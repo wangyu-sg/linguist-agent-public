@@ -1,0 +1,39 @@
+# TencentDB-Agent-Memory Gateway — Linguist Agent local config
+# 100% local: sqlite + sqlite-vec, no external embedding API, no LLM extraction.
+# Enable extraction later by pointing llm.baseUrl/apiKey to your DeepSeek endpoint.
+
+server:
+  port: 8420
+  host: "127.0.0.1"
+  # apiKey: ""        # optional bearer token (loopback-only, fine to leave unset)
+  corsOrigins: []     # no CORS headers needed (server-side Pi tools call this)
+
+memory:
+  capture:
+    enabled: true
+    excludeAgents: []
+    l0l1RetentionDays: 0
+
+  extraction:
+    enabled: false    # set true + configure llm below to enable L1 memory distillation
+    enableDedup: true
+    maxMemoriesPerSession: 20
+
+  recall:
+    enabled: true
+    strategy: "keyword"   # "keyword" works without embedding; switch to "hybrid" with embeddings
+
+  embedding:
+    provider: "none"      # zero external API — keyword search only
+    enabled: false
+
+  pipeline:
+    everyNConversations: 10
+    enableWarmup: true
+
+# LLM config (only needed if extraction.enabled = true)
+# llm:
+#   baseUrl: "https://api.deepseek.com/v1"
+#   apiKey: "${DEEPSEEK_API_KEY}"
+#   model: "deepseek-chat"
+#   maxTokens: 2048

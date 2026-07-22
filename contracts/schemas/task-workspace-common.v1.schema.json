@@ -1,0 +1,1311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linguist-agent.local/contracts/task-workspace-common.v1.schema.json",
+  "title": "Linguist Agent Task Workspace Common Contract v1",
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nullableTimestamp": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId",
+        "segmentIds"
+      ],
+      "properties": {
+        "projectId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "batchId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "segmentIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "sourceLocale": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "targetLocale": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "projectId",
+        "scope",
+        "title",
+        "intent",
+        "kind",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "projectId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "intent": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "kind": {
+          "enum": [
+            "translation",
+            "review",
+            "qa",
+            "delivery",
+            "eval",
+            "general"
+          ]
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "active",
+            "awaiting_input",
+            "stopped",
+            "failed",
+            "complete",
+            "archived"
+          ]
+        },
+        "titleGeneration": {
+          "$ref": "#/$defs/titleGeneration"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cacheReadTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cacheWriteTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "totalTokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "costUSD": {
+          "type": "number",
+          "minimum": 0
+        },
+        "modelCalls": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "usageBySource": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/usage"
+      }
+    },
+    "estimatedCallsBySource": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "titleGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "requestedAt"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pending",
+            "generated",
+            "failed"
+          ]
+        },
+        "requestedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "attemptId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "startedAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "completedAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "provider": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "modelId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "usage": {
+          "$ref": "#/$defs/usage"
+        },
+        "error": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "runResourcePackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "source",
+        "version",
+        "integrity"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(npm:|git:|https://|ssh://|git@)"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "integrity": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^sha(256|512)-[A-Za-z0-9+/_=-]+$"
+        }
+      }
+    },
+    "runRequestShapeManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "systemPromptHash",
+        "toolSurfaceHash",
+        "resourceIndexHash",
+        "requestShapeHash",
+        "systemPromptChars",
+        "activeToolCount",
+        "resourceCount",
+        "activeToolNames"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 2 },
+        "systemPromptHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "toolSurfaceHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "resourceIndexHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "requestShapeHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "systemPromptChars": { "type": "integer", "minimum": 0 },
+        "activeToolCount": { "type": "integer", "minimum": 0 },
+        "resourceCount": { "type": "integer", "minimum": 0 },
+        "activeToolNames": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "runMainResourceSurface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packageNames", "requestShape"],
+      "properties": {
+        "packageNames": { "$ref": "#/$defs/stringArray" },
+        "requestShape": { "$ref": "#/$defs/runRequestShapeManifest" }
+      }
+    },
+    "runResourceManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "packages",
+        "activeToolNames"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "profile": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "piRuntimeVersion": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "cwd": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "fileGrantIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/runResourcePackage"
+          }
+        },
+        "activeToolNames": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "name", "winnerPath", "shadowedPath"],
+            "properties": {
+              "kind": { "enum": ["tool", "flag"] },
+              "name": { "$ref": "#/$defs/nonEmptyString" },
+              "winnerPath": { "$ref": "#/$defs/nonEmptyString" },
+              "shadowedPath": { "$ref": "#/$defs/nonEmptyString" }
+            }
+          }
+        },
+        "profileRevision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "profileHash": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "packageSource",
+              "resourceType",
+              "resourceId",
+              "enabled"
+            ],
+            "properties": {
+              "packageSource": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "resourceType": {
+                "enum": [
+                  "extension",
+                  "skill",
+                  "prompt"
+                ]
+              },
+              "resourceId": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "requestShapeHash": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "systemPromptHash": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "toolSurfaceHash": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "resourceIndexHash": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "requestShape": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "systemPromptChars",
+            "activeToolCount",
+            "resourceCount"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "systemPromptChars": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "activeToolCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "resourceCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "mainSurface": {
+          "$ref": "#/$defs/runMainResourceSurface"
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "taskId",
+        "mode",
+        "status",
+        "rootAgentThreadId",
+        "updatedAt",
+        "stopAvailable",
+        "resumeAvailable"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "taskId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "mode": {
+          "enum": [
+            "single",
+            "team",
+            "pipeline",
+            "eval"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/runStatus"
+        },
+        "rootAgentThreadId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "planHash": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "estimatedCalls": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "estimatedCallsBySource": {
+          "$ref": "#/$defs/estimatedCallsBySource"
+        },
+        "modelRoutes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "startedAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "completedAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "stopAvailable": {
+          "type": "boolean"
+        },
+        "resumeAvailable": {
+          "type": "boolean"
+        },
+        "usage": {
+          "$ref": "#/$defs/usage"
+        },
+        "usageBySource": {
+          "$ref": "#/$defs/usageBySource"
+        },
+        "resourceManifest": {
+          "$ref": "#/$defs/runResourceManifest"
+        }
+      }
+    },
+    "runStatus": {
+      "enum": [
+        "pending",
+        "active",
+        "awaiting_input",
+        "waiting",
+        "stopping",
+        "stopped",
+        "failed",
+        "stale",
+        "complete"
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "roleId",
+        "displayName",
+        "roleLabel",
+        "disclosureLabel"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "main",
+            "specialist",
+            "deterministic"
+          ]
+        },
+        "roleId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "roleLabel": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "disclosureLabel": {
+          "enum": [
+            "Agent",
+            "System"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "deterministic"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "disclosureLabel": {
+                "const": "System"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "disclosureLabel": {
+                "const": "Agent"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "thread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "taskId",
+        "runId",
+        "identity",
+        "status",
+        "canReceiveUserMessage",
+        "childThreadIds",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "taskId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "runId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "parentThreadId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "status": {
+          "$ref": "#/$defs/runStatus"
+        },
+        "canReceiveUserMessage": {
+          "type": "boolean"
+        },
+        "handoffSummary": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "latestActivityId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "childThreadIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "piSessionId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "piSessionFile": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "piEntryId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "branchPointEntryId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "branchPosition": {
+          "enum": ["before", "at"]
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "displayName"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "human",
+            "agent",
+            "system"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "agentThreadId": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "effect"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "effect": {
+          "enum": [
+            "read",
+            "write",
+            "execute"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "outcome": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "activityRefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactIds",
+        "evidenceRefs",
+        "decisionIds"
+      ],
+      "properties": {
+        "artifactIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "evidenceRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "decisionIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "segmentIds": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "taskId",
+        "runId",
+        "agentThreadId",
+        "seq",
+        "type",
+        "status",
+        "actor",
+        "title",
+        "refs",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "taskId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "runId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "agentThreadId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "type": {
+          "enum": [
+            "acknowledgement",
+            "plan",
+            "progress",
+            "evidence_read",
+            "tool_action",
+            "artifact_update",
+            "handoff",
+            "elicitation",
+            "decision",
+            "usage",
+            "error",
+            "final_response"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "blocked",
+            "stale",
+            "error"
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "body": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "tool": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/tool"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "refs": {
+          "$ref": "#/$defs/activityRefs"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "evidence_read",
+                  "tool_action"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "tool"
+            ],
+            "properties": {
+              "tool": {
+                "$ref": "#/$defs/tool"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "artifactProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agentThreadId",
+        "evidenceRefs",
+        "parentArtifactIds"
+      ],
+      "properties": {
+        "agentThreadId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "activityId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "evidenceRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "parentArtifactIds": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "decisionAction": {
+      "enum": [
+        "answer",
+        "approve",
+        "reject",
+        "request_change",
+        "waive",
+        "apply",
+        "authorize_delivery"
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "taskId",
+        "runId",
+        "type",
+        "status",
+        "title",
+        "scope",
+        "version",
+        "provenance",
+        "availableDecisions",
+        "content",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "taskId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "runId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "type": {
+          "enum": [
+            "segment_proposal",
+            "segment_diff",
+            "evidence_pack",
+            "agent_query",
+            "qa_finding",
+            "qa_report",
+            "delivery_readiness",
+            "delivery_export",
+            "eval_output",
+            "eval_scorecard",
+            "eval_comparison",
+            "file",
+            "preview"
+          ]
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "reviewable",
+            "accepted",
+            "rejected",
+            "superseded",
+            "final"
+          ]
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "summary": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "provenance": {
+          "$ref": "#/$defs/artifactProvenance"
+        },
+        "availableDecisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/decisionAction"
+          },
+          "uniqueItems": true
+        },
+        "content": {
+          "type": "object"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "decisionOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "action",
+        "destructive"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "label": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "action": {
+          "$ref": "#/$defs/decisionAction"
+        },
+        "destructive": {
+          "type": "boolean"
+        },
+        "description": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "preview": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "taskId",
+        "runId",
+        "requestedByThreadId",
+        "kind",
+        "status",
+        "prompt",
+        "options",
+        "scope",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "taskId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "runId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "requestedByThreadId": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "artifactId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "kind": {
+          "enum": [
+            "answer",
+            "approval",
+            "proposal_review",
+            "waiver",
+            "apply",
+            "delivery_authorization"
+          ]
+        },
+        "status": {
+          "enum": [
+            "required",
+            "recorded",
+            "cancelled",
+            "superseded"
+          ]
+        },
+        "prompt": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/decisionOption"
+          }
+        },
+        "interactionId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "questionIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 3
+        },
+        "selectionMode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "single",
+            "multiple",
+            "freeform",
+            null
+          ]
+        },
+        "selectedOptionId": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "selectedOptionIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "uniqueItems": true
+        },
+        "responseText": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "reason": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "decidedAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "interactionId": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            },
+            "required": [
+              "interactionId"
+            ]
+          },
+          "then": {
+            "required": [
+              "questionIndex",
+              "selectionMode"
+            ],
+            "properties": {
+              "questionIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3
+              },
+              "selectionMode": {
+                "enum": [
+                  "single",
+                  "multiple",
+                  "freeform"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "questionIndex": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "questionIndex"
+                ]
+              },
+              {
+                "properties": {
+                  "selectionMode": {
+                    "enum": [
+                      "single",
+                      "multiple",
+                      "freeform"
+                    ]
+                  }
+                },
+                "required": [
+                  "selectionMode"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "interactionId"
+            ],
+            "properties": {
+              "interactionId": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selectionMode": {
+                "const": "freeform"
+              }
+            },
+            "required": [
+              "selectionMode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "options": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "const": "freeform"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "recorded"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "selectedOptionId"
+            ],
+            "properties": {
+              "selectedOptionId": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "recorded"
+              },
+              "selectionMode": {
+                "enum": [
+                  "single",
+                  "multiple",
+                  "freeform"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "selectionMode"
+            ]
+          },
+          "then": {
+            "required": [
+              "selectedOptionIds"
+            ],
+            "properties": {
+              "selectedOptionIds": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "recorded"
+              },
+              "selectionMode": {
+                "const": "single"
+              }
+            },
+            "required": [
+              "status",
+              "selectionMode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selectedOptionIds": {
+                "minItems": 1,
+                "maxItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "recorded"
+              },
+              "selectionMode": {
+                "const": "freeform"
+              }
+            },
+            "required": [
+              "status",
+              "selectionMode"
+            ]
+          },
+          "then": {
+            "required": [
+              "responseText"
+            ],
+            "properties": {
+              "selectedOptionId": {
+                "const": "freeform"
+              },
+              "selectedOptionIds": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "const": "freeform"
+                }
+              },
+              "responseText": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

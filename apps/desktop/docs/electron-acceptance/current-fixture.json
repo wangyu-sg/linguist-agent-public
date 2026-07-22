@@ -1,0 +1,22 @@
+{
+  "runtimeURL": "http://127.0.0.1:8799",
+  "displayHz": 60,
+  "scenarios": {
+    "inspector": {
+      "projectId": "native-entry-fixture",
+      "batchId": "dialogue-001",
+      "taskId": "task_5e759585-a445-4518-a07d-38ee64b1a63f"
+    }
+  },
+  "uiTask": {
+    "projectId": "native-entry-fixture",
+    "batchId": "dialogue-001",
+    "taskId": "task_5e759585-a445-4518-a07d-38ee64b1a63f"
+  },
+  "states": {
+    "running": {
+      "projectId": "native-entry-fixture",
+      "taskId": "task_5e759585-a445-4518-a07d-38ee64b1a63f"
+    }
+  }
+}

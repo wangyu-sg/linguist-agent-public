@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "id": "distillation-function-gate-smoke",
+  "description": "Rubric fixture for the domain-distillation behavior gate shipped in 4e783d3 / v2.30.6 (classify-first + text-function strategy + obey-project-assets). Source strings are synthetic, representative game-system phrases authored for this fixture, NOT client batch data. These cases are judged by a human against the rubric after a live SAME-MODEL run; they are intentionally NOT wired into any deterministic assertion test because model output is non-deterministic and an assertion would flake. RUNBOOK.md carries the exact pi command + verdict-recording procedure for each case.",
+  "model": "deepseek-v4-pro:xhigh",
+  "modelNote": "Pin the same model+effort the v0 baseline recorded (deepseek-v4-pro:xhigh). The gate change is a prompt change; using a different model would make a later scorecard delta unreadable.",
+  "judgedBy": "human reviewer or an eval-pack rater — see RUNBOOK.md verdict table.",
+  "cases": [
+    {
+      "id": "informative-ui-no-evidence",
+      "textFunction": "informative/operational",
+      "distance": "non-diegetic",
+      "sourceText": "背包已满",
+      "tools": ["cat_tools_list"],
+      "expectedStrategy": "invisible conventional rendering",
+      "pass": "Returns the standard market-conventional UI string (e.g. \"Inventory full\" / \"Bag is full\") and plainly states the segment is informative/operational, so no transcreation is warranted.",
+      "fail": "Adds flavor, voice, or wordplay; 'creatively' rewrites a plain system label; claims a stylistic choice where convention is required.",
+      "why": "No evidence governs. The distillation says informative text's submission-ready answer is the conventional rendering, not transcreation. This case proves the gate suppresses gratuitous creativity on plain UI."
+    },
+    {
+      "id": "expressive-flavor-character",
+      "textFunction": "expressive/persuasive",
+      "distance": "diegetic",
+      "sourceText": "「这把剑啊,砍过的牛比你吹过的还多。」",
+      "tools": ["cat_tools_list"],
+      "expectedStrategy": "commit to a strong localized choice + accountable expert rationale",
+      "pass": "Delivers a voiced, idiomatic en-US line that keeps the swagger/humor, plus a one-line expert rationale (voice/register/wordplay). Does NOT hand back a flat literal gloss.",
+      "fail": "Returns a flat literal gloss; refuses to commit; over-hedges with needs_review when no evidence is actually in conflict.",
+      "why": "Expressive/diegetic flavor is exactly where the distillation still licenses a strong localized choice. This case proves the gate did NOT over-correct into timidity on creative text."
+    },
+    {
+      "id": "operational-no-evidence-insufficient",
+      "textFunction": "informative/operational",
+      "distance": "non-diegetic",
+      "sourceText": "你并没有足够的采购数",
+      "tools": ["cat_tools_list", "proposal_create"],
+      "expectedStrategy": "conventional rendering + honest flag (query / needs_review), not confident invention",
+      "pass": "Proposes the conventional system string (e.g. \"Insufficient purchase attempts\" / \"Not enough purchases\") AND routes the uncertainty through proposal_create with a query / needs_review rather than fabricating a confident clever rewrite.",
+      "fail": "Invents a flavorful or guessed string presented as final/confident; skips the query/needs_review path; silently overwrites.",
+      "why": "Operational text with a slightly ambiguous source is the canonical case: submission-ready = correct + conventional + honest flagging, never clever invention. This synthetic phrase anchors the ambiguity case."
+    },
+    {
+      "id": "termbase-hit-obey-asset",
+      "textFunction": "informative/operational",
+      "distance": "non-diegetic",
+      "sourceText": "勇者徽记",
+      "tools": ["cat_tools_list", "tm_lookup"],
+      "setup": "Seed/confirm a project termbase entry so the source term has a governing target before the run (mirrors the existing agent:smoke 勇者徽记 + tm_lookup pattern).",
+      "expectedStrategy": "obey the project's own termbase target; cite it; do not self-invent",
+      "pass": "Looks the term up, returns the termbase-governed target, and cites the termbase as the authority. Linguistic taste does not override the asset.",
+      "fail": "Coins its own 'better' term and ignores the termbase; cites a tool trace as if it were evidence.",
+      "why": "Proves the obey-project-assets clause: the project's own assets outrank model judgment, and the authority hierarchy (locked > termbase > styleguide > model) is binding."
+    }
+  ]
+}

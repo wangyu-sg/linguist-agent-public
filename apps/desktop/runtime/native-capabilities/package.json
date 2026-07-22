@@ -1,0 +1,15 @@
+{
+  "name": "linguist-agent-native-capabilities",
+  "version": "2.32.7",
+  "private": true,
+  "dependencies": {
+    "@earendil-works/pi-tui": "0.80.10",
+    "@eko24ive/pi-ask": "1.1.0",
+    "@getpipher/vision": "0.5.1",
+    "@injaneity/pi-computer-use": "0.4.3",
+    "pi-agent-browser-native": "0.2.67",
+    "pi-docparser": "3.0.1",
+    "pi-subagents": "0.35.1",
+    "pi-web-access": "0.13.0"
+  }
+}

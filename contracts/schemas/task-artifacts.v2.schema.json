@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linguist-agent.local/contracts/task-artifacts.v2.schema.json",
+  "title": "Linguist Agent Task Artifacts v2",
+  "type": "array",
+  "items": { "$ref": "./task-workspace-common.v2.schema.json#/$defs/artifact" }
+}

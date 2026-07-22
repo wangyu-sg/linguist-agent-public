@@ -1,0 +1,14 @@
+{
+  "name": "@linguist-agent/cat-tools",
+  "version": "2.32.7",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.80.10",
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@linguist-agent/cat-data": "2.32.7"
+  }
+}

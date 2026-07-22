@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linguist-agent.local/contracts/task-workspace-common.v2.schema.json",
+  "title": "Linguist Agent Task Workspace Common Contract v2",
+  "$defs": {
+    "owner": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "standalone" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "projectId"],
+          "properties": {
+            "kind": { "const": "project" },
+            "projectId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" }
+          }
+        }
+      ]
+    },
+    "standaloneScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "fileGrantIds"],
+      "properties": {
+        "kind": { "const": "standalone" },
+        "workingDirectoryGrantId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "fileGrantIds": {
+          "type": "array",
+          "items": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "projectScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "segmentIds"],
+      "properties": {
+        "kind": { "const": "project" },
+        "batchId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" },
+        "segmentIds": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/stringArray" },
+        "sourceLocale": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" },
+        "targetLocale": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" }
+      }
+    },
+    "scope": {
+      "oneOf": [
+        { "$ref": "#/$defs/standaloneScope" },
+        { "$ref": "#/$defs/projectScope" }
+      ]
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "scope", "title", "intent", "kind", "status", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "owner": { "$ref": "#/$defs/owner" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "title": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "intent": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "kind": { "enum": ["translation", "review", "qa", "delivery", "eval", "general"] },
+        "status": { "enum": ["draft", "active", "awaiting_input", "stopped", "failed", "complete", "archived"] },
+        "titleGeneration": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/titleGeneration" },
+        "createdAt": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/timestamp" },
+        "updatedAt": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/timestamp" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "owner": { "properties": { "kind": { "const": "standalone" } }, "required": ["kind"] } },
+            "required": ["owner"]
+          },
+          "then": {
+            "properties": {
+              "scope": { "$ref": "#/$defs/standaloneScope" },
+              "kind": { "const": "general" }
+            }
+          },
+          "else": { "properties": { "scope": { "$ref": "#/$defs/projectScope" } } }
+        }
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "taskId", "runId", "type", "status", "title", "scope", "version", "provenance", "availableDecisions", "content", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "taskId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "runId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "type": {
+          "enum": ["segment_proposal", "segment_diff", "evidence_pack", "agent_query", "qa_finding", "qa_report", "delivery_readiness", "delivery_export", "eval_output", "eval_scorecard", "eval_comparison", "context_handoff", "memory", "guidance", "document_evidence", "rich_document", "maintenance_plan", "package_audit", "file", "preview"]
+        },
+        "status": { "enum": ["draft", "reviewable", "accepted", "rejected", "superseded", "final"] },
+        "title": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "summary": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "version": { "type": "integer", "minimum": 1 },
+        "provenance": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/artifactProvenance" },
+        "availableDecisions": {
+          "type": "array",
+          "items": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/decisionAction" },
+          "uniqueItems": true
+        },
+        "content": { "type": "object" },
+        "createdAt": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/timestamp" },
+        "updatedAt": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/timestamp" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "taskId", "runId", "requestedByThreadId", "kind", "status", "prompt", "options", "scope", "createdAt"],
+      "properties": {
+        "id": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "taskId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "runId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "requestedByThreadId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "artifactId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" },
+        "kind": { "enum": ["answer", "approval", "proposal_review", "waiver", "apply", "delivery_authorization"] },
+        "status": { "enum": ["required", "recorded", "cancelled", "superseded"] },
+        "prompt": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/decisionOption" }
+        },
+        "interactionId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" },
+        "questionIndex": { "type": ["integer", "null"], "minimum": 0, "maximum": 3 },
+        "selectionMode": { "type": ["string", "null"], "enum": ["single", "multiple", "freeform", null] },
+        "selectedOptionId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" },
+        "selectedOptionIds": {
+          "type": "array",
+          "items": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "responseText": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" },
+        "reason": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "createdAt": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/timestamp" },
+        "decidedAt": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableTimestamp" }
+      }
+    }
+  }
+}

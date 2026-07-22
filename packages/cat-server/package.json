@@ -1,0 +1,20 @@
+{
+  "name": "@linguist-agent/cat-server",
+  "version": "2.32.7",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/server.ts",
+    "./agent_events": "./src/agent_events.ts",
+    "./projects_index": "./src/projects_index.ts",
+    "./server_diagnostics": "./src/server_diagnostics.ts",
+    "./resident_runtime": "./src/resident_runtime.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.80.10",
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@linguist-agent/cat-data": "2.32.7",
+    "@linguist-agent/cat-mcp": "2.32.7",
+    "@linguist-agent/cat-runtime": "2.32.7"
+  }
+}

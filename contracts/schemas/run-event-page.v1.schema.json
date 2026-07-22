@@ -1,0 +1,369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linguist-agent.local/contracts/run-event-page.v1.schema.json",
+  "title": "Linguist Agent Run Event Page v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "runId",
+    "nextCursor",
+    "hasMore",
+    "events"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "taskId": {
+      "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString"
+    },
+    "runId": {
+      "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString"
+    },
+    "afterCursor": {
+      "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString"
+    },
+    "nextCursor": {
+      "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString"
+    },
+    "hasMore": {
+      "type": "boolean"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    }
+  },
+  "$defs": {
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "cursor",
+        "seq",
+        "taskId",
+        "runId",
+        "type",
+        "occurredAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString"
+        },
+        "cursor": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "taskId": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString"
+        },
+        "runId": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString"
+        },
+        "agentThreadId": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/nullableString"
+        },
+        "type": {
+          "enum": [
+            "run_upsert",
+            "thread_upsert",
+            "activity_append",
+            "artifact_upsert",
+            "decision_upsert",
+            "usage_update"
+          ]
+        },
+        "occurredAt": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/timestamp"
+        },
+        "run": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/run"
+        },
+        "thread": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/thread"
+        },
+        "activity": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/activity"
+        },
+        "artifact": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/artifact"
+        },
+        "decision": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/decision"
+        },
+        "usageSource": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "usage": {
+          "$ref": "./task-workspace-common.v1.schema.json#/$defs/usage"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "run_upsert"
+            }
+          },
+          "required": [
+            "run"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "thread"
+                ]
+              },
+              {
+                "required": [
+                  "activity"
+                ]
+              },
+              {
+                "required": [
+                  "artifact"
+                ]
+              },
+              {
+                "required": [
+                  "decision"
+                ]
+              },
+              {
+                "required": [
+                  "usage"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "thread_upsert"
+            }
+          },
+          "required": [
+            "thread"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "run"
+                ]
+              },
+              {
+                "required": [
+                  "activity"
+                ]
+              },
+              {
+                "required": [
+                  "artifact"
+                ]
+              },
+              {
+                "required": [
+                  "decision"
+                ]
+              },
+              {
+                "required": [
+                  "usage"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "activity_append"
+            }
+          },
+          "required": [
+            "activity"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "run"
+                ]
+              },
+              {
+                "required": [
+                  "thread"
+                ]
+              },
+              {
+                "required": [
+                  "artifact"
+                ]
+              },
+              {
+                "required": [
+                  "decision"
+                ]
+              },
+              {
+                "required": [
+                  "usage"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "artifact_upsert"
+            }
+          },
+          "required": [
+            "artifact"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "run"
+                ]
+              },
+              {
+                "required": [
+                  "thread"
+                ]
+              },
+              {
+                "required": [
+                  "activity"
+                ]
+              },
+              {
+                "required": [
+                  "decision"
+                ]
+              },
+              {
+                "required": [
+                  "usage"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "decision_upsert"
+            }
+          },
+          "required": [
+            "decision"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "run"
+                ]
+              },
+              {
+                "required": [
+                  "thread"
+                ]
+              },
+              {
+                "required": [
+                  "activity"
+                ]
+              },
+              {
+                "required": [
+                  "artifact"
+                ]
+              },
+              {
+                "required": [
+                  "usage"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "usage_update"
+            }
+          },
+          "required": [
+            "usage"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "run"
+                ]
+              },
+              {
+                "required": [
+                  "thread"
+                ]
+              },
+              {
+                "required": [
+                  "activity"
+                ]
+              },
+              {
+                "required": [
+                  "artifact"
+                ]
+              },
+              {
+                "required": [
+                  "decision"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "usage_update"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "usageSource"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

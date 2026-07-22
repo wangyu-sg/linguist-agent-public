@@ -1,0 +1,571 @@
+/* ==========================================================================
+   Conversation timeline — Codex professional document flow.
+   文档列 48rem 居中；专家有人格（persona hue + 字形头像），确定性工序
+   呈现为 slate 工序卡。一切颜色走 --la-* token，禁止硬编码色值。
+   虚拟化/滚动钉底相关结构选择器（data-virtualized、transform 定位）保持不变。
+   ========================================================================== */
+
+/* ---------- Persona hue 映射（所有 [data-hue] 元素共享） ---------- */
+
+[data-hue="translator"] { --persona-hue: var(--la-persona-translator); --persona-hue-surface: var(--la-persona-translator-surface); }
+[data-hue="editor"] { --persona-hue: var(--la-persona-editor); --persona-hue-surface: var(--la-persona-editor-surface); }
+[data-hue="proofreader"] { --persona-hue: var(--la-persona-proofreader); --persona-hue-surface: var(--la-persona-proofreader-surface); }
+[data-hue="lead-final"] { --persona-hue: var(--la-persona-lead-final); --persona-hue-surface: var(--la-persona-lead-final-surface); }
+[data-hue="lead-setup"] { --persona-hue: var(--la-persona-lead-setup); --persona-hue-surface: var(--la-persona-lead-setup-surface); }
+[data-hue="pre-lqa"] { --persona-hue: var(--la-persona-pre-lqa); --persona-hue-surface: var(--la-persona-pre-lqa-surface); }
+[data-hue="producer"] { --persona-hue: var(--la-persona-producer); --persona-hue-surface: var(--la-persona-producer-surface); }
+[data-hue="culturalization"] { --persona-hue: var(--la-persona-culturalization); --persona-hue-surface: var(--la-persona-culturalization-surface); }
+[data-hue="slate"] { --persona-hue: var(--la-persona-slate); --persona-hue-surface: var(--la-persona-slate-surface); }
+[data-hue="neutral"] { --persona-hue: var(--la-persona-neutral); --persona-hue-surface: var(--la-persona-neutral-surface); }
+
+/* ---------- Persona 头像：双色渐变砖 + 工作室徽记 + 状态点 ---------- */
+
+.persona-avatar {
+  --persona-hue: var(--la-persona-neutral);
+  --persona-hue-surface: var(--la-persona-neutral-surface);
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  user-select: none;
+}
+
+.persona-avatar[data-size="sm"] { width: 22px; height: 22px; }
+.persona-avatar[data-size="md"] { width: 34px; height: 34px; }
+.persona-avatar[data-size="lg"] { width: 44px; height: 44px; }
+
+.persona-avatar__tile {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 28%;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--persona-hue) 90%, #ffffff 10%),
+    color-mix(in srgb, var(--persona-hue) 84%, #000000 16%)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 -1px 1px rgb(0 0 0 / 0.10),
+    0 1px 2px color-mix(in srgb, var(--persona-hue) 30%, transparent);
+  color: #ffffff;
+}
+
+.persona-avatar__tile > svg {
+  width: 56%;
+  height: 56%;
+}
+
+.persona-avatar[data-deterministic] .persona-avatar__tile {
+  background: var(--persona-hue-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--persona-hue) 30%, transparent);
+  color: var(--persona-hue);
+}
+
+.persona-avatar__status {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--la-raised);
+  border-radius: 50%;
+  background: var(--la-ink-disabled);
+}
+
+.persona-avatar[data-size="sm"] .persona-avatar__status {
+  right: -2px;
+  bottom: -2px;
+  width: 8px;
+  height: 8px;
+  border-width: 1.5px;
+}
+
+.persona-avatar__status[data-status="running"] {
+  background: var(--persona-hue);
+  animation: persona-status-pulse 2.4s var(--la-ease-in-out) infinite;
+}
+
+.persona-avatar__status[data-status="waiting"] { background: var(--la-warning); }
+.persona-avatar__status[data-status="done"] { background: var(--la-success); }
+.persona-avatar__status[data-status="failed"] { background: var(--la-danger); }
+.persona-avatar__status[data-status="stopped"] { background: var(--la-ink-disabled); }
+
+@keyframes persona-status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--persona-hue) 42%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--persona-hue) 0%, transparent); }
+}
+
+/* 工作态微光:运行中的 persona 砖面有缓慢的光泽扫过 */
+.persona-avatar:has(.persona-avatar__status[data-status="running"]) .persona-avatar__tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg, transparent 32%, rgb(255 255 255 / 0.26) 50%, transparent 68%);
+  background-size: 240% 100%;
+  animation: persona-tile-sheen 2.6s var(--la-ease-in-out) infinite;
+}
+
+@keyframes persona-tile-sheen {
+  0% { background-position: 135% 0; }
+  100% { background-position: -95% 0; }
+}
+
+/* ---------- 壳层与滚动 ---------- */
+
+.task-conversation {
+  /* Codex 04 §1.2 消息列宽度变量:默认 48rem 居中;
+     收窄模式(检查器打开/窄窗口,见文件底部容器查询)覆写为 42rem。 */
+  --thread-content-max-width: 48rem;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  background: var(--la-canvas);
+}
+
+.task-conversation__scroller {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Branching and runtime maintenance are real Chat capabilities, but they are
+   rare controls. Keep them in a single overflow surface rather than taking a
+   permanent second toolbar above every conversation. */
+.conversation-context-menu {
+  position: absolute;
+  z-index: var(--la-z-popover);
+  top: var(--la-space-2);
+  right: max(var(--la-space-3), calc((100% - var(--thread-content-max-width)) / 2));
+}
+
+.conversation-context-menu > summary {
+  display: grid;
+  width: var(--la-hit-compact);
+  height: var(--la-hit-compact);
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--la-radius-control);
+  color: var(--la-ink-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.conversation-context-menu > summary::-webkit-details-marker { display: none; }
+.conversation-context-menu > summary::marker { content: ""; }
+.conversation-context-menu > summary > svg { width: 16px; height: 16px; }
+
+.conversation-context-menu[open] > summary,
+.conversation-context-menu > summary:active {
+  border-color: var(--la-border-default);
+  background: var(--la-surface-pressed);
+  color: var(--la-ink-primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .conversation-context-menu > summary:hover {
+    border-color: var(--la-border-hover);
+    background: var(--la-surface-hover);
+    color: var(--la-ink-primary);
+  }
+}
+
+.conversation-context-menu__panel {
+  position: absolute;
+  top: calc(100% + var(--la-space-2));
+  right: 0;
+  display: grid;
+  width: min(352px, calc(100vw - 48px));
+  gap: var(--la-space-2);
+  padding: var(--la-space-3);
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-surface);
+  background: var(--la-canvas);
+  box-shadow: var(--la-shadow-large);
+}
+
+.conversation-context-menu__branch {
+  display: grid;
+  gap: 5px;
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-meta-size);
+  line-height: var(--la-type-meta-line);
+}
+
+.conversation-context-menu__branch select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--la-control-small);
+  padding: 5px var(--la-space-2);
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-control);
+  background: var(--la-canvas);
+  color: var(--la-ink-primary);
+  font: inherit;
+  font-size: var(--la-type-dense-size);
+}
+
+.conversation-context-menu__actions {
+  display: grid;
+  gap: 2px;
+  padding-top: var(--la-space-1);
+  border-top: 1px solid var(--la-border-subtle);
+}
+
+.conversation-context-menu__actions .la-button {
+  justify-content: flex-start;
+  min-height: var(--la-control-small);
+  padding-inline: var(--la-space-2);
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-dense-size);
+}
+
+.conversation-context-menu__actions .la-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 680px) {
+  .conversation-context-menu { right: var(--la-space-2); }
+  .conversation-context-menu__panel { width: min(320px, calc(100vw - 32px)); }
+}
+
+/* ---------- 历史筛选工具 ---------- */
+
+.conversation-history-tools {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  height: 0;
+  width: min(var(--thread-content-max-width), calc(100% - 48px));
+  margin: 0 auto;
+  pointer-events: none;
+}
+
+.conversation-history-tools__toggle {
+  appearance: none;
+  display: inline-flex;
+  min-height: var(--la-hit-compact);
+  position: absolute;
+  top: var(--la-space-2);
+  right: 0;
+  padding: 3px var(--la-space-2);
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-control);
+  background: color-mix(in srgb, var(--la-canvas) 94%, transparent);
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-meta-size);
+  line-height: var(--la-type-meta-line);
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(12px);
+  transition: background-color var(--la-duration-micro) var(--la-ease-out), color var(--la-duration-micro) var(--la-ease-out);
+}
+
+.conversation-history-tools__toggle svg,
+.conversation-history-tools__panel .la-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.conversation-history-tools__count {
+  color: var(--la-ink-disabled);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .conversation-history-tools__toggle:hover {
+    background: var(--la-surface-hover);
+    color: var(--la-ink-primary);
+  }
+}
+
+.conversation-history-tools__toggle:active {
+  background: var(--la-surface-pressed);
+}
+
+.conversation-history-tools__panel {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  display: grid;
+  width: min(var(--thread-content-max-width), calc(100vw - 80px));
+  grid-template-columns: minmax(200px, 2fr) repeat(3, minmax(112px, 1fr)) auto;
+  gap: var(--la-space-2);
+  align-items: center;
+  padding: var(--la-space-3);
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-surface);
+  background: var(--la-canvas);
+  box-shadow: var(--la-shadow-large);
+  pointer-events: auto;
+}
+
+.conversation-history-tools__panel label {
+  min-width: 0;
+}
+
+.conversation-history-tools__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.conversation-history-tools__search > svg {
+  position: absolute;
+  left: 9px;
+  width: 14px;
+  height: 14px;
+  color: var(--la-ink-disabled);
+  pointer-events: none;
+}
+
+.conversation-history-tools__panel :where(input, select) {
+  width: 100%;
+  min-height: var(--la-control-small);
+  padding: 5px var(--la-space-2);
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-control);
+  background: var(--la-canvas);
+  color: var(--la-ink-primary);
+  font-size: var(--la-type-dense-size);
+  line-height: var(--la-type-dense-line);
+}
+
+.conversation-history-tools__search input {
+  padding-left: 30px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .conversation-history-tools__panel :where(input, select):hover {
+    border-color: var(--la-border-hover);
+  }
+}
+
+.conversation-history-tools__panel :where(input, select):focus-visible {
+  border-color: var(--la-border-strong);
+}
+
+.conversation-history-tools__panel .la-button {
+  padding-inline: var(--la-space-2);
+}
+
+.conversation-history-tools__summary {
+  position: absolute;
+  top: 12px;
+  right: 104px;
+  margin: 0;
+  color: var(--la-ink-disabled);
+  font-size: var(--la-type-meta-size);
+  line-height: var(--la-type-meta-line);
+}
+
+/* ---------- 时间线布局：--thread-content-max-width 文档列居中 ---------- */
+
+.task-conversation__timeline {
+  width: min(var(--thread-content-max-width), calc(100% - 48px));
+  max-width: var(--thread-content-max-width);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 32px 0 48px;
+  list-style: none;
+}
+
+.task-conversation__item {
+  padding-bottom: var(--la-space-6);
+}
+
+/* 过程行更紧凑，形成"工序流"节奏 */
+.task-conversation__item:has(> .conversation-activity) {
+  padding-bottom: var(--la-space-1);
+}
+
+.task-conversation__timeline[data-virtualized] {
+  /* The virtualizer measures each item's real content height. The timeline
+     still owns the complete canonical count; only offscreen DOM is recycled. */
+  min-height: 100%;
+  padding-block: 0;
+}
+
+.task-conversation__timeline[data-virtualized] > .task-conversation__item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  margin: 0;
+}
+
+.task-conversation__empty,
+.task-conversation__filter-empty,
+.task-conversation__timeline-loading,
+.task-conversation--state {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  padding: var(--la-space-8);
+  text-align: center;
+}
+
+.task-conversation__timeline-loading {
+  color: var(--la-ink-secondary);
+}
+
+.task-conversation--state {
+  height: 100%;
+}
+
+.task-conversation__filter-empty h2,
+.task-conversation--state h2 {
+  margin: 0;
+  font-size: var(--la-type-heading-size);
+  font-weight: var(--la-weight-semibold);
+  line-height: var(--la-type-heading-line);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.task-conversation__filter-empty p,
+.task-conversation--state p {
+  max-width: 480px;
+  margin: var(--la-space-2) auto 0;
+  color: var(--la-ink-secondary);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.task-conversation__filter-empty .la-button {
+  margin: var(--la-space-4) auto 0;
+}
+
+.task-conversation__state-error {
+  color: var(--la-danger) !important;
+}
+
+/* ---------- 空态 Hero(Codex spec 04 §8) ----------
+   居中单列,与时间线同一 --thread-content-max-width 对齐;
+   heading-xl font-normal 轮换标题,0.2s 淡入;
+   建议卡错峰入场 delay=i×25ms、translateY 8px→0、ease snappy。 */
+
+.conversation-hero {
+  display: flex;
+  width: 100%;
+  max-width: var(--thread-content-max-width);
+  margin: 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--la-space-3);
+  text-align: center;
+  animation: conversation-hero-enter 0.2s var(--la-ease-in-out) both;
+}
+
+@keyframes conversation-hero-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.conversation-hero__title {
+  margin: 0;
+  color: var(--la-ink-primary);
+  font-size: 24px;
+  font-weight: var(--la-weight-regular);
+  line-height: 32px;
+  letter-spacing: -0.01em;
+  white-space: pre-wrap;
+  text-wrap: balance;
+}
+
+.conversation-hero__subtitle {
+  max-width: 480px;
+  margin: 0;
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-copy-size);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.conversation-hero__suggestions {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--la-space-3);
+  margin-top: var(--la-space-4);
+}
+
+.conversation-hero__suggestion {
+  appearance: none;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--la-space-3);
+  border: 1px solid var(--la-border-default);
+  border-radius: 20px;
+  background: var(--la-raised);
+  color: var(--la-ink-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  animation: conversation-hero-suggestion-enter 0.15s cubic-bezier(0.23, 1, 0.32, 1) both;
+  transition:
+    border-color var(--la-duration-micro) var(--la-ease-out),
+    box-shadow var(--la-duration-micro) var(--la-ease-out),
+    transform var(--la-duration-micro) var(--la-ease-out);
+}
+
+.conversation-hero__suggestion-title {
+  font-size: var(--la-type-dense-size);
+  font-weight: var(--la-weight-medium);
+  line-height: var(--la-type-dense-line);
+}
+
+.conversation-hero__suggestion-body {
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-meta-size);
+  line-height: var(--la-type-meta-line);
+}
+
+@keyframes conversation-hero-suggestion-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .conversation-hero__suggestion:hover {
+    border-color: var(--la-border-hover);
+    box-shadow: var(--la-shadow-card);
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-hero,
+  .conversation-hero__suggestion {
+    animation: none;
+  }
+  .conversation-hero__suggestion {
+    transition: none;
+  }
+}
+
+/* ---------- 收窄模式(Codex 04 §1.2) ----------
+   容器设在 .product-task-content(thread-column),直接度量会话列的
+   实际可用宽度:检查器打开、分屏或窄窗口把会话列压到 52rem 以内时,
+   阅读柱从 48rem 收窄到 42rem,保持两侧留白节奏。 */
+
+@container thread-column (max-width: 52rem) {
+  .task-conversation {
+    --thread-content-max-width: 42rem;
+  }
+}

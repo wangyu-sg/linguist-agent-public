@@ -1,0 +1,35 @@
+node_modules/
+dist/
+vendor/
+/data/
+.la-runtime-data-backups/
+.pi-subagents/
+*.log
+.DS_Store
+
+# Local credentials and runtime state
+.env
+.pi/settings.local.json
+.pi/*.local.json
+.pi/sessions/
+.pi/tmp/
+# Pi CLI session dir (project settings.json sets sessionDir: "sessions")
+sessions/
+
+# Build/test output
+coverage/
+tmp/
+.codegraph/
+/apps/desktop/.runtime/
+# Retired Swift client build artifacts stay local; Electron is the only maintained client.
+/apps/mac/.build/
+/apps/mac/dist/
+
+# Global design/dev tooling installed into the workspace (not LA product source).
+# These are local developer tooling (often symlinks into .agents/skills/). Ignore everything
+# under .pi/skills/ EXCEPT the tracked CAT product skills (.pi/skills/cat-*).
+.agents/
+.claude/
+skills-lock.json
+.pi/skills/*
+!.pi/skills/cat-*

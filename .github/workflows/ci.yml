@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/package-lock.json
+
+      - name: Install test system dependencies
+        run: |
+          brew install poppler
+          python3 -m venv "$RUNNER_TEMP/la-python"
+          "$RUNNER_TEMP/la-python/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/la-python/bin/python" -m pip install openpyxl
+          echo "$RUNNER_TEMP/la-python/bin" >> "$GITHUB_PATH"
+          echo "LA_WORKBOOK_PYTHON=$RUNNER_TEMP/la-python/bin/python3" >> "$GITHUB_ENV"
+      - run: npm ci
+      - name: Install Electron client dependencies
+        run: npm --prefix apps/desktop ci
+      - run: npm run release:check
+      - run: npm run typecheck
+      - run: npm test
+      - name: Run Electron macOS client tests
+        run: npm run mac:test
+      - run: npm run rc:status
