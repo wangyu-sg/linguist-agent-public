@@ -1,5 +1,17 @@
 import assert from "node:assert/strict";
+import { ModelContextRegistry } from "@linguist-agent/cat-data";
 import { runPrivateEvalCanonicalSingle } from "../packages/cat-server/src/private_eval_canonical_single.js";
+
+const requestBudget = {
+  registry: new ModelContextRegistry([{ provider: "fixture", modelId: "verified", contextWindow: 200_000, outputReserveTokens: 1_000 }]),
+  provider: "fixture",
+  modelId: "verified",
+  toolSchemaTokens: 0,
+  historyTokens: 0,
+  providerFramingTokens: 8,
+  safetyMarginTokens: 0,
+  compactionReserveTokens: 0,
+};
 
 let calls = 0;
 let capturedPrompt = "";
@@ -11,9 +23,10 @@ const outputs = await runPrivateEvalCanonicalSingle({
   evalSetId: "eval-set-1",
   sourceLocale: "zh-CN",
   targetLocale: "en-US",
-  modelProvider: "opencode-go",
-  modelId: "deepseek-v4-flash",
+  modelProvider: "fixture",
+  modelId: "verified",
   thinkingLevel: "medium",
+  requestBudget,
   segments: [
     { segmentId: "原始段-一", source: "打开 {0} 个宝箱", tags: ["{0}"], riskTypes: ["placeholder"], tmRefs: [], termRefs: [] },
     { segmentId: "原始段-二", source: "继续", tags: [], riskTypes: ["ui"], tmRefs: ["Continue"], termRefs: [] },
@@ -48,7 +61,7 @@ assert.equal(outputs.get("原始段-一")?.executionManifest?.adapter, "canonica
 assert.equal(outputs.get("原始段-一")?.executionManifest?.segmentIdMode, "eval_alias_v1");
 assert.equal(outputs.get("原始段-一")?.executionManifest?.referenceIncluded, false);
 assert.equal(outputs.get("原始段-一")?.executionManifest?.writeMode, "none");
-assert.equal(outputs.get("原始段-一")?.promptManifest?.estimateScope, "compiled_business_prompt");
+assert.equal(outputs.get("原始段-一")?.promptManifest?.estimateScope, "complete_request_v2");
 assert.equal(capturedRunOptions.noTools, "all");
 assert.equal(capturedRunOptions.noSession, true);
 assert.equal(capturedTimeoutMs, 180_000, "small batches keep the measured three-minute watchdog");
@@ -62,7 +75,10 @@ await assert.rejects(runPrivateEvalCanonicalSingle({
   evalSetId: "eval-set-1",
   sourceLocale: "zh-CN",
   targetLocale: "en-US",
+  modelProvider: "fixture",
+  modelId: "verified",
   thinkingLevel: "medium",
+  requestBudget,
   segments: [
     { segmentId: "one", source: "一", tags: [], riskTypes: [], tmRefs: [], termRefs: [] },
     { segmentId: "two", source: "二", tags: [], riskTypes: [], tmRefs: [], termRefs: [] },

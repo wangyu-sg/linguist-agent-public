@@ -111,7 +111,7 @@ async function batchPayload(repoRoot: string, projectId: string, batchId: string
 
 async function exportBatchFromRequest(repoRoot: string, projectId: string, batchId: string, body: Record<string, unknown>, deps: BatchRouteDeps): Promise<ExportResult> {
   const format = deps.requireString(body.format, "format");
-  const common = { projectId, batchId, outputPath: deps.optionalString(body.outputPath), force: Boolean(body.force) };
+  const common = { projectId, batchId, outputPath: deps.optionalString(body.outputPath), force: deps.optionalBoolean(body.force) ?? false };
   if (format === "phrase_mxliff") return exportPhraseMxliff(repoRoot, common);
   if (format === "phrase_docx") return exportPhraseBilingualDocx(repoRoot, { ...common, templateDocxPath: deps.requireString(body.templateDocxPath, "templateDocxPath") });
   if (format === "mqxliff") return exportMqxliff(repoRoot, { ...common, role: deps.optionalString(body.role) as "T" | "E" | "P" | undefined });
@@ -176,7 +176,7 @@ export async function handleBatchRoute(
     const body = await deps.readBody(req) as Record<string, unknown>;
     const filePath = deps.requireString(body.filePath, "filePath");
     const batchId = deps.optionalString(body.batchId) ?? inferBatchId(filePath);
-    const overwrite = Boolean(body.overwrite);
+    const overwrite = deps.optionalBoolean(body.overwrite) ?? false;
     const workflowStage = batchWorkflowStage(body.workflowStage);
     const ext = extname(filePath).toLocaleLowerCase();
     if (ext === ".mxliff") {
@@ -320,8 +320,8 @@ export async function handleBatchRoute(
       const result = await updateSegmentTarget(deps.repoRoot, projectId, batchId, {
         segmentId: decodeURIComponent(parts[6]),
         target: deps.requireString(body.target, "target"),
-        confirm: Boolean(body.confirm),
-        propagateDuplicates: body.propagateDuplicates === undefined ? undefined : Boolean(body.propagateDuplicates),
+        confirm: deps.optionalBoolean(body.confirm) ?? false,
+        propagateDuplicates: deps.optionalBoolean(body.propagateDuplicates),
         reason: deps.requireString(body.reason, "reason"),
         changeType: segmentChangeType(body.changeType),
         evidenceSources: deps.optionalStringArray(body.evidenceSources),
@@ -359,7 +359,7 @@ export async function handleBatchRoute(
     deps.json(res, 200, await createProposalSet(deps.repoRoot, projectId, batchId, {
       proposalSetId: deps.optionalString(body.proposalSetId),
       title: deps.optionalString(body.title),
-      overwrite: Boolean(body.overwrite),
+      overwrite: deps.optionalBoolean(body.overwrite) ?? false,
       proposals: rawProposals.map((proposal) => ({
         segmentId: deps.requireString(proposal.segmentId, "proposal.segmentId"),
         proposedTarget: deps.requireString(proposal.proposedTarget, "proposal.proposedTarget"),
@@ -396,7 +396,7 @@ export async function handleBatchRoute(
   if (parts[5] === "proposals" && parts[6] && parts[7] === "report" && req.method === "POST") {
     const body = await deps.readBody(req) as Record<string, unknown>;
     deps.json(res, 200, await writeProposalReport(deps.repoRoot, projectId, batchId, decodeURIComponent(parts[6]), {
-      writeFile: body.writeFile === undefined ? true : Boolean(body.writeFile),
+      writeFile: deps.optionalBoolean(body.writeFile) ?? true,
     }));
     return true;
   }
@@ -512,7 +512,7 @@ export async function handleBatchRoute(
       projectId,
       batchId,
       xlsxPath: deps.requireString(body.xlsxPath, "xlsxPath"),
-      importReviewedTm: body.importReviewedTm === undefined ? true : Boolean(body.importReviewedTm),
+      importReviewedTm: deps.optionalBoolean(body.importReviewedTm) ?? true,
     });
     const wantsMarkdown =
       ["md", "markdown", "text"].includes((url.searchParams.get("format") ?? "").toLocaleLowerCase()) ||

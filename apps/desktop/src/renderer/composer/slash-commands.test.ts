@@ -31,7 +31,6 @@ function source(overrides: Partial<ComposerSlashSource> = {}): ComposerSlashSour
     canCompact: false,
     canFork: false,
     canCopyChat: false,
-    liveDelivery: null,
     currentThinkingLevel: undefined,
     actions: {
       openModelPicker: () => undefined,
@@ -40,7 +39,6 @@ function source(overrides: Partial<ComposerSlashSource> = {}): ComposerSlashSour
       compact: () => undefined,
       fork: () => undefined,
       copyChat: () => undefined,
-      setDelivery: () => undefined,
       setThinkingLevel: () => undefined,
     },
     ...overrides,
@@ -56,22 +54,21 @@ test("slash trigger requires a leading slash and a single line", () => {
 });
 
 test("inventory lists every runtime thinking level plus contextual actions", () => {
-  const commands = composerSlashCommands(source({ canStop: true, liveDelivery: "steer" }));
+  const commands = composerSlashCommands(source({ canStop: true }));
   const ids = commands.map((command) => command.id);
   for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"]) {
     assert.ok(ids.includes(`thinking-${level}`), `missing thinking-${level}`);
   }
   assert.ok(ids.includes("model"), "missing model");
   assert.ok(ids.includes("stop"), "missing stop while a Run is stoppable");
-  assert.ok(ids.includes("delivery-follow-up"), "missing queue toggle while steering");
-  assert.ok(!ids.includes("delivery-steer"), "current delivery mode is not offered as a no-op");
-  assert.ok(!ids.includes("thinking-auto"), "reset is hidden while following Pi settings");
+  assert.ok(!ids.includes("delivery-steer") && !ids.includes("delivery-follow-up"), "delivery follows composer shortcuts instead of a persistent mode");
+  assert.ok(!ids.includes("thinking-auto"), "reset is hidden while following the default level");
 });
 
 test("disabled-context actions never appear in the menu", () => {
   const ids = composerSlashCommands(source()).map((command) => command.id);
   assert.ok(!ids.includes("stop"), "stop requires a stoppable Run");
-  assert.ok(!ids.includes("delivery-steer") && !ids.includes("delivery-follow-up"), "delivery requires live delivery");
+  assert.ok(!ids.includes("delivery-steer") && !ids.includes("delivery-follow-up"), "delivery selection is not a slash-menu state");
   assert.ok(!ids.includes("compact") && !ids.includes("fork") && !ids.includes("copy-chat"), "branch actions require a branch");
   const noRoute = composerSlashCommands(source({ canPickRoute: false })).map((command) => command.id);
   assert.ok(!noRoute.includes("model") && !noRoute.some((id) => id.startsWith("thinking-")), "route commands hide without a picker");

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, extname, isAbsolute, join, relative, sep } from "node:path";
+import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path";
 import {
   createLocalAssetVectorRecords,
   searchLocalAssetVectorRecords,
@@ -27,7 +27,7 @@ import { readJsonFile, readJsonlFile, writeJsonFile } from "./workspace.js";
 export type LibraryScope = { kind: "personal" } | { kind: "project"; projectId: string };
 export type LibraryRetrievalMode = "lexical" | "vector" | "hybrid";
 
-interface StoredLibraryDocument {
+export interface StoredLibraryDocumentV1 {
   id: string;
   originalName: string;
   managedRelPath: string;
@@ -38,13 +38,44 @@ interface StoredLibraryDocument {
   updatedAt: string;
   blockCount: number;
   parserVersions: string[];
+  /** Published only by the SQLite authority; legacy JSON has no content ref. */
+  contentBlobRefId?: string;
 }
 
-interface StoredLibraryCatalog {
+export interface StoredLibraryCatalogV1 {
   schemaVersion: 1;
   scope: LibraryScope;
-  documents: StoredLibraryDocument[];
+  documents: StoredLibraryDocumentV1[];
   updatedAt: string;
+}
+
+type StoredLibraryDocument = StoredLibraryDocumentV1;
+type StoredLibraryCatalog = StoredLibraryCatalogV1;
+
+export interface LibraryBlockV1 extends AssetBlock {
+  documentId: string;
+}
+
+export interface LibraryMetadataFileV1 {
+  schemaVersion: 1;
+  scope: LibraryScope;
+  documents: StoredLibraryDocumentV1[];
+  blocks: LibraryBlockV1[];
+  updatedAt: string;
+}
+
+export interface LibraryPersistence {
+  read(scope: LibraryScope): Promise<LibraryMetadataFileV1 | null>;
+  write(scope: LibraryScope, value: LibraryMetadataFileV1, expected: LibraryMetadataFileV1 | null): Promise<void>;
+  putDocument(input: {
+    scope: LibraryScope;
+    documentId: string;
+    originalName: string;
+    bytes: Uint8Array;
+    expectedSha256: string;
+  }): Promise<{ managedRelPath: string; contentBlobRefId?: string }>;
+  materializeDocument(scope: LibraryScope, document: StoredLibraryDocumentV1): Promise<{ path: string; cleanup?: () => Promise<void> }>;
+  removeDocument(scope: LibraryScope, document: StoredLibraryDocumentV1): Promise<void>;
 }
 
 export interface LibraryDocument extends Omit<StoredLibraryDocument, "managedRelPath"> {
@@ -59,9 +90,7 @@ export interface LibraryCatalog {
   updatedAt: string;
 }
 
-interface LibraryBlock extends AssetBlock {
-  documentId: string;
-}
+type LibraryBlock = LibraryBlockV1;
 
 export interface LibraryIndexReport {
   scope: LibraryScope;
@@ -113,16 +142,113 @@ export function libraryScopeRoot(runtimeRoot: string, scope: LibraryScope): stri
     : join(runtimeRoot, "data", "projects", validateProjectId(scope.projectId), "library");
 }
 
-function catalogPath(runtimeRoot: string, scope: LibraryScope): string {
+export function libraryCatalogPath(runtimeRoot: string, scope: LibraryScope): string {
   return join(libraryScopeRoot(runtimeRoot, scope), "catalog.json");
 }
 
-function blocksPath(runtimeRoot: string, scope: LibraryScope): string {
+export function libraryBlocksPath(runtimeRoot: string, scope: LibraryScope): string {
   return join(libraryScopeRoot(runtimeRoot, scope), "blocks.jsonl");
 }
 
-function vectorsPath(runtimeRoot: string, scope: LibraryScope): string {
+export function libraryVectorsPath(runtimeRoot: string, scope: LibraryScope): string {
   return join(libraryScopeRoot(runtimeRoot, scope), "vectors.jsonl");
+}
+
+const SQLITE_AUTHORITY_MARKER = "data/runtime/assistant-library-sqlite-v1/authority-v1.json";
+
+function isoTimestamp(value: unknown, label: string): string {
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw new Error(`${label} must be an ISO timestamp.`);
+  return value;
+}
+
+function parseLibraryScope(value: unknown, label: string): LibraryScope {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} is invalid.`);
+  const row = value as Record<string, unknown>;
+  if (row.kind === "personal") return { kind: "personal" };
+  if (row.kind === "project" && typeof row.projectId === "string") {
+    return { kind: "project", projectId: validateProjectId(row.projectId) };
+  }
+  throw new Error(`${label} is invalid.`);
+}
+
+function parseLibraryDocument(value: unknown, label: string): StoredLibraryDocumentV1 {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} is invalid.`);
+  const row = value as Record<string, unknown>;
+  if (typeof row.id !== "string" || !row.id.trim()
+    || typeof row.originalName !== "string" || !row.originalName.trim()
+    || typeof row.managedRelPath !== "string" || !row.managedRelPath.trim()
+    || typeof row.sourceDigest !== "string" || !/^[a-f0-9]{64}$/u.test(row.sourceDigest)
+    || typeof row.sizeBytes !== "number" || !Number.isSafeInteger(row.sizeBytes) || row.sizeBytes < 0
+    || typeof row.extension !== "string" || !row.extension.startsWith(".")
+    || !Number.isFinite(Date.parse(String(row.importedAt))) || !Number.isFinite(Date.parse(String(row.updatedAt)))
+    || !Number.isSafeInteger(row.blockCount) || Number(row.blockCount) < 0
+    || !Array.isArray(row.parserVersions) || !row.parserVersions.every((entry) => typeof entry === "string" && Boolean(entry.trim()))) {
+    throw new Error(`${label} has invalid fields.`);
+  }
+  if (row.contentBlobRefId !== undefined && (typeof row.contentBlobRefId !== "string" || !/^[a-f0-9]{64}$/u.test(row.contentBlobRefId))) {
+    throw new Error(`${label}.contentBlobRefId is invalid.`);
+  }
+  return {
+    id: row.id.trim(),
+    originalName: row.originalName,
+    managedRelPath: row.managedRelPath,
+    sourceDigest: row.sourceDigest,
+    sizeBytes: Number(row.sizeBytes),
+    extension: row.extension,
+    importedAt: isoTimestamp(row.importedAt, `${label}.importedAt`),
+    updatedAt: isoTimestamp(row.updatedAt, `${label}.updatedAt`),
+    blockCount: Number(row.blockCount),
+    parserVersions: row.parserVersions as string[],
+    ...(typeof row.contentBlobRefId === "string" ? { contentBlobRefId: row.contentBlobRefId } : {}),
+  };
+}
+
+function parseLibraryBlock(value: unknown, label: string): LibraryBlockV1 {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} is invalid.`);
+  const row = value as Record<string, unknown>;
+  if (typeof row.blockId !== "string" || !row.blockId.trim()
+    || typeof row.documentId !== "string" || !row.documentId.trim()
+    || typeof row.assetPath !== "string"
+    || !Number.isSafeInteger(row.lineNo) || Number(row.lineNo) < 1
+    || !["heading", "table", "text", "image"].includes(String(row.blockType))
+    || typeof row.text !== "string"
+    || !["text_asset", "docx_asset", "pptx_asset", "pdf_asset", "xlsx_asset", "image_asset"].includes(String(row.sourceEngine))
+    || (row.sourceDigest !== undefined && (typeof row.sourceDigest !== "string" || !/^[a-f0-9]{64}$/u.test(row.sourceDigest)))) {
+    throw new Error(`${label} has invalid fields.`);
+  }
+  return {
+    blockId: row.blockId,
+    documentId: row.documentId,
+    assetPath: row.assetPath,
+    lineNo: Number(row.lineNo),
+    blockType: row.blockType as AssetBlock["blockType"],
+    text: row.text,
+    sourceEngine: row.sourceEngine as AssetBlock["sourceEngine"],
+    ...(typeof row.role === "string" ? { role: row.role } : {}),
+    ...(typeof row.parserKind === "string" ? { parserKind: row.parserKind } : {}),
+    ...(typeof row.typedRowId === "string" ? { typedRowId: row.typedRowId } : {}),
+    ...(typeof row.authorityTier === "string" ? { authorityTier: row.authorityTier } : {}),
+    ...(typeof row.sourceDigest === "string" ? { sourceDigest: row.sourceDigest } : {}),
+    ...(typeof row.page === "number" ? { page: row.page } : {}),
+    ...(typeof row.sheet === "string" ? { sheet: row.sheet } : {}),
+    ...(typeof row.slide === "number" ? { slide: row.slide } : {}),
+    ...(Array.isArray(row.bbox) ? { bbox: row.bbox as [number, number, number, number] } : {}),
+    ...(typeof row.parserVersion === "string" ? { parserVersion: row.parserVersion } : {}),
+  };
+}
+
+export function parseLibraryMetadataFile(value: unknown, label = "Library metadata"): LibraryMetadataFileV1 {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} is invalid.`);
+  const row = value as Record<string, unknown>;
+  if (row.schemaVersion !== 1 || !row.scope || !Array.isArray(row.documents) || !Array.isArray(row.blocks)) throw new Error(`${label} schema is invalid.`);
+  const scope = parseLibraryScope(row.scope, `${label}.scope`);
+  const documents = row.documents.map((document, index) => parseLibraryDocument(document, `${label}.documents[${index}]`));
+  const blocks = row.blocks.map((block, index) => parseLibraryBlock(block, `${label}.blocks[${index}]`));
+  if (new Set(documents.map((document) => document.id)).size !== documents.length
+    || blocks.some((block) => !documents.some((document) => document.id === block.documentId))) {
+    throw new Error(`${label} contains duplicate document IDs or orphan blocks.`);
+  }
+  return { schemaVersion: 1, scope, documents, blocks, updatedAt: isoTimestamp(row.updatedAt, `${label}.updatedAt`) };
 }
 
 function sameScope(left: LibraryScope, right: LibraryScope): boolean {
@@ -133,15 +259,78 @@ function defaultCatalog(scope: LibraryScope): StoredLibraryCatalog {
   return { schemaVersion: 1, scope, documents: [], updatedAt: new Date(0).toISOString() };
 }
 
-async function readStoredCatalog(runtimeRoot: string, scope: LibraryScope): Promise<StoredLibraryCatalog> {
-  const catalog = await readJsonFile<StoredLibraryCatalog>(catalogPath(runtimeRoot, scope), defaultCatalog(scope));
-  if (catalog.schemaVersion !== 1 || !sameScope(catalog.scope, scope) || !Array.isArray(catalog.documents)) {
-    throw new Error("Library catalog scope or schema does not match its managed storage root.");
-  }
-  return catalog;
+function defaultMetadata(scope: LibraryScope): LibraryMetadataFileV1 {
+  return { ...defaultCatalog(scope), blocks: [] };
 }
 
-function managedPath(runtimeRoot: string, scope: LibraryScope, document: StoredLibraryDocument): string {
+async function assertLegacyAuthorityAvailable(runtimeRoot: string): Promise<void> {
+  try {
+    await stat(join(runtimeRoot, SQLITE_AUTHORITY_MARKER));
+    throw new Error("SQLite Library storage is authoritative; legacy JSON Library access is read-only and must use the injected store.");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+async function readLegacyMetadata(runtimeRoot: string, scope: LibraryScope): Promise<LibraryMetadataFileV1> {
+  await assertLegacyAuthorityAvailable(runtimeRoot);
+  const catalogValue = await readJsonFile<unknown>(libraryCatalogPath(runtimeRoot, scope), defaultCatalog(scope));
+  const catalog = catalogValue && typeof catalogValue === "object" && !Array.isArray(catalogValue)
+    ? catalogValue as Record<string, unknown>
+    : null;
+  if (!catalog || typeof catalog !== "object" || Array.isArray(catalog) || catalog.schemaVersion !== 1 || !catalog.scope || !Array.isArray(catalog.documents)) {
+    throw new Error("Library catalog scope or schema does not match its managed storage root.");
+  }
+  const blocks = await readJsonlFile<unknown>(libraryBlocksPath(runtimeRoot, scope));
+  return parseLibraryMetadataFile({ ...catalog, blocks }, "Legacy Library metadata");
+}
+
+function legacyLibraryPersistence(runtimeRoot: string): LibraryPersistence {
+  return {
+    async read(scope) {
+      const catalogFile = await readLegacyMetadata(runtimeRoot, scope);
+      return catalogFile;
+    },
+    async write(scope, value, expected) {
+      await assertLegacyAuthorityAvailable(runtimeRoot);
+      if (!sameScope(value.scope, scope)) throw new Error("Library metadata scope does not match its managed storage root.");
+      const current = await readLegacyMetadata(runtimeRoot, scope);
+      if (expected && !sameJson(current, expected)) throw new Error(`Library ${scope.kind} metadata revision conflict.`);
+      await writeJsonFile(libraryCatalogPath(runtimeRoot, scope), { schemaVersion: 1, scope, documents: value.documents, updatedAt: value.updatedAt });
+      await writeJsonlAtomic(libraryBlocksPath(runtimeRoot, scope), value.blocks);
+    },
+    async putDocument(input) {
+      await assertLegacyAuthorityAvailable(runtimeRoot);
+      const managedRelPath = join("sources", input.documentId, safeName(input.originalName));
+      const target = join(libraryScopeRoot(runtimeRoot, input.scope), managedRelPath);
+      const digest = createHash("sha256").update(input.bytes).digest("hex");
+      if (digest !== input.expectedSha256) throw new Error(`Library source digest mismatch for ${input.originalName}.`);
+      const quarantine = `${target}.quarantine-${process.pid}-${Date.now()}`;
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(quarantine, Buffer.from(input.bytes), { flag: "wx", mode: 0o600 });
+      const copied = await sha256File(quarantine);
+      if (copied.digest !== input.expectedSha256 || copied.sizeBytes !== input.bytes.byteLength) {
+        await rm(quarantine, { force: true });
+        throw new Error(`Library source copy verification failed for ${input.originalName}.`);
+      }
+      await rename(quarantine, target);
+      return { managedRelPath };
+    },
+    async materializeDocument(scope, document) {
+      return { path: managedPath(runtimeRoot, scope, document) };
+    },
+    async removeDocument(scope, document) {
+      await assertLegacyAuthorityAvailable(runtimeRoot);
+      await rm(join(libraryScopeRoot(runtimeRoot, scope), "sources", document.id), { recursive: true, force: true });
+    },
+  };
+}
+
+function managedPath(runtimeRoot: string, scope: LibraryScope, document: StoredLibraryDocumentV1): string {
   const root = libraryScopeRoot(runtimeRoot, scope);
   const path = join(root, document.managedRelPath);
   const rel = relative(root, path);
@@ -150,12 +339,17 @@ function managedPath(runtimeRoot: string, scope: LibraryScope, document: StoredL
 }
 
 function publicDocument(runtimeRoot: string, scope: LibraryScope, document: StoredLibraryDocument): LibraryDocument {
-  const { managedRelPath: _managedRelPath, ...rest } = document;
+  const { managedRelPath: _managedRelPath, contentBlobRefId: _contentBlobRefId, ...rest } = document;
   return { ...rest, scope, managedPath: managedPath(runtimeRoot, scope, document) };
 }
 
-export async function readLibraryCatalog(runtimeRoot: string, scope: LibraryScope): Promise<LibraryCatalog> {
-  const catalog = await readStoredCatalog(runtimeRoot, scope);
+async function readMetadata(runtimeRoot: string, scope: LibraryScope, persistence?: LibraryPersistence): Promise<LibraryMetadataFileV1> {
+  const value = persistence ? await persistence.read(scope) : await legacyLibraryPersistence(runtimeRoot).read(scope);
+  return value ?? defaultMetadata(scope);
+}
+
+export async function readLibraryCatalog(runtimeRoot: string, scope: LibraryScope, options: { persistence?: LibraryPersistence } = {}): Promise<LibraryCatalog> {
+  const catalog = await readMetadata(runtimeRoot, scope, options.persistence);
   return {
     schemaVersion: 1,
     scope,
@@ -218,12 +412,21 @@ async function writeJsonlAtomic(path: string, rows: unknown[]): Promise<void> {
   }
 }
 
-async function rebuildBlocks(runtimeRoot: string, scope: LibraryScope, catalog: StoredLibraryCatalog): Promise<LibraryBlock[]> {
+async function rebuildBlocks(
+  scope: LibraryScope,
+  catalog: StoredLibraryCatalog,
+  persistence: LibraryPersistence,
+): Promise<LibraryBlock[]> {
   const blocks: LibraryBlock[] = [];
   const nextDocuments: StoredLibraryDocument[] = [];
   for (const document of catalog.documents) {
-    const path = managedPath(runtimeRoot, scope, document);
-    const extracted = await extractBlocks(path, document.extension);
+    const materialized = await persistence.materializeDocument(scope, document);
+    let extracted: ExtractedDocumentBlock[];
+    try {
+      extracted = await extractBlocks(materialized.path, document.extension);
+    } finally {
+      await materialized.cleanup?.();
+    }
     const parserVersions = new Set<string>();
     for (const block of extracted) {
       const parserVersion = block.parserVersion ?? "la-document-assets-v1";
@@ -248,27 +451,28 @@ async function rebuildBlocks(runtimeRoot: string, scope: LibraryScope, catalog: 
     nextDocuments.push({ ...document, blockCount: extracted.length, parserVersions: [...parserVersions].sort() });
   }
   catalog.documents = nextDocuments;
-  await writeJsonlAtomic(blocksPath(runtimeRoot, scope), blocks);
   return blocks;
 }
 
 export async function reindexLibrary(
   runtimeRoot: string,
-  options: { scope: LibraryScope; semantic?: boolean; embedder?: LocalTextEmbedder },
+  options: { scope: LibraryScope; semantic?: boolean; embedder?: LocalTextEmbedder; persistence?: LibraryPersistence },
 ): Promise<LibraryIndexReport> {
-  const catalog = await readStoredCatalog(runtimeRoot, options.scope);
-  const blocks = await rebuildBlocks(runtimeRoot, options.scope, catalog);
+  const persistence = options.persistence ?? legacyLibraryPersistence(runtimeRoot);
+  const metadata = await readMetadata(runtimeRoot, options.scope, persistence);
+  const catalog: StoredLibraryCatalog = { schemaVersion: 1, scope: metadata.scope, documents: metadata.documents, updatedAt: metadata.updatedAt };
+  const blocks = await rebuildBlocks(options.scope, catalog, persistence);
   catalog.updatedAt = new Date().toISOString();
-  await writeJsonFile(catalogPath(runtimeRoot, options.scope), catalog);
+  await persistence.write(options.scope, { schemaVersion: 1, scope: options.scope, documents: catalog.documents, blocks, updatedAt: catalog.updatedAt }, metadata);
   if (options.semantic === false) {
-    await rm(vectorsPath(runtimeRoot, options.scope), { force: true });
+    await rm(libraryVectorsPath(runtimeRoot, options.scope), { force: true });
     return { scope: options.scope, documents: catalog.documents.map((document) => publicDocument(runtimeRoot, options.scope, document)), blocks: blocks.length, semanticState: "lexical_only" };
   }
   let embedder = options.embedder;
   if (!embedder) {
     const pack = await inspectLocalEmbeddingPack(runtimeRoot);
     if (pack.state !== "ready") {
-      await rm(vectorsPath(runtimeRoot, options.scope), { force: true });
+      await rm(libraryVectorsPath(runtimeRoot, options.scope), { force: true });
       return {
         scope: options.scope,
         documents: catalog.documents.map((document) => publicDocument(runtimeRoot, options.scope, document)),
@@ -281,7 +485,7 @@ export async function reindexLibrary(
   }
   try {
     const built = await createLocalAssetVectorRecords(blocks, embedder);
-    await writeAssetVectorRecords(vectorsPath(runtimeRoot, options.scope), built.records);
+    await writeAssetVectorRecords(libraryVectorsPath(runtimeRoot, options.scope), built.records);
     return {
       scope: options.scope,
       documents: catalog.documents.map((document) => publicDocument(runtimeRoot, options.scope, document)),
@@ -291,7 +495,7 @@ export async function reindexLibrary(
       message: built.skipped.length ? `${built.skipped.length} empty block(s) were not indexed.` : undefined,
     };
   } catch (error) {
-    await rm(vectorsPath(runtimeRoot, options.scope), { force: true });
+    await rm(libraryVectorsPath(runtimeRoot, options.scope), { force: true });
     return {
       scope: options.scope,
       documents: catalog.documents.map((document) => publicDocument(runtimeRoot, options.scope, document)),
@@ -305,39 +509,31 @@ export async function reindexLibrary(
 
 export async function importLibraryDocuments(
   runtimeRoot: string,
-  options: { scope: LibraryScope; sourcePaths: string[]; semantic?: boolean; embedder?: LocalTextEmbedder },
+  options: { scope: LibraryScope; sourcePaths: string[]; semantic?: boolean; embedder?: LocalTextEmbedder; persistence?: LibraryPersistence },
 ): Promise<LibraryIndexReport> {
   if (!Array.isArray(options.sourcePaths) || !options.sourcePaths.length) throw new Error("Choose at least one document to import into Library.");
-  const root = libraryScopeRoot(runtimeRoot, options.scope);
-  const catalog = await readStoredCatalog(runtimeRoot, options.scope);
+  const persistence = options.persistence ?? legacyLibraryPersistence(runtimeRoot);
+  const metadata = await readMetadata(runtimeRoot, options.scope, persistence);
+  const catalog: StoredLibraryCatalog = { schemaVersion: 1, scope: metadata.scope, documents: metadata.documents, updatedAt: metadata.updatedAt };
   const documents = new Map(catalog.documents.map((document) => [document.id, document]));
-  await mkdir(join(root, "sources"), { recursive: true });
   for (const selectedPath of options.sourcePaths) {
     const source = await realpath(selectedPath);
     const info = await stat(source);
     if (!info.isFile()) throw new Error(`Library import accepts explicitly selected files only: ${selectedPath}`);
     const extension = extname(source).toLocaleLowerCase();
     if (!SUPPORTED_EXTENSIONS.has(extension)) throw new Error(`Library does not support ${extension || "extensionless"} documents yet.`);
-    const { digest, sizeBytes } = await sha256File(source);
+    const bytes = await readFile(source);
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    const sizeBytes = bytes.byteLength;
     const id = `library_${digest.slice(0, 24)}`;
     const originalName = safeName(basename(source));
-    const managedRelPath = join("sources", id, originalName);
-    const target = join(root, managedRelPath);
     if (!documents.has(id)) {
-      const quarantine = `${target}.quarantine-${process.pid}-${Date.now()}`;
-      await mkdir(join(target, ".."), { recursive: true });
-      await copyFile(source, quarantine);
-      const copied = await sha256File(quarantine);
-      if (copied.digest !== digest || copied.sizeBytes !== sizeBytes) {
-        await rm(quarantine, { force: true });
-        throw new Error(`Library source copy verification failed for ${originalName}.`);
-      }
-      await rename(quarantine, target);
+      const stored = await persistence.putDocument({ scope: options.scope, documentId: id, originalName, bytes, expectedSha256: digest });
       const now = new Date().toISOString();
       documents.set(id, {
         id,
         originalName,
-        managedRelPath,
+        managedRelPath: stored.managedRelPath,
         sourceDigest: digest,
         sizeBytes,
         extension,
@@ -345,6 +541,7 @@ export async function importLibraryDocuments(
         updatedAt: now,
         blockCount: 0,
         parserVersions: [],
+        ...(stored.contentBlobRefId ? { contentBlobRefId: stored.contentBlobRefId } : {}),
       });
     }
   }
@@ -355,22 +552,26 @@ export async function importLibraryDocuments(
     documents: [...documents.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id)),
     updatedAt: now,
   };
-  await writeJsonFile(catalogPath(runtimeRoot, options.scope), next);
-  return reindexLibrary(runtimeRoot, { scope: options.scope, semantic: options.semantic, embedder: options.embedder });
+  await persistence.write(options.scope, { schemaVersion: 1, scope: options.scope, documents: next.documents, blocks: metadata.blocks, updatedAt: next.updatedAt }, metadata);
+  return reindexLibrary(runtimeRoot, { scope: options.scope, semantic: options.semantic, embedder: options.embedder, persistence });
 }
 
 export async function removeLibraryDocument(
   runtimeRoot: string,
-  options: { scope: LibraryScope; documentId: string; embedder?: LocalTextEmbedder },
+  options: { scope: LibraryScope; documentId: string; embedder?: LocalTextEmbedder; persistence?: LibraryPersistence },
 ): Promise<LibraryIndexReport> {
-  const catalog = await readStoredCatalog(runtimeRoot, options.scope);
+  const persistence = options.persistence ?? legacyLibraryPersistence(runtimeRoot);
+  const metadata = await readMetadata(runtimeRoot, options.scope, persistence);
+  const catalog: StoredLibraryCatalog = { schemaVersion: 1, scope: metadata.scope, documents: metadata.documents, updatedAt: metadata.updatedAt };
   const document = catalog.documents.find((candidate) => candidate.id === options.documentId);
   if (!document) throw new Error(`Library document not found in this scope: ${options.documentId}`);
   catalog.documents = catalog.documents.filter((candidate) => candidate.id !== options.documentId);
   catalog.updatedAt = new Date().toISOString();
-  await writeJsonFile(catalogPath(runtimeRoot, options.scope), catalog);
-  await rm(join(libraryScopeRoot(runtimeRoot, options.scope), "sources", document.id), { recursive: true, force: true });
-  return reindexLibrary(runtimeRoot, { scope: options.scope, embedder: options.embedder });
+  await persistence.write(options.scope, { schemaVersion: 1, scope: options.scope, documents: catalog.documents, blocks: metadata.blocks.filter((block) => block.documentId !== document.id), updatedAt: catalog.updatedAt }, metadata);
+  // Metadata is authoritative; remove only the derived managed source after the CAS commit.
+  // If cleanup fails, the source/blob remains recoverable and can be collected by a later gate.
+  await persistence.removeDocument(options.scope, document);
+  return reindexLibrary(runtimeRoot, { scope: options.scope, embedder: options.embedder, persistence });
 }
 
 const SPLIT_RE = /[\s,.;:!?，。！？、；："'()[\]{}<>《》【】]+/u;
@@ -400,11 +601,11 @@ function lexicalScore(query: string, text: string): number {
 
 async function searchSingleScope(
   runtimeRoot: string,
-  options: { scope: LibraryScope; query: string; retrievalMode: LibraryRetrievalMode; embedder?: LocalTextEmbedder },
+  options: { scope: LibraryScope; query: string; retrievalMode: LibraryRetrievalMode; embedder?: LocalTextEmbedder; persistence?: LibraryPersistence },
 ): Promise<LibrarySearchReport> {
-  const catalog = await readLibraryCatalog(runtimeRoot, options.scope);
+  const catalog = await readLibraryCatalog(runtimeRoot, options.scope, { persistence: options.persistence });
   const documents = new Map(catalog.documents.map((document) => [document.id, document]));
-  const blocks = await readJsonlFile<LibraryBlock>(blocksPath(runtimeRoot, options.scope));
+  const blocks = (await readMetadata(runtimeRoot, options.scope, options.persistence)).blocks;
   const lexicalScores = new Map(blocks.map((block) => [block.blockId, lexicalScore(options.query, block.text)]));
   const lexical = options.retrievalMode === "vector" ? [] : blocks
     .filter((block) => (lexicalScores.get(block.blockId) ?? 0) > 0)
@@ -413,7 +614,7 @@ async function searchSingleScope(
   let semanticState: LibrarySearchReport["semanticState"] = { state: "lexical_only" };
   let semantic: Awaited<ReturnType<typeof searchLocalAssetVectorRecords>> = [];
   if (options.retrievalMode !== "lexical") {
-    const rows = await readJsonlFile<AssetVectorRecord>(vectorsPath(runtimeRoot, options.scope));
+    const rows = await readJsonlFile<AssetVectorRecord>(libraryVectorsPath(runtimeRoot, options.scope));
     if (rows.length) {
       try {
         const embedder = options.embedder ?? await createLocalE5Embedder(runtimeRoot);
@@ -462,7 +663,7 @@ async function searchSingleScope(
 
 export async function searchLibrary(
   runtimeRoot: string,
-  options: { scope: LibraryScope; query: string; includePersonal?: boolean; retrievalMode?: LibraryRetrievalMode; limit?: number; embedder?: LocalTextEmbedder },
+  options: { scope: LibraryScope; query: string; includePersonal?: boolean; retrievalMode?: LibraryRetrievalMode; limit?: number; embedder?: LocalTextEmbedder; persistence?: LibraryPersistence },
 ): Promise<LibrarySearchReport> {
   const query = options.query.trim();
   if (!query) throw new Error("Library search query is required.");
@@ -470,7 +671,7 @@ export async function searchLibrary(
   const scopes: LibraryScope[] = options.scope.kind === "project" && options.includePersonal !== false
     ? [options.scope, { kind: "personal" }]
     : [options.scope];
-  const reports = await Promise.all(scopes.map((scope) => searchSingleScope(runtimeRoot, { scope, query, retrievalMode, embedder: options.embedder })));
+  const reports = await Promise.all(scopes.map((scope) => searchSingleScope(runtimeRoot, { scope, query, retrievalMode, embedder: options.embedder, persistence: options.persistence })));
   const projectAuthority = (scope: LibraryScope) => scope.kind === "project" ? 1 : 0;
   const hits = reports.flatMap((report) => report.hits)
     .sort((left, right) => right.score - left.score || projectAuthority(right.scope) - projectAuthority(left.scope) || left.blockId.localeCompare(right.blockId))

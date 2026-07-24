@@ -13,7 +13,7 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { createHash } from "node:crypto";
-import type { CatWorkspace, MemoryConfig } from "@linguist-agent/cat-data";
+import type { CatWorkspace, LibraryPersistence } from "@linguist-agent/cat-data";
 import { workspacePath } from "@linguist-agent/cat-data";
 import { buildCatTools } from "@linguist-agent/cat-tools";
 import { applyCatSessionExtensionsOverride } from "./catResourceInheritance.js";
@@ -30,6 +30,7 @@ import { applySharedPiRuntimeOverrides } from "./piRuntimeOverrides.js";
 import { applyAgentRunToolOptions, type AgentRunOptions } from "./agentRunOptions.js";
 import type { AgentPermissionContract, AgentPermissionRequest, AgentPermissionUserDecision } from "./agentPermissions.js";
 import { normalizePiRuntimeModel } from "./modelCompat.js";
+import { assertProductionToolCapabilities } from "./toolCapabilities.js";
 import { buildCatRequestShape, type CatRequestShapeManifest, type CatRequestShapeResource } from "./catRequestShape.js";
 
 const DEV_TOOLS = ["read", "edit", "write", "bash", "grep", "find", "ls"];
@@ -74,6 +75,9 @@ export interface CatExtensionBinding {
 
 export interface CreateCatAgentSessionOptions {
   workspace: CatWorkspace;
+  /** Canonical Task/Run scope for permission requests. */
+  taskId?: string;
+  runId?: string;
   /** Process-owned Pi model/auth runtime. The server injects one shared instance. */
   modelRuntime?: ModelRuntime;
   modelProvider?: string;
@@ -82,7 +86,6 @@ export interface CreateCatAgentSessionOptions {
   sessionMode?: "memory" | "new" | "continue" | "project";
   sessionId?: string;
   branchEntryId?: string;
-  memoryConfig?: MemoryConfig;
   /** Session preset: cat (full CAT tools, default) | dev (LA self-edit) | scratch (conversational). */
   preset?: CatSessionPreset;
   /** Tool names the user disabled at runtime (Settings → Tools). Filtered out of the CAT surface. */
@@ -99,6 +102,10 @@ export interface CreateCatAgentSessionOptions {
   /** Agent-autonomy policy for inherited/builtin/general tools. CAT-domain tools remain CAT-governed. */
   permissionContract?: AgentPermissionContract;
   requestPermissionDecision?: (request: AgentPermissionRequest) => Promise<AgentPermissionUserDecision>;
+  /** Host-authored confirmed-memory recall snapshot; never evidence or authority. */
+  memoryRecall?: string;
+  /** Host-only Library metadata/blob authority; never serialized into a Run plan. */
+  libraryPersistence?: LibraryPersistence;
 }
 
 export function catAgentSessionDir(workspace: CatWorkspace): string {
@@ -143,6 +150,9 @@ export async function createCatAgentSession(
   );
   const runOptions = options.runOptions;
   const isolatedResources = options.isolatedResources;
+  if ((isolatedResources?.extensionPaths?.length ?? 0) > 0) {
+    throw new Error("Isolated CAT executable Extensions must use the isolated Extension Host; direct Pi loader execution is disabled.");
+  }
   if (isolatedResources && [
     runOptions?.additionalExtensionPaths,
     runOptions?.additionalSkillPaths,
@@ -167,7 +177,7 @@ export async function createCatAgentSession(
     cwd: options.workspace.root,
     agentDir: getAgentDir(),
     settingsManager,
-    additionalExtensionPaths: isolatedResources?.extensionPaths ?? (inheritsProjectContext ? runOptions?.additionalExtensionPaths : undefined),
+    additionalExtensionPaths: inheritsProjectContext ? runOptions?.additionalExtensionPaths : undefined,
     additionalSkillPaths: isolatedResources?.skillPaths ?? (inheritsProjectContext ? runOptions?.additionalSkillPaths : undefined),
     additionalPromptTemplatePaths: isolatedResources?.promptTemplatePaths ?? (inheritsProjectContext ? runOptions?.additionalPromptTemplatePaths : undefined),
     additionalThemePaths: isolatedResources?.themePaths ?? (inheritsProjectContext ? runOptions?.additionalThemePaths : undefined),
@@ -179,8 +189,11 @@ export async function createCatAgentSession(
     extensionsOverride: applyCatSessionExtensionsOverride,
     extensionFactories: options.runtimeExtension === false ? [] : [createCatRuntimeExtension(options.workspace, {
       contract: options.permissionContract,
+      taskId: options.taskId,
+      runId: options.runId,
       sessionId: () => activeSessionId,
       requestDecision: options.requestPermissionDecision,
+      memoryRecall: options.memoryRecall,
     })],
     systemPromptOverride: presetDef.preset === "dev"
       ? undefined
@@ -222,7 +235,7 @@ export async function createCatAgentSession(
     presetDef.toolMode === "cat"
       ? [
           createSandboxedBashTool(options.workspace),
-          ...buildCatTools(options.workspace, options.memoryConfig, { includeWebBridges: false }),
+          ...buildCatTools(options.workspace, { includeWebBridges: false, libraryPersistence: options.libraryPersistence }),
         ].filter((tool) => !disabled.has(tool.name)).concat(options.serverTools ?? [])
       : [];
   const baseSessionOptions: CreateAgentSessionOptions =
@@ -262,6 +275,12 @@ export async function createCatAgentSession(
   const sessionOptions = applyAgentRunToolOptions(baseSessionOptions, runOptions);
 
   const result = await createAgentSession(sessionOptions);
+  try {
+    assertProductionToolCapabilities(result.session.getAllTools().map((tool) => tool.name));
+  } catch (error) {
+    result.session.dispose();
+    throw error;
+  }
   activeSessionId = result.session.sessionId;
   if (options.extensionBinding) {
     try {

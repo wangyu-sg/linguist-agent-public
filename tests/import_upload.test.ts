@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
-import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { createSyntheticServerRoot } from "./helpers/synthetic_server_root.js";
+import { runtimeInstanceId } from "../packages/cat-server/src/runtime_compatibility.js";
 
-const repoRoot = new URL("..", import.meta.url).pathname;
+const sourceRepoRoot = new URL("..", import.meta.url).pathname;
+const syntheticServerRoot = await createSyntheticServerRoot();
+const repoRoot = syntheticServerRoot.root;
 const port = 8901;
 const base = `http://127.0.0.1:${port}`;
 const projectId = `codex-upload-api-${Date.now()}`;
@@ -43,8 +46,16 @@ const csvFixture = `SegmentID,Source,Target,Status,Note
 
 function startServer(): ChildProcess {
   return spawn("npm", ["run", "server"], {
-    cwd: repoRoot,
-    env: { ...process.env, LA_SERVER_PORT: String(port), LA_UPLOAD_MAX_BYTES: "2048", LA_LOCAL_API_TOKEN: apiToken },
+    cwd: sourceRepoRoot,
+    env: {
+      ...process.env,
+      LA_SERVER_PORT: String(port),
+      LA_UPLOAD_MAX_BYTES: "2048",
+      LA_LOCAL_API_TOKEN: apiToken,
+      LA_TEST_MODE: "1",
+      LA_TEST_REPO_ROOT: syntheticServerRoot.root,
+      LA_TEST_PI_AGENT_DIR: syntheticServerRoot.piAgentDir,
+    },
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
   });
@@ -90,6 +101,8 @@ async function postUpload(body: Record<string, unknown>): Promise<{ status: numb
 const server = startServer();
 try {
   await waitForServer();
+  const handshake = await fetch(`${base}/api/health`).then((res) => res.json()) as { runtimeInstanceId: string };
+  assert.equal(handshake.runtimeInstanceId, runtimeInstanceId(repoRoot));
   assert.equal((await fetch(`${base}/api/projects`)).status, 401);
   assert.equal((await apiFetch(`${base}/api/projects`, { headers: { origin: "https://malicious.example" } })).status, 403);
   const uploaded = await postUpload({
@@ -146,7 +159,7 @@ try {
   assert.match(String(tooLarge.json.error), /too large/);
 } finally {
   stopServer(server);
-  await rm(join(repoRoot, "data", "projects", projectId), { recursive: true, force: true });
+  await syntheticServerRoot.cleanup();
 }
 
 console.log("import_upload tests passed");

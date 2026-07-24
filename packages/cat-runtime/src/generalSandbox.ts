@@ -6,10 +6,11 @@ import {
   type BashOperations,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { SandboxManager, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
+import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import type { FileGrantV1 } from "@linguist-agent/cat-data";
+import { ProcessCapabilityBroker } from "@linguist-agent/cat-data";
 import {
-  ensureSandboxInitialized,
+  sandboxCommandCoordinator,
   sandboxAllowedDomainsFromEnv,
   sanitizeBashEnv,
 } from "./catSandbox.js";
@@ -49,28 +50,21 @@ export function buildGeneralSandboxRuntimeConfig(
   };
 }
 
-let sandboxWrapQueue = Promise.resolve();
-
-async function sandboxedCommand(command: string, config: SandboxRuntimeConfig, signal?: AbortSignal): Promise<string> {
-  let wrapped = "";
-  const next = sandboxWrapQueue.then(async () => {
-    await ensureSandboxInitialized(config);
-    wrapped = await SandboxManager.wrapWithSandbox(command, undefined, undefined, signal);
-  });
-  sandboxWrapQueue = next.catch(() => undefined);
-  await next;
-  return wrapped;
-}
-
 export function createGeneralSandboxedBashOperations(access: GeneralFilesystemAccess): BashOperations {
   const local = createLocalBashOperations();
   const config = buildGeneralSandboxRuntimeConfig(access);
+  const processBroker = ProcessCapabilityBroker.create({
+    grants: [{ id: "la-general-sandboxed-shell", toolName: "bash", templateIds: ["sandboxed-shell"] }],
+  });
   return {
-    exec: async (command, cwd, options) => local.exec(
-      await sandboxedCommand(command, config, options.signal),
-      cwd,
-      { ...options, env: sanitizeBashEnv({ ...process.env, ...options.env }) },
-    ),
+    exec: async (command, cwd, options) => {
+      processBroker.authorize("bash", "sandboxed-shell");
+      return local.exec(
+        await sandboxCommandCoordinator.wrap(command, config, options.signal),
+        cwd,
+        { ...options, env: sanitizeBashEnv({ ...process.env, ...options.env }) },
+      );
+    },
   };
 }
 

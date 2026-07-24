@@ -8,6 +8,7 @@ import {
   type TaskDecisionOption,
   type TaskRunEventDraft,
 } from "@linguist-agent/cat-data";
+import { bindTaskDecision } from "./task_decision_binding.js";
 
 interface PipelineArtifact {
   type: TaskArtifactType;
@@ -169,7 +170,7 @@ export async function runTaskPipeline<Result>(input: {
       type: "decision_upsert",
       agentThreadId: threadId,
       occurredAt: finishedAt,
-      decision: {
+      decision: bindTaskDecision({
         id,
         taskId: input.taskId!,
         runId,
@@ -184,7 +185,7 @@ export async function runTaskPipeline<Result>(input: {
         scope: snapshot.task.scope,
         createdAt: finishedAt,
         decidedAt: finishedAt,
-      },
+      }, { runPlanHash: null }),
     })));
     events.push(activity(doneActivityId, finishedAt, "done", artifact.title, artifact.summary, [artifactId], decisions.map(({ id }) => id)));
     await append(events);

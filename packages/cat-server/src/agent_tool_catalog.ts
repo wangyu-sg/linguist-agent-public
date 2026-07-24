@@ -1,9 +1,19 @@
 import type { CatToolMetadata } from "@linguist-agent/cat-tools";
+import {
+  assertProductionToolCapabilities,
+  resolveToolCapabilityManifest,
+  type ToolCapability,
+  type ToolPermissionDomain,
+} from "@linguist-agent/cat-runtime";
 
 export type AgentToolSource = "pi-inherited" | "pi-package" | "cat-native" | "builtin";
 
 export interface AgentToolMetadata extends CatToolMetadata {
   source: AgentToolSource;
+  capabilitySchemaVersion: 1;
+  capabilityAuthority: "permission" | "cat-governance";
+  permissionDomain?: ToolPermissionDomain;
+  capabilities: ToolCapability[];
 }
 
 const ALL_MODES: CatToolMetadata["allowedModes"] = ["onboarding", "asset_intake", "translate", "edit", "proof", "delivery", "maintenance"];
@@ -65,6 +75,8 @@ export function createLeasedAgentToolCatalog(input: {
 
 function nonCatToolMetadata(tool: ResolvedAgentToolDefinition): AgentToolMetadata {
   const builtin = tool.sourceInfo?.source === "builtin";
+  const manifest = resolveToolCapabilityManifest(tool.name);
+  if (!manifest) throw new Error(`TOOL_CAPABILITY_UNDECLARED: production tool registration denied for ${tool.name}.`);
   return {
     name: tool.name,
     category: builtin ? "builtin" : "package",
@@ -75,6 +87,24 @@ function nonCatToolMetadata(tool: ResolvedAgentToolDefinition): AgentToolMetadat
     writesSegments: false,
     description: tool.description,
     source: builtin ? "builtin" : "pi-package",
+    capabilitySchemaVersion: manifest.schemaVersion,
+    capabilityAuthority: manifest.authority,
+    permissionDomain: manifest.permissionDomain,
+    capabilities: manifest.capabilities,
+  };
+}
+
+function catToolWithCapabilities(tool: CatToolMetadata, description: string): AgentToolMetadata {
+  const manifest = resolveToolCapabilityManifest(tool.name);
+  if (!manifest) throw new Error(`TOOL_CAPABILITY_UNDECLARED: production tool registration denied for ${tool.name}.`);
+  return {
+    ...tool,
+    description,
+    source: "cat-native",
+    capabilitySchemaVersion: manifest.schemaVersion,
+    capabilityAuthority: manifest.authority,
+    permissionDomain: manifest.permissionDomain,
+    capabilities: manifest.capabilities,
   };
 }
 
@@ -84,6 +114,7 @@ function nonCatToolMetadata(tool: ResolvedAgentToolDefinition): AgentToolMetadat
  * global Extensions are intentionally absent.
  */
 export function buildAgentToolMetadataCatalog(options: BuildAgentToolMetadataCatalogOptions): AgentToolMetadata[] {
+  assertProductionToolCapabilities(options.activeToolNames);
   const catTools = new Map(options.catTools.map((tool) => [tool.name, tool]));
   const definitions = new Map(options.tools.map((tool) => [tool.name, tool]));
   const seen = new Set<string>();
@@ -98,7 +129,7 @@ export function buildAgentToolMetadataCatalog(options: BuildAgentToolMetadataCat
     }
     const catTool = catTools.get(name);
     result.push(catTool
-      ? { ...catTool, description: definition.description || catTool.description, source: "cat-native" }
+      ? catToolWithCapabilities(catTool, definition.description || catTool.description)
       : nonCatToolMetadata(definition));
   }
 

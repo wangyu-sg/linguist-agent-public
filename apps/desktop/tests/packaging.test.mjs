@@ -51,14 +51,18 @@ test("signing identity parsing is exact and never invents an ad-hoc fallback", (
 
 test("package allowlist contains only built renderer and narrow main-process files", () => {
   assert.deepEqual(PACKAGED_SOURCE_FILES, [
-    "src/main.mjs",
-    "src/preload.cjs",
-    "src/desktop-security.mjs",
-    "src/native-dialogs.mjs",
-    "src/runtime-client.mjs",
-    "src/runtime-installer.mjs",
-    "src/notification-policy.mjs",
-    "src/rich-artifact-export.mjs",
+    "dist/electron/main.js",
+    "dist/electron/preload.cjs",
+    "dist/electron/ipc-contract.cjs",
+    "dist/electron/workspace-capabilities.cjs",
+    "dist/electron/desktop-security.mjs",
+    "dist/electron/native-dialogs.mjs",
+    "dist/electron/native-file-handles.mjs",
+    "dist/electron/runtime-client.mjs",
+    "dist/electron/runtime-transport.mjs",
+    "dist/electron/runtime-installer.mjs",
+    "dist/electron/notification-policy.mjs",
+    "dist/electron/rich-artifact-export.mjs",
   ]);
   assert.equal(PACKAGED_SOURCE_FILES.some((path) => path.includes("renderer")), false);
 });
@@ -68,6 +72,7 @@ test("runtime bundle contains compiled runtime code, pinned resources, and a mat
   const output = join(root, "output", "runtime");
   const nativeSource = join(root, "native-source");
   await mkdir(join(root, "packages", "cat-server", "src"), { recursive: true });
+  await mkdir(join(root, "packages", "cat-runtime", "src"), { recursive: true });
   await mkdir(join(root, ".pi"), { recursive: true });
   await mkdir(join(root, "patches", "pi-ask-headless-v1", "src"), { recursive: true });
   await mkdir(join(root, "apps", "desktop"), { recursive: true });
@@ -82,6 +87,13 @@ test("runtime bundle contains compiled runtime code, pinned resources, and a mat
     exports: { ".": "./src/server.ts" },
   })}\n`);
   await writeFile(join(root, "packages", "cat-server", "src", "server.ts"), "export {};\n");
+  await writeFile(join(root, "packages", "cat-runtime", "package.json"), `${JSON.stringify({
+    name: "@linguist-agent/cat-runtime",
+    version: "2.32.7",
+    type: "module",
+    exports: { ".": "./src/index.ts" },
+  })}\n`);
+  await writeFile(join(root, "packages", "cat-runtime", "src", "index.ts"), "export {};\n");
   await mkdir(join(root, "packages", "cat-server", "eval", "fixtures"), { recursive: true });
   await writeFile(join(root, "packages", "cat-server", "eval", "fixtures", "customer.json"), "{}\n");
   await writeFile(join(root, ".pi", "APPEND_SYSTEM.md"), "runtime policy\n");
@@ -118,8 +130,12 @@ test("runtime bundle contains compiled runtime code, pinned resources, and a mat
     if (command.endsWith("/node_modules/.bin/tsc")) {
       const compiledRoot = args[args.indexOf("--outDir") + 1];
       await mkdir(join(compiledRoot, "cat-server", "src"), { recursive: true });
+      await mkdir(join(compiledRoot, "cat-runtime", "src"), { recursive: true });
       await writeFile(join(compiledRoot, "cat-server", "src", "server.js"), "// compiled server\n");
       await writeFile(join(compiledRoot, "cat-server", "src", "install_resident.js"), "// compiled installer\n");
+      await writeFile(join(compiledRoot, "cat-server", "src", "general_run_worker_entry.js"), "// compiled General Run worker\n");
+      await writeFile(join(compiledRoot, "cat-server", "src", "cat_run_worker_entry.js"), "// compiled CAT/Eval Run worker\n");
+      await writeFile(join(compiledRoot, "cat-runtime", "src", "extension_host_entry.js"), "// compiled Extension Host\n");
       return { stdout: "", stderr: "" };
     }
     if (command === "npm") {
@@ -174,6 +190,7 @@ test("runtime bundle contains compiled runtime code, pinned resources, and a mat
   assert.doesNotMatch(stdout, /^packages\/cat-server\/src\/server\.ts$/m);
   assert.doesNotMatch(stdout, /^packages\/cat-server\/eval\//m);
   assert.match(stdout, /^packages\/cat-server\/src\/server\.js$/m);
+  assert.match(stdout, /^packages\/cat-runtime\/src\/extension_host_entry\.js$/m);
   assert.match(stdout, /^runtime-launcher\.mjs$/m);
   assert.match(stdout, /^node_modules\/@earendil-works\/pi-coding-agent\/package\.json$/m);
   assert.match(stdout, /^native-capabilities\/npm\/node_modules\/@eko24ive\/pi-ask\/src\/index\.ts$/m);

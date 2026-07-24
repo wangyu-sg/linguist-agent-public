@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildCatTools, catToolMetadataFor, listCatToolMetadata, prepareCatToolArguments, renderCatToolCatalog } from "@linguist-agent/cat-tools";
+import { buildCatTools, catToolMetadataFor, createWebFetchTool, listCatToolMetadata, prepareCatToolArguments, renderCatToolCatalog } from "@linguist-agent/cat-tools";
 import { createWorkspace } from "@linguist-agent/cat-data";
 
 const metadata = listCatToolMetadata();
@@ -156,8 +156,7 @@ try {
   const address = server.address();
   assert.equal(typeof address, "object");
   const port = address && typeof address === "object" ? address.port : 0;
-  const webFetchTool = tools.find((tool) => tool.name === "web_fetch");
-  assert.ok(webFetchTool);
+  const webFetchTool = createWebFetchTool({ allowPrivateNetwork: true });
   const result = await webFetchTool.execute("tool-call", { url: `http://127.0.0.1:${port}/evidence`, maxChars: 200 }, undefined, undefined, undefined as never);
   assert.match(result.content[0].text, /Evidence: http:\/\/127\.0\.0\.1:/);
   assert.match(result.content[0].text, /Fetched:/);

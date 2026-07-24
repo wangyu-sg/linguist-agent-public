@@ -1,4 +1,4 @@
-import type { TeamRoleId } from "@linguist-agent/cat-data";
+import { transitionTaskRunStatus, type TeamRoleId } from "@linguist-agent/cat-data";
 
 export interface StopAgentRunRequest {
   turnId?: string;
@@ -15,6 +15,8 @@ export interface StopAgentRunRequest {
 export interface ActiveAgentRun {
   turnId: string;
   sessionId?: string;
+  workerId?: string;
+  runtimeEpochId?: string;
   scope: "project" | "standalone" | "workflow_role" | "private_eval";
   projectId?: string;
   taskId?: string;
@@ -39,6 +41,20 @@ interface ActiveAgentRunState {
   status: "running" | "stopping" | "stopped";
   disposed: boolean;
   stopPromise?: Promise<string[]>;
+}
+
+const canonicalRunStatus = {
+  running: "active",
+  stopping: "stopping",
+  stopped: "stopped",
+} as const;
+
+function transitionActiveAgentRunState(
+  state: ActiveAgentRunState,
+  to: ActiveAgentRunState["status"],
+): void {
+  transitionTaskRunStatus(canonicalRunStatus[state.status], canonicalRunStatus[to]);
+  state.status = to;
 }
 
 export class ActiveAgentRunResourceMutationError extends Error {
@@ -69,6 +85,7 @@ export class ActiveAgentRunRegistry {
       ...run,
       startedAt: run.startedAt ?? new Date().toISOString(),
     };
+    transitionTaskRunStatus(undefined, "active");
     const state: ActiveAgentRunState = { run: active, status: "running", disposed: false };
     this.runs.set(active.turnId, state);
     const stoppedParent = active.parentRunId ? this.runs.get(active.parentRunId) : undefined;
@@ -131,6 +148,15 @@ export class ActiveAgentRunRegistry {
     return this.matchingStates(filter)[0]?.run;
   }
 
+  bindWorkerIdentity(turnId: string, input: { workerId: string; runtimeEpochId: string }): ActiveAgentRun {
+    const state = this.runs.get(turnId);
+    if (!state || state.status !== "running") throw new Error(`Agent run ${turnId} is not active for Worker binding.`);
+    if (state.run.workerId || state.run.runtimeEpochId) throw new Error(`Agent run ${turnId} already has Worker identity.`);
+    state.run.workerId = input.workerId;
+    state.run.runtimeEpochId = input.runtimeEpochId;
+    return state.run;
+  }
+
   isStoppingOrStopped(turnId: string): boolean {
     const state = this.runs.get(turnId);
     return state ? state.status !== "running" : false;
@@ -153,7 +179,7 @@ export class ActiveAgentRunRegistry {
 
   private async stopRun(state: ActiveAgentRunState): Promise<string[]> {
     if (state.stopPromise) return state.stopPromise;
-    state.status = "stopping";
+    transitionActiveAgentRunState(state, "stopping");
     state.stopPromise = (async () => {
       const errors: string[] = [];
       const stopDeadline = Date.now() + Math.max(1, this.stopTimeoutMs);
@@ -172,7 +198,7 @@ export class ActiveAgentRunRegistry {
       if (state.run.session) {
         await this.runStopStep("session abort", () => state.run.session!.abort(), errors, () => false, stopDeadline);
       }
-      state.status = "stopped";
+      transitionActiveAgentRunState(state, "stopped");
       this.dispose(state);
       return errors;
     })();

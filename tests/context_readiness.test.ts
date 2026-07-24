@@ -60,26 +60,18 @@ const projectContext: ProjectContextSnapshot = {
 const ready = buildContextReadinessReport({
   projectContext,
   memory: {
-    status: "ready",
-    enabled: true,
-    gatewayUrl: "http://127.0.0.1:8420",
-    gatewayReachable: true,
-    toolsAvailable: true,
+    status: "confirmed_memory_only",
+    toolsAvailable: false,
     captureEnabled: false,
-    cacheSafety: "tool_tail_only",
-    userIdStrategy: "project_id",
-    audit: {
-      path: "/tmp/memory_audit.jsonl",
-      total: 1,
-      lastEvent: {
-        ts: "2026-05-29T00:02:00.000Z",
-        kind: "capture_success",
-        gatewayUrl: "http://127.0.0.1:8420",
-        projectId: "proj",
-      },
-      lastCaptureAt: "2026-05-29T00:02:00.000Z",
-      consecutiveFailures: 0,
+    storeEnabled: false,
+    recallEnabled: false,
+    legacyTdai: {
+      configurationDetected: false,
+      legacyRecallWasConfigured: false,
+      migration: "explicit_read_only_candidate_review_required",
     },
+    semantic: { state: "disabled", assetVectorIndex: "absent" },
+    nextAction: "Confirmed Memory is the only recall source.",
   },
   session: {
     activeSessionId: "la-proj",
@@ -107,15 +99,18 @@ const blocked = buildContextReadinessReport({
     health: { ...projectContext.health!, status: "fail" },
   },
   memory: {
-    status: "gateway_unreachable",
-    enabled: true,
-    gatewayUrl: "http://127.0.0.1:8420",
-    gatewayReachable: false,
+    status: "legacy_migration_required",
     toolsAvailable: false,
     captureEnabled: false,
-    cacheSafety: "tool_tail_only",
-    userIdStrategy: "project_id",
-    nextAction: "Start Gateway",
+    storeEnabled: false,
+    recallEnabled: false,
+    legacyTdai: {
+      configurationDetected: true,
+      legacyRecallWasConfigured: true,
+      migration: "explicit_read_only_candidate_review_required",
+    },
+    semantic: { state: "disabled", assetVectorIndex: "absent" },
+    nextAction: "Review pending legacy candidates",
   },
   session: {
     activeSessionId: "la-proj",
@@ -125,7 +120,7 @@ const blocked = buildContextReadinessReport({
   compaction: { nativeEnabled: false, reserveTokens: 16384, keepRecentTokens: 20000 },
 });
 assert.equal(blocked.status, "fail");
-assert.ok(blocked.nextActions.some((action) => /Gateway|compaction|project session|Import/.test(action)));
+assert.ok(blocked.nextActions.some((action) => /legacy candidates|compaction|project session|Import/.test(action)));
 assert.equal(blocked.checks.find((check) => check.code === "context_budget")?.status, "fail");
 assert.equal(blocked.checks.find((check) => check.code === "project_context_freshness")?.status, "fail");
 assert.match(blocked.checks.find((check) => check.code === "project_context_freshness")?.message ?? "", /missing_assets=25/);

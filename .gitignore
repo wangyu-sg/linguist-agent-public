@@ -33,3 +33,4 @@ tmp/
 skills-lock.json
 .pi/skills/*
 !.pi/skills/cat-*
+.data-root-writer-lease/

@@ -1,7 +1,6 @@
 export { ProjectAssets, type ProjectAssetsProps } from "./ProjectAssets.tsx";
 export {
   ingestProjectAssets,
-  projectRelativeAssetPath,
   type AssetIngestionContext,
   type AssetIngestionDependencies,
   type AssetIngestionFile,

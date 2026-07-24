@@ -1,0 +1,15 @@
+{
+  "name": "@linguist-agent/storage-sqlite",
+  "version": "2.32.7",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@linguist-agent/cat-data": "2.32.7"
+  },
+  "engines": {
+    "node": ">=22.16.0"
+  }
+}

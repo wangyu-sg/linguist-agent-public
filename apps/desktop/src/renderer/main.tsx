@@ -2,6 +2,7 @@ import { Component, StrictMode, useEffect, useRef, useState, type ErrorInfo, typ
 import { createRoot } from "react-dom/client";
 import { ImportBatchAction, NewProjectFlow } from "./onboarding/index.tsx";
 import { ProductWorkspace } from "./shell/index.ts";
+import { safeLogger } from "../../../../packages/cat-data/src/safe_logging.js";
 import "./font-choice.ts";
 import "./theme-choice.ts";
 import "./styles.css";
@@ -19,7 +20,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Electron renderer failed", error, info.componentStack);
+    safeLogger.error("desktop.renderer_failed", { error, componentStack: info.componentStack });
   }
 
   render() {
@@ -75,7 +76,6 @@ function App() {
 
   return (
     <>
-      <div className="desktop-drag-region" aria-hidden="true" />
       <ProductWorkspace
         onCreateProject={() => setOverlay({ kind: "new-project" })}
         onImportBatch={(projectId) => setOverlay({ kind: "import-batch", projectId })}

@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import {
+  appendTaskExecutionSnapshot,
   createTaskWorkspace,
   pendingInitialTaskRun,
   TaskWorkspaceConflictError,
@@ -6,6 +8,8 @@ import {
   type TaskActivityStatus,
   type TaskActivityType,
   type TaskRunEventDraft,
+  type TaskExecutionSnapshot,
+  type TaskRun,
   type TaskRunResourceManifest,
   type TaskRunStatus,
   type TaskLocator,
@@ -62,6 +66,7 @@ export interface SingleTaskRunProjectorInput {
 export interface SingleTaskRunProjector {
   accept(signal: SingleTaskRunSignal): void;
   markTeamPrepared(): void;
+  setExecutionSnapshot(snapshot: TaskExecutionSnapshot): Promise<void>;
   setResourceManifest(manifest: TaskRunResourceManifest): Promise<void>;
   flush(): Promise<void>;
 }
@@ -154,6 +159,17 @@ function boundedPreview(value: string | undefined, limit = 800): string | null {
   return bounded(previewValue(value, limit), limit);
 }
 
+function snapshotHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function modelIdentity(route: string): { providerId: string | null; modelId: string | null } {
+  const separator = route.indexOf("/");
+  return separator > 0 && separator < route.length - 1
+    ? { providerId: route.slice(0, separator), modelId: route.slice(separator + 1) }
+    : { providerId: null, modelId: null };
+}
+
 export async function createSingleTaskRunProjector(input: SingleTaskRunProjectorInput): Promise<SingleTaskRunProjector> {
   const workspace = createTaskWorkspace(input.repoRoot);
   const locator = canonicalLocator(input);
@@ -162,6 +178,7 @@ export async function createSingleTaskRunProjector(input: SingleTaskRunProjector
   let queue = Promise.resolve();
   let teamPrepared = false;
   let responseSequence = 0;
+  let timelineCreated = snapshot.runs.some((run) => run.id === input.runId);
 
   const append = (
     events: TaskRunEventDraft[],
@@ -215,7 +232,10 @@ export async function createSingleTaskRunProjector(input: SingleTaskRunProjector
     },
   });
 
-  const lifecycle = (status: TaskRunStatus, timestamp: string): TaskRunEventDraft[] => [{
+  const lifecycle = (status: TaskRunStatus, timestamp: string): TaskRunEventDraft[] => {
+    const initializeTimeline = !timelineCreated;
+    timelineCreated = true;
+    return [{
     type: "run_upsert",
     agentThreadId: threadId,
     occurredAt: timestamp,
@@ -234,6 +254,7 @@ export async function createSingleTaskRunProjector(input: SingleTaskRunProjector
       completedAt: ["stopped", "failed", "complete"].includes(status) ? timestamp : null,
       stopAvailable: status === "active",
       resumeAvailable: status === "stopped" || status === "failed",
+      ...(initializeTimeline ? { executionSnapshots: [], configChanges: [] } : {}),
     },
   }, {
     type: "thread_upsert",
@@ -254,6 +275,7 @@ export async function createSingleTaskRunProjector(input: SingleTaskRunProjector
       updatedAt: timestamp,
     },
   }];
+  };
 
   if (input.preprojected) {
     append(
@@ -282,11 +304,57 @@ export async function createSingleTaskRunProjector(input: SingleTaskRunProjector
     markTeamPrepared() {
       teamPrepared = true;
     },
+    setExecutionSnapshot(execution) {
+      queue = queue.then(async () => {
+        const current = await workspace.open(locator);
+        const run = current.runs.find((candidate) => candidate.id === input.runId);
+        if (!run) throw new Error(`Run ${input.runId} is not projected.`);
+        const nextRun = appendTaskExecutionSnapshot(run, execution);
+        await workspace.appendGenerated({
+          ...locator,
+          runId: input.runId,
+          events: [{
+            type: "run_upsert",
+            agentThreadId: run.rootAgentThreadId,
+            occurredAt: execution.createdAt,
+            run: nextRun,
+          }],
+        });
+      });
+      return queue;
+    },
     setResourceManifest(manifest) {
       queue = queue.then(async () => {
         const current = await workspace.open(locator);
         const run = current.runs.find((candidate) => candidate.id === input.runId);
         if (!run) throw new Error(`Run ${input.runId} is not projected.`);
+        let nextRun: TaskRun = { ...run, resourceManifest: manifest };
+        if (run.executionSnapshots?.length === 0 && run.configChanges?.length === 0) {
+          const identity = modelIdentity(input.modelRoute);
+          const execution: TaskExecutionSnapshot = {
+            schemaVersion: 1,
+            executionId: `${input.runId}.execution.1`,
+            runId: input.runId,
+            threadId,
+            turnId: input.runId,
+            runtimeEpochId: `${input.runId}.epoch.1`,
+            configRevision: 1,
+            ...identity,
+            reasoningEffort: null,
+            executionProfile: null,
+            promptHash: manifest.systemPromptHash ?? "",
+            toolManifestHash: manifest.toolSurfaceHash ?? "",
+            resourceSnapshotHash: manifest.resourceIndexHash ?? "",
+            capabilityGrantHash: snapshotHash([...(manifest.fileGrantIds ?? [])].sort()),
+            contextInputHash: snapshotHash({
+              userMessage: input.userMessage,
+              evidenceRefs: [...(input.evidenceRefs ?? [])].sort(),
+              parentThreadId: input.parentThreadId ?? null,
+            }),
+            createdAt: new Date().toISOString(),
+          };
+          nextRun = appendTaskExecutionSnapshot(nextRun, execution);
+        }
         await workspace.appendGenerated({
           ...locator,
           runId: input.runId,
@@ -294,7 +362,7 @@ export async function createSingleTaskRunProjector(input: SingleTaskRunProjector
             type: "run_upsert",
             agentThreadId: run.rootAgentThreadId,
             occurredAt: run.updatedAt,
-            run: { ...run, resourceManifest: manifest },
+            run: nextRun,
           }],
         });
       });
@@ -449,6 +517,18 @@ export async function createSingleTaskRunProjector(input: SingleTaskRunProjector
       } else if (signal.type === "retry_end") {
         const failed = signal.retrySuccess === false || signal.isError === true;
         append([activity(`${input.runId}.retry.${signal.retryAttempt ?? "current"}.${eventKey}.end`, signal.ts, failed ? "error" : "progress", failed ? "error" : "done", failed ? "Retry failed" : "Retry completed", bounded(signal.errorMessage ?? signal.text))]);
+      } else if (signal.type === "runtime_diagnostic") {
+        append([activity(
+          `${input.runId}.runtime-diagnostic.${eventKey}`,
+          signal.ts,
+          "error",
+          "error",
+          "Runtime event diagnostic",
+          bounded([signal.errorMessage, signal.text].filter(Boolean).join(": ")),
+          null,
+          [],
+          { kind: "system", id: "runtime", displayName: "Runtime", agentThreadId: threadId },
+        )]);
       } else if (signal.type === "permission_request" && signal.permissionRequest) {
         const request = signal.permissionRequest;
         const argsSummary = boundedPreview(request.argsSummary);

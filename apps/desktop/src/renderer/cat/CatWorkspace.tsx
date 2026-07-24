@@ -313,9 +313,9 @@ function PopulatedCatWorkspace({
     () => batchSegmentStats(batch.segments, batch.tagViews, {
       id: selection.segmentId,
       status: draft.canonical.status,
-      target: draft.buffer,
+      target: draft.canonical.target,
     }),
-    [batch.segments, batch.tagViews, selection.segmentId, draft.canonical.status, draft.buffer],
+    [batch.segments, batch.tagViews, selection.segmentId, draft.canonical.status, draft.canonical.target],
   );
   const positionIndex = useMemo(
     () => batch.segments.findIndex((segment) => segment.id === selection.segmentId),

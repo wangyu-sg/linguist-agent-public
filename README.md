@@ -8,11 +8,16 @@ Linguist Agent is a Pi-native, local-macOS-first general work Agent with a profe
 - `apps/desktop` is the only maintained frontend. It is an Electron macOS client over the authenticated loopback `cat-server` API. SwiftUI `apps/mac` and browser `packages/cat-web` are deleted.
 - Canonical truth is `Task → Run → Agent thread → Activity / Artifact / Decision`; a Task owner is either standalone or Project. Project Tasks may additionally carry Batch, locale, and Segment scope.
 - Standalone and Project Tasks use the same Pi General Core and native message delivery: steer now, durable follow-up queue, pause/resume, edit/delete/reorder/retry, Stop, and compaction. The server owns durable queue identity and Pi owns execution.
+- Composer attachments are real next-Run inputs: standalone Chat uses explicit revocable file grants, Project uses registered assets, and PNG/JPEG/WebP are passed through Pi's native image channel only when the selected model supports image input. Other files remain authorized tool/OCR inputs rather than a false multimodal claim.
+- Model selection is one atomically saved, Mac-local provider/model preference for both Composer and Settings; it applies only to a new Run and is never reset just because a message was sent. OAuth and API-key Provider connections are managed beside that current model choice.
+- A pending Pi/tool permission replaces the current Composer with a Task-scoped Codex-style approval surface and is recovered from the canonical permission endpoint if an event stream reconnects. It never becomes a global dialog, an unlabelled timeout, or a silent fallback.
+- Settings can explicitly restart or repair the managed runtime and can preview then plan-hash-confirm rebuildable-cache cleanup. These actions do not implicitly grant permissions or delete durable Task/Project data.
 - Standalone Chats add a private workspace, explicit file grants, and digest-bound resource trust, but no CAT or delivery authority. Project Tasks add the CAT Expert Layer: Assets, TM/TB/glossary, bilingual Segments, proposals, locks, QA, Team roles, and delivery gates.
-- Personal/Project Library supports lexical, local multilingual-E5 vector, and hybrid retrieval. Memory is proposed and user-confirmed; legacy automatic TDAI recall is disabled.
+- Personal/Project Library supports lexical, local multilingual-E5 vector, and hybrid retrieval. Confirmed Memory is proposed then user-confirmed, has explicit personal/client/franchise/project/locale scope, validity and conflict/supersede history, and enters a Run only through a host-selected immutable lexical/local-semantic snapshot; an unavailable managed E5 pack is shown as lexical-only. Memory is never Evidence. Legacy TDAI capture/store/recall is retired, with only explicit read-only migration candidates awaiting user confirmation.
 - Package Center discovers the Pi community catalog, then uses a preview/hash/risk-approval quarantine flow before a managed Package can enter a future Run. Catalog browsing never executes Package code.
 - Managed document capabilities cover local Office/PDF operations and PaddleOCR evidence. Their declarative Rich Artifacts can combine markdown, tables, charts, images, page overlays, diffs, and file references, then export through an explicit native save flow as inert HTML, PDF, or PNG. MinerU is implemented as a fail-closed Labs capability but remains unqualified on this machine.
-- Maintainer can inspect and build a Pi-runtime upgrade candidate in an isolated Git worktree. Activation is a separate approval and health/rollback operation.
+- Stable does not expose or execute Maintainer mutations. Existing maintenance artifacts remain readable in canonical Task history; the isolated candidate implementation is retained only for later migration to developer/CI tooling.
+- Stable does not expose or execute Private Eval mutations. Existing Eval sets, Runs, outputs, scorecards, comparisons, and canonical Task artifacts remain available through read-only APIs pending migration to the CI eval harness.
 - Pi is exact-pinned at `0.80.10` across manifests and lockfiles. Upgrade the Pi dependency family together.
 
 These are repository/source and test facts. They do not prove that an installed app or managed Application Support runtime matches this checkout; verify those surfaces separately.
@@ -21,7 +26,6 @@ These are repository/source and test facts. They do not prove that an installed 
 
 ```bash
 npm ci
-npm --prefix apps/desktop ci
 npm run typecheck
 npm test
 npm run mac:build
@@ -34,7 +38,7 @@ Run the development server with `npm run la`. Run the worktree-local Electron pa
 ## Product boundaries
 
 - No-project Chat is a first-class Task, not a disguised Home Agent and not a temporary pre-Project screen.
-- General Chat inherits only the Pi resources resolved for its selected directory and trust decision. Unknown user/global executable Extensions require path-plus-SHA approval before evaluation; each Run keeps an immutable resource snapshot and conflict inventory.
+- General Chat inherits only non-executable Pi resources resolved for its selected directory and trust decision. Stable Runs exclude user, project, and managed Package Extension paths and load only LA-owned inline runtime factories; each Run keeps an immutable resource snapshot and conflict inventory.
 - Missing configured Pi Packages fail visibly at General Run startup. Startup does not auto-install them as a side effect.
 - Task-scoped Main, Team, Eval, Quality, and Delivery work share one canonical chronology. Specialist follow-up creates a scoped Run; it does not create a second permanent chat model.
 - CAT writes, proposal application, locked rows, formatting signatures, QA disposition, and delivery export remain server-gated regardless of Agent autonomy settings.

@@ -21,11 +21,8 @@ type RuntimeInstallResult = {
   rollback: "available" | "restored" | "failed" | "not-needed";
 };
 
-type APIRequest = {
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  path: `/api/${string}`;
-  body?: unknown;
-};
+type WorkspaceCapabilityRequest = import("../ipc-contract.cjs").WorkspaceCapabilityRequest;
+type NativeFileHandle = import("../ipc-contract.cjs").NativeFileHandle;
 
 type APIResponse<T = unknown> = {
   ok: boolean;
@@ -63,19 +60,11 @@ type StandaloneChatInput = {
   modelProvider?: string;
   modelId?: string;
   thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+  attachmentGrantIds?: string[];
 };
 
-type ImportKind = "batch" | "asset";
-type AppCommand =
-  | "new-project"
-  | "import-batch"
-  | "show-conversation"
-  | "show-cat"
-  | "show-settings"
-  | "show-command-palette"
-  | "toggle-sidebar"
-  | "toggle-inspector"
-  | "stop-run";
+type ImportKind = "batch" | "asset" | "lapkg";
+type AppCommand = import("../ipc-contract.cjs").AppCommand;
 
 declare global {
   interface Window {
@@ -83,29 +72,32 @@ declare global {
       runtime: Readonly<{
         status(): Promise<BootResult>;
         installOrRepair(): Promise<RuntimeInstallResult>;
-        installCandidate(input: { bundleRoot: string }): Promise<RuntimeInstallResult>;
+        restart(): Promise<RuntimeInstallResult>;
+        installCandidate(input: { candidateHandle: NativeFileHandle }): Promise<RuntimeInstallResult>;
       }>;
       api: Readonly<{
-        request<T = unknown>(input: APIRequest): Promise<APIResponse<T>>;
+        invokeWorkspaceCapability<T = unknown>(input: WorkspaceCapabilityRequest): Promise<APIResponse<T>>;
         subscribeTaskEvents(input: TaskEventSubscription, onEvent: (event: unknown) => void, onState?: (state: StreamState) => void): () => void;
         streamTaskChat(input: TaskChatInput, onEvent: (event: unknown) => void, onState?: (state: StreamState) => void): () => void;
         streamStandaloneChat(input: StandaloneChatInput, onEvent: (event: unknown) => void, onState?: (state: StreamState) => void): () => void;
       }>;
       system: Readonly<{
-        pickProjectFolder(): Promise<string | null>;
-        pickImportFiles(kind: ImportKind): Promise<string[]>;
+        pickProjectFolder(): Promise<NativeFileHandle | null>;
+        pickImportFiles(kind: ImportKind): Promise<NativeFileHandle[]>;
+        refreshProjectAssets(input: { projectId: string; handles: NativeFileHandle[] }): Promise<{
+          files: Array<NativeFileHandle & { relPath: string }>;
+        }>;
         openExternal(url: string): Promise<true>;
-        revealPath(path: string): Promise<true>;
+        revealProject(input: { projectId: string }): Promise<true>;
+        revealMaintenanceCandidate(input: { candidateHandle: NativeFileHandle }): Promise<true>;
         exportRichArtifact(input: {
           format: "html" | "pdf" | "png";
           html: string;
           suggestedName: string;
-        }): Promise<{
-          ok: true;
-          canceled: boolean;
-          format: "html" | "pdf" | "png";
-          path?: string;
-        }>;
+        }): Promise<
+          | { ok: true; canceled: true; format: "html" | "pdf" | "png" }
+          | { ok: true; canceled: false; format: "html" | "pdf" | "png"; file: NativeFileHandle }
+        >;
         showNotification(candidate: {
           id: string;
           category: "waiting" | "failed" | "completed" | "permission";

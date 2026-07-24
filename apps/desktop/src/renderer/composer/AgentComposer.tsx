@@ -153,7 +153,7 @@ export const AgentComposer = forwardRef<HTMLTextAreaElement, AgentComposerProps>
         data-layout={singleLine ? "single-line" : "multiline"}
       >
         {attachments ? <div className="agent-composer__attachments">{attachments}</div> : null}
-        <label className="agent-composer__input">
+        <label className="agent-composer__input" data-placeholder={placeholder}>
           <span className="la-sr-only">{inputLabel}</span>
           <textarea
             ref={textareaRef}
@@ -176,7 +176,10 @@ export const AgentComposer = forwardRef<HTMLTextAreaElement, AgentComposerProps>
           <div className="agent-composer__primary-controls">
             <div ref={leadingRef} className="agent-composer__leading">{leadingControls}</div>
           </div>
-          {hint ? <span id={hintId} className="agent-composer__hint">{hint}</span> : null}
+          {/* Delivery keys still describe the editor to assistive technology, but
+              they are not persistent visual chrome. The primary action reveals
+              its relevant shortcut on hover/focus instead. */}
+          {hint ? <span id={hintId} className="agent-composer__hint la-sr-only">{hint}</span> : null}
           <div ref={actionsRef} className="agent-composer__actions">{trailingControls}</div>
         </div>
       </div>

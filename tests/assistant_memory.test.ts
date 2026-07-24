@@ -67,6 +67,17 @@ try {
   assert.equal(formatAssistantMemoryRecall(await listAssistantMemories(root, personal)), "");
 
   const tools = createAssistantMemoryTools({ runtimeRoot: root, scope: personal, sourceTaskId: "chat-tool", personalOnly: true });
+  const recallEntry = await proposeAssistantMemory(root, {
+    scope: personal,
+    kind: "guidance",
+    text: "Use compact headings for remembered UI guidance.",
+    source: { taskId: "chat-recall" },
+  }).then((entry) => confirmAssistantMemory(root, { scope: personal, id: entry.id, actor: "user" }));
+  const searchTool = tools.find((tool) => tool.name === "assistant_memory_search");
+  assert.ok(searchTool);
+  const searchResult = await searchTool.execute("call-search", { query: "compact headings" } as never);
+  assert.match(searchResult.content[0]?.type === "text" ? searchResult.content[0].text : "", new RegExp(recallEntry.id));
+  assert.equal(searchResult.details.semantic.state, "lexical_only", "a missing local pack must be surfaced as lexical-only to the Agent");
   const proposeTool = tools.find((tool) => tool.name === "assistant_memory_propose");
   assert.ok(proposeTool);
   const toolResult = await proposeTool.execute("call-one", { kind: "fact", text: "My timezone is Asia/Singapore." } as never);

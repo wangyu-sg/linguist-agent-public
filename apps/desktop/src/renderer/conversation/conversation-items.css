@@ -1,6 +1,7 @@
 /* ---------- 人类消息：Codex neutral bubble，右对齐 ---------- */
 
 .conversation-human {
+  position: relative;
   width: fit-content;
   max-width: 77%;
   margin-left: auto;
@@ -8,6 +9,62 @@
   border: 0;
   border-radius: 20px;
   background: var(--la-surface-control);
+}
+
+/* Codex spec 04 §7:user 气泡行内操作(复制)默认隐藏,hover/focus 浮现。 */
+.conversation-human__copy {
+  position: absolute;
+  display: grid;
+  inset: auto 4px 4px auto;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-pill);
+  background: var(--la-raised);
+  color: var(--la-ink-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--la-duration-micro) var(--la-ease-out);
+}
+
+.conversation-human__copy svg {
+  width: 13px;
+  height: 13px;
+}
+
+.conversation-human:hover .conversation-human__copy,
+.conversation-human:focus-within .conversation-human__copy {
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .conversation-human__copy:hover {
+    background: var(--la-surface-hover);
+    color: var(--la-ink-primary);
+  }
+}
+
+/* Codex spec 04 §7:时间戳 12px 三级灰字,默认隐藏,hover/focus-within 浮现;
+   状态元素(Run boundary、思考计时、specialist 耗时)保持常显。 */
+.conversation-activity time,
+.conversation-document__header time,
+.conversation-process > summary time,
+.conversation-artifact time {
+  opacity: 0;
+  transition: opacity var(--la-duration-micro) var(--la-ease-out);
+}
+
+.conversation-activity:hover time,
+.conversation-activity:focus-within time,
+.conversation-document:hover .conversation-document__header time,
+.conversation-document:focus-within .conversation-document__header time,
+.conversation-process:hover > summary time,
+.conversation-process:focus-within > summary time,
+.conversation-artifact:hover time,
+.conversation-artifact:focus-within time {
+  opacity: 1;
 }
 
 .conversation-human > header {
@@ -102,7 +159,7 @@
 
 .conversation-document__identity strong {
   color: var(--la-ink-primary);
-  font-size: 13px;
+  font-size: var(--la-type-copy-size);
   font-weight: var(--la-weight-semibold);
   line-height: var(--la-type-dense-line);
 }
@@ -378,7 +435,7 @@
   background: var(--la-surface-control);
   color: var(--la-ink-secondary);
   font-family: var(--la-font-mono);
-  font-size: 11px;
+  font-size: var(--la-type-meta-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -592,7 +649,7 @@
   border-radius: 999px;
   background: var(--la-accent);
   color: var(--la-accent-text);
-  font-size: 10px;
+  font-size: var(--la-type-meta-size);
   font-weight: var(--la-weight-semibold);
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -808,10 +865,10 @@
   border: 1px solid var(--la-border-default);
   border-radius: 4px;
   color: var(--la-ink-disabled);
-  font-size: 10px;
+  font-size: var(--la-type-meta-size);
   font-weight: var(--la-weight-medium);
   letter-spacing: 0.04em;
-  line-height: 14px;
+  line-height: var(--la-type-meta-line);
   text-transform: uppercase;
 }
 
@@ -1007,7 +1064,7 @@
   border-radius: var(--la-radius-control);
   background: var(--la-raised);
   color: var(--la-ink-secondary);
-  font-size: 12px;
+  font-size: var(--la-type-dense-size);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   -webkit-line-clamp: 3;
@@ -1073,6 +1130,110 @@
   color: var(--la-danger);
 }
 
+/* ---------- Codex Approval Surface：替换当前 Composer，不使用 dialog/backdrop ---------- */
+
+.permission-request-surface {
+  display: grid;
+  width: 100%;
+  max-width: 808px;
+  gap: var(--la-space-3);
+  padding: var(--la-space-4) var(--la-space-5);
+  border: 1px solid var(--la-border-default);
+  border-radius: 20px;
+  background: var(--la-canvas);
+  box-shadow: var(--la-elevation-prominent);
+  color: var(--la-ink-primary);
+}
+
+/* Codex spec 05 §1.2:批准/拒绝按钮上的 kbd 快捷键提示(Enter/Esc)。 */
+.permission-request-surface__kbd {
+  display: inline-flex;
+  height: 16px;
+  min-width: 16px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  box-shadow: none;
+  color: inherit;
+  font-family: var(--la-font-sans);
+  font-size: var(--la-type-meta-size);
+  line-height: 16px;
+}
+
+.permission-request-surface:focus-visible {
+  outline: 2px solid var(--la-accent);
+  outline-offset: 3px;
+}
+
+.permission-request-surface__header {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--la-space-3);
+}
+
+.permission-request-surface__icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--la-warning-surface);
+  color: var(--la-warning);
+}
+
+.permission-request-surface__icon svg { width: 16px; height: 16px; }
+.permission-request-surface__heading { min-width: 0; }
+.permission-request-surface__heading h2,
+.permission-request-surface__heading p,
+.permission-request-surface__eyebrow { margin: 0; }
+.permission-request-surface__eyebrow { color: var(--la-ink-secondary); font-size: var(--la-type-meta-size); line-height: var(--la-type-meta-line); }
+.permission-request-surface__heading h2 { margin-top: 2px; font-family: var(--la-font-mono); font-size: var(--la-type-subheading-size); line-height: var(--la-type-subheading-line); overflow-wrap: anywhere; }
+.permission-request-surface__heading p { margin-top: 3px; color: var(--la-ink-secondary); font-size: var(--la-type-dense-size); line-height: var(--la-type-dense-line); }
+.permission-request-surface__status { color: var(--la-warning); font-size: var(--la-type-meta-size); white-space: nowrap; }
+
+.permission-request-surface__reason,
+.permission-request-surface__preview,
+.permission-request-surface__reason-input,
+.permission-request-surface__error,
+.permission-request-surface__actions { margin-left: 42px; }
+
+.permission-request-surface__reason { display: grid; gap: 2px; }
+.permission-request-surface__reason strong { font-size: var(--la-type-dense-size); font-weight: var(--la-weight-semibold); }
+.permission-request-surface__reason p { margin: 0; color: var(--la-ink-secondary); font-size: var(--la-type-dense-size); }
+.permission-request-surface__preview { min-width: 0; }
+.permission-request-surface__preview pre { display: -webkit-box; max-height: 3lh; margin: 0; padding: var(--la-space-2) var(--la-space-3); overflow: hidden; border: 1px solid var(--la-border-default); border-radius: var(--la-radius-control); background: var(--la-raised); color: var(--la-ink-secondary); font-family: var(--la-font-mono); font-size: var(--la-type-dense-size); line-height: var(--la-type-dense-line); white-space: pre-wrap; overflow-wrap: anywhere; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.permission-request-surface__preview[data-expanded] pre { display: block; max-height: 320px; overflow: auto; -webkit-line-clamp: unset; }
+.permission-request-surface__preview-toggle.la-button { justify-self: end; min-height: 24px; padding: 0 var(--la-space-2); color: var(--la-ink-secondary); font-size: var(--la-type-meta-size); }
+.permission-request-surface__error { margin-top: 0; margin-bottom: 0; color: var(--la-danger); }
+.permission-request-surface__reason-input { display: grid; gap: var(--la-space-1); color: var(--la-ink-secondary); font-size: var(--la-type-meta-size); }
+.permission-request-surface__reason-input textarea { width: 100%; min-height: 48px; resize: vertical; }
+.permission-request-surface__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--la-space-2); }
+.permission-request-surface__scope-menu { position: relative; }
+.permission-request-surface__scope-menu > summary { display: inline-flex; min-height: var(--la-control-regular); align-items: center; gap: 4px; padding: 0 var(--la-space-2); border: 1px solid transparent; border-radius: var(--la-radius-control); color: var(--la-ink-secondary); cursor: pointer; list-style: none; font-size: var(--la-type-dense-size); }
+.permission-request-surface__scope-menu > summary::-webkit-details-marker { display: none; }
+.permission-request-surface__scope-menu > summary svg { width: 14px; height: 14px; }
+.permission-request-surface__scope-menu > div { position: absolute; z-index: var(--la-z-popover); right: 0; bottom: calc(100% + var(--la-space-2)); min-width: 220px; padding: var(--la-space-1); border: 1px solid var(--la-border-default); border-radius: var(--la-radius-surface); background: var(--la-canvas); box-shadow: var(--la-shadow-large); }
+.permission-request-surface__scope-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: var(--la-radius-control); background: transparent; color: var(--la-ink-primary); text-align: left; cursor: pointer; }
+.permission-request-surface__scope-menu button:hover { background: var(--la-surface-hover); }
+.permission-request-surface[data-status="error"] .permission-request-surface__icon { background: var(--la-danger-surface); color: var(--la-danger); }
+
+@media (max-width: 560px) {
+  .permission-request-surface { padding: var(--la-space-3); }
+  .permission-request-surface__header { grid-template-columns: 28px minmax(0, 1fr); }
+  .permission-request-surface__status { grid-column: 2; }
+  .permission-request-surface__reason,
+  .permission-request-surface__preview,
+  .permission-request-surface__reason-input,
+  .permission-request-surface__error,
+  .permission-request-surface__actions { margin-left: 0; }
+  .permission-request-surface__actions > .la-button { flex: 1 1 auto; }
+}
+
 /* ---------- 状态图标旋转 ---------- */
 
 .conversation-document--live .la-status-label[data-state="running"] .lucide-loader-circle,
@@ -1108,7 +1269,7 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: loading-shimmer 2s linear infinite;
+  animation: loading-shimmer 2s steps(48, end) infinite;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1189,6 +1350,35 @@
 
 .decision-interaction__questions {
   margin-top: var(--la-space-3);
+}
+
+.decision-binding-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px var(--la-space-2);
+  margin: var(--la-space-2) 0;
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-meta-size);
+}
+
+.decision-binding-facts > div {
+  display: contents;
+}
+
+.decision-binding-facts dt {
+  color: var(--la-ink-tertiary);
+}
+
+.decision-binding-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.decision-binding-facts__blocked {
+  margin: var(--la-space-2) 0;
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-meta-size);
 }
 
 .decision-interaction__questions > .decision-question {
@@ -1422,4 +1612,359 @@
 
 .decision-interaction__action-spacer {
   flex: 1;
+}
+
+/* ---------- 模型切换内联分割线(Codex spec 05 §5.3) ---------- */
+
+.conversation-model-change {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--la-space-2);
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-dense-size);
+  line-height: var(--la-type-dense-line);
+}
+
+.conversation-model-change__rule {
+  flex: 1;
+  border-top: 1px solid var(--la-border-default);
+}
+
+.conversation-model-change__label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.conversation-model-change__info {
+  position: relative;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--la-radius-pill);
+  color: var(--la-ink-disabled);
+  cursor: help;
+}
+
+.conversation-model-change__info svg {
+  width: 14px;
+  height: 14px;
+}
+
+.conversation-model-change__tooltip {
+  position: absolute;
+  z-index: var(--la-z-popover);
+  display: flex;
+  inset: auto auto calc(100% + 6px) 50%;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-control);
+  background: var(--la-raised);
+  box-shadow: var(--la-shadow-large);
+  color: var(--la-ink-secondary);
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translateX(-50%);
+  transition: opacity var(--la-duration-micro) var(--la-ease-out);
+  white-space: normal;
+}
+
+.conversation-model-change__info:hover .conversation-model-change__tooltip,
+.conversation-model-change__info:focus-visible .conversation-model-change__tooltip,
+.conversation-model-change__info:focus-within .conversation-model-change__tooltip {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---------- Plan 卡(Codex spec 05 §3.3)与 Step pill(§3.4) ---------- */
+
+.conversation-plan-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.conversation-plan-card__header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--la-space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--la-ink-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--la-type-copy-size);
+  line-height: var(--la-type-copy-line);
+  text-align: left;
+}
+
+.conversation-plan-card__summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .conversation-plan-card__header:hover .conversation-plan-card__summary { color: var(--la-ink-primary); }
+}
+
+.conversation-plan-card__chevron {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  transition: transform var(--la-duration-panel) var(--la-ease-out);
+}
+
+.conversation-plan-card[data-state="expanded"] .conversation-plan-card__chevron {
+  transform: rotate(90deg);
+}
+
+.conversation-plan-card__body {
+  max-height: 7rem;
+  margin-top: var(--la-space-2);
+  overflow: hidden;
+  transition: max-height var(--la-duration-panel) var(--la-ease-out);
+}
+
+.conversation-plan-card[data-state="expanded"] .conversation-plan-card__body {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.conversation-present-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.conversation-present-card__header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--la-space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--la-ink-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--la-type-copy-size);
+  line-height: var(--la-type-copy-line);
+  text-align: left;
+}
+
+.conversation-present-card__title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--la-ink-primary);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-present-card__meta {
+  flex: none;
+  font-size: var(--la-type-meta-size);
+}
+
+.conversation-present-card__chevron {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  transition: transform var(--la-duration-panel) var(--la-ease-out);
+}
+
+.conversation-present-card[data-state="expanded"] .conversation-present-card__chevron {
+  transform: rotate(90deg);
+}
+
+.conversation-present-card__body {
+  display: flex;
+  max-height: 9rem;
+  margin-top: var(--la-space-2);
+  flex-direction: column;
+  gap: var(--la-space-3);
+  overflow: hidden;
+  transition: max-height var(--la-duration-panel) var(--la-ease-out);
+}
+
+.conversation-present-card[data-state="expanded"] .conversation-present-card__body {
+  max-height: 32rem;
+  overflow-y: auto;
+}
+
+.conversation-present-card__footer {
+  display: flex;
+  margin-top: var(--la-space-2);
+  justify-content: flex-end;
+}
+
+.conversation-present-card__inspect {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--la-ink-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--la-type-meta-size);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.conversation-plan-card__todos {
+  display: flex;
+  margin: 0;
+  flex-direction: column;
+  gap: var(--la-space-1);
+  padding: 0;
+  list-style: none;
+}
+
+.conversation-plan-card__todo {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--la-space-2);
+  color: var(--la-ink-secondary);
+}
+
+.conversation-plan-card__todo-index {
+  flex: none;
+  color: var(--la-ink-disabled);
+}
+
+.conversation-plan-card__todo-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  align-self: center;
+}
+
+.conversation-plan-card__todo-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.conversation-plan-card__todo[data-status="completed"] .conversation-plan-card__todo-icon {
+  color: var(--la-success);
+}
+
+.conversation-plan-card__todo[data-status="in_progress"] .conversation-plan-card__todo-icon {
+  color: var(--la-accent);
+}
+
+.conversation-plan-card__todo-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.conversation-plan-card__todo[data-status="completed"] .conversation-plan-card__todo-text {
+  color: var(--la-ink-disabled);
+  text-decoration: line-through;
+}
+
+.conversation-plan-pill-wrap {
+  position: relative;
+  align-self: flex-start;
+}
+
+.conversation-plan-pill {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--la-ink-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--la-type-copy-size);
+  line-height: var(--la-type-copy-line);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .conversation-plan-pill:hover { color: var(--la-ink-primary); }
+}
+
+.conversation-plan-pill__step {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.conversation-plan-pill__ring {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  transform: rotate(-90deg);
+}
+
+.conversation-plan-pill__ring-track,
+.conversation-plan-pill__ring-fill {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.conversation-plan-pill__ring-track {
+  stroke: var(--la-border-default);
+}
+
+.conversation-plan-pill__ring-fill {
+  stroke: var(--la-accent);
+  transition: stroke-dashoffset var(--la-duration-panel) var(--la-ease-spring);
+}
+
+.conversation-plan-pill__dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--la-accent);
+}
+
+.conversation-plan-pill__popover {
+  position: absolute;
+  z-index: var(--la-z-popover);
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  width: max-content;
+  max-width: min(24rem, calc(100vw - 32px));
+  max-height: 16rem;
+  flex-direction: column;
+  padding: var(--la-space-3);
+  overflow-y: auto;
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-surface);
+  background: var(--la-raised);
+  box-shadow: var(--la-shadow-large);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--la-duration-micro) var(--la-ease-out);
+}
+
+.conversation-plan-pill:hover .conversation-plan-pill__popover,
+.conversation-plan-pill:focus-within .conversation-plan-pill__popover {
+  opacity: 1;
+  pointer-events: auto;
 }

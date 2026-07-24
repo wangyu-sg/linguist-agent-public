@@ -75,6 +75,28 @@ const actionLabels: Record<TaskDecisionOption["action"], string> = {
   authorize_delivery: "授权交付",
 };
 
+function decisionScopeLabel(decision: TaskDecision): string {
+  if (decision.scope.kind === "standalone") return "此 Chat 的已授权工作区";
+  const segments = decision.scope.segmentIds.length ? ` · ${decision.scope.segmentIds.join("、")}` : "";
+  return `${decision.scope.batchId ?? "项目范围"}${segments}`;
+}
+
+/** Presentation only: all values are issued by the canonical server Decision. */
+function DecisionBindingFacts({ decision }: { decision: TaskDecision }) {
+  const binding = decision.decisionBinding;
+  if (!binding) {
+    return <p className="decision-binding-facts__blocked">这条历史决定缺少服务器执行绑定，需由服务器重新创建。</p>;
+  }
+  return (
+    <dl className="decision-binding-facts">
+      <div><dt>影响范围</dt><dd>{decisionScopeLabel(decision)}</dd></div>
+      <div><dt>内容摘要</dt><dd><code>{binding.contentHash}</code></dd></div>
+      <div><dt>计划摘要</dt><dd><code>{binding.planHash}</code></dd></div>
+      <div><dt>有效至</dt><dd><time dateTime={binding.expiresAt}>{binding.expiresAt}</time></dd></div>
+    </dl>
+  );
+}
+
 export interface CanonicalDecisionProps {
   decision: TaskDecision;
   run?: TaskRun;
@@ -104,6 +126,7 @@ export function CanonicalDecision({
   const teamStartOption = decision.options.find((option) => option.action === "approve");
   const teamChangeOption = decision.options.find((option) => option.action === "request_change");
   const isTeamPreflight = decision.kind === "approval" && run?.mode === "team" && Boolean(run.planHash) && Boolean(teamStartOption);
+  const canExecute = Boolean(decision.decisionBinding);
 
   const commit = async () => {
     if (!selectedOption || !reason.trim()) return;
@@ -145,6 +168,7 @@ export function CanonicalDecision({
             <h3 id={`decision-${decision.id}`}>{decision.prompt}</h3>
           </div>
         </header>
+        <DecisionBindingFacts decision={decision} />
         <div className="decision-question__resolution">
           <span className="decision-question__status">
             {decision.status === "recorded" ? "已记录" : decision.status === "cancelled" ? "已取消" : "已替代"}
@@ -158,7 +182,7 @@ export function CanonicalDecision({
 
   if (isTeamPreflight) {
     const routes = [...new Set(Object.values(run?.modelRoutes ?? {}))];
-    const canStart = run?.status === "awaiting_input";
+    const canStart = run?.status === "awaiting_input" && canExecute;
     return (
       <section className="decision-interaction decision-interaction--team" aria-labelledby={`decision-${decision.id}`}>
         <header className="decision-interaction__header">
@@ -168,6 +192,7 @@ export function CanonicalDecision({
           </div>
           <span className="decision-interaction__progress">{canStart ? "等待确认" : "当前不可启动"}</span>
         </header>
+        <DecisionBindingFacts decision={decision} />
         <p className="decision-team__summary">
           已选择 {participantCount} 个专家与系统角色，预计 {run?.estimatedCalls ?? 0} 次模型调用
           {routes.length ? ` · ${routes.join(" · ")}` : ""}。CAT 写入仍需单独通过 proposal/apply gate。
@@ -211,7 +236,8 @@ export function CanonicalDecision({
           <h3 id={`decision-${decision.id}`}>{decision.prompt}</h3>
         </div>
       </header>
-      <fieldset className="decision-question" disabled={busy !== null}>
+      <DecisionBindingFacts decision={decision} />
+      <fieldset className="decision-question" disabled={busy !== null || !canExecute}>
         <legend className="la-sr-only">可选操作</legend>
         <div className="decision-question__options">
           {decision.options.map((option) => (
@@ -238,7 +264,7 @@ export function CanonicalDecision({
         <Button
           variant={selectedOption?.destructive ? "destructive" : "primary"}
           loading={busy === "decision"}
-          disabled={!selectedOption || !reason.trim()}
+          disabled={!selectedOption || !reason.trim() || !canExecute}
           onClick={() => void commit()}
         >
           {selectedOption ? actionLabels[selectedOption.action] : "选择一个操作"}
@@ -269,7 +295,7 @@ export function DecisionInteraction({
     () => decisions.filter((decision) => decision.status === "required"),
     [decisions],
   );
-  const answerable = interactionId !== null;
+  const answerable = interactionId !== null && decisions.filter((decision) => decision.status === "required").every((decision) => decision.decisionBinding);
   const validAnswers = required.flatMap((decision) => {
     const draft = drafts[decision.id] ?? initialDraft(decision);
     return answerIsValid(decision, draft)
@@ -375,6 +401,7 @@ export function DecisionInteraction({
           </div>
         ) : null}
       </header>
+      {activeDecision ? <DecisionBindingFacts decision={activeDecision} /> : null}
 
       <div className="decision-interaction__questions">
         {activeDecision && activeDraft ? (() => {
@@ -478,7 +505,7 @@ export function DecisionInteraction({
       </div>
 
       {!answerable && required.length ? (
-        <p className="decision-interaction__legacy-note">这是一条历史授权记录；当前客户端不会把它伪装成可提交的交互。</p>
+        <p className="decision-interaction__legacy-note">这是一条历史授权记录或缺少服务器执行绑定；当前客户端不会把它伪装成可提交的交互。</p>
       ) : null}
       {error ? <p className="decision-interaction__error" role="alert">{error}</p> : null}
       {answerable && required.length ? (

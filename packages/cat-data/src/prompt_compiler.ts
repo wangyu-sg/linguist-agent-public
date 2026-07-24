@@ -10,6 +10,70 @@ import { createHash } from "node:crypto";
 export const PROMPT_SURFACES = ["cat", "team_role", "eval_generate", "eval_judge"] as const;
 export type PromptSurface = (typeof PROMPT_SURFACES)[number];
 
+/** A verified model context/output pair.  Provider metadata is not inferred. */
+export interface ModelContextEntry {
+  provider: string;
+  modelId: string;
+  contextWindow: number;
+  outputReserveTokens: number;
+}
+
+function validTokenCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && Number.isFinite(value) && value >= 0;
+}
+
+/**
+ * Minimal immutable lookup used by request planning.  It deliberately stores
+ * only the provider/model pair and the verified context/output limits; tool,
+ * history and framing costs belong to the concrete request.
+ */
+export class ModelContextRegistry {
+  private readonly entries = new Map<string, ModelContextEntry>();
+
+  constructor(entries: readonly ModelContextEntry[]) {
+    for (const entry of entries) {
+      if (!entry.provider.trim() || !entry.modelId.trim()
+        || !validTokenCount(entry.contextWindow) || entry.contextWindow <= 0
+        || !validTokenCount(entry.outputReserveTokens) || entry.outputReserveTokens >= entry.contextWindow) {
+        throw new Error("Invalid ModelContextRegistry entry.");
+      }
+      const key = `${entry.provider}\u0000${entry.modelId}`;
+      if (this.entries.has(key)) throw new Error(`Duplicate ModelContextRegistry entry: ${entry.provider}/${entry.modelId}.`);
+      this.entries.set(key, { ...entry });
+    }
+  }
+
+  resolve(provider: string, modelId: string): ModelContextEntry | undefined {
+    const entry = this.entries.get(`${provider}\u0000${modelId}`);
+    return entry ? { ...entry } : undefined;
+  }
+}
+
+/** Every non-prompt component is explicit so an absent estimate cannot pass. */
+export interface PromptRequestBudget {
+  registry: ModelContextRegistry;
+  provider: string;
+  modelId: string;
+  toolSchemaTokens: number;
+  historyTokens: number;
+  providerFramingTokens: number;
+  safetyMarginTokens: number;
+  compactionReserveTokens: number;
+}
+
+export interface PromptRequestBudgetManifest extends Omit<ModelContextEntry, "provider" | "modelId"> {
+  provider: string;
+  modelId: string;
+  toolSchemaTokens: number;
+  historyTokens: number;
+  providerFramingTokens: number;
+  safetyMarginTokens: number;
+  compactionReserveTokens: number;
+  availablePromptTokens: number;
+  totalRequestTokens: number;
+  requiredRequestTokens: number;
+}
+
 export interface PromptToolProfile {
   /** The harness-enforced allow list. Empty means no generic tools. */
   allowedTools: string[];
@@ -42,18 +106,19 @@ export interface PromptCompileInput {
   constitution?: string;
   context: PromptContextPacket;
   toolProfile: PromptToolProfile;
+  /** Required for a launchable v2 request. */
+  requestBudget?: PromptRequestBudget;
+  /** Legacy prompt-only limit. It remains readable but cannot launch a v2 Run. */
   tokenBudget?: number;
 }
 
 export interface PromptManifest {
   surface: PromptSurface;
-  /** Present only when the caller supplied an evidence-backed fitting limit. */
+  /** Present only on legacy prompt-only manifests. */
   tokenBudget?: number;
-  /**
-   * Covers only `effectivePrompt`; provider system text, tool schemas, cache
-   * prefixes, and transport framing are reflected by actual provider usage.
-   */
-  estimateScope: "compiled_business_prompt";
+  estimateScope: "compiled_business_prompt" | "complete_request_v2";
+  /** Complete v2 request accounting. Undefined keeps historical manifests readable. */
+  requestBudget?: PromptRequestBudgetManifest;
   tokenEstimate: number;
   /** Undefined means no limit was asserted, not that the prompt "passed". */
   overBudget?: boolean;
@@ -79,8 +144,33 @@ export interface CompiledPrompt {
   manifest: PromptManifest;
 }
 
+export type PromptLaunchPlan =
+  | { kind: "ready"; compiled: CompiledPrompt }
+  | { kind: "needs_compaction"; requiredTokens: number; availableTokens: number; removableSections: string[] }
+  | { kind: "blocked"; reason: "unknown_model_context" | "incomplete_request_budget" | "mandatory_prompt_exceeds_budget" | "tool_schema_exceeds_budget" };
+
+export function planPromptLaunch(compiled: CompiledPrompt): PromptLaunchPlan {
+  if (compiled.manifest.requestBudget
+    && compiled.manifest.requestBudget.toolSchemaTokens >= compiled.manifest.requestBudget.contextWindow - compiled.manifest.requestBudget.outputReserveTokens) {
+    return { kind: "blocked", reason: "tool_schema_exceeds_budget" };
+  }
+  if (compiled.manifest.overBudget) return { kind: "blocked", reason: "mandatory_prompt_exceeds_budget" };
+  if (!compiled.manifest.requestBudget) {
+    return { kind: "blocked", reason: compiled.manifest.tokenBudget === undefined ? "unknown_model_context" : "incomplete_request_budget" };
+  }
+  if (compiled.manifest.omittedSections.length) {
+    return {
+      kind: "needs_compaction",
+      requiredTokens: compiled.manifest.requestBudget.requiredRequestTokens,
+      availableTokens: compiled.manifest.requestBudget.contextWindow,
+      removableSections: [...compiled.manifest.omittedSections],
+    };
+  }
+  return { kind: "ready", compiled };
+}
+
 export class PromptCompileError extends Error {
-  readonly code: "invalid_surface" | "empty_recipe" | "reference_not_allowed";
+  readonly code: "invalid_surface" | "empty_recipe" | "reference_not_allowed" | "invalid_request_budget";
 
   constructor(code: PromptCompileError["code"], message: string) {
     super(message);
@@ -114,9 +204,24 @@ function nonEmpty(value: string | undefined): string {
   return value?.trim() ?? "";
 }
 
-function listSection(title: string, rows: string[] | undefined): string | undefined {
+function escapeUntrustedSource(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/[\u200B-\u200D\u200E\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, (character) => `\\u${character.codePointAt(0)!.toString(16).padStart(4, "0")}`);
+}
+
+function untrustedSource(sourceId: string, value: string): string {
+  const sha256 = createHash("sha256").update(value, "utf8").digest("hex");
+  return `<untrusted_source source_id="${sourceId}" sha256="${sha256}" mime="text/plain" truncated="false">\n${escapeUntrustedSource(value)}\n</untrusted_source>`;
+}
+
+function listSection(title: string, rows: string[] | undefined, sourcePrefix?: string): string | undefined {
   const values = (rows ?? []).map((row) => row.trim()).filter(Boolean);
-  return values.length ? [`# ${title}`, ...values.map((row) => `- ${row}`)].join("\n") : undefined;
+  return values.length
+    ? [`# ${title}`, ...values.map((row, index) => sourcePrefix ? untrustedSource(`${sourcePrefix}-${index + 1}`, row) : `- ${row}`)].join("\n")
+    : undefined;
 }
 
 function contextSections(context: PromptContextPacket): Array<{ id: string; text: string; mandatory?: boolean }> {
@@ -124,19 +229,19 @@ function contextSections(context: PromptContextPacket): Array<{ id: string; text
   const hard = listSection("Hard Constraints", context.hardConstraints);
   if (hard) sections.push({ id: "hard_constraints", text: hard, mandatory: true });
   const task = nonEmpty(context.task);
-  if (task) sections.push({ id: "task", text: `# Typed task context\n${task}`, mandatory: true });
+  if (task) sections.push({ id: "task", text: `# Typed task context\n${untrustedSource("task-1", task)}`, mandatory: true });
   const artifactRefs = listSection("Artifact references", context.artifactRefs);
   if (artifactRefs) sections.push({ id: "artifact_refs", text: artifactRefs });
-  const evidence = listSection("Evidence", context.evidence);
+  const evidence = listSection("Evidence", context.evidence, "evidence");
   if (evidence) sections.push({ id: "evidence", text: evidence });
-  const style = listSection("Style Guide / Genre Guidance", context.styleGuidance);
+  const style = listSection("Style Guide / Genre Guidance", context.styleGuidance, "style-guidance");
   if (style) sections.push({ id: "style_guidance", text: style });
-  const findings = listSection("Prior Findings", context.priorFindings);
+  const findings = listSection("Prior Findings", context.priorFindings, "prior-finding");
   if (findings) sections.push({ id: "prior_findings", text: findings });
-  const refs = listSection("Reference material", context.reference);
+  const refs = listSection("Reference material", context.reference, "reference");
   if (refs) sections.push({ id: "reference", text: refs });
   const transcript = nonEmpty(context.transcript);
-  if (transcript) sections.push({ id: "transcript", text: `# Transcript (advisory)\n${transcript}` });
+  if (transcript) sections.push({ id: "transcript", text: `# Transcript (advisory)\n${untrustedSource("transcript-1", transcript)}` });
   return sections;
 }
 
@@ -175,6 +280,34 @@ function fitContext(
   };
 }
 
+function resolveRequestBudget(input: PromptRequestBudget | undefined): PromptRequestBudgetManifest | undefined {
+  if (!input) return undefined;
+  const entry = input.registry.resolve(input.provider, input.modelId);
+  if (!entry) return undefined;
+  const costs = [
+    input.toolSchemaTokens,
+    input.historyTokens,
+    input.providerFramingTokens,
+    input.safetyMarginTokens,
+    input.compactionReserveTokens,
+  ];
+  if (costs.some((value) => !validTokenCount(value))) {
+    throw new PromptCompileError("invalid_request_budget", "Request budget costs must be non-negative integers.");
+  }
+  const availablePromptTokens = entry.contextWindow - entry.outputReserveTokens - costs.reduce((total, value) => total + value, 0);
+  return {
+    ...entry,
+    toolSchemaTokens: input.toolSchemaTokens,
+    historyTokens: input.historyTokens,
+    providerFramingTokens: input.providerFramingTokens,
+    safetyMarginTokens: input.safetyMarginTokens,
+    compactionReserveTokens: input.compactionReserveTokens,
+    availablePromptTokens,
+    totalRequestTokens: entry.contextWindow - availablePromptTokens,
+    requiredRequestTokens: entry.contextWindow - availablePromptTokens,
+  };
+}
+
 /**
  * Compile a prompt and produce a replay/audit manifest. This is intentionally
  * side-effect free so Team, CAT, and private Eval can share the exact seam.
@@ -188,7 +321,8 @@ export function compilePrompt(input: PromptCompileInput): CompiledPrompt {
   }
   const roleRecipe = nonEmpty(input.roleRecipe);
   const constitution = nonEmpty(input.constitution) || "Linguist Agent CAT surface. Follow the typed context and tool profile. Preserve immutable delivery constraints.";
-  const budget = input.tokenBudget;
+  const requestBudget = resolveRequestBudget(input.requestBudget);
+  const budget = requestBudget?.availablePromptTokens ?? input.tokenBudget;
   const systemSections = [constitution, roleRecipe, taskRecipe].filter(Boolean);
   const systemPrompt = systemSections.join("\n\n");
   const systemTokens = estimatePromptTokens(systemPrompt);
@@ -196,15 +330,29 @@ export function compilePrompt(input: PromptCompileInput): CompiledPrompt {
   // Only a caller that explicitly supplies an evidence-backed budget opts in
   // to fitting optional context. No default number is allowed to masquerade as
   // a product or quality threshold.
-  const fitted = fitContext(contextSections(input.context), contextBudget);
+  const sections = contextSections(input.context);
+  const fitted = fitContext(sections, contextBudget);
   const contextPrompt = fitted.prompt;
   const effectivePrompt = [systemPrompt, contextPrompt].filter(Boolean).join("\n\n");
+  const promptTokens = estimatePromptTokens(effectivePrompt);
+  const totalRequestTokens = requestBudget
+    ? promptTokens + requestBudget.outputReserveTokens + requestBudget.toolSchemaTokens + requestBudget.historyTokens
+      + requestBudget.providerFramingTokens + requestBudget.safetyMarginTokens + requestBudget.compactionReserveTokens
+    : promptTokens;
+  const requiredPrompt = [systemPrompt, sections.map((section) => section.text).join("\n\n")].filter(Boolean).join("\n\n");
+  const requiredRequestTokens = requestBudget
+    ? estimatePromptTokens(requiredPrompt) + requestBudget.outputReserveTokens + requestBudget.toolSchemaTokens + requestBudget.historyTokens
+      + requestBudget.providerFramingTokens + requestBudget.safetyMarginTokens + requestBudget.compactionReserveTokens
+    : undefined;
   const manifest: PromptManifest = {
     surface: input.surface,
     tokenBudget: budget,
-    estimateScope: "compiled_business_prompt",
-    tokenEstimate: estimatePromptTokens(effectivePrompt),
-    overBudget: budget === undefined ? undefined : estimatePromptTokens(effectivePrompt) > budget,
+    estimateScope: requestBudget ? "complete_request_v2" : "compiled_business_prompt",
+    requestBudget: requestBudget
+      ? { ...requestBudget, totalRequestTokens, requiredRequestTokens: requiredRequestTokens! }
+      : undefined,
+    tokenEstimate: totalRequestTokens,
+    overBudget: budget === undefined ? undefined : promptTokens > budget || (requestBudget !== undefined && totalRequestTokens > requestBudget.contextWindow),
     truncationReason: fitted.truncationReason,
     omittedSections: fitted.omitted,
     hardConstraintsPreserved: fitted.hardConstraintsPreserved,

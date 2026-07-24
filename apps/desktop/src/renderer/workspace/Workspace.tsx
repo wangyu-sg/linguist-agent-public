@@ -10,12 +10,11 @@ import { workspaceStore, type WorkspaceState, type WorkspaceStore } from "../dat
 import { taskEventNotice } from "../data/task-events.ts";
 import {
   AgentComposer,
-  ComposerAddDisclosure,
+  ComposerAssetControls,
   ComposerAttachmentTray,
+  ComposerModelControls,
   ComposerRecipientChip,
   ComposerScopeDisclosure,
-  ContextUsageDisclosure,
-  ModelDisclosure,
   useComposerData,
 } from "../composer/index.ts";
 import { Button, IconButton, PaneHeader, StatusLabel, type StatusState } from "../ui";
@@ -50,7 +49,7 @@ export interface WorkspaceProps {
   renderStart?: (input: WorkspaceTaskContentInput) => ReactNode;
   renderProject?: (input: WorkspaceTaskContentInput) => ReactNode;
   renderTask?: (input: WorkspaceTaskContentInput) => ReactNode;
-  renderToolbar?: (input: WorkspaceToolbarInput) => ReactNode;
+  renderToolbar: (input: WorkspaceToolbarInput) => ReactNode;
   showTaskHeader?: boolean;
 }
 
@@ -286,19 +285,7 @@ function BatchReady({ state, store, actionError, setActionError, chatCancelRef }
           attachments={selectedAssetPaths.length ? <ComposerAttachmentTray paths={selectedAssetPaths} onRemove={composerData.removeAsset} /> : undefined}
           leadingControls={(
             <>
-              <ComposerAddDisclosure
-                assets={composerData.assetCatalog}
-                assetError={composerData.assetError}
-                assetState={composerData.assetState}
-                capabilityCatalog={composerData.capabilityCatalog}
-                capabilityState={composerData.capabilityState}
-                isImportingAssets={composerData.isImportingAssets}
-                onImportAssets={() => void composerData.importProjectAssets()}
-                onToggleAsset={composerData.toggleAsset}
-                onToggleCapability={composerData.toggleCapability}
-                selectedAssetPaths={selectedAssetPaths}
-                selectedCapabilityIds={selectedCapabilityIds}
-              />
+              <ComposerAssetControls data={composerData} />
               <ComposerScopeDisclosure
                 projectName={projectName(state)}
                 batchLabel={batch.batchId}
@@ -307,7 +294,7 @@ function BatchReady({ state, store, actionError, setActionError, chatCancelRef }
                 recipient={null}
                 scopeLabel="当前 Batch"
               />
-              <ComposerRecipientChip recipient={null} threads={[]} />
+              <ComposerRecipientChip recipient={null} threads={[]} showDefaultRecipient={false} />
             </>
           )}
           onChange={setGoal}
@@ -318,20 +305,20 @@ function BatchReady({ state, store, actionError, setActionError, chatCancelRef }
             }
           }}
           onSubmit={(event) => { event.preventDefault(); void submit(); }}
-          placeholder="交代这单的活儿：目标、语气、禁区，越具体越好。"
+          placeholder="描述需要完成的工作…"
           trailingControls={(
             <>
-              <ContextUsageDisclosure session={sessionInfo} />
-              <ModelDisclosure
-                disabled={providerState === "error"}
-                onChange={setRouteSelection}
+              <ComposerModelControls
+                session={sessionInfo}
                 providers={providerCatalog}
                 selection={routeSelection}
+                onChange={setRouteSelection}
+                disabled={providerState === "error"}
               />
               <IconButton
                 className="agent-composer__primary-action"
+                data-tooltip={submitting ? "正在创建 Task…" : "创建并发送 (⌘↩)"}
                 aria-label={submitting ? "正在创建 Task" : "创建 Task 并发送目标"}
-                title="发送并创建 Task（⌘↩）"
                 type="submit"
                 disabled={!goal.trim() || submitting}
               >
@@ -489,17 +476,12 @@ export function Workspace({
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
       />
       <main className="workspace-main">
-        {renderToolbar ? renderToolbar({
+        {renderToolbar({
           state,
           store,
           sidebarOpen,
           toggleSidebar: () => setSidebarOpen((open) => !open),
-        }) : (
-          <div className="workspace-toolbar" aria-label="工作区工具栏">
-            <Button variant="ghost" onClick={() => setSidebarOpen((open) => !open)}>{sidebarOpen ? "隐藏项目" : "显示项目"}</Button>
-            <div className="workspace-toolbar-scope">{state.task?.task.title ?? state.batchId ?? projectName(state)}</div>
-          </div>
-        )}
+        })}
         <div className="workspace-center" role="region" aria-label="工作区内容" tabIndex={-1} data-command-focus-target="center">{center}</div>
       </main>
     </div>

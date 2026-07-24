@@ -22,7 +22,7 @@ The deepest specialist workflow serves professional game-localization translator
 - The CAT editor remains a real manual professional workspace when the Agent is offline, like an IDE remains useful without its coding Agent.
 - Agent mutations remain explicit, auditable, and gateable. Generic autonomy never bypasses CAT locks, proposals, evidence, QA, or delivery.
 - Tool trace is not evidence. Evidence is a returned source/target pair, term row, asset excerpt, project-file excerpt, or URL/excerpt that supports a claim.
-- Memory is explicit user-governed recall. The Agent may propose a preference, fact, or guidance entry; only confirmed entries are recalled, and recalled memory is not CAT evidence.
+- Memory is explicit user-governed recall. The Agent may propose a preference, fact, or guidance entry; only active, in-validity, conflict-free confirmed entries in the explicit personal/client/franchise/project/locale scopes may enter a host-selected immutable Run snapshot. Recalled memory is not CAT evidence and cannot override Project Truth.
 - Locked client segments are immutable. No silent fallback. Failures remain visible in Chat, Activity, diagnostics, or reports.
 - LA must not import or call runtime code from sibling or historical worktrees.
 

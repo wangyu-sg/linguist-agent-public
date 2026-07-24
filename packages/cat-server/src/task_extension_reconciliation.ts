@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   createTaskWorkspace,
   parseTaskWorkspaceSnapshot,
+  taskAggregateStorageStatus,
   type TaskRunEventDraft,
   type TaskWorkspaceSnapshot,
 } from "@linguist-agent/cat-data";
@@ -121,6 +122,32 @@ export async function reconcileInterruptedTaskExtensionInteractions(input: {
   for (const projectEntry of projectEntries) {
     if (!projectEntry.isDirectory() || !SAFE_ID.test(projectEntry.name)) continue;
     const projectId = projectEntry.name;
+    if (taskAggregateStorageStatus().authority === "installed") {
+      let tasks;
+      try {
+        tasks = await workspace.list({ kind: "project", projectId });
+      } catch {
+        diagnostics.push({ projectId, taskId: "*", code: "task_reconciliation_failed" });
+        continue;
+      }
+      for (const task of tasks) {
+        if (task.status === "archived") continue;
+        try {
+          const snapshot = await workspace.open({ projectId, taskId: task.id });
+          if (!snapshotHasInterruptedRun(snapshot)) continue;
+          for (const run of snapshot.runs) {
+            if (!runWasInterrupted(snapshot, run.id)) continue;
+            const events = restartFailureEvents(snapshot, run.id, failedAt);
+            if (!events.length) continue;
+            await workspace.appendGenerated({ projectId, taskId: task.id, runId: run.id, events });
+            runIds.push(run.id);
+          }
+        } catch {
+          diagnostics.push({ projectId, taskId: task.id, code: "task_reconciliation_failed" });
+        }
+      }
+      continue;
+    }
     const tasksRoot = join(projectsRoot, projectId, "task_workspace", "tasks");
     const taskEntries = await readdir(tasksRoot, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return [];

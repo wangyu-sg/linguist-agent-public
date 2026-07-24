@@ -25,8 +25,6 @@ export interface ComposerSlashSource {
   canCompact: boolean;
   canFork: boolean;
   canCopyChat: boolean;
-  /** standalone Chat 的 Run 进行中时可切换 queue/steer 投递。 */
-  liveDelivery: "steer" | "follow_up" | null;
   currentThinkingLevel?: AgentThinkingLevel;
   actions: {
     openModelPicker: () => void;
@@ -35,7 +33,6 @@ export interface ComposerSlashSource {
     compact: () => void;
     fork: () => void;
     copyChat: () => void;
-    setDelivery: (delivery: "steer" | "follow_up") => void;
     setThinkingLevel: (level: AgentThinkingLevel | undefined) => void;
   };
 }
@@ -63,8 +60,8 @@ export function composerSlashCommands(source: ComposerSlashSource): ComposerSlas
     },
     {
       id: "thinking-auto",
-      title: "思考级别:跟随 Pi 设置",
-      detail: "清除当前 Task 的级别固定,回到 Pi 默认",
+      title: "思考级别:使用默认值",
+      detail: "清除当前 Task 的固定级别,回到默认设置",
       keywords: "thinking effort reset 思考 级别 复位 默认",
       enabled: source.canPickRoute && source.currentThinkingLevel !== undefined,
       run: () => actions.setThinkingLevel(undefined),
@@ -77,22 +74,6 @@ export function composerSlashCommands(source: ComposerSlashSource): ComposerSlas
       enabled: source.canPickRoute,
       run: () => actions.setThinkingLevel(level),
     })),
-    {
-      id: "delivery-steer",
-      title: "现在调整(Steer)",
-      detail: "之后发送的消息立即插入当前 Pi turn",
-      keywords: "steer 投递 现在 调整 立即",
-      enabled: source.liveDelivery !== null && source.liveDelivery !== "steer",
-      run: () => actions.setDelivery("steer"),
-    },
-    {
-      id: "delivery-follow-up",
-      title: "完成后执行(Queue)",
-      detail: "之后发送的消息在当前 turn 完成后依次执行",
-      keywords: "queue follow up 投递 排队 完成后 执行",
-      enabled: source.liveDelivery !== null && source.liveDelivery !== "follow_up",
-      run: () => actions.setDelivery("follow_up"),
-    },
     {
       id: "stop",
       title: "停止当前 Run",

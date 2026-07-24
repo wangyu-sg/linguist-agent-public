@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
 import {
   lstat,
   mkdir,
@@ -10,11 +9,9 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { promisify } from "node:util";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import * as tar from "tar";
 
-const execFileAsync = promisify(execFile);
 const CATALOG_TTL_MS = 24 * 60 * 60 * 1_000;
 const QUARANTINE_TTL_MS = 24 * 60 * 60 * 1_000;
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
@@ -458,37 +455,24 @@ async function validateArchive(archivePath: string): Promise<{ files: number; by
   return { files, bytes };
 }
 
-async function installDependenciesWithoutScripts(packageRoot: string): Promise<void> {
-  const manifest = await readJson<Record<string, unknown>>(join(packageRoot, "package.json"));
-  if (!Object.keys(record(manifest.dependencies)).length) return;
-  const userConfig = join(packageRoot, ".la-empty-npmrc");
-  await writeFile(userConfig, "ignore-scripts=true\naudit=false\nfund=false\n", "utf8");
-  try {
-    await execFileAsync("npm", [
-      "install",
-      "--ignore-scripts",
-      "--omit=dev",
-      "--package-lock=true",
-      "--no-audit",
-      "--no-fund",
-      `--registry=${REGISTRY}`,
-      `--userconfig=${userConfig}`,
-    ], {
-      cwd: packageRoot,
-      timeout: 5 * 60_000,
-      maxBuffer: 10 * 1024 * 1024,
-      env: {
-        PATH: process.env.PATH,
-        npm_config_ignore_scripts: "true",
-        npm_config_audit: "false",
-        npm_config_fund: "false",
-        npm_config_registry: REGISTRY,
-        npm_config_userconfig: userConfig,
-      },
-    });
-  } finally {
-    await rm(userConfig, { force: true });
+async function assertStablePreviewIsInert(packageRoot: string, manifest: Record<string, unknown>): Promise<void> {
+  const installDependencyFields = ["dependencies", "optionalDependencies"] as const;
+  const declared = installDependencyFields.flatMap((field) => Object.keys(record(manifest[field])).map((name) => `${field}.${name}`));
+  const bundled = ["bundledDependencies", "bundleDependencies"].flatMap((field) => stringArray(manifest[field]).map((name) => `${field}.${name}`));
+  if (declared.length || bundled.length) {
+    throw new PackageCenterError(
+      422,
+      "unsafe_archive",
+      `Stable Package preview does not install dependencies; remove install-time dependencies (${[...declared, ...bundled].join(", ")}).`,
+    );
   }
+  try {
+    await stat(join(packageRoot, "npm-shrinkwrap.json"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  throw new PackageCenterError(422, "unsafe_archive", "Stable Package preview rejects publisher-controlled npm-shrinkwrap.json files.");
 }
 
 interface TreeFile {
@@ -723,7 +707,7 @@ async function buildDescriptor(input: {
 export async function previewManagedPackageInstall(
   runtimeRoot: string,
   input: { name: unknown; version: unknown },
-  options: PackageCenterFetchOptions & { installDependencies?: (packageRoot: string) => Promise<void> } = {},
+  options: PackageCenterFetchOptions = {},
 ): Promise<PackageInstallPreview> {
   const name = exactPackageName(input.name);
   const version = exactVersion(input.version);
@@ -756,7 +740,7 @@ export async function previewManagedPackageInstall(
     if (extractedManifest.name !== name || extractedManifest.version !== version) {
       throw new PackageCenterError(409, "package_changed", "The archive manifest does not match the confirmed package and version.");
     }
-    await (options.installDependencies ?? installDependenciesWithoutScripts)(packageRoot);
+    await assertStablePreviewIsInert(packageRoot, extractedManifest);
     const descriptor = await buildDescriptor({ metadata, packageRoot, archiveBytes: archive.length, createdAt: now.toISOString() });
     const requiredRiskIds = descriptor.risks.filter((risk) => risk.detected).map((risk) => risk.id).sort();
     const expiresAt = new Date(now.getTime() + QUARANTINE_TTL_MS).toISOString();

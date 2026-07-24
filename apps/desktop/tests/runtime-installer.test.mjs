@@ -245,3 +245,31 @@ test("an explicitly approved Maintainer bundle installs only from the managed ca
   assert.equal(installed.ok, true);
   assert.equal(await readFile(join(applicationSupportRoot, "runtime", "marker"), "utf8"), "maintainer-runtime");
 });
+
+test("runtime restart uses the managed LaunchAgent and does not touch runtime data", async () => {
+  const root = await mkdtemp(join(tmpdir(), "la-electron-runtime-restart-"));
+  const resourcesPath = join(root, "resources");
+  const homeDirectory = join(root, "home");
+  const launchAgentPath = join(homeDirectory, "Library", "LaunchAgents", "com.linguist-agent.server.plist");
+  await mkdir(join(homeDirectory, "Library", "LaunchAgents"), { recursive: true });
+  await writeFile(launchAgentPath, "managed-plist");
+  const calls = [];
+  const installer = createManagedRuntimeInstaller({
+    resourcesPath,
+    homeDirectory,
+    platform: "darwin",
+    uid: 501,
+    execute: async (command, args) => {
+      calls.push({ command, args });
+      return { stdout: "ok", stderr: "" };
+    },
+    waitForHealth: async () => true,
+  });
+
+  const result = await installer.restart();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.code, "runtime_restarted");
+  assert.deepEqual(calls, [{ command: "/bin/launchctl", args: ["kickstart", "-k", "gui/501/com.linguist-agent.server"] }]);
+  assert.equal(await readFile(launchAgentPath, "utf8"), "managed-plist");
+});

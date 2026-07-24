@@ -27,6 +27,7 @@ import {
   writeTeamRoleSettings,
 } from "@linguist-agent/cat-data";
 import { continueTeamWorkflowUntilPause, handleWorkflowRoute, preflightTeamWorkflowRun, startSpecialistFollowUp } from "../packages/cat-server/src/routes/workflow_routes.js";
+import { verifiedPromptRequestBudget } from "./prompt_budget_fixture.js";
 import { handleTaskWorkspaceRoute } from "../packages/cat-server/src/routes/task_workspace_routes.js";
 import {
   bindSubagentResultDeliveryAcknowledgement,
@@ -158,6 +159,7 @@ assert.equal((await readTeamRoleSettings(workspaceRoot)).profiles.find((profile)
     optionalString: (value: unknown) => typeof value === "string" && value ? value : undefined,
     optionalStringArray: (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined,
     optionalBoolean: (value: unknown) => value === undefined ? undefined : Boolean(value),
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     readProjectAgentSettings: async () => projectAgentSettings,
     writeProjectAgentSettings: async (_projectId: string, patch: { teamRoleSettings?: TeamRoleSettings }) => {
       projectAgentSettings = { ...projectAgentSettings, ...patch };
@@ -499,6 +501,7 @@ assert.equal(validateTeamRoleOutputPresence("lead_linguist_final", {
     optionalString: (value) => typeof value === "string" && value ? value : undefined,
     optionalStringArray: (value) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined,
     optionalBoolean: (value) => value === undefined ? undefined : Boolean(value),
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
   });
   assert.equal(handled, true);
   assert.equal(responses.at(-1)?.status, 202);
@@ -561,6 +564,7 @@ assert.equal(validateTeamRoleOutputPresence("lead_linguist_final", {
     "run-role",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ roleId: "proofreader" }),
     requireString: (value, label) => {
@@ -601,6 +605,7 @@ assert.equal(orchRun.currentStepId, "producer");
     "start",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ execute: false, forceAllRoles: true, planHash: await currentPlanHash("team-orch", true) }),
     requireString: (value, label) => {
@@ -638,6 +643,7 @@ await upsertTeamRolePass(workspaceRoot, "proj", {
     "resume",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ execute: false, forceAllRoles: true, planHash: await currentPlanHash("team-orch", true) }),
     requireString: (value, label) => {
@@ -689,6 +695,7 @@ await upsertTeamRolePass(workspaceRoot, "proj", {
     "start",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ execute: false, forceAllRoles: true, planHash: await currentPlanHash("team-orch", true) }),
     requireString: (value, label) => {
@@ -737,6 +744,7 @@ const completedActiveRoleRuns: Array<{ projectId: string; workflowId: string; ro
     "resume",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ execute: false, forceAllRoles: true, planHash: await currentPlanHash("team-orch", true) }),
     requireString: (value, label) => {
@@ -1544,6 +1552,7 @@ await upsertTeamRolePass(workspaceRoot, "proj", {
     "resume",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ execute: false, planHash: await currentPlanHash("team-blocked-engineering-gate") }),
     requireString: (value, label) => {
@@ -3291,6 +3300,7 @@ await upsertTeamRolePass(workspaceRoot, "proj", {
     "resume",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ execute: false, planHash: await currentPlanHash("team-invalid") }),
     requireString: (value, label) => {
@@ -3329,6 +3339,7 @@ await createCatWorkflowRun(workspaceRoot, {
     "start",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ execute: false, planHash: await currentPlanHash("team-disabled") }),
     requireString: (value, label) => {
@@ -3367,6 +3378,7 @@ await writeTeamRoleSettings(workspaceRoot, {
     "run-role",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ roleId: "proofreader", modelProvider: "deepseek", modelId: "deepseek-v4-flash", execute: true }),
     requireString: (value, label) => {
@@ -3415,6 +3427,7 @@ await writeTeamRoleSettings(workspaceRoot, {
     "run-role",
   ], "proj", {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res, status, data) => responses.push({ status, data }),
     readBody: async () => ({ roleId: "producer", execute: true }),
     requireString: (value, label) => {
@@ -5154,6 +5167,7 @@ await createCatWorkflowRun(workspaceRoot, {
   const preflightResponses: Array<{ status: number; data: unknown }> = [];
   const baseDeps = {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     requireString: (value: unknown, label: string) => {
       if (typeof value !== "string" || !value) throw new Error(`${label} is required.`);
       return value;
@@ -5220,6 +5234,7 @@ await createCatWorkflowRun(workspaceRoot, {
     selectedRoleIds: ["lead_linguist_setup"],
     deps: {
       repoRoot: workspaceRoot,
+      resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
       json: () => undefined,
       readBody: async () => ({}),
       requireString: (value, label) => {
@@ -5291,6 +5306,7 @@ await createTaskWorkspace(workspaceRoot).create({
   const workflowResponses: Array<{ status: number; data: unknown }> = [];
   const baseDeps = {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res: unknown, status: number, data: unknown) => workflowResponses.push({ status, data }),
     requireString: (value: unknown, label: string) => {
       if (typeof value !== "string" || !value) throw new Error(`${label} is required.`);
@@ -5432,6 +5448,7 @@ await createTaskWorkspace(workspaceRoot).create({
   };
   const deps = {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: (_res: unknown, status: number, data: unknown) => responses.push({ status, data }),
     readBody: async () => body,
     requireString: (value: unknown, label: string) => {
@@ -5659,6 +5676,7 @@ await createTaskWorkspace(workspaceRoot).create({
     activityId: "source-producer-handoff",
   }, {
     repoRoot: workspaceRoot,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: () => undefined,
     readBody: async () => ({}),
     requireString: (value, label) => {

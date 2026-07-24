@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import {
   createTaskQueuedMessage,
   createTaskWorkspace,
@@ -129,7 +128,7 @@ export class TaskMessageQueueCoordinator {
     locator: TaskLocator;
     runId: string;
     threadId: string;
-    session: AgentSession | TaskMessageQueueSession;
+    session: TaskMessageQueueSession;
     onChange?: (queue: TaskMessageQueue) => void;
   }): Promise<TaskMessageQueue> {
     return this.exclusive(input.locator, async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Activity,
   CircleHelp,
@@ -18,6 +18,7 @@ import type {
   TaskScope,
 } from "../../../../../packages/cat-data/src/task_workspace_contract.ts";
 import type { SegmentEvidenceSnapshot } from "../data/workspace-client.ts";
+import { workspaceClient } from "../data/workspace-client.ts";
 import {
   workspaceStore,
   type SegmentEvidenceState,
@@ -42,6 +43,7 @@ import {
   type SegmentEvidenceGroup,
 } from "./segment-evidence-model.ts";
 import { RichArtifactPreview } from "./RichArtifactPreview.tsx";
+import { documentArtifactView } from "./document-artifact-model.ts";
 import "./inspector.css";
 
 export interface ContextInspectorProps {
@@ -85,6 +87,8 @@ const artifactTypeLabels: Record<TaskArtifact["type"], string> = {
   rich_document: "富文档",
   maintenance_plan: "维护计划",
   package_audit: "Package 审计",
+  agent_plan: "工作计划",
+  agent_present: "可视化回答",
   file: "文件",
   preview: "预览",
 };
@@ -245,20 +249,77 @@ function ThreadName({ threadId, threads }: { threadId: string; threads: readonly
   );
 }
 
-function ArtifactInspector({ artifact, threads, prefix }: {
+function DocumentJob({ artifact, store, prefix }: { artifact: TaskArtifact; store: WorkspaceStore; prefix: string }) {
+  const view = documentArtifactView(artifact);
+  const [blockId, setBlockId] = useState(view?.textBlocks[0]?.id ?? "");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!view) return <InspectorSection id={`${prefix}-document-job`} title="文档作业"><p className="context-inspector__hint">文档 Router 事实不可用；无法在客户端推断状态或创建修正。</p></InspectorSection>;
+  const selected = view.textBlocks.find((block) => block.id === blockId) ?? view.textBlocks[0];
+
+  async function correct(): Promise<void> {
+    if (!selected || !text.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await workspaceClient.correctDocumentEvidence({ taskId: artifact.taskId, artifactId: artifact.id, blockId: selected.id, text });
+      setText("");
+      await store.refreshTaskEvents();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <InspectorSection id={`${prefix}-document-job`} title="文档作业">
+      <dl className="context-inspector__facts">
+        <div><dt>Router 状态</dt><dd>{view.status}</dd></div>
+        <div><dt>来源摘要</dt><dd><code>{view.source.sha256}</code></dd></div>
+        <div><dt>MIME 类型</dt><dd><code>{view.source.mimeType}</code></dd></div>
+      </dl>
+      <ul className="context-inspector__document-pages" aria-label="Document Router pages">
+        {view.pages.map((page) => <li key={page.page} data-status={page.status}>
+          <strong>Page {page.page} · {page.status}</strong>
+          <span>{page.backend ?? "Backend unavailable"} · {page.blockCount} block(s)</span>
+          <small>{page.reason}</small>
+        </li>)}
+      </ul>
+      {view.textBlocks.length ? (
+        <form className="context-inspector__document-correction" onSubmit={(event) => { event.preventDefault(); void correct(); }}>
+          <label>修正 OCR / 解析文字
+            <select value={selected?.id ?? ""} onChange={(event) => setBlockId(event.target.value)} disabled={busy}>
+              {view.textBlocks.map((block) => <option key={block.id} value={block.id}>{block.locator} · {block.id}{block.userCorrected ? " · corrected" : ""}</option>)}
+            </select>
+          </label>
+          <p className="context-inspector__hint">原文：{selected?.text}</p>
+          <label>更正后文字<textarea value={text} maxLength={20_000} onChange={(event) => setText(event.target.value)} disabled={busy} /></label>
+          {error ? <p role="alert" className="context-inspector__document-error">{error}</p> : null}
+          <Button type="submit" variant="secondary" disabled={busy || !text.trim()}>{busy ? "正在记录…" : "记录修正"}</Button>
+        </form>
+      ) : <p className="context-inspector__hint">没有可修正的文本块。</p>}
+    </InspectorSection>
+  );
+}
+
+function ArtifactInspector({ artifact, threads, prefix, store }: {
   artifact: TaskArtifact;
   threads: readonly TaskAgentThread[];
   prefix: string;
+  store: WorkspaceStore;
 }) {
   const evidence = artifactEvidence(artifact);
   const document = artifact.content.document;
-  const content = Object.fromEntries(Object.entries(artifact.content).filter(([key]) => !["constraints", "document", "evidence", "evidenceRefs"].includes(key)));
+  const content = Object.fromEntries(Object.entries(artifact.content).filter(([key]) => !["constraints", "document", "router", "correction", "artifactPath", "evidence", "evidenceRefs"].includes(key)));
   const constraints = artifact.content.constraints;
   return (
     <>
       {document !== undefined ? (
         <InspectorSection id={`${prefix}-preview`} title="预览与导出"><RichArtifactPreview value={document} /></InspectorSection>
       ) : null}
+      {artifact.type === "document_evidence" ? <DocumentJob key={artifact.id} artifact={artifact} store={store} prefix={prefix} /> : null}
       {Object.keys(content).length ? (
         <InspectorSection id={`${prefix}-content`} title="内容"><ValueView value={content} /></InspectorSection>
       ) : null}
@@ -381,6 +442,15 @@ function DecisionInspector({ decision, threads, prefix }: {
         <p className="context-inspector__hint">这里仅显示记录，不提供重复回答控件。</p>
       </InspectorSection>
       <ScopeSection scope={decision.scope} id={`${prefix}-scope`} />
+      <InspectorSection id={`${prefix}-binding`} title="执行绑定">
+        {decision.decisionBinding ? (
+          <dl className="context-inspector__facts">
+            <div><dt>内容摘要</dt><dd><code>{decision.decisionBinding.contentHash}</code></dd></div>
+            <div><dt>计划摘要</dt><dd><code>{decision.decisionBinding.planHash}</code></dd></div>
+            <div><dt>有效至</dt><dd><time dateTime={decision.decisionBinding.expiresAt}>{timeLabel(decision.decisionBinding.expiresAt)}</time></dd></div>
+          </dl>
+        ) : <p className="context-inspector__hint">历史决定缺少服务器执行绑定，不能再次提交。</p>}
+      </InspectorSection>
       <InspectorSection id={`${prefix}-provenance`} title="来源">
         <dl className="context-inspector__facts">
           <div><dt>请求者</dt><dd><ThreadName threadId={decision.requestedByThreadId} threads={threads} /></dd></div>
@@ -685,7 +755,7 @@ export function ContextInspector({
         </div>
       </header>
       <div className="context-inspector__scroll">
-        {selection.kind === "artifact" ? <ArtifactInspector artifact={selection.artifact} threads={threads} prefix={prefix} /> : null}
+        {selection.kind === "artifact" ? <ArtifactInspector artifact={selection.artifact} threads={threads} prefix={prefix} store={store} /> : null}
         {selection.kind === "activity" ? <ActivityInspector activity={selection.activity} threads={threads} prefix={prefix} /> : null}
         {selection.kind === "decision" ? <DecisionInspector decision={selection.decision} threads={threads} prefix={prefix} /> : null}
         {selection.kind === "segment" ? (

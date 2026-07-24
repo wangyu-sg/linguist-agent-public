@@ -1,11 +1,5 @@
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { constants as fsConstants } from "node:fs";
-import { access, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, delimiter, extname, isAbsolute, join, resolve } from "node:path";
-import JSZip from "jszip";
+import { isAbsolute, resolve } from "node:path";
 import { readProjectManifest } from "./project_manifest.js";
-import { assetCacheDirName, readRuntimeCacheManifest, runtimeProjectCachePath, writeRuntimeCacheManifest } from "./runtime_storage.js";
 import { planWorkbookAssetImport, type WorkbookAssetSheetOverride } from "./workbook_asset_plan.js";
 import { previewWorkbookMapping, suggestWorkbookMappingCandidates } from "./workbook_mapping.js";
 import {
@@ -15,8 +9,6 @@ import {
   type AssetMappingPurpose,
   type AssetMappingSuggestion,
   type AssetMappingSuggestionResult,
-  type AssetMinerUBlock,
-  type AssetMinerUBlockType,
   type AssetParseComparison,
   type AssetParseMode,
   type AssetParsePreview,
@@ -25,8 +17,6 @@ import {
   type AssetStructuredSheet,
 } from "./asset_ingestion_contract.js";
 
-const MINERU_DEFAULT_ARGS = "-p {input} -o {output}";
-const MINERU_CACHE_VERSION = 1;
 const WORKBOOK_MAPPING_ROLES = [
   "termbase",
   "termbase_delta",
@@ -53,276 +43,8 @@ async function resolveProjectPath(workspaceRoot: string, projectId: string, asse
   return resolve(manifest.root, assetPath);
 }
 
-function splitArgs(template: string, input: string, output: string): string[] {
-  return template
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((arg) => arg.replaceAll("{input}", input).replaceAll("{output}", output));
-}
-
-type MinerUCacheManifest = {
-  version: number;
-  sourcePath: string;
-  size: number;
-  mtimeMs: number;
-  command: string;
-  executable: string;
-  argsTemplate: string;
-  warnings: string[];
-  createdAt: string;
-};
-
 function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
-}
-
-async function fileIsAccessible(path: string): Promise<boolean> {
-  try {
-    await access(path, fsConstants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function resolveExecutable(command: string): Promise<string | undefined> {
-  if (isAbsolute(command) || command.includes("/")) {
-    return (await fileIsAccessible(command)) ? command : undefined;
-  }
-  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
-    if (!dir) continue;
-    const candidate = join(dir, command);
-    if (await fileIsAccessible(candidate)) return candidate;
-  }
-  return undefined;
-}
-
-function runCommand(command: string, args: string[], options: { timeoutMs: number; stdin?: string }): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error(`${command} timed out after ${options.timeoutMs}ms.`));
-    }, options.timeoutMs);
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolvePromise({ stdout, stderr });
-      } else {
-        reject(new Error(`${command} exited with ${code ?? "unknown"}${stderr.trim() ? `: ${stderr.trim()}` : ""}`));
-      }
-    });
-    if (options.stdin) child.stdin.write(options.stdin);
-    child.stdin.end();
-  });
-}
-
-async function listFiles(root: string): Promise<string[]> {
-  const out: string[] = [];
-  async function walk(dir: string) {
-    let entries: string[];
-    try {
-      entries = await readdir(dir);
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const path = join(dir, entry);
-      const info = await stat(path).catch(() => undefined);
-      if (!info) continue;
-      if (info.isDirectory()) {
-        await walk(path);
-      } else {
-        out.push(path);
-      }
-    }
-  }
-  await walk(root);
-  return out;
-}
-
-function blockTypeForMarkdown(chunk: string): AssetMinerUBlockType {
-  const trimmed = chunk.trim();
-  if (/^#{1,6}\s/m.test(trimmed)) return "heading";
-  if (/^\s*\|.+\|\s*$/m.test(trimmed)) return "table";
-  if (/^\s*[-*]\s+/m.test(trimmed) || /^\s*\d+\.\s+/m.test(trimmed)) return "list";
-  return trimmed ? "paragraph" : "unknown";
-}
-
-function blocksFromMarkdown(text: string, source: string): AssetMinerUBlock[] {
-  const chunks = text
-    .split(/\n{2,}/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean);
-  return chunks.map((chunk, index) => ({
-    id: `${source}:block-${index + 1}`,
-    blockType: blockTypeForMarkdown(chunk),
-    text: chunk,
-    source,
-  }));
-}
-
-function blocksFromJson(value: unknown, source: string): AssetMinerUBlock[] {
-  const blocks: AssetMinerUBlock[] = [];
-  const pushText = (raw: unknown, indexHint: string, type: AssetMinerUBlockType = "unknown") => {
-    if (typeof raw !== "string" || !raw.trim()) return;
-    blocks.push({
-      id: `${source}:${indexHint}`,
-      blockType: type,
-      text: raw.trim(),
-      source,
-    });
-  };
-  const visit = (node: unknown, path: string) => {
-    if (!node) return;
-    if (typeof node === "string") {
-      pushText(node, path);
-      return;
-    }
-    if (Array.isArray(node)) {
-      node.forEach((item, index) => visit(item, `${path}-${index}`));
-      return;
-    }
-    if (typeof node === "object") {
-      const row = node as Record<string, unknown>;
-      const blockType = typeof row.type === "string" ? row.type.toLocaleLowerCase() : typeof row.blockType === "string" ? row.blockType.toLocaleLowerCase() : "";
-      const mappedType: AssetMinerUBlockType = ["heading", "paragraph", "table", "list", "image"].includes(blockType)
-        ? blockType as AssetMinerUBlockType
-        : "unknown";
-      pushText(row.text ?? row.content ?? row.markdown, path, mappedType);
-      for (const key of ["blocks", "children", "items", "tables", "pages"]) {
-        if (key in row) visit(row[key], `${path}-${key}`);
-      }
-    }
-  };
-  visit(value, "json");
-  return blocks;
-}
-
-async function readMinerUBlocks(outputDir: string): Promise<AssetMinerUBlock[]> {
-  const files = (await listFiles(outputDir))
-    .filter((file) => [".md", ".markdown", ".txt", ".json"].includes(extname(file).toLocaleLowerCase()))
-    .sort((a, b) => {
-      const extA = extname(a).toLocaleLowerCase();
-      const extB = extname(b).toLocaleLowerCase();
-      const priority = (ext: string) => ext === ".json" ? 1 : 0;
-      return priority(extA) - priority(extB) || a.localeCompare(b);
-    });
-  const blocks: AssetMinerUBlock[] = [];
-  for (const file of files) {
-    const rel = file.slice(outputDir.length + 1);
-    const ext = extname(file).toLocaleLowerCase();
-    const raw = await readFile(file, "utf8");
-    if (ext === ".json") {
-      try {
-        blocks.push(...blocksFromJson(JSON.parse(raw), rel));
-      } catch {
-        blocks.push(...blocksFromMarkdown(raw, rel));
-      }
-    } else {
-      blocks.push(...blocksFromMarkdown(raw, rel));
-    }
-  }
-  return blocks;
-}
-
-function mineruCacheKey(input: {
-  resolvedPath: string;
-  size: number;
-  mtimeMs: number;
-  command: string;
-  executable: string;
-  argsTemplate: string;
-}): string {
-  return createHash("sha1")
-    .update(JSON.stringify({ version: MINERU_CACHE_VERSION, ...input }))
-    .digest("hex")
-    .slice(0, 10);
-}
-
-async function pruneSiblingMinerUCaches(mineruRoot: string, currentDir: string, assetName: string): Promise<void> {
-  const prefix = `${assetName.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "asset"}-`;
-  const entries = await readdir(mineruRoot, { withFileTypes: true }).catch(() => []);
-  await Promise.all(entries.map(async (entry) => {
-    if (!entry.isDirectory() || !entry.name.startsWith(prefix)) return;
-    const path = join(mineruRoot, entry.name);
-    if (path === currentDir) return;
-    await rm(path, { recursive: true, force: true });
-  }));
-}
-
-function worksheetPathForRelationships(path: string): string | undefined {
-  const match = path.match(/^xl\/worksheets\/_rels\/(.+)\.rels$/);
-  return match ? `xl/worksheets/${match[1]}` : undefined;
-}
-
-function stripHyperlinkRelationships(xml: string): { xml: string; ids: string[] } {
-  const ids: string[] = [];
-  const cleaned = xml.replace(/<Relationship\b(?=[^>]*relationships\/hyperlink)[^>]*\/>/g, (entry) => {
-    const id = entry.match(/\bId="([^"]+)"/)?.[1];
-    if (id) ids.push(id);
-    return "";
-  });
-  return { xml: cleaned, ids };
-}
-
-function stripWorksheetHyperlinks(xml: string, ids: string[]): string {
-  let cleaned = xml;
-  for (const id of ids) {
-    const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    cleaned = cleaned.replace(new RegExp(`<hyperlink\\b(?=[^>]*\\br:id="${escaped}")[^>]*/>`, "g"), "");
-  }
-  return cleaned.replace(/<hyperlinks>\s*<\/hyperlinks>/g, "");
-}
-
-async function normalizedMinerUXlsxInput(inputPath: string, outputDir: string): Promise<{ path: string; warnings: string[] }> {
-  if (extname(inputPath).toLocaleLowerCase() !== ".xlsx") return { path: inputPath, warnings: [] };
-  const zip = await JSZip.loadAsync(await readFile(inputPath));
-  let removed = 0;
-  for (const name of Object.keys(zip.files)) {
-    if (!name.startsWith("xl/worksheets/_rels/") || !name.endsWith(".rels")) continue;
-    const file = zip.files[name];
-    const relXml = await file.async("string");
-    const stripped = stripHyperlinkRelationships(relXml);
-    if (!stripped.ids.length) continue;
-    removed += stripped.ids.length;
-    zip.file(name, stripped.xml);
-    const sheetPath = worksheetPathForRelationships(name);
-    const sheetFile = sheetPath ? zip.files[sheetPath] : undefined;
-    if (sheetPath && sheetFile) {
-      zip.file(sheetPath, stripWorksheetHyperlinks(await sheetFile.async("string"), stripped.ids));
-    }
-  }
-  if (!removed) return { path: inputPath, warnings: [] };
-  const normalizedPath = join(outputDir, "mineru-input-normalized.xlsx");
-  await writeFile(normalizedPath, await zip.generateAsync({ type: "nodebuffer" }));
-  return {
-    path: normalizedPath,
-    warnings: [`MinerU input normalized: removed ${removed} external workbook hyperlink relationships from a temporary copy.`],
-  };
-}
-
-function summarizeMinerUError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error);
-  const jsonError = raw.match(/"error":\s*"([^"]+)"/)?.[1];
-  if (jsonError) return jsonError.replace(/\\"/g, "\"");
-  const valueError = raw.match(/(?:ValueError|TypeError|Error):[^\n]+/g)?.at(-1);
-  if (valueError) return valueError;
-  return raw.slice(0, 800);
 }
 
 function diagnosticsForSheet(sheet: Pick<AssetStructuredSheet, "headers" | "sampleRows" | "rowCount">): Array<{ label: string; value: string | number }> {
@@ -426,142 +148,18 @@ export async function structuredAssetPreview(
 
 export async function mineruAssetPreview(workspaceRoot: string, options: AssetParsePreviewOptions): Promise<AssetParsePreview> {
   const resolvedPath = await resolveProjectPath(workspaceRoot, options.projectId, options.assetPath);
-  const command = options.mineruCommand ?? process.env.LA_MINERU_COMMAND ?? "mineru";
-  const executable = await resolveExecutable(command);
-  if (!executable) {
-    return {
-      projectId: options.projectId,
-      assetPath: options.assetPath,
-      resolvedPath,
-      mode: options.mode ?? "mineru",
-      parser: "mineru",
-      status: "unavailable",
-      generatedAt: new Date().toISOString(),
-      mineruBlocks: [],
-      warnings: [`MinerU parser is unavailable. Install ${command} or set LA_MINERU_COMMAND to a valid executable.`],
-    };
-  }
-  const inputStat = await stat(resolvedPath);
-  const argsTemplate = process.env.LA_MINERU_ARGS ?? MINERU_DEFAULT_ARGS;
-  const key = mineruCacheKey({
+  return {
+    projectId: options.projectId,
+    assetPath: options.assetPath,
     resolvedPath,
-    size: inputStat.size,
-    mtimeMs: inputStat.mtimeMs,
-    command,
-    executable,
-    argsTemplate,
-  });
-  const mineruRoot = runtimeProjectCachePath(workspaceRoot, options.projectId, "asset_parse", "mineru");
-  const outputDir = join(mineruRoot, assetCacheDirName(resolvedPath, key));
-  const cached = await readRuntimeCacheManifest<MinerUCacheManifest>(outputDir);
-  if (
-    cached?.version === MINERU_CACHE_VERSION &&
-    cached.sourcePath === resolvedPath &&
-    cached.size === inputStat.size &&
-    cached.mtimeMs === inputStat.mtimeMs &&
-    cached.command === command &&
-    cached.executable === executable &&
-    cached.argsTemplate === argsTemplate
-  ) {
-    const blocks = await readMinerUBlocks(outputDir).catch(() => []);
-    if (blocks.length) {
-      return {
-        projectId: options.projectId,
-        assetPath: options.assetPath,
-        resolvedPath,
-        mode: options.mode ?? "mineru",
-        parser: "mineru",
-        status: "ready",
-        generatedAt: new Date().toISOString(),
-        mineruBlocks: blocks,
-        warnings: cached.warnings,
-      };
-    }
-  }
-  await rm(outputDir, { recursive: true, force: true });
-  await mkdir(outputDir, { recursive: true });
-  const normalized = await normalizedMinerUXlsxInput(resolvedPath, outputDir).catch((error) => ({
-    path: resolvedPath,
-    warnings: [`MinerU input normalization failed: ${summarizeMinerUError(error)}`],
-  }));
-  const args = splitArgs(argsTemplate, normalized.path, outputDir);
-  try {
-    const run = await runCommand(executable, args, { timeoutMs: options.mineruTimeoutMs ?? 180_000 });
-    if (run.stdout.trim()) {
-      await writeFile(join(outputDir, "mineru.stdout.txt"), run.stdout, "utf8");
-    }
-    if (run.stderr.trim()) {
-      await writeFile(join(outputDir, "mineru.stderr.txt"), run.stderr, "utf8");
-    }
-    const blocks = await readMinerUBlocks(outputDir);
-    if (blocks.length) {
-      await writeRuntimeCacheManifest(outputDir, {
-        version: MINERU_CACHE_VERSION,
-        sourcePath: resolvedPath,
-        size: inputStat.size,
-        mtimeMs: inputStat.mtimeMs,
-        command,
-        executable,
-        argsTemplate,
-        warnings: normalized.warnings,
-        createdAt: new Date().toISOString(),
-      } satisfies MinerUCacheManifest);
-      await pruneSiblingMinerUCaches(mineruRoot, outputDir, basename(resolvedPath));
-    }
-    return {
-      projectId: options.projectId,
-      assetPath: options.assetPath,
-      resolvedPath,
-      mode: options.mode ?? "mineru",
-      parser: "mineru",
-      status: blocks.length ? "ready" : "error",
-      generatedAt: new Date().toISOString(),
-      mineruBlocks: blocks,
-      warnings: blocks.length ? normalized.warnings : [...normalized.warnings, `MinerU command completed but no markdown/json/text blocks were found in ${outputDir}.`],
-      error: blocks.length ? undefined : "MinerU produced no parseable blocks.",
-    };
-  } catch (error) {
-    const message = summarizeMinerUError(error);
-    const blocks = await readMinerUBlocks(outputDir).catch(() => []);
-    if (blocks.length) {
-      const warnings = uniqueStrings([...normalized.warnings, `MinerU exited with a non-zero status after writing parse output: ${message}`]);
-      await writeRuntimeCacheManifest(outputDir, {
-        version: MINERU_CACHE_VERSION,
-        sourcePath: resolvedPath,
-        size: inputStat.size,
-        mtimeMs: inputStat.mtimeMs,
-        command,
-        executable,
-        argsTemplate,
-        warnings,
-        createdAt: new Date().toISOString(),
-      } satisfies MinerUCacheManifest);
-      await pruneSiblingMinerUCaches(mineruRoot, outputDir, basename(resolvedPath));
-      return {
-        projectId: options.projectId,
-        assetPath: options.assetPath,
-        resolvedPath,
-        mode: options.mode ?? "mineru",
-        parser: "mineru",
-        status: "ready",
-        generatedAt: new Date().toISOString(),
-        mineruBlocks: blocks,
-        warnings,
-      };
-    }
-    return {
-      projectId: options.projectId,
-      assetPath: options.assetPath,
-      resolvedPath,
-      mode: options.mode ?? "mineru",
-      parser: "mineru",
-      status: "error",
-      generatedAt: new Date().toISOString(),
-      mineruBlocks: [],
-      warnings: normalized.warnings,
-      error: message,
-    };
-  }
+    mode: options.mode ?? "mineru",
+    parser: "mineru",
+    status: "unavailable",
+    generatedAt: new Date().toISOString(),
+    mineruBlocks: [],
+    warnings: ["MinerU is disabled until a qualified managed backend is connected through the Document Router."],
+  };
+
 }
 
 export function compareAssetParses(structured: AssetParsePreview, mineru: AssetParsePreview): AssetParseComparison {

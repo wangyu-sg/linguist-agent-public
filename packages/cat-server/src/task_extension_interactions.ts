@@ -14,6 +14,7 @@ import {
   TaskWorkspaceConflictError,
   type TaskWorkspaceSnapshot,
 } from "@linguist-agent/cat-data";
+import { bindTaskDecision } from "./task_decision_binding.js";
 import { executeTaskDecisionInteraction } from "./task_decision_interactions.js";
 import { TaskDecisionExecutionError } from "./task_decision_executor.js";
 
@@ -349,7 +350,7 @@ export async function commitTaskExtensionInteraction(input: {
   return result;
 }
 
-function questionDecision(input: TaskExtensionInteractionHostInput, scope: TaskScope, interactionId: string, kind: GenericKind, title: string, detail: string | undefined, options: string[]): TaskDecision {
+function questionDecision(input: TaskExtensionInteractionHostInput, scope: TaskScope, runPlanHash: string | null | undefined, interactionId: string, kind: GenericKind, title: string, detail: string | undefined, options: string[]): TaskDecision {
   const createdAt = (input.now ?? (() => new Date().toISOString()))();
   const choiceOptions = kind === "confirm"
     ? [
@@ -359,7 +360,7 @@ function questionDecision(input: TaskExtensionInteractionHostInput, scope: TaskS
     : kind === "select"
       ? options.map((label, index) => ({ id: `option-${index + 1}`, label, action: "answer" as const, destructive: false }))
       : [{ id: "freeform", label: "Response", action: "answer" as const, destructive: false, description: detail ?? null }];
-  return {
+  return bindTaskDecision({
     id: `${interactionId}.question-1`,
     taskId: input.taskId,
     runId: input.runId,
@@ -380,7 +381,7 @@ function questionDecision(input: TaskExtensionInteractionHostInput, scope: TaskS
     scope,
     createdAt,
     decidedAt: null,
-  };
+  }, { runPlanHash });
 }
 
 function cancellationValue(kind: GenericKind): string | boolean | undefined {
@@ -635,7 +636,7 @@ export function createTaskExtensionInteractionHost(input: TaskExtensionInteracti
     const ready = enqueue(async () => {
       const interactionId = (input.createInteractionId ?? (() => `native-ui:${randomUUID()}`))();
       const snapshot = await workspace.open({ projectId: input.projectId, taskId: input.taskId });
-      const decision = questionDecision(input, snapshot.task.scope, interactionId, kind, title, detail, options);
+      const decision = questionDecision(input, snapshot.task.scope, snapshot.runs.find((run) => run.id === input.runId)?.planHash, interactionId, kind, title, detail, options);
       const key = pendingKey(input.projectId, input.taskId, input.runId, interactionId);
       if (pendingInteractions.has(key)) throw new Error(`Task interaction ${interactionId} is already pending.`);
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -717,7 +718,7 @@ export function createTaskExtensionInteractionHost(input: TaskExtensionInteracti
     const mapped = started.questions.map((question, questionIndex) => {
       const decisionId = `${interactionId}.question-${questionIndex + 1}`;
       const canonicalToValue = new Map(question.options.map((option, optionIndex) => [`choice-${optionIndex + 1}`, option.value]));
-      const decision: TaskDecision = {
+      const decision = bindTaskDecision({
         id: decisionId,
         taskId: input.taskId,
         runId: input.runId,
@@ -748,7 +749,7 @@ export function createTaskExtensionInteractionHost(input: TaskExtensionInteracti
         scope: snapshot.task.scope,
         createdAt,
         decidedAt: null,
-      };
+      }, { runPlanHash: snapshot.runs.find((run) => run.id === input.runId)?.planHash });
       return { question, decision, canonicalToValue };
     });
     const cleanup = () => {

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { createTaskWorkspace } from "./task_workspace.js";
 import { readJsonFile, writeJsonFile } from "./workspace.js";
+import { resolveStructuredStorageBackend } from "./structured_domain_storage.js";
 
 export interface FileGrantV1 {
   id: string;
@@ -20,6 +21,11 @@ export interface FileGrantV1 {
 interface FileGrantDocumentV1 {
   schemaVersion: 1;
   grants: FileGrantV1[];
+}
+
+interface FileGrantDocumentStateV1 {
+  document: FileGrantDocumentV1;
+  revision: number;
 }
 
 const grantQueues = new Map<string, Promise<void>>();
@@ -80,14 +86,51 @@ function parseGrant(value: unknown, label: string): FileGrantV1 {
   return row as unknown as FileGrantV1;
 }
 
-async function readDocument(runtimeRoot: string, taskId: string): Promise<FileGrantDocumentV1> {
-  const value = await readJsonFile<unknown>(grantsPath(runtimeRoot, taskId), { schemaVersion: 1, grants: [] });
+function storageAddress(taskId: string) {
+  return { domain: "grants" as const, key: taskId, scope: `task:${taskId}` };
+}
+
+export function parseStandaloneFileGrantDocument(value: unknown): FileGrantDocumentV1 {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("File grant document must be an object.");
   const row = value as Record<string, unknown>;
   if (row.schemaVersion !== 1 || !Array.isArray(row.grants)) throw new Error("File grant document schema is invalid.");
   const grants = row.grants.map((grant, index) => parseGrant(grant, `fileGrants[${index}]`));
   if (new Set(grants.map((grant) => grant.id)).size !== grants.length) throw new Error("File grant ids must be unique.");
   return { schemaVersion: 1, grants };
+}
+
+async function readDocumentState(runtimeRoot: string, taskId: string): Promise<FileGrantDocumentStateV1> {
+  const backend = resolveStructuredStorageBackend(runtimeRoot);
+  const stored = backend?.read(storageAddress(taskId));
+  if (stored) return { document: parseStandaloneFileGrantDocument(stored.payload), revision: stored.revision };
+  if (backend) return { document: { schemaVersion: 1, grants: [] }, revision: 0 };
+  return {
+    document: parseStandaloneFileGrantDocument(await readJsonFile<unknown>(grantsPath(runtimeRoot, taskId), { schemaVersion: 1, grants: [] })),
+    revision: 0,
+  };
+}
+
+async function writeDocument(
+  runtimeRoot: string,
+  taskId: string,
+  next: FileGrantDocumentV1,
+  current: FileGrantDocumentStateV1,
+): Promise<number> {
+  const backend = resolveStructuredStorageBackend(runtimeRoot);
+  if (backend) {
+    const stored = backend.read(storageAddress(taskId));
+    const result = await backend.write({
+      address: storageAddress(taskId),
+      expectedRevision: current.revision,
+      expectedValue: stored?.payload ?? current.document as unknown as Record<string, unknown>,
+      value: next as unknown as Record<string, unknown>,
+    });
+    return result.revision;
+  }
+  const path = grantsPath(runtimeRoot, taskId);
+  await mkdir(dirname(path), { recursive: true });
+  await writeJsonFile(path, next, { durability: "critical" });
+  return current.revision;
 }
 
 async function queued<T>(path: string, work: () => Promise<T>): Promise<T> {
@@ -117,7 +160,7 @@ export async function listStandaloneFileGrants(
 ): Promise<FileGrantV1[]> {
   const task = await createTaskWorkspace(runtimeRoot).open({ kind: "standalone", taskId });
   if (task.task.scope.kind !== "standalone") throw new Error(`Task ${taskId} is not standalone.`);
-  const document = await readDocument(runtimeRoot, taskId);
+  const document = (await readDocumentState(runtimeRoot, taskId)).document;
   const referenced = new Set(task.task.scope.fileGrantIds);
   return document.grants.filter((grant) => referenced.has(grant.id) && (options.includeRevoked || !grant.revokedAt));
 }
@@ -141,7 +184,8 @@ export async function createStandaloneFileGrant(runtimeRoot: string, input: {
     const info = await stat(canonicalPath);
     if (input.kind === "file" && !info.isFile()) throw new Error("File grant path is not a file.");
     if (input.kind === "directory" && !info.isDirectory()) throw new Error("Directory grant path is not a directory.");
-    const document = await readDocument(runtimeRoot, taskId);
+    const state = await readDocumentState(runtimeRoot, taskId);
+    const document = state.document;
     const duplicate = document.grants.find((grant) => !grant.revokedAt
       && grant.realPath === canonicalPath
       && grant.kind === input.kind
@@ -159,8 +203,7 @@ export async function createStandaloneFileGrant(runtimeRoot: string, input: {
       fingerprint: await fingerprint(canonicalPath),
     };
     const next: FileGrantDocumentV1 = { schemaVersion: 1, grants: [...document.grants, grant] };
-    await mkdir(dirname(path), { recursive: true });
-    await writeJsonFile(path, next);
+    const writtenRevision = await writeDocument(runtimeRoot, taskId, next, state);
     try {
       await workspace.updateStandaloneScope({
         kind: "standalone",
@@ -169,7 +212,17 @@ export async function createStandaloneFileGrant(runtimeRoot: string, input: {
         fileGrantIds: [...task.task.scope.fileGrantIds, grant.id],
       });
     } catch (error) {
-      await writeJsonFile(path, document);
+      const backend = resolveStructuredStorageBackend(runtimeRoot);
+      if (backend) {
+        await backend.write({
+          address: storageAddress(taskId),
+          expectedRevision: writtenRevision,
+          expectedValue: next as unknown as Record<string, unknown>,
+          value: document as unknown as Record<string, unknown>,
+        });
+      } else {
+        await writeJsonFile(path, document, { durability: "critical" });
+      }
       throw error;
     }
     return { grant, grants: next.grants.filter((entry) => !entry.revokedAt) };
@@ -235,7 +288,8 @@ export async function revokeStandaloneFileGrant(runtimeRoot: string, input: {
     const workspace = createTaskWorkspace(runtimeRoot);
     const task = await workspace.open({ kind: "standalone", taskId });
     if (task.task.scope.kind !== "standalone") throw new Error(`Task ${taskId} is not standalone.`);
-    const document = await readDocument(runtimeRoot, taskId);
+    const state = await readDocumentState(runtimeRoot, taskId);
+    const document = state.document;
     const index = document.grants.findIndex((grant) => grant.id === input.grantId);
     if (index < 0) throw new Error(`File grant ${input.grantId} was not found.`);
     const existing = document.grants[index]!;
@@ -245,7 +299,7 @@ export async function revokeStandaloneFileGrant(runtimeRoot: string, input: {
       schemaVersion: 1,
       grants: document.grants.map((grant, grantIndex) => grantIndex === index ? revoked : grant),
     };
-    await writeJsonFile(path, next);
+    const writtenRevision = await writeDocument(runtimeRoot, taskId, next, state);
     try {
       await workspace.updateStandaloneScope({
         kind: "standalone",
@@ -256,7 +310,17 @@ export async function revokeStandaloneFileGrant(runtimeRoot: string, input: {
         fileGrantIds: task.task.scope.fileGrantIds.filter((grantId) => grantId !== input.grantId),
       });
     } catch (error) {
-      await writeJsonFile(path, document);
+      const backend = resolveStructuredStorageBackend(runtimeRoot);
+      if (backend) {
+        await backend.write({
+          address: storageAddress(taskId),
+          expectedRevision: writtenRevision,
+          expectedValue: next as unknown as Record<string, unknown>,
+          value: document as unknown as Record<string, unknown>,
+        });
+      } else {
+        await writeJsonFile(path, document, { durability: "critical" });
+      }
       throw error;
     }
     return { grant: revoked, grants: next.grants.filter((grant) => !grant.revokedAt) };

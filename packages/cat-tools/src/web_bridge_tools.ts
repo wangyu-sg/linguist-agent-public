@@ -2,9 +2,25 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, readStoredCredential } from "@earendil-works/pi-coding-agent";
+import {
+  NetworkCapabilityBroker,
+  ProcessCapabilityBroker,
+  SecretCapabilityBroker,
+  type SecretCapabilityHandle,
+} from "@linguist-agent/cat-data";
 
 export const WEB_BRIDGE_USER_AGENT = "Linguist-Agent web-evidence-bridge";
 const execFileAsync = promisify(execFile);
+const WEB_SECRET_BROKER = SecretCapabilityBroker.create({
+  grants: [{
+    id: "web-search-provider-secrets",
+    consumer: "web_search",
+    secretIds: ["env:TAVILY_API_KEY", "env:LA_TAVILY_API_KEY", "provider:tavily", "provider:tavily-search"],
+  }],
+});
+const WEB_PROCESS_BROKER = ProcessCapabilityBroker.create({
+  grants: [{ id: "web-search-keychain-reader", toolName: "web_search", templateIds: ["keychain-provider-read"] }],
+});
 
 const webFetchParameters = Type.Object({
   url: Type.String({ description: "HTTP/HTTPS URL to fetch for bounded evidence." }),
@@ -38,6 +54,20 @@ function assertHttpUrl(rawUrl: string): URL {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(`Only http/https URLs are allowed, got ${url.protocol}`);
   }
+  return url;
+}
+
+function authorizePublicWebTarget(toolName: "web_fetch" | "web_search", url: URL, allowPrivateNetwork = false): URL {
+  NetworkCapabilityBroker.create({
+    grants: [{
+      id: `${toolName}-exact-target`,
+      toolName,
+      hosts: [url.hostname],
+      schemes: [url.protocol === "http:" ? "http" : "https"],
+      ...(url.port ? { ports: [Number(url.port)] } : {}),
+      ...(allowPrivateNetwork ? { allowPrivateNetwork: true } : {}),
+    }],
+  }).authorizeUrl(toolName, url.toString());
   return url;
 }
 
@@ -82,32 +112,61 @@ function unquoteShellValue(value: string): string {
   return value.slice(1, -1).replaceAll("'\\''", "'");
 }
 
-async function storedApiKey(provider: string): Promise<string | undefined> {
+async function storedApiKey(provider: string, handle: SecretCapabilityHandle): Promise<string | undefined> {
+  if (handle.consumer !== "web_search" || handle.secretId !== `provider:${provider}`) {
+    throw new Error(`SECRET_CAPABILITY_DENIED: invalid provider handle for ${provider}.`);
+  }
   const credential = readStoredCredential(provider);
   if (credential?.type !== "api_key" || !credential.key) return undefined;
-  if (credential.key.startsWith("$")) return process.env[credential.key.slice(1)];
-  if (!credential.key.startsWith("!")) return credential.key;
-  const match = /^!security find-generic-password -a ('.*') -s ('.*') -w$/.exec(credential.key);
-  if (!match) throw new Error(`Unsupported Pi credential command for ${provider}; LA only executes its own macOS Keychain reference.`);
+  const reference = authorizeStoredWebCredentialReference(provider, credential.key);
+  if (reference.kind === "env") return process.env[reference.envName];
   const { stdout } = await execFileAsync("/usr/bin/security", [
     "find-generic-password",
-    "-a",
-    unquoteShellValue(match[1]),
-    "-s",
-    unquoteShellValue(match[2]),
+    "-a", reference.account,
+    "-s", reference.service,
     "-w",
   ]);
   return stdout.trim() || undefined;
 }
 
-async function tavilyApiKey(): Promise<string | undefined> {
-  return process.env.TAVILY_API_KEY ||
-    process.env.LA_TAVILY_API_KEY ||
-    await storedApiKey("tavily") ||
-    await storedApiKey("tavily-search");
+export function authorizeStoredWebCredentialReference(
+  provider: string,
+  key: string,
+): Readonly<
+  | { kind: "env"; envName: string }
+  | { kind: "keychain"; account: string; service: string }
+> {
+  if (key.startsWith("$")) {
+    const envName = key.slice(1);
+    WEB_SECRET_BROKER.authorize("web_search", `env:${envName}`);
+    return Object.freeze({ kind: "env", envName });
+  }
+  if (!key.startsWith("!")) {
+    throw new Error(`SECRET_CAPABILITY_DENIED: plaintext stored credential for ${provider} is not an approved secret reference.`);
+  }
+  const match = /^!security find-generic-password -a ('.*') -s ('.*') -w$/.exec(key);
+  if (!match) throw new Error(`Unsupported Pi credential command for ${provider}; LA only executes its own macOS Keychain reference.`);
+  const account = unquoteShellValue(match[1]);
+  const service = unquoteShellValue(match[2]);
+  if (service !== `com.linguist-agent.pi.${provider}`) {
+    throw new Error(`SECRET_CAPABILITY_DENIED: Keychain service ${service} is not bound to provider ${provider}.`);
+  }
+  WEB_PROCESS_BROKER.authorize("web_search", "keychain-provider-read");
+  return Object.freeze({ kind: "keychain", account, service });
 }
 
-export function createWebFetchTool() {
+async function tavilyApiKey(): Promise<string | undefined> {
+  const primaryEnv = WEB_SECRET_BROKER.authorize("web_search", "env:TAVILY_API_KEY");
+  const secondaryEnv = WEB_SECRET_BROKER.authorize("web_search", "env:LA_TAVILY_API_KEY");
+  const tavily = WEB_SECRET_BROKER.authorize("web_search", "provider:tavily");
+  const fallback = WEB_SECRET_BROKER.authorize("web_search", "provider:tavily-search");
+  return process.env[primaryEnv.secretId.slice(4)] ||
+    process.env[secondaryEnv.secretId.slice(4)] ||
+    await storedApiKey("tavily", tavily) ||
+    await storedApiKey("tavily-search", fallback);
+}
+
+export function createWebFetchTool(options: { allowPrivateNetwork?: boolean } = {}) {
   return defineTool<typeof webFetchParameters, { evidence: WebEvidence }>({
     name: "web_fetch",
     label: "Web Fetch",
@@ -121,7 +180,7 @@ export function createWebFetchTool() {
     parameters: webFetchParameters,
     executionMode: "parallel",
     async execute(_toolCallId, params, signal) {
-      const url = assertHttpUrl(params.url);
+      const url = authorizePublicWebTarget("web_fetch", assertHttpUrl(params.url), options.allowPrivateNetwork === true);
       const response = await fetch(url, {
         signal,
         headers: {
@@ -166,7 +225,8 @@ export function createWebSearchTool() {
       if (!apiKey) {
         throw new Error("web_search bridge is enabled but not configured. Add TAVILY_API_KEY, LA_TAVILY_API_KEY, or a Pi api_key credential for provider 'tavily'.");
       }
-      const response = await fetch("https://api.tavily.com/search", {
+      const searchUrl = authorizePublicWebTarget("web_search", assertHttpUrl("https://api.tavily.com/search"));
+      const response = await fetch(searchUrl, {
         method: "POST",
         signal,
         headers: {

@@ -1,19 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { realpath } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
   createTaskWorkspace,
-  createDocumentEvidenceRichArtifact,
+  FileCapabilityBroker,
+  createDocumentRouterRichArtifact,
   createMineruRichArtifact,
   createOfficeRichArtifact,
-  extractPaddleOcrEvidence,
   runManagedMineruExtraction,
   runManagedOfficeOperation,
   resolveStandaloneFileGrantAccess,
   standaloneTaskWorkspaceRoot,
   writeJsonFile,
+  type FileGrantV1,
+  type DocumentRouterRichArtifactInput,
 } from "@linguist-agent/cat-data";
 
 const parameters = Type.Object({
@@ -64,12 +65,37 @@ function inside(parent: string, candidate: string): boolean {
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
+async function standaloneFileBroker(access: {
+  workspaceRoot: string;
+  workingDirectory: string;
+  grants: FileGrantV1[];
+}): Promise<FileCapabilityBroker> {
+  return FileCapabilityBroker.create({
+    cwd: access.workingDirectory,
+    grants: [{
+      id: "standalone-workspace",
+      rootPath: access.workspaceRoot,
+      kind: "directory",
+      recursive: true,
+      operations: ["read", "list", "search", "write"],
+    }, ...access.grants.map((grant) => ({
+      id: grant.id,
+      rootPath: grant.realPath,
+      kind: grant.kind,
+      recursive: grant.recursive,
+      operations: grant.access === "read_write"
+        ? ["read", "list", "search", "write"] as const
+        : ["read", "list", "search"] as const,
+    }))],
+  });
+}
+
 export function createStandaloneDocumentTools(options: {
   runtimeRoot: string;
   taskId: string;
   runId: string;
   agentThreadId: string;
-  extract?: typeof extractPaddleOcrEvidence;
+  routeDocument?: (input: { sourcePath: string; useOrientation?: boolean }) => Promise<DocumentRouterRichArtifactInput & { blocks: unknown[] }>;
   runOffice?: typeof runManagedOfficeOperation;
   runMineru?: typeof runManagedMineruExtraction;
 }) {
@@ -86,12 +112,12 @@ export function createStandaloneDocumentTools(options: {
     parameters,
     async execute(_toolCallId, input) {
       const access = await resolveStandaloneFileGrantAccess(options.runtimeRoot, options.taskId);
-      const path = await realpath(input.sourcePath);
-      const grant = access.grants.find((candidate) => candidate.kind === "file" || !candidate.recursive
-        ? candidate.realPath === path
-        : inside(candidate.realPath, path));
-      if (!inside(access.workspaceRoot, path) && !grant) throw new Error("The OCR source is outside this Chat's explicit file grants.");
-      const evidence = await (options.extract ?? extractPaddleOcrEvidence)(options.runtimeRoot, path, { useOrientation: input.useOrientation });
+      const authorization = await (await standaloneFileBroker(access)).authorizePath(input.sourcePath, "read");
+      const path = authorization.path;
+      const grant = access.grants.find((candidate) => candidate.id === authorization.grantId);
+      if (!options.routeDocument) throw new Error("The server-owned Document Router is unavailable.");
+      const routed = await options.routeDocument({ sourcePath: path, useOrientation: input.useOrientation });
+      if (routed.status === "blocked") throw new Error(`Document Router blocked every page: ${routed.pages.map((page) => `page ${page.page}: ${page.reason}`).join("; ")}`);
       const workspace = createTaskWorkspace(options.runtimeRoot);
       const snapshot = await workspace.open({ kind: "standalone", taskId: options.taskId });
       const run = snapshot.runs.find((candidate) => candidate.id === options.runId);
@@ -102,9 +128,9 @@ export function createStandaloneDocumentTools(options: {
       const artifactId = `${options.runId}.document-evidence.${suffix}`;
       const activityId = `${options.runId}.document-evidence.${suffix}.created`;
       const artifactPath = join(standaloneTaskWorkspaceRoot(options.runtimeRoot, options.taskId), "artifacts", `${artifactId}.json`);
-      await writeJsonFile(artifactPath, evidence);
-      const blockCount = evidence.pages.reduce((sum, page) => sum + page.blocks.length, 0);
-      const document = createDocumentEvidenceRichArtifact(evidence);
+      await writeJsonFile(artifactPath, routed);
+      const blockCount = routed.blocks.length;
+      const document = createDocumentRouterRichArtifact(routed, { sourcePath: path, createdAt: now });
       await workspace.appendGenerated({
         kind: "standalone",
         taskId: options.taskId,
@@ -120,12 +146,12 @@ export function createStandaloneDocumentTools(options: {
             type: "document_evidence",
             status: "reviewable",
             title: `Document evidence · ${path.split("/").at(-1) ?? "document"}`,
-            summary: `${blockCount} text regions across ${evidence.pages.length} page(s); low-confidence regions are preserved.`,
+            summary: `${blockCount} text regions across ${routed.pages.length} page(s); routing is ${routed.status} and every blocked page remains explicit.`,
             scope: { kind: "standalone", fileGrantIds: grant ? [grant.id] : [] },
             version: 1,
             provenance: { agentThreadId: options.agentThreadId, activityId, evidenceRefs: [], parentArtifactIds: [] },
             availableDecisions: [],
-            content: { ...evidence, document, artifactPath },
+            content: { router: routed, document, artifactPath },
             createdAt: now,
             updatedAt: now,
           },
@@ -143,8 +169,8 @@ export function createStandaloneDocumentTools(options: {
             status: "done",
             actor: { kind: "agent", id: options.agentThreadId, displayName: thread.identity.displayName, agentThreadId: options.agentThreadId },
             title: "Document evidence ready for review",
-            body: `${blockCount} text regions were extracted locally; confidence and geometry remain attached to every region.`,
-            tool: { name: "document_extract_evidence", effect: "read", target: path, outcome: artifactId },
+            body: `${blockCount} text regions were routed locally; backend provenance remains attached to every region.`,
+            tool: { name: "document_extract_evidence", effect: "read", target: path, outcome: `${artifactId} (${routed.status})` },
             refs: { artifactIds: [artifactId], evidenceRefs: [], decisionIds: [], segmentIds: [] },
             createdAt: now,
             updatedAt: now,
@@ -152,8 +178,8 @@ export function createStandaloneDocumentTools(options: {
         }],
       });
       return {
-        content: [{ type: "text" as const, text: `Created reviewable document evidence Artifact ${artifactId}: ${blockCount} regions across ${evidence.pages.length} page(s). Low-confidence text was preserved.` }],
-        details: { artifactId, artifactPath, sourceSha256: evidence.source.sha256, pages: evidence.pages.length, blocks: blockCount },
+        content: [{ type: "text" as const, text: `Created reviewable document evidence Artifact ${artifactId}: ${blockCount} regions across ${routed.pages.length} page(s), routing ${routed.status}.` }],
+        details: { artifactId, artifactPath, sourceSha256: routed.source.sha256, pages: routed.pages.length, blocks: blockCount, status: routed.status },
       };
     },
   }), defineTool<typeof officeParameters>({
@@ -169,17 +195,15 @@ export function createStandaloneDocumentTools(options: {
     parameters: officeParameters,
     async execute(_toolCallId, input) {
       const access = await resolveStandaloneFileGrantAccess(options.runtimeRoot, options.taskId);
+      const broker = await standaloneFileBroker(access);
       const creation = input.operation === "create_docx" || input.operation === "create_pptx";
       const requestedSources = (input.operation === "pdf_merge" ? input.sourcePaths : input.sourcePath ? [input.sourcePath] : []) ?? [];
       if (!creation && !requestedSources.length) throw new Error(`${input.operation} requires ${input.operation === "pdf_merge" ? "sourcePaths" : "sourcePath"}.`);
-      const sourcePaths = await Promise.all(requestedSources.map((path) => realpath(path)));
+      const sourceAuthorizations = await Promise.all(requestedSources.map((path) => broker.authorizePath(path, "read")));
+      const sourcePaths = sourceAuthorizations.map((authorization) => authorization.path);
       const sourceGrantIds: string[] = [];
-      for (const sourcePath of sourcePaths) {
-        const sourceGrant = access.grants.find((candidate) => candidate.kind === "file" || !candidate.recursive
-          ? candidate.realPath === sourcePath
-          : inside(candidate.realPath, sourcePath));
-        if (!inside(access.workspaceRoot, sourcePath) && !sourceGrant) throw new Error("An Office source is outside this Chat's explicit file grants.");
-        if (sourceGrant) sourceGrantIds.push(sourceGrant.id);
+      for (const authorization of sourceAuthorizations) {
+        if (authorization.grantId !== "standalone-workspace") sourceGrantIds.push(authorization.grantId);
       }
       let outputPath: string | undefined;
       let outputGrantId: string | undefined;
@@ -187,12 +211,10 @@ export function createStandaloneDocumentTools(options: {
       if (mutation) {
         if (!input.outputPath?.trim()) throw new Error(`${input.operation} requires a new outputPath.`);
         const requested = resolve(input.outputPath);
-        const canonicalParent = await realpath(dirname(requested));
-        outputPath = join(canonicalParent, requested.split("/").at(-1) ?? "output");
+        const outputAuthorization = await broker.authorizePath(requested, "write");
+        outputPath = outputAuthorization.path;
         if (sourcePaths.includes(outputPath)) throw new Error("Office output must be a new file, not a source.");
-        const outputGrant = access.grants.find((candidate) => candidate.access === "read_write" && candidate.kind === "directory" && candidate.recursive && inside(candidate.realPath, outputPath!));
-        if (!inside(access.workspaceRoot, outputPath) && !outputGrant) throw new Error("The Office output is outside this Chat's read-write file grants.");
-        outputGrantId = outputGrant?.id;
+        outputGrantId = outputAuthorization.grantId === "standalone-workspace" ? undefined : outputAuthorization.grantId;
       }
       const result = await (options.runOffice ?? runManagedOfficeOperation)(options.runtimeRoot, {
         operation: input.operation,
@@ -295,17 +317,15 @@ export function createStandaloneDocumentTools(options: {
     parameters: mineruParameters,
     async execute(_toolCallId, input) {
       const access = await resolveStandaloneFileGrantAccess(options.runtimeRoot, options.taskId);
-      const sourcePath = await realpath(input.sourcePath);
-      const sourceGrant = access.grants.find((candidate) => candidate.kind === "file" || !candidate.recursive
-        ? candidate.realPath === sourcePath
-        : inside(candidate.realPath, sourcePath));
-      if (!inside(access.workspaceRoot, sourcePath) && !sourceGrant) throw new Error("The MinerU source is outside this Chat's explicit file grants.");
+      const broker = await standaloneFileBroker(access);
+      const sourceAuthorization = await broker.authorizePath(input.sourcePath, "read");
+      const sourcePath = sourceAuthorization.path;
+      const sourceGrant = access.grants.find((candidate) => candidate.id === sourceAuthorization.grantId);
       const requestedOutput = resolve(input.outputDirectory);
-      const outputParent = await realpath(dirname(requestedOutput));
-      const outputDirectory = join(outputParent, requestedOutput.split("/").at(-1) ?? "mineru-output");
+      const outputAuthorization = await broker.authorizePath(requestedOutput, "write");
+      const outputDirectory = outputAuthorization.path;
       if (inside(sourcePath, outputDirectory)) throw new Error("MinerU output must not be inside the source path.");
-      const outputGrant = access.grants.find((candidate) => candidate.access === "read_write" && candidate.kind === "directory" && candidate.recursive && inside(candidate.realPath, outputDirectory));
-      if (!inside(access.workspaceRoot, outputDirectory) && !outputGrant) throw new Error("The MinerU output is outside this Chat's read-write file grants.");
+      const outputGrant = access.grants.find((candidate) => candidate.id === outputAuthorization.grantId);
       const result = await (options.runMineru ?? runManagedMineruExtraction)(options.runtimeRoot, {
         sourcePath,
         outputDirectory,

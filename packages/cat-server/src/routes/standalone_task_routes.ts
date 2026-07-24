@@ -13,6 +13,15 @@ import {
 } from "@linguist-agent/cat-data";
 import { streamCanonicalTaskEvents, taskListResponse, validatedTaskTitle } from "./task_route_shared.js";
 import { handleTaskMessageQueueRoute, type TaskMessageQueueRouteService } from "./task_message_queue_routes.js";
+import {
+  StrictApiInputError,
+  strictApiArray,
+  strictApiBoolean,
+  strictApiJsonValue,
+  strictApiObject,
+  strictApiOptional,
+  strictApiString,
+} from "../strict_api_contract.js";
 
 export interface AcceptedStandaloneMessage {
   messageId: string;
@@ -22,6 +31,7 @@ export interface AcceptedStandaloneMessage {
 }
 
 type StandaloneThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+type StandaloneExecutionProfile = "fast" | "balanced" | "best";
 
 interface StandaloneMessageInput {
   message: string;
@@ -30,7 +40,73 @@ interface StandaloneMessageInput {
   modelProvider?: string;
   modelId?: string;
   thinkingLevel?: StandaloneThinkingLevel;
+  executionProfile?: StandaloneExecutionProfile;
+  attachmentGrantIds?: string[];
 }
+
+const optionalJson = () => strictApiOptional(strictApiJsonValue());
+const optionalText = () => strictApiOptional(strictApiString());
+
+const createChatSchema = strictApiObject({
+  taskId: optionalText(),
+  title: optionalText(),
+  intent: optionalText(),
+  kind: optionalText(),
+  projectId: optionalJson(),
+  batchId: optionalJson(),
+  segmentIds: optionalJson(),
+  sourceLocale: optionalJson(),
+  targetLocale: optionalJson(),
+  owner: optionalJson(),
+  scope: optionalJson(),
+  initialMessage: optionalJson(),
+}, { name: "standalone Chat creation" });
+
+const renameChatSchema = strictApiObject({
+  title: strictApiString(),
+}, { name: "standalone Chat rename" });
+
+const fileGrantSchema = strictApiObject({
+  path: strictApiString(),
+  kind: strictApiString(),
+  access: strictApiString(),
+  recursive: strictApiOptional(strictApiBoolean()),
+}, { name: "standalone file grant" });
+
+const workingDirectorySchema = strictApiObject({
+  grantId: strictApiString(),
+}, { name: "standalone working directory" });
+
+const standaloneMessageSchema = strictApiObject({
+  message: strictApiString(),
+  delivery: optionalText(),
+  agentThreadId: optionalText(),
+  modelProvider: optionalText(),
+  modelId: optionalText(),
+  thinkingLevel: optionalText(),
+  executionProfile: optionalText(),
+  attachmentGrantIds: strictApiOptional(strictApiArray(strictApiString(), { maxItems: 12 })),
+}, { name: "standalone message" });
+
+const stopChatSchema = strictApiObject({
+  reason: optionalText(),
+}, { name: "standalone stop" });
+
+const compactChatSchema = strictApiObject({
+  customInstructions: optionalText(),
+  agentThreadId: optionalText(),
+}, { name: "standalone compaction" });
+
+const forkChatSchema = strictApiObject({
+  sourceThreadId: optionalText(),
+  entryId: optionalText(),
+  position: optionalText(),
+}, { name: "standalone fork" });
+
+const handoffChatSchema = strictApiObject({
+  title: optionalText(),
+  throughActivityId: optionalText(),
+}, { name: "standalone handoff" });
 
 /**
  * Ephemeral Pi output for the active standalone turn. Durable Task events stay
@@ -62,6 +138,8 @@ export interface StandaloneTaskRouteDeps {
     modelProvider?: string;
     modelId?: string;
     thinkingLevel?: StandaloneThinkingLevel;
+    executionProfile?: StandaloneExecutionProfile;
+    attachmentGrantIds?: string[];
   }) => Promise<AcceptedStandaloneMessage>;
   subscribeMessageStream?: (taskId: string, listener: (event: StandaloneAgentStreamEvent) => void) => () => void;
   stop?: (input: { taskId: string; reason?: string }) => Promise<unknown>;
@@ -234,7 +312,8 @@ function optionalIdentifier(value: unknown, label: string): string | undefined {
   return value.trim();
 }
 
-function messageInput(body: Record<string, unknown>): StandaloneMessageInput | null {
+function messageInput(value: unknown): StandaloneMessageInput | null {
+  const body = standaloneMessageSchema.parse(value, "standalone message");
   if (typeof body.message !== "string" || !body.message.trim()) return null;
   const delivery = body.delivery === undefined ? "auto" : body.delivery;
   if (!(["auto", "steer", "follow_up"] as unknown[]).includes(delivery)) {
@@ -250,6 +329,25 @@ function messageInput(body: Record<string, unknown>): StandaloneMessageInput | n
     : (["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const).includes(body.thinkingLevel as StandaloneThinkingLevel)
       ? body.thinkingLevel as StandaloneThinkingLevel
       : (() => { throw new Error("thinkingLevel is invalid."); })();
+  const executionProfile = body.executionProfile === undefined
+    ? undefined
+    : (["fast", "balanced", "best"] as const).includes(body.executionProfile as StandaloneExecutionProfile)
+      ? body.executionProfile as StandaloneExecutionProfile
+      : (() => { throw new Error("executionProfile is invalid."); })();
+  if (executionProfile && (modelProvider || modelId || thinkingLevel)) {
+    throw new Error("executionProfile cannot be combined with an explicit model or thinkingLevel.");
+  }
+  const attachmentGrantIds = body.attachmentGrantIds === undefined
+    ? undefined
+    : (() => {
+      if (!Array.isArray(body.attachmentGrantIds)
+        || !body.attachmentGrantIds.every((entry) => typeof entry === "string" && entry.trim() && entry.trim().length <= 160)) {
+        throw new Error("attachmentGrantIds must be an array of non-empty grant ids up to 160 characters.");
+      }
+      const ids = Array.from(new Set(body.attachmentGrantIds.map((entry) => (entry as string).trim())));
+      if (ids.length > 12) throw new Error("At most 12 file attachments can be selected for one Run.");
+      return ids;
+    })();
   return {
     message: body.message.trim(),
     delivery: delivery as "auto" | "steer" | "follow_up",
@@ -257,6 +355,8 @@ function messageInput(body: Record<string, unknown>): StandaloneMessageInput | n
     ...(modelProvider ? { modelProvider } : {}),
     ...(modelId ? { modelId } : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),
+    ...(executionProfile ? { executionProfile } : {}),
+    ...(attachmentGrantIds?.length ? { attachmentGrantIds } : {}),
   };
 }
 
@@ -281,7 +381,7 @@ export async function handleStandaloneTaskRoute(
       return true;
     }
     if (parts.length === 2 && req.method === "POST") {
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = createChatSchema.parse(await deps.readBody(req), "standalone Chat creation");
       if (body.kind !== undefined && body.kind !== "general") {
         deps.json(res, 400, { error: "Standalone Tasks must use kind general." });
         return true;
@@ -337,7 +437,7 @@ export async function handleStandaloneTaskRoute(
       return true;
     }
     if (parts.length === 3 && req.method === "PATCH") {
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = renameChatSchema.parse(await deps.readBody(req), "standalone Chat rename");
       let title: string;
       try { title = validatedTaskTitle(body.title); }
       catch (error) {
@@ -364,7 +464,7 @@ export async function handleStandaloneTaskRoute(
       return true;
     }
     if (parts[3] === "file-grants" && parts.length === 4 && req.method === "POST") {
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = fileGrantSchema.parse(await deps.readBody(req), "standalone file grant");
       if (typeof body.path !== "string" || !body.path.trim()
         || (body.kind !== "file" && body.kind !== "directory")
         || (body.access !== "read" && body.access !== "read_write")
@@ -402,7 +502,7 @@ export async function handleStandaloneTaskRoute(
       if (deps.hasActiveRun?.(taskId)) {
         throw new TaskWorkspaceConflictError("Stop the active Run before changing this Chat's working directory.");
       }
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = workingDirectorySchema.parse(await deps.readBody(req), "standalone working directory");
       if (typeof body.grantId !== "string" || !body.grantId.trim()) {
         deps.json(res, 400, { error: "grantId is required." });
         return true;
@@ -422,7 +522,7 @@ export async function handleStandaloneTaskRoute(
         deps.json(res, 503, standaloneRuntimeUnavailable("message delivery"));
         return true;
       }
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = await deps.readBody(req);
       let input: NonNullable<ReturnType<typeof messageInput>>;
       try {
         input = messageInput(body) ?? (() => { throw new Error("message is required."); })();
@@ -487,7 +587,7 @@ export async function handleStandaloneTaskRoute(
         deps.json(res, 503, standaloneRuntimeUnavailable("message delivery"));
         return true;
       }
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = await deps.readBody(req);
       let input: NonNullable<ReturnType<typeof messageInput>>;
       try {
         input = messageInput(body) ?? (() => { throw new Error("message is required."); })();
@@ -504,7 +604,7 @@ export async function handleStandaloneTaskRoute(
         deps.json(res, 503, standaloneRuntimeUnavailable("stop"));
         return true;
       }
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = stopChatSchema.parse(await deps.readBody(req), "standalone stop");
       deps.json(res, 200, await deps.stop({
         taskId,
         reason: typeof body.reason === "string" && body.reason.trim() ? body.reason.trim() : undefined,
@@ -517,7 +617,7 @@ export async function handleStandaloneTaskRoute(
         deps.json(res, 503, standaloneRuntimeUnavailable("compaction"));
         return true;
       }
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = compactChatSchema.parse(await deps.readBody(req), "standalone compaction");
       deps.json(res, 200, await deps.compact({
         taskId,
         customInstructions: typeof body.customInstructions === "string" && body.customInstructions.trim()
@@ -533,7 +633,7 @@ export async function handleStandaloneTaskRoute(
         deps.json(res, 503, standaloneRuntimeUnavailable("branching"));
         return true;
       }
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = forkChatSchema.parse(await deps.readBody(req), "standalone fork");
       if (body.position !== undefined && body.position !== "before" && body.position !== "at") {
         deps.json(res, 400, { error: "position must be before or at." });
         return true;
@@ -548,7 +648,7 @@ export async function handleStandaloneTaskRoute(
     }
     if (parts[3] === "handoff" && parts.length === 4 && req.method === "POST") {
       const source = await workspace.open(locator);
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = handoffChatSchema.parse(await deps.readBody(req), "standalone handoff");
       let title: string | undefined;
       if (body.title !== undefined) {
         try { title = validatedTaskTitle(body.title); }
@@ -577,6 +677,10 @@ export async function handleStandaloneTaskRoute(
       return true;
     }
   } catch (error) {
+    if (error instanceof StrictApiInputError) {
+      deps.json(res, error.status, { error: error.message });
+      return true;
+    }
     if (error instanceof TaskWorkspaceNotFoundError) {
       deps.json(res, 404, { error: error.message });
       return true;

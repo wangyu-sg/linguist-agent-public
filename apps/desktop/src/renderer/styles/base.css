@@ -134,6 +134,46 @@ textarea:disabled {
   border: 0;
 }
 
+/* Codex 06 §2:通用脉冲(配合 --la-animate-pulse)。 */
+@keyframes la-pulse {
+  50% { opacity: 0.5; }
+}
+
+/* Codex 06 §2:滚动边缘渐隐系统。@property 注册使 fade 长度可插值;
+   scroll-driven animation 在滚动两端切换上下渐隐,不支持的引擎退化为
+   声明的默认值(仅底部 1rem 渐隐),不会遮挡内容。 */
+@property --la-top-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0rem;
+}
+
+@property --la-bottom-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 1rem;
+}
+
+@keyframes la-edge-fade {
+  0%, 1% {
+    --la-top-fade: 0rem;
+    --la-bottom-fade: 1rem;
+  }
+
+  99%, 100% {
+    --la-top-fade: 1rem;
+    --la-bottom-fade: 0rem;
+  }
+}
+
+.la-scroll-fade-y {
+  --la-top-fade: 0rem;
+  --la-bottom-fade: 1rem;
+  animation: la-edge-fade linear both;
+  animation-timeline: scroll(self block);
+  mask-image: linear-gradient(to bottom, transparent 0, black var(--la-top-fade), black calc(100% - var(--la-bottom-fade)), transparent 100%);
+}
+
 /* Slim, transparent scrollbars that reveal on hover. Thumb color derives
    from --la-ink-primary, so both themes adapt without extra overrides. */
 * {

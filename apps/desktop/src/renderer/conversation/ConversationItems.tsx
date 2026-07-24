@@ -1,6 +1,7 @@
 import {
   memo,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactElement,
@@ -9,14 +10,18 @@ import {
 import {
   Activity as ActivityIcon,
   Brain,
+  Check,
   ChevronRight,
+  Circle,
   CircleAlert,
   CircleCheck,
   CircleHelp,
   CircleStop,
   Clock3,
+  Copy,
   FileText,
   GitBranch,
+  Info,
   LoaderCircle,
   MessageSquareText,
   Search,
@@ -41,6 +46,7 @@ import {
   summarizeProcessActivities,
   type ConversationFilterKind,
   type ConversationItem,
+  type ExecutionModelRef,
 } from "./conversation-model.ts";
 import { PersonaAvatar } from "./PersonaAvatar.tsx";
 import {
@@ -49,6 +55,9 @@ import {
   type Persona,
 } from "./personas.ts";
 import { formatRunElapsed } from "../composer/index.ts";
+import { latestAgentPlan, planProgress, planRingDashoffset, type AgentPlanTodos } from "./plan-model.ts";
+import { agentPresentDocument } from "./present-model.ts";
+import { RichArtifactBlockView } from "../inspector/RichArtifactPreview.tsx";
 import { CanonicalDecision, DecisionInteraction } from "./DecisionInteraction.tsx";
 import { approvalKeyAction } from "./approval-keys.ts";
 
@@ -65,7 +74,6 @@ export type PendingMessage = {
 
 export type TimelineEntry =
   | { id: string; kind: "canonical"; item: ConversationItem }
-  | { id: string; kind: "permission"; request: TaskPermissionRequest }
   | { id: string; kind: "permission-error" }
   | { id: string; kind: "pending"; message: PendingMessage }
   | { id: string; kind: "live"; reply: LiveReply };
@@ -127,7 +135,7 @@ export function estimatedTimelineEntrySize(entry: TimelineEntry | undefined): nu
   if (!entry) return 88;
   if (entry.kind === "pending") return 72;
   if (entry.kind === "live") return 256;
-  if (entry.kind === "permission" || entry.kind === "permission-error") return 220;
+  if (entry.kind === "permission-error") return 220;
   switch (entry.item.kind) {
     case "activity":
       return isHumanMessage(entry.item.activity) ? 84 : isAgentDocument(entry.item.activity) ? 120 : 40;
@@ -135,7 +143,9 @@ export function estimatedTimelineEntrySize(entry: TimelineEntry | undefined): nu
       return 44;
     case "artifact": return 104;
     case "decision": return 180;
+    case "recovery": return 104;
     case "specialist": return 96;
+    case "model-change": return 40;
     case "run": return 72;
   }
 }
@@ -175,6 +185,8 @@ const artifactTypeLabels: Record<TaskArtifact["type"], string> = {
   rich_document: "富文档",
   maintenance_plan: "维护计划",
   package_audit: "Package 审计",
+  agent_plan: "工作计划",
+  agent_present: "可视化回答",
   file: "文件",
   preview: "预览",
 };
@@ -244,6 +256,51 @@ export function isHumanMessage(activity: TaskActivity): boolean {
   return activity.actor.kind === "human" && activity.type === "message";
 }
 
+/** Codex spec 04 §7:user 气泡的行内复制操作,hover/focus 才浮现。 */
+function HumanMessageCopy({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      className="conversation-human__copy"
+      aria-label={copied ? "Copied" : "Copy message"}
+      title={copied ? "Copied" : "Copy"}
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => setCopied(true)).catch(() => undefined);
+      }}
+    >
+      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </button>
+  );
+}
+
+/** Codex spec 05 §5.3:模型切换 = 内联分割线(两侧细线)+ ⓘ 警告 tooltip。 */
+function ModelChangeDivider({ fromModel, toModel }: { fromModel: ExecutionModelRef; toModel: ExecutionModelRef }) {
+  const from = `${fromModel.providerId}/${fromModel.modelId}`;
+  const to = `${toModel.providerId}/${toModel.modelId}`;
+  return (
+    <div className="conversation-model-change" role="separator" aria-label={`Model changed from ${from} to ${to}；从下一 Turn 生效。`}>
+      <span className="conversation-model-change__rule" aria-hidden="true" />
+      <span className="conversation-model-change__label">
+        Model changed from {from} to {to}.
+        <span className="conversation-model-change__info" tabIndex={0}>
+          <Info aria-hidden="true" />
+          <span className="conversation-model-change__tooltip" role="tooltip">
+            <span>切换模型后表现可能变化。</span>
+            <span>上下文可能自动压缩；从下一 Turn 生效。</span>
+          </span>
+        </span>
+      </span>
+      <span className="conversation-model-change__rule" aria-hidden="true" />
+    </div>
+  );
+}
+
 function PersonaDocumentHeader({ activity, persona }: { activity: TaskActivity; persona: Persona }) {
   return (
     <header className="conversation-document__header">
@@ -266,6 +323,7 @@ function ActivityItem({ activity, thread, onInspect }: { activity: TaskActivity;
           <time dateTime={activity.createdAt}>{timeLabel(activity.createdAt)}</time>
         </header>
         <p>{activityText(activity)}</p>
+        <HumanMessageCopy text={activityText(activity)} />
         <span className="la-sr-only">你发送的消息</span>
       </article>
     );
@@ -323,15 +381,19 @@ function ActivityItem({ activity, thread, onInspect }: { activity: TaskActivity;
  * 活动不会让老过程组永远转圈。运行中自动展开,完成后自动收起;
  * 筛选历史时强制展开。
  */
-function ProcessGroup({ activities, thread, runActive = false, forceOpen = false, onInspect }: {
+function ProcessGroup({ activities, thread, activityThreads, runActive = false, forceOpen = false, onInspect }: {
   activities: TaskActivity[];
   thread?: TaskAgentThread;
+  activityThreads?: Map<string, TaskAgentThread>;
   runActive?: boolean;
   forceOpen?: boolean;
   onInspect?: (activity: TaskActivity) => void;
 }) {
   const live = runActive && activities.some((activity) => activity.status === "running" || activity.status === "pending");
   const [toggledOpen, setToggledOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!live) setToggledOpen(null);
+  }, [live]);
   const open = forceOpen || live || (toggledOpen ?? false);
   const processSummary = summarizeProcessActivities(activities, live);
   const last = activities[activities.length - 1]!;
@@ -355,10 +417,117 @@ function ProcessGroup({ activities, thread, runActive = false, forceOpen = false
       </summary>
       <div className="conversation-process__steps">
         {activities.map((activity) => (
-          <ActivityItem key={activity.id} activity={activity} thread={thread} onInspect={onInspect} />
+          <ActivityItem key={activity.id} activity={activity} thread={activityThreads?.get(activity.agentThreadId) ?? thread} onInspect={onInspect} />
         ))}
       </div>
     </details>
+  );
+}
+
+/** Codex spec 05 §3.3:Plan 卡 = 进度摘要标题 + todo 行(图标+删除线) + 高度状态机。 */
+function PlanCard({ artifact }: { artifact: TaskArtifact }) {
+  const [state, setState] = useState<"preview" | "expanded">("preview");
+  const plan = useMemo(() => latestAgentPlan({ artifacts: [artifact] }), [artifact]);
+  if (!plan) return null;
+  const progress = planProgress(plan.items);
+  const summary = progress.completed === 0
+    ? `已创建包含 ${progress.total} 项的计划`
+    : `共 ${progress.total} 项，已完成 ${progress.completed} 项`;
+  const expanded = state === "expanded";
+  return (
+    <div className="conversation-plan-card" data-state={state}>
+      <button
+        type="button"
+        className="conversation-plan-card__header"
+        aria-expanded={state === "expanded"}
+        aria-label={`${summary}，${expanded ? "点击收起" : "点击展开"}`}
+        onClick={() => setState(expanded ? "preview" : "expanded")}
+      >
+        <span className="conversation-plan-card__summary">{summary}</span>
+        <ChevronRight className="conversation-plan-card__chevron" aria-hidden="true" />
+      </button>
+      <div className="conversation-plan-card__body">
+        <ul className="conversation-plan-card__todos">
+          {plan.items.map((item, index) => (
+            <li key={item.id} className="conversation-plan-card__todo" data-status={item.status}>
+              <span className="conversation-plan-card__todo-index" aria-hidden="true">{index + 1}.</span>
+              <span className="conversation-plan-card__todo-icon" aria-hidden="true">
+                {item.status === "completed" ? <CircleCheck /> : <Circle />}
+              </span>
+              <span className="conversation-plan-card__todo-text">{item.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/** agent_present artifact → 时间线 Answer 卡:标题头 + 共享 canonical block 渲染,数据只读、不改写。 */
+function PresentCard({ artifact, onInspect }: { artifact: TaskArtifact; onInspect?: (artifact: TaskArtifact) => void }) {
+  const [state, setState] = useState<"preview" | "expanded">("expanded");
+  const document = useMemo(() => agentPresentDocument(artifact), [artifact]);
+  if (!document) return null;
+  const expanded = state === "expanded";
+  return (
+    <div className="conversation-present-card" data-state={state}>
+      <button
+        type="button"
+        className="conversation-present-card__header"
+        aria-expanded={state === "expanded"}
+        aria-label={`${document.title}，${document.blocks.length} 个内容块，${expanded ? "点击收起" : "点击展开"}`}
+        onClick={() => setState(expanded ? "preview" : "expanded")}
+      >
+        <span className="conversation-present-card__title">{document.title}</span>
+        <span className="conversation-present-card__meta">{document.blocks.length} 个内容块</span>
+        <ChevronRight className="conversation-present-card__chevron" aria-hidden="true" />
+      </button>
+      <div className="conversation-present-card__body">
+        {document.blocks.map((block) => <RichArtifactBlockView key={block.id} block={block} />)}
+      </div>
+      {onInspect ? (
+        <div className="conversation-present-card__footer">
+          <button type="button" className="conversation-present-card__inspect" onClick={() => onInspect?.(artifact)}>检查与导出</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Codex spec 05 §3.4:composer 上方 Step pill(进度环 + Step n/N,hover 出完整计划)。 */
+export function ConversationPlanPill({ plan }: { plan: AgentPlanTodos }) {
+  const progress = planProgress(plan.items);
+  return (
+    <div className="conversation-plan-pill-wrap">
+      <button
+        type="button"
+        className="conversation-plan-pill"
+        aria-label={`工作计划：共 ${progress.total} 项，已完成 ${progress.completed} 项，当前第 ${progress.currentStep} 项`}
+      >
+        {progress.allComplete ? (
+          <span className="conversation-plan-pill__dot" aria-hidden="true" />
+        ) : (
+          <svg className="conversation-plan-pill__ring" viewBox="0 0 16 16" aria-hidden="true">
+            <circle className="conversation-plan-pill__ring-track" cx="8" cy="8" r="6" pathLength={100} />
+            <circle className="conversation-plan-pill__ring-fill" cx="8" cy="8" r="6" pathLength={100} strokeDasharray={100} strokeDashoffset={planRingDashoffset(progress)} />
+          </svg>
+        )}
+        <span className="conversation-plan-pill__step">Step {progress.currentStep} / {progress.total}</span>
+      </button>
+      <div className="conversation-plan-pill__popover" role="tooltip">
+        <ul className="conversation-plan-card__todos">
+          {plan.items.map((item, index) => (
+            <li key={item.id} className="conversation-plan-card__todo" data-status={item.status}>
+              <span className="conversation-plan-card__todo-index" aria-hidden="true">{index + 1}.</span>
+              <span className="conversation-plan-card__todo-icon" aria-hidden="true">
+                {item.status === "completed" ? <CircleCheck /> : <Circle />}
+              </span>
+              <span className="conversation-plan-card__todo-text">{item.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
 
@@ -781,11 +950,15 @@ export const ConversationRow = memo(function ConversationRow({
     case "activity":
       return <ActivityItem activity={item.activity} thread={item.thread} onInspect={onInspectActivity} />;
     case "process": {
-      const run = store.getState().task?.runs.find((candidate) => candidate.id === item.activities[0]?.runId);
+      const snapshot = store.getState().task;
+      const run = snapshot?.runs.find((candidate) => candidate.id === item.activities[0]?.runId);
       const runActive = run?.status === "active" || run?.status === "pending";
-      return <ProcessGroup activities={item.activities} thread={item.thread} runActive={runActive} forceOpen={forceOpenProcess} onInspect={onInspectActivity} />;
+      const threads = new Map(snapshot?.agentThreads.map((candidate) => [candidate.id, candidate]) ?? []);
+      return <ProcessGroup activities={item.activities} thread={item.thread} runActive={runActive} forceOpen={forceOpenProcess} onInspect={onInspectActivity} activityThreads={threads} />;
     }
     case "artifact": {
+      if (item.artifact.type === "agent_plan") return <PlanCard artifact={item.artifact} />;
+      if (item.artifact.type === "agent_present") return <PresentCard artifact={item.artifact} onInspect={onInspectArtifact} />;
       const activities = store.getState().task?.activities ?? [];
       return (
         <ArtifactItem
@@ -835,9 +1008,13 @@ export const ConversationRow = memo(function ConversationRow({
         />
       );
     }
+    case "model-change":
+      return <ModelChangeDivider fromModel={item.fromModel} toModel={item.toModel} />;
+    case "recovery":
     case "run": {
+      const phase = item.kind === "recovery" ? "status" : item.phase;
       const snapshot = store.getState().task;
-      const cast: CastMember[] = item.phase === "started" && item.run.mode === "team" && snapshot
+      const cast: CastMember[] = phase === "started" && item.run.mode === "team" && snapshot
         ? (() => {
             const titles = latestActivityTitles(snapshot);
             return runCastThreads(snapshot, item.run.id).map((thread) => ({
@@ -849,7 +1026,7 @@ export const ConversationRow = memo(function ConversationRow({
       return (
         <RunBoundary
           run={item.run}
-          phase={item.phase}
+          phase={phase}
           thread={item.thread}
           cast={cast}
           onResumeTeam={(workflowId) => store.runTeamWorkflow(workflowId, "resume")}

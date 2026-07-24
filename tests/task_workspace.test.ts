@@ -823,6 +823,26 @@ const promotionRun = {
   stopAvailable: true,
   resumeAvailable: false,
   resourceManifest: promotionMainManifest,
+  executionSnapshots: [{
+    schemaVersion: 1 as const,
+    executionId: "run-promotion.execution.1",
+    runId: "run-promotion",
+    threadId: "thread-promotion-main",
+    turnId: "run-promotion",
+    runtimeEpochId: "run-promotion.epoch.1",
+    configRevision: 1,
+    providerId: null,
+    modelId: null,
+    reasoningEffort: null,
+    executionProfile: null,
+    promptHash: promotionHashes.systemPromptHash,
+    toolManifestHash: promotionHashes.toolSurfaceHash,
+    resourceSnapshotHash: promotionHashes.resourceIndexHash,
+    capabilityGrantHash: "2".repeat(64),
+    contextInputHash: "3".repeat(64),
+    createdAt: "2026-07-10T10:03:08.100Z",
+  }],
+  configChanges: [],
 };
 await workspace.appendGenerated({
   projectId: "project-one",
@@ -869,6 +889,86 @@ const promotedResourceManifest = {
   toolSurfaceHash: "0".repeat(64),
   resourceIndexHash: "1".repeat(64),
 };
+const legacyPromotionRun = {
+  ...promotionRun,
+  id: "run-promotion-legacy",
+  taskId: "task-legacy-promotion",
+  rootAgentThreadId: "thread-promotion-legacy-main",
+  executionSnapshots: undefined,
+  configChanges: undefined,
+};
+await workspace.create({
+  projectId: "project-one",
+  taskId: legacyPromotionRun.taskId,
+  title: "Legacy promotion",
+  intent: "Reject unversioned resource promotion.",
+  kind: "general",
+});
+await workspace.appendGenerated({
+  projectId: "project-one",
+  taskId: legacyPromotionRun.taskId,
+  runId: legacyPromotionRun.id,
+  events: [{
+    type: "run_upsert",
+    agentThreadId: legacyPromotionRun.rootAgentThreadId,
+    run: legacyPromotionRun,
+  }, {
+    type: "thread_upsert",
+    agentThreadId: legacyPromotionRun.rootAgentThreadId,
+    thread: {
+      id: legacyPromotionRun.rootAgentThreadId,
+      taskId: legacyPromotionRun.taskId,
+      runId: legacyPromotionRun.id,
+      parentThreadId: null,
+      identity: {
+        kind: "main",
+        roleId: "main",
+        displayName: "Linguist Agent",
+        roleLabel: "Main Agent",
+        disclosureLabel: "Agent",
+      },
+      status: "waiting",
+      canReceiveUserMessage: true,
+      childThreadIds: [],
+      createdAt: legacyPromotionRun.updatedAt,
+      updatedAt: legacyPromotionRun.updatedAt,
+    },
+  }],
+});
+await assert.rejects(
+  workspace.appendGenerated({
+    projectId: "project-one",
+    taskId: legacyPromotionRun.taskId,
+    runId: legacyPromotionRun.id,
+    events: [{
+      type: "run_upsert",
+      agentThreadId: legacyPromotionRun.rootAgentThreadId,
+      run: {
+        ...legacyPromotionRun,
+        status: "active",
+        updatedAt: "2026-07-10T10:03:08.200Z",
+        resourceManifest: promotedResourceManifest,
+      },
+    }],
+  }),
+  /resource promotion requires a new explicit execution epoch/,
+);
+await workspace.appendGenerated({
+  projectId: "project-one",
+  taskId: legacyPromotionRun.taskId,
+  runId: legacyPromotionRun.id,
+  events: [{
+    type: "run_upsert",
+    agentThreadId: legacyPromotionRun.rootAgentThreadId,
+    run: {
+      ...legacyPromotionRun,
+      status: "complete",
+      updatedAt: "2026-07-10T10:03:08.250Z",
+      completedAt: "2026-07-10T10:03:08.250Z",
+      stopAvailable: false,
+    },
+  }],
+});
 const promotedSnapshot = await workspace.appendGenerated({
   projectId: "project-one",
   taskId: "task-concurrent",
@@ -881,6 +981,29 @@ const promotedSnapshot = await workspace.appendGenerated({
       status: "active",
       updatedAt: "2026-07-10T10:03:08.200Z",
       resourceManifest: promotedResourceManifest,
+      configChanges: [{
+        schemaVersion: 1,
+        changeId: "run-promotion.config.2",
+        runId: promotionRun.id,
+        threadId: promotionRun.rootAgentThreadId,
+        actor: "system",
+        fromRevision: 1,
+        toRevision: 2,
+        changes: { retrievalProfile: { from: "main", to: "main+team" } },
+        effectiveFrom: "new_runtime_epoch",
+        compatibility: "requires_runtime_restart",
+        createdAt: "2026-07-10T10:03:08.200Z",
+      }],
+      executionSnapshots: [...promotionRun.executionSnapshots, {
+        ...promotionRun.executionSnapshots[0],
+        executionId: "run-promotion.execution.2",
+        runtimeEpochId: "run-promotion.epoch.2",
+        configRevision: 2,
+        promptHash: promotedResourceManifest.systemPromptHash,
+        toolManifestHash: promotedResourceManifest.toolSurfaceHash,
+        resourceSnapshotHash: promotedResourceManifest.resourceIndexHash,
+        createdAt: "2026-07-10T10:03:08.200Z",
+      }],
     },
   }],
 });
@@ -898,6 +1021,8 @@ await assert.rejects(
         status: "active",
         updatedAt: "2026-07-10T10:03:08.300Z",
         resourceManifest: { ...promotedResourceManifest, requestShapeHash: "2".repeat(64) },
+        executionSnapshots: undefined,
+        configChanges: undefined,
       },
     }],
   }),
@@ -917,6 +1042,8 @@ await workspace.appendGenerated({
       completedAt: "2026-07-10T10:03:08.400Z",
       stopAvailable: false,
       resourceManifest: promotedResourceManifest,
+      executionSnapshots: undefined,
+      configChanges: undefined,
     },
   }],
 });

@@ -1,5 +1,5 @@
 import { readBatch } from "./batch_workspace.js";
-import { compilePrompt } from "./prompt_compiler.js";
+import { compilePrompt, type PromptRequestBudget } from "./prompt_compiler.js";
 import { createTaskWorkspace } from "./task_workspace.js";
 import { requireProjectTaskScope } from "./task_workspace_contract.js";
 import { teamEvidenceToolsForScope, type TeamEvidenceToolName } from "./team_evidence_scope.js";
@@ -24,6 +24,9 @@ export interface TeamRoleContextInput {
   transcript?: string;
   includeTranscript?: boolean;
   allowedTools?: TeamEvidenceToolName[];
+  requestBudget?: PromptRequestBudget;
+  toolSchemaTokens?: number;
+  /** Legacy prompt-only fitting limit; cannot authorize a new Team Run. */
   tokenBudget?: number;
   coverage?: TeamContextManifest["coverage"];
 }
@@ -67,6 +70,10 @@ export function buildTeamRoleContext(input: TeamRoleContextInput): TeamRoleConte
   if (input.transcript && input.includeTranscript) included.push("transcript");
   else if (input.transcript) omitted.push("transcript");
 
+  let requestBudget = input.requestBudget;
+  if (requestBudget && input.toolSchemaTokens !== undefined) {
+    requestBudget = { ...requestBudget, toolSchemaTokens: input.toolSchemaTokens };
+  }
   const compiled = compilePrompt({
     surface: "team_role",
     taskRecipe: [
@@ -101,6 +108,7 @@ export function buildTeamRoleContext(input: TeamRoleContextInput): TeamRoleConte
       writeMode: "none",
       profileId: `team-role:${input.roleId}:scoped-evidence-v1`,
     },
+    requestBudget,
     tokenBudget: input.tokenBudget,
   });
   for (const section of compiled.manifest.omittedSections) if (!omitted.includes(section)) omitted.push(section);
@@ -117,7 +125,9 @@ export function buildTeamRoleContext(input: TeamRoleContextInput): TeamRoleConte
       includedArtifactIds: [...new Set(included)],
       omittedArtifactIds: omitted,
       estimateScope: compiled.manifest.estimateScope,
+      requestBudget: compiled.manifest.requestBudget,
       tokenEstimate: compiled.manifest.tokenEstimate,
+      omittedSections: compiled.manifest.omittedSections,
       hardConstraintsPreserved: compiled.manifest.hardConstraintsPreserved,
       truncationReason: compiled.manifest.truncationReason,
       promptHash: compiled.manifest.promptHash,
@@ -144,7 +154,13 @@ function requiresBatch(roleId: TeamRoleId): boolean {
  */
 export async function prepareTeamRoleContext(
   repoRoot: string,
-  input: { projectId: string; workflowId: string; roleId: TeamRoleId },
+  input: {
+    projectId: string;
+    workflowId: string;
+    roleId: TeamRoleId;
+    requestBudget?: PromptRequestBudget;
+    estimateToolSchemaTokens?: (toolNames: TeamEvidenceToolName[]) => number;
+  },
 ): Promise<TeamRoleContextPreparation> {
   const workflow = await readCatWorkflowRun(repoRoot, input.projectId, input.workflowId);
   const blockers: string[] = [];
@@ -262,6 +278,8 @@ export async function prepareTeamRoleContext(
       ? findings.map((row) => ({ id: row.id, message: `${row.severity} ${row.type}${row.segmentId ? ` · ${row.segmentId}` : ""}: ${row.message}` }))
       : undefined,
     allowedTools,
+    requestBudget: input.requestBudget,
+    toolSchemaTokens: input.estimateToolSchemaTokens?.(allowedTools),
     coverage: {
       batchSegments: batch?.segments.length ?? 0,
       taskSegments: selected.length,
@@ -269,6 +287,15 @@ export async function prepareTeamRoleContext(
       requiresPaging: Boolean(batch && !segmentIds.length),
     },
   });
+  if (!context.manifest.requestBudget) {
+    return { status: "blocked", blockers: ["The selected model has no verified context budget."], manifest: context.manifest };
+  }
+  if (context.manifest.overBudget) {
+    return { status: "blocked", blockers: ["Mandatory Team context exceeds the selected model budget."], manifest: context.manifest };
+  }
+  if (context.manifest.omittedSections?.length) {
+    return { status: "blocked", blockers: ["Team context needs compaction before optional material can be omitted."], manifest: context.manifest };
+  }
   return {
     status: "ready",
     prompt: context.prompt,

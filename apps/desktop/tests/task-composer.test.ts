@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveWorkspaceCapabilityRequest } from "../src/workspace-capabilities.cjs";
 import { workspaceClient } from "../src/renderer/data/workspace-client.ts";
 
 test("Task Composer forwards only the canonical next-Run fields through the preload stream", () => {
@@ -96,8 +97,8 @@ test("Task session diagnostics stay paired to the canonical Project and Task rou
     value: {
       linguist: {
         api: {
-          request: async (input: unknown) => {
-            calls.push(input);
+          invokeWorkspaceCapability: async (input: unknown) => {
+            calls.push(resolveWorkspaceCapabilityRequest(input));
             return {
               ok: true,
               status: 200,
@@ -127,8 +128,8 @@ test("Project Task live delivery and queue management use the same canonical Tas
     value: {
       linguist: {
         api: {
-          request: async (input: unknown) => {
-            calls.push(input);
+          invokeWorkspaceCapability: async (input: unknown) => {
+            calls.push(resolveWorkspaceCapabilityRequest(input));
             return {
               ok: true,
               status: 200,
@@ -168,8 +169,8 @@ test("projectless Chat exposes the same durable queue route vocabulary", async (
     value: {
       linguist: {
         api: {
-          request: async (input: unknown) => {
-            calls.push(input);
+          invokeWorkspaceCapability: async (input: unknown) => {
+            calls.push(resolveWorkspaceCapabilityRequest(input));
             return {
               ok: true,
               status: 200,

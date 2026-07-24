@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   WorkspaceAPIError,
@@ -145,6 +146,23 @@ test("filters all 10k rows without slicing and navigates to the next editable ro
   assert.equal(matches.length, 5_000);
   assert.equal(matches.at(-1)?.id, "segment-10000");
   assert.equal(nextEditableSegmentId(rows, "segment-1"), "segment-4", "locked and confirmed rows are skipped");
+
+  const samples = Array.from({ length: 20 }, () => {
+    const started = performance.now();
+    const visible = filterSegments(rows, "needle");
+    nextEditableSegmentId(visible, "segment-1");
+    return performance.now() - started;
+  }).sort((left, right) => left - right);
+  const p95 = samples[Math.ceil(samples.length * 0.95) - 1] ?? Infinity;
+  assert.ok(p95 < 50, `10k-row filter/navigation p95 must remain below 50ms (observed ${p95.toFixed(2)}ms)`);
+});
+
+test("10k-row CAT status aggregation does not re-run while the selected draft buffer changes", async () => {
+  const source = await readFile(new URL("../src/renderer/cat/CatWorkspace.tsx", import.meta.url), "utf8");
+  const batchStats = source.match(/const batchStats = useMemo\((.*?)\n  \);/s)?.[1] ?? "";
+  assert.match(batchStats, /id: selection\.segmentId,\n\s*status: draft\.canonical\.status,/);
+  assert.doesNotMatch(batchStats, /target: draft\.buffer/);
+  assert.doesNotMatch(batchStats, /draft\.buffer\],/);
 });
 
 test("reconstructs chips only from server-owned detected tag positions", () => {
@@ -507,7 +525,7 @@ test("segment client always sends compact mode and an explicit revision", async 
     value: {
       linguist: {
         api: {
-          request: async (input: unknown) => {
+          invokeWorkspaceCapability: async (input: unknown) => {
             captured = input;
             const current = segment({ target: "Draft", updatedAt: "rev-one" });
             const outcome = saved(current, "rev-one");
@@ -525,7 +543,7 @@ test("segment client always sends compact mode and an explicit revision", async 
       expectedSegmentUpdatedAt: null,
     });
     assert.deepEqual(captured, {
-      method: "POST",
+      capability: "batch-segment-write",
       path: "/api/projects/project%20one/batches/batch%20one/segments/segment%20one",
       body: {
         target: "Draft",
@@ -551,7 +569,7 @@ test("segment evidence client uses the canonical scoped route", async () => {
     value: {
       linguist: {
         api: {
-          request: async (input: unknown) => {
+          invokeWorkspaceCapability: async (input: unknown) => {
             captured = input;
             return { ok: true, status: 200, data: snapshot };
           },
@@ -562,7 +580,7 @@ test("segment evidence client uses the canonical scoped route", async () => {
   try {
     assert.equal(await workspaceClient.fetchSegmentEvidence("project one", "batch one", "segment one"), snapshot);
     assert.deepEqual(captured, {
-      method: "GET",
+      capability: "batch-segment-evidence-read",
       path: "/api/projects/project%20one/batches/batch%20one/segments/segment%20one/evidence",
     });
   } finally {
@@ -575,7 +593,7 @@ test("only the canonical 409 shape is treated as a revision conflict", async () 
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
-      linguist: { api: { request: async () => ({ ok: false, status: 409, data: { error: "different_conflict" } }) } },
+      linguist: { api: { invokeWorkspaceCapability: async () => ({ ok: false, status: 409, data: { error: "different_conflict" } }) } },
     },
   });
   try {
@@ -596,7 +614,7 @@ test("Batch-ready requests only the canonical summary projection", async () => {
     value: {
       linguist: {
         api: {
-          request: async (input: unknown) => {
+          invokeWorkspaceCapability: async (input: unknown) => {
             captured = input;
             return { ok: true, status: 200, data: { summary: {} } };
           },
@@ -607,7 +625,7 @@ test("Batch-ready requests only the canonical summary projection", async () => {
   try {
     await workspaceClient.openBatchSummary("project one", "batch one");
     assert.deepEqual(captured, {
-      method: "GET",
+      capability: "batch-read",
       path: "/api/projects/project%20one/batches/batch%20one?responseMode=summary",
     });
   } finally {

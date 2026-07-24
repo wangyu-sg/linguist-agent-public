@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
+  Archive,
+  ArchiveRestore,
+  Copy,
   Ellipsis,
-  FlaskConical,
   Folder,
+  GitBranch,
   Languages,
   LibraryBig,
   MessageSquareText,
+  Minimize2,
   PackageCheck,
   PanelLeftOpen,
   PanelRightClose,
@@ -24,7 +28,6 @@ const taskModes: Array<{ id: TaskWorkspaceMode; label: string; icon: typeof Mess
   { id: "review", label: "审阅", icon: SearchCheck },
   { id: "qa", label: "QA", icon: ShieldCheck },
   { id: "delivery", label: "交付", icon: PackageCheck },
-  { id: "eval", label: "评估", icon: FlaskConical },
 ];
 
 const pipelineModes = taskModes.filter((mode) => mode.id !== "conversation" && mode.id !== "cat");
@@ -35,7 +38,6 @@ const surfaceLabels: Record<ProductSurface, string> = {
   review: "审阅",
   qa: "QA",
   delivery: "交付",
-  eval: "评估",
   assets: "资料库",
   library: "Library",
   settings: "设置",
@@ -61,8 +63,22 @@ export function ProductToolbar({
   const [titleDraft, setTitleDraft] = useState(state.task?.task.title ?? "");
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [selectedChatThreadId, setSelectedChatThreadId] = useState("");
+  const [chatAction, setChatAction] = useState<"fork" | "copy" | "compact" | "archive" | "restore" | null>(null);
+  const [chatActionError, setChatActionError] = useState<string | null>(null);
   const project = projectFor(state);
   const standalone = state.task?.task.owner.kind === "standalone";
+  const chatBranches = useMemo(() => {
+    if (!standalone || !state.task) return [];
+    const parents = new Set(state.task.agentThreads.map((thread) => thread.parentThreadId).filter((id): id is string => Boolean(id)));
+    return state.task.agentThreads
+      .filter((thread) => thread.piSessionFile && !parents.has(thread.id))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }, [standalone, state.task]);
+  const selectedChatBranch = chatBranches.find((thread) => thread.id === selectedChatThreadId) ?? chatBranches[0] ?? null;
+  const chatActiveRun = state.task?.runs.find((run) => run.id === state.task?.activeRunId)
+    ?? state.task?.runs.findLast((run) => run.stopAvailable);
+  const chatActionsBlocked = Boolean(chatActiveRun);
   const batchReady = Boolean(project && state.batchId && !state.taskId);
   const activePipelineMode = pipelineModes.find((mode) => mode.id === surface) ?? null;
   const title = surface === "settings"
@@ -89,6 +105,9 @@ export function ProductToolbar({
     setTitleDraft(state.task?.task.title ?? "");
     setRenameBusy(false);
     setRenameError(null);
+    setSelectedChatThreadId("");
+    setChatAction(null);
+    setChatActionError(null);
   }, [state.taskId]);
 
   useEffect(() => {
@@ -136,6 +155,27 @@ export function ProductToolbar({
     }
   };
 
+  const closeTaskMenu = () => {
+    if (taskMenuRef.current) taskMenuRef.current.open = false;
+  };
+
+  const runChatAction = async (
+    action: NonNullable<typeof chatAction>,
+    work: () => Promise<void>,
+  ) => {
+    if (chatAction || chatActionsBlocked) return;
+    setChatAction(action);
+    setChatActionError(null);
+    try {
+      await work();
+      closeTaskMenu();
+    } catch (cause) {
+      setChatActionError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setChatAction(null);
+    }
+  };
+
   return (
     <header className="product-toolbar" aria-label="工作区工具栏">
       <div className="product-toolbar__slot product-toolbar__slot--start">
@@ -153,10 +193,10 @@ export function ProductToolbar({
         <div className="product-toolbar__scope" aria-label={subtitle ? `${title}，${subtitle}` : title}>
           <strong title={title}>{title}</strong>
         </div>
-        {state.taskId && !standalone && surface !== "settings" && surface !== "assets" && surface !== "library" ? (
+        {state.taskId && surface !== "settings" && surface !== "assets" && surface !== "library" ? (
           <details className="product-task-menu" ref={taskMenuRef}>
-            <summary aria-label="更多 Task 操作" title="更多 Task 操作"><Ellipsis aria-hidden="true" /></summary>
-            <div className="product-task-menu__popover" aria-label="Task 操作">
+            <summary aria-label={standalone ? "更多 Chat 操作" : "更多 Task 操作"} title={standalone ? "更多 Chat 操作" : "更多 Task 操作"}><Ellipsis aria-hidden="true" /></summary>
+            <div className="product-task-menu__popover" aria-label={standalone ? "Chat 操作" : "Task 操作"}>
               {!renaming ? (
                 <button
                   type="button"
@@ -193,6 +233,76 @@ export function ProductToolbar({
                   </div>
                 </form>
               )}
+              {standalone ? (
+                <>
+                  <div className="product-task-menu__divider" />
+                  <div className="product-task-menu__section-label">对话</div>
+                  <label className="product-task-menu__branch">
+                    <span>当前分支</span>
+                    <select
+                      value={selectedChatBranch?.id ?? ""}
+                      disabled={chatActionsBlocked || chatAction !== null || chatBranches.length === 0}
+                      onChange={(event) => setSelectedChatThreadId(event.target.value)}
+                    >
+                      {chatBranches.length === 0 ? <option value="">尚无可操作分支</option> : null}
+                      {chatBranches.map((thread, index) => (
+                        <option key={thread.id} value={thread.id}>{index === 0 ? "当前分支" : `分支 ${index + 1}`}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!selectedChatBranch || chatActionsBlocked || chatAction !== null}
+                    onClick={() => void runChatAction("fork", async () => {
+                      if (!selectedChatBranch) return;
+                      await input.store.forkChat({
+                        sourceThreadId: selectedChatBranch.id,
+                        entryId: selectedChatBranch.piEntryId,
+                        position: "at",
+                      });
+                    })}
+                  >
+                    <GitBranch aria-hidden="true" /><span>{chatAction === "fork" ? "正在创建分支…" : "从这里分支"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={chatActionsBlocked || chatAction !== null}
+                    onClick={() => void runChatAction("copy", async () => {
+                      await input.store.copyChat({
+                        ...(selectedChatBranch?.latestActivityId ? { throughActivityId: selectedChatBranch.latestActivityId } : {}),
+                      });
+                    })}
+                  >
+                    <Copy aria-hidden="true" /><span>{chatAction === "copy" ? "正在复制…" : "复制为新 Chat"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedChatBranch || chatActionsBlocked || chatAction !== null}
+                    onClick={() => void runChatAction("compact", async () => {
+                      if (!selectedChatBranch) return;
+                      await input.store.compactChat(undefined, selectedChatBranch.id);
+                    })}
+                  >
+                    <Minimize2 aria-hidden="true" /><span>{chatAction === "compact" ? "正在压缩…" : "压缩上下文"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={chatActionsBlocked || chatAction !== null}
+                    onClick={() => void runChatAction(state.task?.task.status === "archived" ? "restore" : "archive", async () => {
+                      if (!state.task) return;
+                      if (state.task.task.status === "archived") await input.store.restoreChat(state.task.task.id);
+                      else await input.store.archiveChat(state.task.task.id);
+                    })}
+                  >
+                    {state.task?.task.status === "archived" ? <ArchiveRestore aria-hidden="true" /> : <Archive aria-hidden="true" />}
+                    <span>{chatAction === "archive" || chatAction === "restore"
+                      ? state.task?.task.status === "archived" ? "正在恢复…" : "正在归档…"
+                      : state.task?.task.status === "archived" ? "恢复 Chat" : "归档 Chat"}</span>
+                  </button>
+                  {chatActionsBlocked ? <p className="product-task-menu__hint">Run 进行中；完成或停止后可管理分支与归档。</p> : null}
+                  {chatActionError ? <p className="product-task-menu__error" role="alert">{chatActionError}</p> : null}
+                </>
+              ) : null}
               {!standalone ? <div className="product-task-menu__divider" /> : null}
               {!standalone ? <div className="product-task-menu__section-label">专业工作区</div> : null}
               {!standalone ? pipelineModes.map((mode) => {

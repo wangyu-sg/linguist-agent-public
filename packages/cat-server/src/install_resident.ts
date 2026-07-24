@@ -95,14 +95,14 @@ export async function runInstallResidentCommand(options: RunInstallResidentComma
 
   writeLine(`Linguist Agent resident runtime installer`);
   writeLine(`repoRoot: ${repoRoot}`);
-  writeLine(`health: http://127.0.0.1:${port}/api/health`);
+  writeLine("transport: authenticated Unix-domain rendezvous");
 
   try {
     for (const action of plan.actions) {
       const result = await actionRunner(action, { repoRoot, port, currentPid, uptimeSec, launcher });
       results.push(result);
       writeLine(`${action}: ${result.ok ? "ok" : "failed"} - ${result.message}`);
-      writeLine(`status: ${result.status.state ?? "unknown"} port=${result.status.port} plist=${result.status.launchAgentPlist}`);
+      writeLine(`status: ${result.status.state ?? "unknown"} transport=${result.status.transport} plist=${result.status.launchAgentPlist}`);
       if (!result.ok) {
         writeError(`resident runtime ${action} failed`);
         return { exitCode: 1, results };
@@ -110,9 +110,9 @@ export async function runInstallResidentCommand(options: RunInstallResidentComma
     }
     const last = results.at(-1);
     if (last?.status.state === "running") {
-      writeLine(`resident runtime process confirmed; health: http://127.0.0.1:${port}/api/health`);
+      writeLine("resident runtime process confirmed on authenticated Unix transport");
     } else if (last?.ok) {
-      writeLine(`resident runtime action completed; health: http://127.0.0.1:${port}/api/health`);
+      writeLine("resident runtime action completed; verify the authenticated Unix transport");
     }
     return { exitCode: 0, results };
   } catch (error) {

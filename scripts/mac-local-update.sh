@@ -77,14 +77,13 @@ managed_runtime_root() {
 }
 
 wait_runtime_health() {
-  local port="${LA_SERVER_PORT:-8787}"
   for _ in $(seq 1 60); do
-    if curl -sf "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then
+    if node "$ROOT/scripts/check-local-runtime.mjs" >/dev/null 2>&1; then
       return 0
     fi
     sleep 0.5
   done
-  echo "Managed runtime did not become ready on :$port"
+  echo "Managed runtime did not become ready on authenticated Unix transport"
   return 1
 }
 
@@ -444,8 +443,6 @@ install_update() {
   npm --prefix "$REPO_ROOT" install
 
   if [[ "$kind" == "app_runtime" || "$app_needs_install" == "1" ]]; then
-    echo "Installing Electron desktop dependencies"
-    npm --prefix "$REPO_ROOT/apps/desktop" install
     echo "Building signed Electron app"
     npm --prefix "$REPO_ROOT/apps/desktop" run package
 

@@ -115,18 +115,22 @@ export function useSettingsData() {
     setMutation("model");
     setMutationError(null);
     setMutationSuccess(null);
-    let next = data.settings;
     try {
-      const writes: Array<[string, string]> = [
-        ["defaultProvider", input.provider],
-        ["defaultModel", input.model],
-        ["defaultThinkingLevel", input.thinking],
-      ];
-      for (const [path, value] of writes) {
-        if (settingValue(next, path) === value) continue;
-        next = await workspaceClient.updatePiSetting("global", path, value);
+      // Provider and model must be accepted or rejected together. Three
+      // independent writes caused the visible "switch then return to Qwen"
+      // failure when the runtime observed a half-written selection.
+      const next = await workspaceClient.savePiModelPreference(input.provider, input.model, input.thinking as "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max");
+      setData((current) => ({ ...current, settings: next }));
+      // Refresh the runtime-resolved default pair as well. The settings
+      // catalog deliberately preserves Pi's native project-over-global merge;
+      // the model UI instead presents the user's effective LA preference.
+      try {
+        const providers = await workspaceClient.fetchPiProviders();
+        setData((current) => ({ ...current, providers }));
+      } catch {
+        // The preference is already durable. A later Settings refresh can
+        // recover the provider directory without pretending the save failed.
       }
-      if (next) setData((current) => ({ ...current, settings: next }));
       setMutationSuccess("model");
     } catch (error) {
       try {

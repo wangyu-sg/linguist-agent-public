@@ -112,10 +112,10 @@ try {
       integrity: "sha512-dGVzdA==",
     }],
     activeToolNames: ["ask", "tm_lookup"],
-    requestShapeHash: "request-shape-1",
-    systemPromptHash: "system-prompt-1",
-    toolSurfaceHash: "tool-surface-1",
-    resourceIndexHash: "resource-index-1",
+    requestShapeHash: "a".repeat(64),
+    systemPromptHash: "b".repeat(64),
+    toolSurfaceHash: "c".repeat(64),
+    resourceIndexHash: "d".repeat(64),
   };
   await projector.setResourceManifest(resourceManifest);
   projector.accept({ type: "tool_start", ts: "2026-07-12T01:00:01.000Z", toolCallId: "tool-1", toolName: "tm_lookup", argsPreview: "月亮" });
@@ -190,6 +190,10 @@ try {
   assert.deepEqual(run?.estimatedCallsBySource, { main: 1 });
   assert.deepEqual(snapshot.usage, run?.usage, "Task total must be server-projected rather than recomputed by the client");
   assert.deepEqual(run?.resourceManifest, resourceManifest, "terminal lifecycle updates must preserve the resolved resources");
+  assert.equal(run?.executionSnapshots?.length, 1);
+  assert.equal(run?.executionSnapshots?.[0]?.modelId, "deepseek-v4-flash");
+  assert.equal(run?.executionSnapshots?.[0]?.configRevision, 1);
+  assert.equal(run?.configChanges?.length, 0);
   await projector.setResourceManifest(resourceManifest);
   await assert.rejects(
     projector.setResourceManifest({ ...resourceManifest, activeToolNames: ["ask"] }),

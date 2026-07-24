@@ -127,12 +127,13 @@ export function QueuedMessageList({
           </span>
         </div>
       ) : null}
-      <div className="queued-message-list__scroll" role="list">
+      <div className="queued-message-list__scroll la-scroll-fade-y" role="list">
         {queue.messages.map((message, index) => (
           <div
             className="queued-message-list__row"
             data-status={message.status}
             data-dragging={draggingId === message.id ? "true" : undefined}
+            data-editing={editingId === message.id ? "true" : undefined}
             draggable={!busy && editingId !== message.id}
             key={message.id}
             role="listitem"
@@ -161,7 +162,7 @@ export function QueuedMessageList({
             ) : (
               <button className="queued-message-list__text" type="button" title={message.text} onDoubleClick={() => startEdit(message)}>{message.text}</button>
             )}
-            <div className="queued-message-list__actions">
+            <div className="queued-message-list__actions" aria-label="Queued message actions" role="group">
               {message.status !== "queued" ? <IconButton type="button" disabled={busy} aria-label="Retry queued message" title="Retry" onClick={() => onRetry(message)}><RotateCcw /></IconButton> : null}
               <IconButton type="button" disabled={busy || !activeRun} aria-label="Steer with queued message" title="Steer · Submit without interrupting the model" onClick={() => onSteer(message)}><Zap /></IconButton>
               <IconButton className="queued-message-list__move-action" type="button" disabled={busy || index === 0} aria-label="Move queued message up" title="Move up" onClick={() => move(message, -1)}><ArrowUp /></IconButton>

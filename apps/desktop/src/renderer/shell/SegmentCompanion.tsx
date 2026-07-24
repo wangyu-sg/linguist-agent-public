@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowUp, ExternalLink, LoaderCircle, ScanSearch } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { TaskActivity, TaskArtifact } from "../../../../../packages/cat-data/src/task_workspace_contract.ts";
 import type { BatchSegment, StreamState } from "../data/workspace-client.ts";
 import type { WorkspaceStore } from "../data/workspace-store.ts";
 import { segmentNumber } from "../cat/cat-model.ts";
-import { resolvePersona } from "../conversation/personas.ts";
+import { ConversationRow } from "../conversation/ConversationItems.tsx";
+import { buildConversationItems, conversationItemsForSegment } from "../conversation/conversation-model.ts";
+import "../conversation/conversation.css";
 import {
   AgentComposer,
   ComposerAddDisclosure,
@@ -23,39 +23,11 @@ interface SegmentCompanionProps {
   store: WorkspaceStore;
   onOpenHistory: () => void;
   onInspectSegment: (segment: BatchSegment) => void;
+  onInspectActivity: (activity: TaskActivity) => void;
+  onInspectArtifact: (artifact: TaskArtifact) => void;
 }
 
-type SegmentItem =
-  | { kind: "activity"; createdAt: string; activity: TaskActivity }
-  | { kind: "artifact"; createdAt: string; artifact: TaskArtifact };
-
-function segmentItems(
-  segmentId: string | null,
-  activities: TaskActivity[],
-  artifacts: TaskArtifact[],
-): SegmentItem[] {
-  if (!segmentId) return [];
-  return [
-    ...activities
-      .filter((activity) => activity.refs.segmentIds?.includes(segmentId))
-      .map((activity): SegmentItem => ({ kind: "activity", createdAt: activity.createdAt, activity })),
-    ...artifacts
-      .filter((artifact) => artifact.scope.kind === "project" && artifact.scope.segmentIds.includes(segmentId))
-      .map((artifact): SegmentItem => ({ kind: "artifact", createdAt: artifact.createdAt, artifact })),
-  ].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-}
-
-function itemSummary(item: SegmentItem): string | null {
-  if (item.kind === "activity") {
-    const body = item.activity.body?.trim() ?? null;
-    // 原始 JSON 参数/结果不进伴随区——与主时间线同一降噪规则。
-    if (body && /^\s*[{[]/.test(body)) return null;
-    return body;
-  }
-  return item.artifact.summary?.trim() || null;
-}
-
-export function SegmentCompanion({ segment, store, onOpenHistory, onInspectSegment }: SegmentCompanionProps) {
+export function SegmentCompanion({ segment, store, onOpenHistory, onInspectSegment, onInspectActivity, onInspectArtifact }: SegmentCompanionProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -80,8 +52,8 @@ export function SegmentCompanion({ segment, store, onOpenHistory, onInspectSegme
     ?? null;
   const runIsActive = presentedRun?.status === "active" || presentedRun?.status === "pending";
   const items = useMemo(
-    () => segmentItems(segment?.id ?? null, state.task?.activities ?? [], state.task?.artifacts ?? []),
-    [segment?.id, state.task?.activities, state.task?.artifacts],
+    () => segment && state.task ? conversationItemsForSegment(buildConversationItems(state.task), segment.id) : [],
+    [segment, state.task],
   );
 
   const send = (event: FormEvent) => {
@@ -158,43 +130,23 @@ export function SegmentCompanion({ segment, store, onOpenHistory, onInspectSegme
             <span>源文</span>
             <p>{segment.source}</p>
           </div>
-          <div className="segment-companion__history" aria-label="与当前句段相关的 Agent 记录">
-            {items.length ? items.slice(-8).map((item) => {
-              if (item.kind === "activity" && item.activity.actor.kind === "human") {
-                return (
-                  <article key={item.activity.id} className="segment-companion__human">
-                    <span>你</span>
-                    <p>{item.activity.body?.trim() || item.activity.title}</p>
-                  </article>
-                );
-              }
-              if (item.kind === "activity") {
-                const thread = state.task?.agentThreads.find((candidate) => candidate.id === item.activity.agentThreadId);
-                const persona = resolvePersona(thread?.identity ?? null);
-                const body = itemSummary(item);
-                const isDocument = item.activity.type === "final_response" || item.activity.type === "message";
-                return (
-                  <article key={item.activity.id} data-hue={persona.hueKey}>
-                    <span className="segment-companion__author">{persona.personaName}</span>
-                    {item.activity.title && !isDocument ? <h3>{item.activity.title}</h3> : null}
-                    {body ? (
-                      isDocument
-                        ? <div className="segment-companion__markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown></div>
-                        : <p>{body}</p>
-                    ) : null}
-                  </article>
-                );
-              }
-              return (
-                <article key={item.artifact.id}>
-                  <span>产物</span>
-                  <h3>{item.artifact.title}</h3>
-                  {itemSummary(item) ? <p>{itemSummary(item)}</p> : null}
-                </article>
-              );
-            }) : (
+          <div className="segment-companion__history" aria-label="与当前句段相关的对话">
+            {items.length ? (
+              <ol className="segment-companion__timeline">
+                {items.map((item) => (
+                  <li key={item.id} className="task-conversation__item">
+                    <ConversationRow
+                      item={item}
+                      store={store}
+                      onInspectActivity={onInspectActivity}
+                      onInspectArtifact={onInspectArtifact}
+                    />
+                  </li>
+                ))}
+              </ol>
+            ) : (
               <div className="segment-companion__empty">
-                <p>还没有与这个句段相关的 Agent 记录。</p>
+                <p>还没有与这个句段相关的对话。</p>
                 <span>你可以询问语义、术语、标签或上下文;回答会保留在当前 Task 的完整历史中。</span>
               </div>
             )}

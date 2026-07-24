@@ -62,10 +62,10 @@ export function MaintainerPanel({ taskId, disabled = false, onCanonicalUpdate }:
     setBusy(true);
     setError(null);
     try {
-      const path = await window.linguist.system.pickProjectFolder();
-      if (!path) return;
+      const folderHandle = await window.linguist.system.pickProjectFolder();
+      if (!folderHandle) return;
       const response = await workspaceClient.createChatFileGrant(taskId, {
-        path,
+        fileHandle: folderHandle,
         kind: "directory",
         access: "read_write",
         recursive: true,
@@ -127,11 +127,11 @@ export function MaintainerPanel({ taskId, disabled = false, onCanonicalUpdate }:
       });
       setHandoff(response.handoff);
       if (response.handoff.action === "electron_runtime_installer") {
-        const result = await window.linguist.runtime.installCandidate({ bundleRoot: response.handoff.candidateBundleRoot });
+        const result = await window.linguist.runtime.installCandidate({ candidateHandle: response.handoff.candidateHandle });
         if (!result.ok) throw new Error(result.message);
         setStatus(result.message);
       } else {
-        await window.linguist.system.revealPath(response.handoff.candidateAppPath);
+        await window.linguist.system.revealMaintenanceCandidate({ candidateHandle: response.handoff.candidateHandle });
         setStatus("Protocol mismatch blocks runtime-only activation. The full signed app candidate is ready for manual installation.");
       }
     } catch (cause) {

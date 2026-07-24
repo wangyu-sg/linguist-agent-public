@@ -79,7 +79,10 @@ export async function handleUploadImportRoute(
     })).manifest;
   }
   const batchId = deps.optionalString(body.batchId) ?? deps.inferBatchId(fileName);
-  const overwrite = Boolean(body.overwrite);
+  if (body.overwrite !== undefined && typeof body.overwrite !== "boolean") {
+    throw new Error("overwrite must be a boolean when provided.");
+  }
+  const overwrite = body.overwrite ?? false;
   const workflowStage = batchWorkflowStage(body.workflowStage);
   const ext = extname(filePath).toLocaleLowerCase();
   if (ext === ".mxliff") {

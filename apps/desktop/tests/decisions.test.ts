@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveWorkspaceCapabilityRequest } from "../src/workspace-capabilities.cjs";
 import { parseTaskWorkspaceSnapshot } from "../../../packages/cat-data/src/task_workspace_contract.ts";
 import { workspaceClient } from "../src/renderer/data/workspace-client.ts";
 import { WorkspaceStore } from "../src/renderer/data/workspace-store.ts";
@@ -94,7 +95,8 @@ test("workspace client uses canonical ordinary Decision and Team preflight/start
     value: {
       linguist: {
         api: {
-          request: async (request: { method: string; path: string; body?: unknown }) => {
+          invokeWorkspaceCapability: async (input: unknown) => {
+            const request = resolveWorkspaceCapabilityRequest(input);
             requests.push(request);
             if (request.path.endsWith("/preflight")) return { ok: true, status: 200, data: plan };
             if (request.path.includes("/decisions/")) return { ok: true, status: 200, data: { snapshot: teamSnapshot() } };

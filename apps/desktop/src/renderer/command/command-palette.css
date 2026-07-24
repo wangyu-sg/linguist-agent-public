@@ -1,10 +1,10 @@
 .command-palette {
-  width: min(640px, calc(100vw - 32px));
+  width: min(520px, 92vw);
   max-height: min(560px, calc(100vh - 32px));
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--la-border-strong);
-  border-radius: var(--la-radius-surface);
+  border-radius: var(--la-radius-takeover);
   background: var(--la-canvas);
   color: var(--la-ink-primary);
   box-shadow: var(--la-shadow-large);
@@ -50,9 +50,30 @@
 }
 
 .command-palette__results {
-  max-height: min(448px, calc(100vh - 132px));
+  display: flex;
+  max-height: min(440px, calc(90vh - 64px));
+  flex-direction: column;
   padding: var(--la-space-2);
   overflow: auto;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+
+.command-palette__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--la-space-1);
+}
+
+.command-palette__group + .command-palette__group {
+  margin-top: var(--la-space-2);
+}
+
+.command-palette__group-heading {
+  padding: var(--la-space-1) var(--la-space-3) 0;
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-dense-size);
+  line-height: var(--la-type-dense-line);
 }
 
 .command-palette__result {
@@ -159,7 +180,7 @@
 
 @media (max-width: 1080px) {
   .command-palette {
-    width: min(600px, calc(100vw - 24px));
+    width: min(520px, calc(100vw - 24px));
     max-height: calc(100vh - 24px);
   }
 

@@ -5,15 +5,38 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  MINERU_PACK,
   PADDLE_OCR_PACK,
   buildDocumentEvidence,
   extractPaddleOcrEvidence,
   inspectManagedDocumentCapabilities,
   managedDocumentCapabilityPath,
-  routeDocumentExtraction,
   runManagedJsonlWorker,
+  validateMineruQualification,
   type ManagedCapabilityLockV1,
 } from "../packages/cat-data/src/document_capabilities.ts";
+
+test("MinerU requires a complete version, hardware, metric, crash, and license qualification record", () => {
+  const qualification = {
+    schemaVersion: 1,
+    status: "passed" as const,
+    fixtureSetSha256: "a".repeat(64),
+    evidenceSha256: "b".repeat(64),
+    passedAt: "2026-07-24T00:00:00.000Z",
+    backend: {
+      runtimeSha256: MINERU_PACK.runtime.sha256,
+      packageSha256: MINERU_PACK.packages[0]!.sha256!,
+      modelsSha256: "c".repeat(64),
+    },
+    machine: { platform: "darwin" as const, architecture: "arm64" as const, memoryGiB: 16 },
+    measurements: { cjkCer: 0.03, readingOrderScore: 0.95, tableCellF1: 0.9, peakMemoryMiB: 2048, crashFreeRuns: 20 },
+    licenseEvidenceSha256: "d".repeat(64),
+  };
+  assert.equal(validateMineruQualification(qualification), undefined);
+  assert.match(validateMineruQualification({ ...qualification, backend: { ...qualification.backend, packageSha256: "e".repeat(64) } }) ?? "", /package digest/i);
+  assert.match(validateMineruQualification({ ...qualification, measurements: { ...qualification.measurements, crashFreeRuns: 0 } }) ?? "", /crash/i);
+  assert.match(validateMineruQualification({ ...qualification, unexpected: true }) ?? "", /unknown field/i);
+});
 
 test("document packs are explicit and missing never masquerades as ready", async () => {
   const root = await mkdtemp(join(tmpdir(), "la-document-capabilities-"));
@@ -102,6 +125,26 @@ test("JSONL worker uses stdin and returns typed lines without shell interpolatio
   assert.deepEqual(rows, [{ ok: true, request: { sourcePath: "/tmp/name with spaces;no-shell.png" } }]);
 });
 
+test("managed JSONL worker does not inherit or accept caller secrets", async () => {
+  const root = await mkdtemp(join(tmpdir(), "la-document-worker-"));
+  const worker = join(root, "worker.mjs");
+  await writeFile(worker, "console.log(JSON.stringify({ inherited: process.env.LA_DOCUMENT_TEST_SECRET }));", "utf8");
+  const previous = process.env.LA_DOCUMENT_TEST_SECRET;
+  process.env.LA_DOCUMENT_TEST_SECRET = "must-not-reach-managed-worker";
+  try {
+    const rows = await runManagedJsonlWorker({
+      executable: process.execPath,
+      workerPath: worker,
+      request: {},
+      env: { LA_DOCUMENT_TEST_SECRET: "also-denied" },
+    });
+    assert.deepEqual(rows, [{ }]);
+  } finally {
+    if (previous === undefined) delete process.env.LA_DOCUMENT_TEST_SECRET;
+    else process.env.LA_DOCUMENT_TEST_SECRET = previous;
+  }
+});
+
 test("document evidence preserves low confidence text, geometry, digest, and overlay", async () => {
   const root = await mkdtemp(join(tmpdir(), "la-document-evidence-"));
   const source = join(root, "scan.png");
@@ -122,17 +165,4 @@ test("document evidence preserves low confidence text, geometry, digest, and ove
   assert.match(evidence.source.sha256, /^[a-f0-9]{64}$/);
   assert.equal(evidence.overlay.pages[0]?.polygons.length, 1);
   assert.equal((await readFile(source, "utf8")), "fixture", "source files remain read-only");
-});
-
-test("document extraction routing is native-first, local-only by default, and cloud-gated", () => {
-  assert.equal(routeDocumentExtraction({ nativeTextCharacters: 200, nativeTextCoverage: 0.9 }).route, "native-text");
-  assert.equal(routeDocumentExtraction({ nativeTextCharacters: 0 }).route, "paddleocr");
-  assert.equal(routeDocumentExtraction({ nativeTextCharacters: 20, nativeTextCoverage: 0.2, complexLayout: true, mineruState: "unqualified" }).route, "paddleocr");
-  assert.equal(routeDocumentExtraction({ nativeTextCharacters: 20, nativeTextCoverage: 0.2, complexLayout: true, mineruState: "ready" }).route, "mineru");
-  assert.equal(routeDocumentExtraction({ nativeTextCharacters: 0, userRequestedCloudVision: true }).route, "blocked");
-  assert.deepEqual(routeDocumentExtraction({ nativeTextCharacters: 0, userRequestedCloudVision: true, cloudEgressDecisionId: "decision-1" }), {
-    route: "cloud-vision",
-    reason: "The user approved cloud vision for this file.",
-    decisionId: "decision-1",
-  });
 });

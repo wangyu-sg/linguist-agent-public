@@ -41,7 +41,11 @@ function bearerToken(value: string | undefined): string | undefined {
   return match?.[1];
 }
 
-export function createLocalTransportSecurity(input: { token: string; allowedOrigins?: string[] }): LocalTransportSecurity {
+export function createLocalTransportSecurity(input: {
+  token: string;
+  allowedOrigins?: string[];
+  publicHealth?: boolean;
+}): LocalTransportSecurity {
   const token = input.token.trim();
   if (!token) throw new Error("Local transport token is required.");
   const allowedOrigins = new Set((input.allowedOrigins ?? []).map((origin) => origin.trim()).filter(Boolean));
@@ -55,7 +59,7 @@ export function createLocalTransportSecurity(input: { token: string; allowedOrig
       }
       // Only the read-only health probe is public.  A POST/PUT to the same
       // pathname must not become an unauthenticated backdoor as routes evolve.
-      if (request.pathname === "/api/health" && (!request.method || request.method === "GET" || request.method === "HEAD")) {
+      if (input.publicHealth !== false && request.pathname === "/api/health" && (!request.method || request.method === "GET" || request.method === "HEAD")) {
         return { allowed: true, public: true };
       }
       if (!tokenMatches(bearerToken(request.authorization), token)) {

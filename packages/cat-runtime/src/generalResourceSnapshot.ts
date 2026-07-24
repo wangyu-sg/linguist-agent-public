@@ -36,6 +36,14 @@ export interface GeneralResourceSnapshot {
   resourceSetHash: string;
 }
 
+export interface AuthorizedExtensionStage {
+  originalResolvedPath: string;
+  sourceSha256: string;
+  stagedPath: string;
+  stagedSha256: string;
+  sizeBytes: number;
+}
+
 export interface GeneralManagedResourcePaths {
   extensions: string[];
   skills: string[];
@@ -139,6 +147,38 @@ function stableResourceSetHash(entries: GeneralResourceSnapshotEntry[]): string 
     sha256: entry.sha256,
   }));
   return createHash("sha256").update(JSON.stringify(shape)).digest("hex");
+}
+
+/**
+ * Replace discovered executable paths with the exact content-addressed bytes
+ * approved by the host. A loader must never receive the original path after
+ * authorization because that would reopen a verify/load race.
+ */
+export function useAuthorizedExtensionStages(
+  snapshot: GeneralResourceSnapshot,
+  authorizations: AuthorizedExtensionStage[],
+): GeneralResourceSnapshot {
+  const bySource = new Map(authorizations.map((entry) => [entry.originalResolvedPath, entry]));
+  const entries = snapshot.entries.map((entry): GeneralResourceSnapshotEntry => {
+    if (entry.type !== "extension") return entry;
+    const authorization = bySource.get(entry.resolvedPath);
+    if (!authorization || authorization.sourceSha256 !== entry.sha256) {
+      throw new Error(`Pi Extension has no exact staged-byte authorization: ${entry.path}`);
+    }
+    return {
+      ...entry,
+      path: authorization.stagedPath,
+      resolvedPath: authorization.stagedPath,
+      sha256: authorization.stagedSha256,
+      sizeBytes: authorization.sizeBytes,
+    };
+  });
+  return {
+    ...snapshot,
+    entries,
+    extensionPaths: entries.filter((entry) => entry.type === "extension").map((entry) => entry.path),
+    resourceSetHash: stableResourceSetHash(entries),
+  };
 }
 
 /**

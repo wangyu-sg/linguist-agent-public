@@ -15,6 +15,7 @@
     "@earendil-works/pi-coding-agent": "0.80.10",
     "@linguist-agent/cat-data": "2.32.7",
     "@linguist-agent/cat-mcp": "2.32.7",
-    "@linguist-agent/cat-runtime": "2.32.7"
+    "@linguist-agent/cat-runtime": "2.32.7",
+    "@linguist-agent/storage-sqlite": "2.32.7"
   }
 }

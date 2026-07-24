@@ -21,10 +21,8 @@ const plist = renderResidentLaunchAgentPlist({
 });
 
 assert.match(plist, /com\.linguist-agent\.server/);
-assert.match(plist, /LA_SERVER_HOST/);
-assert.match(plist, /127\.0\.0\.1/);
-assert.match(plist, /LA_SERVER_PORT/);
-assert.match(plist, /8787/);
+assert.doesNotMatch(plist, /LA_SERVER_HOST|LA_SERVER_PORT|127\.0\.0\.1|8787/);
+assert.match(plist, /LA_RESIDENT_RUNTIME/);
 assert.match(plist, /StandardOutPath/);
 assert.match(plist, /StandardErrorPath/);
 assert.match(plist, /node_modules\/\.bin\/tsx/);

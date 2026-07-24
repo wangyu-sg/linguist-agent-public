@@ -28,11 +28,12 @@ Conversation 用来协作；有 Batch 范围时 CAT 用来生产。两者属于�
 ## 无项目 Chat
 
 1. 从 Chats 选择 New Chat。创建的是正式 standalone Task，不是隐藏 Project 或 Home Agent。
-2. 需要本地文件时，通过原生 picker 添加文件/目录 grant，并按真实需求选择只读或读写；不要给整个主目录做默认授权。
+2. 需要本地文件时，在 Composer 左侧 `+` 通过原生 picker 添加文件。它只为当前 Chat 创建显式只读 file grant；在同一附件菜单中可管理和撤销。不要给整个主目录做默认授权。相邻盾牌是 Agent 的运行权限档位（请求批准／替我审批／完全访问权限／自定义规则），不是文件授权列表。
 3. 选择工作目录后，项目级 Pi 资源需先通过目录 trust。未知的用户/全局 executable Extension 会显示 canonical path、来源和 SHA-256；只有确认这个摘要后才会执行。文件内容变化会使批准失效。
-4. Run 进行中，“现在调整”使用 Pi steer；“完成后执行”进入 follow-up 队列。Stop 始终独立可用。
-5. Chat 可显式 compact、fork、copy/handoff、pin/archive/restore。复制上下文不会修改源 Chat，也不会偷偷继承源 Chat 的文件授权。
-6. General Chat 没有 Segment、proposal/apply、QA 或 Delivery 权限；需要这些能力时创建 Project Task。
+4. Run 进行中，发送按钮或 `⌘↩` 使用 Pi steer；`⌥⌘↩` 进入 follow-up 队列；`Esc` Stop。没有需要长期保持的“现在调整/完成后执行”切换状态。
+5. Chat 可从标题栏 `…` 显式 compact、fork、copy/handoff、archive/restore。复制上下文不会修改源 Chat，也不会偷偷继承源 Chat 的文件授权。
+6. PNG/JPEG/WebP 图片会在支持视觉输入的当前模型上随下一次新 Run 直接发送；其他文件仍作为受控工具/OCR附件。若模型不支持图片输入，系统会明确拒绝，不会静默忽略。
+7. General Chat 没有 Segment、proposal/apply、QA 或 Delivery 权限；需要这些能力时创建 Project Task。
 
 Library 中可维护个人或 Project 文档，并选择 lexical/vector/hybrid 检索。向量能力依赖 exact managed multilingual-E5 pack；未就绪必须显示状态。Memory 必须由 Agent 提议并经用户确认，支持编辑/撤销，且不能当作 CAT evidence。
 
@@ -79,7 +80,11 @@ Private Eval 只能在明确 Project/Batch 范围内执行。Single 和 Team 生
 
 ## Settings
 
-Settings 管理：模型/provider、认证、Pi settings、Package Center/resources、document capabilities、permissions、memory、one-shot run options、keybindings、themes、历史 Pi sessions、notifications、runtime/storage diagnostics。
+Settings 管理：当前模型与 Provider/能力连接、认证、Pi settings、Package Center/resources、document capabilities、permissions、memory、one-shot run options、keybindings、themes、历史 Pi sessions、notifications、runtime/storage diagnostics。
+
+- “当前模型”是本机用户选择的完整 provider/model 对，不是只显示不生效的项目默认值。它会原子保存，并只应用到下一次新 Run；发送消息、切换 standalone/Project Task 都不会清掉它。正在运行的 Run 不会被中途改写。
+- OAuth Provider 和 API key Provider 都直接显示在“模型与能力连接”中。OAuth 登录会打开官方验证流程；不要把 token 或设备代码写入项目文件、终端历史或文档。
+- Runtime 页可明确重启、修复本机 managed runtime；缓存必须先预览，再用服务端返回的 `planHash` 确认清理。该清理只针对可重建缓存，不会删除 Project、Task、记忆、审计或客户文件。
 
 - Pi keybindings 写入官方全局文件；活动中的 Pi session 可能需要 `/reload`。
 - Pi Settings 的 Package 操作与 Package Center 的 managed install 是两条明确路径；目录浏览不执行代码，安装/激活第三方资源必须经过各自的预览、信任、摘要和确认路径。
@@ -93,7 +98,7 @@ Maintainer 只接受 standalone Chat 中明确的 recursive read-write repositor
 - Runtime unavailable：先看 Settings → Diagnostics 和 runtime 日志，不要把空项目列表当正常状态。
 - Credential unavailable/rejected：修复 Keychain/认证，不要把 token 打到终端或文档。
 - Prompt too long：系统允许 Pi native compaction 后重试一次；持续失败应保留明确错误。
-- Waiting/permission/Decision：处理请求，或明确 Stop；不要通过刷新掩盖等待状态。
+- Waiting/permission/Decision：权限请求会替换当前 Composer 为 Task-scoped approval surface；按请求选择批准范围或拒绝，或明确 Stop，不要通过刷新掩盖等待状态。切换 Task 只会隐藏审批卡，不会替你批准/拒绝；若审批卡未出现，先检查 runtime/stream 恢复状态，而不是把超时当作模型失败。
 - Failed Run：从 Activity/diagnostic 找到失败边界，再决定重试；新尝试必须是新 Run。
 
 ## 安全验证命令

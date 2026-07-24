@@ -1,6 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool } from "@earendil-works/pi-coding-agent";
-import { buildAssetBlocks, buildAssetVectorIndex, buildAssetVectorIndexWithTdai, createWorkspace, probeTdaiEmbeddingBridge, readMemoryConfig, searchAssetBlocksWithReport } from "@linguist-agent/cat-data";
+import { DEFAULT_TDAI_EMBEDDING_GATEWAY_URL, buildAssetBlocks, buildAssetVectorIndex, buildAssetVectorIndexWithTdai, probeTdaiEmbeddingBridge, searchAssetBlocksWithReport } from "@linguist-agent/cat-data";
 
 const assetBlocksBuildParameters = Type.Object({
   projectId: Type.String({ description: "Persisted LA project id." }),
@@ -43,8 +43,7 @@ export function createAssetBlocksBuildTool() {
             vectorWarning = `${error instanceof Error ? error.message : String(error)} Semantic retrieval remains lexical-only.`;
           }
         } else {
-          const memoryConfig = await readMemoryConfig(createWorkspace(process.cwd(), params.projectId));
-          const gatewayUrl = memoryConfig?.gatewayUrl ?? "http://127.0.0.1:8420";
+          const gatewayUrl = DEFAULT_TDAI_EMBEDDING_GATEWAY_URL;
           const bridge = await probeTdaiEmbeddingBridge({ gatewayUrl, timeoutMs: 750 });
           if (bridge.state === "ready") {
             vectorReport = await buildAssetVectorIndexWithTdai(process.cwd(), { projectId: params.projectId, gatewayUrl });
@@ -94,7 +93,7 @@ export function createAssetBlockSearchTool() {
       const report = await searchAssetBlocksWithReport(process.cwd(), {
         ...params,
         retrievalMode: (params.retrievalMode ?? "hybrid") as "lexical" | "vector" | "hybrid",
-        embeddingGatewayUrl: (await readMemoryConfig(createWorkspace(process.cwd(), params.projectId))).gatewayUrl,
+        embeddingGatewayUrl: DEFAULT_TDAI_EMBEDDING_GATEWAY_URL,
       });
       return {
         content: [

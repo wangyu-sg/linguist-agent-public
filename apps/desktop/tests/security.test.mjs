@@ -73,7 +73,7 @@ test("health compatibility requires the canonical native capabilities", () => {
     authRequired: true,
     dataSchemaVersion: 2,
     runtimeInstanceId: "runtime",
-    capabilities: ["local-auth", "native-extension-ui-v1", "run-resource-profile-v1", "runtime-migrations", "task-workspace-v2"],
+    capabilities: ["local-auth", "authenticated-unix-rendezvous-v1", "native-extension-ui-v1", "run-resource-profile-v1", "runtime-migrations", "task-workspace-v2"],
   };
   assert.equal(handshakeProblem(health), null);
   assert.match(handshakeProblem({ ...health, capabilities: ["local-auth"] }), /缺少能力/);
@@ -87,10 +87,13 @@ test("native pickers require explicit user selection and never probe a default f
 
   const batch = importFilesDialogOptions("batch");
   const asset = importFilesDialogOptions("asset");
+  const lapkg = importFilesDialogOptions("lapkg");
   assert.deepEqual(batch.properties, ["openFile", "multiSelections"]);
   assert.equal(batch.filters[0].extensions.includes("mxliff"), true);
   assert.equal(asset.filters[0].extensions.includes("pdf"), true);
   assert.equal(asset.filters[0].extensions.includes("tmx"), true);
+  assert.deepEqual(lapkg.properties, ["openFile"]);
+  assert.deepEqual(lapkg.filters[0].extensions, ["lapkg"]);
   assert.equal("defaultPath" in batch, false);
   assert.throws(() => importFilesDialogOptions("unknown"));
 
@@ -100,22 +103,91 @@ test("native pickers require explicit user selection and never probe a default f
   assert.deepEqual(selectedImportFiles({ canceled: false, filePaths: ["/private/customer/file.xlf"] }), ["/private/customer/file.xlf"]);
 });
 
-test("renderer can only request the fixed managed runtime repair action", async () => {
-  const [main, preload, installer] = await Promise.all([
-    readFile(new URL("../src/main.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../src/preload.cjs", import.meta.url), "utf8"),
+test("Stable Package Center exposes only signed declarative activation", async () => {
+  const client = await readFile(new URL("../src/renderer/data/workspace-client.ts", import.meta.url), "utf8");
+  const settings = await readFile(new URL("../src/renderer/settings/SettingsWorkspace.tsx", import.meta.url), "utf8");
+  assert.match(client, /\/api\/package-center\/lapkg\/preview/u);
+  assert.match(client, /\/api\/package-center\/lapkg\/activate/u);
+  assert.doesNotMatch(client, /\/api\/package-center\/install(?:\/preview)?["`]/u);
+  assert.match(settings, /discovery only/u);
+  assert.match(settings, /不会执行本机代码/u);
+  assert.doesNotMatch(settings, /previewManagedPackageInstall|installManagedPackage/u);
+});
+
+test("renderer can only request fixed managed runtime actions with opaque candidate handles", async () => {
+  const [contract, main, preload, installer] = await Promise.all([
+    readFile(new URL("../src/ipc-contract.cts", import.meta.url), "utf8"),
+    readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/preload.cts", import.meta.url), "utf8"),
     readFile(new URL("../src/runtime-installer.mjs", import.meta.url), "utf8"),
   ]);
-  assert.match(main, /ipcMain\.handle\("runtime:install-or-repair", async \(event\) => \{\s*requireTrustedRenderer\(event\);\s*return runtimeInstaller\.installOrRepair\(\);/);
-  assert.match(preload, /installOrRepair: \(\) => ipcRenderer\.invoke\("runtime:install-or-repair"\)/);
-  assert.match(main, /ipcMain\.handle\("runtime:install-candidate", async \(event, input\) => \{\s*requireTrustedRenderer\(event\);\s*return runtimeInstaller\.installCandidate\(input\);/);
-  assert.match(preload, /installCandidate: \(input\) => ipcRenderer\.invoke\("runtime:install-candidate", input\)/);
-  assert.match(preload, /openExternal: \(url\) => ipcRenderer\.invoke\("system:open-external", url\)/);
-  assert.match(main, /ipcMain\.handle\("system:export-rich-artifact", async \(event, value\) => \{\s*requireTrustedRenderer\(event\);\s*return exportRichArtifact\(value, \{/);
-  assert.match(preload, /exportRichArtifact: \(input\) => ipcRenderer\.invoke\("system:export-rich-artifact", input\)/);
+  assert.match(contract, /runtimeInstallOrRepair: "runtime:install-or-repair"/);
+  assert.match(contract, /runtimeRestart: "runtime:restart"/);
+  assert.match(contract, /runtimeInstallCandidate: "runtime:install-candidate"/);
+  assert.match(contract, /openExternal: "system:open-external"/);
+  assert.match(main, /ipcMain\.handle\(IPC_CHANNELS\.runtimeInstallOrRepair, async \(event\) => \{\s*requireTrustedRenderer\(event\);\s*return runtimeInstaller\.installOrRepair\(\);/);
+  assert.match(preload, /installOrRepair: \(\) => ipcRenderer\.invoke\(IPC_CHANNELS\.runtimeInstallOrRepair\)/);
+  assert.match(main, /ipcMain\.handle\(IPC_CHANNELS\.runtimeRestart, async \(event\) => \{\s*requireTrustedRenderer\(event\);\s*return runtimeInstaller\.restart\(\);/);
+  assert.match(preload, /restart: \(\) => ipcRenderer\.invoke\(IPC_CHANNELS\.runtimeRestart\)/);
+  assert.match(main, /nativeFileHandles\.resolve\(candidateHandle, "maintenance-candidate"\)/);
+  assert.match(preload, /installCandidate: \(input: unknown\) => ipcRenderer\.invoke\(IPC_CHANNELS\.runtimeInstallCandidate, runtimeCandidateInput\(input\)\)/);
+  assert.match(preload, /openExternal: \(url: unknown\) => ipcRenderer\.invoke\(IPC_CHANNELS\.openExternal, url\)/);
+  assert.match(main, /const result = await exportRichArtifact\(value, \{/);
+  assert.match(main, /nativeFileHandles\.issue\(result\.path, "export"\)/);
+  assert.match(preload, /exportRichArtifact: \(input: unknown\) => ipcRenderer\.invoke\(IPC_CHANNELS\.exportRichArtifact, input\)/);
   assert.match(installer, /"Library", "Application Support", "Linguist Agent"/);
   assert.match(installer, /join\(resourcesPath, "runtime"\)/);
-  assert.match(installer, /http:\/\/127\.0\.0\.1:8787\/api\/health/);
+  assert.match(installer, /inspectRuntime\(\)/);
+  assert.doesNotMatch(installer, /http:\/\/127\.0\.0\.1:8787\/api\/health/);
   assert.doesNotMatch(preload, /installOrRepair: \([^)]*[a-zA-Z][^)]*\)/);
   assert.doesNotMatch(installer, /Desktop\/linguist-agent/);
+});
+
+test("renderer native operations use opaque IDs or handles and never submit arbitrary local paths", async () => {
+  const [contract, main, preload, client, desktopTypes, onboarding, assets, sidebar] = await Promise.all([
+    readFile(new URL("../src/ipc-contract.cts", import.meta.url), "utf8"),
+    readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/preload.cts", import.meta.url), "utf8"),
+    readFile(new URL("../src/renderer/data/workspace-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/renderer/desktop.d.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/renderer/onboarding/actions.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/renderer/assets/actions.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/renderer/workspace/WorkspaceSidebar.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(contract, /refreshProjectAssets: "system:refresh-project-assets"/);
+  assert.match(contract, /revealProject: "system:reveal-project"/);
+  assert.match(contract, /revealMaintenanceCandidate: "system:reveal-maintenance-candidate"/);
+  assert.doesNotMatch(contract, /revealPath/);
+  assert.match(main, /resolveNativeWorkspaceRequest/);
+  assert.match(main, /must use a native file handle, not filePath/);
+  assert.match(main, /resolveProjectAssets\(selected, project\.root\)/);
+  assert.match(preload, /projectAssetRefreshInput/);
+  assert.match(desktopTypes, /pickProjectFolder\(\): Promise<NativeFileHandle \| null>/);
+  assert.match(desktopTypes, /pickImportFiles\(kind: ImportKind\): Promise<NativeFileHandle\[\]>/);
+  assert.doesNotMatch(desktopTypes, /revealPath/);
+  assert.match(client, /rootHandle: NativeFileHandle/);
+  assert.match(client, /fileHandle: NativeFileHandle/);
+  assert.match(client, /sourceHandles: NativeFileHandle\[\]/);
+  assert.doesNotMatch(onboarding, /rootPath/);
+  assert.doesNotMatch(assets, /rootPath|filePath/);
+  assert.match(sidebar, /revealProject\(\{ projectId: project\.projectId \}\)/);
+});
+
+test("renderer workspace transport admits only declared capabilities", async () => {
+  const [contract, main, preload, client] = await Promise.all([
+    readFile(new URL("../src/ipc-contract.cts", import.meta.url), "utf8"),
+    readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/preload.cts", import.meta.url), "utf8"),
+    readFile(new URL("../src/renderer/data/workspace-client.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(contract, /workspaceCapability: "api:workspace-capability"/u);
+  assert.match(main, /IPC_CHANNELS\.workspaceCapability/u);
+  assert.match(main, /resolveWorkspaceCapabilityRequest\(input\)/u);
+  assert.match(preload, /invokeWorkspaceCapability/u);
+  assert.match(preload, /resolveWorkspaceCapabilityRequest\(input\)/u);
+  assert.match(client, /workspaceCapabilityFor\(method, path\)/u);
+  assert.doesNotMatch(contract, /apiRequest/u);
+  assert.doesNotMatch(main, /requestRuntime\(input\)/u);
+  assert.doesNotMatch(preload, /request:\s*\(input/u);
+  assert.doesNotMatch(client, /api\.request/u);
 });

@@ -18,6 +18,12 @@ export interface PiSettingsRouteDeps {
   readBody: (req: IncomingMessage) => Promise<unknown>;
   requireString: (value: unknown, label: string) => string;
   readPiSettingsCatalog: () => Promise<unknown>;
+  /**
+   * LA exposes a single, user-owned current model choice.  It is persisted in
+   * Pi's global settings atomically so a Composer choice cannot be split into
+   * a provider from one write and a model from another.
+   */
+  writePiModelPreference: (input: { provider: string; model: string; thinking?: string }) => Promise<unknown>;
   readPiSettingsAudit: (limit?: number) => Promise<unknown[]>;
   readPiUsageCatalog: () => Promise<unknown> | unknown;
   writePiSetting: (scope: PiSettingScope, path: string, value: unknown, unset?: boolean) => Promise<unknown>;
@@ -99,6 +105,15 @@ export async function handlePiSettingsRoute(
   if (url.pathname === "/api/pi/settings" && req.method === "PUT") {
     const body = await deps.readBody(req) as { scope?: PiSettingScope; path?: string; value?: unknown; unset?: boolean };
     deps.json(res, 200, await deps.writePiSetting(body.scope === "global" ? "global" : "project", deps.requireString(body.path, "path"), body.value, body.unset === true));
+    return true;
+  }
+  if (url.pathname === "/api/pi/model-preference" && req.method === "PUT") {
+    const body = await deps.readBody(req) as { provider?: string; model?: string; thinking?: string };
+    deps.json(res, 200, await deps.writePiModelPreference({
+      provider: deps.requireString(body.provider, "provider"),
+      model: deps.requireString(body.model, "model"),
+      ...(typeof body.thinking === "string" ? { thinking: body.thinking } : {}),
+    }));
     return true;
   }
   if (url.pathname === "/api/pi/settings-raw" && req.method === "PUT") {

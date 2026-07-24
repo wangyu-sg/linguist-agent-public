@@ -26,6 +26,7 @@ export interface ResidentRuntimeStatus {
   state: "unsupported" | "manual" | "installed" | "running" | "error";
   pid: number;
   port: number;
+  transport: "unix" | "legacy-loopback";
   uptimeSec: number;
   repoRoot: string;
   logPath: string;
@@ -77,6 +78,7 @@ export interface ResidentRuntimeInput {
   currentPid: number;
   uptimeSec: number;
   launcher?: ResidentRuntimeLauncher;
+  currentServerOwnsTransport?: boolean;
 }
 
 export interface ResidentServerHealth {
@@ -118,8 +120,6 @@ export function renderResidentLaunchAgentPlist(input: { repoRoot: string; port: 
         `cd ${shellQuote(input.repoRoot)}`,
         "&&",
         `LA_RESIDENT_RUNTIME=1`,
-        `LA_SERVER_HOST=127.0.0.1`,
-        `LA_SERVER_PORT=${input.port}`,
         `LA_NO_OPEN=1`,
         `PATH=${shellQuote(process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin")}`,
         shellQuote(join(input.repoRoot, "node_modules", ".bin", "tsx")),
@@ -150,10 +150,6 @@ ${programArguments.map((argument) => `    <string>${xmlEscape(argument)}</string
   <dict>
     <key>LA_RESIDENT_RUNTIME</key>
     <string>1</string>
-    <key>LA_SERVER_HOST</key>
-    <string>127.0.0.1</string>
-    <key>LA_SERVER_PORT</key>
-    <string>${input.port}</string>
     <key>LA_NO_OPEN</key>
     <string>1</string>
 ${launcherEnvironment}
@@ -246,7 +242,7 @@ export async function waitForResidentRuntimeStartConfirmation(input: {
   const attempts = Math.max(1, input.attempts ?? 31);
   const intervalMs = Math.max(0, input.intervalMs ?? 500);
   const inspect = input.inspect ?? inspectLaunchd;
-  const readHealth = input.readHealth ?? (() => readExistingResidentServerHealth({ port: input.port }));
+  const readHealth = input.readHealth ?? (async () => undefined);
   const delay = input.delay ?? ((milliseconds: number) => new Promise<void>((resolveDelay) => setTimeout(resolveDelay, milliseconds)));
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const [launchd, health] = await Promise.all([inspect(), readHealth()]);
@@ -275,8 +271,6 @@ function restartManualServerAfterResponse(input: ResidentRuntimeInput, paths: Re
           ...process.env,
           ELECTRON_RUN_AS_NODE: "1",
           LA_RESIDENT_RUNTIME: "1",
-          LA_SERVER_HOST: "127.0.0.1",
-          LA_SERVER_PORT: String(input.port),
           LA_NO_OPEN: "1",
           LA_NATIVE_CAPABILITY_AGENT_DIR: input.launcher!.nativeCapabilityAgentDir,
           PATH: `${join(input.repoRoot, "bin")}:${join(input.repoRoot, "node_modules", ".bin")}:/usr/bin:/bin:/usr/sbin:/sbin`,
@@ -291,8 +285,6 @@ function restartManualServerAfterResponse(input: ResidentRuntimeInput, paths: Re
     "&&",
     `cd ${shellQuote(input.repoRoot)}`,
     "&&",
-    `LA_SERVER_HOST=127.0.0.1`,
-    `LA_SERVER_PORT=${input.port}`,
     `LA_NO_OPEN=1`,
     "npm run server",
     ">>",
@@ -363,7 +355,7 @@ export async function readResidentRuntimeStatus(input: ResidentRuntimeInput): Pr
     inspectLaunchd(),
     readPlistSecretMatches(paths.launchAgentPlist),
   ]);
-  const loopbackOnly = process.env.LA_SERVER_HOST === undefined || process.env.LA_SERVER_HOST === "127.0.0.1";
+  const legacyLoopback = process.env.LA_LOCAL_TRANSPORT_MODE === "loopback" || process.env.LA_SERVER_PORT !== undefined;
   const state = !supported
     ? "unsupported"
     : launchd.running
@@ -376,7 +368,8 @@ export async function readResidentRuntimeStatus(input: ResidentRuntimeInput): Pr
   if (!autostartInstalled) notes.push("No LaunchAgent is installed; manual server start remains active.");
   if (autostartInstalled && !launchd.running) notes.push("LaunchAgent is installed but not loaded/running.");
   if (plistSecretMatches.length) notes.push("LaunchAgent plist contains secret-like keys and must be regenerated.");
-  if (!loopbackOnly) notes.push("Current server host is not loopback-only; resident runtime should bind 127.0.0.1.");
+  if (legacyLoopback) notes.push("Current runtime uses the authenticated one-version legacy loopback transition mode.");
+  else notes.push("Current runtime uses a random authenticated Unix-domain socket.");
 
   return {
     label: paths.label,
@@ -384,6 +377,7 @@ export async function readResidentRuntimeStatus(input: ResidentRuntimeInput): Pr
     state: launchd.error && autostartInstalled ? "error" : state,
     pid: input.currentPid,
     port: input.port,
+    transport: legacyLoopback ? "legacy-loopback" : "unix",
     uptimeSec: input.uptimeSec,
     repoRoot: input.repoRoot,
     logPath: paths.legacyLogPath,
@@ -394,12 +388,12 @@ export async function readResidentRuntimeStatus(input: ResidentRuntimeInput): Pr
     launchdLoaded: launchd.loaded,
     launchdRunning: launchd.running,
     launchdPid: launchd.pid,
-    loopbackOnly,
+    loopbackOnly: legacyLoopback,
     plistHasSecrets: plistSecretMatches.length > 0,
     plistSecretMatches,
     manualStartCommand: input.launcher
       ? `ELECTRON_RUN_AS_NODE=1 ${input.launcher.executablePath} ${input.launcher.entryPath}`
-      : `cd ${input.repoRoot} && LA_SERVER_HOST=127.0.0.1 LA_SERVER_PORT=${input.port} npm run server`,
+      : `cd ${input.repoRoot} && npm run server`,
     stopCommand: `launchctl bootout ${launchctlGuiDomain()} ${paths.launchAgentPlist}`,
     restartAction: supported ? "launchd" : "not_implemented",
     installCommand: `write ${paths.launchAgentPlist}`,
@@ -433,13 +427,15 @@ export async function runResidentRuntimeAction(action: ResidentRuntimeAction, in
       throw new Error("LaunchAgent plist is not installed. Install it before starting resident runtime.");
     }
     const launchd = await inspectLaunchd();
-    const existingHealth = launchd.running ? undefined : await readExistingResidentServerHealth({ port: input.port });
+    const existingHealth = !launchd.running && input.currentServerOwnsTransport
+      ? { ok: true, runtimeInstanceId: runtimeInstanceId(input.repoRoot) }
+      : undefined;
     if (isResidentServerHealthForRepo(existingHealth, input.repoRoot)) {
       return {
         action,
         ok: true,
         status: await readResidentRuntimeStatus(input),
-        message: "A healthy Linguist Agent server is already listening on this port; LaunchAgent start is deferred to avoid interrupting it.",
+        message: "A healthy Linguist Agent server already owns the authenticated local transport; LaunchAgent start is deferred to avoid interrupting it.",
       };
     }
     if (!launchd.loaded) await runLaunchctl(["bootstrap", launchctlGuiDomain(), paths.launchAgentPlist]);
@@ -469,7 +465,9 @@ export async function runResidentRuntimeAction(action: ResidentRuntimeAction, in
       throw new Error("LaunchAgent plist is not installed. Install it before restarting resident runtime.");
     }
     const launchd = await inspectLaunchd();
-    const existingHealth = launchd.running ? undefined : await readExistingResidentServerHealth({ port: input.port });
+    const existingHealth = !launchd.running && input.currentServerOwnsTransport
+      ? { ok: true, runtimeInstanceId: runtimeInstanceId(input.repoRoot) }
+      : undefined;
     if (shouldReplaceManualServerOnRestart({ launchd, health: existingHealth, repoRoot: input.repoRoot })) {
       restartManualServerAfterResponse(input, paths);
       return {

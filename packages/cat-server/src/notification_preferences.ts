@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { readJsonFile, writeJsonFile } from "@linguist-agent/cat-data";
+import { readJsonFile, resolveStructuredStorageBackend, writeJsonFile } from "@linguist-agent/cat-data";
 
 export const NOTIFICATION_CATEGORIES = ["waiting", "failed", "completed", "permission"] as const;
 export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
@@ -56,6 +56,8 @@ function preferencesPath(repoRoot: string): string {
   return join(repoRoot, "data", "settings", "notifications.json");
 }
 
+const STORAGE_ADDRESS = { domain: "settings" as const, key: "notifications", scope: "global" };
+
 function categoryRecord(value: unknown): Record<NotificationCategory, boolean> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("categories must be an object");
@@ -81,6 +83,9 @@ function normalizeStored(value: unknown): NotificationPreferences {
 }
 
 export async function readNotificationPreferences(repoRoot: string): Promise<NotificationPreferences> {
+  const backend = resolveStructuredStorageBackend(repoRoot);
+  const stored = backend?.read(STORAGE_ADDRESS);
+  if (backend) return normalizeStored(stored?.payload ?? null);
   return normalizeStored(await readJsonFile<unknown>(preferencesPath(repoRoot), null));
 }
 
@@ -98,7 +103,18 @@ export async function writeNotificationPreferences(
     categories: categoryRecord(input.categories),
     updatedAt: now(),
   };
-  await writeJsonFile(preferencesPath(repoRoot), next);
+  const backend = resolveStructuredStorageBackend(repoRoot);
+  const stored = backend?.read(STORAGE_ADDRESS);
+  if (backend) {
+    await backend.write({
+      address: STORAGE_ADDRESS,
+      expectedRevision: stored?.revision ?? 0,
+      expectedValue: stored?.payload ?? {},
+      value: next as unknown as Record<string, unknown>,
+    });
+    return next;
+  }
+  await writeJsonFile(preferencesPath(repoRoot), next, { durability: "critical" });
   return next;
 }
 

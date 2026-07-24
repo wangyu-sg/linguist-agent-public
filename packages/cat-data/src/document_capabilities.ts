@@ -56,6 +56,8 @@ export const PADDLE_OCR_PACK: ManagedDocumentCapabilityDescriptor = {
   ],
 };
 
+export const MANAGED_PADDLE_OCR_RUNTIME_VERSION = `${MANAGED_CPYTHON_DISTRIBUTION} / PaddleOCR 3.7.0 / PaddlePaddle 3.3.1`;
+
 export const MINERU_PACK: ManagedDocumentCapabilityDescriptor = {
   id: "mineru",
   label: "MinerU",
@@ -93,6 +95,18 @@ export interface ManagedLockedFile {
   linkTarget?: string;
 }
 
+export interface ManagedMineruQualificationV1 {
+  schemaVersion: 1;
+  status: "passed";
+  fixtureSetSha256: string;
+  evidenceSha256: string;
+  passedAt: string;
+  backend: { runtimeSha256: string; packageSha256: string; modelsSha256: string };
+  machine: { platform: "darwin"; architecture: "arm64"; memoryGiB: number };
+  measurements: { cjkCer: number; readingOrderScore: number; tableCellF1: number; peakMemoryMiB: number; crashFreeRuns: number };
+  licenseEvidenceSha256: string;
+}
+
 export interface ManagedCapabilityLockV1 {
   schemaVersion: 1;
   capabilityId: ManagedDocumentCapabilityId;
@@ -101,12 +115,7 @@ export interface ManagedCapabilityLockV1 {
   packages: ManagedPackagePin[];
   models: Array<ManagedModelPin & { files: ManagedLockedFile[] }>;
   files: ManagedLockedFile[];
-  qualification?: {
-    status: "passed";
-    fixtureSet: string;
-    passedAt: string;
-    evidenceSha256: string;
-  };
+  qualification?: ManagedMineruQualificationV1;
 }
 
 export interface ManagedDocumentCapabilityStatus {
@@ -131,6 +140,44 @@ export function managedPythonExecutable(workspaceRoot: string): string {
 
 export function managedDocumentCapabilityPythonExecutable(workspaceRoot: string, id: Exclude<ManagedDocumentCapabilityId, "python">): string {
   return join(managedDocumentCapabilityPath(workspaceRoot, id), "venv", "bin", "python3.11");
+}
+
+const SHA256 = /^[a-f0-9]{64}$/u;
+
+function qualificationRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function qualificationTimestamp(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+/** Returns a reason instead of trusting a self-declared `passed` status. */
+export function validateMineruQualification(value: unknown): string | undefined {
+  const qualification = qualificationRecord(value);
+  if (!qualification) return "MinerU qualification record is missing or invalid.";
+  const expected = ["schemaVersion", "status", "fixtureSetSha256", "evidenceSha256", "passedAt", "backend", "machine", "measurements", "licenseEvidenceSha256"];
+  const unknown = Object.keys(qualification).find((key) => !expected.includes(key));
+  if (unknown) return `MinerU qualification has unknown field ${unknown}.`;
+  if (expected.some((key) => !(key in qualification))) return "MinerU qualification is missing required fields.";
+  if (qualification.schemaVersion !== 1 || qualification.status !== "passed") return "MinerU qualification has an unsupported schema or status.";
+  if (![qualification.fixtureSetSha256, qualification.evidenceSha256, qualification.licenseEvidenceSha256].every((digest) => typeof digest === "string" && SHA256.test(digest))) return "MinerU qualification evidence digests must be lowercase SHA-256 values.";
+  if (!qualificationTimestamp(qualification.passedAt)) return "MinerU qualification passedAt must be a canonical ISO timestamp.";
+  const backend = qualificationRecord(qualification.backend);
+  const expectedBackend = ["runtimeSha256", "packageSha256", "modelsSha256"];
+  if (!backend || Object.keys(backend).some((key) => !expectedBackend.includes(key)) || expectedBackend.some((key) => !(key in backend))) return "MinerU qualification backend record is invalid.";
+  if (backend.runtimeSha256 !== MINERU_PACK.runtime.sha256) return "MinerU qualification runtime digest does not match the pinned runtime.";
+  if (backend.packageSha256 !== MINERU_PACK.packages[0]?.sha256) return "MinerU qualification package digest does not match the pinned package.";
+  if (typeof backend.modelsSha256 !== "string" || !SHA256.test(backend.modelsSha256)) return "MinerU qualification model digest is invalid.";
+  const machine = qualificationRecord(qualification.machine);
+  if (!machine || Object.keys(machine).some((key) => !["platform", "architecture", "memoryGiB"].includes(key)) || machine.platform !== "darwin" || machine.architecture !== "arm64" || !Number.isSafeInteger(machine.memoryGiB) || Number(machine.memoryGiB) < 8) return "MinerU qualification hardware record is invalid.";
+  const measurements = qualificationRecord(qualification.measurements);
+  const expectedMeasurements = ["cjkCer", "readingOrderScore", "tableCellF1", "peakMemoryMiB", "crashFreeRuns"];
+  if (!measurements || Object.keys(measurements).some((key) => !expectedMeasurements.includes(key)) || expectedMeasurements.some((key) => !(key in measurements))) return "MinerU qualification measurement record is invalid.";
+  if (typeof measurements.cjkCer !== "number" || measurements.cjkCer < 0 || measurements.cjkCer > 1 || typeof measurements.readingOrderScore !== "number" || measurements.readingOrderScore < 0 || measurements.readingOrderScore > 1 || typeof measurements.tableCellF1 !== "number" || measurements.tableCellF1 < 0 || measurements.tableCellF1 > 1 || !Number.isSafeInteger(measurements.peakMemoryMiB) || Number(measurements.peakMemoryMiB) < 1 || !Number.isSafeInteger(measurements.crashFreeRuns) || Number(measurements.crashFreeRuns) < 1) return "MinerU qualification metrics or crash record is invalid.";
+  return undefined;
 }
 
 function stablePins(pins: ManagedPackagePin[]): string[] {
@@ -248,14 +295,15 @@ async function inspectCapability(workspaceRoot: string, descriptor: ManagedDocum
   for (const requiredPath of requiredPaths) {
     if (!lock.files.some((file) => file.path === requiredPath)) return corrupt(`Capability lock is missing executable or runtime file ${requiredPath}.`);
   }
-  if (descriptor.id === "mineru" && lock.qualification?.status !== "passed") {
+  const qualificationError = descriptor.id === "mineru" ? validateMineruQualification(lock.qualification) : undefined;
+  if (qualificationError) {
     return {
       id: descriptor.id,
       label: descriptor.label,
       tier: descriptor.tier,
       state: "unqualified",
       path,
-      message: "MinerU is installed but remains unavailable until its pinned macOS fixture qualification passes.",
+      message: qualificationError,
       lock,
     };
   }
@@ -276,18 +324,37 @@ export interface RunManagedJsonlWorkerOptions {
   maxBufferBytes?: number;
 }
 
+const MANAGED_WORKER_ENVIRONMENT_KEYS = [
+  "PATH",
+  "LANG",
+  "LC_ALL",
+  "TZ",
+  "HF_HUB_OFFLINE",
+  "TRANSFORMERS_OFFLINE",
+  "PIP_NO_INDEX",
+  "NO_PROXY",
+  "no_proxy",
+] as const;
+
+function managedWorkerEnvironment(overrides: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    PYTHONDONTWRITEBYTECODE: "1",
+    PYTHONNOUSERSITE: "1",
+  };
+  for (const key of MANAGED_WORKER_ENVIRONMENT_KEYS) {
+    const value = overrides?.[key] ?? process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+  return env;
+}
+
 export function runManagedJsonlWorker(options: RunManagedJsonlWorkerOptions): Promise<Record<string, unknown>[]> {
   return new Promise((resolveWorker, rejectWorker) => {
     const child = execFile(
       options.executable,
       [options.workerPath],
       {
-        env: {
-          ...process.env,
-          PYTHONDONTWRITEBYTECODE: "1",
-          PYTHONNOUSERSITE: "1",
-          ...options.env,
-        },
+        env: managedWorkerEnvironment(options.env),
         timeout: options.timeoutMs ?? 120_000,
         maxBuffer: options.maxBufferBytes ?? 16 * 1024 * 1024,
         windowsHide: true,
@@ -314,44 +381,6 @@ export function runManagedJsonlWorker(options: RunManagedJsonlWorkerOptions): Pr
 }
 
 export type EvidencePoint = [number, number];
-
-export type DocumentExtractionRoute = "native-text" | "paddleocr" | "mineru" | "cloud-vision" | "blocked";
-
-export interface DocumentExtractionRoutingInput {
-  nativeTextCharacters: number;
-  nativeTextCoverage?: number;
-  complexLayout?: boolean;
-  userRequestedOcr?: boolean;
-  userRequestedCloudVision?: boolean;
-  cloudEgressDecisionId?: string;
-  mineruState?: ManagedDocumentCapabilityStatus["state"];
-}
-
-export interface DocumentExtractionRoutingDecision {
-  route: DocumentExtractionRoute;
-  reason: string;
-  decisionId?: string;
-}
-
-/** Deterministic policy boundary; parsers supply measurements, not authority. */
-export function routeDocumentExtraction(input: DocumentExtractionRoutingInput): DocumentExtractionRoutingDecision {
-  if (input.userRequestedCloudVision) {
-    if (!input.cloudEgressDecisionId?.trim()) {
-      return { route: "blocked", reason: "Cloud vision requires a file-specific approved data-egress Decision." };
-    }
-    return { route: "cloud-vision", reason: "The user approved cloud vision for this file.", decisionId: input.cloudEgressDecisionId.trim() };
-  }
-  if (input.userRequestedOcr) return { route: "paddleocr", reason: "The user explicitly requested local OCR." };
-  const coverage = Number.isFinite(input.nativeTextCoverage) ? Math.max(0, Math.min(1, input.nativeTextCoverage!)) : undefined;
-  if (input.nativeTextCharacters > 0 && (coverage === undefined || coverage >= 0.75)) {
-    return { route: "native-text", reason: "The native parser or PDF text layer has usable coverage." };
-  }
-  if (input.complexLayout) {
-    if (input.mineruState === "ready") return { route: "mineru", reason: "Native extraction is insufficient and the qualified MinerU Labs pack is available for complex layout." };
-    return { route: "paddleocr", reason: `Native extraction is insufficient; MinerU is ${input.mineruState ?? "missing"}, so local OCR is the declared fallback.` };
-  }
-  return { route: "paddleocr", reason: "The native text layer is empty or below the coverage threshold." };
-}
 
 export interface DocumentEvidenceBlockV1 {
   polygon: EvidencePoint[];
@@ -510,7 +539,7 @@ export async function extractPaddleOcrEvidence(
   return buildDocumentEvidence({
     sourcePath: canonicalSource,
     route: "paddleocr",
-    runtimeVersion: `${MANAGED_CPYTHON_DISTRIBUTION} / PaddleOCR 3.7.0 / PaddlePaddle 3.3.1`,
+    runtimeVersion: MANAGED_PADDLE_OCR_RUNTIME_VERSION,
     modelVersions: Object.fromEntries(PADDLE_OCR_PACK.models.map((model) => [model.role ?? model.name, `${model.name}@${model.revision}`])),
     pages: evidencePages(response.pages),
   });

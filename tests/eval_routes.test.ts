@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { ActiveAgentRunRegistry } from "../packages/cat-server/src/active_agent_runs.js";
 import { handleEvalRoute } from "../packages/cat-server/src/routes/eval_routes.js";
 import { createPrivateEvalRun, createPrivateEvalSet, createProjectManifest, createTaskWorkspace, executePrivateEvalRun, importCsvBatch, listPrivateEvalRuns, readPrivateEvalRun, readPrivateEvalRunOutputs } from "@linguist-agent/cat-data";
+import { verifiedPromptRequestBudget } from "./prompt_budget_fixture.js";
 
 const root = await mkdtemp(join(tmpdir(), "la-eval-route-"));
 const sourceRoot = join(root, "source");
@@ -83,6 +84,8 @@ const agentStartedGate = new Promise<void>((resolve) => {
 });
 const deps = {
   repoRoot: root,
+  allowExecution: true,
+  resolveModelPromptTokenBudget: async (provider: string | undefined, modelId: string | undefined) => verifiedPromptRequestBudget(provider, modelId),
   json: (_res: ServerResponse, status: number, data: unknown) => responses.push({ status, data }),
   readBody: async () => bodies.shift() ?? {},
   requireString: (value: unknown, label: string) => {
@@ -132,6 +135,26 @@ const deps = {
     }]));
   },
 };
+
+await createPrivateEvalRun(root, "route-set", {
+  runId: "stable-reader-orphan",
+  mode: "single_agent",
+  modelRoutes: {},
+});
+const stableResponses: Array<{ status: number; data: unknown }> = [];
+const stableDeps = {
+  ...deps,
+  allowExecution: false,
+  json: (_res: ServerResponse, status: number, data: unknown) => stableResponses.push({ status, data }),
+  readBody: async () => {
+    throw new Error("Stable mutation denial must happen before reading the request body.");
+  },
+};
+assert.equal(await handleEvalRoute({ method: "POST" } as IncomingMessage, {} as ServerResponse, ["api", "evals", "private", "route-set", "runs"], stableDeps), true);
+assert.equal(stableResponses.at(-1)?.status, 403);
+assert.equal((stableResponses.at(-1)?.data as { error: { code: string } }).error.code, "private_eval_disabled_in_stable");
+assert.equal(await handleEvalRoute({ method: "GET" } as IncomingMessage, {} as ServerResponse, ["api", "evals", "private", "route-set", "runs"], stableDeps), true);
+assert.equal((await readPrivateEvalRun(root, "route-set", "stable-reader-orphan")).status, "running", "Stable history reads must not reconcile or mutate stored Eval runs");
 
 assert.equal(await handleEvalRoute({ method: "POST" } as IncomingMessage, {} as ServerResponse, ["api", "evals", "private", "route-set", "runs"], deps), true);
 assert.equal(responses[0].status, 202);

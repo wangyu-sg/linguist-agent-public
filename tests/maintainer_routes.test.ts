@@ -21,7 +21,12 @@ const readOnly = await createStandaloneFileGrant(root, { taskId, path: repo, kin
 let lastPlan: MaintenancePlan | undefined;
 let buildCount = 0;
 
-async function request(method: string, path: string, body: unknown = {}): Promise<{ status: number; data: any }> {
+async function request(
+  method: string,
+  path: string,
+  body: unknown = {},
+  options: { allowExecution?: boolean } = { allowExecution: true },
+): Promise<{ status: number; data: any }> {
   const url = new URL(path, "http://127.0.0.1");
   let output: { status: number; data: any } | undefined;
   const handled = await handleMaintainerRoute(
@@ -32,6 +37,7 @@ async function request(method: string, path: string, body: unknown = {}): Promis
       repoRoot: root,
       json: (_res, status, data) => { output = { status, data }; },
       readBody: async () => body,
+      allowExecution: options.allowExecution,
       preview: async (input) => {
         const plan: MaintenancePlan = {
           schemaVersion: 1,
@@ -78,6 +84,15 @@ async function request(method: string, path: string, body: unknown = {}): Promis
 }
 
 try {
+  const stableBlocked = await request(
+    "POST",
+    `/api/tasks/${taskId}/maintenance/preview`,
+    { grantId: readWrite.grant.id, targetPiVersion: "0.80.11" },
+    { allowExecution: false },
+  );
+  assert.equal(stableBlocked.status, 403);
+  assert.equal(stableBlocked.data.error.code, "maintainer_disabled_in_stable");
+
   const denied = await request("POST", `/api/tasks/${taskId}/maintenance/preview`, { grantId: readOnly.grant.id, targetPiVersion: "0.80.11" });
   assert.equal(denied.status, 400);
   assert.match(denied.data.error.message, /read_write/i);
@@ -89,6 +104,17 @@ try {
   assert.equal(preview.data.snapshot.artifacts.at(-1).status, "reviewable");
   assert.equal(preview.data.snapshot.agentThreads.at(-1).identity.displayName, "Maintainer");
   assert.equal(lastPlan?.repository.path, readWrite.grant.realPath);
+
+  const stableBuildBlocked = await request(
+    "POST",
+    `/api/tasks/${taskId}/maintenance/build`,
+    { planHash: "a".repeat(64) },
+    { allowExecution: false },
+  );
+  assert.equal(stableBuildBlocked.status, 403);
+  assert.equal(stableBuildBlocked.data.error.code, "maintainer_disabled_in_stable");
+  const retainedHistory = await createTaskWorkspace(root).open({ kind: "standalone", taskId });
+  assert.equal(retainedHistory.artifacts.at(-1)?.type, "maintenance_plan");
 
   const started = await request("POST", `/api/tasks/${taskId}/maintenance/build`, { planHash: "a".repeat(64) });
   assert.equal(started.status, 202);

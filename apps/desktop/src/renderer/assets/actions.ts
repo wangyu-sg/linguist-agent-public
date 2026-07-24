@@ -1,6 +1,6 @@
 import type {
   AssetParseResult,
-  CreateProjectInput,
+  NativeFileHandle,
   ProjectAssetItem,
   ProjectAssetReadResponse,
   ProjectAssetsCatalog,
@@ -9,7 +9,7 @@ import type {
 export type AssetIngestionStatus = "queued" | "scanning" | "parsing" | "ready" | "registered" | "failed";
 
 export interface AssetIngestionFile {
-  filePath: string;
+  handle: NativeFileHandle;
   relPath?: string;
   status: AssetIngestionStatus;
   asset?: ProjectAssetItem;
@@ -21,18 +21,14 @@ export interface AssetIngestionFile {
 
 export interface AssetIngestionContext {
   projectId: string;
-  projectName: string;
-  rootPath: string;
-  sourceLanguage?: string;
-  targetLanguage?: string;
 }
 
 export interface AssetIngestionDependencies {
-  pickImportFiles(): Promise<string[]>;
-  refreshProject(input: CreateProjectInput): Promise<unknown>;
+  pickImportFiles(): Promise<NativeFileHandle[]>;
+  refreshProjectAssets(input: { projectId: string; handles: NativeFileHandle[] }): Promise<{ files: Array<NativeFileHandle & { relPath: string }> }>;
   listAssets(projectId: string): Promise<ProjectAssetsCatalog>;
-  parseAsset(projectId: string, filePath: string): Promise<AssetParseResult>;
-  readAsset(projectId: string, filePath: string): Promise<ProjectAssetReadResponse>;
+  parseAsset(projectId: string, assetPath: string): Promise<AssetParseResult>;
+  readAsset(projectId: string, assetPath: string): Promise<ProjectAssetReadResponse>;
   onChange?(files: AssetIngestionFile[]): void;
 }
 
@@ -43,18 +39,6 @@ export interface AssetIngestionOutcome {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function withoutTrailingSlash(path: string): string {
-  return path.length > 1 ? path.replace(/\/+$/u, "") : path;
-}
-
-export function projectRelativeAssetPath(rootPath: string, filePath: string): string | null {
-  const root = withoutTrailingSlash(rootPath.trim());
-  const file = filePath.trim();
-  if (!root || !file || file === root || !file.startsWith(`${root}/`)) return null;
-  const relative = file.slice(root.length + 1);
-  return relative && !relative.split("/").includes("..") ? relative : null;
 }
 
 function supportsStructuredParse(path: string): boolean {
@@ -81,54 +65,27 @@ export async function ingestProjectAssets(
   const selected = await dependencies.pickImportFiles();
   if (!selected.length) return { files: [] };
 
-  const files: AssetIngestionFile[] = selected.map((filePath) => {
-    const relPath = projectRelativeAssetPath(context.rootPath, filePath);
-    return relPath
-      ? { filePath, relPath, status: "queued" }
-      : {
-          filePath,
-          status: "failed",
-          error: "文件不在当前项目文件夹内。Linguist Agent 不会复制客户文件；请先将文件放入项目文件夹，再重新选择。",
-        };
-  });
-  publish(files, dependencies);
-
-  const eligible = files.filter((file) => file.relPath);
-  if (!eligible.length) return { files };
-  if (!context.sourceLanguage || !context.targetLanguage) {
-    const error = "项目语言信息不完整，无法安全刷新资料清单。";
-    for (const file of eligible) {
-      file.status = "failed";
-      file.error = error;
-    }
-    publish(files, dependencies);
-    return { files };
-  }
-
-  for (const file of eligible) file.status = "scanning";
-  publish(files, dependencies);
   let catalog: ProjectAssetsCatalog;
+  let files: AssetIngestionFile[];
   try {
-    await dependencies.refreshProject({
-      projectId: context.projectId,
-      rootPath: context.rootPath,
-      projectName: context.projectName,
-      sourceLanguage: context.sourceLanguage,
-      targetLanguage: context.targetLanguage,
+    const refreshed = await dependencies.refreshProjectAssets({ projectId: context.projectId, handles: selected });
+    const pathsByHandle = new Map(refreshed.files.map((file) => [file.id, file.relPath]));
+    files = selected.map((handle) => {
+      const relPath = pathsByHandle.get(handle.id);
+      if (!relPath) throw new Error("Canonical Project asset refresh did not return a selected native file.");
+      return { handle, relPath, status: "scanning" };
     });
+    publish(files, dependencies);
     catalog = await dependencies.listAssets(context.projectId);
   } catch (error) {
     const detail = errorMessage(error);
-    for (const file of eligible) {
-      file.status = "failed";
-      file.error = detail;
-    }
+    files = selected.map((handle) => ({ handle, status: "failed", error: detail }));
     publish(files, dependencies);
     return { files };
   }
 
   const byPath = new Map(catalog.assets.map((asset) => [asset.relPath, asset]));
-  for (const file of eligible) {
+  for (const file of files) {
     const asset = byPath.get(file.relPath!);
     if (!asset) {
       file.status = "failed";
@@ -140,8 +97,8 @@ export async function ingestProjectAssets(
     file.status = "parsing";
     publish(files, dependencies);
     try {
-      if (supportsStructuredParse(file.filePath)) {
-        const parse = await dependencies.parseAsset(context.projectId, file.filePath);
+      if (supportsStructuredParse(file.relPath!)) {
+        const parse = await dependencies.parseAsset(context.projectId, file.relPath!);
         file.parse = parse;
         const preview = parse.structuredPreview;
         if (preview?.status === "error") {
@@ -151,8 +108,8 @@ export async function ingestProjectAssets(
           file.status = "ready";
           file.message = "已登记并完成本地结构化解析";
         }
-      } else if (supportsTextPreview(file.filePath)) {
-        const read = await dependencies.readAsset(context.projectId, file.filePath);
+      } else if (supportsTextPreview(file.relPath!)) {
+        const read = await dependencies.readAsset(context.projectId, file.relPath!);
         file.read = read;
         file.status = read.skippedReason ? "registered" : "ready";
         file.message = read.skippedReason ?? "已登记并完成本地内容预览";

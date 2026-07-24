@@ -24,11 +24,11 @@ try {
     scope: "global" as const,
   };
 
-  assert.deepEqual(await teamPackagePreflightBlockers([executable]), []);
+  assert.match((await teamPackagePreflightBlockers([executable]))[0]!, /Stable Team Runs do not load third-party executable Package Extensions/);
 
   assert.match((await teamPackagePreflightBlockers([
     { ...executable, executable: false },
-  ]))[0]!, /digest-approved Package-origin Extensions/);
+  ]))[0]!, /Stable Team Runs do not load third-party executable Package Extensions/);
 
   assert.deepEqual(await teamPackagePreflightBlockers([
     { ...executable, resourceType: "skill" as const, executable: false },
@@ -38,7 +38,7 @@ try {
   assert.match((await teamPackagePreflightBlockers([
     executable,
     { ...executable, packageSource: "npm:second@1.0.0", packageName: "second", resourceId: "second.ts" },
-  ]))[0]!, /at most one executable Package extension/);
+  ]))[0]!, /Stable Team Runs do not load third-party executable Package Extensions/);
 } finally {
   await rm(root, { recursive: true, force: true });
 }

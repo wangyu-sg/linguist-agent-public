@@ -3,7 +3,9 @@ import { readBatch } from "./batch_workspace.js";
 import { runDeliveryCheck, type DeliveryReport } from "./delivery.js";
 import { readProjectManifest } from "./project_manifest.js";
 import { scanProjectFolder, type DiscoveredAsset, type SuggestedImportAction } from "./project_scan.js";
-import { createWorkspace, readJsonFile, workspacePath } from "./workspace.js";
+import { readTermbaseEntries } from "./termbase.js";
+import { createTmStore } from "./tm.js";
+import { createWorkspace, workspacePath } from "./workspace.js";
 
 export type ProjectHealthSeverity = "blocker" | "warning" | "info";
 
@@ -57,10 +59,6 @@ function assetChanged(before: DiscoveredAsset, after: DiscoveredAsset): boolean 
   return before.sizeBytes !== after.sizeBytes || before.role !== after.role || before.confidence !== after.confidence;
 }
 
-async function jsonArrayCount(path: string): Promise<number> {
-  return (await readJsonFile<unknown[]>(path, [])).length;
-}
-
 async function fileExists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -86,10 +84,10 @@ async function satisfiedImportAction(workspaceRoot: string, projectId: string, a
   const workspace = createWorkspace(workspaceRoot, projectId);
   if (!action.tool) return true;
   if (action.tool.startsWith("tm_import_") || action.tool === "workbook_preview -> tm_import_table") {
-    return (await jsonArrayCount(workspacePath(workspace, "tm.json"))) > 0;
+    return (await createTmStore(workspace).list()).length > 0;
   }
   if (action.tool.startsWith("termbase_import_") || action.tool === "workbook_preview -> termbase_import_table") {
-    return (await jsonArrayCount(workspacePath(workspace, "termbase.json"))) > 0;
+    return (await readTermbaseEntries(workspaceRoot, projectId)).length > 0;
   }
   if (action.tool === "asset_blocks_build") {
     return fileExists(workspacePath(workspace, "asset_blocks.jsonl"));

@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import type { PromptRequestBudgetManifest } from "./prompt_compiler.js";
+import { resolveStructuredStorageBackend } from "./structured_domain_storage.js";
 import { readJsonFile, writeJsonFile } from "./workspace.js";
 
 export const TEAM_ROLE_IDS = [
@@ -241,8 +243,9 @@ export interface TeamContextManifest {
   includedArtifactIds: string[];
   omittedArtifactIds: string[];
   /** Optional on historical manifests written before estimate scoping. */
-  estimateScope?: "compiled_business_prompt";
+  estimateScope?: "compiled_business_prompt" | "complete_request_v2";
   tokenEstimate: number;
+  omittedSections?: string[];
   hardConstraintsPreserved: boolean;
   truncationReason?: string;
   /** PromptCompiler replay metadata; optional for manifests written by v1 runs. */
@@ -252,6 +255,7 @@ export interface TeamContextManifest {
   contextHash?: string;
   policyHash?: string;
   tokenBudget?: number;
+  requestBudget?: PromptRequestBudgetManifest;
   overBudget?: boolean;
   referenceIncluded?: boolean;
   coverage?: {
@@ -444,18 +448,42 @@ function teamRoleSettingsPath(workspaceRoot: string): string {
   return join(workspaceRoot, "data", "runtime", "team_role_settings.json");
 }
 
-export async function readTeamRoleSettings(workspaceRoot: string): Promise<TeamRoleSettings> {
-  const stored = await readJsonFile<Partial<TeamRoleSettings>>(teamRoleSettingsPath(workspaceRoot), {});
-  const byRole = new Map((stored.profiles ?? []).map((profile) => [profile.roleId, profile]));
+function teamRoleSettingsStorageAddress() {
+  return { domain: "settings" as const, key: "team-roles", scope: "global" };
+}
+
+function normalizeTeamRoleSettings(stored: Partial<TeamRoleSettings> | null | undefined): TeamRoleSettings {
+  const byRole = new Map((stored?.profiles ?? []).map((profile) => [profile.roleId, profile]));
   return {
     profiles: defaultTeamRoleProfiles().map((profile) => ({ ...profile, ...(byRole.get(profile.roleId) ?? {}) })),
   };
+}
+
+export async function readTeamRoleSettings(workspaceRoot: string): Promise<TeamRoleSettings> {
+  const backend = resolveStructuredStorageBackend(workspaceRoot);
+  if (backend) {
+    return normalizeTeamRoleSettings(backend.read(teamRoleSettingsStorageAddress())?.payload as Partial<TeamRoleSettings> | undefined);
+  }
+  const stored = await readJsonFile<Partial<TeamRoleSettings>>(teamRoleSettingsPath(workspaceRoot), {});
+  return normalizeTeamRoleSettings(stored);
 }
 
 export async function writeTeamRoleSettings(workspaceRoot: string, settings: TeamRoleSettings): Promise<TeamRoleSettings> {
   const normalized: TeamRoleSettings = {
     profiles: defaultTeamRoleProfiles().map((profile) => ({ ...profile, ...(settings.profiles.find((row) => row.roleId === profile.roleId) ?? {}) })),
   };
+  const backend = resolveStructuredStorageBackend(workspaceRoot);
+  if (backend) {
+    const address = teamRoleSettingsStorageAddress();
+    const stored = backend.read(address);
+    await backend.write({
+      address,
+      expectedRevision: stored?.revision ?? 0,
+      expectedValue: stored?.payload ?? {},
+      value: normalized as unknown as Record<string, unknown>,
+    });
+    return readTeamRoleSettings(workspaceRoot);
+  }
   await writeJsonFile(teamRoleSettingsPath(workspaceRoot), normalized);
   return readTeamRoleSettings(workspaceRoot);
 }

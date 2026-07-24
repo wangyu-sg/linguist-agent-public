@@ -16,6 +16,18 @@ export interface DocumentEvidenceRichArtifactInput {
   }>;
 }
 
+export interface DocumentRouterRichArtifactInput {
+  source: { sha256: string; mimeType: string };
+  status: "complete" | "partial" | "blocked";
+  pages: Array<{
+    page: number;
+    status: "complete" | "blocked";
+    reason: string;
+    backend?: { id: "native-text" | "light-ocr"; version: string; ocr: boolean };
+    blockCount: number;
+  }>;
+}
+
 export interface OfficeRichArtifactInput {
   ok: true;
   sourcePath?: string;
@@ -111,6 +123,21 @@ export interface RichArtifactFileReferenceBlockV1 {
   file: RichArtifactFileReferenceV1;
 }
 
+export type RichArtifactTodoStatus = "pending" | "in_progress" | "completed";
+
+export interface RichArtifactTodoItemV1 {
+  id: string;
+  text: string;
+  status: RichArtifactTodoStatus;
+}
+
+export interface RichArtifactTodoListBlockV1 {
+  id: string;
+  type: "todo_list";
+  caption?: string;
+  items: RichArtifactTodoItemV1[];
+}
+
 export type RichArtifactBlockV1 =
   | RichArtifactMarkdownBlockV1
   | RichArtifactTableBlockV1
@@ -118,7 +145,8 @@ export type RichArtifactBlockV1 =
   | RichArtifactImageBlockV1
   | RichArtifactPageOverlayBlockV1
   | RichArtifactDiffBlockV1
-  | RichArtifactFileReferenceBlockV1;
+  | RichArtifactFileReferenceBlockV1
+  | RichArtifactTodoListBlockV1;
 
 export interface RichArtifactDocumentV1 {
   schemaVersion: typeof RICH_ARTIFACT_SCHEMA_VERSION;
@@ -128,10 +156,11 @@ export interface RichArtifactDocumentV1 {
   blocks: RichArtifactBlockV1[];
 }
 
-const BLOCK_TYPES = ["markdown", "table", "chart", "image", "page_overlay", "diff", "file_reference"] as const;
+const BLOCK_TYPES = ["markdown", "table", "chart", "image", "page_overlay", "diff", "file_reference", "todo_list"] as const;
 const FILE_ROLES = ["source", "output", "reference"] as const;
 const CHART_KINDS = ["bar", "line", "pie"] as const;
 const ALIGNMENTS = ["left", "center", "right"] as const;
+const TODO_STATUSES = ["pending", "in_progress", "completed"] as const;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const RAW_HTML_PATTERN = /<\s*\/?\s*(?:script|iframe|object|embed|style|link|meta|form|input|button|video|audio|svg)\b/i;
@@ -335,6 +364,25 @@ function parseBlock(value: unknown, index: number): RichArtifactBlockV1 {
       ...(patch ? { patch } : {}),
     };
   }
+  if (type === "todo_list") {
+    const caption = optionalText(row.caption, `${label}.caption`, 1_000);
+    const items = array(row.items, `${label}.items`, 500).map((itemValue, itemIndex) => {
+      const item = object(itemValue, `${label}.items[${itemIndex}]`);
+      return {
+        id: identifier(item.id, `${label}.items[${itemIndex}].id`),
+        text: text(item.text, `${label}.items[${itemIndex}].text`, 2_000),
+        status: enumValue(item.status, TODO_STATUSES, `${label}.items[${itemIndex}].status`),
+      };
+    });
+    if (!items.length) throw new Error(`${label}.items must not be empty.`);
+    if (new Set(items.map((item) => item.id)).size !== items.length) throw new Error(`${label}.items ids must be unique.`);
+    return {
+      id,
+      type,
+      ...(caption ? { caption } : {}),
+      items,
+    };
+  }
   return { id, type, file: fileReference(row.file, `${label}.file`) };
 }
 
@@ -430,6 +478,41 @@ export function createDocumentEvidenceRichArtifact(
         confidence: block.confidence,
       })),
     }))],
+  });
+}
+
+/** Router results carry backend provenance without exposing a staged source path. */
+export function createDocumentRouterRichArtifact(
+  result: DocumentRouterRichArtifactInput,
+  options: { sourcePath: string; createdAt: string; title?: string; generator?: string },
+): RichArtifactDocumentV1 {
+  const complete = result.pages.filter((page) => page.status === "complete").length;
+  return parseRichArtifactDocument({
+    schemaVersion: RICH_ARTIFACT_SCHEMA_VERSION,
+    title: options.title ?? `Document evidence · ${fileName(options.sourcePath)}`,
+    createdAt: options.createdAt,
+    generator: options.generator ?? "Linguist Agent · Document Router",
+    blocks: [{
+      id: "summary",
+      type: "markdown",
+      markdown: `# Local document evidence\n\n${complete}/${result.pages.length} page(s) completed through the server-owned Document Router. ${result.status === "partial" ? "Blocked pages remain explicit for review." : result.status === "blocked" ? "No page completed; inspect the blocked reasons." : "Backend provenance is frozen per page."}`,
+    }, {
+      id: "routing",
+      type: "table",
+      caption: "Per-page routing and provenance",
+      columns: [{ key: "page", label: "Page" }, { key: "status", label: "Status" }, { key: "backend", label: "Backend" }, { key: "blocks", label: "Blocks" }, { key: "reason", label: "Reason" }],
+      rows: result.pages.map((page) => ({
+        page: page.page,
+        status: page.status,
+        backend: page.backend ? `${page.backend.id}@${page.backend.version}` : "blocked",
+        blocks: page.blockCount,
+        reason: page.reason,
+      })),
+    }, {
+      id: "source",
+      type: "file_reference",
+      file: { path: options.sourcePath, label: fileName(options.sourcePath), role: "source", mimeType: result.source.mimeType, sha256: result.source.sha256 },
+    }],
   });
 }
 
@@ -561,11 +644,15 @@ function renderBlock(block: RichArtifactBlockV1): string {
     return `<figure><figcaption>Page ${block.page} · ${block.regions.length} region(s)</figcaption><svg class="overlay" viewBox="0 0 ${block.width} ${block.height}" role="img" aria-label="Page ${block.page} evidence overlay">${polygons}</svg>${block.background ? renderFile(block.background) : ""}</figure>`;
   }
   if (block.type === "diff") return `<section class="diff">${block.label ? `<h3>${escapeHtml(block.label)}</h3>` : ""}${block.before ? `<h4>Before</h4><pre>${escapeHtml(block.before)}</pre>` : ""}${block.after ? `<h4>After</h4><pre>${escapeHtml(block.after)}</pre>` : ""}${block.patch ? `<h4>Patch</h4><pre>${escapeHtml(block.patch)}</pre>` : ""}</section>`;
+  if (block.type === "todo_list") {
+    const statusLabel: Record<RichArtifactTodoStatus, string> = { pending: "Pending", in_progress: "In progress", completed: "Completed" };
+    return `<figure>${block.caption ? `<figcaption>${escapeHtml(block.caption)}</figcaption>` : ""}<ul class="todo">${block.items.map((item) => `<li class="todo-item" data-status="${item.status}"><span class="todo-marker" aria-hidden="true">${item.status === "completed" ? "✓" : item.status === "in_progress" ? "◐" : "○"}</span><span class="todo-text">${escapeHtml(item.text)}</span><span class="todo-status">${statusLabel[item.status]}</span></li>`).join("")}</ul></figure>`;
+  }
   return `<section>${renderFile(block.file)}</section>`;
 }
 
 /** Trusted, script-free export projection of the same declarative document used by Electron preview. */
 export function renderRichArtifactHtml(value: RichArtifactDocumentV1): string {
   const document = parseRichArtifactDocument(value);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="la-rich-artifact" content="v1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>body{margin:0;background:#fff;color:#171717;font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:900px;margin:0 auto;padding:48px}header{border-bottom:1px solid #ddd;margin-bottom:28px;padding-bottom:18px}h1{font-size:28px;margin:0 0 6px}header p{color:#666;margin:0}section,figure{break-inside:avoid;margin:0 0 24px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f6f6;border:1px solid #e5e5e5;border-radius:8px;padding:14px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;vertical-align:top}figcaption{font-weight:650;margin-bottom:8px}.file{border:1px solid #ddd;border-radius:8px;padding:12px}.file div{display:grid;grid-template-columns:90px 1fr;gap:8px}.file dt{color:#666}.file dd{margin:0;overflow-wrap:anywhere}.chart-row{display:grid;grid-template-columns:minmax(100px,1fr) 3fr auto;gap:10px;align-items:center;margin:7px 0}.chart-row i{display:block;height:10px;background:#267a79;border-radius:999px}.overlay{width:100%;max-height:520px;background:#f7f7f7;border:1px solid #ddd}.overlay polygon{fill:rgba(38,122,121,.12);stroke:#267a79;stroke-width:2}.image-placeholder{border:1px dashed #aaa;border-radius:8px;padding:16px}@media print{main{max-width:none;padding:18mm}}</style></head><body><main><header><h1>${escapeHtml(document.title)}</h1><p>${escapeHtml(document.generator)} · ${escapeHtml(document.createdAt)}</p></header>${document.blocks.map(renderBlock).join("")}</main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="la-rich-artifact" content="v1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>body{margin:0;background:#fff;color:#171717;font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:900px;margin:0 auto;padding:48px}header{border-bottom:1px solid #ddd;margin-bottom:28px;padding-bottom:18px}h1{font-size:28px;margin:0 0 6px}header p{color:#666;margin:0}section,figure{break-inside:avoid;margin:0 0 24px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f6f6;border:1px solid #e5e5e5;border-radius:8px;padding:14px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;vertical-align:top}figcaption{font-weight:650;margin-bottom:8px}.file{border:1px solid #ddd;border-radius:8px;padding:12px}.file div{display:grid;grid-template-columns:90px 1fr;gap:8px}.file dt{color:#666}.file dd{margin:0;overflow-wrap:anywhere}.chart-row{display:grid;grid-template-columns:minmax(100px,1fr) 3fr auto;gap:10px;align-items:center;margin:7px 0}.chart-row i{display:block;height:10px;background:#267a79;border-radius:999px}.overlay{width:100%;max-height:520px;background:#f7f7f7;border:1px solid #ddd}.overlay polygon{fill:rgba(38,122,121,.12);stroke:#267a79;stroke-width:2}.image-placeholder{border:1px dashed #aaa;border-radius:8px;padding:16px}.todo{list-style:none;margin:0;padding:0}.todo-item{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid #eee}.todo-item:last-child{border-bottom:0}.todo-item[data-status="completed"] .todo-text{text-decoration:line-through;color:#777}.todo-status{margin-left:auto;color:#666;font-size:12px;white-space:nowrap}@media print{main{max-width:none;padding:18mm}}</style></head><body><main><header><h1>${escapeHtml(document.title)}</h1><p>${escapeHtml(document.generator)} · ${escapeHtml(document.createdAt)}</p></header>${document.blocks.map(renderBlock).join("")}</main></body></html>`;
 }

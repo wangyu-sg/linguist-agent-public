@@ -131,8 +131,16 @@ assert.equal(batch.segments[2].duplicateFirstSegmentId, "job:2");
       return value.trim();
     },
     optionalString: (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : undefined,
-    optionalStringArray: (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined,
-    optionalBoolean: (value: unknown) => value === undefined ? undefined : Boolean(value),
+    optionalStringArray: (value: unknown) => {
+      if (value === undefined) return undefined;
+      if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) throw new Error("Expected a string array.");
+      return value;
+    },
+    optionalBoolean: (value: unknown) => {
+      if (value === undefined) return undefined;
+      if (typeof value !== "boolean") throw new Error("Expected a boolean.");
+      return value;
+    },
   };
 
   routeBody = { filePath: mxliffPath, masterXliffPath: masterPath, batchId: "route-b1", overwrite: true };

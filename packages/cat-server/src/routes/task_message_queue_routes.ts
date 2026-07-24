@@ -5,6 +5,7 @@ import {
   type TaskLocator,
   type TaskMessageQueue,
 } from "@linguist-agent/cat-data";
+import { StrictApiInputError, strictApiArray, strictApiObject, strictApiString } from "../strict_api_contract.js";
 
 export interface TaskMessageQueueRouteService {
   read(locator: TaskLocator): Promise<TaskMessageQueue>;
@@ -29,11 +30,12 @@ function messageId(parts: string[], index: number): string {
   return value;
 }
 
-function objectBody(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
+const queueReorderSchema = strictApiObject({
+  messageIds: strictApiArray(strictApiString({ minLength: 1 })),
+}, { name: "Task message queue reorder" });
+const queueEditSchema = strictApiObject({
+  text: strictApiString({ minLength: 1 }),
+}, { name: "Task queued message edit" });
 
 /** Shared route vocabulary for standalone and Project Task queues. */
 export async function handleTaskMessageQueueRoute(input: {
@@ -70,8 +72,15 @@ export async function handleTaskMessageQueueRoute(input: {
     return true;
   }
   if (parts.length === queueIndex + 2 && action === "reorder" && req.method === "POST") {
-    const body = objectBody(await input.readBody(req));
-    if (!body || !Array.isArray(body.messageIds) || !body.messageIds.every((value) => typeof value === "string" && value.trim())) {
+    let body: Record<string, unknown>;
+    try {
+      body = queueReorderSchema.parse(await input.readBody(req), "Task message queue reorder");
+    } catch (error) {
+      if (!(error instanceof StrictApiInputError)) throw error;
+      input.json(res, error.status, { error: error.message, code: error.code });
+      return true;
+    }
+    if (!Array.isArray(body.messageIds) || !body.messageIds.every((value) => typeof value === "string" && value.trim())) {
       input.json(res, 400, { error: "messageIds must be an array of non-empty strings." });
       return true;
     }
@@ -81,8 +90,15 @@ export async function handleTaskMessageQueueRoute(input: {
   if (!action) return false;
   const id = messageId(parts, queueIndex + 1);
   if (parts.length === queueIndex + 2 && req.method === "PATCH") {
-    const body = objectBody(await input.readBody(req));
-    if (!body || typeof body.text !== "string" || !body.text.trim()) {
+    let body: Record<string, unknown>;
+    try {
+      body = queueEditSchema.parse(await input.readBody(req), "Task queued message edit");
+    } catch (error) {
+      if (!(error instanceof StrictApiInputError)) throw error;
+      input.json(res, error.status, { error: error.message, code: error.code });
+      return true;
+    }
+    if (typeof body.text !== "string" || !body.text.trim()) {
       input.json(res, 400, { error: "text is required." });
       return true;
     }

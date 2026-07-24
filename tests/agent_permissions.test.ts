@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import {
   buildAgentPermissionContract,
+  normalizeAgentPermissionMode,
   evaluateAgentToolPermissionCall,
   resolveAgentToolPermissionDomain,
   type AgentPermissionRules,
 } from "@linguist-agent/cat-runtime";
-import { handleAgentPermissionRoute, normalizeAgentPermissionPatch } from "../packages/cat-server/src/routes/agent_permission_routes.js";
+import { settingsPermissionApplicationPort } from "../packages/cat-server/src/application/settings_permission_application_port.js";
+import { handleAgentPermissionRoute } from "../packages/cat-server/src/routes/agent_permission_routes.js";
+
+const normalizeAgentPermissionPatch = settingsPermissionApplicationPort.normalizePermissionPatch;
 
 const defaultContract = buildAgentPermissionContract({ mode: "auto" });
 
@@ -24,11 +28,11 @@ assert.equal(defaultContract.effectivePolicy.every((entry) => typeof entry.locke
 assert.equal(defaultContract.effectivePolicy.find((entry) => entry.domain === "bash")?.riskClass, "high");
 assert.equal(defaultContract.effectivePolicy.find((entry) => entry.domain === "bash")?.locked, false);
 
-const fullContract = buildAgentPermissionContract({ mode: "full" });
-assert.equal(fullContract.effectivePolicy.find((entry) => entry.domain === "catProposalFirst")?.riskClass, "non_picker");
-assert.equal(fullContract.effectivePolicy.find((entry) => entry.domain === "catProposalFirst")?.locked, true);
-assert.equal(fullContract.effectivePolicy.find((entry) => entry.domain === "catProposalFirst")?.decision, "ask");
-assert.equal(fullContract.effectivePolicy.find((entry) => entry.domain === "lockedSegments")?.decision, "deny");
+assert.equal(defaultContract.presets.some((preset) => preset.id === "full"), false);
+assert.throws(() => buildAgentPermissionContract({ mode: "full" as never }), /permission mode/i);
+assert.equal(defaultContract.effectivePolicy.find((entry) => entry.domain === "catProposalFirst")?.riskClass, "non_picker");
+assert.equal(defaultContract.effectivePolicy.find((entry) => entry.domain === "catProposalFirst")?.locked, true);
+assert.equal(defaultContract.effectivePolicy.find((entry) => entry.domain === "lockedSegments")?.decision, "deny");
 
 assert.equal(resolveAgentToolPermissionDomain("proposal_apply").controlledBy, "cat-governance");
 assert.equal(resolveAgentToolPermissionDomain("segment_set_target").controlledBy, "cat-governance");
@@ -80,9 +84,14 @@ const approvedBash = await evaluateAgentToolPermissionCall({
   toolName: "bash",
   input: { command: "pwd" },
   contract: customContract,
+  taskId: "task-action",
+  runId: "run-action",
   requestDecision: async (request) => {
     requestedTool = request.toolName;
-    return { decision: "approve" };
+    assert.equal(request.kind, "tool");
+    assert.equal(request.taskId, "task-action");
+    assert.equal(request.runId, "run-action");
+    return { action: "allow_once" };
   },
 });
 assert.equal(requestedTool, "bash");
@@ -138,17 +147,30 @@ const noRequester = await evaluateAgentToolPermissionCall({
 assert.equal(noRequester.block, true);
 assert.match(noRequester.reason ?? "", /requires approval/);
 
+assert.equal((await evaluateAgentToolPermissionCall({
+  toolName: "bash",
+  input: { command: "pwd" },
+  contract: customContract,
+  requestDecision: async () => ({ action: "unexpected" as never }),
+})).block, true);
+
 const catToolStillAllowedByPermissionLayer = await evaluateAgentToolPermissionCall({
   toolName: "proposal_apply",
   input: { projectId: "p", batchId: "b", proposalSetId: "ps" },
-  contract: fullContract,
+  contract: defaultContract,
 });
 assert.equal(catToolStillAllowedByPermissionLayer?.block ?? false, false);
 assert.equal(catToolStillAllowedByPermissionLayer?.reason, undefined);
 
-assert.deepEqual(normalizeAgentPermissionPatch({ mode: "full" }), { permissionMode: "full" });
+assert.throws(() => normalizeAgentPermissionPatch({ mode: "full" }), /permission mode/i);
 assert.deepEqual(normalizeAgentPermissionPatch({ customRules }), { permissionRules: customRules });
+assert.throws(() => normalizeAgentPermissionMode("unexpected"), /permission mode/i);
+assert.throws(() => normalizeAgentPermissionMode(undefined), /permission mode/i);
+assert.throws(() => normalizeAgentPermissionPatch({ mode: "unexpected" }), /permission mode/i);
+assert.throws(() => buildAgentPermissionContract({ mode: "unexpected" as never }), /permission mode/i);
 assert.throws(() => normalizeAgentPermissionPatch({ permissionRules: { catProposalFirst: "auto" } }), /Unknown or locked permission domain/);
+assert.throws(() => normalizeAgentPermissionPatch({ mode: "auto", surprise: true }), /unknown field surprise/i);
+assert.throws(() => normalizeAgentPermissionPatch({ mode: true }), /mode must be a string/i);
 
 {
   const responses: Array<{ status: number; data: unknown }> = [];
@@ -182,12 +204,17 @@ assert.throws(() => normalizeAgentPermissionPatch({ permissionRules: { catPropos
     },
   };
 
-  assert.equal(
-    await handleAgentPermissionRoute({ method: "PUT" } as never, {} as never, new URL("http://x/api/agent/permissions"), ["api", "agent", "permissions"], deps),
-    true,
+  await assert.rejects(
+    handleAgentPermissionRoute({ method: "PUT" } as never, {} as never, new URL("http://x/api/agent/permissions"), ["api", "agent", "permissions"], deps),
+    /permission mode/i,
   );
-  assert.equal(responses[0].status, 200);
-  assert.equal((responses[0].data as { mode?: string }).mode, "full");
+  assert.equal(responses.length, 0);
+
+  body = { mode: "unexpected" };
+  await assert.rejects(
+    handleAgentPermissionRoute({ method: "PUT" } as never, {} as never, new URL("http://x/api/agent/permissions"), ["api", "agent", "permissions"], deps),
+    /permission mode/i,
+  );
 
   responses.length = 0;
   body = {};

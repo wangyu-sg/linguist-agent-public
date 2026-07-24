@@ -4,9 +4,10 @@
   "version": "2.32.7",
   "private": true,
   "type": "module",
-  "main": "src/main.mjs",
+  "main": "dist/electron/main.js",
   "scripts": {
-    "build": "vite build",
+    "build": "npm run build:electron && vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
     "package": "node scripts/package-macos.mjs",
     "verify": "node scripts/verify-macos.mjs",
     "verify:signing-stability": "node scripts/verify-signing-stability.mjs",

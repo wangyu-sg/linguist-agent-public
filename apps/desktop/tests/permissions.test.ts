@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveWorkspaceCapabilityRequest } from "../src/workspace-capabilities.cjs";
 import {
   workspaceClient,
   WorkspaceAPIError,
@@ -135,7 +136,7 @@ test("standalone permission recovery accepts only the selected Chat session", as
     value: {
       linguist: {
         api: {
-          request: async () => ({
+          invokeWorkspaceCapability: async () => ({
             ok: true,
             status: 200,
             data: { requests: [
@@ -165,9 +166,10 @@ test("pending permission recovery filters exact canonical Project and Task sessi
     value: {
       linguist: {
         api: {
-          request: async (input: { method: string; path: string; body?: unknown }) => {
-            requests.push(input);
-            if (input.path.endsWith("/pending")) return {
+          invokeWorkspaceCapability: async (input: unknown) => {
+            const resolvedRequest = resolveWorkspaceCapabilityRequest(input);
+            requests.push(resolvedRequest);
+            if (resolvedRequest.path.startsWith("/api/agent/permissions/pending")) return {
               ok: true,
               status: 200,
               data: { requests: [
@@ -195,6 +197,7 @@ test("pending permission recovery filters exact canonical Project and Task sessi
     else Reflect.deleteProperty(globalThis, "window");
   }
   assert.equal(taskAgentSessionId("task-one"), "la-task-task-one");
+  assert.equal(requests.find((entry) => entry.path.startsWith("/api/agent/permissions/pending"))?.path, "/api/agent/permissions/pending?projectId=project-one&taskId=task-one");
   assert.deepEqual(requests.at(-1), {
     method: "POST",
     path: "/api/agent/permissions/decision",

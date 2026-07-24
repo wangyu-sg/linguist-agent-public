@@ -4,6 +4,7 @@ import { runDeliveryCheck, type DeliveryReport } from "./delivery.js";
 import { runProjectHealthCheck, type ProjectHealthReport } from "./project_health.js";
 import { createWorkspace, readJsonFile, workspacePath, writeJsonFile } from "./workspace.js";
 import { TEAM_ROLE_IDS, type TeamRoleId } from "./team_workflow.js";
+import { assertWorkflowEvalLegacyAllowed, workflowEvalPersistenceFor } from "./workflow_eval_storage.js";
 
 export const CAT_WORKFLOW_INTENTS = [
   "onboard_project",
@@ -146,6 +147,20 @@ function workflowRoot(workspaceRoot: string, projectId: string): string {
 
 export function workflowRunPath(workspaceRoot: string, projectId: string, workflowId: string): string {
   return join(workflowRoot(workspaceRoot, projectId), `${safeWorkflowId(workflowId)}.json`);
+}
+
+function workflowStorageKey(projectId: string, workflowId: string): string { return `workflow/${projectId}/${safeWorkflowId(workflowId)}`; }
+async function readStoredWorkflow(workspaceRoot: string, projectId: string, workflowId: string): Promise<CatWorkflowRun | null> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) return await persistence.read(workflowStorageKey(projectId, workflowId)) as CatWorkflowRun | null;
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
+  return readJsonFile<CatWorkflowRun | null>(workflowRunPath(workspaceRoot, projectId, workflowId), null);
+}
+async function writeStoredWorkflow(workspaceRoot: string, projectId: string, workflowId: string, run: CatWorkflowRun): Promise<void> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) return persistence.write(workflowStorageKey(projectId, workflowId), run);
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
+  await writeJsonFile(workflowRunPath(workspaceRoot, projectId, workflowId), run, { durability: "critical" });
 }
 
 function approvedSet(run: Pick<CatWorkflowRun, "approvedStepIds">): Set<string> {
@@ -475,7 +490,7 @@ export async function createCatWorkflowRun(
   const now = new Date().toISOString();
   const workflowId = safeWorkflowId(options.workflowId ?? `${evaluated.plan.intent}-${now.replace(/[:.]/g, "-")}`);
   const path = workflowRunPath(workspaceRoot, evaluated.plan.projectId, workflowId);
-  const existing = await readJsonFile<CatWorkflowRun | null>(path, null);
+  const existing = await readStoredWorkflow(workspaceRoot, evaluated.plan.projectId, workflowId);
   if (existing && !options.overwrite) {
     throw new Error(`Workflow run ${workflowId} already exists. Pass overwrite=true to replace it.`);
   }
@@ -499,12 +514,12 @@ export async function createCatWorkflowRun(
     ],
   });
   await mkdir(dirname(path), { recursive: true });
-  await writeJsonFile(path, run);
+  await writeStoredWorkflow(workspaceRoot, evaluated.plan.projectId, workflowId, run);
   return { run, path };
 }
 
 export async function readCatWorkflowRun(workspaceRoot: string, projectId: string, workflowId: string): Promise<CatWorkflowRun> {
-  const run = await readJsonFile<CatWorkflowRun | null>(workflowRunPath(workspaceRoot, projectId, workflowId), null);
+  const run = await readStoredWorkflow(workspaceRoot, projectId, workflowId);
   if (!run) throw new Error(`Workflow run ${workflowId} not found for project ${projectId}.`);
   return markWorkflowRun(run);
 }
@@ -516,19 +531,25 @@ export async function linkCatWorkflowTask(
   workflowId: string,
   taskId: string,
 ): Promise<CatWorkflowRun> {
-  const path = workflowRunPath(workspaceRoot, projectId, workflowId);
-  const run = await readJsonFile<CatWorkflowRun | null>(path, null);
+  const run = await readStoredWorkflow(workspaceRoot, projectId, workflowId);
   if (!run) throw new Error(`Workflow run ${workflowId} not found for project ${projectId}.`);
   if (run.projectId !== projectId || run.workflowId !== workflowId) throw new Error(`Workflow run ${workflowId} durable scope does not match its storage path.`);
   if (run.taskId && run.taskId !== taskId) throw new Error(`Workflow run ${workflowId} is already linked to Task ${run.taskId}.`);
   if (run.plan.taskId && run.plan.taskId !== taskId) throw new Error(`Workflow plan ${workflowId} is already linked to Task ${run.plan.taskId}.`);
   if (run.taskId === taskId && run.plan.taskId === taskId) return markWorkflowRun(run);
   const linked = { ...run, taskId, plan: { ...run.plan, taskId } };
-  await writeJsonFile(path, linked);
+  await writeStoredWorkflow(workspaceRoot, projectId, workflowId, linked);
   return markWorkflowRun(linked);
 }
 
 export async function listCatWorkflowRuns(workspaceRoot: string, projectId: string): Promise<CatWorkflowRunSummary[]> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) {
+    const prefix = `workflow/${projectId}/`;
+    const runs = await Promise.all((await persistence.list(prefix)).map((key) => persistence.read(key) as Promise<CatWorkflowRun | null>));
+    return runs.filter((run): run is CatWorkflowRun => Boolean(run)).map((run) => ({ workflowId: run.workflowId, projectId: run.projectId, ...(run.taskId ? { taskId: run.taskId } : {}), batchId: run.batchId, intent: run.plan.intent, status: run.status, currentStepId: run.currentStepId, approvalGatesRemaining: remainingApprovalSteps(run).length, updatedAt: run.updatedAt })).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
   let files: string[] = [];
   try {
     files = (await readdir(workflowRoot(workspaceRoot, projectId))).filter((file) => file.endsWith(".json"));
@@ -575,7 +596,7 @@ export async function completeCatWorkflowStep(
       { ts: now, kind: "completed", message: note ? `Completed ${stepId}. ${note}` : `Completed ${stepId}.`, stepIds: [stepId] },
     ],
   });
-  await writeJsonFile(workflowRunPath(workspaceRoot, projectId, workflowId), nextRun);
+  await writeStoredWorkflow(workspaceRoot, projectId, workflowId, nextRun);
   return nextRun;
 }
 
@@ -600,7 +621,7 @@ export async function stopCatWorkflowRun(
       },
     ],
   };
-  await writeJsonFile(workflowRunPath(workspaceRoot, projectId, workflowId), nextRun);
+  await writeStoredWorkflow(workspaceRoot, projectId, workflowId, nextRun);
   return markWorkflowRun(nextRun);
 }
 
@@ -629,7 +650,7 @@ export async function beginStopCatWorkflowRun(
       },
     ],
   };
-  await writeJsonFile(workflowRunPath(workspaceRoot, projectId, workflowId), stopping);
+  await writeStoredWorkflow(workspaceRoot, projectId, workflowId, stopping);
   return markWorkflowRun(stopping);
 }
 

@@ -5,6 +5,13 @@ export interface TdaiEmbeddingBridgeOptions {
   fetchFn?: typeof fetch;
 }
 
+/**
+ * The embedding adapter is separate from the retired TDAI memory runtime.
+ * It is an explicit local compatibility endpoint, never a project Memory
+ * configuration and never a capture/store/recall control.
+ */
+export const DEFAULT_TDAI_EMBEDDING_GATEWAY_URL = "http://127.0.0.1:8420";
+
 export interface TdaiEmbedResponse {
   provider: string;
   model: string;

@@ -27,10 +27,11 @@ export interface WorkflowArtifactRouteDeps {
 
 function stringRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
-  );
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (!entries.every((entry): entry is [string, string] => typeof entry[1] === "string")) {
+    throw new Error("Expected a record of string values.");
+  }
+  return Object.fromEntries(entries);
 }
 
 function phraseBackfillPlanRows(value: unknown, deps: Pick<WorkflowArtifactRouteDeps, "requireString" | "optionalString" | "optionalStringArray">): PlatformBackfillPlanRow[] {
@@ -50,7 +51,7 @@ function phraseBackfillPlanRows(value: unknown, deps: Pick<WorkflowArtifactRoute
   });
 }
 
-function phraseQaCaptures(value: unknown, deps: Pick<WorkflowArtifactRouteDeps, "requireString" | "optionalString">): PhraseQaCapture[] {
+function phraseQaCaptures(value: unknown, deps: Pick<WorkflowArtifactRouteDeps, "requireString" | "optionalString" | "optionalBoolean">): PhraseQaCapture[] {
   if (!Array.isArray(value)) return [];
   return value.map((capture, captureIndex) => {
     if (!capture || typeof capture !== "object") throw new Error(`captures[${captureIndex}] must be an object.`);
@@ -69,7 +70,7 @@ function phraseQaCaptures(value: unknown, deps: Pick<WorkflowArtifactRouteDeps, 
         finalIgnoreState: deps.optionalString(qa.finalIgnoreState) as PhraseQaRawIssue["finalIgnoreState"],
       };
     });
-    return { rows, hasLoadMore: Boolean(input.hasLoadMore) };
+    return { rows, hasLoadMore: deps.optionalBoolean(input.hasLoadMore) ?? false };
   });
 }
 

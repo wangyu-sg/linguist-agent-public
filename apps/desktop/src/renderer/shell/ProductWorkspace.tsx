@@ -231,7 +231,7 @@ export function ProductWorkspace({
     }
   };
 
-  const pipelineMode = surface === "review" || surface === "qa" || surface === "delivery" || surface === "eval" ? surface : null;
+  const pipelineMode = surface === "review" || surface === "qa" || surface === "delivery" ? surface : null;
   const toolbar = useMemo(() => (input: WorkspaceToolbarInput) => (
     <ProductToolbar
       input={input}
@@ -323,6 +323,8 @@ export function ProductWorkspace({
                   segment={focusedSegment}
                   store={currentStore}
                   onOpenHistory={() => changeSurface("conversation")}
+                  onInspectActivity={(activity) => openInspector({ kind: "activity", activity })}
+                  onInspectArtifact={(artifact) => openInspector({ kind: "artifact", artifact })}
                   onInspectSegment={(segment) => {
                     setCatCompanionOpen(false);
                     openInspector({
@@ -348,7 +350,9 @@ export function ProductWorkspace({
               mode={pipelineMode}
               showModeTabs={false}
               showRunHistory={false}
-              onModeChange={(nextMode) => changeSurface(nextMode)}
+              onModeChange={(nextMode) => {
+                if (nextMode !== "eval") changeSurface(nextMode);
+              }}
               onOpenSegment={(segmentId) => {
                 setRequestedSegmentId(segmentId);
                 setCatCompanionOpen(true);

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
-import { defineTool, type ExtensionUIContext } from "@earendil-works/pi-coding-agent";
+import { defineTool } from "@earendil-works/pi-coding-agent";
 import { createWorkspace } from "@linguist-agent/cat-data";
 import { buildCatRequestShape, CAT_SEGMENT_RUN_TOOLS, createCatAgentSession } from "@linguist-agent/cat-runtime";
 import { serverOwnedRunDisabledTools } from "../packages/cat-server/src/task_run_resources.js";
@@ -260,57 +260,25 @@ await writeFile(join(agentDir, "settings.json"), `${JSON.stringify({
 
 try {
   process.env.PI_CODING_AGENT_DIR = agentDir;
-  const notifications: string[] = [];
-  const isolatedBound = await createCatAgentSession({
-    workspace,
-    preset: "cat",
-    sessionMode: "memory",
-    runtimeExtension: false,
-    isolatedResources: { extensionPaths: [boundExtension] },
-    disabledTools: serverOwnedRunDisabledTools([
-      "ask_user",
-      "document_parse",
-      "document_search",
-      "document_screenshot",
-    ]),
-    extensionBinding: {
-      mode: "rpc",
-      uiContext: {
-        notify(message: string) { notifications.push(message); },
-      } as ExtensionUIContext,
-    },
-    runOptions: { noSession: true },
-  });
-  try {
-    assert.equal(existsSync(installMarker), false, "isolated sessions must not install configured global packages");
-    assert.equal(existsSync(rogueMarker), false, "isolated sessions must not load configured global extensions");
-    assert.deepEqual(notifications, ["bound"], "server-owned extension UI must bind before the session is returned");
-    assert.ok(isolatedBound.session.getActiveToolNames().includes("bound_probe"));
-    for (const required of ["ask_user", "document_parse", "document_search", "document_screenshot"]) {
-      assert.ok(
-        isolatedBound.requestShape.activeToolNames.includes(required),
-        `legacy disabledTools cannot remove required Main Package tool ${required}`,
-      );
-    }
-    assert.ok(
-      isolatedBound.requestShape.activeToolNames.includes("bound_probe"),
-      "request shape must be computed after session_start registers dynamic tools",
-    );
-    for (const forbidden of ["edit", "write", "bash", "subagent", "wait", "subagent_supervisor", "intercom", "contact_supervisor"]) {
-      assert.equal(
-        isolatedBound.session.getActiveToolNames().includes(forbidden),
-        false,
-        `${forbidden} must not create parallel CAT or specialist authority`,
-      );
-      assert.equal(
-        isolatedBound.requestShape.activeToolNames.includes(forbidden),
-        false,
-        `${forbidden} must be absent from the provider-visible request shape`,
-      );
-    }
-  } finally {
-    isolatedBound.session.dispose();
-  }
+  await assert.rejects(
+    createCatAgentSession({
+      workspace,
+      preset: "cat",
+      sessionMode: "memory",
+      runtimeExtension: false,
+      isolatedResources: { extensionPaths: [boundExtension] },
+      disabledTools: serverOwnedRunDisabledTools([
+        "ask_user",
+        "document_parse",
+        "document_search",
+        "document_screenshot",
+      ]),
+      runOptions: { noSession: true },
+    }),
+    /Isolated CAT executable Extensions must use the isolated Extension Host/u,
+  );
+  assert.equal(existsSync(installMarker), false, "blocked isolated sessions must not install configured global packages");
+  assert.equal(existsSync(rogueMarker), false, "blocked isolated sessions must not load configured global extensions");
 
   await assert.rejects(
     createCatAgentSession({
@@ -333,8 +301,8 @@ try {
       isolatedResources: { extensionPaths: [brokenExtension] },
       runOptions: { noSession: true },
     }),
-    /Pi Extension loading failed:.*broken-extension/,
-    "an explicitly selected Extension must fail closed instead of disappearing from the Run manifest",
+    /Isolated CAT executable Extensions must use the isolated Extension Host/u,
+    "an explicitly selected Extension must never fall back to host-process loading",
   );
 } finally {
   if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;

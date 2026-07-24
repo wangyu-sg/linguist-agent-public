@@ -25,6 +25,8 @@ import {
   seedPrivateEvalRunFromCheckpoint,
   type PrivateEvalTeamRoleLifecycleEvent,
   type PrivateEvalThinkingLevel,
+  type PromptRequestBudget,
+  safeLogger,
 } from "@linguist-agent/cat-data";
 import type { ActiveAgentRunRegistry } from "../active_agent_runs.js";
 import type { PrivateEvalCanonicalTeamOutput, PrivateEvalCanonicalTeamSegment } from "../private_eval_canonical_team.js";
@@ -45,6 +47,8 @@ export interface EvalRouteDeps {
   repoRoot: string;
   json: (res: ServerResponse, status: number, data: unknown) => void;
   readBody: (req: IncomingMessage) => Promise<unknown>;
+  /** Explicit development/test capability. Stable composition must omit it. */
+  allowExecution?: boolean;
   requireString: (value: unknown, label: string) => string;
   optionalString: (value: unknown) => string | undefined;
   runSingleGeneration?: (input: PrivateEvalCanonicalSingleGenerationInput) => Promise<PrivateEvalCanonicalSingleGenerationResult>;
@@ -59,6 +63,7 @@ export interface EvalRouteDeps {
     onRoleEvent?: (event: PrivateEvalTeamRoleLifecycleEvent) => void | Promise<void>;
   }) => Promise<Map<string, PrivateEvalCanonicalTeamOutput>>;
   activeRuns?: ActiveAgentRunRegistry;
+  resolveModelPromptTokenBudget?: (provider?: string, modelId?: string) => Promise<PromptRequestBudget | undefined>;
 }
 
 function evalTermTargets(refs: readonly string[]): string[] {
@@ -179,6 +184,16 @@ export async function handleEvalRoute(
   deps: EvalRouteDeps,
 ): Promise<boolean> {
   if (parts[0] !== "api" || parts[1] !== "evals" || parts[2] !== "private") return false;
+
+  if (req.method !== "GET" && deps.allowExecution !== true) {
+    deps.json(res, 403, {
+      error: {
+        code: "private_eval_disabled_in_stable",
+        message: "Private Eval execution is unavailable in Stable. Existing Eval history remains read-only.",
+      },
+    });
+    return true;
+  }
 
   if (parts.length === 3 && req.method === "GET") {
     deps.json(res, 200, { rows: await listPrivateEvalSets(deps.repoRoot) });
@@ -394,6 +409,7 @@ export async function handleEvalRoute(
             sourceLocale: executingBatch.sourceLanguage,
             targetLocale: executingBatch.targetLanguage,
             ...model,
+            requestBudget: await deps.resolveModelPromptTokenBudget?.(model.modelProvider, model.modelId),
             thinkingLevel,
             generate: deps.runSingleGeneration!,
           });
@@ -434,7 +450,7 @@ export async function handleEvalRoute(
     };
     if (body.background === true || body.async === true) {
       void execute().catch((error) => {
-        console.error("private eval background run failed", error);
+        safeLogger.error("private_eval.background_run_failed", { error });
       }).finally(() => {
         deps.activeRuns?.unregister(run.runId);
       });
@@ -450,7 +466,10 @@ export async function handleEvalRoute(
   }
 
   if (parts[4] === "runs" && parts.length === 5 && req.method === "GET") {
-    deps.json(res, 200, { rows: await listReconciledPrivateEvalRuns(deps, evalSetId) });
+    const rows = deps.allowExecution === true
+      ? await listReconciledPrivateEvalRuns(deps, evalSetId)
+      : await listPrivateEvalRuns(deps.repoRoot, evalSetId);
+    deps.json(res, 200, { rows });
     return true;
   }
 

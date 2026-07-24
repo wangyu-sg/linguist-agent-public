@@ -12,10 +12,13 @@ import {
   reindexLibrary,
   removeLibraryDocument,
   revokeAssistantMemory,
+  searchAssistantMemories,
   searchLibrary,
   proposeAssistantMemory,
   type AssistantMemoryKind,
+  type AssistantMemoryPersistence,
   type AssistantMemoryScope,
+  type LibraryPersistence,
   type LibraryRetrievalMode,
   type LibraryScope,
   type LocalEmbeddingPackStatus,
@@ -28,6 +31,8 @@ export interface AssistantLibraryRouteDeps {
   inspectEmbeddingPack?: (repoRoot: string) => Promise<LocalEmbeddingPackStatus>;
   installEmbeddingPack?: (repoRoot: string) => Promise<LocalEmbeddingPackStatus>;
   acquireCapabilityMutation?: () => (() => void) | undefined;
+  assistantMemoryStore?: AssistantMemoryPersistence;
+  assistantLibraryStore?: LibraryPersistence;
 }
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -52,13 +57,61 @@ function queryScope(url: URL): LibraryScope {
   return scopeFrom({ scope: url.searchParams.get("scope"), projectId: url.searchParams.get("projectId") });
 }
 
-function memoryScope(scope: LibraryScope): AssistantMemoryScope {
-  return scope;
+function memoryScopeFrom(value: { scope?: unknown; projectId?: unknown; clientId?: unknown; franchiseId?: unknown; locale?: unknown }): AssistantMemoryScope {
+  if (value.scope === "personal") return { kind: "personal" };
+  if (value.scope === "project") {
+    const projectId = string(value.projectId);
+    if (!projectId) throw new Error("projectId is required for Project memory.");
+    return { kind: "project", projectId };
+  }
+  if (value.scope === "client") {
+    const clientId = string(value.clientId);
+    if (!clientId) throw new Error("clientId is required for Client memory.");
+    return { kind: "client", clientId };
+  }
+  if (value.scope === "franchise") {
+    const franchiseId = string(value.franchiseId);
+    if (!franchiseId) throw new Error("franchiseId is required for Franchise memory.");
+    return { kind: "franchise", franchiseId };
+  }
+  if (value.scope === "locale") {
+    const locale = string(value.locale);
+    if (!locale) throw new Error("locale is required for Locale memory.");
+    return { kind: "locale", locale };
+  }
+  throw new Error("Memory scope must be personal, client, franchise, project, or locale.");
+}
+
+function memoryQueryScope(url: URL): AssistantMemoryScope {
+  return memoryScopeFrom({
+    scope: url.searchParams.get("scope"),
+    projectId: url.searchParams.get("projectId"),
+    clientId: url.searchParams.get("clientId"),
+    franchiseId: url.searchParams.get("franchiseId"),
+    locale: url.searchParams.get("locale"),
+  });
+}
+
+function memoryRecallContext(url: URL) {
+  const primary = memoryQueryScope(url);
+  const projectId = string(url.searchParams.get("projectId"));
+  const clientId = string(url.searchParams.get("clientId"));
+  const franchiseId = string(url.searchParams.get("franchiseId"));
+  const locale = string(url.searchParams.get("locale"));
+  return {
+    ...(primary.kind === "project" || projectId ? { projectId: primary.kind === "project" ? primary.projectId : projectId } : {}),
+    ...(primary.kind === "client" || clientId ? { clientId: primary.kind === "client" ? primary.clientId : clientId } : {}),
+    ...(primary.kind === "franchise" || franchiseId ? { franchiseId: primary.kind === "franchise" ? primary.franchiseId : franchiseId } : {}),
+    ...(primary.kind === "locale" || locale ? { locale: primary.kind === "locale" ? primary.locale : locale } : {}),
+    includePersonal: url.searchParams.get("includePersonal") !== "false",
+  };
 }
 
 function sourcePaths(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim());
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string" && item.trim())) {
+    throw new Error("sourcePaths must be an array of non-empty strings.");
+  }
+  return value.map((item) => item.trim());
 }
 
 function retrievalMode(value: unknown): LibraryRetrievalMode {
@@ -74,6 +127,11 @@ function finiteInt(value: unknown, label: string): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1) throw new Error(`${label} must be a positive integer.`);
   return parsed;
+}
+
+function stringArray(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) throw new Error(`${label} must be an array of non-empty strings.`);
+  return value.map((item) => (item as string).trim());
 }
 
 function badRequest(deps: AssistantLibraryRouteDeps, res: ServerResponse, error: unknown): true {
@@ -93,7 +151,7 @@ export async function handleAssistantLibraryRoute(
   try {
     if (parts[1] === "library") {
       if (parts.length === 2 && req.method === "GET") {
-        deps.json(res, 200, await readLibraryCatalog(deps.repoRoot, queryScope(url)));
+        deps.json(res, 200, await readLibraryCatalog(deps.repoRoot, queryScope(url), { persistence: deps.assistantLibraryStore }));
         return true;
       }
       if (parts[2] === "search" && parts.length === 3 && req.method === "GET") {
@@ -106,6 +164,7 @@ export async function handleAssistantLibraryRoute(
           includePersonal: scope.kind === "project" ? url.searchParams.get("includePersonal") !== "false" : false,
           retrievalMode: retrievalMode(url.searchParams.get("retrievalMode")),
           limit: url.searchParams.has("limit") ? finiteInt(url.searchParams.get("limit"), "limit") : undefined,
+          persistence: deps.assistantLibraryStore,
         }));
         return true;
       }
@@ -118,6 +177,7 @@ export async function handleAssistantLibraryRoute(
           scope: scopeFrom(body),
           sourcePaths: paths,
           semantic: body.semantic === false ? false : true,
+          persistence: deps.assistantLibraryStore,
         });
         deps.json(res, 201, result);
         return true;
@@ -128,13 +188,14 @@ export async function handleAssistantLibraryRoute(
         deps.json(res, 200, await reindexLibrary(deps.repoRoot, {
           scope: scopeFrom(body),
           semantic: body.semantic === false ? false : true,
+          persistence: deps.assistantLibraryStore,
         }));
         return true;
       }
       if (parts[2] === "documents" && parts.length === 4 && req.method === "DELETE") {
         const body = object(await deps.readBody(req)) ?? {};
         const scope = body.scope ? scopeFrom(body) : queryScope(url);
-        deps.json(res, 200, await removeLibraryDocument(deps.repoRoot, { scope, documentId: decodeURIComponent(parts[3]!) }));
+        deps.json(res, 200, await removeLibraryDocument(deps.repoRoot, { scope, documentId: decodeURIComponent(parts[3]!), persistence: deps.assistantLibraryStore }));
         return true;
       }
       deps.json(res, 405, { error: { code: "method_not_allowed", message: "Unsupported Library operation." } });
@@ -164,9 +225,21 @@ export async function handleAssistantLibraryRoute(
     }
 
     if (parts[1] === "memories") {
+      if (parts.length === 3 && parts[2] === "search" && req.method === "GET") {
+        const query = string(url.searchParams.get("q"));
+        if (!query) throw new Error("q is required for Memory recall preview.");
+        deps.json(res, 200, await searchAssistantMemories(deps.repoRoot, {
+          query,
+          context: memoryRecallContext(url),
+          retrievalMode: retrievalMode(url.searchParams.get("retrievalMode")),
+          limit: url.searchParams.has("limit") ? finiteInt(url.searchParams.get("limit"), "limit") : undefined,
+          store: deps.assistantMemoryStore,
+        }));
+        return true;
+      }
       if (parts.length === 2 && req.method === "GET") {
-        const scope = memoryScope(queryScope(url));
-        deps.json(res, 200, { scope, memories: await listAssistantMemories(deps.repoRoot, scope) });
+        const scope = memoryQueryScope(url);
+        deps.json(res, 200, { scope, memories: await listAssistantMemories(deps.repoRoot, scope, { store: deps.assistantMemoryStore }) });
         return true;
       }
       if (parts.length === 2 && req.method === "POST") {
@@ -177,7 +250,7 @@ export async function handleAssistantLibraryRoute(
         const text = string(body.text);
         if (!taskId || !text) throw new Error("Memory proposal requires text and source.taskId.");
         const memory = await proposeAssistantMemory(deps.repoRoot, {
-          scope: memoryScope(scopeFrom(body)),
+          scope: memoryScopeFrom(body),
           kind: memoryKind(body.kind),
           text,
           source: {
@@ -185,6 +258,10 @@ export async function handleAssistantLibraryRoute(
             activityId: string(source.activityId),
             artifactId: string(source.artifactId),
           },
+          validFrom: body.validFrom === undefined ? undefined : string(body.validFrom),
+          validUntil: body.validUntil === undefined ? undefined : string(body.validUntil),
+          conflictKey: body.conflictKey === undefined ? undefined : string(body.conflictKey),
+          store: deps.assistantMemoryStore,
         });
         deps.json(res, 201, { memory });
         return true;
@@ -193,26 +270,36 @@ export async function handleAssistantLibraryRoute(
       if (id && parts.length === 4 && parts[3] === "confirm" && req.method === "POST") {
         const body = object(await deps.readBody(req));
         if (!body) throw new Error("Memory confirmation requires scope.");
-        deps.json(res, 200, { memory: await confirmAssistantMemory(deps.repoRoot, { scope: memoryScope(scopeFrom(body)), id, actor: "user" }) });
+        deps.json(res, 200, { memory: await confirmAssistantMemory(deps.repoRoot, {
+          scope: memoryScopeFrom(body),
+          id,
+          actor: "user",
+          supersedes: body.supersedes === undefined ? undefined : stringArray(body.supersedes, "supersedes"),
+          store: deps.assistantMemoryStore,
+        }) });
         return true;
       }
       if (id && parts.length === 3 && req.method === "PATCH") {
         const body = object(await deps.readBody(req));
         if (!body) throw new Error("Memory edit requires scope and expectedRevision.");
         deps.json(res, 200, { memory: await editAssistantMemory(deps.repoRoot, {
-          scope: memoryScope(scopeFrom(body)),
+          scope: memoryScopeFrom(body),
           id,
           expectedRevision: finiteInt(body.expectedRevision, "expectedRevision"),
           text: body.text === undefined ? undefined : string(body.text),
           kind: body.kind === undefined ? undefined : memoryKind(body.kind),
+          validFrom: body.validFrom === undefined ? undefined : string(body.validFrom),
+          validUntil: body.validUntil === undefined ? undefined : body.validUntil === null ? null : string(body.validUntil),
+          conflictKey: body.conflictKey === undefined ? undefined : body.conflictKey === null ? null : string(body.conflictKey),
           actor: "user",
+          store: deps.assistantMemoryStore,
         }) });
         return true;
       }
       if (id && parts.length === 3 && req.method === "DELETE") {
         const body = object(await deps.readBody(req));
-        const scope = body?.scope ? scopeFrom(body) : queryScope(url);
-        deps.json(res, 200, { memory: await revokeAssistantMemory(deps.repoRoot, { scope: memoryScope(scope), id, actor: "user" }) });
+        const scope = body?.scope ? memoryScopeFrom(body) : memoryQueryScope(url);
+        deps.json(res, 200, { memory: await revokeAssistantMemory(deps.repoRoot, { scope, id, actor: "user", store: deps.assistantMemoryStore }) });
         return true;
       }
       deps.json(res, 405, { error: { code: "method_not_allowed", message: "Unsupported memory operation." } });

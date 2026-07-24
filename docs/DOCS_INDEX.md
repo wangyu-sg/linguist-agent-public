@@ -23,7 +23,22 @@ This index routes readers to current truth. Git and `CHANGELOG.md` retain histor
 | `docs/KNOWN_RISKS.md` | RC-consumed risk register |
 | `docs/RELEASE_CANDIDATE.md` | Synthetic two-batch RC method |
 | `docs/DOCUMENTATION_MAINTENANCE.md` | Source-of-truth and sync rules |
+| `docs/adr/0001-sqlite-storage-boundary.md` | Accepted LA-062 storage authority, migration, backup, rollback and export boundary |
 | `.pi/APPEND_SYSTEM.md` | Always-on CAT runtime constitution; no roadmap/history |
+
+## Refactor control plane
+
+`TODO.md` is the human unfinished-work entry. The following seven documents are the sole detailed refactor control plane and are validated together by `npm run roadmap:test`:
+
+- `docs/roadmap/CURRENT_REALITY_REPORT.md`
+- `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`
+- `docs/roadmap/RISK_REGISTER.md`
+- `docs/roadmap/DELETION_CANDIDATES.md`
+- `docs/roadmap/MIGRATION_MATRIX.md`
+- `docs/roadmap/UI_GAP_MATRIX.md`
+- `docs/roadmap/IMPLEMENTATION_QUEUE.md`
+
+The earlier master blueprint is design input only and cannot authorize work. Epic, Gate, and Decision rows in the queue are non-executable.
 
 ## Maintained frontend
 
@@ -32,6 +47,8 @@ This index routes readers to current truth. Git and `CHANGELOG.md` retain histor
 - `apps/desktop/docs/electron-acceptance/`: acceptance harness protocol and baselines.
 - `DESIGN.md`: current visual language.
 - `design-qa.md`: open real-machine P3 checklist.
+- `docs/ui/LA_UI_BEHAVIOR_SPEC.md`: LA-owned clean-room, public UI behavior contract.
+- `docs/ui/codex-ui-spec-full.md`: restricted historical research input only; non-canonical and not an implementation contract. Retention in public distribution remains a user/legal decision.
 
 There is no maintained SwiftUI or browser frontend. Any prose that treats `apps/mac`, `packages/cat-web`, Swift, or Sparkle as current is wrong.
 

@@ -93,6 +93,9 @@ export async function verifyRuntimeBundle(bundleRoot) {
   assert(entries.includes("package-lock.json"), "Bundled runtime archive is missing package-lock.json.");
   assert(entries.includes("runtime-launcher.mjs"), "Bundled runtime archive is missing its launcher.");
   assert(entries.includes("packages/cat-server/src/server.js"), "Bundled runtime archive is missing the compiled server.");
+  assert(entries.includes("packages/cat-server/src/general_run_worker_entry.js"), "Bundled runtime archive is missing the General Run worker entry.");
+  assert(entries.includes("packages/cat-server/src/cat_run_worker_entry.js"), "Bundled runtime archive is missing the CAT/Eval Run worker entry.");
+  assert(entries.includes("packages/cat-runtime/src/extension_host_entry.js"), "Bundled runtime archive is missing the isolated Extension Host entry.");
   assert(entries.includes("packages/cat-server/src/install_resident.js"), "Bundled runtime archive is missing the compiled resident installer.");
   assert(entries.includes("node_modules/@earendil-works/pi-coding-agent/package.json"), "Bundled runtime archive is missing production Pi dependencies.");
   assert(entries.includes("native-capabilities/npm/package-lock.json"), "Bundled runtime archive is missing the native capability lock.");

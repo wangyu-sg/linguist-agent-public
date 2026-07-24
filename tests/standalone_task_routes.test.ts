@@ -19,6 +19,8 @@ let acceptedMessage: {
   modelProvider?: string;
   modelId?: string;
   thinkingLevel?: string;
+  executionProfile?: "fast" | "balanced" | "best";
+  attachmentGrantIds?: string[];
 } | undefined;
 
 async function request(
@@ -80,6 +82,9 @@ try {
   assert.equal((await request("POST", "/api/tasks", { title: "Wrong kind", kind: "translation" })).status, 400);
   assert.equal((await request("POST", "/api/tasks", { title: "   " })).status, 400);
   assert.equal((await request("POST", "/api/tasks", { initialMessage: "Do this now" })).status, 400);
+  const unknownCreateField = await request("POST", "/api/tasks", { title: "No surprise", surprise: true });
+  assert.equal(unknownCreateField.status, 400);
+  assert.match(String(unknownCreateField.data.error), /unknown field surprise/i);
 
   const listed = await request("GET", "/api/tasks");
   assert.equal(listed.status, 200);
@@ -173,6 +178,42 @@ try {
     modelId: "model-two",
     thinkingLevel: "high",
   });
+  const balancedProfileResponse = await request("POST", "/api/tasks/same-id/messages", {
+    message: "Use the known balanced profile",
+    executionProfile: "balanced",
+  }, accepted);
+  assert.equal(balancedProfileResponse.status, 202);
+  assert.deepEqual(acceptedMessage, {
+    taskId: "same-id",
+    message: "Use the known balanced profile",
+    delivery: "auto",
+    executionProfile: "balanced",
+  });
+  const ambiguousProfileSelection = await request("POST", "/api/tasks/same-id/messages", {
+    message: "This must fail",
+    executionProfile: "best",
+    modelProvider: "fixture",
+    modelId: "model-two",
+  }, accepted);
+  assert.equal(ambiguousProfileSelection.status, 400);
+  assert.match(ambiguousProfileSelection.data.error, /cannot be combined/);
+  const attachmentSelection = await request("POST", "/api/tasks/same-id/messages", {
+    message: "Read the selected files",
+    attachmentGrantIds: [fileGrant.data.grant.id],
+  }, accepted);
+  assert.equal(attachmentSelection.status, 202);
+  assert.deepEqual(acceptedMessage, {
+    taskId: "same-id",
+    message: "Read the selected files",
+    delivery: "auto",
+    attachmentGrantIds: [fileGrant.data.grant.id],
+  });
+  const malformedAttachmentSelection = await request("POST", "/api/tasks/same-id/messages", {
+    message: "This must fail",
+    attachmentGrantIds: [""],
+  }, accepted);
+  assert.equal(malformedAttachmentSelection.status, 400);
+  assert.match(malformedAttachmentSelection.data.error, /attachmentGrantIds/);
   const incompleteModelSelection = await request("POST", "/api/tasks/same-id/messages", {
     message: "This must fail",
     modelProvider: "fixture",

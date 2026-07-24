@@ -21,14 +21,18 @@ export const DEFAULT_KEYCHAIN = join(homedir(), "Library", "Keychains", "login.k
 export const APP_ICON = resolve(DESKTOP_ROOT, "resources/AppIcon.icns");
 
 export const PACKAGED_SOURCE_FILES = Object.freeze([
-  "src/main.mjs",
-  "src/preload.cjs",
-  "src/desktop-security.mjs",
-  "src/native-dialogs.mjs",
-  "src/runtime-client.mjs",
-  "src/runtime-installer.mjs",
-  "src/notification-policy.mjs",
-  "src/rich-artifact-export.mjs",
+  "dist/electron/main.js",
+  "dist/electron/preload.cjs",
+  "dist/electron/ipc-contract.cjs",
+  "dist/electron/workspace-capabilities.cjs",
+  "dist/electron/desktop-security.mjs",
+  "dist/electron/native-dialogs.mjs",
+  "dist/electron/native-file-handles.mjs",
+  "dist/electron/runtime-client.mjs",
+  "dist/electron/runtime-transport.mjs",
+  "dist/electron/runtime-installer.mjs",
+  "dist/electron/notification-policy.mjs",
+  "dist/electron/rich-artifact-export.mjs",
 ]);
 
 export function parseCodeSigningIdentities(output) {

@@ -15,7 +15,7 @@ import type { TaskRecord } from "../../../../../packages/cat-data/src/task_works
 import { workspaceClient } from "../data/workspace-client.ts";
 import type { WorkspaceStore } from "../data/workspace-store.ts";
 import { IconButton } from "../ui/index.ts";
-import { commandItems, mergeCommandTasks, nextCommandIndex, searchCommands, type CommandIcon, type CommandSelection } from "./command-model.ts";
+import { commandItems, groupCommandResults, mergeCommandTasks, nextCommandIndex, searchCommands, type CommandIcon, type CommandSelection } from "./command-model.ts";
 import "./command-palette.css";
 
 const taskCache = new Map<string, TaskRecord[]>();
@@ -55,6 +55,7 @@ export function CommandPalette({ store, onDismiss, onSelect }: CommandPalettePro
   }, [projectTasks, state.projects, state.tasks]);
   const items = useMemo(() => commandItems({ ...state, tasks: allTasks, chats: state.chats }), [allTasks, state]);
   const results = useMemo(() => searchCommands(items, query), [items, query]);
+  const resultGroups = useMemo(() => groupCommandResults(results), [results]);
   const requestedIndex = activeId ? results.findIndex((item) => item.id === activeId) : -1;
   const resolvedActiveIndex = requestedIndex >= 0 ? requestedIndex : results.length ? 0 : -1;
   const activeResult = results[resolvedActiveIndex];
@@ -149,32 +150,37 @@ export function CommandPalette({ store, onDismiss, onSelect }: CommandPalettePro
       </div>
 
       <div className="command-palette__results" id={listId} role="listbox" aria-label="搜索结果">
-        {results.length ? results.map((item, index) => {
-          const Icon = icons[item.icon];
-          return (
-            <button
-              key={item.id}
-              id={`command-result-${index}`}
-              type="button"
-              role="option"
-              aria-selected={index === resolvedActiveIndex}
-              aria-label={`${item.type}，${item.title}，${item.detail}`}
-              title={`${item.type} · ${item.title}\n${item.detail}`}
-              data-active={index === resolvedActiveIndex || undefined}
-              className="command-palette__result"
-              onPointerMove={() => setActiveId(item.id)}
-              onFocus={() => setActiveId(item.id)}
-              onClick={() => choose(item.selection)}
-            >
-              <span className="command-palette__result-icon"><Icon aria-hidden="true" /></span>
-              <span className="command-palette__result-copy">
-                <strong>{item.title}</strong>
-                <span>{item.detail}</span>
-              </span>
-              <span className="command-palette__result-type">{item.type}</span>
-            </button>
-          );
-        }) : (
+        {resultGroups.length ? resultGroups.map((group) => (
+          <div className="command-palette__group" role="group" aria-label={group.type} key={group.type}>
+            <div className="command-palette__group-heading">{group.type}</div>
+            {group.items.map((item) => {
+              const Icon = icons[item.icon];
+              return (
+                <button
+                  key={item.id}
+                  id={`command-result-${item.index}`}
+                  type="button"
+                  role="option"
+                  aria-selected={item.index === resolvedActiveIndex}
+                  aria-label={`${item.type}，${item.title}，${item.detail}`}
+                  title={`${item.type} · ${item.title}\n${item.detail}`}
+                  data-active={item.index === resolvedActiveIndex || undefined}
+                  className="command-palette__result"
+                  onPointerMove={() => setActiveId(item.id)}
+                  onFocus={() => setActiveId(item.id)}
+                  onClick={() => choose(item.selection)}
+                >
+                  <span className="command-palette__result-icon"><Icon aria-hidden="true" /></span>
+                  <span className="command-palette__result-copy">
+                    <strong>{item.title}</strong>
+                    <span>{item.detail}</span>
+                  </span>
+                  <span className="command-palette__result-type">{item.type}</span>
+                </button>
+              );
+            })}
+          </div>
+        )) : (
           <p className="command-palette__empty" role="status">没有匹配的项目、Batch、Task 或命令。</p>
         )}
       </div>

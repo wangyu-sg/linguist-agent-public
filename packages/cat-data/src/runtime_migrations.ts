@@ -253,7 +253,7 @@ async function upgradeProjectTaskFiles(stagedDataRoot: string): Promise<void> {
   for (const task of await durableTaskPaths(stagedDataRoot)) {
     if (task.kind !== "project") continue;
     const rawSnapshot = JSON.parse(await readFile(task.snapshotPath, "utf8")) as unknown;
-    await writeJsonFile(task.snapshotPath, upgradeProjectSnapshot(rawSnapshot, task.projectId!, task.taskId));
+    await writeJsonFile(task.snapshotPath, upgradeProjectSnapshot(rawSnapshot, task.projectId!, task.taskId), { durability: "critical" });
     const rawEvents = await readFile(task.eventsPath, "utf8").catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return "";
       throw error;
@@ -479,7 +479,7 @@ async function importLegacyHomeTask(stagedRuntimeRoot: string, migratedAt: strin
     sourceKind: "legacy_home",
     sourceDigest: source.digest,
     importedAt: migratedAt,
-  });
+  }, { durability: "critical" });
   return taskId;
 }
 
@@ -589,7 +589,7 @@ export async function migrateRuntimeDataSchemaV2(
       backupId,
       ...(legacyHomeTaskId ? { legacyHomeTaskId } : {}),
     };
-    await writeJsonFile(join(stagedData, RUNTIME_DATA_SCHEMA_FILE), marker);
+    await writeJsonFile(join(stagedData, RUNTIME_DATA_SCHEMA_FILE), marker, { durability: "critical" });
     await verifyRuntimeDataSchemaV2(stagedRuntimeRoot);
     const migratedManifest = await buildManifest(stagedData, RUNTIME_DATA_SCHEMA_VERSION);
     await options.beforeSwap?.(stagedRuntimeRoot);
@@ -660,7 +660,7 @@ async function ensureBackup(runtimeRoot: string, input: {
     await rm(path, { recursive: true, force: true });
     throw new Error("Runtime data backup verification failed.");
   }
-  await writeJsonFile(manifestPath, copied);
+  await writeJsonFile(manifestPath, copied, { durability: "critical" });
 }
 
 /**

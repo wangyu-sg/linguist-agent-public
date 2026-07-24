@@ -1,9 +1,11 @@
 import type { ToolCallEventResult } from "@earendil-works/pi-coding-agent";
-import { catToolMetadataFor } from "@linguist-agent/cat-tools";
+import { resolveToolCapabilityManifest } from "./toolCapabilities.js";
 
-export type AgentPermissionMode = "ask" | "auto" | "full" | "custom";
+export type AgentPermissionMode = "ask" | "auto" | "custom";
 export type AgentPermissionDecision = "auto" | "ask" | "deny";
 export type AgentPermissionRiskClass = "low" | "medium" | "high" | "protected" | "non_picker";
+export type AgentPermissionRequestKind = "tool" | "pi_resource_trust";
+export type AgentPermissionAction = "allow_once" | "allow_conversation" | "always_allow" | "deny";
 export type AgentPermissionDomain =
   | "fileRead"
   | "fileWrite"
@@ -22,6 +24,7 @@ export type EditableAgentPermissionDomain = Exclude<
 >;
 
 export type AgentPermissionRules = Partial<Record<EditableAgentPermissionDomain, AgentPermissionDecision>>;
+/** Legacy wire value accepted from older clients and fixtures. */
 export type PermissionUserDecision = "approve" | "deny";
 
 export interface AgentPermissionPreset {
@@ -61,21 +64,36 @@ export interface AgentPermissionContract {
 
 export interface AgentPermissionRequest {
   requestId?: string;
+  taskId?: string;
+  runId?: string;
+  sessionId?: string;
+  projectId?: string;
+  /** Defaults to tool for legacy callers; all server-emitted requests include it. */
+  kind?: AgentPermissionRequestKind;
   toolName: string;
   domain: EditableAgentPermissionDomain;
   riskClass: AgentPermissionRiskClass;
   argsSummary: string;
-  sessionId?: string;
-  projectId?: string;
 }
 
 export interface AgentPermissionUserDecision {
-  decision: PermissionUserDecision;
+  /** New scoped action. Optional only to keep old in-process callers source-compatible. */
+  action?: AgentPermissionAction;
+  /** Removed from the public UI, but accepted for old clients during migration. */
+  decision?: PermissionUserDecision;
   reason?: string;
 }
 
+export function agentPermissionAction(decision: AgentPermissionUserDecision): AgentPermissionAction {
+  if (decision.action === "allow_once"
+    || decision.action === "allow_conversation"
+    || decision.action === "always_allow"
+    || decision.action === "deny") return decision.action;
+  return decision.decision === "approve" ? "allow_once" : "deny";
+}
+
 export interface AgentToolPermissionDomainResolution {
-  controlledBy: "permission" | "cat-governance";
+  controlledBy: "permission" | "cat-governance" | "undeclared";
   domain: EditableAgentPermissionDomain | "catProposalFirst";
   riskClass: AgentPermissionRiskClass;
   reason?: string;
@@ -215,7 +233,7 @@ const EDITABLE_DOMAINS: AgentPermissionDomainInfo[] = [
     label: "Bridge / MCP / browser",
     description: "External bridge tools including MCP and browser-style surfaces. Standing forbidden bridges stay blocked.",
     riskClass: "high",
-    tools: ["mcp__", "mcp_bridge", "browser", "browser_automation", "weather"],
+    tools: ["mcp_bridge", "browser", "browser_automation", "weather"],
   },
 ];
 
@@ -237,14 +255,6 @@ const AUTO_APPROVAL_RULES: AgentPermissionRules = {
   bridge: "ask",
 };
 
-const FULL_ACCESS_RULES: AgentPermissionRules = {
-  fileRead: "auto",
-  fileWrite: "auto",
-  webRead: "auto",
-  bash: "auto",
-  bridge: "auto",
-};
-
 export const AGENT_PERMISSION_PRESETS: AgentPermissionPreset[] = [
   {
     id: "ask",
@@ -254,15 +264,9 @@ export const AGENT_PERMISSION_PRESETS: AgentPermissionPreset[] = [
   },
   {
     id: "auto",
-    label: "替我批准",
+    label: "替我审批",
     description: "常规文件/联网自动；bash 和 bridge 先询问。",
     rules: AUTO_APPROVAL_RULES,
-  },
-  {
-    id: "full",
-    label: "完全访问",
-    description: "通用工具尽量自动；CAT 改稿、apply、export 仍走 proposal-first。",
-    rules: FULL_ACCESS_RULES,
   },
   {
     id: "custom",
@@ -276,7 +280,9 @@ const PRESETS_BY_ID = new Map(AGENT_PERMISSION_PRESETS.map((preset) => [preset.i
 
 function presetRules(mode: AgentPermissionMode): AgentPermissionRules {
   if (mode === "custom") return AUTO_APPROVAL_RULES;
-  return PRESETS_BY_ID.get(mode)?.rules ?? AUTO_APPROVAL_RULES;
+  const preset = PRESETS_BY_ID.get(mode);
+  if (!preset) throw new Error(`Unknown agent permission mode: ${String(mode)}.`);
+  return preset.rules;
 }
 
 function normalizeDecision(value: unknown): AgentPermissionDecision | undefined {
@@ -284,7 +290,8 @@ function normalizeDecision(value: unknown): AgentPermissionDecision | undefined 
 }
 
 export function normalizeAgentPermissionMode(value: unknown): AgentPermissionMode {
-  return value === "ask" || value === "auto" || value === "full" || value === "custom" ? value : "auto";
+  if (value === "ask" || value === "auto" || value === "custom") return value;
+  throw new Error("permission mode must be ask, auto, or custom; Stable does not support full access. Select a supported mode to repair this setting.");
 }
 
 export function normalizeAgentPermissionRules(value: unknown): AgentPermissionRules {
@@ -301,7 +308,7 @@ export function buildAgentPermissionContract(input: {
   mode?: AgentPermissionMode;
   customRules?: AgentPermissionRules;
 } = {}): AgentPermissionContract {
-  const mode = input.mode ?? "auto";
+  const mode = normalizeAgentPermissionMode(input.mode ?? "auto");
   const base = presetRules(mode);
   const customRules = normalizeAgentPermissionRules(input.customRules ?? {});
   const effectiveRules: AgentPermissionRules = mode === "custom" ? { ...AUTO_APPROVAL_RULES, ...customRules } : base;
@@ -378,50 +385,36 @@ export function buildAgentPermissionContract(input: {
   };
 }
 
-function lowerToolName(toolName: string): string {
-  return toolName.trim().toLowerCase();
-}
-
-function toolInDomain(toolName: string, domain: AgentPermissionDomainInfo): boolean {
-  const lower = lowerToolName(toolName);
-  return domain.tools.some((tool) => (tool.endsWith("__") ? lower.startsWith(tool) : lower === tool));
-}
-
 export function resolveAgentToolPermissionDomain(toolName: string): AgentToolPermissionDomainResolution {
-  const normalizedToolName = lowerToolName(toolName);
-  if (normalizedToolName === "ask_user" || normalizedToolName === "prepare_team_execution") {
+  const manifest = resolveToolCapabilityManifest(toolName);
+  if (!manifest) {
+    return {
+      controlledBy: "undeclared",
+      domain: "bridge",
+      riskClass: "protected",
+      reason: `TOOL_CAPABILITY_UNDECLARED: ${toolName} has no reviewed production capability manifest.`,
+    };
+  }
+  if (manifest.authority === "cat-governance") {
     return {
       controlledBy: "cat-governance",
       domain: "catProposalFirst",
       riskClass: "non_picker",
-      reason: normalizedToolName === "ask_user"
-        ? "ask_user is the canonical Task Decision interaction and must not create a second permission request."
-        : "prepare_team_execution only creates a server-owned canonical Team proposal; its required Task Decision is the approval boundary.",
+      reason: `${toolName} is governed by its declared LA capability and canonical product gates, not the autonomy picker.`,
     };
   }
-  const metadata = catToolMetadataFor(toolName);
-  if (metadata && metadata.category !== "bridge") {
+  if (!manifest.permissionDomain) {
     return {
-      controlledBy: "cat-governance",
-      domain: "catProposalFirst",
-      riskClass: "non_picker",
-      reason: "CAT-native tools remain governed by proposal/evidence/write/delivery policy, not the autonomy picker.",
+      controlledBy: "undeclared",
+      domain: "bridge",
+      riskClass: "protected",
+      reason: `TOOL_CAPABILITY_UNDECLARED: ${toolName} has no permission domain.`,
     };
-  }
-  for (const domain of EDITABLE_DOMAINS) {
-    if (toolInDomain(toolName, domain)) {
-      return {
-        controlledBy: "permission",
-        domain: domain.id,
-        riskClass: domain.riskClass,
-      };
-    }
   }
   return {
     controlledBy: "permission",
-    domain: "bridge",
-    riskClass: "high",
-    reason: "Unknown inherited or external tool is treated as high-impact bridge autonomy.",
+    domain: manifest.permissionDomain,
+    riskClass: manifest.riskClass === "non-picker" ? "non_picker" : manifest.riskClass,
   };
 }
 
@@ -446,11 +439,19 @@ export async function evaluateAgentToolPermissionCall(input: {
   toolName: string;
   input: unknown;
   contract: AgentPermissionContract;
+  taskId?: string;
+  runId?: string;
   projectId?: string;
   sessionId?: string;
   requestDecision?: (request: AgentPermissionRequest) => Promise<AgentPermissionUserDecision>;
 }): Promise<ToolCallEventResult | undefined> {
   const resolved = resolveAgentToolPermissionDomain(input.toolName);
+  if (resolved.controlledBy === "undeclared") {
+    return {
+      block: true,
+      reason: resolved.reason,
+    };
+  }
   if (resolved.controlledBy === "cat-governance") return undefined;
   const domain = resolved.domain as EditableAgentPermissionDomain;
   const entry = policyEntryFor(input.contract, domain);
@@ -468,6 +469,9 @@ export async function evaluateAgentToolPermissionCall(input: {
     };
   }
   const decision = await input.requestDecision({
+    kind: "tool",
+    taskId: input.taskId,
+    runId: input.runId,
     toolName: input.toolName,
     domain,
     riskClass: resolved.riskClass,
@@ -475,7 +479,7 @@ export async function evaluateAgentToolPermissionCall(input: {
     projectId: input.projectId,
     sessionId: input.sessionId,
   });
-  if (decision.decision === "approve") return undefined;
+  if (agentPermissionAction(decision) !== "deny") return undefined;
   return {
     block: true,
     reason: decision.reason || `User denied ${domain} tool ${input.toolName}.`,

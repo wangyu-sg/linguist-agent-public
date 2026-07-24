@@ -23,7 +23,7 @@ async function updateKind(paths) {
 
 test("local updater classifies Electron, runtime, and documentation changes", async () => {
   assert.equal(await updateKind(""), "none");
-  assert.equal(await updateKind("apps/desktop/src/main.mjs"), "app_runtime");
+  assert.equal(await updateKind("apps/desktop/src/main.ts"), "app_runtime");
   assert.equal(await updateKind("apps/desktop/package-lock.json\npackages/cat-server/src/server.ts"), "app_runtime");
   assert.equal(await updateKind("packages/cat-server/src/server.ts"), "runtime");
   assert.equal(await updateKind("apps/desktop/docs/electron-acceptance/README.md"), "docs");
@@ -49,6 +49,7 @@ test("local updater uses the signed Electron package and dynamic bundle executab
   const source = await readFile(updateScript, "utf8");
   assert.match(source, /npm --prefix "\$REPO_ROOT\/apps\/desktop" run package/);
   assert.match(source, /npm --prefix "\$REPO_ROOT\/apps\/desktop" run verify -- --app="\$app_dir"/);
+  assert.doesNotMatch(source, /npm --prefix "\$REPO_ROOT\/apps\/desktop" install/);
   assert.match(source, /bundle_plist_value "\$1" CFBundleExecutable/);
   assert.doesNotMatch(source, /apps\/mac\/script\/build_and_run\.sh/);
 });

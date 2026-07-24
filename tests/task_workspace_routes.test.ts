@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { EventEmitter } from "node:events";
 import { createTaskWorkspace } from "@linguist-agent/cat-data";
+import { bindTaskDecision } from "../packages/cat-server/src/task_decision_binding.js";
 import {
   formatTaskRuntimeScope,
   handleTaskWorkspaceRoute,
@@ -502,7 +503,7 @@ await workspace.appendGenerated({
   }, {
     type: "decision_upsert",
     agentThreadId: "thread-main",
-    decision: {
+    decision: bindTaskDecision({
       id: "decision-row-1",
       taskId: "task-one",
       runId: "run-one",
@@ -520,7 +521,7 @@ await workspace.appendGenerated({
       scope: { kind: "project", batchId: "batch-one", segmentIds: ["row-1"], sourceLocale: "zh-CN", targetLocale: "en-US" },
       createdAt: "2026-07-11T01:01:00.000Z",
       decidedAt: null,
-    },
+    }, { expiresAt: "2030-01-01T00:00:00.000Z" }),
   }],
 });
 
@@ -561,7 +562,7 @@ await workspace.appendGenerated({
   }, {
     type: "decision_upsert",
     agentThreadId: "thread-main",
-    decision: {
+    decision: bindTaskDecision({
       id: "decision-row-2",
       taskId: "task-one",
       runId: "run-one",
@@ -576,7 +577,7 @@ await workspace.appendGenerated({
       scope: { kind: "project", batchId: "batch-one", segmentIds: ["row-2"], sourceLocale: "zh-CN", targetLocale: "en-US" },
       createdAt: "2026-07-11T01:02:00.000Z",
       decidedAt: null,
-    },
+    }, { expiresAt: "2030-01-01T00:00:00.000Z" }),
   }],
 });
 const lockedDecision = await request("POST", `/api/projects/${projectId}/tasks/task-one/decisions/decision-row-2`, {

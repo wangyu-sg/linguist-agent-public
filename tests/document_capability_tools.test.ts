@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createStandaloneFileGrant, createTaskWorkspace, type DocumentEvidenceV1 } from "@linguist-agent/cat-data";
+import { createStandaloneFileGrant, createTaskWorkspace } from "@linguist-agent/cat-data";
 import { createStandaloneDocumentTools } from "../packages/cat-tools/src/document-capability-tools.ts";
 
 test("General Core OCR tool writes a canonical reviewable Artifact inside the active Run", async () => {
@@ -29,19 +29,18 @@ test("General Core OCR tool writes a canonical reviewable Artifact inside the ac
         status: "active", canReceiveUserMessage: true, handoffSummary: null, latestActivityId: null, childThreadIds: [], createdAt: now, updatedAt: now,
       },
     }] });
-    const evidence: DocumentEvidenceV1 = {
-      schemaVersion: 1,
-      source: { path: source, sha256: "b".repeat(64), mimeType: "image/png" },
-      extraction: { route: "paddleocr", runtimeVersion: "managed", modelVersions: {}, createdAt: now },
-      pages: [{ page: 1, width: 10, height: 10, orientation: 0, blocks: [{ polygon: [[0, 0], [5, 0], [5, 5], [0, 5]], bbox: { x: 0, y: 0, width: 5, height: 5 }, text: "text", confidence: 0.2, orientation: 0 }] }],
-      overlay: { pages: [{ page: 1, width: 10, height: 10, polygons: [{ polygon: [[0, 0], [5, 0], [5, 5], [0, 5]], confidence: 0.2, text: "text" }] }] },
+    const routed = {
+      source: { sha256: "b".repeat(64), mimeType: "image/png" },
+      status: "complete" as const,
+      pages: [{ page: 1, status: "complete" as const, reason: "Local light OCR is selected.", backend: { id: "light-ocr" as const, version: "managed", ocr: true }, blockCount: 1 }],
+      blocks: [{ id: "page-1", kind: "paragraph" as const, text: "text", locator: { kind: "page" as const, page: 1, bbox: { x: 0, y: 0, width: 5, height: 5 } }, readingOrder: 1, provenance: { sourceDigest: "b".repeat(64), backend: { id: "light-ocr" as const, version: "managed", ocr: true }, confidence: 0.2, userCorrected: false } }],
     };
     const [tool, officeTool] = createStandaloneDocumentTools({
       runtimeRoot: root,
       taskId: "chat",
       runId: "run",
       agentThreadId: "run.main",
-      extract: async () => evidence,
+      routeDocument: async () => routed,
       runOffice: async (_root, request) => ({
         ok: true,
         sourcePath: request.sourcePath,
@@ -57,7 +56,7 @@ test("General Core OCR tool writes a canonical reviewable Artifact inside the ac
     const snapshot = await workspace.open({ kind: "standalone", taskId: "chat" });
     assert.equal(snapshot.artifacts[0]?.type, "document_evidence");
     assert.equal(snapshot.artifacts[0]?.status, "reviewable");
-    assert.equal((snapshot.artifacts[0]?.content.document as any)?.blocks.some((block: any) => block.type === "page_overlay"), true);
+    assert.equal((snapshot.artifacts[0]?.content.router as any)?.pages[0].backend.id, "light-ocr");
     assert.equal(snapshot.artifacts[0]?.scope.kind, "standalone");
     assert.deepEqual(snapshot.artifacts[0]?.scope.kind === "standalone" ? snapshot.artifacts[0].scope.fileGrantIds : [], [grant.grant.id]);
     assert.equal(snapshot.activities.at(-1)?.refs.artifactIds[0], snapshot.artifacts[0]?.id);

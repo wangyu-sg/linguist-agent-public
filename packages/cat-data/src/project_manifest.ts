@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path";
 import { createWorkspace, workspacePath, writeJsonFile } from "./workspace.js";
 import { scanProjectFolder, type ProjectScanReport } from "./project_scan.js";
 import { canonicalLocale } from "./locale.js";
+import { assertCatCoreLegacyAllowed, catCorePersistenceFor, readCatCoreReadCache } from "./cat_core_storage.js";
 
 export interface AssetRoleDecision {
   relPath: string;
@@ -61,6 +62,12 @@ function requiredLocale(value: string | undefined, label: "sourceLanguage" | "ta
   return canonicalLocale(value, label);
 }
 
+function projectManifestNotFound(projectId: string): NodeJS.ErrnoException {
+  const error = new Error(`Project manifest ${projectId} not found.`) as NodeJS.ErrnoException;
+  error.code = "ENOENT";
+  return error;
+}
+
 export function inferProjectId(rootPath: string): string {
   return asciiSlug(basename(resolve(rootPath)));
 }
@@ -114,9 +121,33 @@ function buildManifest(
 }
 
 export async function readProjectManifest(workspaceRoot: string, projectId: string): Promise<ProjectManifest> {
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  if (persistence) {
+    const manifest = await persistence.readProjectManifest(projectId);
+    if (!manifest) throw projectManifestNotFound(projectId);
+    return manifest;
+  }
+  const cached = await readCatCoreReadCache<ProjectManifest>(workspaceRoot, "manifest", projectId);
+  if (cached) return cached;
+  await assertCatCoreLegacyAllowed(workspaceRoot);
   const path = projectManifestPath(workspaceRoot, projectId);
   const raw = await readFile(path, "utf8");
   return JSON.parse(raw) as ProjectManifest;
+}
+
+async function writeProjectManifest(
+  workspaceRoot: string,
+  projectId: string,
+  manifest: ProjectManifest,
+  expected: ProjectManifest | null,
+): Promise<void> {
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  if (persistence) {
+    await persistence.writeProjectManifest(projectId, manifest, expected);
+    return;
+  }
+  await assertCatCoreLegacyAllowed(workspaceRoot);
+  await writeJsonFile(projectManifestPath(workspaceRoot, projectId), manifest);
 }
 
 export async function readProjectLocalePair(
@@ -142,6 +173,7 @@ async function readPreviousManifest(workspaceRoot: string, projectId: string): P
     return await readProjectManifest(workspaceRoot, projectId);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (error instanceof Error && error.message === `Project manifest ${projectId} not found.`) return undefined;
     throw error;
   }
 }
@@ -197,7 +229,7 @@ export async function createProjectManifest(
     assetRoleOverrides: options.assetRoleOverrides,
   });
   const path = projectManifestPath(workspaceRoot, projectId);
-  await writeJsonFile(path, manifest);
+  await writeProjectManifest(workspaceRoot, projectId, manifest, previous ?? null);
   return { manifest, path };
 }
 
@@ -211,6 +243,6 @@ export async function refreshProjectManifest(
   const manifest = buildManifest(projectId, scan, { previous });
   const changes = diffManifests(previous, manifest);
   const path = projectManifestPath(workspaceRoot, projectId);
-  await writeJsonFile(path, manifest);
+  await writeProjectManifest(workspaceRoot, projectId, manifest, previous);
   return { manifest, path, changes };
 }

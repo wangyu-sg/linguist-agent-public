@@ -1,7 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, unlink } from "node:fs/promises";
-import { relative, resolve } from "node:path";
 import {
   beginStopCatWorkflowRun,
   buildRolePassFromSubagentStatus,
@@ -49,15 +47,15 @@ import {
   type TeamRolePass,
   type TeamRoleProfile,
   type TeamRoleSettings,
+  type PromptRequestBudget,
   type TeamRunPlan,
   type TaskArtifact,
   type TaskDecision as TaskWorkspaceDecision,
   type TaskRun,
   type TaskRunEventDraft,
 } from "@linguist-agent/cat-data";
-import { prepareTeamEvidenceChildScope } from "@linguist-agent/cat-runtime";
-import { prepareSubagentTeamRoleRun, teamRoleAgentName } from "../subagent_team_adapter.js";
-import { readSubagentTaskActivityDrafts } from "../subagent_task_activity_bridge.js";
+import { bindTaskDecision } from "../task_decision_binding.js";
+import { workflowApplicationPort } from "../application/workflow_application_port.js";
 import { teamPackagePreflightBlockers, type TaskPackageRunResources } from "../task_package_profile.js";
 
 export interface WorkflowRouteDeps {
@@ -76,6 +74,7 @@ export interface WorkflowRouteDeps {
   readProjectAgentSettings?: (projectId: string) => Promise<{ teamRoleSettings?: TeamRoleSettings }>;
   writeProjectAgentSettings?: (projectId: string, patch: { teamRoleSettings?: TeamRoleSettings }) => Promise<unknown>;
   readTaskPackageRunResources?: (projectId: string, taskId: string) => Promise<TaskPackageRunResources>;
+  resolveModelPromptTokenBudget?: (provider?: string, modelId?: string) => Promise<PromptRequestBudget | undefined>;
 }
 
 export async function projectCreatedWorkflowTask(
@@ -218,26 +217,6 @@ function extractSubagentAsyncDir(value: unknown): string | undefined {
   const data = root.data && typeof root.data === "object" ? root.data as Record<string, unknown> : root;
   const details = data.details && typeof data.details === "object" ? data.details as Record<string, unknown> : undefined;
   return typeof details?.asyncDir === "string" ? details.asyncDir : undefined;
-}
-
-async function readInsideAsyncDir(asyncDir: string | undefined, path: string | undefined): Promise<string | undefined> {
-  if (!asyncDir || !path) return undefined;
-  const root = resolve(asyncDir);
-  const file = resolve(path);
-  return readInsideRoot(root, file);
-}
-
-async function readInsideRoot(root: string, path: string | undefined): Promise<string | undefined> {
-  if (!path) return undefined;
-  const file = resolve(root, path);
-  const rel = relative(root, file);
-  if (rel === ".." || rel.startsWith("../") || rel.startsWith("..\\") || resolve(rel) === rel) return undefined;
-  try {
-    return await readFile(file, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -873,9 +852,12 @@ async function ingestCompletedRoleOutput(input: {
 }): Promise<RoleOutputIngestResult> {
   if (input.rolePass.status !== "completed") return { ok: true, artifactsWritten: false };
   const configuredOutput = input.rolePass.subagentSpawnRequest?.params.output;
-  const outputText =
-    await readInsideRoot(resolve(input.repoRoot), configuredOutput) ??
-    await readInsideAsyncDir(input.asyncDir, input.statusOutputFile);
+  const outputText = await workflowApplicationPort.readRoleOutput({
+    repoRoot: input.repoRoot,
+    asyncDir: input.asyncDir,
+    configuredOutput,
+    statusOutputFile: input.statusOutputFile,
+  });
   const output = roleOutputJson(outputText);
   if (!output) return { ok: false, reason: "missing or invalid JSON" };
   const summary = typeof output.summary === "string" ? output.summary.trim() : "";
@@ -1105,36 +1087,37 @@ async function runTeamRole(input: {
     return runDeterministicDeliveryRole({ projectId, workflowId, deps });
   }
   const profile = (await readEffectiveTeamRoleSettings(projectId, deps)).profiles.find((row) => row.roleId === roleId);
+  const modelProvider = deps.optionalString(body.modelProvider) ?? profile?.provider;
+  const modelId = deps.optionalString(body.modelId) ?? profile?.modelId;
   const forbiddenContextFields = ["task", "hardConstraints", "evidence", "styleGuideRules", "transcript", "includeTranscript", "tokenBudget", "inputArtifactRefs", "contextManifestRef"]
     .filter((field) => Object.prototype.hasOwnProperty.call(body, field));
   if (forbiddenContextFields.length) {
     throw new Error(`Team role context is server-authored; remove: ${forbiddenContextFields.join(", ")}.`);
   }
-  const context = await prepareTeamRoleContext(deps.repoRoot, { projectId, workflowId, roleId });
+  const requestBudget = await deps.resolveModelPromptTokenBudget?.(modelProvider, modelId);
+  const context = await prepareTeamRoleContext(deps.repoRoot, {
+    projectId,
+    workflowId,
+    roleId,
+    requestBudget,
+    estimateToolSchemaTokens: workflowApplicationPort.estimateTeamToolSchemaTokens,
+  });
   if (context.status === "blocked") {
     return { status: 409, data: { workflowId, roleId, status: "blocked", blockers: context.blockers, contextManifest: context.manifest } };
   }
-  const childScope = await prepareTeamEvidenceChildScope({
+  const prepared = await workflowApplicationPort.prepareTeamRoleRun({
     repoRoot: deps.repoRoot,
     projectId,
     workflowId,
     roleId,
-    batchId: context.evidenceScope.batchId,
-    segmentIds: context.evidenceScope.segmentIds,
-    allowedTools: context.evidenceScope.allowedTools,
-  });
-  const prepared = prepareSubagentTeamRoleRun({
-    workflowId,
-    roleId,
+    evidenceScope: context.evidenceScope,
     task: context.prompt,
-    modelProvider: deps.optionalString(body.modelProvider) ?? profile?.provider,
-    modelId: deps.optionalString(body.modelId) ?? profile?.modelId,
+    modelProvider,
+    modelId,
     thinking: profile?.thinking,
     inputArtifactRefs: context.inputArtifactRefs,
     outputArtifactRefs: deps.optionalStringArray(body.outputArtifactRefs) ?? [],
-    contextManifestRef: `team-evidence-policy:${childScope.policyHash}`,
     contextManifest: context.manifest,
-    sessionDir: childScope.sessionDir,
   });
   let artifacts = await upsertTeamRolePass(deps.repoRoot, projectId, prepared.rolePass);
   await projectTeamRolePass(projectId, workflowId, roleId, prepared.rolePass, deps);
@@ -1158,7 +1141,7 @@ async function runTeamRole(input: {
       : undefined;
     if (!latest) {
       await sleep(750);
-      const [row] = await listSubagentAsyncStatuses({ sinceMs: startedAfter, agent: teamRoleAgentName(roleId) });
+      const [row] = await listSubagentAsyncStatuses({ sinceMs: startedAfter, agent: workflowApplicationPort.roleAgentName(roleId) });
       if (row) {
         latest = await buildRolePassFromSubagentStatus({
           workflowId,
@@ -1510,7 +1493,7 @@ async function projectTeamPreflight(
     {
       type: "decision_upsert",
       agentThreadId: mainThread.id,
-      decision: existingDecision ?? {
+      decision: existingDecision ?? bindTaskDecision({
         id: decisionId,
         taskId: workflow.taskId,
         runId: workflowId,
@@ -1532,7 +1515,7 @@ async function projectTeamPreflight(
         // canonical definition.
         createdAt: mainThread.createdAt,
         decidedAt: null,
-      },
+      }, { runPlanHash: plan.planHash }),
     },
   ];
   if (!snapshot.activities.some((activity) => activity.id === activityId)) {
@@ -1757,7 +1740,7 @@ async function projectTeamRolePass(
   const contextArtifactId = contextKey ? `team-context:${workflowId}:${roleId}:${contextKey.slice(0, 16)}` : undefined;
   const shouldProjectContext = Boolean(contextActivityId && contextArtifactId && !snapshot.activities.some((activity) => activity.id === contextActivityId));
   const traceEvents = pass.subagentAsyncDir && pass.subagentRunId
-    ? await readSubagentTaskActivityDrafts({
+    ? await workflowApplicationPort.readTaskActivityDrafts({
         asyncDir: pass.subagentAsyncDir,
         subagentRunId: pass.subagentRunId,
         taskId: workflow.taskId,
@@ -2034,12 +2017,13 @@ async function projectTeamRoleArtifacts(
     authorize_delivery: "Authorize delivery",
   })[action];
   const events: TaskRunEventDraft[] = [];
+  const runPlanHash = snapshot.runs.find((run) => run.id === workflowId)?.planHash;
   let nextSeq = Math.max(0, ...snapshot.activities.filter((row) => row.runId === workflowId).map((row) => row.seq)) + 1;
   for (const artifact of artifacts) {
     events.push({ type: "artifact_upsert", agentThreadId: threadId, artifact });
     const decisionId = `task-decision:${artifact.id}`;
     const existingDecision = snapshot.decisions.find((row) => row.id === decisionId);
-    const decision: TaskWorkspaceDecision | undefined = artifact.availableDecisions.length && !existingDecision ? {
+    const decision: TaskWorkspaceDecision | undefined = artifact.availableDecisions.length && !existingDecision ? bindTaskDecision({
       id: decisionId,
       taskId: workflow.taskId,
       runId: workflowId,
@@ -2058,7 +2042,7 @@ async function projectTeamRoleArtifacts(
       scope: artifact.scope,
       createdAt: now,
       decidedAt: null,
-    } : undefined;
+    }, { runPlanHash }) : undefined;
     if (decision) events.push({ type: "decision_upsert", agentThreadId: threadId, decision });
     const activityId = `artifact-reviewable:${artifact.id}:v${artifact.version}`;
     if (!snapshot.activities.some((row) => row.id === activityId)) {
@@ -2468,7 +2452,7 @@ export async function startSpecialistFollowUp(
       planBody: `1. Follow up with ${sourceThread.identity.displayName}`,
     });
   } catch (error) {
-    await unlink(created.path).catch(() => undefined);
+    await workflowApplicationPort.discardWorkflowFile(created.path).catch(() => undefined);
     throw error;
   }
 
@@ -2639,7 +2623,7 @@ export async function handleWorkflowRoute(
     try {
       await projectCreatedWorkflowTask(created.run, deps);
     } catch (error) {
-      if (body.overwrite !== true) await unlink(created.path).catch(() => undefined);
+      if (body.overwrite !== true) await workflowApplicationPort.discardWorkflowFile(created.path).catch(() => undefined);
       throw error;
     }
     deps.json(res, 200, created);

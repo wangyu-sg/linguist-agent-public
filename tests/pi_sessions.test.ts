@@ -185,6 +185,28 @@ try {
     ),
     /surface must be global or project/,
   );
+
+  let modelPreference: { provider: string; model: string; thinking?: string } | undefined;
+  const modelResponses: unknown[] = [];
+  assert.equal(await handlePiSettingsRoute(
+    { method: "PUT" } as never,
+    {} as never,
+    new URL("http://la/api/pi/model-preference"),
+    {
+      json: (_response, _status, value) => modelResponses.push(value),
+      readBody: async () => ({ provider: "openai-codex", model: "gpt-5.2", thinking: "high" }),
+      requireString: (value, label) => {
+        if (typeof value !== "string" || !value) throw new Error(`${label} is required`);
+        return value;
+      },
+      writePiModelPreference: async (input) => {
+        modelPreference = input;
+        return { saved: true };
+      },
+    } as unknown as PiSettingsRouteDeps,
+  ), true);
+  assert.deepEqual(modelPreference, { provider: "openai-codex", model: "gpt-5.2", thinking: "high" });
+  assert.deepEqual(modelResponses, [{ saved: true }]);
 } finally {
   await rm(root, { recursive: true, force: true });
 }

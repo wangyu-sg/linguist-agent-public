@@ -95,7 +95,7 @@
         "taskId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
         "runId": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },
         "type": {
-          "enum": ["segment_proposal", "segment_diff", "evidence_pack", "agent_query", "qa_finding", "qa_report", "delivery_readiness", "delivery_export", "eval_output", "eval_scorecard", "eval_comparison", "context_handoff", "memory", "guidance", "document_evidence", "rich_document", "maintenance_plan", "package_audit", "file", "preview"]
+          "enum": ["segment_proposal", "segment_diff", "evidence_pack", "agent_query", "qa_finding", "qa_report", "delivery_readiness", "delivery_export", "eval_output", "eval_scorecard", "eval_comparison", "context_handoff", "memory", "guidance", "document_evidence", "rich_document", "maintenance_plan", "package_audit", "agent_plan", "agent_present", "file", "preview"]
         },
         "status": { "enum": ["draft", "reviewable", "accepted", "rejected", "superseded", "final"] },
         "title": { "$ref": "./task-workspace-common.v1.schema.json#/$defs/nonEmptyString" },

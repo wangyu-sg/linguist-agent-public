@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { CatWorkspace, MemoryConfig } from "@linguist-agent/cat-data";
+import type { CatWorkspace, LibraryPersistence } from "@linguist-agent/cat-data";
 import { createAssetBlocksBuildTool, createAssetBlockSearchTool } from "./asset_block_tools.js";
 import { createAssistantLibraryTools } from "./assistant-library-tools.js";
 import { createRecordDecisionTool } from "./decision_tools.js";
@@ -30,7 +30,6 @@ import { createDeliveryQaTool } from "./delivery_qa_tools.js";
 import { createAssetGrepTool, createAssetReadTool, createGlossaryImportTool, createGlossaryLookupTool } from "./evidence_tools.js";
 import { createCustomerReturnLearnTool } from "./customer_return_tools.js";
 import { createEvidencePackTool } from "./evidence_pack_tools.js";
-import { createMemorySearchTool } from "./memory-tools.js";
 import { createPhraseQaRunTool, createPlatformBackfillRunTool } from "./platform_ops_tools.js";
 import { createProposalApplyTool, createProposalCreateTool, createProposalReadTool, createProposalReportTool } from "./proposal_tools.js";
 import { createQualityAuditTool, createQualityWaiverTool, createExpressiveAuditTool, createConstraintPackTool } from "./quality_tools.js";
@@ -60,11 +59,11 @@ import {
 
 export interface BuildCatToolsOptions {
   includeWebBridges?: boolean;
+  libraryPersistence?: LibraryPersistence;
 }
 
 export function buildCatTools(
   workspace: CatWorkspace,
-  memoryConfig?: MemoryConfig,
   options: BuildCatToolsOptions = {},
 ): ToolDefinition[] {
   const includeWebBridges = options.includeWebBridges ?? true;
@@ -118,7 +117,7 @@ export function buildCatTools(
     createEvidencePackTool(workspace),
     createAssetBlocksBuildTool(),
     createAssetBlockSearchTool(),
-    ...createAssistantLibraryTools({ runtimeRoot: workspace.root, scope: { kind: "project", projectId: workspace.projectId }, includePersonal: true }),
+    ...createAssistantLibraryTools({ runtimeRoot: workspace.root, scope: { kind: "project", projectId: workspace.projectId }, includePersonal: true, persistence: options.libraryPersistence }),
     createAssetGrepTool(),
     createAssetReadTool(),
     createProposalCreateTool(),
@@ -138,11 +137,6 @@ export function buildCatTools(
     createExemplarLookupTool(workspace),
     createExemplarAddTool(workspace),
     createTmLookupTool(workspace),
-    ...(memoryConfig?.enabled
-      ? [
-          createMemorySearchTool(memoryConfig, workspace.projectId, workspace),
-        ]
-      : []),
   ];
   return applyCatToolPolicies(tools);
 }
@@ -172,6 +166,8 @@ export {
   createExportXlsxTool,
 };
 export { createAssetBlocksBuildTool, createAssetBlockSearchTool };
+export { createUpdatePlanTool } from "./update-plan-tool.js";
+export { createPresentAnswerTool } from "./present-answer-tool.js";
 export { createAssetGrepTool, createAssetReadTool, createGlossaryImportTool, createGlossaryLookupTool };
 export { createCustomerReturnLearnTool };
 export { createEvidencePackTool };
@@ -186,7 +182,7 @@ export { catToolMetadataFor, createCatToolsListTool, listCatToolMetadata, render
 export { applyCatToolPolicies, applyCatToolPolicy, catEvidenceViolations, prepareCatToolArguments, type CatToolPolicyDetails } from "./tool_policy.js";
 export { buildTeamEvidenceTools, type TeamEvidenceScopeResolver } from "./team_evidence_tools.js";
 export { WEB_BRIDGE_USER_AGENT } from "./web_bridge_tools.js";
-export { createWebFetchTool, createWebSearchTool };
+export { authorizeStoredWebCredentialReference, createWebFetchTool, createWebSearchTool } from "./web_bridge_tools.js";
 export {
   createAssetMappingProfileSaveTool,
   createAssetMappingSuggestTool,
@@ -196,7 +192,7 @@ export {
   createWorkbookMappingCandidatesTool,
   createWorkbookPreviewTool,
 };
-export { captureMemoryTurn, createMemorySearchTool, createMemoryStoreTool, gatewayHealthy } from "./memory-tools.js";
 export { createAssistantMemoryTools } from "./assistant-memory-tools.js";
+export { legacyTdaiMemoryRuntimeStatus } from "./memory-tools.js";
 export { createAssistantLibraryTools } from "./assistant-library-tools.js";
 export { createStandaloneDocumentTools } from "./document-capability-tools.js";

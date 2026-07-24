@@ -109,7 +109,7 @@ function SidebarContextMenu({ target, x, y, state, store, onClose }: {
   };
 
   const reveal = () => {
-    if (project?.root) void window.linguist.system.revealPath(project.root);
+    if (project) void window.linguist.system.revealProject({ projectId: project.projectId });
     onClose();
   };
 
@@ -281,6 +281,7 @@ function TaskRow({ task, state, store, level, parentKey }: {
   const selected = state.taskId === task.id
     && (task.owner.kind === "standalone" ? state.projectId === null : state.projectId === task.owner.projectId);
   const StatusIcon = status ? taskStatusIcon(status.state) : null;
+  const pendingPermission = state.pendingPermissionTaskIds.includes(task.id);
   const rowKey = task.owner.kind === "standalone" ? `chat:${task.id}` : `task:${task.id}`;
   return (
     <li role="none">
@@ -303,6 +304,9 @@ function TaskRow({ task, state, store, level, parentKey }: {
         }}
       >
         <span className="workspace-tree-label">{task.title}</span>
+        {pendingPermission ? (
+          <span className="workspace-task-pending-badge" title="等待权限决定" aria-label="等待权限决定">!</span>
+        ) : null}
         {status && StatusIcon ? (
           <span className="workspace-task-status" data-state={status.state} title={status.label}>
             <StatusIcon aria-hidden="true" />

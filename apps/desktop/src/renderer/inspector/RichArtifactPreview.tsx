@@ -46,7 +46,7 @@ function Chart({ block }: { block: RichArtifactChartBlockV1 }) {
   );
 }
 
-function Block({ block }: { block: RichArtifactBlockV1 }): ReactNode {
+export function RichArtifactBlockView({ block }: { block: RichArtifactBlockV1 }): ReactNode {
   if (block.type === "markdown") {
     return (
       <section className="rich-artifact__markdown">
@@ -113,6 +113,23 @@ function Block({ block }: { block: RichArtifactBlockV1 }): ReactNode {
       </section>
     );
   }
+  if (block.type === "todo_list") {
+    return (
+      <figure className="rich-artifact__todo-list">
+        {block.caption ? <figcaption>{block.caption}</figcaption> : null}
+        <ul>
+          {block.items.map((item) => (
+            <li className="rich-artifact__todo" data-status={item.status} key={item.id}>
+              <span className="rich-artifact__todo-marker" aria-hidden="true">
+                {item.status === "completed" ? "✓" : item.status === "in_progress" ? "◐" : "○"}
+              </span>
+              <span className="rich-artifact__todo-text">{item.text}</span>
+            </li>
+          ))}
+        </ul>
+      </figure>
+    );
+  }
   return <section><FileReference file={block.file} /></section>;
 }
 
@@ -145,7 +162,7 @@ export function RichArtifactPreview({ value }: { value: unknown }) {
         html: renderRichArtifactHtml(document),
         suggestedName: safeSuggestedName(document),
       });
-      if (!result.canceled) setExportState({ tone: "success", message: `Exported ${format.toUpperCase()} to ${result.path}.` });
+      if (!result.canceled) setExportState({ tone: "success", message: `Exported ${format.toUpperCase()} as ${result.file.name}.` });
     } catch (cause) {
       setExportState({ tone: "error", message: cause instanceof Error ? cause.message : String(cause) });
     } finally {
@@ -170,7 +187,7 @@ export function RichArtifactPreview({ value }: { value: unknown }) {
       </header>
       {exportState ? <p className="rich-artifact__export-state" data-tone={exportState.tone} role={exportState.tone === "error" ? "alert" : "status"}>{exportState.message}</p> : null}
       <div className="rich-artifact__blocks">
-        {document.blocks.map((block) => <Block key={block.id} block={block} />)}
+        {document.blocks.map((block) => <RichArtifactBlockView key={block.id} block={block} />)}
       </div>
     </article>
   );

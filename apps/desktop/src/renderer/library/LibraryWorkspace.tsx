@@ -21,6 +21,8 @@ import {
   type AssistantLibrarySearchReport,
   type AssistantMemoryDTO,
   type AssistantMemoryKind,
+  type AssistantMemoryRecallReport,
+  type AssistantMemoryScope,
   type LocalEmbeddingCapabilityStatus,
 } from "../data/workspace-client.ts";
 import { Button, IconButton } from "../ui/index.ts";
@@ -47,6 +49,28 @@ function formatDate(value: string): string {
 
 function scopeLabel(scope: AssistantLibraryScope): string {
   return scope.kind === "personal" ? "Personal" : "Project";
+}
+
+function memoryScopeLabel(scope: AssistantMemoryScope): string {
+  if (scope.kind === "personal") return "Personal";
+  if (scope.kind === "project") return `Project · ${scope.projectId}`;
+  if (scope.kind === "client") return `Client · ${scope.clientId}`;
+  if (scope.kind === "franchise") return `Franchise · ${scope.franchiseId}`;
+  return `Locale · ${scope.locale}`;
+}
+
+function scopeId(scope: AssistantMemoryScope): string {
+  if (scope.kind === "client") return scope.clientId;
+  if (scope.kind === "franchise") return scope.franchiseId;
+  if (scope.kind === "project") return scope.projectId;
+  if (scope.kind === "locale") return scope.locale;
+  return "";
+}
+
+function toIso(value: string): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 function locationLabel(hit: AssistantLibrarySearchReport["hits"][number]): string {
@@ -106,12 +130,12 @@ function DocumentsPanel({ scope }: { scope: AssistantLibraryScope }) {
 
   const importFiles = async () => {
     if (busy) return;
-    const paths = await window.linguist.system.pickImportFiles("asset");
-    if (!paths.length) return;
+    const sourceHandles = await window.linguist.system.pickImportFiles("asset");
+    if (!sourceHandles.length) return;
     setBusy("import");
     setError(null);
     try {
-      const report = await workspaceClient.importLibrary(scope, paths, true);
+      const report = await workspaceClient.importLibrary(scope, sourceHandles, true);
       setCatalog({ schemaVersion: 1, scope, documents: report.documents, updatedAt: new Date().toISOString() });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -262,13 +286,34 @@ function MemoriesPanel({ scope, taskId }: { scope: AssistantLibraryScope; taskId
   const [busy, setBusy] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [draftKind, setDraftKind] = useState<AssistantMemoryKind>(scope.kind === "personal" ? "preference" : "guidance");
-  const [editing, setEditing] = useState<{ id: string; text: string; kind: AssistantMemoryKind } | null>(null);
+  const [scopeKind, setScopeKind] = useState<AssistantMemoryScope["kind"]>(scope.kind);
+  const [scopeValue, setScopeValue] = useState(scope.kind === "project" ? scope.projectId : "");
+  const [draftValidUntil, setDraftValidUntil] = useState("");
+  const [draftConflictKey, setDraftConflictKey] = useState("");
+  const [editing, setEditing] = useState<{ id: string; text: string; kind: AssistantMemoryKind; validUntil: string; conflictKey: string } | null>(null);
+  const [previewQuery, setPreviewQuery] = useState("");
+  const [preview, setPreview] = useState<AssistantMemoryRecallReport | null>(null);
+
+  const memoryScope: AssistantMemoryScope | null = useMemo(() => {
+    const value = scopeValue.trim();
+    if (scopeKind === "personal") return { kind: "personal" };
+    if (scopeKind === "project") return scope.kind === "project" ? { kind: "project", projectId: scope.projectId } : null;
+    if (!value) return null;
+    if (scopeKind === "client") return { kind: "client", clientId: value };
+    if (scopeKind === "franchise") return { kind: "franchise", franchiseId: value };
+    return { kind: "locale", locale: value };
+  }, [scope.kind, scope.kind === "project" ? scope.projectId : "", scopeKind, scopeValue]);
 
   const load = async () => {
+    if (!memoryScope) {
+      setMemories([]);
+      setState("ready");
+      return;
+    }
     setState("loading");
     setError(null);
     try {
-      setMemories((await workspaceClient.listAssistantMemories(scope)).memories);
+      setMemories((await workspaceClient.listAssistantMemories(memoryScope)).memories);
       setState("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -279,25 +324,34 @@ function MemoriesPanel({ scope, taskId }: { scope: AssistantLibraryScope; taskId
   useEffect(() => {
     setDraft("");
     setDraftKind(scope.kind === "personal" ? "preference" : "guidance");
+    setScopeKind(scope.kind);
+    setScopeValue(scope.kind === "project" ? scope.projectId : "");
+    setDraftValidUntil("");
+    setDraftConflictKey("");
     setEditing(null);
-    void load();
   }, [scope.kind, scope.kind === "project" ? scope.projectId : "personal"]);
+
+  useEffect(() => { void load(); }, [memoryScope?.kind, memoryScope ? scopeId(memoryScope) : ""]);
 
   const update = (memory: AssistantMemoryDTO) => setMemories((current) => [memory, ...current.filter((entry) => entry.id !== memory.id)]);
 
   const propose = async (event: FormEvent) => {
     event.preventDefault();
-    if (!draft.trim() || busy) return;
+    if (!draft.trim() || busy || !memoryScope) return;
     setBusy("proposal");
     setError(null);
     try {
-      const { memory } = await workspaceClient.proposeAssistantMemory(scope, {
+      const { memory } = await workspaceClient.proposeAssistantMemory(memoryScope, {
         kind: draftKind,
         text: draft.trim(),
         source: { taskId: taskId ?? "library-manual" },
+        validUntil: toIso(draftValidUntil),
+        conflictKey: draftConflictKey.trim() || undefined,
       });
       update(memory);
       setDraft("");
+      setDraftValidUntil("");
+      setDraftConflictKey("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -305,15 +359,16 @@ function MemoriesPanel({ scope, taskId }: { scope: AssistantLibraryScope; taskId
     }
   };
 
-  const act = async (id: string, action: "confirm" | "revoke") => {
-    if (busy) return;
-    setBusy(id);
+  const act = async (memory: AssistantMemoryDTO, action: "confirm" | "revoke") => {
+    if (busy || !memoryScope) return;
+    setBusy(memory.id);
     setError(null);
     try {
       const result = action === "confirm"
-        ? await workspaceClient.confirmAssistantMemory(scope, id)
-        : await workspaceClient.revokeAssistantMemory(scope, id);
+        ? await workspaceClient.confirmAssistantMemory(memoryScope, memory.id, memory.conflictsWith)
+        : await workspaceClient.revokeAssistantMemory(memoryScope, memory.id);
       update(result.memory);
+      await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -322,11 +377,17 @@ function MemoriesPanel({ scope, taskId }: { scope: AssistantLibraryScope; taskId
   };
 
   const saveEdit = async (memory: AssistantMemoryDTO) => {
-    if (!editing?.text.trim() || busy) return;
+    if (!editing?.text.trim() || busy || !memoryScope) return;
     setBusy(memory.id);
     setError(null);
     try {
-      const result = await workspaceClient.editAssistantMemory(scope, memory.id, { expectedRevision: memory.revision, text: editing.text.trim(), kind: editing.kind });
+      const result = await workspaceClient.editAssistantMemory(memoryScope, memory.id, {
+        expectedRevision: memory.revision,
+        text: editing.text.trim(),
+        kind: editing.kind,
+        validUntil: editing.validUntil ? toIso(editing.validUntil) : null,
+        conflictKey: editing.conflictKey.trim() || null,
+      });
       update(result.memory);
       setEditing(null);
     } catch (cause) {
@@ -337,19 +398,48 @@ function MemoriesPanel({ scope, taskId }: { scope: AssistantLibraryScope; taskId
   };
 
   const ordered = useMemo(() => [...memories].sort((left, right) => {
-    const rank = { proposed: 0, active: 1, revoked: 2 } as const;
+    const rank = { proposed: 0, active: 1, superseded: 2, revoked: 3 } as const;
     return rank[left.status] - rank[right.status] || right.updatedAt.localeCompare(left.updatedAt);
   }), [memories]);
+
+  const previewRecall = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!memoryScope || !previewQuery.trim() || busy) return;
+    setBusy("preview");
+    setError(null);
+    try { setPreview(await workspaceClient.searchAssistantMemories(memoryScope, { query: previewQuery.trim() })); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setBusy(null); }
+  };
 
   return (
     <div className="assistant-library__panel">
       <section className="assistant-library__hero" aria-labelledby="library-memory-title">
         <div>
-          <span className="assistant-library__eyebrow">{scopeLabel(scope)} Memory</span>
+          <span className="assistant-library__eyebrow">{memoryScope ? memoryScopeLabel(memoryScope) : "Memory scope required"}</span>
           <h2 id="library-memory-title">Confirmed recall</h2>
           <p>Raw Chats remain isolated. Only confirmed preference, fact, or guidance items can be recalled; memory is never client evidence.</p>
         </div>
         <Button variant="secondary" disabled={state === "loading"} onClick={() => void load()}><RefreshCw />Refresh</Button>
+      </section>
+
+      <section className="assistant-library__memory-scope" aria-label="Memory scope">
+        <label>Scope
+          <select value={scopeKind} onChange={(event) => {
+            const next = event.target.value as AssistantMemoryScope["kind"];
+            setScopeKind(next);
+            setScopeValue(next === "project" && scope.kind === "project" ? scope.projectId : "");
+            setPreview(null);
+          }}>
+            <option value="personal">Personal</option>
+            <option value="project" disabled={scope.kind !== "project"}>Current Project</option>
+            <option value="client">Client (explicit ID)</option>
+            <option value="franchise">Franchise (explicit ID)</option>
+            <option value="locale">Locale (explicit ID)</option>
+          </select>
+        </label>
+        {scopeKind !== "personal" && scopeKind !== "project" ? <label>{scopeKind === "client" ? "Client ID" : scopeKind === "franchise" ? "Franchise ID" : "Locale"}<input value={scopeValue} onChange={(event) => setScopeValue(event.target.value)} placeholder={scopeKind === "locale" ? "e.g. zh-CN" : "Explicit identifier"} /></label> : null}
+        <p>Client and Franchise have no inferred Project mapping. They are included only when you explicitly choose their identifier.</p>
       </section>
 
       <form className="assistant-library__memory-proposal" onSubmit={propose}>
@@ -365,7 +455,15 @@ function MemoriesPanel({ scope, taskId }: { scope: AssistantLibraryScope; taskId
           <span>New proposal</span>
           <textarea value={draft} maxLength={20_000} onChange={(event) => setDraft(event.target.value)} placeholder="Propose one durable item. It will remain inactive until you confirm it." />
         </label>
-        <Button type="submit" variant="primary" disabled={!draft.trim() || Boolean(busy)}>{busy === "proposal" ? "Proposing…" : "Create proposal"}</Button>
+        <label>Expires at (optional)<input type="datetime-local" value={draftValidUntil} onChange={(event) => setDraftValidUntil(event.target.value)} /></label>
+        <label>Conflict group (optional)<input value={draftConflictKey} maxLength={256} onChange={(event) => setDraftConflictKey(event.target.value)} placeholder="Explicit user-defined topic" /></label>
+        <Button type="submit" variant="primary" disabled={!draft.trim() || !memoryScope || Boolean(busy)}>{busy === "proposal" ? "Proposing…" : "Create proposal"}</Button>
+      </form>
+
+      <form className="assistant-library__memory-preview" onSubmit={previewRecall}>
+        <label>Recall preview<input value={previewQuery} onChange={(event) => setPreviewQuery(event.target.value)} placeholder="Check lexical/local semantic recall" /></label>
+        <Button type="submit" variant="secondary" disabled={!previewQuery.trim() || !memoryScope || Boolean(busy)}><Search />Preview</Button>
+        {preview ? <p data-state={preview.semantic.state}>{preview.semantic.state === "ready" ? `Local semantic ready: ${preview.semantic.embeddingModel}` : `Lexical-only: ${preview.semantic.message ?? "managed semantic pack unavailable"}`} · {preview.hits.length} selected · {preview.conflicts.length} conflict group(s) withheld</p> : null}
       </form>
 
       {error ? <div className="assistant-library__notice" data-tone="error" role="alert">{error}</div> : null}
@@ -384,21 +482,24 @@ function MemoriesPanel({ scope, taskId }: { scope: AssistantLibraryScope; taskId
                   <option value="preference">Preference</option><option value="fact">Fact</option><option value="guidance">Guidance</option>
                 </select>
                 <textarea value={editing.text} onChange={(event) => setEditing({ ...editing, text: event.target.value })} />
+                <input type="datetime-local" value={editing.validUntil} onChange={(event) => setEditing({ ...editing, validUntil: event.target.value })} aria-label="Expiry" />
+                <input value={editing.conflictKey} maxLength={256} onChange={(event) => setEditing({ ...editing, conflictKey: event.target.value })} aria-label="Conflict group" />
                 <div><Button variant="secondary" onClick={() => setEditing(null)}>Cancel</Button><Button variant="primary" disabled={busy === memory.id} onClick={() => void saveEdit(memory)}>Save</Button></div>
               </div>
             ) : <p>{memory.text}</p>}
             <div className="assistant-library__memory-source">
-              <span>Source</span><code>{memory.source.taskId}</code>{memory.source.activityId ? <code>{memory.source.activityId}</code> : null}
+              <span>Scope</span><code>{memoryScopeLabel(memory.scope)}</code><span>Source</span><code>{memory.source.taskId}</code>{memory.source.activityId ? <code>{memory.source.activityId}</code> : null}
             </div>
+            <div className="assistant-library__memory-meta">{memory.validUntil ? <span data-state={Date.parse(memory.validUntil) <= Date.now() ? "expired" : "expiring"}>{Date.parse(memory.validUntil) <= Date.now() ? "Expired" : `Expires ${formatDate(memory.validUntil)}`}</span> : <span>No expiry</span>}{memory.conflictKey ? <span>Conflict group: {memory.conflictKey}</span> : null}{memory.conflictsWith?.length ? <span data-state="conflict">Conflicts with {memory.conflictsWith.length} active memory item(s)</span> : null}</div>
             <footer>
               <details>
                 <summary>History <span>{memory.history.length}</span><ChevronRight /></summary>
                 <ol>{memory.history.map((entry) => <li key={entry.revision}><strong>v{entry.revision} · {entry.action}</strong><span>{entry.actor} · {formatDate(entry.at)}</span><p>{entry.text}</p></li>)}</ol>
               </details>
               <div>
-                {memory.status === "proposed" ? <Button variant="primary" disabled={busy === memory.id} onClick={() => void act(memory.id, "confirm")}><Check />Confirm</Button> : null}
-                {memory.status !== "revoked" && editing?.id !== memory.id ? <Button variant="secondary" disabled={Boolean(busy)} onClick={() => setEditing({ id: memory.id, text: memory.text, kind: memory.kind })}>Edit</Button> : null}
-                {memory.status !== "revoked" ? <Button variant="secondary" disabled={busy === memory.id} onClick={() => void act(memory.id, "revoke")}><Trash2 />Revoke</Button> : null}
+                {memory.status === "proposed" ? <Button variant="primary" disabled={busy === memory.id} onClick={() => void act(memory, "confirm")}><Check />{memory.conflictsWith?.length ? "Confirm & supersede conflict" : "Confirm"}</Button> : null}
+                {(memory.status === "proposed" || memory.status === "active") && editing?.id !== memory.id ? <Button variant="secondary" disabled={Boolean(busy)} onClick={() => setEditing({ id: memory.id, text: memory.text, kind: memory.kind, validUntil: memory.validUntil ? new Date(memory.validUntil).toISOString().slice(0, 16) : "", conflictKey: memory.conflictKey ?? "" })}>Edit</Button> : null}
+                {(memory.status === "proposed" || memory.status === "active" || memory.status === "superseded") ? <Button variant="secondary" disabled={busy === memory.id} onClick={() => void act(memory, "revoke")}><Trash2 />Revoke</Button> : null}
               </div>
             </footer>
           </li>

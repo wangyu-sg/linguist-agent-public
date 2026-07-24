@@ -8,7 +8,7 @@ Linguist Agent `2.32.7` is a local macOS product composed of an Electron client,
 Electron renderer
   ↕ typed preload IPC
 Electron main process
-  ↕ authenticated loopback HTTP/SSE
+  ↕ signed rendezvous + authenticated random Unix-domain HTTP/SSE
 cat-server
   ├─ canonical standalone + Project Task/Run projection
   ├─ Pi session and active-run ownership
@@ -57,13 +57,13 @@ Standalone and Project Main expose the same active-Run delivery vocabulary. Stee
 
 ### Standalone General
 
-`/api/tasks/*` creates, lists, archives, restores, copies, grants files to, and runs no-project Chats. `general_agent_runs.ts` owns live General coordination. Before a model call it resolves directory trust and Pi resources without evaluating Extension modules, obtains path-plus-SHA approval for unknown user/global executable Extensions, fixes an immutable resource snapshot, and writes the Run resource manifest. The Pi session then exposes the shared General delivery path, fork/compaction, and only the filesystem roots granted to that Chat.
+`/api/tasks/*` creates, lists, archives, restores, copies, grants files to, and runs no-project Chats. `general_agent_runs.ts` owns live General coordination. Before a model call it resolves directory trust and Pi resources without evaluating Extension modules, obtains path-plus-SHA approval for unknown user/global executable Extensions, fixes an immutable resource snapshot, and writes the Run resource manifest. A selected file grant becomes explicit next-Run attachment context; PNG/JPEG/WebP is converted to Pi `prompt(images)` input only after current-grant and declared-model-capability checks. The Pi session then exposes the shared General delivery path, fork/compaction, and only the filesystem roots granted to that Chat.
 
 General Run resources can include approved Pi Skills, Prompts, Themes, context/system files, Extensions, managed Packages, built-in tools, dynamic general tools, and the sandboxed shell. General Chat has no Project, Segment, proposal, apply, QA, or delivery authority. Server-owned delegation creates identified child threads; direct Package child orchestration tools are not activated.
 
 ### Project Main / Single
 
-`POST /api/projects/:projectId/tasks/:taskId/chat/stream` derives the internal Pi session id, validates Task/batch/segment scope, resolves the immutable Run resource manifest, and projects human, tool/evidence, response, usage, failure, compaction, and Stop facts into the Task chronology. During that Run, `/messages` and `/message-queue/*` expose the same steer/follow-up and durable queue operations as a standalone Chat.
+`POST /api/projects/:projectId/tasks/:taskId/chat/stream` derives the internal Pi session id, validates Task/batch/segment scope, resolves the immutable Run resource manifest, and projects human, tool/evidence, response, usage, failure, compaction, and Stop facts into the Task chronology. Registered Project asset attachments use the same Pi native image-content path as standalone grants when they are PNG/JPEG/WebP and the selected model accepts images; other asset types remain explicit tool/document inputs. During that Run, `/messages` and `/message-queue/*` expose the same steer/follow-up and durable queue operations as a standalone Chat.
 
 ### Team
 
@@ -109,7 +109,7 @@ Managed document capabilities use preview/plan-hash installation, exact manifest
 
 ## Pi resources and Packages
 
-Pi owns sessions, providers/models, tools, compaction, skills, prompts, themes, and extensions. LA uses exact package pins and official APIs. Task Package profiles record future-Run intent with revision and plan hash; the Run manifest records the immutable resolved package/resource facts and request-shape hashes.
+Pi owns sessions, providers/models, tools, compaction, skills, prompts (including native image content), themes, and extensions. LA uses exact package pins and official APIs. Task Package profiles record future-Run intent with revision and plan hash; the Run manifest records the immutable resolved package/resource facts and request-shape hashes.
 
 General Chat resolves Pi resources before execution and records each exact path/digest plus winner/shadowed conflicts. Directory trust controls project-local resources; digest-bound LA trust controls previously unknown user/global executable Extensions. Changed bytes invalidate approval. Configured-but-missing Packages fail startup rather than auto-installing.
 
@@ -125,8 +125,16 @@ The professional shell exposes Chats, Projects, Library, Package Center, and Set
 
 Notifications derive from validated Task event candidates, stay quiet for the foreground Task, deduplicate reconnect replay, and never accept arbitrary Electron notification options. Settings edits Pi keybindings through the official global contract and keeps provider secrets behind Keychain/official environment references.
 
+The current model is not a renderer-only default. `PUT /api/pi/model-preference` validates one available provider/model pair and writes the Pi global preference atomically; `readModelDefaults()` gives that complete user pair precedence over the bundled project fallback, while explicit environment overrides still win. Composer and Settings consume the same resolved provider catalog defaults, retain the choice across Tasks and sends, and apply it only to a new Run. Provider OAuth/API-key connection actions live beside this control, with credentials remaining in Keychain or official environment references.
+
+Pending Pi/tool permission requests are canonical server state. Electron renders the earliest actionable request by replacing the current Composer with the shared Task-scoped approval surface and recovers pending requests during an active Run after stream reconnects; approval/denial is still sent only to the server. Settings exposes narrow trusted IPC actions for launchd restart and signed-runtime repair. Rebuildable-cache cleanup remains an authenticated server preview followed by an exact `planHash` execute request, never a renderer-side delete.
+
 ## Storage and recovery
 
+- `packages/storage-sqlite` is the LA-023/LA-084/LA-085/LA-086/LA-087/LA-088/LA-105 foundation built on the Node `node:sqlite` API (minimum 22.16 for the online backup API). Its schema-v2 WAL store provides atomic event/projection commits, optimistic revision checks, command idempotency, migration-version refusal, reopen recovery, and rollback on a mid-transaction constraint failure. Version 2 includes a hash-bound, data-only mapping contract for legacy Task workspace/event, quality-decision, message-queue, and Task Package-profile fields plus ordering, revision/cursor, and blob-reference boundaries. The importers require explicit storage authority, publish byte-hashed backups before classification, reject unknown fields and corrupt middle JSONL, retain the established torn-final-record rule, replay ordered canonical Task events, recheck source digest and authority before commits, and verify stored projections. LA-087/105 provide the shared Project/standalone TaskWorkspace, queue and profile backend; LA-089 is the sole production caller and explicitly excludes the Project quality ledger. Authority-gated database backup separately uses SQLite's online backup API and verifies schema, quick-check, size and SHA-256 before restoring only to absent targets. LA-090 adds a read-only audit boundary: a SQLite snapshot deterministically produces hash-chained schema-v1 JSONL containing only opaque stream/event references, sequence/type/time metadata, and canonical payload/projection digests. It never exports raw payloads, projections, identifiers or paths and has no import/write API.
+- Task persistence is one aggregate for migration purposes: `TaskRunEvent` includes `decision_upsert`, and `TaskWorkspaceSnapshot` embeds Decisions while queue/resource profile are Task-side state. LA-102 therefore makes LA-087 repository-readiness-only and assigns the Task-domain production authority switch to LA-089 after both core Task replay and Task-side state pass parity. The Project quality decision ledger is a separate cross-Task CAT-governance stream: LA-103 explicitly excludes it from LA-089, keeps JSONL canonical, and assigns its later single cutover to LA-098. Splitting Task writers, or letting LA-089 and LA-098 both own the Project ledger, is forbidden.
+- LA-104 routes TaskWorkspace, Task message queue and Task Package profile access through explicit install-once persistence seams. LA-089 now performs the only production install during exclusive startup: after the existing runtime-schema migration, under the data-root writer lease and before recovery/listen, it inventories legacy Task roots, publishes per-Task workspace and side-state backups, runs strict import/parity, verifies the exact baseline projection set, writes one durable SQLite authority marker, blocks explicit legacy state-file writers, and installs the complete backend. On later starts the marker, canonical database path, SQLite quick-check, cutover baseline and backup digests must all verify before requests are served. Post-cutover Task creation may add canonical streams without changing the frozen baseline. The old Task state files are retained as rollback evidence and are never dual-written. Project quality ledger remains JSONL-owned until LA-098.
+- `npm run storage:audit -- export --database <absolute-db> --output <absolute-jsonl>` and the corresponding `verify --input` command open SQLite read-only. Export stages and fsyncs a new file, publishes without overwriting an existing destination, removes partial staging on failure, and returns the whole-file SHA-256 plus record counts. Verification regenerates the canonical bytes and compares them exactly; it is not a re-import path and cannot restore JSONL as an authority.
 - Durable project state: `data/projects/<projectId>`.
 - Durable standalone Chats and private workspaces: `data/assistant/tasks/<taskId>`.
 - Durable queued follow-ups: `message_queue.json` beside the owning Task snapshot for either owner type.
@@ -136,11 +144,14 @@ Notifications derive from validated Task event candidates, stay quiet for the fo
 - Logs/reports/acceptance output: ignored runtime roots or `/private/tmp`.
 - Original imported source directories are never owned or deleted by LA.
 
+Production backend and renderer log events use the shared `cat-data/safe_logging.ts` entry. It emits schema-v1 JSON lines with a diagnostic ID and recursively redacts credentials, authorization/cookie headers, local paths, customer-content fields, unknown free-form strings, nested Error messages, and oversized/circular values before the sink sees them. Server diagnostics apply the same redaction on create, append, and legacy read; their active JSONL file is bounded to 5 MiB plus one rotated archive. Existing log bytes are not rewritten by migration.
+
 Cleanup and historical backfill are preview/hash-gated. Resident runtime is launchd-owned and loopback-only. Repository validation must not be confused with synchronizing or restarting the managed Application Support runtime.
 
 ## Security invariants
 
-- Authenticated loopback transport and Keychain-backed local credential.
+- Signed rendezvous, authenticated random Unix-domain transport, and Keychain-backed bootstrap credential; fixed loopback is an explicit authenticated transition/test mode only.
+- No production business module may write raw payloads through `console.*`; user-facing CLI output is not a retained product log.
 - Task/project/batch/segment scope validated before model launch.
 - Standalone file access confined to the private workspace plus explicit canonical grants.
 - Project resource trust resolved before inclusion; unknown executable Extension approval bound to canonical path and SHA-256 before evaluation.

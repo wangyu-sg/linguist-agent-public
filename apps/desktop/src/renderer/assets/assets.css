@@ -20,9 +20,9 @@
 }
 
 .assets-workspace--empty h1 {
-  font-size: 20px;
+  font-size: var(--la-type-heading-size);
   font-weight: var(--la-weight-semibold);
-  line-height: 28px;
+  line-height: var(--la-type-heading-line);
   letter-spacing: -0.02em;
   text-wrap: balance;
 }
@@ -187,9 +187,9 @@
 .asset-library-empty h2 {
   margin-top: var(--la-space-3);
   color: var(--la-ink-primary);
-  font-size: 20px;
+  font-size: var(--la-type-heading-size);
   font-weight: var(--la-weight-semibold);
-  line-height: 28px;
+  line-height: var(--la-type-heading-line);
   letter-spacing: -0.02em;
   text-wrap: balance;
 }
@@ -320,7 +320,7 @@
   background: var(--la-raised);
   color: var(--la-ink-secondary);
   font-family: var(--la-font-mono);
-  font-size: 8px;
+  font-size: var(--la-type-meta-size);
   font-weight: var(--la-weight-semibold);
   line-height: 1;
   overflow-wrap: anywhere;
@@ -547,7 +547,7 @@
   color: var(--la-ink-secondary);
   font-family: var(--la-font-sans);
   font-size: var(--la-type-copy-size);
-  line-height: 1.55;
+  line-height: var(--la-type-copy-line);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -619,7 +619,7 @@
 
 .asset-sheet-tabs small {
   color: var(--la-ink-disabled);
-  font-size: 10px;
+  font-size: var(--la-type-meta-size);
 }
 
 .asset-workbook-preview__count {

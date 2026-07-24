@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTaskWorkspace, defaultSubagentAsyncRoot } from "@linguist-agent/cat-data";
 import { handleWorkflowRoute } from "../packages/cat-server/src/routes/workflow_routes.js";
+import { verifiedPromptRequestBudget } from "./prompt_budget_fixture.js";
 
 const root = await mkdtemp(join(tmpdir(), "la-subagent-workflow-"));
 const taskId = "task-subagent-bridge";
@@ -49,6 +50,7 @@ try {
     optionalString: (value: unknown) => typeof value === "string" && value ? value : undefined,
     optionalStringArray: (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined,
     optionalBoolean: (value: unknown) => value === undefined ? undefined : Boolean(value),
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
   };
   assert.equal(await handleWorkflowRoute({ method: "POST" } as never, {} as never, ["api", "projects", "project-one", "workflows"], "project-one", deps), true);
 

@@ -99,6 +99,13 @@ function fileExtension(path: string): string {
   return extension && extension !== fileName(path) ? extension.toLocaleUpperCase() : "FILE";
 }
 
+function formatPreviewSkipReason(reason: string): string {
+  const match = /^Unsupported readable asset extension (.+?)\. Supported:/i.exec(reason.trim());
+  if (!match) return reason;
+  const extension = match[1] ?? "unknown";
+  return `该资料类型（${extension.toLocaleUpperCase()}）暂不提供通用内容预览。文件仍已登记，可作为项目资料使用。`;
+}
+
 function formatBytes(value?: number): string {
   if (value === undefined) return "—";
   if (value < 1024) return `${value} B`;
@@ -168,10 +175,10 @@ function IngestionRow({ file, selected, onSelect }: {
   return (
     <li className="asset-list__item">
       <button type="button" className="asset-row asset-row--ingestion" aria-current={selected ? "true" : undefined} onClick={onSelect}>
-        <span className="asset-row__icon" aria-hidden="true">{fileExtension(file.filePath)}</span>
+        <span className="asset-row__icon" aria-hidden="true">{fileExtension(file.handle.name)}</span>
         <span className="asset-row__main">
-          <strong>{fileName(file.filePath)}</strong>
-          <span>{file.relPath ?? file.filePath}</span>
+          <strong>{file.handle.name}</strong>
+          <span>{file.relPath ?? file.handle.name}</span>
         </span>
         <StatusLabel live state={ingestionTone(file.status)}>{ingestionLabels[file.status]}</StatusLabel>
       </button>
@@ -297,7 +304,7 @@ export function ProjectAssets({ project, onCatalogChange }: ProjectAssetsProps) 
   const sheetRequest = useRef(0);
 
   const selectedAsset = catalog?.assets.find((asset) => asset.relPath === selectedAssetPath) ?? null;
-  const selectedIngestion = ingestion.find((file) => file.filePath === selectedIngestionPath) ?? null;
+  const selectedIngestion = ingestion.find((file) => file.handle.id === selectedIngestionPath) ?? null;
   const visibleAssets = useMemo(
     () => catalog?.assets.filter((asset) => assetMatches(asset, searchedQuery)) ?? [],
     [catalog, searchedQuery],
@@ -456,20 +463,16 @@ export function ProjectAssets({ project, onCatalogChange }: ProjectAssetsProps) 
       const outcome = await ingestProjectAssets(
         {
           projectId: project.projectId,
-          projectName: project.name,
-          rootPath: project.root,
-          sourceLanguage: catalog.sourceLanguage,
-          targetLanguage: catalog.targetLanguage,
         },
         {
           pickImportFiles: () => window.linguist.system.pickImportFiles("asset"),
-          refreshProject: (input) => workspaceClient.createProject(input),
+          refreshProjectAssets: (input) => window.linguist.system.refreshProjectAssets(input),
           listAssets: (projectId) => workspaceClient.listProjectAssets(projectId),
-          parseAsset: (projectId, filePath) => workspaceClient.parseProjectAsset(projectId, filePath, "structured"),
-          readAsset: (projectId, filePath) => workspaceClient.readProjectAsset(projectId, filePath),
+          parseAsset: (projectId, assetPath) => workspaceClient.parseProjectAsset(projectId, assetPath, "structured"),
+          readAsset: (projectId, assetPath) => workspaceClient.readProjectAsset(projectId, assetPath),
           onChange: (files) => {
             setIngestion(files);
-            setSelectedIngestionPath((current) => current ?? files[0]?.filePath ?? null);
+            setSelectedIngestionPath((current) => current ?? files[0]?.handle.id ?? null);
             setSelectedAssetPath(null);
             setSelectedHit(null);
           },
@@ -548,11 +551,11 @@ export function ProjectAssets({ project, onCatalogChange }: ProjectAssetsProps) 
               <ul className="asset-list">
                 {ingestion.map((file) => (
                   <IngestionRow
-                    key={file.filePath}
+                    key={file.handle.id}
                     file={file}
-                    selected={selectedIngestionPath === file.filePath}
+                    selected={selectedIngestionPath === file.handle.id}
                     onSelect={() => {
-                      setSelectedIngestionPath(file.filePath);
+                      setSelectedIngestionPath(file.handle.id);
                       setSelectedAssetPath(null);
                       setSelectedHit(null);
                     }}
@@ -598,7 +601,7 @@ export function ProjectAssets({ project, onCatalogChange }: ProjectAssetsProps) 
         </div>
 
         {libraryIsEmpty ? null : selectedIngestion ? (
-          <PreviewShell title={fileName(selectedIngestion.filePath)} subtitle={selectedIngestion.relPath ?? "未登记"}>
+          <PreviewShell title={selectedIngestion.handle.name} subtitle={selectedIngestion.relPath ?? "未登记"}>
             <dl className="asset-metadata">
               <div><dt>状态</dt><dd>{ingestionLabels[selectedIngestion.status]}</dd></div>
               <div><dt>原文件</dt><dd>保留在项目文件夹中，没有复制</dd></div>
@@ -610,7 +613,7 @@ export function ProjectAssets({ project, onCatalogChange }: ProjectAssetsProps) 
             {selectedIngestion.read ? (
               <section className="asset-text-preview">
                 <h3>内容预览</h3>
-                {selectedIngestion.read.skippedReason ? <p>{selectedIngestion.read.skippedReason}</p> : <pre>{selectedIngestion.read.text}</pre>}
+                {selectedIngestion.read.skippedReason ? <p className="asset-preview__message">{formatPreviewSkipReason(selectedIngestion.read.skippedReason)}</p> : <pre>{selectedIngestion.read.text}</pre>}
               </section>
             ) : null}
           </PreviewShell>
@@ -651,7 +654,7 @@ export function ProjectAssets({ project, onCatalogChange }: ProjectAssetsProps) 
             {readPreview ? (
               <section className="asset-text-preview">
                 <header><h3>内容预览</h3>{readPreview.truncated ? <span>已显示前 24,000 字符</span> : null}</header>
-                {readPreview.skippedReason ? <p>{readPreview.skippedReason}</p> : <pre>{readPreview.text}</pre>}
+                {readPreview.skippedReason ? <p className="asset-preview__message">{formatPreviewSkipReason(readPreview.skippedReason)}</p> : <pre>{readPreview.text}</pre>}
               </section>
             ) : null}
             {workbookPreview ? (

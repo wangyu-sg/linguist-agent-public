@@ -1,9 +1,9 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { createWorkspace, readJsonFile, workspacePath, writeJsonFile } from "./workspace.js";
+import { createWorkspace, workspacePath, writeJsonFile } from "./workspace.js";
 import { readProjectManifest } from "./project_manifest.js";
 import { readWorkbookRows, type WorkbookRows } from "./workbook_mapping.js";
-import { termbasePath, type TermbaseEntry } from "./termbase.js";
+import { readTermbaseEntries, termbasePath, type TermbaseEntry, writeTermbaseEntries } from "./termbase.js";
 import { termHistoryPath, termHistoryRowsFromSheet, writeTermHistoryRows, type TermHistoryRecord } from "./term_history.js";
 import { assetBlocksPath, type AssetBlock } from "./asset_blocks.js";
 import type { AssetAuthorityTier } from "./asset_ingestion_contract.js";
@@ -500,7 +500,7 @@ export async function confirmTypedAssetCandidates(
   const termRows = rows.filter((row) => row.kind === "term_candidate" && row.source && row.target);
   const historyRows = rows.filter((row) => row.kind === "term_history_candidate");
   const termbaseFile = termbasePath(workspaceRoot, options.projectId);
-  const existing = options.append === false ? [] : await readJsonFile<TermbaseEntry[]>(termbaseFile, []);
+  const existing = options.append === false ? [] : await readTermbaseEntries(workspaceRoot, options.projectId);
   const seenTerms = new Set(existing.map((entry) => `${normalized(entry.source)}\u0000${normalized(entry.target)}`));
   const confirmedTerms = termRows.filter((row) => {
     const key = `${normalized(row.source ?? "")}\u0000${normalized(row.target ?? "")}`;
@@ -523,7 +523,7 @@ export async function confirmTypedAssetCandidates(
       origin: "table",
     })),
   ];
-  if (confirmedTerms.length || options.append === false) await writeJsonFile(termbaseFile, nextTerms);
+  if (confirmedTerms.length || options.append === false) await writeTermbaseEntries(workspaceRoot, options.projectId, nextTerms, options.append === false ? null : existing);
   const records: TermHistoryRecord[] = historyRows.map((row): TermHistoryRecord => ({
     id: row.id,
     sourceFile: row.assetPath,

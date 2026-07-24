@@ -34,6 +34,7 @@ import { acceptedQaWriteRisk } from "./qa_write_gate.js";
 import { deliveryRiskFindingId, readDeliveryRiskWaivers, type DeliveryRiskWaiver } from "./delivery_waivers.js";
 import { qualityAuditFindingLedgerEvents, runQualityAudit } from "./quality_audit.js";
 import { appendQualityDecisionLedgerOnce, authorizeQualityLedgerExport, type QualityDecisionLedgerInput } from "./quality_decision_ledger.js";
+import { assertCatGovernanceLegacyAllowed, catGovernancePersistenceFor, readCatGovernanceReadCache } from "./cat_governance_storage.js";
 
 export type DeliverySeverity = "blocker" | "warning" | "waived";
 
@@ -651,8 +652,13 @@ async function appendExportAudit(
     templateDocxPath: options.templateDocxPath,
   };
   const path = exportAuditPath(workspaceRoot, result.projectId);
-  await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify(record)}\n`, "utf8");
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  if (persistence) await persistence.appendExportAudit(result.projectId, record);
+  else {
+    await assertCatGovernanceLegacyAllowed(workspaceRoot);
+    await mkdir(dirname(path), { recursive: true });
+    await appendFile(path, `${JSON.stringify(record)}\n`, "utf8");
+  }
   return { auditId, path };
 }
 
@@ -661,6 +667,11 @@ export async function readExportAuditRecords(
   projectId: string,
   batchId?: string,
 ): Promise<ExportAuditRecord[]> {
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  if (persistence) return persistence.readExportAudits(projectId, batchId);
+  const cached = await readCatGovernanceReadCache<ExportAuditRecord[]>(workspaceRoot, "export-audit", projectId);
+  if (cached) return (batchId ? cached.filter((record) => record.batchId === batchId) : cached).sort((a, b) => b.exportedAt.localeCompare(a.exportedAt));
+  await assertCatGovernanceLegacyAllowed(workspaceRoot);
   const path = exportAuditPath(workspaceRoot, projectId);
   let raw = "";
   try {

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTaskWorkspace, defaultSubagentAsyncRoot, readCatWorkflowRun, type TeamRoleId } from "@linguist-agent/cat-data";
 import { runPrivateEvalCanonicalTeam } from "../packages/cat-server/src/private_eval_canonical_team.js";
+import { verifiedPromptRequestBudget } from "./prompt_budget_fixture.js";
 
 const root = await mkdtemp(join(tmpdir(), "la-canonical-eval-team-"));
 const asyncRoot = defaultSubagentAsyncRoot();
@@ -49,6 +50,7 @@ const result = await runPrivateEvalCanonicalTeam({
   onRoleEvent: (event) => { lifecycle.push(`${event.roleId}:${event.type}`); },
   workflowDeps: {
     repoRoot: root,
+    resolveModelPromptTokenBudget: async (provider, modelId) => verifiedPromptRequestBudget(provider, modelId),
     json: () => undefined,
     readBody: async () => ({}),
     requireString: (value, label) => {
@@ -108,7 +110,7 @@ assert.equal(new Set(calls.map((call) => call.roleId)).size, calls.length);
 assert.ok(calls.every((call) => !call.task.includes("batch_read")), "the exact Eval segment scope should be inline instead of forcing a redundant batch read");
 assert.ok(calls.every((call) => call.task.includes("Scoped segment packet:")));
 assert.ok(calls.every((call) => call.task.includes("[eval-0001]") && !call.task.includes("原始项目:Sheet1")));
-assert.ok(calls.every((call) => call.task.includes("Locale: zh-CN -> en-US")), "isolated Team prompts must inherit the canonical batch locale");
+assert.ok(calls.every((call) => call.task.includes("Locale: zh-CN -&gt; en-US")), "isolated Team prompts must inherit the canonical batch locale inside an untrusted-source envelope");
 assert.ok(calls.every((call) => !call.task.includes("tm_lookup")), "blind Eval must use only its replayable scoped packet");
 assert.ok(calls.every((call) => call.task.includes("Callable CAT evidence tools: none")));
 assert.ok(calls.every((call) => call.task.includes("No artifact-read tool is available") && !call.task.includes("Use team_artifact_read")));

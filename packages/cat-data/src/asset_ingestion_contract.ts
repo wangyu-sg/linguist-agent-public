@@ -113,8 +113,6 @@ export interface AssetParsePreviewOptions {
   maxSheets?: number;
   sheetOffset?: number;
   sampleRows?: number;
-  mineruCommand?: string;
-  mineruTimeoutMs?: number;
 }
 
 export interface AssetMappingSuggestion extends AssetConfirmedMapping {

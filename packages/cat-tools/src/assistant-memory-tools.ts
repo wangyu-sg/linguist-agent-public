@@ -1,10 +1,10 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
-  listAssistantMemories,
   proposeAssistantMemory,
-  type AssistantMemoryEntry,
+  searchAssistantMemories,
   type AssistantMemoryKind,
+  type AssistantMemoryPersistence,
   type AssistantMemoryScope,
 } from "@linguist-agent/cat-data";
 
@@ -22,13 +22,12 @@ const proposeParameters = Type.Object({
   text: Type.String({ description: "One specific fact, preference, or guidance item to propose for long-term recall." }),
 });
 
-function score(query: string, entry: AssistantMemoryEntry): number {
-  const normalized = query.toLocaleLowerCase().trim();
-  if (!normalized) return 0;
-  const text = entry.text.toLocaleLowerCase();
-  if (text.includes(normalized)) return 1;
-  const terms = normalized.split(/[\s,.;:!?，。！？、；：]+/u).filter(Boolean);
-  return terms.length ? terms.filter((term) => text.includes(term)).length / terms.length : 0;
+function recallContext(scope: AssistantMemoryScope) {
+  if (scope.kind === "personal") return { includePersonal: true };
+  if (scope.kind === "project") return { projectId: scope.projectId };
+  if (scope.kind === "client") return { clientId: scope.clientId };
+  if (scope.kind === "franchise") return { franchiseId: scope.franchiseId };
+  return { locale: scope.locale };
 }
 
 export function createAssistantMemoryTools(options: {
@@ -36,6 +35,7 @@ export function createAssistantMemoryTools(options: {
   scope: AssistantMemoryScope;
   sourceTaskId: string;
   personalOnly?: boolean;
+  store?: AssistantMemoryPersistence;
 }) {
   return [
     defineTool<typeof searchParameters>({
@@ -49,18 +49,30 @@ export function createAssistantMemoryTools(options: {
       ],
       parameters: searchParameters,
       async execute(_id, params) {
-        const entries = (await listAssistantMemories(options.runtimeRoot, options.scope, { status: "active" }))
-          .map((entry) => ({ entry, score: score(params.query, entry) }))
-          .filter((result) => result.score > 0)
-          .sort((left, right) => right.score - left.score || right.entry.updatedAt.localeCompare(left.entry.updatedAt))
-          .slice(0, params.limit ?? 8);
-        const text = entries.length
+        const report = await searchAssistantMemories(options.runtimeRoot, {
+          query: params.query,
+          context: recallContext(options.scope),
+          limit: params.limit ?? 8,
+          store: options.store,
+        });
+        const text = report.hits.length
           ? [
               "Explicitly confirmed memory (recall-only; not citable evidence):",
-              ...entries.map(({ entry }) => `- [${entry.kind}] ${entry.text} (memory: ${entry.id}, source task: ${entry.source.taskId})`),
+              ...report.hits.map((hit) => `- [${hit.memory.kind}] ${hit.memory.text} (memory: ${hit.memory.id}, scope: ${hit.memory.scope.kind}, source task: ${hit.memory.source.taskId}, reason: ${hit.reason})`),
+              ...(report.conflicts.length ? ["Conflicting memories were withheld pending explicit user resolution."] : []),
             ].join("\n")
-          : "No matching confirmed memory was found.";
-        return { content: [{ type: "text" as const, text }], details: { memoryIds: entries.map(({ entry }) => entry.id), scope: options.scope } };
+          : report.conflicts.length
+            ? "Matching Confirmed Memory is withheld because an explicit conflict needs user resolution. Memory remains recall-only and is not citable evidence."
+            : "No matching confirmed memory was found.";
+        return {
+          content: [{ type: "text" as const, text }],
+          details: {
+            memoryIds: report.hits.map((hit) => hit.memory.id),
+            scope: options.scope,
+            semantic: report.semantic,
+            conflicts: report.conflicts,
+          },
+        };
       },
     }),
     defineTool<typeof proposeParameters>({
@@ -85,6 +97,7 @@ export function createAssistantMemoryTools(options: {
           kind,
           text: params.text,
           source: { taskId: options.sourceTaskId },
+          store: options.store,
         });
         return {
           content: [{ type: "text" as const, text: `Memory proposal ${proposal.id} is awaiting explicit user confirmation. It is not active recall yet.` }],

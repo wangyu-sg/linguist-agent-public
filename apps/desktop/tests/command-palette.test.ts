@@ -119,9 +119,10 @@ test("arrow selection wraps while Home and End remain deterministic", () => {
 });
 
 test("Command-K crosses the context bridge only as a fixed main-to-renderer command", async () => {
-  const [main, preload, palette, productWorkspace, workspace] = await Promise.all([
-    readFile(new URL("../src/main.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../src/preload.cjs", import.meta.url), "utf8"),
+  const [contract, main, preload, palette, productWorkspace, workspace] = await Promise.all([
+    readFile(new URL("../src/ipc-contract.cts", import.meta.url), "utf8"),
+    readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/preload.cts", import.meta.url), "utf8"),
     readFile(new URL("../src/renderer/command/CommandPalette.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/renderer/shell/ProductWorkspace.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/renderer/workspace/Workspace.tsx", import.meta.url), "utf8"),
@@ -130,8 +131,8 @@ test("Command-K crosses the context bridge only as a fixed main-to-renderer comm
   assert.match(main, /sendCommand\("show-command-palette"\)/);
   assert.match(main, /accelerator: "CommandOrControl\+Shift\+I"/);
   assert.match(main, /sendCommand\("toggle-inspector"\)/);
-  assert.match(preload, /"show-command-palette"/);
-  assert.match(preload, /"toggle-inspector"/);
+  assert.match(contract, /"show-command-palette"/);
+  assert.match(contract, /"toggle-inspector"/);
   assert.doesNotMatch(preload, /sendCommand|ipcRenderer\.send\("app:command"/);
   assert.match(palette, /previousFocus\.current/);
   assert.match(palette, /target\.focus\(\)/);

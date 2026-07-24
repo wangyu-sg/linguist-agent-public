@@ -6,6 +6,7 @@ import { compareFormattingSignatures } from "./format_signatures.js";
 import { readProjectTagRuleContext, type ProjectTagRuleContext } from "./tag_rules.js";
 import type { TeamCandidateTarget, TeamDecision, TeamRoleFinding, TeamRoleId, TeamRolePass } from "./team_workflow.js";
 import type { DeliveryQaReport } from "./delivery_qa.js";
+import { assertWorkflowEvalLegacyAllowed, workflowEvalPersistenceFor } from "./workflow_eval_storage.js";
 
 export type RiskKind =
   | "tag"
@@ -181,6 +182,8 @@ async function withWorkflowArtifactMutationLock<T>(
 export function workflowArtifactsPath(workspaceRoot: string, projectId: string): string {
   return workspacePath(createWorkspace(workspaceRoot, projectId), "workflow_artifacts.json");
 }
+
+function workflowArtifactsStorageKey(projectId: string): string { return `artifacts/${projectId}`; }
 
 export function emptyWorkflowArtifacts(projectId: string, artifactPath: string): ProjectWorkflowArtifactsPayload {
   return {
@@ -376,7 +379,10 @@ async function buildProjectRiskQueue(workspaceRoot: string, projectId: string): 
 export async function readWorkflowArtifacts(workspaceRoot: string, projectId: string): Promise<ProjectWorkflowArtifactsPayload> {
   const path = workflowArtifactsPath(workspaceRoot, projectId);
   const defaults = emptyWorkflowArtifacts(projectId, path);
-  const stored = await readJsonFile<Partial<WorkflowArtifacts>>(path, {});
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  const stored = persistence
+    ? (await persistence.read(workflowArtifactsStorageKey(projectId)) ?? {}) as Partial<WorkflowArtifacts>
+    : (await assertWorkflowEvalLegacyAllowed(workspaceRoot), await readJsonFile<Partial<WorkflowArtifacts>>(path, {}));
   const generatedRiskQueue = await buildProjectRiskQueue(workspaceRoot, projectId);
   const storedRiskQueue = stored.riskQueue ?? defaults.riskQueue;
   const mergedRiskQueue = [
@@ -410,10 +416,13 @@ async function writeWorkflowArtifactsUnlocked(
 ): Promise<ProjectWorkflowArtifactsPayload> {
   const path = workflowArtifactsPath(workspaceRoot, projectId);
   const { projectId: _projectId, artifactPath: _artifactPath, ...stored } = artifacts as ProjectWorkflowArtifactsPayload;
-  await writeJsonFile(path, {
+  const value = {
     ...stored,
     authorityDecisions: resolveWorkflowAuthorityDecisions(artifacts.authorityEvidenceRows ?? []),
-  });
+  };
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) await persistence.write(workflowArtifactsStorageKey(projectId), value);
+  else { await assertWorkflowEvalLegacyAllowed(workspaceRoot); await writeJsonFile(path, value); }
   return readWorkflowArtifacts(workspaceRoot, projectId);
 }
 

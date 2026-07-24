@@ -78,6 +78,36 @@ try {
   assert.equal((await request("GET", "/api/memories?scope=project&projectId=project-b")).data.memories.length, 0, "memory scope cannot be forged across projects");
   assert.equal((await request("DELETE", `/api/memories/${id}?scope=personal`)).data.memory.status, "revoked");
 
+  const firstClient = await request("POST", "/api/memories", {
+    scope: "client",
+    clientId: "client-a",
+    kind: "guidance",
+    text: "Use Gem for 宝石.",
+    conflictKey: "item-term",
+    source: { taskId: "client-task" },
+  });
+  await request("POST", `/api/memories/${firstClient.data.memory.id}/confirm`, { scope: "client", clientId: "client-a" });
+  const secondClient = await request("POST", "/api/memories", {
+    scope: "client",
+    clientId: "client-a",
+    kind: "guidance",
+    text: "Use Jewel for 宝石.",
+    conflictKey: "item-term",
+    source: { taskId: "client-task" },
+  });
+  const clientRows = await request("GET", "/api/memories?scope=client&clientId=client-a");
+  assert.deepEqual(clientRows.data.memories.find((memory: { id: string }) => memory.id === secondClient.data.memory.id)?.conflictsWith, [firstClient.data.memory.id]);
+  const resolvedClient = await request("POST", `/api/memories/${secondClient.data.memory.id}/confirm`, {
+    scope: "client",
+    clientId: "client-a",
+    supersedes: [firstClient.data.memory.id],
+  });
+  assert.equal(resolvedClient.data.memory.status, "active");
+  assert.equal((await request("GET", "/api/memories?scope=client&clientId=client-a")).data.memories.find((memory: { id: string }) => memory.id === firstClient.data.memory.id)?.status, "superseded");
+  const preview = await request("GET", "/api/memories/search?scope=client&clientId=client-a&q=%E5%AE%9D%E7%9F%B3");
+  assert.equal(preview.data.semantic.state, "lexical_only");
+  assert.equal(preview.data.hits[0]?.memory.id, secondClient.data.memory.id);
+
   assert.equal((await request("GET", "/api/library?scope=project")).status, 400);
   assert.equal((await request("POST", "/api/library/import", { scope: "personal", sourcePaths: [] })).status, 400);
 

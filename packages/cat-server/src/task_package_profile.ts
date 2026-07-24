@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
+  assertLegacyTaskFileWriteAllowed,
   readJsonFile,
   writeJsonFile,
   type TaskRunResourceManifest,
@@ -121,6 +122,16 @@ export interface TaskPackageProfileStoreInput {
   taskId: string;
 }
 
+export interface TaskPackageProfilePersistence {
+  key(input: TaskPackageProfileStoreInput): string;
+  read(input: TaskPackageProfileStoreInput): Promise<unknown | null>;
+  write(
+    input: TaskPackageProfileStoreInput,
+    expected: TaskPackageProfile,
+    next: TaskPackageProfile,
+  ): Promise<void>;
+}
+
 function safeId(value: string, label: string): string {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) throw new Error(`${label} must be a safe identifier.`);
   return value;
@@ -128,6 +139,44 @@ function safeId(value: string, label: string): string {
 
 function profilePath(input: TaskPackageProfileStoreInput): string {
   return resolve(input.repoRoot, "data", "projects", safeId(input.projectId, "projectId"), "task_workspace", "tasks", safeId(input.taskId, "taskId"), "resource-profile.json");
+}
+
+let installedProfilePersistence: {
+  root: string;
+  persistence: TaskPackageProfilePersistence;
+} | null = null;
+
+export function createFileTaskPackageProfilePersistence(repoRoot: string): TaskPackageProfilePersistence {
+  const root = resolve(repoRoot);
+  return {
+    key: (input) => profilePath({ ...input, repoRoot: root }),
+    read: (input) => readJsonFile<unknown | null>(profilePath({ ...input, repoRoot: root }), null),
+    async write(input, _expected, next) {
+      assertLegacyTaskFileWriteAllowed(root);
+      await writeJsonFile(profilePath({ ...input, repoRoot: root }), next, { durability: "critical" });
+    },
+  };
+}
+
+export function installTaskPackageProfilePersistence(input: {
+  root: string;
+  persistence: TaskPackageProfilePersistence;
+}): void {
+  if (installedProfilePersistence) {
+    throw new Error("canonical Task Package profile storage is already installed.");
+  }
+  installedProfilePersistence = Object.freeze({
+    root: resolve(input.root),
+    persistence: input.persistence,
+  });
+}
+
+function resolveTaskPackageProfilePersistence(input: TaskPackageProfileStoreInput): TaskPackageProfilePersistence {
+  if (!installedProfilePersistence) return createFileTaskPackageProfilePersistence(input.repoRoot);
+  if (installedProfilePersistence.root !== resolve(input.repoRoot)) {
+    throw new Error("canonical Task Package profile storage is installed for another root.");
+  }
+  return installedProfilePersistence.persistence;
 }
 
 function nonEmpty(value: unknown, label: string): string {
@@ -222,7 +271,7 @@ function emptyProfile(taskId: string): TaskPackageProfile {
 }
 
 export async function readTaskPackageProfile(input: TaskPackageProfileStoreInput): Promise<TaskPackageProfile> {
-  const value = await readJsonFile<unknown | null>(profilePath(input), null);
+  const value = await resolveTaskPackageProfilePersistence(input).read(input);
   return value === null ? emptyProfile(input.taskId) : parseProfile(value, input.taskId);
 }
 
@@ -390,9 +439,10 @@ export async function applyTaskPackageProfile(input: {
   selections: TaskPackageSelection[];
   executableApprovals?: TaskPackageExecutableApproval[];
 }): Promise<TaskPackageProfile> {
-  const path = profilePath(input.store);
-  return withProfileWriteLock(path, async () => {
-    const current = await readTaskPackageProfile(input.store);
+  const persistence = resolveTaskPackageProfilePersistence(input.store);
+  return withProfileWriteLock(persistence.key(input.store), async () => {
+    const stored = await persistence.read(input.store);
+    const current = stored === null ? emptyProfile(input.store.taskId) : parseProfile(stored, input.store.taskId);
     if (current.revision !== input.expectedRevision) throw new TaskPackageProfileError(409, "revision_conflict", `Task Package profile revision ${current.revision} does not match expected ${input.expectedRevision}.`);
     const preview = await previewTaskPackageProfile({
       profile: current,
@@ -410,7 +460,7 @@ export async function applyTaskPackageProfile(input: {
       executableApprovals: preview.executableApprovals,
       updatedAt: new Date().toISOString(),
     };
-    await writeJsonFile(path, next);
+    await persistence.write(input.store, current, next);
     return next;
   });
 }

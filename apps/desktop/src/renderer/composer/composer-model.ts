@@ -44,34 +44,45 @@ export type AgentComposerRunStatus =
   | null;
 export type AgentComposerAction = "send" | "sending" | "steer" | "follow_up" | "stop" | "stopping";
 
+/**
+ * Run actions are driven exclusively by the server-projected activeRunId.
+ * Historical Runs may retain metadata such as stopAvailable while a snapshot
+ * is reconnecting, but must never become a locally inferred active authority.
+ */
+export function selectCanonicalActiveRun<Run extends { id: string }>(
+  activeRunId: string | null | undefined,
+  runs: readonly Run[],
+): Run | null {
+  if (!activeRunId) return null;
+  return runs.find((run) => run.id === activeRunId) ?? null;
+}
+
 /** Codex spec 03 §2:提交键 tooltip 四态 Send / Stop / Queue / Steer(+本地瞬态)。 */
 export type AgentComposerSendState = "send" | "sending" | "stop" | "stopping" | "queue" | "steer";
 
 export interface AgentComposerSendButton {
   state: AgentComposerSendState;
   tooltip: string;
-  /** spec 03 §3:stop 态按钮内嵌 Esc kbd 提示。 */
-  kbd: "Esc" | null;
 }
 
 /**
- * 单按钮状态机:idle→Send;streaming→Stop(内嵌 Esc kbd);streaming+queue 模式→Queue;
- * streaming+steer 模式→Steer。本地 follow_up/steer action 与 spec 的 Queue/Steer 一一对应。
+ * 单按钮状态机：闲置时发送，运行中在有草稿时默认立即调整。排队动作是
+ * 一个键盘变体，不再把投递模式做成常驻的两段式开关。
  */
 export function deriveAgentComposerSendButton(action: AgentComposerAction): AgentComposerSendButton {
   switch (action) {
     case "stop":
-      return { state: "stop", tooltip: "停止当前 Run(Esc)", kbd: "Esc" };
+      return { state: "stop", tooltip: "停止当前 Run (Esc)" };
     case "stopping":
-      return { state: "stopping", tooltip: "正在停止…", kbd: null };
+      return { state: "stopping", tooltip: "正在停止…" };
     case "sending":
-      return { state: "sending", tooltip: "正在发送…", kbd: null };
+      return { state: "sending", tooltip: "正在发送…" };
     case "follow_up":
-      return { state: "queue", tooltip: "排队:当前 turn 完成后执行(⌘↩)", kbd: null };
+      return { state: "queue", tooltip: "完成后执行 (⌥⌘↩)" };
     case "steer":
-      return { state: "steer", tooltip: "转向:立即插入当前 turn(⌘↩)", kbd: null };
+      return { state: "steer", tooltip: "立即调整 (⌘↩)" };
     default:
-      return { state: "send", tooltip: "发送(⌘↩)", kbd: null };
+      return { state: "send", tooltip: "发送 (⌘↩)" };
   }
 }
 
@@ -84,7 +95,7 @@ export interface AgentComposerPresentationInput {
   recipientName?: string | null;
   runStatus?: AgentComposerRunStatus;
   stopAvailable?: boolean;
-  /** Queue/Steer replaces Stop only while the user has a message to submit. */
+  /** 有草稿时，运行中的主发送按钮默认承担立即调整。 */
   hasDraft?: boolean;
   activeDelivery?: "steer" | "follow_up" | null;
   isSending?: boolean;
@@ -125,7 +136,7 @@ export function deriveAgentComposerPresentation({
       canSend: !isSending,
       hint: isSending ? "正在创建 Task…" : "发送后创建 Task",
       layoutLock: "multiline",
-      placeholder: "交代这单的活儿：目标、语气、禁区，越具体越好。",
+      placeholder: "描述需要完成的工作…",
       sendButton: deriveAgentComposerSendButton(action),
     };
   }
@@ -145,29 +156,25 @@ export function deriveAgentComposerPresentation({
         : "send";
 
   const placeholder = runIsStopping
-    ? "Run 正在停止；写好的草稿会留住…"
+    ? "Run 正在停止，草稿会保留…"
     : action === "steer"
-      ? "现在补充方向；消息会进入当前 Pi turn…"
-      : action === "follow_up"
-        ? "安排下一步；消息会在当前 turn 完成后执行…"
+      ? "补充要求或方向…"
+    : action === "follow_up"
+        ? "安排当前 Run 完成后的下一步…"
         : runIsActive
-          ? "先把话写下；当前 Run 完成后再发送…"
+          ? "补充要求或方向…"
       : recipientName
-        ? `追问 ${recipientName}：哪里不对、要怎么改…`
+        ? `给 ${recipientName} 留言…`
           : focusedSegmentId
-            ? "问这一句，或交代要改成什么样…"
-          : hasHistory
-            ? "接着说：改哪里、盯什么、做到什么程度…"
-            : isStandalone
-              ? "你想完成什么？"
-              : "交代你想做成什么样：审校、翻译，还是查问题…";
+            ? "说明这一句要如何处理…"
+          : "输入消息…";
 
   const hint = action === "steer"
-    ? "⌘↩ 现在调整 · ⌘. 停止"
+    ? "⌘↩ 立即调整 · ⌥⌘↩ 完成后执行 · Esc 停止"
     : action === "follow_up"
-      ? "⌘↩ 完成后执行 · ⌘. 停止"
+      ? "⌥⌘↩ 完成后执行 · Esc 停止"
       : action === "stop"
-    ? "⌘. 停止 · 草稿会保留"
+    ? "Esc 停止 · 草稿会保留"
     : action === "stopping"
       ? "正在停止…"
       : action === "sending"

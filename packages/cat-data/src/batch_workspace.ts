@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import {
   countPhrasePlaceholders,
@@ -20,6 +20,7 @@ import { readXlsxBatchRows } from "./table_batch.js";
 import { assertChangeEvidenceAllowed, assertSegmentWritePolicyAllowed } from "./write_policy.js";
 import { createWorkspace, readJsonFile, workspacePath, writeJsonFile, type CatWorkspace } from "./workspace.js";
 import { readProjectTagRuleContext } from "./tag_rules.js";
+import { assertCatCoreLegacyAllowed, catCorePersistenceFor, readCatCoreReadCache, catCoreReadCachePath } from "./cat_core_storage.js";
 
 export type SegmentStatus = "new" | "draft" | "confirmed";
 export type BatchWorkflowStage = "translate" | "edit" | "proof" | "delivery";
@@ -156,6 +157,32 @@ export function batchPath(workspace: CatWorkspace, batchId: string): string {
   return workspacePath(workspace, "batches", batchId, "batch.json");
 }
 
+async function readExistingBatch(workspaceRoot: string, projectId: string, batchId: string): Promise<CatBatch | null> {
+  try {
+    return await readBatch(workspaceRoot, projectId, batchId);
+  } catch (error) {
+    if (error instanceof Error && error.message === `Batch ${batchId} not found for project ${projectId}.`) return null;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+export async function writeBatch(
+  workspaceRoot: string,
+  projectId: string,
+  batch: CatBatch,
+  expected: CatBatch | null,
+): Promise<void> {
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  if (persistence) {
+    await persistence.writeBatch(projectId, batch.batchId, batch, expected);
+    return;
+  }
+  await assertCatCoreLegacyAllowed(workspaceRoot);
+  await mkdir(dirname(batchPath(createWorkspace(workspaceRoot, projectId), batch.batchId)), { recursive: true });
+  await writeJsonFile(batchPath(createWorkspace(workspaceRoot, projectId), batch.batchId), batch);
+}
+
 function safeBatchId(value: string): string {
   return value.replace(/[/:]+/g, "-").replace(/\s+/g, " ").trim() || "batch";
 }
@@ -245,7 +272,7 @@ export async function importPhraseBatch(
   const workspace = createWorkspace(workspaceRoot, options.projectId);
   const batchId = safeBatchId(options.batchId ?? parsed.batchId);
   const path = batchPath(workspace, batchId);
-  const existing = await readJsonFile<CatBatch | null>(path, null);
+  const existing = await readExistingBatch(workspaceRoot, options.projectId, batchId);
   if (existing && !options.overwrite) {
     throw new Error(`Batch ${batchId} already exists. Pass overwrite=true to replace it.`);
   }
@@ -289,8 +316,7 @@ export async function importPhraseBatch(
     }))),
   };
 
-  await mkdir(dirname(path), { recursive: true });
-  await writeJsonFile(path, batch);
+  await writeBatch(workspaceRoot, options.projectId, batch, existing);
   await writeSourceContextRowsForBatch(workspaceRoot, batch);
   return { batch, path };
 }
@@ -310,7 +336,7 @@ export async function importSdlxliffBatch(
   const workspace = createWorkspace(workspaceRoot, options.projectId);
   const batchId = safeBatchId(options.batchId ?? parsed.batchId);
   const path = batchPath(workspace, batchId);
-  const existing = await readJsonFile<CatBatch | null>(path, null);
+  const existing = await readExistingBatch(workspaceRoot, options.projectId, batchId);
   if (existing && !options.overwrite) {
     throw new Error(`Batch ${batchId} already exists. Pass overwrite=true to replace it.`);
   }
@@ -348,8 +374,7 @@ export async function importSdlxliffBatch(
     segments,
   };
 
-  await mkdir(dirname(path), { recursive: true });
-  await writeJsonFile(path, batch);
+  await writeBatch(workspaceRoot, options.projectId, batch, existing);
   await writeSourceContextRowsForBatch(workspaceRoot, batch);
   return { batch, path };
 }
@@ -369,7 +394,7 @@ export async function importMqxliffBatch(
   const workspace = createWorkspace(workspaceRoot, options.projectId);
   const batchId = safeBatchId(options.batchId ?? parsed.batchId);
   const path = batchPath(workspace, batchId);
-  const existing = await readJsonFile<CatBatch | null>(path, null);
+  const existing = await readExistingBatch(workspaceRoot, options.projectId, batchId);
   if (existing && !options.overwrite) {
     throw new Error(`Batch ${batchId} already exists. Pass overwrite=true to replace it.`);
   }
@@ -407,8 +432,7 @@ export async function importMqxliffBatch(
     segments,
   };
 
-  await mkdir(dirname(path), { recursive: true });
-  await writeJsonFile(path, batch);
+  await writeBatch(workspaceRoot, options.projectId, batch, existing);
   await writeSourceContextRowsForBatch(workspaceRoot, batch);
   return { batch, path };
 }
@@ -434,7 +458,7 @@ async function writeGenericBatch(
   const workspace = createWorkspace(workspaceRoot, options.projectId);
   const batchId = safeBatchId(options.batchId);
   const path = batchPath(workspace, batchId);
-  const existing = await readJsonFile<CatBatch | null>(path, null);
+  const existing = await readExistingBatch(workspaceRoot, options.projectId, batchId);
   if (existing && !options.overwrite) {
     throw new Error(`Batch ${batchId} already exists. Pass overwrite=true to replace it.`);
   }
@@ -470,8 +494,7 @@ async function writeGenericBatch(
     duplicateSourceGroups: buildDuplicateGroups(segments),
     segments,
   };
-  await mkdir(dirname(path), { recursive: true });
-  await writeJsonFile(path, batch);
+  await writeBatch(workspaceRoot, options.projectId, batch, existing);
   await writeSourceContextRowsForBatch(workspaceRoot, batch);
   return { batch, path };
 }
@@ -551,7 +574,11 @@ export async function importXlsxBatch(
 }
 
 export async function readBatch(workspaceRoot: string, projectId: string, batchId: string): Promise<CatBatch> {
-  const batch = await readJsonFile<CatBatch | null>(batchPath(createWorkspace(workspaceRoot, projectId), batchId), null);
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  const batch = persistence
+    ? await persistence.readBatch(projectId, batchId)
+    : (await readCatCoreReadCache<CatBatch>(workspaceRoot, "batch", projectId, batchId))
+      ?? (await assertCatCoreLegacyAllowed(workspaceRoot), await readJsonFile<CatBatch | null>(batchPath(createWorkspace(workspaceRoot, projectId), batchId), null));
   if (!batch) throw new Error(`Batch ${batchId} not found for project ${projectId}.`);
   return {
     ...batch,
@@ -561,9 +588,25 @@ export async function readBatch(workspaceRoot: string, projectId: string, batchI
 }
 
 export async function listBatches(workspaceRoot: string, projectId: string): Promise<Array<{ batchId: string; path: string }>> {
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  if (persistence) return persistence.listBatches(projectId);
+  const cachedRoot = dirname(catCoreReadCachePath(workspaceRoot, "batch", projectId, "__root__"));
+  try {
+    const cachedEntries = await readdir(cachedRoot, { withFileTypes: true });
+    const cached = await Promise.all(cachedEntries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map(async (entry) => ({
+        batch: JSON.parse(await readFile(join(cachedRoot, entry.name), "utf8")) as CatBatch,
+      })));
+    return cached
+      .sort((left, right) => left.batch.batchId.localeCompare(right.batch.batchId))
+      .map(({ batch }) => ({ batchId: batch.batchId, path: batchPath(createWorkspace(workspaceRoot, projectId), batch.batchId) }));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await assertCatCoreLegacyAllowed(workspaceRoot);
   const projectDir = workspacePath(createWorkspace(workspaceRoot, projectId), "batches");
   try {
-    const { readdir } = await import("node:fs/promises");
     const entries = await readdir(projectDir, { withFileTypes: true });
     return entries
       .filter((entry) => entry.isDirectory())
@@ -591,9 +634,8 @@ async function updateSegmentTargetUnlocked(
   options: SegmentUpdateOptions,
 ): Promise<SegmentUpdateResult> {
   const evidenceSources = assertSegmentWriteAllowed(options);
-  const workspace = createWorkspace(workspaceRoot, projectId);
-  const path = batchPath(workspace, batchId);
   const batch = await readBatch(workspaceRoot, projectId, batchId);
+  const expectedBatch = structuredClone(batch);
   const ruleContext = await readProjectTagRuleContext(workspaceRoot, projectId);
   const primary = batch.segments.find((segment) => segment.id === options.segmentId);
   if (!primary) throw new Error(`Segment ${options.segmentId} not found in batch ${batchId}.`);
@@ -656,8 +698,9 @@ async function updateSegmentTargetUnlocked(
   }
 
   batch.updatedAt = now;
-  await writeJsonFile(path, batch);
+  await writeBatch(workspaceRoot, projectId, batch, expectedBatch);
   if (options.confirm) {
+    const workspace = createWorkspace(workspaceRoot, projectId);
     const tm = createTmStore(workspace);
     for (const segment of changedSegments) {
       if (!segment.source.trim() || !segment.target.trim()) continue;

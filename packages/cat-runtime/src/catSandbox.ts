@@ -1,9 +1,9 @@
 import { createBashToolDefinition, createLocalBashOperations, type BashOperations, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { SandboxManager, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import type { CatWorkspace } from "@linguist-agent/cat-data";
+import { normalizeNetworkCapabilityHost, ProcessCapabilityBroker } from "@linguist-agent/cat-data";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { domainToASCII } from "node:url";
 import { CAT_PROTECTED_CREDENTIAL_PATHS } from "./catSafetyKernel.js";
 
 export const CAT_BASH_DEFAULT_ALLOWED_DOMAINS = [
@@ -26,6 +26,11 @@ export const CAT_BASH_DEFAULT_ALLOWED_DOMAINS = [
 export const CAT_BASH_SANDBOX_SEED_DOMAINS = ["api.deepseek.com", "api.tavily.com"] as const;
 
 export type CatSandboxPhase = "off" | "observe" | "enforce";
+
+export interface CatSandboxPhaseOptions {
+  /** Explicit test/development capability. Stable product callers never set it. */
+  allowUnsafePhase?: boolean;
+}
 
 export interface CatSandboxHealthReport {
   engine: "none" | "srt";
@@ -61,16 +66,12 @@ export function validateSandboxAllowedDomains(domains: readonly string[]): strin
   const result: string[] = [];
   const seen = new Set<string>();
   for (const domain of domains) {
-    const trimmed = domain.trim().toLowerCase();
-    if (!trimmed) continue;
-    if (trimmed.includes("*")) throw new Error(`Sandbox egress allowlist requires exact host entries; wildcard rejected: ${domain}`);
-    if (trimmed.includes("\0") || trimmed.includes("%00")) throw new Error(`Sandbox egress allowlist rejected null byte host: ${domain}`);
-    if (/[\s\r\n/:]/.test(trimmed) || trimmed.endsWith(".") || trimmed.startsWith(".")) {
-      throw new Error(`Sandbox egress allowlist requires exact host entries; invalid host: ${domain}`);
-    }
-    const ascii = domainToASCII(trimmed);
-    if (!ascii || ascii !== trimmed || ascii.includes("*") || ascii.includes("\0") || ascii.includes("%00")) {
-      throw new Error(`Sandbox egress allowlist requires exact host entries; invalid host: ${domain}`);
+    if (!domain.trim()) continue;
+    let ascii: string;
+    try {
+      ascii = normalizeNetworkCapabilityHost(domain);
+    } catch (error) {
+      throw new Error(`Sandbox egress allowlist requires exact host entries: ${error instanceof Error ? error.message : String(error)}`);
     }
     if (!seen.has(ascii)) {
       seen.add(ascii);
@@ -88,9 +89,16 @@ export function sandboxAllowedDomainsFromEnv(env: NodeJS.ProcessEnv = process.en
   ]);
 }
 
-export function catSandboxPhaseFromEnv(env: NodeJS.ProcessEnv = process.env): CatSandboxPhase {
+export function catSandboxPhaseFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  options: CatSandboxPhaseOptions = {},
+): CatSandboxPhase {
   const raw = (env.LA_CAT_SANDBOX_PHASE ?? "enforce").trim().toLowerCase();
-  if (raw === "off" || raw === "observe" || raw === "enforce") return raw;
+  if (raw === "enforce") return raw;
+  if ((raw === "off" || raw === "observe") && options.allowUnsafePhase === true) return raw;
+  if (raw === "off" || raw === "observe") {
+    throw new Error(`Stable runtime requires LA_CAT_SANDBOX_PHASE=enforce; ${raw} needs an explicit test/development capability.`);
+  }
   throw new Error(`Invalid LA_CAT_SANDBOX_PHASE: ${raw}`);
 }
 
@@ -130,8 +138,9 @@ export function buildCatSandboxRuntimeConfig(
 export function buildCatSandboxHealthReport(
   workspace: CatWorkspace,
   env: NodeJS.ProcessEnv = process.env,
+  options: CatSandboxPhaseOptions = {},
 ): CatSandboxHealthReport {
-  const phase = catSandboxPhaseFromEnv(env);
+  const phase = catSandboxPhaseFromEnv(env, options);
   const dataRoot = resolve(workspace.root, "data");
   const allowedDomains = phase === "off" ? [] : sandboxAllowedDomainsFromEnv(env);
   return {
@@ -157,26 +166,40 @@ export function buildCatSandboxHealthReport(
   };
 }
 
-let activeSandboxConfigKey: string | undefined;
+type SandboxCommandRuntime = Pick<
+  typeof SandboxManager,
+  "getConfig" | "initialize" | "updateConfig" | "wrapWithSandbox"
+>;
 
-export async function ensureSandboxInitialized(config: SandboxRuntimeConfig): Promise<void> {
-  const nextKey = JSON.stringify(config);
-  if (SandboxManager.getConfig()) {
-    if (activeSandboxConfigKey !== nextKey) {
-      SandboxManager.updateConfig(config);
-      activeSandboxConfigKey = nextKey;
-    }
-    return;
-  }
-  await SandboxManager.initialize(config);
-  activeSandboxConfigKey = nextKey;
+export function createSandboxCommandCoordinator(runtime: SandboxCommandRuntime = SandboxManager) {
+  let activeConfigKey: string | undefined;
+  let tail = Promise.resolve();
+  return {
+    async wrap(command: string, config: SandboxRuntimeConfig, signal?: AbortSignal): Promise<string> {
+      const next = tail.then(async () => {
+        const configKey = JSON.stringify(config);
+        if (!runtime.getConfig()) await runtime.initialize(config);
+        else if (activeConfigKey !== configKey) runtime.updateConfig(config);
+        activeConfigKey = configKey;
+        return runtime.wrapWithSandbox(command, undefined, undefined, signal);
+      });
+      tail = next.then(() => undefined, () => undefined);
+      return next;
+    },
+  };
 }
+
+export const sandboxCommandCoordinator = createSandboxCommandCoordinator();
+const SANDBOX_PROCESS_BROKER = ProcessCapabilityBroker.create({
+  grants: [{ id: "la-sandboxed-shell", toolName: "bash", templateIds: ["sandboxed-shell"] }],
+});
 
 export function createSandboxedBashOperations(workspace: CatWorkspace): BashOperations {
   const local = createLocalBashOperations();
   const config = buildCatSandboxRuntimeConfig(workspace);
   return {
     exec: async (command, cwd, options) => {
+      SANDBOX_PROCESS_BROKER.authorize("bash", "sandboxed-shell");
       const phase = catSandboxPhaseFromEnv();
       if (phase !== "enforce") {
         return local.exec(command, cwd, {
@@ -184,8 +207,7 @@ export function createSandboxedBashOperations(workspace: CatWorkspace): BashOper
           env: sanitizeBashEnv({ ...process.env, ...options.env }),
         });
       }
-      await ensureSandboxInitialized(config);
-      const wrappedCommand = await SandboxManager.wrapWithSandbox(command, undefined, undefined, options.signal);
+      const wrappedCommand = await sandboxCommandCoordinator.wrap(command, config, options.signal);
       return local.exec(wrappedCommand, cwd, {
         ...options,
         env: sanitizeBashEnv({ ...process.env, ...options.env }),

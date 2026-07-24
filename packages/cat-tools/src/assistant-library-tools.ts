@@ -4,6 +4,7 @@ import {
   readLibraryCatalog,
   searchLibrary,
   type LibraryScope,
+  type LibraryPersistence,
 } from "@linguist-agent/cat-data";
 
 const searchParameters = Type.Object({
@@ -20,7 +21,7 @@ function location(hit: Awaited<ReturnType<typeof searchLibrary>>["hits"][number]
   return `block ${hit.lineNo}`;
 }
 
-export function createAssistantLibraryTools(options: { runtimeRoot: string; scope: LibraryScope; includePersonal?: boolean }) {
+export function createAssistantLibraryTools(options: { runtimeRoot: string; scope: LibraryScope; includePersonal?: boolean; persistence?: LibraryPersistence }) {
   return [
     defineTool<typeof searchParameters>({
       name: "assistant_library_search",
@@ -40,6 +41,7 @@ export function createAssistantLibraryTools(options: { runtimeRoot: string; scop
           includePersonal: options.includePersonal,
           retrievalMode: "hybrid",
           limit: params.limit ?? 8,
+          persistence: options.persistence,
         });
         const lines = report.hits.length
           ? report.hits.map((hit, index) => [
@@ -78,7 +80,7 @@ export function createAssistantLibraryTools(options: { runtimeRoot: string; scop
       promptSnippet: "List explicitly imported Library documents",
       parameters: listParameters,
       async execute() {
-        const catalog = await readLibraryCatalog(options.runtimeRoot, options.scope);
+        const catalog = await readLibraryCatalog(options.runtimeRoot, options.scope, { persistence: options.persistence });
         const text = catalog.documents.length
           ? catalog.documents.map((document) => `- ${document.originalName} · ${document.blockCount} blocks · sha256:${document.sourceDigest}`).join("\n")
           : "No documents are imported in this Library scope.";

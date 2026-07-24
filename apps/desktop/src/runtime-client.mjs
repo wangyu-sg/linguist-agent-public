@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
+import { access } from "node:fs/promises";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
 import { handshakeProblem, resolveAPIURL, resolveServerBaseURL } from "./desktop-security.mjs";
+import { requestUnixRuntime, runtimeTransportPaths } from "./runtime-transport.mjs";
 
 const run = promisify(execFile);
 const KEYCHAIN_SERVICE = "com.linguist-agent.local-transport";
@@ -29,22 +31,50 @@ async function readCredential(environment) {
   }
 }
 
+function legacyLoopbackEnabled(environment) {
+  return environment.LA_LOCAL_TRANSPORT_MODE === "loopback";
+}
+
+async function requestLocalRuntime(input, environment, credential) {
+  if (legacyLoopbackEnabled(environment)) {
+    return fetch(resolveAPIURL(resolveServerBaseURL(environment), input.path), {
+      method: input.method,
+      headers: {
+        authorization: `Bearer ${credential}`,
+        ...(input.headers ?? {}),
+      },
+      body: input.body,
+      signal: input.signal,
+    });
+  }
+  const paths = runtimeTransportPaths(environment.LA_RUNTIME_TRANSPORT_ROOT?.trim() || undefined);
+  return requestUnixRuntime({
+    ...paths,
+    bootstrapToken: credential,
+    method: input.method,
+    path: input.path,
+    headers: input.headers,
+    body: input.body,
+    signal: input.signal,
+    timeoutMs: input.timeoutMs,
+    expectedRoot: paths.root,
+  });
+}
+
 export async function requestRuntime(input, environment = process.env) {
   const method = typeof input?.method === "string" ? input.method.toUpperCase() : "";
   if (!ALLOWED_METHODS.has(method)) throw new Error("Unsupported LA API method.");
-  const url = resolveAPIURL(resolveServerBaseURL(environment), input?.path);
+  const path = resolveAPIURL("http://127.0.0.1", input?.path).replace("http://127.0.0.1", "");
   const credential = await readCredential(environment);
   if (!credential) throw new Error("Local runtime credential is unavailable.");
 
-  const response = await fetch(url, {
+  const response = await requestLocalRuntime({
     method,
-    headers: {
-      authorization: `Bearer ${credential}`,
-      ...(input.body === undefined ? {} : { "content-type": "application/json" }),
-    },
+    path,
+    headers: input.body === undefined ? undefined : { "content-type": "application/json" },
     body: input.body === undefined ? undefined : JSON.stringify(input.body),
     signal: AbortSignal.timeout(60_000),
-  });
+  }, environment, credential);
   const text = await response.text();
   if (response.status === 401) cachedCredential = undefined;
   let data = null;
@@ -61,12 +91,20 @@ function requiredId(value, label) {
 
 async function consumeSSE(response, onEvent, signal) {
   if (!response.body) throw new Error("LA stream returned no body.");
-  const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  while (!signal.aborted) {
-    const { value, done } = await reader.read();
-    if (done) break;
+  const chunks = response.body && typeof response.body.getReader === "function"
+    ? (async function* () {
+      const reader = response.body.getReader();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        yield value;
+      }
+    })()
+    : response.body;
+  for await (const value of chunks) {
+    if (signal.aborted) break;
     buffer += decoder.decode(value, { stream: true });
     buffer = buffer.replaceAll("\r\n", "\n");
     if (buffer.length > 16 * 1024 * 1024) throw new Error("LA stream event exceeded the desktop limit.");
@@ -117,10 +155,11 @@ export async function streamTaskEvents(input, handlers, environment = process.en
         const path = kind === "standalone"
           ? `/api/tasks/${encodeURIComponent(taskId)}/events/stream?after=${encodeURIComponent(cursor)}`
           : `/api/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/events/stream?after=${encodeURIComponent(cursor)}`;
-        const response = await fetch(resolveAPIURL(resolveServerBaseURL(environment), path), {
-          headers: { authorization: `Bearer ${credential}` },
+        const response = await requestLocalRuntime({
+          method: "GET",
+          path,
           signal: handlers.signal,
-        });
+        }, environment, credential);
         if (response.status === 401) {
           cachedCredential = undefined;
           handlers.onState({ status: "error", message: "本机 runtime 凭据已失效。" });
@@ -156,9 +195,10 @@ export async function streamTaskChat(input, handlers, environment = process.env)
   if (!credential) throw new Error("Local runtime credential is unavailable.");
   const path = `/api/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/chat/stream`;
   try {
-    const response = await fetch(resolveAPIURL(resolveServerBaseURL(environment), path), {
+    const response = await requestLocalRuntime({
       method: "POST",
-      headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" },
+      path,
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         message: input.message,
         ...(typeof input.runId === "string" && input.runId.trim() ? { runId: input.runId.trim() } : {}),
@@ -170,7 +210,7 @@ export async function streamTaskChat(input, handlers, environment = process.env)
         ...(Array.isArray(input.capabilityIds) ? { capabilityIds: input.capabilityIds } : {}),
       }),
       signal: handlers.signal,
-    });
+    }, environment, credential);
     if (response.status === 401) cachedCredential = undefined;
     if (!response.ok) throw new Error(`Task chat stream returned HTTP ${response.status}.`);
     handlers.onState({ status: "connected" });
@@ -192,9 +232,10 @@ export async function streamStandaloneChat(input, handlers, environment = proces
   if (!credential) throw new Error("Local runtime credential is unavailable.");
   const path = `/api/tasks/${encodeURIComponent(taskId)}/messages/stream`;
   try {
-    const response = await fetch(resolveAPIURL(resolveServerBaseURL(environment), path), {
+    const response = await requestLocalRuntime({
       method: "POST",
-      headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" },
+      path,
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         message: input.message.trim(),
         ...(typeof input.delivery === "string" ? { delivery: input.delivery } : {}),
@@ -204,7 +245,7 @@ export async function streamStandaloneChat(input, handlers, environment = proces
         ...(typeof input.thinkingLevel === "string" && input.thinkingLevel.trim() ? { thinkingLevel: input.thinkingLevel.trim() } : {}),
       }),
       signal: handlers.signal,
-    });
+    }, environment, credential);
     if (response.status === 401) cachedCredential = undefined;
     if (!response.ok) throw new Error(`Standalone chat stream returned HTTP ${response.status}.`);
     handlers.onState({ status: "connected" });
@@ -216,19 +257,32 @@ export async function streamStandaloneChat(input, handlers, environment = proces
   }
 }
 
-async function get(url, authorization) {
-  return fetch(url, {
+async function get(path, environment, credential) {
+  return requestLocalRuntime({
     method: "GET",
-    headers: authorization ? { authorization: `Bearer ${authorization}` } : undefined,
+    path,
     signal: AbortSignal.timeout(5_000),
-  });
+    timeoutMs: 5_000,
+  }, environment, credential);
 }
 
 export async function inspectRuntime(environment = process.env) {
-  const baseURL = resolveServerBaseURL(environment);
+  const baseURL = legacyLoopbackEnabled(environment) ? resolveServerBaseURL(environment) : "unix://authenticated-rendezvous";
+  if (!legacyLoopbackEnabled(environment)) {
+    const paths = runtimeTransportPaths(environment.LA_RUNTIME_TRANSPORT_ROOT?.trim() || undefined);
+    try {
+      await access(paths.rendezvousPath);
+    } catch {
+      return { status: "offline", message: "无法连接本机 Linguist Agent runtime。", baseURL };
+    }
+  }
+  const credential = await readCredential(environment);
+  if (!credential) {
+    return { status: "credential-unavailable", message: "未能从登录钥匙串读取本机安装凭据。", baseURL };
+  }
   let health;
   try {
-    const response = await get(`${baseURL}/api/health`);
+    const response = await get("/api/health", environment, credential);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     health = await response.json();
   } catch {
@@ -243,13 +297,8 @@ export async function inspectRuntime(environment = process.env) {
   };
   if (incompatibility) return { status: "incompatible", message: incompatibility, baseURL, runtime };
 
-  const credential = await readCredential(environment);
-  if (!credential) {
-    return { status: "credential-unavailable", message: "未能从登录钥匙串读取本机安装凭据。", baseURL, runtime };
-  }
-
   try {
-    const response = await get(`${baseURL}/api/projects`, credential);
+    const response = await get("/api/projects", environment, credential);
     await response.arrayBuffer();
     if (response.status === 401) {
       cachedCredential = undefined;

@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import {
   compilePrompt,
+  planPromptLaunch,
   type PrivateEvalExecutionManifest,
   type PrivateEvalRunOutput,
   type PrivateEvalSegment,
   type PrivateEvalThinkingLevel,
   type PrivateEvalUsage,
   type PromptManifest,
+  type PromptRequestBudget,
 } from "@linguist-agent/cat-data";
 import type { AgentRunOptions } from "@linguist-agent/cat-runtime";
 
@@ -41,6 +43,7 @@ export interface RunPrivateEvalCanonicalSingleInput {
   modelProvider?: string;
   modelId?: string;
   thinkingLevel: PrivateEvalThinkingLevel;
+  requestBudget?: PromptRequestBudget;
   generate: (input: PrivateEvalCanonicalSingleGenerationInput) => Promise<PrivateEvalCanonicalSingleGenerationResult>;
 }
 
@@ -121,6 +124,9 @@ export async function runPrivateEvalCanonicalSingle(
   input: RunPrivateEvalCanonicalSingleInput,
 ): Promise<Map<string, PrivateEvalCanonicalSingleOutput>> {
   if (!input.segments.length) return new Map();
+  if (input.requestBudget && (input.modelProvider !== input.requestBudget.provider || input.modelId !== input.requestBudget.modelId)) {
+    throw new Error("Private Eval request budget does not match the selected model.");
+  }
   const scoped = input.segments.map((segment, index) => ({
     original: segment,
     segmentId: `eval-${String(index + 1).padStart(4, "0")}`,
@@ -157,7 +163,13 @@ export async function runPrivateEvalCanonicalSingle(
       writeMode: "none",
       profileId: "private-eval:canonical-single-batch",
     },
+    requestBudget: input.requestBudget,
   });
+  const launchPlan = planPromptLaunch(compiled);
+  if (launchPlan.kind !== "ready") {
+    const reason = launchPlan.kind === "blocked" ? launchPlan.reason : "needs_compaction";
+    throw new Error(`Private Eval prompt blocked: ${reason}.`);
+  }
   // The historical three-minute watchdog was measured on per-segment calls.
   // Batch envelopes need time proportional to output rows, while still
   // retaining a finite upper bound for provider/SDK stalls.

@@ -1,50 +1,56 @@
-import { readJsonFile, writeJsonFile, workspacePath } from "./workspace.js";
+import { stat } from "node:fs/promises";
+import { readJsonFile, workspacePath } from "./workspace.js";
 import type { CatWorkspace } from "./workspace.js";
-import type { MemoryAuditSummary } from "./memory-audit.js";
 import type { AssetSemanticState } from "./asset_blocks.js";
-import type { TdaiEmbeddingBridgeStatus } from "./tdai_embedding_bridge.js";
 
-export interface MemoryConfig {
-  enabled: boolean;
-  gatewayUrl: string;
+interface LegacyTdaiMemoryConfigFile {
+  enabled?: unknown;
+  gatewayUrl?: unknown;
+}
+
+export interface LegacyTdaiMemoryConfigurationStatus {
+  configurationDetected: boolean;
+  legacyRecallWasConfigured: boolean;
 }
 
 export interface MemoryStatus {
-  status: "disabled" | "ready" | "gateway_unreachable";
-  enabled: boolean;
-  gatewayUrl: string;
-  gatewayReachable?: boolean;
-  toolsAvailable: boolean;
-  captureEnabled: boolean;
-  cacheSafety: "tool_tail_only";
-  userIdStrategy: "project_id";
+  status: "confirmed_memory_only" | "legacy_migration_required";
+  toolsAvailable: false;
+  captureEnabled: false;
+  storeEnabled: false;
+  recallEnabled: false;
+  legacyTdai: {
+    configurationDetected: boolean;
+    legacyRecallWasConfigured: boolean;
+    migration: "explicit_read_only_candidate_review_required";
+  };
   semantic: AssetSemanticState;
-  embeddingBridge?: TdaiEmbeddingBridgeStatus;
-  audit?: MemoryAuditSummary;
-  nextAction?: string;
+  nextAction: string;
 }
 
-const DEFAULTS: MemoryConfig = {
-  enabled: false,
-  gatewayUrl: "http://127.0.0.1:8420",
-};
-
-function configPath(workspace: CatWorkspace): string {
+function legacyConfigPath(workspace: CatWorkspace): string {
   return workspacePath(workspace, "cat-agent-memory.json");
 }
 
-export async function readMemoryConfig(workspace: CatWorkspace): Promise<MemoryConfig> {
-  const stored = await readJsonFile<Partial<MemoryConfig>>(configPath(workspace), {});
-  return { ...DEFAULTS, ...stored };
-}
-
-export async function writeMemoryConfig(workspace: CatWorkspace, config: MemoryConfig): Promise<void> {
-  await writeJsonFile(configPath(workspace), config);
-}
-
-export async function isMemoryEnabled(workspace: CatWorkspace): Promise<boolean> {
-  const config = await readMemoryConfig(workspace);
-  return config.enabled;
+/**
+ * This is deliberately inventory-only.  It never returns a gateway URL and
+ * cannot enable the retired TDAI capture/store/recall runtime.
+ */
+export async function inspectLegacyTdaiMemoryConfiguration(workspace: CatWorkspace): Promise<LegacyTdaiMemoryConfigurationStatus> {
+  const path = legacyConfigPath(workspace);
+  try {
+    await stat(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { configurationDetected: false, legacyRecallWasConfigured: false };
+    }
+    throw error;
+  }
+  const config = await readJsonFile<LegacyTdaiMemoryConfigFile>(path, {});
+  return {
+    configurationDetected: true,
+    legacyRecallWasConfigured: config.enabled === true,
+  };
 }
 
 function defaultSemanticState(): AssetSemanticState {
@@ -52,56 +58,23 @@ function defaultSemanticState(): AssetSemanticState {
 }
 
 export function buildMemoryStatus(
-  config: MemoryConfig,
-  gatewayReachable?: boolean,
-  audit?: MemoryAuditSummary,
+  legacyTdai: LegacyTdaiMemoryConfigurationStatus,
   semantic = defaultSemanticState(),
-  embeddingBridge?: TdaiEmbeddingBridgeStatus,
 ): MemoryStatus {
-  if (!config.enabled) {
-    return {
-      status: "disabled",
-      enabled: false,
-      gatewayUrl: config.gatewayUrl,
-      gatewayReachable,
-      toolsAvailable: false,
-      captureEnabled: false,
-      cacheSafety: "tool_tail_only",
-      userIdStrategy: "project_id",
-      semantic,
-      embeddingBridge,
-      audit,
-      nextAction: "Optional legacy TDAI recall is disabled. Use Library for LA's local confirmed memory.",
-    };
-  }
-  if (gatewayReachable !== true) {
-    return {
-      status: "gateway_unreachable",
-      enabled: true,
-      gatewayUrl: config.gatewayUrl,
-      gatewayReachable,
-      toolsAvailable: false,
-      captureEnabled: false,
-      cacheSafety: "tool_tail_only",
-      userIdStrategy: "project_id",
-      semantic,
-      embeddingBridge,
-      audit,
-      nextAction: "Start the TencentDB-Agent-Memory Gateway with npm run tdai:start, then retry memory status.",
-    };
-  }
+  const migrationRequired = legacyTdai.configurationDetected;
   return {
-    status: "ready",
-    enabled: true,
-    gatewayUrl: config.gatewayUrl,
-    gatewayReachable: true,
-    toolsAvailable: true,
+    status: migrationRequired ? "legacy_migration_required" : "confirmed_memory_only",
+    toolsAvailable: false,
     captureEnabled: false,
-    cacheSafety: "tool_tail_only",
-    userIdStrategy: "project_id",
+    storeEnabled: false,
+    recallEnabled: false,
+    legacyTdai: {
+      ...legacyTdai,
+      migration: "explicit_read_only_candidate_review_required",
+    },
     semantic,
-    embeddingBridge,
-    audit,
-    nextAction: "Legacy TDAI is available for read-only project recall. Long-term writes require confirmation in Library.",
+    nextAction: migrationRequired
+      ? "Legacy TDAI capture, store, and recall are disabled. Review an explicit read-only export as pending MemoryCandidate records before any user-confirmed import."
+      : "Confirmed Memory is the only recall source. Legacy TDAI capture, store, and recall remain disabled.",
   };
 }

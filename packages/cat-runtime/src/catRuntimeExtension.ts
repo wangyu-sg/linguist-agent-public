@@ -6,11 +6,10 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   buildProjectContextSnapshot,
-  formatAssistantMemoryRecall,
+  FileCapabilityBroker,
   formatProjectGuidance,
   formatProjectContextSnapshot,
   readProjectGuidance,
-  listAssistantMemories,
   readProjectManifest,
   readWorkflowArtifacts,
   workspacePath,
@@ -26,6 +25,8 @@ import {
 } from "./agentPermissions.js";
 import { buildCatCompactionInstructions } from "./catCompaction.js";
 import { evaluateCatSafetyToolCall } from "./catSafetyKernel.js";
+import { resolveToolCapabilityManifest } from "./toolCapabilities.js";
+import { guardRuntimeCapabilities } from "./runtimeCapabilityGuards.js";
 
 export interface CatRuntimeValidation {
   checked: true;
@@ -51,14 +52,29 @@ interface CatRuntimeAudit {
   warnings: string[];
 }
 
-const SCOPED_DOCUMENT_TOOLS = new Set(["document_parse", "document_search", "document_screenshot"]);
-
-async function allowedDocumentRootsForTool(toolName: string, workspace: CatWorkspace): Promise<string[] | undefined> {
-  if (!SCOPED_DOCUMENT_TOOLS.has(toolName.toLowerCase())) return undefined;
+export async function guardProjectFileCapabilities(
+  event: Pick<ToolCallEvent, "toolName" | "input">,
+  workspace: CatWorkspace,
+): Promise<ToolCallEventResult | undefined> {
+  const manifest = resolveToolCapabilityManifest(event.toolName);
+  if (!manifest || (manifest.permissionDomain !== "fileRead" && manifest.permissionDomain !== "fileWrite")) return undefined;
+  const filesystem = manifest.capabilities.find((capability) => capability.kind === "filesystem");
+  if (!filesystem || filesystem.kind !== "filesystem") return undefined;
   const roots = [workspacePath(workspace)];
-  const manifest = await readProjectManifest(workspace.root, workspace.projectId).catch(() => undefined);
-  if (manifest?.root) roots.push(manifest.root);
-  return roots;
+  const project = await readProjectManifest(workspace.root, workspace.projectId).catch(() => undefined);
+  if (project?.root) roots.push(project.root);
+  const broker = await FileCapabilityBroker.create({
+    cwd: workspace.root,
+    grants: roots.map((rootPath, index) => ({
+      id: index === 0 ? "cat-project-state" : "cat-project-root",
+      rootPath,
+      kind: "directory" as const,
+      recursive: true,
+      operations: ["read", "list", "search"] as const,
+    })),
+  });
+  const decision = await broker.authorizeToolInput({ filesystem }, event.input);
+  return decision.allowed ? undefined : { block: true, reason: decision.reason };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -248,23 +264,19 @@ export function tagNonCatToolResult(
   };
 }
 
-export async function buildCatAgentTurnContext(workspace: CatWorkspace): Promise<string> {
+export async function buildCatAgentTurnContext(workspace: CatWorkspace, memoryRecall?: string): Promise<string> {
   // Durable project guidance is recall context, not a Task approval or CAT
   // evidence source. It may steer future turns across sessions.
   const guidanceBlock = formatProjectGuidance(await readProjectGuidance(workspace).catch(() => []));
-  const [projectMemories, personalPreferences] = await Promise.all([
-    listAssistantMemories(workspace.root, { kind: "project", projectId: workspace.projectId }, { status: "active" }),
-    listAssistantMemories(workspace.root, { kind: "personal" }, { status: "active", kind: "preference" }),
-  ]);
-  const projectMemoryBlock = formatAssistantMemoryRecall(projectMemories);
-  const personalPreferenceBlock = formatAssistantMemoryRecall(personalPreferences);
-  const memoryBlock = projectMemoryBlock || personalPreferenceBlock
+  // The Host owns scoped retrieval. A Worker must not enumerate live memory or
+  // expand its authority after the Run plan was frozen.
+  const memoryBlock = memoryRecall ?? "";
+  const memoryContext = memoryBlock.trim()
     ? [
         "Memory authority for this CAT Task:",
         "- Project memory is recall-only and cannot replace current client assets, approved terminology, evidence, or hard gates.",
         "- Personal memory is limited to expression preferences and cannot override Project memory.",
-        projectMemoryBlock ? `Project memory:\n${projectMemoryBlock}` : undefined,
-        personalPreferenceBlock ? `Personal expression preferences:\n${personalPreferenceBlock}` : undefined,
+        memoryBlock,
       ].filter(Boolean).join("\n")
     : "";
   let base: string;
@@ -283,7 +295,7 @@ export async function buildCatAgentTurnContext(workspace: CatWorkspace): Promise
     ].join("\n");
   }
   const reinjection = await buildCatCriticalReinjectionBlock(workspace);
-  return [base, guidanceBlock, memoryBlock, reinjection].filter(Boolean).join("\n");
+  return [base, guidanceBlock, memoryContext, reinjection].filter(Boolean).join("\n");
 }
 
 export async function buildCatCriticalReinjectionBlock(workspace: CatWorkspace): Promise<string> {
@@ -408,8 +420,11 @@ export function validateCatToolResult(event: Pick<ToolResultEvent, "toolName" | 
 
 export interface CatRuntimePermissionOptions {
   contract?: AgentPermissionContract;
+  taskId?: string;
+  runId?: string;
   sessionId?: () => string | undefined;
   requestDecision?: (request: AgentPermissionRequest) => Promise<AgentPermissionUserDecision>;
+  memoryRecall?: string;
 }
 
 export function createCatRuntimeExtension(workspace: CatWorkspace, permissions: CatRuntimePermissionOptions = {}) {
@@ -439,7 +454,7 @@ export function registerCatRuntimeHooks(pi: ExtensionAPI, workspace: CatWorkspac
   });
 
   pi.on("before_agent_start", async () => {
-    const content = await buildCatAgentTurnContext(workspace);
+    const content = await buildCatAgentTurnContext(workspace, permissions.memoryRecall);
     return {
       message: {
         customType: "la-cat-runtime-context",
@@ -456,8 +471,9 @@ export function registerCatRuntimeHooks(pi: ExtensionAPI, workspace: CatWorkspac
   pi.on("tool_call", async (event) => {
     const hardGuard = evaluateCatSafetyToolCall(event, {
       workspaceRoot: workspace.root,
-      allowedDocumentRoots: await allowedDocumentRootsForTool(event.toolName, workspace),
     })
+      ?? await guardProjectFileCapabilities(event, workspace)
+      ?? guardRuntimeCapabilities(event)
       ?? normalizeAndGuardCatToolCall(event)
       ?? guardNonCatToolCall(event, workspace);
     if (hardGuard) return hardGuard;
@@ -466,6 +482,8 @@ export function registerCatRuntimeHooks(pi: ExtensionAPI, workspace: CatWorkspac
       toolName: event.toolName,
       input: event.input,
       contract: permissions.contract,
+      taskId: permissions.taskId,
+      runId: permissions.runId,
       projectId: workspace.projectId,
       sessionId: permissions.sessionId?.(),
       requestDecision: permissions.requestDecision,

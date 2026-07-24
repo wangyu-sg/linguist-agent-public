@@ -13,14 +13,10 @@ import {
 import {
   ArrowDown,
   ArrowUp,
-  CircleStop,
-  Copy,
-  Ellipsis,
-  GitBranch,
   LoaderCircle,
   ListFilter,
-  Minimize2,
   Search,
+  Square,
   X,
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -30,7 +26,9 @@ import type {
 } from "../../../../../packages/cat-data/src/task_workspace_contract.ts";
 import { workspaceStore, type WorkspaceStore } from "../data/workspace-store.ts";
 import {
+  WorkspaceAPIError,
   workspaceClient,
+  type StandaloneFileGrantDTO,
   type StreamState,
   type TaskMessageQueue,
   type TaskQueuedMessage,
@@ -44,27 +42,28 @@ import {
 import { resolvePersona } from "./personas.ts";
 import {
   AgentComposer,
-  ComposerAddDisclosure,
+  ComposerAssetControls,
   ComposerAttachmentTray,
+  ComposerChatAttachmentDisclosure,
+  ComposerModelControls,
+  ComposerPermissionDisclosure,
   ComposerRecipientChip,
-  ComposerScopeDisclosure,
   ComposerSlashMenu,
   composerSlashCommands,
-  ContextUsageDisclosure,
   deriveAgentComposerPresentation,
   filterComposerSlashCommands,
-  ModelDisclosure,
   QueuedMessageList,
   slashQueryFromDraft,
+  selectCanonicalActiveRun,
   useComposerData,
   type ComposerSlashCommand,
 } from "../composer/index.ts";
 import { nextCommandIndex } from "../command/command-model.ts";
 import {
   ConversationRow,
+  ConversationPlanPill,
   LiveAgentReply,
   PendingHumanMessage,
-  PermissionRequestItem,
   activityText,
   estimatedTimelineEntrySize,
   historyKindLabels,
@@ -75,9 +74,11 @@ import {
   type PendingMessage,
   type TimelineEntry,
 } from "./ConversationItems.tsx";
+import { latestAgentPlan } from "./plan-model.ts";
+import { PermissionRequestSurface } from "./PermissionRequestSurface.tsx";
 import { liveReplyMatchesDurableActivity, reduceLiveStreamEvent, type LiveStreamEvent } from "./live-reply-model.ts";
+import { StreamEventCoalescer } from "./stream-event-coalescer.ts";
 import { CONVERSATION_BOTTOM_THRESHOLD_PX, conversationIsAtBottom } from "./conversation-scroll-model.ts";
-import { MaintainerPanel } from "./MaintainerPanel.tsx";
 import "./conversation.css";
 
 export interface ConversationRecipient {
@@ -111,7 +112,20 @@ type StreamPayload = LiveStreamEvent & {
   messageQueue?: TaskMessageQueue;
 };
 
+type BufferedStreamPayload = StreamPayload & {
+  __pendingId?: string;
+  __claimedQueueMessageId?: string;
+};
+
 let pendingSequence = 0;
+
+function messageQueueFailureMessage(cause: unknown): string {
+  if (cause instanceof WorkspaceAPIError && cause.status === 404) {
+    return "待发送消息队列暂不可用：当前 App 与本机 runtime 可能不是同一版本。请在 设置 › Runtime 中修复并重启。";
+  }
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  return `待发送消息队列暂不可用：${detail}`;
+}
 
 /* ---------- 空态 Hero(Codex spec 04 §8):轮换中文标题 + 错峰入场的建议卡 ---------- */
 
@@ -193,6 +207,7 @@ export function TaskConversation({
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const snapshot = state.task;
   const isStandalone = snapshot?.task.owner.kind === "standalone";
+  const planTodos = useMemo(() => latestAgentPlan(snapshot), [snapshot]);
   const canonicalItems = useMemo(() => {
     if (!snapshot) return [];
     return buildConversationItems(snapshot);
@@ -219,10 +234,15 @@ export function TaskConversation({
   const [messageQueue, setMessageQueue] = useState<TaskMessageQueue | null>(null);
   const [queueBusy, setQueueBusy] = useState(false);
   const [pausedSubmit, setPausedSubmit] = useState<string | null>(null);
+  const [pausedSubmitDelivery, setPausedSubmitDelivery] = useState<"steer" | "follow_up" | undefined>();
   const [composerError, setComposerError] = useState<string | null>(null);
-  const [liveDelivery, setLiveDelivery] = useState<"steer" | "follow_up">("steer");
+  const [queueError, setQueueError] = useState<string | null>(null);
   const [selectedBranchThreadId, setSelectedBranchThreadId] = useState("");
   const [branchAction, setBranchAction] = useState<"fork" | "copy" | "compact" | null>(null);
+  const [chatFileGrants, setChatFileGrants] = useState<StandaloneFileGrantDTO[]>([]);
+  const [selectedChatFileGrantIds, setSelectedChatFileGrantIds] = useState<string[]>([]);
+  const [isPickingChatFiles, setIsPickingChatFiles] = useState(false);
+  const [revokeBusyGrantId, setRevokeBusyGrantId] = useState<string | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const slashListId = useId();
   const modelDisclosureRef = useRef<HTMLDetailsElement>(null);
@@ -235,9 +255,9 @@ export function TaskConversation({
   }, []);
   const timelineEntries = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = items.map((item) => ({ id: item.id, kind: "canonical", item }));
-    for (const request of state.permissionRequests) {
-      entries.push({ id: `permission-${request.requestId}`, kind: "permission", request });
-    }
+    // Pending permissions are shown in the Composer stack, not as a virtualized
+    // timeline row. A requirement to trust executable Pi code must not scroll
+    // out of sight.
     if (state.permissionState === "error" && state.permissionRequests.length === 0) {
       entries.push({ id: "permission-error", kind: "permission-error" });
     }
@@ -246,7 +266,7 @@ export function TaskConversation({
     }
     if (liveReply) entries.push({ id: "live-reply", kind: "live", reply: liveReply });
     return entries;
-  }, [items, liveReply, pendingMessages, state.permissionRequests, state.permissionState]);
+  }, [items, liveReply, pendingMessages, state.permissionRequests.length, state.permissionState]);
   const timelineVirtualizer = useVirtualizer({
     count: timelineEntries.length,
     getScrollElement: () => scrollerRef.current,
@@ -272,30 +292,30 @@ export function TaskConversation({
   const entryCountRef = useRef(0);
   const [atBottom, setAtBottom] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
-  const replyDeltaRef = useRef("");
-  const replyFrameRef = useRef<number | null>(null);
+  const processStreamEventRef = useRef<(payload: BufferedStreamPayload) => void>(() => undefined);
+  const streamEventCoalescerRef = useRef<StreamEventCoalescer<BufferedStreamPayload> | null>(null);
+  if (!streamEventCoalescerRef.current) {
+    streamEventCoalescerRef.current = new StreamEventCoalescer({
+      emit: (payload) => processStreamEventRef.current(payload),
+    });
+  }
   const project = state.projects.find((candidate) => candidate.projectId === state.projectId) ?? null;
+  const permissionProjectId = snapshot?.task.owner.kind === "project" ? snapshot.task.owner.projectId : undefined;
+  const composerData = useComposerData(project, snapshot?.task.id ?? null);
   const {
-    assetCatalog,
-    assetState,
-    assetError,
     selectedAssetPaths,
-    isImportingAssets,
-    capabilityCatalog,
-    capabilityState,
     selectedCapabilityIds,
     providerCatalog,
     providerState,
+    routeSelectionError,
     sessionInfo,
     routeSelection,
     setRouteSelection,
-    toggleAsset,
-    toggleCapability,
     removeAsset,
-    importProjectAssets,
     refreshSession,
     resetTransientSelections,
-  } = useComposerData(project, snapshot?.task.id ?? null);
+  } = composerData;
+  const selectedChatFileGrants = useMemo(() => chatFileGrants.filter((grant) => selectedChatFileGrantIds.includes(grant.id)), [chatFileGrants, selectedChatFileGrantIds]);
 
   const clearHistoryFilter = () => {
     setHistoryQuery("");
@@ -315,11 +335,12 @@ export function TaskConversation({
     resetTransientSelections();
   }, [recipient?.threadId]);
 
-  const activeRun = snapshot?.runs.find((run) => run.id === snapshot.activeRunId)
-    ?? snapshot?.runs.findLast((run) => run.stopAvailable);
-  const presentedRun = activeRun ?? snapshot?.runs.at(-1) ?? null;
+  const activeRun = selectCanonicalActiveRun(snapshot?.activeRunId, snapshot?.runs ?? []);
   const canStop = Boolean(activeRun?.stopAvailable && activeRun.status !== "stopping");
-  const permissionDecisionDisabled = !activeRun?.stopAvailable;
+  const pendingPermissionRequest = useMemo(() => state.permissionRequests
+    .filter((request) => request.status === "pending" || request.status === "error")
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.requestId.localeCompare(right.requestId))[0] ?? null,
+  [state.permissionRequests]);
   // A Main single Run has the same Pi delivery surface whether its Task owner
   // is standalone or Project. Project scope adds CAT authority, not a weaker
   // conversation transport.
@@ -330,10 +351,6 @@ export function TaskConversation({
       ? { kind: "standalone" as const, taskId: snapshot.task.id }
       : { kind: "project" as const, projectId: snapshot.task.owner.projectId, taskId: snapshot.task.id }
     : null;
-  const projectName = state.projects.find((project) => project.projectId === state.projectId)?.name
-    ?? (snapshot?.task.owner.kind === "standalone" ? "无项目 Chat" : state.projectId);
-  const batchLabel = state.batch?.batch.batchId
-    ?? (snapshot?.task.scope.kind === "project" ? snapshot.task.scope.batchId ?? null : null);
   const routeSelectionIncomplete = Boolean(routeSelection.modelProvider && !routeSelection.modelId);
   const sendDisabledReason = recipient && !onSendMessage
     ? "当前专家追问入口尚未连接，消息不会被静默发送给 Main Agent。"
@@ -349,10 +366,12 @@ export function TaskConversation({
     isStandalone,
     focusedSegmentId,
     recipientName: recipient?.displayName,
-    runStatus: presentedRun?.status ?? null,
+    runStatus: activeRun?.status ?? null,
     stopAvailable: canStop,
     hasDraft: Boolean(draft.trim()),
-    activeDelivery: supportsLiveDelivery ? liveDelivery : null,
+    // Clicking send and ⌘↩ adjust the live turn. ⌥⌘↩ is the explicit
+    // follow-up shortcut, so there is no sticky, user-visible delivery mode.
+    activeDelivery: supportsLiveDelivery && draft.trim() ? "steer" : null,
     isSending: sendInFlight,
     isStopping,
   });
@@ -368,11 +387,26 @@ export function TaskConversation({
     ?? null;
 
   useEffect(() => {
-    setLiveDelivery("steer");
     setSelectedBranchThreadId("");
     setBranchAction(null);
     setPausedSubmit(null);
+    setPausedSubmitDelivery(undefined);
+    setSelectedChatFileGrantIds([]);
+    setChatFileGrants([]);
+    setIsPickingChatFiles(false);
+    setRevokeBusyGrantId(null);
   }, [snapshot?.task.id]);
+
+  useEffect(() => {
+    if (!snapshot || !isStandalone) return;
+    let active = true;
+    void workspaceClient.listChatFileGrants(snapshot.task.id).then(({ grants }) => {
+      if (active) setChatFileGrants(grants);
+    }).catch((cause) => {
+      if (active) setComposerError(cause instanceof Error ? cause.message : String(cause));
+    });
+    return () => { active = false; };
+  }, [isStandalone, snapshot?.task.id]);
 
   useEffect(() => {
     if (!selectedTaskLocator) {
@@ -382,15 +416,21 @@ export function TaskConversation({
     let active = true;
     setMessageQueue(null);
     void workspaceClient.fetchTaskMessageQueue(selectedTaskLocator).then((queue) => {
-      if (active) setMessageQueue(queue);
+      if (active) {
+        setMessageQueue(queue);
+        setQueueError(null);
+      }
     }).catch((cause) => {
-      if (active) setComposerError(cause instanceof Error ? cause.message : String(cause));
+      if (active) setQueueError(messageQueueFailureMessage(cause));
     });
     return () => { active = false; };
   }, [selectedTaskLocator?.kind, selectedTaskLocator?.taskId, selectedTaskLocator?.kind === "project" ? selectedTaskLocator.projectId : null]);
 
   useEffect(() => {
-    if (!messageQueue?.paused || messageQueue.messages.length === 0) setPausedSubmit(null);
+    if (!messageQueue?.paused || messageQueue.messages.length === 0) {
+      setPausedSubmit(null);
+      setPausedSubmitDelivery(undefined);
+    }
   }, [messageQueue?.paused, messageQueue?.messages.length]);
 
   useEffect(() => {
@@ -415,6 +455,17 @@ export function TaskConversation({
     supportsLiveDelivery,
   ]);
 
+  // SSE normally delivers permission_request immediately. Poll while a Run is
+  // alive as a recovery path for a reconnect race, so a two-minute trust
+  // request cannot silently expire because one renderer event was lost.
+  useEffect(() => {
+    const runMayRequestPermission = activeRun?.status === "pending" || activeRun?.status === "active" || isSending || isDelivering;
+    if (!snapshot || !runMayRequestPermission) return;
+    void store.refreshPermissionRequests();
+    const timer = window.setInterval(() => { void store.refreshPermissionRequests(); }, 750);
+    return () => window.clearInterval(timer);
+  }, [activeRun?.status, isDelivering, isSending, snapshot?.task.id, store]);
+
   useEffect(() => {
     if (!snapshot || pendingMessages.length === 0) return;
     const humanMessages = snapshot.activities.filter(isHumanMessage);
@@ -436,22 +487,29 @@ export function TaskConversation({
       && liveReplyMatchesDurableActivity(liveReply, activity, rootAgentThreadId)
     ));
     if (durableReply) {
-      replyDeltaRef.current = "";
-      if (replyFrameRef.current !== null) cancelAnimationFrame(replyFrameRef.current);
-      replyFrameRef.current = null;
+      streamEventCoalescerRef.current?.clear();
       setLiveReply(null);
     }
   }, [snapshot, liveReply]);
 
   useEffect(() => () => {
     streamCancelRef.current?.();
-    if (replyFrameRef.current !== null) cancelAnimationFrame(replyFrameRef.current);
+    streamEventCoalescerRef.current?.clear();
   }, []);
 
   useEffect(() => {
+    streamEventCoalescerRef.current?.clear();
     clearHistoryFilter();
     setHistoryToolsOpen(false);
   }, [snapshot?.task.id]);
+
+  useEffect(() => {
+    const flushOnBackground = () => {
+      if (document.visibilityState === "hidden") streamEventCoalescerRef.current?.flush();
+    };
+    document.addEventListener("visibilitychange", flushOnBackground);
+    return () => document.removeEventListener("visibilitychange", flushOnBackground);
+  }, []);
 
   useEffect(() => {
     const count = timelineEntries.length;
@@ -474,18 +532,12 @@ export function TaskConversation({
   };
 
   const flushReplyDelta = () => {
-    replyFrameRef.current = null;
-    const text = replyDeltaRef.current;
-    replyDeltaRef.current = "";
-    if (!text) return;
-    setLiveReply((current) => {
-      return reduceLiveStreamEvent(current, { type: "assistant_delta", text });
-    });
+    streamEventCoalescerRef.current?.flush();
   };
 
-  const applyStreamEvent = (event: unknown, pendingId?: string, claimedQueueMessageId?: string) => {
-    if (!event || typeof event !== "object") return;
-    const payload = event as StreamPayload;
+  const processStreamEvent = (payload: BufferedStreamPayload) => {
+    const pendingId = payload.__pendingId;
+    const claimedQueueMessageId = payload.__claimedQueueMessageId;
     if (payload.type === "queue_update" && payload.messageQueue) {
       setMessageQueue(payload.messageQueue);
       return;
@@ -498,25 +550,17 @@ export function TaskConversation({
           .then(setMessageQueue)
           .catch((cause) => setComposerError(cause instanceof Error ? cause.message : String(cause)));
       }
-      replyDeltaRef.current = "";
-      if (replyFrameRef.current !== null) cancelAnimationFrame(replyFrameRef.current);
-      replyFrameRef.current = null;
       setLiveReply((current) => reduceLiveStreamEvent(current, payload));
     } else if (payload.type === "assistant_delta" && payload.text) {
-      replyDeltaRef.current += payload.text;
-      if (replyFrameRef.current === null) replyFrameRef.current = requestAnimationFrame(flushReplyDelta);
+      setLiveReply((current) => reduceLiveStreamEvent(current, payload));
     } else if (payload.type === "assistant_thinking_started") {
       setLiveReply((current) => reduceLiveStreamEvent(current, payload));
     } else if (payload.type === "assistant_final") {
-      if (replyFrameRef.current !== null) cancelAnimationFrame(replyFrameRef.current);
-      flushReplyDelta();
       setLiveReply((current) => reduceLiveStreamEvent(current, payload));
     } else if (payload.type === "done") {
       // The standalone transport explicitly emits `done` before closing its
       // SSE response. Do not leave the Composer disabled while the network
       // close and canonical projection race each other.
-      if (replyFrameRef.current !== null) cancelAnimationFrame(replyFrameRef.current);
-      flushReplyDelta();
       setLiveReply((current) => reduceLiveStreamEvent(current, payload));
       setIsSending(false);
       // `done` acknowledges the stream, but it is not a canonical Task
@@ -531,13 +575,9 @@ export function TaskConversation({
       streamCancelRef.current = null;
       void refreshSession();
     } else if (payload.type === "stopped") {
-      if (replyFrameRef.current !== null) cancelAnimationFrame(replyFrameRef.current);
-      flushReplyDelta();
       setLiveReply((current) => reduceLiveStreamEvent(current, payload));
       setIsSending(false);
     } else if (payload.type === "error") {
-      if (replyFrameRef.current !== null) cancelAnimationFrame(replyFrameRef.current);
-      flushReplyDelta();
       setLiveReply((current) => reduceLiveStreamEvent(current, payload));
       const error = payload.errorMessage ?? payload.text ?? "消息发送失败。";
       setIsSending(false);
@@ -550,8 +590,20 @@ export function TaskConversation({
     }
   };
 
+  processStreamEventRef.current = processStreamEvent;
+
+  const applyStreamEvent = (event: unknown, pendingId?: string, claimedQueueMessageId?: string) => {
+    if (!event || typeof event !== "object") return;
+    streamEventCoalescerRef.current?.enqueue({
+      ...(event as StreamPayload),
+      __pendingId: pendingId,
+      __claimedQueueMessageId: claimedQueueMessageId,
+    });
+  };
+
   const applyStreamState = (pendingId: string, streamState: StreamState, liveDeliveryRequest: boolean) => {
     if (streamState.status === "closed") {
+      flushReplyDelta();
       if (liveDeliveryRequest) setIsDelivering(false);
       else setIsSending(false);
       setPendingMessages((current) => current.map((message) => (
@@ -560,6 +612,7 @@ export function TaskConversation({
       if (!liveDeliveryRequest) streamCancelRef.current = null;
       void refreshSession();
     } else if (streamState.status === "error") {
+      flushReplyDelta();
       const error = streamState.message ?? "消息发送失败。";
       if (liveDeliveryRequest) setIsDelivering(false);
       else setIsSending(false);
@@ -582,10 +635,16 @@ export function TaskConversation({
   ) => {
     if (!snapshot || sendInFlight || sendDisabledReason || isStopping) return;
     if (!recipient && activeRun && !supportsLiveDelivery) return;
+    if (!recipient && supportsLiveDelivery && (selectedAssetPaths.length || selectedCapabilityIds.length || selectedChatFileGrantIds.length)) {
+      setComposerError("资料、能力和文件只能附加到下一次新 Run。请等待当前 Run 完成，或先停止它。");
+      return;
+    }
     const text = rawText.trim();
     if (!text) return;
     const liveDeliveryRequest = Boolean(supportsLiveDelivery && !recipient);
-    const requestedLiveDelivery = deliveryOverride ?? liveDelivery;
+    // A click on the single primary action is the natural "act now" path.
+    // The only way to queue a live follow-up is the explicit ⌥⌘↩ shortcut.
+    const requestedLiveDelivery = deliveryOverride ?? "steer";
     const showPendingMessage = !liveDeliveryRequest || requestedLiveDelivery !== "follow_up";
     const pendingId = `pending-${Date.now()}-${++pendingSequence}`;
     const pending: PendingMessage = { id: pendingId, text, sentAt: new Date().toISOString(), status: "sending" };
@@ -620,6 +679,9 @@ export function TaskConversation({
             ...(routeSelection.thinkingLevel && !recipient && !supportsLiveDelivery ? { thinkingLevel: routeSelection.thinkingLevel } : {}),
             ...(selectedAssetPaths.length && !recipient ? { assetPaths: selectedAssetPaths } : {}),
             ...(selectedCapabilityIds.length && !recipient ? { capabilityIds: selectedCapabilityIds } : {}),
+            ...(snapshot.task.owner.kind === "standalone" && selectedChatFileGrantIds.length && !recipient
+              ? { attachmentGrantIds: selectedChatFileGrantIds }
+              : {}),
             ...(supportsLiveDelivery ? { delivery: requestedLiveDelivery } : {}),
             ...(snapshot.task.owner.kind === "standalone" && (activeRun?.rootAgentThreadId ?? selectedBranchThread?.id)
               ? { agentThreadId: activeRun?.rootAgentThreadId ?? selectedBranchThread!.id }
@@ -630,6 +692,7 @@ export function TaskConversation({
       if (!liveDeliveryRequest) streamCancelRef.current = cancel;
       if (!recipient) {
         resetTransientSelections();
+        setSelectedChatFileGrantIds([]);
       }
       if (recipient) onCancelRecipient?.();
     } catch (cause) {
@@ -643,14 +706,66 @@ export function TaskConversation({
     }
   };
 
-  const send = (event?: FormEvent) => {
+  const send = (event?: FormEvent, deliveryOverride?: "steer" | "follow_up") => {
     event?.preventDefault();
     const text = draft.trim();
     if (text && !recipient && messageQueue?.paused && messageQueue.messages.length > 0) {
       setPausedSubmit(text);
+      setPausedSubmitDelivery(deliveryOverride);
       return;
     }
-    sendText(draft);
+    sendText(draft, undefined, deliveryOverride);
+  };
+
+  const pickChatFiles = async () => {
+    if (!snapshot || !isStandalone || activeRun || isPickingChatFiles) return;
+    setIsPickingChatFiles(true);
+    setComposerError(null);
+    try {
+      const files = await window.linguist.system.pickImportFiles("asset");
+      if (files.length === 0) return;
+      let grants = chatFileGrants;
+      const selectedIds: string[] = [];
+      for (const fileHandle of files.slice(0, 12)) {
+        const result = await workspaceClient.createChatFileGrant(snapshot.task.id, {
+          fileHandle,
+          kind: "file",
+          access: "read",
+        });
+        grants = result.grants;
+        selectedIds.push(result.grant.id);
+      }
+      setChatFileGrants(grants);
+      setSelectedChatFileGrantIds((current) => Array.from(new Set([...current, ...selectedIds])).slice(0, 12));
+    } catch (cause) {
+      setComposerError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setIsPickingChatFiles(false);
+    }
+  };
+
+  const revokeChatFileGrant = async (grantId: string) => {
+    if (!snapshot || !isStandalone || activeRun || revokeBusyGrantId) return;
+    setRevokeBusyGrantId(grantId);
+    setComposerError(null);
+    try {
+      const result = await workspaceClient.revokeChatFileGrant(snapshot.task.id, grantId);
+      setChatFileGrants(result.grants);
+      setSelectedChatFileGrantIds((current) => current.filter((id) => id !== grantId));
+    } catch (cause) {
+      setComposerError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRevokeBusyGrantId(null);
+    }
+  };
+
+  const toggleChatFileGrant = (grantId: string) => {
+    if (activeRun) return;
+    setSelectedChatFileGrantIds((current) => (
+      current.includes(grantId)
+        ? current.filter((id) => id !== grantId)
+        : current.length < 12 ? [...current, grantId] : current
+    ));
   };
 
   const stop = async () => {
@@ -659,6 +774,7 @@ export function TaskConversation({
     setComposerError(null);
     try {
       await store.stopTask("user stop");
+      flushReplyDelta();
       streamCancelRef.current?.();
       streamCancelRef.current = null;
       setIsSending(false);
@@ -716,8 +832,10 @@ export function TaskConversation({
       const queue = await workspaceClient.clearTaskMessageQueue(selectedTaskLocator);
       setMessageQueue(queue);
       setPausedSubmit(null);
+      const delivery = pausedSubmitDelivery;
+      setPausedSubmitDelivery(undefined);
       setQueueBusy(false);
-      sendText(text);
+      sendText(text, undefined, delivery);
     } catch (cause) {
       setComposerError(cause instanceof Error ? cause.message : String(cause));
       setQueueBusy(false);
@@ -727,10 +845,12 @@ export function TaskConversation({
     const text = pausedSubmit;
     if (!text) return;
     setPausedSubmit(null);
+    const delivery = pausedSubmitDelivery;
+    setPausedSubmitDelivery(undefined);
     // An active Pi turn can accept the new instruction immediately while the
     // older follow-ups remain paused. With no active turn this starts a new Run
     // and preserves the old queue for explicit later action.
-    sendText(text, undefined, supportsLiveDelivery ? "steer" : undefined);
+    sendText(text, undefined, supportsLiveDelivery ? delivery ?? "steer" : delivery);
   };
 
   const forkFromHere = async () => {
@@ -796,7 +916,6 @@ export function TaskConversation({
     canCompact: Boolean(selectedBranchThread) && !activeRun && !branchAction,
     canFork: Boolean(selectedBranchThread) && !activeRun && !branchAction,
     canCopyChat: isStandalone && !activeRun && !branchAction,
-    liveDelivery: supportsLiveDelivery ? liveDelivery : null,
     currentThinkingLevel: routeSelection.thinkingLevel,
     actions: {
       openModelPicker: () => {
@@ -807,11 +926,10 @@ export function TaskConversation({
       compact: () => void compactBranch(),
       fork: () => void forkFromHere(),
       copyChat: () => void copyAsNewChat(),
-      setDelivery: setLiveDelivery,
       setThinkingLevel: (level) => setRouteSelection({ ...routeSelection, thinkingLevel: level }),
     },
   }), [
-    activeRun, branchAction, canStop, isStandalone, liveDelivery, onOpenSettings,
+    activeRun, branchAction, canStop, isStandalone, onOpenSettings,
     providerState, recipient, routeSelection, selectedBranchThread, supportsLiveDelivery,
   ]);
   const slashFiltered = useMemo(
@@ -853,7 +971,7 @@ export function TaskConversation({
     }
     if (event.key === "Enter" && event.metaKey) {
       event.preventDefault();
-      send();
+      send(undefined, supportsLiveDelivery && !recipient && event.altKey ? "follow_up" : undefined);
     } else if (event.key === "Escape" && recipient && onCancelRecipient) {
       event.preventDefault();
       onCancelRecipient();
@@ -881,44 +999,6 @@ export function TaskConversation({
 
   return (
     <section className="task-conversation" aria-label={`${snapshot.task.title} 对话`}>
-      {isStandalone && (canonicalItems.length > 0 || branchThreads.length > 1) ? (
-        <details className="conversation-context-menu">
-          <summary aria-label="Chat 分支与上下文操作" title="Chat 分支与上下文操作"><Ellipsis aria-hidden="true" /></summary>
-          <div className="conversation-context-menu__panel" aria-label="Chat 分支与上下文操作">
-            <label className="conversation-context-menu__branch">
-              <span>对话分支</span>
-              <select
-                value={selectedBranchThread?.id ?? ""}
-                disabled={!branchThreads.length || Boolean(activeRun)}
-                onChange={(event) => setSelectedBranchThreadId(event.target.value)}
-              >
-                {!branchThreads.length ? <option value="">尚无可恢复分支</option> : null}
-                {branchThreads.map((thread, index) => (
-                  <option key={thread.id} value={thread.id}>
-                    {thread.branchPointEntryId ? `Branch ${branchThreads.length - index}` : "Current conversation"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="conversation-context-menu__actions">
-              <Button variant="ghost" disabled={!selectedBranchThread || Boolean(activeRun) || Boolean(branchAction)} onClick={() => void forkFromHere()}>
-                <GitBranch aria-hidden="true" /><span>{branchAction === "fork" ? "正在分支…" : "从这里分支"}</span>
-              </Button>
-              <Button variant="ghost" disabled={Boolean(activeRun) || Boolean(branchAction)} onClick={() => void copyAsNewChat()}>
-                <Copy aria-hidden="true" /><span>{branchAction === "copy" ? "正在复制…" : "复制为新 Chat"}</span>
-              </Button>
-              <Button variant="ghost" disabled={!selectedBranchThread || Boolean(activeRun) || Boolean(branchAction)} onClick={() => void compactBranch()}>
-                <Minimize2 aria-hidden="true" /><span>{branchAction === "compact" ? "正在压缩…" : "压缩上下文"}</span>
-              </Button>
-            </div>
-            <MaintainerPanel
-              taskId={snapshot.task.id}
-              disabled={Boolean(activeRun)}
-              onCanonicalUpdate={() => store.openChat(snapshot.task.id)}
-            />
-          </div>
-        </details>
-      ) : null}
       <div
         ref={setScrollerElement}
         className="task-conversation__scroller"
@@ -1019,13 +1099,7 @@ export function TaskConversation({
             <>
               {timelineEntries.map((entry) => (
                 <li key={entry.id} className="task-conversation__item">
-                  {entry.kind === "permission" ? (
-                    <PermissionRequestItem
-                      request={entry.request}
-                      disabled={permissionDecisionDisabled}
-                      onDecide={(requestId, decision, reason) => store.decidePermission(requestId, decision, reason)}
-                    />
-                  ) : entry.kind === "permission-error" ? (
+                  {entry.kind === "permission-error" ? (
                     <div className="conversation-permission conversation-permission--load-error" role="alert">
                       <p>{state.permissionError ?? "无法恢复待处理权限请求。"}</p>
                       <Button onClick={() => void store.refreshPermissionRequests()}>重试</Button>
@@ -1045,15 +1119,6 @@ export function TaskConversation({
                 <p>完整记录仍然保留；调整关键词或筛选条件即可重新显示。</p>
                 <Button onClick={clearHistoryFilter}>清除筛选</Button>
               </li>
-              {state.permissionRequests.map((request) => (
-                <li key={`permission-${request.requestId}`} className="task-conversation__item">
-                  <PermissionRequestItem
-                    request={request}
-                    disabled={permissionDecisionDisabled}
-                    onDecide={(requestId, decision, reason) => store.decidePermission(requestId, decision, reason)}
-                  />
-                </li>
-              ))}
               {state.permissionState === "error" && state.permissionRequests.length === 0 ? (
                 <li className="task-conversation__item">
                   <div className="conversation-permission conversation-permission--load-error" role="alert">
@@ -1092,12 +1157,6 @@ export function TaskConversation({
                     onInspectArtifact={onInspectArtifact}
                     onInspectActivity={onInspectActivity}
                   />
-                ) : entry.kind === "permission" ? (
-                  <PermissionRequestItem
-                    request={entry.request}
-                    disabled={permissionDecisionDisabled}
-                    onDecide={(requestId, decision, reason) => store.decidePermission(requestId, decision, reason)}
-                  />
                 ) : entry.kind === "permission-error" ? (
                   <div className="conversation-permission conversation-permission--load-error" role="alert">
                     <p>{state.permissionError ?? "无法恢复待处理权限请求。"}</p>
@@ -1131,13 +1190,29 @@ export function TaskConversation({
             {unreadCount > 0 ? <span className="conversation-jump-latest__badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
           </button>
         ) : null}
-        <AgentComposer
+        {planTodos && !pendingPermissionRequest ? <ConversationPlanPill plan={planTodos} /> : null}
+        {pendingPermissionRequest ? (
+          <PermissionRequestSurface
+            request={pendingPermissionRequest}
+            onDecide={(requestId, action, reason) => store.decidePermission(requestId, action, reason)}
+          />
+        ) : <AgentComposer
           ref={textareaRef}
           className="task-agent-composer"
           aria-label="发送消息给 Linguist Agent"
           autoFocus={canonicalItems.length === 0}
-          attachments={selectedAssetPaths.length ? <ComposerAttachmentTray paths={selectedAssetPaths} onRemove={removeAsset} /> : undefined}
-          errorMessage={composerError}
+          attachments={isStandalone
+            ? selectedChatFileGrants.length ? (
+              <ComposerAttachmentTray
+                paths={selectedChatFileGrants.map((grant) => grant.realPath)}
+                onRemove={(path) => {
+                  const grant = selectedChatFileGrants.find((candidate) => candidate.realPath === path);
+                  if (grant) toggleChatFileGrant(grant.id);
+                }}
+              />
+            ) : undefined
+            : selectedAssetPaths.length ? <ComposerAttachmentTray paths={selectedAssetPaths} onRemove={removeAsset} /> : undefined}
+          errorMessage={composerError ?? routeSelectionError ?? queueError}
           hint={composerPresentation.hint}
           inputLabel="消息"
           inputPopupActiveDescendant={slashOpen && slashSelectedIndex >= 0
@@ -1153,6 +1228,7 @@ export function TaskConversation({
               queue={messageQueue}
               onClear={() => {
                 setPausedSubmit(null);
+                setPausedSubmitDelivery(undefined);
                 if (selectedTaskLocator) void runQueueAction(() => workspaceClient.clearTaskMessageQueue(selectedTaskLocator));
               }}
               onDelete={deleteQueuedMessage}
@@ -1169,46 +1245,43 @@ export function TaskConversation({
               onRetry={retryQueuedMessage}
               onSteer={steerQueuedMessage}
               pausedSubmitText={pausedSubmit}
-              onCancelPausedSubmit={() => setPausedSubmit(null)}
+              onCancelPausedSubmit={() => { setPausedSubmit(null); setPausedSubmitDelivery(undefined); }}
               onClearAndSubmit={() => void clearQueueAndSubmit()}
               onSubmitDespitePause={submitDespitePausedQueue}
             />
           ) : undefined}
           leadingControls={(
             <div className="conversation-composer__primary-bound">
-              {!isStandalone ? (
-                <ComposerAddDisclosure
-                  assets={assetCatalog}
-                  assetError={assetError}
-                  assetState={assetState}
-                  capabilityCatalog={capabilityCatalog}
-                  capabilityState={capabilityState}
-                  disabled={Boolean(recipient)}
-                  isImportingAssets={isImportingAssets}
-                  onImportAssets={() => void importProjectAssets()}
-                  onToggleAsset={toggleAsset}
-                  onToggleCapability={toggleCapability}
-                  selectedAssetPaths={selectedAssetPaths}
-                  selectedCapabilityIds={selectedCapabilityIds}
+              {isStandalone ? (
+                <>
+                  <ComposerChatAttachmentDisclosure
+                    disabled={Boolean(activeRun) || Boolean(recipient)}
+                    grants={chatFileGrants}
+                  isPicking={isPickingChatFiles}
+                  onPickFiles={pickChatFiles}
+                  onRevokeGrant={revokeChatFileGrant}
+                  onToggleGrant={toggleChatFileGrant}
+                  revokeBusyGrantId={revokeBusyGrantId}
+                  selectedGrantIds={selectedChatFileGrantIds}
                 />
-              ) : null}
-              <ComposerScopeDisclosure
-                projectName={projectName ?? "项目"}
-                batchLabel={batchLabel}
-                defaultRecipientLabel={isStandalone ? "Linguist Agent" : undefined}
-                hasBatch={!isStandalone}
-                hideProject={isStandalone}
-                scopeLabel={isStandalone ? "当前 Chat" : undefined}
-                taskLabel={isStandalone ? "Chat" : undefined}
-                taskTitle={snapshot.task.title}
-                focusedSegmentId={focusedSegmentId}
-                recipient={recipient}
+                </>
+              ) : (
+                <>
+                <ComposerAssetControls data={composerData} disabled={Boolean(recipient) || Boolean(activeRun)} />
+                </>
+              )}
+              <ComposerPermissionDisclosure
+                onOpenSettings={onOpenSettings}
+                projectId={permissionProjectId}
               />
               <ComposerRecipientChip
                 recipient={recipient}
                 threads={snapshot.agentThreads}
                 onCancelRecipient={onCancelRecipient}
-                showDefaultRecipient={!isStandalone}
+                /* Main Agent is the canonical destination, not a choice the
+                   user needs to see on every idle Composer. A real specialist
+                   target remains visible and removable. */
+                showDefaultRecipient={false}
               />
             </div>
           )}
@@ -1229,43 +1302,22 @@ export function TaskConversation({
           statusMessage={sendDisabledReason}
           trailingControls={(
             <>
-              {supportsLiveDelivery ? (
-                <div className="conversation-composer__delivery" role="group" aria-label="当前 Run 消息投递方式">
-                  <button
-                    type="button"
-                    aria-pressed={liveDelivery === "steer"}
-                    disabled={isDelivering || isStopping}
-                    title="立即调整当前 Pi turn"
-                    onClick={() => setLiveDelivery("steer")}
-                  >
-                    现在调整
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={liveDelivery === "follow_up"}
-                    disabled={isDelivering || isStopping}
-                    title="当前 turn 完成后执行"
-                    onClick={() => setLiveDelivery("follow_up")}
-                  >
-                    完成后执行
-                  </button>
-                </div>
-              ) : null}
-              <ContextUsageDisclosure session={sessionInfo} taskUsage={snapshot.usage} />
-              <ModelDisclosure
-                detailsRef={modelDisclosureRef}
-                disabled={Boolean(recipient) || providerState === "error"}
-                onChange={setRouteSelection}
-                onOpenSettings={onOpenSettings}
+              <ComposerModelControls
+                session={sessionInfo}
+                taskUsage={snapshot.usage}
                 providers={providerCatalog}
                 selection={routeSelection}
+                onChange={setRouteSelection}
+                disabled={Boolean(recipient) || providerState === "error"}
+                onOpenSettings={onOpenSettings}
+                detailsRef={modelDisclosureRef}
               />
-              {/* Codex spec 03 §2/§3 单按钮四态:Send / Stop(内嵌 Esc kbd)/ Queue / Steer */}
+              {/* 单一主动作：运行中默认立即调整，完成后执行由 ⌥⌘↩ 明确选择。 */}
               <IconButton
                 className="agent-composer__primary-action conversation-composer__send"
                 data-send-state={composerPresentation.sendButton.state}
+                data-tooltip={composerPresentation.sendButton.tooltip}
                 aria-label={composerPresentation.sendButton.tooltip}
-                title={composerPresentation.sendButton.tooltip}
                 type={composerPresentation.sendButton.state === "stop" ? "button" : "submit"}
                 disabled={slashOpen
                   || (composerPresentation.sendButton.state === "stop" ? false
@@ -1273,12 +1325,8 @@ export function TaskConversation({
                     : isDelivering || !draft.trim() || !composerPresentation.canSend || Boolean(sendDisabledReason))}
                 onClick={composerPresentation.sendButton.state === "stop" ? () => void stop() : undefined}
               >
-                {composerPresentation.sendButton.state === "stop" ? (
-                  <span className="agent-composer__send-stop" aria-hidden="true">
-                    <CircleStop />
-                    <kbd className="agent-composer__send-kbd">{composerPresentation.sendButton.kbd}</kbd>
-                  </span>
-                ) : composerPresentation.sendButton.state === "stopping" || composerPresentation.sendButton.state === "sending" ? (
+                {composerPresentation.sendButton.state === "stop" ? <Square fill="currentColor" strokeWidth={0} aria-hidden="true" />
+                  : composerPresentation.sendButton.state === "stopping" || composerPresentation.sendButton.state === "sending" ? (
                   <LoaderCircle className="conversation-composer__spin" aria-hidden="true" />
                 ) : (
                   <ArrowUp aria-hidden="true" />
@@ -1288,7 +1336,7 @@ export function TaskConversation({
           )}
           value={draft}
           variant={canonicalItems.length === 0 ? "first-turn" : "default"}
-        />
+        />}
       </div>
     </section>
   );

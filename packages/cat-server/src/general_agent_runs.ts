@@ -1,26 +1,50 @@
 import { createHash, randomUUID } from "node:crypto";
-import { VERSION, type AgentSession, type AgentSessionEvent, type AgentSessionRuntime, type ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { basename, join } from "node:path";
 import {
   createTaskWorkspace,
+  formatAssistantMemoryRecallReport,
+  parseRichArtifactDocument,
   resolveStandaloneFileGrantAccess,
+  searchAssistantMemories,
+  standaloneTaskWorkspaceRoot,
   TaskWorkspaceConflictError,
+  writeJsonFile,
+  type RichArtifactTodoStatus,
   type TaskAgentThread,
   type TaskRunEventDraft,
   type TaskWorkspaceSnapshot,
+  type ExecutionProfileId,
+  type ExecutionProfilePlan,
+  safeLogger,
 } from "@linguist-agent/cat-data";
 import {
   buildAgentPermissionContract,
-  createGeneralAgentSession,
+  prepareGeneralAgentSessionPlan,
+  agentPermissionAction,
   generalAgentSessionId,
+  type AgentRuntimeEvent,
+  type AgentRuntimeImageContent,
+  type AgentRuntimePort,
+  type AgentRuntimeSession,
+  type AgentRuntimeSessionCreation,
+  assertRuntimeCompactionTarget,
+  buildRuntimeCompactionHandoff,
+  renderRuntimeCompactionInstructions,
   type AgentPermissionContract,
   type AgentPermissionRequest,
   type AgentPermissionUserDecision,
   type GeneralDelegationRequest,
   type GeneralDelegationResult,
-  type GeneralExecutableExtensionAuthorizationRequest,
 } from "@linguist-agent/cat-runtime";
+import type { AssistantMemoryPersistence, LibraryPersistence } from "@linguist-agent/cat-data";
 import { previewValue } from "./agent_events.js";
+import {
+  prepareDirectImageAttachments,
+  visibleAttachmentMessage,
+  withAttachmentContext,
+} from "./direct_image_attachments.js";
 import { ActiveAgentRunRegistry } from "./active_agent_runs.js";
+import type { GeneralWorkerSessionAuthority, GeneralWorkerSessionCreation } from "./general_worker_runtime.js";
 import {
   createSingleTaskRunProjector,
   stopPendingSingleTaskRun,
@@ -28,8 +52,7 @@ import {
 } from "./single_task_run_projection.js";
 import type { AcceptedStandaloneMessage, StandaloneAgentStreamEvent } from "./routes/standalone_task_routes.js";
 import { TaskMessageQueueCoordinator } from "./task_message_queue.js";
-import { resolveApprovedManagedPackageResources } from "./package_center.js";
-import { approvePiExtensionEntries, unknownPiExtensionEntries } from "./pi_extension_trust.js";
+import { resolveActivatedLapkgResources } from "./lapkg_activation.js";
 import {
   hasGeneralContextResources,
   readPiTrustStatus,
@@ -41,13 +64,16 @@ export interface GeneralModelRoute {
   provider?: string;
   modelId?: string;
   thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+  /** Requested quality name; direct provider/model selection omits it and becomes custom. */
+  executionProfile?: ExecutionProfileId;
+  /** Server-resolved immutable plan; callers never invent one in the renderer. */
+  profilePlan?: ExecutionProfilePlan;
 }
 
 interface LiveGeneralRun {
   taskId: string;
   runId: string;
-  session: AgentSession;
-  runtime?: AgentSessionRuntime;
+  session: AgentRuntimeSession;
   projector: SingleTaskRunProjector;
   rootThreadId: string;
 }
@@ -58,7 +84,8 @@ export interface GeneralAgentRunCoordinatorDeps {
   piAgentDir?: string;
   activeRuns: ActiveAgentRunRegistry;
   messageQueue: TaskMessageQueueCoordinator;
-  modelRuntime: () => Promise<ModelRuntime>;
+  runtimePort: AgentRuntimePort;
+  workerRuntime: GeneralWorkerSessionAuthority;
   modelRoute: () => Promise<GeneralModelRoute>;
   /**
    * The server is the authority for whether a selected model is currently
@@ -68,12 +95,14 @@ export interface GeneralAgentRunCoordinatorDeps {
   resolveModelRoute?: (route: GeneralModelRoute) => Promise<GeneralModelRoute>;
   permissionContract: () => Promise<AgentPermissionContract>;
   defaultProjectTrust?: () => Promise<PiDefaultProjectTrust>;
-  createSession?: typeof createGeneralAgentSession;
   requestPermissionDecision: (
     request: AgentPermissionRequest,
     onPending: (request: AgentPermissionRequest & { requestId?: string }) => void,
   ) => Promise<AgentPermissionUserDecision>;
   cancelPermissionDecisions?: (sessionId: string, reason: string) => void;
+  resolveManagedResources?: () => Promise<Awaited<ReturnType<typeof resolveActivatedLapkgResources>>>;
+  assistantMemoryStore?: () => AssistantMemoryPersistence | undefined;
+  libraryPersistence?: () => LibraryPersistence | undefined;
 }
 
 function usageFromMessage(message: unknown) {
@@ -129,6 +158,14 @@ function delegatedRole(value: string | undefined): string {
   return role;
 }
 
+function snapshotThinkingLevel(value: string | null): GeneralModelRoute["thinkingLevel"] {
+  if (value === null) return undefined;
+  if (["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(value)) {
+    return value as GeneralModelRoute["thinkingLevel"];
+  }
+  throw new TaskWorkspaceConflictError("The stored ExecutionProfile has an unsupported reasoning effort; start a new Run instead.");
+}
+
 function acceptedContextHandoffs(snapshot: TaskWorkspaceSnapshot): string[] {
   return snapshot.artifacts
     .filter((artifact) => artifact.type === "context_handoff" && (artifact.status === "accepted" || artifact.status === "final"))
@@ -137,6 +174,20 @@ function acceptedContextHandoffs(snapshot: TaskWorkspaceSnapshot): string[] {
       const transcript = typeof artifact.content.transcript === "string" ? artifact.content.transcript.trim() : "";
       return [`Handoff: ${artifact.title}`, artifact.summary, transcript].filter(Boolean).join("\n").slice(0, 20_000);
     });
+}
+
+async function scopedGeneralMemorySnapshot(input: {
+  runtimeRoot: string;
+  query: string;
+  store?: AssistantMemoryPersistence;
+}): Promise<string> {
+  if (!input.query.trim()) return "";
+  const report = await searchAssistantMemories(input.runtimeRoot, {
+    query: input.query,
+    context: { includePersonal: true },
+    store: input.store,
+  });
+  return formatAssistantMemoryRecallReport(report);
 }
 
 function pendingRunEvents(input: {
@@ -166,6 +217,8 @@ function pendingRunEvents(input: {
       completedAt: null,
       stopAvailable: true,
       resumeAvailable: false,
+      executionSnapshots: [],
+      configChanges: [],
     },
   }, {
     type: "thread_upsert",
@@ -221,6 +274,12 @@ export class GeneralAgentRunCoordinator {
 
   constructor(private readonly deps: GeneralAgentRunCoordinatorDeps) {}
 
+  private resolveManagedResources(): Promise<Awaited<ReturnType<typeof resolveActivatedLapkgResources>>> {
+    return this.deps.resolveManagedResources
+      ? this.deps.resolveManagedResources()
+      : resolveActivatedLapkgResources(this.deps.repoRoot);
+  }
+
   /**
    * The canonical Task event log remains the durable source of truth. This is
    * deliberately a separate, short-lived channel for the exact Pi deltas that
@@ -244,17 +303,62 @@ export class GeneralAgentRunCoordinator {
 
   private async resolveStartModelRoute(selection: GeneralModelRoute = {}): Promise<GeneralModelRoute> {
     const defaults = await this.deps.modelRoute().catch((): GeneralModelRoute => ({}));
+    const explicitModelPreference = selection.provider !== undefined
+      || selection.modelId !== undefined
+      || selection.thinkingLevel !== undefined;
     const route: GeneralModelRoute = {
       provider: selection.provider ?? defaults.provider,
       modelId: selection.modelId ?? defaults.modelId,
       thinkingLevel: selection.thinkingLevel ?? defaults.thinkingLevel,
+      ...(selection.executionProfile === undefined && explicitModelPreference
+        ? {}
+        : { executionProfile: selection.executionProfile ?? defaults.executionProfile }),
     };
-    return this.deps.resolveModelRoute ? this.deps.resolveModelRoute(route) : route;
+    const resolved = this.deps.resolveModelRoute ? await this.deps.resolveModelRoute(route) : route;
+    if (!resolved.profilePlan) {
+      throw new TaskWorkspaceConflictError("The selected model has no verified immutable ExecutionProfile plan.");
+    }
+    if (resolved.provider !== resolved.profilePlan.model.provider
+      || resolved.modelId !== resolved.profilePlan.model.modelId
+      || resolved.thinkingLevel !== resolved.profilePlan.model.thinkingLevel) {
+      throw new TaskWorkspaceConflictError("The selected model route differs from its immutable ExecutionProfile plan.");
+    }
+    return resolved;
+  }
+
+  private async prepareStartAttachments(input: {
+    taskId: string;
+    attachmentGrantIds?: string[];
+    modelRoute: GeneralModelRoute;
+  }): Promise<{ images: AgentRuntimeImageContent[]; labels: string[]; imageLabels: string[] }> {
+    const ids = input.attachmentGrantIds ?? [];
+    if (ids.length === 0) return { images: [], labels: [], imageLabels: [] };
+    const access = await resolveStandaloneFileGrantAccess(this.deps.repoRoot, input.taskId);
+    const byId = new Map(access.grants.map((grant) => [grant.id, grant]));
+    const selected = ids.map((id) => byId.get(id));
+    const missing = ids.filter((_id, index) => !selected[index]);
+    if (missing.length) throw new TaskWorkspaceConflictError(`Selected file attachment is no longer authorized: ${missing.join(", ")}.`);
+    const nonFiles = selected.filter((grant) => grant?.kind !== "file");
+    if (nonFiles.length) throw new TaskWorkspaceConflictError("Only explicitly granted files can be attached to a Run; attach a file instead of a directory.");
+    const prepared = await prepareDirectImageAttachments(selected.map((grant) => ({
+      path: grant!.realPath,
+      label: basename(grant!.realPath),
+    })));
+    if (prepared.images.length) {
+      if (!input.modelRoute.provider || !input.modelRoute.modelId) {
+        throw new TaskWorkspaceConflictError("Select a configured vision-capable model before attaching images.");
+      }
+      if (!await this.deps.runtimePort.supportsInput(input.modelRoute.provider, input.modelRoute.modelId, "image")) {
+        throw new TaskWorkspaceConflictError(`Model ${input.modelRoute.provider}/${input.modelRoute.modelId} does not accept image input. Choose a vision-capable model or remove the image attachment.`);
+      }
+    }
+    return prepared;
   }
 
   private async resolveWorkingDirectoryTrust(
     taskId: string,
     sessionId: string,
+    runId?: string,
     onPending?: (request: AgentPermissionRequest & { requestId?: string }) => void,
   ): Promise<boolean> {
     const access = await resolveStandaloneFileGrantAccess(this.deps.repoRoot, taskId);
@@ -267,6 +371,9 @@ export class GeneralAgentRunCoordinator {
     if (status.defaultProjectTrust === "always") return true;
     if (status.defaultProjectTrust === "never" || !onPending) return false;
     const decision = await this.deps.requestPermissionDecision({
+      taskId,
+      runId,
+      kind: "pi_resource_trust",
       toolName: "Trust working-directory Pi resources",
       domain: "bridge",
       riskClass: "high",
@@ -278,7 +385,7 @@ export class GeneralAgentRunCoordinator {
       }, null, 2),
       sessionId,
     }, onPending);
-    const trusted = decision.decision === "approve";
+    const trusted = agentPermissionAction(decision) !== "deny";
     await writePiTrustDecision({
       cwd: access.workingDirectory,
       target: "current",
@@ -289,39 +396,6 @@ export class GeneralAgentRunCoordinator {
     return trusted;
   }
 
-  private async authorizeExecutableExtensions(
-    request: GeneralExecutableExtensionAuthorizationRequest,
-    sessionId: string,
-    onPending?: (request: AgentPermissionRequest & { requestId?: string }) => void,
-  ): Promise<void> {
-    const unknown = await unknownPiExtensionEntries(this.deps.repoRoot, request.extensions);
-    if (!unknown.length) return;
-    if (!onPending) {
-      throw new TaskWorkspaceConflictError("Pi user Extensions changed or have not been approved. Start a normal Chat turn to review their exact digests before this operation.");
-    }
-    const inventory = JSON.stringify({
-      resourceSetHash: request.resourceSetHash,
-      extensions: unknown.map((entry) => ({
-        path: entry.path,
-        canonicalPath: entry.resolvedPath,
-        sha256: entry.sha256,
-        source: entry.source,
-        sizeBytes: entry.sizeBytes,
-      })),
-    }, null, 2);
-    const decision = await this.deps.requestPermissionDecision({
-      toolName: "Trust Pi Extension executable code",
-      domain: "bridge",
-      riskClass: "high",
-      argsSummary: inventory.length <= 24_000 ? inventory : `${inventory.slice(0, 23_900)}\n... inventory truncated in UI`,
-      sessionId,
-    }, onPending);
-    if (decision.decision !== "approve") {
-      throw new TaskWorkspaceConflictError(decision.reason || "User declined the unknown Pi Extension executable digest.");
-    }
-    await approvePiExtensionEntries(this.deps.repoRoot, unknown);
-  }
-
   async acceptMessage(input: {
     taskId: string;
     message: string;
@@ -330,6 +404,8 @@ export class GeneralAgentRunCoordinator {
     modelProvider?: string;
     modelId?: string;
     thinkingLevel?: GeneralModelRoute["thinkingLevel"];
+    executionProfile?: "fast" | "balanced" | "best";
+    attachmentGrantIds?: string[];
   }): Promise<AcceptedStandaloneMessage> {
     const workspace = createTaskWorkspace(this.deps.repoRoot);
     const snapshot = await workspace.open({ kind: "standalone", taskId: input.taskId });
@@ -342,8 +418,11 @@ export class GeneralAgentRunCoordinator {
       if (input.agentThreadId && input.agentThreadId !== current.rootThreadId) {
         throw new TaskWorkspaceConflictError("Cannot queue a message onto a different Agent thread while this Chat is running.");
       }
-      if (input.modelProvider || input.modelId || input.thinkingLevel) {
+      if (input.modelProvider || input.modelId || input.thinkingLevel || input.executionProfile) {
         throw new TaskWorkspaceConflictError("Model and effort selection apply to a new Run. Stop or let the current Run finish before changing them.");
+      }
+      if (input.attachmentGrantIds?.length) {
+        throw new TaskWorkspaceConflictError("File and image attachments apply to a new Run. Stop or let the current Run finish before attaching them.");
       }
       const delivery = input.delivery === "follow_up" ? "follow_up" : "steer";
       return this.deps.messageQueue.deliver({
@@ -363,7 +442,15 @@ export class GeneralAgentRunCoordinator {
       provider: input.modelProvider,
       modelId: input.modelId,
       thinkingLevel: input.thinkingLevel,
+      executionProfile: input.executionProfile,
     });
+    const attachments = await this.prepareStartAttachments({
+      taskId: input.taskId,
+      attachmentGrantIds: input.attachmentGrantIds,
+      modelRoute,
+    });
+    const userMessage = visibleAttachmentMessage(input.message, attachments.labels);
+    const promptMessage = withAttachmentContext(input.message, attachments.labels, attachments.imageLabels);
 
     const runId = `turn_${randomUUID()}`;
     const messageId = `message_${randomUUID()}`;
@@ -380,19 +467,21 @@ export class GeneralAgentRunCoordinator {
       kind: "standalone",
       taskId: input.taskId,
       runId,
-      events: pendingRunEvents({ taskId: input.taskId, runId, messageId, message: input.message, occurredAt, parentThread }),
+      events: pendingRunEvents({ taskId: input.taskId, runId, messageId, message: userMessage, occurredAt, parentThread }),
     });
     this.publishMessageStream({
       type: "turn_start",
       taskId: input.taskId,
       runId,
       ts: occurredAt,
-      text: input.message,
+      text: userMessage,
     });
     void this.launch({
       taskId: input.taskId,
       runId,
-      message: input.message,
+      message: promptMessage,
+      userMessage,
+      images: attachments.images,
       startedAt: occurredAt,
       parentThreadId: parentThread?.id,
       sessionFile: parentThread?.piSessionFile,
@@ -407,7 +496,7 @@ export class GeneralAgentRunCoordinator {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
         await this.failPendingLaunch(input.taskId, runId, error).catch((failure) => {
-          console.error("Failed to project standalone Run launch failure:", failure);
+          safeLogger.error("standalone.run_launch_failure_projection_failed", { error: failure });
         });
       });
     return { messageId, runId, delivery: "start" };
@@ -445,7 +534,6 @@ export class GeneralAgentRunCoordinator {
     if (snapshot.activeRunId || this.live.has(input.taskId)) {
       throw new TaskWorkspaceConflictError("Stop or finish the active Run before compacting this Chat.");
     }
-    const modelRoute = await this.resolveStartModelRoute();
     const access = await resolveStandaloneFileGrantAccess(this.deps.repoRoot, input.taskId);
     const sessionId = generalAgentSessionId(input.taskId, access.workingDirectory);
     const projectTrusted = await this.resolveWorkingDirectoryTrust(input.taskId, sessionId);
@@ -453,26 +541,145 @@ export class GeneralAgentRunCoordinator {
       ? snapshot.agentThreads.find((thread) => thread.id === input.agentThreadId && thread.piSessionFile)
       : snapshot.agentThreads.filter((thread) => thread.piSessionFile).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (input.agentThreadId && !latestThread) throw new TaskWorkspaceConflictError(`Agent thread ${input.agentThreadId} has no resumable Pi session.`);
-    const created = await (this.deps.createSession ?? createGeneralAgentSession)({
+    const permissionContract = await this.deps.permissionContract();
+    const managedResources = await this.resolveManagedResources();
+    if (!latestThread) throw new TaskWorkspaceConflictError("This Chat has no resumable Agent thread to compact.");
+    const run = snapshot.runs.find((candidate) => candidate.id === latestThread.runId);
+    const execution = run?.executionSnapshots?.at(-1);
+    if (!run?.resourceManifest || !execution || !execution.executionProfile || !execution.providerId || !execution.modelId) {
+      throw new TaskWorkspaceConflictError("This legacy Agent thread has no verified execution/resource snapshot; start a new Run or fork instead of compacting it.");
+    }
+    const modelRoute = await this.resolveStartModelRoute({
+      provider: execution.providerId,
+      modelId: execution.modelId,
+      thinkingLevel: snapshotThinkingLevel(execution.reasoningEffort),
+      executionProfile: execution.executionProfile,
+    });
+    const plan = await prepareGeneralAgentSessionPlan({
       runtimeRoot: this.deps.repoRoot,
       taskId: input.taskId,
       agentDir: this.deps.piAgentDir,
-      modelRuntime: await this.deps.modelRuntime(),
+      runId: run.id,
+      rootAgentThreadId: latestThread.id,
       modelProvider: modelRoute.provider,
       modelId: modelRoute.modelId,
       thinkingLevel: modelRoute.thinkingLevel,
-      permissionContract: await this.deps.permissionContract(),
-      requestPermissionDecision: (request) => this.deps.requestPermissionDecision(request, () => undefined),
+      executionProfilePlan: modelRoute.profilePlan,
+      permissionContract,
       projectTrusted,
-      authorizeExecutableExtensions: (request) => this.authorizeExecutableExtensions(request, sessionId),
       sessionFile: latestThread?.piSessionFile,
-      managedResources: await resolveApprovedManagedPackageResources(this.deps.repoRoot),
+      managedResources,
+      assistantMemoryStore: this.deps.assistantMemoryStore?.(),
+    });
+    const created = await this.deps.workerRuntime.createGeneralSession({
+      plan,
+      executionIdentity: {
+        executionId: `${run.id}.compaction.${randomUUID()}`,
+        threadId: latestThread.id,
+        turnId: `${run.id}.compaction`,
+        runtimeEpochId: execution.runtimeEpochId,
+        configRevision: execution.configRevision,
+        executionProfile: execution.executionProfile,
+        createdAt: new Date().toISOString(),
+      },
+      persistExecutionSnapshot: async () => undefined,
+      requestPermissionDecision: (request) => this.deps.requestPermissionDecision(request, () => undefined),
+      delegate: async () => { throw new Error("Compaction cannot delegate work."); },
+      assistantMemoryStore: this.deps.assistantMemoryStore?.(),
+      libraryPersistence: this.deps.libraryPersistence?.(),
+      agentPlanHandler: (payload) => updateAgentPlanArtifact({ repoRoot: this.deps.repoRoot, taskId: input.taskId, runId: run.id, agentThreadId: latestThread.id, payload }),
+      agentPresentHandler: (payload) => presentAgentAnswerArtifact({ repoRoot: this.deps.repoRoot, taskId: input.taskId, runId: run.id, agentThreadId: latestThread.id, payload }),
     });
     try {
-      return await created.session.compact(input.customInstructions);
+      try {
+        assertRuntimeCompactionTarget({
+          threadId: latestThread.id,
+          expectedSessionId: latestThread.piSessionId,
+          expectedSessionFile: latestThread.piSessionFile!,
+          actualSessionId: created.session.sessionId,
+          actualSessionFile: created.session.sessionFile,
+        });
+      } catch (error) {
+        throw new TaskWorkspaceConflictError(error instanceof Error ? error.message : String(error));
+      }
+      const createdAt = new Date().toISOString();
+      const handoffId = `compaction-handoff-${randomUUID()}`;
+      const activityId = `${handoffId}.activity`;
+      const handoff = buildRuntimeCompactionHandoff({
+        handoffId,
+        taskId: input.taskId,
+        runId: run.id,
+        threadId: latestThread.id,
+        sessionId: created.session.sessionId,
+        taskGoal: snapshot.task.intent,
+        openDecisionIds: snapshot.decisions.filter((decision) => decision.status === "required").map((decision) => decision.id),
+        pendingArtifactIds: snapshot.artifacts
+          .filter((artifact) => artifact.status === "draft" || artifact.status === "reviewable")
+          .map((artifact) => artifact.id),
+        execution: {
+          executionId: execution.executionId,
+          runtimeEpochId: execution.runtimeEpochId,
+          configRevision: execution.configRevision,
+          promptHash: execution.promptHash,
+          toolManifestHash: execution.toolManifestHash,
+          resourceSnapshotHash: execution.resourceSnapshotHash,
+          capabilityGrantHash: execution.capabilityGrantHash,
+          contextInputHash: execution.contextInputHash,
+        },
+        resourceManifestHash: createHash("sha256").update(JSON.stringify(run.resourceManifest)).digest("hex"),
+        requestedFocus: input.customInstructions,
+        createdAt,
+      });
+      const transcript = renderRuntimeCompactionInstructions(handoff);
+      await workspace.appendGenerated({
+        kind: "standalone",
+        taskId: input.taskId,
+        runId: run.id,
+        events: [{
+          type: "artifact_upsert",
+          agentThreadId: latestThread.id,
+          occurredAt: createdAt,
+          artifact: {
+            id: handoffId,
+            taskId: input.taskId,
+            runId: run.id,
+            type: "context_handoff",
+            status: "final",
+            title: "Durable compaction handoff",
+            summary: `Preserves ${handoff.openDecisionIds.length} open decision(s), ${handoff.pendingArtifactIds.length} pending artifact(s), and the exact execution/resource policy hashes.`,
+            scope: snapshot.task.scope,
+            version: 1,
+            provenance: { agentThreadId: latestThread.id, activityId, evidenceRefs: [], parentArtifactIds: [] },
+            availableDecisions: [],
+            content: { kind: "runtime_compaction_handoff", ...handoff, transcript },
+            createdAt,
+            updatedAt: createdAt,
+          },
+        }, {
+          type: "activity_append",
+          agentThreadId: latestThread.id,
+          occurredAt: createdAt,
+          activity: {
+            id: activityId,
+            taskId: input.taskId,
+            runId: run.id,
+            agentThreadId: latestThread.id,
+            seq: 1,
+            type: "handoff",
+            status: "done",
+            actor: { kind: "system", id: "runtime", displayName: "Runtime", agentThreadId: latestThread.id },
+            title: "Compaction handoff persisted",
+            body: `Schema v1 · execution ${execution.executionId} · session ${created.session.sessionId}`,
+            tool: null,
+            refs: { artifactIds: [handoffId], evidenceRefs: [], decisionIds: handoff.openDecisionIds, segmentIds: [] },
+            createdAt,
+            updatedAt: createdAt,
+          },
+        }],
+      });
+      return await created.session.compact({ handoff });
     } finally {
-      if (created.runtime) await created.runtime.dispose();
-      else created.session.dispose();
+      await created.dispose();
     }
   }
 
@@ -491,38 +698,68 @@ export class GeneralAgentRunCoordinator {
       : snapshot.agentThreads.filter((thread) => thread.piSessionFile).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (!source) throw new TaskWorkspaceConflictError("This Chat has no resumable Agent thread to branch.");
     if (!source.piSessionFile) throw new TaskWorkspaceConflictError(`Agent thread ${source.id} has no resumable Pi session.`);
-    const modelRoute = await this.resolveStartModelRoute();
     const access = await resolveStandaloneFileGrantAccess(this.deps.repoRoot, input.taskId);
     const sessionId = generalAgentSessionId(input.taskId, access.workingDirectory);
     const projectTrusted = await this.resolveWorkingDirectoryTrust(input.taskId, sessionId);
-    const created = await (this.deps.createSession ?? createGeneralAgentSession)({
+    const sourceRun = snapshot.runs.find((candidate) => candidate.id === source.runId);
+    const sourceExecution = sourceRun?.executionSnapshots?.at(-1);
+    if (!sourceExecution || !sourceExecution.executionProfile || !sourceExecution.providerId || !sourceExecution.modelId) {
+      throw new TaskWorkspaceConflictError("This legacy Agent thread has no verified ExecutionProfile snapshot; start a new Run instead of branching it.");
+    }
+    const modelRoute = await this.resolveStartModelRoute({
+      provider: sourceExecution.providerId,
+      modelId: sourceExecution.modelId,
+      thinkingLevel: snapshotThinkingLevel(sourceExecution.reasoningEffort),
+      executionProfile: sourceExecution.executionProfile,
+    });
+    const plan = await prepareGeneralAgentSessionPlan({
       runtimeRoot: this.deps.repoRoot,
       taskId: input.taskId,
       agentDir: this.deps.piAgentDir,
-      modelRuntime: await this.deps.modelRuntime(),
+      runId: source.runId,
+      rootAgentThreadId: source.id,
       modelProvider: modelRoute.provider,
       modelId: modelRoute.modelId,
       thinkingLevel: modelRoute.thinkingLevel,
+      executionProfilePlan: modelRoute.profilePlan,
       permissionContract: await this.deps.permissionContract(),
-      requestPermissionDecision: (request) => this.deps.requestPermissionDecision(request, () => undefined),
       projectTrusted,
-      authorizeExecutableExtensions: (request) => this.authorizeExecutableExtensions(request, sessionId),
       sessionFile: source.piSessionFile,
-      managedResources: await resolveApprovedManagedPackageResources(this.deps.repoRoot),
+      managedResources: await this.resolveManagedResources(),
+      assistantMemoryStore: this.deps.assistantMemoryStore?.(),
     });
-    if (!created.runtime) {
-      created.session.dispose();
+    const created = await this.deps.workerRuntime.createGeneralSession({
+      plan,
+      executionIdentity: {
+        executionId: `${source.runId}.fork.${randomUUID()}`,
+        threadId: source.id,
+        turnId: `${source.runId}.fork`,
+        runtimeEpochId: sourceExecution.runtimeEpochId,
+        configRevision: sourceExecution.configRevision,
+        executionProfile: sourceExecution.executionProfile,
+        createdAt: new Date().toISOString(),
+      },
+      persistExecutionSnapshot: async () => undefined,
+      requestPermissionDecision: (request) => this.deps.requestPermissionDecision(request, () => undefined),
+      delegate: async () => { throw new Error("Branch creation cannot delegate work."); },
+      assistantMemoryStore: this.deps.assistantMemoryStore?.(),
+      libraryPersistence: this.deps.libraryPersistence?.(),
+      agentPlanHandler: (payload) => updateAgentPlanArtifact({ repoRoot: this.deps.repoRoot, taskId: input.taskId, runId: source.runId, agentThreadId: source.id, payload }),
+      agentPresentHandler: (payload) => presentAgentAnswerArtifact({ repoRoot: this.deps.repoRoot, taskId: input.taskId, runId: source.runId, agentThreadId: source.id, payload }),
+    });
+    if (!created.fork) {
+      await created.dispose();
       throw new TaskWorkspaceConflictError("The General Core session runtime does not support Pi branching.");
     }
     try {
-      const entryId = input.entryId ?? source.piEntryId ?? created.session.sessionManager.getLeafId() ?? undefined;
-      if (!entryId || !created.session.sessionManager.getEntry(entryId)) {
+      const entryId = input.entryId ?? source.piEntryId ?? created.session.leafEntryId();
+      if (!entryId) {
         throw new TaskWorkspaceConflictError("The requested Pi branch point is not present in the selected Agent thread.");
       }
       const position = input.position ?? "at";
-      const result = await created.runtime.fork(entryId, { position });
+      const result = await created.fork(entryId, { position });
       if (result.cancelled) throw new TaskWorkspaceConflictError("Pi Extension cancelled the branch operation.");
-      const branchSession = created.runtime.session;
+      const branchSession = result.session;
       const branchedAt = new Date().toISOString();
       const runId = `branch_${randomUUID()}`;
       const threadId = `${runId}.main`;
@@ -567,7 +804,7 @@ export class GeneralAgentRunCoordinator {
             childThreadIds: [],
             piSessionId: branchSession.sessionId,
             piSessionFile: branchSession.sessionFile,
-            piEntryId: branchSession.sessionManager.getLeafId() ?? undefined,
+            piEntryId: branchSession.leafEntryId(),
             branchPointEntryId: entryId,
             branchPosition: position,
             createdAt: branchedAt,
@@ -604,7 +841,7 @@ export class GeneralAgentRunCoordinator {
         piSessionId: branchSession.sessionId,
       };
     } finally {
-      await created.runtime.dispose();
+      await created.dispose();
     }
   }
 
@@ -612,6 +849,8 @@ export class GeneralAgentRunCoordinator {
     taskId: string;
     runId: string;
     message: string;
+    userMessage: string;
+    images: AgentRuntimeImageContent[];
     startedAt: string;
     parentThreadId?: string;
     sessionFile?: string;
@@ -619,6 +858,8 @@ export class GeneralAgentRunCoordinator {
   }): Promise<void> {
     const releaseStartLease = this.deps.activeRuns.acquireRunStartLease();
     const modelRoute = input.modelRoute;
+    const profilePlan = modelRoute.profilePlan;
+    if (!profilePlan) throw new TaskWorkspaceConflictError("A General Run requires a verified immutable ExecutionProfile plan.");
     let projector: Awaited<ReturnType<typeof createSingleTaskRunProjector>>;
     try {
       projector = await createSingleTaskRunProjector({
@@ -626,7 +867,7 @@ export class GeneralAgentRunCoordinator {
         locator: { kind: "standalone", taskId: input.taskId },
         taskId: input.taskId,
         runId: input.runId,
-        userMessage: input.message,
+        userMessage: input.userMessage,
         startedAt: input.startedAt,
         modelRoute: modelRoute.provider && modelRoute.modelId ? `${modelRoute.provider}/${modelRoute.modelId}` : "unconfigured",
         preprojected: true,
@@ -636,8 +877,8 @@ export class GeneralAgentRunCoordinator {
       releaseStartLease();
       throw error;
     }
-    let session: AgentSession | undefined;
-    let sessionRuntime: AgentSessionRuntime | undefined;
+    let session: AgentRuntimeSession | undefined;
+    let sessionCreation: AgentRuntimeSessionCreation | undefined;
     let unsubscribe = () => {};
     let registered = false;
     let pendingSessionId: string | undefined;
@@ -661,24 +902,60 @@ export class GeneralAgentRunCoordinator {
           permissionRequest: pending,
         });
       };
-      const projectTrusted = await this.resolveWorkingDirectoryTrust(input.taskId, pendingSessionId, onPending);
-      const managedResources = await resolveApprovedManagedPackageResources(this.deps.repoRoot);
-      const created = await (this.deps.createSession ?? createGeneralAgentSession)({
+      const projectTrusted = await this.resolveWorkingDirectoryTrust(input.taskId, pendingSessionId, input.runId, onPending);
+      const managedResources = await this.resolveManagedResources();
+      const permissionContract = await this.deps.permissionContract();
+      const contextHandoffs = acceptedContextHandoffs(await createTaskWorkspace(this.deps.repoRoot).open({ kind: "standalone", taskId: input.taskId }));
+      const assistantMemoryStore = this.deps.assistantMemoryStore?.();
+      const plan = await prepareGeneralAgentSessionPlan({
         runtimeRoot: this.deps.repoRoot,
         taskId: input.taskId,
         agentDir: this.deps.piAgentDir,
         runId: input.runId,
         rootAgentThreadId: `${input.runId}.main`,
-        modelRuntime: await this.deps.modelRuntime(),
         modelProvider: modelRoute.provider,
         modelId: modelRoute.modelId,
         thinkingLevel: modelRoute.thinkingLevel,
-        permissionContract: await this.deps.permissionContract(),
-        requestPermissionDecision: (request) => this.deps.requestPermissionDecision(request, onPending),
+        executionProfilePlan: profilePlan,
+        permissionContract,
         projectTrusted,
-        authorizeExecutableExtensions: (request) => this.authorizeExecutableExtensions(request, pendingSessionId!, onPending),
         sessionFile: input.sessionFile,
-        contextHandoffs: acceptedContextHandoffs(await createTaskWorkspace(this.deps.repoRoot).open({ kind: "standalone", taskId: input.taskId })),
+        contextHandoffs,
+        delegationEnabled: true,
+        managedResources,
+        assistantMemoryStore,
+        confirmedMemory: await scopedGeneralMemorySnapshot({
+          runtimeRoot: this.deps.repoRoot,
+          query: input.message,
+          store: assistantMemoryStore,
+        }),
+      });
+      const runtimeEpochId = `${input.runId}.epoch.1`;
+      const created = await this.deps.workerRuntime.createGeneralSession({
+        plan,
+        executionIdentity: {
+          executionId: `${input.runId}.execution.1`,
+          threadId: `${input.runId}.main`,
+          turnId: input.runId,
+          runtimeEpochId,
+          configRevision: 1,
+          executionProfile: profilePlan.profile,
+          createdAt: input.startedAt,
+        },
+        persistExecutionSnapshot: (snapshot) => projector.setExecutionSnapshot(snapshot),
+        requestPermissionDecision: (request) => this.deps.requestPermissionDecision(request, onPending),
+        delegate: (request) => this.runDelegatedChild({
+          taskId: input.taskId,
+          runId: input.runId,
+          parentThreadId: `${input.runId}.main`,
+          modelRoute,
+          request,
+          signal: undefined,
+        }),
+      assistantMemoryStore: this.deps.assistantMemoryStore?.(),
+      libraryPersistence: this.deps.libraryPersistence?.(),
+        agentPlanHandler: (payload) => updateAgentPlanArtifact({ repoRoot: this.deps.repoRoot, taskId: input.taskId, runId: input.runId, agentThreadId: `${input.runId}.main`, payload }),
+        agentPresentHandler: (payload) => presentAgentAnswerArtifact({ repoRoot: this.deps.repoRoot, taskId: input.taskId, runId: input.runId, agentThreadId: `${input.runId}.main`, payload }),
         onCapabilityActivation: (activation) => {
           projector.accept({
             type: "capability_activation",
@@ -686,18 +963,9 @@ export class GeneralAgentRunCoordinator {
             capabilityActivation: activation,
           });
         },
-        delegate: (request, signal) => this.runDelegatedChild({
-          taskId: input.taskId,
-          runId: input.runId,
-          parentThreadId: `${input.runId}.main`,
-          modelRoute,
-          request,
-          signal,
-        }),
-        managedResources,
       });
       session = created.session;
-      sessionRuntime = created.runtime;
+      sessionCreation = created;
       const systemPrompt = typeof session.systemPrompt === "string" ? session.systemPrompt : "";
       const systemPromptHash = createHash("sha256").update(systemPrompt).digest("hex");
       const toolSurfaceHash = createHash("sha256").update(JSON.stringify(created.resources.activeToolNames)).digest("hex");
@@ -709,14 +977,14 @@ export class GeneralAgentRunCoordinator {
       await projector.setResourceManifest({
         schemaVersion: 2,
         profile: "general",
-        piRuntimeVersion: VERSION,
+        piRuntimeVersion: created.runtimeVersion,
         cwd: created.access.workingDirectory,
         fileGrantIds: created.access.grants.map((grant) => grant.id),
         packages: managedResources.packages.map((pkg) => ({
-          name: pkg.descriptor.package.name,
-          source: pkg.descriptor.package.source,
-          version: pkg.descriptor.package.version,
-          integrity: pkg.descriptor.package.integrity,
+          name: pkg.packageId,
+          source: `lapkg:${pkg.publisherId}`,
+          version: pkg.packageVersion,
+          integrity: `sha256-${pkg.archiveSha256}`,
         })),
         activeToolNames: created.resources.activeToolNames,
         conflicts: created.resources.conflicts,
@@ -751,7 +1019,7 @@ export class GeneralAgentRunCoordinator {
         });
       }
       const rootThreadId = `${input.runId}.main`;
-      const live: LiveGeneralRun = { taskId: input.taskId, runId: input.runId, session, runtime: created.runtime, projector, rootThreadId };
+      const live: LiveGeneralRun = { taskId: input.taskId, runId: input.runId, session, projector, rootThreadId };
       this.live.set(input.taskId, live);
       await this.deps.messageQueue.bindRun({
         locator: { kind: "standalone", taskId: input.taskId },
@@ -771,6 +1039,8 @@ export class GeneralAgentRunCoordinator {
       this.deps.activeRuns.register({
         turnId: input.runId,
         sessionId: session.sessionId,
+        workerId: created.workerId,
+        runtimeEpochId: created.runtimeEpochId,
         scope: "standalone",
         taskId: input.taskId,
         beforeAbort: async () => {
@@ -783,8 +1053,7 @@ export class GeneralAgentRunCoordinator {
         session: {
           abort: () => session!.abort(),
           dispose: () => {
-            if (created.runtime) void created.runtime.dispose();
-            else session!.dispose();
+            void created.dispose();
           },
         },
       });
@@ -806,19 +1075,19 @@ export class GeneralAgentRunCoordinator {
 
       let assistantText = "";
       let thinkingStarted = false;
-      unsubscribe = session.subscribe((event: AgentSessionEvent) => {
+      let runtimeTerminalError: string | undefined;
+      unsubscribe = session.subscribe((event: AgentRuntimeEvent) => {
         const ts = new Date().toISOString();
-        if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-          const delta = event.assistantMessageEvent.delta;
-          assistantText += delta;
+        if (event.type === "message.delta" && event.channel === "text") {
+          assistantText += event.delta;
           this.publishMessageStream({
             type: "assistant_delta",
             taskId: input.taskId,
             runId: input.runId,
             ts,
-            text: delta,
+            text: event.delta,
           });
-        } else if (event.type === "message_update" && event.assistantMessageEvent.type === "thinking_delta") {
+        } else if (event.type === "message.delta" && event.channel === "thinking") {
           if (!thinkingStarted) {
             thinkingStarted = true;
             this.publishMessageStream({
@@ -828,7 +1097,7 @@ export class GeneralAgentRunCoordinator {
               ts,
             });
           }
-        } else if (event.type === "message_end") {
+        } else if (event.type === "message.completed") {
           const error = messageError(event.message);
           const role = (event.message as { role?: string }).role;
           if (role === "assistant" && !error) {
@@ -866,7 +1135,7 @@ export class GeneralAgentRunCoordinator {
             });
             assistantText = "";
           }
-        } else if (event.type === "tool_execution_start") {
+        } else if (event.type === "tool.started") {
           projector.accept({
             type: "tool_start",
             ts,
@@ -874,7 +1143,7 @@ export class GeneralAgentRunCoordinator {
             toolName: event.toolName,
             argsPreview: previewValue(event.args),
           });
-        } else if (event.type === "tool_execution_end") {
+        } else if (event.type === "tool.completed") {
           projector.accept({
             type: "tool_end",
             ts,
@@ -884,32 +1153,32 @@ export class GeneralAgentRunCoordinator {
             resultPreview: previewValue(event.result),
             errorMessage: event.isError ? previewValue(event.result, 240) : undefined,
           });
-        } else if (event.type === "queue_update") {
+        } else if (event.type === "queue.changed") {
           void this.deps.messageQueue.syncPiQueue({
             locator: { kind: "standalone", taskId: input.taskId },
             runId: input.runId,
             followUp: event.followUp,
           }).catch((error) => {
-            console.warn("Standalone message queue sync failed:", error instanceof Error ? error.message : String(error));
+            safeLogger.warn("standalone.message_queue_sync_failed", { error });
           });
           projector.accept({
             type: "queue_update",
             ts,
             text: `${event.steering.length} steering · ${event.followUp.length} follow-up queued`,
           });
-        } else if (event.type === "compaction_start") {
+        } else if (event.type === "compaction.started") {
           projector.accept({ type: "compaction_start", ts, reason: event.reason });
-        } else if (event.type === "compaction_end") {
+        } else if (event.type === "compaction.completed") {
           projector.accept({
             type: "compaction_end",
             ts,
             reason: event.reason,
-            tokensBefore: event.result?.tokensBefore,
-            estimatedTokensAfter: event.result?.estimatedTokensAfter,
+            tokensBefore: event.tokensBefore,
+            estimatedTokensAfter: event.estimatedTokensAfter,
             isError: Boolean(event.errorMessage),
             errorMessage: event.errorMessage,
           });
-        } else if (event.type === "auto_retry_start") {
+        } else if (event.type === "retry.started") {
           projector.accept({
             type: "retry_start",
             ts,
@@ -917,13 +1186,41 @@ export class GeneralAgentRunCoordinator {
             retryMaxAttempts: event.maxAttempts,
             errorMessage: event.errorMessage,
           });
-        } else if (event.type === "auto_retry_end") {
-          projector.accept({ type: "retry_end", ts, retrySuccess: event.success, errorMessage: event.finalError });
+        } else if (event.type === "retry.completed") {
+          projector.accept({ type: "retry_end", ts, retryAttempt: event.attempt, retrySuccess: event.success, errorMessage: event.finalError });
+        } else if (event.type === "attempt.failed") {
+          assistantText = "";
+        } else if (event.type === "runtime.diagnostic") {
+          projector.accept({
+            type: "runtime_diagnostic",
+            ts,
+            text: event.message,
+            errorMessage: event.code,
+          });
+        } else if (event.type === "run.failed") {
+          runtimeTerminalError = event.errorMessage;
+          projector.accept({
+            type: "error",
+            ts,
+            text: event.errorMessage,
+            errorMessage: event.errorMessage,
+          });
+          this.publishMessageStream({
+            type: "error",
+            taskId: input.taskId,
+            runId: input.runId,
+            ts,
+            errorMessage: event.errorMessage,
+          });
         }
       });
-      await session.prompt(input.message);
+      await session.prompt(input.message, input.images.length ? { images: input.images } : undefined);
       await session.waitForIdle();
       const stopped = this.deps.activeRuns.isStoppingOrStopped(input.runId);
+      if (runtimeTerminalError && !stopped) {
+        runFailure = new Error(runtimeTerminalError);
+        return;
+      }
       const ts = new Date().toISOString();
       projector.accept({
         type: stopped ? "stopped" : "done",
@@ -978,13 +1275,12 @@ export class GeneralAgentRunCoordinator {
       if (this.live.get(input.taskId)?.runId === input.runId) this.live.delete(input.taskId);
       if (registered) this.deps.activeRuns.complete({ scope: "standalone", turnId: input.runId });
       else if (session) {
-        if (sessionRuntime) await sessionRuntime.dispose();
-        else session.dispose();
+        await sessionCreation?.dispose();
       }
     }
   }
 
-  private async persistThreadSession(taskId: string, runId: string, session: AgentSession): Promise<void> {
+  private async persistThreadSession(taskId: string, runId: string, session: AgentRuntimeSession): Promise<void> {
     const workspace = createTaskWorkspace(this.deps.repoRoot);
     const snapshot = await workspace.open({ kind: "standalone", taskId });
     const thread = snapshot.agentThreads.find((candidate) => candidate.id === `${runId}.main`);
@@ -1006,7 +1302,7 @@ export class GeneralAgentRunCoordinator {
           ])],
           piSessionId: session.sessionId,
           piSessionFile: session.sessionFile,
-          piEntryId: session.sessionManager.getLeafId() ?? undefined,
+          piEntryId: session.leafEntryId(),
           updatedAt: occurredAt,
         },
       }],
@@ -1030,6 +1326,8 @@ export class GeneralAgentRunCoordinator {
     const existingChildren = snapshot.agentThreads.filter((thread) => thread.parentThreadId === parent.id);
     if (existingChildren.length >= 8) throw new TaskWorkspaceConflictError("This General Run already has eight delegated child threads.");
     const role = delegatedRole(input.request.role);
+    const profilePlan = input.modelRoute.profilePlan;
+    if (!profilePlan) throw new TaskWorkspaceConflictError("Delegation requires the Main Run's verified ExecutionProfile plan.");
     const childId = `${input.runId}.delegate.${randomUUID()}`;
     const startedAt = new Date().toISOString();
     const startedActivityId = `${childId}.started`;
@@ -1083,8 +1381,9 @@ export class GeneralAgentRunCoordinator {
       }],
     });
 
-    let childSession: AgentSession | undefined;
-    let childRuntime: AgentSessionRuntime | undefined;
+    let childSession: AgentRuntimeSession | undefined;
+    let childCreation: GeneralWorkerSessionCreation | undefined;
+    let workerBound = false;
     let unsubscribe = () => {};
     let abortListener: (() => void) | undefined;
     const activityEvents: TaskRunEventDraft[] = [];
@@ -1093,7 +1392,12 @@ export class GeneralAgentRunCoordinator {
       const childAccess = await resolveStandaloneFileGrantAccess(this.deps.repoRoot, input.taskId);
       const childSessionId = `${generalAgentSessionId(input.taskId, childAccess.workingDirectory)}-${childId}`;
       const projectTrusted = await this.resolveWorkingDirectoryTrust(input.taskId, childSessionId);
-      const created = await (this.deps.createSession ?? createGeneralAgentSession)({
+      const permissionContract = buildAgentPermissionContract({
+        mode: "custom",
+        customRules: { fileRead: "auto", fileWrite: "deny", webRead: "deny", bash: "deny", bridge: "deny" },
+      });
+      const assistantMemoryStore = this.deps.assistantMemoryStore?.();
+      const plan = await prepareGeneralAgentSessionPlan({
         runtimeRoot: this.deps.repoRoot,
         taskId: input.taskId,
         agentDir: this.deps.piAgentDir,
@@ -1101,34 +1405,110 @@ export class GeneralAgentRunCoordinator {
         rootAgentThreadId: childId,
         sessionIdSuffix: childId,
         readOnlyChild: true,
-        modelRuntime: await this.deps.modelRuntime(),
         modelProvider: input.modelRoute.provider,
         modelId: input.modelRoute.modelId,
         thinkingLevel: input.modelRoute.thinkingLevel,
-        permissionContract: buildAgentPermissionContract({
-          mode: "custom",
-          customRules: { fileRead: "auto", fileWrite: "deny", webRead: "deny", bash: "deny", bridge: "deny" },
-        }),
+        executionProfilePlan: profilePlan,
+        permissionContract,
         projectTrusted,
         contextHandoffs: [[
           `Delegated task from Main: ${input.request.task}`,
           input.request.context ? `Minimum parent context:\n${input.request.context}` : undefined,
           "Return a concise, evidence-aware report to Main. Do not perform writes or side effects.",
         ].filter(Boolean).join("\n\n")],
-        managedResources: await resolveApprovedManagedPackageResources(this.deps.repoRoot),
+        managedResources: await this.resolveManagedResources(),
+        assistantMemoryStore,
+        confirmedMemory: await scopedGeneralMemorySnapshot({
+          runtimeRoot: this.deps.repoRoot,
+          query: input.request.task,
+          store: assistantMemoryStore,
+        }),
+      });
+      const created = await this.deps.workerRuntime.createGeneralSession({
+        plan,
+        executionIdentity: {
+          executionId: `${childId}.execution.1`,
+          threadId: childId,
+          turnId: childId,
+          runtimeEpochId: `${input.runId}.${childId}.epoch.1`,
+          configRevision: 1,
+          executionProfile: profilePlan.profile,
+          createdAt: new Date().toISOString(),
+        },
+        persistExecutionSnapshot: async () => undefined,
+        requestPermissionDecision: (request) => this.deps.requestPermissionDecision(request, () => undefined),
+        delegate: async () => { throw new Error("Delegated read-only children cannot delegate further."); },
+      assistantMemoryStore: this.deps.assistantMemoryStore?.(),
+      libraryPersistence: this.deps.libraryPersistence?.(),
       });
       childSession = created.session;
-      childRuntime = created.runtime;
-      let eventIndex = 0;
-      unsubscribe = childSession.subscribe((event: AgentSessionEvent) => {
+      childCreation = created;
+      const workerBoundAt = new Date().toISOString();
+      await workspace.appendGenerated({
+        kind: "standalone",
+        taskId: input.taskId,
+        runId: input.runId,
+        events: [{
+          type: "activity_append",
+          agentThreadId: childId,
+          occurredAt: workerBoundAt,
+          activity: {
+            id: `${childId}.worker-bound`,
+            taskId: input.taskId,
+            runId: input.runId,
+            agentThreadId: childId,
+            seq: 2,
+            type: "progress",
+            status: "done",
+            actor: { kind: "system", id: "runtime", displayName: "Runtime", agentThreadId: childId },
+            title: "Delegated Worker isolated",
+            body: `Worker ${created.workerId} · epoch ${created.runtimeEpochId}`,
+            tool: null,
+            refs: { artifactIds: [], evidenceRefs: [], decisionIds: [], segmentIds: [] },
+            createdAt: workerBoundAt,
+            updatedAt: workerBoundAt,
+          },
+        }],
+      });
+      workerBound = true;
+      let eventIndex = 1;
+      unsubscribe = childSession.subscribe((event: AgentRuntimeEvent) => {
         const occurredAt = new Date().toISOString();
-        if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") summary += event.assistantMessageEvent.delta;
-        if (event.type === "message_end" && (event.message as { role?: string }).role === "assistant" && !summary.trim()) {
+        if (event.type === "message.delta" && event.channel === "text") {
+          summary += event.delta;
+        }
+        if (event.type === "message.completed" && (event.message as { role?: string }).role === "assistant" && !summary.trim()) {
           summary = assistantMessageText(event.message);
         }
-        if (event.type !== "tool_execution_start" && event.type !== "tool_execution_end") return;
+        if (event.type === "runtime.diagnostic") {
+          eventIndex += 1;
+          activityEvents.push({
+            type: "activity_append",
+            agentThreadId: childId,
+            occurredAt,
+            activity: {
+              id: `${childId}.runtime-diagnostic.${eventIndex}`,
+              taskId: input.taskId,
+              runId: input.runId,
+              agentThreadId: childId,
+              seq: eventIndex + 1,
+              type: "error",
+              status: "error",
+              actor: { kind: "system", id: "runtime", displayName: "Runtime", agentThreadId: childId },
+              title: "Runtime event diagnostic",
+              body: `${event.code}: ${event.message}`,
+              tool: null,
+              refs: { artifactIds: [], evidenceRefs: [], decisionIds: [], segmentIds: [] },
+              createdAt: occurredAt,
+              updatedAt: occurredAt,
+            },
+          });
+          return;
+        }
+        if (event.type !== "tool.started" && event.type !== "tool.completed") return;
         eventIndex += 1;
-        const ended = event.type === "tool_execution_end";
+        const ended = event.type === "tool.completed";
+        const toolName = event.toolName;
         activityEvents.push({
           type: "activity_append",
           agentThreadId: childId,
@@ -1142,9 +1522,9 @@ export class GeneralAgentRunCoordinator {
             type: "tool_action",
             status: ended ? (event.isError ? "error" : "done") : "running",
             actor: { kind: "agent", id: childId, displayName: role, agentThreadId: childId },
-            title: `${role} ${ended ? (event.isError ? "failed" : "completed") : "started"} ${event.toolName}`,
+            title: `${role} ${ended ? (event.isError ? "failed" : "completed") : "started"} ${toolName}`,
             body: ended ? previewValue(event.result) : previewValue(event.args),
-            tool: { name: event.toolName, effect: "read", target: null, outcome: ended ? (event.isError ? "failed" : "completed") : "started" },
+            tool: { name: toolName, effect: "read", target: null, outcome: ended ? (event.isError ? "failed" : "completed") : "started" },
             refs: { artifactIds: [], evidenceRefs: [], decisionIds: [], segmentIds: [] },
             createdAt: occurredAt,
             updatedAt: occurredAt,
@@ -1176,7 +1556,7 @@ export class GeneralAgentRunCoordinator {
             taskId: input.taskId,
             runId: input.runId,
             agentThreadId: childId,
-            seq: activityEvents.length + 2,
+            seq: activityEvents.length + 3,
             type: "final_response",
             status: "done",
             actor: { kind: "agent", id: childId, displayName: role, agentThreadId: childId },
@@ -1198,7 +1578,7 @@ export class GeneralAgentRunCoordinator {
             latestActivityId: finalActivityId,
             piSessionId: childSession.sessionId,
             piSessionFile: childSession.sessionFile,
-            piEntryId: childSession.sessionManager.getLeafId() ?? undefined,
+            piEntryId: childSession.leafEntryId(),
             updatedAt: completedAt,
           },
         }],
@@ -1219,7 +1599,7 @@ export class GeneralAgentRunCoordinator {
             agentThreadId: childId,
             occurredAt: failedAt,
             activity: {
-              id: `${childId}.failed`, taskId: input.taskId, runId: input.runId, agentThreadId: childId, seq: 1,
+              id: `${childId}.failed`, taskId: input.taskId, runId: input.runId, agentThreadId: childId, seq: workerBound ? 3 : 2,
               type: "error", status: "error",
               actor: { kind: "agent", id: childId, displayName: role, agentThreadId: childId },
               title: `${role} failed delegated work`, body: message, tool: null,
@@ -1235,8 +1615,7 @@ export class GeneralAgentRunCoordinator {
     } finally {
       if (abortListener) input.signal?.removeEventListener("abort", abortListener);
       unsubscribe();
-      if (childRuntime) await childRuntime.dispose();
-      else childSession?.dispose();
+      await childCreation?.dispose();
     }
   }
 
@@ -1285,4 +1664,254 @@ export class GeneralAgentRunCoordinator {
       }],
     });
   }
+}
+
+/* ---------- agent_plan_update: host-owned canonical work-plan writer ---------- */
+
+const AGENT_PLAN_ITEM_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const AGENT_PLAN_STATUSES = ["pending", "in_progress", "completed"] as const;
+
+export type AgentPlanUpdateItem = { id: string; text: string; status: RichArtifactTodoStatus };
+export type AgentPlanUpdatePayload = { title?: string; items: AgentPlanUpdateItem[] };
+
+/** Strict server-side validation of the model-submitted full todo list. */
+export function parseAgentPlanUpdatePayload(payload: unknown): AgentPlanUpdatePayload {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("agent_plan_update payload must be an object.");
+  const row = payload as Record<string, unknown>;
+  for (const key of Object.keys(row)) {
+    if (key !== "title" && key !== "items") throw new Error(`agent_plan_update payload has an unexpected field: ${key}.`);
+  }
+  if (row.title !== undefined && (typeof row.title !== "string" || !row.title.trim() || row.title.length > 1_000 || row.title.includes("\0"))) {
+    throw new Error("agent_plan_update title must be a non-empty string of at most 1000 characters without NUL.");
+  }
+  if (!Array.isArray(row.items) || row.items.length === 0) throw new Error("agent_plan_update items must not be empty.");
+  if (row.items.length > 500) throw new Error("agent_plan_update items must contain at most 500 entries.");
+  const items = row.items.map((value, index) => {
+    const label = `agent_plan_update items[${index}]`;
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object.`);
+    const item = value as Record<string, unknown>;
+    for (const key of Object.keys(item)) {
+      if (key !== "id" && key !== "text" && key !== "status") throw new Error(`${label} has an unexpected field: ${key}.`);
+    }
+    if (typeof item.id !== "string" || !AGENT_PLAN_ITEM_ID_PATTERN.test(item.id)) throw new Error(`${label}.id must be a stable identifier.`);
+    if (typeof item.text !== "string" || !item.text.trim() || item.text.length > 2_000) throw new Error(`${label}.text must be a non-empty string of at most 2000 characters.`);
+    if (item.text.includes("\0")) throw new Error(`${label}.text contains a NUL byte.`);
+    if (typeof item.status !== "string" || !(AGENT_PLAN_STATUSES as readonly string[]).includes(item.status)) {
+      throw new Error(`${label}.status must be one of ${AGENT_PLAN_STATUSES.join(", ")}.`);
+    }
+    return { id: item.id, text: item.text, status: item.status as RichArtifactTodoStatus };
+  });
+  if (new Set(items.map((item) => item.id)).size !== items.length) throw new Error("agent_plan_update item ids must be unique.");
+  return { ...(row.title === undefined ? {} : { title: row.title.trim() }), items };
+}
+
+/**
+ * The host-owned agent_plan writer. The model submits a full todo list; the
+ * host validates it and appends the next canonical artifact version plus a
+ * plan activity to the active Run. The Worker never writes Task truth itself.
+ */
+export async function updateAgentPlanArtifact(options: {
+  repoRoot: string;
+  taskId: string;
+  runId: string;
+  agentThreadId: string;
+  payload: unknown;
+}): Promise<{ artifactId: string; version: number }> {
+  const request = parseAgentPlanUpdatePayload(options.payload);
+  const workspace = createTaskWorkspace(options.repoRoot);
+  const before = await workspace.open({ kind: "standalone", taskId: options.taskId });
+  if (before.activeRunId !== options.runId) throw new TaskWorkspaceConflictError("The plan-update Run is no longer active.");
+  const now = new Date().toISOString();
+  const artifactId = `agent-plan:${options.taskId}`;
+  const completed = request.items.filter((item) => item.status === "completed").length;
+  const document = parseRichArtifactDocument({
+    schemaVersion: 1,
+    title: request.title ?? "Agent 工作计划",
+    createdAt: now,
+    generator: "Linguist Agent · agent_plan_update",
+    blocks: [{ id: "plan", type: "todo_list", items: request.items }],
+  });
+  const artifactPath = join(
+    standaloneTaskWorkspaceRoot(options.repoRoot, options.taskId),
+    "artifacts",
+    `${artifactId.replace(/[^A-Za-z0-9._-]+/g, "-")}.json`,
+  );
+  await writeJsonFile(artifactPath, document);
+  const activityId = `${options.runId}.plan.${randomUUID()}`;
+  const snapshot = await workspace.appendGenerated({
+    kind: "standalone",
+    taskId: options.taskId,
+    runId: options.runId,
+    expectedActiveRun: { id: options.runId, status: "active" },
+    events: [{
+      type: "artifact_upsert",
+      agentThreadId: options.agentThreadId,
+      occurredAt: now,
+      artifact: {
+        id: artifactId,
+        taskId: options.taskId,
+        runId: options.runId,
+        type: "agent_plan",
+        status: "reviewable",
+        title: document.title,
+        summary: `${request.items.length} 项工作计划，${completed} 项已完成`,
+        scope: { kind: "standalone", fileGrantIds: [] },
+        version: 1,
+        provenance: { agentThreadId: options.agentThreadId, activityId, evidenceRefs: [], parentArtifactIds: [] },
+        availableDecisions: [],
+        content: { document, artifactPath },
+        createdAt: now,
+        updatedAt: now,
+      },
+    }, {
+      type: "activity_append",
+      agentThreadId: options.agentThreadId,
+      occurredAt: now,
+      activity: {
+        id: activityId,
+        taskId: options.taskId,
+        runId: options.runId,
+        agentThreadId: options.agentThreadId,
+        seq: 1,
+        type: "plan",
+        status: "done",
+        actor: { kind: "agent", id: "main", displayName: "Linguist Agent", agentThreadId: options.agentThreadId },
+        title: `更新工作计划：${request.items.length} 项，${completed} 项已完成`,
+        body: null,
+        tool: { name: "agent_plan_update", effect: "write", target: artifactId, outcome: `${completed}/${request.items.length} 完成` },
+        refs: { artifactIds: [artifactId], evidenceRefs: [], decisionIds: [], segmentIds: [] },
+        createdAt: now,
+        updatedAt: now,
+      },
+    }],
+  });
+  const artifact = snapshot.artifacts.find((entry) => entry.id === artifactId);
+  if (!artifact) throw new Error("Agent plan artifact was not persisted.");
+  return { artifactId, version: artifact.version };
+}
+
+/* ---------- agent_present: host-owned canonical visual-answer writer ---------- */
+
+const AGENT_PRESENT_BLOCK_TYPES = ["markdown", "table", "chart", "diff", "file_reference"] as const;
+
+type AgentPresentBlock = ReturnType<typeof parseRichArtifactDocument>["blocks"][number];
+export type AgentPresentPayload = { title?: string; blocks: AgentPresentBlock[] };
+
+/**
+ * Strict server-side validation of the model-submitted visual answer. Only
+ * presentational blocks are accepted: todo_list stays exclusive to the plan
+ * tool and evidence blocks (image, page_overlay) are not model-presentable.
+ */
+export function parseAgentPresentPayload(payload: unknown): AgentPresentPayload {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("agent_present payload must be an object.");
+  const row = payload as Record<string, unknown>;
+  for (const key of Object.keys(row)) {
+    if (key !== "title" && key !== "blocks") throw new Error(`agent_present payload has an unexpected field: ${key}.`);
+  }
+  if (row.title !== undefined && (typeof row.title !== "string" || !row.title.trim() || row.title.length > 1_000 || row.title.includes("\0"))) {
+    throw new Error("agent_present title must be a non-empty string of at most 1000 characters without NUL.");
+  }
+  if (!Array.isArray(row.blocks)) throw new Error("agent_present blocks must be an array.");
+  if (row.blocks.length === 0) throw new Error("agent_present blocks must not be empty.");
+  row.blocks.forEach((block, index) => {
+    const type = block && typeof block === "object" && !Array.isArray(block)
+      ? (block as Record<string, unknown>).type
+      : undefined;
+    if (typeof type !== "string" || !(AGENT_PRESENT_BLOCK_TYPES as readonly string[]).includes(type)) {
+      throw new Error(`agent_present blocks[${index}].type is not presentable: ${String(type)}.`);
+    }
+  });
+  const validated = parseRichArtifactDocument({
+    schemaVersion: 1,
+    title: "agent_present payload validation",
+    createdAt: "1970-01-01T00:00:00.000Z",
+    generator: "agent_present payload validation",
+    blocks: row.blocks,
+  });
+  return { ...(row.title === undefined ? {} : { title: (row.title as string).trim() }), blocks: validated.blocks };
+}
+
+/**
+ * The host-owned agent_present writer. The model submits declarative content
+ * blocks; the host validates them, stamps title/generator/createdAt, and
+ * appends a brand-new canonical artifact plus an artifact_update activity to
+ * the active Run. The Worker never writes Task truth itself.
+ */
+export async function presentAgentAnswerArtifact(options: {
+  repoRoot: string;
+  taskId: string;
+  runId: string;
+  agentThreadId: string;
+  payload: unknown;
+}): Promise<{ artifactId: string; version: number }> {
+  const request = parseAgentPresentPayload(options.payload);
+  const workspace = createTaskWorkspace(options.repoRoot);
+  const before = await workspace.open({ kind: "standalone", taskId: options.taskId });
+  if (before.activeRunId !== options.runId) throw new TaskWorkspaceConflictError("The present Run is no longer active.");
+  const now = new Date().toISOString();
+  const artifactId = `agent-present:${options.taskId}:${randomUUID()}`;
+  const document = parseRichArtifactDocument({
+    schemaVersion: 1,
+    title: request.title ?? "Agent 可视化回答",
+    createdAt: now,
+    generator: "Linguist Agent · agent_present",
+    blocks: request.blocks,
+  });
+  const artifactPath = join(
+    standaloneTaskWorkspaceRoot(options.repoRoot, options.taskId),
+    "artifacts",
+    `${artifactId.replace(/[^A-Za-z0-9._-]+/g, "-")}.json`,
+  );
+  await writeJsonFile(artifactPath, document);
+  const activityId = `${options.runId}.present.${randomUUID()}`;
+  const snapshot = await workspace.appendGenerated({
+    kind: "standalone",
+    taskId: options.taskId,
+    runId: options.runId,
+    expectedActiveRun: { id: options.runId, status: "active" },
+    events: [{
+      type: "artifact_upsert",
+      agentThreadId: options.agentThreadId,
+      occurredAt: now,
+      artifact: {
+        id: artifactId,
+        taskId: options.taskId,
+        runId: options.runId,
+        type: "agent_present",
+        status: "reviewable",
+        title: document.title,
+        summary: `${document.blocks.length} 个内容块的可视化回答`,
+        scope: { kind: "standalone", fileGrantIds: [] },
+        version: 1,
+        provenance: { agentThreadId: options.agentThreadId, activityId, evidenceRefs: [], parentArtifactIds: [] },
+        availableDecisions: [],
+        content: { document, artifactPath },
+        createdAt: now,
+        updatedAt: now,
+      },
+    }, {
+      type: "activity_append",
+      agentThreadId: options.agentThreadId,
+      occurredAt: now,
+      activity: {
+        id: activityId,
+        taskId: options.taskId,
+        runId: options.runId,
+        agentThreadId: options.agentThreadId,
+        seq: 1,
+        type: "artifact_update",
+        status: "done",
+        actor: { kind: "agent", id: "main", displayName: "Linguist Agent", agentThreadId: options.agentThreadId },
+        title: `呈现可视化回答：${document.title}`,
+        body: null,
+        tool: { name: "agent_present", effect: "write", target: artifactId, outcome: `${document.blocks.length} 个内容块` },
+        refs: { artifactIds: [artifactId], evidenceRefs: [], decisionIds: [], segmentIds: [] },
+        createdAt: now,
+        updatedAt: now,
+      },
+    }],
+  });
+  const artifact = snapshot.artifacts.find((entry) => entry.id === artifactId);
+  if (!artifact) throw new Error("Agent present artifact was not persisted.");
+  return { artifactId, version: artifact.version };
 }

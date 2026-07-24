@@ -1,68 +1,38 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendMemoryAudit, buildMemoryStatus, createWorkspace, readMemoryAuditSummary, readMemoryConfig } from "@linguist-agent/cat-data";
+import { buildMemoryStatus, createWorkspace, inspectLegacyTdaiMemoryConfiguration } from "@linguist-agent/cat-data";
 
-const disabled = buildMemoryStatus({ enabled: false, gatewayUrl: "http://127.0.0.1:8420" });
-assert.equal(disabled.status, "disabled");
-assert.equal(disabled.toolsAvailable, false);
-assert.equal(disabled.captureEnabled, false);
-assert.equal(disabled.cacheSafety, "tool_tail_only");
-assert.equal(disabled.userIdStrategy, "project_id");
-assert.equal(disabled.semantic.state, "disabled");
+const confirmedOnly = buildMemoryStatus({ configurationDetected: false, legacyRecallWasConfigured: false });
+assert.equal(confirmedOnly.status, "confirmed_memory_only");
+assert.equal(confirmedOnly.toolsAvailable, false);
+assert.equal(confirmedOnly.captureEnabled, false);
+assert.equal(confirmedOnly.storeEnabled, false);
+assert.equal(confirmedOnly.recallEnabled, false);
+assert.equal(confirmedOnly.semantic.state, "disabled");
+assert.match(confirmedOnly.nextAction, /Confirmed Memory/);
 
-const unreachable = buildMemoryStatus({ enabled: true, gatewayUrl: "http://127.0.0.1:8420" }, false);
-assert.equal(unreachable.status, "gateway_unreachable");
-assert.equal(unreachable.gatewayReachable, false);
-assert.match(unreachable.nextAction ?? "", /tdai:start/);
-
-const ready = buildMemoryStatus({ enabled: true, gatewayUrl: "http://127.0.0.1:8420" }, true);
-assert.equal(ready.status, "ready");
-assert.equal(ready.toolsAvailable, true);
-assert.equal(ready.captureEnabled, false);
-assert.match(ready.nextAction ?? "", /read-only project recall/);
-assert.equal(ready.semantic.assetVectorIndex, "absent");
-
-const readyWithSemantic = buildMemoryStatus(
-  { enabled: true, gatewayUrl: "http://127.0.0.1:8420" },
-  true,
-  undefined,
-  { state: "ready", assetVectorIndex: "ready", embeddingModel: "la-local-hash-v1", indexedBlocks: 12 },
-);
-assert.equal(readyWithSemantic.semantic.state, "ready");
-assert.equal(readyWithSemantic.semantic.indexedBlocks, 12);
-
-const root = await mkdtemp(join(tmpdir(), "la-memory-audit-"));
+const root = await mkdtemp(join(tmpdir(), "la-memory-status-"));
 const workspace = createWorkspace(root, "proj");
-const defaultConfig = await readMemoryConfig(workspace);
-assert.equal(defaultConfig.enabled, false);
-assert.equal(defaultConfig.gatewayUrl, "http://127.0.0.1:8420");
+const noLegacyConfig = await inspectLegacyTdaiMemoryConfiguration(workspace);
+assert.deepEqual(noLegacyConfig, { configurationDetected: false, legacyRecallWasConfigured: false });
 
-await appendMemoryAudit(workspace, {
-  kind: "capture_failed",
-  gatewayUrl: "http://127.0.0.1:8420",
-  error: "boom",
+const configPath = join(root, "data", "projects", "proj", "cat-agent-memory.json");
+await mkdir(join(root, "data", "projects", "proj"), { recursive: true });
+await writeFile(configPath, JSON.stringify({ enabled: true, gatewayUrl: "http://127.0.0.1:8420" }), "utf8");
+const legacyConfig = await inspectLegacyTdaiMemoryConfiguration(workspace);
+assert.deepEqual(legacyConfig, { configurationDetected: true, legacyRecallWasConfigured: true });
+
+const migrationRequired = buildMemoryStatus(legacyConfig, {
+  state: "ready",
+  assetVectorIndex: "ready",
+  embeddingModel: "la-local-e5",
+  indexedBlocks: 12,
 });
-await appendMemoryAudit(workspace, {
-  kind: "capture_success",
-  gatewayUrl: "http://127.0.0.1:8420",
-  sessionId: "s1",
-  contentPreview: "hello",
-});
-await appendMemoryAudit(workspace, {
-  kind: "search_success",
-  gatewayUrl: "http://127.0.0.1:8420",
-  query: "term",
-  resultCount: 2,
-  strategy: "vector",
-});
-const audit = await readMemoryAuditSummary(workspace);
-assert.equal(audit.total, 3);
-assert.equal(audit.lastCaptureError, undefined);
-assert.ok(audit.lastCaptureAt);
-assert.ok(audit.lastSearchAt);
-const readyWithAudit = buildMemoryStatus({ enabled: true, gatewayUrl: "http://127.0.0.1:8420" }, true, audit);
-assert.equal(readyWithAudit.audit?.total, 3);
+assert.equal(migrationRequired.status, "legacy_migration_required");
+assert.equal(migrationRequired.legacyTdai.migration, "explicit_read_only_candidate_review_required");
+assert.equal(migrationRequired.semantic.indexedBlocks, 12);
+assert.match(migrationRequired.nextAction, /capture, store, and recall are disabled/);
 
 console.log("memory_status tests passed");

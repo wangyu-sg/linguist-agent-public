@@ -484,7 +484,95 @@
         },
         "resourceManifest": {
           "$ref": "#/$defs/runResourceManifest"
+        },
+        "executionSnapshots": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/executionSnapshot" }
+        },
+        "configChanges": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sessionConfigChange" }
         }
+      }
+    },
+    "executionSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "executionId", "runId", "threadId", "turnId", "runtimeEpochId", "configRevision", "providerId", "modelId", "reasoningEffort", "executionProfile", "promptHash", "toolManifestHash", "resourceSnapshotHash", "capabilityGrantHash", "contextInputHash", "createdAt"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "executionId": { "$ref": "#/$defs/nonEmptyString" },
+        "runId": { "$ref": "#/$defs/nonEmptyString" },
+        "threadId": { "$ref": "#/$defs/nonEmptyString" },
+        "turnId": { "$ref": "#/$defs/nonEmptyString" },
+        "runtimeEpochId": { "$ref": "#/$defs/nonEmptyString" },
+        "configRevision": { "type": "integer", "minimum": 1 },
+        "providerId": { "$ref": "#/$defs/nullableString" },
+        "modelId": { "$ref": "#/$defs/nullableString" },
+        "reasoningEffort": { "$ref": "#/$defs/nullableString" },
+        "executionProfile": { "type": ["string", "null"], "enum": ["fast", "balanced", "best", "custom", null] },
+        "promptHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "toolManifestHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "resourceSnapshotHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "capabilityGrantHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "contextInputHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "createdAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "nullableConfigChangeField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/nullableString" },
+        "to": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "requiredConfigChangeField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/nonEmptyString" },
+        "to": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "executionProfileChangeField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": ["string", "null"], "enum": ["fast", "balanced", "best", "custom", null] },
+        "to": { "type": ["string", "null"], "enum": ["fast", "balanced", "best", "custom", null] }
+      }
+    },
+    "sessionConfigChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "changeId", "runId", "threadId", "actor", "fromRevision", "toRevision", "changes", "effectiveFrom", "compatibility", "createdAt"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "changeId": { "$ref": "#/$defs/nonEmptyString" },
+        "runId": { "$ref": "#/$defs/nonEmptyString" },
+        "threadId": { "$ref": "#/$defs/nonEmptyString" },
+        "actor": { "enum": ["user", "system"] },
+        "fromRevision": { "type": "integer", "minimum": 1 },
+        "toRevision": { "type": "integer", "minimum": 2 },
+        "changes": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "modelId": { "$ref": "#/$defs/nullableConfigChangeField" },
+            "reasoningEffort": { "$ref": "#/$defs/nullableConfigChangeField" },
+            "executionProfile": { "$ref": "#/$defs/executionProfileChangeField" },
+            "permissionProfile": { "$ref": "#/$defs/requiredConfigChangeField" },
+            "retrievalProfile": { "$ref": "#/$defs/requiredConfigChangeField" }
+          }
+        },
+        "effectiveFrom": { "enum": ["immediately", "next_tool_call", "next_turn", "after_compaction", "new_runtime_epoch"] },
+        "compatibility": { "enum": ["compatible", "requires_compaction", "requires_runtime_restart", "requires_fork"] },
+        "createdAt": { "$ref": "#/$defs/timestamp" }
       }
     },
     "runStatus": {

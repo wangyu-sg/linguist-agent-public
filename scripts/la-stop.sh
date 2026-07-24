@@ -2,7 +2,7 @@
 # Linguist Agent — one-click stop.
 #
 # Stops the background server-mode processes started by scripts/la-start.sh:
-# the cat-server (LA_SERVER_PORT, default 8787) and optional TencentDB memory
+# the Unix-domain cat-server and optional TencentDB memory
 # gateway (8420).
 #
 # Usage: bash scripts/la-stop.sh
@@ -13,7 +13,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 RUN_DIR="tmp/la"
-SERVER_PORT="${LA_SERVER_PORT:-8787}"
 GATEWAY_PORT="8420"
 
 stopped_any=0
@@ -54,7 +53,9 @@ kill_port() { # port, label — kill whatever holds the port (the real listener)
 # of the actual listeners as the authoritative cleanup.
 for name in server gateway; do kill_pidfile "$name"; done
 
-kill_port "$SERVER_PORT" "cat-server"
+if [ -n "${LA_SERVER_PORT:-}" ]; then
+  kill_port "$LA_SERVER_PORT" "legacy cat-server"
+fi
 kill_port "$GATEWAY_PORT" "memory gateway"
 
 if [ "$stopped_any" = "1" ]; then

@@ -4,7 +4,46 @@ export type TaskKind = "translation" | "review" | "qa" | "delivery" | "eval" | "
 export type TaskStatus = "draft" | "active" | "awaiting_input" | "stopped" | "failed" | "complete" | "archived";
 export type TaskTitleGenerationStatus = "pending" | "generated" | "failed";
 export type TaskRunMode = "single" | "team" | "pipeline" | "eval";
-export type TaskRunStatus = "pending" | "active" | "awaiting_input" | "waiting" | "stopping" | "stopped" | "failed" | "stale" | "complete";
+export const TASK_RUN_STATUSES = ["pending", "active", "awaiting_input", "waiting", "stopping", "stopped", "failed", "stale", "complete"] as const;
+export type TaskRunStatus = (typeof TASK_RUN_STATUSES)[number];
+
+function runTransitions(...statuses: TaskRunStatus[]): ReadonlySet<TaskRunStatus> {
+  return new Set(statuses);
+}
+
+const TASK_RUN_TRANSITIONS: Readonly<Record<TaskRunStatus, ReadonlySet<TaskRunStatus>>> = Object.freeze({
+  pending: runTransitions(...TASK_RUN_STATUSES),
+  active: runTransitions("active", "awaiting_input", "waiting", "stopping", "stopped", "failed", "stale", "complete"),
+  awaiting_input: runTransitions("awaiting_input", "active", "waiting", "stopping", "stopped", "failed", "stale", "complete"),
+  waiting: runTransitions("waiting", "active", "awaiting_input", "stopping", "stopped", "failed", "stale", "complete"),
+  stopping: runTransitions("stopping", "stopped", "failed", "stale", "complete"),
+  stopped: runTransitions("stopped", "active", "awaiting_input", "waiting"),
+  failed: runTransitions("failed", "active", "awaiting_input", "waiting"),
+  stale: runTransitions("stale"),
+  complete: runTransitions("complete"),
+});
+
+export class TaskRunTransitionError extends Error {
+  readonly code = "TASK_RUN_INVALID_STATE_TRANSITION" as const;
+  readonly from: TaskRunStatus;
+  readonly to: TaskRunStatus;
+
+  constructor(from: TaskRunStatus, to: TaskRunStatus) {
+    super(`Task Run cannot transition from ${from} to ${to}.`);
+    this.name = "TaskRunTransitionError";
+    this.from = from;
+    this.to = to;
+  }
+}
+
+export function canTransitionTaskRunStatus(from: TaskRunStatus, to: TaskRunStatus): boolean {
+  return TASK_RUN_TRANSITIONS[from].has(to);
+}
+
+export function transitionTaskRunStatus(from: TaskRunStatus | undefined, to: TaskRunStatus): TaskRunStatus {
+  if (from !== undefined && !canTransitionTaskRunStatus(from, to)) throw new TaskRunTransitionError(from, to);
+  return to;
+}
 export type TaskAgentKind = "main" | "specialist" | "deterministic";
 export type TaskActivityActorKind = "human" | "agent" | "system";
 export type TaskActivityType =
@@ -42,6 +81,8 @@ export type TaskArtifactType =
   | "rich_document"
   | "maintenance_plan"
   | "package_audit"
+  | "agent_plan"
+  | "agent_present"
   | "file"
   | "preview";
 export type TaskArtifactStatus = "draft" | "reviewable" | "accepted" | "rejected" | "superseded" | "final";
@@ -206,6 +247,171 @@ export interface TaskRunResourceManifest {
   mainSurface?: TaskRunMainResourceSurface;
 }
 
+export interface TaskExecutionSnapshot {
+  schemaVersion: 1;
+  executionId: string;
+  runId: string;
+  threadId: string;
+  turnId: string;
+  runtimeEpochId: string;
+  configRevision: number;
+  providerId: string | null;
+  modelId: string | null;
+  reasoningEffort: string | null;
+  executionProfile: "fast" | "balanced" | "best" | "custom" | null;
+  promptHash: string;
+  toolManifestHash: string;
+  resourceSnapshotHash: string;
+  capabilityGrantHash: string;
+  contextInputHash: string;
+  createdAt: string;
+}
+
+export interface TaskSessionConfigChange {
+  schemaVersion: 1;
+  changeId: string;
+  runId: string;
+  threadId: string;
+  actor: "user" | "system";
+  fromRevision: number;
+  toRevision: number;
+  changes: {
+    modelId?: { from: string | null; to: string | null };
+    reasoningEffort?: { from: string | null; to: string | null };
+    executionProfile?: { from: TaskExecutionSnapshot["executionProfile"]; to: TaskExecutionSnapshot["executionProfile"] };
+    permissionProfile?: { from: string; to: string };
+    retrievalProfile?: { from: string; to: string };
+  };
+  effectiveFrom: "immediately" | "next_tool_call" | "next_turn" | "after_compaction" | "new_runtime_epoch";
+  compatibility: "compatible" | "requires_compaction" | "requires_runtime_restart" | "requires_fork";
+  createdAt: string;
+}
+
+export class TaskExecutionTimelineError extends Error {
+  readonly code = "TASK_EXECUTION_TIMELINE_INVALID" as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "TaskExecutionTimelineError";
+  }
+}
+
+function assertExecutionHash(value: string, label: string): void {
+  if (!/^[a-f0-9]{64}$/.test(value)) throw new TaskExecutionTimelineError(`${label} must be a SHA-256 hex digest.`);
+}
+
+function validateExecutionTimeline(run: TaskRun): void {
+  if (run.executionSnapshots === undefined || run.configChanges === undefined) {
+    if (run.executionSnapshots !== undefined || run.configChanges !== undefined) {
+      throw new TaskExecutionTimelineError("Execution snapshots and config changes must be present together.");
+    }
+    return;
+  }
+  const executionIds = new Set<string>();
+  let revision = 1;
+  for (const [index, snapshot] of run.executionSnapshots.entries()) {
+    if (snapshot.runId !== run.id || snapshot.threadId !== run.rootAgentThreadId) {
+      throw new TaskExecutionTimelineError(`Execution snapshot ${snapshot.executionId} scope does not match its Run.`);
+    }
+    if (executionIds.has(snapshot.executionId)) throw new TaskExecutionTimelineError(`Duplicate executionId ${snapshot.executionId}.`);
+    executionIds.add(snapshot.executionId);
+    for (const [label, digest] of Object.entries({
+      promptHash: snapshot.promptHash,
+      toolManifestHash: snapshot.toolManifestHash,
+      resourceSnapshotHash: snapshot.resourceSnapshotHash,
+      capabilityGrantHash: snapshot.capabilityGrantHash,
+      contextInputHash: snapshot.contextInputHash,
+    })) assertExecutionHash(digest, `${snapshot.executionId}.${label}`);
+    if (index === 0 && snapshot.configRevision !== 1) throw new TaskExecutionTimelineError("First execution snapshot must use config revision 1.");
+    if (snapshot.configRevision < revision || snapshot.configRevision > revision + 1) {
+      throw new TaskExecutionTimelineError("Execution snapshot config revision must be current or the next explicit revision.");
+    }
+    revision = snapshot.configRevision;
+  }
+  let expectedRevision = 1;
+  for (const change of run.configChanges) {
+    if (change.runId !== run.id || change.threadId !== run.rootAgentThreadId) {
+      throw new TaskExecutionTimelineError(`Config change ${change.changeId} scope does not match its Run.`);
+    }
+    if (change.fromRevision !== expectedRevision || change.toRevision !== expectedRevision + 1) {
+      throw new TaskExecutionTimelineError("Config changes must increment config revision by exactly one.");
+    }
+    if (Object.keys(change.changes).length === 0) throw new TaskExecutionTimelineError("Config change must describe at least one field.");
+    expectedRevision = change.toRevision;
+  }
+  for (let index = 1; index < run.executionSnapshots.length; index += 1) {
+    const previous = run.executionSnapshots[index - 1]!;
+    const current = run.executionSnapshots[index]!;
+    if (current.configRevision === previous.configRevision && current.runtimeEpochId !== previous.runtimeEpochId) {
+      throw new TaskExecutionTimelineError("Runtime epoch cannot change without an explicit config revision.");
+    }
+    if (current.configRevision > previous.configRevision) {
+      const change = run.configChanges.find((candidate) => candidate.toRevision === current.configRevision);
+      if (!change) throw new TaskExecutionTimelineError("Execution snapshot revision requires an explicit config change.");
+      if (change.compatibility === "compatible" && current.runtimeEpochId !== previous.runtimeEpochId) {
+        throw new TaskExecutionTimelineError("A compatible change must retain the runtime epoch.");
+      }
+      if (change.compatibility === "requires_compaction") {
+        if (change.effectiveFrom !== "after_compaction") {
+          throw new TaskExecutionTimelineError("A compaction-required change must take effect after compaction.");
+        }
+        if (current.runtimeEpochId !== previous.runtimeEpochId) {
+          throw new TaskExecutionTimelineError("A compaction-required change must retain the runtime epoch.");
+        }
+      }
+      if (change.compatibility === "requires_runtime_restart") {
+        if (change.effectiveFrom !== "new_runtime_epoch") {
+          throw new TaskExecutionTimelineError("A runtime-restart change must take effect in a new runtime epoch.");
+        }
+        if (current.runtimeEpochId === previous.runtimeEpochId) {
+          throw new TaskExecutionTimelineError("A runtime-restart change must create a new runtime epoch.");
+        }
+      }
+      if (change.compatibility === "requires_fork") {
+        throw new TaskExecutionTimelineError("A fork-required change cannot create another execution snapshot in the same Run.");
+      }
+      if (change.changes.modelId
+        && (previous.modelId !== change.changes.modelId.from || current.modelId !== change.changes.modelId.to)) {
+        throw new TaskExecutionTimelineError("Execution snapshot model does not match its config change.");
+      }
+    }
+  }
+}
+
+export function appendTaskExecutionSnapshot(run: TaskRun, snapshot: TaskExecutionSnapshot): TaskRun {
+  if (!run.executionSnapshots || !run.configChanges) throw new TaskExecutionTimelineError("Legacy epoch is read-only; start a new Run or fork before changing execution config.");
+  const next = { ...run, executionSnapshots: [...run.executionSnapshots, snapshot] };
+  validateExecutionTimeline(next);
+  return next;
+}
+
+export function appendTaskSessionConfigChange(run: TaskRun, change: TaskSessionConfigChange): TaskRun {
+  if (!run.executionSnapshots || !run.configChanges) throw new TaskExecutionTimelineError("Legacy epoch is read-only; start a new Run or fork before changing execution config.");
+  const next = { ...run, configChanges: [...run.configChanges, change] };
+  validateExecutionTimeline(next);
+  return next;
+}
+
+export function assertTaskExecutionTimelineAppendOnly(previous: TaskRun, next: TaskRun): void {
+  if (previous.executionSnapshots === undefined || previous.configChanges === undefined) {
+    if (next.executionSnapshots !== undefined || next.configChanges !== undefined) {
+      throw new TaskExecutionTimelineError("Legacy epoch is read-only; its execution timeline cannot be initialized in place.");
+    }
+    return;
+  }
+  if (!next.executionSnapshots || !next.configChanges) {
+    throw new TaskExecutionTimelineError("Execution timeline cannot be removed after Run creation.");
+  }
+  const prefixMatches = <T>(before: readonly T[], after: readonly T[]): boolean => before.length <= after.length
+    && before.every((entry, index) => JSON.stringify(entry) === JSON.stringify(after[index]));
+  if (!prefixMatches(previous.executionSnapshots, next.executionSnapshots)) {
+    throw new TaskExecutionTimelineError("Execution snapshots are immutable and append-only.");
+  }
+  if (!prefixMatches(previous.configChanges, next.configChanges)) {
+    throw new TaskExecutionTimelineError("Session config changes are immutable and append-only.");
+  }
+}
+
 export interface TaskRun {
   id: string;
   taskId: string;
@@ -225,6 +431,10 @@ export interface TaskRun {
   usage?: TaskUsage;
   usageBySource?: TaskUsageBySource;
   resourceManifest?: TaskRunResourceManifest;
+  /** Missing means a pre-LA-009 legacy epoch and is intentionally read-only. */
+  executionSnapshots?: TaskExecutionSnapshot[];
+  /** Missing means a pre-LA-009 legacy epoch and is intentionally read-only. */
+  configChanges?: TaskSessionConfigChange[];
 }
 
 export interface TaskActiveRunSummary {
@@ -348,6 +558,16 @@ export interface TaskDecisionRequestProvenance {
   integrity: string;
 }
 
+export const TASK_DECISION_BINDING_SCHEMA_VERSION = 1 as const;
+
+/** Immutable server-issued facts required before a pending Decision can execute. */
+export interface TaskDecisionBinding {
+  schemaVersion: typeof TASK_DECISION_BINDING_SCHEMA_VERSION;
+  contentHash: string;
+  planHash: string;
+  expiresAt: string;
+}
+
 export interface TaskDecision {
   id: string;
   taskId: string;
@@ -368,6 +588,8 @@ export interface TaskDecision {
   reason?: string | null;
   scope: TaskScope;
   createdAt: string;
+  /** Missing only for legacy snapshots; execution must fail closed. */
+  decisionBinding?: TaskDecisionBinding;
   decidedAt?: string | null;
 }
 
@@ -470,13 +692,12 @@ const TASK_KINDS = ["translation", "review", "qa", "delivery", "eval", "general"
 const TASK_STATUSES = ["draft", "active", "awaiting_input", "stopped", "failed", "complete", "archived"] as const;
 const TITLE_GENERATION_STATUSES = ["pending", "generated", "failed"] as const;
 const RUN_MODES = ["single", "team", "pipeline", "eval"] as const;
-const RUN_STATUSES = ["pending", "active", "awaiting_input", "waiting", "stopping", "stopped", "failed", "stale", "complete"] as const;
 const AGENT_KINDS = ["main", "specialist", "deterministic"] as const;
 const ACTOR_KINDS = ["human", "agent", "system"] as const;
 const ACTIVITY_TYPES = ["message", "acknowledgement", "plan", "progress", "evidence_read", "tool_action", "artifact_update", "handoff", "elicitation", "decision", "usage", "error", "final_response"] as const;
 const ACTIVITY_STATUSES = ["pending", "running", "done", "blocked", "stale", "error"] as const;
 const TOOL_EFFECTS = ["read", "write", "execute"] as const;
-const ARTIFACT_TYPES = ["segment_proposal", "segment_diff", "evidence_pack", "agent_query", "qa_finding", "qa_report", "delivery_readiness", "delivery_export", "eval_output", "eval_scorecard", "eval_comparison", "context_handoff", "memory", "guidance", "document_evidence", "rich_document", "maintenance_plan", "package_audit", "file", "preview"] as const;
+const ARTIFACT_TYPES = ["segment_proposal", "segment_diff", "evidence_pack", "agent_query", "qa_finding", "qa_report", "delivery_readiness", "delivery_export", "eval_output", "eval_scorecard", "eval_comparison", "context_handoff", "memory", "guidance", "document_evidence", "rich_document", "maintenance_plan", "package_audit", "agent_plan", "agent_present", "file", "preview"] as const;
 const ARTIFACT_STATUSES = ["draft", "reviewable", "accepted", "rejected", "superseded", "final"] as const;
 const DECISION_KINDS = ["answer", "approval", "proposal_review", "waiver", "apply", "delivery_authorization"] as const;
 const DECISION_STATUSES = ["required", "recorded", "cancelled", "superseded"] as const;
@@ -820,6 +1041,81 @@ function parseTask(value: unknown, label: string): TaskRecord {
   };
 }
 
+function parseExecutionSnapshot(value: unknown, label: string): TaskExecutionSnapshot {
+  const row = object(value, label);
+  if (row.schemaVersion !== 1) throw new Error(`${label}.schemaVersion must be 1`);
+  const executionProfile = row.executionProfile === null
+    ? null
+    : enumValue(row.executionProfile, ["fast", "balanced", "best", "custom"] as const, `${label}.executionProfile`);
+  return {
+    schemaVersion: 1,
+    executionId: string(row.executionId, `${label}.executionId`),
+    runId: string(row.runId, `${label}.runId`),
+    threadId: string(row.threadId, `${label}.threadId`),
+    turnId: string(row.turnId, `${label}.turnId`),
+    runtimeEpochId: string(row.runtimeEpochId, `${label}.runtimeEpochId`),
+    configRevision: integer(row.configRevision, `${label}.configRevision`, 1),
+    providerId: optionalString(row.providerId, `${label}.providerId`) ?? null,
+    modelId: optionalString(row.modelId, `${label}.modelId`) ?? null,
+    reasoningEffort: optionalString(row.reasoningEffort, `${label}.reasoningEffort`) ?? null,
+    executionProfile,
+    promptHash: string(row.promptHash, `${label}.promptHash`),
+    toolManifestHash: string(row.toolManifestHash, `${label}.toolManifestHash`),
+    resourceSnapshotHash: string(row.resourceSnapshotHash, `${label}.resourceSnapshotHash`),
+    capabilityGrantHash: string(row.capabilityGrantHash, `${label}.capabilityGrantHash`),
+    contextInputHash: string(row.contextInputHash, `${label}.contextInputHash`),
+    createdAt: isoDate(row.createdAt, `${label}.createdAt`),
+  };
+}
+
+function parseConfigChangeField(value: unknown, label: string): { from: string | null; to: string | null } {
+  const row = object(value, label);
+  return {
+    from: optionalString(row.from, `${label}.from`) ?? null,
+    to: optionalString(row.to, `${label}.to`) ?? null,
+  };
+}
+
+function parseRequiredConfigChangeField(value: unknown, label: string): { from: string; to: string } {
+  const row = object(value, label);
+  return {
+    from: string(row.from, `${label}.from`),
+    to: string(row.to, `${label}.to`),
+  };
+}
+
+function parseSessionConfigChange(value: unknown, label: string): TaskSessionConfigChange {
+  const row = object(value, label);
+  if (row.schemaVersion !== 1) throw new Error(`${label}.schemaVersion must be 1`);
+  const changes = object(row.changes, `${label}.changes`);
+  const executionProfile = changes.executionProfile === undefined ? undefined : (() => {
+    const field = object(changes.executionProfile, `${label}.changes.executionProfile`);
+    const parse = (entry: unknown, fieldLabel: string) => entry === null
+      ? null
+      : enumValue(entry, ["fast", "balanced", "best", "custom"] as const, fieldLabel);
+    return { from: parse(field.from, `${label}.changes.executionProfile.from`), to: parse(field.to, `${label}.changes.executionProfile.to`) };
+  })();
+  return {
+    schemaVersion: 1,
+    changeId: string(row.changeId, `${label}.changeId`),
+    runId: string(row.runId, `${label}.runId`),
+    threadId: string(row.threadId, `${label}.threadId`),
+    actor: enumValue(row.actor, ["user", "system"] as const, `${label}.actor`),
+    fromRevision: integer(row.fromRevision, `${label}.fromRevision`, 1),
+    toRevision: integer(row.toRevision, `${label}.toRevision`, 2),
+    changes: {
+      ...(changes.modelId === undefined ? {} : { modelId: parseConfigChangeField(changes.modelId, `${label}.changes.modelId`) }),
+      ...(changes.reasoningEffort === undefined ? {} : { reasoningEffort: parseConfigChangeField(changes.reasoningEffort, `${label}.changes.reasoningEffort`) }),
+      ...(executionProfile === undefined ? {} : { executionProfile }),
+      ...(changes.permissionProfile === undefined ? {} : { permissionProfile: parseRequiredConfigChangeField(changes.permissionProfile, `${label}.changes.permissionProfile`) }),
+      ...(changes.retrievalProfile === undefined ? {} : { retrievalProfile: parseRequiredConfigChangeField(changes.retrievalProfile, `${label}.changes.retrievalProfile`) }),
+    },
+    effectiveFrom: enumValue(row.effectiveFrom, ["immediately", "next_tool_call", "next_turn", "after_compaction", "new_runtime_epoch"] as const, `${label}.effectiveFrom`),
+    compatibility: enumValue(row.compatibility, ["compatible", "requires_compaction", "requires_runtime_restart", "requires_fork"] as const, `${label}.compatibility`),
+    createdAt: isoDate(row.createdAt, `${label}.createdAt`),
+  };
+}
+
 function parseRun(value: unknown, label: string): TaskRun {
   const row = object(value, label);
   const estimatedCallsBySource = row.estimatedCallsBySource === undefined
@@ -828,11 +1124,11 @@ function parseRun(value: unknown, label: string): TaskRun {
   const usageBySource = row.usageBySource === undefined
     ? undefined
     : parseUsageBySource(row.usageBySource, `${label}.usageBySource`);
-  return {
+  const run: TaskRun = {
     id: string(row.id, `${label}.id`),
     taskId: string(row.taskId, `${label}.taskId`),
     mode: enumValue(row.mode, RUN_MODES, `${label}.mode`),
-    status: enumValue(row.status, RUN_STATUSES, `${label}.status`),
+    status: enumValue(row.status, TASK_RUN_STATUSES, `${label}.status`),
     rootAgentThreadId: string(row.rootAgentThreadId, `${label}.rootAgentThreadId`),
     planHash: optionalString(row.planHash, `${label}.planHash`),
     estimatedCalls: estimatedCallsBySource === undefined
@@ -850,7 +1146,15 @@ function parseRun(value: unknown, label: string): TaskRun {
       : sumUsage(Object.values(usageBySource)),
     usageBySource,
     resourceManifest: row.resourceManifest === undefined ? undefined : parseResourceManifest(row.resourceManifest, `${label}.resourceManifest`),
+    executionSnapshots: row.executionSnapshots === undefined
+      ? undefined
+      : array(row.executionSnapshots, `${label}.executionSnapshots`).map((entry, index) => parseExecutionSnapshot(entry, `${label}.executionSnapshots[${index}]`)),
+    configChanges: row.configChanges === undefined
+      ? undefined
+      : array(row.configChanges, `${label}.configChanges`).map((entry, index) => parseSessionConfigChange(entry, `${label}.configChanges[${index}]`)),
   };
+  validateExecutionTimeline(run);
+  return run;
 }
 
 function parseIdentity(value: unknown, label: string): TaskAgentIdentity {
@@ -876,7 +1180,7 @@ function parseThread(value: unknown, label: string): TaskAgentThread {
     runId: string(row.runId, `${label}.runId`),
     parentThreadId: optionalString(row.parentThreadId, `${label}.parentThreadId`),
     identity: parseIdentity(row.identity, `${label}.identity`),
-    status: enumValue(row.status, RUN_STATUSES, `${label}.status`),
+    status: enumValue(row.status, TASK_RUN_STATUSES, `${label}.status`),
     canReceiveUserMessage: bool(row.canReceiveUserMessage, `${label}.canReceiveUserMessage`),
     handoffSummary: optionalString(row.handoffSummary, `${label}.handoffSummary`),
     latestActivityId: optionalString(row.latestActivityId, `${label}.latestActivityId`),
@@ -971,6 +1275,28 @@ export function parseTaskArtifact(value: unknown): TaskArtifact {
   return parseArtifact(value, "artifact");
 }
 
+function parseTaskDecisionBinding(value: unknown, label: string): TaskDecisionBinding {
+  const row = object(value, label);
+  const keys = ["schemaVersion", "contentHash", "planHash", "expiresAt"];
+  if (Object.keys(row).some((key) => !keys.includes(key)) || keys.some((key) => row[key] === undefined)) {
+    throw new Error(`${label} must contain only schemaVersion, contentHash, planHash, and expiresAt`);
+  }
+  if (row.schemaVersion !== TASK_DECISION_BINDING_SCHEMA_VERSION) {
+    throw new Error(`${label}.schemaVersion must be ${TASK_DECISION_BINDING_SCHEMA_VERSION}`);
+  }
+  const digest = (key: "contentHash" | "planHash") => {
+    const value = string(row[key], `${label}.${key}`);
+    if (!/^[a-f0-9]{64}$/.test(value)) throw new Error(`${label}.${key} must be a 64-character lowercase SHA-256 hash`);
+    return value;
+  };
+  return {
+    schemaVersion: TASK_DECISION_BINDING_SCHEMA_VERSION,
+    contentHash: digest("contentHash"),
+    planHash: digest("planHash"),
+    expiresAt: isoDate(row.expiresAt, `${label}.expiresAt`),
+  };
+}
+
 function parseDecision(value: unknown, label: string): TaskDecision {
   const row = object(value, label);
   const options = array(row.options, `${label}.options`).map((entry, index): TaskDecisionOption => {
@@ -1043,6 +1369,9 @@ function parseDecision(value: unknown, label: string): TaskDecision {
     resourceId: string(provenanceRow.resourceId, `${label}.requestProvenance.resourceId`),
     integrity: string(provenanceRow.integrity, `${label}.requestProvenance.integrity`),
   } satisfies TaskDecisionRequestProvenance : undefined;
+  const decisionBinding = row.decisionBinding === undefined
+    ? undefined
+    : parseTaskDecisionBinding(row.decisionBinding, `${label}.decisionBinding`);
   return {
     id: string(row.id, `${label}.id`),
     taskId: string(row.taskId, `${label}.taskId`),
@@ -1063,6 +1392,7 @@ function parseDecision(value: unknown, label: string): TaskDecision {
     reason: optionalString(row.reason, `${label}.reason`),
     scope: parseScope(row.scope, `${label}.scope`),
     createdAt: isoDate(row.createdAt, `${label}.createdAt`),
+    ...(decisionBinding ? { decisionBinding } : {}),
     decidedAt: row.decidedAt === undefined || row.decidedAt === null ? row.decidedAt : isoDate(row.decidedAt, `${label}.decidedAt`),
   };
 }
@@ -1274,8 +1604,15 @@ export function applyTaskRunEventPage(
   for (const event of page.events) {
     if (event.type === "run_upsert" && event.run) {
       const previous = runs.find((run) => run.id === event.run!.id);
-      const run = {
+      transitionTaskRunStatus(previous?.status, event.run.status);
+      const timelineRun = previous ? {
         ...event.run,
+        executionSnapshots: event.run.executionSnapshots ?? previous.executionSnapshots,
+        configChanges: event.run.configChanges ?? previous.configChanges,
+      } : event.run;
+      if (previous) assertTaskExecutionTimelineAppendOnly(previous, timelineRun);
+      const run = {
+        ...timelineRun,
         ...(previous?.usageBySource
           ? { usage: previous.usage, usageBySource: previous.usageBySource }
           : previous?.usage && event.run.usage === undefined ? { usage: previous.usage } : {}),

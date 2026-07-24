@@ -2,7 +2,19 @@
 
 Current product version: `2.32.7`.
 
-The repository is in release candidate, feature freeze mode: only work required to close the gates below is authorized. This file lists unfinished work only. Completed implementation history belongs in Git, dated evidence reports, and `CHANGELOG.md`.
+The repository remains on the release candidate track but is now in controlled refactor mode. The former state label was `release candidate, feature freeze`; that blanket freeze is explicitly superseded. This file remains the human entry point for unfinished work; the only detailed, machine-validated refactor control plane is the seven-document set under `docs/roadmap/` listed below. Implementation is authorized only for one queue entry whose metadata says `Kind=ticket` and `Executable=yes`; Epic, Gate, and Decision entries are not directly executable. Existing release gates remain open and are not closed by roadmap planning.
+
+## Refactor control plane
+
+- `CURRENT_REALITY_REPORT.md`
+- `MODULE_AND_DATA_INVENTORY.md`
+- `RISK_REGISTER.md`
+- `DELETION_CANDIDATES.md`
+- `MIGRATION_MATRIX.md`
+- `UI_GAP_MATRIX.md`
+- `IMPLEMENTATION_QUEUE.md`
+
+Run `npm run roadmap:test` before accepting changes to this control plane. Completed implementation history belongs in Git, dated evidence reports, and `CHANGELOG.md`.
 
 ## Product acceptance
 

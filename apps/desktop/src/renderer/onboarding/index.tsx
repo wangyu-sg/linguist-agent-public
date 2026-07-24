@@ -11,10 +11,6 @@ import {
 } from "./actions.ts";
 import "./onboarding.css";
 
-function leafName(path: string): string {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
-}
-
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -52,7 +48,7 @@ export function NewProjectFlow({ store = workspaceStore, onCancel, onCreated }: 
         createProject: workspaceClient.createProject,
         refreshProjects: () => store.refreshProjects(),
         selectProject: (projectId) => store.selectProject(projectId),
-        onFolderSelected: (folderPath) => setDraft((current) => ({ ...current, folderPath })),
+        onFolderSelected: (folderHandle) => setDraft((current) => ({ ...current, folderHandle })),
       });
       if (result.status === "created") onCreated?.(result.projectId);
     } catch (caught) {
@@ -98,15 +94,15 @@ export function NewProjectFlow({ store = workspaceStore, onCancel, onCreated }: 
       ) : (
         <form className="la-onboarding__form" onSubmit={(event) => void create(event)}>
           <div className="la-onboarding__folder">
-            <span>{draft.folderPath ? leafName(draft.folderPath) : "尚未选择文件夹"}</span>
-            <small>{draft.folderPath ? "已明确选择；创建失败时会保留" : "只访问你在系统选择器中选中的位置"}</small>
+            <span>{draft.folderHandle ? draft.folderHandle.name : "尚未选择文件夹"}</span>
+            <small>{draft.folderHandle ? "已明确选择；创建失败时会保留" : "只访问你在系统选择器中选中的位置"}</small>
           </div>
           <p className="la-onboarding__hint">创建完成后进入 Batch 导入；Agent 不会自动运行。</p>
           {error ? <p className="la-onboarding__error" role="alert">{error}</p> : null}
           <footer className="la-onboarding__actions">
             <Button variant="ghost" onClick={() => setStep("metadata")} disabled={busy}>返回</Button>
             <Button ref={folderPickerButtonRef} variant="primary" type="submit" loading={busy} loadingLabel="正在创建…">
-              {draft.folderPath ? "重试创建" : "选择文件夹并创建"}
+              {draft.folderHandle ? "重试创建" : "选择文件夹并创建"}
             </Button>
           </footer>
         </form>
@@ -160,8 +156,8 @@ export function ImportBatchAction({ projectId, store = workspaceStore, onImporte
       {results.length ? (
         <ul className="la-import-results" aria-live="polite">
           {results.map((result) => (
-            <li key={result.filePath}>
-              <span title={result.filePath}>{leafName(result.filePath)}</span>
+            <li key={result.file.id}>
+              <span>{result.file.name}</span>
               <StatusLabel state={result.status === "imported" ? "complete" : "failed"}>
                 {result.status === "imported" ? `${result.segmentCount ?? 0} 个句段` : result.message ?? "导入失败"}
               </StatusLabel>

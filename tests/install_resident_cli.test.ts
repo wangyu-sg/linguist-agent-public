@@ -44,6 +44,7 @@ const result = await runInstallResidentCommand({
         state: action === "start" ? "running" : "installed",
         pid: 0,
         port: input.port,
+        transport: "unix",
         uptimeSec: 0,
         repoRoot: input.repoRoot,
         logPath: "/tmp/la/data/logs/la-server.log",
@@ -65,7 +66,8 @@ const result = await runInstallResidentCommand({
 
 assert.equal(result.exitCode, 0);
 assert.deepEqual(calls, ["install:/tmp/la:9898:42", "start:/tmp/la:9898:42"]);
-assert.equal(output.some((line) => line.includes("http://127.0.0.1:9898/api/health")), true);
+assert.equal(output.some((line) => line.includes("authenticated Unix-domain rendezvous")), true);
+assert.equal(output.some((line) => line.includes("http://127.0.0.1:9898/api/health")), false);
 assert.equal(output.some((line) => line.includes("resident runtime process confirmed")), true);
 
 console.log("install_resident_cli tests passed");

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseTaskWorkspaceSnapshot, type TaskRunEvent } from "../../../packages/cat-data/src/task_workspace_contract.ts";
-import { applyTaskEvent, taskEventNotice, TaskEventGapError } from "../src/renderer/data/task-events.ts";
+import { applyTaskEvent, taskEventNotice, TaskEventGapError, TaskProjectionStore } from "../src/renderer/data/task-events.ts";
 import { workspaceClient } from "../src/renderer/data/workspace-client.ts";
 import { WorkspaceStore } from "../src/renderer/data/workspace-store.ts";
 
@@ -90,6 +90,33 @@ test("ignores another Task and rejects an event gap", () => {
   const current = snapshot();
   assert.strictEqual(applyTaskEvent(current, runEvent("task-two")), current);
   assert.throws(() => applyTaskEvent(current, runEvent("task-one", 5)), TaskEventGapError);
+});
+
+test("TaskProjectionStore derives Task facts only from canonical snapshot replacement and ordered events", () => {
+  const initial = snapshot();
+  const projection = new TaskProjectionStore(initial);
+  let notifications = 0;
+  const unsubscribe = projection.subscribe(() => { notifications += 1; });
+
+  projection.apply(runEvent());
+  assert.equal(projection.getSnapshot().eventCursor, "task-one:3");
+  assert.equal(projection.getSnapshot().runs[0]?.status, "awaiting_input");
+  assert.equal(notifications, 1);
+
+  projection.replace(initial);
+  assert.equal(projection.getSnapshot().eventCursor, "task-one:3", "a late snapshot must not regress an advanced canonical cursor");
+  assert.equal(notifications, 1);
+
+  projection.apply(runEvent());
+  assert.equal(notifications, 1, "a replayed cursor must not create a second product fact");
+  assert.throws(() => projection.apply(runEvent("task-one", 5)), TaskEventGapError);
+  assert.equal(projection.getSnapshot().eventCursor, "task-one:3", "a gap must leave the last canonical projection intact");
+
+  const refreshed = parseTaskWorkspaceSnapshot({ ...initial, eventCursor: "task-one:8" });
+  projection.replace(refreshed);
+  assert.strictEqual(projection.getSnapshot(), refreshed, "recovery replaces the projection with the canonical snapshot");
+  assert.equal(notifications, 2);
+  unsubscribe();
 });
 
 test("keeps project loads independent and defers full Batch hydration until CAT needs it", async () => {

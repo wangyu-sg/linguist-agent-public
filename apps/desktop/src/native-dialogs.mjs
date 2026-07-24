@@ -4,6 +4,7 @@ const ASSET_EXTENSIONS = [
   "png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp",
   "tmx", "sdltm", "tbx", "sdltb",
 ];
+const LAPKG_EXTENSIONS = ["lapkg"];
 
 export function projectFolderDialogOptions() {
   return {
@@ -14,13 +15,13 @@ export function projectFolderDialogOptions() {
 }
 
 export function importFilesDialogOptions(kind) {
-  const extensions = kind === "batch" ? BATCH_EXTENSIONS : kind === "asset" ? ASSET_EXTENSIONS : null;
+  const extensions = kind === "batch" ? BATCH_EXTENSIONS : kind === "asset" ? ASSET_EXTENSIONS : kind === "lapkg" ? LAPKG_EXTENSIONS : null;
   if (!extensions) throw new Error("Unsupported import kind.");
   return {
-    title: kind === "batch" ? "导入 Batch" : "导入 Assets",
-    buttonLabel: "导入",
-    properties: ["openFile", "multiSelections"],
-    filters: [{ name: kind === "batch" ? "CAT 文件" : "项目资料", extensions: [...extensions] }],
+    title: kind === "batch" ? "导入 Batch" : kind === "asset" ? "导入 Assets" : "选择签名 LA Package",
+    buttonLabel: kind === "lapkg" ? "选择" : "导入",
+    properties: kind === "lapkg" ? ["openFile"] : ["openFile", "multiSelections"],
+    filters: [{ name: kind === "batch" ? "CAT 文件" : kind === "asset" ? "项目资料" : "LA Package", extensions: [...extensions] }],
   };
 }
 

@@ -19,6 +19,7 @@ import {
   updateSegmentTarget,
 } from "@linguist-agent/cat-data";
 import { handleWorkflowRoute, prepareTeamExecution } from "../packages/cat-server/src/routes/workflow_routes.js";
+import { verifiedPromptRequestBudget } from "./prompt_budget_fixture.js";
 
 const masterFixture = `<?xml version="1.0"?>
 <xliff version="1.2"><file source-language="zh-CN" target-language="en-US"><body>
@@ -165,6 +166,7 @@ assert.equal((await readCatWorkflowRun(workspaceRoot, "proj", "delivery-smoke"))
 {
   const responses: Array<{ status: number; data: unknown }> = [];
   let routeBody: Record<string, unknown> = {};
+  let verifiedPromptBudget = false;
   const routeDeps = {
     repoRoot: workspaceRoot,
     json: (_res: unknown, status: number, data: unknown) => responses.push({ status, data }),
@@ -176,6 +178,9 @@ assert.equal((await readCatWorkflowRun(workspaceRoot, "proj", "delivery-smoke"))
     optionalString: (value: unknown) => typeof value === "string" && value ? value : undefined,
     optionalStringArray: (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined,
     optionalBoolean: (value: unknown) => value === undefined ? undefined : Boolean(value),
+    resolveModelPromptTokenBudget: async (provider: string | undefined, modelId: string | undefined) => verifiedPromptBudget
+      ? verifiedPromptRequestBudget(provider, modelId)
+      : undefined,
   };
 
   routeBody = { batchId: "b1", workflowId: "unlinked-must-not-exist", intent: "prepare_delivery" };
@@ -305,6 +310,13 @@ assert.equal((await readCatWorkflowRun(workspaceRoot, "proj", "delivery-smoke"))
   teamSnapshot = await createTaskWorkspace(workspaceRoot).open({ projectId: "proj", taskId: "task-team-route" });
   assert.equal(teamSnapshot.runs[0]?.status, "awaiting_input", "a failed child launch must not project a false active run");
 
+  routeBody = { planHash: teamPlan.planHash, forceAllRoles: true, execute: false };
+  assert.equal(await handleWorkflowRoute({ method: "POST" } as never, {} as never, ["api", "projects", "proj", "workflows", "team-route", "start"], "proj", routeDeps), true);
+  responses.pop();
+  teamSnapshot = await createTaskWorkspace(workspaceRoot).open({ projectId: "proj", taskId: "task-team-route" });
+  assert.equal(teamSnapshot.runs[0]?.status, "awaiting_input", "unknown model budget must not start the Team Run");
+
+  verifiedPromptBudget = true;
   routeBody = { planHash: teamPlan.planHash, forceAllRoles: true, execute: false };
   assert.equal(await handleWorkflowRoute({ method: "POST" } as never, {} as never, ["api", "projects", "proj", "workflows", "team-route", "start"], "proj", routeDeps), true);
   responses.pop();

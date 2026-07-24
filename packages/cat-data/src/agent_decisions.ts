@@ -5,9 +5,8 @@
 //
 // Boundary preserved: consolidated decisions are RECALL CONTEXT, not citable CAT evidence —
 // term/terminology-authority writes still require returned TM/TB/glossary/asset evidenceSources.
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { workspacePath, type CatWorkspace } from "./workspace.js";
+import { readFile } from "node:fs/promises";
+import { workspacePath, writeJsonFile, type CatWorkspace } from "./workspace.js";
 
 export type DecisionScope = "term" | "style" | "tm" | "dup" | "general";
 
@@ -46,8 +45,7 @@ export async function readProjectGuidance(workspace: CatWorkspace): Promise<Proj
 
 export async function writeProjectGuidance(workspace: CatWorkspace, decisions: ProjectGuidanceDecision[]): Promise<ProjectGuidanceDecision[]> {
   const path = decisionsPath(workspace);
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify({ decisions }, null, 2)}\n`, "utf8");
+  await writeJsonFile(path, { decisions }, { durability: "critical" });
   return decisions;
 }
 

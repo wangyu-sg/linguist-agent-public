@@ -2,6 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { resolveStructuredStorageBackend } from "@linguist-agent/cat-data";
 
 export type PiTrustDecision = boolean | null;
 export type PiDefaultProjectTrust = "ask" | "always" | "never";
@@ -29,25 +30,58 @@ function trustPath(agentDir = join(homedir(), ".pi", "agent")): string {
   return join(agentDir, "trust.json");
 }
 
-async function readTrustFile(path: string): Promise<Record<string, boolean | null>> {
+const STORAGE_ADDRESS = { domain: "trust" as const, key: "pi", scope: "global" };
+
+interface TrustState {
+  decisions: Record<string, boolean | null>;
+  revision: number;
+}
+
+function parseDecisions(parsed: unknown): Record<string, boolean | null> {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("expected object");
+  const out: Record<string, boolean | null> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (value !== true && value !== false && value !== null) throw new Error(`invalid value for ${key}`);
+    out[key] = value;
+  }
+  return out;
+}
+
+async function readTrustFile(path: string, storageRoot?: string): Promise<TrustState> {
+  const backend = storageRoot ? resolveStructuredStorageBackend(storageRoot) : null;
+  const stored = backend?.read(STORAGE_ADDRESS);
+  if (stored) {
+    const payload = stored.payload;
+    if (payload.schemaVersion !== 1 || !payload.decisions) throw new Error("SQLite Pi trust payload is invalid.");
+    return { decisions: parseDecisions(payload.decisions), revision: stored.revision };
+  }
+  if (backend) return { decisions: {}, revision: 0 };
   try {
-    const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("expected object");
-    const out: Record<string, boolean | null> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (value !== true && value !== false && value !== null) throw new Error(`invalid value for ${key}`);
-      out[key] = value;
-    }
-    return out;
+    return { decisions: parseDecisions(JSON.parse(await readFile(path, "utf8")) as unknown), revision: 0 };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { decisions: {}, revision: 0 };
     throw error;
   }
 }
 
-async function writeTrustFile(path: string, decisions: Record<string, boolean | null>): Promise<void> {
+async function writeTrustFile(
+  path: string,
+  decisions: Record<string, boolean | null>,
+  storageRoot?: string,
+  state?: TrustState,
+): Promise<void> {
   const sorted: Record<string, boolean | null> = {};
   for (const key of Object.keys(decisions).sort()) sorted[key] = decisions[key] ?? null;
+  const backend = storageRoot ? resolveStructuredStorageBackend(storageRoot) : null;
+  if (backend) {
+    await backend.write({
+      address: STORAGE_ADDRESS,
+      expectedRevision: state?.revision ?? 0,
+      expectedValue: state ? { schemaVersion: 1, decisions: state.decisions } : {},
+      value: { schemaVersion: 1, decisions: sorted },
+    });
+    return;
+  }
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(sorted, null, 2)}\n`, "utf8");
 }
@@ -96,12 +130,13 @@ export async function readPiTrustStatus(input: {
   agentDir?: string;
   defaultProjectTrust?: PiDefaultProjectTrust;
   homeDir?: string;
+  storageRoot?: string;
 }): Promise<PiTrustStatus> {
   const currentPath = canonicalPath(input.cwd);
   const parent = dirname(currentPath);
   const path = trustPath(input.agentDir);
-  const decisions = await readTrustFile(path);
-  const entry = nearestTrustEntry(decisions, currentPath);
+  const state = await readTrustFile(path, input.storageRoot);
+  const entry = nearestTrustEntry(state.decisions, currentPath);
   return {
     trustPath: path,
     currentPath,
@@ -110,7 +145,7 @@ export async function readPiTrustStatus(input: {
     defaultProjectTrust: input.defaultProjectTrust ?? "ask",
     entry,
     effectiveDecision: entry ? (entry.decision ? "trusted" : "untrusted") : "unset",
-    decisions,
+    decisions: state.decisions,
   };
 }
 
@@ -121,15 +156,17 @@ export async function writePiTrustDecision(input: {
   agentDir?: string;
   defaultProjectTrust?: PiDefaultProjectTrust;
   homeDir?: string;
+  storageRoot?: string;
 }): Promise<PiTrustStatus> {
   const currentPath = canonicalPath(input.cwd);
   const parentPath = dirname(currentPath);
   const path = trustPath(input.agentDir);
-  const decisions = await readTrustFile(path);
+  const state = await readTrustFile(path, input.storageRoot);
+  const decisions = state.decisions;
   const targetPath = input.target === "parent" ? parentPath : currentPath;
   if (input.decision === null) delete decisions[targetPath];
   else decisions[targetPath] = input.decision;
   if (input.target === "parent") delete decisions[currentPath];
-  await writeTrustFile(path, decisions);
+  await writeTrustFile(path, decisions, input.storageRoot, state);
   return readPiTrustStatus(input);
 }

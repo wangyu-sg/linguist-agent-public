@@ -57,7 +57,7 @@ const plan = await preflightTeamWorkflowRun({
 
 assert.equal(plan.readiness.status, "blocked");
 assert.equal(plan.selectedRoleIds.includes("loc_engineer_gate" as TeamRoleId), true);
-assert.match(plan.readiness.blockers.join("\n"), /Team child RPC could not verify/);
+assert.match(plan.readiness.blockers.join("\n"), /Stable Team Runs do not load third-party executable Package Extensions/);
 assert.match(plan.readiness.blockers.join("\n"), /example-package@1\.2\.3/);
 
 console.log("team package preflight tests passed");

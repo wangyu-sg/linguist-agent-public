@@ -139,107 +139,6 @@
   scrollbar-gutter: stable;
 }
 
-/* Branching and runtime maintenance are real Chat capabilities, but they are
-   rare controls. Keep them in a single overflow surface rather than taking a
-   permanent second toolbar above every conversation. */
-.conversation-context-menu {
-  position: absolute;
-  z-index: var(--la-z-popover);
-  top: var(--la-space-2);
-  right: max(var(--la-space-3), calc((100% - var(--thread-content-max-width)) / 2));
-}
-
-.conversation-context-menu > summary {
-  display: grid;
-  width: var(--la-hit-compact);
-  height: var(--la-hit-compact);
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: var(--la-radius-control);
-  color: var(--la-ink-secondary);
-  cursor: pointer;
-  list-style: none;
-}
-
-.conversation-context-menu > summary::-webkit-details-marker { display: none; }
-.conversation-context-menu > summary::marker { content: ""; }
-.conversation-context-menu > summary > svg { width: 16px; height: 16px; }
-
-.conversation-context-menu[open] > summary,
-.conversation-context-menu > summary:active {
-  border-color: var(--la-border-default);
-  background: var(--la-surface-pressed);
-  color: var(--la-ink-primary);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .conversation-context-menu > summary:hover {
-    border-color: var(--la-border-hover);
-    background: var(--la-surface-hover);
-    color: var(--la-ink-primary);
-  }
-}
-
-.conversation-context-menu__panel {
-  position: absolute;
-  top: calc(100% + var(--la-space-2));
-  right: 0;
-  display: grid;
-  width: min(352px, calc(100vw - 48px));
-  gap: var(--la-space-2);
-  padding: var(--la-space-3);
-  border: 1px solid var(--la-border-default);
-  border-radius: var(--la-radius-surface);
-  background: var(--la-canvas);
-  box-shadow: var(--la-shadow-large);
-}
-
-.conversation-context-menu__branch {
-  display: grid;
-  gap: 5px;
-  color: var(--la-ink-secondary);
-  font-size: var(--la-type-meta-size);
-  line-height: var(--la-type-meta-line);
-}
-
-.conversation-context-menu__branch select {
-  width: 100%;
-  min-width: 0;
-  min-height: var(--la-control-small);
-  padding: 5px var(--la-space-2);
-  border: 1px solid var(--la-border-default);
-  border-radius: var(--la-radius-control);
-  background: var(--la-canvas);
-  color: var(--la-ink-primary);
-  font: inherit;
-  font-size: var(--la-type-dense-size);
-}
-
-.conversation-context-menu__actions {
-  display: grid;
-  gap: 2px;
-  padding-top: var(--la-space-1);
-  border-top: 1px solid var(--la-border-subtle);
-}
-
-.conversation-context-menu__actions .la-button {
-  justify-content: flex-start;
-  min-height: var(--la-control-small);
-  padding-inline: var(--la-space-2);
-  color: var(--la-ink-secondary);
-  font-size: var(--la-type-dense-size);
-}
-
-.conversation-context-menu__actions .la-button svg {
-  width: 14px;
-  height: 14px;
-}
-
-@media (max-width: 680px) {
-  .conversation-context-menu { right: var(--la-space-2); }
-  .conversation-context-menu__panel { width: min(320px, calc(100vw - 32px)); }
-}
-
 /* ---------- 历史筛选工具 ---------- */
 
 .conversation-history-tools {
@@ -441,7 +340,7 @@
   max-width: 480px;
   margin: var(--la-space-2) auto 0;
   color: var(--la-ink-secondary);
-  line-height: 1.55;
+  line-height: var(--la-type-copy-line);
   text-wrap: pretty;
 }
 
@@ -478,9 +377,9 @@
 .conversation-hero__title {
   margin: 0;
   color: var(--la-ink-primary);
-  font-size: 24px;
+  font-size: var(--la-type-display-size);
   font-weight: var(--la-weight-regular);
-  line-height: 32px;
+  line-height: var(--la-type-display-line);
   letter-spacing: -0.01em;
   white-space: pre-wrap;
   text-wrap: balance;
@@ -491,7 +390,7 @@
   margin: 0;
   color: var(--la-ink-secondary);
   font-size: var(--la-type-copy-size);
-  line-height: 1.55;
+  line-height: var(--la-type-copy-line);
   text-wrap: pretty;
 }
 

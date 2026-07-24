@@ -12,7 +12,7 @@ import {
   type TaskRun,
   type TaskScope,
 } from "@linguist-agent/cat-data";
-import type { NativeCapabilityPackageId } from "@linguist-agent/cat-runtime";
+import { taskRunApplicationPort, type TaskComposerCapabilityId } from "../application/task_run_application_port.js";
 import { executeTaskDecision, TaskDecisionExecutionError } from "../task_decision_executor.js";
 import { commitTaskExtensionInteraction } from "../task_extension_interactions.js";
 import {
@@ -22,12 +22,84 @@ import {
   type TaskPackageProfilePreview,
   type TaskPackageSelection,
 } from "../task_package_profile.js";
+import {
+  StrictApiInputError,
+  strictApiArray,
+  strictApiJsonValue,
+  strictApiObject,
+  strictApiOptional,
+  strictApiString,
+} from "../strict_api_contract.js";
 import { streamCanonicalTaskEvents, taskListResponse, validatedTaskTitle } from "./task_route_shared.js";
 import { handleTaskMessageQueueRoute, type TaskMessageQueueRouteService } from "./task_message_queue_routes.js";
 
 const TASK_KINDS = new Set<TaskKind>(["translation", "review", "qa", "delivery", "eval", "general"]);
 const TASK_THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-const TASK_COMPOSER_CAPABILITY_IDS = new Set<NativeCapabilityPackageId>(["research"]);
+const optionalText = () => strictApiOptional(strictApiString());
+const optionalJson = () => strictApiOptional(strictApiJsonValue());
+
+const createTaskSchema = strictApiObject({
+  taskId: optionalText(),
+  title: strictApiString(),
+  intent: strictApiString(),
+  kind: strictApiString(),
+  initialMessage: optionalText(),
+  segmentIds: strictApiOptional(strictApiArray(strictApiString())),
+  sourceLocale: optionalText(),
+  targetLocale: optionalText(),
+  batchId: optionalText(),
+  assetPaths: strictApiOptional(strictApiArray(strictApiString(), { maxItems: 12 })),
+}, { name: "Project Task creation" });
+
+const resourceProfilePreviewSchema = strictApiObject({
+  expectedRevision: strictApiJsonValue(),
+  selections: strictApiJsonValue(),
+  executableApprovals: optionalJson(),
+}, { name: "Task Package profile preview" });
+
+const resourceProfileApplySchema = strictApiObject({
+  expectedRevision: strictApiJsonValue(),
+  planHash: strictApiString(),
+  selections: strictApiJsonValue(),
+  executableApprovals: optionalJson(),
+}, { name: "Task Package profile apply" });
+
+const renameTaskSchema = strictApiObject({ title: strictApiString() }, { name: "Project Task rename" });
+const followUpSchema = strictApiObject({
+  message: strictApiString(),
+  artifactId: optionalText(),
+  activityId: optionalText(),
+}, { name: "specialist follow-up" });
+const taskChatSchema = strictApiObject({
+  message: strictApiString(),
+  runId: optionalText(),
+  segmentId: optionalText(),
+  // Legacy clients may still send this forged field; it is deliberately
+  // accepted for compatibility and never becomes canonical source context.
+  segmentSource: optionalJson(),
+  modelProvider: optionalText(),
+  modelId: optionalText(),
+  thinkingLevel: optionalText(),
+  assetPaths: strictApiOptional(strictApiArray(strictApiString(), { maxItems: 12 })),
+  capabilityIds: strictApiOptional(strictApiArray(strictApiString(), { maxItems: 12 })),
+}, { name: "Project Task chat" });
+const projectMessageSchema = strictApiObject({
+  message: strictApiString(),
+  delivery: strictApiString(),
+}, { name: "Project Task message" });
+const projectCompactionSchema = strictApiObject({ customInstructions: optionalText() }, { name: "Project Task compaction" });
+const projectStopSchema = strictApiObject({ reason: optionalText(), turnId: optionalText() }, { name: "Project Task stop" });
+const projectDecisionSchema = strictApiObject({ optionId: strictApiString(), reason: strictApiString() }, { name: "Project Task decision" });
+const interactionAnswerSchema = strictApiObject({
+  decisionId: strictApiString(),
+  selectedOptionIds: strictApiOptional(strictApiArray(strictApiString())),
+  responseText: optionalText(),
+}, { name: "Task interaction answer" });
+const taskInteractionSchema = strictApiObject({
+  action: strictApiString(),
+  reason: optionalText(),
+  answers: strictApiOptional(strictApiArray(interactionAnswerSchema)),
+}, { name: "Task decision interaction" });
 
 async function validatedTaskAssetPaths(repoRoot: string, projectId: string, value: unknown): Promise<{ paths: string[]; refs: string[] }> {
   if (value === undefined) return { paths: [], refs: [] };
@@ -41,17 +113,6 @@ async function validatedTaskAssetPaths(repoRoot: string, projectId: string, valu
   const unknown = paths.filter((path) => !known.has(path));
   if (unknown.length) throw new TaskWorkspaceConflictError(`Unknown Project asset attachment: ${unknown.join(", ")}.`);
   return { paths, refs: paths.map((path) => `asset:${path}`) };
-}
-
-function validatedTaskCapabilityIds(value: unknown): NativeCapabilityPackageId[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
-    throw new TaskWorkspaceConflictError("capabilityIds must be an array of native capability ids.");
-  }
-  const ids = [...new Set(value)] as NativeCapabilityPackageId[];
-  const unsupported = ids.filter((id) => !TASK_COMPOSER_CAPABILITY_IDS.has(id));
-  if (unsupported.length) throw new TaskWorkspaceConflictError(`Native capability is not ready for Task Composer activation: ${unsupported.join(", ")}.`);
-  return ids;
 }
 
 export interface TaskAgentRuntimeRouteDeps {
@@ -75,7 +136,7 @@ export interface TaskAgentRuntimeRouteDeps {
       taskScope: TaskScope;
       attachmentPaths?: string[];
       attachmentRefs?: string[];
-      capabilityIds?: NativeCapabilityPackageId[];
+      capabilityIds?: TaskComposerCapabilityId[];
     },
   ) => Promise<unknown[]>;
   stopAgent: (input: {
@@ -149,7 +210,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
       return true;
     }
     if (parts.length === 4 && req.method === "POST") {
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = createTaskSchema.parse(await deps.readBody(req), "Project Task creation");
       const kind = typeof body.kind === "string" && TASK_KINDS.has(body.kind as TaskKind) ? body.kind as TaskKind : undefined;
       if (typeof body.title !== "string" || !body.title.trim() || typeof body.intent !== "string" || !body.intent.trim() || !kind) {
         deps.json(res, 400, { error: "title, intent, and a valid kind are required." });
@@ -256,7 +317,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
     if (taskId && parts[5] === "resource-profile" && parts[6] === "preview" && parts.length === 7 && req.method === "POST") {
       await workspace.open({ projectId, taskId });
       if (!deps.taskPackageProfile) throw new TaskWorkspaceConflictError("Task Package profile runtime is unavailable.");
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = resourceProfilePreviewSchema.parse(await deps.readBody(req), "Task Package profile preview");
       if (!Number.isInteger(body.expectedRevision) || (body.expectedRevision as number) < 0) {
         deps.json(res, 400, { error: "expectedRevision must be a non-negative integer." });
         return true;
@@ -277,7 +338,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
     if (taskId && parts[5] === "resource-profile" && parts.length === 6 && req.method === "PUT") {
       await workspace.open({ projectId, taskId });
       if (!deps.taskPackageProfile) throw new TaskWorkspaceConflictError("Task Package profile runtime is unavailable.");
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = resourceProfileApplySchema.parse(await deps.readBody(req), "Task Package profile apply");
       if (!Number.isInteger(body.expectedRevision) || (body.expectedRevision as number) < 0) {
         deps.json(res, 400, { error: "expectedRevision must be a non-negative integer." });
         return true;
@@ -301,7 +362,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
       return true;
     }
     if (taskId && parts.length === 5 && req.method === "PATCH") {
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = renameTaskSchema.parse(await deps.readBody(req), "Project Task rename");
       let title: string;
       try { title = validatedTaskTitle(body.title); }
       catch (error) {
@@ -314,7 +375,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
     if (taskId && parts[5] === "threads" && parts[6] && parts[7] === "follow-up" && parts.length === 8 && req.method === "POST") {
       await workspace.open({ projectId, taskId });
       if (!deps.specialistFollowUp) throw new TaskWorkspaceConflictError("Specialist follow-up runtime is unavailable.");
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = followUpSchema.parse(await deps.readBody(req), "specialist follow-up");
       if (typeof body.message !== "string" || !body.message.trim()) {
         deps.json(res, 400, { error: "message is required." });
         return true;
@@ -337,7 +398,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
         batch = await readBatch(deps.repoRoot, projectId, taskScope.batchId);
         taskScope = { ...taskScope, sourceLocale: batch.sourceLanguage, targetLocale: batch.targetLanguage };
       }
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = taskChatSchema.parse(await deps.readBody(req), "Project Task chat");
       const message = agentRuntime.requireString(body.message, "message");
       const expectedRunId = agentRuntime.optionalString(body.runId);
       const segmentId = agentRuntime.optionalString(body.segmentId);
@@ -354,7 +415,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
       }
       const thinkingLevel = thinkingValue as "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
       const attachments = await validatedTaskAssetPaths(deps.repoRoot, projectId, body.assetPaths);
-      const capabilityIds = validatedTaskCapabilityIds(body.capabilityIds);
+      const capabilityIds = taskRunApplicationPort.resolveComposerCapabilityIds(body.capabilityIds);
       let segmentSource: string | undefined;
       if (segmentId) {
         if (!batch || !taskScope.batchId) throw new TaskWorkspaceConflictError(`Focused segment ${segmentId} requires a batch-scoped Task.`);
@@ -398,15 +459,14 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
     }
     if (taskId && agentRuntime && parts[5] === "messages" && parts.length === 6 && req.method === "POST") {
       const snapshot = await workspace.open({ projectId, taskId });
-      const payload = await deps.readBody(req);
-      const body = payload && typeof payload === "object" && !Array.isArray(payload)
-        ? payload as Record<string, unknown>
-        : null;
-      if (!body || typeof body.message !== "string" || !body.message.trim()) {
+      const body = projectMessageSchema.parse(await deps.readBody(req), "Project Task message");
+      const message = body.message;
+      if (typeof message !== "string" || !message.trim()) {
         deps.json(res, 400, { error: "message is required." });
         return true;
       }
-      if (body.delivery !== "steer" && body.delivery !== "follow_up") {
+      const delivery = body.delivery;
+      if (delivery !== "steer" && delivery !== "follow_up") {
         deps.json(res, 400, { error: "delivery must be steer or follow_up." });
         return true;
       }
@@ -414,8 +474,8 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
         projectId,
         taskId,
         runId: snapshot.activeRunId ?? undefined,
-        message: body.message,
-        delivery: body.delivery,
+        message,
+        delivery,
       }));
       return true;
     }
@@ -426,7 +486,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
     }
     if (taskId && agentRuntime && parts[5] === "compact" && parts.length === 6 && req.method === "POST") {
       await workspace.open({ projectId, taskId });
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = projectCompactionSchema.parse(await deps.readBody(req), "Project Task compaction");
       deps.json(res, 200, await agentRuntime.compactProjectAgentSession(
         projectId,
         taskId,
@@ -437,7 +497,7 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
     }
     if (taskId && agentRuntime && parts[5] === "stop" && parts.length === 6 && req.method === "POST") {
       const snapshot = await workspace.open({ projectId, taskId });
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = projectStopSchema.parse(await deps.readBody(req), "Project Task stop");
       const requestedRunId = agentRuntime.optionalString(body.turnId);
       const runId = requestedRunId ?? snapshot.activeRunId ?? undefined;
       deps.json(res, 200, await agentRuntime.stopAgent({
@@ -494,13 +554,13 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
         projectId,
         taskId,
         interactionId: decodeURIComponent(parts[6]),
-        body: await deps.readBody(req),
+        body: taskInteractionSchema.parse(await deps.readBody(req), "Task decision interaction"),
       }));
       return true;
     }
     if (taskId && parts[5] === "decisions" && parts[6] && parts.length === 7 && req.method === "POST") {
       const decisionId = decodeURIComponent(parts[6]);
-      const body = await deps.readBody(req) as Record<string, unknown>;
+      const body = projectDecisionSchema.parse(await deps.readBody(req), "Project Task decision");
       deps.json(res, 200, await executeTaskDecision({
         repoRoot: deps.repoRoot,
         projectId,
@@ -512,6 +572,10 @@ export async function handleTaskWorkspaceRoute(req: IncomingMessage, res: Server
       return true;
     }
   } catch (error) {
+    if (error instanceof StrictApiInputError) {
+      deps.json(res, error.status, { error: error.message, code: error.code });
+      return true;
+    }
     if (error instanceof TaskWorkspaceNotFoundError) {
       deps.json(res, 404, { error: error.message });
       return true;

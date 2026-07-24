@@ -1,8 +1,7 @@
 import { isAbsolute, resolve } from "node:path";
 import { readProjectLocalePair, readProjectManifest } from "./project_manifest.js";
 import { assetBlocksPath } from "./asset_blocks.js";
-import { readJsonFile, writeJsonFile } from "./workspace.js";
-import { termbasePath, type TermbaseEntry } from "./termbase.js";
+import { readTermbaseEntries, termbasePath, type TermbaseEntry, writeTermbaseEntries } from "./termbase.js";
 import { readWorkbookRows, type WorkbookRows } from "./workbook_mapping.js";
 import { termHistoryPath, termHistoryRowsFromSheet, writeTermHistoryRows, type TermHistoryDecision, type TermHistoryRecord } from "./term_history.js";
 import type { AssetConfirmedMapping, AssetParseMode } from "./asset_ingestion_contract.js";
@@ -406,7 +405,7 @@ export async function importWorkbookAssetPlan(
   const blocksFile = assetBlocksPath(workspaceRoot, options.projectId);
   const historyFile = termHistoryPath(workspaceRoot, options.projectId);
   const append = options.append !== false;
-  const existing = append ? await readJsonFile<TermbaseEntry[]>(termbaseFile, []) : [];
+  const existing = append ? await readTermbaseEntries(workspaceRoot, options.projectId) : [];
   const seen = new Set(existing.map((entry) => termDedupeKey(entry)));
   const entries: TermbaseEntry[] = [];
   const termHistoryRows: TermHistoryRecord[] = [];
@@ -450,7 +449,7 @@ export async function importWorkbookAssetPlan(
   const termHistory = termHistoryRows.length
     ? await writeTermHistoryRows(workspaceRoot, options.projectId, termHistoryRows, { append })
     : { importedRows: 0, decisions: [] as TermHistoryDecision[] };
-  await writeJsonFile(termbaseFile, [...existing, ...entries]);
+  await writeTermbaseEntries(workspaceRoot, options.projectId, [...existing, ...entries], append ? existing : null);
   const confirmedTyped = options.confirmedTypedCandidateIds?.length
     ? await confirmTypedAssetCandidates(workspaceRoot, {
         projectId: options.projectId,

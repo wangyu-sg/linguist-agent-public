@@ -14,7 +14,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 RUN_DIR="tmp/la"
-SERVER_PORT="${LA_SERVER_PORT:-8787}"
 GATEWAY_PORT="8420"
 
 MODE="${1:-server}"
@@ -38,14 +37,6 @@ port_pids() { lsof -ti "tcp:$1" 2>/dev/null || true; }
 
 # ── Server mode (background) ──────────────────────────────────────────────────────
 mkdir -p "$RUN_DIR"
-
-# Refuse to double-start: if the server port is already taken, point at la-stop.
-for p in "$SERVER_PORT"; do
-  if [ -n "$(port_pids "$p")" ]; then
-    echo "[la-start] Port $p is already in use. Run 'bash scripts/la-stop.sh' first (or it is still running)." >&2
-    exit 1
-  fi
-done
 
 start_bg() { # name, logfile, cmd...
   local name="$1" log="$2" session pid cmd; shift 2
@@ -80,10 +71,10 @@ fi
 start_bg server "$RUN_DIR/server.log" npm run server
 
 # ── wait for readiness ─────────────────────────────────────────────────────────
-echo -n "[la-start] waiting for server on :$SERVER_PORT "
+echo -n "[la-start] waiting for authenticated local runtime "
 ready=0
 for _ in $(seq 1 40); do
-  if curl -sf -o /dev/null "http://127.0.0.1:${SERVER_PORT}/api/health" 2>/dev/null; then ready=1; break; fi
+  if node scripts/check-local-runtime.mjs >/dev/null 2>&1; then ready=1; break; fi
   if ! kill -0 "$(cat "$RUN_DIR/server.pid")" 2>/dev/null; then break; fi
   printf "."; sleep 0.5
 done
@@ -94,5 +85,5 @@ if [ "$ready" != "1" ]; then
   exit 1
 fi
 
-echo "[la-start] Server ready → http://127.0.0.1:${SERVER_PORT}"
+echo "[la-start] Server ready on authenticated Unix transport"
 echo "[la-start] Stop with: bash scripts/la-stop.sh"

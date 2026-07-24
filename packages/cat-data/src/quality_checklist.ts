@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { readJsonFile, writeJsonFile } from "./workspace.js";
 import { parseMechanicalTextQaOptions, type MechanicalTextQaOptions, type MechanicalTextQaSegment } from "./mechanical_text_qa.js";
+import { assertCatGovernanceLegacyAllowed, catGovernancePersistenceFor, readCatGovernanceReadCache } from "./cat_governance_storage.js";
 
 export type QualityChecklistScope = "source" | "target" | "either";
 export type QualityChecklistSeverity = "blocker" | "warning" | "info";
@@ -126,7 +127,12 @@ export function validateQualityChecklistDocument(input: QualityChecklistDocument
 
 export async function readQualityChecklist(workspaceRoot: string, projectId: string): Promise<QualityChecklistDocument> {
   const empty: QualityChecklistDocument = { schemaVersion: 1, projectId: safeProjectId(projectId), updatedAt: "", mechanicalOptions: {}, entries: [] };
-  const document = await readJsonFile<QualityChecklistDocument>(qualityChecklistPath(workspaceRoot, projectId), empty);
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  const cached = persistence ? null : await readCatGovernanceReadCache<QualityChecklistDocument>(workspaceRoot, "checklist", projectId);
+  const document = persistence
+    ? await persistence.readQualityChecklist(projectId) ?? empty
+    : cached ?? await readJsonFile<QualityChecklistDocument>(qualityChecklistPath(workspaceRoot, projectId), empty);
+  if (!persistence && !cached) await assertCatGovernanceLegacyAllowed(workspaceRoot);
   return validateQualityChecklistDocument(document);
 }
 
@@ -144,7 +150,12 @@ export async function writeQualityChecklist(
     mechanicalOptions: currentOptions,
     entries,
   });
-  await writeJsonFile(qualityChecklistPath(workspaceRoot, projectId), document);
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  if (persistence) await persistence.writeQualityChecklist(projectId, document, await persistence.readQualityChecklist(projectId));
+  else {
+    await assertCatGovernanceLegacyAllowed(workspaceRoot);
+    await writeJsonFile(qualityChecklistPath(workspaceRoot, projectId), document, { durability: "critical" });
+  }
   return document;
 }
 

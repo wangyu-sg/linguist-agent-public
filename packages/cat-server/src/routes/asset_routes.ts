@@ -72,8 +72,6 @@ export interface AssetRouteDeps {
     maxSheets?: number;
     sheetOffset?: number;
     sampleRows?: number;
-    mineruCommand?: string;
-    mineruTimeoutMs?: number;
     sheetOverrides?: WorkbookSheetOverrideInput[];
     purpose?: AssetMappingPurpose;
   }) => Promise<unknown>;
@@ -84,8 +82,6 @@ export interface AssetRouteDeps {
     maxSheets?: number;
     sheetOffset?: number;
     sampleRows?: number;
-    mineruCommand?: string;
-    mineruTimeoutMs?: number;
     sheetOverrides?: WorkbookSheetOverrideInput[];
     purpose?: AssetMappingPurpose;
     askModel?: AskAssetMappingModel;
@@ -153,21 +149,22 @@ function assetKind(relPath: string): "workbook" | "document" | "memory" | "other
 }
 
 function sheetOverrides(value: unknown): WorkbookSheetOverrideInput[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.flatMap((item): WorkbookSheetOverrideInput[] => {
-    if (!item || typeof item !== "object") return [];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error("sheetOverrides must be an array.");
+  return value.map((item, index): WorkbookSheetOverrideInput => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`sheetOverrides[${index}] must be an object.`);
     const row = item as Record<string, unknown>;
-    if (typeof row.sheetName !== "string" || typeof row.role !== "string") return [];
-    if (!WORKBOOK_MAPPING_ROLES.includes(row.role as (typeof WORKBOOK_MAPPING_ROLES)[number])) return [];
+    if (typeof row.sheetName !== "string" || typeof row.role !== "string") throw new Error(`sheetOverrides[${index}] requires sheetName and role.`);
+    if (!WORKBOOK_MAPPING_ROLES.includes(row.role as (typeof WORKBOOK_MAPPING_ROLES)[number])) throw new Error(`sheetOverrides[${index}].role is invalid.`);
     const action = typeof row.action === "string" && ["import_terms", "import_term_delta", "resolve_term_history", "index_reference", "needs_mapping"].includes(row.action)
       ? row.action as WorkbookSheetOverrideInput["action"]
-      : undefined;
-    return [{
+      : row.action === undefined ? undefined : (() => { throw new Error(`sheetOverrides[${index}].action is invalid.`); })();
+    return {
       sheetName: row.sheetName,
       role: row.role as WorkbookSheetOverrideInput["role"],
       action,
       reason: typeof row.reason === "string" ? row.reason : undefined,
-    }];
+    };
   });
 }
 
@@ -178,7 +175,11 @@ function optionalNumber(value: unknown): number | undefined {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string" && item.trim())) {
+    throw new Error("Expected an array of non-empty strings.");
+  }
+  return value.map((item) => item.trim());
 }
 
 function parseMode(value: unknown, fallback: AssetParseMode = "structured"): AssetParseMode {
@@ -320,16 +321,24 @@ async function buildAssetSearchPayload(projectId: string, deps: AssetRouteDeps, 
 }
 
 function confirmedMappings(value: unknown): AssetConfirmedMapping[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.flatMap((item): AssetConfirmedMapping[] => {
-    if (!item || typeof item !== "object") return [];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error("confirmedMappings must be an array.");
+  return value.map((item, index): AssetConfirmedMapping => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`confirmedMappings[${index}] must be an object.`);
     const row = item as Record<string, unknown>;
-    if (typeof row.sheetName !== "string") return [];
-    if (typeof row.role !== "string" || !WORKBOOK_MAPPING_ROLES.includes(row.role as (typeof WORKBOOK_MAPPING_ROLES)[number])) return [];
-    if (typeof row.action !== "string" || !["import_terms", "import_term_delta", "resolve_term_history", "index_reference", "needs_mapping"].includes(row.action)) return [];
-    if (typeof row.authorityTier !== "string" || !["termbase", "term_history", "style_guide", "reference", "proposal_only"].includes(row.authorityTier)) return [];
-    const confidence = typeof row.confidence === "number" ? Math.max(0, Math.min(1, row.confidence)) : 0.7;
-    return [{
+    if (typeof row.sheetName !== "string") throw new Error(`confirmedMappings[${index}].sheetName is required.`);
+    if (typeof row.role !== "string" || !WORKBOOK_MAPPING_ROLES.includes(row.role as (typeof WORKBOOK_MAPPING_ROLES)[number])) throw new Error(`confirmedMappings[${index}].role is invalid.`);
+    if (typeof row.action !== "string" || !["import_terms", "import_term_delta", "resolve_term_history", "index_reference", "needs_mapping"].includes(row.action)) throw new Error(`confirmedMappings[${index}].action is invalid.`);
+    if (typeof row.authorityTier !== "string" || !["termbase", "term_history", "style_guide", "reference", "proposal_only"].includes(row.authorityTier)) throw new Error(`confirmedMappings[${index}].authorityTier is invalid.`);
+    if (row.confidence !== undefined && (typeof row.confidence !== "number" || !Number.isFinite(row.confidence) || row.confidence < 0 || row.confidence > 1)) throw new Error(`confirmedMappings[${index}].confidence must be between 0 and 1.`);
+    const confidence = row.confidence ?? 0.7;
+    const warnings = row.warnings === undefined
+      ? undefined
+      : (() => {
+        if (!Array.isArray(row.warnings) || !row.warnings.every((warning) => typeof warning === "string")) throw new Error(`confirmedMappings[${index}].warnings must be an array of strings.`);
+        return row.warnings;
+      })();
+    return {
       sheetName: row.sheetName,
       role: row.role as AssetConfirmedMapping["role"],
       action: row.action as AssetConfirmedMapping["action"],
@@ -343,8 +352,8 @@ function confirmedMappings(value: unknown): AssetConfirmedMapping[] | undefined 
       categoryColumn: typeof row.categoryColumn === "string" ? row.categoryColumn : undefined,
       dateColumn: typeof row.dateColumn === "string" ? row.dateColumn : undefined,
       commentColumn: typeof row.commentColumn === "string" ? row.commentColumn : undefined,
-      warnings: Array.isArray(row.warnings) ? row.warnings.filter((warning): warning is string => typeof warning === "string") : undefined,
-    }];
+      warnings,
+    };
   });
 }
 
@@ -427,8 +436,6 @@ export async function handleAssetRoute(
       maxSheets: optionalNumber(body.maxSheets),
       sheetOffset: optionalNumber(body.sheetOffset),
       sampleRows: optionalNumber(body.sampleRows),
-      mineruCommand: deps.optionalString(body.mineruCommand),
-      mineruTimeoutMs: optionalNumber(body.mineruTimeoutMs),
       sheetOverrides: sheetOverrides(body.sheetOverrides),
       purpose: mappingPurpose(body.purpose),
     }));
@@ -503,8 +510,6 @@ export async function handleAssetRoute(
       maxSheets: optionalNumber(body.maxSheets),
       sheetOffset: optionalNumber(body.sheetOffset),
       sampleRows: optionalNumber(body.sampleRows),
-      mineruCommand: deps.optionalString(body.mineruCommand),
-      mineruTimeoutMs: optionalNumber(body.mineruTimeoutMs),
       sheetOverrides: sheetOverrides(body.sheetOverrides),
       purpose: mappingPurpose(body.purpose),
       askModel: model?.askModel,
@@ -530,7 +535,12 @@ export async function handleAssetRoute(
       parserEvidence: typeof body.parserEvidence === "object" && body.parserEvidence ? body.parserEvidence as AssetMappingProfile["parserEvidence"] : {},
       llmAssisted: deps.optionalBoolean(body.llmAssisted) ?? mappings.some((mapping) => mapping.reason.toLocaleLowerCase().includes("llm")),
       confirmedBy: deps.optionalString(body.confirmedBy) ?? "user",
-      warnings: Array.isArray(body.warnings) ? body.warnings.filter((warning): warning is string => typeof warning === "string") : [],
+      warnings: body.warnings === undefined
+        ? []
+        : (() => {
+          if (!Array.isArray(body.warnings) || !body.warnings.every((warning) => typeof warning === "string")) throw new Error("warnings must be an array of strings.");
+          return body.warnings;
+        })(),
     }));
     return true;
   }

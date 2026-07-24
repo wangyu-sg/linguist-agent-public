@@ -261,6 +261,73 @@
   line-height: var(--la-type-meta-line) !important;
 }
 
+.context-inspector__document-pages {
+  display: grid;
+  gap: var(--la-space-2);
+  padding: 0;
+  margin: var(--la-space-3) 0 0;
+  list-style: none;
+}
+
+.context-inspector__document-pages li {
+  display: grid;
+  gap: var(--la-space-1);
+  padding: var(--la-space-2);
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-control);
+}
+
+.context-inspector__document-pages li[data-status="blocked"] {
+  border-color: var(--la-danger);
+}
+
+.context-inspector__document-pages strong,
+.context-inspector__document-pages span,
+.context-inspector__document-pages small {
+  overflow-wrap: anywhere;
+  font-size: var(--la-type-dense-size);
+  line-height: var(--la-type-dense-line);
+}
+
+.context-inspector__document-pages span,
+.context-inspector__document-pages small,
+.context-inspector__document-error {
+  color: var(--la-ink-secondary);
+}
+
+.context-inspector__document-correction {
+  display: grid;
+  gap: var(--la-space-2);
+  margin-top: var(--la-space-3);
+}
+
+.context-inspector__document-correction label {
+  display: grid;
+  gap: var(--la-space-1);
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-meta-size);
+  line-height: var(--la-type-meta-line);
+}
+
+.context-inspector__document-correction select,
+.context-inspector__document-correction textarea {
+  width: 100%;
+  min-height: var(--la-control-height);
+  box-sizing: border-box;
+}
+
+.context-inspector__document-correction textarea {
+  min-height: 7lh;
+  resize: vertical;
+}
+
+.context-inspector__document-error {
+  margin: 0;
+  color: var(--la-danger);
+  font-size: var(--la-type-meta-size);
+  line-height: var(--la-type-meta-line);
+}
+
 .context-inspector__option-list > li {
   padding-block: var(--la-space-2);
 }
@@ -839,4 +906,52 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* ---------- Rich Artifact:todo_list(Agent Plan block) ---------- */
+
+.rich-artifact__todo-list > ul {
+  display: flex;
+  margin: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  list-style: none;
+}
+
+.rich-artifact__todo {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--la-space-2);
+  padding: 2px 0;
+}
+
+.rich-artifact__todo-marker {
+  width: 16px;
+  flex: none;
+  color: var(--la-ink-disabled);
+  text-align: center;
+}
+
+.rich-artifact__todo[data-status="completed"] .rich-artifact__todo-marker {
+  color: var(--la-success);
+}
+
+.rich-artifact__todo[data-status="in_progress"] .rich-artifact__todo-marker {
+  color: var(--la-accent);
+}
+
+.rich-artifact__todo-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rich-artifact__todo[data-status="completed"] .rich-artifact__todo-text {
+  color: var(--la-ink-disabled);
+  text-decoration: line-through;
+}
+
+.rich-artifact__todo[data-status="in_progress"] .rich-artifact__todo-text {
+  color: var(--la-ink-primary);
 }

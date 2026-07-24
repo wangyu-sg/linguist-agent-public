@@ -29,7 +29,7 @@ const workspace = createWorkspace(workspaceRoot, "proj");
 // through a server-selected Run resource profile.
 const registered = new Set(buildCatTools(workspace).map((tool) => tool.name));
 const inheritedModeCustomTools = new Set(
-  buildCatTools(workspace, undefined, { includeWebBridges: false }).map((tool) => tool.name),
+  buildCatTools(workspace, { includeWebBridges: false }).map((tool) => tool.name),
 );
 assert.ok(registered.has("web_search"), "legacy CAT tool build must still support LA web_search");
 assert.ok(registered.has("web_fetch"), "legacy CAT tool build must still support LA web_fetch");

@@ -2,6 +2,8 @@ export { AgentComposer, type AgentComposerProps } from "./AgentComposer.tsx";
 export {
   ComposerAddDisclosure,
   ComposerAttachmentTray,
+  ComposerChatAttachmentDisclosure,
+  ComposerPermissionDisclosure,
   ComposerRecipientChip,
   ComposerScopeDisclosure,
   ContextUsageDisclosure,
@@ -16,6 +18,7 @@ export {
   deriveAgentComposerPresentation,
   deriveAgentComposerSendButton,
   formatRunElapsed,
+  selectCanonicalActiveRun,
   shouldUseSingleLineComposer,
   type AgentComposerAction,
   type AgentComposerContext,
@@ -26,6 +29,7 @@ export {
   type ComposerLayoutLock,
   type ComposerLayoutMetrics,
 } from "./composer-model.ts";
+export { ComposerAssetControls, ComposerModelControls } from "./composer-workbench.tsx";
 export {
   COMPOSER_POWER_LEVELS,
   clampPowerIndex,

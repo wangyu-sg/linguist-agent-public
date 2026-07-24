@@ -11,7 +11,15 @@ import {
   registerCatRuntimeHooks,
   validateCatToolResult,
 } from "@linguist-agent/cat-runtime";
-import { createWorkspace, upsertPhraseQaRow, upsertPlatformBackfillRow, upsertWorkflowAuthorityEvidence, workspacePath } from "@linguist-agent/cat-data";
+import {
+  confirmAssistantMemory,
+  createWorkspace,
+  proposeAssistantMemory,
+  upsertPhraseQaRow,
+  upsertPlatformBackfillRow,
+  upsertWorkflowAuthorityEvidence,
+  workspacePath,
+} from "@linguist-agent/cat-data";
 
 const workspaceRoot = await mkdtemp(join(tmpdir(), "la-runtime-hooks-test-"));
 const customerRoot = join(workspaceRoot, "customer");
@@ -106,6 +114,28 @@ await upsertWorkflowAuthorityEvidence(workspaceRoot, "proj", {
   target: "Hero Emblem",
   evidenceSource: "style_guide",
 });
+
+const implicitMemory = await proposeAssistantMemory(workspaceRoot, {
+  scope: { kind: "project", projectId: "proj" },
+  kind: "guidance",
+  text: "Implicit runtime memory must never be enumerated by a CAT Worker.",
+  source: { taskId: "memory-snapshot-test" },
+});
+await confirmAssistantMemory(workspaceRoot, {
+  scope: { kind: "project", projectId: "proj" },
+  id: implicitMemory.id,
+  actor: "user",
+});
+
+const noSnapshotContext = await buildCatAgentTurnContext(workspace);
+assert.doesNotMatch(noSnapshotContext, /Implicit runtime memory must never be enumerated/, "a CAT Worker must receive only the host-provided immutable memory snapshot");
+
+const snapshotContext = await buildCatAgentTurnContext(
+  workspace,
+  "- snapshot memory: host-selected recall context only; never citable project evidence.",
+);
+assert.match(snapshotContext, /snapshot memory: host-selected recall context only/);
+assert.match(snapshotContext, /cannot replace current client assets, approved terminology, evidence, or hard gates/);
 
 const context = await buildCatAgentTurnContext(workspace);
 assert.match(context, /project_id: proj/);
@@ -212,7 +242,11 @@ function captureToolCallHook(contract: ReturnType<typeof buildAgentPermissionCon
   return toolCallHook as HookFn;
 }
 
-const compactionHooks = captureRuntimeHooks(buildAgentPermissionContract({ mode: "full" }));
+assert.throws(
+  () => buildAgentPermissionContract({ mode: "full" }),
+  /Stable does not support full access/,
+);
+const compactionHooks = captureRuntimeHooks(buildAgentPermissionContract({ mode: "auto" }));
 assert.equal(typeof compactionHooks["session_before_compact"], "function");
 assert.equal(typeof compactionHooks["session_compact"], "function");
 const statusUpdates: Array<{ key: string; text: string | undefined }> = [];
@@ -232,37 +266,37 @@ await compactionHooks["session_compact"](
 );
 assert.deepEqual(statusUpdates.at(-1), { key: "la-cat-compaction", text: undefined });
 
-// Full-access mode: an unevidenced term change is STILL blocked by the CAT evidence gate,
+// A supported custom mode with bash auto-approval: an unevidenced term change is STILL blocked by the CAT evidence gate,
 // because the hook runs the hard guard before ever consulting the permission policy.
-const fullHook = captureToolCallHook(buildAgentPermissionContract({ mode: "full" }));
-const fullModeTermChange = await fullHook({
+const permissiveHook = captureToolCallHook(buildAgentPermissionContract({ mode: "custom", customRules: { bash: "auto" } }));
+const permissiveModeTermChange = await permissiveHook({
   toolName: "segment_set_target",
   input: { project_id: "proj", batch_id: "b1", segment_id: "s1", target: "Gemstone", reason: "Terminology update", change_type: "term" },
 });
-assert.equal(fullModeTermChange?.block, true);
-assert.match(fullModeTermChange?.reason ?? "", /evidence gate blocked segment_set_target/);
+assert.equal(permissiveModeTermChange?.block, true);
+assert.match(permissiveModeTermChange?.reason ?? "", /evidence gate blocked segment_set_target/);
 
-// Same full-access hook: a generic bash call is auto-approved (no block). This proves the
+// Same supported custom hook: a generic bash call is auto-approved (no block). This proves the
 // block above is the CAT gate, not a blanket denial — the permission layer is permissive here.
-const fullModeBash = await fullHook({ toolName: "bash", input: { command: "pwd" } });
-assert.equal(fullModeBash?.block ?? false, false);
+const permissiveModeBash = await permissiveHook({ toolName: "bash", input: { command: "pwd" } });
+assert.equal(permissiveModeBash?.block ?? false, false);
 
-const projectDocumentRead = await fullHook({ toolName: "document_parse", input: { path: customerDocument } });
+const projectDocumentRead = await permissiveHook({ toolName: "document_parse", input: { path: customerDocument } });
 assert.equal(projectDocumentRead, undefined);
-const canonicalDocumentRead = await fullHook({
+const canonicalDocumentRead = await permissiveHook({
   toolName: "document_search",
   input: { path: workspacePath(workspace, "project.json"), phrase: "projectId" },
 });
 assert.equal(canonicalDocumentRead, undefined);
-const outsideDocumentRead = await fullHook({ toolName: "document_screenshot", input: { path: outsideDocument } });
+const outsideDocumentRead = await permissiveHook({ toolName: "document_screenshot", input: { path: outsideDocument } });
 assert.equal(outsideDocumentRead?.block, true);
-assert.match(outsideDocumentRead?.reason ?? "", /outside the current Project scope/i);
-const escapedDocumentRead = await fullHook({
+assert.match(outsideDocumentRead?.reason ?? "", /FILE_CAPABILITY_DENIED/);
+const escapedDocumentRead = await permissiveHook({
   toolName: "document_parse",
   input: { path: join(customerRoot, "escape", "outside.pdf") },
 });
 assert.equal(escapedDocumentRead?.block, true);
-assert.match(escapedDocumentRead?.reason ?? "", /outside the current Project scope/i);
+assert.match(escapedDocumentRead?.reason ?? "", /FILE_CAPABILITY_DENIED/);
 const deniedDocumentReadHook = captureToolCallHook(
   buildAgentPermissionContract({ mode: "custom", customRules: { fileRead: "deny" } }),
 );
@@ -283,19 +317,19 @@ assert.equal(
 );
 
 for (const toolName of ["subagent", "wait"]) {
-  const result = await fullHook({ toolName, input: toolName === "subagent" ? { agent: "worker", task: "translate" } : {} });
+  const result = await permissiveHook({ toolName, input: toolName === "subagent" ? { agent: "worker", task: "translate" } : {} });
   assert.equal(result?.block, true);
   assert.match(result?.reason ?? "", /canonical Task Run\/Agent lifecycle/i);
 }
 
-// Credential paths are a hard rail, not an autonomy preference. Full access therefore cannot
+// Credential paths are a hard rail, not an autonomy preference. A permissive supported mode cannot
 // expose provider auth files or invoke the macOS Keychain CLI through inherited Pi tools.
-const fullModeCredentialRead = await fullHook({ toolName: "read", input: { path: "~/.pi/agent/auth.json" } });
-assert.equal(fullModeCredentialRead?.block, true);
-assert.match(fullModeCredentialRead?.reason ?? "", /protected credential path/);
-const fullModeKeychainBash = await fullHook({ toolName: "bash", input: { command: "/usr/bin/security find-generic-password -s test" } });
-assert.equal(fullModeKeychainBash?.block, true);
-assert.match(fullModeKeychainBash?.reason ?? "", /Keychain access/);
+const permissiveModeCredentialRead = await permissiveHook({ toolName: "read", input: { path: "~/.pi/agent/auth.json" } });
+assert.equal(permissiveModeCredentialRead?.block, true);
+assert.match(permissiveModeCredentialRead?.reason ?? "", /protected credential path/);
+const permissiveModeKeychainBash = await permissiveHook({ toolName: "bash", input: { command: "/usr/bin/security find-generic-password -s test" } });
+assert.equal(permissiveModeKeychainBash?.block, true);
+assert.match(permissiveModeKeychainBash?.reason ?? "", /Keychain access/);
 
 // Ask mode through the same registered hook: a denied approval on bash surfaces as a block,
 // confirming the permission layer is actually reachable along the real tool_call path.

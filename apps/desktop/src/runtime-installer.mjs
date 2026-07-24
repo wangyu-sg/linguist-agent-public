@@ -15,7 +15,7 @@ import { constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { promisify } from "node:util";
-import { handshakeProblem } from "./desktop-security.mjs";
+import { inspectRuntime } from "./runtime-client.mjs";
 
 const execFileAsync = promisify(execFile);
 const MANIFEST_NAME = "runtime.manifest.json";
@@ -149,9 +149,7 @@ function archiveEntriesAreSafe(output) {
 async function defaultWaitForHealth() {
   for (let attempt = 0; attempt < 60; attempt += 1) {
     try {
-      const response = await fetch("http://127.0.0.1:8787/api/health", { signal: AbortSignal.timeout(1_000) });
-      const health = response.ok ? await response.json() : null;
-      if (health && !handshakeProblem(health)) return true;
+      if ((await inspectRuntime()).status === "ready") return true;
     } catch {
       // launchd may need a few seconds to start the newly installed runtime.
     }
@@ -321,10 +319,36 @@ export function createManagedRuntimeInstaller(options = {}) {
     }
   }
 
+  async function restartRuntime() {
+    if (platform !== "darwin") return installFailure("unsupported_platform", "本机 runtime 重启仅支持 macOS。");
+    if (!await exists(launchAgentPath)) {
+      return installFailure("runtime_not_installed", "没有发现已安装的本机 runtime。请先执行“修复本机 runtime”。");
+    }
+    try {
+      await execute("/bin/launchctl", ["kickstart", "-k", `gui/${uid}/com.linguist-agent.server`], { timeout: 30_000 });
+      if (!await waitForHealth()) throw new Error("runtime health check did not become ready");
+      return {
+        ok: true,
+        status: "ready",
+        code: "runtime_restarted",
+        message: "本机 runtime 已重启，项目数据未被修改。",
+        rollback: "not-needed",
+      };
+    } catch {
+      return installFailure("runtime_restart_failed", "本机 runtime 没有在重启后恢复健康。请使用“修复本机 runtime”重新部署已签名的运行时。");
+    }
+  }
+
   return Object.freeze({
     installOrRepair() {
       if (!activeInstall) activeInstall = install(bundleRoot).finally(() => { activeInstall = null; });
       return activeInstall;
+    },
+    async restart() {
+      // Never race a filesystem swap with launchctl. A requested restart after
+      // a repair is resolved only once the repair outcome is known.
+      if (activeInstall) await activeInstall;
+      return restartRuntime();
     },
     async installCandidate(input) {
       if (!input || typeof input.bundleRoot !== "string" || !input.bundleRoot.trim()) {

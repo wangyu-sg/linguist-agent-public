@@ -7,9 +7,21 @@ import {
   createCatWorkflowRun,
   createTaskWorkspace,
   createWorkspace,
+  ModelContextRegistry,
   prepareTeamRoleContext,
   writeJsonFile,
 } from "@linguist-agent/cat-data";
+
+const requestBudget = {
+  registry: new ModelContextRegistry([{ provider: "fixture", modelId: "verified", contextWindow: 200_000, outputReserveTokens: 1_000 }]),
+  provider: "fixture",
+  modelId: "verified",
+  toolSchemaTokens: 0,
+  historyTokens: 0,
+  providerFramingTokens: 8,
+  safetyMarginTokens: 0,
+  compactionReserveTokens: 0,
+};
 
 const root = await mkdtemp(join(tmpdir(), "la-team-context-"));
 const projectId = "project-1";
@@ -87,7 +99,13 @@ await createCatWorkflowRun(root, {
   includeReadiness: false,
 });
 
-const subset = await prepareTeamRoleContext(root, { projectId, workflowId: "workflow-subset", roleId: "translator" });
+const subset = await prepareTeamRoleContext(root, {
+  projectId,
+  workflowId: "workflow-subset",
+  roleId: "translator",
+  requestBudget,
+  estimateToolSchemaTokens: (toolNames) => toolNames.length * 10,
+});
 assert.equal(subset.status, "ready");
 if (subset.status !== "ready") throw new Error(subset.blockers.join("; "));
 assert.match(subset.prompt, /获得 \{0\} 颗勇者徽记/);
@@ -105,8 +123,15 @@ assert.equal(subset.manifest.coverage?.taskSegments, 1);
 assert.equal(subset.manifest.coverage?.inlineSegments, 1);
 assert.equal(subset.manifest.coverage?.requiresPaging, false);
 assert.equal(subset.manifest.hardConstraintsPreserved, true);
+assert.equal(subset.manifest.requestBudget?.toolSchemaTokens, subset.evidenceScope.allowedTools.length * 10);
 
-const repeated = await prepareTeamRoleContext(root, { projectId, workflowId: "workflow-subset", roleId: "translator" });
+const repeated = await prepareTeamRoleContext(root, {
+  projectId,
+  workflowId: "workflow-subset",
+  roleId: "translator",
+  requestBudget,
+  estimateToolSchemaTokens: (toolNames) => toolNames.length * 10,
+});
 assert.equal(repeated.status, "ready");
 if (repeated.status === "ready") {
   assert.equal(repeated.manifest.promptHash, subset.manifest.promptHash);
@@ -129,7 +154,7 @@ await createCatWorkflowRun(root, {
   intent: "game_localization_team_run",
   includeReadiness: false,
 });
-const wholeBatch = await prepareTeamRoleContext(root, { projectId, workflowId: "workflow-batch", roleId: "translator" });
+const wholeBatch = await prepareTeamRoleContext(root, { projectId, workflowId: "workflow-batch", roleId: "translator", requestBudget });
 assert.equal(wholeBatch.status, "ready");
 if (wholeBatch.status === "ready") {
   assert.equal(wholeBatch.evidenceScope.allowedTools.includes("batch_read"), true);
@@ -155,19 +180,23 @@ await createCatWorkflowRun(root, {
   intent: "game_localization_team_run",
   includeReadiness: false,
 });
-const stale = await prepareTeamRoleContext(root, { projectId, workflowId: "workflow-stale", roleId: "translator" });
+const stale = await prepareTeamRoleContext(root, { projectId, workflowId: "workflow-stale", roleId: "translator", requestBudget });
 assert.equal(stale.status, "blocked");
 if (stale.status === "blocked") assert.match(stale.blockers.join("\n"), /missing-segment/);
 
 batch.segments[0]!.source = "超长句段".repeat(16_000);
 batch.segments[0]!.rawSource = batch.segments[0]!.source;
 await writeJsonFile(batchPath(createWorkspace(root, projectId), batchId), batch);
-const oversized = await prepareTeamRoleContext(root, { projectId, workflowId: "workflow-subset", roleId: "translator" });
-assert.equal(oversized.status, "ready");
-if (oversized.status === "ready") {
-  assert.equal(oversized.manifest.overBudget, undefined, "large context is measured but not labelled against an invented default ceiling");
-  assert.equal(oversized.manifest.hardConstraintsPreserved, true);
-  assert.match(oversized.prompt, /超长句段/);
-}
+const oversized = await prepareTeamRoleContext(root, {
+  projectId,
+  workflowId: "workflow-subset",
+  roleId: "translator",
+  requestBudget: {
+    ...requestBudget,
+    registry: new ModelContextRegistry([{ provider: "fixture", modelId: "verified", contextWindow: 2_000, outputReserveTokens: 500 }]),
+  },
+});
+assert.equal(oversized.status, "blocked");
+if (oversized.status === "blocked") assert.match(oversized.blockers.join("\n"), /exceeds.*budget/i);
 
 console.log("team context builder tests passed");

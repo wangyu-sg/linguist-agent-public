@@ -12,6 +12,7 @@ import {
   followUpTargetForSelection,
   segmentLinkedItems,
 } from "../src/renderer/inspector/inspector-model.ts";
+import { documentArtifactView } from "../src/renderer/inspector/document-artifact-model.ts";
 import {
   segmentEvidenceGroups,
   segmentEvidenceSummaryRows,
@@ -118,6 +119,35 @@ test("message and final reply bodies stay in conversation while typed activity d
 
 test("artifact evidence is canonical and de-duplicated", () => {
   assert.deepEqual(artifactEvidence(artifact()), { refs: ["term:one", "tm:two"], content: undefined });
+});
+
+test("document inspector projects server Router facts and exposes only textual correction targets", () => {
+  const view = documentArtifactView(artifact({
+    type: "document_evidence",
+    content: {
+      router: {
+        schemaVersion: 1,
+        source: { sha256: "a".repeat(64), mimeType: "image/png" },
+        policy: { source: "benchmark-profile", reason: "Synthetic benchmark", nativeTextCoverage: 0.8 },
+        status: "partial",
+        pages: [
+          { page: 1, status: "complete", reason: "Light OCR selected.", backend: { id: "light-ocr", version: "managed", ocr: true }, blockCount: 1 },
+          { page: 2, status: "blocked", reason: "Optional backend is unavailable.", blockCount: 0 },
+        ],
+        blocks: [
+          { id: "page-1", text: "原始文字", locator: { kind: "page", page: 1 }, provenance: { userCorrected: false } },
+          { id: "image-1", locator: { kind: "page", page: 1 }, provenance: { userCorrected: false } },
+        ],
+      },
+    },
+  }));
+  assert.deepEqual(view?.pages.map((page) => [page.page, page.status, page.backend, page.reason]), [
+    [1, "complete", "light-ocr@managed", "Light OCR selected."],
+    [2, "blocked", null, "Optional backend is unavailable."],
+  ]);
+  assert.deepEqual(view?.textBlocks, [{ id: "page-1", text: "原始文字", locator: "Page 1", userCorrected: false }]);
+  assert.equal(view?.status, "partial");
+  assert.equal(documentArtifactView(artifact({ type: "document_evidence", content: { router: { status: "complete" } } })), null);
 });
 
 test("focused segment links only its canonical Task items and keeps chronology", () => {

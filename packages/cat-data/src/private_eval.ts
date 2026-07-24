@@ -11,6 +11,7 @@ import type { PromptManifest } from "./prompt_compiler.js";
 import type { TeamContextManifest, TeamRoleId, TeamRoleProfile } from "./team_workflow.js";
 import { numberQaTokens } from "./number_qa.js";
 import { checkSpelling, type SpellingQaCoverage } from "./spelling_qa.js";
+import { assertWorkflowEvalLegacyAllowed, workflowEvalPersistenceFor } from "./workflow_eval_storage.js";
 
 export type PrivateEvalThinkingLevel = NonNullable<TeamRoleProfile["thinking"]>;
 export const DEFAULT_PRIVATE_EVAL_THINKING_LEVEL: PrivateEvalThinkingLevel = "medium";
@@ -327,6 +328,34 @@ function evalSetsRoot(workspaceRoot: string): string {
   return join(workspaceRoot, "data", "evals", "private");
 }
 
+function evalStorageKey(evalSetId: string, kind: "set" | "run" | "outputs" | "scorecard" | "blind", id?: string): string {
+  return `eval/${privateEvalId(evalSetId, "Private Eval set id")}/${kind}${id ? `/${privateEvalId(id, `Private Eval ${kind} id`)}` : ""}`;
+}
+async function readEvalRecord<T>(workspaceRoot: string, key: string, path: string, fallback: T): Promise<T> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) return (await persistence.read(key) ?? fallback) as T;
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
+  return readJsonFile<T>(path, fallback);
+}
+async function writeEvalRecord(workspaceRoot: string, key: string, path: string, value: unknown): Promise<void> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) return persistence.write(key, value);
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
+  await writeJsonFile(path, value);
+}
+async function readEvalRows<T>(workspaceRoot: string, key: string, path: string): Promise<T[]> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) return (await persistence.read(key) ?? []) as T[];
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
+  return readJsonlFile<T>(path);
+}
+async function writeEvalRows(workspaceRoot: string, key: string, path: string, rows: unknown[]): Promise<void> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) return persistence.write(key, rows);
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
+  await writeJsonl(path, rows);
+}
+
 async function walkFiles(root: string): Promise<string[]> {
   const out: string[] = [];
   async function walk(dir: string): Promise<void> {
@@ -600,7 +629,7 @@ export async function createPrivateEvalSet(workspaceRoot: string, input: CreateP
     rubricPath: join(root, "rubric.json"),
   };
   await mkdir(root, { recursive: true });
-  await writeJsonFile(join(root, "eval_set.json"), evalSet);
+  await writeEvalRecord(workspaceRoot, evalStorageKey(input.evalSetId, "set"), join(root, "eval_set.json"), evalSet);
   await writeJsonl(join(root, "segments.jsonl"), segments);
   await writeJsonl(join(root, "references.jsonl"), segments.map((segment) => ({
     segmentId: segment.segmentId,
@@ -613,6 +642,9 @@ export async function createPrivateEvalSet(workspaceRoot: string, input: CreateP
 }
 
 export async function listPrivateEvalSets(workspaceRoot: string): Promise<PrivateEvalSet[]> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) return (await Promise.all((await persistence.list("eval/")).filter((key) => key.endsWith("/set")).map((key) => persistence.read(key)))).filter((row): row is PrivateEvalSet => Boolean(row)).sort((a, b) => a.evalSetId.localeCompare(b.evalSetId));
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
   const root = evalSetsRoot(workspaceRoot);
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
   const rows = await Promise.all(entries
@@ -625,7 +657,7 @@ export async function readPrivateEvalSet(workspaceRoot: string, evalSetId: strin
   const root = evalRoot(workspaceRoot, evalSetId);
   const segments = await readJsonlFile<PrivateEvalSegment>(join(root, "segments.jsonl"));
   return {
-    evalSet: await readJsonFile<PrivateEvalSet>(join(root, "eval_set.json"), {
+    evalSet: await readEvalRecord(workspaceRoot, evalStorageKey(evalSetId, "set"), join(root, "eval_set.json"), {
       evalSetId,
       label: evalSetId,
       sourceRoot: "",
@@ -670,12 +702,12 @@ export async function createPrivateEvalRun(workspaceRoot: string, evalSetId: str
     if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`Private Eval run already exists: ${run.runId}`);
     throw error;
   }
-  await writeJsonFile(join(runRoot, "run.json"), run);
+  await writeEvalRecord(workspaceRoot, evalStorageKey(evalSetId, "run", run.runId), join(runRoot, "run.json"), run);
   return run;
 }
 
 export async function readPrivateEvalRun(workspaceRoot: string, evalSetId: string, runId: string): Promise<PrivateEvalRun> {
-  return readJsonFile<PrivateEvalRun>(join(evalRunRoot(workspaceRoot, evalSetId, runId), "run.json"), {
+  return readEvalRecord(workspaceRoot, evalStorageKey(evalSetId, "run", runId), join(evalRunRoot(workspaceRoot, evalSetId, runId), "run.json"), {
     runId,
     evalSetId,
     mode: "single_agent",
@@ -686,11 +718,14 @@ export async function readPrivateEvalRun(workspaceRoot: string, evalSetId: strin
 }
 
 export async function updatePrivateEvalRun(workspaceRoot: string, run: PrivateEvalRun): Promise<PrivateEvalRun> {
-  await writeJsonFile(join(evalRunRoot(workspaceRoot, run.evalSetId, run.runId), "run.json"), run);
+  await writeEvalRecord(workspaceRoot, evalStorageKey(run.evalSetId, "run", run.runId), join(evalRunRoot(workspaceRoot, run.evalSetId, run.runId), "run.json"), run);
   return run;
 }
 
 export async function listPrivateEvalRuns(workspaceRoot: string, evalSetId: string): Promise<PrivateEvalRun[]> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) return (await Promise.all((await persistence.list(`eval/${privateEvalId(evalSetId, "Private Eval set id")}/run/`)).map((key) => persistence.read(key)))).filter((row): row is PrivateEvalRun => Boolean(row)).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
   const runsRoot = join(evalRoot(workspaceRoot, evalSetId), "runs");
   const entries = await readdir(runsRoot, { withFileTypes: true }).catch(() => []);
   const rows = await Promise.all(entries
@@ -702,11 +737,11 @@ export async function listPrivateEvalRuns(workspaceRoot: string, evalSetId: stri
 }
 
 export async function readPrivateEvalRunOutputs(workspaceRoot: string, evalSetId: string, runId: string): Promise<PrivateEvalRunOutput[]> {
-  return readJsonlFile<PrivateEvalRunOutput>(join(evalRunRoot(workspaceRoot, evalSetId, runId), "outputs.jsonl"));
+  return readEvalRows(workspaceRoot, evalStorageKey(evalSetId, "outputs", runId), join(evalRunRoot(workspaceRoot, evalSetId, runId), "outputs.jsonl"));
 }
 
 async function writePrivateEvalRunOutputs(workspaceRoot: string, evalSetId: string, runId: string, outputs: PrivateEvalRunOutput[]): Promise<void> {
-  await writeJsonl(join(evalRunRoot(workspaceRoot, evalSetId, runId), "outputs.jsonl"), outputs);
+  await writeEvalRows(workspaceRoot, evalStorageKey(evalSetId, "outputs", runId), join(evalRunRoot(workspaceRoot, evalSetId, runId), "outputs.jsonl"), outputs);
 }
 
 /**
@@ -851,12 +886,12 @@ export async function writeHumanScorecard(workspaceRoot: string, evalSetId: stri
   const merged = new Map((await readHumanScorecard(workspaceRoot, evalSetId, runId))
     .map((row) => [`${row.segmentId}\0${row.dimension}`, row] as const));
   for (const row of cleanRows) merged.set(`${row.segmentId}\0${row.dimension}`, row);
-  await writeJsonl(path, Array.from(merged.values()));
+  await writeEvalRows(workspaceRoot, evalStorageKey(evalSetId, "scorecard", runId), path, Array.from(merged.values()));
   return path;
 }
 
 export async function readHumanScorecard(workspaceRoot: string, evalSetId: string, runId: string): Promise<HumanScoreRow[]> {
-  return readJsonlFile<HumanScoreRow>(join(evalRoot(workspaceRoot, evalSetId), "scorecards", `${privateEvalId(runId, "Private Eval run id")}.jsonl`));
+  return readEvalRows(workspaceRoot, evalStorageKey(evalSetId, "scorecard", runId), join(evalRoot(workspaceRoot, evalSetId), "scorecards", `${privateEvalId(runId, "Private Eval run id")}.jsonl`));
 }
 
 function blindReviewDirectory(workspaceRoot: string, evalSetId: string): string {
@@ -905,6 +940,13 @@ function summarizeBlindReview(stored: StoredPrivateEvalBlindReview): PrivateEval
 }
 
 export async function listPrivateEvalBlindReviews(workspaceRoot: string, evalSetId: string): Promise<PrivateEvalBlindReviewSummary[]> {
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  if (persistence) {
+    const prefix = `eval/${privateEvalId(evalSetId, "Private Eval set id")}/blind/`;
+    const rows = await Promise.all((await persistence.list(prefix)).map((key) => persistence.read(key) as Promise<StoredPrivateEvalBlindReview | null>));
+    return rows.filter((row): row is StoredPrivateEvalBlindReview => Boolean(row)).map(summarizeBlindReview).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.reviewId.localeCompare(b.reviewId));
+  }
+  await assertWorkflowEvalLegacyAllowed(workspaceRoot);
   let files: string[];
   try {
     files = (await readdir(blindReviewDirectory(workspaceRoot, evalSetId))).filter((file) => file.endsWith(".json"));
@@ -1000,7 +1042,7 @@ export async function createPrivateEvalBlindReview(workspaceRoot: string, evalSe
   });
   const stored: StoredPrivateEvalBlindReview = { reviewId, evalSetId, seed, createdAt: new Date().toISOString(), runIds: [leftId, rightId], pairs };
   return withBlindReviewMutationLock(path, async () => {
-    const existing = await readJsonFile<StoredPrivateEvalBlindReview | null>(path, null);
+    const existing = await readEvalRecord<StoredPrivateEvalBlindReview | null>(workspaceRoot, evalStorageKey(evalSetId, "blind", reviewId), path, null);
     if (existing) {
       if (
         existing.seed !== seed
@@ -1011,19 +1053,19 @@ export async function createPrivateEvalBlindReview(workspaceRoot: string, evalSe
       }
       return presentBlindReview(workspaceRoot, existing);
     }
-    await writeJsonFile(path, stored);
-    return presentBlindReview(workspaceRoot, await readJsonFile(path, stored));
+    await writeEvalRecord(workspaceRoot, evalStorageKey(evalSetId, "blind", reviewId), path, stored);
+    return presentBlindReview(workspaceRoot, await readEvalRecord(workspaceRoot, evalStorageKey(evalSetId, "blind", reviewId), path, stored));
   });
 }
 
 export async function readPrivateEvalBlindReview(workspaceRoot: string, evalSetId: string, reviewId: string): Promise<PrivateEvalBlindReview> {
-  const stored = await readJsonFile<StoredPrivateEvalBlindReview | null>(blindReviewPath(workspaceRoot, evalSetId, reviewId), null);
+  const stored = await readEvalRecord<StoredPrivateEvalBlindReview | null>(workspaceRoot, evalStorageKey(evalSetId, "blind", reviewId), blindReviewPath(workspaceRoot, evalSetId, reviewId), null);
   if (!stored) throw new Error(`Blind review not found: ${reviewId}`);
   return presentBlindReview(workspaceRoot, stored);
 }
 
 export async function readPrivateEvalBlindReviewRunIds(workspaceRoot: string, evalSetId: string, reviewId: string): Promise<[string, string]> {
-  const stored = await readJsonFile<StoredPrivateEvalBlindReview | null>(blindReviewPath(workspaceRoot, evalSetId, reviewId), null);
+  const stored = await readEvalRecord<StoredPrivateEvalBlindReview | null>(workspaceRoot, evalStorageKey(evalSetId, "blind", reviewId), blindReviewPath(workspaceRoot, evalSetId, reviewId), null);
   if (!stored) throw new Error(`Blind review not found: ${reviewId}`);
   return stored.runIds;
 }
@@ -1031,7 +1073,7 @@ export async function readPrivateEvalBlindReviewRunIds(workspaceRoot: string, ev
 export async function writePrivateEvalBlindJudgments(workspaceRoot: string, evalSetId: string, reviewId: string, rows: Array<Omit<PrivateEvalBlindJudgment, "judgedAt"> & { judgedAt?: string }>): Promise<PrivateEvalBlindReview> {
   const path = blindReviewPath(workspaceRoot, evalSetId, reviewId);
   return withBlindReviewMutationLock(path, async () => {
-    const stored = await readJsonFile<StoredPrivateEvalBlindReview | null>(path, null);
+    const stored = await readEvalRecord<StoredPrivateEvalBlindReview | null>(workspaceRoot, evalStorageKey(evalSetId, "blind", reviewId), path, null);
     if (!stored) throw new Error(`Blind review not found: ${reviewId}`);
     const pairs = new Map(stored.pairs.map((pair) => [pair.pairId, pair]));
     for (const row of rows) {
@@ -1046,7 +1088,7 @@ export async function writePrivateEvalBlindJudgments(workspaceRoot: string, eval
       if (row.comment !== undefined && typeof row.comment !== "string") throw new Error("Blind review comment must be a string.");
       pair.judgment = { ...row, comment: row.comment?.trim() || undefined, judgedAt: new Date().toISOString() };
     }
-    await writeJsonFile(path, stored);
+    await writeEvalRecord(workspaceRoot, evalStorageKey(evalSetId, "blind", reviewId), path, stored);
     return presentBlindReview(workspaceRoot, stored);
   });
 }
@@ -1075,8 +1117,10 @@ function formatUsage(run: PrivateEvalRun): string {
 export async function renderPrivateEvalComparison(workspaceRoot: string, evalSetId: string, comparisonId = `comparison-${randomUUID()}`): Promise<{ markdown: string; reportPath: string }> {
   const payload = await readPrivateEvalSet(workspaceRoot, evalSetId);
   const scorecardDir = join(evalRoot(workspaceRoot, evalSetId), "scorecards");
-  const files = (await readdir(scorecardDir).catch(() => [])).filter((file) => file.endsWith(".jsonl"));
-  const rows = (await Promise.all(files.map((file) => readJsonlFile<HumanScoreRow>(join(scorecardDir, file))))).flat();
+  const persistence = workflowEvalPersistenceFor(workspaceRoot);
+  const rows = persistence
+    ? (await Promise.all((await persistence.list(`eval/${privateEvalId(evalSetId, "Private Eval set id")}/scorecard/`)).map((key) => persistence.read(key) as Promise<HumanScoreRow[] | null>))).flatMap((value) => value ?? [])
+    : (await assertWorkflowEvalLegacyAllowed(workspaceRoot), (await Promise.all((await readdir(scorecardDir).catch(() => [])).filter((file) => file.endsWith(".jsonl")).map((file) => readJsonlFile<HumanScoreRow>(join(scorecardDir, file))))).flat());
   const runs = await listPrivateEvalRuns(workspaceRoot, evalSetId);
   const outputsByRun = new Map<string, PrivateEvalRunOutput[]>();
   await Promise.all(runs.map(async (run) => {

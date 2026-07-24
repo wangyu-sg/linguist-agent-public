@@ -43,17 +43,9 @@ try {
     scope: "global" as const,
   };
   const standard = await resolveTeamChildPackageExecution([baseResource]);
-  assert.equal(standard.mode, "pi_rpc_v1");
-  assert.deepEqual(standard.blockers, []);
-  assert.deepEqual(standard.provenance, {
-    kind: "package_extension",
-    transport: "pi-rpc-v1",
-    packageSource: "npm:example-package@1.2.3",
-    packageName: "example-package",
-    packageVersion: "1.2.3",
-    resourceId: "standard-ui.ts",
-    integrity: baseResource.integrity,
-  });
+  assert.equal(standard.mode, "blocked");
+  assert.match(standard.blockers.join("\n"), /Stable Team Runs do not load third-party executable Package Extensions/);
+  assert.equal(standard.provenance, undefined);
 
   const unsupported = await resolveTeamChildPackageExecution([{
     ...baseResource,
@@ -62,14 +54,14 @@ try {
     integrity: `sha256-${createHash("sha256").update(await readFile(unsupportedExtension)).digest("base64")}`,
   }]);
   assert.equal(unsupported.mode, "blocked");
-  assert.match(unsupported.blockers.join("\n"), /custom UI/i);
+  assert.match(unsupported.blockers.join("\n"), /Stable Team Runs do not load third-party executable Package Extensions/);
 
   const ambiguous = await resolveTeamChildPackageExecution([
     baseResource,
     { ...baseResource, packageSource: "npm:another@1.0.0", packageName: "another", resourceId: "another.ts" },
   ]);
   assert.equal(ambiguous.mode, "blocked");
-  assert.match(ambiguous.blockers.join("\n"), /one executable Package extension/i);
+  assert.match(ambiguous.blockers.join("\n"), /Stable Team Runs do not load third-party executable Package Extensions/);
 
   const noExtension = await resolveTeamChildPackageExecution([{ ...baseResource, resourceType: "skill", executable: false }]);
   assert.equal(noExtension.mode, "pi_rpc_v1");
@@ -275,7 +267,7 @@ You are the Producer. Return only the role JSON.
   });
   process.env.FAKE_UI_RESPONSE_LOG = responseLog;
   process.env.FAKE_ARGS_LOG = argsLog;
-  const workflowHandle = await startWorkflowTeamChildRpc({
+  await assert.rejects(startWorkflowTeamChildRpc({
     repoRoot: root,
     roleId: "producer",
     workflowId: "workflow-one",
@@ -311,6 +303,44 @@ You are the Producer. Return only the role JSON.
     },
     verifiedPiBinaryPath: fakePi,
     uiContext,
+  }), /Stable Team Runs do not load third-party executable Package Extensions/);
+
+  const workflowHandle = await startWorkflowTeamChildRpc({
+    repoRoot: root,
+    roleId: "producer",
+    workflowId: "workflow-one",
+    request: {
+      protocol: "pi-subagents-rpc-v1",
+      method: "spawn",
+      params: {
+        agent: "la-team-producer",
+        task: "Run the Producer role.",
+        context: "fresh",
+        agentScope: "project",
+        async: true,
+        clarify: false,
+        artifacts: true,
+        acceptance: { level: "none", reason: "Typed output validation." },
+        output: "data/team-role-outputs/test.json",
+        outputMode: "file-only",
+        sessionDir: scoped.sessionDir,
+        model: "example/model",
+      },
+    },
+    taskPackageResources: {
+      profileRevision: 1,
+      profileHash: "sha256-profile",
+      selections: [],
+      resolvedResources: [skillResource, promptResource],
+      isolatedResources: {
+        extensionPaths: [],
+        skillPaths: [skillPath],
+        promptTemplatePaths: [promptPath],
+      },
+      packages: [],
+    },
+    verifiedPiBinaryPath: fakePi,
+    uiContext,
   });
   createdAsyncDirs.push(workflowHandle.asyncDir);
   assert.equal((await workflowHandle.completion).state, "complete");
@@ -318,11 +348,7 @@ You are the Producer. Return only the role JSON.
   assert.deepEqual(workflowArgs.slice(0, 2), ["--mode", "rpc"]);
   assert.equal(workflowArgs.includes("--no-context-files"), true);
   assert.equal(workflowArgs.includes(join(extensionDir, "team-evidence-child.ts")), true);
-  assert.equal(workflowArgs.includes(standardExtension), true);
-  assert.ok(
-    workflowArgs.indexOf(join(extensionDir, "team-evidence-child.ts")) > workflowArgs.indexOf(standardExtension),
-    "the server-owned evidence guard must load after Package hooks",
-  );
+  assert.equal(workflowArgs.includes(standardExtension), false);
   assert.equal(workflowArgs.includes(skillPath), true);
   assert.equal(workflowArgs.includes(promptPath), true);
   const systemPromptIndex = workflowArgs.indexOf("--system-prompt");

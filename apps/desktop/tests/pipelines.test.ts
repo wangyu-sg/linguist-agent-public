@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveWorkspaceCapabilityRequest } from "../src/workspace-capabilities.cjs";
 import {
   executeCanonicalPipelineAction,
   type CanonicalPipelineClient,
@@ -157,7 +158,8 @@ test("workspace client calls the canonical pipeline routes and never requests a 
     value: {
       linguist: {
         api: {
-          request: async (request: { method: string; path: string; body?: unknown }) => {
+          invokeWorkspaceCapability: async (input: unknown) => {
+            const request = resolveWorkspaceCapabilityRequest(input);
             requests.push(request);
             return { ok: true, status: 200, data: request.path.includes("/runs") ? { run: { runId: "eval-one" }, outputs: [] } : {} };
           },
@@ -272,7 +274,8 @@ test("workspace client reads the canonical Eval authoring state instead of creat
     value: {
       linguist: {
         api: {
-          request: async (request: { method: string; path: string; body?: unknown }) => {
+          invokeWorkspaceCapability: async (input: unknown) => {
+            const request = resolveWorkspaceCapabilityRequest(input);
             requests.push(request);
             return { ok: true, status: 200, data: { rows: [] } };
           },

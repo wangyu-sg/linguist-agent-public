@@ -46,7 +46,8 @@ assert.deepEqual(
   result.diagnostics.map((diagnostic) => diagnostic.code).sort(),
   ["project_batch_unreadable", "project_manifest_unreadable"],
 );
-assert.ok(result.diagnostics.every((diagnostic) => diagnostic.path?.startsWith(root)));
+assert.ok(result.diagnostics.every((diagnostic) => diagnostic.path === "[REDACTED_PATH]"));
+assert.ok(result.diagnostics.every((diagnostic) => diagnostic.schemaVersion === 1));
 
 await appendServerDiagnostics(root, result.diagnostics);
 const persisted = await readServerDiagnostics(root);

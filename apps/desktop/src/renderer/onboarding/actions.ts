@@ -2,26 +2,27 @@ import type {
   BatchImportResponse,
   CreateProjectInput,
   CreateProjectResponse,
+  NativeFileHandle,
 } from "../data/workspace-client.ts";
 
 export interface ProjectDraft {
   name: string;
   sourceLocale: string;
   targetLocale: string;
-  folderPath?: string;
+  folderHandle?: NativeFileHandle;
 }
 
 export interface NewProjectDependencies {
-  pickProjectFolder(): Promise<string | null>;
+  pickProjectFolder(): Promise<NativeFileHandle | null>;
   createProject(input: CreateProjectInput): Promise<CreateProjectResponse>;
   refreshProjects(): Promise<void>;
   selectProject(projectId: string): Promise<void>;
-  onFolderSelected?(path: string): void;
+  onFolderSelected?(handle: NativeFileHandle): void;
 }
 
 export type NewProjectResult =
   | { status: "cancelled" }
-  | { status: "created"; projectId: string; folderPath: string };
+  | { status: "created"; projectId: string; folder: NativeFileHandle };
 
 function required(value: string, label: string): string {
   const trimmed = value.trim();
@@ -36,17 +37,17 @@ export async function createProjectFromPicker(
   const projectName = required(draft.name, "项目名称");
   const sourceLanguage = required(draft.sourceLocale, "源语言");
   const targetLanguage = required(draft.targetLocale, "目标语言");
-  const folderPath = draft.folderPath?.trim() || await dependencies.pickProjectFolder();
-  if (!folderPath) return { status: "cancelled" };
-  dependencies.onFolderSelected?.(folderPath);
-  const created = await dependencies.createProject({ rootPath: folderPath, projectName, sourceLanguage, targetLanguage });
+  const folder = draft.folderHandle ?? await dependencies.pickProjectFolder();
+  if (!folder) return { status: "cancelled" };
+  dependencies.onFolderSelected?.(folder);
+  const created = await dependencies.createProject({ rootHandle: folder, projectName, sourceLanguage, targetLanguage });
   await dependencies.refreshProjects();
   await dependencies.selectProject(created.manifest.projectId);
-  return { status: "created", projectId: created.manifest.projectId, folderPath };
+  return { status: "created", projectId: created.manifest.projectId, folder };
 }
 
 export interface BatchImportFileResult {
-  filePath: string;
+  file: NativeFileHandle;
   status: "imported" | "failed";
   batchId?: string;
   segmentCount?: number;
@@ -70,8 +71,8 @@ export function shouldDismissBatchImport(outcome: BatchImportOutcome): boolean {
 }
 
 export interface ImportBatchDependencies {
-  pickImportFiles(): Promise<string[]>;
-  importBatch(projectId: string, filePath: string): Promise<BatchImportResponse>;
+  pickImportFiles(): Promise<NativeFileHandle[]>;
+  importBatch(projectId: string, file: NativeFileHandle): Promise<BatchImportResponse>;
   refreshProjects(): Promise<void>;
   openBatch(projectId: string, batchId: string): Promise<void>;
 }
@@ -88,18 +89,18 @@ export async function importBatchesFromPicker(
   if (!files.length) return { results: [] };
   const results: BatchImportFileResult[] = [];
   let lastImported: BatchImportResponse | undefined;
-  for (const filePath of files) {
+  for (const file of files) {
     try {
-      const imported = await dependencies.importBatch(projectId, filePath);
+      const imported = await dependencies.importBatch(projectId, file);
       lastImported = imported;
       results.push({
-        filePath,
+        file,
         status: "imported",
         batchId: imported.batch.batchId,
         segmentCount: imported.batch.segments.length,
       });
     } catch (error) {
-      results.push({ filePath, status: "failed", message: errorMessage(error) });
+      results.push({ file, status: "failed", message: errorMessage(error) });
     }
   }
   if (!lastImported) return { results };

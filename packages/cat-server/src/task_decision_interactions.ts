@@ -3,6 +3,7 @@ import {
   type TaskDecision,
   type TaskRunEventDraft,
 } from "@linguist-agent/cat-data";
+import { taskDecisionBindingIssue } from "./task_decision_binding.js";
 import { TaskDecisionExecutionError } from "./task_decision_executor.js";
 
 type InteractionAction = "submit" | "elaborate" | "cancel";
@@ -143,6 +144,14 @@ export async function executeTaskDecisionInteraction(input: {
   const run = snapshot.runs.find((candidate) => candidate.id === runId);
   if (action !== "cancel" && (!run || ["stopping", "stopped", "failed", "stale", "complete"].includes(run.status))) {
     throw new TaskDecisionExecutionError(409, `Decision interaction ${interactionId} is no longer active.`);
+  }
+  if (action !== "cancel") {
+    for (const decision of interaction.filter((candidate) => candidate.status === "required")) {
+      const bindingIssue = taskDecisionBindingIssue(decision, { runPlanHash: run?.planHash, now: new Date() });
+      if (bindingIssue) {
+        throw new TaskDecisionExecutionError(409, `Decision ${decision.id} must be recreated before execution (${bindingIssue}).`);
+      }
+    }
   }
 
   const answers = action === "cancel" ? [] : parseAnswers(body.answers);

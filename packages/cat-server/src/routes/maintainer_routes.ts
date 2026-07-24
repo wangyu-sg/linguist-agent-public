@@ -49,6 +49,8 @@ export interface MaintainerRouteDeps {
   repoRoot: string;
   json: (res: ServerResponse, status: number, data: unknown) => void;
   readBody: (req: IncomingMessage) => Promise<unknown>;
+  /** Explicit development/test capability. Stable composition must omit it. */
+  allowExecution?: boolean;
   acquireCapabilityMutation?: () => (() => void) | undefined;
   preview?: (input: Parameters<typeof previewMaintenance>[0]) => Promise<MaintenancePlan>;
   build?: (input: Parameters<typeof buildMaintenanceCandidate>[0]) => Promise<MaintenanceCandidate>;
@@ -224,6 +226,15 @@ export async function handleMaintainerRoute(
 ): Promise<boolean> {
   if (parts[0] !== "api" || parts[1] !== "tasks" || !parts[2] || parts[3] !== "maintenance") return false;
   const taskId = decodeURIComponent(parts[2]);
+  if (req.method !== "GET" && deps.allowExecution !== true) {
+    deps.json(res, 403, {
+      error: {
+        code: "maintainer_disabled_in_stable",
+        message: "Runtime Maintainer execution is unavailable in Stable. Existing Task history remains read-only.",
+      },
+    });
+    return true;
+  }
   try {
     if (parts[4] === "preview" && parts.length === 5 && req.method === "POST") {
       const before = await createTaskWorkspace(deps.repoRoot).open({ kind: "standalone", taskId });

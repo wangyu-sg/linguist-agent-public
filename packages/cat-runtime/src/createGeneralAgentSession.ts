@@ -6,7 +6,6 @@ import {
   createAgentSession,
   createAgentSessionRuntime,
   DefaultResourceLoader,
-  getAgentDir,
   ModelRuntime,
   SessionManager,
   SettingsManager,
@@ -14,17 +13,17 @@ import {
   type CreateAgentSessionRuntimeFactory,
 } from "@earendil-works/pi-coding-agent";
 import {
-  formatAssistantMemoryRecall,
-  listAssistantMemories,
-  resolveStandaloneFileGrantAccess,
   standaloneTaskSessionRoot,
+  type AssistantMemoryPersistence,
   type FileGrantV1,
+  type LibraryPersistence,
 } from "@linguist-agent/cat-data";
-import { createAssistantLibraryTools, createAssistantMemoryTools, createStandaloneDocumentTools } from "@linguist-agent/cat-tools";
+import { createAssistantLibraryTools, createAssistantMemoryTools, createPresentAnswerTool, createStandaloneDocumentTools, createUpdatePlanTool } from "@linguist-agent/cat-tools";
 import { applySharedPiRuntimeOverrides } from "./piRuntimeOverrides.js";
 import { normalizePiRuntimeModel } from "./modelCompat.js";
 import { createGeneralRuntimeExtension } from "./generalRuntimeExtension.js";
 import { createGeneralDelegationTool, type GeneralDelegationRequest, type GeneralDelegationResult } from "./generalDelegation.js";
+import { routeDocumentWithPolicy } from "./documentRouter.js";
 import {
   CAPABILITY_SEARCH_TOOL,
   createDynamicToolLoadingExtension,
@@ -32,8 +31,16 @@ import {
 } from "./dynamicToolLoading.js";
 import { createGeneralSandboxedBashTool } from "./generalSandbox.js";
 import {
-  buildGeneralResourceSnapshot,
+  assertGeneralAgentSessionPlan,
+  GENERAL_BUILTIN_TOOL_NAMES,
+  GENERAL_READ_ONLY_TOOL_NAMES,
+  prepareGeneralAgentSessionPlan,
+  resolveGeneralSessionPlanAccess,
+  type GeneralAgentSessionPlanV1,
+} from "./generalSessionPlan.js";
+import {
   verifyGeneralResourceSnapshot,
+  type AuthorizedExtensionStage,
   type GeneralResourceSnapshot,
   type GeneralResourceSnapshotEntry,
 } from "./generalResourceSnapshot.js";
@@ -42,11 +49,9 @@ import type {
   AgentPermissionRequest,
   AgentPermissionUserDecision,
 } from "./agentPermissions.js";
+import { assertProductionToolCapabilities } from "./toolCapabilities.js";
 
 const builtinModelCatalog = builtinModels();
-const GENERAL_BUILTIN_TOOLS = ["read", "grep", "find", "ls", "edit", "write", "bash"] as const;
-const GENERAL_READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
-
 export interface GeneralResourceInventory {
   extensions: Array<{
     path: string;
@@ -95,7 +100,7 @@ export interface CreateGeneralAgentSessionOptions {
   /** Pi project trust resolved by the server before any working-directory resource is loaded. */
   projectTrusted?: boolean;
   /** Required before previously unknown user/global Extension bytes may be evaluated. */
-  authorizeExecutableExtensions?: (request: GeneralExecutableExtensionAuthorizationRequest) => Promise<void>;
+  authorizeExecutableExtensions?: (request: GeneralExecutableExtensionAuthorizationRequest) => Promise<AuthorizedExtensionStage[] | void>;
   /** Server-authored Pi session file selected by a canonical AgentThread. */
   sessionFile?: string;
   /** Server-authored context copied explicitly through a context_handoff Artifact. */
@@ -110,6 +115,14 @@ export interface CreateGeneralAgentSessionOptions {
     themes: string[];
   };
   delegate?: (request: GeneralDelegationRequest, signal?: AbortSignal) => Promise<GeneralDelegationResult>;
+  /** Host-authored immutable preflight. Supplying it prevents resource/settings rediscovery. */
+  preparedPlan?: GeneralAgentSessionPlanV1;
+  assistantMemoryStore?: AssistantMemoryPersistence;
+  libraryPersistence?: LibraryPersistence;
+  /** Host-owned canonical agent_plan writer crossing the Worker bridge; unavailable sessions reject at execution time. */
+  submitAgentPlan?: (payload: unknown) => Promise<unknown>;
+  /** Host-owned canonical agent_present writer crossing the Worker bridge; unavailable sessions reject at execution time. */
+  submitAgentPresent?: (payload: unknown) => Promise<unknown>;
 }
 
 export interface CreateGeneralAgentSessionResult {
@@ -178,48 +191,70 @@ async function openOrCreateSession(
 export async function createGeneralAgentSession(
   options: CreateGeneralAgentSessionOptions,
 ): Promise<CreateGeneralAgentSessionResult> {
-  const access = await resolveStandaloneFileGrantAccess(options.runtimeRoot, options.taskId);
-  const confirmedMemory = formatAssistantMemoryRecall(await listAssistantMemories(options.runtimeRoot, { kind: "personal" }));
-  const agentDir = options.agentDir ?? getAgentDir();
-  const sessionIdSuffix = options.sessionIdSuffix?.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 64);
-  const sessionId = `${generalAgentSessionId(options.taskId, access.workingDirectory)}${sessionIdSuffix ? `-${sessionIdSuffix}` : ""}`;
+  const preparedPlan = options.preparedPlan ?? await prepareGeneralAgentSessionPlan({
+    runtimeRoot: options.runtimeRoot,
+    taskId: options.taskId,
+    runId: options.runId,
+    rootAgentThreadId: options.rootAgentThreadId,
+    sessionIdSuffix: options.sessionIdSuffix,
+    readOnlyChild: options.readOnlyChild,
+    agentDir: options.agentDir,
+    modelProvider: options.modelProvider,
+    modelId: options.modelId,
+    thinkingLevel: options.thinkingLevel,
+    permissionContract: options.permissionContract,
+    projectTrusted: options.projectTrusted,
+    sessionFile: options.sessionFile,
+    contextHandoffs: options.contextHandoffs,
+    delegationEnabled: Boolean(options.delegate),
+    managedResources: options.managedResources,
+    assistantMemoryStore: options.assistantMemoryStore,
+  });
+  assertGeneralAgentSessionPlan(preparedPlan);
+  if (preparedPlan.runtimeRoot !== options.runtimeRoot
+    || preparedPlan.taskId !== options.taskId
+    || preparedPlan.runId !== options.runId
+    || preparedPlan.rootAgentThreadId !== options.rootAgentThreadId
+    || preparedPlan.sessionIdSuffix !== options.sessionIdSuffix
+    || preparedPlan.readOnlyChild !== (options.readOnlyChild === true)
+    || preparedPlan.agentDir !== (options.agentDir ?? preparedPlan.agentDir)
+    || preparedPlan.modelProvider !== options.modelProvider
+    || preparedPlan.modelId !== options.modelId
+    || preparedPlan.thinkingLevel !== options.thinkingLevel
+    || JSON.stringify(preparedPlan.permissionContract) !== JSON.stringify(options.permissionContract)
+    || preparedPlan.projectTrusted !== (options.projectTrusted === true)
+    || preparedPlan.sessionFile !== options.sessionFile
+    || JSON.stringify(preparedPlan.contextHandoffs) !== JSON.stringify(options.contextHandoffs ?? [])
+    || preparedPlan.delegationEnabled !== Boolean(options.delegate)) {
+    throw new Error("General session preparation plan does not match the requested session identity or capabilities.");
+  }
+  const access = preparedPlan.access;
+  const confirmedMemory = preparedPlan.confirmedMemory;
+  const agentDir = preparedPlan.agentDir;
+  const sessionIdSuffix = preparedPlan.sessionIdSuffix?.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 64);
+  const sessionId = `${generalAgentSessionId(preparedPlan.taskId, access.workingDirectory)}${sessionIdSuffix ? `-${sessionIdSuffix}` : ""}`;
   const model = normalizePiRuntimeModel(
-    options.modelProvider && options.modelId
-      ? options.modelRuntime.getModel(options.modelProvider, options.modelId)
-        ?? builtinModelCatalog.getModel(options.modelProvider, options.modelId)
+    preparedPlan.modelProvider && preparedPlan.modelId
+      ? options.modelRuntime.getModel(preparedPlan.modelProvider, preparedPlan.modelId)
+        ?? builtinModelCatalog.getModel(preparedPlan.modelProvider, preparedPlan.modelId)
       : undefined,
   );
   let activeSessionId: string | undefined = sessionId;
   const sessionManager = await openOrCreateSession(
     access.workingDirectory,
-    standaloneTaskSessionRoot(options.runtimeRoot, options.taskId),
+    standaloneTaskSessionRoot(preparedPlan.runtimeRoot, preparedPlan.taskId),
     sessionId,
-    options.sessionFile,
+    preparedPlan.sessionFile,
   );
   let inventory: GeneralResourceInventory | undefined;
-  let resourceSnapshot: GeneralResourceSnapshot | undefined;
+  const resourceSnapshot: GeneralResourceSnapshot = preparedPlan.resourceSnapshot;
+  if (resourceSnapshot.extensionPaths.length > 0) {
+    throw new Error("External executable Extensions must use the isolated Extension Host; direct Pi loader execution is disabled.");
+  }
   const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager: nextSessionManager, sessionStartEvent }) => {
     if (cwd !== access.workingDirectory) throw new Error(`General Chat runtime cannot switch outside its authorized working directory: ${cwd}`);
-    const nextSettings = SettingsManager.create(cwd, agentDir, { projectTrusted: options.projectTrusted === true });
+    const nextSettings = SettingsManager.create(cwd, agentDir, { projectTrusted: preparedPlan.projectTrusted });
     applySharedPiRuntimeOverrides(nextSettings);
-    if (!resourceSnapshot) {
-      const candidate = await buildGeneralResourceSnapshot({
-        cwd,
-        agentDir,
-        settingsManager: nextSettings,
-        projectTrusted: options.projectTrusted === true,
-        includeExecutableExtensions: options.readOnlyChild !== true,
-        managedResources: options.managedResources,
-      });
-      const executableExtensions = candidate.entries.filter((entry) => entry.type === "extension" && entry.scope === "user");
-      if (executableExtensions.length) {
-        if (!options.authorizeExecutableExtensions) {
-          throw new Error("General Chat found executable user Pi Extensions, but no pre-execution trust channel is available.");
-        }
-        await options.authorizeExecutableExtensions({ extensions: executableExtensions, resourceSetHash: candidate.resourceSetHash });
-      }
-      resourceSnapshot = candidate;
-    }
     await verifyGeneralResourceSnapshot(resourceSnapshot);
     // Resource discovery is resolved above without evaluating code. The loader
     // receives only the exact, approved snapshot paths so Settings/package
@@ -234,7 +269,6 @@ export async function createGeneralAgentSession(
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
-      additionalExtensionPaths: resourceSnapshot.extensionPaths,
       additionalSkillPaths: resourceSnapshot.skillPaths,
       additionalPromptTemplatePaths: resourceSnapshot.promptPaths,
       additionalThemePaths: resourceSnapshot.themePaths,
@@ -243,14 +277,16 @@ export async function createGeneralAgentSession(
       appendSystemPrompt: resourceSnapshot.appendSystemPrompt,
       extensionFactories: [
         createGeneralRuntimeExtension({
-          access: () => resolveStandaloneFileGrantAccess(options.runtimeRoot, options.taskId),
-          contract: options.permissionContract,
+          access: () => resolveGeneralSessionPlanAccess(preparedPlan),
+          contract: preparedPlan.permissionContract,
+          taskId: preparedPlan.taskId,
+          runId: preparedPlan.runId,
           sessionId: () => activeSessionId,
           requestDecision: options.requestPermissionDecision,
         }),
-        ...(options.readOnlyChild ? [] : [createDynamicToolLoadingExtension({
+        ...(preparedPlan.readOnlyChild ? [] : [createDynamicToolLoadingExtension({
           initialToolNames: [
-            ...GENERAL_BUILTIN_TOOLS,
+            ...GENERAL_BUILTIN_TOOL_NAMES,
             "assistant_memory_search",
             "assistant_memory_propose",
             "assistant_library_search",
@@ -274,12 +310,18 @@ export async function createGeneralAgentSession(
           "- Never probe outside these roots. Ask the host for a file or directory grant when more access is needed.",
           "- Use inherited Pi Extensions, Skills, Prompts, context files, and Package tools when relevant; obey host permission Decisions and never route around a denial.",
           "- Produce inspectable files and Artifacts for durable work instead of claiming completion from prose alone.",
-          options.readOnlyChild
+          preparedPlan.runId && preparedPlan.rootAgentThreadId && !preparedPlan.readOnlyChild
+            ? "- For multi-step work, keep one visible work plan current with agent_plan_update (activate it via capability_search first); users watch that plan in the timeline."
+            : undefined,
+          preparedPlan.runId && preparedPlan.rootAgentThreadId && !preparedPlan.readOnlyChild
+            ? "- When an answer is easier to scan as a table, chart, or diff, present it with agent_present (activate it via capability_search first) so it renders as a card in the timeline."
+            : undefined,
+          preparedPlan.readOnlyChild
             ? "- You are a delegated child Agent. You may only read explicitly granted local material and return analysis. File writes, shell/process execution, network/bridge use, UI requests, further delegation, and external side effects are forbidden."
             : "- Use delegate_agent for a bounded independent read-only subtask when delegation adds real leverage; verify and synthesize the child result yourself.",
-          confirmedMemory || "- No explicitly confirmed Personal memory is active for this Chat.",
-          options.contextHandoffs?.length
-            ? `- Explicit context handoff(s) accepted by the user:\n${options.contextHandoffs.join("\n\n---\n\n")}`
+          confirmedMemory || "- No host-selected Confirmed Memory was attached to this Run. Use assistant_memory_search for scoped recall.",
+          preparedPlan.contextHandoffs.length
+            ? `- Explicit context handoff(s) accepted by the user:\n${preparedPlan.contextHandoffs.join("\n\n---\n\n")}`
             : undefined,
         ].filter(Boolean).join("\n"),
       ],
@@ -290,41 +332,75 @@ export async function createGeneralAgentSession(
     if (fatalExtensionErrors.length) {
       throw new Error(`Pi Extension loading failed: ${fatalExtensionErrors.map(({ path, error }) => `${path}: ${error}`).join("; ")}`);
     }
-    const memoryTools = createAssistantMemoryTools({ runtimeRoot: options.runtimeRoot, scope: { kind: "personal" }, sourceTaskId: options.taskId, personalOnly: true })
-      .filter((tool) => !options.readOnlyChild || tool.name === "assistant_memory_search");
-    const libraryTools = createAssistantLibraryTools({ runtimeRoot: options.runtimeRoot, scope: { kind: "personal" } });
-    const documentTools = options.runId && options.rootAgentThreadId
-      && !options.readOnlyChild
-      ? createStandaloneDocumentTools({ runtimeRoot: options.runtimeRoot, taskId: options.taskId, runId: options.runId, agentThreadId: options.rootAgentThreadId })
+    const memoryTools = createAssistantMemoryTools({ runtimeRoot: preparedPlan.runtimeRoot, scope: { kind: "personal" }, sourceTaskId: preparedPlan.taskId, personalOnly: true, store: options.assistantMemoryStore })
+      .filter((tool) => !preparedPlan.readOnlyChild || tool.name === "assistant_memory_search");
+    const libraryTools = createAssistantLibraryTools({ runtimeRoot: preparedPlan.runtimeRoot, scope: { kind: "personal" }, persistence: options.libraryPersistence });
+    const documentTools = preparedPlan.runId && preparedPlan.rootAgentThreadId
+      && !preparedPlan.readOnlyChild
+      ? createStandaloneDocumentTools({
+        runtimeRoot: preparedPlan.runtimeRoot,
+        taskId: preparedPlan.taskId,
+        runId: preparedPlan.runId,
+        agentThreadId: preparedPlan.rootAgentThreadId,
+        routeDocument: ({ sourcePath, useOrientation }) => routeDocumentWithPolicy({ runtimeRoot: preparedPlan.runtimeRoot, taskId: preparedPlan.taskId, sourcePath, useOrientation }),
+      })
       : [];
-    const delegationTools = options.delegate && !options.readOnlyChild ? [createGeneralDelegationTool(options.delegate)] : [];
-    const builtinTools = options.readOnlyChild ? GENERAL_READ_ONLY_TOOLS : GENERAL_BUILTIN_TOOLS;
+    const delegationTools = options.delegate && !preparedPlan.readOnlyChild ? [createGeneralDelegationTool(options.delegate)] : [];
+    const planTools = preparedPlan.runId && preparedPlan.rootAgentThreadId && !preparedPlan.readOnlyChild
+      ? [createUpdatePlanTool({
+          submitPlan: options.submitAgentPlan ?? (async () => { throw new Error("Agent plan updates are unavailable in this Session."); }),
+        })]
+      : [];
+    const presentTools = preparedPlan.runId && preparedPlan.rootAgentThreadId && !preparedPlan.readOnlyChild
+      ? [createPresentAnswerTool({
+          submitPresentation: options.submitAgentPresent ?? (async () => { throw new Error("Agent presentations are unavailable in this Session."); }),
+        })]
+      : [];
+    const builtinTools = preparedPlan.readOnlyChild ? GENERAL_READ_ONLY_TOOL_NAMES : GENERAL_BUILTIN_TOOL_NAMES;
     const result = await createAgentSession({
       cwd,
       modelRuntime: options.modelRuntime,
       model,
-      thinkingLevel: options.thinkingLevel,
+      thinkingLevel: preparedPlan.thinkingLevel,
       sessionManager: nextSessionManager,
       settingsManager: nextSettings,
       resourceLoader,
       customTools: [
-        ...(options.readOnlyChild ? [] : [createGeneralSandboxedBashTool(access)]),
+        ...(preparedPlan.readOnlyChild ? [] : [createGeneralSandboxedBashTool(access)]),
         ...memoryTools,
         ...libraryTools,
         ...documentTools,
         ...delegationTools,
+        ...planTools,
+        ...presentTools,
       ],
       sessionStartEvent,
     });
+    try {
+      assertProductionToolCapabilities(result.session.getAllTools().map((tool) => tool.name));
+    } catch (error) {
+      result.session.dispose();
+      throw error;
+    }
     result.session.setActiveToolsByName([
       ...new Set([
         ...builtinTools,
-        ...(options.readOnlyChild ? [] : [CAPABILITY_SEARCH_TOOL]),
+        ...(preparedPlan.readOnlyChild ? [] : [CAPABILITY_SEARCH_TOOL]),
         ...memoryTools.map((tool) => tool.name),
         ...libraryTools.map((tool) => tool.name),
         ...delegationTools.map((tool) => tool.name),
       ]),
     ]);
+    const actualActiveToolNames = result.session.getActiveToolNames();
+    if (JSON.stringify(actualActiveToolNames) !== JSON.stringify(preparedPlan.initialActiveToolNames)) {
+      result.session.dispose();
+      throw new Error("General session active tool surface differs from its immutable preparation plan.");
+    }
+    const actualRegisteredToolNames = result.session.getAllTools().map((tool) => tool.name).sort();
+    if (JSON.stringify(actualRegisteredToolNames) !== JSON.stringify(preparedPlan.registeredToolNames)) {
+      result.session.dispose();
+      throw new Error(`General session registered tool surface differs from its immutable preparation plan: expected ${JSON.stringify(preparedPlan.registeredToolNames)}, received ${JSON.stringify(actualRegisteredToolNames)}.`);
+    }
     activeSessionId = result.session.sessionId;
     const entryByPath = new Map(resourceSnapshot.entries.map((entry) => [resolve(entry.resolvedPath), entry]));
     inventory = {
@@ -376,7 +452,7 @@ export async function createGeneralAgentSession(
       activeToolNames: session.getActiveToolNames(),
       entries: resourceSnapshot?.entries ?? [],
       conflicts: [],
-      resourceSetHash: resourceSnapshot?.resourceSetHash ?? createHash("sha256").update("[]").digest("hex"),
+      resourceSetHash: resourceSnapshot.resourceSetHash,
     },
   };
 }

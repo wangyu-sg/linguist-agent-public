@@ -9,6 +9,7 @@ import {
 } from "./batch_workspace.js";
 import { createWorkspace, readJsonFile, workspacePath, writeJsonFile } from "./workspace.js";
 import { assertChangeEvidenceAllowed } from "./write_policy.js";
+import { assertCatGovernanceLegacyAllowed, catGovernancePersistenceFor, readCatGovernanceReadCache } from "./cat_governance_storage.js";
 
 export type ProposalStatus = "proposed" | "applied" | "rejected" | "skipped";
 export type ProposalSetStatus = "active" | "superseded" | "closed";
@@ -99,10 +100,14 @@ export async function createProposalSet(
 ): Promise<{ proposalSet: SegmentProposalSet; path: string }> {
   const batch = await readBatch(workspaceRoot, projectId, batchId);
   if (!options.proposals.length) throw new Error("createProposalSet requires at least one proposal.");
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
   const now = new Date().toISOString();
   const proposalSetId = safeProposalSetId(options.proposalSetId ?? `${now.replace(/[:.]/g, "-")}`);
   const path = proposalPath(workspaceRoot, projectId, batchId, proposalSetId);
-  const existing = await readJsonFile<SegmentProposalSet | null>(path, null);
+  const existing = persistence
+    ? await persistence.readProposalSet(projectId, batchId, proposalSetId)
+    : await readCatGovernanceReadCache<SegmentProposalSet>(workspaceRoot, "proposal", projectId, batchId, proposalSetId) ?? await readJsonFile<SegmentProposalSet | null>(path, null);
+  if (!persistence) await assertCatGovernanceLegacyAllowed(workspaceRoot);
   if (existing && !options.overwrite) {
     throw new Error(`Proposal set ${proposalSetId} already exists. Pass overwrite=true to replace it.`);
   }
@@ -148,10 +153,13 @@ export async function createProposalSet(
       previous.status = "superseded";
       previous.supersededByProposalSetId = proposalSetId;
       previous.updatedAt = now;
-      await writeJsonFile(previousPath, normalizeProposalSet(previous));
+      const normalizedPrevious = normalizeProposalSet(previous);
+      if (persistence) await persistence.writeProposalSet(projectId, batchId, normalizedPrevious, previous);
+      else await writeJsonFile(previousPath, normalizedPrevious);
     }
   }
-  await writeJsonFile(path, proposalSet);
+  if (persistence) await persistence.writeProposalSet(projectId, batchId, proposalSet, existing);
+  else await writeJsonFile(path, proposalSet);
   return { proposalSet, path };
 }
 
@@ -169,7 +177,23 @@ export async function readProposalSet(
   batchId: string,
   proposalSetId: string,
 ): Promise<SegmentProposalSet> {
-  const proposalSet = await readJsonFile<SegmentProposalSet | null>(proposalPath(workspaceRoot, projectId, batchId, proposalSetId), null);
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  let proposalSet: SegmentProposalSet | null;
+  let usedLegacyRead = false;
+  if (persistence) proposalSet = await persistence.readProposalSet(projectId, batchId, proposalSetId);
+  else {
+    const index = await readCatGovernanceReadCache<SegmentProposalSet[]>(workspaceRoot, "proposal", projectId, "__index__", "index");
+    if (index && !index.some((candidate) => candidate.batchId === batchId && candidate.proposalSetId === proposalSetId)) proposalSet = null;
+    else {
+      const cached = await readCatGovernanceReadCache<SegmentProposalSet>(workspaceRoot, "proposal", projectId, batchId, proposalSetId);
+      if (cached) proposalSet = cached;
+      else {
+        usedLegacyRead = true;
+        proposalSet = await readJsonFile<SegmentProposalSet | null>(proposalPath(workspaceRoot, projectId, batchId, proposalSetId), null);
+      }
+    }
+  }
+  if (!persistence && usedLegacyRead) await assertCatGovernanceLegacyAllowed(workspaceRoot);
   if (!proposalSet) throw new Error(`Proposal set ${proposalSetId} not found for batch ${batchId}.`);
   return normalizeProposalSet(proposalSet);
 }
@@ -179,6 +203,39 @@ export async function listProposalSets(
   projectId: string,
   batchId: string,
 ): Promise<Array<{ proposalSetId: string; path: string; title: string; status: ProposalSetStatus; supersedesProposalSetId?: string; supersededByProposalSetId?: string; proposed: number; applied: number; skipped: number; rejected: number; updatedAt: string }>> {
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  if (persistence) {
+    return (await persistence.listProposalSets(projectId, batchId)).map((set) => ({
+      proposalSetId: set.proposalSetId,
+      path: proposalPath(workspaceRoot, projectId, batchId, set.proposalSetId),
+      title: set.title,
+      status: set.status,
+      supersedesProposalSetId: set.supersedesProposalSetId,
+      supersededByProposalSetId: set.supersededByProposalSetId,
+      proposed: set.proposals.filter((proposal) => proposal.status === "proposed").length,
+      applied: set.proposals.filter((proposal) => proposal.status === "applied").length,
+      skipped: set.proposals.filter((proposal) => proposal.status === "skipped").length,
+      rejected: set.proposals.filter((proposal) => proposal.status === "rejected").length,
+      updatedAt: set.updatedAt,
+    }));
+  }
+  const cached = await readCatGovernanceReadCache<SegmentProposalSet[]>(workspaceRoot, "proposal", projectId, "__index__", "index");
+  if (cached) {
+    return cached.filter((set) => set.batchId === batchId).map((set) => ({
+      proposalSetId: set.proposalSetId,
+      path: proposalPath(workspaceRoot, projectId, batchId, set.proposalSetId),
+      title: set.title,
+      status: set.status,
+      supersedesProposalSetId: set.supersedesProposalSetId,
+      supersededByProposalSetId: set.supersededByProposalSetId,
+      proposed: set.proposals.filter((proposal) => proposal.status === "proposed").length,
+      applied: set.proposals.filter((proposal) => proposal.status === "applied").length,
+      skipped: set.proposals.filter((proposal) => proposal.status === "skipped").length,
+      rejected: set.proposals.filter((proposal) => proposal.status === "rejected").length,
+      updatedAt: set.updatedAt,
+    }));
+  }
+  await assertCatGovernanceLegacyAllowed(workspaceRoot);
   const root = proposalRoot(workspaceRoot, projectId, batchId);
   let files: string[] = [];
   try {
@@ -292,7 +349,12 @@ export async function applyProposalSet(
     proposalSet.status = "closed";
     proposalSet.closedAt = now;
   }
-  await writeJsonFile(proposalPath(workspaceRoot, projectId, batchId, proposalSetId), proposalSet);
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  if (persistence) await persistence.writeProposalSet(projectId, batchId, proposalSet, await persistence.readProposalSet(projectId, batchId, proposalSetId));
+  else {
+    await assertCatGovernanceLegacyAllowed(workspaceRoot);
+    await writeJsonFile(proposalPath(workspaceRoot, projectId, batchId, proposalSetId), proposalSet);
+  }
   return { proposalSetId, applied, skipped, rejected };
 }
 

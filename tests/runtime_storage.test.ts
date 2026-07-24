@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -66,34 +66,24 @@ assert.equal(await readFile(join(repoRoot, "data/projects/storage-test/batches/b
 assert.equal(await readFile(join(repoRoot, "data/projects/storage-test/uploads/source.xliff"), "utf8"), "source");
 
 const workbookPath = join(customerRoot, "terms.xlsx");
-await writeFile(workbookPath, "not a real workbook but fake mineru only checks path", "utf8");
+await writeFile(workbookPath, "not a real workbook", "utf8");
 const counterPath = join(customerRoot, "mineru-count.txt");
 const fakeMineruPath = join(customerRoot, "fake-mineru.mjs");
 await writeFile(fakeMineruPath, `#!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-const outIndex = process.argv.indexOf("-o");
-const output = outIndex >= 0 ? process.argv[outIndex + 1] : "";
-const countPath = ${JSON.stringify(counterPath)};
-let count = 0;
-try { count = Number(readFileSync(countPath, "utf8")); } catch {}
-writeFileSync(countPath, String(count + 1), "utf8");
-mkdirSync(output, { recursive: true });
-writeFileSync(join(output, "mineru.md"), "# MinerU\\n\\n| Source | Target |\\n| --- | --- |\\n| A | B |\\n", "utf8");
+import { writeFileSync } from "node:fs";
+writeFileSync(${JSON.stringify(counterPath)}, "started", "utf8");
 `, "utf8");
 await chmod(fakeMineruPath, 0o755);
-
-await parseAsset(repoRoot, { projectId, assetPath: "terms.xlsx", mode: "mineru", mineruCommand: fakeMineruPath });
-await parseAsset(repoRoot, { projectId, assetPath: "terms.xlsx", mode: "mineru", mineruCommand: fakeMineruPath });
-assert.equal(await readFile(counterPath, "utf8"), "1");
-const cacheRoot = join(testCacheRoot, "projects/storage-test/asset_parse/mineru");
-assert.equal((await readdir(cacheRoot)).filter((name) => name.startsWith("terms.xlsx-")).length, 1);
-
-await new Promise((resolve) => setTimeout(resolve, 10));
-await writeFile(workbookPath, "changed", "utf8");
-await parseAsset(repoRoot, { projectId, assetPath: "terms.xlsx", mode: "mineru", mineruCommand: fakeMineruPath });
-assert.equal(await readFile(counterPath, "utf8"), "2");
-assert.equal((await readdir(cacheRoot)).filter((name) => name.startsWith("terms.xlsx-")).length, 1);
+const previousMineruCommand = process.env.LA_MINERU_COMMAND;
+process.env.LA_MINERU_COMMAND = fakeMineruPath;
+try {
+  const preview = await parseAsset(repoRoot, { projectId, assetPath: "terms.xlsx", mode: "mineru" });
+  assert.equal(preview.mineruPreview?.status, "unavailable");
+  await assert.rejects(readFile(counterPath, "utf8"));
+} finally {
+  if (previousMineruCommand === undefined) delete process.env.LA_MINERU_COMMAND;
+  else process.env.LA_MINERU_COMMAND = previousMineruCommand;
+}
 
 function captureJson() {
   let payload: { status: number; data: any } | undefined;
@@ -120,7 +110,7 @@ function captureJson() {
   assert.equal(result.data.runtimeRoot, repoRoot);
   assert.equal(result.data.policyVersion, 2);
   assert.equal(result.data.roots.cacheRoot, testCacheRoot);
-  assert.ok(result.data.buckets.some((bucket: any) => bucket.storageClass === "cache"));
+  assert.equal(result.data.buckets.some((bucket: any) => bucket.storageClass === "cache"), false, "an unavailable MinerU request must not create a cache");
 }
 
 {

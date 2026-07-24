@@ -9,6 +9,7 @@ import { extractMappedRows } from "./workbook_mapping.js";
 import { workflowArtifactsPath, type WorkflowAuthorityDecision } from "./workflow_artifacts.js";
 import type { TermHistoryDecision, TermHistoryIndex } from "./term_history.js";
 import { localesMatch } from "./locale.js";
+import { assertCatCoreLegacyAllowed, catCorePersistenceFor, readCatCoreReadCache } from "./cat_core_storage.js";
 
 export interface TermbaseEntry {
   id: string;
@@ -293,7 +294,7 @@ async function persistTerms(
     targetLanguage: options.tgtLang,
   });
   const path = termbasePath(workspaceRoot, options.projectId);
-  const existing = options.append ? await readJsonFile<TermbaseEntry[]>(path, []) : [];
+  const existing = options.append ? await readTermbaseEntries(workspaceRoot, options.projectId) : [];
   const seen = new Set(existing.map((entry) => `${entry.source}\u0000${entry.target}\u0000${entry.sourceFile}\u0000${entry.rowNo}`));
   const entries: TermbaseEntry[] = [];
   let skipped = 0;
@@ -325,7 +326,7 @@ async function persistTerms(
       origin: options.origin,
     });
   }
-  await writeJsonFile(path, [...existing, ...entries]);
+  await writeTermbaseEntries(workspaceRoot, options.projectId, [...existing, ...entries], existing);
   return {
     projectId: options.projectId,
     imported: entries.length,
@@ -577,14 +578,47 @@ export async function importSdltbTermbase(
 }
 
 export async function readTermbaseEntries(workspaceRoot: string, projectId: string): Promise<TermbaseEntry[]> {
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  if (persistence) return (await persistence.readTermbase(projectId)).entries;
+  const cached = await readCatCoreReadCache<{ entries: TermbaseEntry[]; overrides: TermbaseOverride[] }>(workspaceRoot, "termbase", projectId);
+  if (cached) return cached.entries;
+  await assertCatCoreLegacyAllowed(workspaceRoot);
   return readJsonFile<TermbaseEntry[]>(termbasePath(workspaceRoot, projectId), []);
 }
 
 export async function readTermbaseOverrides(workspaceRoot: string, projectId: string): Promise<TermbaseOverride[]> {
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  if (persistence) return (await persistence.readTermbase(projectId)).overrides;
+  const cached = await readCatCoreReadCache<{ entries: TermbaseEntry[]; overrides: TermbaseOverride[] }>(workspaceRoot, "termbase", projectId);
+  if (cached) return cached.overrides;
+  await assertCatCoreLegacyAllowed(workspaceRoot);
   return readJsonFile<TermbaseOverride[]>(termbaseOverridesPath(workspaceRoot, projectId), []);
 }
 
+export async function writeTermbaseEntries(
+  workspaceRoot: string,
+  projectId: string,
+  entries: TermbaseEntry[],
+  expected: TermbaseEntry[] | null,
+): Promise<void> {
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  if (persistence) {
+    const current = await persistence.readTermbase(projectId);
+    await persistence.writeTermbase(projectId, { entries, overrides: current.overrides }, expected === null ? null : { entries: expected, overrides: current.overrides });
+    return;
+  }
+  await assertCatCoreLegacyAllowed(workspaceRoot);
+  await writeJsonFile(termbasePath(workspaceRoot, projectId), entries);
+}
+
 export async function writeTermbaseOverrides(workspaceRoot: string, projectId: string, overrides: TermbaseOverride[]): Promise<TermbaseOverride[]> {
+  const persistence = catCorePersistenceFor(workspaceRoot);
+  if (persistence) {
+    const current = await persistence.readTermbase(projectId);
+    await persistence.writeTermbase(projectId, { entries: current.entries, overrides }, current);
+    return overrides;
+  }
+  await assertCatCoreLegacyAllowed(workspaceRoot);
   await writeJsonFile(termbaseOverridesPath(workspaceRoot, projectId), overrides);
   return overrides;
 }
@@ -647,7 +681,7 @@ export async function lookupTermbase(
   options: { projectId: string; term: string; srcLang?: string; tgtLang?: string; limit?: number },
 ): Promise<TermbaseMatch[]> {
   const [entries, overrides, locales] = await Promise.all([
-    readJsonFile<TermbaseEntry[]>(termbasePath(workspaceRoot, options.projectId), []),
+    readTermbaseEntries(workspaceRoot, options.projectId),
     readTermbaseOverrides(workspaceRoot, options.projectId),
     readProjectLocalePair(workspaceRoot, options.projectId, {
       sourceLanguage: options.srcLang,

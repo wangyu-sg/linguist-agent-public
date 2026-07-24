@@ -193,10 +193,10 @@
 }
 
 .settings-page-header h1 {
-  font-size: 24px;
+  font-size: var(--la-type-display-size);
   font-weight: var(--la-weight-semibold);
   letter-spacing: -0.02em;
-  line-height: 30px;
+  line-height: var(--la-type-display-line);
 }
 
 .settings-page-header p {
@@ -617,6 +617,55 @@
   font-size: var(--la-type-dense-size);
   line-height: var(--la-type-dense-line);
   overflow-wrap: anywhere;
+}
+
+.settings-runtime-actions {
+  display: grid;
+  gap: var(--la-space-3);
+  padding-top: var(--la-space-4);
+  margin-top: var(--la-space-4);
+  border-top: 1px solid var(--la-border-subtle);
+}
+
+.settings-runtime-actions__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--la-space-2);
+}
+
+.settings-runtime-actions__storage,
+.settings-runtime-actions__message,
+.settings-runtime-plan > p,
+.settings-runtime-plan li {
+  margin: 0;
+  color: var(--la-ink-secondary);
+  font-size: var(--la-type-dense-size);
+  line-height: var(--la-type-dense-line);
+}
+
+.settings-runtime-actions__message {
+  padding: var(--la-space-2) var(--la-space-3);
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-control);
+  background: var(--la-surface-hover);
+}
+
+.settings-runtime-plan {
+  display: grid;
+  gap: var(--la-space-2);
+  padding: var(--la-space-3);
+  border: 1px solid var(--la-border-default);
+  border-radius: var(--la-radius-surface);
+  background: var(--la-raised);
+}
+
+.settings-runtime-plan ul {
+  display: grid;
+  max-height: 180px;
+  gap: 4px;
+  padding-left: 20px;
+  margin: 0;
+  overflow: auto;
 }
 
 .settings-checks {

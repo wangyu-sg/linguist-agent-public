@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { writeDurableFileAtomic } from "./durable_file.js";
 
 export interface CatWorkspace {
   root: string;
@@ -44,7 +45,15 @@ export async function readJsonFile<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
-export async function writeJsonFile(path: string, value: unknown): Promise<void> {
+export async function writeJsonFile(
+  path: string,
+  value: unknown,
+  options: { durability?: "normal" | "critical" } = {},
+): Promise<void> {
+  if (options.durability === "critical") {
+    await writeDurableFileAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
+    return;
+  }
   await mkdir(dirname(path), { recursive: true });
   // Write-then-rename keeps the previous file intact if the process dies mid-write.
   const tmpPath = `${path}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

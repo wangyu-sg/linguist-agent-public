@@ -53,6 +53,12 @@ function optionalStringArray(value: unknown, label: string): string[] | undefine
   return value;
 }
 
+function optionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new Error(`${label} must be a boolean.`);
+  return value;
+}
+
 function asVoiceProfileEntry(value: unknown): VoiceProfileEntryInput {
   const row = value as Record<string, unknown>;
   if (!row || typeof row !== "object") throw new Error("voice profile entry must be an object.");
@@ -172,7 +178,7 @@ export async function handleVoiceRoute(
           status: asVoiceProfileStatus(body.status),
           updatedBy: deps.optionalString(body.updatedBy),
           entries: Array.isArray(body.entries) ? body.entries.map(asVoiceProfileEntry) : undefined,
-          replaceEntries: Boolean(body.replaceEntries),
+          replaceEntries: optionalBoolean(body.replaceEntries, "replaceEntries") ?? false,
         }),
       );
       return true;

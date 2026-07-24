@@ -7,8 +7,8 @@ import { join } from "node:path";
 import {
   createStandaloneFileGrant,
   createTaskWorkspace,
-  type DocumentEvidenceV1,
 } from "@linguist-agent/cat-data";
+import { createDocumentEvidenceApplicationPort } from "../packages/cat-server/src/application/document_evidence_application_port.js";
 import { handleDocumentCapabilityRoute } from "../packages/cat-server/src/routes/document_capability_routes.js";
 
 const root = await mkdtemp(join(tmpdir(), "la-document-capability-routes-"));
@@ -20,12 +20,13 @@ await writeFile(denied, "not-granted", "utf8");
 await createTaskWorkspace(root).create({ owner: { kind: "standalone" }, taskId, title: "Document review", intent: "Review local document evidence", kind: "general" });
 const grant = await createStandaloneFileGrant(root, { taskId, path: source, kind: "file", access: "read" });
 
-const evidence: DocumentEvidenceV1 = {
-  schemaVersion: 1,
-  source: { path: source, sha256: "a".repeat(64), mimeType: "image/png" },
-  extraction: { route: "paddleocr", runtimeVersion: "managed", modelVersions: { detection: "det", recognition: "rec" }, createdAt: "2026-07-20T00:00:00.000Z" },
-  pages: [{ page: 1, width: 100, height: 80, orientation: 0, blocks: [{ polygon: [[0, 0], [10, 0], [10, 8], [0, 8]], bbox: { x: 0, y: 0, width: 10, height: 8 }, text: "低置信度", confidence: 0.4, orientation: 0 }] }],
-  overlay: { pages: [{ page: 1, width: 100, height: 80, polygons: [{ polygon: [[0, 0], [10, 0], [10, 8], [0, 8]], confidence: 0.4, text: "低置信度" }] }] },
+const routed = {
+  schemaVersion: 1 as const,
+  source: { sha256: "a".repeat(64), mimeType: "image/png" },
+  policy: { source: "conservative-default" as const, reason: "Synthetic test policy.", nativeTextCoverage: 0.75 },
+  status: "complete" as const,
+  pages: [{ page: 1, status: "complete" as const, reason: "Local light OCR is selected.", backend: { id: "light-ocr" as const, version: "managed", ocr: true }, blockCount: 1 }],
+  blocks: [{ id: "page-1", kind: "paragraph" as const, text: "低置信度", locator: { kind: "page" as const, page: 1, bbox: { x: 0, y: 0, width: 10, height: 8 } }, readingOrder: 1, provenance: { sourceDigest: "a".repeat(64), backend: { id: "light-ocr" as const, version: "managed", ocr: true }, confidence: 0.4, userCorrected: false } }],
 };
 let mutationAvailable = true;
 let installed = 0;
@@ -42,7 +43,9 @@ async function request(method: string, path: string, body: unknown = {}): Promis
       json: (_res, status, data) => { output = { status, data }; },
       readBody: async () => body,
       inspectCapabilities: async () => ({ python: { state: "ready" }, ocr: { state: "ready" }, mineru: { state: "missing" }, office: { state: "missing" } } as any),
-      extractOcr: async (_root, path) => ({ ...evidence, source: { ...evidence.source, path } }),
+      documentEvidence: createDocumentEvidenceApplicationPort({
+        routeDocument: async () => routed,
+      }),
       previewInstall: (_root, id) => ({ capabilityId: id, planHash: "p".repeat(64), label: id } as any),
       installCapability: async (_root, input) => { installed += 1; return { state: "ready", id: input.capabilityId }; },
       acquireCapabilityMutation: () => mutationAvailable ? () => undefined : undefined,
@@ -77,11 +80,26 @@ try {
   assert.equal(extracted.data.artifacts[0].type, "document_evidence");
   assert.equal(extracted.data.artifacts[0].status, "reviewable");
   assert.deepEqual(extracted.data.artifacts[0].scope.fileGrantIds, [grant.grant.id]);
-  assert.equal(extracted.data.artifacts[0].content.pages[0].blocks[0].confidence, 0.4);
-  assert.equal(extracted.data.artifacts[0].content.document.blocks.some((block: any) => block.type === "page_overlay"), true);
+  assert.equal(extracted.data.artifacts[0].content.router.blocks[0].provenance.confidence, 0.4);
+  assert.equal(extracted.data.artifacts[0].content.router.pages[0].backend.id, "light-ocr");
+  assert.equal(extracted.data.artifacts[0].content.document.blocks.some((block: any) => block.id === "routing"), true);
   assert.equal(extracted.data.runs[0].mode, "pipeline");
   assert.equal(extracted.data.agentThreads[0].identity.displayName, "Document Analyst");
   assert.equal(await readFile(source, "utf8"), "source-remains-read-only");
+
+  const corrected = await request("POST", "/api/documents/evidence/corrections", {
+    taskId,
+    artifactId: extracted.data.artifacts[0].id,
+    blockId: "page-1",
+    text: "人工确认后的文字",
+  });
+  assert.equal(corrected.status, 201);
+  const correctionArtifact = corrected.data.artifacts.find((artifact: any) => artifact.provenance.parentArtifactIds.includes(extracted.data.artifacts[0].id));
+  assert.equal(correctionArtifact.type, "document_evidence");
+  assert.equal(correctionArtifact.content.router.blocks[0].text, "人工确认后的文字");
+  assert.equal(correctionArtifact.content.router.blocks[0].provenance.userCorrected, true);
+  assert.equal(correctionArtifact.content.correction.blockId, "page-1");
+  assert.equal(corrected.data.artifacts.find((artifact: any) => artifact.id === extracted.data.artifacts[0].id).content.router.blocks[0].text, "低置信度");
 
   const conflictWorkspace = createTaskWorkspace(root);
   const snapshot = await conflictWorkspace.open({ kind: "standalone", taskId });

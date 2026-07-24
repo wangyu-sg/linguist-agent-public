@@ -150,19 +150,18 @@ export function buildContextReadinessReport(input: ContextReadinessInput): Conte
 
   push(checks, {
     code: "memory_status",
-    status: input.memory.status === "gateway_unreachable" ? "warn" : "pass",
-    message: `Optional legacy TDAI recall is ${input.memory.status}; confirmed local memory remains Library-owned and non-evidence.`,
+    status: input.memory.status === "legacy_migration_required" ? "warn" : "pass",
+    message: `Memory status is ${input.memory.status}; Confirmed Memory is recall-only and never CAT Evidence.`,
     nextAction: input.memory.nextAction,
   });
 
-  const audit = input.memory.audit;
   push(checks, {
-    code: "legacy_memory_recall_audit",
-    status: input.memory.status === "gateway_unreachable" ? "warn" : "pass",
-    message: audit?.lastSearchAt
-      ? `Last optional legacy memory search completed at ${audit.lastSearchAt}.`
-      : "Automatic turn capture is disabled; legacy TDAI has no required capture audit.",
-    nextAction: input.memory.status === "gateway_unreachable" ? input.memory.nextAction : undefined,
+    code: "legacy_memory_migration",
+    status: input.memory.status === "legacy_migration_required" ? "warn" : "pass",
+    message: input.memory.legacyTdai.configurationDetected
+      ? "Legacy TDAI configuration was found. Capture, store, and recall are disabled until its records are reviewed as pending MemoryCandidate entries."
+      : "No legacy TDAI configuration is present; no legacy memory runtime is available.",
+    nextAction: input.memory.status === "legacy_migration_required" ? input.memory.nextAction : undefined,
   });
 
   push(checks, {

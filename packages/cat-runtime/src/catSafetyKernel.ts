@@ -31,8 +31,6 @@ const CANONICAL_LIFECYCLE_ONLY_TOOLS = new Set([
   "intercom",
   "contact_supervisor",
 ]);
-const DOCUMENT_UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
-
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -130,24 +128,6 @@ function isProtectedPath(path: string, workspaceRoot: string, homeDir: string): 
   return name === ".env" || name.startsWith(".env.");
 }
 
-function documentScopeViolation(
-  event: { toolName: string; input: unknown },
-  workspaceRoot: string,
-  homeDir: string,
-  allowedRoots: readonly string[] | undefined,
-): string | undefined {
-  if (!SCOPED_DOCUMENT_TOOLS.has(event.toolName.toLowerCase())) return undefined;
-  const roots = (allowedRoots ?? []).map((path) => canonicalPath(expandPath(path, workspaceRoot, homeDir)));
-  const paths = collectPaths(event.input);
-  const outside = paths.find((path) => {
-    const normalized = path.trim().replace(/^@/, "").replace(DOCUMENT_UNICODE_SPACES, " ");
-    const candidate = canonicalPath(expandPath(normalized, workspaceRoot, homeDir));
-    return !roots.some((root) => isInside(root, candidate));
-  });
-  if (outside) return outside;
-  return paths.length === 0 || roots.length === 0 ? "(missing scoped document path)" : undefined;
-}
-
 function bashProtectedReason(command: string, homeDir: string): string | undefined {
   if (/(^|[;&|()\s'"])(?:[^;&|()\s'"]*\/)?security(?:[;&|()\s'"]|$)/i.test(command)) {
     return "CAT safety kernel blocked direct macOS Keychain access from bash.";
@@ -175,7 +155,7 @@ function bashProtectedReason(command: string, homeDir: string): string | undefin
 
 export function evaluateCatSafetyToolCall(
   event: { toolName: string; input: unknown },
-  options: { workspaceRoot: string; homeDir?: string; allowedDocumentRoots?: readonly string[] },
+  options: { workspaceRoot: string; homeDir?: string },
 ): ToolCallEventResult | undefined {
   if (catToolMetadataFor(event.toolName)) return undefined;
   const toolName = event.toolName.toLowerCase();
@@ -206,13 +186,5 @@ export function evaluateCatSafetyToolCall(
   if (blockedPath) {
     return { block: true, reason: `CAT safety kernel blocked ${event.toolName} access to protected credential path ${blockedPath}.` };
   }
-  const outsideDocumentScope = documentScopeViolation(
-    event,
-    options.workspaceRoot,
-    homeDir,
-    options.allowedDocumentRoots,
-  );
-  return outsideDocumentScope
-    ? { block: true, reason: `CAT safety kernel blocked ${event.toolName} path ${outsideDocumentScope} because it is outside the current Project scope.` }
-    : undefined;
+  return undefined;
 }

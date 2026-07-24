@@ -8,7 +8,6 @@ import {
   Cpu,
   ExternalLink,
   Keyboard,
-  Link,
   LogIn,
   LogOut,
   Package as PackageIcon,
@@ -38,7 +37,6 @@ import type {
   NotificationCategory,
   ProjectGuidanceDecision,
   ProjectGuidanceScope,
-  ProjectMemoryConfig,
   ProjectMemoryStatus,
   CommunityPackageCatalogPage,
   ManagedPackageCatalog,
@@ -51,7 +49,7 @@ import { applyFontChoice, applyCatEditorFontSize, currentCatEditorFontSize, curr
 import { applyAppearance, currentAppearance, type AppearanceChoice } from "../theme-choice.ts";
 import { Button, StatusLabel, type StatusState } from "../ui/index.ts";
 import { settingValue, useSettingsData } from "./settings-data.ts";
-import { availableModels, displayHash, formatUptime, latestManifestRun } from "./settings-model.ts";
+import { availableModels, displayHash, formatBytes, formatUptime, latestManifestRun } from "./settings-model.ts";
 import "./settings.css";
 
 export interface SettingsWorkspaceProps {
@@ -59,7 +57,7 @@ export interface SettingsWorkspaceProps {
   onClose?: () => void;
 }
 
-type SettingsPage = "model" | "connections" | "notifications" | "permissions" | "memory" | "appearance" | "runtime" | "manifest" | "packages" | "keybindings" | "themes";
+type SettingsPage = "models" | "notifications" | "permissions" | "memory" | "appearance" | "runtime" | "manifest" | "packages" | "keybindings" | "themes";
 
 interface SettingsPageItem {
   id: SettingsPage;
@@ -72,8 +70,7 @@ const pageGroups: Array<{ label: string; items: SettingsPageItem[] }> = [
   {
     label: "日常",
     items: [
-      { id: "model", label: "模型", detail: "Provider、模型与思考级别", icon: Bot },
-      { id: "connections", label: "能力连接", detail: "凭据与 Run 能力", icon: Link },
+      { id: "models", label: "模型与能力连接", detail: "当前模型、Provider 登录与 Run 能力", icon: Bot },
       { id: "notifications", label: "通知", detail: "系统授权与提醒边界", icon: Bell },
       { id: "permissions", label: "权限", detail: "通用 Agent 工具自主性", icon: Shield },
       { id: "memory", label: "Legacy recall", detail: "TDAI adapter 与项目指南", icon: Brain },
@@ -159,10 +156,14 @@ function ModelSettings({
   const models = useMemo(() => availableModels(providers, provider), [provider, providers]);
 
   useEffect(() => {
-    setProvider(asString(settingValue(catalog, "defaultProvider")));
-    setModel(asString(settingValue(catalog, "defaultModel")));
-    setThinking(asString(settingValue(catalog, "defaultThinkingLevel")) || "medium");
-  }, [catalog]);
+    // `providers.defaults` is LA's resolved current selection: it gives the
+    // global user preference precedence over the bundled project fallback.
+    // The generic Pi settings catalog intentionally retains native project
+    // merge semantics, so it cannot be the source of truth for this control.
+    setProvider(providers?.defaults?.provider ?? asString(settingValue(catalog, "defaultProvider")));
+    setModel(providers?.defaults?.modelId ?? asString(settingValue(catalog, "defaultModel")));
+    setThinking(providers?.defaults?.thinkingLevel ?? (asString(settingValue(catalog, "defaultThinkingLevel")) || "medium"));
+  }, [catalog, providers]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -189,7 +190,7 @@ function ModelSettings({
           </select>
         </label>
         <label className="settings-field">
-          <span>默认模型</span>
+          <span>当前模型</span>
           <select value={model} onChange={(event) => setModel(event.target.value)}>
             {!models.some((item) => item.id === model) && model ? <option value={model}>{model}</option> : null}
             {models.map((item) => <option key={item.id} value={item.id}>{item.name ?? item.id}</option>)}
@@ -203,8 +204,8 @@ function ModelSettings({
         </label>
       </div>
       <div className="settings-form__footer">
-        <p>应用到新 Run。当前 Run 保留启动时记录的模型与资源。</p>
-        <Button variant="primary" type="submit" loading={saving} loadingLabel="正在保存" disabled={busy || !provider || !model}>保存模型设置</Button>
+        <p>这是本机当前选择，不是临时“默认模型”。应用到新 Run；当前 Run 保留启动时记录的模型与资源。</p>
+        <Button variant="primary" type="submit" loading={saving} loadingLabel="正在保存" disabled={busy || !provider || !model}>保存当前模型</Button>
       </div>
     </form>
   );
@@ -368,12 +369,13 @@ function ProviderConnections({
       </ul>
 
       {otherProviders.length ? (
-        <details className="settings-disclosure">
-          <summary>查看其他 {otherProviders.length} 个 Provider</summary>
-          <ul className="settings-flat-list" aria-label="其他模型 Provider">
+        <div className="settings-subsection">
+          <h3>可连接的 Provider</h3>
+          <p>OAuth Provider 与 API key Provider 都直接显示；不会为了简化页面而把可登录的连接藏起来。</p>
+          <ul className="settings-flat-list" aria-label="可连接的模型 Provider">
             {otherProviders.map(providerRow)}
           </ul>
-        </details>
+        </div>
       ) : null}
 
       {loginAttempt ? (
@@ -498,6 +500,77 @@ function PermissionSettings({
 
 function RuntimeSettings({ state }: { state: ReturnType<typeof useSettingsData> }) {
   const runtime = state.data.runtime;
+  const [storage, setStorage] = useState<Awaited<ReturnType<typeof workspaceClient.fetchRuntimeStorageSummary>> | null>(null);
+  const [cleanupPlan, setCleanupPlan] = useState<Awaited<ReturnType<typeof workspaceClient.previewRuntimeStorageAction>> | null>(null);
+  const [action, setAction] = useState<"restart" | "repair" | "preview-cache" | "clear-cache" | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  const refreshStorage = async () => {
+    try {
+      setStorage(await workspaceClient.fetchRuntimeStorageSummary());
+    } catch (error) {
+      setActionMessage(`无法读取本机缓存状态：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  useEffect(() => { void refreshStorage(); }, []);
+
+  const restartRuntime = async () => {
+    setAction("restart");
+    setActionMessage(null);
+    try {
+      const outcome = await window.linguist.runtime.restart();
+      setActionMessage(outcome.message);
+      if (outcome.ok) await state.load();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const repairRuntime = async () => {
+    setAction("repair");
+    setActionMessage(null);
+    try {
+      const outcome = await window.linguist.runtime.installOrRepair();
+      setActionMessage(outcome.message);
+      if (outcome.ok) await state.load();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const previewCacheCleanup = async () => {
+    setAction("preview-cache");
+    setActionMessage(null);
+    try {
+      setCleanupPlan(await workspaceClient.previewRuntimeStorageAction({ action: "pruneCaches" }));
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const clearPreviewedCaches = async () => {
+    if (!cleanupPlan) return;
+    setAction("clear-cache");
+    setActionMessage(null);
+    try {
+      const result = await workspaceClient.executeRuntimeStorageAction({ action: cleanupPlan.action, planHash: cleanupPlan.planHash });
+      setActionMessage(`已清理 ${formatBytes(result.deletedBytes)} 缓存（${result.deletedFiles} 个文件）。项目、Task、记忆与审计数据未被触碰。`);
+      setCleanupPlan(null);
+      await refreshStorage();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAction(null);
+    }
+  };
+
   if (!runtime) return <Unavailable />;
   const resident = runtime.residentRuntime;
   return (
@@ -518,6 +591,34 @@ function RuntimeSettings({ state }: { state: ReturnType<typeof useSettingsData> 
           </li>
         ))}
       </ul>
+      <div className="settings-runtime-actions">
+        <div className="settings-subsection-header">
+          <div><h3>运行时操作</h3><p>重启不会修改项目数据；修复会用当前已安装 App 内经过校验的 runtime 重新部署，并保留数据与备份。</p></div>
+        </div>
+        <div className="settings-runtime-actions__buttons">
+          <Button variant="secondary" loading={action === "restart"} disabled={action !== null} onClick={() => void restartRuntime()}><RefreshCw aria-hidden="true" />重启 runtime</Button>
+          <Button variant="secondary" loading={action === "repair"} disabled={action !== null} onClick={() => void repairRuntime()}><Cpu aria-hidden="true" />修复本机 runtime</Button>
+        </div>
+      </div>
+      <div className="settings-runtime-actions">
+        <div className="settings-subsection-header">
+          <div><h3>可安全清理的缓存</h3><p>只清理 runtime 标记为可重建的缓存；清理前必须先生成预览和 planHash。</p></div>
+          {storage ? <strong>{formatBytes(storage.removableBytes)} 可清理</strong> : null}
+        </div>
+        {storage ? <p className="settings-runtime-actions__storage">本机 runtime 共占用 {formatBytes(storage.totalBytes)}。不会把项目、Task、记忆、审计或客户文件算入此操作。</p> : <p className="settings-runtime-actions__storage">正在读取本机缓存状态…</p>}
+        {!cleanupPlan ? <Button variant="secondary" loading={action === "preview-cache"} disabled={action !== null} onClick={() => void previewCacheCleanup()}><Trash2 aria-hidden="true" />查看可清理缓存</Button> : (
+          <div className="settings-runtime-plan">
+            <p>将清理 {formatBytes(cleanupPlan.bytes)}（{cleanupPlan.files} 个文件）。</p>
+            {cleanupPlan.warnings.length ? <ul>{cleanupPlan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
+            <details><summary>查看 {cleanupPlan.paths.length} 个路径</summary><ul>{cleanupPlan.paths.slice(0, 30).map((path) => <li key={path}><code>{path}</code></li>)}</ul></details>
+            <div className="settings-runtime-actions__buttons">
+              <Button variant="ghost" disabled={action !== null} onClick={() => setCleanupPlan(null)}>取消</Button>
+              <Button variant="primary" loading={action === "clear-cache"} disabled={action !== null} onClick={() => void clearPreviewedCaches()}><Trash2 aria-hidden="true" />清理这些缓存</Button>
+            </div>
+          </div>
+        )}
+      </div>
+      {actionMessage ? <p className="settings-runtime-actions__message" role="status">{actionMessage}</p> : null}
     </>
   );
 }
@@ -575,7 +676,8 @@ function PackageSettings({ state }: { state: ReturnType<typeof useSettingsData> 
   const [busy, setBusy] = useState<"load" | "preview" | "install" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PackageInstallPreview | null>(null);
-  const [confirmedVersion, setConfirmedVersion] = useState("");
+  const [archiveHandle, setArchiveHandle] = useState<Awaited<ReturnType<typeof window.linguist.system.pickImportFiles>>[number] | null>(null);
+  const [confirmation, setConfirmation] = useState("");
   const [acceptedRisks, setAcceptedRisks] = useState<string[]>([]);
 
   const load = async (input: { refresh?: boolean; cursor?: number; append?: boolean; search?: string } = {}) => {
@@ -606,13 +708,16 @@ function PackageSettings({ state }: { state: ReturnType<typeof useSettingsData> 
 
   useEffect(() => { void load(); }, []);
 
-  const inspect = async (name: string, version: string) => {
+  const inspect = async () => {
     setBusy("preview");
     setError(null);
     try {
-      const result = await workspaceClient.previewManagedPackageInstall(name, version);
+      const [selected] = await window.linguist.system.pickImportFiles("lapkg");
+      if (!selected) return;
+      const result = await workspaceClient.previewLapkgInstall(selected);
+      setArchiveHandle(selected);
       setPreview(result);
-      setConfirmedVersion("");
+      setConfirmation("");
       setAcceptedRisks([]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -622,19 +727,18 @@ function PackageSettings({ state }: { state: ReturnType<typeof useSettingsData> 
   };
 
   const install = async () => {
-    if (!preview) return;
+    if (!preview || !archiveHandle) return;
     setBusy("install");
     setError(null);
     try {
-      await workspaceClient.installManagedPackage({
-        planHash: preview.planHash,
-        name: preview.descriptor.package.name,
-        version: preview.descriptor.package.version,
-        confirmedVersion,
-        acceptedRiskIds: acceptedRisks,
+      await workspaceClient.activateLapkg({
+        archiveHandle,
+        expectedPlanHash: preview.planHash,
+        preview,
       });
       setPreview(null);
-      setConfirmedVersion("");
+      setArchiveHandle(null);
+      setConfirmation("");
       setAcceptedRisks([]);
       setManaged(await workspaceClient.fetchManagedPackages());
     } catch (reason) {
@@ -678,32 +782,29 @@ function PackageSettings({ state }: { state: ReturnType<typeof useSettingsData> 
     <div className="settings-package-center">
       <div className="settings-warning-row" role="note">
         <Shield aria-hidden="true" />
-        <span>Community Catalog 只代表 npm 中带 <code>pi-package</code> 标签的发现结果，不代表 LA 审核或信任。只有完成隔离下载、integrity 校验、依赖闭包扫描和逐项风险确认的精确版本才会进入 managed runtime。</span>
+        <span>Community Catalog 只是只读发现来源，不代表 LA 审核或信任，也不能触发安装。Stable 只激活用户选择且通过受信发布者签名、内容摘要和逐项风险确认的声明式 <code>.lapkg</code>。</span>
       </div>
       {error ? <div className="settings-warning-row" role="alert"><AlertTriangle aria-hidden="true" /><span>{error}</span></div> : null}
 
       <section className="settings-package-section" aria-labelledby="package-core-title">
         <header className="settings-subsection-header">
-          <div><h3 id="package-core-title">Core & managed capabilities</h3><p>Core 是 LA 固定策略；其他已批准包进入 Labs。新版本必须重新预览和批准。</p></div>
-          <StatusLabel state={managed ? "complete" : "waiting"}>{managed?.packages.length ?? 0} managed</StatusLabel>
+          <div><h3 id="package-core-title">Signed declarative packages</h3><p>Stable 只接受受信发布者签名的 <code>.lapkg</code>。包不得包含脚本、npm 依赖、原生二进制或可执行 Extension。</p></div>
+          <StatusLabel state={managed ? "complete" : "waiting"}>{managed?.packages.length ?? 0} active</StatusLabel>
         </header>
         <ul className="settings-flat-list">
-          {(managed?.corePolicy ?? []).map((item) => {
-            const installed = managed?.packages.find((candidate) => candidate.packageName === item.name && candidate.version === item.version);
-            return (
-              <li key={`${item.name}@${item.version}`}>
-                <div className="settings-list-copy"><strong>{item.name}@{item.version}</strong><span>{item.reason}</span></div>
-                <StatusLabel state={installed ? "complete" : "neutral"}>{installed ? "managed" : "runtime pin"}</StatusLabel>
-              </li>
-            );
-          })}
-          {(managed?.packages ?? []).filter((item) => item.descriptor.tier === "labs").map((item) => (
-            <li key={`${item.packageName}@${item.version}`}>
-              <div className="settings-list-copy"><strong>{item.packageName}@{item.version}</strong><span>{item.descriptor.resources.extensions.length} extensions · {item.descriptor.resources.skills.length} skills · {item.descriptor.dependencyClosure.length} dependencies</span></div>
-              <StatusLabel state="complete">Labs approved</StatusLabel>
+          {(managed?.packages ?? []).map((item) => (
+            <li key={`${item.packageId}@${item.packageVersion}`}>
+              <div className="settings-list-copy"><strong>{item.packageId}@{item.packageVersion}</strong><span>{item.publisherId} · {item.resources.length} declarative resources · revision {item.activationRevision}</span></div>
+              <StatusLabel state="complete">signature verified</StatusLabel>
             </li>
           ))}
+          {managed && !managed.packages.length ? <li><span>尚未激活任何 Stable 声明式资源包。</span></li> : null}
         </ul>
+        <div className="settings-form__footer">
+          <p>旧 v1 registry 只读：{managed?.legacy.totalRecords ?? 0} records；不会加载、执行或迁移。</p>
+          <Button variant="secondary" disabled={busy !== null || managed?.trustedPublisherCount === 0} loading={busy === "preview"} onClick={() => void inspect()}>选择签名 .lapkg</Button>
+        </div>
+        {managed?.trustedPublisherCount === 0 ? <p className="settings-readonly-note">当前构建尚未配置经产品确认的 Stable 发布者信任根，因此新激活保持 fail-closed。</p> : null}
       </section>
 
       <section className="settings-package-section" aria-labelledby="document-capability-title">
@@ -751,42 +852,42 @@ function PackageSettings({ state }: { state: ReturnType<typeof useSettingsData> 
       {preview ? (
         <section className="settings-package-audit" aria-labelledby="package-audit-title">
           <header className="settings-subsection-header">
-            <div><h3 id="package-audit-title">Audit · {preview.descriptor.package.name}@{preview.descriptor.package.version}</h3><p>Quarantine expires {new Date(preview.expiresAt).toLocaleString()} · plan <code>{preview.planHash.slice(0, 12)}</code></p></div>
-            <Button variant="ghost" onClick={() => setPreview(null)}>关闭</Button>
+            <div><h3 id="package-audit-title">Audit · {preview.package.id}@{preview.package.version}</h3><p>Approval expires {new Date(preview.expiresAt).toLocaleString()} · plan <code>{preview.planHash.slice(0, 12)}</code></p></div>
+            <Button variant="ghost" onClick={() => { setPreview(null); setArchiveHandle(null); }}>关闭</Button>
           </header>
           <dl className="settings-facts">
-            <div><dt>Tier</dt><dd>{preview.descriptor.tier}</dd></div>
-            <div><dt>License</dt><dd>{preview.descriptor.package.license ?? "missing"}</dd></div>
-            <div><dt>Files</dt><dd>{preview.descriptor.audit.fileCount}</dd></div>
-            <div><dt>Dependencies</dt><dd>{preview.descriptor.dependencyClosure.length}</dd></div>
-            <div><dt>Extensions</dt><dd>{preview.descriptor.resources.extensions.length}</dd></div>
-            <div><dt>Skills</dt><dd>{preview.descriptor.resources.skills.length}</dd></div>
+            <div><dt>Publisher</dt><dd>{preview.signer.publisherId}</dd></div>
+            <div><dt>Signing key</dt><dd>{preview.signer.keyId}</dd></div>
+            <div><dt>License</dt><dd>{preview.package.license}</dd></div>
+            <div><dt>Resources</dt><dd>{preview.resources.length}</dd></div>
+            <div><dt>Executable</dt><dd>no</dd></div>
+            <div><dt>Archive SHA</dt><dd><code>{preview.archiveSha256.slice(0, 16)}</code></dd></div>
           </dl>
           <div className="settings-package-risks" role="group" aria-label="Package risk approvals">
-            {preview.descriptor.risks.filter((risk) => risk.detected).map((risk) => (
-              <label key={risk.id} data-severity={risk.severity}>
+            {preview.requiredRiskIds.map((risk) => (
+              <label key={risk} data-severity="medium">
                 <input
                   type="checkbox"
-                  checked={acceptedRisks.includes(risk.id)}
+                  checked={acceptedRisks.includes(risk)}
                   onChange={(event) => setAcceptedRisks((current) => event.target.checked
-                    ? [...new Set([...current, risk.id])]
-                    : current.filter((item) => item !== risk.id))}
+                    ? [...new Set([...current, risk])]
+                    : current.filter((item) => item !== risk))}
                 />
-                <span><strong>{risk.id}</strong><small>{risk.severity} · {risk.evidence.slice(0, 3).join(" · ")}</small></span>
+                <span><strong>{risk}</strong><small>该声明式资源会影响 Agent 指令、项目行为或产品呈现；不会执行本机代码。</small></span>
               </label>
             ))}
           </div>
           <label className="settings-field settings-package-confirm">
-            <span>输入精确版本 <code>{preview.descriptor.package.version}</code> 以确认</span>
-            <input value={confirmedVersion} onChange={(event) => setConfirmedVersion(event.target.value)} placeholder={preview.descriptor.package.version} />
+            <span>输入精确包 ID <code>{preview.package.id}</code> 以确认签名、内容摘要和风险计划</span>
+            <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={preview.package.id} />
           </label>
           <div className="settings-form__footer">
-            <p>Promotion 只写入 LA managed directory，不编辑 <code>~/.pi/settings</code>。运行中的 Agent 会阻止变更。</p>
+            <p>激活只写 v2 内容寻址 registry；不会写 legacy registry、运行 npm 或加载 Extension。运行中的 Agent 会阻止变更。</p>
             <Button
               variant="primary"
               loading={busy === "install"}
               loadingLabel="正在安全提升"
-              disabled={busy !== null || !requiredAccepted || confirmedVersion !== preview.descriptor.package.version}
+              disabled={busy !== null || !requiredAccepted || confirmation !== preview.package.id}
               onClick={() => void install()}
             >批准并安装</Button>
           </div>
@@ -805,7 +906,6 @@ function PackageSettings({ state }: { state: ReturnType<typeof useSettingsData> 
         </form>
         <ul className="settings-flat-list settings-package-results">
           {(community?.items ?? []).map((item) => {
-            const installed = managed?.packages.some((candidate) => candidate.packageName === item.name && candidate.version === item.version);
             return (
               <li key={`${item.name}@${item.version}`}>
                 <div className="settings-list-copy">
@@ -814,7 +914,7 @@ function PackageSettings({ state }: { state: ReturnType<typeof useSettingsData> 
                 </div>
                 <div className="settings-package-actions">
                   <Button variant="ghost" onClick={() => void window.linguist.system.openExternal(item.piGalleryUrl)} aria-label={`打开 ${item.name} Pi 页面`}><ExternalLink aria-hidden="true" /></Button>
-                  <Button variant="secondary" disabled={busy !== null || installed} loading={busy === "preview"} onClick={() => void inspect(item.name, item.version)}>{installed ? "已批准" : "隔离审计"}</Button>
+                  <StatusLabel state="neutral">discovery only</StatusLabel>
                 </div>
               </li>
             );
@@ -958,15 +1058,14 @@ const guidanceScopeLabels: Record<ProjectGuidanceScope, string> = {
 };
 
 function memoryStatusTone(status: string | undefined): StatusState {
-  if (status === "ready") return "complete";
-  if (status === "gateway_unreachable") return "waiting";
+  if (status === "confirmed_memory_only") return "complete";
+  if (status === "legacy_migration_required") return "waiting";
   return "neutral";
 }
 
 function memoryStatusText(status: string | undefined): string {
-  if (status === "ready") return "就绪";
-  if (status === "disabled") return "已禁用";
-  if (status === "gateway_unreachable") return "Gateway 不可达";
+  if (status === "confirmed_memory_only") return "仅 Confirmed Memory";
+  if (status === "legacy_migration_required") return "待迁移审阅";
   return status ?? "未报告";
 }
 
@@ -986,14 +1085,8 @@ function MemorySettings({ store }: { store: WorkspaceStore }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(projectId !== null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [config, setConfig] = useState<ProjectMemoryConfig | null>(null);
   const [status, setStatus] = useState<ProjectMemoryStatus | null>(null);
   const [guidance, setGuidance] = useState<ProjectGuidanceDecision[] | null>(null);
-  const [enabled, setEnabled] = useState(true);
-  const [gatewayUrl, setGatewayUrl] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveNotice, setSaveNotice] = useState(false);
   const [guidanceBusy, setGuidanceBusy] = useState(false);
   const [guidanceError, setGuidanceError] = useState<string | null>(null);
   const [draftScope, setDraftScope] = useState<ProjectGuidanceScope>("general");
@@ -1003,7 +1096,6 @@ function MemorySettings({ store }: { store: WorkspaceStore }) {
     if (!projectId) {
       setLoading(false);
       setLoadError(null);
-      setConfig(null);
       setStatus(null);
       setGuidance(null);
       return;
@@ -1011,18 +1103,12 @@ function MemorySettings({ store }: { store: WorkspaceStore }) {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    setSaveError(null);
-    setSaveNotice(false);
     setGuidanceError(null);
     void Promise.all([
-      workspaceClient.fetchMemoryConfig(projectId),
       workspaceClient.fetchMemoryStatus(projectId),
       workspaceClient.fetchMemoryGuidance(projectId),
-    ]).then(([nextConfig, nextStatus, nextGuidance]) => {
+    ]).then(([nextStatus, nextGuidance]) => {
       if (cancelled) return;
-      setConfig(nextConfig);
-      setEnabled(nextConfig.enabled);
-      setGatewayUrl(nextConfig.gatewayUrl);
       setStatus(nextStatus);
       setGuidance(nextGuidance.guidance);
       setLoading(false);
@@ -1038,7 +1124,7 @@ function MemorySettings({ store }: { store: WorkspaceStore }) {
     return <Unavailable>记忆与指南按项目保存。先在工作区打开一个项目，再回到这里配置。</Unavailable>;
   }
   if (loading) return <SettingsSkeleton />;
-  if (loadError || !config || !guidance) {
+  if (loadError || !guidance) {
     return (
       <div className="settings-form">
         <div className="settings-warning-row" role="alert">
@@ -1052,33 +1138,6 @@ function MemorySettings({ store }: { store: WorkspaceStore }) {
       </div>
     );
   }
-
-  const saveConfig = async (event: FormEvent) => {
-    event.preventDefault();
-    if (saving) return;
-    setSaving(true);
-    setSaveError(null);
-    setSaveNotice(false);
-    try {
-      const patch: { enabled: boolean; gatewayUrl?: string } = { enabled };
-      const trimmedUrl = gatewayUrl.trim();
-      if (trimmedUrl) patch.gatewayUrl = trimmedUrl;
-      const saved = await workspaceClient.updateMemoryConfig(projectId, patch);
-      setConfig(saved);
-      setEnabled(saved.enabled);
-      setGatewayUrl(saved.gatewayUrl);
-      setSaveNotice(true);
-      try {
-        setStatus(await workspaceClient.fetchMemoryStatus(projectId));
-      } catch {
-        // 状态快照刷新失败时保留旧值,不覆盖保存成功的反馈。
-      }
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "记忆设置保存失败");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const writeGuidance = async (next: ProjectGuidanceDecision[]): Promise<boolean> => {
     setGuidanceBusy(true);
@@ -1116,45 +1175,19 @@ function MemorySettings({ store }: { store: WorkspaceStore }) {
 
   return (
     <div className="settings-stack">
-      <Section title="Legacy TDAI Recall" description="可选的旧项目召回适配器。LA 的正式本地记忆、确认、编辑与撤销已迁移到 Library。">
-        <form className="settings-form" onSubmit={(event) => void saveConfig(event)}>
-          <label className="settings-toggle-row">
-            <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
-            <span><strong>启用 TDAI 只读召回</strong><small>只提供旧项目记忆搜索；不会自动捕获对话，也不会绕过 Library 的用户确认。</small></span>
-          </label>
-          <label className="settings-field settings-field--wide">
-            <span>Memory Gateway URL</span>
-            <input
-              value={gatewayUrl}
-              placeholder="http://127.0.0.1:8420"
-              autoComplete="off"
-              onChange={(event) => setGatewayUrl(event.target.value)}
-            />
-            <small>本机 TencentDB Agent Memory Gateway 地址;留空保存时保留当前值。</small>
-          </label>
-          {saveError ? (
-            <div className="settings-warning-row" role="alert">
-              <AlertTriangle aria-hidden="true" /><span>{saveError}</span>
-            </div>
-          ) : null}
-          {saveNotice ? <p className="settings-readonly-note" role="status">记忆设置已保存。</p> : null}
-          <div className="settings-form__footer">
-            <p>按项目保存,立即生效。</p>
-            <Button variant="primary" type="submit" loading={saving} loadingLabel="正在保存">保存记忆设置</Button>
-          </div>
-        </form>
+      <Section title="Memory migration" description="Confirmed Memory 是唯一可召回的长期记忆。旧 TDAI capture、store 和 recall 已停用，不能再通过设置重新开启。">
+        <p className="settings-readonly-note">旧记录只能作为显式、只读的 MemoryCandidate 审阅输入；每条候选均须用户确认和备份后才会进入 Confirmed Memory。</p>
         {status ? (
           <div className="settings-subsection">
             <h3>记忆状态</h3>
             <dl className="settings-facts">
               <div><dt>状态</dt><dd><StatusLabel state={memoryStatusTone(status.status)}>{memoryStatusText(status.status)}</StatusLabel></dd></div>
-              <div><dt>记忆开关</dt><dd>{status.enabled === true ? "启用" : status.enabled === false ? "禁用" : "未报告"}</dd></div>
-              <div><dt>Gateway</dt><dd><code>{status.gatewayUrl ?? "未报告"}</code></dd></div>
-              <div><dt>Gateway 可达</dt><dd>{memoryBoolText(status.gatewayReachable)}</dd></div>
+              <div><dt>旧配置</dt><dd>{memoryBoolText(status.legacyTdai?.configurationDetected)}</dd></div>
+              <div><dt>旧召回曾启用</dt><dd>{memoryBoolText(status.legacyTdai?.legacyRecallWasConfigured)}</dd></div>
               <div><dt>记忆工具</dt><dd>{memoryBoolText(status.toolsAvailable)}</dd></div>
-              <div><dt>自动捕获</dt><dd>永久关闭</dd></div>
-              <div><dt>缓存策略</dt><dd>{status.cacheSafety ?? "未报告"}</dd></div>
-              <div><dt>用户标识</dt><dd>{status.userIdStrategy ?? "未报告"}</dd></div>
+              <div><dt>自动捕获</dt><dd>{memoryBoolText(status.captureEnabled)}</dd></div>
+              <div><dt>自动存储</dt><dd>{memoryBoolText(status.storeEnabled)}</dd></div>
+              <div><dt>旧记录召回</dt><dd>{memoryBoolText(status.recallEnabled)}</dd></div>
               {status.semantic ? (
                 <div><dt>语义索引</dt><dd>
                   {status.semantic.state ?? status.semantic.assetVectorIndex ?? "未报告"}
@@ -1295,35 +1328,33 @@ function SettingsPageContent({ page, state, store }: {
   state: ReturnType<typeof useSettingsData>;
   store: WorkspaceStore;
 }) {
-  if (page === "model") {
+  if (page === "models") {
     return (
-      <Section title="新 Run 默认配置" description="改变后只应用到新 Run；正在运行的工作保留启动时记录的配置。">
-        <ModelSettings
-          catalog={state.data.settings}
-          providers={state.data.providers}
-          busy={state.mutation !== null}
-          saving={state.mutation === "model"}
-          onSave={state.saveModel}
-        />
-      </Section>
-    );
-  }
-  if (page === "connections") {
-    return (
-      <Section title="Provider 与能力" description="Provider 凭据进入 Keychain；每个 Run 的实际能力仍由服务端 profile 决定。">
-        <ProviderConnections
-          catalog={state.data.providers}
-          bridges={state.data.bridges}
-          busy={state.mutation !== null}
-          saving={state.mutation === "connection"}
-          loginAttempt={state.providerLogin}
-          onAnswerLogin={state.answerProviderLogin}
-          onCancelLogin={state.cancelProviderLogin}
-          onLogin={state.startProviderLogin}
-          onLogout={state.logoutProvider}
-          onSave={state.saveApiKey}
-        />
-      </Section>
+      <>
+        <Section title="当前模型" description="保存为此 Mac 上的当前模型选择；改变后只应用到新 Run，正在运行的工作保留启动时记录的配置。">
+          <ModelSettings
+            catalog={state.data.settings}
+            providers={state.data.providers}
+            busy={state.mutation !== null}
+            saving={state.mutation === "model"}
+            onSave={state.saveModel}
+          />
+        </Section>
+        <Section title="Provider 与 Run 能力" description="Provider 凭据进入 Keychain；OAuth 登录、API key 连接和实际 Run 能力在同一处管理。">
+          <ProviderConnections
+            catalog={state.data.providers}
+            bridges={state.data.bridges}
+            busy={state.mutation !== null}
+            saving={state.mutation === "connection"}
+            loginAttempt={state.providerLogin}
+            onAnswerLogin={state.answerProviderLogin}
+            onCancelLogin={state.cancelProviderLogin}
+            onLogin={state.startProviderLogin}
+            onLogout={state.logoutProvider}
+            onSave={state.saveApiKey}
+          />
+        </Section>
+      </>
     );
   }
   if (page === "notifications") {
@@ -1391,7 +1422,7 @@ function SettingsPageContent({ page, state, store }: {
 }
 
 export function SettingsWorkspace({ store = workspaceStore, onClose }: SettingsWorkspaceProps) {
-  const [page, setPage] = useState<SettingsPage>("model");
+  const [page, setPage] = useState<SettingsPage>("models");
   const [query, setQuery] = useState("");
   const state = useSettingsData();
   const hasData = Object.values(state.data).some(Boolean);

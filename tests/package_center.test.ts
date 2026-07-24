@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as tar from "tar";
@@ -16,6 +16,9 @@ import {
 
 const root = await mkdtemp(join(tmpdir(), "la-package-center-"));
 const fixture = await mkdtemp(join(tmpdir(), "la-package-fixture-"));
+const dependencyFixture = await mkdtemp(join(tmpdir(), "la-package-dependency-fixture-"));
+const shrinkwrapFixture = await mkdtemp(join(tmpdir(), "la-package-shrinkwrap-fixture-"));
+const fakeBin = await mkdtemp(join(tmpdir(), "la-package-fake-bin-"));
 
 try {
   await mkdir(join(fixture, "extensions"), { recursive: true });
@@ -113,7 +116,6 @@ try {
 
   const preview = await previewManagedPackageInstall(root, { name: "fixture-pi-package", version: "1.2.3" }, {
     fetchImpl,
-    installDependencies: async () => undefined,
     now: new Date("2026-07-20T03:00:00.000Z"),
   });
   assert.equal(preview.descriptor.package.integrity, integrity);
@@ -124,6 +126,96 @@ try {
   assert.equal(preview.requiredRiskIds.includes("lifecycle_scripts"), true);
   assert.equal(preview.requiredRiskIds.includes("process_execution"), true);
   assert.equal(preview.requiredRiskIds.includes("secret_access"), true);
+
+  const dependencyArchivePath = join(root, "dependency-fixture.tgz");
+  await writeFile(join(dependencyFixture, "package.json"), JSON.stringify({
+    name: "dependency-fixture",
+    version: "1.0.0",
+    dependencies: { unsafe: "file:/tmp/host-package" },
+  }, null, 2));
+  await tar.c({ gzip: true, file: dependencyArchivePath, cwd: dependencyFixture, prefix: "package/" }, ["package.json"]);
+  const dependencyArchive = await readFile(dependencyArchivePath);
+  const dependencyIntegrity = `sha512-${createHash("sha512").update(dependencyArchive).digest("base64")}`;
+  const npmMarker = join(root, "npm-was-started");
+  const fakeNpm = join(fakeBin, "npm");
+  await writeFile(fakeNpm, `#!/bin/sh\nprintf started > "${npmMarker}"\n`, "utf8");
+  await chmod(fakeNpm, 0o755);
+  let dependencyFetchCalls = 0;
+  const dependencyFetch: typeof fetch = async (input) => {
+    dependencyFetchCalls += 1;
+    const url = String(input);
+    if (url.includes("dependency-fixture/1.0.0")) {
+      return new Response(JSON.stringify({
+        name: "dependency-fixture",
+        version: "1.0.0",
+        dist: { tarball: "https://registry.npmjs.org/dependency-fixture/-/dependency-fixture-1.0.0.tgz", integrity: dependencyIntegrity },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.endsWith("dependency-fixture-1.0.0.tgz")) return new Response(dependencyArchive, { status: 200 });
+    throw new Error(`Unexpected dependency fixture URL: ${url}`);
+  };
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${fakeBin}:${originalPath ?? ""}`;
+  try {
+    await assert.rejects(
+      previewManagedPackageInstall(root, { name: "dependency-fixture", version: "1.0.0" }, { fetchImpl: dependencyFetch }),
+      (error: unknown) => error instanceof PackageCenterError && error.code === "unsafe_archive" && /dependencies/i.test(error.message),
+    );
+  } finally {
+    process.env.PATH = originalPath;
+  }
+  await assert.rejects(readFile(npmMarker), /ENOENT/, "Stable preview must not start npm or any dependency installer");
+  assert.equal(dependencyFetchCalls, 2, "preview may fetch only metadata and the selected archive");
+
+  for (const dependencyCase of [
+    { suffix: "git", spec: "git+https://example.test/unsafe.git" },
+    { suffix: "url", spec: "https://example.test/unsafe.tgz" },
+  ]) {
+    const packageName = `dependency-fixture-${dependencyCase.suffix}`;
+    await writeFile(join(dependencyFixture, "package.json"), JSON.stringify({
+      name: packageName,
+      version: "1.0.0",
+      dependencies: { unsafe: dependencyCase.spec },
+    }, null, 2));
+    const archivePathForCase = join(root, `${packageName}.tgz`);
+    await tar.c({ gzip: true, file: archivePathForCase, cwd: dependencyFixture, prefix: "package/" }, ["package.json"]);
+    const archiveForCase = await readFile(archivePathForCase);
+    const integrityForCase = `sha512-${createHash("sha512").update(archiveForCase).digest("base64")}`;
+    let fetchCalls = 0;
+    const fetchForCase: typeof fetch = async (input) => {
+      fetchCalls += 1;
+      return String(input).endsWith(`${packageName}-1.0.0.tgz`)
+        ? new Response(archiveForCase, { status: 200 })
+        : new Response(JSON.stringify({
+          name: packageName,
+          version: "1.0.0",
+          dist: { tarball: `https://registry.npmjs.org/${packageName}/-/${packageName}-1.0.0.tgz`, integrity: integrityForCase },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await assert.rejects(
+      previewManagedPackageInstall(root, { name: packageName, version: "1.0.0" }, { fetchImpl: fetchForCase }),
+      (error: unknown) => error instanceof PackageCenterError && error.code === "unsafe_archive" && /dependencies/i.test(error.message),
+    );
+    assert.equal(fetchCalls, 2, `${dependencyCase.suffix} dependency preview must perform no dependency fetch`);
+  }
+
+  const shrinkwrapArchivePath = join(root, "shrinkwrap-fixture.tgz");
+  await writeFile(join(shrinkwrapFixture, "package.json"), JSON.stringify({ name: "shrinkwrap-fixture", version: "1.0.0" }));
+  await writeFile(join(shrinkwrapFixture, "npm-shrinkwrap.json"), JSON.stringify({ name: "shrinkwrap-fixture", version: "1.0.0", lockfileVersion: 3 }));
+  await tar.c({ gzip: true, file: shrinkwrapArchivePath, cwd: shrinkwrapFixture, prefix: "package/" }, ["package.json", "npm-shrinkwrap.json"]);
+  const shrinkwrapArchive = await readFile(shrinkwrapArchivePath);
+  const shrinkwrapIntegrity = `sha512-${createHash("sha512").update(shrinkwrapArchive).digest("base64")}`;
+  const shrinkwrapFetch: typeof fetch = async (input) => String(input).endsWith("shrinkwrap-fixture-1.0.0.tgz")
+    ? new Response(shrinkwrapArchive, { status: 200 })
+    : new Response(JSON.stringify({
+      name: "shrinkwrap-fixture",
+      version: "1.0.0",
+      dist: { tarball: "https://registry.npmjs.org/shrinkwrap-fixture/-/shrinkwrap-fixture-1.0.0.tgz", integrity: shrinkwrapIntegrity },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  await assert.rejects(
+    previewManagedPackageInstall(root, { name: "shrinkwrap-fixture", version: "1.0.0" }, { fetchImpl: shrinkwrapFetch }),
+    (error: unknown) => error instanceof PackageCenterError && error.code === "unsafe_archive" && /shrinkwrap/i.test(error.message),
+  );
 
   await assert.rejects(
     promoteManagedPackageInstall(root, {
@@ -155,5 +247,8 @@ try {
   await Promise.all([
     rm(root, { recursive: true, force: true }),
     rm(fixture, { recursive: true, force: true }),
+    rm(dependencyFixture, { recursive: true, force: true }),
+    rm(shrinkwrapFixture, { recursive: true, force: true }),
+    rm(fakeBin, { recursive: true, force: true }),
   ]);
 }

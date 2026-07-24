@@ -8,6 +8,7 @@ import {
   buildAgentPermissionContract,
   buildGeneralSandboxRuntimeConfig,
   createGeneralAgentSession,
+  createPiAgentRuntimePort,
 } from "@linguist-agent/cat-runtime";
 
 const root = await mkdtemp(join(tmpdir(), "la-general-session-"));
@@ -74,33 +75,32 @@ try {
     modelRuntime,
     permissionContract: buildAgentPermissionContract({ mode: "ask" }),
     projectTrusted: true,
-    authorizeExecutableExtensions: async (request) => {
+    authorizeExecutableExtensions: async () => {
       executableAuthorizationCount += 1;
-      assert.equal(await access(join(root, "extension-executed.txt")).then(() => true, () => false), false, "authorization must happen before Extension module evaluation");
-      assert.equal(request.extensions.length, 2);
-      assert.match(request.resourceSetHash, /^[a-f0-9]{64}$/);
-      assert.equal(request.extensions.every((entry) => /^[a-f0-9]{64}$/.test(entry.sha256)), true);
     },
     delegate: async () => ({ agentThreadId: "child-1", role: "Research Agent", summary: "done" }),
   });
   try {
-    assert.equal(executableAuthorizationCount, 1);
-    assert.equal(await access(join(root, "extension-executed.txt")).then(() => true, () => false), true);
+    assert.equal(executableAuthorizationCount, 0, "Stable General Runs must not offer approval for third-party executable Extensions");
+    assert.equal(await access(join(root, "extension-executed.txt")).then(() => true, () => false), false, "Stable General Runs must not evaluate third-party Extension modules");
     assert.equal(created.access.workingDirectory, privateWorkspace);
     assert.deepEqual(created.access.grants, []);
     assert.equal(created.resources.skills.some((skill) => skill.name === "fixture-skill"), true);
     assert.equal(created.resources.prompts.some((prompt) => prompt.name === "fixture"), true);
-    assert.equal(created.resources.extensions.some((extension) => extension.commands.includes("fixture-command")), true);
-    assert.equal(created.resources.conflicts.some((conflict) => conflict.kind === "tool" && conflict.name === "fixture_deferred"), true);
+    assert.deepEqual(created.resources.extensions, [
+      { path: "<inline:1>", tools: [], commands: [] },
+      { path: "<inline:2>", tools: ["capability_search"], commands: [] },
+    ], "Stable General Runs load only the two LA-owned inline extension factories");
+    assert.deepEqual(created.resources.conflicts, []);
     assert.match(created.resources.resourceSetHash, /^[a-f0-9]{64}$/);
     assert.equal(created.resources.contextFiles.includes(join(privateWorkspace, "AGENTS.md")), true);
     for (const tool of ["read", "grep", "find", "ls", "edit", "write", "bash", "capability_search", "assistant_memory_search", "assistant_memory_propose", "assistant_library_search", "assistant_library_list", "delegate_agent"]) {
       assert.equal(created.resources.activeToolNames.includes(tool), true, `${tool} must be active in General Core`);
     }
-    assert.equal(created.session.getAllTools().some((tool) => tool.name === "fixture_deferred"), true);
+    assert.equal(created.session.getAllTools().some((tool) => tool.name === "fixture_deferred"), false);
     assert.equal(created.resources.activeToolNames.includes("fixture_deferred"), false, "non-core tools must remain registered but initially inactive");
-    assert.match(created.session.systemPrompt, /Keep answers concise/);
-    assert.match(created.session.systemPrompt, /recall context only/);
+    assert.doesNotMatch(created.session.systemPrompt, /Keep answers concise/, "a General Worker must not enumerate live Personal Memory without a host-selected snapshot");
+    assert.match(created.session.systemPrompt, /No host-selected Confirmed Memory was attached to this Run/);
     const sandbox = buildGeneralSandboxRuntimeConfig(created.access);
     assert.deepEqual(sandbox.filesystem?.allowWrite?.includes(privateWorkspace), true);
     assert.deepEqual(sandbox.filesystem?.allowRead?.includes(privateWorkspace), true);
@@ -125,8 +125,8 @@ try {
     assert.equal(forked.cancelled, false);
     assert.notEqual(created.runtime.session.sessionFile, originalSessionFile);
     assert.equal(created.runtime.session.sessionManager.getHeader().parentSession, originalSessionFile);
-    assert.equal(executableAuthorizationCount, 1, "Pi runtime replacement must reuse the immutable Run resource approval");
-    await write(join(agentDir, "extensions", "fixture.ts"), "export default function changed() {}\n");
+    assert.equal(executableAuthorizationCount, 0);
+    await write(join(agentDir, "skills", "fixture-skill", "SKILL.md"), "---\nname: fixture-skill\ndescription: Changed\n---\nChanged.\n");
     await assert.rejects(
       created.runtime.newSession(),
       /resource changed after the Run snapshot was fixed/i,
@@ -162,6 +162,26 @@ try {
   } finally {
     if (child.runtime) await child.runtime.dispose();
     else child.session.dispose();
+  }
+
+  const runtimePort = createPiAgentRuntimePort({ modelRuntime: async () => modelRuntime });
+  assert.equal(await runtimePort.supportsInput("fixture", "missing", "image"), false);
+  const adapted = await runtimePort.createGeneralSession({
+    runtimeRoot: root,
+    taskId: "chat-one",
+    agentDir,
+    permissionContract: buildAgentPermissionContract({ mode: "ask" }),
+    projectTrusted: true,
+  });
+  try {
+    assert.equal(adapted.access.workingDirectory, privateWorkspace);
+    assert.equal(adapted.resources.activeToolNames.includes("read"), true);
+    assert.match(adapted.resources.resourceSetHash, /^[a-f0-9]{64}$/u);
+    assert.equal(adapted.session.sessionId.length > 0, true);
+    assert.equal(adapted.session.sessionFile?.endsWith(".jsonl"), true);
+    assert.equal(typeof adapted.fork, "function", "Pi adapter preserves native branch capability behind the port");
+  } finally {
+    await adapted.dispose();
   }
 
   console.log("general Agent session tests passed");

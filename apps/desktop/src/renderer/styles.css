@@ -4,16 +4,6 @@
 @import "./workspace/workspace.css";
 @import "./conversation/conversation.css";
 @import "./onboarding/onboarding.css";
-@import "./shell/product-workspace.css";
-
-.desktop-drag-region {
-  position: fixed;
-  z-index: 100;
-  inset: 0 0 auto;
-  height: 28px;
-  pointer-events: none;
-  -webkit-app-region: drag;
-}
 
 .desktop-fatal {
   display: flex;
@@ -38,8 +28,8 @@
 
 .desktop-fatal h1 {
   margin-top: var(--la-space-2);
-  font-size: 20px;
-  line-height: 28px;
+  font-size: var(--la-type-heading-size);
+  line-height: var(--la-type-heading-line);
 }
 
 .desktop-fatal span {

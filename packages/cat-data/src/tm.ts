@@ -2,6 +2,7 @@ import { appendFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { workspacePath, type CatWorkspace, readJsonFile, writeJsonFile } from "./workspace.js";
 import { localeKey, localesMatch } from "./locale.js";
+import { assertCatCoreLegacyAllowed, catCorePersistenceFor, readCatCoreReadCache, type CatCorePersistence } from "./cat_core_storage.js";
 
 export interface TmEntry {
   id: string;
@@ -171,12 +172,25 @@ function snippetAround(value: string, query: string, radius = 48): string {
 export class JsonTmStore {
   readonly path: string;
 
-  constructor(readonly workspace: CatWorkspace) {
+  constructor(readonly workspace: CatWorkspace, private readonly persistence?: CatCorePersistence) {
     this.path = workspacePath(workspace, "tm.json");
   }
 
   async list(): Promise<TmEntry[]> {
+    if (this.persistence) return this.persistence.readTm(this.workspace.projectId);
+    const cached = await readCatCoreReadCache<TmEntry[]>(this.workspace.root, "tm", this.workspace.projectId);
+    if (cached) return cached;
+    await assertCatCoreLegacyAllowed(this.workspace.root);
     return readJsonFile<TmEntry[]>(this.path, []);
+  }
+
+  private async writeEntries(entries: TmEntry[], expected: TmEntry[] | null): Promise<void> {
+    if (this.persistence) {
+      await this.persistence.writeTm(this.workspace.projectId, entries, expected);
+      return;
+    }
+    await assertCatCoreLegacyAllowed(this.workspace.root);
+    await writeJsonFile(this.path, entries);
   }
 
   async seed(entries: TmSeedEntry[]): Promise<TmEntry[]> {
@@ -197,7 +211,7 @@ export class JsonTmStore {
       createdAt: entry.createdAt ?? now,
       updatedAt: entry.updatedAt ?? now,
     }));
-    await writeJsonFile(this.path, normalized);
+    await this.writeEntries(normalized, await this.list());
     return normalized;
   }
 
@@ -253,7 +267,7 @@ export class JsonTmStore {
       } else {
         entries.push(next);
       }
-      await writeJsonFile(this.path, entries);
+      await this.writeEntries(entries, await this.list());
       await appendFile(
         workspacePath(this.workspace, "tm_audit.jsonl"),
         `${JSON.stringify({ ts: new Date().toISOString(), action, entry: existingIndex >= 0 ? entries[existingIndex] : next })}\n`,
@@ -278,7 +292,7 @@ export class JsonTmStore {
       const action: TmUpsertResult["action"] =
         current.origin === next.origin && current.sourceKind === next.sourceKind ? "unchanged" : "updated";
       entries[index] = next;
-      await writeJsonFile(this.path, entries);
+      await this.writeEntries(entries, await this.list());
       await appendFile(
         workspacePath(this.workspace, "tm_audit.jsonl"),
         `${JSON.stringify({ ts: next.updatedAt, action: "promote_reviewed", entry: next })}\n`,
@@ -380,7 +394,7 @@ export class JsonTmStore {
         }
       }
 
-      await writeJsonFile(this.path, entries);
+      await this.writeEntries(entries, original);
       await appendFile(
         workspacePath(this.workspace, "tm_audit.jsonl"),
         `${JSON.stringify({
@@ -486,5 +500,5 @@ export class JsonTmStore {
 }
 
 export function createTmStore(workspace: CatWorkspace): JsonTmStore {
-  return new JsonTmStore(workspace);
+  return new JsonTmStore(workspace, catCorePersistenceFor(workspace.root));
 }

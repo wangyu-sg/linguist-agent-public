@@ -227,7 +227,6 @@ export async function createRuntimeBundle(repoRoot, outputDirectory, options = {
 }
 
 async function stageApplication(stageDirectory, desktopPackage) {
-  await mkdir(join(stageDirectory, "src"), { recursive: true });
   for (const relativePath of PACKAGED_SOURCE_FILES) {
     const destination = join(stageDirectory, relativePath);
     await mkdir(dirname(destination), { recursive: true });
@@ -240,7 +239,7 @@ async function stageApplication(stageDirectory, desktopPackage) {
     version: desktopPackage.version,
     private: true,
     type: "module",
-    main: "src/main.mjs",
+    main: "dist/electron/main.js",
   }, null, 2)}\n`);
 }
 

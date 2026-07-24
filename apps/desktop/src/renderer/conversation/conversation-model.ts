@@ -13,12 +13,20 @@ type BaseItem = {
   order: number;
 };
 
+/* 一次 Turn 的模型身份,来自 canonical ExecutionSnapshot(providerId/modelId)。 */
+export type ExecutionModelRef = {
+  providerId: string;
+  modelId: string;
+};
+
 export type ConversationItem =
   | (BaseItem & { kind: "activity"; activity: TaskActivity; thread?: TaskAgentThread })
   | (BaseItem & { kind: "process"; activities: TaskActivity[]; thread?: TaskAgentThread })
   | (BaseItem & { kind: "artifact"; artifact: TaskArtifact; thread?: TaskAgentThread })
   | (BaseItem & { kind: "decision"; interactionId: string | null; decisions: TaskDecision[]; thread?: TaskAgentThread })
+  | (BaseItem & { kind: "recovery"; run: TaskRun; thread?: TaskAgentThread })
   | (BaseItem & { kind: "specialist"; thread: TaskAgentThread })
+  | (BaseItem & { kind: "model-change"; fromModel: ExecutionModelRef; toModel: ExecutionModelRef })
   | (BaseItem & { kind: "run"; phase: "started" | "status"; run: TaskRun; thread?: TaskAgentThread });
 
 export type ConversationFilterKind = "all" | "messages" | "process" | "artifacts" | "decisions";
@@ -53,6 +61,18 @@ function earliest(values: string[]): string {
  * announce an Artifact or Decision are suppressed because the typed object is
  * rendered at that same chronological position.
  */
+/** 取 Run 最后一个带完整模型身份的 ExecutionSnapshot;缺/旧 epoch 返回 null。 */
+function latestExecutionModel(run: TaskRun): ExecutionModelRef | null {
+  const snapshots = run.executionSnapshots ?? [];
+  for (let index = snapshots.length - 1; index >= 0; index -= 1) {
+    const candidate = snapshots[index];
+    if (candidate?.modelId && candidate?.providerId) {
+      return { providerId: candidate.providerId, modelId: candidate.modelId };
+    }
+  }
+  return null;
+}
+
 export function buildConversationItems(snapshot: TaskWorkspaceSnapshot): ConversationItem[] {
   const threads = new Map(snapshot.agentThreads.map((thread) => [thread.id, thread]));
   const runs = new Map(snapshot.runs.map((run) => [run.id, run]));
@@ -71,25 +91,43 @@ export function buildConversationItems(snapshot: TaskWorkspaceSnapshot): Convers
     if (!current || activity.createdAt < current.createdAt) firstRootReplyByRun.set(run.id, activity);
   }
 
+  let previousModel: ExecutionModelRef | null = null;
   for (const run of snapshot.runs) {
     const thread = threads.get(run.rootAgentThreadId);
+    const runModel = latestExecutionModel(run);
+    if (run.startedAt && runModel && previousModel
+      && (runModel.modelId !== previousModel.modelId || runModel.providerId !== previousModel.providerId)) {
+      items.push({
+        id: `model-change:${run.id}`,
+        kind: "model-change",
+        fromModel: previousModel,
+        toModel: runModel,
+        occurredAt: run.startedAt,
+        order: -1,
+      });
+    }
+    if (runModel) previousModel = runModel;
     if (run.startedAt) {
       items.push({ id: `run:${run.id}:started`, kind: "run", phase: "started", run, thread, occurredAt: run.startedAt, order: 0 });
     }
     if (terminalRunStatuses.has(run.status)) {
       const firstRootReply = firstRootReplyByRun.get(run.id);
-      items.push({
-        id: `run:${run.id}:${run.status}`,
-        kind: "run",
-        phase: "status",
+      const boundary = {
         run,
         thread,
         occurredAt: firstRootReply?.createdAt ?? run.completedAt ?? run.updatedAt,
-        // Codex places Worked between the process trace and the root reply.
-        // Canonical completion is recorded later, so presentation anchors the
-        // divider to the first durable Main reply without rewriting history.
         order: firstRootReply ? 29 : 90,
-      });
+      };
+      if (run.mode === "team" && run.resumeAvailable) {
+        items.push({ id: `recovery:${run.id}`, kind: "recovery", ...boundary });
+      } else {
+        items.push({
+          id: `run:${run.id}:${run.status}`,
+          kind: "run",
+          phase: "status",
+          ...boundary,
+        });
+      }
     }
   }
 
@@ -153,6 +191,7 @@ export function buildConversationItems(snapshot: TaskWorkspaceSnapshot): Convers
 
   return groupProcessActivities(
     items.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.order - right.order || left.id.localeCompare(right.id)),
+    new Set(snapshot.runs.filter((run) => terminalRunStatuses.has(run.status)).map((run) => run.id)),
   );
 }
 
@@ -174,12 +213,6 @@ function isProcessActivityItem(item: ConversationItem): item is ActivityItem_ {
     && item.activity.type !== "final_response"
     && item.activity.type !== "message"
     && item.activity.type !== "error";
-}
-
-function processActivitySignature(activity: TaskActivity): string {
-  if (activity.tool) return `tool:${activity.tool.effect}:${activity.tool.name}`;
-  if (activity.type === "evidence_read") return "evidence_read";
-  return `${activity.type}:${activity.title}`;
 }
 
 function boundedProcessDetail(value: string | null | undefined): string | null {
@@ -232,41 +265,67 @@ export function summarizeProcessActivities(activities: TaskActivity[], live = fa
 }
 
 /**
- * Collapses runs of consecutive process activities into one collapsible
- * group so tool chatter never floods the conversation. Groups never mix
- * threads; a lone process activity renders on its own.
+ * Active work collapses consecutive process activities. Once a Run reaches a
+ * terminal state, every process Activity in that Run moves into one collapsed
+ * row immediately before its Worked/status boundary, even when intermediate
+ * Agent messages or Artifacts interrupted the original tool sequence.
  */
-function groupProcessActivities(sorted: ConversationItem[]): ConversationItem[] {
+function groupProcessActivities(sorted: ConversationItem[], terminalRunIds: Set<string>): ConversationItem[] {
   const grouped: ConversationItem[] = [];
   let pending: ActivityItem_[] = [];
-  const flush = () => {
-    if (!pending.length) return;
-    const first = pending[0]!;
+  const terminalActivities = new Map<string, ActivityItem_[]>();
+  for (const item of sorted) {
+    if (!isProcessActivityItem(item) || !terminalRunIds.has(item.activity.runId)) continue;
+    const activities = terminalActivities.get(item.activity.runId) ?? [];
+    activities.push(item);
+    terminalActivities.set(item.activity.runId, activities);
+  }
+  const pushGroup = (activities: ActivityItem_[]) => {
+    if (!activities.length) return;
+    const first = activities[0]!;
     grouped.push({
       id: `process:${first.activity.id}`,
       kind: "process",
-      activities: pending.map((item) => item.activity),
+      activities: activities.map((item) => item.activity),
       thread: first.thread,
       occurredAt: first.occurredAt,
       order: first.order,
     });
+  };
+  const flush = () => {
+    pushGroup(pending);
     pending = [];
   };
   for (const item of sorted) {
     if (isProcessActivityItem(item)) {
-      const previous = pending[pending.length - 1];
-      if (previous && (
-        (previous.thread?.id ?? "") !== (item.thread?.id ?? "")
-        || processActivitySignature(previous.activity) !== processActivitySignature(item.activity)
-      )) flush();
-      pending.push(item);
+      if (!terminalRunIds.has(item.activity.runId)) pending.push(item);
     } else {
       flush();
+      if ((item.kind === "run" && item.phase === "status") || item.kind === "recovery") {
+        pushGroup(terminalActivities.get(item.run.id) ?? []);
+      }
       grouped.push(item);
     }
   }
   flush();
   return grouped;
+}
+
+/**
+ * The CAT companion is the same conversation presentation, narrowed to one
+ * segment. Process groups are trimmed so expanding one segment never reveals
+ * activity from another segment in the Task.
+ */
+export function conversationItemsForSegment(items: ConversationItem[], segmentId: string): ConversationItem[] {
+  return items.flatMap((item): ConversationItem[] => {
+    if (item.kind === "activity") return item.activity.refs.segmentIds?.includes(segmentId) ? [item] : [];
+    if (item.kind === "artifact") {
+      return item.artifact.scope.kind === "project" && item.artifact.scope.segmentIds.includes(segmentId) ? [item] : [];
+    }
+    if (item.kind !== "process") return [];
+    const activities = item.activities.filter((activity) => activity.refs.segmentIds?.includes(segmentId));
+    return activities.length ? [{ ...item, activities }] : [];
+  });
 }
 
 function itemThreadId(item: ConversationItem): string | undefined {
@@ -275,6 +334,7 @@ function itemThreadId(item: ConversationItem): string | undefined {
     case "process": return item.activities[0]?.agentThreadId;
     case "artifact": return item.artifact.provenance.agentThreadId;
     case "decision": return item.decisions[0]?.requestedByThreadId;
+    case "recovery": return item.run.rootAgentThreadId;
     case "specialist": return item.thread.id;
     case "run": return item.run.rootAgentThreadId;
   }
@@ -286,6 +346,7 @@ function itemRunId(item: ConversationItem): string | undefined {
     case "process": return item.activities[0]?.runId;
     case "artifact": return item.artifact.runId;
     case "decision": return item.decisions[0]?.runId;
+    case "recovery": return item.run.id;
     case "specialist": return item.thread.runId;
     case "run": return item.run.id;
   }
@@ -300,8 +361,10 @@ function itemMatchesKind(item: ConversationItem, kind: ConversationFilterKind): 
   if (kind === "artifacts") return item.kind === "artifact";
   if (kind === "decisions") return item.kind === "decision";
   return item.kind === "run"
+    || item.kind === "recovery"
     || item.kind === "specialist"
     || item.kind === "process"
+    || item.kind === "model-change"
     || (item.kind === "activity" && item.activity.type !== "message" && item.activity.type !== "final_response");
 }
 
@@ -350,8 +413,12 @@ function itemSearchText(item: ConversationItem): string {
         ...(decision.selectedOptionIds ?? []),
         ...decision.options.flatMap((option) => [option.label, option.description, option.preview]),
       ]).filter(Boolean).join(" ");
+    case "recovery":
+      return [item.run.id, item.run.mode, item.run.status, "recovery", item.thread?.identity.displayName, item.thread?.identity.roleLabel].filter(Boolean).join(" ");
     case "specialist":
       return [item.thread.identity.displayName, item.thread.identity.roleLabel, item.thread.handoffSummary, item.thread.status].filter(Boolean).join(" ");
+    case "model-change":
+      return [item.fromModel.providerId, item.fromModel.modelId, item.toModel.providerId, item.toModel.modelId, "model changed"].filter(Boolean).join(" ");
     case "run":
       return [item.run.id, item.run.mode, item.run.status, item.thread?.identity.displayName, item.thread?.identity.roleLabel].filter(Boolean).join(" ");
   }

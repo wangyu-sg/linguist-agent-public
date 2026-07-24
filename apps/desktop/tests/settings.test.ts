@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { resolveWorkspaceCapabilityRequest } from "../src/workspace-capabilities.cjs";
 import type { TaskWorkspaceSnapshot } from "../../../packages/cat-data/src/task_workspace_contract.ts";
 import {
   workspaceClient,
@@ -18,8 +19,8 @@ test("settings writes use only the canonical runtime routes and exact bodies", a
     value: {
       linguist: {
         api: {
-          request: async (input: unknown) => {
-            calls.push(input);
+          invokeWorkspaceCapability: async (input: unknown) => {
+            calls.push(resolveWorkspaceCapabilityRequest(input));
             return { ok: true, status: 200, data: {} };
           },
         },
@@ -28,6 +29,7 @@ test("settings writes use only the canonical runtime routes and exact bodies", a
   });
   try {
     await workspaceClient.updatePiSetting("global", "defaultModel", "model-one");
+    await workspaceClient.savePiModelPreference("provider-one", "model-one", "high");
     await workspaceClient.savePiProviderApiKey("provider-one", "secret-value");
     await workspaceClient.updateAgentPermissions({ mode: "custom", customRules: { fileRead: "auto", bash: "ask" } });
     await workspaceClient.updatePiThemeSelection("native-theme");
@@ -42,6 +44,11 @@ test("settings writes use only the canonical runtime routes and exact bodies", a
         method: "PUT",
         path: "/api/pi/settings",
         body: { scope: "global", path: "defaultModel", value: "model-one", unset: false },
+      },
+      {
+        method: "PUT",
+        path: "/api/pi/model-preference",
+        body: { provider: "provider-one", model: "model-one", thinking: "high" },
       },
       {
         method: "POST",
@@ -74,6 +81,36 @@ test("settings writes use only the canonical runtime routes and exact bodies", a
   }
 });
 
+test("Agent permission policies use the matching global or Project canonical route", async () => {
+  const originalWindow = globalThis.window;
+  const calls: unknown[] = [];
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      linguist: {
+        api: {
+          invokeWorkspaceCapability: async (input: unknown) => {
+            calls.push(resolveWorkspaceCapabilityRequest(input));
+            return { ok: true, status: 200, data: {} };
+          },
+        },
+      },
+    },
+  });
+  try {
+    await workspaceClient.fetchAgentPermissions();
+    await workspaceClient.fetchAgentPermissions("project / one");
+    await workspaceClient.updateAgentPermissions({ mode: "auto" }, "project / one");
+    assert.deepEqual(calls, [
+      { method: "GET", path: "/api/agent/permissions" },
+      { method: "GET", path: "/api/projects/project%20%2F%20one/agent/permissions" },
+      { method: "PUT", path: "/api/projects/project%20%2F%20one/agent/permissions", body: { mode: "auto" } },
+    ]);
+  } finally {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+  }
+});
+
 test("Pi OAuth settings use the server-owned login coordinator routes", async () => {
   const originalWindow = globalThis.window;
   const calls: unknown[] = [];
@@ -82,8 +119,8 @@ test("Pi OAuth settings use the server-owned login coordinator routes", async ()
     value: {
       linguist: {
         api: {
-          request: async (input: unknown) => {
-            calls.push(input);
+          invokeWorkspaceCapability: async (input: unknown) => {
+            calls.push(resolveWorkspaceCapabilityRequest(input));
             return { ok: true, status: 200, data: { attemptId: "attempt-one", status: "pending", events: [] } };
           },
         },

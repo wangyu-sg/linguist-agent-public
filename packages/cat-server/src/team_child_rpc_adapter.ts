@@ -40,6 +40,13 @@ export async function resolveTeamChildPackageExecution(
   resources: readonly TaskPackageResolvedResource[],
 ): Promise<TeamChildPackageExecution> {
   if (resources.length === 0) return { mode: "pi_subagents", blockers: [] };
+  const stableBlockedExtensions = resources.filter((resource) => resource.resourceType === "extension");
+  if (stableBlockedExtensions.length) {
+    return {
+      mode: "blocked",
+      blockers: [`Stable Team Runs do not load third-party executable Package Extensions (${stableBlockedExtensions.map((resource) => `${resource.packageName}@${resource.version}:${resource.resourceId}`).join(", ")}). Skills and Prompts remain available through the server-owned child transport.`],
+    };
+  }
   for (const resource of resources) {
     let actualIntegrity: string;
     try {

@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { appendDurableFile } from "./durable_file.js";
+import { assertCatGovernanceLegacyAllowed, catGovernancePersistenceFor, readCatGovernanceReadCache } from "./cat_governance_storage.js";
 
 export type QualityDecisionLedgerKind =
   | "quality_finding"
@@ -77,6 +79,11 @@ function hashEvent(event: Omit<QualityDecisionLedgerEvent, "hash">): string {
 }
 
 export async function readQualityDecisionLedger(workspaceRoot: string, projectId: string): Promise<QualityDecisionLedgerEvent[]> {
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  if (persistence) return persistence.readLedger(projectId);
+  const cached = await readCatGovernanceReadCache<QualityDecisionLedgerEvent[]>(workspaceRoot, "ledger", projectId);
+  if (cached) return cached;
+  await assertCatGovernanceLegacyAllowed(workspaceRoot);
   const path = qualityDecisionLedgerPath(workspaceRoot, projectId);
   let raw: string;
   try { raw = await readFile(path, "utf8"); } catch (error) {
@@ -158,6 +165,8 @@ async function appendQualityDecisionLedgerInputs(
   if (!inputs.length) return { events: [], appended: 0, skipped: 0 };
   const projectId = inputs[0]!.projectId;
   if (inputs.some((input) => input.projectId !== projectId)) throw new Error("quality decision ledger batch requires one projectId.");
+  const persistence = catGovernancePersistenceFor(workspaceRoot);
+  if (persistence) return persistence.appendLedger(projectId, inputs, requireLogicalEventId);
   const path = qualityDecisionLedgerPath(workspaceRoot, projectId);
   for (const input of inputs) {
     validateLedgerInput(input);
@@ -166,6 +175,7 @@ async function appendQualityDecisionLedgerInputs(
   let result!: QualityDecisionLedgerAppendResult;
   const previous = appendQueues.get(path) ?? Promise.resolve();
   const next = previous.then(async () => {
+    await assertCatGovernanceLegacyAllowed(workspaceRoot);
     const existing = await readQualityDecisionLedger(workspaceRoot, projectId);
     assertFindingScopes(existing, inputs);
     const byLogicalEventId = new Map(existing.flatMap((event) => event.logicalEventId ? [[event.logicalEventId, event] as const] : []));
@@ -194,8 +204,7 @@ async function appendQualityDecisionLedgerInputs(
       if (input.logicalEventId) byLogicalEventId.set(input.logicalEventId, event);
     }
     if (appended.length) {
-      await mkdir(dirname(path), { recursive: true });
-      await appendFile(path, `${appended.map((event) => JSON.stringify(event)).join("\n")}\n`, "utf8");
+      await appendDurableFile(path, `${appended.map((event) => JSON.stringify(event)).join("\n")}\n`);
     }
     result = { events, appended: appended.length, skipped: events.length - appended.length };
   });

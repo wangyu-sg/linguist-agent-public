@@ -1,6 +1,5 @@
-import { appendFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
 import { createWorkspace, readJsonlFile, workspacePath } from "./workspace.js";
+import { appendDurableFile } from "./durable_file.js";
 
 export type ReadinessDecisionKind = "accept_warning" | "reopen_warning";
 
@@ -34,8 +33,7 @@ export async function appendReadinessDecision(
 ): Promise<ReadinessDecisionEvent> {
   const full: ReadinessDecisionEvent = { ts: new Date().toISOString(), ...event };
   const path = readinessDecisionPath(workspaceRoot, event.projectId);
-  await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify(full)}\n`, "utf8");
+  await appendDurableFile(path, `${JSON.stringify(full)}\n`);
   return full;
 }
 

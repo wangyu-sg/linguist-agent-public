@@ -5,6 +5,7 @@ import {
   requireProjectTaskScope,
   type TaskRunEventDraft,
 } from "@linguist-agent/cat-data";
+import { taskDecisionBindingIssue } from "./task_decision_binding.js";
 
 export class TaskDecisionExecutionError extends Error {
   constructor(
@@ -53,6 +54,12 @@ export async function executeTaskDecision(input: {
   }
   if (decision.status !== "required") {
     throw new TaskDecisionExecutionError(409, `Decision ${input.decisionId} is already ${decision.status}.`);
+  }
+  const run = snapshot.runs.find((row) => row.id === decision.runId);
+  if (!run) throw new TaskDecisionExecutionError(409, `Decision ${input.decisionId} no longer has a canonical Run.`);
+  const bindingIssue = taskDecisionBindingIssue(decision, { runPlanHash: run.planHash, now: new Date() });
+  if (bindingIssue) {
+    throw new TaskDecisionExecutionError(409, `Decision ${input.decisionId} must be recreated before execution (${bindingIssue}).`);
   }
   const option = decision.options.find((row) => row.id === optionId);
   if (!option) throw new TaskDecisionExecutionError(400, `Decision option ${optionId} is not available.`);

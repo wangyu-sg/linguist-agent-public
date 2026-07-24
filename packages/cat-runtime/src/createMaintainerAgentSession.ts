@@ -10,6 +10,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { normalizePiRuntimeModel } from "./modelCompat.js";
 import { applySharedPiRuntimeOverrides } from "./piRuntimeOverrides.js";
+import { assertProductionToolCapabilities } from "./toolCapabilities.js";
 
 const MAINTAINER_TOOLS = ["edit", "find", "grep", "ls", "read", "write"] as const;
 const modelCatalog = builtinModels();
@@ -81,6 +82,12 @@ export async function createMaintainerAgentSession(options: CreateMaintainerAgen
     resourceLoader,
     customTools: [],
   });
+  try {
+    assertProductionToolCapabilities(session.getAllTools().map((tool) => tool.name));
+  } catch (error) {
+    session.dispose();
+    throw error;
+  }
   session.setActiveToolsByName([...MAINTAINER_TOOLS]);
   return {
     session,

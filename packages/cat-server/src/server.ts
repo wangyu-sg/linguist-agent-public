@@ -1,21 +1,21 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import { DefaultPackageManager, ProjectTrustStore, SessionManager, SettingsManager, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { DefaultPackageManager, ProjectTrustStore, SessionManager, SettingsManager, getAgentDir, type EventBus } from "@earendil-works/pi-coding-agent";
 import {
+  appendTaskExecutionSnapshot,
+  appendTaskSessionConfigChange,
   createProjectManifest,
   createTaskWorkspace,
   listPrivateEvalRuns,
   listPrivateEvalSets,
-  pendingInitialTaskRun,
   TaskWorkspaceConflictError,
   buildMemoryStatus,
-  readMemoryAuditSummary,
   auditTermbaseConflicts,
   importWorkbookAssetPlan,
   parseAsset,
@@ -38,6 +38,7 @@ import {
   readAssetTypedIndex,
   confirmTypedAssetCandidates,
   type ProjectGuidanceDecision,
+  type TaskRun,
   importCsvBatch,
   importGenericXliffBatch,
   importMqxliffBatch,
@@ -48,6 +49,7 @@ import {
   readSubagentAsyncStatus,
   readBatch,
   readCatWorkflowRun,
+  appendDurableFile,
   readJsonFile,
   readProjectManifest,
   waitForSubagentAsyncStatus,
@@ -62,19 +64,24 @@ import {
   writeProjectTagRuleCandidates,
   workspacePath,
   createWorkspace,
-  readMemoryConfig,
+  inspectLegacyTdaiMemoryConfiguration,
+  formatAssistantMemoryRecallReport,
+  searchAssistantMemories,
   readAssetVectorIndexSummary,
-  probeTdaiEmbeddingBridge,
   readProjectTagRuleContext,
-  writeMemoryConfig,
-  type MemoryConfig,
+  writeJsonFile,
   type MemoryStatus,
+  type AssistantMemoryPersistence,
+  type LibraryPersistence,
   type AskTagRuleModel,
   type AskAssetMappingModel,
   type TeamRoleId,
   type TeamRoleSettings,
+  ModelContextRegistry,
+  estimatePromptTokens,
+  planExecutionProfile,
+  type PromptRequestBudget,
   type TeamRoleSubagentSpawnRequest,
-  type TaskRunEventDraft,
   type TaskMessageQueue,
   type TaskScope,
   DETERMINISTIC_TEAM_ROLE_IDS,
@@ -84,37 +91,29 @@ import {
   parseQualityChecklistEntries,
   parseMechanicalTextQaOptions,
   writeQualityChecklist,
+  safeLogger,
+  resolveStructuredStorageBackend,
 } from "@linguist-agent/cat-data";
 import {
   BROWSER_SESSION_POLICY,
-  buildCatCompactionInstructionsFromManifest,
   buildCatRuntimeHealthReport,
   buildCatSandboxHealthReport,
   CAT_PI_PACKAGE_RESOURCES,
-  CAT_SEGMENT_RUN_TOOLS,
   CAT_WEB_SESSION_BRIDGE_POLICIES,
   catAgentProjectSessionId,
   catAgentSessionDir,
-  buildCatCompactionInstructionsForWorkspace,
-  buildCatStreamRetryInstruction,
-  classifyCatRuntimeRecovery,
-  createCatSelfHealingRetryState,
-  createCatStreamRuleMonitor,
-  createCatAgentSession,
+  createPiAgentRuntimePort,
   createKeyedSerialQueue,
+  cleanupExpiredDocumentRouterStages,
   assertCanonicalTeamProjectSettingsDocument,
   buildTeamEvidenceChildRequestShape,
   readTeamEvidenceChildScope,
-  markCatSelfHealingCompacted,
-  planCatSelfHealingRetry,
-  extractCatRuntimeValidation,
   PROJECT_SESSION_STRATEGY,
-  shouldAbortForCatStreamViolation,
   buildAgentPermissionContract,
   normalizeAgentPermissionMode,
   normalizeAgentPermissionRules,
   NATIVE_CAPABILITY_PACKAGES,
-  type CatStreamRuleViolation,
+  type AgentPermissionAction,
   type AgentPermissionContract,
   type AgentPermissionMode,
   type AgentPermissionRequest,
@@ -124,12 +123,8 @@ import {
   type NativeCapabilityPackageId,
 } from "@linguist-agent/cat-runtime";
 import { buildMcpBridgeCatalog, discoverMcpServerTools, readMcpServerConfigs, type McpBridgeCatalog, type McpToolDescriptor } from "@linguist-agent/cat-mcp";
-import { createAssistantMemoryTools, gatewayHealthy, listCatToolMetadata } from "@linguist-agent/cat-tools";
-import {
-  AgentTraceBuilder,
-  previewValue,
-  type AgentTraceEvent,
-} from "./agent_events.js";
+import { listCatToolMetadata } from "@linguist-agent/cat-tools";
+import { type AgentTraceEvent } from "./agent_events.js";
 import { deleteProjectWorkspace, listProjects, listProjectsWithDiagnostics } from "./projects_index.js";
 import { appendServerDiagnostics, createServerDiagnostic, readServerDiagnostics, type ServerDiagnostic } from "./server_diagnostics.js";
 import { addPiMessageUsageTotals, emptySessionUsageTotals } from "./session_stats.js";
@@ -137,12 +132,12 @@ import {
   buildAgentToolMetadataCatalog,
   createLeasedAgentToolCatalog,
 } from "./agent_tool_catalog.js";
-import { handleAgentPermissionRoute, type AgentPermissionSettings } from "./routes/agent_permission_routes.js";
+import type { AgentPermissionSettings } from "./application/settings_permission_application_port.js";
+import { handleAgentPermissionRoute } from "./routes/agent_permission_routes.js";
 import { handleAgentCatalogRoute } from "./routes/agent_catalog_routes.js";
 import { handleProjectAgentSettingsRoute } from "./routes/project_agent_settings_routes.js";
 import { handleWorkflowArtifactRoute } from "./routes/workflow_artifact_routes.js";
 import { handleWorkflowRoute, prepareTeamExecution, startSpecialistFollowUp, stopTeamWorkflowRun, type WorkflowRouteDeps } from "./routes/workflow_routes.js";
-import { createPrepareTeamExecutionTool } from "./main_team_host_tool.js";
 import {
   bindSubagentResultDeliveryAcknowledgement,
   callSubagentRpc,
@@ -166,17 +161,42 @@ import { handleStandaloneTaskRoute } from "./routes/standalone_task_routes.js";
 import { handleHomeReplacementRoute } from "./routes/home_replacement_routes.js";
 import { handleAssistantLibraryRoute } from "./routes/assistant_library_routes.js";
 import { handlePackageCenterRoute } from "./routes/package_center_routes.js";
+import { resolveActivatedLapkgResources } from "./lapkg_activation.js";
+import { recoverLapkgActivation } from "./lapkg_activation_recovery.js";
+import { prepareLapkgSqliteCutover } from "./lapkg_sqlite_cutover.js";
+import { prepareAssistantMemorySqliteCutover } from "./assistant_memory_sqlite_cutover.js";
+import { prepareAssistantLibrarySqliteCutover } from "./assistant_library_sqlite_cutover.js";
+import { activateCatCoreSqliteCutover, prepareCatCoreSqliteCutover } from "./cat_core_sqlite_cutover.js";
+import { activateCatGovernanceSqliteCutover, prepareCatGovernanceSqliteCutover } from "./cat_governance_sqlite_cutover.js";
+import { activateWorkflowEvalSqliteCutover, prepareWorkflowEvalSqliteCutover } from "./workflow_eval_sqlite_cutover.js";
+import type { LapkgPackageStorage } from "./lapkg_package_storage.js";
+import { acquireDataRootWriterLease } from "./data_root_writer_lease.js";
+import {
+  activateTaskAggregateSqliteCutover,
+  prepareTaskAggregateSqliteCutover,
+} from "./task_aggregate_sqlite_cutover.js";
+import {
+  assertCanonicalAgentPermissionSettings,
+  assertCanonicalAgentSettings,
+  prepareSettingsGrantsTrustSqliteCutover,
+} from "./settings_grants_trust_sqlite_cutover.js";
 import { handleDocumentCapabilityRoute } from "./routes/document_capability_routes.js";
 import { handleMaintainerRoute } from "./routes/maintainer_routes.js";
 import { runMaintainerMigrationAgent } from "./maintainer_migration_agent.js";
-import { createSingleTaskRunProjector, stopPendingSingleTaskRun, type SingleTaskRunProjector } from "./single_task_run_projection.js";
+import { stopPendingSingleTaskRun } from "./single_task_run_projection.js";
 import { GeneralAgentRunCoordinator } from "./general_agent_runs.js";
-import { TaskMessageQueueCoordinator } from "./task_message_queue.js";
+import { ProjectTaskRunCoordinator } from "./application/project_task_run_coordinator.js";
+import { SupervisorGeneralWorkerSessionAuthority } from "./general_worker_runtime.js";
 import {
-  completeTaskExtensionFatalFailure,
-  createTaskExtensionInteractionHost,
-  persistTaskExtensionFatalFallback,
-} from "./task_extension_interactions.js";
+  SupervisorCatWorkerSessionAuthority,
+  finalizeCatWorkerSessionPlan,
+  type CatWorkerSessionCreation,
+  type CatWorkerSessionPlanV1,
+} from "./cat_worker_runtime.js";
+import { NodeJsonlRunWorkerProcessAdapter, RunWorkerSupervisor } from "./run_worker_supervisor.js";
+import { resolvePiAgentDir, resolveServerRepoRoot } from "./server_root.js";
+import { TaskMessageQueueCoordinator } from "./task_message_queue.js";
+import { createTaskExtensionInteractionHost } from "./task_extension_interactions.js";
 import { reconcileInterruptedTaskExtensionInteractions } from "./task_extension_reconciliation.js";
 import {
   composeTeamRunResourceManifest,
@@ -254,7 +274,6 @@ import { getPiCredentialStore, getPiModelRuntime } from "./pi_model_runtime.js";
 import { piProviderUsesOAuth } from "./pi_provider_auth.js";
 import { handleUploadImportRoute } from "./routes/upload_import_route.js";
 import { ActiveAgentRunRegistry, ActiveAgentRunResourceMutationError } from "./active_agent_runs.js";
-import { createTaskSessionStopBridge } from "./task_session_stop_bridge.js";
 import { readResidentRuntimeStatus, runResidentRuntimeAction, type ResidentRuntimeAction } from "./resident_runtime.js";
 import { createPermissionDecisionRegistry } from "./permission_decisions.js";
 import { readPiUsageParityCatalog } from "./pi_usage.js";
@@ -265,15 +284,34 @@ import {
   LOCAL_TRANSPORT_KEYCHAIN_SERVICE,
   LocalTransportError,
   createLocalTransportSecurity,
-  readLocalJsonBody,
   resolveLocalTransportToken,
 } from "./local_transport_security.js";
-import { buildRuntimeHandshake } from "./runtime_compatibility.js";
+import { externalApiRequestSchema, readStrictApiJsonBody, StrictApiInputError } from "./strict_api_contract.js";
+import { buildRuntimeHandshake, runtimeInstanceId } from "./runtime_compatibility.js";
+import {
+  createRuntimeRendezvous,
+  deriveRuntimeSessionCredential,
+  prepareRuntimeTransportRoot,
+  publishRuntimeRendezvous,
+  randomRuntimeSocketPath,
+  runtimeTransportPaths,
+  secureRuntimeSocket,
+} from "./local_transport_rendezvous.js";
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const sourceRepoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repoRoot = resolveServerRepoRoot({ sourceRoot: sourceRepoRoot, env: process.env });
+const piAgentDirOverride = resolvePiAgentDir({ env: process.env });
 const piAuthLoginCoordinator = createPiAuthLoginCoordinator();
 const piRuntimeVersion = readPinnedDependencyVersion("@earendil-works/pi-coding-agent");
 const productVersion = readProductVersion();
+const dataRootWriterLease = await acquireDataRootWriterLease(repoRoot, { productVersion });
+let lapkgPackageStorage: LapkgPackageStorage | undefined;
+let assistantMemoryStore: AssistantMemoryPersistence | undefined;
+let assistantLibraryStore: LibraryPersistence | undefined;
+let catCoreStorage: { close(): void } | undefined;
+let catGovernanceStorage: { close(): void } | undefined;
+let workflowEvalStorage: { close(): void } | undefined;
+const legacyLoopbackTransport = process.env.LA_LOCAL_TRANSPORT_MODE === "loopback" || process.env.LA_SERVER_PORT !== undefined;
 const port = Number(process.env.LA_SERVER_PORT ?? 8787);
 const uploadMaxBytes = Number(process.env.LA_UPLOAD_MAX_BYTES ?? 100 * 1024 * 1024);
 const configuredLocalBodyMaxBytes = Number(process.env.LA_LOCAL_BODY_MAX_BYTES ?? DEFAULT_LOCAL_BODY_BYTES);
@@ -295,8 +333,17 @@ const localTransportToken = await resolveLocalTransportToken({
     trustedApplicationPaths: ["/usr/bin/security"],
   }),
 });
+const unixTransportPaths = runtimeTransportPaths(process.env.LA_RUNTIME_TRANSPORT_ROOT);
+const runtimeRendezvous = legacyLoopbackTransport ? undefined : createRuntimeRendezvous({
+  bootstrapToken: localTransportToken,
+  runtimeInstanceId: runtimeInstanceId(repoRoot),
+  socketPath: randomRuntimeSocketPath(unixTransportPaths.root),
+});
 const localTransportSecurity = createLocalTransportSecurity({
-  token: localTransportToken,
+  token: runtimeRendezvous
+    ? deriveRuntimeSessionCredential(localTransportToken, runtimeRendezvous)
+    : localTransportToken,
+  publicHealth: legacyLoopbackTransport,
   allowedOrigins: (process.env.LA_LOCAL_ALLOWED_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean),
 });
 const runtimeHandshake = buildRuntimeHandshake({
@@ -306,6 +353,7 @@ const runtimeHandshake = buildRuntimeHandshake({
   dataSchemaVersion: RUNTIME_DATA_SCHEMA_VERSION,
   capabilities: [
     "local-auth",
+    "authenticated-unix-rendezvous-v1",
     "native-extension-ui-v1",
     "run-resource-profile-v1",
     "task-package-profile-v1",
@@ -453,34 +501,6 @@ interface StreamEvent {
   usage?: ChatEvent["usage"];
 }
 
-function streamRuleTraceInput(violation: ReturnType<ReturnType<typeof createCatStreamRuleMonitor>["observeDelta"]>[number]) {
-  return {
-    piEventType: "message_update",
-    text: violation.message,
-    isError: violation.severity === "blocker",
-    ruleCode: violation.code,
-    ruleSeverity: violation.severity,
-    ruleAction: violation.action,
-    ruleMatch: violation.match,
-    ruleOffset: violation.offset,
-  };
-}
-
-const CAT_STREAM_RULE_MAX_RETRIES = 1;
-
-function buildStreamRuleRetryPrompt(basePrompt: string, violation: CatStreamRuleViolation, attempt: number, maxAttempts: number): string {
-  const instruction = buildCatStreamRetryInstruction(violation);
-  return [
-    basePrompt,
-    "",
-    "CAT stream-rule recovery:",
-    `Retry ${attempt}/${maxAttempts}.`,
-    `Reason: ${instruction.reason}`,
-    instruction.correctiveInstruction,
-    "Do not mention the aborted draft unless the user explicitly asks about runtime recovery.",
-  ].join("\n");
-}
-
 // Agent runs against the same chat scope are serialized: concurrent runs raced
 // on the durable Pi session file and on chat.json's read-modify-write (last
 // writer wins, dropping the loser's messages). Keyed per project, so distinct
@@ -491,38 +511,62 @@ const agentRunQueue = createKeyedSerialQueue();
 const permissionDecisionRegistry = createPermissionDecisionRegistry();
 const activeAgentRuns = new ActiveAgentRunRegistry();
 const taskMessageQueue = new TaskMessageQueueCoordinator(repoRoot);
+const serverSourceExtension = extname(fileURLToPath(import.meta.url));
+const generalWorkerRuntime = new SupervisorGeneralWorkerSessionAuthority(new RunWorkerSupervisor(
+  new NodeJsonlRunWorkerProcessAdapter({
+    entryPath: join(dirname(fileURLToPath(import.meta.url)), `general_run_worker_entry${serverSourceExtension}`),
+    cwd: repoRoot,
+    env: process.env,
+    nodeArgs: serverSourceExtension === ".ts" ? ["--import", "tsx"] : [],
+  }),
+  { readyTimeoutMs: 120_000, heartbeatTimeoutMs: 15_000, cancelGraceMs: 8_000 },
+));
+const catWorkerRuntime = new SupervisorCatWorkerSessionAuthority(new RunWorkerSupervisor(
+  new NodeJsonlRunWorkerProcessAdapter({
+    entryPath: join(dirname(fileURLToPath(import.meta.url)), `cat_run_worker_entry${serverSourceExtension}`),
+    cwd: repoRoot,
+    env: process.env,
+    nodeArgs: serverSourceExtension === ".ts" ? ["--import", "tsx"] : [],
+  }),
+  { readyTimeoutMs: 120_000, heartbeatTimeoutMs: 15_000, cancelGraceMs: 8_000 },
+));
+
+/**
+ * Supporting CAT operations also cross the Worker boundary. They are
+ * not canonical Task Runs, so their attested ExecutionSnapshot has no durable
+ * Task owner; the caller remains responsible for its existing durable result.
+ */
+async function createCatWorkerSupportSession(plan: CatWorkerSessionPlanV1, operation: string): Promise<CatWorkerSessionCreation> {
+  const effectivePlan = plan.memoryRecall === undefined
+    ? finalizeCatWorkerSessionPlan({
+        ...plan,
+        memoryRecall: plan.workspace.projectId && assistantMemoryStore
+          ? await confirmedMemoryRecallForCat(plan.workspace.projectId)
+          : "",
+      })
+    : plan;
+  const createdAt = new Date().toISOString();
+  return catWorkerRuntime.createSession({
+    plan: effectivePlan,
+    executionIdentity: {
+      executionId: `${effectivePlan.runId}.execution.1`,
+      threadId: `${effectivePlan.runId}.support`,
+      turnId: effectivePlan.runId,
+      runtimeEpochId: `${effectivePlan.runId}.epoch.1`,
+      configRevision: 1,
+      executionProfile: null,
+      createdAt,
+    },
+    persistExecutionSnapshot: async () => undefined,
+    requestPermissionDecision: async () => ({ action: "deny", reason: `${operation} has no interactive tool authority.` }),
+    executeServerTool: async () => { throw new Error(`${operation} has no server tools.`); },
+    requestUi: async () => { throw new Error(`${operation} has no Extension UI.`); },
+    notifyUi: () => undefined,
+    libraryPersistence: assistantLibraryStore,
+  });
+}
 const activeTaskSessionManagers = new Map<string, SessionManager>();
 let legacyHomeReplacementTaskId: string | undefined;
-
-function recoveryTraceInput(input: { message?: string; toolName?: string; validationErrors?: string[]; isToolError?: boolean }) {
-  const recovery = classifyCatRuntimeRecovery(input);
-  return {
-    recovery,
-    trace: {
-      reason: recovery.reason,
-      recoveryKind: recovery.kind,
-      recoveryAction: recovery.action,
-      recoveryRetryable: recovery.retryable,
-    },
-  };
-}
-
-function isSandboxDeniedMessage(message: string | undefined): boolean {
-  return Boolean(message && /\b(sandbox(?:ed)? denied|operation not permitted|permission denied|denyWrite|denyRead|egress denied|not allowed by sandbox|seatbelt)\b/i.test(message));
-}
-
-function sandboxDeniedTraceInput(event: { result?: unknown; toolName?: string }) {
-  const message = previewValue(event.result, 240);
-  return {
-    isDenied: isSandboxDeniedMessage(message),
-    trace: {
-      reason: `Sandbox denied ${event.toolName ?? "tool"} execution.`,
-      recoveryKind: "sandbox_denied",
-      recoveryAction: "blocked_by_harness",
-      recoveryRetryable: false,
-    },
-  };
-}
 
 function assistantMessageError(message: unknown): string | undefined {
   const assistant = message as { role?: string; stopReason?: string; errorMessage?: string } | undefined;
@@ -530,15 +574,6 @@ function assistantMessageError(message: unknown): string | undefined {
   if (assistant.stopReason !== "error" && assistant.stopReason !== "aborted") return undefined;
   const errorMessage = assistant.errorMessage?.trim();
   return errorMessage || `Request ${assistant.stopReason}`;
-}
-
-function assistantMessageHasThinking(message: unknown): boolean {
-  const content = (message as { content?: unknown } | undefined)?.content;
-  if (!Array.isArray(content)) return false;
-  return content.some((part) => {
-    const row = part as { type?: unknown; thinking?: unknown };
-    return row?.type === "thinking" && typeof row.thinking === "string" && row.thinking.trim().length > 0;
-  });
 }
 
 function assistantMessageUsage(message: unknown): ChatEvent["usage"] {
@@ -602,7 +637,11 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   const maxBytes = req.url?.startsWith("/api/projects/import-upload")
     ? Math.ceil(uploadMaxBytes * 4 / 3) + 1024 * 1024
     : localBodyMaxBytes;
-  return readLocalJsonBody(req, maxBytes);
+  return readStrictApiJsonBody(req, {
+    contentType: req.headers["content-type"],
+    maxBytes,
+    schema: externalApiRequestSchema,
+  });
 }
 
 function requireString(value: unknown, name: string): string {
@@ -611,7 +650,10 @@ function requireString(value: unknown, name: string): string {
 }
 
 function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new Error("Optional string input must be a string.");
+  const normalized = value.trim();
+  return normalized || undefined;
 }
 
 function isEnoent(error: unknown): boolean {
@@ -619,16 +661,23 @@ function isEnoent(error: unknown): boolean {
 }
 
 function optionalStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.filter((item): item is string => typeof item === "string");
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new Error("Optional string array input must be an array of strings.");
+  }
+  return value;
 }
 
 function optionalBoolean(value: unknown): boolean | undefined {
-  return value === undefined ? undefined : Boolean(value);
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "boolean") throw new Error("Optional boolean input must be a boolean.");
+  return value;
 }
 
 function optionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("Optional numeric input must be a finite number.");
+  return value;
 }
 
 function legacyGlobalDataPath(...parts: string[]): string {
@@ -676,15 +725,13 @@ async function resolveSelectedGlobalSessionId(): Promise<string> {
 
 async function setSelectedSessionId(projectId: string, sessionId: string): Promise<{ selectedSessionId: string }> {
   const path = agentSelectedSessionPath(projectId);
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify({ selectedSessionId: sessionId, selectedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+  await writeJsonFile(path, { selectedSessionId: sessionId, selectedAt: new Date().toISOString() }, { durability: "critical" });
   return { selectedSessionId: sessionId };
 }
 
 async function setSelectedGlobalSessionId(sessionId: string): Promise<{ selectedSessionId: string }> {
   const path = globalSessionControlPath();
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify({ selectedSessionId: sessionId, selectedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+  await writeJsonFile(path, { selectedSessionId: sessionId, selectedAt: new Date().toISOString() }, { durability: "critical" });
   return { selectedSessionId: sessionId };
 }
 
@@ -693,8 +740,7 @@ async function readSelectedSessionControl(path: string): Promise<SelectedSession
 }
 
 async function writeSelectedSessionControl(path: string, control: SelectedSessionControl): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(control, null, 2)}\n`, "utf8");
+  await writeJsonFile(path, control, { durability: "critical" });
 }
 
 async function setProjectPendingBranchEntry(projectId: string, sessionId: string, entryId: string): Promise<void> {
@@ -757,9 +803,9 @@ interface ModelDefaults {
   effectiveThinkingLevel?: PiThinkingLevel;
   source: {
     piSettingsPath: string;
-    provider: "env" | "pi-settings" | "unset";
-    model: "env" | "pi-settings" | "unset";
-    thinkingLevel: "env" | "pi-settings" | "unset";
+    provider: "env" | "global" | "project" | "unset";
+    model: "env" | "global" | "project" | "unset";
+    thinkingLevel: "env" | "global" | "project" | "unset";
   };
 }
 
@@ -767,16 +813,35 @@ function agentSettingsPath(projectId: string): string {
   return workspacePath(createWorkspace(repoRoot, projectId), "agent_settings.json");
 }
 
+function agentSettingsStorageAddress(projectId: string) {
+  return { domain: "settings" as const, key: `agent:${projectId}`, scope: `project:${projectId}` };
+}
+
 async function readAgentSettings(projectId: string): Promise<AgentSettings> {
+  const backend = resolveStructuredStorageBackend(repoRoot);
+  const stored = backend?.read(agentSettingsStorageAddress(projectId));
+  if (stored) return stored.payload as AgentSettings;
+  if (backend) return {};
   return readJsonFile<AgentSettings>(agentSettingsPath(projectId), {});
 }
 
 async function writeAgentSettings(projectId: string, patch: Partial<AgentSettings>): Promise<AgentSettings> {
   const current = await readAgentSettings(projectId);
   const next: AgentSettings = { ...current, ...patch };
+  assertCanonicalAgentSettings(next, `project ${projectId} agent settings`);
+  const backend = resolveStructuredStorageBackend(repoRoot);
+  const stored = backend?.read(agentSettingsStorageAddress(projectId));
+  if (backend) {
+    await backend.write({
+      address: agentSettingsStorageAddress(projectId),
+      expectedRevision: stored?.revision ?? 0,
+      expectedValue: stored?.payload ?? {},
+      value: next as unknown as Record<string, unknown>,
+    });
+    return next;
+  }
   const path = agentSettingsPath(projectId);
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeJsonFile(path, next, { durability: "critical" });
   return next;
 }
 
@@ -785,9 +850,12 @@ function globalAgentPermissionSettingsPath(): string {
 }
 
 async function readGlobalAgentPermissionSettings(): Promise<AgentPermissionSettings> {
-  const raw = await readJsonFile<Record<string, unknown>>(globalAgentPermissionSettingsPath(), {});
+  const address = { domain: "settings" as const, key: "agent-permissions", scope: "global" };
+  const backend = resolveStructuredStorageBackend(repoRoot);
+  const raw = backend?.read(address)?.payload
+    ?? (backend ? {} : await readJsonFile<Record<string, unknown>>(globalAgentPermissionSettingsPath(), {}));
   return {
-    permissionMode: normalizeAgentPermissionMode(raw.permissionMode),
+    permissionMode: raw.permissionMode === undefined ? "ask" : normalizeAgentPermissionMode(raw.permissionMode),
     permissionRules: normalizeAgentPermissionRules(raw.permissionRules),
   };
 }
@@ -795,9 +863,22 @@ async function readGlobalAgentPermissionSettings(): Promise<AgentPermissionSetti
 async function writeGlobalAgentPermissionSettings(patch: AgentPermissionSettings): Promise<AgentPermissionSettings> {
   const current = await readGlobalAgentPermissionSettings();
   const next = { ...current, ...patch };
+  assertCanonicalAgentPermissionSettings(next);
+  const address = { domain: "settings" as const, key: "agent-permissions", scope: "global" };
+  const backend = resolveStructuredStorageBackend(repoRoot);
+  const stored = backend?.read(address);
+  if (backend) {
+    await backend.write({
+      address,
+      expectedRevision: stored?.revision ?? 0,
+      expectedValue: stored?.payload ?? {},
+      value: next as unknown as Record<string, unknown>,
+    });
+    await appendPiSettingsAudit({ scope: "global", path: "agent.permissions", mode: "permission-policy", restartRequired: false });
+    return next;
+  }
   const path = globalAgentPermissionSettingsPath();
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeJsonFile(path, next, { durability: "critical" });
   await appendPiSettingsAudit({ scope: "global", path: "agent.permissions", mode: "permission-policy", restartRequired: false });
   return next;
 }
@@ -807,8 +888,11 @@ async function readEffectiveAgentPermissionSettings(projectId?: string): Promise
   if (!projectId) return global;
   const project = await readAgentSettings(projectId);
   return {
-    permissionMode: project.permissionMode ?? global.permissionMode,
-    permissionRules: project.permissionRules ?? global.permissionRules,
+    permissionMode: project.permissionMode ?? (project.permissionRules ? "custom" : global.permissionMode),
+    permissionRules: {
+      ...(global.permissionRules ?? {}),
+      ...(project.permissionRules ?? {}),
+    },
   };
 }
 
@@ -830,16 +914,52 @@ async function readAgentPermissionContract(projectId?: string): Promise<AgentPer
 }
 
 async function readGeneralAgentPermissionContract(): Promise<AgentPermissionContract> {
-  const raw = await readJsonFile<Record<string, unknown>>(globalAgentPermissionSettingsPath(), {});
+  const address = { domain: "settings" as const, key: "agent-permissions", scope: "global" };
+  const backend = resolveStructuredStorageBackend(repoRoot);
+  const raw = backend?.read(address)?.payload
+    ?? (backend ? {} : await readJsonFile<Record<string, unknown>>(globalAgentPermissionSettingsPath(), {}));
   return buildAgentPermissionContract({
     mode: raw.permissionMode === undefined ? "ask" : normalizeAgentPermissionMode(raw.permissionMode),
     customRules: normalizeAgentPermissionRules(raw.permissionRules),
   });
 }
 
+async function persistPermissionDecision(
+  request: AgentPermissionRequest,
+  action: AgentPermissionAction,
+  reason?: string,
+): Promise<void> {
+  if (action !== "always_allow") return;
+  if (request.kind !== "tool") throw new TaskWorkspaceConflictError("Pi resource trust uses its exact summary/path trust mechanism, not Always allow.");
+  const editableDomains = new Set(["fileRead", "fileWrite", "webRead", "bash", "bridge"]);
+  if (!editableDomains.has(request.domain)) throw new TaskWorkspaceConflictError(`Permission domain ${request.domain} is server-locked.`);
+  const current = await readEffectiveAgentPermissionSettings(request.projectId);
+  const currentContract = buildAgentPermissionContract({
+    mode: current.permissionMode ?? "auto",
+    customRules: current.permissionRules,
+  });
+  const rules = normalizeAgentPermissionRules({
+    ...Object.fromEntries(currentContract.effectivePolicy
+      .filter((entry) => editableDomains.has(entry.domain))
+      .map((entry) => [entry.domain, entry.decision])),
+    [request.domain]: "auto",
+  });
+  const patch: AgentPermissionSettings = { permissionMode: "custom", permissionRules: rules };
+  if (request.projectId) await writeProjectAgentPermissionSettings(request.projectId, patch);
+  else await writeGlobalAgentPermissionSettings(patch);
+  await appendPiSettingsAudit({
+    scope: request.projectId ? "project" : "global",
+    path: request.projectId ? `projects.${request.projectId}.agent.permissions.${request.domain}` : `agent.permissions.${request.domain}`,
+    mode: "permission-decision",
+    restartRequired: false,
+    ...(reason ? { nextValue: { action, reason } } : {}),
+  });
+}
+
 async function permissionDecisionForRequest(request: AgentPermissionRequest, emit?: (event: StreamEvent) => void): Promise<AgentPermissionUserDecision> {
   if (!emit) return { decision: "deny", reason: "permission approval requires a streaming client" };
-  const pending = permissionDecisionRegistry.request(request);
+  const pending = permissionDecisionRegistry.request({ kind: "tool", ...request });
+  if (pending.autoApproved) return pending.decision;
   emit({
     type: "permission_request",
     ts: new Date().toISOString(),
@@ -849,13 +969,18 @@ async function permissionDecisionForRequest(request: AgentPermissionRequest, emi
   return pending.decision;
 }
 
-async function projectPermissionSessionOptions(projectId: string, emit?: (event: StreamEvent) => void): Promise<{
+async function projectPermissionSessionOptions(projectId: string, emit?: (event: StreamEvent) => void, taskId?: string, runId?: string): Promise<{
   permissionContract: AgentPermissionContract;
   requestPermissionDecision: (request: AgentPermissionRequest) => Promise<AgentPermissionUserDecision>;
 }> {
   return {
     permissionContract: await readAgentPermissionContract(projectId),
-    requestPermissionDecision: (request) => permissionDecisionForRequest(request, emit),
+    requestPermissionDecision: (request) => permissionDecisionForRequest({
+      ...request,
+      projectId: request.projectId ?? projectId,
+      ...(request.taskId ?? taskId ? { taskId: request.taskId ?? taskId } : {}),
+      ...(request.runId ?? runId ? { runId: request.runId ?? runId } : {}),
+    }, emit),
   };
 }
 
@@ -866,11 +991,34 @@ function normalizeThinkingLevel(value: unknown): PiThinkingLevel | undefined {
 }
 
 async function readModelDefaults(): Promise<ModelDefaults> {
-  const piSettingsPath = join(repoRoot, ".pi", "settings.json");
-  const piSettings = await readJsonFile<Record<string, unknown>>(piSettingsPath, {});
-  const settingsProvider = typeof piSettings.defaultProvider === "string" ? piSettings.defaultProvider : undefined;
-  const settingsModel = typeof piSettings.defaultModel === "string" ? piSettings.defaultModel : undefined;
-  const settingsThinkingLevel = normalizeThinkingLevel(piSettings.defaultThinkingLevel);
+  const [globalSettings, projectSettings] = await Promise.all([
+    readJsonFile<Record<string, unknown>>(globalPiSettingsPath(), {}),
+    readJsonFile<Record<string, unknown>>(projectPiSettingsPath(), {}),
+  ]);
+  const globalProvider = typeof globalSettings.defaultProvider === "string" ? globalSettings.defaultProvider : undefined;
+  const globalModel = typeof globalSettings.defaultModel === "string" ? globalSettings.defaultModel : undefined;
+  const projectProvider = typeof projectSettings.defaultProvider === "string" ? projectSettings.defaultProvider : undefined;
+  const projectModel = typeof projectSettings.defaultModel === "string" ? projectSettings.defaultModel : undefined;
+  // A person choosing a model in LA is a user preference, not a project-file
+  // default.  Pi's project settings remain a safe bundled fallback only until
+  // that user has selected a complete provider/model pair.
+  const globalSelection = Boolean(globalProvider && globalModel);
+  const projectSelection = Boolean(projectProvider && projectModel);
+  const settingsProvider = globalSelection ? globalProvider : projectSelection ? projectProvider : undefined;
+  const settingsModel = globalSelection ? globalModel : projectSelection ? projectModel : undefined;
+  const selectionSource = globalSelection ? "global" as const : projectSelection ? "project" as const : "unset" as const;
+  const settingsThinkingLevel = normalizeThinkingLevel(
+    globalSelection
+      ? globalSettings.defaultThinkingLevel
+      : projectSelection
+        ? projectSettings.defaultThinkingLevel
+        : globalSettings.defaultThinkingLevel ?? projectSettings.defaultThinkingLevel,
+  );
+  const thinkingSource = normalizeThinkingLevel(globalSettings.defaultThinkingLevel)
+    ? "global" as const
+    : normalizeThinkingLevel(projectSettings.defaultThinkingLevel)
+      ? "project" as const
+      : "unset" as const;
   const envProvider = process.env.LA_MODEL_PROVIDER || undefined;
   const envModel = process.env.LA_MODEL_ID || undefined;
   const envThinkingLevel = normalizeThinkingLevel(process.env.LA_PI_THINKING_LEVEL);
@@ -882,35 +1030,100 @@ async function readModelDefaults(): Promise<ModelDefaults> {
     effectiveModel: envModel ?? settingsModel,
     effectiveThinkingLevel: envThinkingLevel ?? settingsThinkingLevel,
     source: {
-      piSettingsPath: ".pi/settings.json",
-      provider: envProvider ? "env" : settingsProvider ? "pi-settings" : "unset",
-      model: envModel ? "env" : settingsModel ? "pi-settings" : "unset",
-      thinkingLevel: envThinkingLevel ? "env" : settingsThinkingLevel ? "pi-settings" : "unset",
+      piSettingsPath: globalPiSettingsPath(),
+      provider: envProvider ? "env" : settingsProvider ? selectionSource : "unset",
+      model: envModel ? "env" : settingsModel ? selectionSource : "unset",
+      thinkingLevel: envThinkingLevel ? "env" : settingsThinkingLevel ? thinkingSource : "unset",
     },
   };
 }
 
+async function writePiModelPreference(input: { provider: string; model: string; thinking?: string }) {
+  const provider = input.provider.trim();
+  const model = input.model.trim();
+  if (!provider || !model) throw new Error("provider and model are required.");
+  const thinking = input.thinking === undefined ? undefined : normalizeThinkingLevel(input.thinking);
+  if (input.thinking !== undefined && !thinking) throw new Error("thinking must be a valid Pi thinking level.");
+  const catalog = await readPiProviderCatalog();
+  const selected = catalog.providers
+    .find((entry) => entry.id === provider && entry.kind === "model")
+    ?.models.find((entry) => entry.id === model);
+  if (!selected?.available) throw new TaskWorkspaceConflictError(`Model ${provider}/${model} is not available for this runtime.`);
+
+  const path = globalPiSettingsPath();
+  const before = await readJsonFile<Record<string, unknown>>(path, {});
+  const next = JSON.parse(JSON.stringify(before)) as Record<string, unknown>;
+  next.defaultProvider = provider;
+  next.defaultModel = model;
+  if (thinking) next.defaultThinkingLevel = thinking;
+  await writeJsonFile(path, next, { durability: "critical" });
+  await appendPiSettingsAudit({
+    scope: "global",
+    path: "model-preference",
+    mode: "current-model",
+    restartRequired: false,
+    previousValue: { provider: before.defaultProvider, model: before.defaultModel, thinking: before.defaultThinkingLevel },
+    nextValue: { provider, model, ...(thinking ? { thinking } : {}) },
+  });
+  return readPiSettingsCatalog();
+}
+
 const generalAgentRuns = new GeneralAgentRunCoordinator({
   repoRoot,
+  resolveManagedResources: async () => {
+    if (!lapkgPackageStorage) throw new Error("Package SQLite storage is not ready.");
+    return resolveActivatedLapkgResources(repoRoot, { storage: lapkgPackageStorage });
+  },
+  assistantMemoryStore: () => assistantMemoryStore,
+  libraryPersistence: () => assistantLibraryStore,
   activeRuns: activeAgentRuns,
   messageQueue: taskMessageQueue,
-  modelRuntime: getPiModelRuntime,
+  runtimePort: createPiAgentRuntimePort({ modelRuntime: getPiModelRuntime }),
+  workerRuntime: generalWorkerRuntime,
   modelRoute: async () => {
     const defaults = await readModelDefaults();
     return {
       provider: defaults.effectiveProvider,
       modelId: defaults.effectiveModel,
       thinkingLevel: defaults.effectiveThinkingLevel,
+      executionProfile: "balanced" as const,
     };
   },
   resolveModelRoute: async (route) => {
     const defaults = await readModelDefaults();
-    const provider = route.provider ?? defaults.effectiveProvider;
-    const modelId = route.modelId ?? defaults.effectiveModel;
-    const thinkingLevel = route.thinkingLevel ?? defaults.effectiveThinkingLevel;
-    if (!provider || !modelId) {
+    const defaultRoute = defaults.effectiveProvider && defaults.effectiveModel
+      ? {
+        provider: defaults.effectiveProvider,
+        modelId: defaults.effectiveModel,
+        ...(defaults.effectiveThinkingLevel === undefined ? {} : { thinkingLevel: defaults.effectiveThinkingLevel }),
+      }
+      : undefined;
+    const requestedProfile = route.executionProfile ?? "custom";
+    const selectedRoute = requestedProfile === "custom"
+      ? route.provider && route.modelId
+        ? {
+          provider: route.provider,
+          modelId: route.modelId,
+          ...(route.thinkingLevel === undefined ? {} : { thinkingLevel: route.thinkingLevel }),
+        }
+        : undefined
+      : requestedProfile === "balanced"
+        ? defaultRoute
+        : undefined;
+    if (!selectedRoute) {
+      if (requestedProfile === "fast" || requestedProfile === "best") {
+        throw new TaskWorkspaceConflictError(`${requestedProfile.slice(0, 1).toUpperCase()}${requestedProfile.slice(1)} ExecutionProfile is not configured for standalone Chats.`);
+      }
       throw new TaskWorkspaceConflictError("No model is configured for this Chat Run.");
     }
+    if (requestedProfile !== "custom" && route.provider && route.modelId
+      && (route.provider !== selectedRoute.provider || route.modelId !== selectedRoute.modelId
+        || route.thinkingLevel !== selectedRoute.thinkingLevel)) {
+      throw new TaskWorkspaceConflictError("The requested ExecutionProfile no longer matches this immutable Run route; start a new Run from the current profile instead.");
+    }
+    const provider = selectedRoute.provider;
+    const modelId = selectedRoute.modelId;
+    const thinkingLevel = selectedRoute.thinkingLevel;
     const catalog = await readPiProviderCatalog();
     const model = catalog.providers
       .find((entry) => entry.id === provider && entry.kind === "model")
@@ -918,12 +1131,20 @@ const generalAgentRuns = new GeneralAgentRunCoordinator({
     if (!model?.available) {
       throw new TaskWorkspaceConflictError(`Model ${provider}/${modelId} is not available for this Chat Run.`);
     }
-    return { provider, modelId, thinkingLevel };
+    const requestBudget = await resolveModelPromptTokenBudget(provider, modelId);
+    if (!requestBudget) {
+      throw new TaskWorkspaceConflictError(`Model ${provider}/${modelId} has no verified context/output budget for an ExecutionProfile.`);
+    }
+    const profilePlan = requestedProfile === "custom"
+      ? planExecutionProfile({ explicitModel: selectedRoute, qualityRoutes: {}, requestBudget })
+      : planExecutionProfile({ requestedProfile, qualityRoutes: { balanced: defaultRoute! }, requestBudget });
+    return { provider, modelId, ...(thinkingLevel === undefined ? {} : { thinkingLevel }), executionProfile: profilePlan.profile, profilePlan };
   },
   permissionContract: () => readGeneralAgentPermissionContract(),
   defaultProjectTrust: () => readDefaultProjectTrust(),
-  requestPermissionDecision: async (request, onPending) => {
-    const pending = permissionDecisionRegistry.request(request);
+    requestPermissionDecision: async (request, onPending) => {
+    const pending = permissionDecisionRegistry.request({ kind: "tool", ...request });
+    if (pending.autoApproved) return pending.decision;
     onPending(pending.request);
     return pending.decision;
   },
@@ -955,16 +1176,30 @@ async function projectPromptModelForProject(projectId: string): Promise<{
     assistantModel: `${modelProvider}/${modelId}`,
     askPrompt: async (prompt) => {
       const workspace = createWorkspace(repoRoot, projectId);
-      const { session } = await createCatAgentSession({
-        workspace,
-        modelRuntime,
+      const operationId = `project-prompt-${randomUUID()}`;
+      const created = await createCatWorkerSupportSession(finalizeCatWorkerSessionPlan({
+        schemaVersion: 1,
+        profile: "cat",
+        runtimeRoot: repoRoot,
+        workspace: { root: workspace.root, projectId: workspace.projectId },
+        taskId: null,
+        runId: operationId,
         modelProvider,
         modelId,
-        thinkingLevel,
+        thinkingLevel: thinkingLevel ?? null,
         sessionMode: "memory",
+        sessionId: null,
+        branchEntryId: null,
         preset: "scratch",
+        disabledTools: [],
+        runOptions: null,
         isolatedResources: {},
-      });
+        runtimeExtension: true,
+        permissionContract: null,
+        serverTools: [],
+        extensionBinding: false,
+      }), "Project prompt helper");
+      const { session } = created;
       const assistantParts: string[] = [];
       let assistantEndError: string | undefined;
       try {
@@ -980,7 +1215,7 @@ async function projectPromptModelForProject(projectId: string): Promise<{
         if (assistantEndError) throw new Error(assistantEndError);
         return assistantParts.join("").trim();
       } finally {
-        session.dispose();
+        await created.dispose();
       }
     },
   };
@@ -1105,12 +1340,11 @@ function piSettingsAuditPath(): string {
 
 async function appendPiSettingsAudit(entry: Omit<PiSettingsAuditEntry, "id" | "ts"> & Partial<Pick<PiSettingsAuditEntry, "id" | "ts">>): Promise<void> {
   const path = join(repoRoot, "data", "runtime", "pi_settings_audit.jsonl");
-  await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify({
+  await appendDurableFile(path, `${JSON.stringify({
     id: entry.id ?? `pi_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     ts: entry.ts ?? new Date().toISOString(),
     ...entry,
-  })}\n`, "utf8");
+  })}\n`);
 }
 
 async function readPiSettingsAudit(limit = 80): Promise<PiSettingsAuditEntry[]> {
@@ -1198,8 +1432,7 @@ async function writePiSetting(scope: PiSettingScope, path: string, value: unknow
   const previousValue = getPathValue(before, path);
   if (unset) unsetPathValue(next, path);
   else setPathValue(next, path, value);
-  await mkdir(dirname(settingsPath), { recursive: true });
-  await writeFile(settingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeJsonFile(settingsPath, next, { durability: "critical" });
   const nextValue = getPathValue(next, path);
   await appendPiSettingsAudit({
     scope,
@@ -1225,19 +1458,19 @@ async function writePiSettingsRaw(scope: PiSettingScope, value: unknown) {
     assertCanonicalTeamProjectSettingsDocument(value);
   }
   const settingsPath = scope === "global" ? globalPiSettingsPath() : projectPiSettingsPath();
-  await mkdir(dirname(settingsPath), { recursive: true });
-  await writeFile(settingsPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  await writeJsonFile(settingsPath, value, { durability: "critical" });
   await appendPiSettingsAudit({ scope, path: "*", mode: "raw-json", restartRequired: true });
   return readPiSettingsCatalog();
 }
 
 async function readPiTrustStatusForRepo() {
-  return readPiTrustStatus({ cwd: repoRoot, defaultProjectTrust: await readDefaultProjectTrust() });
+  return readPiTrustStatus({ cwd: repoRoot, storageRoot: repoRoot, defaultProjectTrust: await readDefaultProjectTrust() });
 }
 
 async function writePiTrustDecisionForRepo(target: "current" | "parent", decision: PiTrustDecision) {
   const status = await writePiTrustDecision({
     cwd: repoRoot,
+    storageRoot: repoRoot,
     target,
     decision,
     defaultProjectTrust: await readDefaultProjectTrust(),
@@ -1331,8 +1564,7 @@ async function resolveTaskPackageRunResourcesForRepo(projectId: string, taskId: 
 
 async function writeScopedPiSettings(scope: PiSettingScope, settings: Record<string, unknown>) {
   const settingsPath = scope === "global" ? globalPiSettingsPath() : projectPiSettingsPath();
-  await mkdir(dirname(settingsPath), { recursive: true });
-  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  await writeJsonFile(settingsPath, settings, { durability: "critical" });
 }
 
 async function upsertPiPackageEntryForRepo(scope: PiSettingScope, input: Record<string, unknown>) {
@@ -1414,8 +1646,7 @@ async function writePiKeybindingActionForRepo(input: Record<string, unknown>) {
     keys: input.keys,
     unset: input.unset === true,
   });
-  await mkdir(dirname(keybindingsPath), { recursive: true });
-  await writeFile(keybindingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeJsonFile(keybindingsPath, next, { durability: "critical" });
   await appendPiSettingsAudit({
     scope: "global",
     path: `keybindings.${String(input.id ?? "")}`,
@@ -1686,8 +1917,7 @@ function cleanOptionalString(value: unknown): string | undefined {
 
 async function writeCustomModelsDocument(document: CustomModelsDocument) {
   const path = piModelsJsonPath();
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify({ providers: document.providers ?? {} }, null, 2)}\n`, "utf8");
+  await writeJsonFile(path, { providers: document.providers ?? {} }, { durability: "critical" });
   await (await getPiModelRuntime()).reloadConfig();
   await appendPiSettingsAudit({ scope: "global", path: "models.json", mode: "custom-models", restartRequired: false });
   return readCustomModelsCatalog();
@@ -2114,6 +2344,34 @@ async function resolveModelContextWindow(provider?: string, modelId?: string): P
   }
 }
 
+async function resolveModelPromptTokenBudget(provider?: string, modelId?: string): Promise<PromptRequestBudget | undefined> {
+  if (!provider || !modelId) return undefined;
+  try {
+    const model = (await getPiModelRuntime()).getModel(provider, modelId) ?? builtinModelCatalog.getModel(provider, modelId);
+    if (!(typeof model?.contextWindow === "number" && model.contextWindow > 0
+      && typeof model.maxTokens === "number" && model.maxTokens > 0 && model.maxTokens < model.contextWindow
+    )) return undefined;
+    const registry = new ModelContextRegistry([{
+      provider,
+      modelId,
+      contextWindow: model.contextWindow,
+      outputReserveTokens: model.maxTokens,
+    }]);
+    return {
+      registry,
+      provider,
+      modelId,
+      toolSchemaTokens: 0,
+      historyTokens: 0,
+      providerFramingTokens: estimatePromptTokens(JSON.stringify({ provider, modelId, api: model.api, messages: [], tools: [] })),
+      safetyMarginTokens: 0,
+      compactionReserveTokens: 0,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function sessionContextPercent(contextTokens: number | null, contextWindow: number | null): number | null {
   return typeof contextTokens === "number" && typeof contextWindow === "number"
     ? Number(((contextTokens / contextWindow) * 100).toFixed(2))
@@ -2323,20 +2581,38 @@ const mainRunToolCatalog = createLeasedAgentToolCatalog({
   acquireResourceRead: () => activeAgentRuns.acquireRunStartLease(),
   load: async () => {
     const resources = await resolveTaskRunResources("main", { cwd: repoRoot });
-    const createdSession = await createCatAgentSession({
-      workspace: createWorkspace(repoRoot, "__main_run_tool_catalog__"),
-      modelRuntime: await getPiModelRuntime(),
+    const workspace = createWorkspace(repoRoot, "__main_run_tool_catalog__");
+    const operationId = `tool-catalog-${randomUUID()}`;
+    const createdSession = await createCatWorkerSupportSession(finalizeCatWorkerSessionPlan({
+      schemaVersion: 1,
+      profile: "cat",
+      runtimeRoot: repoRoot,
+      workspace: { root: workspace.root, projectId: workspace.projectId },
+      taskId: null,
+      runId: operationId,
+      modelProvider: null,
+      modelId: null,
+      thinkingLevel: null,
       sessionMode: "memory",
+      sessionId: null,
+      branchEntryId: null,
+      preset: "cat",
+      disabledTools: [],
+      runOptions: null,
       isolatedResources: resources.isolatedResources,
-    });
+      runtimeExtension: true,
+      permissionContract: null,
+      serverTools: [],
+      extensionBinding: false,
+    }), "Main Run tool catalog probe");
     try {
       return buildAgentToolMetadataCatalog({
         catTools: listCatToolMetadata(),
         activeToolNames: createdSession.requestShape.activeToolNames,
-        tools: createdSession.session.getAllTools(),
+        tools: createdSession.tools,
       });
     } finally {
-      createdSession.session.dispose();
+      await createdSession.dispose();
     }
   },
 });
@@ -2400,16 +2676,13 @@ async function readNativeCapabilityCatalog() {
 
 async function projectMemoryStatus(projectId: string): Promise<MemoryStatus> {
   const workspace = createWorkspace(repoRoot, projectId);
-  const config = await readMemoryConfig(workspace);
-  const [reachable, audit, vectorIndex, embeddingBridge] = await Promise.all([
-    config.enabled ? gatewayHealthy(config.gatewayUrl) : Promise.resolve(undefined),
-    readMemoryAuditSummary(workspace),
+  const [legacyTdai, vectorIndex] = await Promise.all([
+    inspectLegacyTdaiMemoryConfiguration(workspace),
     readAssetVectorIndexSummary(repoRoot, projectId),
-    config.enabled ? probeTdaiEmbeddingBridge({ gatewayUrl: config.gatewayUrl }) : Promise.resolve(undefined),
   ]);
-  return buildMemoryStatus(config, reachable, audit, vectorIndex.state === "ready"
+  return buildMemoryStatus(legacyTdai, vectorIndex.state === "ready"
     ? {
-        state: vectorIndex.backend === "tdai_embedding" && embeddingBridge?.state !== "ready" ? "blocked_embedding_bridge_unavailable" : "ready",
+        state: "ready",
         assetVectorIndex: "ready",
         embeddingModel: vectorIndex.embeddingModel,
         backend: vectorIndex.backend,
@@ -2417,14 +2690,12 @@ async function projectMemoryStatus(projectId: string): Promise<MemoryStatus> {
         dim: vectorIndex.dim,
         indexedBlocks: vectorIndex.indexedBlocks,
         builtAt: vectorIndex.builtAt,
-        message: vectorIndex.backend === "tdai_embedding" && embeddingBridge?.state !== "ready" ? embeddingBridge?.message ?? embeddingBridge?.state : undefined,
       }
     : {
         state: "blocked_missing_vector_index",
         assetVectorIndex: vectorIndex.state,
         indexedBlocks: vectorIndex.indexedBlocks,
       },
-    embeddingBridge,
   );
 }
 
@@ -2657,7 +2928,7 @@ async function spawnWorkflowSubagent(projectId: string, workflowId: string, role
       if (!request.params.sessionDir) throw new Error(`Team role ${roleId} has no server-owned child session scope.`);
       const agentSettings = await readAgentSettings(projectId);
       const modelDefaults = await readModelDefaults();
-      const permissionOptions = await projectPermissionSessionOptions(projectId);
+      const permissionOptions = await projectPermissionSessionOptions(projectId, undefined, workflow.taskId, workflowId);
       const resources = await resolveTaskRunResources("team", { cwd: repoRoot });
       const taskPackageResources = await resolveTaskPackageRunResourcesForRepo(projectId, workflow.taskId);
       const packageExecution = await resolveTeamChildPackageExecution(taskPackageResources.resolvedResources);
@@ -2678,24 +2949,149 @@ async function spawnWorkflowSubagent(projectId: string, workflowId: string, role
         ...(packageExecution.provenance ? { requestProvenance: packageExecution.provenance } : {}),
         onFatalError: async () => { await sessionAbort?.(); },
       });
-      const createdSession = await createCatAgentSession({
-        workspace,
-        modelRuntime: await getPiModelRuntime(),
-        modelProvider: agentSettings.modelProvider ?? modelDefaults.effectiveProvider,
-        modelId: agentSettings.modelId ?? modelDefaults.effectiveModel,
-        thinkingLevel: agentSettings.thinkingLevel ?? modelDefaults.effectiveThinkingLevel,
+      const childScope = await readTeamEvidenceChildScope(repoRoot, join(request.params.sessionDir, "session.jsonl"));
+      if (childScope.projectId !== projectId || childScope.workflowId !== workflowId || childScope.roleId !== roleId) {
+        throw new Error(`Team child evidence scope does not match ${projectId}/${workflowId}/${roleId}.`);
+      }
+      const selectedModelRoles = (workflow.teamSelectedRoleIds?.length ? workflow.teamSelectedRoleIds : [roleId])
+        .filter((candidate): candidate is TeamRoleId => !DETERMINISTIC_TEAM_ROLE_IDS.has(candidate));
+      if (!selectedModelRoles.includes(roleId)) {
+        throw new Error(`Team role ${roleId} is not part of the persisted Run plan.`);
+      }
+      const childRequestShape = await buildTeamEvidenceChildRequestShape({
+        repoRoot,
+        roleIds: selectedModelRoles,
+        activeToolNames: childScope.allowedTools,
+        packageResources: packageExecution.mode === "pi_rpc_v1"
+          ? taskPackageResources.resolvedResources.map((resource) => ({
+              packageName: resource.packageName,
+              version: resource.version,
+              resourceType: resource.resourceType,
+              resourceId: resource.resourceId,
+              integrity: resource.integrity,
+            }))
+          : undefined,
+      });
+      const taskWorkspace = createTaskWorkspace(repoRoot);
+      const taskSnapshot = await taskWorkspace.open({ projectId, taskId: workflow.taskId });
+      const run = taskSnapshot.runs.find((candidate) => candidate.id === workflowId);
+      if (!run) throw new Error(`Team Run ${workflowId} is not projected in Task ${workflow.taskId}.`);
+      const previousExecutions = run.executionSnapshots;
+      const previousExecutionCount = previousExecutions?.length ?? 0;
+      const previousExecution = previousExecutions?.at(-1);
+      if (!previousExecution || !run.configChanges) {
+        throw new Error(`Team Run ${workflowId} predates ExecutionSnapshot authority; start a new Team Run.`);
+      }
+      const toRevision = previousExecution.configRevision + 1;
+      const workerStartedAt = new Date().toISOString();
+      const plan = finalizeCatWorkerSessionPlan({
+        schemaVersion: 1,
+        profile: "team",
+        runtimeRoot: repoRoot,
+        workspace: { root: workspace.root, projectId: workspace.projectId },
+        taskId: workflow.taskId,
+        runId: workflowId,
+        modelProvider: agentSettings.modelProvider ?? modelDefaults.effectiveProvider ?? null,
+        modelId: agentSettings.modelId ?? modelDefaults.effectiveModel ?? null,
+        thinkingLevel: agentSettings.thinkingLevel ?? modelDefaults.effectiveThinkingLevel ?? null,
         sessionMode: "new",
+        sessionId: null,
+        branchEntryId: null,
         preset: "scratch",
         disabledTools: serverOwnedRunDisabledTools(agentSettings.disabledTools),
         isolatedResources: packageExecution.mode === "pi_rpc_v1"
           ? {}
           : mergeTaskPackageIsolatedResources(resources.isolatedResources, taskPackageResources.isolatedResources),
-        extensionBinding: { uiContext: interactionHost.uiContext, mode: "rpc" },
-        ...permissionOptions,
+        runOptions: null,
+        runtimeExtension: true,
+        permissionContract: permissionOptions.permissionContract,
+        serverTools: [],
+        extensionBinding: true,
+        memoryRecall: await confirmedMemoryRecallForCat(projectId),
       });
-      const { session, eventBus } = createdSession;
+      const createdSession = await catWorkerRuntime.createSession({
+        plan,
+        executionIdentity: {
+          executionId: `${run.id}.execution.${previousExecutionCount + 1}`,
+          threadId: run.rootAgentThreadId,
+          turnId: `${workflowId}.${roleId}`,
+          runtimeEpochId: `${run.id}.epoch.${toRevision}`,
+          configRevision: toRevision,
+          executionProfile: previousExecution.executionProfile,
+          createdAt: workerStartedAt,
+        },
+        persistExecutionSnapshot: async (workerSnapshot, supervisorShape) => {
+          const promotedManifest = composeTeamRunResourceManifest({
+            packages: Array.from(new Map([...resources.manifest.packages, ...taskPackageResources.packages].map((entry) => [entry.name, entry])).values()),
+            supervisor: supervisorShape,
+            children: childRequestShape,
+            previous: run.resourceManifest,
+            ...(taskPackageResources.profileRevision > 0 || taskPackageResources.selections.length > 0
+              ? {
+                  profileRevision: taskPackageResources.profileRevision,
+                  profileHash: taskPackageResources.profileHash,
+                  resources: taskPackageResources.selections,
+                }
+              : {}),
+          });
+          let promotedRun: TaskRun = { ...run, resourceManifest: promotedManifest };
+          promotedRun = appendTaskSessionConfigChange(promotedRun, {
+            schemaVersion: 1,
+            changeId: `${run.id}.config.${toRevision}`,
+            runId: run.id,
+            threadId: run.rootAgentThreadId,
+            actor: "system",
+            fromRevision: previousExecution.configRevision,
+            toRevision,
+            changes: { retrievalProfile: { from: run.resourceManifest?.profile ?? "main", to: promotedManifest.profile } },
+            effectiveFrom: "new_runtime_epoch",
+            compatibility: "requires_runtime_restart",
+            createdAt: workerSnapshot.createdAt,
+          });
+          promotedRun = appendTaskExecutionSnapshot(promotedRun, {
+            ...workerSnapshot,
+            promptHash: promotedManifest.systemPromptHash!,
+            toolManifestHash: promotedManifest.toolSurfaceHash!,
+            resourceSnapshotHash: promotedManifest.resourceIndexHash!,
+            contextInputHash: createHash("sha256").update(JSON.stringify({
+              workflowId,
+              roleId,
+              childPolicyHash: childScope.policyHash,
+              planHash: run.planHash ?? null,
+              requestShapeHash: promotedManifest.requestShapeHash,
+            })).digest("hex"),
+          });
+          await taskWorkspace.appendGenerated({
+            projectId,
+            taskId: workflow.taskId!,
+            runId: workflowId,
+            events: [{
+              type: "run_upsert",
+              agentThreadId: run.rootAgentThreadId,
+              occurredAt: workerSnapshot.createdAt,
+              run: promotedRun,
+            }],
+          });
+        },
+        requestPermissionDecision: permissionOptions.requestPermissionDecision,
+        executeServerTool: async () => { throw new Error("Team supervisor has no Host server tools."); },
+        requestUi: (uiRequest) => {
+          if (uiRequest.method === "select") return interactionHost.uiContext.select(uiRequest.title, uiRequest.options ?? [], uiRequest.dialog);
+          if (uiRequest.method === "confirm") return interactionHost.uiContext.confirm(uiRequest.title, uiRequest.message ?? "", uiRequest.dialog);
+          if (uiRequest.method === "input") return interactionHost.uiContext.input(uiRequest.title, uiRequest.message, uiRequest.dialog);
+          return interactionHost.uiContext.editor(uiRequest.title, uiRequest.message);
+        },
+        notifyUi: (message, level) => interactionHost.uiContext.notify(message, level),
+        libraryPersistence: assistantLibraryStore,
+      });
+      const session = createdSession.session;
+      const eventBus: EventBus = {
+        emit: (channel, data) => createdSession.emitExtensionEvent(channel, data),
+        on: (channel, handler) => createdSession.onExtensionEvent((candidate, data) => {
+          if (candidate === channel) handler(data);
+        }),
+      };
       sessionAbort = () => session.abort();
-      if (!eventBus) throw new Error("Pi event bus is not available for the Team child host.");
       const unbindResultDelivery = packageExecution.mode === "pi_subagents"
         ? bindSubagentResultDeliveryAcknowledgement(eventBus)
         : () => undefined;
@@ -2710,58 +3106,7 @@ async function spawnWorkflowSubagent(projectId: string, workflowId: string, role
       interactionHost.bindEvents(eventBus);
       let retainedByActiveRun = false;
       try {
-        await session.bindExtensions({});
         if (packageExecution.mode === "pi_subagents") await callSubagentRpc(eventBus, "ping", {});
-        const childScope = await readTeamEvidenceChildScope(repoRoot, join(request.params.sessionDir, "session.jsonl"));
-        const selectedModelRoles = (workflow.teamSelectedRoleIds?.length ? workflow.teamSelectedRoleIds : [roleId])
-          .filter((candidate): candidate is TeamRoleId => !DETERMINISTIC_TEAM_ROLE_IDS.has(candidate));
-        if (!selectedModelRoles.includes(roleId)) {
-          throw new Error(`Team role ${roleId} is not part of the persisted Run plan.`);
-        }
-        const childRequestShape = await buildTeamEvidenceChildRequestShape({
-          repoRoot,
-          roleIds: selectedModelRoles,
-          activeToolNames: childScope.allowedTools,
-          packageResources: packageExecution.mode === "pi_rpc_v1"
-            ? taskPackageResources.resolvedResources.map((resource) => ({
-                packageName: resource.packageName,
-                version: resource.version,
-                resourceType: resource.resourceType,
-                resourceId: resource.resourceId,
-                integrity: resource.integrity,
-              }))
-            : undefined,
-        });
-        const taskWorkspace = createTaskWorkspace(repoRoot);
-        const snapshot = await taskWorkspace.open({ projectId, taskId: workflow.taskId });
-        const run = snapshot.runs.find((candidate) => candidate.id === workflowId);
-        if (!run) throw new Error(`Team Run ${workflowId} is not projected in Task ${workflow.taskId}.`);
-        await taskWorkspace.appendGenerated({
-          projectId,
-          taskId: workflow.taskId,
-          runId: workflowId,
-          events: [{
-            type: "run_upsert",
-            agentThreadId: run.rootAgentThreadId,
-            occurredAt: run.updatedAt,
-            run: {
-              ...run,
-              resourceManifest: composeTeamRunResourceManifest({
-                packages: Array.from(new Map([...resources.manifest.packages, ...taskPackageResources.packages].map((entry) => [entry.name, entry])).values()),
-                supervisor: createdSession.requestShape,
-                children: childRequestShape,
-                previous: run.resourceManifest,
-                ...(taskPackageResources.profileRevision > 0 || taskPackageResources.selections.length > 0
-                  ? {
-                      profileRevision: taskPackageResources.profileRevision,
-                      profileHash: taskPackageResources.profileHash,
-                      resources: taskPackageResources.selections,
-                    }
-                  : {}),
-              }),
-            },
-          }],
-        });
         await mkdir(join(repoRoot, "data", "team-role-outputs"), { recursive: true });
         let directChild: Awaited<ReturnType<typeof startWorkflowTeamChildRpc>> | undefined;
         const reply = packageExecution.mode === "pi_rpc_v1"
@@ -2793,6 +3138,8 @@ async function spawnWorkflowSubagent(projectId: string, workflowId: string, role
           activeAgentRuns.register({
             turnId,
             sessionId: session.sessionId,
+            workerId: createdSession.workerId,
+            runtimeEpochId: createdSession.runtimeEpochId,
             scope: "workflow_role",
             projectId,
             taskId: workflow.taskId,
@@ -2849,6 +3196,7 @@ function workflowRouteDeps(overrides: Partial<WorkflowRouteDeps> = {}): Workflow
     readProjectAgentSettings: readAgentSettings,
     writeProjectAgentSettings: (id, patch) => writeAgentSettings(id, patch),
     readTaskPackageRunResources: (projectId, taskId) => resolveTaskPackageRunResourcesForRepo(projectId, taskId),
+    resolveModelPromptTokenBudget,
     ...overrides,
   };
 }
@@ -2861,24 +3209,55 @@ async function runPrivateEvalSingle(
   const modelDefaults = await readModelDefaults();
   const turnId = `eval-single:${input.parentRunId}:${randomUUID()}`;
   const releaseRunStart = activeAgentRuns.acquireRunStartLease();
-  let session: Awaited<ReturnType<typeof createCatAgentSession>>["session"];
+  let workerCreation: CatWorkerSessionCreation;
   try {
-    ({ session } = await createCatAgentSession({
-      workspace,
-      modelRuntime: await getPiModelRuntime(),
-      modelProvider: input.modelProvider ?? agentSettings.modelProvider ?? modelDefaults.effectiveProvider,
-      modelId: input.modelId ?? agentSettings.modelId ?? modelDefaults.effectiveModel,
-      thinkingLevel: input.thinkingLevel,
+    const plan = finalizeCatWorkerSessionPlan({
+      schemaVersion: 1,
+      profile: "private_eval",
+      runtimeRoot: repoRoot,
+      workspace: { root: workspace.root, projectId: workspace.projectId },
+      taskId: null,
+      runId: turnId,
+      modelProvider: input.modelProvider ?? agentSettings.modelProvider ?? modelDefaults.effectiveProvider ?? null,
+      modelId: input.modelId ?? agentSettings.modelId ?? modelDefaults.effectiveModel ?? null,
+      thinkingLevel: input.thinkingLevel ?? null,
       sessionMode: "memory",
+      sessionId: null,
+      branchEntryId: null,
       preset: "eval",
-      runtimeExtension: false,
       disabledTools: serverOwnedRunDisabledTools(agentSettings.disabledTools),
-      runOptions: input.runOptions,
+      runOptions: input.runOptions ?? null,
       isolatedResources: {},
-    }));
+      runtimeExtension: false,
+      permissionContract: null,
+      serverTools: [],
+      extensionBinding: false,
+      memoryRecall: await confirmedMemoryRecallForCat(input.projectId),
+    });
+    workerCreation = await catWorkerRuntime.createSession({
+      plan,
+      executionIdentity: {
+        executionId: `${turnId}.execution.1`,
+        threadId: `${turnId}.main`,
+        turnId,
+        runtimeEpochId: `${turnId}.epoch.1`,
+        configRevision: 1,
+        executionProfile: null,
+        createdAt: new Date().toISOString(),
+      },
+      persistExecutionSnapshot: async () => undefined,
+      requestPermissionDecision: async () => ({ action: "deny", reason: "Private Eval has no runtime tool permissions." }),
+      executeServerTool: async () => { throw new Error("Private Eval has no server tools."); },
+      requestUi: async () => { throw new Error("Private Eval has no Extension UI."); },
+      notifyUi: () => undefined,
+      libraryPersistence: assistantLibraryStore,
+    });
+    const session = workerCreation.session;
     activeAgentRuns.register({
       turnId,
       sessionId: session.sessionId,
+      workerId: workerCreation.workerId,
+      runtimeEpochId: workerCreation.runtimeEpochId,
       scope: "private_eval",
       projectId: input.projectId,
       parentRunId: input.parentRunId,
@@ -2887,6 +3266,7 @@ async function runPrivateEvalSingle(
   } finally {
     releaseRunStart();
   }
+  const session = workerCreation.session;
   const assistantParts: string[] = [];
   let assistantError: string | undefined;
   let usage: ChatEvent["usage"];
@@ -2931,6 +3311,22 @@ type TaskAgentRunOptions = {
 
 const taskSessionKey = (projectId: string, taskId: string): string => `${projectId}\0${taskId}`;
 
+async function confirmedMemoryRecallForCat(projectId: string, query = ""): Promise<string> {
+  if (!assistantMemoryStore) throw new Error("SQLite assistant memory storage is not ready.");
+  if (!query.trim()) return "";
+  const manifest = await readProjectManifest(repoRoot, projectId).catch(() => undefined);
+  const report = await searchAssistantMemories(repoRoot, {
+    query,
+    context: {
+      projectId,
+      ...(manifest?.targetLanguage ? { locale: manifest.targetLanguage } : {}),
+      includePersonal: true,
+    },
+    store: assistantMemoryStore,
+  });
+  return formatAssistantMemoryRecallReport(report);
+}
+
 async function syncCanonicalTaskTitleToPiSession(input: { projectId: string; taskId: string; title: string }): Promise<void> {
   const live = activeTaskSessionManagers.get(taskSessionKey(input.projectId, input.taskId));
   await syncExistingPiSessionTitle({
@@ -2965,7 +3361,7 @@ const taskAutoTitles = createTaskAutoTitleCoordinator({
 
 function scheduleTaskAutoTitle(input: { projectId: string; taskId: string }): void {
   void taskAutoTitles.schedule(input).catch((error) => {
-    console.warn("Task auto-title failed:", error instanceof Error ? error.message : String(error));
+    safeLogger.warn("task.auto_title_failed", { error });
   });
 }
 
@@ -3023,941 +3419,41 @@ function runAgentStreaming(
   emit: (event: StreamEvent) => void,
   options: TaskAgentRunOptions,
 ): Promise<ChatEvent[]> {
-  return agentRunQueue(`agent:${projectId}:${options.sessionId}`, () => runAgentStreamingUnlocked(projectId, message, emit, options));
+  return agentRunQueue(`agent:${projectId}:${options.sessionId}`, () => projectTaskRunCoordinator.run(projectId, message, emit, options));
 }
 
-async function runAgentStreamingUnlocked(
-  projectId: string,
-  message: string,
-  rawEmit: (event: StreamEvent) => void,
-  options: TaskAgentRunOptions,
-): Promise<ChatEvent[]> {
-  let taskProjector: SingleTaskRunProjector | undefined;
-  const emit = (event: StreamEvent): void => {
-    rawEmit(event);
-    taskProjector?.accept(event);
-  };
-  const workspace = createWorkspace(repoRoot, projectId);
-  const memoryConfig = await readMemoryConfig(workspace);
-  let assistantParts: string[] = [];
-  let thinkingStarted = false;
-  let assistantEndError: string | undefined;
-  let assistantUsage: ChatEvent["usage"];
-  const toolParts: Array<{ text: string; toolCallId?: string }> = [];
-  const trace: AgentTraceEvent[] = [];
-  const selfHealing = createCatSelfHealingRetryState();
-  const selectedSessionId = options.sessionId;
-  const agentSettings = await readAgentSettings(projectId);
-  const modelDefaults = await readModelDefaults();
-  const selectedModelProvider = options.modelProvider ?? agentSettings.modelProvider ?? modelDefaults.effectiveProvider;
-  const selectedModelId = options.modelId ?? agentSettings.modelId ?? modelDefaults.effectiveModel;
-  const selectedThinkingLevel = options.thinkingLevel ?? agentSettings.thinkingLevel ?? modelDefaults.effectiveThinkingLevel;
-  if (!selectedModelProvider || !selectedModelId) {
-    throw new TaskWorkspaceConflictError("No model is configured for this Task Run.");
-  }
-  const providerCatalog = await readPiProviderCatalog();
-  const selectedModel = providerCatalog.providers
-    .find((provider) => provider.id === selectedModelProvider && provider.kind === "model")
-    ?.models.find((model) => model.id === selectedModelId);
-  if (!selectedModel?.available) {
-    throw new TaskWorkspaceConflictError(`Model ${selectedModelProvider}/${selectedModelId} is not available for this Task Run.`);
-  }
-  const permissionOptions = await projectPermissionSessionOptions(projectId, emit);
-  const taskDisabledTools = serverOwnedRunDisabledTools(agentSettings.disabledTools);
-  const segmentRunOptions = options.segmentId ? { tools: [...CAT_SEGMENT_RUN_TOOLS, "prepare_team_execution"] } : undefined;
-  const taskSnapshot = await createTaskWorkspace(repoRoot).open({ projectId, taskId: options.taskId });
-  const queueLocator = { kind: "project" as const, projectId, taskId: options.taskId };
-  const normalizedMessage = message.trim();
-  const pendingInitial = pendingInitialTaskRun(taskSnapshot, normalizedMessage, options.expectedRunId);
-  if (options.expectedRunId && !pendingInitial) {
-    throw new TaskWorkspaceConflictError(
-      `Task ${options.taskId} Run ${options.expectedRunId} is no longer pending for this message.`,
-    );
-  }
-  const turnId = pendingInitial?.run.id ?? `turn_${randomUUID()}`;
-  const startedAt = new Date().toISOString();
-  const threadId = `${turnId}.main`;
-  const stopBridge = createTaskSessionStopBridge();
-  let extensionInteractionFatalError: Error | undefined;
-  let rejectExtensionFatal!: (error: Error) => void;
-  const extensionFatal = new Promise<never>((_resolve, reject) => { rejectExtensionFatal = reject; });
-  void extensionFatal.catch(() => undefined);
-  const interactionHost = createTaskExtensionInteractionHost({
-    repoRoot,
+const projectTaskRunCoordinator = new ProjectTaskRunCoordinator({
+  repoRoot,
+  activeRuns: activeAgentRuns,
+  messageQueue: taskMessageQueue,
+  workerRuntime: catWorkerRuntime,
+  readProjectSummary: async (projectId) => (await listProjects(repoRoot)).find((item) => item.projectId === projectId),
+  resolveSessionId: resolveSelectedSessionId,
+  consumePendingBranchEntry: consumeProjectPendingBranchEntry,
+  readAgentSettings,
+  readModelDefaults,
+  readProviderCatalog: readPiProviderCatalog,
+  projectPermissionContract: async (projectId, taskId, operationId) => (
+    await projectPermissionSessionOptions(projectId, undefined, taskId, operationId)
+  ).permissionContract,
+  projectPermissionSessionOptions,
+  createSupportSession: createCatWorkerSupportSession,
+  readSessionStats: async (path, projectId, sessionId) => readSessionStats(path, undefined, projectId, sessionId),
+  projectSessionInfo,
+  readTaskPackageRunResources: resolveTaskPackageRunResourcesForRepo,
+  prepareTeamExecution: ({ projectId, taskId, runId, reason }) => prepareTeamExecution({
     projectId,
-    taskId: options.taskId,
-    runId: turnId,
-    agentThreadId: threadId,
-    onFatalError: (error) => {
-      if (extensionInteractionFatalError) return;
-      extensionInteractionFatalError = error;
-      rejectExtensionFatal(error);
-      void stopBridge.registrySession.abort().catch(() => undefined);
-    },
-  });
-  const releaseRunStart = activeAgentRuns.acquireRunStartLease();
-  let runRegistered = false;
-  try {
-    activeAgentRuns.register({
-      turnId,
-      sessionId: selectedSessionId,
-      scope: "project",
-      projectId,
-      taskId: options.taskId,
-      parentRunId: options.parentRunId,
-      beforeAbort: async () => {
-        await taskMessageQueue.pause(queueLocator, "interrupted");
-        permissionDecisionRegistry.cancelForSession(selectedSessionId, "permission request cancelled because the Task was stopped");
-        await interactionHost.prepareStop();
-      },
-      session: stopBridge.registrySession,
-    });
-    runRegistered = true;
-    taskProjector = await createSingleTaskRunProjector({
-      repoRoot,
-      projectId,
-      taskId: options.taskId,
-      runId: turnId,
-      userMessage: message,
-      startedAt,
-      modelRoute: `${selectedModelProvider}/${selectedModelId}`,
-      focusedSegmentId: options.segmentId,
-      evidenceRefs: options.attachmentRefs,
-      preprojected: Boolean(pendingInitial),
-    });
-    await taskProjector.flush();
-  } catch (error) {
-    if (runRegistered) activeAgentRuns.unregister(turnId);
-    await interactionHost.dispose().catch(() => undefined);
-    throw error;
-  } finally {
-    releaseRunStart();
-  }
-
-  let createdSession: Awaited<ReturnType<typeof createCatAgentSession>>;
-  try {
-    const resources = await resolveTaskRunResources("main", { cwd: repoRoot }, options.capabilityIds);
-    const taskPackageResources = await resolveTaskPackageRunResourcesForRepo(projectId, options.taskId);
-    if (activeAgentRuns.isStoppingOrStopped(turnId)) throw new Error("Agent run stopped while resolving Task resources.");
-    createdSession = await createCatAgentSession({
-      workspace,
-      modelRuntime: await getPiModelRuntime(),
-      modelProvider: selectedModelProvider,
-      modelId: selectedModelId,
-      thinkingLevel: selectedThinkingLevel,
-      sessionId: selectedSessionId,
-      sessionMode: "project",
-      disabledTools: taskDisabledTools,
-      runOptions: segmentRunOptions,
-      isolatedResources: mergeTaskPackageIsolatedResources(resources.isolatedResources, taskPackageResources.isolatedResources),
-      serverTools: [
-        ...createAssistantMemoryTools({
-          runtimeRoot: repoRoot,
-          scope: { kind: "project", projectId },
-          sourceTaskId: options.taskId,
-        }),
-        createPrepareTeamExecutionTool(async (reason) => {
-        await taskProjector?.flush();
-        const prepared = await prepareTeamExecution({
-          projectId,
-          taskId: options.taskId,
-          runId: turnId,
-          reason,
-          deps: workflowRouteDeps(),
-        });
-        taskProjector?.markTeamPrepared();
-        return prepared;
-        }),
-      ],
-      extensionBinding: { uiContext: interactionHost.uiContext, mode: "rpc" },
-      memoryConfig: memoryConfig.enabled ? memoryConfig : undefined,
-      ...permissionOptions,
-    });
-    stopBridge.bind(createdSession.session);
-    if (!createdSession.eventBus) throw new Error("Pi event bus is not available for native Task interactions.");
-    interactionHost.bindEvents(createdSession.eventBus);
-    const mergedPackages = Array.from(new Map([
-      ...resources.manifest.packages,
-      ...taskPackageResources.packages,
-    ].map((entry) => [entry.name, entry])).values());
-    await taskProjector.setResourceManifest({
-      ...resources.manifest,
-      packages: mergedPackages,
-      ...(taskPackageResources.profileRevision > 0 || taskPackageResources.selections.length > 0
-        ? {
-            profileRevision: taskPackageResources.profileRevision,
-            profileHash: taskPackageResources.profileHash,
-            resources: taskPackageResources.selections,
-          }
-        : {}),
-      activeToolNames: createdSession.requestShape.activeToolNames,
-      requestShapeHash: createdSession.requestShape.requestShapeHash,
-      systemPromptHash: createdSession.requestShape.systemPromptHash,
-      toolSurfaceHash: createdSession.requestShape.toolSurfaceHash,
-      resourceIndexHash: createdSession.requestShape.resourceIndexHash,
-      requestShape: {
-        schemaVersion: createdSession.requestShape.schemaVersion,
-        systemPromptChars: createdSession.requestShape.systemPromptChars,
-        activeToolCount: createdSession.requestShape.activeToolCount,
-        resourceCount: createdSession.requestShape.resourceCount,
-      },
-      mainSurface: {
-        packageNames: mergedPackages.map(({ name }) => name),
-        requestShape: createdSession.requestShape,
-      },
-    });
-    stopBridge.throwIfForcedStopped();
-  } catch (error) {
-    const ts = new Date().toISOString();
-    const stoppedDuringSetup = stopBridge.isForcedStopError(error) || activeAgentRuns.isStoppingOrStopped(turnId);
-    if (stoppedDuringSetup) {
-      void interactionHost.prepareStop().catch(() => undefined);
-      void interactionHost.dispose().catch(() => undefined);
-    } else {
-      await interactionHost.dispose().catch(() => undefined);
-    }
-    emit({
-      type: stoppedDuringSetup ? "stopped" : "error",
-      ts,
-      turnId,
-      sessionId: selectedSessionId,
-      ...(stoppedDuringSetup
-        ? { text: "Agent run stopped by user." }
-        : { isError: true, errorMessage: error instanceof Error ? error.message : String(error) }),
-    });
-    await taskProjector.flush();
-    activeAgentRuns.unregister(turnId);
-    if (stoppedDuringSetup) {
-      return [
-        { ts, kind: "user", text: message, sessionId: selectedSessionId },
-        { ts, kind: "system", text: "Agent run stopped by user.", sessionId: selectedSessionId },
-      ];
-    }
-    throw error;
-  }
-  const { session, requestShape } = createdSession;
-  await taskMessageQueue.bindRun({
-    locator: queueLocator,
-    runId: turnId,
-    threadId,
-    session,
-    onChange: (messageQueue) => emit({
-      type: "queue_update",
-      ts: new Date().toISOString(),
-      turnId,
-      sessionId: session.sessionId,
-      sessionFile: session.sessionFile,
-      messageQueue,
-    }),
-  });
-  const sessionKey = taskSessionKey(projectId, options.taskId);
-  activeTaskSessionManagers.set(sessionKey, session.sessionManager);
-  const syncCanonicalTaskTitle = async (): Promise<void> => {
-    const latest = await createTaskWorkspace(repoRoot).open({ projectId, taskId: options.taskId });
-    await syncCanonicalTaskTitleToPiSession({ projectId, taskId: options.taskId, title: latest.task.title });
-  };
-  // Naming is important durable metadata, but it must never prevent the
-  // canonical Task Run from starting. Late title completion and the finally
-  // sync below both converge the Pi session without another model call.
-  await syncCanonicalTaskTitle().catch((error) => {
-    console.warn("Task title session sync failed:", error instanceof Error ? error.message : String(error));
-  });
-  const sessionMeta = { sessionId: session.sessionId, sessionFile: session.sessionFile };
-  const traceBuilder = new AgentTraceBuilder({ projectId, ...sessionMeta, turnId });
-  // A focused-segment conversation can contain explanations, source quotes,
-  // or Chinese operator text. It is still not a candidate write.
-  let streamRules = createCatStreamRuleMonitor();
-  let pendingStreamRuleRetry: CatStreamRuleViolation | undefined;
-  let retryAbortRequested = false;
-  let streamRuleRetries = 0;
-  const requestStreamRuleRetry = (violation: CatStreamRuleViolation, abortActiveTurn = true): void => {
-    if (pendingStreamRuleRetry || !shouldAbortForCatStreamViolation(violation)) return;
-    pendingStreamRuleRetry = violation;
-    if (!abortActiveTurn || streamRuleRetries >= CAT_STREAM_RULE_MAX_RETRIES) return;
-    retryAbortRequested = true;
-    void session.abort().catch((error) => {
-      const traceEvent = traceBuilder.event("error", {
-        piEventType: "stream_rule_abort_error",
-        isError: true,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "error",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        isError: true,
-        errorMessage: traceEvent.errorMessage,
-      });
-    });
-  };
-  const started = traceBuilder.event("turn_start", {
-    piEventType: "turn_start",
-    text: message,
-    requestShapeHash: requestShape.requestShapeHash,
-    systemPromptHash: requestShape.systemPromptHash,
-    toolSurfaceHash: requestShape.toolSurfaceHash,
-    resourceIndexHash: requestShape.resourceIndexHash,
-    systemPromptChars: requestShape.systemPromptChars,
-    activeToolCount: requestShape.activeToolCount,
-    resourceCount: requestShape.resourceCount,
-  });
-  trace.push(started);
-  emit({
-    type: "turn_start",
-    ts: started.ts,
-    turnId: started.turnId,
-    ...sessionMeta,
-    text: message,
-  });
-  const publishThinkingStarted = (): void => {
-    if (thinkingStarted) return;
-    thinkingStarted = true;
-    const traceEvent = traceBuilder.event("assistant_thinking_started", {
-      piEventType: "thinking_started",
-    });
-    trace.push(traceEvent);
-    emit({
-      type: "assistant_thinking_started",
-      ts: traceEvent.ts,
-      turnId: traceEvent.turnId,
-      ...sessionMeta,
-    });
-  };
-  session.subscribe((event) => {
-    const ts = new Date().toISOString();
-    if (extensionInteractionFatalError && event.type === "tool_execution_end" && event.toolName === "ask_user") return;
-    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-      assistantParts.push(event.assistantMessageEvent.delta);
-      emit({
-        type: "assistant_delta",
-        ts,
-        turnId: traceBuilder.turnId,
-        ...sessionMeta,
-        text: event.assistantMessageEvent.delta,
-      });
-      for (const violation of streamRules.observeDelta(event.assistantMessageEvent.delta)) {
-        const traceEvent = traceBuilder.event("stream_rule_violation", streamRuleTraceInput(violation));
-        trace.push(traceEvent);
-        emit({
-          type: "stream_rule_violation",
-          ts: traceEvent.ts,
-          turnId: traceEvent.turnId,
-          ...sessionMeta,
-          text: traceEvent.text,
-          isError: traceEvent.isError,
-          ruleCode: traceEvent.ruleCode,
-          ruleSeverity: traceEvent.ruleSeverity,
-          ruleAction: traceEvent.ruleAction,
-          ruleMatch: traceEvent.ruleMatch,
-          ruleOffset: traceEvent.ruleOffset,
-        });
-        requestStreamRuleRetry(violation);
-      }
-    }
-    if (
-      event.type === "message_update"
-      && event.assistantMessageEvent.type === "thinking_delta"
-    ) {
-      publishThinkingStarted();
-    }
-    if (event.type === "message_end") {
-      if (assistantMessageHasThinking(event.message)) publishThinkingStarted();
-      assistantEndError = assistantMessageError(event.message) ?? assistantEndError;
-      assistantUsage = assistantMessageUsage(event.message) ?? assistantUsage;
-    }
-    if (event.type === "queue_update") {
-      void taskMessageQueue.syncPiQueue({
-        locator: queueLocator,
-        runId: turnId,
-        followUp: event.followUp,
-      }).catch((error) => {
-        console.warn("Project Task message queue sync failed:", error instanceof Error ? error.message : String(error));
-      });
-    }
-    if (event.type === "tool_execution_start") {
-      toolParts.push({ text: `tool_start ${event.toolName}`, toolCallId: event.toolCallId });
-      const traceEvent = traceBuilder.event("tool_start", {
-        piEventType: event.type,
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        argsPreview: previewValue(event.args),
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "tool_start",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        argsPreview: traceEvent.argsPreview,
-      });
-    }
-    if (event.type === "tool_execution_end") {
-      toolParts.push({ text: `tool_end ${event.toolName} ${event.isError ? "error" : "ok"}`, toolCallId: event.toolCallId });
-      const validation = extractCatRuntimeValidation(event.result);
-      const denied = sandboxDeniedTraceInput({ result: event.result, toolName: event.toolName });
-      const isDenied = denied.isDenied;
-      const recovery = isDenied
-        ? denied.trace
-        : event.isError || validation?.errors.length
-        ? recoveryTraceInput({
-            message: event.isError ? previewValue(event.result, 240) : validation?.errors.join("; "),
-            toolName: event.toolName,
-            isToolError: event.isError,
-            validationErrors: validation?.errors,
-          }).trace
-        : undefined;
-      const traceEvent = traceBuilder.event(isDenied ? "sandbox_denied" : "tool_end", {
-        piEventType: event.type,
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        isError: isDenied || event.isError || Boolean(validation?.errors.length),
-        resultPreview: previewValue(event.result),
-        errorMessage: isDenied || event.isError ? previewValue(event.result, 240) : validation?.errors.join("; "),
-        validationWarnings: validation?.warnings.length ? validation.warnings : undefined,
-        validationErrors: validation?.errors.length ? validation.errors : undefined,
-        ...recovery,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: isDenied ? "sandbox_denied" : "tool_end",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        isError: traceEvent.isError,
-        resultPreview: traceEvent.resultPreview,
-        errorMessage: traceEvent.errorMessage,
-        validationWarnings: traceEvent.validationWarnings,
-        validationErrors: traceEvent.validationErrors,
-        recoveryKind: traceEvent.recoveryKind,
-        recoveryAction: traceEvent.recoveryAction,
-        recoveryRetryable: traceEvent.recoveryRetryable,
-      });
-    }
-    if (event.type === "compaction_start") {
-      const traceEvent = traceBuilder.event("compaction_start", {
-        piEventType: event.type,
-        reason: event.reason,
-        text: `Pi compaction started: ${event.reason}`,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "compaction_start",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        reason: event.reason,
-        text: traceEvent.text,
-      });
-    }
-    if (event.type === "compaction_end") {
-      if (!event.errorMessage && !event.aborted) markCatSelfHealingCompacted(selfHealing);
-      const traceEvent = traceBuilder.event("compaction_end", {
-        piEventType: event.type,
-        reason: event.reason,
-        tokensBefore: event.result?.tokensBefore,
-        estimatedTokensAfter: event.result?.estimatedTokensAfter,
-        firstKeptEntryId: event.result?.firstKeptEntryId,
-        aborted: event.aborted,
-        willRetry: event.willRetry,
-        isError: Boolean(event.errorMessage),
-        errorMessage: event.errorMessage,
-        text: event.result?.summary,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "compaction_end",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        reason: event.reason,
-        tokensBefore: event.result?.tokensBefore,
-        estimatedTokensAfter: event.result?.estimatedTokensAfter,
-        firstKeptEntryId: event.result?.firstKeptEntryId,
-        aborted: event.aborted,
-        willRetry: event.willRetry,
-        isError: Boolean(event.errorMessage),
-        errorMessage: event.errorMessage,
-        text: event.result?.summary,
-      });
-    }
-    if (event.type === "auto_retry_start") {
-      const traceEvent = traceBuilder.event("retry_start", {
-        piEventType: event.type,
-        text: `Provider retry ${event.attempt}/${event.maxAttempts}`,
-        errorMessage: event.errorMessage,
-        retryAttempt: event.attempt,
-        retryMaxAttempts: event.maxAttempts,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "retry_start",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        text: traceEvent.text,
-        errorMessage: event.errorMessage,
-        retryAttempt: event.attempt,
-        retryMaxAttempts: event.maxAttempts,
-      });
-    }
-    if (event.type === "auto_retry_end") {
-      const traceEvent = traceBuilder.event("retry_end", {
-        piEventType: event.type,
-        isError: !event.success,
-        errorMessage: event.finalError,
-        retrySuccess: event.success,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "retry_end",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        isError: !event.success,
-        errorMessage: event.finalError,
-        retrySuccess: event.success,
-      });
-    }
-  });
-
-  let promptError: unknown;
-  let stoppedByUser = false;
-  // Project context is injected once per turn by the cat-runtime before_agent_start
-  // hook; embedding the snapshot here again doubled every turn's context cost.
-  const basePrompt = [
-    options.taskId ? `Current task: ${options.taskId}` : "",
-    ...formatTaskRuntimeScope(options.taskScope),
-    options.segmentId ? `Focused segment: ${options.segmentId}` : "",
-    options.segmentSource ? `Focused segment source: ${options.segmentSource}` : "",
-    options.attachmentPaths?.length ? `Attached Project assets: ${options.attachmentPaths.join(", ")}` : "",
-    options.capabilityIds?.length ? `Enabled Run capabilities: ${options.capabilityIds.join(", ")}` : "",
-    `When using batch_read, use an imported batch_id from "imported_batches". Do not conclude a batch is unimported just because it appears in raw scanned assets.`,
-    ``,
-    `User request: ${message}`,
-    ``,
-    `Use CAT tools when project/batch evidence is needed. Keep the answer operational and list next concrete actions.`,
-  ]
-    .filter((line) => line !== "")
-    .join("\n");
-  try {
-    stopBridge.throwIfForcedStopped();
-    if (activeAgentRuns.isStoppingOrStopped(started.turnId)) {
-      throw new Error("Agent run stopped before the first prompt.");
-    }
-    let promptText = basePrompt;
-    let preserveStreamState = false;
-    for (;;) {
-      if (preserveStreamState) {
-        // Output-cutoff continuation: keep streamed text and stream-rule state.
-        preserveStreamState = false;
-      } else {
-        assistantParts = [];
-        assistantEndError = undefined;
-        streamRules = createCatStreamRuleMonitor();
-      }
-      pendingStreamRuleRetry = undefined;
-      retryAbortRequested = false;
-      try {
-        await Promise.race([session.prompt(promptText), extensionFatal, stopBridge.forcedStop]);
-        stopBridge.throwIfForcedStopped();
-        if (assistantEndError && !pendingStreamRuleRetry) throw new Error(assistantEndError);
-      } catch (error) {
-        if (extensionInteractionFatalError) throw extensionInteractionFatalError;
-        if (stopBridge.isForcedStopError(error)) throw error;
-        if (!pendingStreamRuleRetry) {
-          const { recovery, trace: recoveryTrace } = recoveryTraceInput({
-            message: error instanceof Error ? error.message : String(error),
-          });
-          const plan = planCatSelfHealingRetry(recovery, selfHealing);
-          if (plan) {
-            const traceEvent = traceBuilder.event("retry_start", {
-              piEventType: plan.piEventType,
-              text: `Self-healing retry: ${recovery.reason}`,
-              retryAttempt: 1,
-              retryMaxAttempts: 1,
-              ...recoveryTrace,
-            });
-            trace.push(traceEvent);
-            emit({
-              type: "retry_start",
-              ts: traceEvent.ts,
-              turnId: traceEvent.turnId,
-              ...sessionMeta,
-              text: traceEvent.text,
-              retryAttempt: traceEvent.retryAttempt,
-              retryMaxAttempts: traceEvent.retryMaxAttempts,
-              recoveryKind: traceEvent.recoveryKind,
-              recoveryAction: traceEvent.recoveryAction,
-              recoveryRetryable: traceEvent.recoveryRetryable,
-            });
-            if (plan.compactFirst) {
-              await Promise.race([
-                session.compact(await buildCatCompactionInstructionsForWorkspace(workspace, recovery.correctiveInstruction)),
-                stopBridge.forcedStop,
-              ]);
-            }
-            if (plan.delayMs > 0) {
-              await Promise.race([
-                new Promise((resolve) => setTimeout(resolve, plan.delayMs)),
-                stopBridge.forcedStop,
-              ]);
-            }
-            stopBridge.throwIfForcedStopped();
-            preserveStreamState = plan.preserveStreamState;
-            promptText = `${basePrompt}${plan.promptSuffix}`;
-            continue;
-          }
-          throw error;
-        }
-        if (streamRuleRetries >= CAT_STREAM_RULE_MAX_RETRIES) break;
-      }
-
-      if (!pendingStreamRuleRetry) {
-        for (const violation of streamRules.finalize()) {
-          const traceEvent = traceBuilder.event("stream_rule_violation", streamRuleTraceInput(violation));
-          trace.push(traceEvent);
-          emit({
-            type: "stream_rule_violation",
-            ts: traceEvent.ts,
-            turnId: traceEvent.turnId,
-            ...sessionMeta,
-            text: traceEvent.text,
-            isError: traceEvent.isError,
-            ruleCode: traceEvent.ruleCode,
-            ruleSeverity: traceEvent.ruleSeverity,
-            ruleAction: traceEvent.ruleAction,
-            ruleMatch: traceEvent.ruleMatch,
-            ruleOffset: traceEvent.ruleOffset,
-          });
-          requestStreamRuleRetry(violation, false);
-        }
-      }
-      if (!pendingStreamRuleRetry || streamRuleRetries >= CAT_STREAM_RULE_MAX_RETRIES) break;
-
-      streamRuleRetries += 1;
-      const retryInstruction = buildCatStreamRetryInstruction(pendingStreamRuleRetry);
-      const traceEvent = traceBuilder.event("retry_start", {
-        piEventType: retryAbortRequested ? "stream_rule_abort" : "stream_rule_retry",
-        text: `CAT stream-rule retry ${streamRuleRetries}/${CAT_STREAM_RULE_MAX_RETRIES}: ${retryInstruction.reason}`,
-        reason: retryInstruction.reason,
-        retryAttempt: streamRuleRetries,
-        retryMaxAttempts: CAT_STREAM_RULE_MAX_RETRIES,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "retry_start",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        text: traceEvent.text,
-        reason: traceEvent.reason,
-        retryAttempt: traceEvent.retryAttempt,
-        retryMaxAttempts: traceEvent.retryMaxAttempts,
-      });
-      promptText = buildStreamRuleRetryPrompt(basePrompt, pendingStreamRuleRetry, streamRuleRetries, CAT_STREAM_RULE_MAX_RETRIES);
-    }
-    if (pendingStreamRuleRetry && streamRuleRetries >= CAT_STREAM_RULE_MAX_RETRIES) {
-      const retryInstruction = buildCatStreamRetryInstruction(pendingStreamRuleRetry);
-      const traceEvent = traceBuilder.event("retry_end", {
-        piEventType: "stream_rule_retry_exhausted",
-        isError: true,
-        reason: retryInstruction.reason,
-        errorMessage: `CAT stream-rule retry circuit breaker exhausted: ${retryInstruction.reason}`,
-        retrySuccess: false,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "retry_end",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        isError: true,
-        reason: traceEvent.reason,
-        errorMessage: traceEvent.errorMessage,
-        retrySuccess: false,
-      });
-      throw new Error(`CAT stream-rule retry circuit breaker exhausted: ${retryInstruction.reason}`);
-    }
-    if (streamRuleRetries > 0) {
-      const traceEvent = traceBuilder.event("retry_end", {
-        piEventType: "stream_rule_retry_end",
-        retrySuccess: true,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "retry_end",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        retrySuccess: true,
-      });
-    }
-    for (const used of selfHealing.used) {
-      const traceEvent = traceBuilder.event("retry_end", {
-        piEventType: "self_healing_retry_end",
-        recoveryKind: used.kind,
-        recoveryAction: used.action,
-        recoveryRetryable: true,
-        retrySuccess: true,
-      });
-      trace.push(traceEvent);
-      emit({
-        type: "retry_end",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        recoveryKind: traceEvent.recoveryKind,
-        recoveryAction: traceEvent.recoveryAction,
-        recoveryRetryable: traceEvent.recoveryRetryable,
-        retrySuccess: true,
-      });
-    }
-    await interactionHost.flush();
-    stopBridge.throwIfForcedStopped();
-    if (extensionInteractionFatalError) throw extensionInteractionFatalError;
-  } catch (error) {
-    if (stopBridge.isForcedStopError(error) || activeAgentRuns.isStoppingOrStopped(started.turnId)) {
-      stoppedByUser = true;
-      void interactionHost.prepareStop().catch(() => undefined);
-      emit({
-        type: "stopped",
-        ts: new Date().toISOString(),
-        turnId: started.turnId,
-        ...sessionMeta,
-        text: "Agent run stopped by user.",
-        usage: assistantUsage,
-      });
-    } else {
-      await interactionHost.dispose().catch(() => undefined);
-      promptError = error;
-      const { trace: recoveryTrace } = recoveryTraceInput({
-        message: error instanceof Error ? error.message : String(error),
-      });
-      const traceEvent = traceBuilder.event("error", {
-        piEventType: "prompt_error",
-        isError: true,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        ...recoveryTrace,
-      });
-      trace.push(traceEvent);
-      const promptFailure: StreamEvent = {
-        type: "error",
-        ts: traceEvent.ts,
-        turnId: traceEvent.turnId,
-        ...sessionMeta,
-        isError: true,
-        errorMessage: traceEvent.errorMessage,
-        recoveryKind: traceEvent.recoveryKind,
-        recoveryAction: traceEvent.recoveryAction,
-        recoveryRetryable: traceEvent.recoveryRetryable,
-        usage: assistantUsage,
-      };
-      if (extensionInteractionFatalError) {
-        const fatalPersistence = await interactionHost.fatalPersistence();
-        await completeTaskExtensionFatalFailure({
-          fatalPersistence,
-          emitRaw: () => { rawEmit(promptFailure); },
-          persistFallback: async () => {
-            await persistTaskExtensionFatalFallback({
-              repoRoot,
-              projectId,
-              taskId: options.taskId,
-              runId: started.turnId,
-              failedAt: promptFailure.ts,
-            });
-          },
-        });
-      } else {
-        emit(promptFailure);
-      }
-    }
-  } finally {
-    if (stoppedByUser) void interactionHost.dispose().catch(() => undefined);
-    else await interactionHost.dispose().catch(() => undefined);
-    await syncCanonicalTaskTitle().catch(() => undefined);
-    await taskMessageQueue.finishRun({
-      locator: queueLocator,
-      runId: started.turnId,
-      ...(promptError && !stoppedByUser ? { error: promptError } : {}),
-    }).catch(() => undefined);
-    if (activeTaskSessionManagers.get(sessionKey) === session.sessionManager) activeTaskSessionManagers.delete(sessionKey);
-    activeAgentRuns.unregister(started.turnId);
-  }
-
-  const now = new Date().toISOString();
-  const assistantText = assistantParts.join("").trim() || "(no final response)";
-  if (!promptError && !stoppedByUser) {
-    const finalTrace = traceBuilder.event("assistant_final", { piEventType: "assistant_final", text: assistantText });
-    trace.push(finalTrace);
-    emit({
-      type: "assistant_final",
-      ts: finalTrace.ts,
-      turnId: finalTrace.turnId,
-      ...sessionMeta,
-      text: assistantText,
-      usage: assistantUsage,
-    });
-  }
-  await taskProjector?.flush();
-
-  const chatEvents: ChatEvent[] = stoppedByUser
-    ? [
-        { ts: now, kind: "user", text: message, ...sessionMeta },
-        ...toolParts.map((part) => ({ ts: now, kind: "tool" as const, text: part.text, toolCallId: part.toolCallId, ...sessionMeta })),
-        { ts: new Date().toISOString(), kind: "system", text: "Agent run stopped by user.", ...sessionMeta },
-      ]
-    : promptError
-    ? [
-        { ts: now, kind: "user", text: message, ...sessionMeta },
-        ...toolParts.map((part) => ({ ts: now, kind: "tool" as const, text: part.text, toolCallId: part.toolCallId, ...sessionMeta })),
-        {
-          ts: new Date().toISOString(),
-          kind: "error",
-          text: promptError instanceof Error ? promptError.message : String(promptError),
-          ...sessionMeta,
-        },
-      ]
-    : [
-        { ts: now, kind: "user", text: message, ...sessionMeta },
-        ...toolParts.map((part) => ({ ts: now, kind: "tool" as const, text: part.text, toolCallId: part.toolCallId, ...sessionMeta })),
-        { ts: new Date().toISOString(), kind: "assistant", text: assistantText, usage: assistantUsage, ...sessionMeta },
-      ];
-  if (promptError) throw promptError;
-  return chatEvents;
-}
-
-async function appendTaskCompactionActivity(input: {
-  projectId: string;
-  taskId: string;
-  operationId: string;
-  phase: "start" | "completed" | "failed";
-  body?: string;
-}): Promise<void> {
-  const workspace = createTaskWorkspace(repoRoot);
-  const snapshot = await workspace.open({ projectId: input.projectId, taskId: input.taskId });
-  const run = [...snapshot.runs].sort((left, right) => left.updatedAt.localeCompare(right.updatedAt)).at(-1);
-  if (!run) throw new Error("Task context cannot be compacted before its first Agent run.");
-  const thread = snapshot.agentThreads.find((candidate) => candidate.id === run.rootAgentThreadId);
-  if (!thread) throw new Error(`Task run ${run.id} has no root Agent thread.`);
-  const occurredAt = new Date().toISOString();
-  const status = input.phase === "start" ? "running" : input.phase === "failed" ? "error" : "done";
-  const title = input.phase === "start" ? "Compacting context" : input.phase === "failed" ? "Context compaction failed" : "Context compacted";
-  const event: TaskRunEventDraft = {
-    type: "activity_append",
-    agentThreadId: thread.id,
-    occurredAt,
-    activity: {
-      id: `${input.operationId}.${input.phase}`,
-      taskId: input.taskId,
-      runId: run.id,
-      agentThreadId: thread.id,
-      seq: 1,
-      type: input.phase === "failed" ? "error" : "progress",
-      status,
-      actor: { kind: "system", id: "pi-runtime", displayName: "Pi Runtime", agentThreadId: thread.id },
-      title,
-      body: input.body ?? null,
-      tool: null,
-      refs: { artifactIds: [], evidenceRefs: [], decisionIds: [] },
-      createdAt: occurredAt,
-      updatedAt: occurredAt,
-    },
-  };
-  await workspace.appendGenerated({ projectId: input.projectId, taskId: input.taskId, runId: run.id, events: [event] });
-}
-
-async function compactProjectAgentSession(projectId: string, taskId: string, customInstructions?: string, requestedSessionId?: string): Promise<{
-  result: {
-    summary: string;
-    firstKeptEntryId: string;
-    tokensBefore: number;
-    estimatedTokensAfter?: number;
-    details?: unknown;
-  };
-  session: Awaited<ReturnType<typeof projectSessionInfo>>;
-}> {
-  const operationId = `task-compaction-${randomUUID()}`;
-  await appendTaskCompactionActivity({ projectId, taskId, operationId, phase: "start" });
-  const manifest = await readProjectManifest(repoRoot, projectId);
-  const summary = (await listProjects(repoRoot)).find((item) => item.projectId === projectId);
-  const workspace = createWorkspace(repoRoot, projectId);
-  const sessionId = requestedSessionId ?? await resolveSelectedSessionId(projectId);
-  const branchEntryId = await consumeProjectPendingBranchEntry(projectId, sessionId);
-  const agentSettings = await readAgentSettings(projectId);
-  const modelDefaults = await readModelDefaults();
-  const permissionOptions = await projectPermissionSessionOptions(projectId);
-  const { session } = await createCatAgentSession({
-    workspace,
-    modelRuntime: await getPiModelRuntime(),
-    modelProvider: agentSettings.modelProvider ?? modelDefaults.effectiveProvider,
-    modelId: agentSettings.modelId ?? modelDefaults.effectiveModel,
-    thinkingLevel: agentSettings.thinkingLevel ?? modelDefaults.effectiveThinkingLevel,
-    sessionId,
-    branchEntryId,
-    sessionMode: "project",
-    disabledTools: serverOwnedRunDisabledTools(agentSettings.disabledTools),
-    isolatedResources: {},
-    ...permissionOptions,
-  });
-  const beforeStats = session.sessionFile
-    ? await readSessionStats(session.sessionFile, undefined, projectId, session.sessionId)
-    : undefined;
-  try {
-    const result = await session.compact(
-      buildCatCompactionInstructionsFromManifest(
-        manifest,
-        summary?.batches.map((batch) => ({
-          batchId: batch.batchId,
-          format: batch.format,
-          segments: batch.segments,
-          confirmed: batch.confirmed,
-          draft: batch.draft,
-          new: batch.new,
-          locked: batch.locked,
-        })),
-        customInstructions,
-      ),
-    );
-    const effectiveTokensBefore = result.tokensBefore || (typeof beforeStats?.contextTokens === "number" ? beforeStats.contextTokens : 0);
-    await appendTaskCompactionActivity({
-      projectId,
-      taskId,
-      operationId,
-      phase: "completed",
-      body: [
-        `${effectiveTokensBefore} tokens before compaction`,
-        result.estimatedTokensAfter !== undefined ? `${result.estimatedTokensAfter} estimated after` : undefined,
-      ].filter(Boolean).join(" · "),
-    });
-    return {
-      result: {
-        summary: result.summary,
-        firstKeptEntryId: result.firstKeptEntryId,
-        tokensBefore: effectiveTokensBefore,
-        estimatedTokensAfter: result.estimatedTokensAfter,
-        details: result.details,
-      },
-      session: await projectSessionInfo(projectId, sessionId),
-    };
-  } catch (error) {
-    await appendTaskCompactionActivity({
-      projectId,
-      taskId,
-      operationId,
-      phase: "failed",
-      body: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  } finally {
-    session.dispose();
-  }
-}
+    taskId,
+    runId,
+    reason,
+    deps: workflowRouteDeps(),
+  }),
+  syncTaskTitle: syncCanonicalTaskTitleToPiSession,
+  cancelPermissionDecisions: (sessionId, reason) => permissionDecisionRegistry.cancelForSession(sessionId, reason),
+  assistantMemoryStore: () => assistantMemoryStore,
+  assistantLibraryStore: () => assistantLibraryStore,
+  formatTaskRuntimeScope,
+});
 
 function inferBatchId(path: string): string {
   return basename(path)
@@ -4037,6 +3533,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     readAgentPermissionContract,
     writeGlobalAgentPermissionSettings,
     writeProjectAgentPermissionSettings,
+    persistPermissionDecision,
   })) {
     return;
   }
@@ -4062,6 +3559,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       port,
       currentPid: process.pid,
       uptimeSec: Math.round(process.uptime()),
+      currentServerOwnsTransport: true,
     }));
     return;
   }
@@ -4075,6 +3573,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     repoRoot,
     json,
     readBody,
+    assistantMemoryStore,
+    assistantLibraryStore,
     acquireCapabilityMutation: () => activeAgentRuns.tryAcquireResourceMutationLease(),
   })) {
     return;
@@ -4091,6 +3591,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     repoRoot,
     json,
     readBody,
+    packageStorage: lapkgPackageStorage,
     acquireCapabilityMutation: () => activeAgentRuns.tryAcquireResourceMutationLease(),
     invalidateResourceCatalogs: () => {
       mainRunToolCatalog.invalidate();
@@ -4141,6 +3642,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     readPiSettingsAudit,
     readPiUsageCatalog: readPiUsageParityCatalog,
     writePiSetting,
+    writePiModelPreference,
     writePiSettingsRaw,
     readPiTrustStatus: readPiTrustStatusForRepo,
     writePiTrustDecision: writePiTrustDecisionForRepo,
@@ -4210,6 +3712,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       workflowDeps: workflowRouteDeps({ continueTeamRunsInBackground: false }),
       activeRuns: activeAgentRuns,
     }),
+    resolveModelPromptTokenBudget,
     activeRuns: activeAgentRuns,
   })) {
     return;
@@ -4384,7 +3887,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         deliverMessage: deliverCanonicalTaskMessage,
         messageQueue: taskMessageQueue,
         projectSessionInfo,
-        compactProjectAgentSession,
+        compactProjectAgentSession: (projectId, taskId, customInstructions, sessionId) => (
+          projectTaskRunCoordinator.compact(projectId, taskId, customInstructions, sessionId)
+        ),
       },
     })) {
       return;
@@ -4395,11 +3900,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       readAgentSettings,
       writeAgentSettings: (id, patch) => writeAgentSettings(id, patch as Partial<AgentSettings>),
     })) {
-      return;
-    }
-    if (parts[3] === "memory" && parts.length === 4 && req.method === "GET") {
-      const workspace = createWorkspace(repoRoot, projectId);
-      json(res, 200, await readMemoryConfig(workspace));
       return;
     }
     if (parts[3] === "memory" && parts[4] === "status" && req.method === "GET") {
@@ -4420,18 +3920,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         createWorkspace(repoRoot, projectId),
         body.guidance as ProjectGuidanceDecision[],
       ) });
-      return;
-    }
-    if (parts[3] === "memory" && parts.length === 4 && req.method === "PUT") {
-      const body = (await readBody(req)) as Partial<MemoryConfig>;
-      const workspace = createWorkspace(repoRoot, projectId);
-      const current = await readMemoryConfig(workspace);
-      const updated: MemoryConfig = {
-        enabled: typeof body.enabled === "boolean" ? body.enabled : current.enabled,
-        gatewayUrl: typeof body.gatewayUrl === "string" && body.gatewayUrl ? body.gatewayUrl : current.gatewayUrl,
-      };
-      await writeMemoryConfig(workspace, updated);
-      json(res, 200, updated);
       return;
     }
     if (await handleWorkflowRoute(req, res, parts, projectId, workflowRouteDeps())) {
@@ -4458,28 +3946,151 @@ const dataMigration = await migrateRuntimeDataSchemaV2(repoRoot, { activeRuns: a
 if (dataMigration.status === "blocked") throw new Error(dataMigration.blockers.join("\n"));
 legacyHomeReplacementTaskId = dataMigration.legacyHomeTaskId;
 if (dataMigration.status === "migrated") {
-  console.log(`Migrated runtime data to schema v${dataMigration.schemaVersion}; backup ${dataMigration.backup?.backupId}.`);
+  safeLogger.info("runtime.data_migrated", {
+    schemaVersion: dataMigration.schemaVersion,
+    backupId: dataMigration.backup?.backupId,
+  });
 }
+
+const taskAggregateSqlite = await prepareTaskAggregateSqliteCutover({
+  repoRoot,
+  authority: dataRootWriterLease,
+  activeRunCount: activeAgentRuns.list().length,
+});
+activateTaskAggregateSqliteCutover(taskAggregateSqlite);
+safeLogger.info("task.storage_authority_ready", {
+  authority: taskAggregateSqlite.marker.authority,
+  status: taskAggregateSqlite.status,
+  taskCount: taskAggregateSqlite.marker.tasks.length,
+  inventoryHash: taskAggregateSqlite.marker.inventoryHash,
+});
+
+const settingsGrantsTrustSqlite = await prepareSettingsGrantsTrustSqliteCutover({
+  repoRoot,
+  authority: dataRootWriterLease,
+  activeRunCount: activeAgentRuns.list().length,
+  ...(piAgentDirOverride ? { piAgentDir: piAgentDirOverride } : {}),
+});
+safeLogger.info("settings_grants_trust.storage_authority_ready", {
+  authority: settingsGrantsTrustSqlite.marker.authority,
+  status: settingsGrantsTrustSqlite.status,
+  sourceCount: settingsGrantsTrustSqlite.marker.sources.length,
+  excludes: settingsGrantsTrustSqlite.marker.excludes,
+});
+
+const lapkgSqlite = await prepareLapkgSqliteCutover({
+  repoRoot,
+  authority: dataRootWriterLease,
+  activeRunCount: activeAgentRuns.list().length,
+});
+lapkgPackageStorage = lapkgSqlite.storage;
+safeLogger.info("package.storage_authority_ready", {
+  authority: lapkgSqlite.marker.authority,
+  status: lapkgSqlite.status,
+  packageCount: lapkgSqlite.marker.packageCount,
+});
+
+const assistantMemorySqlite = await prepareAssistantMemorySqliteCutover({
+  root: repoRoot,
+  authority: dataRootWriterLease,
+  activeRunCount: activeAgentRuns.list().length,
+});
+assistantMemoryStore = assistantMemorySqlite.store;
+safeLogger.info("assistant_memory.storage_authority_ready", {
+  authority: assistantMemorySqlite.marker.authority,
+  status: assistantMemorySqlite.status,
+  scopeCount: assistantMemorySqlite.marker.scopes.length,
+  excludes: assistantMemorySqlite.marker.excludes,
+});
+
+const assistantLibrarySqlite = await prepareAssistantLibrarySqliteCutover({
+  root: repoRoot,
+  authority: dataRootWriterLease,
+  activeRunCount: activeAgentRuns.list().length,
+});
+assistantLibraryStore = assistantLibrarySqlite.persistence;
+safeLogger.info("assistant_library.storage_authority_ready", {
+  authority: assistantLibrarySqlite.marker.authority,
+  status: assistantLibrarySqlite.status,
+  scopeCount: assistantLibrarySqlite.marker.scopes.length,
+  excludes: assistantLibrarySqlite.marker.excludes,
+});
+
+const catCoreSqlite = await prepareCatCoreSqliteCutover({
+  root: repoRoot,
+  authority: dataRootWriterLease,
+  activeRunCount: activeAgentRuns.list().length,
+});
+activateCatCoreSqliteCutover(catCoreSqlite);
+catCoreStorage = catCoreSqlite.repository;
+safeLogger.info("cat_core.storage_authority_ready", {
+  authority: catCoreSqlite.marker.authority,
+  status: catCoreSqlite.status,
+  projectCount: catCoreSqlite.marker.projects.length,
+  sourceRefCount: catCoreSqlite.marker.sourceRefs,
+  excludes: catCoreSqlite.marker.excludes,
+});
+
+const catGovernanceSqlite = await prepareCatGovernanceSqliteCutover({
+  root: repoRoot,
+  authority: dataRootWriterLease,
+  activeRunCount: activeAgentRuns.list().length,
+});
+activateCatGovernanceSqliteCutover(catGovernanceSqlite);
+catGovernanceStorage = catGovernanceSqlite.repository;
+safeLogger.info("cat_governance.storage_authority_ready", {
+  authority: catGovernanceSqlite.marker.authority,
+  status: catGovernanceSqlite.status,
+  projectCount: catGovernanceSqlite.marker.projects.length,
+  excludes: catGovernanceSqlite.marker.excludes,
+});
+
+const workflowEvalSqlite = await prepareWorkflowEvalSqliteCutover({
+  root: repoRoot,
+  authority: dataRootWriterLease,
+  activeRunCount: activeAgentRuns.list().length,
+});
+activateWorkflowEvalSqliteCutover(workflowEvalSqlite);
+workflowEvalStorage = workflowEvalSqlite.repository;
+safeLogger.info("workflow_eval.storage_authority_ready", {
+  authority: workflowEvalSqlite.marker.authority,
+  status: workflowEvalSqlite.status,
+  records: workflowEvalSqlite.marker.records,
+  excludes: workflowEvalSqlite.marker.excludes,
+});
 
 const taskExtensionRecovery = await reconcileInterruptedTaskExtensionInteractions({ repoRoot });
 if (taskExtensionRecovery.failedRuns > 0) {
-  console.warn(`Marked ${taskExtensionRecovery.failedRuns} interrupted native Package run(s) as failed.`);
+  safeLogger.warn("extension.interrupted_runs_failed", { failedRuns: taskExtensionRecovery.failedRuns });
 }
 for (const diagnostic of taskExtensionRecovery.diagnostics) {
-  console.warn(`Skipped native Package recovery for Task ${diagnostic.projectId}/${diagnostic.taskId}: ${diagnostic.code}.`);
+  safeLogger.warn("extension.recovery_skipped", { diagnostic });
 }
+const lapkgRecovery = await recoverLapkgActivation(repoRoot, { exclusiveStartup: true, storage: lapkgPackageStorage });
+if (lapkgRecovery.status === "blocked") {
+  throw new Error(`Stable Package Center recovery is blocked: ${lapkgRecovery.reason}`);
+}
+if (lapkgRecovery.status !== "clean") {
+  safeLogger.info("package.recovery_completed", { status: lapkgRecovery.status, reason: lapkgRecovery.reason });
+}
+const staleDocumentStages = await cleanupExpiredDocumentRouterStages(repoRoot);
+if (staleDocumentStages) safeLogger.info("document_router.staging_recovered", { removed: staleDocumentStages });
 try {
   const titleRecovery = await taskAutoTitles.recover();
   if (titleRecovery.failed > 0) {
-    console.warn(`Marked ${titleRecovery.failed} interrupted Task title generation request(s) as failed without repeating them.`);
+    safeLogger.warn("task.interrupted_title_requests_failed", { failed: titleRecovery.failed });
   }
 } catch (error) {
-  console.warn("Task title recovery failed:", error instanceof Error ? error.message : String(error));
+  safeLogger.warn("task.title_recovery_failed", { error });
 }
 
-createServer((req, res) => {
-  handle(req, res).catch((error) => {
+const localServer = createServer((req, res) => {
+  dataRootWriterLease.assertOwned().then(() => handle(req, res)).catch((error) => {
     if (error instanceof LocalTransportError) {
+      json(res, error.status, { error: { code: error.code, message: error.message } });
+      return;
+    }
+    if (error instanceof StrictApiInputError) {
       json(res, error.status, { error: { code: error.code, message: error.message } });
       return;
     }
@@ -4489,6 +4100,55 @@ createServer((req, res) => {
     }
     json(res, 500, { error: error instanceof Error ? error.message : String(error) });
   });
-}).listen(port, "127.0.0.1", () => {
-  console.log(`Linguist Agent server listening on http://127.0.0.1:${port}`);
 });
+
+await new Promise<void>((resolveReady, rejectReady) => {
+  localServer.once("error", rejectReady);
+  if (runtimeRendezvous) {
+    void prepareRuntimeTransportRoot(unixTransportPaths.root).then(async () => {
+      await rm(runtimeRendezvous.socketPath, { force: true });
+      localServer.listen(runtimeRendezvous.socketPath, async () => {
+        try {
+          await secureRuntimeSocket(runtimeRendezvous.socketPath);
+          await publishRuntimeRendezvous(unixTransportPaths.rendezvousPath, runtimeRendezvous);
+          safeLogger.info("runtime.transport_listening", { transport: "unix" });
+          resolveReady();
+        } catch (error) {
+          localServer.close();
+          rejectReady(error);
+        }
+      });
+    }).catch(rejectReady);
+    return;
+  }
+  localServer.listen(port, "127.0.0.1", () => {
+    safeLogger.info("runtime.transport_listening", { transport: "legacy-loopback", port });
+    resolveReady();
+  });
+});
+
+let releasingDataRootLease = false;
+async function releaseDataRootLeaseAndExit(signal: NodeJS.Signals): Promise<void> {
+  if (releasingDataRootLease) return;
+  releasingDataRootLease = true;
+  try {
+    const closed = new Promise<void>((resolveClose) => localServer.close(() => resolveClose()));
+    localServer.closeAllConnections();
+    await closed;
+    if (runtimeRendezvous) await rm(runtimeRendezvous.socketPath, { force: true });
+    lapkgPackageStorage?.close();
+    assistantMemorySqlite.close();
+    assistantLibrarySqlite.close();
+    catCoreStorage?.close();
+    catGovernanceStorage?.close();
+    workflowEvalStorage?.close();
+    taskAggregateSqlite.close();
+    await dataRootWriterLease.release();
+    process.exit(0);
+  } catch (error) {
+    safeLogger.error("runtime.writer_lease_release_failed", { signal, error });
+    process.exit(1);
+  }
+}
+process.once("SIGINT", () => { void releaseDataRootLeaseAndExit("SIGINT"); });
+process.once("SIGTERM", () => { void releaseDataRootLeaseAndExit("SIGTERM"); });

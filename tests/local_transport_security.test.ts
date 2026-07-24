@@ -34,6 +34,13 @@ assert.equal(
 );
 assert.deepEqual(security.responseHeaders(), {});
 
+const unixSecurity = createLocalTransportSecurity({ token: "session-secret", publicHealth: false });
+assert.equal(unixSecurity.authorize({ method: "GET", pathname: "/api/health" }).status, 401);
+assert.deepEqual(
+  unixSecurity.authorize({ method: "GET", pathname: "/api/health", authorization: "Bearer session-secret" }),
+  { allowed: true, public: false },
+);
+
 const browserEnabled = createLocalTransportSecurity({ token: "local-secret", allowedOrigins: ["http://127.0.0.1:9999"] });
 assert.deepEqual(
   browserEnabled.authorize({ method: "OPTIONS", pathname: "/api/projects", origin: "http://127.0.0.1:9999" }),

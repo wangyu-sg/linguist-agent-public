@@ -41,6 +41,13 @@ registry.register({
     },
   },
 });
+const workerBound = registry.bindWorkerIdentity("turn-1", { workerId: "worker-1", runtimeEpochId: "turn-1.epoch.1" });
+assert.equal(workerBound.workerId, "worker-1");
+assert.equal(workerBound.runtimeEpochId, "turn-1.epoch.1");
+assert.throws(
+  () => registry.bindWorkerIdentity("turn-1", { workerId: "worker-2", runtimeEpochId: "turn-1.epoch.2" }),
+  /already has Worker identity/,
+);
 assert.throws(() => registry.register({
   turnId: "turn-1",
   scope: "project",

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { Check, ChevronDown, Crosshair, Paperclip, Plus, Settings2, X } from "lucide-react";
+import { Check, ChevronDown, Crosshair, Hand, Paperclip, Plus, Settings2, ShieldCheck, X } from "lucide-react";
 import type { TaskAgentThread } from "../../../../../packages/cat-data/src/task_workspace_contract.ts";
 import type { TaskUsage } from "../../../../../packages/cat-data/src/task_workspace_contract.ts";
 import type {
   AgentNativeCapabilityCatalog,
+  AgentPermissionContract,
+  AgentPermissionMode,
   AgentSessionInfo,
   AgentSessionSummary,
   AgentThinkingLevel,
@@ -11,6 +13,7 @@ import type {
   PiProviderCatalog,
   ProjectAssetsCatalog,
   ProjectSummary,
+  StandaloneFileGrantDTO,
 } from "../data/workspace-client.ts";
 import { workspaceClient } from "../data/workspace-client.ts";
 import { ingestProjectAssets } from "../assets/actions.ts";
@@ -106,6 +109,7 @@ export interface ComposerData {
   providerState: "idle" | "loading" | "ready" | "error";
   sessionInfo: AgentSessionInfo | null;
   routeSelection: ComposerRouteSelection;
+  routeSelectionError: string | null;
   setRouteSelection: (selection: ComposerRouteSelection) => void;
   toggleAsset: (path: string) => void;
   toggleCapability: (id: NativeComposerCapabilityId) => void;
@@ -136,7 +140,10 @@ export function useComposerData(
   const [providerCatalog, setProviderCatalog] = useState<PiProviderCatalog | null>(null);
   const [providerState, setProviderState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [sessionInfo, setSessionInfo] = useState<AgentSessionInfo | null>(null);
-  const [routeSelection, setRouteSelection] = useState<ComposerRouteSelection>({});
+  const [routeSelection, setRouteSelectionState] = useState<ComposerRouteSelection>({});
+  const routeSelectionRef = useRef<ComposerRouteSelection>({});
+  const modelPreferenceRequestRef = useRef(0);
+  const [routeSelectionError, setRouteSelectionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,6 +178,21 @@ export function useComposerData(
       if (cancelled) return;
       setProviderCatalog(catalog);
       setProviderState("ready");
+      setRouteSelectionState((current) => {
+        // The runtime catalog already resolved the user-owned Pi preference
+        // (or the bundled project fallback before a user has chosen one).
+        // Preserve a choice made while this request was in flight.
+        const next: ComposerRouteSelection = {
+          ...current,
+          ...(current.modelProvider && current.modelId ? {} : {
+            modelProvider: catalog.defaults?.provider,
+            modelId: catalog.defaults?.modelId,
+          }),
+          ...(current.thinkingLevel ? {} : { thinkingLevel: catalog.defaults?.thinkingLevel }),
+        };
+        routeSelectionRef.current = next;
+        return next;
+      });
     }).catch(() => {
       if (!cancelled) setProviderState("error");
     });
@@ -182,8 +204,13 @@ export function useComposerData(
     setCapabilityCatalog(null);
     setSessionInfo(null);
     setSelectedCapabilityIds([]);
-    // 思考级别是 Task 级偏好(Power Slider):切换 Task 时恢复该 Task 持久化的选择。
-    setRouteSelection({ thinkingLevel: readPersistedThinkingLevel(globalThis.localStorage, taskId) });
+    // 思考级别是 Task 级偏好(Power Slider):切换 Task 时恢复该 Task
+    // 持久化的选择。模型则是本机用户偏好，绝不能随着 Task 被清掉。
+    setRouteSelectionState((current) => {
+      const next = { ...current, thinkingLevel: readPersistedThinkingLevel(globalThis.localStorage, taskId) ?? current.thinkingLevel };
+      routeSelectionRef.current = next;
+      return next;
+    });
     if (!projectId) {
       setCapabilityState("idle");
       return () => { cancelled = true; };
@@ -225,23 +252,19 @@ export function useComposerData(
       const outcome = await ingestProjectAssets(
         {
           projectId: project.projectId,
-          projectName: project.name,
-          rootPath: project.root,
-          sourceLanguage: catalog.sourceLanguage,
-          targetLanguage: catalog.targetLanguage,
         },
         {
           pickImportFiles: () => window.linguist.system.pickImportFiles("asset"),
-          refreshProject: (input) => workspaceClient.createProject(input),
+          refreshProjectAssets: (input) => window.linguist.system.refreshProjectAssets(input),
           listAssets: (projectId) => workspaceClient.listProjectAssets(projectId),
-          parseAsset: (projectId, filePath) => workspaceClient.parseProjectAsset(projectId, filePath, "structured"),
-          readAsset: (projectId, filePath) => workspaceClient.readProjectAsset(projectId, filePath),
+          parseAsset: (projectId, assetPath) => workspaceClient.parseProjectAsset(projectId, assetPath, "structured"),
+          readAsset: (projectId, assetPath) => workspaceClient.readProjectAsset(projectId, assetPath),
         },
       );
       const nextCatalog = outcome.catalog ?? catalog;
       setAssetCatalog(nextCatalog);
       setAssetState("ready");
-      const failures = outcome.files.filter((file) => file.error).map((file) => `${file.relPath ?? file.filePath}: ${file.error}`);
+      const failures = outcome.files.filter((file) => file.error).map((file) => `${file.relPath ?? file.handle.name}: ${file.error}`);
       setAssetError(failures.length ? failures.join("\n") : null);
     } catch (error) {
       setAssetState("error");
@@ -268,10 +291,35 @@ export function useComposerData(
     setSelectedCapabilityIds((current) => current.includes(id) ? current.filter((candidate) => candidate !== id) : [...current, id]);
   }, [capabilityCatalog]);
 
+  const setRouteSelection = useCallback((next: ComposerRouteSelection) => {
+    const previous = routeSelectionRef.current;
+    routeSelectionRef.current = next;
+    setRouteSelectionState(next);
+    setRouteSelectionError(null);
+
+    const modelChanged = Boolean(
+      next.modelProvider
+      && next.modelId
+      && (next.modelProvider !== previous.modelProvider || next.modelId !== previous.modelId),
+    );
+    if (!modelChanged || !next.modelProvider || !next.modelId) return;
+
+    const request = ++modelPreferenceRequestRef.current;
+    void workspaceClient.savePiModelPreference(next.modelProvider, next.modelId).then(() => {
+      if (request === modelPreferenceRequestRef.current) setRouteSelectionError(null);
+    }).catch((error) => {
+      if (request !== modelPreferenceRequestRef.current) return;
+      // Do not lie about a model choice the runtime rejected. Restore the
+      // prior known-good selection and show the actionable failure in Composer.
+      routeSelectionRef.current = previous;
+      setRouteSelectionState(previous);
+      setRouteSelectionError(`当前模型没有保存：${error instanceof Error ? error.message : String(error)}`);
+    });
+  }, []);
+
   const resetTransientSelections = useCallback(() => {
-    // 发送/切换追问只清一次性选择(模型覆盖、资料、能力);思考级别作为
-    // Task 级偏好保留,并持久化到 localStorage。
-    setRouteSelection((current) => ({ thinkingLevel: current.thinkingLevel }));
+    // 发送/切换追问只清一次性资料与能力。模型是用户的本机当前选择，
+    // 思考级别是 Task 偏好；两者都不能因发送一条消息而被重置。
     setSelectedAssetPaths([]);
     setSelectedCapabilityIds([]);
   }, []);
@@ -293,6 +341,7 @@ export function useComposerData(
     providerState,
     sessionInfo,
     routeSelection,
+    routeSelectionError,
     setRouteSelection,
     toggleAsset,
     toggleCapability,
@@ -308,18 +357,240 @@ export function currentSessionSummary(session: AgentSessionInfo | null): AgentSe
   return session.sessions.find((candidate) => candidate.id === session.activeSessionId) ?? session.sessions[0] ?? null;
 }
 
-export function ComposerAttachmentTray({ paths, onRemove }: { paths: string[]; onRemove: (path: string) => void }) {
+export function ComposerAttachmentTray({
+  paths,
+  onRemove,
+  labelForPath = (path) => path.startsWith("/") ? fileName(path) : path,
+}: {
+  paths: string[];
+  onRemove: (path: string) => void;
+  labelForPath?: (path: string) => string;
+}) {
   return (
     <div className="agent-composer__attachment-list" aria-label="已附加到下一次 Run 的项目资料">
       {paths.map((path) => (
         <span className="agent-composer__attachment" key={path}>
           <Paperclip aria-hidden="true" />
-          <span title={path}>{path}</span>
-          <button type="button" onClick={() => onRemove(path)} aria-label={`移除资料 ${path}`}><X aria-hidden="true" /></button>
+          <span title={path}>{labelForPath(path)}</span>
+          <button type="button" onClick={() => onRemove(path)} aria-label={`移除附件 ${labelForPath(path)}`}><X aria-hidden="true" /></button>
         </span>
       ))}
     </div>
   );
+}
+
+/**
+ * Standalone Chat does not inherit arbitrary disk access. This is the small,
+ * visible bridge between the user's native file picker and the server-owned
+ * file-grant ledger. Selection is for the next Run only. File grants are
+ * managed here, rather than being confused with the Agent autonomy policy in
+ * the adjacent shield control.
+ */
+export function ComposerChatAttachmentDisclosure({
+  disabled = false,
+  grants,
+  isPicking = false,
+  onPickFiles,
+  onRevokeGrant,
+  onToggleGrant,
+  revokeBusyGrantId,
+  selectedGrantIds,
+}: {
+  disabled?: boolean;
+  grants: StandaloneFileGrantDTO[];
+  isPicking?: boolean;
+  onPickFiles: () => Promise<void>;
+  onRevokeGrant: (grantId: string) => Promise<void>;
+  onToggleGrant: (grantId: string) => void;
+  revokeBusyGrantId?: string | null;
+  selectedGrantIds: string[];
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useDismissibleDetails(detailsRef);
+  const popover = useComposerPopoverSide(detailsRef);
+  return (
+    <details
+      className="conversation-composer__add conversation-composer__chat-attachments"
+      ref={detailsRef}
+      data-popover-side={popover.side}
+      style={{ "--composer-popover-max-height": `${popover.maxHeight}px` } as CSSProperties}
+      onToggle={popover.position}
+    >
+      <summary aria-label="添加文件到下一次 Run" title={disabled ? "Run 进行中，文件会在下一次 Run 生效" : "添加文件到下一次 Run"} aria-disabled={disabled}>
+        <Plus aria-hidden="true" />
+      </summary>
+      <div className="conversation-composer__add-popover" aria-label="添加文件">
+        <header>添加到下一次 Run</header>
+        <section className="conversation-composer__add-section" aria-labelledby="composer-chat-files-heading">
+          <h3 id="composer-chat-files-heading">已授权文件</h3>
+          {grants.length ? (
+            <fieldset disabled={disabled}>
+              <legend className="la-sr-only">选择要附加的文件</legend>
+              {grants.filter((grant) => grant.kind === "file").map((grant) => {
+                const selected = selectedGrantIds.includes(grant.id);
+                const blocked = !selected && selectedGrantIds.length >= 12;
+                return (
+                  <label className="conversation-composer__asset-option" key={grant.id} title={blocked ? "一次 Run 最多附加 12 个文件" : grant.realPath}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      disabled={blocked}
+                      onChange={() => onToggleGrant(grant.id)}
+                    />
+                    <span>{fileName(grant.realPath)}</span>
+                    <small>{grant.access === "read_write" ? "读写" : "只读"}</small>
+                  </label>
+                );
+              })}
+            </fieldset>
+          ) : <p>这个 Chat 还没有授权文件。</p>}
+          <button
+            type="button"
+            className="conversation-composer__add-action"
+            disabled={disabled || isPicking}
+            onClick={() => { void onPickFiles(); }}
+          >
+            <Paperclip aria-hidden="true" />
+            <span>{isPicking ? "正在添加文件…" : "从电脑选择文件…"}</span>
+          </button>
+          {grants.length ? (
+            <details className="conversation-composer__attachment-management">
+              <summary>管理已授权文件</summary>
+              <div className="conversation-composer__permissions-files" aria-label="已授权文件列表">
+                {grants.map((grant) => (
+                  <div key={grant.id}>
+                    <span title={grant.realPath}>{fileName(grant.realPath)}</span>
+                    <small>{grant.kind === "directory" ? "文件夹" : "文件"} · {grant.access === "read_write" ? "读写" : "只读"}</small>
+                    <button
+                      type="button"
+                      disabled={disabled || revokeBusyGrantId === grant.id}
+                      onClick={() => { void onRevokeGrant(grant.id); }}
+                    >{revokeBusyGrantId === grant.id ? "正在撤销…" : "撤销"}</button>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
+          <p className="conversation-composer__add-note">文件只会授予这个 Chat；图片在支持视觉输入的模型上作为下一次 Run 的附件，其余文件仍可由受控工具读取。</p>
+        </section>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * The shield is Agent autonomy, not a file-access ledger. It writes the
+ * server-owned Pi permission contract used by the next Run. Project Tasks
+ * receive the same control and surface as Chats, with a scoped policy route.
+ */
+export function ComposerPermissionDisclosure({
+  disabled = false,
+  onOpenSettings,
+  projectId,
+}: {
+  disabled?: boolean;
+  onOpenSettings?: () => void;
+  projectId?: string;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const [contract, setContract] = useState<AgentPermissionContract | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
+  const [error, setError] = useState<string | null>(null);
+  useDismissibleDetails(detailsRef);
+  const popover = useComposerPopoverSide(detailsRef);
+  useEffect(() => {
+    let active = true;
+    setState("loading");
+    setError(null);
+    setContract(null);
+    void workspaceClient.fetchAgentPermissions(projectId).then((next) => {
+      if (!active) return;
+      setContract(next);
+      setState("ready");
+    }).catch((cause) => {
+      if (!active) return;
+      setState("error");
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
+    return () => { active = false; };
+  }, [projectId]);
+
+  const activePreset = contract?.presets.find((preset) => preset.id === contract.mode) ?? null;
+  const summaryLabel = state === "loading" ? "读取权限…" : activePreset?.label ?? "权限";
+  const chooseMode = async (mode: AgentPermissionMode) => {
+    if (!contract || disabled || state === "saving" || mode === contract.mode) return;
+    setState("saving");
+    setError(null);
+    try {
+      const next = await workspaceClient.updateAgentPermissions({
+        mode,
+        ...(mode === "custom" ? { customRules: contract.customRules } : {}),
+      }, projectId);
+      setContract(next);
+      setState("ready");
+      if (detailsRef.current) detailsRef.current.open = false;
+    } catch (cause) {
+      setState("error");
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+  return (
+    <details
+      className="conversation-composer__add conversation-composer__permissions"
+      ref={detailsRef}
+      data-popover-side={popover.side}
+      style={{ "--composer-popover-max-height": `${popover.maxHeight}px` } as CSSProperties}
+      onToggle={popover.position}
+    >
+      <summary aria-label={`调整 Agent 权限，当前为${summaryLabel}`} title="调整 Agent 权限">
+        <ShieldCheck aria-hidden="true" />
+        <span>{summaryLabel}</span>
+        <ChevronDown aria-hidden="true" />
+      </summary>
+      <div className="conversation-composer__permissions-popover" aria-label="Agent 权限">
+        <header><span>Agent 权限</span><strong>应如何批准 Agent 操作？</strong></header>
+        {contract ? (
+          <div className="conversation-composer__permission-options" role="radiogroup" aria-label="Agent 权限模式">
+            {contract.presets.map((preset) => {
+              const selected = preset.id === contract.mode;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  data-mode={preset.id}
+                  disabled={disabled || state === "saving"}
+                  onClick={() => { void chooseMode(preset.id); }}
+                >
+                  <PermissionPresetIcon mode={preset.id} />
+                  <span><strong>{preset.label}</strong><small>{preset.description}</small></span>
+                  {selected ? <Check aria-hidden="true" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : <p role={state === "error" ? "alert" : "status"}>{error ?? "正在读取当前权限策略…"}</p>}
+        <p>{projectId ? "仅作用于当前 Project；已经开始的 Run 不会被中途改写。" : "作用于无项目 Chat；已经开始的 Run 不会被中途改写。"}</p>
+        {contract?.mode === "custom" && onOpenSettings ? (
+          <button type="button" onClick={() => { if (detailsRef.current) detailsRef.current.open = false; onOpenSettings(); }}>
+            <Settings2 aria-hidden="true" /><span>在设置中编辑详细规则</span>
+          </button>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+function PermissionPresetIcon({ mode }: { mode: AgentPermissionMode }) {
+  if (mode === "ask") return <Hand aria-hidden="true" />;
+  if (mode === "custom") return <Settings2 aria-hidden="true" />;
+  return <ShieldCheck aria-hidden="true" />;
+}
+
+function fileName(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  return normalized.split("/").filter(Boolean).at(-1) ?? path;
 }
 
 export function ComposerAddDisclosure({
@@ -371,7 +642,6 @@ export function ComposerAddDisclosure({
           <h3 id="composer-assets-heading">项目资料</h3>
           {assetState === "loading" ? <p>正在载入项目资料…</p> : null}
           {assetState === "error" ? <p role="alert">{assetError ?? "项目资料暂时不可用。"}</p> : null}
-          {assetState === "ready" && assetError ? <p role="alert">{assetError}</p> : null}
           {assetState === "ready" && assetsCount === 0 ? <p>当前 Project 还没有可附加的资料。</p> : null}
           {assetsCount ? (
             <fieldset disabled={disabled}>
@@ -596,7 +866,7 @@ export function ContextUsageDisclosure({ session, taskUsage }: { session: AgentS
             style={{ "--gauge-pct": pct ?? 0 } as CSSProperties}
             aria-hidden="true"
           />
-          <span className="conversation-composer__gauge-label">{pct === null ? "—" : `${pct}%`}</span>
+          <span className="conversation-composer__gauge-label la-sr-only">{pct === null ? "上下文用量未知" : `上下文 ${pct}%`}</span>
         </span>
       </summary>
       <div className="conversation-composer__capability-popover">
@@ -651,17 +921,12 @@ export function ModelDisclosure({
   const selectedProvider = selectedOption?.provider
     ?? modelProviders.find((provider) => provider.id === selection.modelProvider);
   const selectedModel = selectedOption?.model;
-  const overrideLabel = selection.modelId
-    ? (selectedModel?.name ?? selection.modelId)
-    : selection.thinkingLevel
-      ? `Pi 设置 · ${thinkingLevelLabels[selection.thinkingLevel]}`
-      : null;
-  const summaryLabel = overrideLabel ?? "模型";
+  const summaryLabel = selectedModel?.name ?? selection.modelId ?? "当前模型";
   const glyphProvider = selectedProvider?.id;
-  const chooseModel = (option?: typeof modelOptions[number]) => {
+  const chooseModel = (option: typeof modelOptions[number]) => {
     onChange({
-      modelProvider: option?.provider.id,
-      modelId: option?.model.id,
+      modelProvider: option.provider.id,
+      modelId: option.model.id,
       thinkingLevel: selection.thinkingLevel,
     });
   };
@@ -690,23 +955,12 @@ export function ModelDisclosure({
         <section className="conversation-model-picker__section" aria-labelledby="composer-model-heading">
           <h3 id="composer-model-heading">模型</h3>
           <div className="conversation-model-picker__list" role="radiogroup" aria-label="选择下一次 Run 的模型">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={!selectedOption}
-              data-selected={!selectedOption || undefined}
-              disabled={disabled || !providers}
-              onClick={() => chooseModel()}
-            >
-              <span className="conversation-model-picker__option-copy"><ProviderGlyph /><span>跟随 Pi 设置</span></span>
-              {!selectedOption ? <Check aria-hidden="true" /> : null}
-            </button>
             {modelProviders.map((provider) => (
               <div className="conversation-model-picker__provider" key={provider.id}>
                 <span>{provider.displayName}</span>
                 {provider.models.filter((model) => model.available).map((model) => {
-                  const option = modelOptions.find((candidate) => candidate.provider.id === provider.id && candidate.model.id === model.id);
-                  const selected = selectedOption?.key === option?.key;
+                  const option = { key: `${provider.id}\u0000${model.id}`, provider, model };
+                  const selected = selectedOption?.key === option.key;
                   return (
                     <button
                       key={model.id}
@@ -735,7 +989,7 @@ export function ModelDisclosure({
             onChange={chooseThinking}
           />
         </section>
-        <p>思考级别会固定到当前 Task,只从下一条新 Run 生效;Run 进行中不会被中途改写。</p>
+        <p>模型会保存为本机当前选择；思考级别固定到当前 Task。两者只从下一条新 Run 生效，进行中的 Run 不会被中途改写。</p>
         {onOpenSettings ? (
           <button type="button" onClick={() => { if (detailsRef.current) detailsRef.current.open = false; onOpenSettings(); }}>
             <Settings2 aria-hidden="true" /><span>模型与能力设置</span>

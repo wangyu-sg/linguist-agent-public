@@ -6,8 +6,12 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import JSZip from "jszip";
 import { parseWorkbookTypedAsset, suggestAssetMappings as suggestAssetMappingsDirect } from "@linguist-agent/cat-data";
+import { createSyntheticServerRoot } from "./helpers/synthetic_server_root.js";
+import { runtimeInstanceId } from "../packages/cat-server/src/runtime_compatibility.js";
 
-const repoRoot = new URL("..", import.meta.url).pathname;
+const sourceRepoRoot = new URL("..", import.meta.url).pathname;
+const syntheticServerRoot = await createSyntheticServerRoot();
+const repoRoot = syntheticServerRoot.root;
 const port = 8902;
 const base = `http://127.0.0.1:${port}`;
 const projectId = `codex-asset-api-${Date.now()}`;
@@ -95,13 +99,16 @@ async function addExternalHyperlink(path: string): Promise<void> {
 
 function startServer(): ChildProcess {
   return spawn("npm", ["run", "server"], {
-    cwd: repoRoot,
+    cwd: sourceRepoRoot,
     env: {
       ...process.env,
       LA_SERVER_PORT: String(port),
       LA_LOCAL_API_TOKEN: apiToken,
       LA_MODEL_PROVIDER: "__asset_api_test_provider__",
       LA_MODEL_ID: "__asset_api_test_model__",
+      LA_TEST_MODE: "1",
+      LA_TEST_REPO_ROOT: syntheticServerRoot.root,
+      LA_TEST_PI_AGENT_DIR: syntheticServerRoot.piAgentDir,
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
@@ -228,6 +235,8 @@ await chmod(fakeMineruPath, 0o755);
 const server = startServer();
 try {
   await waitForServer();
+  const handshake = await fetch(`${base}/api/health`).then((res) => res.json()) as { runtimeInstanceId: string };
+  assert.equal(handshake.runtimeInstanceId, runtimeInstanceId(repoRoot));
   const onboard = await post("/api/projects", { rootPath: projectRoot, projectId, sourceLanguage: "zh-CN", targetLanguage: "en-US" });
   assert.equal(onboard.status, 200);
   const importedBatch = await post("/api/projects/import-upload", {
@@ -285,26 +294,22 @@ try {
 
   const dualPreview = await post(`/api/projects/${encodeURIComponent(projectId)}/assets/parse-compare`, {
     assetPath: "os-assets.xlsx",
-    mineruCommand: fakeMineruPath,
     sampleRows: 4,
   });
   assert.equal(dualPreview.status, 200);
-  assert.equal((dualPreview.json.comparison as { mineruStatus: string }).mineruStatus, "ready");
-  assert.equal((dualPreview.json.comparison as { mineruTableBlockCount: number }).mineruTableBlockCount >= 1, true);
-  assert.equal((dualPreview.json.comparison as { mineruBlockCount: number }).mineruBlockCount > 500, true, "MinerU parsing must not silently discard blocks after an arbitrary count");
+  assert.equal((dualPreview.json.comparison as { mineruStatus: string }).mineruStatus, "unavailable");
+  assert.equal((dualPreview.json.comparison as { mineruBlockCount: number }).mineruBlockCount, 0);
 
   const hyperlinkedDualPreview = await post(`/api/projects/${encodeURIComponent(projectId)}/assets/parse-compare`, {
     assetPath: "hyperlinked-assets.xlsx",
-    mineruCommand: fakeMineruPath,
     sampleRows: 4,
   });
   assert.equal(hyperlinkedDualPreview.status, 200);
-  assert.equal((hyperlinkedDualPreview.json.comparison as { mineruStatus: string }).mineruStatus, "ready");
-  assert.equal(((hyperlinkedDualPreview.json.mineruPreview as { warnings: string[] }).warnings).some((warning) => warning.includes("removed 1 external workbook hyperlink")), true);
+  assert.equal((hyperlinkedDualPreview.json.comparison as { mineruStatus: string }).mineruStatus, "unavailable");
+  assert.match((hyperlinkedDualPreview.json.mineruPreview as { warnings: string[] }).warnings[0] ?? "", /disabled/i);
 
   const missingMineruPreview = await post(`/api/projects/${encodeURIComponent(projectId)}/assets/parse-compare`, {
     assetPath: "os-assets.xlsx",
-    mineruCommand: join(projectRoot, "missing-mineru"),
     sampleRows: 4,
   });
   assert.equal(missingMineruPreview.status, 200);
@@ -506,7 +511,7 @@ try {
 } finally {
   stopServer(server);
   await rm(projectRoot, { recursive: true, force: true });
-  await rm(join(repoRoot, "data", "projects", projectId), { recursive: true, force: true });
+  await syntheticServerRoot.cleanup();
 }
 
 console.log("asset_api tests passed");

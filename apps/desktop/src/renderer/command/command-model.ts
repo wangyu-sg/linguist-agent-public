@@ -215,6 +215,29 @@ export function searchCommands(items: readonly CommandItem[], value: string): Co
     .map(({ item }) => item);
 }
 
+export interface CommandResultGroup {
+  type: CommandItem["type"];
+  items: Array<CommandItem & { index: number }>;
+}
+
+/* cmdk 分组顺序:命令优先,其后按工作层级(Chat → 项目 → Batch → Task)。 */
+const commandGroupOrder: CommandItem["type"][] = ["命令", "Chat", "项目", "Batch", "Task"];
+
+export function groupCommandResults(results: readonly CommandItem[]): CommandResultGroup[] {
+  const groups = new Map<CommandItem["type"], CommandResultGroup>();
+  results.forEach((item, index) => {
+    let group = groups.get(item.type);
+    if (!group) {
+      group = { type: item.type, items: [] };
+      groups.set(item.type, group);
+    }
+    group.items.push({ ...item, index });
+  });
+  return [...groups.values()].sort(
+    (left, right) => commandGroupOrder.indexOf(left.type) - commandGroupOrder.indexOf(right.type),
+  );
+}
+
 export function nextCommandIndex(current: number, key: string, length: number): number {
   if (length <= 0) return -1;
   if (key === "Home") return 0;

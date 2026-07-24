@@ -1,6 +1,7 @@
 export const DEFAULT_SERVER_BASE_URL = "http://127.0.0.1:8787";
 export const REQUIRED_CAPABILITIES = Object.freeze([
   "local-auth",
+  "authenticated-unix-rendezvous-v1",
   "native-extension-ui-v1",
   "run-resource-profile-v1",
   "runtime-migrations",
@@ -70,6 +71,12 @@ export function handshakeProblem(value) {
   return missing.length ? `本机运行时缺少能力：${missing.join("、")}` : null;
 }
 
+/**
+ * @param {string} preload
+ * @param {boolean} [dark]
+ * @param {{ width: number; height: number }} [size]
+ * @returns {import("electron").BrowserWindowConstructorOptions}
+ */
 export function browserWindowOptions(preload, dark = false, size = DEFAULT_WINDOW_SIZE) {
   return {
     width: size.width,

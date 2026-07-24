@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, open as openFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open as openFile, readdir, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -23,6 +23,11 @@ import {
   type TaskWorkspaceSnapshot,
 } from "./task_workspace_contract.js";
 import { readJsonFile, readJsonlFile, writeJsonFile } from "./workspace.js";
+import { appendDurableFile, syncParentDirectory } from "./durable_file.js";
+import {
+  assertLegacyTaskFileWriteAllowed,
+  resolveTaskWorkspacePersistence,
+} from "./task_aggregate_storage.js";
 
 interface CreateTaskWorkspaceBase {
   taskId?: string;
@@ -89,6 +94,26 @@ export interface TaskWorkspaceEventBatch {
 export interface TaskWorkspaceOptions {
   now?: () => string;
   createTaskId?: () => string;
+}
+
+export interface TaskWorkspacePersistence {
+  key(locator: TaskLocator): string;
+  readSnapshot(locator: TaskLocator): Promise<TaskWorkspaceSnapshot | null>;
+  readEvents(locator: TaskLocator): Promise<TaskRunEvent[]>;
+  readLastEventCursor(locator: TaskLocator): Promise<string | null>;
+  listLocators(owner: TaskOwner): Promise<TaskLocator[]>;
+  create(locator: TaskLocator, snapshot: TaskWorkspaceSnapshot, page?: TaskRunEventPage): Promise<void>;
+  replaceProjection(
+    locator: TaskLocator,
+    expected: TaskWorkspaceSnapshot,
+    next: TaskWorkspaceSnapshot,
+  ): Promise<void>;
+  commitPage(
+    locator: TaskLocator,
+    expected: TaskWorkspaceSnapshot,
+    page: TaskRunEventPage,
+    next: TaskWorkspaceSnapshot,
+  ): Promise<void>;
 }
 
 export type TaskRunEventDraft = Omit<
@@ -216,6 +241,25 @@ function isMainToTeamResourcePromotion(previous: TaskRun, next: TaskRun): boolea
   return before.packages.every(({ name }) => before.mainSurface!.packageNames.includes(name));
 }
 
+function hasExecutionEpochForResourcePromotion(previous: TaskRun, next: TaskRun): boolean {
+  if (previous.executionSnapshots === undefined || previous.configChanges === undefined) return false;
+  if (previous.executionSnapshots.length === 0) return true;
+  if (!next.executionSnapshots || !next.configChanges) return false;
+  if (next.executionSnapshots.length !== previous.executionSnapshots.length + 1
+    || next.configChanges.length !== previous.configChanges.length + 1) return false;
+  const before = previous.executionSnapshots.at(-1)!;
+  const after = next.executionSnapshots.at(-1)!;
+  const change = next.configChanges.at(-1)!;
+  return change.fromRevision === before.configRevision
+    && change.toRevision === after.configRevision
+    && change.compatibility === "requires_runtime_restart"
+    && change.effectiveFrom === "new_runtime_epoch"
+    && before.runtimeEpochId !== after.runtimeEpochId
+    && after.promptHash === next.resourceManifest?.systemPromptHash
+    && after.toolManifestHash === next.resourceManifest?.toolSurfaceHash
+    && after.resourceSnapshotHash === next.resourceManifest?.resourceIndexHash;
+}
+
 function safeId(value: string, label: string): string {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) throw new Error(`${label} must be a safe identifier.`);
   return value;
@@ -327,38 +371,105 @@ function nonEmpty(value: string, label: string): string {
   return normalized;
 }
 
-export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOptions = {}): TaskWorkspace {
+function parseStoredTaskEvents(rows: readonly unknown[], taskId: string): TaskRunEvent[] {
+  const events = rows.flatMap((row, index) => {
+    if (row && typeof row === "object" && !Array.isArray(row) && (row as Record<string, unknown>).recordType === "task_run_event_page_v1") {
+      return parseTaskRunEventPage((row as Record<string, unknown>).page).events;
+    }
+    return [parseTaskRunEvent(row, `events.jsonl[${index}]`)];
+  });
+  const ids = new Set<string>();
+  const cursors = new Set<string>();
+  for (const [index, event] of events.entries()) {
+    if (index > 0 && event.seq <= events[index - 1]!.seq) throw new Error(`Task ${taskId} event sequence is not strictly increasing.`);
+    if (ids.has(event.id)) throw new Error(`Task ${taskId} event id ${event.id} is duplicated.`);
+    if (cursors.has(event.cursor)) throw new Error(`Task ${taskId} event cursor ${event.cursor} is duplicated.`);
+    ids.add(event.id);
+    cursors.add(event.cursor);
+  }
+  return events;
+}
+
+export function createFileTaskWorkspacePersistence(repoRoot: string): TaskWorkspacePersistence {
   const root = resolve(repoRoot);
+  return {
+    key: (locator) => taskSnapshotPath(root, locator),
+    async readSnapshot(locator) {
+      const raw = await readJsonFile<unknown | null>(taskSnapshotPath(root, locator), null);
+      return raw === null ? null : parseTaskWorkspaceSnapshot(raw);
+    },
+    async readEvents(locator) {
+      return parseStoredTaskEvents(await readJsonlFile<unknown>(taskEventsPath(root, locator)), locator.taskId);
+    },
+    readLastEventCursor: (locator) => readLastEventCursor(taskEventsPath(root, locator)),
+    async listLocators(owner) {
+      const ownerTasksRoot = tasksRoot(root, owner);
+      let entries;
+      try {
+        entries = await readdir(ownerTasksRoot, { withFileTypes: true });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+        throw error;
+      }
+      return entries.filter((entry) => entry.isDirectory()).map((entry): TaskLocator => owner.kind === "standalone"
+        ? { kind: "standalone", taskId: entry.name }
+        : { kind: "project", projectId: owner.projectId, taskId: entry.name });
+    },
+    async create(locator, snapshot, page) {
+      assertLegacyTaskFileWriteAllowed(root);
+      const path = taskSnapshotPath(root, locator);
+      if (!page) {
+        await writeJsonFile(path, snapshot, { durability: "critical" });
+        if (locator.kind === "standalone") await mkdir(join(dirname(path), "workspace", "attachments"), { recursive: true });
+        return;
+      }
+      const directory = dirname(path);
+      const parent = dirname(directory);
+      const staging = join(parent, `.${locator.taskId}.tmp-${process.pid}-${randomUUID()}`);
+      await mkdir(parent, { recursive: true });
+      await mkdir(staging);
+      try {
+        await writeJsonFile(join(staging, "snapshot.json"), snapshot, { durability: "critical" });
+        await appendDurableFile(join(staging, "events.jsonl"), `${JSON.stringify({ recordType: "task_run_event_page_v1", page })}\n`);
+        await rename(staging, directory);
+        await syncParentDirectory(directory);
+        if (locator.kind === "standalone") await mkdir(join(directory, "workspace", "attachments"), { recursive: true });
+      } catch (error) {
+        await rm(staging, { recursive: true, force: true });
+        throw error;
+      }
+    },
+    async replaceProjection(locator, _expected, next) {
+      assertLegacyTaskFileWriteAllowed(root);
+      await writeJsonFile(taskSnapshotPath(root, locator), next, { durability: "critical" });
+    },
+    async commitPage(locator, _expected, page, next) {
+      assertLegacyTaskFileWriteAllowed(root);
+      const eventPath = taskEventsPath(root, locator);
+      await mkdir(dirname(eventPath), { recursive: true });
+      if (page.events.length) await appendDurableFile(eventPath, `${JSON.stringify({ recordType: "task_run_event_page_v1", page })}\n`);
+      await writeJsonFile(taskSnapshotPath(root, locator), next, { durability: "critical" });
+    },
+  };
+}
+
+export function createTaskWorkspaceFromPersistence(
+  persistence: TaskWorkspacePersistence,
+  options: TaskWorkspaceOptions = {},
+): TaskWorkspace {
   const now = options.now ?? (() => new Date().toISOString());
   const createTaskId = options.createTaskId ?? (() => `task_${randomUUID()}`);
 
   const readEvents = async (locator: TaskLocator): Promise<TaskRunEvent[]> => {
-    const rows = await readJsonlFile<unknown>(taskEventsPath(root, locator));
-    const events = rows.flatMap((row, index) => {
-      if (row && typeof row === "object" && !Array.isArray(row) && (row as Record<string, unknown>).recordType === "task_run_event_page_v1") {
-        return parseTaskRunEventPage((row as Record<string, unknown>).page).events;
-      }
-      return [parseTaskRunEvent(row, `events.jsonl[${index}]`)];
-    });
-    const ids = new Set<string>();
-    const cursors = new Set<string>();
-    for (const [index, event] of events.entries()) {
-      if (index > 0 && event.seq <= events[index - 1]!.seq) throw new Error(`Task ${locator.taskId} event sequence is not strictly increasing.`);
-      if (ids.has(event.id)) throw new Error(`Task ${locator.taskId} event id ${event.id} is duplicated.`);
-      if (cursors.has(event.cursor)) throw new Error(`Task ${locator.taskId} event cursor ${event.cursor} is duplicated.`);
-      ids.add(event.id);
-      cursors.add(event.cursor);
-    }
-    return events;
+    return persistence.readEvents(locator);
   };
 
   const open = async (input: TaskWorkspaceLocator): Promise<TaskWorkspaceSnapshot> => {
     const locator = normalizeTaskLocator(input);
     const taskId = locator.taskId;
-    const path = taskSnapshotPath(root, locator);
-    const raw = await readJsonFile<unknown | null>(path, null);
-    if (raw === null) throw new TaskWorkspaceNotFoundError(locator);
-    let snapshot = parseTaskWorkspaceSnapshot(raw);
+    const stored = await persistence.readSnapshot(locator);
+    if (stored === null) throw new TaskWorkspaceNotFoundError(locator);
+    let snapshot = stored;
     const ownerMatches = locator.kind === "standalone"
       ? snapshot.task.owner.kind === "standalone"
       : snapshot.task.owner.kind === "project" && snapshot.task.owner.projectId === locator.projectId;
@@ -398,7 +509,7 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
       });
     }
     const reconciled = reconcileTerminalAgentThreads(snapshot);
-    if (pendingEvents.length || reconciled !== snapshot) await writeJsonFile(path, reconciled);
+    if (pendingEvents.length || reconciled !== snapshot) await persistence.replaceProjection(locator, stored, reconciled);
     snapshot = reconciled;
     return snapshot;
   };
@@ -406,13 +517,12 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
   const probe = async (input: TaskWorkspaceLocator): Promise<TaskWorkspaceProbe> => {
     const locator = normalizeTaskLocator(input);
     const taskId = locator.taskId;
-    const path = taskSnapshotPath(root, locator);
-    const raw = await readJsonFile<unknown | null>(path, null);
+    const raw = await persistence.readSnapshot(locator);
     if (raw === null) throw new TaskWorkspaceNotFoundError(locator);
     // The derived snapshot is written atomically after every event page. A
     // poll only needs this small JSON projection; open() remains the recovery
     // path that replays the event log after an interrupted write.
-    const snapshot = parseTaskWorkspaceSnapshot(raw);
+    const snapshot = raw;
     const ownerMatches = locator.kind === "standalone"
       ? snapshot.task.owner.kind === "standalone"
       : snapshot.task.owner.kind === "project" && snapshot.task.owner.projectId === locator.projectId;
@@ -422,7 +532,7 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
     const activeRun = snapshot.activeRunId
       ? snapshot.runs.find((run) => run.id === snapshot.activeRunId) ?? null
       : null;
-    const logCursor = await readLastEventCursor(taskEventsPath(root, locator));
+    const logCursor = await persistence.readLastEventCursor(locator);
     return {
       schemaVersion: TASK_WORKSPACE_SCHEMA_VERSION,
       ...locator,
@@ -450,14 +560,18 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
       events: page.events.map((event) => {
         if (event.type !== "run_upsert" || !event.run) return event;
         const previous = runs.get(event.run.id);
-        if (previous?.resourceManifest && event.run.resourceManifest
-          && !isDeepStrictEqual(previous.resourceManifest, event.run.resourceManifest)
-          && !isMainToTeamResourcePromotion(previous, event.run)) {
+        const resourceChanged = previous?.resourceManifest && event.run.resourceManifest
+          && !isDeepStrictEqual(previous.resourceManifest, event.run.resourceManifest);
+        const promotion = previous ? isMainToTeamResourcePromotion(previous, event.run) : false;
+        if (resourceChanged && !promotion) {
           throw new TaskWorkspaceConflictError(`Run ${event.run.id} resourceManifest cannot change after it is recorded.`);
+        }
+        if (previous && promotion && !hasExecutionEpochForResourcePromotion(previous, event.run)) {
+          throw new TaskWorkspaceConflictError(`Run ${event.run.id} resource promotion requires a new explicit execution epoch.`);
         }
         const run = {
           ...event.run,
-          ...(previous?.resourceManifest && !isMainToTeamResourcePromotion(previous, event.run)
+          ...(previous?.resourceManifest && !promotion
             ? { resourceManifest: previous.resourceManifest }
             : {}),
         };
@@ -498,14 +612,9 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
       knownCursors.add(event.cursor);
       expectedSeq += 1;
     }
-    const eventPath = taskEventsPath(root, locator);
-    await mkdir(dirname(eventPath), { recursive: true });
-    // One JSONL record per page makes a torn trailing append discard the whole
-    // transaction instead of replaying a valid-but-referentially-incomplete prefix.
-    if (durablePage.events.length) await appendFile(eventPath, `${JSON.stringify({ recordType: "task_run_event_page_v1", page: durablePage })}\n`, "utf8");
-    await writeJsonFile(taskSnapshotPath(root, locator), result);
+    await persistence.commitPage(locator, current, durablePage, result);
     if (durablePage.events.length) {
-      for (const listener of taskEventListeners.get(taskSnapshotPath(root, locator)) ?? []) {
+      for (const listener of taskEventListeners.get(persistence.key(locator)) ?? []) {
         try { listener(durablePage.events); } catch { /* A disconnected client cannot invalidate a durable commit. */ }
       }
     }
@@ -528,19 +637,7 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
 
   const listSnapshots = async (input: TaskWorkspaceListInput): Promise<TaskWorkspaceSnapshot[]> => {
     const owner = normalizeTaskOwner(input);
-    const ownerTasksRoot = tasksRoot(root, owner);
-    let entries;
-    try {
-      entries = await readdir(ownerTasksRoot, { withFileTypes: true });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw error;
-    }
-    const snapshots = await Promise.all(entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => open(owner.kind === "standalone"
-        ? { kind: "standalone", taskId: entry.name }
-        : { kind: "project", projectId: owner.projectId, taskId: entry.name })));
+    const snapshots = await Promise.all((await persistence.listLocators(owner)).map((locator) => open(locator)));
     return snapshots.sort((left, right) => right.task.updatedAt.localeCompare(left.task.updatedAt) || left.task.id.localeCompare(right.task.id));
   };
 
@@ -563,9 +660,9 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
       const locator: TaskLocator = owner.kind === "standalone"
         ? { kind: "standalone", taskId }
         : { kind: "project", projectId: owner.projectId, taskId };
-      const path = taskSnapshotPath(root, locator);
-      return queued(path, async () => {
-        if (await readJsonFile<unknown | null>(path, null) !== null) {
+      const key = persistence.key(locator);
+      return queued(key, async () => {
+        if (await persistence.readSnapshot(locator) !== null) {
           throw new TaskWorkspaceConflictError(owner.kind === "project"
             ? `Task ${taskId} already exists in project ${owner.projectId}.`
             : `Standalone Task ${taskId} already exists.`);
@@ -611,8 +708,7 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
           decisions: [],
         });
         if (initialMessage === undefined) {
-          await writeJsonFile(path, draft);
-          if (owner.kind === "standalone") await mkdir(join(dirname(path), "workspace", "attachments"), { recursive: true });
+          await persistence.create(locator, draft);
           return draft;
         }
 
@@ -642,6 +738,8 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
               completedAt: null,
               stopAvailable: true,
               resumeAvailable: false,
+              executionSnapshots: [],
+              configChanges: [],
             },
           }),
           parseTaskRunEvent({
@@ -717,36 +815,14 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
         });
         const snapshot = applyTaskRunEventPage(draft, page);
 
-        // Stage the complete first-turn Task beside its final directory, then
-        // publish it with one directory rename. A crash can reveal either no
-        // Task or the Task + pending Main Run + full human message, never a
-        // half-created conversation.
-        const taskDirectory = dirname(path);
-        const tasksDirectory = dirname(taskDirectory);
-        const stagingDirectory = join(tasksDirectory, `.${taskId}.tmp-${process.pid}-${randomUUID()}`);
-        await mkdir(tasksDirectory, { recursive: true });
-        await mkdir(stagingDirectory);
-        try {
-          await writeJsonFile(join(stagingDirectory, "snapshot.json"), snapshot);
-          await writeFile(
-            join(stagingDirectory, "events.jsonl"),
-            `${JSON.stringify({ recordType: "task_run_event_page_v1", page })}\n`,
-            "utf8",
-          );
-          await rename(stagingDirectory, taskDirectory);
-          if (owner.kind === "standalone") await mkdir(join(taskDirectory, "workspace", "attachments"), { recursive: true });
-        } catch (error) {
-          await rm(stagingDirectory, { recursive: true, force: true });
-          throw error;
-        }
+        await persistence.create(locator, snapshot, page);
         return snapshot;
       });
     },
     async updateTitle(input) {
       const locator = normalizeTaskLocator(input);
       const title = nonEmpty(input.title, "title");
-      const path = taskSnapshotPath(root, locator);
-      return queued(path, async () => {
+      return queued(persistence.key(locator), async () => {
         const current = await open(locator);
         if (current.task.title === title) return current;
         const updatedAt = now();
@@ -763,14 +839,13 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
           task: { ...current.task, title, titleGeneration, updatedAt },
           projectedAt: updatedAt,
         });
-        await writeJsonFile(path, updated);
+        await persistence.replaceProjection(locator, current, updated);
         return updated;
       });
     },
     async updateTitleGeneration(input) {
       const locator = normalizeTaskLocator(input);
-      const path = taskSnapshotPath(root, locator);
-      return queued(path, async () => {
+      return queued(persistence.key(locator), async () => {
         const current = await open(locator);
         const generation = current.task.titleGeneration;
         if (!generation
@@ -790,15 +865,14 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
           },
           projectedAt: updatedAt,
         });
-        await writeJsonFile(path, updated);
+        await persistence.replaceProjection(locator, current, updated);
         return updated;
       });
     },
     async archive(input) {
       const locator = normalizeTaskLocator(input);
       const taskId = locator.taskId;
-      const path = taskSnapshotPath(root, locator);
-      return queued(path, async () => {
+      return queued(persistence.key(locator), async () => {
         const current = await open(locator);
         if (current.task.status === "archived") return current;
         if (current.activeRunId) throw new TaskWorkspaceConflictError(`Task ${taskId} cannot be archived while run ${current.activeRunId} is active.`);
@@ -808,14 +882,13 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
           task: { ...current.task, status: "archived", updatedAt },
           projectedAt: updatedAt,
         });
-        await writeJsonFile(path, updated);
+        await persistence.replaceProjection(locator, current, updated);
         return updated;
       });
     },
     async restore(input) {
       const locator = normalizeTaskLocator(input);
-      const path = taskSnapshotPath(root, locator);
-      return queued(path, async () => {
+      return queued(persistence.key(locator), async () => {
         const current = await open(locator);
         if (current.task.status !== "archived") return current;
         const latestRun = [...current.runs]
@@ -833,14 +906,13 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
           task: { ...current.task, status, updatedAt },
           projectedAt: updatedAt,
         });
-        await writeJsonFile(path, updated);
+        await persistence.replaceProjection(locator, current, updated);
         return updated;
       });
     },
     async updateStandaloneScope(input) {
       const locator = normalizeTaskLocator(input);
-      const path = taskSnapshotPath(root, locator);
-      return queued(path, async () => {
+      return queued(persistence.key(locator), async () => {
         const current = await open(locator);
         if (current.task.owner.kind !== "standalone" || current.task.scope.kind !== "standalone") {
           throw new TaskWorkspaceConflictError(`Task ${locator.taskId} is not standalone.`);
@@ -863,7 +935,7 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
           },
           projectedAt: updatedAt,
         });
-        await writeJsonFile(path, updated);
+        await persistence.replaceProjection(locator, current, updated);
         return updated;
       });
     },
@@ -878,16 +950,14 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
       const taskId = locator.taskId;
       const page = parseTaskRunEventPage(input.page);
       if (page.taskId !== taskId) throw new TaskWorkspaceConflictError("Event page taskId does not match the TaskWorkspace locator.");
-      const path = taskSnapshotPath(root, locator);
-      return queued(path, () => commitPage(locator, page));
+      return queued(persistence.key(locator), () => commitPage(locator, page));
     },
     async appendGenerated(input) {
       const locator = normalizeTaskLocator(input);
       const taskId = locator.taskId;
       const runId = safeId(input.runId, "runId");
       const expectedRequiredDecisionIds = (input.expectedRequiredDecisionIds ?? []).map((id) => nonEmpty(id, "decisionId"));
-      const path = taskSnapshotPath(root, locator);
-      return queued(path, async () => {
+      return queued(persistence.key(locator), async () => {
         const current = await open(locator);
         if (input.expectedActiveRun) {
           const expected = input.expectedActiveRun;
@@ -1024,14 +1094,21 @@ export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOpti
     },
     subscribeEvents(input, listener) {
       const locator = normalizeTaskLocator(input);
-      const path = taskSnapshotPath(root, locator);
-      const listeners = taskEventListeners.get(path) ?? new Set();
+      const key = persistence.key(locator);
+      const listeners = taskEventListeners.get(key) ?? new Set();
       listeners.add(listener);
-      taskEventListeners.set(path, listeners);
+      taskEventListeners.set(key, listeners);
       return () => {
         listeners.delete(listener);
-        if (!listeners.size) taskEventListeners.delete(path);
+        if (!listeners.size) taskEventListeners.delete(key);
       };
     },
   };
+}
+
+export function createTaskWorkspace(repoRoot: string, options: TaskWorkspaceOptions = {}): TaskWorkspace {
+  return createTaskWorkspaceFromPersistence(
+    resolveTaskWorkspacePersistence(repoRoot, () => createFileTaskWorkspacePersistence(repoRoot)),
+    options,
+  );
 }

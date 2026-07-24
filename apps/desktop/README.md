@@ -11,11 +11,13 @@ Standalone working directories/file grants and Project folders/Batch/Asset
 files are accessed only through explicit native pickers. The shell does not
 set a Desktop or current-directory default path.
 
+From the repository root, install the single workspace closure and run desktop commands through its workspace name:
+
 ```bash
 npm install
-npm test
-npm run typecheck
-npm start
+npm --workspace @linguist-agent/desktop run test
+npm --workspace @linguist-agent/desktop run typecheck
+npm --workspace @linguist-agent/desktop run start
 ```
 
 `LA_MAC_LOCAL_SERVER_URL=http://127.0.0.1:<port>` may target an isolated local
