@@ -42,6 +42,7 @@ import {
   automationGroupOrderAtom,
   dockBadgeCountAtom,
   unviewedCompletedSessionIdsAtom,
+  agentLinguistTurnContextCaptureAtom,
 } from './atoms/agent-atoms'
 import { updateStatusAtom, initializeUpdater } from './atoms/updater'
 import { automationsAtom } from './atoms/automation-atoms'
@@ -63,8 +64,18 @@ import {
 } from './atoms/markdown-font-size'
 import { useGlobalAgentListeners } from './hooks/useGlobalAgentListeners'
 import { useGlobalChatListeners } from './hooks/useGlobalChatListeners'
-import { tabsAtom, activeTabIdAtom, ensureScratchPadTab, getPersistableTabState, scratchPadContentAtom, scratchPadLoadedAtom, SCRATCH_PAD_ID } from './atoms/tab-atoms'
-import type { TabItem } from './atoms/tab-atoms'
+import { activeTabIdAtom, ensureScratchPadTab, getPersistableTabState, getPersistedTabMru, restorePersistedTabState, scratchPadContentAtom, scratchPadLoadedAtom, SCRATCH_PAD_ID, tabMruAtom, tabsAtom } from './atoms/tab-atoms'
+import {
+  parseProjectAgentSessionPreferences,
+  projectCurrentAgentSessionIdMapAtom,
+  serializeProjectAgentSessionIds,
+} from './atoms/project-agent-session-atoms'
+import {
+  captureLinguistTurnContextSnapshot,
+  linguistWorkbenchLocationsAtom,
+  restoreLinguistWorkbenchLocationsAtom,
+} from './features/linguist/projects/cat-workspace-atoms'
+import { CatToolResultNavigationInitializer } from './features/linguist/projects/CatToolResultNavigationInitializer'
 import { chatToolsAtom } from './atoms/chat-tool-atoms'
 import { feishuBotStatesAtom } from './atoms/feishu-atoms'
 import { dingtalkBotStatesAtom } from './atoms/dingtalk-atoms'
@@ -152,6 +163,20 @@ function ThemeInitializer(): null {
   useEffect(() => {
     applyInterfaceVariantToDOM(interfaceVariant)
   }, [interfaceVariant])
+
+  return null
+}
+
+/** 在组合根注入同步快照 seam，避免原生 AgentView 反向依赖 Linguist feature。 */
+function LinguistTurnContextInitializer(): null {
+  const store = useStore()
+  const setCapture = useSetAtom(agentLinguistTurnContextCaptureAtom)
+
+  useEffect(() => {
+    setCapture(() => (projectId: string) =>
+      captureLinguistTurnContextSnapshot(store, projectId))
+    return () => setCapture(null)
+  }, [setCapture, store])
 
   return null
 }
@@ -631,27 +656,6 @@ function DingTalkInitializer(): null {
  * 运行时监听标签页变化，自动保存到 settings.json。
  */
 
-/**
- * 旧版（分屏时代）持久化结构——仅用于向后兼容读取迁移。
- * 新版已扁平化为 { tabs, activeTabId }；旧版是 { tabs, splitLayout }。
- */
-interface LegacyTabStateWithSplitLayout {
-  splitLayout?: {
-    focusedPanelIndex?: number
-    panels?: Array<{ activeTabId?: string | null }>
-  }
-}
-
-/** 从旧版 splitLayout 结构中提取原焦点面板的 activeTabId */
-function extractLegacyActiveTabId(tabState: unknown): string | null {
-  if (!tabState || typeof tabState !== 'object') return null
-  const legacy = tabState as LegacyTabStateWithSplitLayout
-  const panels = legacy.splitLayout?.panels
-  if (!Array.isArray(panels) || panels.length === 0) return null
-  const focusedIndex = legacy.splitLayout?.focusedPanelIndex ?? 0
-  return panels[focusedIndex]?.activeTabId ?? panels[0]?.activeTabId ?? null
-}
-
 function TabStatePersistenceInitializer(): null {
   const store = useStore()
   const restoredRef = useRef(false)
@@ -662,7 +666,17 @@ function TabStatePersistenceInitializer(): null {
       window.electronAPI.getSettings(),
       window.electronAPI.listConversations(),
       window.electronAPI.listAgentSessions(),
-    ]).then(([settings, conversations, agentSessions]) => {
+      window.electronAPI.linguistProjectsList({ includeArchived: true }).catch(() => null),
+    ]).then(([settings, conversations, agentSessions, projectsResult]) => {
+      store.set(agentSessionsAtom, agentSessions)
+      store.set(
+        projectCurrentAgentSessionIdMapAtom,
+        parseProjectAgentSessionPreferences(settings.linguistProjectAgentSessionIds),
+      )
+      store.set(
+        restoreLinguistWorkbenchLocationsAtom,
+        settings.linguistProjectWorkbenchLocations,
+      )
       const tabState = settings.tabState
       if (!tabState?.tabs?.length) {
         restoredRef.current = true
@@ -674,56 +688,44 @@ function TabStatePersistenceInitializer(): null {
         ...conversations.map((c) => c.id),
         ...agentSessions.map((s) => s.id),
       ])
-
-      // 过滤 diff 类型 Tab（不持久化），同时过滤掉已被删除的会话
-      const validTabs = tabState.tabs.filter(
-        (t): t is TabItem =>
-          typeof t === 'object' &&
-          t !== null &&
-          'id' in t &&
-          'sessionId' in t &&
-          'type' in t &&
-          'title' in t &&
-          (t.type === 'chat' || t.type === 'agent') &&
-          validSessionIds.has(t.sessionId),
+      const projectStatuses = new Map(
+        projectsResult?.ok
+          ? projectsResult.data.map((project) => [
+            project.id,
+            project.archivedAt ? 'archived' as const : 'active' as const,
+          ])
+          : [],
       )
+      const restored = restorePersistedTabState(tabState, validSessionIds, projectStatuses)
+      const validTabs = restored.tabs
       if (validTabs.length === 0) {
         restoredRef.current = true
         return
       }
 
-      const validTabIds = new Set(validTabs.map((t) => t.id))
-
-      // 恢复 activeTabId（校验有效性）
-      let restoredActiveTabId: string | null = null
-      if (tabState.activeTabId && validTabIds.has(tabState.activeTabId)) {
-        restoredActiveTabId = tabState.activeTabId
-      } else {
-        // 向后兼容：从旧版 splitLayout 结构中恢复原焦点面板的 activeTabId
-        const legacyId = extractLegacyActiveTabId(tabState)
-        if (legacyId && validTabIds.has(legacyId)) {
-          restoredActiveTabId = legacyId
-        } else {
-          restoredActiveTabId = validTabs[0]?.id ?? null
-        }
-      }
-
+      const restoredActiveTabId = restored.activeTabId
       const activeTab = validTabs.find((t) => t.id === restoredActiveTabId) ?? validTabs[0] ?? null
-      store.set(tabsAtom, ensureScratchPadTab(activeTab ? [activeTab] : []))
+      store.set(tabsAtom, ensureScratchPadTab(validTabs))
       store.set(activeTabIdAtom, restoredActiveTabId)
+      const restoredMru = getPersistedTabMru(tabState, validTabs)
+      if (restoredMru.length > 0) store.set(tabMruAtom, restoredMru)
 
       // 同步 appMode 和 currentSessionId
       if (activeTab) {
         if (activeTab.type === 'chat') {
           store.set(appModeAtom, 'chat')
           store.set(currentConversationIdAtom, activeTab.sessionId)
-        } else {
+        } else if (activeTab.type === 'agent') {
           store.set(appModeAtom, 'agent')
           store.set(currentAgentSessionIdAtom, activeTab.sessionId)
+        } else if (activeTab.type === 'linguist-project') {
+          store.set(appModeAtom, 'linguist')
+          store.set(currentConversationIdAtom, null)
+          store.set(currentAgentSessionIdAtom, null)
         }
       }
 
-      console.log(`[TabRestore] 已恢复当前会话入口，历史标签 ${validTabs.length} 个已收敛到左侧列表`)
+      console.log(`[TabRestore] 已恢复 ${validTabs.length} 个会话/项目入口`)
     }).catch((err) => console.error('[TabRestore] 恢复标签页失败:', err))
       .finally(() => { restoredRef.current = true })
   }, [store])
@@ -735,9 +737,13 @@ function TabStatePersistenceInitializer(): null {
     const save = (): void => {
       const tabs = store.get(tabsAtom)
       const activeTabId = store.get(activeTabIdAtom)
-      const persistableTabState = getPersistableTabState(tabs, activeTabId)
+      const persistableTabState = getPersistableTabState(tabs, activeTabId, store.get(tabMruAtom))
       window.electronAPI.updateSettings({
         tabState: persistableTabState,
+        linguistProjectAgentSessionIds: serializeProjectAgentSessionIds(
+          store.get(projectCurrentAgentSessionIdMapAtom),
+        ),
+        linguistProjectWorkbenchLocations: store.get(linguistWorkbenchLocationsAtom),
       }).catch(console.error)
     }
 
@@ -749,6 +755,9 @@ function TabStatePersistenceInitializer(): null {
 
     const unsub1 = store.sub(tabsAtom, debouncedSave)
     const unsub2 = store.sub(activeTabIdAtom, debouncedSave)
+    const unsub3 = store.sub(tabMruAtom, debouncedSave)
+    const unsub4 = store.sub(projectCurrentAgentSessionIdMapAtom, debouncedSave)
+    const unsub5 = store.sub(linguistWorkbenchLocationsAtom, debouncedSave)
 
     // 窗口关闭前立即刷新，避免最后 500ms 内的变更丢失
     const handleBeforeUnload = (): void => {
@@ -756,9 +765,15 @@ function TabStatePersistenceInitializer(): null {
       // 使用同步 IPC 确保关闭前数据写入磁盘
       const tabs = store.get(tabsAtom)
       const activeTabId = store.get(activeTabIdAtom)
-      const persistableTabState = getPersistableTabState(tabs, activeTabId)
+      const persistableTabState = getPersistableTabState(tabs, activeTabId, store.get(tabMruAtom))
       if (tabs.length > 0 && window.electronAPI.updateSettingsSync) {
-        const ok = window.electronAPI.updateSettingsSync({ tabState: persistableTabState })
+        const ok = window.electronAPI.updateSettingsSync({
+          tabState: persistableTabState,
+          linguistProjectAgentSessionIds: serializeProjectAgentSessionIds(
+            store.get(projectCurrentAgentSessionIdMapAtom),
+          ),
+          linguistProjectWorkbenchLocations: store.get(linguistWorkbenchLocationsAtom),
+        })
         if (!ok) {
           console.warn('[TabPersist] sync IPC failed, falling back to async save')
           save()
@@ -772,6 +787,9 @@ function TabStatePersistenceInitializer(): null {
     return () => {
       unsub1()
       unsub2()
+      unsub3()
+      unsub4()
+      unsub5()
       if (timer) clearTimeout(timer)
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
@@ -921,6 +939,8 @@ if (isQuickTaskWindow) {
     <React.StrictMode>
       <ThemeInitializer />
       <AgentSettingsInitializer />
+      <LinguistTurnContextInitializer />
+      <CatToolResultNavigationInitializer />
       <NotificationsInitializer />
       <DockBadgeInitializer />
       <UiPreferencesInitializer />

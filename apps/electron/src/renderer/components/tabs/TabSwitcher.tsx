@@ -11,12 +11,16 @@ import type { AgentSessionMeta, ConversationMeta } from '@proma/shared'
 import { cn } from '@/lib/utils'
 import {
   activeTabIdAtom,
+  activeTabAtom,
   activeSessionIdAtom,
+  getTabMruId,
   openTab,
   buildOpenTabRestore,
   sessionViewStateMapAtom,
+  tabIndicatorMapAtom,
   tabMruAtom,
   tabsAtom,
+  type LocalizationProjectTab,
 } from '@/atoms/tab-atoms'
 import { previewFileMapAtom } from '@/atoms/preview-atoms'
 import { getInitialTabSwitchIndex, promoteTabMru } from '@/lib/tab-switching'
@@ -36,10 +40,11 @@ import {
 } from '@/atoms/agent-atoms'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
-import { Bot, GitBranch, MessageSquare } from 'lucide-react'
+import { Bot, GitBranch, Languages, MessageSquare } from 'lucide-react'
+import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 
 type SwitchSectionId = 'collaboration' | 'recent'
-type SwitchCandidateType = 'chat' | 'agent'
+type SwitchCandidateType = 'chat' | 'agent' | 'linguist-project'
 
 interface SwitchCandidate {
   id: string
@@ -68,11 +73,13 @@ export function TabSwitcher(): ReactElement | null {
   const store = useStore()
   const tabs = useAtomValue(tabsAtom)
   const setTabs = useSetAtom(tabsAtom)
-  const activeTabId = useAtomValue(activeTabIdAtom)
+  const activeTab = useAtomValue(activeTabAtom)
   const setActiveTabId = useSetAtom(activeTabIdAtom)
   // MRU 与 Ctrl+Tab 起始定位均按会话 ID 归一化：预览 Tab 复用其 owner 会话 ID，
   // 与候选列表（会话 ID）对齐，避免处于预览 Tab 时需按两下才能切换。
   const activeSessionId = useAtomValue(activeSessionIdAtom)
+  const activeSwitchTargetId = activeTab ? getTabMruId(activeTab) : null
+  const tabIndicatorMap = useAtomValue(tabIndicatorMapAtom)
   const tabMru = useAtomValue(tabMruAtom)
   const setTabMru = useSetAtom(tabMruAtom)
 
@@ -129,7 +136,17 @@ export function TabSwitcher(): ReactElement | null {
       .filter((session) => !session.archived && !draftSessionIds.has(session.id))
       .map(buildAgentCandidate)
 
-    const allCandidates = [...chatCandidates, ...agentCandidates]
+    const projectCandidates = tabs
+      .filter((tab): tab is LocalizationProjectTab => tab.type === 'linguist-project')
+      .map((tab): SwitchCandidate => ({
+        id: tab.id,
+        type: 'linguist-project',
+        title: tab.title,
+        updatedAt: 0,
+        status: tabIndicatorMap.get(tab.id) ?? 'idle',
+      }))
+
+    const allCandidates = [...chatCandidates, ...agentCandidates, ...projectCandidates]
 
     const candidateById = new Map(allCandidates.map((candidate) => [candidate.id, candidate]))
     const activeAgentSession = activeSessionId
@@ -204,13 +221,15 @@ export function TabSwitcher(): ReactElement | null {
     draftSessionIds,
     streamingConversationIds,
     tabMru,
+    tabIndicatorMap,
+    tabs,
     unviewedCompletedIds,
   ])
 
   // Refs 用于事件回调中读取最新值，避免全局键盘监听闭包过期。
   const isOpenRef = useRef(false)
   const selectedIndexRef = useRef(0)
-  const activeSessionIdRef = useRef<string | null>(activeSessionId)
+  const activeSwitchTargetIdRef = useRef<string | null>(activeSwitchTargetId)
   const candidatesRef = useRef<SwitchCandidate[]>(switcherModel.candidates)
   const tabMruRef = useRef<string[]>(tabMru)
   const tabsRef = useRef(tabs)
@@ -218,18 +237,18 @@ export function TabSwitcher(): ReactElement | null {
 
   isOpenRef.current = isOpen
   selectedIndexRef.current = selectedIndex
-  activeSessionIdRef.current = activeSessionId
+  activeSwitchTargetIdRef.current = activeSwitchTargetId
   candidatesRef.current = switcherModel.candidates
   tabMruRef.current = tabMru
   tabsRef.current = tabs
 
   useEffect(() => {
     setTabMru((prev) => {
-      const next = promoteTabMru(prev, activeSessionId)
+      const next = promoteTabMru(prev, activeSwitchTargetId)
       tabMruRef.current = next
       return next
     })
-  }, [activeSessionId, setTabMru])
+  }, [activeSwitchTargetId, setTabMru])
 
   const closeSwitcher = useCallback((): void => {
     setIsOpen(false)
@@ -240,6 +259,22 @@ export function TabSwitcher(): ReactElement | null {
 
   const activateCandidate = useCallback(
     (candidate: SwitchCandidate): void => {
+      if (candidate.type === 'linguist-project') {
+        const projectTab = tabsRef.current.find(
+          (tab): tab is LocalizationProjectTab =>
+            tab.type === 'linguist-project' && tab.id === candidate.id,
+        )
+        if (!projectTab) return
+        enterLinguistNavigation(store, projectTab.id, 'conversations')
+        activeSwitchTargetIdRef.current = candidate.id
+        setTabMru((prev) => {
+          const next = promoteTabMru(prev, candidate.id)
+          tabMruRef.current = next
+          return next
+        })
+        return
+      }
+
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
       const restore = candidate.type === 'agent'
         ? buildOpenTabRestore(
@@ -257,7 +292,7 @@ export function TabSwitcher(): ReactElement | null {
       setActiveTabId(nextTab.activeTabId)
       // MRU/起始定位按会话 ID 归一化：即使 restore 后激活的是预览 Tab，
       // 也以 candidate.id（会话 ID）记账，保证与候选列表对齐。
-      activeSessionIdRef.current = candidate.id
+      activeSwitchTargetIdRef.current = candidate.id
       setTabMru((prev) => {
         const next = promoteTabMru(prev, candidate.id)
         tabMruRef.current = next
@@ -309,17 +344,17 @@ export function TabSwitcher(): ReactElement | null {
   useEffect(() => {
     const getNextIndex = (direction: 1 | -1): number => {
       const candidates = candidatesRef.current
-      return getInitialTabSwitchIndex(
-        candidates,
-        activeSessionIdRef.current,
+          return getInitialTabSwitchIndex(
+            candidates,
+            activeSwitchTargetIdRef.current,
         tabMruRef.current,
         direction,
       )
     }
 
-    const hasAlternateTarget = (): boolean => {
-      const candidates = candidatesRef.current
-      return candidates.some((candidate) => candidate.id !== activeSessionIdRef.current)
+      const hasAlternateTarget = (): boolean => {
+        const candidates = candidatesRef.current
+        return candidates.some((candidate) => candidate.id !== activeSwitchTargetIdRef.current)
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -523,6 +558,11 @@ function SwitcherCandidateRow({
           <>
             <Bot className="size-2.5" />
             Agent
+          </>
+        ) : candidate.type === 'linguist-project' ? (
+          <>
+            <Languages className="size-2.5" />
+            Linguist
           </>
         ) : (
           <>

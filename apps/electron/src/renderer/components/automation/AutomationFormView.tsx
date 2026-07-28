@@ -39,6 +39,7 @@ import { activeSessionIdAtom } from '@/atoms/tab-atoms'
 import { activeViewAtom, agentSkillsTabAtom } from '@/atoms/active-view'
 import { settingsOpenAtom, settingsTabAtom } from '@/atoms/settings-tab'
 import { useOpenSession } from '@/hooks/useOpenSession'
+import { AGENT_RUNTIME_SWITCHER_VISIBLE } from '@/lib/feature-flags'
 import { MarkdownRichEditor } from '@/components/diff/MarkdownRichEditor'
 import type {
   AutomationFeishuNotificationTarget,
@@ -1010,13 +1011,17 @@ export function AutomationFormView(): React.ReactElement | null {
             </div>
           )}
 
-          <div className="flex flex-col gap-2">
-            <Label>Agent 内核</Label>
-            <AutomationRuntimeSelector runtime={form.agentRuntime} onChange={handleRuntimeChange} />
-            <span className="pl-2.5 text-xs text-muted-foreground leading-relaxed">
-              Pi 内核支持选择任意已启用模型渠道；Claude 内核仅显示已勾选为 Agent 兼容的渠道。
-            </span>
-          </div>
+          {/* D-002（PB-011）：首版仅展示 Pi runtime，隐藏内核选择器；代码路径保留，
+              恢复时把 lib/feature-flags.ts 的开关改回 true。 */}
+          {AGENT_RUNTIME_SWITCHER_VISIBLE && (
+            <div className="flex flex-col gap-2">
+              <Label>Agent 内核</Label>
+              <AutomationRuntimeSelector runtime={form.agentRuntime} onChange={handleRuntimeChange} />
+              <span className="pl-2.5 text-xs text-muted-foreground leading-relaxed">
+                Pi 内核支持选择任意已启用模型渠道；Claude 内核仅显示已勾选为 Agent 兼容的渠道。
+              </span>
+            </div>
+          )}
 
           {/* 选择模型（Claude 内核仅显示 Agent 兼容渠道；Pi 内核显示所有已启用渠道） */}
           <div className="flex flex-col gap-2">

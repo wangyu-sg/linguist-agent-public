@@ -30,6 +30,8 @@ export interface MinimapItem {
 
 interface ScrollMinimapProps {
   items: MinimapItem[]
+  /** 请求挂载尚未进入 DOM 的消息；返回 true 表示已开始挂载。 */
+  onRequestItem?: (id: string) => boolean
 }
 
 /** 最少消息数才显示迷你地图 */
@@ -74,7 +76,7 @@ function escapeRegExp(str: string): string {
 
 // ── 主组件 ──
 
-export function ScrollMinimap({ items }: ScrollMinimapProps): React.ReactElement | null {
+export function ScrollMinimap({ items, onRequestItem }: ScrollMinimapProps): React.ReactElement | null {
   const { scrollRef, stopScroll, state: stickyState } = useStickToBottomContext()
   const [hovered, setHovered] = React.useState(false)
   const [isLeaving, setIsLeaving] = React.useState(false)
@@ -236,26 +238,36 @@ export function ScrollMinimap({ items }: ScrollMinimapProps): React.ReactElement
   const scrollToMessage = React.useCallback((id: string) => {
     const el = scrollRef.current
     if (!el) return
-    const target = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(
-      (node) => node.getAttribute('data-message-id') === id
-    )
-    if (!target) return
 
-    stopScroll()
-    stickyState.animation = undefined
-    stickyState.velocity = 0
-    stickyState.accumulated = 0
+    const scrollMountedMessage = (behavior: ScrollBehavior): boolean => {
+      const target = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(
+        (node) => node.getAttribute('data-message-id') === id
+      )
+      if (!target) return false
 
-    const offsetTop = getOffsetTopRelativeTo(target, el)
-    const targetHeight = target.offsetHeight
-    const viewportHeight = el.clientHeight
-    const scrollTarget = targetHeight < viewportHeight
-      ? offsetTop - (viewportHeight - targetHeight) / 2
-      : offsetTop - 32
-    el.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' })
+      stopScroll()
+      stickyState.animation = undefined
+      stickyState.velocity = 0
+      stickyState.accumulated = 0
+
+      const offsetTop = getOffsetTopRelativeTo(target, el)
+      const targetHeight = target.offsetHeight
+      const viewportHeight = el.clientHeight
+      const scrollTarget = targetHeight < viewportHeight
+        ? offsetTop - (viewportHeight - targetHeight) / 2
+        : offsetTop - 32
+      el.scrollTo({ top: Math.max(0, scrollTarget), behavior })
+      return true
+    }
+
+    if (!scrollMountedMessage('smooth') && onRequestItem?.(id)) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => scrollMountedMessage('auto'))
+      })
+    }
 
     setHovered(false)
-  }, [scrollRef, stopScroll, stickyState])
+  }, [onRequestItem, scrollRef, stopScroll, stickyState])
 
   // ── 搜索过滤 ──
 

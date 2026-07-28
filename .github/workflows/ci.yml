@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  workflow_call:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: 1.3.14
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: TypeScript 类型检查
+        run: bun run typecheck
+
+      - name: 根单元测试
+        run: bun test
+
+      - name: CAT Core 测试
+        run: bun test packages/linguist-cat-core
+
+      - name: CAT Store 测试
+        run: bun --cwd packages/linguist-cat-store run test
+
+      - name: CAT Tools 测试
+        run: bun --cwd packages/linguist-cat-tools run test
+
+      - name: Linguist 主进程与安全测试
+        run: bun --cwd apps/electron run test:linguist
+
+      - name: 架构边界检查
+        run: bun run check:boundaries
+
+      - name: Linguist Fusion 单一实现架构检查
+        run: node --test tests/linguist-fusion-architecture.test.mjs
+
+      - name: 依赖许可扫描
+        run: bun run license:scan
+
+      - name: Electron 构建
+        run: bun run electron:build

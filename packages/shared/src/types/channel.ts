@@ -258,7 +258,7 @@ export interface ChannelModel {
 /**
  * 渠道配置
  *
- * 存储在 ~/.proma/channels.json 中，apiKey 字段为加密后的 base64 字符串
+ * 存储在 ~/.linguist-agent/channels.json 中，apiKey 字段为加密后的 base64 字符串
  */
 export interface Channel {
   /** 渠道唯一标识 */
@@ -315,6 +315,12 @@ export interface ChannelsConfig {
   version: number
   /** 渠道列表 */
   channels: Channel[]
+}
+
+/** 从旧 Proma 数据根显式导入 Provider 配置的结果。 */
+export interface PromaProviderImportResult {
+  importedCount: number
+  skippedCount: number
 }
 
 /**
@@ -439,6 +445,8 @@ export const CHANNEL_IPC_CHANNELS = {
   DELETE: 'channel:delete',
   /** 解密获取明文 API Key */
   DECRYPT_KEY: 'channel:decrypt-key',
+  /** 从旧 Proma 数据根导入 Provider 配置 */
+  IMPORT_PROMA_PROVIDERS: 'channel:import-proma-providers',
   /** 测试渠道连接 */
   TEST: 'channel:test',
   /** 从供应商拉取可用模型列表 */

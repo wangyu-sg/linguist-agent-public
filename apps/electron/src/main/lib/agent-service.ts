@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path'
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { BrowserWindow } from 'electron'
 import type { WebContents } from 'electron'
-import { AGENT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@proma/shared'
+import { AGENT_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@proma/shared'
 import type {
   AgentSendInput,
   AgentGenerateTitleInput,
@@ -27,6 +27,7 @@ import type {
   PromaPermissionMode,
   AgentExternalRunSource,
   AgentMessage,
+  LinguistProjectMutationEvent,
 } from '@proma/shared'
 import { ClaudeAgentAdapter, scanAndKillOrphanedClaudeSubprocesses } from './adapters/claude-agent-adapter'
 import { PiAgentAdapter, cleanupPiRuntimeResources } from './adapters/pi-agent-adapter'
@@ -104,6 +105,15 @@ function isMainRendererWindow(win: BrowserWindow): boolean {
 function getMainRendererWebContents(): WebContents | null {
   const win = BrowserWindow.getAllWindows().find(isMainRendererWindow)
   return win && !win.webContents.isDestroyed() ? win.webContents : null
+}
+
+function sendLinguistProjectMutation(
+  webContents: WebContents | null,
+  event: LinguistProjectMutationEvent,
+): void {
+  if (webContents && !webContents.isDestroyed()) {
+    webContents.send(LINGUIST_CAT_IPC_CHANNELS.PROJECT_MUTATION, event)
+  }
 }
 
 // ===== EventBus IPC 转发中间件 =====
@@ -185,6 +195,9 @@ export async function runAgent(
             title,
           })
         }
+      },
+      onLinguistProjectMutation: (event) => {
+        sendLinguistProjectMutation(webContents, event)
       },
     })
   } catch (err) {
@@ -287,6 +300,9 @@ export async function runAgentHeadless(
           },
         })
       },
+      onLinguistProjectMutation: (event) => {
+        sendLinguistProjectMutation(wc, event)
+      },
     })
   } catch (err) {
     console.error('[Agent 服务] runAgentHeadless 未处理异常:', err)
@@ -388,6 +404,7 @@ export async function queueAgentMessage(
     input.mentionedSkills,
     input.mentionedMcpServers,
     input.mentionedSessionIds,
+    input.linguistContext,
   )
 }
 

@@ -84,7 +84,7 @@ export function McpCard({
 
       <div className="mt-auto flex items-center gap-2">
         {isBuiltin && (
-          <span className="flex items-center gap-1 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400">
+          <span className="flex items-center gap-1 rounded-md bg-info/10 px-1.5 py-0.5 text-[11px] font-medium text-info">
             <ShieldCheck size={12} /> 内置
           </span>
         )}
@@ -92,8 +92,8 @@ export function McpCard({
           <span
             className={cn(
               'flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium',
-              statusTone === 'success' && 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-              statusTone === 'warning' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+              statusTone === 'success' && 'bg-success/10 text-success',
+              statusTone === 'warning' && 'bg-warning/10 text-warning',
               statusTone === 'muted' && 'bg-muted text-muted-foreground',
             )}
           >
@@ -107,7 +107,7 @@ export function McpCard({
             className={cn(
               'flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium',
               test.success
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                ? 'bg-success/10 text-success'
                 : 'bg-destructive/10 text-destructive',
             )}
           >

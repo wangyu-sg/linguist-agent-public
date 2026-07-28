@@ -148,7 +148,7 @@ export function createTray(actionsInput?: Partial<TrayActions>): Tray | null {
     tray = new Tray(image)
 
     // 设置 tooltip
-    tray.setToolTip('Proma')
+    tray.setToolTip('Linguist Agent')
 
     updateTrayMenu(actions)
 

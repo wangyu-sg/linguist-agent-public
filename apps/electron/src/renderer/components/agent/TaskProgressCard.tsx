@@ -51,10 +51,10 @@ function TaskRow({ item }: TaskRowProps): React.ReactElement {
           <Loader2 className="size-2 animate-spin text-blue-500" />
         )}
         {isCompleted && (
-          <CheckCircle2 className="size-2.5 text-green-500" />
+          <CheckCircle2 className="size-2.5 text-success" />
         )}
         {item.status === 'blocked' && (
-          <CircleAlert className="size-2.5 text-amber-500" />
+          <CircleAlert className="size-2.5 text-warning" />
         )}
         {isCancelled && (
           <CircleX className="size-2.5 text-muted-foreground/50" />

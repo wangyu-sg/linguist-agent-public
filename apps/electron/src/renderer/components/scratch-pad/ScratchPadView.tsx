@@ -1,7 +1,7 @@
 /**
  * ScratchPadView — 草稿本编辑器
  *
- * 基于 TipTap 的轻量 Markdown 编辑器，内容持久化到 ~/.proma/scratch-pad.md。
+ * 基于 TipTap 的轻量 Markdown 编辑器，内容持久化到 ~/.linguist-agent/scratch-pad.md。
  * 自动保存由 ScratchPadPersistence 组件通过监听 scratchPadContentAtom 统一管理。
  *
  * 支持：Markdown 快捷输入、图片粘贴、Todo 列表（- [ ] 触发）、代码高亮（lowlight）、数学公式（$..$ / $$..$$ 触发）、导出为 Markdown
@@ -251,12 +251,14 @@ function ScratchPadEditor({ variant }: ScratchPadEditorProps): React.ReactElemen
   const activeSessionId = React.useMemo(() => {
     const activeTab = tabs.find((t) => t.id === activeTabId)
     if (activeTab?.type === 'agent' || activeTab?.type === 'preview') return activeTab.sessionId
-    const agentTab = [...tabs].reverse().find((t) => t.type === 'agent')
-    return agentTab?.sessionId ?? null
+    const agentTab = [...tabs].reverse().find((tab) => tab.type === 'agent')
+    return agentTab?.type === 'agent' ? agentTab.sessionId : null
   }, [tabs, activeTabId])
 
   const activeSessionTitle = React.useMemo(() => {
-    const agentTab = tabs.find((t) => t.sessionId === activeSessionId && t.type === 'agent')
+    const agentTab = tabs.find(
+      (tab) => tab.type === 'agent' && tab.sessionId === activeSessionId,
+    )
     return agentTab?.title ?? null
   }, [tabs, activeSessionId])
 

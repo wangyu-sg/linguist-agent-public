@@ -277,11 +277,11 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
   }
 
   return (
-    <div className="ask-user-banner mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+    <div className="ask-user-banner rounded-xl border border-border/60 bg-card overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
       {/* 头部 + Tab 栏 */}
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-foreground">Proma Agent 需要你的输入</span>
+          <span className="text-sm font-medium text-foreground">Agent 需要你的输入</span>
           <div className="flex items-center gap-1.5">
             {requests.length > 1 && (
               <span className="text-xs text-muted-foreground">(+{requests.length - 1})</span>

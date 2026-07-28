@@ -78,7 +78,7 @@ function UsageRing({ ratio, isWarning }: UsageRingProps): React.ReactElement {
       viewBox="0 0 20 20"
       className={cn(
         'shrink-0 transition-colors',
-        isWarning ? 'text-amber-500 dark:text-amber-400' : 'text-foreground/70',
+        isWarning ? 'text-warning' : 'text-foreground/70',
       )}
       aria-hidden="true"
     >
@@ -150,7 +150,7 @@ function PlanQuotaRow({ quotaWindow }: { quotaWindow: ChannelPlanQuotaWindow }):
           <div
             className={cn(
               'h-full rounded-full',
-              quotaWindow.remainingPercent <= 20 ? 'bg-amber-500' : 'bg-foreground/60',
+              quotaWindow.remainingPercent <= 20 ? 'bg-warning' : 'bg-foreground/60',
             )}
             style={{ width: `${Math.max(0, Math.min(100, quotaWindow.remainingPercent))}%` }}
           />
@@ -237,6 +237,7 @@ export function ContextUsageBadge({
         size="icon"
         className={cn(inputToolbarButtonClass, 'text-muted-foreground cursor-default')}
         disabled
+        aria-label="正在压缩上下文"
       >
         <Loader2 className="size-4 animate-spin" />
       </Button>
@@ -290,13 +291,14 @@ export function ContextUsageBadge({
           size="icon"
           className={cn(
             inputToolbarButtonClass,
-            isWarning ? 'text-amber-600 dark:text-amber-400' : 'text-foreground/60 hover:text-foreground',
+            isWarning ? 'text-warning' : 'text-foreground/60 hover:text-foreground',
           )}
           onMouseEnter={() => {
             cancelClose()
             setOpen(true)
           }}
           onMouseLeave={scheduleClose}
+          aria-label="上下文用量"
         >
           <UsageRing ratio={ratio} isWarning={isWarning} />
         </Button>
@@ -369,7 +371,7 @@ export function ContextUsageBadge({
             size="sm"
             className={cn(
               'h-7 text-xs gap-1.5',
-              isWarning && 'bg-amber-500 hover:bg-amber-600 text-white',
+              isWarning && 'bg-warning hover:bg-warning/90 text-warning-foreground',
             )}
             onClick={handleCompactClick}
             disabled={isProcessing}

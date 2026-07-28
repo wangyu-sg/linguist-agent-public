@@ -56,6 +56,8 @@ export function createVoiceDictationWindow(): void {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
       partition: VOICE_DICTATION_PARTITION,
     },
   })

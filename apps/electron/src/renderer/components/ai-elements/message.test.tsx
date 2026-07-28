@@ -8,7 +8,7 @@ function renderMessage(markdown: string): string {
 
 describe('MessageResponse local file Markdown links', () => {
   test('renders the reported absolute path with a line suffix as a file chip', () => {
-    const href = '/Users/bigmouth/Workspace/Project/Proma/apps/electron/src/renderer/components/agent/ContextUsageBadge.tsx:247'
+    const href = '/Users/<user>/Workspace/Project/Proma/apps/electron/src/renderer/components/agent/ContextUsageBadge.tsx:247'
     const html = renderMessage(`[ContextUsageBadge.tsx](${href})`)
 
     expect(html).toContain('<button')

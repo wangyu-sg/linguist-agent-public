@@ -441,7 +441,7 @@ export function MigrationSettings(): React.ReactElement {
             </button>
 
             {exportResult && (
-              <div className={cn('flex items-center gap-1.5 text-sm', exportResult.success ? 'text-green-600' : 'text-red-500')}>
+              <div className={cn('flex items-center gap-1.5 text-sm', exportResult.success ? 'text-success' : 'text-destructive')}>
                 {exportResult.success ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
                 {exportResult.success
                   ? `已导出至 ${exportResult.filePath?.split('/').pop() ?? ''}`
@@ -451,7 +451,7 @@ export function MigrationSettings(): React.ReactElement {
           </div>
 
           {exportResult?.success && exportResult.warnings && exportResult.warnings.length > 0 && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200/70 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-soft/60 px-3 py-2 text-sm text-warning-foreground">
               <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
               <div className="min-w-0 space-y-1">
                 <p>导出已完成，但有 {exportResult.warnings.length} 个项目无法读取，已跳过。</p>

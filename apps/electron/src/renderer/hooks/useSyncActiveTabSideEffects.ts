@@ -57,6 +57,19 @@ export function useSyncActiveTabSideEffects(): SyncActiveTabSideEffects {
         return
       }
 
+      if (newActiveTab.type === 'linguist-project') {
+        setAppMode('linguist')
+        setCurrentConversationId(null)
+        setCurrentAgentSessionId(null)
+        return
+      }
+
+      if (newActiveTab.type === 'tutorial') {
+        setCurrentConversationId(null)
+        setCurrentAgentSessionId(null)
+        return
+      }
+
       // Agent / 会话预览
       setAppMode('agent')
       setCurrentAgentSessionId(newActiveTab.sessionId)

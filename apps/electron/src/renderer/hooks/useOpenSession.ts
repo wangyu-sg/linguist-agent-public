@@ -17,6 +17,7 @@ import {
 } from '@/atoms/tab-atoms'
 import { previewFileMapAtom } from '@/atoms/preview-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
+import type { PrimaryAppMode } from '@/atoms/app-mode'
 import { activeViewAtom } from '@/atoms/active-view'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { currentConversationIdAtom } from '@/atoms/chat-atoms'
@@ -27,7 +28,8 @@ import {
   unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
 
-type OpenSessionFn = (type: TabType, sessionId: string, title: string) => void
+type OpenSessionTarget = Exclude<TabType, 'linguist-project'> | PrimaryAppMode
+type OpenSessionFn = (type: OpenSessionTarget, sessionId: string, title: string) => void
 
 export function useOpenSession(): OpenSessionFn {
   const store = useStore()
@@ -43,7 +45,15 @@ export function useOpenSession(): OpenSessionFn {
   const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
 
   return React.useCallback(
-    (type: TabType, sessionId: string, title: string): void => {
+    (type: OpenSessionTarget, sessionId: string, title: string): void => {
+      // Project Tab 尚未落地；切换主模式即可，不能伪造 Agent sessionId。
+      if (type === 'linguist') {
+        setAppMode('linguist')
+        setCurrentConversationId(null)
+        setCurrentAgentSessionId(null)
+        return
+      }
+
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
       const restore = type === 'agent'
         ? buildOpenTabRestore(
@@ -82,7 +92,8 @@ export function useOpenSession(): OpenSessionFn {
           }).catch(console.error)
         }
       } else {
-        setAppMode('scratch')
+        // Scratch/教程等辅助 Tab 不再是主模式，维持在 Agent 上下文中。
+        setAppMode('agent')
         setCurrentConversationId(null)
         setCurrentAgentSessionId(null)
       }

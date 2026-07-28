@@ -23,6 +23,7 @@ import { ScrollMinimap } from '@/components/ai-elements/scroll-minimap'
 import type { MinimapItem } from '@/components/ai-elements/scroll-minimap'
 import { StickyUserMessage } from '@/components/ai-elements/sticky-user-message'
 import { useSmoothStream } from '@proma/ui'
+import { useStickToBottomContext } from 'use-stick-to-bottom'
 import { formatMessageTime } from '@/components/chat/ChatMessageItem'
 import { getModelLogo, resolveModelDisplayName, resolveModelProvider } from '@/lib/model-logo'
 import { userProfileAtom } from '@/atoms/user-profile'
@@ -32,8 +33,16 @@ import { ScrollPositionManager } from '@/hooks/useScrollPositionMemory'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { groupIntoTurns, MessageGroupRenderer, getGroupId, getGroupPreview, extractUserText, parseAttachedFiles as sdkParseAttachedFiles, isImageFile as sdkIsImageFile, buildTaskProgressDataForTurn, type MessageGroup } from './SDKMessageRenderer'
+import { groupIntoTurns, MessageGroupRenderer, getGroupId, getGroupPreview, extractUserText, parseAttachedFiles as sdkParseAttachedFiles, buildTaskProgressDataForTurn, type MessageGroup } from './SDKMessageRenderer'
 import { buildLiveGroupSet } from './live-group-set'
+import { buildModelSwitchDividers } from './turn-divider-utils'
+import {
+  createInitialAgentMessageWindow,
+  createTargetAgentMessageWindow,
+  expandAgentMessageWindow,
+  syncAgentMessageWindow,
+  type AgentMessageWindow,
+} from './agent-message-window'
 import { ContentBlock } from './ContentBlock'
 import { parseThinkTagsFromText } from './thinking-tag-parser'
 import { AgentHistorySelectionLayer } from './AgentHistorySelectionLayer'
@@ -168,6 +177,8 @@ export function getContextCompactionProgress(
 /** AgentMessages 属性接口 */
 interface AgentMessagesProps {
   sessionId: string
+  /** Rail 表示层只收紧间距，不改变消息行为。 */
+  compact?: boolean
   /** 用户在前端选择的模型 ID（用于显示渠道配置的 Model Name） */
   sessionModelId?: string
   /** 消息是否已完成首次加载 */
@@ -189,11 +200,100 @@ interface AgentMessagesProps {
   onFork?: (upToMessageUuid: string) => void
   onRewind?: (assistantMessageUuid: string) => void
   onCompact?: () => void
+  /** 渲染在消息流末尾的交互横幅（权限 / AskUser / ExitPlanMode），随消息流滚动 */
+  inlineBanner?: React.ReactNode
 }
 
-/** 空状态引导 — 使用 WelcomeEmptyState */
-function EmptyState(): React.ReactElement {
+/** Full 保留全局欢迎页；Rail 使用项目内空态，避免模式切换泄漏。 */
+function EmptyState({ compact }: { compact: boolean }): React.ReactElement {
+  if (compact) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-5 text-center">
+        <Bot className="size-5 text-muted-foreground/60" aria-hidden="true" />
+        <p className="text-sm font-medium text-foreground/80">选择片段或输入任务</p>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Agent 将基于当前项目上下文协助处理。
+        </p>
+      </div>
+    )
+  }
   return <WelcomeEmptyState />
+}
+
+/** 交互横幅出现在消息流末尾时，滚动到底保证可见（复用 StickToBottom 上下文） */
+function InlineBannerScrollIntoView(): null {
+  const { scrollToBottom } = useStickToBottomContext()
+  React.useEffect(() => {
+    scrollToBottom()
+  }, [scrollToBottom])
+  return null
+}
+
+interface AgentMessageWindowControllerProps {
+  hasOlder: boolean
+  onLoadOlder: () => void
+}
+
+/** 在消息窗口边界按需补载，并在顶部补载后保持用户当前锚点。 */
+function AgentMessageWindowController({
+  hasOlder,
+  onLoadOlder,
+}: AgentMessageWindowControllerProps): null {
+  const { scrollRef, stopScroll, state: stickyState } = useStickToBottomContext()
+  const loadingRef = React.useRef(false)
+
+  React.useEffect(() => {
+    const element = scrollRef.current
+    if (!element) return
+    element.dataset.testid = 'agent-message-scroll'
+
+    const loadOlder = (): void => {
+      if (loadingRef.current) return
+      loadingRef.current = true
+      const previousHeight = element.scrollHeight
+      const previousTop = element.scrollTop
+      const anchor = element.querySelector<HTMLElement>('[data-message-id]')
+      const anchorId = anchor?.getAttribute('data-message-id')
+      const anchorTop = anchor?.getBoundingClientRect().top
+
+      stopScroll()
+      stickyState.animation = undefined
+      stickyState.velocity = 0
+      stickyState.accumulated = 0
+      onLoadOlder()
+
+      const restoreAnchor = (): void => {
+        const currentAnchor = anchorId
+          ? Array.from(element.querySelectorAll<HTMLElement>('[data-message-id]'))
+            .find((node) => node.getAttribute('data-message-id') === anchorId)
+          : undefined
+        if (currentAnchor && anchorTop !== undefined) {
+          element.scrollTop += currentAnchor.getBoundingClientRect().top - anchorTop
+        } else {
+          element.scrollTop = previousTop + element.scrollHeight - previousHeight
+        }
+      }
+      requestAnimationFrame(() => {
+        restoreAnchor()
+        requestAnimationFrame(() => {
+          restoreAnchor()
+          loadingRef.current = false
+        })
+      })
+    }
+
+    const handleScroll = (): void => {
+      if (hasOlder && element.scrollTop < 100) loadOlder()
+    }
+
+    element.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      element.removeEventListener('scroll', handleScroll)
+      delete element.dataset.testid
+    }
+  }, [hasOlder, onLoadOlder, scrollRef, stickyState, stopScroll])
+
+  return null
 }
 
 function AssistantLogo({ model }: { model?: string }): React.ReactElement {
@@ -249,7 +349,7 @@ function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['
   }, [retrying.failed, retrying.history])
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 p-3 mb-3">
+    <div className="rounded-lg border border-warning/40 bg-warning-soft/60 p-3 mb-3">
       {/* 头部：简洁状态 */}
       <button
         type="button"
@@ -257,11 +357,11 @@ function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['
         onClick={() => setExpanded(!expanded)}
       >
         {retrying.failed ? (
-          <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <AlertTriangle className="size-4 text-warning shrink-0" />
         ) : (
-          <RotateCw className="size-4 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
+          <RotateCw className="size-4 animate-spin text-warning shrink-0" />
         )}
-        <span className="text-sm text-amber-900 dark:text-amber-100 flex-1">
+        <span className="text-sm text-warning-foreground flex-1">
           {retrying.failed
             ? `重试失败 (${retrying.currentAttempt}/${retrying.maxAttempts})`
             : countdown > 0
@@ -270,16 +370,16 @@ function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['
           {retrying.history.length > 0 && ` · ${retrying.history[retrying.history.length - 1]?.reason}`}
         </span>
         {expanded ? (
-          <ChevronDown className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <ChevronDown className="size-4 text-warning shrink-0" />
         ) : (
-          <ChevronRight className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <ChevronRight className="size-4 text-warning shrink-0" />
         )}
       </button>
 
       {/* 展开内容：重试历史 */}
       {expanded && retrying.history.length > 0 && (
-        <div className="mt-3 space-y-3 border-t border-amber-200 dark:border-amber-800 pt-3">
-          <div className="text-xs font-medium text-amber-900 dark:text-amber-100">
+        <div className="mt-3 space-y-3 border-t border-warning/30 pt-3">
+          <div className="text-xs font-medium text-warning-foreground">
             尝试历史：
           </div>
           {retrying.history.map((attempt, index) => (
@@ -291,7 +391,7 @@ function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['
             />
           ))}
           {!retrying.failed && (
-            <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 pl-6">
+            <div className="flex items-center gap-2 text-xs text-warning-foreground/80 pl-6">
               {countdown > 0 ? (
                 <>
                   <RotateCw className="size-3 animate-spin" />
@@ -336,16 +436,16 @@ function RetryAttemptItem({
       <div className="flex items-start gap-2">
         <span className="text-destructive shrink-0">❌</span>
         <div className="flex-1 min-w-0 space-y-1">
-          <div className="text-xs text-amber-900 dark:text-amber-100">
+          <div className="text-xs text-warning-foreground">
             第 {attempt.attempt} 次 ({time}) - {attempt.reason}
           </div>
-          <div className="text-xs text-amber-700 dark:text-amber-300 font-mono break-words">
+          <div className="text-xs text-warning-foreground/80 font-mono break-words">
             {attempt.errorMessage}
           </div>
 
           {/* 环境信息 */}
           {attempt.environment && (
-            <div className="text-[11px] text-amber-600 dark:text-amber-400 space-y-0.5">
+            <div className="text-[11px] text-warning space-y-0.5">
               <div>运行时: {attempt.environment.runtime}</div>
               <div>平台: {attempt.environment.platform}</div>
               <div>模型: {attempt.environment.model}</div>
@@ -358,7 +458,7 @@ function RetryAttemptItem({
             <div className="mt-2">
               <button
                 type="button"
-                className="text-[11px] text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
+                className="text-[11px] text-warning-foreground/80 hover:underline flex items-center gap-1"
                 onClick={() => setShowStderr(!showStderr)}
               >
                 {showStderr ? (
@@ -369,7 +469,7 @@ function RetryAttemptItem({
                 显示 stderr 输出
               </button>
               {showStderr && (
-                <pre className="mt-1 text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
+                <pre className="mt-1 text-[10px] text-warning-foreground/90 bg-warning/10 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
                   {attempt.stderr}
                 </pre>
               )}
@@ -381,7 +481,7 @@ function RetryAttemptItem({
             <div className="mt-2">
               <button
                 type="button"
-                className="text-[11px] text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
+                className="text-[11px] text-warning-foreground/80 hover:underline flex items-center gap-1"
                 onClick={() => setShowStack(!showStack)}
               >
                 {showStack ? (
@@ -392,7 +492,7 @@ function RetryAttemptItem({
                 显示堆栈跟踪
               </button>
               {showStack && (
-                <pre className="mt-1 text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
+                <pre className="mt-1 text-[10px] text-warning-foreground/90 bg-warning/10 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
                   {attempt.stack}
                 </pre>
               )}
@@ -473,11 +573,30 @@ function AgentRunningIndicator({ startedAt }: { startedAt?: number }): React.Rea
   )
 }
 
-export function AgentMessages({ sessionId, sessionModelId, messagesLoaded, persistedSDKMessages, streaming, streamState, liveMessages, sessionPath, attachedDirs, stoppedByUser, onRetry, onRetryInNewSession, onFork, onRewind, onCompact }: AgentMessagesProps): React.ReactElement {
+export function AgentMessages({
+  sessionId,
+  compact = false,
+  sessionModelId,
+  messagesLoaded,
+  persistedSDKMessages,
+  streaming,
+  streamState,
+  liveMessages,
+  sessionPath,
+  attachedDirs,
+  stoppedByUser,
+  onRetry,
+  onRetryInNewSession,
+  onFork,
+  onRewind,
+  onCompact,
+  inlineBanner,
+}: AgentMessagesProps): React.ReactElement {
   const userProfile = useAtomValue(userProfileAtom)
   const setMinimapCache = useSetAtom(tabMinimapCacheAtom)
   const channels = useAtomValue(channelsAtom)
   const historySelectionRootRef = React.useRef<HTMLDivElement>(null)
+  const stickyUserMessageHostRef = React.useRef<HTMLDivElement>(null)
   /** 淡入控制：切换会话时先隐藏，等布局完成后再显示。 */
   const [ready, setReady] = React.useState(false)
   // 空会话无需淡入过渡（无消息则无滚动位置问题）
@@ -640,6 +759,61 @@ export function AgentMessages({ sessionId, sessionModelId, messagesLoaded, persi
     [allGroups],
   )
 
+  interface SessionMessageWindow extends AgentMessageWindow {
+    sessionId: string
+  }
+
+  const [messageWindowState, setMessageWindowState] = React.useState<SessionMessageWindow>(() => ({
+    sessionId,
+    ...createInitialAgentMessageWindow(visibleGroups.length),
+  }))
+  const messageWindow = React.useMemo<SessionMessageWindow>(() => {
+    if (messageWindowState.sessionId !== sessionId || streaming) {
+      return { sessionId, ...createInitialAgentMessageWindow(visibleGroups.length) }
+    }
+    return {
+      sessionId,
+      ...syncAgentMessageWindow(messageWindowState, visibleGroups.length),
+    }
+  }, [messageWindowState, sessionId, streaming, visibleGroups.length])
+
+  React.useEffect(() => {
+    setMessageWindowState((current) => (
+      current.sessionId === messageWindow.sessionId
+      && current.start === messageWindow.start
+      && current.end === messageWindow.end
+      && current.total === messageWindow.total
+        ? current
+        : messageWindow
+    ))
+  }, [messageWindow])
+
+  const renderedGroups = React.useMemo(
+    () => visibleGroups.slice(messageWindow.start, messageWindow.end),
+    [messageWindow.end, messageWindow.start, visibleGroups],
+  )
+
+  const expandMessageWindow = React.useCallback((direction: 'older' | 'newer'): void => {
+    setMessageWindowState({
+      sessionId,
+      ...expandAgentMessageWindow(messageWindow, direction),
+    })
+  }, [messageWindow, sessionId])
+  const loadOlderMessages = React.useCallback(
+    () => expandMessageWindow('older'),
+    [expandMessageWindow],
+  )
+
+  const requestMessage = React.useCallback((id: string): boolean => {
+    const index = visibleGroups.findIndex((group) => getGroupId(group) === id)
+    if (index < 0 || (index >= messageWindow.start && index < messageWindow.end)) return false
+    setMessageWindowState({
+      sessionId,
+      ...createTargetAgentMessageWindow(index, visibleGroups.length),
+    })
+    return true
+  }, [messageWindow.end, messageWindow.start, sessionId, visibleGroups])
+
   // 标记哪些 group 属于实时流式消息（用于 isStreaming / onFork 差异化渲染）
   const liveGroupSet = React.useMemo(() => {
     return buildLiveGroupSet({
@@ -648,6 +822,9 @@ export function AgentMessages({ sessionId, sessionModelId, messagesLoaded, persi
       streaming,
     })
   }, [allGroups, liveMessages, streaming])
+
+  // 模型切换 divider：相邻 assistant turn 模型变化时，在后一个 turn 前插入提示（纯派生，PB-101）
+  const modelSwitchDividers = React.useMemo(() => buildModelSwitchDividers(visibleGroups), [visibleGroups])
 
   // 迷你地图数据 — 直接使用统一的 allGroups（无需去重）
   const minimapItems: MinimapItem[] = React.useMemo(
@@ -684,7 +861,7 @@ export function AgentMessages({ sessionId, sessionModelId, messagesLoaded, persi
         return {
           id: getGroupId(g),
           text,
-          attachments: files.map((f) => ({ filename: f.filename, isImage: sdkIsImageFile(f.filename) })),
+          attachments: files.map((file) => ({ filename: file.filename })),
         }
       })
   }, [visibleGroups])
@@ -700,15 +877,29 @@ export function AgentMessages({ sessionId, sessionModelId, messagesLoaded, persi
   return (
     <BasePathsProvider basePaths={attachedDirs}>
     <div ref={historySelectionRootRef} className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={stickyUserMessageHostRef} className="shrink-0" />
       <Conversation resize={ready && !transitioning ? 'smooth' : 'instant'} className={ready ? (skipFadeIn ? 'opacity-100' : 'opacity-100 transition-opacity duration-200') : 'opacity-0'}>
         <ScrollPositionManager id={sessionId} ready={ready} />
-        <ConversationContent>
+        {ready && (
+          <AgentMessageWindowController
+            hasOlder={messageWindow.start > 0}
+            onLoadOlder={loadOlderMessages}
+          />
+        )}
+        <ConversationContent
+          className={compact ? 'px-3 py-3' : undefined}
+          data-testid="agent-message-window"
+          data-window-start={messageWindow.start}
+          data-window-end={messageWindow.end}
+          data-window-total={messageWindow.total}
+        >
           {!hasContent && !streaming ? (
-            <EmptyState />
+            <EmptyState compact={compact} />
           ) : (
             <>
               {/* 统一消息渲染（持久化 + 实时合并为一个列表，确保 system 消息位置正确） */}
-              {visibleGroups.map((group, idx) => {
+              {renderedGroups.map((group, renderedIndex) => {
+                const idx = messageWindow.start + renderedIndex
                 const isLive = liveGroupSet.has(group)
                 const isErrorGroup = group.type === 'assistant-turn'
                   && group.assistantMessages.some((m) => !!m.error)
@@ -717,23 +908,44 @@ export function AgentMessages({ sessionId, sessionModelId, messagesLoaded, persi
                 const isLastAssistantTurn = !streaming && stoppedByUser
                   && group.type === 'assistant-turn'
                   && idx === visibleGroups.findLastIndex((g) => g.type === 'assistant-turn')
+                const modelSwitch = modelSwitchDividers.get(idx)
                 return (
-                  <MessageGroupRenderer
-                    key={getGroupId(group)}
-                    group={group}
-                    allMessages={allSDKMessages}
-                    basePath={sessionPath || undefined}
-                    onFork={shouldDisableActions ? undefined : onFork}
-                    onRewind={shouldDisableActions ? undefined : onRewind}
-                    onRetry={shouldDisableActions ? undefined : onRetry}
-                    onRetryInNewSession={shouldDisableActions ? undefined : onRetryInNewSession}
-                    onCompact={shouldDisableActions ? undefined : onCompact}
-                    isStreaming={isLive || undefined}
-                    stoppedByUser={isLastAssistantTurn || undefined}
-                    sessionModelId={sessionModelId}
-                  />
+                  <React.Fragment key={getGroupId(group)}>
+                    {modelSwitch && (
+                      <div className="flex select-none items-center gap-2.5 py-1 pl-[46px]" aria-hidden="true">
+                        <span className="h-px flex-1 bg-border/60" />
+                        <span className="text-xs text-foreground-faint">
+                          模型已切换：{resolveModelDisplayName(modelSwitch.prevModel, channels)} → {resolveModelDisplayName(modelSwitch.nextModel, channels)}
+                        </span>
+                        <span className="h-px flex-1 bg-border/60" />
+                      </div>
+                    )}
+                    <MessageGroupRenderer
+                      group={group}
+                      allMessages={allSDKMessages}
+                      basePath={sessionPath || undefined}
+                      onFork={shouldDisableActions ? undefined : onFork}
+                      onRewind={shouldDisableActions ? undefined : onRewind}
+                      onRetry={shouldDisableActions ? undefined : onRetry}
+                      onRetryInNewSession={shouldDisableActions ? undefined : onRetryInNewSession}
+                      onCompact={shouldDisableActions ? undefined : onCompact}
+                      isStreaming={isLive || undefined}
+                      stoppedByUser={isLastAssistantTurn || undefined}
+                      sessionModelId={sessionModelId}
+                    />
+                  </React.Fragment>
                 )
               })}
+
+              {messageWindow.end < messageWindow.total && (
+                <button
+                  type="button"
+                  className="mx-auto my-2 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  onClick={() => expandMessageWindow('newer')}
+                >
+                  加载较新消息
+                </button>
+              )}
 
               {/* 有实时助手内容时：显示运行指示器或占位（防止 streaming 结束到 Actions Bar 出现之间的高度跳动） */}
               {/* 不使用 mt：ConversationContent 的 gap-1(4px) 已提供间距，
@@ -783,16 +995,29 @@ export function AgentMessages({ sessionId, sessionModelId, messagesLoaded, persi
 
             </>
           )}
+
+          {/* 交互横幅（权限 / AskUser / ExitPlanMode）：内联在消息流末尾 */}
+          {inlineBanner && (
+            <div className="pt-2">
+              <InlineBannerScrollIntoView />
+              {inlineBanner}
+            </div>
+          )}
         </ConversationContent>
-        <ScrollMinimap items={minimapItems} />
+        <ScrollMinimap items={minimapItems} onRequestItem={requestMessage} />
         <TaskProgressOverlay
           key={sessionId}
           activities={liveTaskActivities}
           streaming={streaming}
           contextCompaction={contextCompaction}
+          onRetryCompaction={onCompact}
         />
         {allUserMessagesData.length > 0 && (
-          <StickyUserMessage userMessages={allUserMessagesData} />
+          <StickyUserMessage
+            userMessages={allUserMessagesData}
+            compact={compact}
+            hostRef={stickyUserMessageHostRef}
+          />
         )}
       </Conversation>
       <AgentHistorySelectionLayer sessionId={sessionId} rootRef={historySelectionRootRef} />

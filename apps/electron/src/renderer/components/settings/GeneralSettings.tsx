@@ -46,6 +46,7 @@ import {
   updateStickyUserMessageEnabled,
 } from '@/atoms/ui-preferences'
 import { cn } from '@/lib/utils'
+import { PROMA_PROMO_VISIBLE } from '@/lib/feature-flags'
 import { Button } from '../ui/button'
 import type { NotificationSoundId, NotificationSoundType, NotificationSoundSettings } from '@/types/settings'
 
@@ -357,14 +358,18 @@ export function GeneralSettings(): React.ReactElement {
               updateRichTextRenderingEnabled(checked)
             }}
           />
-          <SettingsToggle
-            label="Git/PR 标识"
-            description="Agent 代你提交 commit 或创建 PR 时，附加 Made-with: Proma 与官网链接，便于推广；可随时关闭"
-            checked={gitAttributionEnabled}
-            onCheckedChange={(checked) => {
-              void handleGitAttributionChange(checked)
-            }}
-          />
+          {/* D-007（PB-012）：v1 隐藏 Git/PR 推广标识开关（仅隐藏 UI，主进程行为不变）；
+              恢复见 lib/feature-flags.ts */}
+          {PROMA_PROMO_VISIBLE && (
+            <SettingsToggle
+              label="Git/PR 标识"
+              description="Agent 代你提交 commit 或创建 PR 时，附加 Made-with: Proma 与官网链接，便于推广；可随时关闭"
+              checked={gitAttributionEnabled}
+              onCheckedChange={(checked) => {
+                void handleGitAttributionChange(checked)
+              }}
+            />
+          )}
         </SettingsCard>
       </SettingsSection>
     </div>

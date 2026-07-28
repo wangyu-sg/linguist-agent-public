@@ -53,3 +53,9 @@ export * from './wechat'
 
 // 定时任务（Automation）相关类型
 export * from './automation'
+
+// Linguist CAT 项目 IPC 契约（PB-031）
+export * from './linguist'
+
+// Linguist Agent 每 Turn 结构化 UI 上下文（LF-060）
+export * from './linguist-turn-context'

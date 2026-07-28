@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
+import type { SDKUserMessage } from '@proma/shared'
+import { electronMock, resetElectronMock } from './test/electron-mock'
 
 type AgentSessionManager = typeof import('./agent-session-manager')
 
@@ -11,26 +13,7 @@ const originalHome = process.env.HOME
 const originalPromaDev = process.env.PROMA_DEV
 const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
 
-mock.module('electron', () => ({
-  app: {
-    isPackaged: true,
-    getPath: () => join(process.env.HOME ?? tempHome, 'Library', 'Application Support'),
-  },
-  BrowserWindow: class {},
-  clipboard: {},
-  dialog: {},
-  nativeImage: { createFromPath: () => ({}) },
-  nativeTheme: {},
-  powerMonitor: {},
-  powerSaveBlocker: {},
-  screen: {},
-  shell: {},
-  safeStorage: {
-    isEncryptionAvailable: () => false,
-    encryptString: (value: string) => Buffer.from(value),
-    decryptString: (value: Buffer) => value.toString('utf-8'),
-  },
-}))
+mock.module('electron', () => electronMock)
 
 mock.module('node:os', () => ({
   ...os,
@@ -42,13 +25,13 @@ function jsonl(rows: string[]): string {
 }
 
 function writeAgentSessionJsonl(sessionId: string, rows: string[]): void {
-  const dir = join(tempHome, '.proma', 'agent-sessions')
+  const dir = join(tempHome, '.linguist-agent', 'agent-sessions')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, `${sessionId}.jsonl`), jsonl(rows), 'utf-8')
 }
 
 function writeSdkSessionJsonl(sdkSessionId: string, rows: string[]): void {
-  const dir = join(tempHome, '.proma', 'sdk-config', 'projects', 'test-project')
+  const dir = join(tempHome, '.linguist-agent', 'sdk-config', 'projects', 'test-project')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, `${sdkSessionId}.jsonl`), jsonl(rows), 'utf-8')
 }
@@ -60,7 +43,7 @@ function writeAgentSessionsIndex(sessions: Array<{
   createdAt: number
   updatedAt: number
 }>): void {
-  const dir = join(tempHome, '.proma')
+  const dir = join(tempHome, '.linguist-agent')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'agent-sessions.json'), JSON.stringify({ version: 1, sessions }), 'utf-8')
 }
@@ -80,6 +63,7 @@ beforeAll(async () => {
   process.env.HOME = tempHome
   process.env.PROMA_DEV = '0'
   delete process.env.CLAUDE_CONFIG_DIR
+  resetElectronMock()
   manager = await import('./agent-session-manager')
 })
 
@@ -103,6 +87,32 @@ afterAll(() => {
 })
 
 describe('Agent 会话 JSONL 读取', () => {
+  test('Given Linguist Turn 已发送 When 后续 Context 变化并重读历史 Then 原 Turn 保留自己的 snapshot', () => {
+    const message: SDKUserMessage = {
+      type: 'user',
+      message: { content: [{ type: 'text', text: '翻译当前片段' }] },
+      parent_tool_use_id: null,
+      linguistContext: {
+        schemaVersion: 1,
+        projectId: 'prj-0123456789abcdef',
+        selectedSegmentIds: ['seg-0123456789abcdef'],
+        capturedAt: '2026-07-27T08:00:00.000Z',
+        uiRevision: 1,
+      },
+    }
+    manager.appendSDKMessages('session-with-context', [message])
+
+    const stored = manager.getAgentSessionSDKMessages('session-with-context')[0]
+
+    expect(stored).toMatchObject({
+      linguistContext: {
+        projectId: 'prj-0123456789abcdef',
+        selectedSegmentIds: ['seg-0123456789abcdef'],
+        uiRevision: 1,
+      },
+    })
+  })
+
   test('Given 会话 JSONL 混入损坏行 When 读取 SDKMessage Then 跳过坏行并保留其它消息', () => {
     writeAgentSessionJsonl('session-with-bad-line', [
       JSON.stringify({ type: 'user', message: { content: [{ type: 'text', text: '你好' }] }, parent_tool_use_id: null }),
@@ -152,8 +162,8 @@ describe('Agent 会话 JSONL 读取', () => {
 
 describe('Agent 会话 runtime 元数据', () => {
   test('Given 已保存 OpenAI medium 默认值 When 新建 Pi 或 Claude 会话 Then 默认并持久化 medium', () => {
-    const settingsPath = join(tempHome, '.proma', 'settings.json')
-    mkdirSync(join(tempHome, '.proma'), { recursive: true })
+    const settingsPath = join(tempHome, '.linguist-agent', 'settings.json')
+    mkdirSync(join(tempHome, '.linguist-agent'), { recursive: true })
     writeFileSync(settingsPath, JSON.stringify({
       agentThinking: { type: 'adaptive' },
       agentEffort: 'max',
@@ -178,10 +188,10 @@ describe('Agent 会话 runtime 元数据', () => {
   })
 
   test('Given 新安装用户保存关闭思考 When 连续新建会话 Then 不被旧版迁移改回 high', () => {
-    const settingsPath = join(tempHome, '.proma', 'settings.json')
-    const indexPath = join(tempHome, '.proma', 'agent-sessions.json')
+    const settingsPath = join(tempHome, '.linguist-agent', 'settings.json')
+    const indexPath = join(tempHome, '.linguist-agent', 'agent-sessions.json')
     const indexBackupPath = `${indexPath}.bak`
-    mkdirSync(join(tempHome, '.proma'), { recursive: true })
+    mkdirSync(join(tempHome, '.linguist-agent'), { recursive: true })
     rmSync(indexPath, { force: true })
     rmSync(indexBackupPath, { force: true })
     writeFileSync(settingsPath, JSON.stringify({

@@ -2,7 +2,7 @@
  * AppearanceSettings - 外观设置页
  *
  * 特殊风格选择 + 主题模式切换（浅色/深色/跟随系统/特殊风格）。
- * 通过 Jotai atom 管理状态，持久化到 ~/.proma/settings.json。
+ * 通过 Jotai atom 管理状态，持久化到 ~/.linguist-agent/settings.json。
  */
 
 import * as React from 'react'
@@ -31,6 +31,7 @@ import {
   updateMarkdownFontSize,
 } from '@/atoms/markdown-font-size'
 import { previewModePreferenceAtom, type PreviewModePreference } from '@/atoms/preview-atoms'
+import { PROMA_PROMO_VISIBLE } from '@/lib/feature-flags'
 import { cn } from '@/lib/utils'
 import { detectIsWindows } from '@/lib/platform'
 import type { InterfaceVariant, ThemeMode, ThemeStyle, MarkdownFontSize } from '../../../types'
@@ -179,6 +180,17 @@ const ICON_VARIANTS: readonly IconVariant[] = [
   { id: 'futuristic', name: '未来质感', src: promaFuturisticLogo, previewBg: 'bg-[#4a4a4a]' },
 ] as const
 
+/**
+ * 图标选择器实际展示的变体列表（PB-113）。
+ *
+ * 13 个 Proma 品牌 logo 变体与 Proma 商业推广面同族，由 PROMA_PROMO_VISIBLE
+ * 门控：false 时选择器只剩 default（LA 图标）。资产 png 保留不删，
+ * 恢复可见只需把 PROMA_PROMO_VISIBLE 改回 true。
+ */
+const VISIBLE_ICON_VARIANTS: readonly IconVariant[] = PROMA_PROMO_VISIBLE
+  ? ICON_VARIANTS
+  : ICON_VARIANTS.filter((variant) => variant.id === 'default')
+
 /** 根据平台返回缩放快捷键提示 */
 const isMac = navigator.userAgent.includes('Mac')
 const ZOOM_HINT = isMac
@@ -306,7 +318,13 @@ function AppIconPicker(): React.ReactElement {
   // 初始化时读取当前设置
   React.useEffect(() => {
     window.electronAPI.getSettings().then((settings) => {
-      setActiveIcon(settings.appIconVariant ?? 'default')
+      const stored = settings.appIconVariant ?? 'default'
+      // PB-113 兜底：settings 里已存的变体不在当前可见列表内（如 Proma 变体
+      // 被 PROMA_PROMO_VISIBLE 隐藏）时，选择器高亮回落 default；不改写用户
+      // 存储值，主进程解析图标路径时同样兜底（resolveAppIconPath）。
+      setActiveIcon(
+        VISIBLE_ICON_VARIANTS.some((variant) => variant.id === stored) ? stored : 'default',
+      )
     })
   }, [])
 
@@ -342,7 +360,7 @@ function AppIconPicker(): React.ReactElement {
       <SettingsCard divided={false}>
         <div className="px-4 py-3">
           <div className="grid grid-cols-7 gap-3">
-            {ICON_VARIANTS.map((variant) => (
+            {VISIBLE_ICON_VARIANTS.map((variant) => (
               <IconCard
                 key={variant.id}
                 variant={variant}

@@ -1,0 +1,91 @@
+import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import ts from 'typescript'
+
+const TARGETS = [
+  resolve(import.meta.dir, 'LeftSidebar.tsx'),
+  resolve(import.meta.dir, '../tabs/TabBarItem.tsx'),
+  resolve(import.meta.dir, '../../features/linguist/projects/ProjectCard.tsx'),
+]
+
+function staticRole(node: ts.JsxOpeningLikeElement): string | undefined {
+  const role = node.attributes.properties.find(
+    (property): property is ts.JsxAttribute =>
+      ts.isJsxAttribute(property)
+      && ts.isIdentifier(property.name)
+      && property.name.text === 'role',
+  )
+  return role?.initializer && ts.isStringLiteral(role.initializer)
+    ? role.initializer.text
+    : undefined
+}
+
+function isInteractive(node: ts.JsxOpeningLikeElement): boolean {
+  const tag = ts.isIdentifier(node.tagName) ? node.tagName.text : ''
+  return tag === 'button' || staticRole(node) === 'button' || staticRole(node) === 'tab'
+}
+
+function nestedInteractiveLines(filePath: string): number[] {
+  const source = readFileSync(filePath, 'utf8')
+  const file = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const lines: number[] = []
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxElement(node) && isInteractive(node.openingElement)) {
+      let parent = node.parent
+      while (parent) {
+        if (ts.isJsxElement(parent) && isInteractive(parent.openingElement)) {
+          lines.push(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1)
+          break
+        }
+        parent = parent.parent
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(file)
+  return lines
+}
+
+describe('结构性无障碍契约', () => {
+  test('given 主体与行内动作共存 when 编译 TSX then 不产生 nested-interactive', () => {
+    for (const target of TARGETS) {
+      expect(nestedInteractiveLines(target)).toEqual([])
+    }
+  })
+
+  test('given 侧边栏图标动作 when 读取源码 then 搜索、折叠和会话操作都有名称', () => {
+    const source = readFileSync(TARGETS[0]!, 'utf8')
+    expect(source).toContain('aria-label="搜索会话"')
+    expect(source).toContain('aria-label="收起侧边栏"')
+    expect(source).toContain("aria-label={pinned ? '取消置顶' : '置顶'}")
+    expect(source).toContain('aria-label="更多会话操作"')
+    expect(source).toContain('tabular-nums text-foreground/65')
+  })
+
+  test('given Chat 标题进入编辑态 when 使用辅助技术 then 输入框有可访问名称', () => {
+    const source = readFileSync(resolve(import.meta.dir, '../chat/ChatHeader.tsx'), 'utf8')
+    expect(source).toContain('aria-label="对话标题"')
+  })
+
+  test('given 模型选择器打开 when 使用辅助技术搜索 then 搜索框有可访问名称', () => {
+    const source = readFileSync(resolve(import.meta.dir, '../chat/ModelSelector.tsx'), 'utf8')
+    expect(source).toContain('aria-label="搜索模型"')
+  })
+
+  test('given Chat 工具列表打开 when 使用辅助技术切换工具 then 每个开关使用工具名称', () => {
+    const source = readFileSync(resolve(import.meta.dir, '../chat/ToolSelectorPopover.tsx'), 'utf8')
+    expect(source).toContain('aria-label={tool.meta.name}')
+    expect(source).toContain('aria-label="工具面板"')
+  })
+
+  test('given 系统提示词菜单打开 when 仅使用键盘 then 所有动作都是菜单项', () => {
+    const source = readFileSync(resolve(import.meta.dir, '../chat/SystemPromptSelector.tsx'), 'utf8')
+    expect(source.match(/<DropdownMenuItem/g)).toHaveLength(2)
+    expect(source).not.toContain('onClick=')
+    expect(source).toContain('<DropdownMenu modal={false}')
+    expect(source).toContain('text-xs text-foreground/70 shrink-0')
+  })
+})

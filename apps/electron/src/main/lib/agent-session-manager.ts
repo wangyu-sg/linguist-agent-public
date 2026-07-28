@@ -2,8 +2,8 @@
  * Agent 会话管理器
  *
  * 负责 Agent 会话的 CRUD 操作和消息持久化。
- * - 会话索引：~/.proma/agent-sessions.json（轻量元数据）
- * - 消息存储：~/.proma/agent-sessions/{id}.jsonl（JSONL 格式，逐行追加）
+ * - 会话索引：~/.linguist-agent/agent-sessions.json（轻量元数据）
+ * - 消息存储：~/.linguist-agent/agent-sessions/{id}.jsonl（JSONL 格式，逐行追加）
  *
  * 照搬 conversation-manager.ts 的模式。
  */
@@ -216,6 +216,19 @@ export function getAgentSessionMeta(id: string): AgentSessionMeta | undefined {
 }
 
 /**
+ * Linguist 项目绑定（PB-034）：仅在项目内创建会话时写入，创建后冻结。
+ * updateAgentSessionMeta 刻意不接收这两个字段（类型白名单之外），
+ * 并在运行时强制保持原值（防御 any 断言绕过）。
+ * PB-082：评审会话在创建时附带 linguistSessionRole:'reviewer' 标记
+ * （缺省 = 普通助理会话，不写库），同样冻结。
+ */
+export interface AgentSessionLinguistBinding {
+  linguistProjectId: string
+  linguistProjectName: string
+  linguistSessionRole?: 'reviewer' | 'auditor'
+}
+
+/**
  * 创建新会话
  */
 export function createAgentSession(
@@ -224,6 +237,7 @@ export function createAgentSession(
   workspaceId?: string,
   modelId?: string,
   agentRuntime: AgentRuntime = 'pi',
+  linguistBinding?: AgentSessionLinguistBinding,
 ): AgentSessionMeta {
   const index = readIndex()
   const now = Date.now()
@@ -240,6 +254,7 @@ export function createAgentSession(
     agentRuntime,
     // 新会话继承已持久化的全局思考偏好，之后仍可按会话单独调整。
     openAIThinkingLevel: defaultThinkingLevel,
+    ...(linguistBinding ? { ...linguistBinding } : {}),
     createdAt: now,
     updatedAt: now,
   }
@@ -469,6 +484,12 @@ export function updateAgentSessionMeta(
   const updated: AgentSessionMeta = {
     ...existing,
     ...updates,
+    // Linguist 项目绑定在创建时冻结（PB-034 硬规则）：类型白名单刻意不含
+    // 这两个字段，这里再防御 any 断言绕过——永远保持创建时的值。
+    // PB-082 的 linguistSessionRole 角色标记同理冻结。
+    linguistProjectId: existing.linguistProjectId,
+    linguistProjectName: existing.linguistProjectName,
+    linguistSessionRole: existing.linguistSessionRole,
     ...(autoUnarchive ? { archived: false } : {}),
     updatedAt: isStarredOnly ? existing.updatedAt : Date.now(),
   }
@@ -477,6 +498,28 @@ export function updateAgentSessionMeta(
   writeIndex(index)
 
   console.log(`[Agent 会话] 已更新会话: ${updated.title} (${updated.id})`)
+  return updated
+}
+
+/**
+ * 永久解除 Linguist 项目绑定。常规元数据更新仍无法改写绑定；只有用户显式
+ * 触发的此入口会同时清除项目快照和 reviewer 角色。未知会话返回 null。
+ */
+export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta | null {
+  const index = readIndex()
+  const idx = index.sessions.findIndex((session) => session.id === id)
+  if (idx === -1) return null
+
+  const existing = index.sessions[idx]!
+  if (!existing.linguistProjectId) return existing
+
+  const updated: AgentSessionMeta = { ...existing, updatedAt: Date.now() }
+  delete updated.linguistProjectId
+  delete updated.linguistProjectName
+  delete updated.linguistSessionRole
+  index.sessions[idx] = updated
+  writeIndex(index)
+  console.log(`[Agent 会话] 已永久解除 Linguist 项目绑定: ${updated.id}`)
   return updated
 }
 
@@ -1280,7 +1323,7 @@ export function removeSDKErrorMessage(id: string, errorUuid: string): boolean {
 /**
  * 从 SDK session JSONL 中查找指定 assistant message 之后最近的 user message UUID
  *
- * SDK session JSONL（~/.proma/sdk-config/projects/...）中的消息都带有 uuid，
+ * SDK session JSONL（~/.linguist-agent/sdk-config/projects/...）中的消息都带有 uuid，
  * 但 Proma 自己构造的 user message 没有 uuid。此函数直接读取 SDK 的 JSONL
  * 来解析 rewindFiles 所需的 user message UUID。
  *

@@ -100,7 +100,7 @@ export function MessageHeader({
       )}
       <div className="flex flex-col justify-between h-[35px]">
         {model && <span className="text-sm font-semibold text-foreground/60 leading-none">{model}</span>}
-        {time && <span className="message-time text-[10px] text-foreground/[0.38] leading-none">{time}</span>}
+        {time && <span className="message-time text-[10px] text-foreground/60 leading-none">{time}</span>}
       </div>
       {children}
     </div>
@@ -652,7 +652,7 @@ export const UserMessageContent = React.memo(
     }, [])
 
     return (
-      <div className={cn('relative inline-block max-w-full rounded-[10px] bg-primary/10 px-3.5 py-2.5', className)} {...props}>
+      <div className={cn('relative inline-block max-w-full rounded-[10px] border border-primary/[0.12] bg-primary/[0.08] px-3.5 py-2.5', className)} {...props}>
         <div
           ref={contentRef}
           className={cn(

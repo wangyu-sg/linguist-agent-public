@@ -22,21 +22,26 @@ permissions:
   contents: write
 
 jobs:
+  validate:
+    name: 完整 CI 门禁
+    uses: ./.github/workflows/ci.yml
+
   build-mac-arm64:
     name: build (macos-latest, mac, arm64, --arm64)
     runs-on: macos-latest
+    needs: validate
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: 安装 Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
-          bun-version: latest
+          bun-version: 1.3.14
 
       - name: 安装 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
@@ -79,7 +84,13 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           for i in 1 2 3; do
-            npx electron-builder --mac --arm64 --publish always && break
+            if npx electron-builder --mac --arm64 --publish always; then
+              exit 0
+            fi
+            if [ "$i" -eq 3 ]; then
+              echo "三次打包均失败"
+              exit 1
+            fi
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
@@ -88,18 +99,19 @@ jobs:
   build-mac-x64:
     name: build (macos-15-intel, mac, x64, --x64)
     runs-on: macos-15-intel
+    needs: validate
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: 安装 Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
-          bun-version: latest
+          bun-version: 1.3.14
 
       - name: 安装 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
@@ -142,7 +154,13 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           for i in 1 2 3; do
-            npx electron-builder --mac --x64 --publish always && break
+            if npx electron-builder --mac --x64 --publish always; then
+              exit 0
+            fi
+            if [ "$i" -eq 3 ]; then
+              echo "三次打包均失败"
+              exit 1
+            fi
             echo "Attempt $i failed, retrying in 15s..."
             sleep 15
           done
@@ -287,18 +305,19 @@ jobs:
   build-windows-x64:
     name: build (windows-latest, win, x64, --x64)
     runs-on: windows-latest
+    needs: validate
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: 安装 Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
-          bun-version: latest
+          bun-version: 1.3.14
 
       - name: 安装 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 

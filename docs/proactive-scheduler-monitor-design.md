@@ -609,7 +609,7 @@ interface Recommendation {
 Daily Memory 不能只依赖 Agent 在 SDK project 目录里写 Markdown 文件。Proma 主应用需要同时支持两条路径：
 
 1. Agent 最终回答里的结构化 `proma-memory-items` fenced JSON block。
-2. Claude Agent SDK project memory 目录里的 Markdown 文件：`~/.proma[-dev]/sdk-config/projects/*/memory/*.md`。
+2. Claude Agent SDK project memory 目录里的 Markdown 文件：`~/.linguist-agent[-dev]/sdk-config/projects/*/memory/*.md`。
 
 结构化 block 是即时摄取路径。每次主动任务运行时，主进程从 assistant messages 中解析：
 
@@ -912,7 +912,7 @@ interface Recommendation {
 建议继续本地优先：
 
 ```text
-~/.proma/
+~/.linguist-agent/
   proactive/
     schedules.json
     monitors.json

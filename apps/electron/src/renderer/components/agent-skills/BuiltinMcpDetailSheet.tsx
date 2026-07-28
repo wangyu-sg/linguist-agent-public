@@ -86,7 +86,7 @@ export function BuiltinMcpDetailSheet({ open, server, onOpenChange, onConfigure 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="truncate text-base font-semibold text-foreground">{server.displayName}</h3>
-                    <span className="shrink-0 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400">
+                    <span className="shrink-0 rounded-md bg-info/10 px-1.5 py-0.5 text-[11px] font-medium text-info">
                       Proma 内置
                     </span>
                   </div>
@@ -162,7 +162,7 @@ function InfoItem({ label, value, tone = 'default' }: { label: string; value: st
       <div className="text-[11px] font-medium text-muted-foreground">{label}</div>
       <div className={cn(
         'mt-1 flex items-center gap-1.5 text-sm font-medium',
-        tone === 'success' && 'text-emerald-600 dark:text-emerald-400',
+        tone === 'success' && 'text-success',
         tone === 'muted' && 'text-muted-foreground',
       )}>
         {tone === 'success' && <CheckCircle2 size={14} />}

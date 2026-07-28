@@ -30,7 +30,13 @@ import { VersionHistory } from './VersionHistory'
 declare const __APP_VERSION__: string
 const APP_VERSION = __APP_VERSION__
 
-const GITHUB_RELEASES_URL = 'https://github.com/ErlichLiu/Proma/releases'
+const GITHUB_RELEASES_URL = 'https://github.com/proma-ai/Proma/releases'
+
+/** 对应源码公开仓（AGPL-3.0 第 13 条 Corresponding Source，PB-116 指定的公开仓） */
+const SOURCE_CODE_URL = 'https://github.com/wangyu-sg/linguist-agent-public'
+/** 第三方声明（随仓维护，应用内以公开仓外链形式打开） */
+const THIRD_PARTY_NOTICES_URL =
+  'https://github.com/wangyu-sg/linguist-agent-public/blob/main/THIRD_PARTY_NOTICES.md'
 
 /** 更新状态卡片 */
 function UpdateCard(): React.ReactElement | null {
@@ -472,8 +478,8 @@ function ShellEnvironmentCard(): React.ReactElement | null {
 export function AboutSettings(): React.ReactElement {
   return (
     <SettingsSection
-      title="关于 Proma"
-      description="集成通用 AI Agent 的下一代人工智能软件"
+      title="关于 Linguist Agent"
+      description="基于 Proma 构建的桌面本地化 Agent / Built on Proma (AGPL-3.0)"
     >
       <SettingsCard>
         <SettingsRow label="版本">
@@ -484,7 +490,7 @@ export function AboutSettings(): React.ReactElement {
         </SettingsRow>
         <SettingsRow
           label="开源协议"
-          description="社区版基于 AGPL-3.0 开源，商业授权请联系 erlichliu@gmail.com"
+          description="Linguist Agent 是 Proma 的衍生作品，整体基于 AGPL-3.0 开源"
         >
           <a
             href="https://www.gnu.org/licenses/agpl-3.0.html"
@@ -495,14 +501,43 @@ export function AboutSettings(): React.ReactElement {
             AGPL-3.0
           </a>
         </SettingsRow>
-        <SettingsRow label="项目地址">
+        <SettingsRow
+          label="上游项目"
+          description="基于 Proma 构建 / Built on Proma (AGPL-3.0)，Proma 版权归原作者所有"
+        >
           <a
-            href="https://github.com/ErlichLiu/Proma.git"
+            href="https://github.com/proma-ai/Proma"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-primary hover:underline"
           >
-            github.com/ErlichLiu/Proma
+            github.com/proma-ai/Proma
+          </a>
+        </SettingsRow>
+        <SettingsRow
+          label="Source Code"
+          description="本应用的完整对应源码（AGPL-3.0 第 13 条 Corresponding Source）"
+        >
+          <a
+            href={SOURCE_CODE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-primary hover:underline"
+          >
+            github.com/wangyu-sg/linguist-agent-public
+          </a>
+        </SettingsRow>
+        <SettingsRow
+          label="Third-Party Notices"
+          description="第三方组件许可与声明汇总（THIRD_PARTY_NOTICES.md）"
+        >
+          <a
+            href={THIRD_PARTY_NOTICES_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-primary hover:underline"
+          >
+            THIRD_PARTY_NOTICES.md
           </a>
         </SettingsRow>
       </SettingsCard>

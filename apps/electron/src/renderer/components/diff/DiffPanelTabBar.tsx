@@ -176,6 +176,7 @@ export function DiffPanelTabBar({
               <button
                 type="button"
                 onClick={onClose}
+                aria-label="折叠文件面板"
                 className="flex items-center justify-center size-[28px] mr-1 mb-[3px] rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
               >
                 <PanelRightClose className="size-4" />

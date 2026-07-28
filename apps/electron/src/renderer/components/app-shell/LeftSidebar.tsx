@@ -11,10 +11,11 @@
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeftClose, PanelLeftOpen, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, MessageSquare, MoreHorizontal, FolderOpen, GripVertical, Clock, AlarmClock, ChevronRight, Blocks, GitBranch, Download, Loader2, RotateCw } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeftClose, PanelLeftOpen, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, Languages, MessageSquare, MoreHorizontal, FolderOpen, GripVertical, Clock, AlarmClock, ChevronRight, Blocks, GitBranch, Download, Loader2, RotateCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ModeSwitcher } from './ModeSwitcher'
+import { LinguistSidebarContent } from '@/features/linguist/sidebar/LinguistSidebarContent'
 import { SearchDialog } from './SearchDialog'
 import { UserAvatar } from '@/components/chat/UserAvatar'
 import { activeViewAtom, agentSkillsTabAtom } from '@/atoms/active-view'
@@ -84,6 +85,7 @@ import { conversationPromptIdAtom } from '@/atoms/system-prompt-atoms'
 import { interfaceVariantAtom } from '@/atoms/theme'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { useOpenSession } from '@/hooks/useOpenSession'
+import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { CollapsedWorkspacePopover } from '@/components/agent/CollapsedWorkspacePopover'
 import { MoveSessionDialog } from '@/components/agent/MoveSessionDialog'
@@ -93,6 +95,7 @@ import {
   type SessionMiniMapType,
 } from '@/components/session-preview/SessionMiniMapPopover'
 import { detectIsMac } from '@/lib/platform'
+import { AUTOMATIONS_VISIBLE } from '@/lib/feature-flags'
 import { getActiveAccelerator, getAcceleratorDisplay } from '@/lib/shortcut-registry'
 import {
   collectAgentSessionTreeIds,
@@ -247,49 +250,6 @@ function AutomationSidebarEntry({ count, active, onClick }: AutomationSidebarEnt
   )
 }
 
-interface SkillsSidebarEntryProps {
-  count: number
-  updateCount: number
-  active: boolean
-  onClick: () => void
-}
-
-function SkillsSidebarEntry({ count, updateCount, active, onClick }: SkillsSidebarEntryProps): React.ReactElement {
-  const hasUpdate = updateCount > 0
-  return (
-    <button
-      type="button"
-      aria-label={`Agent 技能，${count} 个能力${hasUpdate ? `，${updateCount} 个可更新` : ''}`}
-      onClick={onClick}
-      className={cn(
-        'group w-full flex items-center justify-between px-3 py-2 rounded-md text-[13px] transition-colors duration-100 titlebar-no-drag',
-        active
-          ? 'bg-accent-foreground/[0.10] text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
-          : 'text-foreground/60 hover:bg-accent-foreground/[0.08] hover:text-foreground',
-      )}
-    >
-      <span className="flex items-center gap-3 min-w-0">
-        <span className={cn('flex-shrink-0 w-[18px] h-[18px]', active ? 'text-accent-foreground' : 'text-foreground/45')}>
-          <Blocks size={16} className="block" />
-        </span>
-        <span className="truncate">Agent 技能</span>
-      </span>
-      <span
-        className={cn(
-          'ml-2 flex h-5 min-w-[22px] flex-shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-medium tabular-nums',
-          hasUpdate
-            ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-            : active
-              ? 'bg-accent-foreground/[0.26] text-primary-foreground'
-              : 'bg-foreground/[0.045] text-foreground/[0.42] group-hover:text-foreground/65',
-        )}
-      >
-        {formatAutomationCount(count)}
-      </span>
-    </button>
-  )
-}
-
 export interface LeftSidebarProps {
   /** 可选固定宽度，默认使用 CSS 响应式宽度 */
   width?: number
@@ -389,7 +349,7 @@ const RAIL_STATUS_CLASS: Record<SessionIndicatorStatus, string> = {
   idle: 'hidden',
   running: 'border-blue-500 animate-pulse',
   blocked: 'border-orange-500',
-  completed: 'border-emerald-500',
+  completed: 'border-success',
 }
 
 const SIDEBAR_DRAG_STRIP_HEIGHT = {
@@ -769,7 +729,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const setSessionPathMap = useSetAtom(agentSessionPathMapAtom)
   const [currentWorkspaceId, setCurrentWorkspaceId] = useAtom(currentAgentWorkspaceIdAtom)
   const [workspaces, setWorkspaces] = useAtom(agentWorkspacesAtom)
-  const setMode = useSetAtom(appModeAtom)
+  const switchMode = useSwitchAppMode()
 
   // 当前项目能力（MCP + Skill 计数）
   const [capabilities, setCapabilities] = React.useState<WorkspaceCapabilities | null>(null)
@@ -1510,9 +1470,11 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   /**
    * 合成「自动任务」项目组：聚合所有自动任务会话（跨工作区），
    * 作为这些会话在侧栏的统一归属地。会话为空时返回 null（不渲染空组）。
+   * D-007（PB-012）：v1 隐藏自动任务产品面（lib/feature-flags.ts），分组随之一并隐藏。
    */
   const automationGroup = React.useMemo<AgentProjectGroup | null>(
     () => {
+      if (!AUTOMATIONS_VISIBLE) return null
       const sessions = sortAgentSessionsByUpdatedAtDesc(
         agentSessions.filter((session) =>
           !session.archived
@@ -2119,47 +2081,12 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
   const handleRailModeSwitch = React.useCallback((targetMode: AppMode) => {
     setViewMode('active')
-    if (targetMode === mode) return
-
-    const isChatMode = targetMode === 'chat'
-    const sessions = isChatMode ? conversations : agentSessions
-    const lastId = isChatMode ? currentConversationId : currentAgentSessionId
-
-    if (lastId) {
-      const match = sessions.find((s) => s.id === lastId)
-      if (match) {
-        openSession(targetMode, match.id, match.title)
-        return
-      }
-    }
-
-    const tab = tabs.find((t) => t.type === targetMode)
-    if (tab) {
-      openSession(targetMode, tab.sessionId, tab.title)
-      return
-    }
-
-    const recent = sessions.find((s) => !s.archived && !draftSessionIds.has(s.id))
-    if (recent) {
-      openSession(targetMode, recent.id, recent.title)
-      return
-    }
-
-    setMode(targetMode)
-  }, [
-    mode,
-    conversations,
-    agentSessions,
-    currentConversationId,
-    currentAgentSessionId,
-    tabs,
-    draftSessionIds,
-    openSession,
-    setMode,
-    setViewMode,
-  ])
+    switchMode(targetMode)
+  }, [setViewMode, switchMode])
 
   const railRecentItems = React.useMemo(() => {
+    if (mode === 'linguist') return []
+
     if (mode === 'chat') {
       return conversations
         .filter((c) => !c.archived && !draftSessionIds.has(c.id))
@@ -2415,6 +2342,25 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             </TooltipTrigger>
             <TooltipContent side="right">Chat 模式</TooltipContent>
           </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="切换到 Linguist 模式"
+                onClick={() => handleRailModeSwitch('linguist')}
+                className={cn(
+                  'relative size-10 flex items-center justify-center rounded-[12px] transition-colors titlebar-no-drag',
+                  mode === 'linguist'
+                    ? 'bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+                    : 'text-foreground/45 hover:bg-foreground/[0.06] hover:text-foreground/75'
+                )}
+              >
+                <Languages size={17} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">本地化模式</TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="my-3 h-px w-8 bg-border/70" />
@@ -2435,60 +2381,39 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             <TooltipContent side="right">搜索</TooltipContent>
           </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={`自动任务，${automationCount} 个任务已创建`}
-                onClick={handleOpenAutomations}
-                className={cn(
-                  'relative size-10 flex items-center justify-center rounded-[12px] transition-colors titlebar-no-drag border',
-                  activeView === 'automations'
-                    ? 'border-primary/80 bg-primary text-primary-foreground shadow-sm'
-                    : 'border-border/45 bg-foreground/[0.025] text-foreground/45 hover:border-border/70 hover:bg-foreground/[0.045] hover:text-primary',
-                )}
-              >
-                <AlarmClock size={16} />
-                {automationCount > 0 && (
-                  <span
-                    className={cn(
-                      'absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-medium tabular-nums',
-                      activeView === 'automations'
-                        ? 'bg-primary-foreground text-primary'
-                        : 'bg-primary text-primary-foreground',
-                    )}
-                  >
-                    {formatAutomationCount(automationCount)}
-                  </span>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              自动任务（{automationCount} 个任务已创建）
-            </TooltipContent>
-          </Tooltip>
-
-          {mode === 'agent' && (
+          {/* D-007（PB-012）：v1 隐藏自动任务入口；恢复见 lib/feature-flags.ts */}
+          {AUTOMATIONS_VISIBLE && mode !== 'linguist' && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Agent 技能"
-                  onClick={handleOpenSkills}
+                  aria-label={`自动任务，${automationCount} 个任务已创建`}
+                  onClick={handleOpenAutomations}
                   className={cn(
                     'relative size-10 flex items-center justify-center rounded-[12px] transition-colors titlebar-no-drag border',
-                    activeView === 'agent-skills'
+                    activeView === 'automations'
                       ? 'border-primary/80 bg-primary text-primary-foreground shadow-sm'
                       : 'border-border/45 bg-foreground/[0.025] text-foreground/45 hover:border-border/70 hover:bg-foreground/[0.045] hover:text-primary',
                   )}
                 >
-                  <Blocks size={16} />
-                  {(capabilities?.skills.filter((s) => s.hasUpdate).length ?? 0) > 0 && (
-                    <span className="absolute -top-1 -right-1 size-2.5 rounded-full bg-blue-500" />
+                  <AlarmClock size={16} />
+                  {automationCount > 0 && (
+                    <span
+                      className={cn(
+                        'absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-medium tabular-nums',
+                        activeView === 'automations'
+                          ? 'bg-primary-foreground text-primary'
+                          : 'bg-primary text-primary-foreground',
+                      )}
+                    >
+                      {formatAutomationCount(automationCount)}
+                    </span>
                   )}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right">Agent 技能</TooltipContent>
+              <TooltipContent side="right">
+                自动任务（{automationCount} 个任务已创建）
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -2525,6 +2450,30 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               readyDotClassName="absolute top-0 right-0 w-2 h-2 rounded-full bg-primary"
             />
           )}
+          {/* Agent 技能入口（PB-102：从顶部导航栈降级到底部小图标区，与设置头像同排） */}
+          {mode === 'agent' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Agent 技能"
+                  onClick={handleOpenSkills}
+                  className={cn(
+                    'relative size-10 flex items-center justify-center rounded-[12px] transition-colors titlebar-no-drag',
+                    activeView === 'agent-skills'
+                      ? 'bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+                      : 'text-foreground/45 hover:bg-foreground/[0.06] hover:text-foreground/75'
+                  )}
+                >
+                  <Blocks size={16} />
+                  {(capabilities?.skills.filter((s) => s.hasUpdate).length ?? 0) > 0 && (
+                    <span className="absolute top-0 right-0 size-2.5 rounded-full bg-info" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Agent 技能</TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -2535,7 +2484,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               >
                 <UserAvatar avatar={userProfile.avatar} size={28} />
                 {hasEnvironmentIssues && (
-                  <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-500" />
+                  <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-destructive" />
                 )}
               </button>
             </TooltipTrigger>
@@ -2563,7 +2512,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           ? 'bg-background rounded-2xl shadow-xl dark:shadow-md'
           : 'bg-[hsl(var(--sidebar-surface))]'
       )}
-      style={{ width: width ?? 300, minWidth: 200, flexShrink: 0 }}
+      style={{ width: width ?? 'var(--sidebar-w)', minWidth: 200, flexShrink: 0 }}
     >
       <SidebarWindowDragStrip
         height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.expandedMac : SIDEBAR_DRAG_STRIP_HEIGHT.expanded}
@@ -2580,6 +2529,8 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label="搜索会话"
               onClick={() => setSearchDialogOpen(true)}
               className="mt-2 size-10 flex-shrink-0 flex items-center justify-center rounded-[10px] text-foreground/40 sidebar-control-surface hover:text-foreground/60 transition-[background-color,color] duration-150 titlebar-no-drag"
             >
@@ -2591,6 +2542,8 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
+              aria-label="收起侧边栏"
               onClick={() => setSidebarCollapsed(true)}
               className={cn(
                 'sidebar-collapse-button mt-2 size-10 flex-shrink-0 flex items-center justify-center rounded-[10px] text-foreground/40 sidebar-control-surface hover:text-foreground/60 titlebar-no-drag transition-[background-color,color] duration-150'
@@ -2603,29 +2556,22 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         </Tooltip>
       </div>
 
-      {/* 自动任务入口：作为任务中心入口放在置顶区上方，不参与置顶列表层级。 */}
-      <div className="px-3 pt-2 pb-0.5">
-        <AutomationSidebarEntry
-          count={automationCount}
-          active={activeView === 'automations'}
-          onClick={handleOpenAutomations}
-        />
-      </div>
-
-      {/* Agent 技能入口：Skills / MCP 能力中心，仅 Agent 模式可见 */}
-      {mode === 'agent' && (
-        <div className="px-3 pb-0.5">
-          <SkillsSidebarEntry
-            count={capabilities?.skills.length ?? 0}
-            updateCount={capabilities?.skills.filter((s) => s.hasUpdate).length ?? 0}
-            active={activeView === 'agent-skills'}
-            onClick={handleOpenSkills}
+      {/* 自动任务入口：作为任务中心入口放在置顶区上方，不参与置顶列表层级。
+          D-007（PB-012）：v1 隐藏；恢复见 lib/feature-flags.ts */}
+      {AUTOMATIONS_VISIBLE && mode !== 'linguist' && (
+        <div className="px-3 pt-2 pb-0.5">
+          <AutomationSidebarEntry
+            count={automationCount}
+            active={activeView === 'automations'}
+            onClick={handleOpenAutomations}
           />
         </div>
       )}
 
-      {/* Chat 模式 active 视图：置顶 + 对话历史，结构与 Agent active 视图保持一致 */}
-      {mode === 'chat' && viewMode === 'active' ? (
+      {/* 三种模式各自拥有独立侧栏内容；Linguist 不复刻 Agent / Chat 会话树。 */}
+      {mode === 'linguist' && viewMode === 'active' ? (
+        <LinguistSidebarContent />
+      ) : mode === 'chat' && viewMode === 'active' ? (
         <div className="flex-1 flex flex-col min-h-0">
           {pinnedConversations.length > 0 && (
             <div className="pt-2 pb-1 flex-shrink-0 titlebar-no-drag">
@@ -2660,11 +2606,11 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           )}
 
           <div className="group/chat-section relative flex items-center px-2 pt-2 pb-1 flex-shrink-0">
-            <span className="ml-[4px] px-1.5 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">对话</span>
+            <span className="ml-[4px] px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">对话</span>
             {newChatShortcutLabel && (
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-medium text-foreground/35 transition-opacity group-hover/chat-section:opacity-0"
+                className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-medium text-foreground/60 transition-opacity group-hover/chat-section:opacity-0"
               >
                 {newChatShortcutLabel} 新建对话
               </span>
@@ -2689,7 +2635,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           <div className="flex-1 overflow-y-auto px-2 pb-3 scrollbar-thin min-h-0 titlebar-no-drag">
             {conversationGroups.map((group) => (
               <div key={group.label} className="mb-1">
-                <div className="ml-[4px] px-1.5 pt-2 pb-1 text-[11px] font-medium text-foreground/40 select-none">
+                <div className="ml-[4px] px-1.5 pt-2 pb-1 text-[11px] font-medium text-foreground/60 select-none">
                   {group.label}
                 </div>
                 <div className="flex flex-col gap-0.5">
@@ -2793,7 +2739,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
           {/* 下区标题：项目历史 */}
           <div className="px-2 pt-2 pb-1 flex items-center justify-between flex-shrink-0">
-            <span className="ml-[4px] px-1.5 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">项目</span>
+            <span className="ml-[4px] px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">项目</span>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -3049,6 +2995,30 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               hideIcon
             />
           )}
+          {/* Agent 技能入口（PB-102：从主导航降级到底部小图标区，与设置同排；仅 Agent 模式可见） */}
+          {mode === 'agent' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Agent 技能"
+                  onClick={handleOpenSkills}
+                  className={cn(
+                    'relative flex size-7 flex-shrink-0 items-center justify-center rounded-[8px] transition-colors titlebar-no-drag',
+                    activeView === 'agent-skills'
+                      ? 'bg-foreground/[0.07] text-foreground/80'
+                      : 'text-foreground/40 hover:bg-foreground/[0.05] hover:text-foreground/70',
+                  )}
+                >
+                  <Blocks size={16} />
+                  {(capabilities?.skills.filter((s) => s.hasUpdate).length ?? 0) > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-info" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Agent 技能</TooltipContent>
+            </Tooltip>
+          )}
           <button
             type="button"
             aria-label="打开设置"
@@ -3058,7 +3028,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             <div className="relative flex-shrink-0 text-foreground/40">
               <Settings size={16} />
               {hasEnvironmentIssues && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-destructive" />
               )}
             </div>
           </button>
@@ -3229,14 +3199,11 @@ function SessionItemActions({
   const forceVisible = archiveConfirming || menuOpen
 
   return (
-    <div
-      className="session-item-actions relative flex-shrink-0 h-[18px] w-[58px]"
-      onClick={(e) => e.stopPropagation()}
-    >
+    <div className="session-item-actions relative flex-shrink-0 h-[18px] w-[58px]">
       <span
         title={`最后更新：${new Date(updatedAt).toLocaleString('zh-CN')}`}
         className={cn(
-          'absolute inset-y-0 right-0 block w-full overflow-hidden whitespace-nowrap text-right text-[11px] leading-[18px] tabular-nums text-foreground/35 transition-opacity duration-100',
+          'absolute inset-y-0 right-0 block w-full overflow-hidden whitespace-nowrap text-right text-[11px] leading-[18px] tabular-nums text-foreground/65 transition-opacity duration-100',
           forceVisible ? 'opacity-0' : 'opacity-100 group-hover:opacity-0',
         )}
       >
@@ -3247,11 +3214,13 @@ function SessionItemActions({
           'absolute right-1 top-0 flex items-center gap-0.5 transition-opacity duration-100',
           forceVisible
             ? 'opacity-100 pointer-events-auto'
-            : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+            : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
         )}
       >
         <SafeTooltip content={pinned ? '取消置顶' : '置顶'} side="top">
           <button
+            type="button"
+            aria-label={pinned ? '取消置顶' : '置顶'}
             className={cn(
               'p-0.5 rounded transition-colors',
               pinned
@@ -3268,6 +3237,8 @@ function SessionItemActions({
           side="top"
         >
           <button
+            type="button"
+            aria-label={archiveConfirming ? '再次点击确认归档' : archived ? '取消归档' : '归档'}
             className={cn(
               'p-0.5 rounded transition-colors',
               archiveConfirming
@@ -3284,6 +3255,8 @@ function SessionItemActions({
         <DropdownMenu onOpenChange={handleMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <button
+              type="button"
+              aria-label="更多会话操作"
               className={cn(
                 'p-0.5 rounded text-foreground/30 hover:bg-foreground/[0.08] hover:text-foreground/60 transition-colors',
                 'data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground/60',
@@ -3407,18 +3380,11 @@ const ConversationItem = React.memo(function ConversationItem({
       <ContextMenuTrigger asChild>
         <div
           ref={preview.setAnchorRef}
-          role="button"
-          tabIndex={0}
           data-session-switch-id={conversation.id}
           data-session-switch-title={conversation.title}
           data-session-switch-type="chat"
-          onClick={() => onSelect(conversation.id, conversation.title)}
           onMouseEnter={preview.handleMouseEnter}
           onMouseLeave={preview.handleMouseLeave}
-          onDoubleClick={(e) => {
-            e.stopPropagation()
-            startEdit()
-          }}
           className={cn(
             'session-quick-switch-row group relative w-full flex items-center gap-1.5 rounded-md py-1 pl-2.5 pr-1.5 transition-colors duration-100 titlebar-no-drag text-left',
             active && 'session-item-selected',
@@ -3437,31 +3403,37 @@ const ConversationItem = React.memo(function ConversationItem({
               aria-hidden="true"
             />
           )}
-          <div className="flex-1 min-w-0">
-            {editing ? (
-              <input
-                ref={inputRef}
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onBlur={saveTitle}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full bg-transparent text-[13px] leading-5 text-foreground border-b border-primary/50 outline-none px-0 py-0"
-                maxLength={100}
-              />
-            ) : (
-              <div className={cn(
-                'truncate text-[13px] leading-[18px] flex items-center gap-1.5',
-                active ? 'text-foreground' : 'text-foreground/80'
-              )}>
-                {/* 置顶标记 */}
-                {showPinIcon && (
-                  <Pin size={11} className="flex-shrink-0 text-primary/60" />
-                )}
-                <span className="truncate">{conversation.title}</span>
-              </div>
-            )}
-          </div>
+          {editing ? (
+            <input
+              ref={inputRef}
+              aria-label={`重命名对话：${conversation.title}`}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={saveTitle}
+              className="flex-1 min-w-0 bg-transparent text-[13px] leading-5 text-foreground border-b border-primary/50 outline-none px-0 py-0"
+              maxLength={100}
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label={`打开对话：${conversation.title}`}
+              onClick={() => onSelect(conversation.id, conversation.title)}
+              onDoubleClick={(event) => {
+                event.stopPropagation()
+                startEdit()
+              }}
+              className={cn(
+                'flex flex-1 min-w-0 items-center gap-1.5 rounded text-left text-[13px] leading-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                active ? 'text-foreground' : 'text-foreground/80',
+              )}
+            >
+              {showPinIcon && (
+                <Pin size={11} className="flex-shrink-0 text-primary/60" />
+              )}
+              <span className="truncate">{conversation.title}</span>
+            </button>
+          )}
 
           {/* 默认显示时间，hover 时显示操作按钮 */}
           {!editing && (
@@ -3511,14 +3483,14 @@ const SESSION_ACCENT_ROW_CLASS: Record<SessionLeftAccent, string> = {
 const SESSION_ACCENT_INDICATOR_CLASS: Record<SessionLeftAccent, string> = {
   orange: 'bg-orange-500',
   blue: 'bg-blue-500',
-  green: 'bg-green-500',
+  green: 'bg-success',
 }
 
 const DELEGATION_STATUS_ICON_CLASS: Record<SessionIndicatorStatus, string> = {
   idle: 'text-foreground/40',
   running: 'text-blue-500',
   blocked: 'text-orange-500',
-  completed: 'text-green-500',
+  completed: 'text-success',
 }
 
 function getSessionLeftAccent(status: SessionIndicatorStatus): SessionLeftAccent | undefined {
@@ -3674,12 +3646,9 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
       <ContextMenuTrigger asChild>
         <div
           ref={preview.setAnchorRef}
-          role="button"
-          tabIndex={0}
           data-session-switch-id={session.id}
           data-session-switch-title={session.title}
           data-session-switch-type="agent"
-          onClick={() => onSelect(session.id, session.title)}
           onMouseEnter={() => { setRowHovered(true); preview.handleMouseEnter() }}
           onMouseLeave={() => { setRowHovered(false); preview.handleMouseLeave() }}
           className={cn(
@@ -3701,88 +3670,82 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
               )}
             />
           )}
-          <div className="flex-1 min-w-0">
-            {editing ? (
-              <input
-                ref={inputRef}
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onBlur={saveTitle}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full bg-transparent text-[13px] leading-5 text-foreground border-b border-primary/50 outline-none px-0 py-0"
-                maxLength={100}
-              />
-            ) : (
-              <div className={cn(
-                'truncate text-[13px] leading-[18px] flex items-center gap-1.5',
-                active ? 'text-foreground' : 'text-foreground/80'
-              )}>
-                {showPinIcon && (
-                  <Pin size={11} className="flex-shrink-0 text-primary/60" />
-                )}
-                {session.sourceAutomationId && !session.sourceDelegationId && (
-                  <Clock size={11} className="flex-shrink-0 text-foreground/40" />
-                )}
-                {session.sourceDelegationId && (
-                  <GitBranch size={11} className={cn('flex-shrink-0', DELEGATION_STATUS_ICON_CLASS[indicatorStatus])} />
-                )}
-                <span
-                  className="truncate"
-                  onDoubleClick={(event) => {
-                    event.stopPropagation()
-                    startEdit()
-                  }}
-                >
-                  {session.title}
+          {editing ? (
+            <input
+              ref={inputRef}
+              aria-label={`重命名会话：${session.title}`}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={saveTitle}
+              className="flex-1 min-w-0 bg-transparent text-[13px] leading-5 text-foreground border-b border-primary/50 outline-none px-0 py-0"
+              maxLength={100}
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label={`打开会话：${session.title}`}
+              onClick={() => onSelect(session.id, session.title)}
+              className={cn(
+                'flex flex-1 min-w-0 items-center gap-1.5 rounded text-left text-[13px] leading-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                active ? 'text-foreground' : 'text-foreground/80',
+              )}
+            >
+              {showPinIcon && (
+                <Pin size={11} className="flex-shrink-0 text-primary/60" />
+              )}
+              {session.sourceAutomationId && !session.sourceDelegationId && (
+                <Clock size={11} className="flex-shrink-0 text-foreground/40" />
+              )}
+              {session.sourceDelegationId && (
+                <GitBranch size={11} className={cn('flex-shrink-0', DELEGATION_STATUS_ICON_CLASS[indicatorStatus])} />
+              )}
+              <span
+                className="truncate"
+                onDoubleClick={(event) => {
+                  event.stopPropagation()
+                  startEdit()
+                }}
+              >
+                {session.title}
+              </span>
+              {workspaceName && (
+                <span className="flex-shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[80px]">
+                  {workspaceName}
                 </span>
-                <SafeTooltip content={session.starred ? '取消星标' : '添加星标'} side="top">
-                  <button
-                    type="button"
-                    aria-label={session.starred ? '取消星标' : '添加星标'}
-                    aria-pressed={!!session.starred}
-                    onMouseEnter={preview.closeNow}
-                    onFocus={preview.closeNow}
-                    onMouseDown={(event) => {
-                      event.stopPropagation()
-                      preview.closeNow()
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      preview.closeNow()
-                      if (event.detail > 1) return
-                      void onToggleStar(session.id)
-                    }}
-                    onDoubleClick={(event) => {
-                      event.stopPropagation()
-                      preview.closeNow()
-                    }}
-                    className={cn(
-                      'flex-shrink-0 inline-flex size-6 -my-1 items-center justify-center rounded transition-colors',
-                      session.starred
-                        ? 'text-amber-500 hover:text-amber-500'
-                        : cn('text-foreground/45 hover:bg-foreground/[0.055] hover:text-foreground/70', rowHovered ? 'opacity-100' : 'opacity-0'),
-                    )}
-                  >
-                    <Star size={13} fill={session.starred ? 'currentColor' : 'none'} />
-                  </button>
-                </SafeTooltip>
-                {workspaceName && (
-                  <span className="flex-shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[80px]">
-                    {workspaceName}
-                  </span>
-                )}
-                {delegationSummary && (
-                  <span className="flex-shrink-0 text-[11px] leading-4 text-foreground/45">
-                    {delegationSummary.completed}/{delegationSummary.total}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+              )}
+              {delegationSummary && (
+                <span className="flex-shrink-0 text-[11px] leading-4 text-foreground/45">
+                  {delegationSummary.completed}/{delegationSummary.total}
+                </span>
+              )}
+            </button>
+          )}
 
           {!editing && (
             <>
+              <SafeTooltip content={session.starred ? '取消星标' : '添加星标'} side="top">
+                <button
+                  type="button"
+                  aria-label={session.starred ? '取消星标' : '添加星标'}
+                  aria-pressed={!!session.starred}
+                  onMouseEnter={preview.closeNow}
+                  onFocus={preview.closeNow}
+                  onClick={(event) => {
+                    preview.closeNow()
+                    if (event.detail > 1) return
+                    void onToggleStar(session.id)
+                  }}
+                  className={cn(
+                    'flex-shrink-0 inline-flex size-6 -my-1 items-center justify-center rounded transition-colors',
+                    session.starred
+                      ? 'text-warning hover:text-warning'
+                      : cn('text-foreground/45 hover:bg-foreground/[0.055] hover:text-foreground/70 focus-visible:opacity-100', rowHovered ? 'opacity-100' : 'opacity-0'),
+                  )}
+                >
+                  <Star size={13} fill={session.starred ? 'currentColor' : 'none'} />
+                </button>
+              </SafeTooltip>
               {delegationSummary && (
                 <SafeTooltip content={delegationSummary.expanded ? '收起子会话' : '展开子会话'} side="top">
                   <button
@@ -4171,7 +4134,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
         {isCurrent && !isAutomationGroup && newSessionShortcutLabel && !projectMenuOpen && (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-medium text-foreground/35 transition-opacity group-hover/project:opacity-0"
+            className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-medium text-foreground/60 transition-opacity group-hover/project:opacity-0"
           >
             {newSessionShortcutLabel} 新建项目内会话
           </span>

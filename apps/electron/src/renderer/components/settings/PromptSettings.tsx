@@ -277,7 +277,7 @@ function PromptListItem({
           <span className="text-xs text-muted-foreground shrink-0">(内置)</span>
         )}
         {isDefault && (
-          <Star className="size-3.5 text-amber-500 fill-amber-500 shrink-0" />
+          <Star className="size-3.5 text-warning fill-warning shrink-0" />
         )}
       </div>
 

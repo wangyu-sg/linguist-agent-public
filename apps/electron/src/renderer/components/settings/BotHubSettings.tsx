@@ -77,8 +77,8 @@ const PLATFORMS: readonly BotPlatformDef[] = [
 const BRIDGE_STATUS_COLORS = {
   disconnected: 'bg-gray-400',
   connecting: 'bg-yellow-400 animate-pulse',
-  connected: 'bg-green-500',
-  error: 'bg-red-500',
+  connected: 'bg-success',
+  error: 'bg-destructive',
 } as const
 
 // ===== 子组件 =====

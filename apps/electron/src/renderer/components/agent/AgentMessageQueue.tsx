@@ -65,7 +65,7 @@ export function AgentMessageQueue({
       onDragLeave={(event) => event.stopPropagation()}
       onDrop={(event) => event.stopPropagation()}
     >
-      <div className="flex items-center justify-between gap-2 px-1 pb-1 text-[12px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-2 px-1 pb-1 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <Clock3 className="size-3.5" />
           <span>队列</span>
@@ -105,9 +105,9 @@ export function AgentMessageQueue({
               {isDropBefore && <div className="absolute left-2 right-2 top-0 h-0.5 rounded-full bg-primary" />}
               {isDropAfter && <div className="absolute left-2 right-2 bottom-0 h-0.5 rounded-full bg-primary" />}
               <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground/55 active:cursor-grabbing" />
-              <div className="min-w-0 flex-1 text-[13px] leading-5 text-foreground/80">
+              <div className="min-w-0 flex-1 text-base leading-5 text-foreground/80">
                 {item.quotedSelection && (
-                  <div className="mb-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-4 text-muted-foreground">
+                  <div className="mb-0.5 flex min-w-0 items-center gap-1 text-xs leading-4 text-muted-foreground">
                     <Quote className="size-3 shrink-0" />
                     <span className="truncate">
                       引用：{item.quotedSelection.sourceLabel ?? item.quotedSelection.filePath}
@@ -115,7 +115,7 @@ export function AgentMessageQueue({
                   </div>
                 )}
                 {item.attachments && item.attachments.length > 0 && (
-                  <div className="mb-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-4 text-muted-foreground">
+                  <div className="mb-0.5 flex min-w-0 items-center gap-1 text-xs leading-4 text-muted-foreground">
                     <Paperclip className="size-3 shrink-0" />
                     <span className="truncate">
                       {item.attachments.length === 1

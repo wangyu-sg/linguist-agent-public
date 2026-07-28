@@ -3,13 +3,13 @@
  *
  * 负责渠道的 CRUD 操作、API Key 加密/解密、连接测试。
  * 使用 Electron safeStorage 进行 API Key 加密（底层使用 OS 级加密）。
- * 数据持久化到 ~/.proma/channels.json。
+ * 数据持久化到 ~/.linguist-agent/channels.json。
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, renameSync, rmSync } from 'node:fs'
 import { safeStorage } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { getChannelsPath } from './config-paths'
+import { getChannelsPath, getLegacyPromaChannelsPath } from './config-paths'
 import type {
   Channel,
   ChannelCreateInput,
@@ -23,12 +23,14 @@ import type {
   CodexOAuthCredentials,
   FetchModelsInput,
   FetchModelsResult,
+  PromaProviderImportResult,
   ProviderType,
 } from '@proma/shared'
 import {
   extractZhipuCodingTeamApiToken,
   parseZhipuTeamCredentials,
   PROVIDER_DEFAULT_URLS,
+  PROVIDER_LABELS,
   parseCodexCredentials,
   serializeCodexCredentials,
   isCodexCredentialExpired,
@@ -200,30 +202,103 @@ function migrateConfig(config: ChannelsConfig): { config: ChannelsConfig; change
   return { config: { version: CONFIG_VERSION, channels }, changed: true }
 }
 
-/**
- * 读取渠道配置文件
- *
- * 读取时自动将旧版本配置迁移到 CONFIG_VERSION，并在发生变更时回写。
- */
-function readConfig(): ChannelsConfig {
-  const configPath = getChannelsPath()
+function parseChannelsConfig(raw: string): { config: ChannelsConfig; changed: boolean } {
+  const parsed: unknown = JSON.parse(raw)
+  if (parsed === null || typeof parsed !== 'object') throw new Error('配置根必须是对象')
+  const record = parsed as Record<string, unknown>
+  if (!Array.isArray(record.channels)) throw new Error('channels 必须是数组')
+  return migrateConfig({
+    version: typeof record.version === 'number' ? record.version : 1,
+    channels: record.channels.map((value, index) => {
+      if (value === null || typeof value !== 'object') {
+        throw new Error(`channels[${index}] 必须是对象`)
+      }
+      const channel = value as Record<string, unknown>
+      if (
+        typeof channel.id !== 'string'
+        || typeof channel.name !== 'string'
+        || typeof channel.provider !== 'string'
+        || !Object.hasOwn(PROVIDER_LABELS, channel.provider)
+        || typeof channel.baseUrl !== 'string'
+        || typeof channel.apiKey !== 'string'
+        || !Array.isArray(channel.models)
+        || typeof channel.enabled !== 'boolean'
+        || typeof channel.createdAt !== 'number'
+        || typeof channel.updatedAt !== 'number'
+      ) {
+        throw new Error(`channels[${index}] 格式无效`)
+      }
+      return {
+        id: channel.id,
+        name: channel.name,
+        provider: channel.provider as ProviderType,
+        baseUrl: channel.baseUrl,
+        apiKey: channel.apiKey,
+        models: channel.models.map((value, modelIndex) => {
+          if (value === null || typeof value !== 'object') {
+            throw new Error(`channels[${index}].models[${modelIndex}] 必须是对象`)
+          }
+          const model = value as Record<string, unknown>
+          if (
+            typeof model.id !== 'string'
+            || typeof model.name !== 'string'
+            || typeof model.enabled !== 'boolean'
+            || (model.source !== undefined && model.source !== 'manual' && model.source !== 'fetched')
+          ) {
+            throw new Error(`channels[${index}].models[${modelIndex}] 格式无效`)
+          }
+          return {
+            id: model.id,
+            name: model.name,
+            enabled: model.enabled,
+            ...(model.source !== undefined ? { source: model.source } : {}),
+          }
+        }),
+        enabled: channel.enabled,
+        createdAt: channel.createdAt,
+        updatedAt: channel.updatedAt,
+      }
+    }),
+  })
+}
 
-  if (!existsSync(configPath)) {
-    return { version: CONFIG_VERSION, channels: [] }
-  }
+/**
+ * 读取渠道配置文件。
+ * 普通调用维持历史 fail-open；导入流程可要求 fail-closed，避免覆盖损坏的现有配置。
+ */
+function readConfig(failClosed = false): ChannelsConfig {
+  const configPath = getChannelsPath()
+  if (!existsSync(configPath)) return { version: CONFIG_VERSION, channels: [] }
 
   try {
     const raw = readFileSync(configPath, 'utf-8')
-    const parsed = JSON.parse(raw) as ChannelsConfig
-    const { config, changed } = migrateConfig(parsed)
-    if (changed) {
+    const { config, changed } = failClosed
+      ? parseChannelsConfig(raw)
+      : migrateConfig(JSON.parse(raw) as ChannelsConfig)
+    if (changed && !failClosed) {
       writeConfig(config)
       console.log('[渠道管理] 渠道配置已迁移并持久化')
     }
     return config
   } catch (error) {
+    if (failClosed) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`当前 Provider 配置损坏，已取消导入：${message}`)
+    }
     console.error('[渠道管理] 读取配置文件失败:', error)
     return { version: CONFIG_VERSION, channels: [] }
+  }
+}
+
+function readPromaConfig(): ChannelsConfig {
+  const configPath = getLegacyPromaChannelsPath()
+  if (!existsSync(configPath)) throw new Error(`未找到 Proma Provider 配置：${configPath}`)
+
+  try {
+    return parseChannelsConfig(readFileSync(configPath, 'utf-8')).config
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`读取 Proma Provider 配置失败：${message}`)
   }
 }
 
@@ -232,12 +307,31 @@ function readConfig(): ChannelsConfig {
  */
 function writeConfig(config: ChannelsConfig): void {
   const configPath = getChannelsPath()
+  const tempPath = `${configPath}.${process.pid}.${randomUUID()}.tmp`
 
   try {
-    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+    writeFileSync(tempPath, JSON.stringify(config, null, 2), 'utf-8')
+    renameSync(tempPath, configPath)
   } catch (error) {
+    try {
+      rmSync(tempPath, { force: true })
+    } catch {
+      // 清理失败不覆盖原始写入错误。
+    }
     console.error('[渠道管理] 写入配置文件失败:', error)
     throw new Error('写入渠道配置失败')
+  }
+}
+
+function canEncryptChannelApiKey(): boolean {
+  // 打包烟测使用临时 HOME；访问 macOS Keychain 会请求不存在的旧服务密钥并阻塞探针。
+  if (process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS === '1') return false
+
+  try {
+    return safeStorage.isEncryptionAvailable()
+  } catch (error) {
+    console.warn('[渠道管理] safeStorage 状态读取失败，将以明文存储', error)
+    return false
   }
 }
 
@@ -252,7 +346,7 @@ function writeConfig(config: ChannelsConfig): void {
  * @returns base64 编码的加密字符串
  */
 function encryptApiKey(plainKey: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
+  if (!canEncryptChannelApiKey()) {
     console.warn('[渠道管理] safeStorage 加密不可用，将以明文存储')
     return plainKey
   }
@@ -268,7 +362,7 @@ function encryptApiKey(plainKey: string): string {
  * @returns 明文 API Key
  */
 function decryptKey(encryptedKey: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
+  if (!canEncryptChannelApiKey()) {
     // 如果加密不可用，假设存储的是明文
     return encryptedKey
   }
@@ -354,6 +448,43 @@ export function createChannel(input: ChannelCreateInput): Channel {
 
   console.log(`[渠道管理] 已创建渠道: ${channel.name} (${channel.id})`)
   return channel
+}
+
+/** 显式导入旧 Proma Provider 配置；不读取或写入其他 Proma 数据。 */
+export function importPromaProviderConfigs(): PromaProviderImportResult {
+  if (process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS === '1') {
+    throw new Error('打包烟测明文凭据模式不允许导入 Proma Provider 配置')
+  }
+  if (!canEncryptChannelApiKey()) {
+    throw new Error('系统安全存储不可用，无法安全解密并重新加密 Proma Provider 配置')
+  }
+  const source = readPromaConfig()
+  const target = readConfig(true)
+  const targetIds = new Set(target.channels.map((channel) => channel.id))
+  const imported: Channel[] = []
+  let skippedCount = 0
+
+  for (const channel of source.channels) {
+    // ID 是 Proma 配置的稳定身份；同 Provider 允许多账号，不能按 URL 猜测并丢配置。
+    if (targetIds.has(channel.id)) {
+      skippedCount += 1
+      continue
+    }
+    const plainApiKey = decryptKey(channel.apiKey)
+    imported.push({
+      ...channel,
+      apiKey: encryptApiKey(plainApiKey),
+      models: cloneModels(channel.models),
+    })
+    targetIds.add(channel.id)
+  }
+
+  if (imported.length > 0) {
+    target.channels.push(...imported)
+    writeConfig(target)
+  }
+  console.log(`[渠道管理] Proma Provider 导入完成：新增 ${imported.length}，跳过 ${skippedCount}`)
+  return { importedCount: imported.length, skippedCount }
 }
 
 /**

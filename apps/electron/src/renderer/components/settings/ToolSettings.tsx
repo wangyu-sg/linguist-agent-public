@@ -160,7 +160,7 @@ function WebSearchSettings(): React.ReactElement {
                 disabled={testing || !apiKey.trim()}
                 onClick={handleTest}
               >
-                {testing ? <><Loader2 size={14} className="animate-spin mr-1.5" />测试中...</> : '测试连接'}
+                {testing ? <><Loader2 size={14} className="animate-spin motion-reduce:hidden mr-1.5" />测试中...</> : '测试连接'}
               </Button>
             </div>
             <div className="relative">
@@ -184,7 +184,7 @@ function WebSearchSettings(): React.ReactElement {
           </div>
 
           {testResult && (
-            <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${testResult.success ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-destructive/10 text-destructive'}`}>
+            <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${testResult.success ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
               {testResult.success ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : <XCircle size={16} className="mt-0.5 shrink-0" />}
               <span>{testResult.message}</span>
             </div>
@@ -331,7 +331,7 @@ function NanoBananaSettings(): React.ReactElement {
                 disabled={testing || !apiKey.trim()}
                 onClick={handleTest}
               >
-                {testing ? <><Loader2 size={14} className="animate-spin mr-1.5" />测试中...</> : '测试连接'}
+                {testing ? <><Loader2 size={14} className="animate-spin motion-reduce:hidden mr-1.5" />测试中...</> : '测试连接'}
               </Button>
             </div>
             <div className="relative">
@@ -379,7 +379,7 @@ function NanoBananaSettings(): React.ReactElement {
           </div>
 
           {testResult && (
-            <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${testResult.success ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-destructive/10 text-destructive'}`}>
+            <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${testResult.success ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
               {testResult.success ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : <XCircle size={16} className="mt-0.5 shrink-0" />}
               <span>{testResult.message}</span>
             </div>

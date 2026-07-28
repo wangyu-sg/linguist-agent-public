@@ -20,7 +20,7 @@ import { join, dirname } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { app } from 'electron'
-import type { AgentRuntime, AgentSendInput, AgentMessage, AgentGenerateTitleInput, AgentProviderAdapter, AgentSessionMeta, CodexOAuthCredentials, TypedError, RetryAttempt, SDKMessage, SDKAssistantMessage, AgentStreamPayload, RewindSessionResult, ProviderType } from '@proma/shared'
+import type { AgentRuntime, AgentSendInput, AgentMessage, AgentGenerateTitleInput, AgentProviderAdapter, AgentSessionMeta, CodexOAuthCredentials, TypedError, RetryAttempt, SDKMessage, SDKAssistantMessage, AgentStreamPayload, RewindSessionResult, ProviderType, LinguistTurnContextV1, LinguistProjectMutationEvent } from '@proma/shared'
 import {
   PROMA_DEFAULT_PERMISSION_MODE,
   PROMA_PERMISSION_MODE_CONFIG,
@@ -64,6 +64,15 @@ import { injectBuiltinMcpServers } from './builtin-mcp/registry'
 import { injectChromeDevtoolsMcpServer } from './builtin-mcp/chrome-devtools'
 import { isBuiltinMcpUserEnabled } from './builtin-mcp/settings'
 import { buildPiBuiltinTools } from './adapters/pi-builtin-tools'
+import { checkLinguistSessionSendBlock } from './linguist/session-binding'
+import { getLinguistProjectService } from './linguist/project-service'
+import {
+  buildLinguistTurnContextBlock,
+  validateLinguistTurnContextForAgentTurn,
+} from './linguist/turn-context-validator'
+import { resolveLinguistSessionSkillPaths } from './linguist/project-skill'
+import { buildLinguistProjectAssetsPrompt } from './linguist/project-assets-prompt'
+import { assertNoLinguistCatToolNameConflict, resolveLinguistSessionCatTools } from './linguist/session-cat-tools'
 import { buildPiMcpTools } from './adapters/pi-mcp-tools'
 import { buildAgentRuntimeEnv, mergeRuntimeEnv, type AgentRuntimeEnv } from './agent-runtime-env'
 import { isVisibleRunMessage } from './agent-run-message-visibility'
@@ -90,6 +99,8 @@ export interface SessionCallbacks {
   onTitleUpdated: (title: string) => void
   /** 用户消息已持久化，外部入口可据此通知前端切到实时会话 */
   onRunStarted?: (opts: { startedAt: number }) => void
+  /** Agent CAT Tool 成功提交项目写入后的窄事件。 */
+  onLinguistProjectMutation?: (event: LinguistProjectMutationEvent) => void
 }
 
 type RecoverableAgentQueryOptions = {
@@ -789,7 +800,12 @@ export class AgentOrchestrator {
     appendSDKMessages(sessionId, withTimestamps)
   }
 
-  private persistUserMessage(sessionId: string, userMessage: string, createdAt = Date.now()): void {
+  private persistUserMessage(
+    sessionId: string,
+    userMessage: string,
+    createdAt = Date.now(),
+    linguistContext?: Readonly<LinguistTurnContextV1>,
+  ): void {
     const userSDKMsg: SDKMessage = {
       type: 'user',
       message: {
@@ -797,6 +813,7 @@ export class AgentOrchestrator {
       },
       parent_tool_use_id: null,
       _createdAt: createdAt,
+      ...(linguistContext ? { linguistContext } : {}),
     } as unknown as SDKMessage
     appendSDKMessages(sessionId, [userSDKMsg])
   }
@@ -842,14 +859,29 @@ export class AgentOrchestrator {
    * 通过 EventBus 分发 AgentEvent，通过 callbacks 发送控制信号。
    */
   async sendMessage(input: AgentSendInput, callbacks: SessionCallbacks): Promise<void> {
-    const { sessionId, userMessage, channelId, modelId, agentRuntime: inputAgentRuntime, workspaceId, additionalDirectories, customMcpServers, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, automationContext, retryOfErrorUuid } = input
+    const { sessionId, userMessage, channelId, modelId, agentRuntime: inputAgentRuntime, workspaceId, additionalDirectories, customMcpServers, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, automationContext, retryOfErrorUuid, linguistContext } = input
     const stderrChunks: string[] = []
     const streamStartedAt = input.startedAt ?? Date.now()
     let userMessagePersisted = false
+    let validatedLinguistContext: Readonly<LinguistTurnContextV1> | undefined
+
+    try {
+      // 持久化前先完成主进程 ownership 校验，拒绝把伪造 ID 写入历史。
+      validatedLinguistContext = validateLinguistTurnContextForAgentTurn(
+        linguistContext,
+        getAgentSessionMeta(sessionId) ?? undefined,
+        getLinguistProjectService,
+      )?.context
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown context validation error'
+      callbacks.onError(`Linguist Context 校验失败：${message}`)
+      callbacks.onComplete([], { startedAt: streamStartedAt })
+      return
+    }
 
     const persistInitialUserMessage = (): void => {
       if (userMessagePersisted) return
-      this.persistUserMessage(sessionId, userMessage)
+      this.persistUserMessage(sessionId, userMessage, Date.now(), validatedLinguistContext)
       userMessagePersisted = true
       callbacks.onRunStarted?.({ startedAt: streamStartedAt })
     }
@@ -1010,6 +1042,30 @@ export class AgentOrchestrator {
     }
     console.log(`[Agent 编排] Agent runtime: ${agentRuntime}`)
 
+    // 2.05 Linguist 项目绑定会话：归档、缺失或服务不可用均 fail closed。
+    // renderer 另有徽章/通告提示；这里是模型调用前的真实强制点。
+    const linguistSendBlock = checkLinguistSessionSendBlock(sessionMeta, getLinguistProjectService)
+    if (linguistSendBlock) {
+      reportPreflightError(linguistSendBlock)
+      return
+    }
+    try {
+      validatedLinguistContext = validateLinguistTurnContextForAgentTurn(
+        validatedLinguistContext,
+        sessionMeta,
+        getLinguistProjectService,
+      )?.context
+    } catch (error) {
+      reportPreflightError({
+        code: 'invalid_request',
+        title: 'Linguist Context 无效',
+        message: error instanceof Error ? error.message : 'context validation failed',
+        actions: [],
+        canRetry: false,
+      })
+      return
+    }
+
     if (!channel.enabled) {
       reportPreflightError({
         code: 'channel_disabled',
@@ -1152,7 +1208,7 @@ export class AgentOrchestrator {
               key: 'i',
               label: '报告问题',
               action: 'open_external',
-              payload: 'https://github.com/ErlichLiu/Proma/issues/new',
+              payload: 'https://github.com/proma-ai/Proma/issues/new',
             },
           ],
           canRetry: false,
@@ -1235,7 +1291,7 @@ export class AgentOrchestrator {
 
       // 9.6 直接信任已保存的 sdkSessionId，跳过 listSessions 预验证
       // 原因：listSessions({ dir }) 基于 cwd 路径哈希查找，但 session 级别的 cwd
-      // （如 ~/.proma/agent-workspaces/workspace-xxx/sessionId）与 SDK 内部存储的路径哈希可能不匹配，
+      // （如 ~/.linguist-agent/agent-workspaces/workspace-xxx/sessionId）与 SDK 内部存储的路径哈希可能不匹配，
       // 导致 listSessions 始终返回 0 个会话，误杀有效的 resume。
       // SDK 本身会优雅处理无效的 resume ID（回退为新会话），无需预验证。
       if (existingSdkSessionId) {
@@ -1303,6 +1359,9 @@ export class AgentOrchestrator {
         workspaceSlug,
         agentCwd,
       })
+      const linguistContextBlock = validatedLinguistContext
+        ? buildLinguistTurnContextBlock(validatedLinguistContext)
+        : ''
 
       // 11.5 注入 mention 引用指令（Skill/MCP/会话）— 仅影响 prompt，不影响持久化
       let enrichedMessage = userMessage
@@ -1326,7 +1385,11 @@ export class AgentOrchestrator {
         console.log(`[Agent 编排] 注入 mentioned_tools: ${mentionedSkills?.length ?? 0} skills, ${mentionedMcpServers?.length ?? 0} MCP`)
       }
 
-      const contextualMessage = `${dynamicCtx}\n\n${enrichedMessage}`
+      const contextualMessage = [
+        dynamicCtx,
+        linguistContextBlock,
+        enrichedMessage,
+      ].filter(Boolean).join('\n\n')
 
       const isCompactCommand = userMessage.trim() === '/compact'
       const finalPrompt = isCompactCommand
@@ -1622,7 +1685,27 @@ export class AgentOrchestrator {
           event: { type: 'context_window', contextWindow },
         })
       }
-      const piCustomTools = [...piBuiltinTools, ...piMcpTools]
+      // PB-042：项目绑定会话在既有 customTools 缝上追加五个只读 CAT 工具
+      // （白名单 lib/linguist/session-cat-tools.ts）——普通会话 []；绑定会话
+      // active/archived/missing 均装配（missing 时工具调用抛 PROJECT_MISSING，
+      // 失败对模型可读；archived 发送已被 PB-034 闸门阻断，工具 inert）。
+      // 工具数组每次发送重建、绑定状态每次调用实时重解析，resume/queueMessage
+      // 复用 sendMessage 建立的活跃 Pi 会话，自然一致。cat_* 撞名属编程错误，
+      // init 时 fail loud（绝不静默覆盖既有工具实现）。
+      const piLinguistCatTools = agentRuntime === 'pi'
+        ? resolveLinguistSessionCatTools(
+          sessionMeta,
+          getLinguistProjectService,
+          callbacks.onLinguistProjectMutation,
+        )
+        : []
+      assertNoLinguistCatToolNameConflict(
+        [...piBuiltinTools, ...piMcpTools]
+          .map((tool) => (tool as { name?: unknown } | null | undefined)?.name)
+          .filter((name): name is string => typeof name === 'string'),
+        piLinguistCatTools,
+      )
+      const piCustomTools = [...piBuiltinTools, ...piMcpTools, ...piLinguistCatTools]
       const queryOptions: ClaudeAgentQueryOptions | PiAgentQueryOptions = agentRuntime === 'pi' ? {
         agentRuntime: 'pi',
         sessionId,
@@ -1641,12 +1724,25 @@ export class AgentOrchestrator {
         ...(maxTurns != null && { maxTurns }),
         permissionMode: initialPermissionMode,
         canUseTool,
-        systemPrompt: systemPromptAppend + buildPiAdditionalDirectoriesPrompt(allAdditionalDirectories),
+        // PB-095：项目绑定会话追加六类项目资产摘要（Style Guide/技术约束/
+        // Voice Profiles/Context 目录；普通会话与 missing 绑定为空串，fail closed）。
+        systemPrompt: systemPromptAppend + buildPiAdditionalDirectoriesPrompt(allAdditionalDirectories)
+          + buildLinguistProjectAssetsPrompt(sessionMeta, getLinguistProjectService),
         resumeSessionId: existingSdkSessionId,
         piAgentDir: getSdkConfigDir(),
         piSessionDir: join(getSdkConfigDir(), 'sessions'),
         ...(allAdditionalDirectories.length > 0 && { additionalDirectories: allAdditionalDirectories }),
-        ...(workspaceSlug ? { additionalSkillPaths: [getWorkspaceSkillsDir(workspaceSlug)] } : {}),
+        // PB-040：项目绑定会话在既有 additionalSkillPaths 缝上追加常驻 project-assistant
+        // Skill（active/archived 注入；missing/普通会话/服务不可解析不注入，fail closed）。
+        // 每次发送实时重解析，resume 走同一解析自然一致；Skill 列表不持久化进会话状态。
+        ...(workspaceSlug || sessionMeta?.linguistProjectId
+          ? {
+            additionalSkillPaths: [
+              ...(workspaceSlug ? [getWorkspaceSkillsDir(workspaceSlug)] : []),
+              ...resolveLinguistSessionSkillPaths(sessionMeta, getLinguistProjectService),
+            ],
+          }
+          : {}),
         ...(mentionedSkills?.length ? { skillMentions: mentionedSkills } : {}),
         ...(isCompactCommand ? { compactRequest: true } : {}),
         ...(sessionMeta?.codexFastMode && channel.provider === 'openai-codex' ? { codexFastMode: true } : {}),
@@ -2424,7 +2520,7 @@ export class AgentOrchestrator {
           // 此终止分支只会被「非 session-not-found」的错误命中（session 失效已在上文
           // isSessionNotFoundError 分支单独处理并切到恢复模式）。网络断连、服务端 5xx、
           // 未知错误都不代表 SDK 会话本身失效——其完整历史 JSONL 仍保存在
-          // ~/.proma/sdk-config/projects/.../{sdkSessionId}.jsonl 中，依旧可 resume。
+          // ~/.linguist-agent/sdk-config/projects/.../{sdkSessionId}.jsonl 中，依旧可 resume。
           // 此前这里对 `!apiError`（如普通断连解析不出状态码）一律清除指针，导致下一轮
           // 退化为「仅回填最近 N 条」的冷启动，上下文从满载骤降（#903）。
           if (existingSdkSessionId) {
@@ -2643,6 +2739,7 @@ export class AgentOrchestrator {
     mentionedSkills?: string[],
     mentionedMcpServers?: string[],
     mentionedSessionIds?: string[],
+    linguistContext?: Readonly<LinguistTurnContextV1>,
   ): Promise<string> {
     if (!this.activeSessions.has(sessionId)) {
       throw new Error(`[Agent 编排] 会话未运行，无法追加消息: ${sessionId}`)
@@ -2654,6 +2751,18 @@ export class AgentOrchestrator {
 
     // 注入 mention 引用指令（Skill/MCP/会话）— 与 sendMessage 路径保持一致的 prompt 加工
     const meta = getAgentSessionMeta(sessionId)
+
+    // Linguist 项目绑定会话：归档项目只读，流式追加同样拒绝（与 sendMessage 闸门一致，PB-034）
+    const linguistQueueBlock = checkLinguistSessionSendBlock(meta ?? undefined, getLinguistProjectService)
+    if (linguistQueueBlock) {
+      throw new Error(`${linguistQueueBlock.title}: ${linguistQueueBlock.message}`)
+    }
+    const validatedLinguistContext = validateLinguistTurnContextForAgentTurn(
+      linguistContext,
+      meta ?? undefined,
+      getLinguistProjectService,
+    )?.context
+
     const workspaceSlug = meta?.workspaceId
       ? getAgentWorkspace(meta.workspaceId)?.slug
       : undefined
@@ -2675,6 +2784,9 @@ export class AgentOrchestrator {
         toolLines.push(`- MCP 服务器: ${name}（请使用此 MCP 服务器的工具来完成任务）`)
       }
       enrichedText = `<mentioned_tools>\n${toolLines.join('\n')}\n</mentioned_tools>\n\n${enrichedText}`
+    }
+    if (validatedLinguistContext) {
+      enrichedText = `${buildLinguistTurnContextBlock(validatedLinguistContext)}\n\n${enrichedText}`
     }
 
     const uuid = presetUuid || randomUUID()
@@ -2718,6 +2830,7 @@ export class AgentOrchestrator {
         },
         parent_tool_use_id: null,
         _createdAt: Date.now(),
+        ...(validatedLinguistContext ? { linguistContext: validatedLinguistContext } : {}),
       } as unknown as SDKMessage
       appendSDKMessages(sessionId, [persistMsg])
     } catch (error) {

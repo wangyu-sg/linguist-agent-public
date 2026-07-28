@@ -35,6 +35,8 @@ export function PromptEditorSidebar(): React.ReactElement {
   const [editName, setEditName] = React.useState('')
   const [editContent, setEditContent] = React.useState('')
   const [hoveredId, setHoveredId] = React.useState<string | null>(null)
+  const promptNameId = React.useId()
+  const promptContentId = React.useId()
 
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -181,8 +183,9 @@ export function PromptEditorSidebar(): React.ReactElement {
       {selectedPrompt && (
         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto p-3 gap-3">
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">名称</label>
+            <label htmlFor={promptNameId} className="text-xs font-medium text-muted-foreground mb-1.5 block">名称</label>
             <Input
+              id={promptNameId}
               value={editName}
               onChange={(e) => handleNameChange(e.target.value)}
               readOnly={selectedPrompt.isBuiltin}
@@ -191,8 +194,9 @@ export function PromptEditorSidebar(): React.ReactElement {
             />
           </div>
           <div className="flex-1 min-h-0 flex flex-col">
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">内容</label>
+            <label htmlFor={promptContentId} className="text-xs font-medium text-muted-foreground mb-1.5 block">内容</label>
             <Textarea
+              id={promptContentId}
               value={editContent}
               onChange={(e) => handleContentChange(e.target.value)}
               readOnly={selectedPrompt.isBuiltin}
@@ -259,7 +263,7 @@ function SidebarPromptItem({
           <span className="text-[10px] text-muted-foreground shrink-0">(内置)</span>
         )}
         {isDefault && (
-          <Star className="size-3 text-amber-500 fill-amber-500 shrink-0" />
+          <Star className="size-3 text-warning fill-warning shrink-0" />
         )}
       </div>
 

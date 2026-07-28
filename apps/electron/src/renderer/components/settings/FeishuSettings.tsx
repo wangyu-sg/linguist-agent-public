@@ -68,9 +68,9 @@ const TAB_OPTIONS: Array<{ value: FeishuTab; label: string }> = [
 /** 连接状态颜色映射 */
 const STATUS_CONFIG = {
   disconnected: { color: 'bg-gray-400', label: '未连接' },
-  connecting: { color: 'bg-amber-400 animate-pulse', label: '连接中...' },
-  connected: { color: 'bg-green-500', label: '已连接' },
-  error: { color: 'bg-red-500', label: '连接错误' },
+  connecting: { color: 'bg-warning animate-pulse', label: '连接中...' },
+  connected: { color: 'bg-success', label: '已连接' },
+  error: { color: 'bg-destructive', label: '连接错误' },
 } as const
 
 
@@ -282,7 +282,7 @@ function PermissionsStep(): React.ReactElement {
           onClick={handleCopy}
           className={cn(
             'gap-2 transition-all',
-            copied && 'bg-green-600 hover:bg-green-600 text-white'
+            copied && 'bg-success hover:bg-success text-white'
           )}
         >
           {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -449,7 +449,7 @@ const FeishuBindingCard = React.memo(function FeishuBindingCard({
         <div className="flex items-center gap-2.5">
           <div className={cn(
             'flex items-center justify-center w-8 h-8 rounded-lg',
-            isGroup ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-green-500/10 text-green-600 dark:text-green-400'
+            isGroup ? 'bg-info/10 text-info' : 'bg-success/10 text-success'
           )}>
             {isGroup ? <Users size={16} /> : <User size={16} />}
           </div>
@@ -991,7 +991,7 @@ function RegisterFeishuDialog({ open, onOpenChange, onSuccess }: RegisterFeishuD
           {phase === 'success' && (
             <div className="w-full flex flex-col items-center gap-4 py-2">
               <div className="flex flex-col items-center gap-2 text-sm">
-                <CheckCircle2 size={32} className="text-green-600" />
+                <CheckCircle2 size={32} className="text-success" />
                 <span className="text-foreground font-medium">应用创建成功</span>
                 <span className="text-xs text-muted-foreground">已自动保存配置，正在启动 Bot…</span>
               </div>
@@ -1003,7 +1003,7 @@ function RegisterFeishuDialog({ open, onOpenChange, onSuccess }: RegisterFeishuD
 
           {phase === 'error' && (
             <div className="flex flex-col items-center gap-2 py-8 text-sm">
-              <XCircle size={32} className="text-red-600" />
+              <XCircle size={32} className="text-destructive" />
               <span className="text-foreground font-medium">创建失败</span>
               <span className="text-xs text-muted-foreground text-center max-w-[300px]">{errorMsg || '未知错误，请稍后重试'}</span>
             </div>
@@ -1130,27 +1130,27 @@ function SessionMirrorSection({ bots }: { bots: FeishuBotConfig[] }): React.Reac
             </Select>
           </div>
 
-          <div className="flex items-start gap-2 rounded-lg bg-blue-500/10 px-3 py-3 text-xs text-blue-700 dark:text-blue-300">
+          <div className="flex items-start gap-2 rounded-lg bg-info/10 px-3 py-3 text-xs text-info">
             <MessageSquare size={15} className="mt-0.5 flex-shrink-0" />
             <div className="leading-relaxed">
               实时同步模式下，一个 Proma Session 对应一个飞书群。即使配置了多个 Bot，也只会使用这里选中的 Bot，避免同一 Session 被多个 Bot 重复建群或拆散上下文。
             </div>
           </div>
 
-          <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-3 text-xs text-amber-800 dark:text-amber-300">
+          <div className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-3 text-xs text-warning">
             <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
             <div className="space-y-1 leading-relaxed">
-              <div className="font-medium text-amber-900 dark:text-amber-200">想在仅你和 Bot 的群里不 @Bot 也能继续发送消息，需要额外申请两个权限。</div>
+              <div className="font-medium text-warning">想在仅你和 Bot 的群里不 @Bot 也能继续发送消息，需要额外申请两个权限。</div>
               <div>
                 请在飞书开放平台为同步 Bot 申请并发布以下权限：
               </div>
               <div className="flex flex-col gap-1 pl-1">
                 <div>
-                  <code className="rounded bg-amber-500/15 px-1 py-0.5 text-[11px] text-amber-900 dark:text-amber-100">im:message.group_msg</code>
+                  <code className="rounded bg-warning/15 px-1 py-0.5 text-[11px] text-warning">im:message.group_msg</code>
                   {' '}— 接收群聊中所有用户消息（否则飞书不会把非 @ 的群消息推送给 Proma）
                 </div>
                 <div>
-                  <code className="rounded bg-amber-500/15 px-1 py-0.5 text-[11px] text-amber-900 dark:text-amber-100">im:chat</code>
+                  <code className="rounded bg-warning/15 px-1 py-0.5 text-[11px] text-warning">im:chat</code>
                   {' '}— 读取群基础信息以判断群里只有你和 Bot（缺少时无法识别 2 人群，仍需 @Bot）
                 </div>
               </div>
@@ -1161,7 +1161,7 @@ function SessionMirrorSection({ bots }: { bots: FeishuBotConfig[] }): React.Reac
           </div>
 
           {showBotBindingWarning && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-3 text-xs text-amber-800 dark:text-amber-300">
+            <div className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-3 text-xs text-warning">
               <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
               <div className="leading-relaxed">
                 当前同步 Bot 还没有绑定记录。请先在飞书里向「{selectedBot?.name ?? '该 Bot'}」发送一条消息，Proma 记录你的 open_id 后才能自动为新 Session 建群。
@@ -1325,7 +1325,7 @@ function BotConfigCard({ bot, state, onSaved, onRemoved }: BotConfigCardProps): 
           ) : bot.appId ? (
             <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); handleToggle() }}
               disabled={state?.status === 'connecting'}>
-              {state?.status === 'connecting' ? <Loader2 size={14} className="animate-spin mr-1" /> : <Power size={14} className="mr-1" />}
+              {state?.status === 'connecting' ? <Loader2 size={14} className="animate-spin motion-reduce:hidden mr-1" /> : <Power size={14} className="mr-1" />}
               启动
             </Button>
           ) : null}
@@ -1389,7 +1389,7 @@ function BotConfigCard({ bot, state, onSaved, onRemoved }: BotConfigCardProps): 
           {testResult && (
             <div className={cn(
               'p-3 rounded-lg flex items-start gap-2 text-sm',
-              testResult.success ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'
+              testResult.success ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
             )}>
               {testResult.success
                 ? <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
@@ -1400,7 +1400,7 @@ function BotConfigCard({ bot, state, onSaved, onRemoved }: BotConfigCardProps): 
           )}
 
           {state?.status === 'error' && state.errorMessage && (
-            <div className="p-2.5 rounded-lg bg-red-500/10 text-red-700 dark:text-red-400 text-sm">
+            <div className="p-2.5 rounded-lg bg-destructive/10 text-destructive text-sm">
               {state.errorMessage}
             </div>
           )}
@@ -1665,7 +1665,7 @@ function FeishuConfigTab(): React.ReactElement {
             </div>
 
             {/* 提示 */}
-            <div className="pl-7 p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
+            <div className="pl-7 p-3 rounded-lg bg-warning/10 text-warning text-xs">
               版本审核通过并发布后，在飞书中搜索机器人名称添加到聊天，
               即可通过飞书向 Proma Agent 发送指令。
             </div>

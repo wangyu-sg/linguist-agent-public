@@ -7,7 +7,7 @@
 
 import { atom } from 'jotai'
 import { atomFamily, atomWithStorage } from 'jotai/utils'
-import type { AgentSessionMeta, AgentEvent, AgentWorkspace, AgentPendingFile, RetryAttempt, PromaPermissionMode, PermissionRequest, AskUserRequest, ExitPlanModeRequest, ThinkingConfig, AgentEffort, SDKMessage, UnstagedChangesResult } from '@proma/shared'
+import type { AgentSessionMeta, AgentEvent, AgentWorkspace, AgentPendingFile, RetryAttempt, PromaPermissionMode, PermissionRequest, AskUserRequest, ExitPlanModeRequest, ThinkingConfig, AgentEffort, SDKMessage, UnstagedChangesResult, LinguistTurnContextParseResult, LinguistTurnContextV1 } from '@proma/shared'
 import { PROMA_DEFAULT_PERMISSION_MODE } from '@proma/shared'
 import { calculateDockBadgeCount, countPendingRequests } from '@/lib/dock-badge-count'
 import type { AgentQueuedMessage } from '@/lib/agent-message-queue'
@@ -207,11 +207,22 @@ export interface AgentPendingPrompt {
   sessionId: string
   message: string
   additionalDirectories?: string[]
+  /** 触发动作点击时冻结的项目上下文；普通 Agent pending prompt 不携带。 */
+  linguistContext?: Readonly<LinguistTurnContextV1>
 }
 
 // ===== Atoms =====
 
 export const agentSessionsAtom = atom<AgentSessionMeta[]>([])
+
+/** 组合根注入的同步快照函数；AgentView 不反向依赖 Linguist feature。 */
+export type AgentLinguistTurnContextCapture = (
+  projectId: string,
+) => LinguistTurnContextParseResult
+
+export const agentLinguistTurnContextCaptureAtom = atom<
+  AgentLinguistTurnContextCapture | null
+>(null)
 export const agentWorkspacesAtom = atom<AgentWorkspace[]>([])
 export const currentAgentWorkspaceIdAtom = atom<string | null>(null)
 /** 侧栏「自动任务」合成项目组在项目列表中的位置索引（默认 0 = 最靠前；从 settings.json 加载） */

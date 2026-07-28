@@ -19,6 +19,7 @@ import { ImageLightbox, type LightboxImage } from '@/components/ui/image-lightbo
 import { ContentBlock } from './ContentBlock'
 import { TurnFileChangesSummary, buildTurnFileNameMap } from './TurnFileChangesSummary'
 import { ProcessBlockGroup, buildAssistantTurnRenderItems, buildCompletedToolResultIds } from './ProcessBlockGroup'
+import { buildWorkedDividerLabel, countTurnSteps } from './turn-divider-utils'
 import { extractToolResultText, TASK_TOOL_NAMES } from './task-progress'
 import { normalizeThinkTagsInContentBlocks } from './thinking-tag-parser'
 // 会话转录的纯逻辑(Turn 分组 / 快照去重 / 预览)已下沉到 @proma/session-core 作为唯一真源。
@@ -65,6 +66,7 @@ import { useOpenPreview } from '@/components/diff/preview-opener'
 import { getFileParentPath } from '@/lib/file-utils'
 import { parseQuotedSelectionRefs } from '@/lib/quoted-selection'
 import type { ParsedQuotedSelectionRef } from '@/lib/quoted-selection'
+import { AUTOMATIONS_VISIBLE } from '@/lib/feature-flags'
 import type {
   SDKMessage,
   SDKAssistantMessage,
@@ -133,8 +135,8 @@ function PermissionDeniedNotice({ message }: { message: SDKSystemMessage }): Rea
 
   return (
     <div className="my-3 pl-[46px] pr-1">
-      <div className="flex items-start gap-2.5 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-foreground/80">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+      <div className="flex items-start gap-2.5 rounded-md border border-warning/40 bg-warning-soft/60 px-3 py-2.5 text-xs text-foreground/80">
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-foreground">权限检查已拒绝操作</span>
@@ -481,6 +483,9 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
     [turn.turnMessages]
   )
 
+  // Worked divider 文案（纯派生：耗时同 DurationBadge 数据源，steps 为顶层工具调用数）
+  const workedLabel = buildWorkedDividerLabel(durationMs, countTurnSteps(topLevelBlocks))
+
   // 如果只有错误消息
   if (enrichedBlocks.length === 0 && hasError && errorContent) {
     return (
@@ -609,6 +614,14 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
           </MessageActions>
         )
       })()}
+      {/* Worked divider：turn 完成后显示「Worked for Xs · N steps」（纯派生，PB-101） */}
+      {!isStreaming && workedLabel && (
+        <div className="mt-3 flex select-none items-center gap-2.5 pl-[46px]" aria-hidden="true">
+          <span className="h-px flex-1 bg-border/60" />
+          <span className="text-xs tabular-nums text-foreground-faint">{workedLabel}</span>
+          <span className="h-px flex-1 bg-border/60" />
+        </div>
+      )}
     </Message>
   )
 }
@@ -979,9 +992,10 @@ function UserInputMessage({ message }: { message: SDKUserMessage }): React.React
           {(meta.createdAt || isScheduledRun) && (
             <span className="flex items-center gap-2 leading-none">
               {meta.createdAt && (
-                <span className="message-time text-[10px] text-foreground/[0.38]">{formatMessageTime(meta.createdAt)}</span>
+                <span className="message-time text-[10px] text-foreground/60">{formatMessageTime(meta.createdAt)}</span>
               )}
-              {isScheduledRun && (
+              {/* D-007（PB-012）：v1 隐藏定时任务入口徽章；恢复见 lib/feature-flags.ts */}
+              {isScheduledRun && AUTOMATIONS_VISIBLE && (
                 <ScheduledRunBadge />
               )}
             </span>
@@ -1393,8 +1407,21 @@ export function MessageGroupRenderer({ group, allMessages, basePath, onFork, onR
   }
 
   // assistant-turn
+  //
+  // PB-101：窗口内的离屏 turn 继续用 content-visibility 跳过布局/绘制；
+  // AC-007 已在 AgentMessages 限制首次挂载的历史窗口，避免完整长线程先构建全部
+  // React/Markdown 节点。contain-intrinsic-size 为当前窗口内离屏 turn 提供高度估值。
+  // 兼容性：
+  // - StickToBottom 依赖 scrollHeight 测量：估值偏差只影响滚动条滑块比例，不影响吸底判定；
+  //   流式中的 turn 不启用（isStreaming 时不加 style），避免高度估值与吸底滚动互相干扰。
+  // - ScrollMinimap 通过完整数据导航；目标不在当前 DOM 时会先请求 AgentMessages
+  //   切换历史窗口，再定位 data-message-id。
   return (
-    <div data-message-id={groupId} data-message-role="assistant">
+    <div
+      data-message-id={groupId}
+      data-message-role="assistant"
+      style={isStreaming ? undefined : { contentVisibility: 'auto', containIntrinsicSize: 'auto 600px' }}
+    >
       <AssistantTurnRenderer
         turn={group}
         allMessages={allMessages}

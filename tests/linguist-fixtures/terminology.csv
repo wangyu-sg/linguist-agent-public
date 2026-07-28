@@ -1,0 +1,7 @@
+term,translation,note
+health potion,生命药水,Consumable item
+mana,法力,Resource stat
+cooldown,冷却时间,Ability mechanic
+quest,任务,Do not translate proper quest names
+critical hit,暴击,Combat term
+inventory,背包,UI term

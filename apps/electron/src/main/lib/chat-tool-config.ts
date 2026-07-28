@@ -1,7 +1,7 @@
 /**
  * Chat 工具配置服务
  *
- * 管理 ~/.proma/chat-tools.json 的读写。
+ * 管理 ~/.linguist-agent/chat-tools.json 的读写。
  * 存储工具开关状态和非记忆工具的凭据。
  * 记忆凭据保留在 memory.json（Chat + Agent 共用）。
  */

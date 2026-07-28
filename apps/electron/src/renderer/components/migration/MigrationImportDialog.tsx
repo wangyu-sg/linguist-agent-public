@@ -97,7 +97,7 @@ export function MigrationImportDialog(): React.ReactElement {
               </button>
 
               {importResult && !importResult.success && (
-                <div className="flex items-center gap-1.5 text-sm text-red-500">
+                <div className="flex items-center gap-1.5 text-sm text-destructive">
                   <XCircle size={15} />
                   {importResult.error}
                 </div>
@@ -110,11 +110,11 @@ export function MigrationImportDialog(): React.ReactElement {
             <div className="space-y-4">
               {/* 跨平台警告 */}
               {importPreview.crossPlatform && (
-                <div className="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 dark:bg-amber-950/20 dark:border-amber-800">
-                  <AlertTriangle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-amber-700 dark:text-amber-400">
+                <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning-soft/60 px-4 py-3">
+                  <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-warning" />
+                  <div className="text-sm text-warning-foreground">
                     <p className="font-medium">检测到跨平台迁移（{importPreview.manifest.sourcePlatform} → 当前系统）</p>
-                    <p className="mt-0.5 text-amber-600 dark:text-amber-500">部分 Skills 和 MCP 工具可能需要手动调整命令路径。</p>
+                    <p className="mt-0.5 text-warning-foreground/80">部分 Skills 和 MCP 工具可能需要手动调整命令路径。</p>
                   </div>
                 </div>
               )}
@@ -143,9 +143,9 @@ export function MigrationImportDialog(): React.ReactElement {
                       <div key={r.path} className="px-4 py-3 space-y-1.5">
                         <div className="flex items-center gap-2">
                           {r.exists ? (
-                            <CheckCircle2 size={14} className="text-green-500 flex-shrink-0" />
+                            <CheckCircle2 size={14} className="text-success flex-shrink-0" />
                           ) : (
-                            <XCircle size={14} className="text-red-400 flex-shrink-0" />
+                            <XCircle size={14} className="text-destructive flex-shrink-0" />
                           )}
                           <span className="text-xs font-mono text-foreground truncate">{r.path}</span>
                         </div>
@@ -201,7 +201,7 @@ export function MigrationImportDialog(): React.ReactElement {
               </div>
 
               {importResult && !importResult.success && (
-                <div className="flex items-center gap-1.5 text-sm text-red-500">
+                <div className="flex items-center gap-1.5 text-sm text-destructive">
                   <XCircle size={15} />
                   {importResult.error}
                 </div>
@@ -212,8 +212,8 @@ export function MigrationImportDialog(): React.ReactElement {
           {/* 阶段 3：导入成功 */}
           {importResult?.success && !importPreview && (
             <div className="flex flex-col items-center gap-4 py-6">
-              <div className="w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center">
-                <CheckCircle2 size={28} className="text-green-500" />
+              <div className="w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center">
+                <CheckCircle2 size={28} className="text-success" />
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-foreground">导入成功</p>
@@ -315,7 +315,7 @@ function V2ContentSummary({ preview, workspaceMappings, localWorkspaces, onWorks
               <div key={ws.workspaceSlug} className="px-4 py-3 space-y-2">
                 <div className="flex items-center gap-2">
                   {ws.existsLocally ? (
-                    <CheckCircle2 size={14} className="text-green-500 flex-shrink-0" />
+                    <CheckCircle2 size={14} className="text-success flex-shrink-0" />
                   ) : (
                     <span className="w-3.5 h-3.5 rounded-full border-2 border-blue-400 flex-shrink-0" />
                   )}
@@ -326,7 +326,7 @@ function V2ContentSummary({ preview, workspaceMappings, localWorkspaces, onWorks
                   {ws.skillNames.length > 0 && <span>Skills: {ws.skillNames.length} 个</span>}
                   {ws.mcpServerNames.length > 0 && <span>MCP: {ws.mcpServerNames.length} 个</span>}
                   {((ws.conflictingSkills?.length ?? 0) > 0 || (ws.conflictingMcpServers?.length ?? 0) > 0) && (
-                    <span className="text-amber-600 dark:text-amber-400">
+                    <span className="text-warning">
                       冲突: {[
                         (ws.conflictingSkills?.length ?? 0) > 0 ? `${ws.conflictingSkills.length} 个 Skill` : '',
                         (ws.conflictingMcpServers?.length ?? 0) > 0 ? `${ws.conflictingMcpServers.length} 个 MCP` : '',
@@ -382,18 +382,18 @@ function V2ContentSummary({ preview, workspaceMappings, localWorkspaces, onWorks
       </div>
 
       {hasConflicts && (
-        <div className="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 dark:bg-amber-950/20 dark:border-amber-800">
-          <AlertTriangle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+        <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning-soft/60 px-4 py-3">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-warning" />
           <div className="flex-1 space-y-2">
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+            <p className="text-sm font-medium text-warning-foreground">
               检测到同名 Skills / MCP 已存在于本地
             </p>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-amber-600 dark:text-amber-500">冲突处理：</span>
+              <span className="text-xs text-warning-foreground/80">冲突处理：</span>
               <select
                 value={conflictResolution}
                 onChange={(e) => onConflictResolutionChange(e.target.value as 'overwrite' | 'skip')}
-                className="text-xs border border-amber-300 dark:border-amber-700 rounded px-2 py-1 bg-background"
+                className="text-xs border border-warning/40 rounded px-2 py-1 bg-background"
               >
                 <option value="overwrite">用导入版本覆盖本地（推荐）</option>
                 <option value="skip">保留本地版本，跳过冲突项</option>

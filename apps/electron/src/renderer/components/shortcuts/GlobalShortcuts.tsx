@@ -42,6 +42,7 @@ import {
 } from '@/atoms/chat-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { useCreateSession } from '@/hooks/useCreateSession'
+import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
 import { useShortcut } from '@/hooks/useShortcut'
 import { useCloseTab } from '@/hooks/useCloseTab'
 import {
@@ -49,6 +50,7 @@ import {
   updateShortcutOverrides,
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
+import { getNextMode } from '@/components/app-shell/mode-switcher-utils'
 
 /**
  * 快捷键初始化 + 全局 Handler 注册
@@ -56,7 +58,7 @@ import { getFileParentPath } from '@/lib/file-utils'
  * 挂载后从 settings 加载自定义配置，并注册所有应用级快捷键。
  */
 export function GlobalShortcuts(): null {
-  const [appMode, setAppMode] = useAtom(appModeAtom)
+  const appMode = useAtomValue(appModeAtom)
   const [settingsOpen, setSettingsOpen] = useAtom(settingsOpenAtom)
   const channelFormDirty = useAtomValue(channelFormDirtyAtom)
   const setSettingsCloseRequested = useSetAtom(settingsCloseRequestedAtom)
@@ -66,6 +68,7 @@ export function GlobalShortcuts(): null {
   const shortcutOverrides = useAtomValue(shortcutOverridesAtom)
   const setSendWithCmdEnter = useSetAtom(sendWithCmdEnterAtom)
   const { createChat, createAgent } = useCreateSession()
+  const switchMode = useSwitchAppMode()
 
   // Tab 管理（用于关闭标签页）
   const activeTabId = useAtomValue(activeTabIdAtom)
@@ -141,11 +144,8 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'new-session',
     useCallback(() => {
-      if (appMode === 'agent') {
-        createAgent({ draft: true })
-      } else {
-        createChat({ draft: true })
-      }
+      if (appMode === 'agent') void createAgent({ draft: true })
+      if (appMode === 'chat') void createChat({ draft: true })
     }, [appMode, createAgent, createChat]),
   )
 
@@ -162,8 +162,8 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'toggle-mode',
     useCallback(
-      () => { if (appMode !== 'scratch') setAppMode(appMode === 'chat' ? 'agent' : 'chat') },
-      [appMode, setAppMode],
+      () => switchMode(getNextMode(appMode, 'ArrowRight')),
+      [appMode, switchMode],
     ),
   )
 
@@ -365,6 +365,11 @@ export function GlobalShortcuts(): null {
           : { type: 'chat' as const, sessionId: store.get(currentConversationIdAtom) }
       const target = activeTab ?? fallbackTarget
 
+      if (
+        target.type !== 'agent' &&
+        target.type !== 'preview' &&
+        target.type !== 'chat'
+      ) return
       if (!target.sessionId) return
 
       store.set(activeViewAtom, 'conversations')

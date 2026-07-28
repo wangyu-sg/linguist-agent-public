@@ -57,6 +57,7 @@ export function SpeechButton({
           )}
           onClick={handleClick}
           disabled={disabled}
+          aria-label="语音输入"
         >
           <MicIcon className="size-4" />
         </Button>

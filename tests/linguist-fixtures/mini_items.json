@@ -1,0 +1,23 @@
+{
+  "items": {
+    "potion": {
+      "name": "Health Potion",
+      "desc": "Restores {count} HP.\n\"Drink up, traveler!\"",
+      "lore": "晨露酿造，回甘绵长"
+    },
+    "sword": {
+      "name": "Iron Sword",
+      "desc": "A sturdy blade. Path: C:\\forge\\iron",
+      "flavor": "Forged at the caf\u00e9 forge"
+    }
+  },
+  "ui": {
+    "equip": "Equip",
+    "compare_hint": ""
+  },
+  "meta": {
+    "version": 3,
+    "premium_only": false,
+    "event_end": null
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@linguist/cat-formats",
+  "version": "0.0.6",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "CAT bilingual format adapters for Linguist Agent: adapter interface, registry, typed format errors and the generic round-trip test harness. Bytes in, bytes out — no fs, no Proma/Pi/Electron/React.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.8.11",
+    "@linguist/cat-core": "workspace:*",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

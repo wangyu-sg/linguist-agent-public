@@ -145,19 +145,19 @@ function statusMeta(status: string | undefined): {
     case 'in_progress':
       return {
         label: getTaskGetStatusLabel(status),
-        className: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+        className: 'border-info/20 bg-info/10 text-info',
         icon: Clock3,
       }
     case 'completed':
       return {
         label: getTaskGetStatusLabel(status),
-        className: 'border-green-500/20 bg-green-500/10 text-green-600 dark:text-green-400',
+        className: 'border-success/20 bg-success/10 text-success',
         icon: CheckCircle2,
       }
     case 'blocked':
       return {
         label: getTaskGetStatusLabel(status),
-        className: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+        className: 'border-warning/25 bg-warning/10 text-warning',
         icon: Circle,
       }
     case 'cancelled':

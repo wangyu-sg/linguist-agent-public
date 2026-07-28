@@ -17,9 +17,10 @@ import { agentSidePanelWidthAtom, currentAgentSessionIdAtom, currentSessionSideP
 import { leftSidebarWidthAtom } from '@/atoms/sidebar-atoms'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
 import { automationFormAtom } from '@/atoms/automation-atoms'
-import { activeViewAtom } from '@/atoms/active-view'
+import { activeViewAtom, resolveActiveViewForMode } from '@/atoms/active-view'
 import { interfaceVariantAtom } from '@/atoms/theme'
 import { WindowControls } from '@/components/WindowControls'
+import { shouldShowAgentRail, shouldSuppressAgentRail } from './right-rail-policy'
 import { detectIsWindows, WINDOW_CONTROLS_INSET_RIGHT } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +38,23 @@ function clampLeftSidebarWidth(width: number): number {
   return Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.min(MAX_LEFT_SIDEBAR_WIDTH, width))
 }
 
+/** 主内容区最小可用宽度（CSS px）：低于此值时右侧面板自动让位 */
+const MIN_MAIN_AREA_WIDTH = 320
+
+/**
+ * 响应式视口宽度（resize 事件驱动；webContents zoom 变化同样触发 resize）。
+ * 用于窄视口下的布局让位判定。
+ */
+function useViewportWidth(): number {
+  const [width, setWidth] = React.useState(() => window.innerWidth)
+  React.useEffect(() => {
+    const onResize = (): void => setWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return width
+}
+
 export interface AppShellProps {
   /** Context 值，用于传递给子组件 */
   contextValue: AppShellContextType
@@ -50,8 +68,14 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
   const interfaceVariant = useAtomValue(interfaceVariantAtom)
   const isClassic = interfaceVariant === 'classic'
   // 定时任务表单打开时隐藏右侧文件面板，让中间区域扩展到全宽（表单内含自己的右栏配置）
-  const activeView = useAtomValue(activeViewAtom)
-  const showRightPanel = appMode === 'agent' && !!currentSessionId && !automationForm.open && activeView !== 'automations' && activeView !== 'agent-skills'
+  const activeView = resolveActiveViewForMode(useAtomValue(activeViewAtom), appMode)
+  // Rail 可见性判定集中在 right-rail-policy（纯函数）。
+  const showRightPanel = shouldShowAgentRail({
+    appMode,
+    hasAgentSession: !!currentSessionId,
+    automationFormOpen: automationForm.open,
+    activeView,
+  })
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 
   // 左侧边栏可拖拽宽度
@@ -113,6 +137,19 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
   const [rightPanelWidth, setRightPanelWidth] = useAtom(agentSidePanelWidthAtom)
   const dragging = React.useRef(false)
   const clampedRightPanelWidth = clampRightPanelWidth(rightPanelWidth)
+
+  // PB-105 窄视口防破版：左栏（≥300）+ 右栏（≥300）在 200% zoom 等窄 CSS 视口下
+  // 会把主区挤到不可用（实测 640 CSS px 视口主区仅 39px）。视口放不下
+  // 「左栏 + 右栏 + 主区最小宽度」时右侧面板整体让位（不渲染）；视口加宽后
+  // 自动恢复，不改写用户的面板开关状态。
+  const viewportWidth = useViewportWidth()
+  const visibleLeftSidebarWidth = sidebarCollapsed ? 60 : clampedLeftSidebarWidth
+  const rightPanelSuppressed = shouldSuppressAgentRail(
+    viewportWidth,
+    visibleLeftSidebarWidth,
+    clampedRightPanelWidth,
+    MIN_MAIN_AREA_WIDTH,
+  )
 
   React.useEffect(() => {
     if (clampedRightPanelWidth !== rightPanelWidth) {
@@ -200,8 +237,8 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
           <MainArea />
         </div>
 
-        {/* 右侧边栏：Agent 文件面板 */}
-        {showRightPanel && (
+        {/* 右侧边栏：Agent 文件面板（窄视口让位，见 rightPanelSuppressed） */}
+        {showRightPanel && !rightPanelSuppressed && (
           <div
             className={cn(
               'relative z-[60] flex items-stretch crt-sidebar',

@@ -79,6 +79,7 @@ export function ToolSelectorPopover(): React.ReactElement {
                 inputToolbarButtonClass,
                 hasActiveTools && inputToolbarActiveButtonClass,
               )}
+              aria-label="工具"
             >
               <Wrench className="size-5" />
             </Button>
@@ -88,7 +89,7 @@ export function ToolSelectorPopover(): React.ReactElement {
           <p>工具</p>
         </TooltipContent>
       </Tooltip>
-      <PopoverContent className="w-64" side="top" align="center">
+      <PopoverContent aria-label="工具面板" className="w-64" side="top" align="center">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium">工具</span>
@@ -128,6 +129,7 @@ export function ToolSelectorPopover(): React.ReactElement {
                       )}
                     </div>
                     <Switch
+                      aria-label={tool.meta.name}
                       checked={isEnabled && canToggle}
                       onCheckedChange={() => toggleTool(tool.meta.id, isEnabled)}
                       disabled={!canToggle}

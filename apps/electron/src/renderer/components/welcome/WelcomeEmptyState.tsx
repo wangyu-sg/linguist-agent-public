@@ -8,13 +8,14 @@
  */
 
 import * as React from 'react'
-import { useAtomValue, useAtom } from 'jotai'
-import { Lightbulb, MessageSquare, Bot, StickyNote } from 'lucide-react'
+import { useAtomValue } from 'jotai'
+import { Lightbulb, MessageSquare, Bot } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { userProfileAtom } from '@/atoms/user-profile'
-import { appModeAtom, type AppMode } from '@/atoms/app-mode'
+import { appModeAtom } from '@/atoms/app-mode'
 import { themeStyleAtom } from '@/atoms/theme'
 import { getRandomTip, getPlatform, type Tip } from '@/lib/tips'
+import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
 
 /** 根据小时返回时段问候 */
 function getGreeting(hour: number): string {
@@ -25,15 +26,15 @@ function getGreeting(hour: number): string {
 }
 
 /** 模式配置 */
-const MODE_CONFIG: Record<AppMode, { icon: React.ReactNode; label: string }> = {
+const MODE_CONFIG: Record<'agent' | 'chat', { icon: React.ReactNode; label: string }> = {
   chat: { icon: <MessageSquare size={15} />, label: 'Chat' },
   agent: { icon: <Bot size={15} />, label: 'Agent' },
-  scratch: { icon: <StickyNote size={15} />, label: 'Scratch Pad' },
 }
 
 export function WelcomeEmptyState(): React.ReactElement {
   const userProfile = useAtomValue(userProfileAtom)
-  const [mode, setMode] = useAtom(appModeAtom)
+  const mode = useAtomValue(appModeAtom)
+  const switchMode = useSwitchAppMode()
   const themeStyle = useAtomValue(themeStyleAtom)
 
   // 稳定的随机 Tip（组件挂载时选一条）
@@ -46,11 +47,9 @@ export function WelcomeEmptyState(): React.ReactElement {
   // 森息晨光主题下选中按钮使用主色
   const selectedColor = themeStyle === 'forest-light' ? '#4a7858' : undefined
 
-  /** 切换模式：仅切换模式，不创建新会话 */
-  const handleModeSwitch = React.useCallback((targetMode: AppMode): void => {
-    if (targetMode === mode) return
-    setMode(targetMode)
-  }, [mode, setMode])
+  const handleModeSwitch = React.useCallback((targetMode: 'agent' | 'chat'): void => {
+    switchMode(targetMode)
+  }, [switchMode])
 
   return (
     <div className="welcome-empty-state flex h-full flex-col items-center justify-center gap-6 px-4">

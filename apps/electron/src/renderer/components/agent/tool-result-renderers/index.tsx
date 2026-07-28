@@ -17,6 +17,7 @@ import { WebFetchResultRenderer } from './web-fetch-result'
 import { TaskGetResultRenderer } from './task-get-result'
 import { TaskListResultRenderer } from './task-list-result'
 import { DefaultResultRenderer } from './default-result'
+import { CatResultRenderer } from './cat-result'
 
 export interface ToolResultRendererProps {
   toolName: string
@@ -49,6 +50,9 @@ export function ToolResultRenderer({ toolName, input, result, isError, basePath 
     case 'TaskList':
       return <TaskListResultRenderer result={result} isError={isError} />
     default:
+      if (toolName.startsWith('cat_')) {
+        return <CatResultRenderer toolName={toolName} result={result} isError={isError} />
+      }
       return <DefaultResultRenderer result={result} isError={isError} />
   }
 }

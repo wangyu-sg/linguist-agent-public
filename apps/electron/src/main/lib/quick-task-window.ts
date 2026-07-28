@@ -42,6 +42,8 @@ export function createQuickTaskWindow(): void {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
     },
   })
 

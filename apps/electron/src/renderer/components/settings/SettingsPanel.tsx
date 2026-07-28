@@ -31,7 +31,7 @@ import { appModeAtom } from "@/atoms/app-mode";
 import { activeViewAtom } from "@/atoms/active-view";
 import { automationFormAtom } from "@/atoms/automation-atoms";
 import { hasUpdateAtom } from "@/atoms/updater";
-import { tabsAtom, activeTabIdAtom, openTab, TUTORIAL_TAB_ID } from "@/atoms/tab-atoms";
+import { tabsAtom, activeTabIdAtom, openTab, TUTORIAL_TAB_ID, TUTORIAL_TAB_TITLE } from "@/atoms/tab-atoms";
 import { hasEnvironmentIssuesAtom } from "@/atoms/environment";
 import {
   AlertDialog,
@@ -43,6 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { REMOTE_BOTS_SETTINGS_VISIBLE } from "@/lib/feature-flags";
 import { ChannelSettings } from "./ChannelSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { ProxySettings } from "./ProxySettings";
@@ -83,7 +84,7 @@ const BOTS_TAB: TabItem = {
 };
 const TUTORIAL_TAB: TabItem = {
   id: "tutorial",
-  label: "Proma 教程",
+  label: "使用教程",
   icon: <GraduationCap size={16} />,
 };
 const SHORTCUTS_TAB: TabItem = {
@@ -181,7 +182,7 @@ export function SettingsPanel({
   /** 切换标签页时检测是否有未保存内容，tutorial 特殊处理：打开 New Tab 并关闭设置 */
   const handleTabChange = (tabId: SettingsTab): void => {
     if (tabId === 'tutorial') {
-      const result = openTab(mainTabs, { type: 'tutorial', sessionId: TUTORIAL_TAB_ID, title: 'Proma 使用教程' })
+      const result = openTab(mainTabs, { type: 'tutorial', sessionId: TUTORIAL_TAB_ID, title: TUTORIAL_TAB_TITLE })
       setMainTabs(result.tabs)
       setMainActiveTabId(result.activeTabId)
       // Skills/Automations 会全屏覆盖 TabContent；打开教程时先清理表单并回到会话视图。
@@ -216,25 +217,26 @@ export function SettingsPanel({
   }, [closeRequested, activeTab, setCloseRequested])
 
   // 工具 tab 两种模式都显示，Agent Skills / MCP 独立在侧边栏能力中心管理。
+  // D-007（PB-012）：v1 隐藏「远程连接」（飞书/钉钉/微信 Bot）设置页，
+  // 恢复时把 lib/feature-flags.ts 的 REMOTE_BOTS_SETTINGS_VISIBLE 改回 true。
   const tabs = React.useMemo(() => {
+    const middleTabs = [
+      TOOLS_TAB,
+      VOICE_INPUT_TAB,
+      ...(REMOTE_BOTS_SETTINGS_VISIBLE ? [BOTS_TAB] : []),
+      TUTORIAL_TAB,
+      SHORTCUTS_TAB,
+    ];
     if (appMode === "agent") {
       return [
         ...BASE_TABS,
-        TOOLS_TAB,
-        VOICE_INPUT_TAB,
-        BOTS_TAB,
-        TUTORIAL_TAB,
-        SHORTCUTS_TAB,
+        ...middleTabs,
         ...TAIL_TABS,
       ];
     }
     return [
       ...BASE_TABS,
-      TOOLS_TAB,
-      VOICE_INPUT_TAB,
-      BOTS_TAB,
-      TUTORIAL_TAB,
-      SHORTCUTS_TAB,
+      ...middleTabs,
       ...TAIL_TABS,
     ];
   }, [appMode]);
@@ -278,7 +280,7 @@ export function SettingsPanel({
                 {tab.icon}
                 <span>{tab.label}</span>
                 {tab.id === "about" && (hasUpdate || hasEnvironmentIssues) && (
-                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="w-2 h-2 rounded-full bg-destructive" />
                 )}
               </button>
             ))}

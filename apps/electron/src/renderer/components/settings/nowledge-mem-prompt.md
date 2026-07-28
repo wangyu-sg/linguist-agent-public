@@ -31,7 +31,7 @@ MCP、Skills、Hooks 都是按工作区生效的，所以**必须先问清楚用
 先列出当前所有工作区：
 
 ```bash
-ls ~/.proma/agent-workspaces/
+ls ~/.linguist-agent/agent-workspaces/
 ```
 
 然后**必须调用 `AskUserQuestion` 工具**向用户提问，不要用纯文本问，否则用户无法在选项中点选。具体参数：
@@ -85,7 +85,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 uvx nmem-cli status
 ```
 
-如果走方式 B，**记下"用户的 nmem 实际命令是 `uvx nmem-cli`"**——这个信息当前 Step 4 的 hooks 不直接用到（hooks 是调用 `~/.proma/scripts/` 下的 Python 脚本，跟 nmem CLI 无关），但用户排错或自己用 nmem 时需要知道。
+如果走方式 B，**记下"用户的 nmem 实际命令是 `uvx nmem-cli`"**——这个信息当前 Step 4 的 hooks 不直接用到（hooks 是调用 `~/.linguist-agent/scripts/` 下的 Python 脚本，跟 nmem CLI 无关），但用户排错或自己用 nmem 时需要知道。
 
 ### 方式 C · 最后兜底 · 仅 macOS
 
@@ -109,15 +109,15 @@ nmem status
 rm -rf /tmp/nowledge-community
 git clone https://github.com/nowledge-co/community.git /tmp/nowledge-community
 
-mkdir -p ~/.proma/scripts ~/.proma/agent-workspaces/<工作区名>/skills
-cp /tmp/nowledge-community/nowledge-mem-proma-plugin/hooks/save-to-nmem.py ~/.proma/scripts/
-cp /tmp/nowledge-community/nowledge-mem-proma-plugin/hooks/read-working-memory.py ~/.proma/scripts/
-chmod +x ~/.proma/scripts/save-to-nmem.py ~/.proma/scripts/read-working-memory.py
-cp -R /tmp/nowledge-community/nowledge-mem-proma-plugin/skills/{read-working-memory,search-memory,distill-memory,save-thread,status} ~/.proma/agent-workspaces/<工作区名>/skills/
+mkdir -p ~/.linguist-agent/scripts ~/.linguist-agent/agent-workspaces/<工作区名>/skills
+cp /tmp/nowledge-community/nowledge-mem-proma-plugin/hooks/save-to-nmem.py ~/.linguist-agent/scripts/
+cp /tmp/nowledge-community/nowledge-mem-proma-plugin/hooks/read-working-memory.py ~/.linguist-agent/scripts/
+chmod +x ~/.linguist-agent/scripts/save-to-nmem.py ~/.linguist-agent/scripts/read-working-memory.py
+cp -R /tmp/nowledge-community/nowledge-mem-proma-plugin/skills/{read-working-memory,search-memory,distill-memory,save-thread,status} ~/.linguist-agent/agent-workspaces/<工作区名>/skills/
 ```
 
 ## Step 3：配置目标工作区的 MCP
-在 `~/.proma/agent-workspaces/<工作区名>/mcp.json` 中创建或编辑（顶层 key 必须是 `servers`）：
+在 `~/.linguist-agent/agent-workspaces/<工作区名>/mcp.json` 中创建或编辑（顶层 key 必须是 `servers`）：
 
 ```json
 {
@@ -136,7 +136,7 @@ cp -R /tmp/nowledge-community/nowledge-mem-proma-plugin/skills/{read-working-mem
 如果文件已存在，把 `nowledge-mem` 合并进已有 `servers`，**不要覆盖其他条目**。
 
 ## Step 4：配置 Hooks
-编辑 `~/.proma/sdk-config/.claude/settings.json`，添加以下 hooks。如果文件已有内容则合并，不要覆盖。
+编辑 `~/.linguist-agent/sdk-config/.claude/settings.json`，添加以下 hooks。如果文件已有内容则合并，不要覆盖。
 
 **先把下面所有 `<工作区名>` 替换成 Step 0.5 中用户选择的工作区**：
 
@@ -197,12 +197,12 @@ cp -R /tmp/nowledge-community/nowledge-mem-proma-plugin/skills/{read-working-mem
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 nmem status
-python3 ~/.proma/scripts/read-working-memory.py
-grep 'nowledge-mem:start' ~/.proma/agent-workspaces/<工作区名>/CLAUDE.md && echo "Block 已注入" || echo "Block 缺失"
+python3 ~/.linguist-agent/scripts/read-working-memory.py
+grep 'nowledge-mem:start' ~/.linguist-agent/agent-workspaces/<工作区名>/CLAUDE.md && echo "Block 已注入" || echo "Block 缺失"
 
 # 检查 5 个 skill 是否都已安装到目标工作区
 for s in read-working-memory search-memory distill-memory save-thread status; do
-  if [ -d ~/.proma/agent-workspaces/<工作区名>/skills/$s ]; then
+  if [ -d ~/.linguist-agent/agent-workspaces/<工作区名>/skills/$s ]; then
     echo "✅ skill: $s"
   else
     echo "❌ skill: $s 缺失"
@@ -224,5 +224,5 @@ done
 MCP 和 Hooks 只在 Proma 启动时加载，不重启等于没有配置。
 
 重启后在新会话里验证：
-1. `cat ~/.proma/logs/nm-hooks.log` — 确认有新的 SessionStart 记录
+1. `cat ~/.linguist-agent/logs/nm-hooks.log` — 确认有新的 SessionStart 记录
 2. 用自然语言说「帮我记住：<想存的内容>」存第一条记忆

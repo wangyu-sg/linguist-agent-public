@@ -510,7 +510,7 @@ function SkillsTab({
   return (
     <div className="flex flex-col gap-8">
       {updateCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2 text-[13px] text-blue-600 dark:text-blue-400">
+        <div className="flex items-center gap-2 rounded-lg border border-info/20 bg-info/[0.06] px-3 py-2 text-[13px] text-info">
           有 {updateCount} 个 Skill 可更新到来源最新版本
         </div>
       )}

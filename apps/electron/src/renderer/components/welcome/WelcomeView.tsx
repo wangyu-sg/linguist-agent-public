@@ -10,13 +10,14 @@
  */
 
 import * as React from 'react'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import { Loader2 } from 'lucide-react'
 import { appModeAtom } from '@/atoms/app-mode'
 import { currentAgentWorkspaceIdAtom, agentSettingsReadyAtom } from '@/atoms/agent-atoms'
 import { tabsAtom, activeTabIdAtom, openTab } from '@/atoms/tab-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { useCreateSession } from '@/hooks/useCreateSession'
+import { restoreLastLocalizationProject } from '@/lib/linguist-navigation'
 
 export function WelcomeView(): React.ReactElement {
   const mode = useAtomValue(appModeAtom)
@@ -26,6 +27,7 @@ export function WelcomeView(): React.ReactElement {
   const [tabs, setTabs] = useAtom(tabsAtom)
   const setActiveTabId = useSetAtom(activeTabIdAtom)
   const { createChat, createAgent } = useCreateSession()
+  const store = useStore()
   const initRef = React.useRef<string | null>(null)
 
   // 将高频变化的值收集到 ref 中，避免污染 useEffect 依赖数组（否则 tabs/draftSessionIds
@@ -58,6 +60,11 @@ export function WelcomeView(): React.ReactElement {
     // 标记当前 mode 的请求，用于取消过期的异步回调
     const currentMode = mode
     initRef.current = mode
+
+    if (currentMode === 'linguist') {
+      restoreLastLocalizationProject(store)
+      return
+    }
 
     // 从后端 IPC 拿最新数据，避免 HMR 导致 atoms 重置为空时重复创建会话
     if (currentMode === 'chat') {
@@ -149,7 +156,7 @@ export function WelcomeView(): React.ReactElement {
         currentCreateAgent({ draft: true })
       }).catch(console.error)
     }
-  }, [mode, agentSettingsReady])
+  }, [mode, agentSettingsReady, store])
 
   // 短暂的过渡状态（通常几十毫秒内就会被 TabContent 替换）
   return (

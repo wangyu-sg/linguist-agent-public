@@ -1,13 +1,13 @@
 ---
 name: session-cleaner
 description: 把 Proma 会话 JSONL 清洗为干净可读的 Markdown 对话，并支持对超长会话的渐进式读取（概览 / 大纲 / 搜索 / 按 turn 区间导出），避免一次性全量读撑爆上下文。当用户提到"清洗会话""解析对话文件""提取对话上下文""过滤流式冗余""导出会话 Markdown""把会话转成对话""整理 agent-sessions""看某个会话讲了什么"时使用此技能。
-version: 2.0.0
+version: 2.0.1
 license: AGPL-3.0-only
 ---
 
 # Session Cleaner
 
-把 `~/.proma/agent-sessions/<id>.jsonl` 里被流式快照污染过的会话，清洗为干净 Markdown 对话。
+把 `~/.linguist-agent/agent-sessions/<id>.jsonl` 里被流式快照污染过的会话，清洗为干净 Markdown 对话。
 
 本技能是 `proma` CLI 的**薄封装**：所有解析 / 快照去重 / 渲染逻辑都在 `@proma/session-core`（仓库内唯一真源），由 `proma session` 命令暴露。技能本身不解析 JSONL，只负责教你按正确的顺序调用 CLI。
 
@@ -94,7 +94,7 @@ proma session export <id> --out cleaned/<id>.clean.md
 
 - **打包版（生产）**：`proma` 二进制随桌面 App 分发，应在 PATH 上或由运行时注入（见 PR4）。优先直接 `proma session ...`。
 - **开发/源码环境**：若 `proma` 不在 PATH，用 `bun <repo>/apps/cli/src/index.ts session ...` 直接跑源码。
-- **配置目录**：CLI 默认读 `~/.proma`；开发模式数据在 `~/.proma-dev`，加 `--dev` 或设 `PROMA_DEV=1`。
+- **配置目录**：CLI 默认读 `~/.linguist-agent`；开发模式数据在 `~/.linguist-agent-dev`，加 `--dev` 或设 `PROMA_DEV=1`。
 
 ## 实现要点（供维护者）
 

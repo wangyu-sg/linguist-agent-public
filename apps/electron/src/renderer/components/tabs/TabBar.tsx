@@ -139,6 +139,10 @@ export function TabBar(): React.ReactElement {
           agentWorkspaceId: session.workspaceId,
         }).catch(console.error)
       }
+    } else if (tab.type === 'linguist-project') {
+      setAppMode('linguist')
+      setCurrentConversationId(null)
+      setCurrentAgentSessionId(null)
     } else if (tab.type === 'scratch' || tab.type === 'tutorial') {
       setCurrentConversationId(null)
       if (appMode !== 'agent') {
@@ -451,6 +455,7 @@ function AgentPanelOpenButton({
             size="icon"
             className="relative h-7 w-7"
             onClick={onToggle}
+            aria-label="打开文件面板"
           >
             <PanelRight className="size-3.5" />
           </Button>

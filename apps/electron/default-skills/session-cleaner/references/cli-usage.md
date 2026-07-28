@@ -6,11 +6,11 @@
 ## 会话存储
 
 ```
-~/.proma/agent-sessions.json        会话索引（{ version, sessions: AgentSessionMeta[] }）
-~/.proma/agent-sessions/<id>.jsonl   单会话消息，JSONL（一行一条 JSON）
+~/.linguist-agent/agent-sessions.json        会话索引（{ version, sessions: AgentSessionMeta[] }）
+~/.linguist-agent/agent-sessions/<id>.jsonl   单会话消息，JSONL（一行一条 JSON）
 ```
 
-开发模式（`PROMA_DEV=1` 或 Proma 未打包）数据在 `~/.proma-dev/`。CLI 用 `--dev` 或 `--config-dir` 切换。
+开发模式（`PROMA_DEV=1` 或 Proma 未打包）数据在 `~/.linguist-agent-dev/`。CLI 用 `--dev` 或 `--config-dir` 切换。
 
 ## 两种会话格式（CLI 自动识别，无需关心）
 

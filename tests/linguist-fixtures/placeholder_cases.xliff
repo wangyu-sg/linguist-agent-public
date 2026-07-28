@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+  <file original="synthetic-edge-cases.xlf" source-language="zh-CN" target-language="en-US" datatype="x-synthetic">
+    <body>
+      <trans-unit id="edge.cjk" resname="ui/cjk_label">
+        <source>合成占位符：玩家 {player} 获得了「传说之剑」</source>
+        <target state="translated">Synthetic placeholder: player {player} obtained the "Sword of Legend"</target>
+        <note>CJK source with a runtime placeholder.</note>
+      </trans-unit>
+      <trans-unit id="edge.entities">
+        <source>Tom &amp; Jerry &lt;hint&gt; score 5 &gt; 3</source>
+        <target state="translated">Tom &amp; Jerry &lt;hint&gt; score 5 &gt; 3</target>
+      </trans-unit>
+      <trans-unit id="edge.cdata">
+        <source><![CDATA[Line A <not-a-tag> & raw "quotes"]]></source>
+        <target state="translated"><![CDATA[Line A <not-a-tag> & raw "quotes"]]></target>
+      </trans-unit>
+      <trans-unit id="edge.ph">
+        <source>获得第<ph id="1" equiv-text="{0}"/>枚徽章！</source>
+        <target state="translated">Earn badge #<ph id="1" equiv-text="{0}"/>!</target>
+      </trans-unit>
+      <trans-unit id="edge.bpt_ept">
+        <source><bpt id="1" ctype="x-html-b">&lt;b&gt;</bpt>合成加粗<ept id="1">&lt;/b&gt;</ept>文本</source>
+        <target state="translated"><bpt id="1" ctype="x-html-b">&lt;b&gt;</bpt>Synthetic bold<ept id="1">&lt;/b&gt;</ept> text</target>
+      </trans-unit>
+      <trans-unit id="edge.empty_target">
+        <source>待翻译的合成条目</source>
+        <target state="new"></target>
+      </trans-unit>
+      <trans-unit id="edge.locked" translate="no">
+        <source>切勿翻译：{brand}</source>
+        <target state="final">切勿翻译：{brand}</target>
+      </trans-unit>
+      <trans-unit resname="dialog/quit_confirm">
+        <source>确定要退出吗？</source>
+        <target state="translated" state-qualifier="reviewed">Are you sure you want to quit?</target>
+        <note>resname-only unit: key falls back to resname.</note>
+      </trans-unit>
+      <trans-unit id="edge.selfclosing_target">
+        <source>自闭合 target 的合成条目</source>
+        <target/>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

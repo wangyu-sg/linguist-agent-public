@@ -21,6 +21,7 @@ import { FileBrowser, FileDropZone, FileTypeIcon, FileSearchBar, computeRevealAn
 import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { ChatView } from '@/components/chat/ChatView'
+import { DeliverablesSection } from '@/features/linguist/projects/DeliverablesSection'
 import {
   agentSidePanelOpenAtom,
   workspaceFilesVersionAtom,
@@ -517,6 +518,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
                     onFilePreview={handleFilePreview}
                   />
                   <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+                    {/* PB-102：绑定 linguist 项目时展示交付物（exports/ 目录）；无绑定不渲染 */}
+                    <DeliverablesSection sessionId={sessionId} />
                     {attachedFiles.length > 0 && (
                       <AttachedFilesSection
                         attachedFiles={attachedFiles}

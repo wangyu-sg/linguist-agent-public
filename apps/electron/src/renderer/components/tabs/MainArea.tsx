@@ -28,8 +28,11 @@ import { AutomationFormView } from '@/components/automation/AutomationFormView'
 import { AutomationsListView } from '@/components/automation/AutomationsListView'
 import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
 import { automationFormAtom } from '@/atoms/automation-atoms'
-import { activeViewAtom } from '@/atoms/active-view'
+import { activeViewAtom, resolveActiveViewForMode } from '@/atoms/active-view'
+import { appModeAtom } from '@/atoms/app-mode'
 import { interfaceVariantAtom } from '@/atoms/theme'
+import { AUTOMATIONS_VISIBLE } from '@/lib/feature-flags'
+import { ProjectsView } from '@/features/linguist/projects/ProjectsView'
 import { cn } from '@/lib/utils'
 
 export function MainArea(): React.ReactElement {
@@ -40,8 +43,17 @@ export function MainArea(): React.ReactElement {
   const activeTabId = useAtomValue(activeTabIdAtom)
   const setActiveTabId = useSetAtom(activeTabIdAtom)
   const activeTab = useAtomValue(activeTabAtom)
-  const automationFormOpen = useAtomValue(automationFormAtom).open
-  const activeView = useAtomValue(activeViewAtom)
+  const automationFormOpenRaw = useAtomValue(automationFormAtom).open
+  const activeViewRaw = useAtomValue(activeViewAtom)
+  const appMode = useAtomValue(appModeAtom)
+  // D-007（PB-012）：v1 隐藏自动任务产品面；开关关闭时 automations 路由与
+  // 任务表单一律不渲染，回落到普通会话视图（恢复见 lib/feature-flags.ts）。
+  const automationFormOpen = AUTOMATIONS_VISIBLE && automationFormOpenRaw
+  const hiddenViewFallback = activeViewRaw === 'automations' && !AUTOMATIONS_VISIBLE
+  const activeView = resolveActiveViewForMode(
+    hiddenViewFallback ? 'conversations' : activeViewRaw,
+    appMode,
+  )
   const interfaceVariant = useAtomValue(interfaceVariantAtom)
   const isClassic = interfaceVariant === 'classic'
   const store = useStore()
@@ -232,6 +244,9 @@ export function MainArea(): React.ReactElement {
             ) : activeView === 'agent-skills' ? (
               // Agent 技能视图：全屏取代 TabBar + TabContent
               <AgentSkillsView />
+            ) : activeView === 'projects' ? (
+              // Linguist 侧栏的次级「管理项目」入口：全屏取代 TabBar + TabContent。
+              <ProjectsView />
             ) : (
               <>
                 <TabBar />

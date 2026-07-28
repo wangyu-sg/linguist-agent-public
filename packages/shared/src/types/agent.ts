@@ -1,4 +1,5 @@
 import type { ProviderType } from './channel'
+import type { LinguistTurnContextV1 } from './linguist-turn-context'
 
 /**
  * Agent 相关类型定义
@@ -234,6 +235,8 @@ export interface SDKUserMessage {
   isReplay?: boolean
   /** SDK 合成的消息（如 Skill 展开 prompt），非人类用户输入 */
   isSynthetic?: boolean
+  /** LF-062：该历史 Turn 在点击发送时冻结的 Linguist UI 上下文。 */
+  linguistContext?: Readonly<LinguistTurnContextV1>
 }
 
 /** SDK result 消息（查询结束时返回） */
@@ -396,6 +399,12 @@ export type ErrorCode =
   | 'claude_binary_not_found'
   | 'agent_runtime_not_found'
   | 'session_busy'
+  /** Linguist 绑定会话的项目已归档——会话只读，发送被主进程拒绝（PB-034）。 */
+  | 'linguist_project_archived'
+  /** Linguist 绑定项目缺失或损坏——发送 fail closed，等待修复或显式解绑。 */
+  | 'linguist_project_missing'
+  /** Linguist 项目服务暂不可用——发送 fail closed，可重试或显式解绑。 */
+  | 'linguist_project_unavailable'
   | 'unknown_error'
 
 /** 恢复操作 */
@@ -607,7 +616,7 @@ export type AgentStreamPayload =
 /**
  * Agent 会话轻量索引项
  *
- * 存储在 ~/.proma/agent-sessions.json 中，
+ * 存储在 ~/.linguist-agent/agent-sessions.json 中，
  * 类似 ConversationMeta，独立存储。
  */
 export interface AgentSessionMeta {
@@ -668,6 +677,20 @@ export interface AgentSessionMeta {
   parentSessionId?: string
   /** 根 Agent 会话 ID（多层委派时用于追溯；当前仅允许一层，预留字段） */
   rootSessionId?: string
+  /**
+   * 绑定的 Linguist CAT 项目 ID（PB-034）：仅「项目内创建的对话」携带；
+   * 普通对话绝不携带。创建时冻结——常规元数据更新/重绑定 API 都不得改写；
+   * 仅可通过专用的一次性解绑 API 永久清除。
+   */
+  linguistProjectId?: string
+  /** 绑定时的项目名快照（纯展示用；项目缺失/改名后徽章仍可读） */
+  linguistProjectName?: string
+  /**
+   * Linguist 会话角色标记：独立评审写 'reviewer'，盲审项目写 'auditor'；
+   * 缺省 = 普通助理会话（刻意不写 'assistant' 字面量进库）。与绑定同为
+   * 创建时冻结；专用解绑 API 会与项目绑定一并永久清除。
+   */
+  linguistSessionRole?: 'reviewer' | 'auditor'
   /** 来源委派任务 ID（由 collaboration 工具生成，用于父子会话关联） */
   sourceDelegationId?: string
   /** 委派角色，用于 UI 和后续统计 */
@@ -693,7 +716,7 @@ export type AgentDelegationStatus = 'running' | 'completed' | 'failed' | 'cancel
 /**
  * Agent 持久化消息
  *
- * 存储在 ~/.proma/agent-sessions/{id}.jsonl 中。
+ * 存储在 ~/.linguist-agent/agent-sessions/{id}.jsonl 中。
  */
 export interface AgentMessage {
   /** 消息唯一标识 */
@@ -995,6 +1018,8 @@ export interface AgentSendInput {
   triggeredBy?: 'user' | 'automation' | 'delegation'
   /** 定时任务执行上下文（注入到系统提示词，用户不可见） */
   automationContext?: string
+  /** Linguist 项目会话本 Turn 在点击发送时冻结的 UI 上下文。 */
+  linguistContext?: Readonly<LinguistTurnContextV1>
 }
 
 // ===== Agent 队列消息 =====
@@ -1021,6 +1046,8 @@ export interface AgentQueueMessageInput {
   mentionedMcpServers?: string[]
   /** 用户通过 &session:xxx 引用的 Agent 会话 ID 列表 */
   mentionedSessionIds?: string[]
+  /** 排队/steer 沿用入队点击时冻结的 Linguist UI 上下文。 */
+  linguistContext?: Readonly<LinguistTurnContextV1>
 }
 
 // ===== 会话迁移输入 =====
@@ -1510,7 +1537,7 @@ export const AGENT_IPC_CHANNELS = {
   TOGGLE_SKILL: 'agent:toggle-skill',
   /** 获取其他工作区的 Skill 列表 */
   GET_OTHER_WORKSPACE_SKILLS: 'agent:get-other-workspace-skills',
-  /** 获取默认 Skills 的 slug 列表（来自 ~/.proma/default-skills/） */
+  /** 获取默认 Skills 的 slug 列表（来自 ~/.linguist-agent/default-skills/） */
   GET_DEFAULT_SKILL_SLUGS: 'agent:get-default-skill-slugs',
   /** 从其他工作区导入 Skill 到当前工作区 */
   IMPORT_SKILL_FROM_WORKSPACE: 'agent:import-skill-from-workspace',

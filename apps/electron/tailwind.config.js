@@ -61,6 +61,33 @@ export default {
           muted: 'hsl(var(--tooltip-muted) / <alpha-value>)',
         },
         'content-area': 'hsl(var(--content-area) / <alpha-value>)',
+        // ===== LA token additions (PB-100) =====
+        // Tier-3 text + status colors, each with a soft surface and a
+        // readable foreground on that soft surface. scrim alpha is composed
+        // at the call site (e.g. `bg-scrim/50`).
+        'foreground-faint': 'hsl(var(--foreground-faint) / <alpha-value>)',
+        success: {
+          DEFAULT: 'hsl(var(--success) / <alpha-value>)',
+          soft: 'hsl(var(--success-soft) / <alpha-value>)',
+          foreground: 'hsl(var(--success-foreground) / <alpha-value>)',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning) / <alpha-value>)',
+          soft: 'hsl(var(--warning-soft) / <alpha-value>)',
+          foreground: 'hsl(var(--warning-foreground) / <alpha-value>)',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info) / <alpha-value>)',
+          soft: 'hsl(var(--info-soft) / <alpha-value>)',
+          foreground: 'hsl(var(--info-foreground) / <alpha-value>)',
+        },
+        // review（PB-104）：评审语义状态色（建议待审/已审核/评审会话），对齐三件套结构
+        review: {
+          DEFAULT: 'hsl(var(--review) / <alpha-value>)',
+          soft: 'hsl(var(--review-soft) / <alpha-value>)',
+          foreground: 'hsl(var(--review-foreground) / <alpha-value>)',
+        },
+        scrim: 'hsl(var(--scrim) / <alpha-value>)',
       },
       // ===== 字体栈：Inter Variable 优先，回退 SF Pro Text / 系统中文字体 =====
       fontFamily: {
@@ -97,6 +124,48 @@ export default {
         lg: 'var(--shadow-lg)',
         xl: 'var(--shadow-xl)',
         '2xl': 'var(--shadow-xl)',
+      },
+      // ===== LA semantic type scale (PB-100, LA-original) =====
+      // Deliberately overrides Tailwind defaults: this app's de-facto body
+      // text is 13px (information-dense desktop UI), so `base` = 13px rather
+      // than the stock 16px; xs/sm/lg shift down one step to match. Existing
+      // text-xs/sm/base/lg usages pick up the new sizes automatically.
+      // heading-* adds a semibold title ramp absent from the Tailwind default.
+      fontSize: {
+        badge: ['10px', { lineHeight: '15px', fontWeight: '600' }],
+        xs: ['11px', { lineHeight: '1.33' }],
+        sm: ['12px', { lineHeight: '1.43' }],
+        base: ['13px', { lineHeight: '1.5' }],
+        lg: ['14px', { lineHeight: '1.56' }],
+        'heading-sm': ['16px', { lineHeight: '1.25', fontWeight: '600' }],
+        'heading-md': ['18px', { lineHeight: '1.25', fontWeight: '600' }],
+        'heading-lg': ['20px', { lineHeight: '1.25', fontWeight: '600' }],
+        'heading-xl': ['24px', { lineHeight: '1.25', fontWeight: '600' }],
+      },
+      // ===== Motion tokens (PB-100): semantic duration/easing via CSS vars =====
+      // Stock numeric durations (75/100/150/...) stay available; these add
+      // semantic aliases that resolve to the --duration-*/--ease-* variables.
+      transitionDuration: {
+        fast: 'var(--duration-fast)',
+        normal: 'var(--duration-normal)',
+        slow: 'var(--duration-slow)',
+      },
+      transitionTimingFunction: {
+        standard: 'var(--ease-standard)',
+        enter: 'var(--ease-enter)',
+      },
+      // ===== 布局锚点（PB-102）：h-toolbar / w-sidebar / max-w-markdown-wide 等 =====
+      spacing: {
+        toolbar: 'var(--toolbar-h)',
+        'toolbar-pane': 'var(--toolbar-pane-h)',
+        'toolbar-sm': 'var(--toolbar-sm-h)',
+        'settings-row': 'var(--settings-row-h)',
+      },
+      width: {
+        sidebar: 'var(--sidebar-w)',
+      },
+      maxWidth: {
+        'markdown-wide': 'var(--markdown-wide)',
       },
       keyframes: {
         'slide-in-from-top': {

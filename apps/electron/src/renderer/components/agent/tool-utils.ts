@@ -134,6 +134,16 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   ReadMcpResourceTool: '读取 MCP 资源',
   ListMcpResourcesTool: '列出 MCP 资源',
   SendMessage: '发送消息',
+  cat_project_summary: '检查项目摘要',
+  cat_list_assets: '查看项目文件',
+  cat_get_segments: '读取项目片段',
+  cat_search_tm: '查找翻译记忆',
+  cat_search_terms: '搜索项目术语',
+  cat_propose_translations: '创建翻译建议',
+  cat_run_qa: '运行项目质检',
+  cat_get_qa_findings: '查看质检问题',
+  cat_submit_critic_review: '提交独立复核',
+  cat_run_batch_consistency: '检查批量一致性',
 }
 
 /**

@@ -67,7 +67,7 @@ export function SkillCard({ skill, isBuiltin, updating, onOpen, onToggle, onUpda
 
       <div className="mt-auto flex items-center gap-2">
         {isBuiltin ? (
-          <span className="flex items-center gap-1 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400">
+          <span className="flex items-center gap-1 rounded-md bg-info/10 px-1.5 py-0.5 text-[11px] font-medium text-info">
             <ShieldCheck size={12} /> PROMA 内置
           </span>
         ) : skill.importSource ? (
@@ -87,7 +87,7 @@ export function SkillCard({ skill, isBuiltin, updating, onOpen, onToggle, onUpda
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onUpdate() }}
                 disabled={updating}
-                className="ml-auto flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-600 hover:bg-blue-500/20 transition-colors disabled:opacity-60 dark:text-blue-400"
+                className="ml-auto flex items-center gap-1 rounded-md bg-info/10 px-2 py-0.5 text-[11px] font-medium text-info hover:bg-info/20 transition-colors disabled:opacity-60"
               >
                 <RefreshCw size={12} className={cn(updating && 'animate-spin')} />
                 {updating ? '更新中' : '有更新'}

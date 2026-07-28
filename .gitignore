@@ -30,6 +30,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # caches
 .eslintcache
 .cache
+.codegraph/
 *.tsbuildinfo
 
 # IntelliJ based IDEs
@@ -55,3 +56,13 @@ pnpm-workspace.yaml
 
 # Proma 会话/工作区文档（不应入仓，见 CLAUDE.md 红线）
 .context/
+
+# 私人研究资料（PB-002，见 docs/attribution/PRIVATE_RESEARCH_POLICY.md）
+# 原始逆向规格、闭源客户端解包产物不得进入本仓及公开镜像
+linguist-agent-research-private/
+THREE_APPS_PIXEL_SPEC.md
+codex-ui-spec-full.md
+codex-teardown/
+asar-src/
+*.asar
+*.dmg

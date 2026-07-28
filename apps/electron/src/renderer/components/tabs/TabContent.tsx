@@ -15,6 +15,7 @@ import { PreviewTabContent } from '@/components/diff/PreviewTabContent'
 import { MarkdownRichEditor } from '@/components/diff/MarkdownRichEditor'
 import { MarkdownToc } from '@/components/diff/MarkdownToc'
 import { ScratchPadView } from '@/components/scratch-pad/ScratchPadView'
+import { LocalizationProjectWorkbench } from '@/features/linguist/projects/LocalizationProjectWorkbench'
 import { TabErrorBoundary } from './TabErrorBoundary'
 
 export interface TabContentProps {
@@ -61,6 +62,19 @@ export function TabContent({ tabId }: TabContentProps): React.ReactElement {
       <TabErrorBoundary key={tab.id} sessionId={tab.sessionId}>
         <PreviewTabContent sessionId={tab.sessionId} />
       </TabErrorBoundary>
+    )
+  }
+
+  if (tab.type === 'linguist-project') {
+    if (tab.repairState === undefined) {
+      return <LocalizationProjectWorkbench projectId={tab.projectId} />
+    }
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        {tab.repairState === 'archived'
+          ? '项目已归档，请先恢复项目。'
+          : '项目不可用，请修复或关闭此标签页。'}
+      </div>
     )
   }
 

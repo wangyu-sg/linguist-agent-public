@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:mq="MQXliff">
+  <file original="synthetic-game-ui.xlsx" mq:id="00000000-0000-4000-8000-000000000001" mq:projectid="00000000-0000-4000-8000-000000000002" source-language="zh-CN" target-language="en-US" datatype="x-synthetic">
+    <header>
+      <tool tool-id="LA" tool-name="Linguist Agent synthetic fixture" tool-version="1" tool-company="Linguist Agent" />
+      <mq:docinformation mq:docname="synthetic-game-ui.xlsx" mq:origfile="synthetic-game-ui.xlsx" mq:numberofwords="18">
+        <mq:doccomments />
+      </mq:docinformation>
+    </header>
+    <body>
+      <trans-unit id="1" mq:status="PartiallyEdited" mq:segmentguid="00000000-0000-4000-8000-000000000011">
+        <source xml:space="preserve">合成菜单标题</source>
+        <target xml:space="preserve">Synthetic Menu Title</target>
+        <note>Synthetic fixture note; no customer content.</note>
+      </trans-unit>
+      <trans-unit id="2" mq:status="PartiallyEdited" mq:segmentguid="00000000-0000-4000-8000-000000000012">
+        <source xml:space="preserve">合成任务说明</source>
+        <target xml:space="preserve">Synthetic Quest Instruction</target>
+      </trans-unit>
+      <trans-unit id="3" mq:status="PartiallyEdited" mq:segmentguid="00000000-0000-4000-8000-000000000013">
+        <source xml:space="preserve">获得第<ph id="1">&lt;mq:rxt displaytext=&quot;{0}&quot; val=&quot;{0}&quot; /&gt;</ph>枚徽章！</source>
+        <target xml:space="preserve">Earn badge #<ph id="1">&lt;mq:rxt displaytext=&quot;{0}&quot; val=&quot;{0}&quot; /&gt;</ph>!</target>
+      </trans-unit>
+      <trans-unit id="4" mq:status="PartiallyEdited" mq:segmentguid="00000000-0000-4000-8000-000000000014">
+        <source xml:space="preserve"><bpt id="1">&lt;mq:rxt displaytext=&quot;&lt;color=#5a9142&gt;&quot; val=&quot;&lt;color=#5a9142&gt;&quot; /&gt;</bpt>合成提示<ept id="2">&lt;mq:rxt displaytext=&quot;&lt;/color&gt;&quot; val=&quot;&lt;/color&gt;&quot; /&gt;</ept><ph id="3">&lt;mq:ch val=&quot;\n&quot; /&gt;</ph>数量：<ph id="4">&lt;mq:rxt displaytext=&quot;{0}&quot; val=&quot;{0}&quot; /&gt;</ph></source>
+        <target xml:space="preserve"><bpt id="1">&lt;mq:rxt displaytext=&quot;&lt;color=#5a9142&gt;&quot; val=&quot;&lt;color=#5a9142&gt;&quot; /&gt;</bpt>Synthetic tip<ept id="2">&lt;mq:rxt displaytext=&quot;&lt;/color&gt;&quot; val=&quot;&lt;/color&gt;&quot; /&gt;</ept><ph id="3">&lt;mq:ch val=&quot;\n&quot; /&gt;</ph>Count: <ph id="4">&lt;mq:rxt displaytext=&quot;{0}&quot; val=&quot;{0}&quot; /&gt;</ph></target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

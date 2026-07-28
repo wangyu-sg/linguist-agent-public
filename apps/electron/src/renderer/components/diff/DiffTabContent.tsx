@@ -1165,8 +1165,8 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
                 disabled={markdownSaving}
                 className={cn(
                   'p-1 rounded hover:bg-foreground/[0.06] disabled:opacity-50 shrink-0 transition-colors duration-300',
-                  autosaveStatus === 'saved' && 'text-green-500 hover:text-green-500',
-                  autosaveStatus === 'error' && 'text-red-500 hover:text-red-500',
+                  autosaveStatus === 'saved' && 'text-success hover:text-success',
+                  autosaveStatus === 'error' && 'text-destructive hover:text-destructive',
                   autosaveStatus !== 'saved' && autosaveStatus !== 'error' && 'text-foreground/40 hover:text-foreground/60',
                 )}
                 title={
@@ -1195,7 +1195,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
         <button type="button" onClick={handleCopy}
           className={cn("p-1 rounded hover:bg-foreground/[0.06] text-foreground/40 hover:text-foreground/60 shrink-0", previewOnly && !isEditableText && "ml-auto")}
           title="复制文件内容">
-          {copied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
+          {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
         </button>
 
         <button

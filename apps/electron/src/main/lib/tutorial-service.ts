@@ -71,7 +71,7 @@ export function createWelcomeConversation(): ConversationMeta | null {
 
     // 2. 保存教程文件为附件
     const attachmentId = randomUUID()
-    const attachmentFilename = 'Proma 使用教程.md'
+    const attachmentFilename = 'Linguist Agent 使用教程.md'
     const localPath = `${meta.id}/${attachmentId}.md`
     const dir = getConversationAttachmentsDir(meta.id)
     const fullPath = join(dir, `${attachmentId}.md`)

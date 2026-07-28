@@ -401,9 +401,12 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
             )}
           />
 
-          {/* 状态指示：仅流式中的未完成工具才显示 spinner */}
+          {/* 状态指示：仅流式中的未完成工具才显示 spinner；reduced-motion 下降级为静态文案（全局规则会冻结 animate-spin 首帧） */}
           {!isCompleted && isStreaming ? (
-            <Loader2 className="size-3.5 animate-spin text-primary/50 shrink-0" />
+            <>
+              <Loader2 className="size-3.5 animate-spin text-primary/50 shrink-0 motion-reduce:hidden" />
+              <span className="hidden motion-reduce:inline text-[12px] leading-none text-primary/60 shrink-0">执行中</span>
+            </>
           ) : isError ? (
             <XCircle className="size-3.5 text-destructive/70 shrink-0" />
           ) : null}
@@ -486,7 +489,10 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
         onClick={() => setExpanded(!expanded)}
       >
         {!isCompleted && isStreaming ? (
-          <Loader2 className="size-3.5 animate-spin text-primary/50 shrink-0" />
+          <>
+            <Loader2 className="size-3.5 animate-spin text-primary/50 shrink-0 motion-reduce:hidden" />
+            <span className="hidden motion-reduce:inline text-[12px] leading-none text-primary/60 shrink-0">执行中</span>
+          </>
         ) : isError ? (
           <XCircle className="size-3.5 text-destructive/70 shrink-0" />
         ) : null}
@@ -558,12 +564,14 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
 interface ThinkingBlockProps {
   block: SDKThinkingBlock
   dimmed?: boolean
+  /** 是否为「正在生成」的 live 态（流式中且未被弱化）；live 态标签显示 "Thinking…"，完成态显示 "Thought process" */
+  isLive?: boolean
 }
 
 /** 思考块折叠行数阈值 */
 const THINKING_COLLAPSE_LINE_THRESHOLD = 4
 
-function ThinkingBlock({ block, dimmed = false }: ThinkingBlockProps): React.ReactElement {
+function ThinkingBlock({ block, dimmed = false, isLive = false }: ThinkingBlockProps): React.ReactElement {
   const thinkingExpanded = useAtomValue(thinkingExpandedAtom)
   const [isExpanded, setIsExpanded] = React.useState(thinkingExpanded)
   const [shouldCollapse, setShouldCollapse] = React.useState(false)
@@ -591,8 +599,10 @@ function ThinkingBlock({ block, dimmed = false }: ThinkingBlockProps): React.Rea
     <div className="relative mb-3">
       <div className="flex items-center gap-1.5 mb-1.5">
         <Brain className={cn('size-3.5', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')} />
+        {/* live 态用静态圆点作「进行中」指示（不用 animate-spin，reduced-motion 下不会冻结成静止首帧） */}
+        {isLive && <span className="size-1.5 rounded-full bg-primary/60 shrink-0" aria-hidden="true" />}
         <span className={cn('text-[14px] uppercase tracking-wider', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')}>
-          Thinking
+          {isLive ? 'Thinking…' : 'Thought process'}
         </span>
       </div>
       <div
@@ -673,11 +683,11 @@ export function ContentBlock({ block, allMessages, basePath, basePaths, animate 
     )
   }
 
-  // thinking 块
+  // thinking 块（live 态 = 流式中且未被弱化，即当前正在生成的思考段）
   if (block.type === 'thinking') {
     const thinkingBlock = block as SDKThinkingBlock
     if (!thinkingBlock.thinking) return null
-    return <ThinkingBlock block={thinkingBlock} dimmed={dimmed} />
+    return <ThinkingBlock block={thinkingBlock} dimmed={dimmed} isLive={!!isStreaming && !dimmed} />
   }
 
   return null

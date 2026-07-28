@@ -56,7 +56,7 @@ export function BashResultRenderer({ result, isError, input }: BashResultRendere
               key={i}
               className={cn(
                 'whitespace-pre-wrap break-all min-h-[1.25em]',
-                type === 'stderr' && 'text-red-400',
+                type === 'stderr' && 'text-destructive',
               )}
             >
               {line || '\u200B'}
