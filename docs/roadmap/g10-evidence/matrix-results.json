@@ -1,0 +1,262 @@
+{
+  "artifactDir": "/var/folders/bv/rf0_4lx52kvbsphwqfh444jw0000gn/T/proma-pb105-artifacts-SG5HQY",
+  "screenshots": [
+    "agent-1280x820-light.png",
+    "cat-1280x820-light.png",
+    "projects-1280x820-light.png",
+    "agent-1024x700-light.png",
+    "cat-1024x700-light.png",
+    "projects-1024x700-light.png",
+    "agent-800x600-light.png",
+    "cat-800x600-light.png",
+    "projects-800x600-light.png",
+    "agent-1280x820-dark.png",
+    "cat-1280x820-dark.png",
+    "projects-1280x820-dark.png",
+    "agent-1024x700-dark.png",
+    "cat-1024x700-dark.png",
+    "projects-1024x700-dark.png",
+    "agent-800x600-dark.png",
+    "cat-800x600-dark.png",
+    "projects-800x600-dark.png",
+    "agent-1280x820-light-zoom200.png",
+    "cat-1280x820-light-zoom200.png",
+    "agent-1280x820-light-rm.png"
+  ],
+  "results": [
+    {
+      "name": "packaged-binary-exists",
+      "pass": true,
+      "level": "hard",
+      "evidence": "/Users/<local>/Desktop/linguist-agent-next/apps/electron/out/mac-arm64/Linguist Agent.app/Contents/MacOS/Linguist Agent"
+    },
+    {
+      "name": "axe-core-installed",
+      "pass": true,
+      "level": "hard",
+      "evidence": "/Users/<local>/Desktop/linguist-agent-next/node_modules/axe-core/axe.min.js"
+    },
+    {
+      "name": "seed",
+      "pass": true,
+      "level": "hard",
+      "evidence": "settings.json 预写；10k 项目 prj-c2fe170f34a0bde1（CLI 导入 371ms）；1000-turn 会话 b073bedf-16ab-45a6-9a9c-21ae18ca6a37（2000 条消息）"
+    },
+    {
+      "name": "packaged-launch",
+      "pass": true,
+      "level": "hard",
+      "evidence": "主窗口获取成功，window.electronAPI 就绪"
+    },
+    {
+      "name": "viewport-1280x820-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth/Height 已变为 1280×820"
+    },
+    {
+      "name": "matrix-agent-1280x820-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1280，scrollWidth=1280"
+    },
+    {
+      "name": "matrix-cat-1280x820-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1280，scrollWidth=1280，CAT 容器内部 scroll=623/client=623（组件行为）"
+    },
+    {
+      "name": "matrix-projects-1280x820-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1280，scrollWidth=1280"
+    },
+    {
+      "name": "viewport-1024x700-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth/Height 已变为 1024×700"
+    },
+    {
+      "name": "matrix-agent-1024x700-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1024，scrollWidth=1024"
+    },
+    {
+      "name": "matrix-cat-1024x700-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1024，scrollWidth=1024，CAT 容器内部 scroll=659/client=659（组件行为）"
+    },
+    {
+      "name": "matrix-projects-1024x700-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1024，scrollWidth=1024"
+    },
+    {
+      "name": "viewport-800x600-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth/Height 已变为 800×600"
+    },
+    {
+      "name": "matrix-agent-800x600-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=800，scrollWidth=800"
+    },
+    {
+      "name": "matrix-cat-800x600-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=800，scrollWidth=800，CAT 容器内部 scroll=435/client=435（组件行为）"
+    },
+    {
+      "name": "matrix-projects-800x600-light",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=800，scrollWidth=800"
+    },
+    {
+      "name": "viewport-1280x820-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth/Height 已变为 1280×820"
+    },
+    {
+      "name": "matrix-agent-1280x820-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1280，scrollWidth=1280"
+    },
+    {
+      "name": "matrix-cat-1280x820-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1280，scrollWidth=1280，CAT 容器内部 scroll=623/client=623（组件行为）"
+    },
+    {
+      "name": "matrix-projects-1280x820-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1280，scrollWidth=1280"
+    },
+    {
+      "name": "viewport-1024x700-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth/Height 已变为 1024×700"
+    },
+    {
+      "name": "matrix-agent-1024x700-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1024，scrollWidth=1024"
+    },
+    {
+      "name": "matrix-cat-1024x700-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1024，scrollWidth=1024，CAT 容器内部 scroll=659/client=659（组件行为）"
+    },
+    {
+      "name": "matrix-projects-1024x700-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=1024，scrollWidth=1024"
+    },
+    {
+      "name": "viewport-800x600-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth/Height 已变为 800×600"
+    },
+    {
+      "name": "matrix-agent-800x600-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=800，scrollWidth=800"
+    },
+    {
+      "name": "matrix-cat-800x600-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=800，scrollWidth=800，CAT 容器内部 scroll=435/client=435（组件行为）"
+    },
+    {
+      "name": "matrix-projects-800x600-dark",
+      "pass": true,
+      "level": "hard",
+      "evidence": "innerWidth=800，scrollWidth=800"
+    },
+    {
+      "name": "zoom-factor-applied",
+      "pass": true,
+      "level": "hard",
+      "evidence": "setZoomFactor(2) → 2"
+    },
+    {
+      "name": "matrix-agent-1280x820-light-zoom200",
+      "pass": true,
+      "level": "hard",
+      "evidence": "zoom200 CSS 视口 innerWidth=640，scrollWidth=640"
+    },
+    {
+      "name": "matrix-cat-1280x820-light-zoom200",
+      "pass": true,
+      "level": "hard",
+      "evidence": "zoom200 CSS 视口 innerWidth=640，scrollWidth=640，CAT 容器内部 scroll=298/client=275（组件行为，允许）"
+    },
+    {
+      "name": "matrix-agent-1280x820-light-rm",
+      "pass": true,
+      "level": "hard",
+      "evidence": "matchMedia reduce=true，对照元素 transition-duration：基线=0.1s → reduce=1e-05s（globals.css 安全网）"
+    },
+    {
+      "name": "perf-1000turn-open",
+      "pass": false,
+      "level": "hard",
+      "evidence": "打开会话→末尾 turn（pb105-asst-0999）可见=true，总耗时=10522ms（分段：首 turn=10444ms，末尾挂载=10461ms；软阈值≤10s）"
+    },
+    {
+      "name": "perf-1000turn-scroll-mid",
+      "pass": true,
+      "level": "hard",
+      "evidence": "滚动到第 500 轮（pb105-asst-0499）可见=true，耗时=34ms（软阈值≤3s）"
+    },
+    {
+      "name": "perf-1000turn-message-count",
+      "pass": true,
+      "level": "hard",
+      "evidence": "[data-message-role] 计数=2000（期望 2000）"
+    },
+    {
+      "name": "perf-10k-grid",
+      "pass": true,
+      "level": "hard",
+      "evidence": "首屏渲染=765ms，末行=true，DOM rows=14（<80），scroll delta=0.0px（<2px）"
+    },
+    {
+      "name": "axe-agent",
+      "pass": false,
+      "level": "warn",
+      "evidence": "violations 总数=8，serious/critical=5（aria-command-name×1, button-name×12, color-contrast×6, nested-interactive×2, scrollable-region-focusable×101）"
+    },
+    {
+      "name": "axe-cat",
+      "pass": false,
+      "level": "warn",
+      "evidence": "violations 总数=7，serious/critical=4（aria-required-children×1, button-name×5, color-contrast×34, nested-interactive×1）"
+    },
+    {
+      "name": "axe-projects",
+      "pass": false,
+      "level": "warn",
+      "evidence": "violations 总数=5，serious/critical=3（button-name×5, color-contrast×9, nested-interactive×2）"
+    }
+  ]
+}

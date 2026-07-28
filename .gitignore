@@ -1,36 +1,68 @@
-node_modules/
-dist/
-vendor/
-/data/
-.la-runtime-data-backups/
-.pi-subagents/
-*.log
+# dependencies (bun install)
+node_modules
+
+# output
+out
+dist
+*.tgz
+
+# 编译产物：proma CLI 二进制（build:cli 用 bun build --compile 生成，打包时现编，不进 git）
+apps/electron/resources/bin/
+# bun build --compile 的临时中间产物
+*.bun-build
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+logs
+_.log
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# caches
+.eslintcache
+.cache
+.codegraph/
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea
+
+# Finder (MacOS) folder config
 .DS_Store
 
-# Local credentials and runtime state
-.env
-.pi/settings.local.json
-.pi/*.local.json
-.pi/sessions/
-.pi/tmp/
-# Pi CLI session dir (project settings.json sets sessionDir: "sessions")
-sessions/
+# ignore craft-agents-oss folder
+craft-agents-oss
 
-# Build/test output
-coverage/
-tmp/
-.codegraph/
-/apps/desktop/.runtime/
-# Retired Swift client build artifacts stay local; Electron is the only maintained client.
-/apps/mac/.build/
-/apps/mac/dist/
+# ignore what_are_humans_thinking folder
+what_are_humans_thinking
 
-# Global design/dev tooling installed into the workspace (not LA product source).
-# These are local developer tooling (often symlinks into .agents/skills/). Ignore everything
-# under .pi/skills/ EXCEPT the tracked CAT product skills (.pi/skills/cat-*).
-.agents/
-.claude/
-skills-lock.json
-.pi/skills/*
-!.pi/skills/cat-*
-.data-root-writer-lease/
+# vendor binaries
+vendor
+
+# git worktrees (managed by proma-worktree skill)
+.worktrees
+# pnpm (本项目用 bun，禁止误提交 pnpm lockfile)
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
+# Proma 会话/工作区文档（不应入仓，见 CLAUDE.md 红线）
+.context/
+
+# 私人研究资料（PB-002，见 docs/attribution/PRIVATE_RESEARCH_POLICY.md）
+# 原始逆向规格、闭源客户端解包产物不得进入本仓及公开镜像
+linguist-agent-research-private/
+THREE_APPS_PIXEL_SPEC.md
+codex-ui-spec-full.md
+codex-teardown/
+asar-src/
+*.asar
+*.dmg

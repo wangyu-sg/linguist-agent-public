@@ -1,0 +1,25 @@
+{
+  "name": "@linguist/cat-store",
+  "version": "0.0.20",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Per-project SQLite persistence for Linguist Agent CAT data (PB-024): project index, schema migrations, repositories, backup. Runs on node:sqlite (Electron main process); the store root dir is always injected, never hardcoded.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-transform-types --import ./test/register-ts-loader.mjs --test \"src/**/*.nodetest.ts\"",
+    "cli": "node --experimental-transform-types --import ./test/register-ts-loader.mjs src/cli.ts"
+  },
+  "dependencies": {
+    "@linguist/cat-core": "workspace:*",
+    "@linguist/cat-formats": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

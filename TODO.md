@@ -1,32 +1,31 @@
 # TODO
 
-Current product version: `2.32.7`.
+更新时间：2026-07-29
 
-The repository remains on the release candidate track but is now in controlled refactor mode. The former state label was `release candidate, feature freeze`; that blanket freeze is explicitly superseded. This file remains the human entry point for unfinished work; the only detailed, machine-validated refactor control plane is the seven-document set under `docs/roadmap/` listed below. Implementation is authorized only for one queue entry whose metadata says `Kind=ticket` and `Executable=yes`; Epic, Gate, and Decision entries are not directly executable. Existing release gates remain open and are not closed by roadmap planning.
+只记录仍未完成的事项。已实现功能和历史工单见 `docs/roadmap/linguist-fusion-queue.json`。
 
-## Refactor control plane
+## 14 天个人使用
 
-- `CURRENT_REALITY_REPORT.md`
-- `MODULE_AND_DATA_INVENTORY.md`
-- `RISK_REGISTER.md`
-- `DELETION_CANDIDATES.md`
-- `MIGRATION_MATRIX.md`
-- `UI_GAP_MATRIX.md`
-- `IMPLEMENTATION_QUEUE.md`
+- [ ] 从 `/Applications/Linguist Agent.app` 启动 `0.15.133`，开始连续 14 天真实本地化项目使用。
+- [ ] 每个问题记录：复现步骤、项目/资产类型、数据安全影响、频率、期望行为。
+- [ ] P0/P1 修复完成后重跑相关 targeted test、全量门禁与 packaged smoke。
 
-Run `npm run roadmap:test` before accepting changes to this control plane. Completed implementation history belongs in Git, dated evidence reports, and `CHANGELOG.md`.
+## 人工产品证据
 
-## Product acceptance
+- [ ] 真实 macOS IME composition：中日韩输入、候选确认、撤销、保存、确认并前进。
+- [ ] Native Save：原稿、受管 source/blobs/exports/backup 路径的覆盖拒绝与默认文件名。
+- [ ] VoiceOver：三模式、Project Sidebar、Segment Grid、Bottom Dock、Agent Rail。
+- [ ] 完整 keyboard-only 工作流与焦点顺序。
+- [ ] Agent Rail / Bottom Dock 拖拽和窄窗手感。
 
-- [ ] Run a fresh fixed-seed 60-row blind Eval on a synthetic or explicitly authorized dataset. A human must judge every identity-hidden pair as A, B, or C. Only ties, both-fail rows, and rows with an issue flag receive the nine-dimension dispute scorecard. Record evidence-authority disagreements, complete the typed comparison artifact, and rerun the same fixed sample if a prompt/role change follows. Do not commit the source rows, provider payloads, or private Run identifiers.
-- [ ] Complete real-machine Electron P3 acceptance from `design-qa.md`: 480×600, 1024×700, the default 1280×820, and 1440×900; light/dark; real macOS Reduce Motion; keyboard traversal and focus restoration; VoiceOver labels/order/no duplicate announcements; General and Project running/awaiting-input/waiting/stopping/stopped/failed states; real wheel/trackpad long Activity history; 10,000 variable-height CAT rows; failure recovery; and stable designated requirement across two clean signed builds. Source grep, unit tests, packaged automation, and Chromium emulation are supporting evidence, not substitutes.
-- [ ] Publish only after real Developer ID/notary credentials and release authority are available. The maintained chain is Electron → signed/notarized app/zip/dmg → GitHub Release; Swift, Sparkle, appcast, and Pages feeds must not return.
+## 翻译质量
 
-## Document capability qualification
+- [ ] 用真实游戏文本生成 Fast / Balanced / Best 三档结果。
+- [ ] 按 `docs/release/PB085_BLIND_EVAL_PREP.md` 盲评准确性、自然度、术语一致性、人工修改量、延迟和成本。
+- [ ] 依据预先写死的判定式决定默认档位，不以主观印象替代数据。
 
-- [ ] Qualify the exact managed MinerU Labs pack on supported macOS hardware with sufficient disk space. Run the pinned bilingual/layout/table/formula fixture suite, source-digest checks, output reopen checks, zero-outbound guard, cold/warm performance and uninstall/recovery checks. Until it passes, keep state `unqualified`, route native-insufficient documents to PaddleOCR where appropriate, and never use an undeclared system command or cloud parser as fallback.
+## 当前不做
 
-## Measured structural debt
-
-- [ ] Split `packages/cat-server/src/server.ts` and `routes/workflow_routes.ts` only when changing those areas, preserving the existing route owners and tests. They are the largest backend concentration points; a speculative framework rewrite is not authorized.
-- [ ] Split Electron files above roughly 1,000 lines (`workspace-client.ts`, `PipelineWorkspace.tsx`, `TaskConversation.tsx`, and remaining large CSS) along existing domain boundaries when they next change. Conversation rows and the queued-message tray already have dedicated owners, but Task orchestration still exceeds the target. Do not trade line count for wrapper components or duplicate state.
+- 公众发布、签名、公证、公开更新渠道；
+- 新格式、OCR、多 Agent Team、自动模型路由、Extension 市场；
+- 重写 Proma Runtime、Agent/Chat UI 或 CAT Core。

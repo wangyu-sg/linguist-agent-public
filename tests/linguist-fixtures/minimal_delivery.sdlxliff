@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2"
+       xmlns:sdl="http://sdl.com/FileTypes/SdlXliff/1.0"
+       version="1.2">
+  <sdl:doc-info>
+    <sdl:seg-defs>
+      <sdl:seg id="1" conf="Translated" />
+      <sdl:seg id="2" conf="Translated" />
+    </sdl:seg-defs>
+  </sdl:doc-info>
+  <file original="delivery.docx" source-language="zh-CN" target-language="en-US">
+    <body>
+      <trans-unit id="tu1">
+        <source>点击开始</source>
+        <seg-source><mrk mtype="seg" mid="1">点击 <ph id="1" equiv-text="{0}">{0}</ph> 开始</mrk></seg-source>
+        <target><mrk mtype="seg" mid="1">Click <ph id="1" equiv-text="{0}">{0}</ph> to start</mrk></target>
+      </trans-unit>
+      <trans-unit id="tu2">
+        <source>退出游戏</source>
+        <seg-source><mrk mtype="seg" mid="2">退出游戏</mrk></seg-source>
+        <target><mrk mtype="seg" mid="2">Quit game</mrk></target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

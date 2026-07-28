@@ -1,2197 +1,2429 @@
-# Linguist Agent Evolution Execution Ledger
-
-Campaign branch: `evolution/la-3-candidate`
-
-Baseline branch: `main`
-
-Baseline commit: `64bcb15bed78a5d71d91d791948b7652987267d5`
-
-Baseline upstream: `origin/main`
-
-Public mirror: deferred until final verification.
-
-`resultCommit: SELF` means the commit containing that ledger entry. A Git commit cannot embed its own final SHA without changing that SHA; the immutable commit containing the entry is the result reference.
-
-## Stage Gate G1 — Stopgaps
-
-- status: passed_for_private_campaign_continuation
-- candidateCommit: `cfe41ec1e99c02c7563c6f3fcb11b1ce105ff04a` before the report commit
-- report: `docs/roadmap/G1_STOPGAPS_REPORT.md`
-- tests: full backend, full Desktop, mac:test, root/Desktop typecheck, roadmap validator, release check, diff check passed
-- blockers: LA-059 future license/contribution-policy choice remains blocked; public reuse/release remains prohibited
-- excludedEvidence: `rc:status` generated one forbidden data report; the exact new report was removed unread and the command is not Gate evidence
-- realMachine: not proven
-
-## Stage Gate G2 — Runtime Contract
-
-- status: passed_for_private_campaign_continuation
-- candidateCommit: `5c4e38c2`
-- report: `docs/roadmap/G2_RUNTIME_CONTRACT_REPORT.md`
-- tests: 174 root, 150 Desktop plus 3 activity, mac:test, 20 security, 8 recovery, root/Desktop typecheck, roadmap validator, release check and diff check passed after LA-067 repaired the first Gate attempt
-- blockers: LA-059 license/contribution-policy Decision remains blocked; public reuse/release remains prohibited
-- excludedEvidence: the first Desktop Gate attempt failed on Node strip-only-incompatible shared-contract syntax and remains recorded in the report; it was not counted as a pass
-- realMachine: provider, packaged-app, accessibility, signing, notarization and customer-data evidence not proven
-
-## Stage Gate G3 — Isolation
-
-- status: passed_for_private_campaign_continuation
-- candidateCommit: `6b16f174d07bfc60298e5c841cc93ef26c236a89` before the report commit
-- report: `docs/roadmap/G3_ISOLATION_REPORT.md`
-- tests: 193 root, 151 Desktop plus 3 activity, mac:test, 26 security, 9 recovery, root/Desktop typecheck, roadmap validator, release check and diff check passed
-- blockers: LA-059 license/contribution-policy Decision and publisher trust-root governance remain blocked; public reuse/release remains prohibited
-- excludedEvidence: managed E5 acceptance skipped because its pack is absent; no real provider, installed app, signing, notarization, accessibility, power-loss or customer-data evidence
-- realMachine: not proven
-
-## Stage Gate G4 — Storage
-
-- status: passed_for_private_campaign_continuation
-- candidateCommit: `86444f13` before this report commit
-- report: `docs/roadmap/G4_STORAGE_REPORT.md`
-- tests: full root suite (211 discovered; declared Managed E5 pack skip), security suite, recovery suite (18 tests), Desktop (151 Node plus 3 Electron activity tests), `npm run mac:test`, root/Desktop typecheck, roadmap tests/validation, release check, ledger JSON parse and `git diff --check` passed
-- stopgap: LA-106 isolated both server-starting fixtures behind explicit synthetic repository and Pi-agent roots under guarded test mode; the full G4 recheck completed without reading checkout `data/**` or real home Pi trust
-- historicalBlocker: the pre-LA-106 attempt was correctly blocked because those fixtures used the checkout root; see `G4_STORAGE_REPORT.md` Initial blocked attempt (preserved)
-- unverifiedRealMachineItems: real data, real Pi trust, customer content, installed runtime, process kill, power loss, disk full, production rollback, signing/notarization, and public mirror remain unverified
-
-## Stage Gate G5 — Product
-
-- status: passed_for_private_campaign_continuation
-- candidateCommit: `a3c426a0` before this report commit
-- report: `docs/roadmap/G5_PRODUCT_REPORT.md`
-- completedPhaseTickets: LA-038, LA-039, LA-040, LA-041, LA-042, LA-043, LA-117, LA-118, LA-119, LA-120, LA-121, LA-122
-- passedEvidence: fresh direct `npm test` (231 discovered root tests; declared managed-E5-pack skip); `npm run test:security` (29 selected tests); `npm run test:recovery` (19 selected tests); Desktop build; 161 Desktop Node plus 3 Electron activity tests; `npm run mac:test`; root/Desktop typecheck; roadmap test/validation; release check; ledger JSON parse; diff check. The test suite used only the LA-118-121 authorized synthetic root/material view and did not access real `data/**`.
-- initialBlocker: the requested `npm test` did not start because its root discovery process had not guaranteed a disposable synthetic repository and Pi-agent root for every child test; it could reach checkout `data/**`, which the campaign forbids
-- repairTicket: LA-117 completed the per-child synthetic-root runner and direct literal server-launch inheritance guard; LA-118 completed the authorized actual-cwd source-view repair for the checkout-cwd data-read path; LA-119 completed the precise tracked project-Pi-material repair; LA-120 completed the one-file Dev-context repair; LA-121 completed the one-file Team-extension repair; LA-122 completed the canonical Electron lease-guard repair
-- historicalBlocker: after LA-117, direct rechecks separately exposed checkout cwd access, three required tracked static materials, and a stale deleted `main.mjs` lease guard. LA-118 through LA-122 each repaired one invariant in its own commit; no data path was accessed. The fresh full execution above is the only G5 gate evidence.
-- excludedEvidence: earlier G4 full-suite evidence predates Phase 5; focused ticket/Desktop evidence is not full-suite/security/recovery/macOS proof; the declared E5 pack skip is not E5 qualification evidence.
-- tag: local annotated `la-g5-product` is created at this report commit
-- blockedContinuation: final verification; public mirror work; release and merge remain blocked by later work and R-030 as applicable
-- remainingRisks: source-level synthetic-root isolation is not an OS sandbox; managed E5 qualification, real-machine P3/accessibility/installed-app proof, signing/notarization, and R-030 legal/release Decision remain open
-- realMachine: not proven
-
-## LA-000 — Roadmap documentation consistency
-
-- status: completed
-- dependencies: LA-BASE
-- baseCommit: `64bcb15bed78a5d71d91d791948b7652987267d5`
-- resultCommit: `SELF`
-- filesChanged: seven-document roadmap control plane, documentation governance, sanitized UI behavior contract, roadmap validator, validator test, npm scripts
-- testsAdded: `tests/validate_roadmap.test.ts`
-- commandsExecuted: `npm run roadmap:test`; `npm run roadmap:validate`; `npm run typecheck`; `npm run release:check`; `git diff --check`; `npm run rc:status`
-- migration: none; no database or runtime schema created
-- rollback: revert this commit; no data rollback required
-- deletedEntries: none; original reports and research input retained but downgraded from execution authority
-- remainingRisks: R-001 through R-031 remain owned by their mapped tickets; R-030 requires user/legal decision
-- unverifiedRealMachineItems: MinerU qualification, human blind review, accessibility/P3, signing and notarization remain open
-
-## LA-001 — Reject invalid permission modes
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `a15e6fb6b1de7f5c8ebdab4f8b80ae5d25bd13fd`
-- resultCommit: `SELF`
-- filesChanged: shared permission normalization, safe missing-global default, permission behavior test, ledgers
-- testsAdded: invalid normalize/patch/contract and API rejection assertions in `tests/agent_permissions.test.ts`
-- commandsExecuted: focused agent permission test; permission decision test; typecheck; diff check
-- migration: valid stored values remain unchanged; missing global mode becomes `ask`; invalid stored values remain intact and block instead of widening
-- rollback: revert this commit; never restore unknown-to-auto behavior
-- deletedEntries: none
-- remainingRisks: R-008 Stable `full` preset remains for LA-006
-- unverifiedRealMachineItems: existing invalid values in real user data were not read or inventoried
-
-## LA-002 — Serialize sandbox configuration and command wrapping
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `a479a640abf00f40ef1f7a8b87dc1e3e6c25ac8c`
-- resultCommit: `SELF`
-- filesChanged: shared sandbox coordinator, CAT/General callers, concurrency test, test registration, ledgers
-- testsAdded: `tests/sandbox_coordinator.test.ts`
-- commandsExecuted: sandbox coordinator test; CAT safety kernel test; concurrency test; typecheck; single-updateConfig grep; diff check
-- migration: none; existing runtime configs are passed unchanged
-- rollback: revert this commit; do not restore independent CAT/General queues
-- deletedEntries: General-only sandbox queue and standalone initialization helper
-- remainingRisks: per-Run process isolation remains LA-017 Epic
-- unverifiedRealMachineItems: real sandbox-runtime process interleavings outside the deterministic adapter test
-
-## LA-003 — Block unbudgeted prompt launches
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `3936e6dcff62e28d6b82191283e9d4b6519aa8b5`
-- resultCommit: `SELF`
-- filesChanged: prompt launch guard, Team context preparation and workflow model-budget resolution, canonical Private Eval prompt preparation, supported-model runtime budget resolver, focused tests, ledgers
-- testsAdded: unknown-budget and mandatory-overflow launch assertions; Team over-budget preparation assertion; explicit verified-budget fixtures in Team and Eval route tests
-- commandsExecuted: prompt compiler test; Team context builder test; Team run plan test; Team workflow foundation test; canonical Private Eval Single test; canonical Private Eval Team test; Eval route test; typecheck; diff check
-- migration: no schema or user-data change; currently resolvable Pi builtin/custom models use their explicit contextWindow minus maxTokens budget; models without valid metadata are blocked
-- rollback: revert this commit only if the affected prompt launch paths remain fail-closed; never restore over-budget or unknown-budget launch
-- deletedEntries: none
-- remainingRisks: LA-032 must include tools, history, provider framing, output reserves, untrusted-source envelopes, and the durable minimal ModelContextRegistry
-- unverifiedRealMachineItems: provider framing and live custom-model metadata were not measured against a real provider request
-
-## LA-004 — Keep Stable Package preview inert
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `15ec1649ee56c2be7c6f9865f2fe9b82cd87cbdd`
-- resultCommit: `SELF`
-- filesChanged: Stable Package preview implementation, Package Center tests, ledgers
-- testsAdded: fake-npm subprocess sentinel; metadata/archive-only fetch counts; file, Git, HTTP tarball dependency fixtures; publisher shrinkwrap fixture
-- commandsExecuted: Package Center test; Package Center route test; native capability package test; typecheck; diff check; source grep for retired installer
-- migration: no registry or user-data rewrite; dependency-bearing legacy packages remain readable, while new Stable previews reject install-time dependency declarations and npm-shrinkwrap
-- rollback: disable Stable managed install rather than restoring npm execution during Preview
-- deletedEntries: `installDependenciesWithoutScripts`, child-process import/promisified executor, Preview dependency-installer injection
-- remainingRisks: LA-020 owns the declarative signed package format and activation replacement; legacy installed executable packages remain governed by LA-005/LA-019
-- unverifiedRealMachineItems: no public registry package was downloaded; tests use synthetic archives only
-
-## LA-005 — Block third-party executable Extensions in Stable Runs
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `079d648d8cb181207c6748c8a5083a50d3f25d73`
-- resultCommit: `SELF`
-- filesChanged: Stable General resource selection, Team Package execution preflight, General/Team tests, current-state resource documentation, ledgers
-- testsAdded: General hostile top-level Extension remains unevaluated with no approval request; exact LA-owned inline factory inventory; Team Package Extension blocks before launch with package identity
-- commandsExecuted: General Agent session test; General Run coordinator test; Task Package Team capability test; Team Package preflight test; Pi Extension trust regression; attempted nonexistent `tests/general_resource_snapshot.test.ts` (failed before test execution and replaced by the actual General Run test); typecheck; diff check
-- migration: no trust or Package data rewrite; existing digest approvals remain readable legacy records but no longer authorize a new Stable Run
-- rollback: keep external Extensions disabled; a rollback may restore non-executable Skills/Prompts only, never arbitrary executable paths
-- deletedEntries: none; legacy trust approval storage is retained for later migration/deletion work
-- remainingRisks: LA-018 exact-byte staging and LA-019 capability-isolated Extension Host remain required before third-party execution can return
-- unverifiedRealMachineItems: packaged Stable UI visibility and a real malicious Extension process-access PoC remain outside this source-level stopgap
-
-## LA-006 — Remove the Stable full permission preset
-
-- status: completed
-- dependencies: LA-001
-- baseCommit: `85dacaa557741a6959f770e543dbcc0daea0989e`
-- resultCommit: `SELF`
-- filesChanged: permission mode/preset contract, Desktop permission DTO/icon/style, Stable resource policy, permission tests, ledgers
-- testsAdded: `full` absent from presets; direct contract, patch, and API update reject `full`; Desktop permission/settings regressions
-- commandsExecuted: agent permission test; root typecheck; Desktop typecheck; Desktop permission/settings tests; production-source forbidden-pattern scan; one exploratory scan accidentally used `|| true` and was rerun with an explicit Node assertion without suppression; diff check
-- migration: no stored settings were read or rewritten; a legacy stored `full` value now blocks with an explicit repair instruction to choose ask, auto, or custom
-- rollback: restore only a separately gated Developer-channel mode in a future Ticket; never expose `full` in Stable
-- deletedEntries: `FULL_ACCESS_RULES`, Stable `full` preset, Desktop `full` DTO union/icon/style branch
-- remainingRisks: LA-014/LA-015 still replace tool-name permission classification with capability and filesystem brokers
-- unverifiedRealMachineItems: packaged Settings/Composer visual absence has not yet passed real-machine P3
-
-## LA-007 — Require sandbox enforcement in Stable
-
-- status: completed
-- dependencies: LA-002
-- baseCommit: `7bf1021c3ea4f438b00fbd12748e2c79f76e32ad`
-- resultCommit: `SELF`
-- filesChanged: CAT sandbox phase parser/health contract, safety tests, runtime policy, ledgers
-- testsAdded: Stable `off` and `observe` denial; explicit test/development capability acceptance; enforce and invalid-value controls
-- commandsExecuted: CAT safety kernel test; sandbox coordinator test; typecheck; roadmap validation; release check; diff check
-- migration: no environment or user-data rewrite; unset/enforce remain valid, while existing Stable off/observe configuration now fails startup/health construction visibly
-- rollback: temporarily hard-code enforce; never restore environment-only downgrade
-- deletedEntries: environment-only authorization of off/observe phases
-- remainingRisks: LA-017 still replaces process-global sandbox configuration with per-Run isolation
-- unverifiedRealMachineItems: packaged runtime launch with hostile environment injection has not yet been exercised on a real app bundle
-
-## LA-060 — Disable Stable Maintainer execution
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `2cfae5dd2d733646326efff432649668435c62fa`
-- resultCommit: `SELF`
-- filesChanged: Maintainer route capability gate, route characterization tests, current-state documentation, ledgers
-- testsAdded: Stable preview/build mutation denial; explicit development/test capability; canonical maintenance history remains readable
-- commandsExecuted: Maintainer route test; Maintainer core test; Maintainer Agent session test; typecheck; roadmap validation; release check; diff check
-- migration: no jobs, candidates, plans, artifacts, or user data were read or rewritten; Stable composition omits the execution capability
-- rollback: retain the Stable mutation block; a future developer/CI tool may explicitly supply the capability
-- deletedEntries: none; LA-050 child tickets own later production-code migration and deletion
-- remainingRisks: LA-050 still must migrate Maintainer to developer/CI tooling and remove the retained production implementation
-- unverifiedRealMachineItems: packaged Stable UI absence and read-only historical rendering have not yet passed real-machine P3
-
-## LA-061 — Disable Stable Private Eval execution
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `5063a7c8b1cf1dfdf14c7ea3d0c753cc470f1380`
-- resultCommit: `SELF`
-- filesChanged: Eval route capability/read-only gate, Stable product-surface navigation, backend/UI characterization tests, current-state documentation, ledgers
-- testsAdded: Stable mutation denied before body parsing; Stable Run listing does not reconcile/write; Stable shell has no Eval surface
-- commandsExecuted: Eval route test; canonical Private Eval single/team tests; Desktop Codex UI contract test; root/Desktop typecheck; roadmap validation; release check; diff check
-- migration: no Eval set, Run, corpus, output, scorecard, comparison, Task, or Artifact was deleted or rewritten; Stable GET routes remain read-only
-- rollback: retain Stable mutation/navigation block; only explicit developer/CI composition may execute the retained implementation
-- deletedEntries: Stable Eval toolbar/product-surface entry; no Eval data or retained implementation
-- remainingRisks: LA-050 still requires separate child tickets to migrate the harness and remove production execution code
-- unverifiedRealMachineItems: packaged navigation absence and historical Eval browsing have not yet passed real-machine P3
-
-## LA-059 — Licensing and clean-room decision
-
-- status: blocked
-- dependencies: LA-000
-- baseCommit: `b9ecb32fce15bb715971996fc20b3b65f9434336`
-- resultCommit: `SELF`
-- filesChanged: execution ledgers only; current source-available and clean-room facts were already established by LA-000
-- testsAdded: none; this is a non-executable Decision
-- commandsExecuted: license-file presence check; source-available/clean-room documentation scan; roadmap validation; release check; diff check
-- migration: none
-- rollback: not applicable; no license or legal state was changed
-- deletedEntries: none
-- remainingRisks: current repository remains source-available without redistribution/modification/commercial-use grant. This legal Decision blocks only public-mirror push, external contribution/reuse claims and release; it does not block private-repository Tickets, tests, phase Gates or final private verification. No license choice was made by engineering.
-- unverifiedRealMachineItems: none; the unresolved item is legal/product authority, not runtime behavior
-
-## LA-063 — Align Team child adapter regression with Stable Extension block
-
-- status: completed
-- dependencies: LA-005
-- baseCommit: `966186b5e70ee0bf3c5cb40337e89913ef7da9e4`
-- resultCommit: `SELF`
-- filesChanged: implementation queue/risk mapping, Team child RPC adapter regression test, ledgers
-- testsAdded: executable Package Extension resolution and workflow launch remain blocked; non-executable Skill/Prompt resources still run through server-owned RPC with the evidence guard
-- commandsExecuted: initial G1 `npm test` failed on stale pi_rpc_v1 expectation; focused Team child RPC adapter test; roadmap validation; typecheck; diff check
-- migration: none; production behavior was not changed
-- rollback: do not restore stale executable-Extension expectations; rollback blocks G1
-- deletedEntries: obsolete test expectations that Stable loads executable Package Extensions
-- remainingRisks: LA-019 still owns capability isolation before any executable Extension can return
-- unverifiedRealMachineItems: raw Pi RPC transport remains synthetic; Stable blocking is source-tested
-
-## LA-064 — Remove deleted Stable full mode from runtime hook regression
-
-- status: completed
-- dependencies: LA-006
-- baseCommit: `fd2e7894d0a50eb63524b3d47a7f8e1f9e9eed3d`
-- resultCommit: `SELF`
-- filesChanged: implementation queue/risk mapping, runtime hook regression test, ledgers
-- testsAdded: removed Stable full mode throws; supported custom bash-auto policy still cannot bypass CAT evidence, filesystem, credential, Keychain, or child-lifecycle hard rails
-- commandsExecuted: second G1 `npm test` failed on stale full fixture; focused runtime hooks test; roadmap validation; typecheck; diff check
-- migration: none; production behavior was not changed
-- rollback: do not restore Stable full fixtures or behavior
-- deletedEntries: obsolete full-mode runtime hook fixture and names
-- remainingRisks: LA-014/LA-015 still replace tool-name classification and path guards with canonical capability brokers
-- unverifiedRealMachineItems: hook behavior is synthetic/in-process, not packaged-app evidence
-
-## LA-065 — Supply verified prompt budget in Team activity regression
-
-- status: completed
-- dependencies: LA-003
-- baseCommit: `22614fa6c3ec21f071cb9357a7306c6563a7ffdd`
-- resultCommit: `SELF`
-- filesChanged: implementation queue/risk mapping, Team workflow activity regression fixture, ledgers
-- testsAdded: existing context-preparation/activity assertions now execute only with an explicit verified 100k model budget
-- commandsExecuted: third G1 `npm test` failed because unknown budget correctly blocked preparation; focused subagent Task activity workflow test; roadmap validation; typecheck; diff check
-- migration: none; production behavior was not changed
-- rollback: do not remove the explicit budget or bypass the Prompt launch guard
-- deletedEntries: implicit unknown-budget launch assumption in the fixture
-- remainingRisks: LA-032 still owns complete request budgeting and durable ModelContextRegistry
-- unverifiedRealMachineItems: 100k is a synthetic supported-model fixture, not live provider metadata
-
-## LA-066 — Characterize unknown and verified budgets in workflow plan
-
-- status: completed
-- dependencies: LA-003
-- baseCommit: `62deb3ebf593c45dadf9b48606ff512c34a8f70e`
-- resultCommit: `SELF`
-- filesChanged: implementation queue/risk mapping, workflow plan regression fixture, ledgers
-- testsAdded: unknown model budget remains awaiting_input; explicit verified 100k budget permits the prepared non-executing Team Run to become active
-- commandsExecuted: fourth G1 `npm test` failed on stale active expectation; focused workflow plan test; roadmap validation; typecheck; diff check
-- migration: none; production behavior was not changed
-- rollback: retain both branches; never make unknown budget executable
-- deletedEntries: unconditional active expectation for an unknown-budget Team start
-- remainingRisks: LA-032 still owns final request budgeting and durable ModelContextRegistry
-- unverifiedRealMachineItems: 100k is a synthetic fixture, not live provider capability evidence
-
-## LA-053 — Discover and shard every root test
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `0f7d0168e0a9b70cfc751a9b0bfe3c94d9200812`
-- resultCommit: `SELF`
-- filesChanged: root package test scripts, discovery/selection runner, runner characterization test, ledgers
-- testsAdded: recursive test/spec discovery; old-chain parity and missing-file error; newly discovered test inclusion; named security suite; disjoint two-way shard coverage; legacy-order migration
-- commandsExecuted: initial focused failure for missing runner module; focused runner test; roadmap suite; two-way roadmap shard execution; standalone runner TypeScript check; root typecheck; first full run exposed alphabetical-order incompatibility at asset API; sandboxed full run was blocked by the existing Team cache path; sandbox-exempt `npm test` passed all 168 discovered root tests; diff check
-- migration: the prior 164-entry pre/test/post chain is retained verbatim under `test:legacy:*` as a one-version parity and ordering snapshot; the new runner executes those tests in their established order and appends four automatically discovered tests
-- rollback: restore the legacy lifecycle entrypoints for one version while retaining the missing-test detector; do not return CI to an unverified hand-maintained set
-- deletedEntries: npm lifecycle `pretest` and `posttest` entrypoints; their exact commands remain as non-executing legacy snapshots
-- remainingRisks: LA-054 must split CI suites and retire the legacy snapshot only after shard parity; suite filename classification is an initial migration classifier, not final semantic ownership
-- unverifiedRealMachineItems: managed E5 acceptance remained explicitly skipped because its pack is absent; no real provider, packaged app, or customer data was used
-
-## LA-008 — Make the Task Run transition table canonical
-
-- status: completed
-- dependencies: LA-001, LA-003
-- baseCommit: `c4923c2a809f607782dd9f497aa7dccfd7b92ff5`
-- resultCommit: `SELF`
-- filesChanged: canonical Task Run contract/projector, live Run registry adapter, transition property/integration test, ledgers
-- testsAdded: exhaustive legal/illegal status pair matrix; invalid completed-Run reopen through the durable projector; retry/stop sequence; same-terminal idempotence; different-terminal rejection; explicit failed/stopped resume paths
-- commandsExecuted: initial missing-state-machine failure; focused state-machine, Task contract, live registry, single projection, Eval projection, and workflow tests; first Eval projection exposed the supported failed-to-active resume contract; first workflow run exposed the supported stopped-to-awaiting_input preflight resume contract; root typecheck; automatic full `npm test` passed all 169 discovered tests; diff check
-- migration: no status, event, runtime schema, or stored history was rewritten; desired statuses remain wire-compatible, while every newly projected canonical `run_upsert` is checked against the single transition table
-- rollback: the projector check can be reverted only with the pure table and tests retained as an adapter guard; never restore route-specific silent transitions
-- deletedEntries: duplicate private Run-status enum used by parsing; direct live-registry running/stopping/stopped assignments
-- remainingRisks: LA-009 must version execution snapshots/epochs; LA-010/011 must move runtime-native lifecycle behind the adapter; retry terminal semantics remain LA-012
-- unverifiedRealMachineItems: no live provider retry/resume or packaged-app stop was exercised; managed E5 acceptance remained skipped
-
-## LA-009 — Version immutable execution snapshots
-
-- status: completed
-- dependencies: LA-008
-- baseCommit: `bbb30d81fe559d889eadc3551e40eeae9445602e`
-- resultCommit: `SELF`
-- filesChanged: canonical Task Run contract/schema/projector, standalone and Team resource promotion paths, execution/resource/workspace regressions, ledgers
-- testsAdded: immutable and append-only snapshot history; explicit compatible model switch; compaction-bound same epoch; runtime-restart new epoch; fork-required same-Run denial; legacy epoch write denial; resource manifest freeze and versioned Main-to-Team promotion; first General execution identity
-- commandsExecuted: initial missing execution-timeline export failure; focused execution snapshot, single projection, General Run, Task workspace/contract/resource, and workflow tests; focused failures exposed invalid legacy fixture hashes, missing General timeline initialization, selected model identity, stale lifecycle arrays, and a TypeScript optional-array narrowing issue; root and Desktop typechecks; automatic full `npm test` passed all 170 discovered tests; diff check
-- migration: new Runs initialize empty versioned timelines and record the first immutable snapshot when resources freeze; missing timeline fields remain legacy epoch 0 and are read-only; no stored Run or user data was rewritten or backfilled
-- rollback: readers may continue accepting missing legacy fields, but newly recorded Runs must not lose append-only timeline validation or resume ambient configuration drift
-- deletedEntries: parser type assertions for non-null permission/retrieval changes; unversioned Main-to-Team resource promotion for new Runs
-- remainingRisks: LA-010/LA-011 must move Pi lifecycle and native events behind the runtime adapter; LA-013 owns durable compaction handoff; LA-033 owns full ExecutionProfile and quality routing
-- unverifiedRealMachineItems: no live provider model switch, real compaction, packaged-app continuation, or customer data was used; managed E5 acceptance remained skipped
-
-## LA-010 — Introduce the General Agent runtime port
-
-- status: completed
-- dependencies: LA-008
-- baseCommit: `87a24291e027b2c0dd91cd9ed1fecc3be0fe6b17`
-- resultCommit: `SELF`
-- filesChanged: new cat-runtime port/Pi adapter, General coordinator and server composition, shared Task message queue session contract, adapter/coordinator/session regressions, ledgers
-- testsAdded: source boundary rejects Pi imports/native session types in General coordinator; fake AgentRuntimePort completes start/stream/queue/delegation/compact/fork/stop lifecycle; real Pi adapter preserves access/resources/session identity/branch capability and model-input probing
-- commandsExecuted: initial adapter test failed because the port export did not exist, then failed on the expected direct Pi coordinator import; focused port, General coordinator, General session, and Task message queue tests; root and Desktop typechecks; automatic full `npm test` passed all 171 discovered tests; diff check
-- migration: no Task/runtime/user schema or data changed; production composition now injects `createPiAgentRuntimePort`, while the existing `createGeneralAgentSession` factory remains the Pi adapter implementation and direct parity fixture
-- rollback: composition may temporarily inject a compatibility port wrapping the existing factory, but coordinators must not regain Pi imports or native session/model types
-- deletedEntries: General coordinator `modelRuntime` and `createSession` dependencies; direct Pi session/runtime/event/image/version imports; Task message queue native AgentSession union
-- remainingRisks: LA-011 must normalize the temporary compatibility event envelope; CAT/Eval/Team factories remain outside this General-first ticket; old General factory deletion remains gated by LA-056
-- unverifiedRealMachineItems: no live provider call, OAuth refresh, real network model input, packaged-app session resume, or customer data was used; managed E5 acceptance remained skipped
-
-## LA-011 — Normalize Pi events at the runtime adapter boundary
-
-- status: completed
-- dependencies: LA-010
-- baseCommit: `8bfa0986315f5bbf55e117e66e33d58cf9741c52`
-- resultCommit: `SELF`
-- filesChanged: canonical runtime event normalizer and export, Pi adapter subscription, General Main/child consumers, Task diagnostic projection, mapping/coordinator regressions, ledgers
-- testsAdded: ordered Pi-to-canonical mapping snapshot; unknown and malformed native event diagnostics; General coordinator persists unmapped-event diagnostics without exposing hidden reasoning
-- commandsExecuted: initial normalizer import failure; focused normalizer, runtime port, General coordinator/session, and runtime hook tests; root and Desktop typechecks; automatic full `npm test` discovered and passed 172 root tests; roadmap validation/tests; diff check
-- migration: no Task product event schema, persisted runtime schema, or user data changed; the Pi adapter now emits a strict LA-owned discriminated union and existing General consumers were migrated in place
-- rollback: the adapter may temporarily translate canonical events through an old consumer mapper, but coordinators must not regain Pi-native event parsing and unknown native events must remain visible diagnostics
-- deletedEntries: permissive compatibility event envelope; General coordinator runtime field validators and direct Pi event-name branches
-- remainingRisks: LA-012 owns retry terminal gating and stream coalescing; CAT/Eval/Team factory migration remains outside this General-first ticket; LA-045 owns the renderer timeline protocol
-- unverifiedRealMachineItems: no live provider event stream, real retry/compaction, packaged-app renderer, or customer data was used; managed E5 acceptance remained skipped
-
-## LA-012 — Gate retry terminal state and coalesce streaming deltas
-
-- status: completed
-- dependencies: LA-011
-- baseCommit: `3581b4c8dc981fb0ce5b6109db9e892aba4acff1`
-- resultCommit: `SELF`
-- filesChanged: runtime event pipeline and export, canonical terminal failure event, Pi adapter settlement/cancellation integration, General terminal projection, pipeline regressions, ledgers
-- testsAdded: failure-before-retry-decision and decision-before-failure permutations; retry success; cancellation during retry; exactly-once terminal failure; 50ms/20fps delta window; final-before-pending-delta flush
-- commandsExecuted: initial missing pipeline export failure; focused pipeline/normalizer/runtime-port/General/session/self-healing tests; root and Desktop typechecks; automatic full `npm test` discovered and passed 173 root tests; roadmap validation/tests; diff check
-- migration: no persisted schema or user data changed; each Pi adapter subscription now uses an in-memory settlement pipeline and flushes on idle before the coordinator finalizes its Run
-- rollback: coalescing may be disabled by immediate flush for diagnosis, but terminal attempt failures must continue waiting for Pi's explicit retry decision and must remain exactly once
-- deletedEntries: direct per-token Pi adapter emission; implicit assumption that waitForIdle alone establishes canonical stream settlement
-- remainingRisks: LA-013 owns durable compaction handoff; non-General runtime factories remain outside the current adapter; real-provider retry ordering remains unverified
-- unverifiedRealMachineItems: no live provider retry, compaction overflow, rate-limit delay, packaged-app stream, or customer data was used; managed E5 acceptance remained skipped
-
-## LA-013 — Persist a structured handoff before exact-session compaction
-
-- status: completed
-- dependencies: LA-009, LA-010, LA-011
-- baseCommit: `7b080faca74ee8a694df650921f31839786cc4b4`
-- resultCommit: `SELF`
-- filesChanged: versioned runtime compaction contract/renderer, runtime port compact request, General durable handoff transaction and exact-session guard, handoff/coordinator regressions, ledgers
-- testsAdded: deterministic version-1 handoff and hash validation; session ID/file mismatch denial; required Decision and reviewable Artifact preservation; execution/resource/policy hash preservation; proof that the artifact is durable before Pi compact is invoked
-- commandsExecuted: initial missing handoff export failure; existing coordinator assertion failed on the intentionally removed free-string compact contract; focused handoff/General/runtime-port/execution-snapshot tests; root and Desktop typechecks; automatic full `npm test` discovered and passed 174 root tests; roadmap validation/tests; diff check
-- migration: no stored history was rewritten; new compactions append a final context_handoff Artifact plus system Activity to the existing Task event log, while legacy threads without verified execution/resource snapshots remain read-only and cannot compact
-- rollback: disable compaction and direct users to a new Run/fork; never call Pi compact without a durable v1 handoff or relax the exact session ID/file check
-- deletedEntries: free-form-only runtime compact contract; compaction path that executed before Task durability; ambient selection of an unverified legacy execution/resource context
-- remainingRisks: automatic handoff retention/checkpoint policy remains a later storage concern; non-General compaction paths remain outside the current General-first runtime port; real Pi compaction rehydration remains unverified
-- unverifiedRealMachineItems: no live Pi compaction, overflow recovery, provider context inspection, packaged-app flow, or customer data was used; managed E5 acceptance remained skipped
-
-## LA-067 — Preserve Desktop strip-only loading of the shared Task contract
-
-- status: completed
-- dependencies: LA-008
-- baseCommit: `ff892f92d7b49ec663d70a2dc7eb9906fdcbc3f9`
-- resultCommit: `SELF`
-- filesChanged: shared Task workspace contract, Desktop strip-only import regression, ledgers
-- testsAdded: direct Node strip-only import of the canonical Task Run transition contract, including legal and rejected transitions with the unchanged stable error code and endpoints
-- commandsExecuted: direct Node test first reproduced `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` for the constructor parameter property and then passed; Desktop test suite passed 150 Desktop tests plus 3 activity-producer tests; root suite automatically discovered and passed 174 tests; root and Desktop typechecks; roadmap validation/tests; release check; diff check
-- migration: none; no Task schema, stored data, event shape, transition rule, error code, or product behavior changed
-- rollback: do not restore constructor parameter properties in shared contracts consumed by Node strip-only tests; reverting would restore the G2 Desktop Gate failure
-- deletedEntries: the non-erasable constructor parameter-property syntax at the shared Desktop import boundary
-- remainingRisks: future shared contracts can reintroduce unsupported TypeScript syntax unless the strip-only regression remains in the Desktop suite; LA-054 still owns broader CI suite separation
-- unverifiedRealMachineItems: packaged Desktop loading of this shared contract remains unverified; no real Task data or customer data was read
-
-## LA-014 — Require structured capabilities for every production tool
-
-- status: completed
-- dependencies: LA-001, LA-010
-- baseCommit: `e4decdc1f76e3caf5664bfc696f1b58ba1d0a652`
-- resultCommit: `SELF`
-- filesChanged: schema-v1 tool capability inventory, permission resolver, General/CAT/Maintainer session registration gates, Agent tool catalog projection, current context, capability regressions, ledgers
-- testsAdded: exact reviewed capability lookup; every CAT tool receives a structured manifest; case/name aliases remain undeclared; mixed declared/undeclared registration fails; unknown tools remain blocked even under bridge auto; catalog refuses undeclared active tools
-- commandsExecuted: focused test first failed because the capability registry export did not exist; focused capability, permission, catalog, General, CAT, and Maintainer tests; root and Desktop typechecks; automatic root suite discovered and passed 175 tests; Desktop passed 150 tests plus 3 activity-producer tests; roadmap validation/tests; release check; diff check
-- migration: no persisted schema or user data changed; existing reviewed tool names receive an in-memory schema-v1 manifest, and production session/catalog construction now fails before exposing any undeclared name
-- rollback: a temporary compatibility inventory may enumerate another reviewed exact tool name, but unknown tools must remain blocked and production sessions must not return to tool-name heuristics
-- deletedEntries: runtime permission classification by editable-domain name arrays; unknown-tool fallback to high-risk bridge approval
-- remainingRisks: LA-015 must route declared filesystem operations through one FileCapabilityBroker; LA-016 must do the same for network/process/secrets; capability inventory review remains required when Pi or first-party tools change
-- unverifiedRealMachineItems: no live provider, packaged app, third-party extension, external MCP, or customer data was used; managed E5 acceptance remained skipped
-
-## LA-015 — Centralize filesystem capability authorization
-
-- status: completed
-- dependencies: LA-014
-- baseCommit: `6f2ead6257de2bdaacd33af676aea86a55e1a78c`
-- resultCommit: `SELF`
-- filesChanged: FileCapabilityBroker and cat-data export; General/CAT runtime guards; document tool adapter; filesystem capability manifests; safety/runtime/capability regressions; current context; ledgers
-- testsAdded: Project read/list/search allowlist; outside/home-equivalent and symlink escape denial; new-file parent realpath validation; generic CAT write denial; explicit output write grant; nested path extraction; current-grant revocation; General and CAT runtime integration; source assertions removing prior duplicate authorities
-- commandsExecuted: focused broker test first failed because the broker export did not exist, then passed; focused runtime hook, CAT safety, General session, CAT prompt-isolation, document route/capability, and capability-manifest tests; root and Desktop typechecks; automatic root suite discovered and passed 176 tests; Desktop passed 150 tests plus 3 activity-producer tests; roadmap validation/tests; release check; diff check
-- migration: no persistent schema or user data changed; existing `FileGrantV1` realpaths, access modes, recursion, and fingerprints remain canonical, and the broker consumes freshly resolved grants at each General tool call
-- rollback: keep the broker default-deny and disable an unported Stable tool if necessary; never restore the removed parallel path/grant authorities
-- deletedEntries: General runtime embedded path collector/canonicalizer/grant matcher; CAT safety-kernel document-root authority; document-tool-specific explicit-grant matching
-- remainingRisks: LA-016 still owns network/process/secret brokers; authorization and the eventual filesystem open are not yet one OS-level no-follow operation, so per-Run isolation and host capability RPC remain required; direct Pi/tool inventory changes still require capability review
-- unverifiedRealMachineItems: no live provider, packaged app, external filesystem grant, third-party document backend, customer data, or OS-level symlink-race exploit was used; managed E5 acceptance remained skipped
-
-## LA-016 — Centralize network, process, and Secret capability authorization
-
-- status: completed
-- dependencies: LA-014
-- baseCommit: `d25647189c270610dbc29db5c50f05da60d8f31f`
-- resultCommit: `SELF`
-- filesChanged: shared network/process/Secret brokers; General/CAT runtime capability guard; CAT/General sandbox spawn guards; legacy web bridge host/credential enforcement; capability manifests; focused and loopback regressions; runtime policy/current context; ledgers
-- testsAdded: exact scheme/host/port grant; wildcard, subdomain, credential URL, private-network, consumer, and process-template denial; explicit test-only private-network grant; runtime web/bash/bridge guard; source assertions proving General, CAT, sandbox, and web paths use the brokers
-- commandsExecuted: focused broker test first failed because the broker exports did not exist, then passed; focused file broker, runtime hook, permission, sandbox, web parity, and tool-catalog tests; tool-catalog loopback was rerun in the allowed local environment after sandbox bind EPERM; first full root run found non-default port incompatibility; exact ports were added to grants and focused tests passed; a full 177-test run passed; private-network default denial was then added with an explicit test-only loopback grant and the final full 177-test run passed; root and Desktop typechecks; diff check
-- migration: no schema, stored permission, credential, Package, document, or user data changed; existing permission decisions remain the upper policy layer while execution now requires a separate in-memory exact capability grant
-- rollback: disable the affected network/process/Secret capability or legacy web bridge; never restore direct plaintext credential return, unbrokered process spawn, wildcard host matching, or permission-only execution
-- deletedEntries: direct sandbox domain validator independent of the network broker; direct unbrokered sandbox spawn; legacy web bridge direct credential and Keychain process access; bash's misleading generic filesystem manifest
-- remainingRisks: DNS resolution can still change after hostname authorization and requires worker/OS egress enforcement; non-Agent host maintenance/package/provider process paths remain separately governed and require review when migrated; LA-017/LA-019 still own process isolation and capability RPC
-- unverifiedRealMachineItems: no live provider/API credential, external public network, packaged app, private-network service outside a synthetic loopback, third-party Package/Extension, customer data, or DNS-rebinding exploit was used; managed E5 acceptance remained skipped
-
-## LA-018 — Load executable Extensions only from approved content-addressed bytes
-
-- status: completed
-- dependencies: LA-005, LA-015
-- baseCommit: `d4182beb9f7dce73f0803aaaf53c801960fba6ac`
-- resultCommit: `SELF`
-- filesChanged: v2 Extension trust document and read-only content store; staged-tree verifier; General resource snapshot staged-path replacement; server authorization return contract; Extension regressions; runtime policy/current context; ledgers
-- testsAdded: approval re-reads the canonical source; content-addressed staged file and manifest; read-only mode; original-path replacement cannot alter loaded bytes; exact loader snapshot replacement; unexpected tree member denial; staged-byte tamper denial; dynamic import denial; legacy v1 approval cannot authorize staged execution
-- commandsExecuted: focused trust test first failed on the missing staged verifier and then passed; focused General session and Run coordinator tests; root and Desktop typechecks; roadmap validation/tests and release check (tsx IPC first blocked by the managed sandbox, then passed in the allowed same-machine environment); automatic full `npm test` first hit the existing user-cache fixture sandbox restriction, then discovered and passed all 177 root tests in the allowed environment; final focused trust test and both typechecks; diff check
-- migration: no real runtime data was read or written; new approvals use `pi_extension_trust.v2.json` and a content-addressed staged tree, while legacy v1 path/digest records remain untouched and are deliberately ignored as execution authority so they require explicit restaging and reapproval
-- rollback: keep Stable external Extension execution disabled and retain v2 staged records as inert read-only evidence; never restore original-path loading or treat v1 approval as equivalent authority
-- deletedEntries: path-plus-digest approval as current execution authority; post-approval loader use of the original Extension path; trust records without a verified staged tree
-- remainingRisks: LA-019 capability-isolated Extension Host remains mandatory before Stable third-party execution can return; same-user filesystem mutation is detected but not prevented by an OS security boundary; the staged closure is intentionally single-file and blocks dynamic, require, and relative module dependencies
-- unverifiedRealMachineItems: no real `data/**`, customer Extension, packaged app, live Pi Extension evaluation, cross-process staging race, code signing, or isolated Extension Host was used; Stable execution remains disabled and managed E5 acceptance remained skipped
-
-## LA-068 — Establish the versioned Run Worker protocol and Supervisor lifecycle
-
-- status: completed
-- dependencies: LA-009, LA-010, LA-015, LA-016
-- baseCommit: `288e5c2b6f3a8e2948e85cc60b7701ec155b8020`
-- resultCommit: `SELF`
-- filesChanged: strict v1 worker bootstrap/command/message contract; process adapter seam; sanitized Node JSONL process adapter; Supervisor ready/heartbeat/cancel/hard-kill/crash lifecycle; synthetic and fake-process regressions; current context; ledgers
-- testsAdded: unknown/bootstrap schema denial; execution/run identity match; successful ready-heartbeat-complete; cancellation command followed by timeout SIGKILL; heartbeat timeout classification; exit-before-ready classification; actual sanitized Node child JSONL round trip
-- commandsExecuted: focused supervisor test first failed because the module did not exist, then exposed an unref timer settlement bug and passed after correction; root typecheck; automatic full `npm test` discovered and passed all 178 root tests including the new test; Desktop typecheck and diff check
-- migration: none; this is an unconnected foundation and no production route, Run registry, Task schema, runtime process, or stored data uses the worker protocol yet
-- rollback: remove the unconnected protocol/Supervisor module and test; do not partially connect a production profile or introduce a second active Run authority
-- deletedEntries: none; production host execution is deliberately retained until profile parity tickets LA-069 through LA-071 pass and LA-072 removes the fallback
-- remainingRisks: every production profile still executes in the host until its dedicated migration ticket completes; worker capability RPC is not connected; process-level OS sandboxing and cross-root isolation remain unproven
-- unverifiedRealMachineItems: only synthetic fake and local Node child workers were used; no Pi provider, real Run, real `data/**`, customer content, packaged app, OS sandbox profile, or crash-recovery persistence was exercised; managed E5 acceptance remained skipped
-
-## LA-073 — Freeze General Session preparation before Pi construction
-
-- status: completed
-- dependencies: LA-068
-- baseCommit: `51fc0f092e6869e240ab5e7f8bbbbe494377b2c3`
-- resultCommit: `SELF`
-- filesChanged: schema-v1 General preparation Plan and export; General Session Plan consumer/parity gates; focused regression; worker-epic queue contract; runtime/resource current-state documentation; ledgers
-- testsAdded: deterministic JSON round trip; complete input hashes; Stable preflight excludes and never executes an external Extension; planned initial/registered tool parity; Plan/options mismatch denial; post-preflight Grant expansion denial; source mutation denial before Session construction
-- commandsExecuted: focused test first failed because the Plan export did not exist, then exposed active-versus-registered document tool and builtin ordering differences; focused Plan/General Session/General coordinator tests; root typecheck; first full 179-test run exposed undefined fields lost at the process-boundary JSON round trip; resource snapshot normalization fixed it; focused regression and root typecheck passed; final full 179-test run passed in the allowed synthetic user-cache environment after the managed sandbox blocked its existing cache fixture; Desktop typecheck; roadmap validation/test and release check through local `node --import tsx` after the npm `tsx` CLI IPC socket was sandbox-blocked; diff check
-- migration: no runtime schema, Task contract, stored Run, user setting, or user data changed; new General Session construction prepares an in-memory schema-v1 Plan when callers do not yet supply one, while LA-074 will make that Plan the worker wire input and attest the exact runtime output
-- rollback: block new General worker migration and revert the unconnected Plan seam; never allow Session construction to rediscover resources or substitute model, permission, prompt, or tool inputs after accepting a frozen Plan
-- deletedEntries: General Session runtime-time resource discovery; duplicate General builtin-tool name constants; live-option authority after a prepared Plan is accepted
-- remainingRisks: LA-074 must add a strict hostile-wire parser, worker attestation, Host-persisted exact ExecutionSnapshot, and activation-before-prompt; LA-075 still owns production General cutover and parity; production execution remains in the host
-- unverifiedRealMachineItems: no real Pi provider request, worker Session, packaged app, real `data/**`, customer content, or external Extension execution was used; managed E5 acceptance remained skipped
-
-## LA-074 — Attest and activate General Worker Sessions over bidirectional RPC
-
-- status: completed
-- dependencies: LA-073
-- baseCommit: `41041e8d95f3c4c6d33f0b0df3ae853d345d5ea1`
-- resultCommit: `SELF`
-- filesChanged: strict hostile-wire General Plan parser; versioned bidirectional General Worker RPC; Supervisor-multiplexed Worker entry and application transport; exact prompt/tool/resource/grant attestation; Host-persisted ExecutionSnapshot-before-activation gate; permission/delegation bridges; runtime event and queue proxy; JSONL bounds and error redaction; focused regressions; current runtime/resource documentation; ledgers
-- testsAdded: strict Plan unknown-field denial; bounded JSONL framing; durable snapshot persistence before activation/Session return; attestation and activation hash mismatch denial; prompt-before-activation denial; permission and delegation round trips; concurrent command correlation; runtime event and queue forwarding; active-tool mismatch denial; timeout/disconnect cleanup; Secret redaction; Supervisor application-channel multiplexing
-- commandsExecuted: focused General Worker RPC test first failed because the module did not exist, then exposed strict resource normalization and Supervisor-path ownership gaps; focused General Worker RPC, Supervisor, General Plan, General Session, and General coordinator tests; root and Desktop typechecks; first full automatic suite was blocked by the managed sandbox at the existing synthetic user-cache fixture; approved rerun discovered and passed all 180 root tests; roadmap validation/test, release check, and diff check
-- migration: none; RPC schema v1 and the Worker entry are unconnected foundations, no production route/coordinator/active Run/Task schema/stored Run/user setting/user data changed, and production General execution remains Host-owned until LA-075
-- rollback: remove the unconnected General Worker RPC/entry/application transport and revert the preparation-only Supervisor bootstrap alternative; retain Host execution as the single production authority and never leave both paths active
-- deletedEntries: duplicate standalone Worker lifecycle path was removed during implementation; General RPC is multiplexed through the single LA-068 Supervisor channel; raw bootstrap/shutdown exception text no longer crosses the Worker boundary
-- remainingRisks: LA-075 must atomically cut new General Runs over to Worker authority and prove start/retry/cancel/crash/reconnect, durable queue/delegation, fork/copy, resource and ExecutionSnapshot parity; CAT/Eval/Team remain Host-owned pending their profile tickets; process-level OS sandbox isolation remains unproven
-- unverifiedRealMachineItems: no production coordinator, real Pi provider request, real Run, packaged app, OS sandbox profile, real `data/**`, customer content, or external Extension execution was used; managed E5 acceptance remained skipped because its pack is absent
-
-## LA-075 — Cut new standalone General root Runs over to Worker authority
-
-- status: completed
-- dependencies: LA-074
-- baseCommit: `07918c211038a6e49705a223316096c3b54a6cdb`
-- resultCommit: `SELF`
-- filesChanged: production General Worker authority and Supervisor composition; dev/compiled Worker entry resolution; exact ExecutionSnapshot projector entry; active worker/epoch registry identity; Coordinator cutover with no new-root-Run Host fallback; dynamic capability bridge; bounded Supervisor JSONL framing; packaged-runtime Worker-entry assertion and fixture; Coordinator, RPC, Supervisor and actual child-process regressions; current runtime/resource documentation; ledgers
-- testsAdded: actual TS Worker process prepares, attests, activates and stops; exact attested Snapshot is durable before Session return; new root Run never invokes Host Session construction; active worker/epoch identity; native image, queue/steer/follow-up, delegation, permission, capability activation, Retry and resource-manifest parity; Stop projection; disconnect/failure projection; Worker entry packaging requirement
-- commandsExecuted: General coordinator test initially timed out because Worker authority was not connected; focused root typecheck and General coordinator/RPC/runtime/Supervisor/projector/active-registry tests; actual local child-process Worker test; automatic full `npm test` discovered and passed all 181 root tests; Desktop typecheck; first Desktop suite exposed a stale packaging fixture missing the compiled Worker entry, then all 150 Desktop tests and all 3 acceptance-activity tests passed after the fixture matched the new archive contract; roadmap validation/test, release check, and diff check; `npm run desktop:package` was attempted but stopped before building because the required local signing identity was unavailable, so `desktop:verify` was not run
-- migration: only newly started standalone General root Runs use Worker authority; active Host Runs are not hot-migrated or rewritten; no Task/runtime schema or user data migration; standalone compaction/fork maintenance and delegated children retain their existing paths pending their dedicated isolation/deletion gates
-- rollback: a future explicit ticket may route only subsequent new root Runs back to the Host; never hot-migrate a current Run and never keep both authorities eligible for the same launch
-- deletedEntries: new standalone General root Run Host Session construction and its approximate ExecutionSnapshot derivation; production General Worker foundation is no longer unconnected
-- remainingRisks: standalone compaction/fork maintenance and delegated-child sessions still execute in the Host; CAT/Eval/Team remain Host-owned pending LA-070/LA-071; LA-072 must remove all remaining production Host execution after parity; OS sandbox profile isolation and real provider recovery remain unproven
-- unverifiedRealMachineItems: no real provider request, existing active Host Run, packaged-app interactive Run, OS sandbox profile, real `data/**`, customer content, or external Extension execution was used; a signed packaged archive and archive-level Worker-entry proof remain unverified because the required local signing identity was unavailable; managed E5 acceptance remained skipped because its pack is absent
-
-## LA-069 — Close the General Worker migration Epic
-
-- status: completed
-- dependencies: LA-068, LA-073, LA-074, LA-075
-- baseCommit: `07918c211038a6e49705a223316096c3b54a6cdb`
-- resultCommit: `SELF`
-- filesChanged: no additional implementation beyond completed child Tickets LA-073 through LA-075; Epic closure recorded in the control plane and execution ledgers
-- testsAdded: inherited from LA-073 deterministic preflight, LA-074 RPC attestation/activation, and LA-075 production cutover/parity evidence
-- commandsExecuted: child Ticket verification sets plus LA-075 full automatically discovered root and Desktop suites; static packaging contract checks passed, while signed package creation was blocked by the unavailable local signing identity and archive verification was not run
-- migration: the Epic closes only the new standalone General root-Run authority; it does not claim CAT/Eval/Team, delegated-child, compaction/fork, OS sandbox, provider, or real-machine release acceptance
-- rollback: governed by LA-075; only a future explicit Ticket may change authority for subsequent new Runs
-- deletedEntries: none beyond the child Tickets' recorded deletions
-- remainingRisks: LA-070, LA-071 and LA-072 remain required before the process-isolation Epic and R-002 can close globally
-- unverifiedRealMachineItems: same bounded synthetic/local-child evidence as LA-075; no real provider or packaged-app interactive acceptance; no signed packaged archive or archive-level verification
-
-## LA-070 — Isolate new Project CAT root Runs and Private Eval single generation
-
-- status: completed
-- dependencies: LA-068
-- baseCommit: `5733813a98c5103e31ceab68e2938494fc11af36`
-- resultCommit: `SELF`
-- filesChanged: CAT/Eval immutable Session Plan and Supervisor authority; strict bidirectional Worker RPC; CAT/Eval Worker entry; Project CAT and Private Eval production cutover; active worker/epoch binding; packaged-runtime entry contract; focused regressions; current runtime/resource documentation; ledgers
-- testsAdded: actual child-process CAT and Private Eval preparation/activation/Stop; concurrent cross-root CAT Workers; Plan digest mutation denial; Host server-tool AbortSignal propagation; Project CAT and Private Eval source cutover contract; active-registry worker identity; packaged-runtime CAT/Eval entry requirement
-- commandsExecuted: CAT Worker runtime test first failed because the Worker module did not exist; focused CAT Worker runtime/RPC/cutover, Supervisor, active registry, CAT safety/prompt isolation/runtime session, Private Eval and Eval route tests; root typecheck and diff check; automatic full root suite first hit the managed sandbox at the existing synthetic user-cache fixture, then the approved rerun discovered and passed all 184 tests; Desktop suite passed all 150 tests and all 3 acceptance-activity tests; Desktop typecheck, roadmap validation/test and release check; signed packaging was not retried because LA-075 already proved the required local signing identity is unavailable
-- migration: only newly started Project CAT root Runs and Private Eval single generations use Worker authority; existing active Runs are not hot-migrated; no CAT, Task, runtime, Private Eval, or user-data schema changed; Private Eval retains its canonical execution manifest while Project CAT persists the exact attested Task ExecutionSnapshot before activation
-- rollback: a future explicit Ticket may disable an unmigrated profile for subsequent new Runs only; never route a failed migrated launch to Host execution and never keep Host and Worker eligible for the same new Run
-- deletedEntries: direct Host Pi Session construction for new Project CAT root Runs; direct Host Pi Session construction for Private Eval single generation; live SessionManager ownership for migrated Project CAT root Runs
-- remainingRisks: Team specialist sessions remain Host-owned pending LA-071; standalone compaction/fork maintenance plus non-Run CAT prompt/catalog/compaction helpers remain Host-owned pending LA-072; Private Eval does not have a canonical Task locator for a Task ExecutionSnapshot and continues to use its existing canonical Eval execution manifest; OS sandbox profile isolation, real provider recovery, and full Package Extension UI execution remain unproven
-- unverifiedRealMachineItems: no real provider request, existing active Host Run, packaged-app interactive Run, OS sandbox profile, real `data/**`, customer content, or external Extension execution was used; signed packaged archive and archive-level Worker-entry proof remain unavailable because the required local signing identity is missing; managed E5 acceptance remained skipped because its pack is absent
-
-## LA-071 — Isolate new Team specialist transport Sessions
-
-- status: completed
-- dependencies: LA-068
-- baseCommit: `3c000376292f823cea22d355dff7f58a967ccd6c`
-- resultCommit: `SELF`
-- filesChanged: Team profile support in the shared CAT/Eval Worker Plan/RPC/entry; Team launch cutover; pre-launch signed child-scope identity/subset validation; exact composite Team resource manifest and ExecutionSnapshot-before-activation persistence; active worker/epoch identity; focused regressions; current runtime/resource documentation; ledgers
-- testsAdded: source cutover contract rejects Host Session construction and requires Team Worker identity; actual child-process `team` Worker preparation/activation/Stop; cross-Project/Workflow/Role scope-binding contract; existing evidence-scope, Pi child RPC, workflow, activity and active-registry parity suites
-- commandsExecuted: Team cutover test first failed because `spawnWorkflowSubagent` still constructed the transport Session in the Host; focused Team Worker/CAT Worker tests; focused Team Pi child RPC and evidence tests first hit the managed sandbox at their existing synthetic cache fixture, then passed in the allowed test cache environment; Team workflow/activity/active registry suites; root typecheck and diff check; automatic full suite discovered and passed all 185 root tests; Desktop suite passed all 150 tests and all 3 acceptance-activity tests; Desktop typecheck, roadmap validation/test and release check
-- migration: only newly started Team specialist transport Sessions use Worker authority; active Team children are not hot-migrated; the two existing verified Pi-native child transports remain nested execution details; no Team, Task, runtime, child-scope, Package, or user-data schema changed
-- rollback: a future explicit Ticket may block subsequent Team specialist launches or route only a verified new child through a separately reviewed transport; never fall back to Host Pi Session execution and never keep Host/Worker authorities eligible for the same child
-- deletedEntries: direct Host `createCatAgentSession` construction for new Team specialist transport Sessions; post-activation approximate Team ExecutionSnapshot promotion; redundant second Extension binding for the Team transport Session
-- remainingRisks: standalone compaction/fork maintenance and non-Run CAT prompt/catalog/compaction helpers remain Host-owned pending LA-072; verified nested Pi child processes still use their established pi-subagents/Pi-RPC lifecycle beneath the Supervisor-owned Team transport; OS sandbox profile isolation and real provider/Package execution recovery remain unproven
-- unverifiedRealMachineItems: no real provider request, existing active Team child, packaged-app interactive Team Run, OS sandbox profile, real `data/**`, customer content, or executable Package Extension was used; signed packaged archive remains unavailable because the required local signing identity is missing; managed E5 acceptance remained skipped because its pack is absent
-
-## LA-072 — Remove production Host Agent execution fallback
-
-- status: completed
-- dependencies: LA-069, LA-070, LA-071
-- baseCommit: `8bfad494f3d1ec06c6f8e3fb1f3e3e5aaf3e49a5`
-- resultCommit: `SELF`
-- filesChanged: CAT Worker tool-definition attestation; General Worker fork RPC; General coordinator compaction/fork/delegated-child cutover; non-Run CAT prompt/catalog/compaction support cutover; delegated Worker identity Activity; architecture and randomized cross-root regressions; current runtime/resource documentation; ledgers
-- testsAdded: architecture guard rejects direct CAT Session construction in the Server and direct Host General Session construction in the coordinator; strict CAT Worker tool-definition wire validation; General Worker fork and branch identity; six randomized concurrent CAT roots retain unique Worker IDs plus exact Run/epoch identity; delegated child records Worker/epoch Activity before execution
-- commandsExecuted: the architecture test first failed on direct Server CAT Session construction; the General coordinator test then exposed its Host-based child/compaction/fork fixture and passed after the fixture used Worker authority; focused General coordinator/Worker RPC/Worker runtime/architecture/compaction/active-registry tests; root typecheck; automatic full root suite discovered and passed all 186 tests; Desktop passed 150 tests plus 3 acceptance-activity tests; Desktop typecheck; roadmap validation/test; release check; `npm run mac:test`; diff check; signed packaging not retried because LA-075 already proved the required local signing identity is unavailable
-- migration: only operations started after this commit use the completed boundary; no active Run is hot-migrated, no runtime/Task/user-data schema changes, and no stored data is rewritten; delegated child identity is recorded as canonical Activity, while compaction/fork and CAT support operations retain their existing durable domain result instead of inventing a second Task execution authority
-- rollback: keep a failed profile or support operation Stable-blocked/read-only and repair it in a new Ticket; never restore Host Agent execution, hot-migrate a current Run, or make Host and Worker simultaneously eligible
-- deletedEntries: direct Host CAT Session construction for Project prompt support, Main tool-catalog probing, and Project compaction; direct Host General Session construction for standalone compaction, fork, and delegated children; obsolete Host executable-Extension authorization path for these plans; active product Agent execution fallback outside the Worker authorities
-- remainingRisks: the dormant Maintainer migration Agent remains Stable-disabled pending LA-050; verified nested Pi children retain their established pi-subagents/Pi-RPC lifecycle beneath the Supervisor-owned Team transport; delegated-child Task schema has no separate child ExecutionSnapshot and therefore records Worker binding as Activity; OS sandbox profile enforcement, real provider recovery, and isolated Extension Host execution remain unproven
-- unverifiedRealMachineItems: no live provider, existing active Host Run, packaged-app interactive Run, OS sandbox profile, real `data/**`, customer content, third-party Extension, or signing credential was used; signed package/archive verification remains blocked by the missing local identity; managed E5 acceptance remained skipped because its pack is absent
-
-## LA-017 — Close the per-Run Worker isolation Epic
-
-- status: completed
-- dependencies: LA-009, LA-010, LA-015, LA-016; accepted child Tickets LA-068 through LA-075
-- baseCommit: `b5bfdd413ff901b91808c319f56d92a36a287e42`
-- resultCommit: `SELF`
-- filesChanged: no production implementation; Epic closure recorded in the execution ledgers after all Worker foundation, profile cutover, parity, and fallback-removal Tickets completed
-- testsAdded: inherited from LA-068 Supervisor lifecycle, LA-073/074 immutable General plan/RPC, LA-075 General cutover, LA-070 CAT/Eval cutover, LA-071 Team cutover, and LA-072 architecture/randomized cross-root proof
-- commandsExecuted: accepted the child Ticket verification evidence, including the final 186-test root suite, 150+3 Desktop suite, mac:test, root/Desktop typechecks, roadmap validation/tests, release check, and diff check
-- migration: none beyond the child Tickets; existing active Host Runs were never hot-migrated and no persisted schema or user data was rewritten
-- rollback: governed by the child Tickets; block a future failed profile and repair it in a new Ticket, never restore shared Host execution or dual authority
-- deletedEntries: no additional entries beyond the child Tickets' recorded direct Host Session and fallback deletions
-- remainingRisks: this closes R-002 for active product Agent execution, not OS-level sandbox enforcement, same-user native-process threats, verified nested Pi child lifecycle, or the separately Stable-disabled Maintainer migration Agent; LA-019 still owns capability-isolated Extension execution
-- unverifiedRealMachineItems: no real provider, packaged-app interactive Run, OS sandbox attack, active legacy Run, customer data, signed archive, or external Extension execution was used
-
-## LA-019 — Isolate executable Extensions behind a capability-denied Host
-
-- status: completed
-- dependencies: LA-017, LA-018
-- baseCommit: `5d3b3895b34f3cdd83d3ad2a58b320c019a7f6ff`
-- resultCommit: `SELF`
-- filesChanged: versioned Extension Host plan/protocol and Pi pure-tool compatibility adapter; independent `srt` child entry with Node permissions; private exact-byte restaging; authenticated bounded JSONL; General/isolated-CAT in-process loader denial; runtime archive contract and packaging fixture; malicious capability/crash/timeout and architecture regressions; resource/risk/migration documentation; ledgers
-- testsAdded: malformed Host plan fails before process launch; benign pure tool invocation; filesystem read, child process, inherited secret and loopback network denial; unsupported command/API rejection; request timeout kill; Host crash isolation; General and isolated CAT source guards prevent external paths entering the Pi loader; packaged runtime requires the compiled Host entry
-- commandsExecuted: the new characterization test first failed because no isolated Host export existed; the architecture guard later failed while external paths still reached Pi loaders; focused Extension Host iterations exposed canonical temp-path, package-resolution and sandbox CLI boundary requirements and replaced an infeasible child-side tsx loader with parent-side TypeScript transpilation; `npm run typecheck`; focused `extension_host.test.ts`; automatic `npm test` discovered and passed all 187 root tests; `npm run test:security` ran and passed all 24 discovered security tests; `npm run mac:test` passed all 150 Desktop tests, all 3 acceptance-activity tests, and Desktop typecheck; roadmap validation/test, release check, and diff check passed
-- migration: no persistent schema or user-data migration; approved source bytes are copied into an unpredictable, read-only, process-private temporary root and removed on dispose/failure; Stable external executable Extensions remain disabled and are not activated by this Ticket; active Runs are unchanged
-- rollback: keep Stable external executable Extensions disabled and remove the unactivated Host foundation in a future explicit Ticket if required; never restore in-process external loading or make Host and Agent process simultaneously eligible
-- deletedEntries: direct General resource-snapshot Extension paths into Pi's in-process loader; direct isolated CAT Extension paths into Pi's in-process loader; stale CAT regression that expected server-selected external code to execute inside the Agent process
-- remainingRisks: LA-020 and its child Tickets still own signed declarative Package format and any explicit Stable activation Gate; Host v1 supports only pure registered tools and deliberately blocks event, command, flag, shortcut, UI/render and argument hooks; same-user native-process threats and sandbox-runtime beta behavior are not a proven OS security boundary; LA-owned inline runtime factories remain trusted product code inside their Run Workers
-- unverifiedRealMachineItems: no real provider, customer data, real `data/**`, third-party production Extension, signed Package, installed packaged-app Host, notarization credential, or external network service was used; signed archive execution remains unverified because the required local signing identity is unavailable; managed E5 acceptance remained skipped because its pack is absent
-
-## LA-076 — Define the strict declarative `.lapkg` v1 format
-
-- status: completed
-- dependencies: LA-004, LA-018
-- baseCommit: `090fbde67b92a738a493ac04e15804404ddcda6e`
-- resultCommit: `SELF`
-- filesChanged: unconnected `.lapkg` v1 manifest/archive verifier; closed declarative resource-type and extension allowlists; exact archive/manifest/tree digest projection; bounded tar parsing from the same hashed bytes; portable path and executable-surface rejection; focused synthetic archive regressions; current package/resource/risk/migration documentation; ledgers
-- testsAdded: valid self-contained Skill/Glossary archive; strict unknown manifest field; duplicate resource ID; unknown resource type; traversal; case-insensitive and Unicode-normalized collisions; digest mismatch; executable extension, shebang and tar permission bits; undeclared/missing file; symlink/hardlink; file-count and resource-byte limits
-- commandsExecuted: the new characterization test first failed because the format module did not exist; focused iterations exposed an invalid duplicate-ID fixture and an uncaught tar callback error boundary before the final fail-closed parser passed; `npm run typecheck`; focused `lapkg_format.test.ts`; automatic `npm test` discovered and passed all 188 root tests including the new test; Desktop typecheck; roadmap validation/test; release check; diff check
-- migration: no route, registry, activation, runtime schema, persistent state, or user-data migration; only synthetic archives were created under temporary test roots; Stable legacy Package installation remains governed by its existing stopgap
-- rollback: the verifier is not connected to production and can be removed as one unit; keep Stable legacy install disabled rather than falling back to npm, executable Package content, or unsigned data
-- deletedEntries: none; legacy catalog, registry and package trees remain unchanged and read-only/blocked according to existing controls
-- remainingRisks: LA-077 must cryptographically verify the syntax-only Ed25519 envelope against explicit trust roots; resource-specific semantic schemas beyond valid UTF-8/JSON remain future format evolution; LA-078 through LA-082 still own preview, legacy inventory, activation, recovery and product cutover; `.lapkg` v1 intentionally supports no binary resources
-- unverifiedRealMachineItems: no real `data/**`, customer content, publisher archive/key, production route, Package Center UI, installed runtime, signed app/archive, or network source was used; managed E5 acceptance remained skipped because its pack is absent
-
-## LA-077 — Verify `.lapkg` signatures against explicit publisher roots
-
-- status: completed
-- dependencies: LA-076
-- baseCommit: `70be517cc71dcf5c120524c61a6bf0c02616891e`
-- resultCommit: `SELF`
-- filesChanged: unconnected domain-separated Ed25519 signature payload/verifier; strict injected trust-root validation and publisher binding; validity/revocation handling; immutable verification attestation; cryptographic tamper/key/error regressions; current package/resource/migration documentation; ledgers
-- testsAdded: valid publisher-bound signature; empty trust roots; revoked key; publisher mismatch; substituted key; duplicate key ID; RSA/non-Ed25519 key; unknown trust-root field; not-yet-valid and expired key; manifest and resource-tree tamper; noncanonical Base64 envelope; manifest field-order invariance; source guard against embedded production public keys
-- commandsExecuted: the new characterization test first failed because no signature module existed; its first implementation run exposed a synchronous assertion-wrapper issue before the final test passed; `npm run typecheck`; focused `lapkg_signature_security.test.ts`; automatic security suite discovered 189 total root tests and ran/passed all 25 security tests including the new signature test; Desktop typecheck; roadmap validation/test; release check; diff check
-- migration: no trust-root store, production key, route, registry, Package activation, runtime schema, or user-data migration; generated Ed25519/RSA keys and archives existed only in temporary test fixtures
-- rollback: the verifier is unconnected and can be removed as one unit; with no verified trust path, `.lapkg` remains blocked rather than accepted by hash, manual checkbox, or unknown key
-- deletedEntries: none; no legacy Package or trust record was rewritten, promoted, or deleted
-- remainingRisks: production publisher enrollment, rotation, revocation distribution and legal governance remain undecided and must not be inferred; LA-078 through LA-082 still own preview, legacy inventory, activation, recovery and product cutover; current verification attests content, not tar byte-for-byte encoding metadata
-- unverifiedRealMachineItems: no real publisher key, external archive, trust service, revocation feed, `data/**`, customer content, production route/UI, installed runtime, signed app/archive, or network source was used
-
-## LA-078 — Make declarative Package Preview inert and approval-bound
-
-- status: completed
-- dependencies: LA-077
-- baseCommit: `d5cd82ef0807ed51f844181f9bbd1c37017f642b`
-- resultCommit: `SELF`
-- filesChanged: byte-oriented `.lapkg` inspection entrypoint; unconnected in-memory Preview service; strict source descriptor and TTL; signature-error boundary; deterministic full-object `planHash`; risk projection; stale/mutated/expired approval guard; focused network/subprocess and tamper regressions; current package/resource/risk/migration documentation; ledgers
-- testsAdded: initial missing-module characterization failure; zero `fetch` calls and fake-`npm` sentinel; deterministic identical preview; source digest and signature mutation rejection; full-plan mutation and supplied-hash mismatch rejection; exact expiry boundary; declarative risk projection
-- commandsExecuted: focused Preview security test first failed because `lapkg_preview.ts` did not exist and then passed; `npm run typecheck`; automatic security suite discovered 190 total root tests and ran/passed all 26 security tests including Preview; Desktop typecheck; roadmap validation initially caught and corrected an over-broad bidirectional risk mapping, then validation/test passed; release check; JSON ledger parse; source guard; diff check
-- migration: none; Preview accepts caller-owned in-memory bytes and trust roots, creates no registry, archive extraction, quarantine, activation, runtime schema or user-data state, and remains disconnected from production routes
-- rollback: remove the unconnected Preview module and byte inspection entrypoint; Stable legacy dependency-bearing preview remains blocked and no npm/Git/shell fallback is permitted
-- deletedEntries: none; no legacy Package, quarantine archive, registry, trust record or user data was read, rewritten, promoted or deleted
-- remainingRisks: LA-079 must inventory legacy Package state without reading real `data/**`; LA-080/081 own v2 activation and recovery; LA-082 owns route/UI cutover and permanent old-API retirement; production publisher-root governance remains undecided
-- unverifiedRealMachineItems: no real `data/**`, external source, network, publisher key/archive, Package route/UI, installed runtime, signed app/archive or customer content was used
-
-## LA-079 — Inventory legacy Packages without mutation
-
-- status: completed
-- dependencies: LA-076
-- baseCommit: `3c8ecc9b4b1970c0318d81975f372256a55950c9`
-- resultCommit: `SELF`
-- filesChanged: unconnected read-only legacy `installed-v1` inventory and report; strict record projection; managed-root containment and realpath check; bounded symlink-denying tree hash parity; declarative-candidate/manual-review reasons; corrupt/missing registry reporting; synthetic migration fixtures; current package/resource/migration documentation; ledgers
-- testsAdded: initial missing-module characterization failure; one eligible declarative candidate; executable Extension/risk classification; missing tree; tree digest mismatch; outside-root path refusal; corrupt record accounting; corrupt registry JSON; original path/source/digest/risk preservation
-- commandsExecuted: focused legacy inventory test first failed because the module did not exist and then passed; `npm run typecheck`; automatic `npm test` discovered and ran all 191 root tests including the new inventory test; Desktop typecheck; release check; roadmap validation/test and diff/source/JSON checks before commit
-- migration: report-only and unconnected; tests use a synthetic temporary runtime root; no real `data/**`, registry, installed Package tree, route, runtime schema or user data was read or changed
-- rollback: delete the unconnected inventory module/report test; legacy registry and trees remain disabled/read-only and no v2 activation may infer parity without the report
-- deletedEntries: none; the Ticket explicitly does not execute, delete, resign, repack or activate legacy Packages
-- remainingRisks: actual legacy Package count, corruption and repack eligibility remain unknown because real `data/**` was prohibited; LA-080/081 own v2 activation/recovery and LA-082 owns product cutover; production publisher trust remains undecided
-- unverifiedRealMachineItems: no real registry/tree, Package archive, publisher key, customer content, Package route/UI, installed runtime, signed app/archive or network source was used; managed E5 acceptance skipped because its pack is absent
-
-## LA-080 — Atomically activate approved declarative Packages into v2
-
-- status: completed
-- dependencies: LA-078, LA-079
-- baseCommit: `eae91a233f456bc4feb2e7deaa55affbf1a89466`
-- resultCommit: `SELF`
-- filesChanged: unconnected v2 Package registry/content activation service; strict registry reader; approval/archive/signature revalidation; private same-root staging extraction; post-extraction resource digest checks; cross-process writer lock; read-only content publish; fsync-backed atomic registry writer; pure-resource resolver with no Extension surface; focused synthetic activation/concurrency/rollback regressions; current package/resource/migration documentation; ledgers
-- testsAdded: initial missing-module characterization failure; successful exact activation and resource resolution; Package exists; archive tamper; expired approval; deterministic concurrent writer refusal; injected pre-registry failure rollback; no staging residue; no executable Extension result; registry/content parity
-- commandsExecuted: focused activation test first failed because the module did not exist; first implementation exposed read-only staging rollback failure and then tampered-tar error normalization before passing; `npm run typecheck`; `npm run test:list` confirmed automatic discovery; Desktop typecheck; roadmap validation/test; release check; JSON ledger parse; source guard; diff check
-- migration: synthetic v2 only; `installed-v1` and legacy trees remain untouched/read-only; the new writer owns only `packages-v2` and is not connected to routes, UI, runtime resource activation or real `data/**`
-- rollback: before registry commit, restore removability and delete newly published content plus staging; because no production caller exists, the v2 module/root can be removed without restoring npm or legacy writes; after a committed atomic rename, content remains consistent with registry
-- deletedEntries: none; no legacy registry/tree, Package, approval, route or user data was read, rewritten or deleted
-- remainingRisks: LA-081 must add a durable activation journal and startup recovery for process/OS crashes between phases; lock staleness is not yet recovered; LA-082 owns production route/UI and runtime cutover; production publisher trust remains undecided
-- unverifiedRealMachineItems: only synthetic temporary roots and generated keys/archives were used; no real `data/**`, customer Package, route/UI, installed runtime, signed app/archive, crash/power-loss injection or network was used
-
-## LA-081 — Recover declarative Package activation by exact revision
-
-- status: completed
-- dependencies: LA-080
-- baseCommit: `b971adb2ebb838037967a580f686c8614e700bb5`
-- resultCommit: `SELF`
-- filesChanged: durable versioned activation journal; exact previous/target registry revision+hash and record binding; five deterministic abrupt-termination fault points; exclusive-startup recovery; exact rollback/finalize decisions; orphan staging cleanup; persistent recovery-blocked marker and activation refusal; idempotent recovery; activation registry/content verification exports; focused recovery regressions; current package/resource/migration documentation; ledgers
-- testsAdded: crash after journal prepared, staging verified, content published, registry rename and registry-committed journal; exact expected rollback/finalize for each; second-run idempotence; orphan staging cleanup; rollback failure -> persistent blocked; activation denied while blocked; previous-registry content changed without revision -> blocked; exclusive-startup requirement
-- commandsExecuted: recovery implementation and deterministic fault matrix were developed together, so this Ticket lacks a pre-implementation missing-module failure and records that process deviation explicitly; focused recovery test passed; LA-080 activation regression passed; `npm run typecheck`; automatic recovery suite discovered 193 total root tests, ran 9 recovery tests and included the new suite; Desktop typecheck; roadmap validation/test; release check; JSON ledger parse; source guard; diff check
-- migration: v2 synthetic state only; journal schema v1 and blocked marker live solely under `packages-v2`; no legacy registry/tree, runtime schema, route, UI or real user data was read or migrated
-- rollback: before production cutover, remove the unconnected v2 activation/recovery modules and synthetic roots; never clear an ambiguous blocked marker automatically or fall back to legacy/npm writers
-- deletedEntries: none; recovery removes only exact journal-owned synthetic staging/content proven uncommitted, while ambiguous evidence is retained blocked
-- remainingRisks: real SIGKILL/power-loss/filesystem behavior is not yet proven; publisher-root governance remains undecided; LA-082 must call recovery under actual exclusive startup before enabling routes and must expose blocked diagnostics without bypass
-- unverifiedRealMachineItems: no real `data/**`, Package, publisher key, customer content, route/UI, packaged runtime, signed app/archive, actual process kill, power loss or network was used
-
-## LA-082 — Cut Stable Package Center over to signed declarative v2 resources
-
-- status: completed
-- dependencies: LA-019, LA-081
-- baseCommit: `ae7b116056db77f360758394a40997d992a3d2dd`
-- resultCommit: `SELF`
-- filesChanged: Stable Package routes; v2 resource resolver and General Run manifest projection; fail-closed Package-root process lease and startup activation recovery; strict Desktop DTO/client; `.lapkg` native picker and Settings risk/signature surface; path-redacted legacy inventory DTO; route/Desktop/recovery security regressions; current Package policy, inventory, migration, risk and deletion control documents; ledgers
-- testsAdded: old npm preview/install endpoints return 410 without invoking legacy writers; catalog is discovery-only; installed DTO is v2 and does not expose legacy absolute paths; unknown fields and non-`.lapkg` paths rejected; active Run lease blocks activation; exact preview/activation path invalidates future resource catalogs; live Package-root owner blocks and provably dead owner is replaceable; single-file `.lapkg` picker; Desktop source guard proves only new endpoints and no catalog install action; deterministic Preview hash mutation and General crash disposal waits replace two randomized full-suite assertions discovered during final validation
-- commandsExecuted: focused route test first failed by reaching the legacy npm preview and then passed after cutover; activation and General Run regressions passed; Package-root lease regression and all 9 recovery suites passed; automatic security suite discovered 193 root tests and passed all 26 security tests; initial final-suite reruns exposed and corrected a random no-op Preview hash mutation plus a General crash projection/disposal race (including one temporary cleanup `ENOTEMPTY`); the final automatic root suite then passed all 193 tests with managed E5 explicitly skipped because its pack is absent; final Desktop suite passed 151 tests plus 3 acceptance activity tests; root and Desktop typechecks, roadmap validation/test, release check, JSON parse, source guard and diff check passed
-- migration: no real legacy data was read or changed; `installed-v1` remains disabled and is returned only as a path-redacted read-only inventory; `packages-v2` is the sole new Package writer and General new Runs resolve only its declarative skill/prompt/theme paths; no dual write exists
-- rollback: hide the new activation button and keep v2 read-only if product trust roots or recovery are unavailable; do not restore old npm endpoints, legacy executable resource resolution or a second writer
-- deletedEntries: legacy npm Preview/install production callers and legacy managed-resource resolver callers; no registry, Package tree, user data or historical implementation file was deleted
-- remainingRisks: production publisher enrollment/rotation/revocation storage is an unresolved Decision, so the current zero-root build visibly disables activation; Package-root lease is intentionally narrower than LA-021's full dataRoot authority and PID reuse can conservatively false-block; the old npm implementation remains dead code until its read-only catalog is separated and deletion gates pass; actual legacy inventory and real signed Package behavior remain unknown
-- unverifiedRealMachineItems: no real `data/**`, customer Package, production publisher key, installed runtime, packaged app, signed archive, active live Run, actual process kill/power loss or network source was used; managed E5 acceptance remains outside this Ticket
-
-## LA-020 — Close the declarative Stable Package Epic
-
-- status: completed
-- dependencies: LA-004, LA-018; accepted child Tickets LA-076 through LA-082
-- baseCommit: `2b0c4117`
-- resultCommit: `SELF`
-- filesChanged: no production implementation; Epic closure recorded in the execution ledgers after format, signature, inert Preview, legacy inventory, v2 activation/recovery and product cutover Tickets completed
-- testsAdded: inherited strict archive/manifest/resource validation, explicit publisher trust, zero-network/subprocess Preview, legacy read-only classification, atomic activation and crash recovery, Package-root lease, old-route 410, active-Run freeze, v2-only resolver and Desktop source/UI coverage
-- commandsExecuted: accepted all child Ticket evidence; final child passed 193 root tests, 26 security tests, 9 recovery suites, 151 Desktop tests plus 3 acceptance activity tests, root/Desktop typechecks, roadmap validation/tests, release check and diff check
-- migration: no real legacy Package data was read or migrated; `installed-v1` and original trees remain disabled/read-only while `packages-v2` is the only new Package writer and runtime resolver
-- rollback: hide Stable activation and keep v2 read-only; never restore npm install/Preview endpoints, legacy executable resolution or dual writers
-- deletedEntries: no additional files or user data; child Tickets removed the legacy production callers while retaining historical implementation until the read-only catalog is separated and deletion gates pass
-- remainingRisks: production publisher enrollment/rotation/revocation and trust-root storage remain a blocked Decision; actual legacy inventory, real signed Package behavior, power-loss durability and full dataRoot single-writer authority remain unverified and are not falsely closed by this Epic
-- unverifiedRealMachineItems: no real `data/**`, customer/third-party Package, production publisher key, packaged app, signed archive, active live Run, process kill, power loss or network source was used
-
-## LA-083 — Keep Gate reports and execution ledgers in parity
-
-- status: completed
-- dependencies: LA-067
-- baseCommit: `98d16a6068a73ab2837ac08183440fdfcad492fb`
-- resultCommit: `SELF`
-- filesChanged: roadmap Ticket registry; Gate-ledger validator and focused assertions; missing G2 records in the Markdown and JSON execution ledgers
-- testsAdded: report-backed Gate IDs must exist in both ledgers; Markdown/JSON Gate IDs must each have the matching report and counterpart entry
-- commandsExecuted: the first sandboxed roadmap test was blocked by the known tsx IPC EPERM and was not counted; the allowed failure run proved the new validator export was absent; roadmap test and validation passed after implementation; root/Desktop typechecks and diff check passed
-- migration: none; the existing G2 report and tag remain authoritative evidence and were referenced without rewriting their history
-- rollback: revert this Ticket as a unit; do not delete Gate reports/tags or leave only one ledger format updated
-- deletedEntries: none
-- remainingRisks: Gate evidence still records bounded automated/source verification and must not be upgraded to real-machine, signing, accessibility or customer-data proof
-- unverifiedRealMachineItems: no provider, packaged app, signing identity, notarization, customer data, real `data/**` or public mirror was used
-
-## LA-021 — Enforce one dataRoot writer lease
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `18b7af1e0ee09963091162b1d840e35f1e4cc185`
-- resultCommit: `SELF`
-- filesChanged: dataRoot writer lease authority; server startup/request guard; Electron single-instance guard; removal of the superseded Package-root process lease; focused process fixture/test; storage/package/current-state/risk/migration documentation; ledgers
-- testsAdded: initial missing-module characterization failure; two real process contention; live owner denial; provably dead PID takeover; malformed owner fail-closed; lost-owner assertion/release denial; data-directory swap preserves ownership; server acquisition-before-migration source guard; Electron single-instance source guard
-- commandsExecuted: focused test first failed because `data_root_writer_lease.ts` was absent and then passed; runtime migration/storage and Package activation recovery regressions; full automatic root suite passed 194 tests; root/Desktop typechecks; full Desktop test suite passed 151 plus 3 activity tests; roadmap validation/tests; release check; source/JSON/diff guards
-- migration: no real `data/**` was read or rewritten; the new owner file is runtime metadata at `.data-root-writer-lease`, outside the atomically exchanged `data/` directory; the obsolete Package-root lease has no production caller and is removed as a second authority
-- rollback: stop the runtime or run it read-only; never restore best-effort multi-writer startup or the narrower Package-root process lease as canonical authority
-- deletedEntries: `acquireLapkgRuntimeLease` and its duplicate owner schema/process-liveness tests; no Package registry, user data, journal, or activation state was deleted
-- remainingRisks: LA-022 owns file/parent fsync and fault recovery; actual SIGKILL, PID reuse false-block behavior, same-UID lease deletion, and already-running background writes after external lease loss remain unverified
-- unverifiedRealMachineItems: no real `data/**`, customer content, installed runtime, process kill, power loss, packaged-app second launch, signing, notarization, or public mirror was used
-
-## LA-022 — Make security-critical file transactions durable
-
-- status: completed
-- dependencies: LA-021
-- baseCommit: `050c40a0cac70fbe4e1f600a99f9bbf1b28ef499`
-- resultCommit: `SELF`
-- filesChanged: shared durable atomic-write/append primitive; workspace durability class; Task event/snapshot and first-directory publish; quality/readiness/project decisions; confirmed memory; grants/trust/settings; workflow/message queue; runtime migration; Package registry/journal consolidation; focused fault test; current storage/risk/migration documentation; ledgers
-- testsAdded: initial missing-module characterization failure; ordered write/file-sync/rename/parent-sync checkpoints; before-write ENOSPC; failures before rename preserve old file and remove temp; failure after rename leaves a complete new file; durable append ordering
-- commandsExecuted: focused durable test first failed because the module was absent and then passed; workspace/Task/decision/guidance/message queue/workflow/memory/grant/trust/settings/runtime migration/Package activation and recovery regressions; `npm test` passed all 195 automatically discovered root tests with only the absent managed-E5 qualification pack explicitly skipped; Desktop typecheck and 151 tests plus 3 activity acceptance tests passed; root typecheck, roadmap validation/tests, release check, JSON parse, test-discovery check and diff check passed; one workflow run was sandbox-blocked and rerun with its synthetic cache permission; one nonexistent quality checklist filename was not counted
-- migration: no schema, database, dual write, user data, real `data/**`, or cache rewrite; callers opt into critical durability while rebuildable/normal files keep their prior path
-- rollback: put affected critical surfaces read-only; do not revert them to unsynced writes while claiming durability; the shared primitive can be reverted only with all critical callers in the same commit
-- deletedEntries: duplicate Package registry/journal fsync implementations; no Package state, decision, Task, user data, or audit record was deleted
-- remainingRisks: synthetic fault injection is not actual process-kill/power-loss evidence; ordinary TM/memory audit, Private Eval and rebuildable index/cache writers are not covered by the critical guarantee; SQLite scope remains blocked on LA-062 Decision
-- unverifiedRealMachineItems: no real `data/**`, disk-full filesystem, SIGKILL, power loss, customer content, installed runtime, packaged app, signing, notarization, or public mirror was used
-
-## LA-026 — Authenticate a random Unix-domain runtime transport
-
-- status: completed
-- dependencies: LA-021
-- baseCommit: `862e1bd96df53660380046f19e82d2d7c2a6272b`
-- resultCommit: `SELF`
-- filesChanged: signed runtime rendezvous/session credential protocol; Desktop Unix HTTP/SSE client and Keychain bootstrap use; server default Unix listener and authenticated health; LaunchAgent/dev/update/installer health migration; explicit non-simultaneous loopback transition mode; packaging allowlist; focused transport/resident/Desktop regressions; architecture/risk/inventory/migration/current-state docs; ledgers
-- testsAdded: initial missing rendezvous module failure; signed record and identical session derivation; no credential on disk; clean first-install offline state; overlong Unix path, tamper/root/owner/mode denial; `0600` rendezvous and socket; synthetic fixed-port squatter receives zero requests; integrated Desktop request; restart publishes a new endpoint/credential and reconnect rereads it; Unix health requires authentication; LaunchAgent contains no fixed host/port; automatic security-suite discovery
-- commandsExecuted: focused rendezvous test first failed because both protocol modules were absent, then the sandbox run was blocked from binding the synthetic squatter and the allowed run passed; the first 27-test security run exposed the macOS Unix-path limit and passed after fail-closed validation plus a short per-user `/tmp` root; focused Package tests passed after a concurrent full-suite attempt produced a non-reproducible `tar/minipass write after end`; one isolated rerun passed all 196 automatically discovered root tests with only the declared missing Managed E5 pack skip; 27 security tests, root/Desktop typechecks, Desktop 151+3 tests, `mac:test`, roadmap validation/tests, release check and `git diff --check` passed
-- migration: existing Keychain token remains a bootstrap HMAC key and is not transmitted on the default path; Session credential is derived per runtime start and never persisted; default server and managed LaunchAgent use only one random Unix socket; explicit `LA_SERVER_PORT` or `LA_LOCAL_TRANSPORT_MODE=loopback` keeps a one-version/test compatibility path without simultaneous listeners
-- rollback: stop or repair the runtime; retain authenticated signed rendezvous verification; the explicit authenticated loopback transition may be selected for one version but public-health-then-long-term-token behavior must not return
-- deletedEntries: fixed-port defaults from the managed LaunchAgent, Desktop installer/update health checks and dev start/stop path; no Keychain item, user data, runtime data, credential or public repository object was read or deleted
-- remainingRisks: same-UID native malware that can invoke the trusted Keychain client is not isolated by UDS; XPC/audit-token/code-signing requirement remains a future threat-model decision; real old-install upgrade, Keychain ACL prompts, launchd and packaged-app reconnect are unverified
-- unverifiedRealMachineItems: no installed runtime, actual Keychain item, LaunchAgent mutation, packaged app, legacy installation, real `data/**`, customer data, signing, notarization or public mirror was used
-
-## LA-027 — Route product logs through structured redaction
-
-- status: completed
-- dependencies: LA-010, LA-016
-- baseCommit: `7d9d06dd1f9fc71dd6b023ab7f4d0d2742c7d114`
-- resultCommit: `SELF`
-- filesChanged: shared browser-safe structured logger/redactor and cat-data export; server/general/eval/memory/renderer product-log cutover; schema-v1 server diagnostics with diagnostic IDs, append/read redaction, serialized retention rotation; production console architecture guard and focused redaction/legacy/retention tests; Project diagnostic expectation; test security-suite discovery; architecture/runtime/current-reality/inventory/migration docs; ledgers
-- testsAdded: initial missing shared module failure; unknown free-form customer text and explicit source/target fields; nested Error/code/cause/extra fields without message/stack disclosure; authorization/cookie/API key and URL query redaction; local Unix/Windows path redaction; bounded/circular contexts; schema-v1 JSON line and diagnostic ID; legacy diagnostic read projection redacted without rewriting old bytes; 5 MiB-default single-archive retention using a bounded synthetic threshold; repository-wide production `console.*` guard with one documented non-retained CLI exception; automatic security-suite discovery
-- commandsExecuted: focused safe-logging test first failed because the module did not exist, then exposed customer-text leakage and direct production console callers before passing; Project diagnostics, General Run, Private Eval route and legacy memory-tool focused regressions passed; the final focused test also covered Windows paths, circular contexts, bounded arrays and active/archive size limits; 28 security tests and all 197 automatically discovered root tests passed with only the declared absent Managed E5 qualification pack skipped; 151 Desktop tests plus 3 activity acceptance tests, root/Desktop typechecks, Desktop production build, roadmap validation/tests, release check and diff check passed
-- migration: no existing log file is rewritten; new product events emit schema-v1 JSON lines; legacy server diagnostic rows are sanitized only in their read projection; append rotates the active diagnostic file at 5 MiB and retains one `.1` archive; domain audit records remain owned by their domain and are not silently reclassified as product logs
-- rollback: reduce or disable detailed logging while retaining the shared redactor and fixed event codes; never restore raw payload console fallbacks; server diagnostics may become read-only if rotation fails
-- deletedEntries: direct production console payload calls in server, General coordinator, Private Eval background execution, legacy memory tools and renderer error boundary; no historical log, audit, user data, customer content or public repository object was read, rewritten or deleted
-- remainingRisks: existing historical log bytes may still contain pre-LA-027 material and are intentionally not rewritten; real launchd stdout/stderr retention is not proven; domain audit schemas remain separate; aggressive unknown-string redaction reduces diagnostic detail by design; user-facing scripts outside product runtime retain their CLI output
-- unverifiedRealMachineItems: no real `data/**`, historical logs, customer text, installed LaunchAgent, packaged-app crash, log-volume stress, signing, notarization or public mirror was used
-
-## LA-062 — Decide the SQLite storage boundary
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `fac579c29f1027872509558da98525fbb1718a0f`
-- resultCommit: `SELF`
-- filesChanged: accepted storage ADR; queue/current-reality/risk/migration documentation; docs index/maintenance owner; roadmap ADR validator; execution ledgers; no database, migration, production schema or writer was created
-- testsAdded: none; this is a non-executable Decision
-- commandsExecuted: source-only storage-boundary and migration-control scan without opening `data/**`; roadmap validation/tests; release check; JSON ledger parse; diff check
-- migration: none; JSON/JSONL and the existing domain stores remain canonical under the LA-021 dataRoot lease and LA-022 durability classes
-- rollback: revert the accepted ADR/control-plane commit before LA-023 starts; once migration Tickets exist, a new explicit Decision is required rather than silently restoring the old blocked state
-- deletedEntries: none
-- remainingRisks: real scale and recovery measurements remain unavailable because this campaign is forbidden from reading real `data/**`; LA-023 must remain synthetic and LA-024/025 domain child Tickets cannot cut over until their parity, backup, rollback and JSONL export gates pass
-- unverifiedRealMachineItems: no real data size distribution, largest Task/Project, corrupt historical sample, backup restore, SQLite WAL behavior, JSONL export parity, schema migration, process kill, power loss, customer data or public mirror was inspected
-
-## LA-023 — Establish a synthetic SQLite WAL event/projection foundation
-
-- status: completed
-- dependencies: LA-008, LA-021, LA-062
-- baseCommit: `30aa7f8a9f456647d67b0e20d36302e19e92ee42`
-- resultCommit: `SELF`
-- filesChanged: private workspace package/lock entry; one concrete Node `node:sqlite` schema-v1 event/projection store; synthetic focused test and automatic discovery; architecture/current-reality/inventory/risk/migration docs; ledgers
-- testsAdded: initial missing-module failure; WAL/FULL-sync schema migration; atomic stream/event/projection/idempotency commit; same-command retry and mismatched-command refusal; same/second-connection revision CAS; constraint failure rollback; non-JSON rejection; reopen/quick-check; future/incomplete schema refusal; production import guard
-- commandsExecuted: focused test first failed because the package was absent and then passed; test discovery listed 198 root tests; recovery suite ran 10 tests including the new SQLite test; full root suite ran all 198 discovered tests; Desktop passed 151 Node tests plus 3 Electron acceptance tests; root and Desktop typechecks, roadmap validation/tests, release check and `git diff --check` passed (roadmap/release checks were rerun with local IPC permission after the restricted sandbox denied the `tsx` socket)
-- migration: synthetic temp databases only; no real `data/**`, production writer, JSON/JSONL file, schema, Task, Project or customer content was read or changed; JSON/JSONL remains canonical
-- rollback: delete the unconnected package, its lock entries and focused test; no production data or authority rollback is needed
-- deletedEntries: none
-- remainingRisks: Node 22 emits an experimental warning for `node:sqlite`; real scale, WAL growth, backup/restore, JSONL export, import parity, process kill, power loss and production cutover remain unproven and belong to LA-024/025 child Tickets and G4
-- unverifiedRealMachineItems: no real data, largest Task/Project, corrupt historic sample, installed runtime, packaged app, backup, import, export, process kill, power loss, customer content or public mirror was used
-
-## LA-084 — Establish authority-gated SQLite backup and restore
-
-- status: completed
-- dependencies: LA-022, LA-023
-- baseCommit: `343c2d43dd7c962538e2afa175590200ccbc8d64`
-- resultCommit: `SELF`
-- filesChanged: `storage-sqlite` online backup/restore and manifest implementation; Node engine floor/lock metadata; synthetic recovery test; architecture/current-reality/inventory/migration docs; ledgers
-- testsAdded: initial missing-export failure; WAL-consistent pre-mutation snapshot; exact manifest/schema/digest/size; optional immutable blob copy/restore; source mutation isolation; tampered DB denial without target; missing blob denial; authority loss before publish cleanup; existing canonical target overwrite refusal
-- commandsExecuted: focused test first failed because backup exports were absent and then passed; automatic discovery listed 199 root tests; recovery suite ran 11 tests including both SQLite tests; all 199 discovered root tests passed with only the already-declared missing Managed E5 qualification pack skipped; Desktop passed 151 Node tests plus 3 Electron acceptance tests; root/Desktop typechecks, roadmap validation/tests, release check, ledger JSON parse and `git diff --check` passed
-- migration: synthetic temporary DB/blob inputs and absent restore targets only; no production startup/caller, real `data/**`, Task, Project, user setting, JSON/JSONL writer or customer content was read or changed
-- rollback: remove the unconnected backup/restore exports and focused test, restore the package engine floor if no remaining API needs it; JSON/JSONL remains canonical throughout
-- deletedEntries: none
-- remainingRisks: `node:sqlite` remains experimental on Node 22; no real size, duration, WAL growth, concurrent production mutation, process kill, power loss, full blob CAS, JSONL export, domain import/parity or cutover evidence exists
-- unverifiedRealMachineItems: real data/backup duration/recovery time, installed runtime, packaged app, process kill, power loss, disk full, customer content and public mirror were not used
-
-## LA-085 — Freeze the versioned legacy Task SQLite mapping contract
-
-- status: completed
-- dependencies: LA-023, LA-084
-- baseCommit: `9a3e9b8b9c7aeea7f0555aed4fae668da7831150`
-- resultCommit: `SELF`
-- filesChanged: schema-v1 data-only legacy Task mapping contract; exact persisted field inventories for Task workspace/Run/event, quality decision ledger, message queue and Task Package profile; ordering/revision/cursor/blob-reference boundaries; strict unknown contract/legacy field guards; unconnected SQLite v1-to-v2 mapping-contract migration and hash verification; synthetic Project/standalone/migration tests; architecture/current-reality/inventory/risk/migration docs; ledgers
-- testsAdded: initial missing mapping module failure; all five source contracts and entity field uniqueness; Project and standalone scope; unsupported mapping version; unknown mapping field; unknown legacy entity field; schema-v2 hash-bound stored contract; v1-to-v2 migration ledger and reopen
-- commandsExecuted: focused test first failed because `task_mapping_contract.ts` did not exist and then passed; SQLite foundation and backup regressions passed after expected schema version updates; `npm run test:list` discovered 200 root tests and listed the new test; recovery suite was rerun after the filename was made discoverable and ran/passed 12 tests including all three SQLite tests; full root suite ran/passed all 200 discovered tests with only the declared absent Managed E5 qualification pack skipped; Desktop passed 151 Node tests plus 3 activity acceptance tests; root/Desktop typechecks, roadmap validation/tests, release check, JSON parse and diff check passed
-- migration: only the unconnected synthetic SQLite schema migrated from v1 to v2; no importer, production writer/startup caller, JSON/JSONL authority, real `data/**`, Task, Project, queue, decision, Package profile, user schema or customer content was read or changed
-- rollback: remove schema-v2 mapping table/contract/test and return the unconnected synthetic database to schema v1; JSON/JSONL remains the only production authority, so no user-data rollback or dual-write reconciliation is required
-- deletedEntries: none; no legacy field, source file, Task event, decision, queue message, resource approval or user data was deleted
-- remainingRisks: exact real legacy schema distribution and previously unknown fields remain unverified; LA-086/088 must block rather than guess on unmapped input and prove ordered import/replay parity before LA-087/089 cutover; artifact bytes remain legacy inline JSON until LA-092 defines the CAS boundary; `node:sqlite` remains experimental
-- unverifiedRealMachineItems: no real `data/**`, historical corrupt/torn sample, largest Task/Project, production import, installed runtime, packaged app, process kill, power loss, disk full, customer content or public mirror was used
-
-## LA-086 — Prove legacy Task import and replay parity on synthetic roots
-
-- status: completed
-- dependencies: LA-085
-- baseCommit: `bce36bb8b09b5c8dd39594037d71c41907358467`
-- resultCommit: `SELF`
-- filesChanged: exact `cat-data` workspace dependency/lock entry; authority-gated legacy Task source reader, backup manifest, strict field validation, ordered event import and semantic reducer parity implementation; revision-zero projection initialization; synthetic Project/standalone importer recovery test; architecture/current-reality/inventory/risk/migration docs; ledgers
-- testsAdded: initial missing importer/export failure; Project and standalone Task counts/sequence/cursor; exact JSON-semantic event payloads; replayed/stored projection equality and reopen; idempotent repeated import; zero-event revision-zero projection; supported torn-final-record classification; corrupt middle record refusal after durable source backup; source mutation after backup refusal; writer-authority loss immediately before commit refusal
-- commandsExecuted: focused importer test first failed because the module/export did not exist and then passed; root typecheck and recovery suite passed with 201 automatically discovered root tests and 13 recovery tests; full root suite ran/passed all 201 tests with only the declared absent Managed E5 qualification pack skipped; Desktop passed 151 Node tests plus 3 Electron activity acceptance tests and typecheck; roadmap validation/tests, release check and diff/ledger checks passed
-- migration: synthetic temporary Project and standalone Task roots only; each source was copied to a new hash-manifest backup before classification and imported into a separate temporary SQLite database; no production caller/startup, real `data/**`, canonical JSON/JSONL writer, user schema, Task, Project or customer content was read or changed
-- rollback: remove the unconnected importer, revision-zero initialization API, exact `cat-data` package dependency and focused test; delete only synthetic temporary databases/backups; JSON/JSONL remains the sole production authority
-- deletedEntries: none; no legacy Task directory, event, snapshot, user data or public repository object was deleted or rewritten
-- remainingRisks: only repository-generated synthetic schema shapes were exercised; real historical field/version distribution, largest Task, prior corrupt records, production authority cutover, process-kill/power-loss and JSONL export remain unproven; LA-087 must not treat synthetic parity as permission to guess or silently repair real legacy input; `node:sqlite` remains experimental
-- unverifiedRealMachineItems: no real `data/**`, historical Task, customer content, installed runtime, packaged app, production migration, process kill, power loss, disk full or public mirror was used
-
-## LA-102 — Repair the Task aggregate cutover boundary
-
-- status: completed
-- dependencies: LA-086
-- baseCommit: `16bf40f29cee99848e633c0d18857e31f5b1d3f8`
-- resultCommit: `SELF`
-- filesChanged: implementation queue ticket/dependency/cutover-owner contract; roadmap validator and characterization tests; architecture/current-reality/module inventory/risk/migration documents; ledgers
-- testsAdded: initial validator failure for missing Task aggregate cutover owner and missing LA-087 boundary dependency; missing/duplicate owner refusal; wrong owner refusal; LA-087 bypass dependency refusal; existing dependency/risk/Epic validation retained
-- commandsExecuted: focused roadmap test first failed with zero cutover owners and absent LA-102 dependency, then passed; roadmap validation passed; full roadmap suite, typecheck, release check, JSON ledger parse and diff check passed
-- migration: none; this Ticket only corrects the execution control plane after source tracing proved Task events/snapshot embed Decisions
-- rollback: do not restore the old split cutover plan; any replacement must still prove one Task aggregate and one production authority switch without a dependency cycle
-- deletedEntries: the unsafe claim that LA-087 may switch only Task/Run/Event before Decision parity; no production code, schema, data, customer content or public repository object was changed
-- remainingRisks: LA-087 repository parity and LA-088 remaining Task-side state parity are not implemented; LA-089 production cutover still cannot proceed without both; real historical data remains unverified by campaign constraint
-- unverifiedRealMachineItems: no real `data/**`, runtime startup, installed app, production cutover, rollback, customer content or public mirror was used
-
-## LA-087 — Establish the unconnected SQLite TaskWorkspace repository
-
-- status: completed
-- dependencies: LA-086, LA-102
-- baseCommit: `6ae48b6087a111e16dc766c3fefccc26d12d3c33`
-- resultCommit: `SELF`
-- filesChanged: `TaskWorkspacePersistence` seam and unchanged file adapter; unconnected authority-gated SQLite TaskWorkspace repository/factory; revision-zero stream append repair; machine-readable unconnected/LA-089 readiness marker; synthetic repository test; architecture/current-reality/inventory/risk/migration docs; ledgers
-- testsAdded: initial projection-only revision-zero first-append failure; Project/standalone shared repository; reopen/event replay; exact projection CAS with one stale contender rejected; authority-loss mutation refusal; imported legacy Task reopen and continued write; production-package import guard; automatic discovery
-- commandsExecuted: focused repository test first reproduced the revision-zero stream uniqueness failure and then passed; TaskWorkspace contract/workspace/Project route/standalone route, SQLite foundation and importer regressions passed; all 202 automatically discovered root tests passed with only the declared missing Managed E5 pack skip; 13 recovery tests passed; Desktop passed 151 Node tests plus 3 Electron activity tests and typecheck; root typecheck, roadmap validation/tests, release check and diff check passed
-- migration: synthetic temporary SQLite databases and repository-generated legacy Task roots only; the repository readiness marker remains `unconnected`; no production package imports the SQLite package, no startup composition changed, and JSON/JSONL remains the sole production authority
-- rollback: remove the unconnected repository/factory/readiness marker and restore the file-only `TaskWorkspace` assembly; retain the revision-zero stream fix if projection initialization remains supported; no production data or writer rollback is required
-- deletedEntries: none; no legacy writer, Task directory, event, snapshot, user data or public repository object was removed or rewritten
-- remainingRisks: LA-088 must still prove Decision/queue/resource-profile parity; LA-089 alone may perform the complete Task aggregate production cutover; real historical shapes, largest Task, production startup crash, process-kill/power-loss and JSONL export remain unproven; `node:sqlite` remains experimental
-- unverifiedRealMachineItems: no real `data/**`, historical Task, customer content, installed runtime, packaged app, production writer switch/rollback, process kill, power loss, disk full or public mirror was used
-
-## LA-088 — Prove Task side-state import parity
-
-- status: completed
-- dependencies: LA-085, LA-086
-- baseCommit: `ac57e209aa553d627ce3fa88324f489558519fde`
-- resultCommit: `SELF`
-- filesChanged: strict unconnected legacy Task side-state importer/export; synthetic Decision/quality ledger/message queue/resource-profile parity and refusal test; architecture/current-reality/inventory/risk/migration docs; ledgers
-- testsAdded: initial missing-export failure; embedded Task Decision equality; Project quality ledger sequence/hash-chain/scope and Project-level stream identity; queue stored order/status; resource profile revision/canonical sort/production hash; idempotent repeat; orphan Task, unknown field and authority-loss refusal with raw source preserved
-- commandsExecuted: focused importer test first failed because the export was absent and then passed; quality decision ledger, Task message queue, Task Package profile, Task importer and SQLite repository regressions passed; all 203 automatically discovered root tests passed with only the declared absent Managed E5 pack skip; 14 recovery tests passed; Desktop passed 151 Node tests plus 3 Electron activity tests and typecheck; root typecheck, roadmap validation/tests, release check, ledger JSON parse and diff check passed
-- migration: synthetic temporary Project Task roots and SQLite databases only; the Task aggregate had to be imported first, all side inputs were copied to a hash-manifest backup, and the importer remained unconnected; no production caller/startup, real `data/**`, canonical writer, Project, Task or customer content was read or changed
-- rollback: remove the unconnected side-state importer/export and focused test and delete only its synthetic import database/report; JSON/JSONL remains the sole production authority
-- deletedEntries: none; no Task Decision, quality ledger row, queued message, resource selection/approval, legacy file, user data or public repository object was deleted or rewritten
-- remainingRisks: the synthetic importer publishes quality, queue and profile streams in separate commits and is not a production atomic cutover; LA-089 must switch the Task/embedded-Decision/queue/profile aggregate atomically or leave its JSON/JSONL canonical, while Project quality remains JSONL until LA-098; real historical shapes, largest Project ledger, process-kill/power-loss and JSONL export remain unproven; `node:sqlite` remains experimental
-- unverifiedRealMachineItems: no real `data/**`, historical Decision/queue/profile/quality ledger, customer content, installed runtime, packaged app, production cutover/rollback, process kill, power loss, disk full or public mirror was used
-
-## LA-103 — Repair the Project quality-ledger cutover boundary
-
-- status: completed
-- dependencies: LA-088
-- baseCommit: `08743c93194b737040312403ed3688c71911d9b9`
-- resultCommit: `SELF`
-- filesChanged: storage authority-boundary validator and characterization tests; implementation queue Ticket/dependency/owner markers; architecture/current-reality/inventory/risk/migration documents; ledgers
-- testsAdded: initial missing validator export failure; missing Project quality-ledger owner refusal; missing Task-aggregate exclusion marker refusal; existing dependency/risk/Epic/cutover-owner validation retained
-- commandsExecuted: focused roadmap test first failed because the authority-boundary validator export was absent and then passed; roadmap validation, root typecheck, release check and diff check passed
-- migration: none; source tracing established that the Project-root quality ledger is shared across Tasks and CAT governance, so this Ticket only repairs the execution control plane
-- rollback: do not restore two cutover owners; any replacement must keep Project quality ledger under exactly one Project-level production authority and outside LA-089
-- deletedEntries: the unsafe control-plane claim that LA-089 owns Project quality-ledger cutover as part of a Task aggregate; no production code, schema, data or historical evidence was deleted
-- remainingRisks: LA-089 still requires a production-safe Task/embedded-Decision/queue/profile composition seam and atomic authority marker; Project quality ledger remains JSONL until LA-098; real historical Project concurrency is unverified
-- unverifiedRealMachineItems: no real `data/**`, Project quality ledger, runtime startup, production cutover/rollback, customer content, installed app or public mirror was used
-
-## LA-104 — Add an install-once Task aggregate storage seam
-
-- status: completed
-- dependencies: LA-103
-- baseCommit: `dc69d6e385e8020c9053dc2bb22a6784ef58b336`
-- resultCommit: `SELF`
-- filesChanged: cat-data install-once Task aggregate backend contract; Workspace and message-queue file persistence adapters/resolvers; cat-server Task Package profile persistence adapter/resolver; focused dispatch test; LA-105 dependency split; architecture/current-reality/inventory/risk/migration/queue docs; ledgers
-- testsAdded: initial missing-export failure; synthetic alternate-root Workspace/queue/profile dispatch; default file bytes at the backend root; second backend installation refusal; another-root access refusal
-- commandsExecuted: focused dispatch test first failed because the file queue persistence export was absent and then passed; TaskWorkspace, message queue, Task Package profile and profile-route regressions passed; all 204 automatically discovered root tests passed with only the declared absent Managed E5 pack skip; 15 recovery tests passed; Desktop passed 151 Node tests plus 3 Electron activity tests and typecheck; root typecheck, roadmap validation/tests, release check, ledger JSON parse and diff check passed
-- migration: none; no backend is installed by production startup, so every current caller resolves to the existing file implementation and JSON/JSONL remains canonical
-- rollback: remove both install-once resolvers and persistence interfaces together and restore direct file factories; do not leave Workspace, queue or profile on different authority paths
-- deletedEntries: direct public Task queue/profile file selection inside their read/update/apply entrypoints; the same file behavior remains behind named adapters; no data, legacy reader/writer, Task or public repository object was deleted
-- remainingRisks: LA-105 must implement unconnected SQLite queue/profile persistence and a complete backend; LA-089 must install it only after backup/import/parity and publish one authority marker; explicit low-level file factories remain callable until LA-089 old-writer guards them
-- unverifiedRealMachineItems: no real `data/**`, production backend installation, runtime startup, Task migration, installed app, customer content or public mirror was used
-
-## LA-105 — Compose the unconnected SQLite Task aggregate backend
-
-- status: completed
-- dependencies: LA-087, LA-088, LA-104
-- baseCommit: `b59e03169e5de142141cac41f6c478e43663f1c4`
-- resultCommit: `SELF`
-- filesChanged: storage-sqlite queue/profile repositories and aggregate backend factory/export; focused recovery-classified backend test; current-reality/inventory/risk/migration control-plane docs; ledgers
-- testsAdded: initial missing-export failure; install-once public dispatch over the complete backend; imported queue stored order/status and profile revision/production hash; queue/profile writes and reopen; concurrent exact-projection CAS with one winner; absent-stream initialization; queue/profile authority-loss refusal without projection change; unknown-field refusal; production factory import guard
-- commandsExecuted: focused backend test first failed because the backend export was absent and then passed; SQLite foundation/import/side-state/repository, Task composition, message queue and Task Package profile regressions passed; all 205 automatically discovered root tests passed with only the declared absent Managed E5 pack skip; 16 recovery tests passed; Desktop passed 151 Node tests plus 3 Electron activity tests and typecheck; root typecheck, roadmap validation/tests, release check, ledger JSON parse and diff check passed
-- migration: synthetic temporary SQLite databases only; the backend remains marked `unconnected`, production startup imports/installs nothing, and no authority marker was published
-- rollback: remove the unconnected SQLite queue/profile adapters, factory/export and focused test; the LA-104 file-default seam and JSON/JSONL canonical writer remain unchanged
-- deletedEntries: none; no file writer, legacy reader, Task state, queued message, resource profile, Project quality ledger, user data or public repository object was deleted or rewritten
-- remainingRisks: LA-089 must inventory and backup real-shaped legacy roots without reading production data in tests, prove import parity under the writer lease, publish one Task-domain authority marker, install this backend once, and guard old Task writers; Project quality ledger remains JSONL until LA-098; `node:sqlite` remains experimental
-- unverifiedRealMachineItems: no real `data/**`, historical Task/queue/profile, customer content, production startup/cutover/rollback, process kill, power loss, disk full, installed app or public mirror was used
-
-## LA-089 — Cut Task aggregate production authority to SQLite
-
-- status: completed
-- dependencies: LA-087, LA-088, LA-103, LA-105
-- baseCommit: `da6e6d521110e363cbb9af1b856659dff01f3c39`
-- resultCommit: `SELF`
-- filesChanged: startup-only Task aggregate inventory/backup/import/parity/marker/activation module; cat-server SQLite dependency and startup/shutdown wiring; Project-quality exclusion in the side importer; install-once legacy Task state-writer block across Workspace/queue/profile; canonical SQLite recovery enumeration; focused cutover/recovery test and updated pre-cutover source guards; architecture/current-reality/inventory/risk/migration docs; ledgers
-- testsAdded: initial missing cutover module failure; Project Task workspace/embedded Decision/queue/profile cutover parity; no Project quality shadow projection; source bytes unchanged; durable marker reload; pending queue recovery; nonzero active-Run refusal before marker; partial pre-marker database idempotent recovery; corrupt source refusal without marker; complete backup manifest and exact backup-file hash/size required after marker; explicit old file-writer refusal; SQLite-only post-cutover Task creation/reload; SQLite-only active Run startup reconciliation; sole LA-089 production import guards
-- commandsExecuted: focused test first failed because the cutover module did not exist and then passed; affected Task/queue/profile/import/repository/reconciliation tests passed; root typecheck passed; full root suite initially exposed two obsolete pre-LA-089 source guards, both were narrowed to the sole LA-089 owner, and the final automatic run passed all 206 discovered tests with only the declared missing Managed E5 qualification pack skipped; recovery suite passed all 17 tests; Desktop passed 151 Node tests plus 3 Electron activity tests and Desktop typecheck; roadmap/release/diff/ledger checks passed
-- migration: production startup code is now wired to migrate the Task aggregate only under the data-root writer lease and before recovery/listen, but this campaign did not launch it against the repository or read/modify any real `data/**`; all executed cutovers, backups, partial-crash recovery and post-cutover writes used synthetic temporary roots
-- rollback: before marker publication, discard the partial candidate database and retain the legacy writer; after marker publication, rollback must restore the entire Task/embedded-Decision/queue/profile domain from the exact marker-linked backup and switch one authority marker—never re-enable only one legacy sub-writer or touch the Project quality ledger; the synthetic executable rollback proof is provided by LA-091, while production rollback remains unverified
-- deletedEntries: no Task, event, Decision, queue message, resource profile, Project quality ledger row, legacy state file, user data or public repository object was deleted or rewritten; obsolete tests claiming production wiring was forbidden before LA-089 were replaced by sole-owner guards
-- remainingRisks: real historical schema distribution/size and startup duration are unverified because real `data/**` is prohibited; LA-091 synthetic whole-domain rollback/no-dual-authority proof is complete, but process-kill, power-loss, disk-full, production rollback and stable compatibility-window deletion remain unverified; deterministic JSONL audit export is complete under LA-090; `node:sqlite` remains experimental; Project quality ledger remains JSONL until LA-098
-- unverifiedRealMachineItems: real `data/**`, historical corrupt/unknown Task shapes, installed runtime startup, packaged app, real cutover/rollback, process kill, power loss, disk full, customer content and public mirror were not used
-
-## LA-090 — Generate deterministic read-only JSONL audit exports
-
-- status: completed
-- dependencies: LA-089
-- baseCommit: `8a8573f947d20993cc85ed5ca1f80886920af652`
-- resultCommit: `SELF`
-- filesChanged: storage-sqlite read-only constructor option and audit export/verify service; strict local CLI and root script; deterministic export test; architecture/current-reality/inventory/risk/migration documents; ledgers
-- testsAdded: initial missing audit-export API failure; repeated byte-identical export; stable stream/event sequence and record hash chain; canonical payload/projection digest without raw content, paths, credentials or original identifiers; whole-file digest/counts; read-only database byte preservation; strict export/verify CLI arguments; tamper refusal; absolute destination; real publish-race no-overwrite with competing bytes preserved and staging cleanup; source guard forbidding SQLite writer methods
-- commandsExecuted: focused audit test first failed because the API export was absent and then passed; root typecheck passed; all 207 automatically discovered root tests passed with only the declared absent Managed E5 pack skip; 17 recovery tests passed; Desktop passed 151 Node tests plus 3 Electron activity tests and Desktop typecheck; roadmap/release/ledger/diff checks passed
-- migration: none; the service and CLI only read an explicitly named SQLite database and write a new explicitly named audit file; all tests used synthetic temporary data and no production startup, real `data/**` or JSONL authority was changed
-- rollback: remove the audit module/export, CLI/root script and focused test; canonical SQLite and the LA-089 authority marker remain unchanged because the audit format has no import or write path
-- deletedEntries: none; no SQLite event/projection, legacy Task file, JSONL authority, user data or public repository object was deleted or rewritten
-- remainingRisks: the exporter currently materializes canonical records in memory, so real maximum database/export size and latency remain unmeasured; LA-091 synthetic whole-domain rollback, compatibility-window read-only behavior and no-dual-authority proof is complete, but production rollback and real compatibility-window operation remain unverified; `node:sqlite` remains experimental; Project quality ledger remains JSONL until LA-098
-- unverifiedRealMachineItems: real `data/**`, large historical SQLite snapshots, installed runtime CLI invocation, disk-full/power-loss during export, packaged app, customer content and public mirror were not used
-
-## LA-091 — Prove whole-domain Task rollback and legacy compatibility
-
-- status: completed
-- dependencies: LA-084, LA-087, LA-089, LA-090
-- baseCommit: `bdf08117`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/task_aggregate_sqlite_cutover.ts`; `packages/cat-server/src/task_aggregate_legacy_rollback.ts`; `tests/sqlite_storage_task_rollback.test.ts`; `tests/sqlite_storage.test.ts`; `tests/sqlite_task_workspace_repository.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/IMPLEMENTATION_QUEUE.md`; `docs/roadmap/MIGRATION_MATRIX.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: SQLite-only Task survives rollback; queued message survives rollback; legacy startup does not auto-re-cutover; legacy writes remain available only while legacy authority is active; fresh re-cutover imports Tasks created during rollback; restart/recovery; active-Run rollback/re-cutover refusal; old-writer AST guards remain present; audit JSONL verifies against the source SQLite database
-- commandsExecuted: focused rollback test initially failed on missing rollback module; rerun exposed legacy importer event-page semantics and then passed after exporting one complete event page; two full-suite attempts exposed the architecture-owner allowlist and passed after both guards were updated; final `npm test` passed all 208 discovered root tests; `npm run test:recovery` passed 18 tests; `npm --prefix apps/desktop test` passed 151 Node plus 3 Electron activity tests; `npm run mac:test` passed Desktop tests and typecheck; focused cutover/audit/backend/rollback/repository tests passed; `npm run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; `npm run release:check`; `git diff --check`
-- migration: synthetic temporary roots only; rollback reads the active SQLite aggregate read-only, exports all current Task/embedded-Decision/queue/profile projections, publishes legacy-compatible files, writes one legacy authority marker last, and never touches Project quality ledger or real `data/**`
-- rollback: revert this commit before any production authority transition; after a real rollback, retain the source SQLite database and rollback report, and use only the explicit fresh-database re-cutover path—never restore an old SQLite file or enable JSONL and SQLite writers together
-- deletedEntries: none; legacy readers and files remain, SQLite source remains, no Task/event/Decision/queue/profile/quality-ledger/user/customer/public-repository data was deleted
-- remainingRisks: real production data shape, process-kill/power-loss during rollback publication, same-process operational invocation, and real maximum Task size remain unverified; LA-024 is closed as an Epic after its Task-aggregate child set completed, while G4 still requires its stage report and tag before LA-025 execution; Project quality ledger remains JSONL until LA-098; `node:sqlite` remains experimental
-- unverifiedRealMachineItems: no real `data/**`, installed runtime, customer content, signing credential, public mirror, process kill, power loss, disk-full or production rollback was used
-
-## LA-092 — Establish the unconnected SHA-256 content-addressed blob/ref foundation
-
-- status: completed
-- dependencies: LA-024, LA-084
-- baseCommit: `87c0b40e`
-- resultCommit: `SELF`
-- filesChanged: `packages/storage-sqlite/src/blob_store.ts`; `packages/storage-sqlite/src/index.ts`; `tests/sqlite_blob_store.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/MIGRATION_MATRIX.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/IMPLEMENTATION_QUEUE.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: SHA-256 digest validation; immutable read-only CAS publication; byte-identical deduplication; transactional reference manifest revision CAS; concurrent reference publish with one winner; staging/blob/ref orphan inspection and staging prune; missing-blob reference detection; authority loss after blob publication; backup/restore of a CAS-shaped blob manifest
-- commandsExecuted: focused blob test first failed because the new exports were absent and then passed; `npm exec --no -- tsx tests/sqlite_blob_store.test.ts`; focused SQLite backup/restore, foundation and audit-export regressions passed; `npm test` passed all 209 automatically discovered root tests with only the declared missing Managed E5 qualification pack skipped; `npm run test:recovery` passed 18 tests; `npm --prefix apps/desktop test` passed 151 Node tests plus 3 Electron activity tests; `npm run mac:test`; `npm run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; `npm run release:check`; execution-ledger JSON parse; `git diff --check`
-- migration: none; the store accepts only an explicitly named temporary root and caller-owned authority, has no domain caller, no production startup wiring, no schema or user-data migration, and leaves existing JSON/JSONL/blob authorities unchanged
-- rollback: remove the unconnected blob store module/export and focused test; no production authority, existing file, database, domain schema or user data requires rollback
-- deletedEntries: none; no existing blob, reference, Task, event, Decision, Project, customer content, user data or public repository object was deleted or rewritten
-- remainingRisks: real blob sizes and streaming behavior, cross-process stale lock recovery, concurrent filesystem/process failures, disk full, power loss, production backup/restore, and domain-level reference lifecycle remain unverified; `node:sqlite` remains experimental; LA-092 must not be treated as LA-094/096/097 cutover evidence
-- unverifiedRealMachineItems: no real `data/**`, existing production blob root, customer content, installed runtime, packaged app, signing credential, public mirror, process kill, power loss or disk-full scenario was used
-
-## LA-093 — Cut LA-owned settings, grants, and trust to the SQLite authority
-
-- status: completed
-- dependencies: LA-024
-- baseCommit: `287527cc`
-- resultCommit: `SELF`
-- filesChanged: `packages/storage-sqlite/src/settings_grants_trust_repository.ts`; `packages/storage-sqlite/src/index.ts`; `packages/cat-data/src/structured_domain_storage.ts`; `packages/cat-data/src/index.ts`; `packages/cat-data/src/standalone_file_grants.ts`; `packages/cat-data/src/team_workflow.ts`; `packages/cat-server/src/settings_grants_trust_sqlite_cutover.ts`; `packages/cat-server/src/notification_preferences.ts`; `packages/cat-server/src/pi_trust.ts`; `packages/cat-server/src/pi_extension_trust.ts`; `packages/cat-server/src/server.ts`; `tests/sqlite_settings_grants_trust.test.ts`; `tests/sqlite_storage.test.ts`; `tests/sqlite_task_workspace_repository.test.ts`; `docs/AGENT_CONTEXT.md`; `docs/HANDOFF.md`; roadmap/current-state/inventory/risk/migration/ledger docs
-- testsAdded: strict structured envelope and identity/digest checks; revision/CAS conflict; invalid raw preservation and marker absence; secret-value refusal; synthetic startup cutover/reopen; active-Run refusal; source collector invalid-JSON blocking; settings/notification, standalone grant, team-role, Pi trust and Extension trust compatibility regressions; domain-specific SQLite cutover-owner architecture guards
-- commandsExecuted: sandboxed `npm run roadmap:test`, `npm run roadmap:validate`, and focused `npm exec --no -- tsx` attempts were blocked by the environment's local tsx IPC pipe policy (not test failures); rerun with permitted local IPC passed `npm run roadmap:test`, `npm run roadmap:validate`, `npm exec --no -- tsx tests/sqlite_settings_grants_trust.test.ts`, `npm exec --no -- tsx tests/notification_preferences.test.ts`, `npm exec --no -- tsx tests/pi_trust.test.ts`, `npm exec --no -- tsx tests/pi_extension_trust.test.ts`, `npm exec --no -- tsx tests/team_workflow_contract.test.ts`, `npm exec --no -- tsx tests/team_workflow_foundation.test.ts`, `npm exec --no -- tsx tests/document_capability_routes.test.ts`, `npm exec --no -- tsx tests/sqlite_storage.test.ts`, `npm exec --no -- tsx tests/sqlite_task_workspace_repository.test.ts`, and `npm exec --no -- tsx tests/sqlite_storage_task_aggregate_backend.test.ts`; `npm run typecheck`; `git diff --check`; execution-ledger JSON parse; the first parallel full-root attempt was blocked by the real-data server fixtures and the safe 208-test subset had one transient worker-heartbeat failure, after which the five worker regressions passed in isolation (the two real-data server fixtures remain unverified)
-- migration: startup inventories only LA-owned settings/grants/trust sources under the data-root lease, copies exact raw bytes to a marker-linked backup, validates domain payloads without unknown-field or secret normalization, imports source/payload digests into SQLite with revision-zero parity, publishes one authority marker, then installs the process backend. Provider secrets remain Keychain/reference-only and Pi native settings remain Pi-owned; the campaign used synthetic temporary roots and a synthetic Pi agent directory only.
-- rollback: before marker publication delete only the candidate SQLite files and retain the raw backup for repair; after publication restore the complete settings/grants/trust domain from the marker-linked backup and activate one legacy authority marker or a fresh SQLite cutover—never re-enable an individual JSON writer and never restore secrets into SQLite.
-- deletedEntries: none; legacy files/readers remain for backup/read-only rollback, Pi native settings and Provider secret references were not migrated or rewritten, and no user/customer/public-mirror data was read or deleted
-- remainingRisks: real configuration distributions, unknown legacy fields, invalid grants, stale Extension staging, Keychain/reference availability, process-kill/power-loss, production startup duration, real rollback and cross-process behavior remain unverified; LA-094/095/096/097/098/099 still own their domains; G4 stage report/tag remains required before continuing the LA-025 sequence
-- unverifiedRealMachineItems: no real `data/**`, real `~/.pi/agent/trust.json`, customer content, installed runtime, packaged app, signing credential, public mirror, process kill, power loss, disk-full or production rollback was used
-
-## LA-106 — Isolate server integration fixtures from checkout data
-
-- status: completed
-- dependencies: LA-093
-- baseCommit: `ebd308b9`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/server_root.ts`; `packages/cat-server/src/server.ts`; `tests/server_root_override.test.ts`; `tests/helpers/synthetic_server_root.ts`; `tests/import_upload.test.ts`; `tests/asset_api.test.ts`; current storage reality/inventory/migration/handoff docs
-- testsAdded: explicit test-mode root and Pi-agent-dir resolver contract; synthetic server-root fixture; runtime handshake instance-id assertion in both server-starting integration fixtures
-- commandsExecuted: initial characterization test failed because `server_root.ts` was absent; `npm exec --no -- tsx tests/server_root_override.test.ts`; `npm exec --no -- tsx tests/import_upload.test.ts`; `npm exec --no -- tsx tests/asset_api.test.ts`; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; `git diff --check`
-- migration: no production or user-data migration; production defaults continue to resolve the source checkout root; only `LA_TEST_MODE=1` with temporary-directory-contained `LA_TEST_REPO_ROOT` and `LA_TEST_PI_AGENT_DIR` can redirect the server fixture root; the two fixtures now clean only their disposable roots
-- rollback: revert this commit and the preceding roadmap ticket registration; the test suite becomes unsafe for post-LA-093 full-root execution again, so G4 must remain blocked; never remove the explicit test-mode guard while retaining the environment variables
-- deletedEntries: none; no checkout `data/**`, home trust, customer file, public mirror or runtime artifact was read, migrated or deleted
-- remainingRisks: the server override is a test harness boundary, not proof of real data-shape, scale, process-kill, power-loss, disk-full or production rollback; G4 still needs a full synthetic-root recheck before LA-025 storage children
-- unverifiedRealMachineItems: real `data/**`, real `~/.pi/agent/trust.json`, installed runtime, customer content, signing/notarization, process kill, power loss, disk full, production rollback and public mirror remain unverified
-
-## LA-094 — Cut `.lapkg` v2 Package registry/journal/recovery to SQLite with CAS content refs
-
-- status: completed
-- dependencies: LA-024, LA-082, LA-092
-- baseCommit: `46eeed4c`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/lapkg_package_storage.ts`; `packages/cat-server/src/lapkg_sqlite_cutover.ts`; `packages/cat-server/src/lapkg_activation.ts`; `packages/cat-server/src/lapkg_activation_recovery.ts`; `packages/cat-server/src/routes/package_center_routes.ts`; `packages/cat-server/src/general_agent_runs.ts`; `packages/cat-server/src/server.ts`; `tests/sqlite_lapkg_package_registry.test.ts`; `tests/sqlite_storage.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/MIGRATION_MATRIX.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/DELETION_CANDIDATES.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: initial missing SQLite Package cutover module failure; signed synthetic `.lapkg` activation through SQLite registry/journal/recovery; registry record `contentBlobRefId` validation; archive/resource CAS publication and verification; legacy v2 registry/resource-byte import; authority marker/reopen; old file-writer denial after cutover; registry-commit crash recovery; architecture guard for the single Package SQLite cutover owner
-- commandsExecuted: initial `npm exec --no -- tsx tests/sqlite_lapkg_package_registry.test.ts` failed because the new cutover module did not exist; focused SQLite Package, activation, recovery, format, preview, signature, Package route and storage-owner tests passed after implementation; `npm run typecheck`; automatic `npm test` discovered 212 root tests and passed all 212 with only the declared missing Managed E5 pack skip; `npm run test:security`; `npm run test:recovery`; `npm --prefix apps/desktop test`; `npm --prefix apps/desktop run typecheck`; `npm run mac:test`; `npm run roadmap:test`; `npm run roadmap:validate`; `npm run release:check`; execution-ledger JSON parse; `git diff --check`
-- migration: under the existing runtime-root writer lease and before recovery/listen, read the legacy v2 registry and verify every materialized resource byte; publish verified resource bytes to the content-addressed blob store; initialize SQLite registry, activation-journal and recovery-block projections; write a marker-linked legacy registry backup and publish the SQLite Package authority marker. New activations publish archive/resource bytes into the same CAS reference before the SQLite registry CAS commit. Legacy registry/journal/recovery files and materialized content remain read-only backup or derived verification evidence; migration never reads real `data/**`, never deletes user/customer content, and never invents archive bytes absent from the legacy tree.
-- rollback: before marker publication close the candidate store and remove only the candidate SQLite/blob root while retaining legacy files; after marker publication restore the complete Package registry/journal/recovery/content authority from its marker-linked backup or enter an explicit blocked/read-only recovery state. Never re-enable npm installation, the pre-cutover file registry writer, or a second Package writer. Synthetic crash-after-registry-commit recovery is covered; real production rollback is not proven.
-- deletedEntries: none; old `package_center.ts` and legacy v2 files remain for read-only compatibility/rollback evidence; no Package, blob, Task, user, customer, public-mirror, signing, or credential data was deleted or rewritten.
-- remainingRisks: real legacy Package count/shape/scale and startup duration; legacy archive-byte provenance when only materialized resources exist; CAS streaming/size and disk-full behavior; process-kill/power-loss durability; real signed publisher packages/trust roots; production rollback and installed-runtime behavior; `node:sqlite` experimental status; other structured domains remain on their existing writers until their own tickets.
-- unverifiedRealMachineItems: no real `data/**`, customer Package, installed runtime, real signed archive, provider, Keychain, signing/notarization material, process kill, power loss, disk full, public mirror, or production rollback was used.
-
-## LA-095 — Cut Confirmed Memory to SQLite without changing recall authority
-
-- status: completed
-- dependencies: LA-024
-- baseCommit: `b8fea746`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/assistant_memory.ts`; `packages/storage-sqlite/src/assistant_memory_repository.ts`; `packages/storage-sqlite/src/index.ts`; `packages/cat-server/src/assistant_memory_sqlite_cutover.ts`; `packages/cat-server/src/server.ts`; `packages/cat-server/src/general_agent_runs.ts`; `packages/cat-server/src/general_worker_runtime.ts`; `packages/cat-server/src/general_worker_rpc.ts`; `packages/cat-runtime/src/agentRuntimePort.ts`; `packages/cat-runtime/src/createGeneralAgentSession.ts`; `packages/cat-runtime/src/generalSessionPlan.ts`; `packages/cat-runtime/src/createCatAgentSession.ts`; `packages/cat-runtime/src/catRuntimeExtension.ts`; `packages/cat-server/src/cat_worker_runtime.ts`; `packages/cat-server/src/cat_worker_rpc.ts`; `packages/cat-server/src/routes/assistant_library_routes.ts`; `packages/cat-tools/src/assistant-memory-tools.ts`; `tests/sqlite_assistant_memory.test.ts`; `tests/sqlite_storage.test.ts`; `tests/sqlite_task_workspace_repository.test.ts`; current-reality/inventory/migration/risk/deletion docs; ledgers
-- testsAdded: initial missing SQLite cutover failure; synthetic personal/project import and round-trip parity; proposed/active/revoked/history/source/revision preservation; scope isolation; CAS/old-writer denial; reopen/idempotent authority marker; strict General worker memory bridge payload/scope validation; CAT/General worker and prompt/runtime regressions; domain-specific SQLite cutover-owner guards
-- commandsExecuted: initial `npx --no-install tsx tests/sqlite_assistant_memory.test.ts` failed because the cutover module did not exist; `npx --no-install tsx tests/sqlite_assistant_memory.test.ts`; `npx --no-install tsx tests/assistant_memory.test.ts`; `npx --no-install tsx tests/general_worker_rpc.test.ts`; `npx --no-install tsx tests/cat_worker_runtime.test.ts`; `npx --no-install tsx tests/runtime_hooks.test.ts`; `npx --no-install tsx tests/cat_prompt_isolation.test.ts`; `npx --no-install tsx tests/sqlite_storage.test.ts`; `npx --no-install tsx tests/sqlite_task_workspace_repository.test.ts`; `npx --no-install tsc --noEmit --pretty false`; `npm test` passed all 213 automatically discovered root tests with only the declared missing Managed E5 qualification pack skipped; `npm run test:security`; `npm run test:recovery`; `npm --prefix apps/desktop test`; `npm --prefix apps/desktop run typecheck`; `npm run mac:test`; `npm run release:check`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check`
-- migration: under the existing data-root writer lease and before server listen, scan only legacy personal/project `memories.json` under synthetic or explicitly supplied runtime roots; copy exact raw bytes to an attempt backup, strictly parse and import the full Confirmed Memory file into per-scope SQLite projection/event streams, verify round-trip parity, publish one authority marker, then inject the SQLite persistence into routes, memory tools, General workers and CAT host-authored recall. TDAI capture/store/config and semantic index are explicitly excluded; recall remains non-Evidence and cannot authorize CAT writes.
-- rollback: before marker publication close and remove only the candidate SQLite database/WAL/SHM while retaining the raw attempt backup and legacy files; after marker publication use the marker-linked whole-memory backup/read-only rollback path or a fresh explicit re-cutover, never re-enable legacy JSON and SQLite writers together and never auto-activate a proposed memory.
-- deletedEntries: none; legacy memory JSON files, TDAI assets/tools/scripts, semantic indexes, user/customer data and public mirror were not deleted or rewritten.
-- remainingRisks: real memory distribution/scale, semantic recall quality/index rebuild, TDAI migration and client/franchise scope, SQLite WAL growth, process-kill/power-loss/disk-full, real startup duration, production rollback and installed-runtime behavior remain unverified; `node:sqlite` remains experimental; LA-029 still owns semantic recall enhancement.
-- unverifiedRealMachineItems: no real `data/**`, customer memory, TDAI gateway/data, installed runtime, provider/Keychain, process kill, power loss, disk full, signing/notarization material, public mirror or production rollback was used.
-
-## LA-096 — Cut Library metadata to SQLite with CAS document bytes
-
-- status: completed
-- dependencies: LA-024, LA-092
-- baseCommit: `d57c157ad3bcddfa1d5a8b56fd5315ad7a4cabf8`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/assistant_library.ts`; `packages/storage-sqlite/src/assistant_library_repository.ts`; `packages/storage-sqlite/src/index.ts`; `packages/cat-server/src/assistant_library_sqlite_cutover.ts`; `packages/cat-server/src/server.ts`; `packages/cat-server/src/general_agent_runs.ts`; `packages/cat-server/src/general_worker_runtime.ts`; `packages/cat-server/src/general_worker_rpc.ts`; `packages/cat-server/src/cat_worker_runtime.ts`; `packages/cat-server/src/cat_worker_rpc.ts`; `packages/cat-server/src/routes/assistant_library_routes.ts`; `packages/cat-runtime/src/agentRuntimePort.ts`; `packages/cat-runtime/src/createCatAgentSession.ts`; `packages/cat-runtime/src/createGeneralAgentSession.ts`; `packages/cat-tools/src/assistant-library-tools.ts`; `packages/cat-tools/src/index.ts`; `tests/sqlite_assistant_library.test.ts`; `tests/assistant_library.test.ts`; `tests/sqlite_storage.test.ts`; `tests/sqlite_task_workspace_repository.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/MIGRATION_MATRIX.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/DELETION_CANDIDATES.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: synthetic personal/project catalog import and round-trip parity; document/source digest and size verification; locator/block/count/parser parity; same-bytes CAS deduplication; lexical search parity; reindex and rebuildable-vector exclusion; orphan blob inspection; old legacy-writer denial; reopen/idempotent marker; read-only CAT/General worker bridge; route/runtime/library regression coverage; domain-specific SQLite cutover-owner architecture guards
-- commandsExecuted: focused `npm exec --no -- tsx tests/sqlite_assistant_library.test.ts` first encountered the environment's local tsx IPC `listen EPERM` and passed when rerun with permitted local IPC; `npm exec --no -- tsx tests/sqlite_assistant_library.test.ts`; `npm exec --no -- tsx tests/assistant_library.test.ts`; `npm exec --no -- tsx tests/general_worker_rpc.test.ts`; `npm exec --no -- tsx tests/cat_worker_runtime.test.ts`; `npm exec --no -- tsx tests/assistant_library_routes.test.ts`; `npm exec --no -- tsx tests/sqlite_storage.test.ts`; `npm exec --no -- tsx tests/sqlite_task_workspace_repository.test.ts`; `npm exec --no -- tsc --noEmit --pretty false`; `npm run roadmap:test`; `npm run roadmap:validate`; `npm test` passed all 214 automatically discovered root tests with only the declared missing Managed E5 qualification pack skipped; `npm run test:security` passed 29 tests; `npm run test:recovery` passed 18 tests; `npm --prefix apps/desktop test` passed 151 Node tests plus 3 Electron activity tests; `npm --prefix apps/desktop run typecheck`; `npm run mac:test`; `npm run release:check`; `node` execution-ledger JSON parse; `git diff --check`
-- migration: synthetic temporary roots only; under the existing data-root writer lease and before server listen, discover personal/project legacy catalog/block/source files, back up exact raw bytes, strictly parse and verify source digest/size, publish managed bytes into the LA-092 content-addressed blob store, import full metadata into per-scope SQLite projection/event streams, verify round-trip and lexical parity, publish one Library authority marker, and inject `LibraryPersistence` into routes, CAT/General tools, and worker bridges. `vectors.jsonl` is excluded from authority and remains rebuildable; legacy metadata/source writers are fail-closed after the marker; no real `data/**` or customer content was read.
-- rollback: before marker publication close/remove only candidate SQLite/WAL/SHM and blob roots while retaining the marker-linked raw backup; after marker publication restore the complete Library domain through the explicit whole-domain backup or fresh re-cutover path, never re-enable JSON and SQLite writers together. Managed source cache remains read-only provenance/derived cache; unreferenced CAS blobs remain for authority-gated GC; semantic vectors/index are rebuildable.
-- deletedEntries: none; no legacy catalog, blocks, source cache, vector index, Task, Project, customer, user, public-mirror, signing or credential data was deleted or rewritten.
-- remainingRisks: real Library distribution/scale and large-file streaming; blob GC and orphan retention; SQLite WAL growth; process-kill/power-loss/disk-full; cross-process stale lease; semantic E5/index quality and rebuild cost; installed runtime startup duration; production rollback and public mirror remain unverified; `node:sqlite` remains experimental; LA-029 still owns semantic recall quality and LA-056 owns later legacy-entry deletion.
-- unverifiedRealMachineItems: no real `data/**`, customer Library, installed runtime, provider/Keychain, process kill, power loss, disk full, signing/notarization material, public mirror, or production rollback was used.
-
-## LA-097 — Cut CAT core manifest, Batch, TM and termbase facts to SQLite with source CAS refs
-
-- status: completed
-- dependencies: LA-024, LA-092
-- baseCommit: `48a21acc`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/cat_core_storage.ts`; `packages/storage-sqlite/src/cat_core_repository.ts`; `packages/storage-sqlite/src/index.ts`; `packages/cat-server/src/cat_core_sqlite_cutover.ts`; `packages/cat-server/src/server.ts`; `packages/cat-data/src/batch_workspace.ts`; `packages/cat-data/src/project_manifest.ts`; `packages/cat-data/src/tm.ts`; `packages/cat-data/src/termbase.ts`; `packages/cat-data/src/asset_typed_index.ts`; `packages/cat-data/src/workbook_asset_plan.ts`; `packages/cat-data/src/project_health.ts`; `packages/cat-data/src/index.ts`; `tests/sqlite_cat_core.test.ts`; `tests/sqlite_storage.test.ts`; `tests/sqlite_task_workspace_repository.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/MIGRATION_MATRIX.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/DELETION_CANDIDATES.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: synthetic Project manifest/Batch/TM/termbase/source import and round-trip parity; source/master SHA-256 CAS publication and ref verification; row/locked/tag/revision/TM/TB query/override parity; active-run block; marker/reopen; CAS conflict; old JSON-writer denial; derived cross-process read-cache; CAT-core startup-owner architecture allowlists
-- commandsExecuted: focused `npm exec --no -- tsx tests/sqlite_cat_core.test.ts`; `npm exec --no -- tsx tests/project_health.test.ts`; `npm exec --no -- tsx tests/qa_terminology.test.ts`; `npm exec --no -- tsx tests/constraint_pack.test.ts`; `npm exec --no -- tsx tests/segment_evidence.test.ts`; `npm exec --no -- tsx tests/evidence_tools.test.ts`; `npm exec --no -- tsx tests/asset_api.test.ts`; `npm exec --no -- tsx tests/asset_routes.test.ts`; `npm exec --no -- tsx tests/tm_reviewed_writeback.test.ts`; `npm exec --no -- tsx tests/tm_fuzzy_retrieval.test.ts`; `npm exec --no -- tsx tests/import_upload.test.ts`; `npm exec --no -- tsc --noEmit --pretty false`; `npm test` passed 215 automatically discovered root tests with only the declared missing Managed E5 qualification pack skipped; `npm run test:security` passed 29 tests; `npm run test:recovery` passed 18 tests; `npm --prefix apps/desktop test` passed 151 Node tests plus 3 Electron activity tests; `npm --prefix apps/desktop run typecheck`; `npm run mac:test`; `npm run release:check`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check`
-- migration: under the existing data-root writer lease and before server listen, discover only synthetic/explicitly supplied Project roots, strictly parse manifest/Batch/TM/termbase files, back up exact workspace and referenced source bytes, publish source/master bytes to the LA-092 content-addressed blob store, import SQLite projection/event streams, verify round-trip parity, publish one CAT-core authority marker, and install the host persistence bridge. After the marker, legacy JSON writers fail closed; the read-cache is a derived cross-process projection only and is never a writer. CAT proposals, QA, delivery and quality-ledger authority remain for later tickets.
-- rollback: before marker publication close and remove only candidate CAT-core SQLite/WAL/SHM/blob/read-cache roots while retaining the attempt backup; after marker publication restore the complete CAT-core domain from its marker-linked Project backup or perform an explicit fresh re-cutover. Never rollback only segments, never re-enable JSON and SQLite writers together, and never delete source evidence or derived indexes as a side effect.
-- deletedEntries: none; no real `data/**`, customer/project source, legacy CAT-core file, runtime artifact, public mirror, signing material or credential was deleted or rewritten.
-- remainingRisks: real Project format/distribution/scale and source-file layout; large source streaming; process-kill/power-loss/disk-full; cross-process stale lease; production rollback; CAT proposal/QA/delivery/quality-ledger cutover; `node:sqlite` experimental status; E5 qualification pack remains unavailable for the declared unrelated RAG test.
-- unverifiedRealMachineItems: no real `data/**`, customer Project, installed runtime, provider/Keychain, process kill, power loss, disk full, signing/notarization material, public mirror or production rollback was used.
-
-## LA-098 — Cut CAT proposal, evidence-reference, QA, waiver, delivery and Project quality-ledger governance to SQLite
-
-- status: completed
-- dependencies: LA-097
-- baseCommit: `134ca44c`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/cat_governance_storage.ts`; `packages/cat-data/src/index.ts`; `packages/cat-data/src/delivery.ts`; `packages/cat-data/src/proposals.ts`; `packages/cat-data/src/quality_checklist.ts`; `packages/cat-data/src/quality_decision_ledger.ts`; `packages/storage-sqlite/src/cat_governance_repository.ts`; `packages/storage-sqlite/src/index.ts`; `packages/cat-server/src/cat_governance_sqlite_cutover.ts`; `packages/cat-server/src/server.ts`; `tests/sqlite_cat_governance.test.ts`; `tests/sqlite_storage.test.ts`; `tests/sqlite_task_workspace_repository.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/MIGRATION_MATRIX.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/DELETION_CANDIDATES.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: initial missing cutover-module characterization failure; synthetic ledger sequence/hash/idempotency and waiver append; proposal-set/checklist exact import and revision-CAS; locked/tag/placeholder and proposal evidence-reference preservation; QA/waiver/delivery export-audit parity; cross-task/team ledger compatibility; empty-project zero-row read-cache recovery; marker/reopen; active-run/authority boundary; legacy writer denial; SQLite cutover-owner architecture allowlists
-- commandsExecuted: `npm exec --no -- tsc --noEmit --pretty false`; `npm exec --no -- tsx tests/sqlite_cat_governance.test.ts`; focused `npm exec --no -- tsx tests/delivery_qa.test.ts`; `npm exec --no -- tsx tests/delivery_readiness.test.ts`; `npm exec --no -- tsx tests/delivery_export.test.ts`; `npm exec --no -- tsx tests/proposals.test.ts`; `npm exec --no -- tsx tests/quality_decision_ledger.test.ts`; `npm exec --no -- tsx tests/quality_waiver_tool.test.ts`; `npm exec --no -- tsx tests/team_quality_decision_ledger.test.ts`; `npm exec --no -- tsx tests/quality_audit.test.ts`; `npm exec --no -- tsx tests/sqlite_storage.test.ts`; `npm exec --no -- tsx tests/sqlite_task_workspace_repository.test.ts`; `npm test` discovered 216 root tests and passed all after the architecture-owner allowlists were updated, with only the declared missing Managed E5 qualification pack skipped
-- migration: under the existing data-root writer lease and before server listen, discover only synthetic/explicitly supplied Project roots, parse and back up exact legacy quality ledger/checklist/proposal/export-audit files, import them into project-scoped SQLite streams/projections, verify ledger hash-chain and proposal/checklist/audit parity, seed explicit zero-row derived read caches, publish one CAT-governance authority marker, and install the host persistence seam. Proposal evidence references remain in the proposal projection; evidence bytes, vectors and semantic/read caches are excluded from this domain cutover. After the marker, legacy governance writers fail closed; cross-process reads use only marker-linked derived caches and missing cache fails closed. No real `data/**`, user/customer content or public mirror was read.
-- rollback: before marker publication close and remove only candidate CAT-governance SQLite/WAL/SHM/read-cache roots while retaining the attempt backup; after marker publication restore the complete CAT-governance domain from its marker-linked backup or perform an explicit fresh re-cutover. Never roll back only the ledger/proposal/checklist subset, never re-enable JSON/JSONL and SQLite writers together, and never treat evidence references as evidence bytes.
-- deletedEntries: none; legacy governance files/readers remain as read-only backup/rollback evidence, no CAT source/evidence bytes, Task, Project, customer, user or public-mirror data was deleted or rewritten.
-- remainingRisks: real largest Project governance shape/scale, evidence-byte distribution, cross-process concurrency, process-kill/power-loss/disk-full, production rollback, WAL growth and `node:sqlite` experimental behavior remain unverified; LA-099 still owns Workflow/Team/Private Eval structured-state migration and LA-100/101 own cross-domain restore and legacy-writer deletion gates.
-- unverifiedRealMachineItems: no real `data/**`, customer Project, installed runtime, provider/Keychain, process kill, power loss, disk full, signing/notarization material, public mirror or production rollback was used.
-
-## LA-099 — Cut Workflow/Team and Private Eval structured metadata to SQLite
-
-- status: completed
-- dependencies: LA-024
-- baseCommit: `28a88358`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/workflow_eval_storage.ts`; `workflow_plan.ts`; `workflow_artifacts.ts`; `private_eval.ts`; `packages/storage-sqlite/src/workflow_eval_repository.ts`; `packages/cat-server/src/workflow_eval_sqlite_cutover.ts`; `server.ts`; storage exports/architecture tests; roadmap control plane and ledger.
-- testsAdded: synthetic workflow/Team artifact and Eval set/run/output/scorecard/blind-review import parity; active-run refusal; marker/reopen; public Workflow and Eval API writes after authority installation; legacy writer denial; cutover-owner architecture allowlists.
-- commandsExecuted: `npm exec --no -- tsc --noEmit --pretty false`; focused SQLite Workflow/Eval, workflow-plan, workflow-artifacts, private-eval, eval-route and Team foundation tests; storage architecture tests; `npm test` discovered 217 root tests and passed; `npm run test:security`; `npm run test:recovery`; Desktop typecheck/tests; `npm run mac:test`; `npm run release:check`; roadmap validation and diff check.
-- migration: before listen and under the existing data-root writer lease, back up and import Workflow run/artifact and Private Eval metadata into one SQLite projection store, verify exact projection parity, publish one marker and install the host persistence seam. Eval corpus/reference/rubric bytes and generated reports remain excluded files; Stable Private Eval mutations remain blocked.
-- rollback: before marker remove only candidate SQLite/WAL/SHM while keeping the backup; after marker restore the complete Workflow/Eval structured domain from its backup or fresh re-cutover. Never restore one legacy writer alongside SQLite, never delete Eval corpus, and never re-enable Stable Eval execution.
-- deletedEntries: none; legacy structured files remain marker-linked backup/read-only evidence; no real data, customer files, corpus, credentials, public mirror or release material was read or modified.
-- remainingRisks: real Workflow/Team/Eval history and scale, cross-process concurrency, process-kill/power-loss/disk-full, production rollback, WAL growth, and the eventual developer/CI Eval-harness migration remain unverified; LA-100/101 own cross-domain recovery and deletion gates.
-- unverifiedRealMachineItems: no real `data/**`, customer Project/Eval corpus, installed runtime, provider/Keychain, process kill, power loss, disk full, signing/notarization, public mirror or production rollback was used.
-
-## LA-100 — Verify one aggregate backup and isolated restore for every LA-025 domain
-
-- status: completed
-- dependencies: LA-093, LA-094, LA-095, LA-096, LA-097, LA-098, LA-099
-- baseCommit: `857c507a`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/cross_domain_sqlite_backup.ts`; `packages/storage-sqlite/src/index.ts`; `tests/sqlite_cross_domain_backup.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/MIGRATION_MATRIX.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/DELETION_CANDIDATES.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: initial missing-module characterization; seven-domain synthetic marker/database/blob fixture; one aggregate manifest and fresh-root restore; marker/schema/event-replay parity; no-overwrite restore; missing blob; orphan blob; broken foreign-key; future/old schema refusal.
-- commandsExecuted: `npm exec --no -- tsx tests/sqlite_cross_domain_backup.test.ts` (RED then green cycles); `npm exec --no -- tsc --noEmit --pretty false`; `npm run typecheck`; `npm test` discovered 218 root tests and passed; `npm run test:recovery`; `npm run test:security`; `git diff --check`.
-- migration: no production migration or writer cutover. Under a supplied authority lease, discover the seven fixed LA-025 authority markers; verify each v2 SQLite snapshot, foreign keys and blob/reference closure; create nested verified SQLite/blob backups plus marker digests under one aggregate manifest; restore only through a fresh staged synthetic root, then re-open/replay/verify every domain before atomic publication. No real `data/**`, customer data, runtime state, public mirror or server startup was read or changed.
-- rollback: delete only an unpublished aggregate staging directory or isolated synthetic restore target. A published manifest is whole-domain recovery evidence: restore all seven domains together to a new root, never overwrite a canonical root or roll back one domain while keeping cross-domain references live. This Ticket neither changes nor re-enables any legacy writer.
-- deletedEntries: none; no legacy reader, writer, backup, database, blob, customer file or public-mirror object was deleted.
-- remainingRisks: aggregate manifests are only exercised on synthetic roots; real historical volume, concurrent external writers/snapshot timing, process-kill/power-loss/disk-full, WAL growth, filesystem semantics, production rollback duration and `node:sqlite` experimental behavior remain unverified. LA-101 must still prove legacy writers have no permanent dual-write path before LA-025 can close.
-- unverifiedRealMachineItems: real `data/**`, customer Project/Memory/Library/Package/Eval content, installed runtime, provider/Keychain, concurrent real writers, process kill, power loss, disk full, signing/notarization, public mirror and production rollback were not used.
-
-## LA-101 — Prove legacy structured writers have no permanent dual-write path
-
-- status: completed
-- dependencies: LA-092, LA-100
-- baseCommit: `626532d1`
-- resultCommit: `SELF`
-- filesChanged: `tests/sqlite_legacy_writer_gate.test.ts`; `docs/roadmap/IMPLEMENTATION_QUEUE.md`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/MIGRATION_MATRIX.md`; `docs/roadmap/DELETION_CANDIDATES.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: TypeScript AST production startup/import graph proof for all seven LA-025 prepare calls before `createServer`; source-level legacy writer guard ordering for Memory, Library, CAT core/governance, Workflow/Eval and Package; synthetic authority-marker write sentinels; Settings/Grant/Trust startup-backend assertion.
-- commandsExecuted: sandboxed focused `npm exec --no -- tsx tests/sqlite_legacy_writer_gate.test.ts` first encountered the known local IPC `EPERM`; permitted rerun passed; all seven per-domain SQLite cutover tests plus `tests/sqlite_cross_domain_backup.test.ts` and the new Gate test passed; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm test` discovered and passed 219 root tests; `npm --prefix apps/desktop test` passed 151 Node tests plus 3 Electron activity tests; `npm run mac:test`; `npm run test:recovery`; `npm run test:security`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check` all passed.
-- migration: no data migration or new writer. The test proves that all seven startup cutovers complete before server transport construction, Package without injected storage refuses a SQLite marker, and preserved legacy structured write branches call their marker/authority guard before file mutation. Settings/Grant/Trust uses the startup-installed SQLite backend. No real `data/**`, customer content, public mirror, installed runtime, signing material or credentials was read or modified.
-- rollback: revert only this evidence/ledger Ticket; it never changes a domain authority. Existing complete-domain marker-linked rollback paths remain the only rollback route; never re-enable JSON and SQLite writers together.
-- deletedEntries: none; legacy readers, backups, JSON/JSONL paths, SQLite data, blobs and public-mirror objects remain untouched.
-- remainingRisks: source/marker proof and synthetic restart/rollback do not prove real historical shape/scale, concurrent external writers, process-kill/power-loss/disk-full, filesystem semantics, production rollback duration or `node:sqlite` production behavior. LA-056 still owns every actual old-entry deletion.
-- unverifiedRealMachineItems: real `data/**`, customer Project/Memory/Library/Package/Eval content, installed runtime, provider/Keychain, concurrent real writers, process kill, power loss, disk full, signing/notarization, public mirror and production rollback were not used.
-
-## LA-025 — Close the remaining structured storage Epic
-
-- status: completed
-- dependencies: LA-024; accepted child Tickets LA-092 through LA-101
-- baseCommit: `626532d1`
-- resultCommit: `SELF`
-- filesChanged: no additional production implementation; Epic closure recorded with LA-101 evidence in the roadmap control plane and execution ledgers.
-- testsAdded: inherited blob/ref dedupe and orphan recovery; seven per-domain strict import/parity/cutover/restart/rollback tests; LA-100 aggregate isolated restore; LA-101 AST/import-graph and runtime marker write sentinels.
-- commandsExecuted: accepted child Ticket evidence and LA-101's full F validation: root/Desktop typechecks; 219 root tests; 151+3 Desktop tests; `mac:test`; recovery/security; roadmap test/validation; ledger JSON parse and diff check passed.
-- migration: no data was rewritten for Epic closure. Each domain retains its one startup SQLite/CAS authority and its marker-linked legacy backup/read-only compatibility window; no dual writer is reintroduced.
-- rollback: governed by the affected complete domain's existing rollback contract; never enable an individual legacy writer beside SQLite.
-- deletedEntries: none beyond completed child Ticket records; actual legacy-entry deletion remains reserved for LA-056 sub-Tickets.
-- remainingRisks: all evidence remains synthetic; real historical data, concurrency, process kill, power loss, disk full, blob GC and production rollback remain unverified.
-- unverifiedRealMachineItems: real `data/**`, customer content, installed runtime, provider/Keychain, process kill, power loss, disk full, signing/notarization, public mirror and production rollback were not used.
-
-## LA-028 — Migrate legacy TDAI only as inert MemoryCandidate records
-
-- status: completed
-- dependencies: LA-025
-- baseCommit: `78f51568`
-- resultCommit: `SELF`
-- filesChanged: `.pi/extensions/memory.ts`; `scripts/tdai-setup.sh`; `scripts/tdai-start.sh`; `packages/cat-data/src/{tdai_memory_migration,memory-config,memory-audit,tdai_embedding_bridge,index}.ts`; `packages/cat-tools/src/{memory-tools,index,asset_block_tools}.ts`; `packages/cat-runtime/src/createCatAgentSession.ts`; `packages/cat-server/src/{server,cat_worker_runtime,cat_worker_rpc}.ts`; `packages/cat-data/src/context_readiness.ts`; `apps/desktop/src/renderer/{data/workspace-client.ts,settings/SettingsWorkspace.tsx}`; `tests/{tdai_memory_migration,memory_status,memory_tools,context_readiness,cat_worker_rpc,cat_worker_runtime,web_tool_parity}.test.ts`; `README.md`; `docs/HANDOFF.md`; roadmap control plane and ledgers.
-- testsAdded: initial missing-export characterization; synthetic explicit snapshot with source/count/secret-or-PII/low-value/duplicate/conflict assertions; no secret in candidate plan/report; exact-byte non-overwrite backup receipt; mismatched plan-hash refusal; no active recall before confirmation and one active memory only after runtime-checked user confirmation; no legacy TDAI Tool/Pi extension/script/config/worker-plan surface; independent TDAI embedding asset-vector regressions.
-- commandsExecuted: sandboxed `npm exec --no -- tsx tests/tdai_memory_migration.test.ts` hit the known local IPC `EPERM` and was not counted; permitted focused migration/status/tools/context/asset-embedding/CAT-worker tests passed; 220 root tests; 151+3 Desktop tests; 29 security tests; root and Desktop typechecks; roadmap test/validation; execution-ledger JSON parse; `git diff --check`; all passed. Ticket-level B validation is recorded below; later phase and final-campaign validation remain pending successor work.
-- migration: no automatic scan, gateway call, TDAI write, or Confirmed Memory write. A caller supplies one explicit read-only snapshot. The pure plan records source digest/count and safe pending candidates only; excluded secret text never enters plan/report. A caller-selected non-overwrite exact-byte backup produces the receipt required alongside the exact `planHash` and `confirmedBy: "user"` before a single candidate reaches the existing Confirmed Memory writer. Pending candidates never recall. No real `data/**`, external TDAI directory, customer record, or public mirror was read.
-- rollback: retain the entry-point quarantine unless a separately approved safe successor exists; never restore capture/store/recall, gateway toggles, or a second memory writer. The source remains untouched, backups are immutable, and a user-confirmed entry follows the existing Confirmed Memory revoke/rollback contract.
-- deletedEntries: none; obsolete source files remain quarantined for compatibility evidence. The separate `tdai_embedding_bridge.ts` remains an explicit asset-vector compatibility adapter and is not memory migration evidence.
-- remainingRisks: no qualified real TDAI export adapter, inventory, ownership/retention proof, scale sample, batch-confirmation UI, persisted review store, or expanded original-source provenance exists; LA-029 owns scope/conflict/expiry/semantic recall and product UI; LA-056 owns actual deletion after its gates.
-- unverifiedRealMachineItems: real `data/**`/TDAI data, customer memory, installed TDAI runtime, packaged-app migration UI, provider/Keychain, process kill, power loss, disk full, production rollback, signing/notarization and public mirror were not used.
-
-## LA-029 — Govern scoped Confirmed Memory recall
-
-- status: completed
-- dependencies: LA-025, LA-028
-- baseCommit: `02d9fcd3`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/assistant_memory.ts`; `packages/storage-sqlite/src/assistant_memory_repository.ts`; `packages/cat-server/src/{assistant_memory_sqlite_cutover,general_agent_runs,server}.ts`; `packages/cat-server/src/routes/assistant_library_routes.ts`; `packages/cat-runtime/src/{catRuntimeExtension,createGeneralAgentSession,generalSessionPlan}.ts`; `packages/cat-tools/src/assistant-memory-tools.ts`; `apps/desktop/src/renderer/{data/workspace-client.ts,library/LibraryWorkspace.tsx,library/library.css}`; `tests/{assistant_memory,assistant_memory_evolution,assistant_library_routes,general_agent_session,general_session_plan,runtime_hooks,sqlite_assistant_memory}.test.ts`; `apps/desktop/tests/library-memory.test.ts`; `README.md`; `PRODUCT.md`; `docs/{AGENT_CONTEXT,HANDOFF}.md`; roadmap/UI control documents and ledgers.
-- testsAdded: initial missing-export characterization for scoped lexical/local-semantic recall and Prompt snapshot formatting; synthetic personal/client/franchise/project/locale authority ordering, expiry exclusion, injected local-embedder semantic retrieval, missing-pack lexical-only state, explicit-conflict withholding, user supersede and revocation; CAT Worker no-live-Memory fallback; General Worker no-live-Personal-Memory fallback; host snapshot included in General plan hash; SQLite client-scope reopen parity; route and Desktop Memory Center scope/conflict/expiry/lexical-only visibility.
-- commandsExecuted: permitted focused `npm exec --no -- tsx` runs for `assistant_memory_evolution`, `assistant_memory`, `sqlite_assistant_memory`, `assistant_library_routes`, `general_agent_session`, `general_session_plan`, and `runtime_hooks`; `node --test apps/desktop/tests/library-memory.test.ts`; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm --prefix apps/desktop test` passed 152 Node tests plus 3 Electron activity tests; `git diff --check`. A full `npm test` attempt discovered 221 tests, but was not counted because existing `tests/sqlite_storage.test.ts` incorrectly rejects unchanged read-only `cross_domain_sqlite_backup.ts` for importing storage primitives; the file is not modified by this Ticket and the repair is isolated as LA-107 before any final Gate.
-- migration: no legacy mass rewrite, no new database, no second writer and no TDAI source read. The existing SQLite Memory authority stores additive scope/status/validity/conflict/supersede fields; V1 entries without `validFrom` retain their exact stored shape and are interpreted as valid from `createdAt`. The Host alone queries active/in-validity/non-conflicted records with Project -> Client/Franchise -> Locale -> Personal precedence, uses the managed local E5 pack when available and otherwise explicitly reports lexical-only, then freezes selected provenance/reason into the General/CAT plan. Client/Franchise are never inferred from a Project. Workers receive only that snapshot; Memory remains non-Evidence.
-- rollback: revert this Ticket while retaining the existing SQLite single writer and raw legacy backup/rollback contract. A missing or broken managed embedding pack remains explicit lexical-only; never restore all-active Memory injection, worker-side live enumeration, TDAI capture/store/recall, inferred Client/Franchise mapping or dual write.
-- deletedEntries: none; no legacy Memory, TDAI, customer, `data/**`, credential, runtime or public-mirror object was deleted or rewritten.
-- remainingRisks: managed E5 cross-lingual quality/performance and index/rebuild cost are synthetic/unqualified; Client/Franchise need explicitly entered IDs because no authoritative mapping exists; no real TDAI export adapter/inventory/batch confirmation or expanded original provenance store exists; Desktop contract test is not packaged-app accessibility/P3 evidence; LA-034 still owns the unified Memory/Library/Project Truth graph; LA-107 must repair the pre-existing SQLite architecture-test allowlist before the next full root-suite evidence.
-- unverifiedRealMachineItems: real `data/**`, customer Memory/TDAI export, actual managed E5 pack behavior, installed runtime, packaged-app/VoiceOver behavior, provider/Keychain, process kill/power loss/disk full, production rollback, signing/notarization and public mirror were not used.
-
-## LA-107 — Permit only the LA-100 non-authoritative aggregate backup helper
-
-- status: completed
-- dependencies: LA-100, LA-101
-- baseCommit: `dbfa99d3`
-- resultCommit: `SELF`
-- filesChanged: `tests/sqlite_storage.test.ts`; `tests/sqlite_task_workspace_repository.test.ts`; `docs/roadmap/IMPLEMENTATION_QUEUE.md`; `docs/roadmap/RISK_REGISTER.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: initial root-suite characterization of both false-positive import-graph guards; two exact one-path allowlist assertions; continued negative proof that every other production non-owner importing SQLite storage primitives fails; focused aggregate backup/recovery and Task repository guards.
-- commandsExecuted: initial `npm test` reproduced the unchanged `cross_domain_sqlite_backup.ts` false positive in `sqlite_storage.test.ts`; focused SQLite storage/cross-domain recovery passed; the next root run exposed the matching `sqlite_task_workspace_repository.test.ts` guard; permitted focused storage/Task repository/cross-domain recovery passed after both exact allowlists; a final `npm test` passed all 221 discovered root tests with the declared missing-managed-E5 skip. Two earlier full-suite attempts were not counted because unrelated `maintainer_routes.test.ts` timing and `tar` `write after end` failures occurred; both focused tests then passed. `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; and `git diff --check` passed.
-- migration: none. No production writer, cutover owner, authority marker, canonical storage data, backup manifest, or runtime behavior changed. Both static guards name exactly `packages/cat-server/src/cross_domain_sqlite_backup.ts`, the LA-100 non-authoritative aggregate backup/recovery helper. It can write only to a supplied fresh isolated recovery root; all other production imports remain subject to the existing single-owner rule. No real `data/**`, customer data, public mirror, runtime state, credentials, or release material was read or modified.
-- rollback: revert only the two static-guard allowlists and this control-plane record. Do not broaden the exception to a directory, glob, additional helper, or business writer; no data rollback is involved.
-- deletedEntries: none; no data, legacy entry, writer, backup, public-mirror object, or production source was deleted.
-- remainingRisks: the protection remains a static import-graph policy and does not independently prove production backup behavior; LA-100 synthetic aggregate recovery remains the behavioral proof. Full-suite timing instability was observed in unrelated Maintainer/tar tests, although the final complete root run passed; real historical storage shape/scale, concurrent writers, process kill, power loss, disk full, production rollback duration, and `node:sqlite` behavior remain unverified.
-- unverifiedRealMachineItems: real `data/**`, customer content, installed runtime, provider/Keychain, concurrent real writers, process kill, power loss, disk full, production rollback, signing/notarization, and public mirror were not used.
-
-## LA-108 — Define the strict normalized Document Backend contract
-
-- status: completed
-- dependencies: LA-017, LA-025
-- baseCommit: `8b87220c`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/document_router_contract.ts`; `packages/cat-data/src/index.ts`; `tests/document_router_contract.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: initial missing-module characterization; existing local OCR evidence -> normalized block parity with no source path; strict unknown-field denial; invalid bbox, non-positive reading order, cross-source digest and duplicate block ID denial.
-- commandsExecuted: `npm exec --no -- tsx tests/document_router_contract.test.ts` first failed because the contract module did not exist, then passed through the public `@linguist-agent/cat-data` seam; `npm exec --no -- tsx tests/document_capabilities.test.ts`; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. The new pure contract has no writer and no route chooser. It strictly validates a normalized result and adapts existing `DocumentEvidenceV1` in memory only, omitting `source.path` while retaining source digest/mime type, page/bbox or future cell/slide locator, backend/version, OCR flag, confidence, correction flag and reading order. Existing direct native/Paddle callers and their Artifact shapes remain unchanged until LA-109 through LA-111 prove parity and delete the old route chooser. No real `data/**`, customer document, managed capability directory, provider/Keychain, public mirror or release material was read or modified.
-- rollback: revert the unconsumed contract and adapter together; no stored artifact, backend, Worker, capability lock, route, authority or data needs rollback. Do not compensate by accepting unknown fields or malformed provenance in existing callers.
-- deletedEntries: none; no legacy route, Artifact, backend, worker, capability, data or public-mirror object was deleted.
-- remainingRisks: no registered native/light adapter, page probe, per-page Router, optional-backend blocked/partial projection, benchmark policy profile, Artifact migration parity, packaged-app UI or real document/capability behavior is proven. MinerU and Unlimited-OCR remain unqualified/blocked; real OCR quality/resource/worker isolation remain LA-109 through LA-112, LA-031 and release-gate work.
-- unverifiedRealMachineItems: real `data/**`, customer documents, installed managed OCR/MinerU capability, actual Worker resource limits, provider/Keychain, packaged-app/VoiceOver, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-113 — Require a host-staged Document parse request
-
-- status: completed
-- dependencies: LA-108
-- baseCommit: `b1e309b9`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/document_router_contract.ts`; `tests/document_router_contract.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: initial missing-export characterization; mismatched staged-input/source digest refusal; arbitrary input path and repeated page-scope refusal.
-- commandsExecuted: `npm exec --no -- tsx tests/document_router_contract.test.ts` first failed because `parseDocumentParseRequest` was absent, then passed; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. `DocumentBackend.parse` now requires a pure strict `DocumentParseRequest`: source digest/mime, opaque `host-staged-file` ID and optional unique page scope. The contract never accepts or returns a raw path; an eventual backend adapter must resolve the opaque ID through a host-owned scoped staging mechanism. No route, Worker, capability lock, Artifact writer, data authority or real `data/**` changed.
-- rollback: revert this interface correction with its tests and stop successor native/light adapter work; do not reintroduce `parse(DocumentProbe)`, arbitrary paths or a Worker-visible Project path.
-- deletedEntries: none; no backend, Worker, document, artifact, capability, data or public-mirror object was deleted.
-- remainingRisks: the contract does not yet prove a host staging resolver, native/light backend, page probe, Router, optional blocked/partial behavior, benchmark policy, Artifact parity, real capability behavior or packaged UI. MinerU and Unlimited-OCR remain unqualified/blocked.
-- unverifiedRealMachineItems: real `data/**`, customer documents, installed capability/worker resource limits, provider/Keychain, packaged app/VoiceOver, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-114 — Require a host-staged Document probe
-
-- status: completed
-- dependencies: LA-113
-- baseCommit: `341a36de`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/document_router_contract.ts`; `tests/document_router_contract.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: initial missing-export characterization; probe staged-input/source-digest mismatch refusal.
-- commandsExecuted: `npm exec --no -- tsx tests/document_router_contract.test.ts` first failed because `parseDocumentProbe` was absent, then passed; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. `DocumentBackend.probe` now uses the same strict source + opaque host-staged input + optional unique page scope as `parse`; no route, Worker, capability, Artifact, writer or data authority changed, and no raw path crosses the contract.
-- rollback: revert this interface correction with its test and stop successor adapter work; never restore a bare-path or metadata-only probe that forces an adapter around the seam.
-- deletedEntries: none.
-- remainingRisks: host staging resolver, native/light adapters, real page coverage, Router, optional backend blocked/partial behavior, benchmark policy, Artifact parity, real capability behavior and packaged UI remain unproven; MinerU/Unlimited-OCR remain blocked.
-- unverifiedRealMachineItems: real `data/**`, customer documents, installed capability/worker limits, provider/Keychain, packaged app/VoiceOver, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-115 — Require page-level Document probe estimates
-
-- status: completed
-- dependencies: LA-114
-- baseCommit: `fd7b16f3`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/document_router_contract.ts`; `tests/document_router_contract.test.ts`; `docs/roadmap/CURRENT_REALITY_REPORT.md`; `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`; `docs/roadmap/EXECUTION_LEDGER.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: initial missing-export characterization; backend estimate refuses a missing page list.
-- commandsExecuted: `npm exec --no -- tsx tests/document_router_contract.test.ts` first failed because `parseDocumentBackendEstimate` was absent, then passed; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. The pure estimate validator accepts only a boolean support state, reason, and unique page rows with bounded native text coverage, non-negative character count, reading-order state, and layout complexity. It creates no backend, route, worker, artifact, writer, or data authority.
-- rollback: revert this unconsumed validator with its check and stop successor backend work; do not let a Router infer a page route from missing or unbounded estimate fields.
-- deletedEntries: none.
-- remainingRisks: no native/light adapter, real text-coverage probe, Router, optional blocked/partial behavior, benchmark policy, Artifact parity, real capability behavior, or packaged UI is proven; MinerU/Unlimited-OCR remain blocked.
-- unverifiedRealMachineItems: real `data/**`, customer documents, installed capability/worker limits, provider/Keychain, packaged app/VoiceOver, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-109 — Add the native PDF/PPTX Document backend
-
-- status: completed
-- dependencies: LA-115
-- baseCommit: `60d073cc`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/{document_native_backend,index}.ts`; `tests/document_native_backend.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing-export characterization; synthetic host-staged PDF digest match/mismatch refusal, probe, full-and-page-scoped stable block identity/provenance with `ocr:false`; synthetic built-in PPTX extractor slide-provenance parity.
-- commandsExecuted: `npm exec --no -- tsx tests/document_native_backend.test.ts` first failed because `NativeTextDocumentBackend` was absent, then passed; `npm exec --no -- tsx tests/document_router_contract.test.ts`; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. The exported native backend resolves only an opaque host-staged ID through an injected Host resolver, streams the resolved bytes to verify the requested SHA-256, and emits normalized PDF page/PPTX slide blocks with `ocr:false`. DOCX/XLSX are explicitly partial/refused because the current extractors have no verified page/cell locator. No Router, Worker, managed OCR/MinerU capability, Artifact writer, data authority or direct caller changed; no real `data/**`, customer document, credential, public mirror or release material was read.
-- rollback: revert the adapter/export/test together; existing direct extractors remain the unchanged pre-LA-111 path. Do not replace an unavailable native locator with fake provenance, a system/cloud OCR fallback, or a second route chooser.
-- deletedEntries: none.
-- remainingRisks: no production host-staging resolver, qualified native text coverage/reading-order measurement, DOCX/XLSX locator mapping, light-OCR backend, per-page Router, benchmark policy, Artifact parity, packaged UI or real document/capability behavior is proven; MinerU and Unlimited-OCR remain blocked.
-- unverifiedRealMachineItems: real `data/**` and customer documents; installed capability/worker limits, provider/Keychain, packaged app/VoiceOver; process kill, power loss, disk full, signing/notarization and public mirror were not used.
-
-## LA-110 — Add the managed local PaddleOCR backend
-
-- status: completed
-- dependencies: LA-115
-- baseCommit: `674e2ecb`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/{document_capabilities,document_light_ocr_backend,index}.ts`; `tests/{document_capabilities,document_light_ocr_backend}.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing-export characterization; synthetic opaque staged input with managed-Paddle runtime/version, geometry/confidence/provenance parity and no output path; worker timeout/output bound propagation; missing/corrupt/unqualified pack, oversized input, over-page output, output byte and runtime-drift refusal; managed JSONL worker denies inherited and caller-supplied secret environment values.
-- commandsExecuted: `npm exec --no -- tsx tests/document_light_ocr_backend.test.ts` first failed because `LightOcrDocumentBackend` was absent, then passed; `npm exec --no -- tsx tests/document_capabilities.test.ts`; `npm exec --no -- tsx tests/document_router_contract.test.ts`; `npm run test:security`; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. The adapter resolves only a Host staged ID, streams its bytes to verify digest and input cap, verifies managed Python/OCR status and the pinned runtime string, then reuses the existing local Paddle JSONL/evidence path under Host-supplied limits. The runner allows only path/language/timezone and declared offline keys, so it receives no inherited or supplied arbitrary secret. Missing/corrupt/unqualified packs, source/runtime drift and every tested limit fail closed. Existing direct Paddle Artifact callers, routing, Worker ownership, capability installation, MinerU/Unlimited-OCR/remote behavior and all data authority remain unchanged; no real `data/**`, customer document, installed capability, credential, public mirror or release material was read.
-- rollback: revert this adapter and its managed-worker environment narrowing as one security change; existing direct Paddle evidence callers remain the pre-LA-111 path. Do not restore arbitrary worker environment inheritance, a raw worker-visible client path, a system/cloud fallback, unbounded execution or a second route chooser.
-- deletedEntries: none.
-- remainingRisks: no production host-staging resolver, installed managed pack, real Worker resource/timeout/cancellation behavior, real OCR quality/coverage, actual file-grant process isolation, per-page Router, benchmark profile, Artifact parity or packaged UI is proven; DOCX/XLSX native locator and MinerU/Unlimited-OCR remain blocked/unqualified.
-- unverifiedRealMachineItems: real `data/**` and customer documents; installed managed Python/Paddle pack, worker process isolation/limits, provider/Keychain, packaged app/VoiceOver; process kill, power loss, disk full, signing/notarization and public mirror were not used.
-
-## LA-116 — Require frozen Host-staged PDF Router inputs
-
-- status: completed
-- dependencies: LA-109, LA-110
-- baseCommit: `123321f0`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/{document_staging,index}.ts`; `tests/document_staging.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing-export characterization; synthetic source mutation after staging preserves copied bytes/digest and no serialized source path; opaque unknown/disposed handle refusal; oversize input and page-inventory failure clean partial copies.
-- commandsExecuted: `npm exec --no -- tsx tests/document_staging.test.ts` first failed because `stagePdfDocument` was absent, then passed; `npm run typecheck`; `npm --prefix apps/desktop run typecheck`; `npm run roadmap:test`; `npm run roadmap:validate`; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. A Host caller supplies an already-authorized PDF path, private staging root and maximum input bytes. The service streams an immutable `0700/0600` temporary copy, derives SHA-256 and an opaque handle from those copied bytes, queries `pdfinfo` only against the copy, and exposes a resolver closure plus idempotent dispose. There is no raw path in the staged DTO, no Artifact/Project writer, no Router/Worker activation and no fallback to form-feed/cloud/page guessing. No real `data/**`, customer document, managed capability, credential, public mirror or release material was read.
-- rollback: revert the isolated staging helper and retain direct callers until LA-111 migrates them. Do not resolve opaque handles to original grant paths, retain staged copies after dispose, accept missing pages or substitute a cloud/heuristic page guess.
-- deletedEntries: none; temporary test copies were disposed.
-- remainingRisks: production caller integration, actual `pdfinfo`, cleanup across process crash, staging root capacity/permissions, real file grants, Router, Artifact parity, installed OCR capability and packaged UI remain unproven.
-- unverifiedRealMachineItems: real `data/**` and customer documents; actual `pdfinfo`, production staging root/filesystem behavior, installed managed Python/Paddle pack, worker process isolation/limits, provider/Keychain, packaged app/VoiceOver; process kill, power loss, disk full, signing/notarization and public mirror were not used.
-
-## LA-111 — Per-page Document Router and direct-choice migration
-
-- status: completed
-- dependencies: LA-109, LA-110, LA-116
-- baseCommit: `ebe03b77`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-runtime/src/{documentRouter,createGeneralAgentSession,index}.ts`; `packages/cat-data/src/{document_staging,document_light_ocr_backend,document_capabilities,rich_artifact}.ts`; `packages/cat-server/src/{server,application/document_evidence_application_port}.ts`; `packages/cat-tools/src/document-capability-tools.ts`; `tests/{document_router,document_staging,document_capabilities,document_capability_routes,document_capability_tools}.test.ts`; roadmap facts/inventory/ledgers
-- testsAdded: RED missing Router export; mixed three-page native/no-OCR + light-OCR + complex-blocked frozen result; missing light backend yields blocked rather than fallback; policy/default and legacy direct-Paddle/route-chooser import guards; 500-page cap and immediate/24h crash-stage cleanup characterization; migrated route and General-tool artifact contracts
-- commandsExecuted: focused Router/staging/native/light/capability/route/tool tests; root and Desktop typechecks; full root and Desktop suites; roadmap test/validation; diff check
-- migration: no canonical data migration. The sole Router composition uses a user-authorized temporary server/worker policy: 64MiB input, 500 pages, 20,000 blocks, 32MiB output, 5min worker timeout, 0.75 native coverage and 24h stale-stage TTL. It stages PDF and PNG/JPEG/TIFF bytes privately, freezes a per-page native/light/blocked plan, emits backend/version/OCR provenance and always disposes staging. HTTP evidence and General tool both call it; direct API/Tool Paddle choice and the unused `routeDocumentExtraction` chooser are deleted. Light's internal managed-worker bridge remains one backend implementation, not a second route authority. Partial Artifacts retain blocked reasons; all-blocked calls fail closed.
-- rollback: revert this Ticket as one unit to restore the prior direct adapters only as an explicit rollback state. Do not retain Router and direct chooser concurrently, expose the original grant path to a backend, add system/cloud fallback, or turn blocked pages into success.
-- deletedEntries: direct HTTP/General-tool Paddle selection; unused `routeDocumentExtraction` policy/type exports; old overlay-shaped route/tool artifact payload
-- remainingRisks: LA-112 benchmark profile and LA-031 optional-backend qualification remain. Synthetic coverage does not prove real PDF complexity/coverage, installed Paddle/pdfinfo, live startup cleanup, resource isolation/limits, OCR quality, correction lifecycle or packaged UI.
-- unverifiedRealMachineItems: real `data/**`/customer documents, production staging root/permissions/cleanup, actual `pdfinfo`, installed Paddle pack/worker cancellation and limits, provider/Keychain, packaged app/VoiceOver, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-112 — Auditable Document Router benchmark policy
-
-- status: completed
-- dependencies: LA-111
-- baseCommit: `d4ac203a`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-runtime/src/{documentRouter,documentRouterBenchmarkPolicy,index}.ts`; `tests/document_router_benchmark.test.ts`; `tests/fixtures/document-router-benchmark/{profile-v1,synthetic-report-v1}.json`; `docs/roadmap/DOCUMENT_ROUTER_BENCHMARK_POLICY_REPORT.md`; roadmap facts/inventory/ledgers.
-- testsAdded: RED missing policy-loader export; exact v1 profile/report digest, profile digest/version/unknown-field refusal, missing/expired fallback, threshold-driven light route and trace, and no optional-backend marketing guard.
-- commandsExecuted: `npx tsx tests/document_router_benchmark.test.ts` first failed because the loader export was absent, then focused benchmark/Router tests; root and Desktop typechecks; roadmap test/validation; full root and Desktop suites; diff check.
-- migration: none. The Router retains one server-owned conservative native/light/blocked policy. An optional v1 profile can change only `nativeTextCoverage` after exact schema, canonical SHA-256 evidence reference and expiry validation; valid output preserves profile/report digests and threshold reason in the Router result. Missing/expired profiles retain the 0.75 baseline; malformed/version-invalid/unknown-field profiles refuse. The checked-in profile/report are synthetic-only test fixtures, not canonical project data or an optional-backend qualification.
-- rollback: remove the profile loader, fixtures, report and trace projection together; Router falls back to the existing conservative 0.75 policy. Do not retain a partially parsed profile, accept unknown fields, infer an evidence report, or mark optional backends ready.
-- deletedEntries: none.
-- remainingRisks: the synthetic fixture does not prove real OCR quality, corpus fit, hardware/memory/latency, installed capability behavior or optional backend qualification. LA-031/release qualification remains required for MinerU/Unlimited-OCR/remote backends.
-- unverifiedRealMachineItems: real `data/**`/customer documents, real benchmark corpus and hardware matrix, installed Paddle/pdfinfo/optional backend behavior, production staging and packaged UI/accessibility, provider/Keychain, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-030 — Document Router Epic closure
-
-- status: completed; Epic was never directly implemented
-- dependencies: LA-017, LA-025
-- baseCommit: `77d3f43d`
-- resultCommit: `SELF`
-- evidence: LA-108 established the strict normalized block/result contract; LA-113/114/115 fixed host-staged parse/probe and complete page estimates; LA-109/110 supplied native/light adapters; LA-116 supplied private immutable staging; LA-111 made Router the only HTTP/General route chooser and deleted direct choices; LA-112 added the auditable policy-profile seam. All listed child Tickets are completed and their dependency chain was rechecked before this closure.
-- childTickets: LA-108 contract; LA-113 parse request; LA-114 probe request; LA-115 estimate; LA-109 native adapter; LA-110 light adapter; LA-116 staging; LA-111 Router migration; LA-112 benchmark policy.
-- commandsExecuted: accepted child RED/green and regressions; LA-112 final root suite (242 discovered tests), Desktop suite, root/Desktop typechecks, roadmap test/validation, ledger JSON parse and diff check.
-- migration: no new Epic-level data migration. There is one Router selection authority, one canonical existing Task Artifact writer and no permanent direct chooser/dual writer. Native/light/blocked output remains bounded and provenance-preserving; unavailable optional backends remain explicitly blocked.
-- rollback: use the relevant child Ticket rollback in dependency-safe reverse order. Do not restore a direct route chooser beside Router, reintroduce an original grant path to a backend, claim optional-backend readiness, or add a system/cloud fallback.
-- deletedEntries: direct HTTP/General Paddle selection and `routeDocumentExtraction`, as recorded by LA-111; no new Epic-level deletion.
-- remainingRisks: synthetic evidence does not qualify OCR quality, real PDF/document corpus, hardware/resource matrix, installed backends, worker isolation or packaged UI. LA-031 owns optional-backend qualification; DOCX/XLSX verified locators remain absent.
-- unverifiedRealMachineItems: real `data/**`/customer documents, installed managed capability and hardware benchmark, real staging/pdfinfo/Paddle behavior, provider/Keychain, packaged app/accessibility, process kill/power loss/disk full, signing/notarization and public mirror remain unverified.
-
-## LA-031 — Fail closed optional document backends
-
-- status: completed
-- dependencies: LA-030
-- baseCommit: `ebadaba0`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/{asset_parsing,asset_ingestion_contract,document_capabilities}.ts`; `packages/cat-server/src/{routes/asset_routes,strict_api_contract}.ts`; `tests/{runtime_storage,document_capabilities}.test.ts`; optional-backend report and roadmap facts/risk/ledgers.
-- testsAdded: RED synthetic `LA_MINERU_COMMAND` executable must remain unstarted and return `unavailable`; complete MinerU qualification record rejects unknown fields, package-digest drift and absent crash evidence.
-- commandsExecuted: `npx tsx tests/runtime_storage.test.ts` first failed because legacy parse invoked the fake backend; then `document_capabilities`/`runtime_storage` regressions and root/Desktop typechecks; roadmap validation, full root/Desktop suites and diff check.
-- migration: no data migration or backend enablement. Asset parse no longer accepts command/timeout override and returns explicit unavailable state without a cache/output. A managed MinerU lock is `ready` only with the exact qualification record; standalone process/cache/output implementation is deleted. Router continues to block optional pages.
-- rollback: restore only the prior disabled surface if necessary; never restore PATH/environment command lookup, raw Project-path execution, cache-success fallback, or an incomplete qualification record as ready.
-- deletedEntries: Asset parse `mineruCommand`/`mineruTimeoutMs` route and contract inputs; runnable PATH/environment activation; standalone process/cache/output/XLSX-preprocessing implementation.
-- remainingRisks: no actual qualified MinerU pack, hardware matrix, corpus, license assessment, crash/quality measurement, managed Worker staging integration or Unlimited-OCR implementation exists. Optional backends remain blocked.
-- unverifiedRealMachineItems: real `data/**`/customer documents, managed pack install, hardware/corpus/quality/crash/license evidence, packaged UI/accessibility, provider/Keychain, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-032 — Complete Prompt Compiler request budgeting
-
-- status: completed
-- dependencies: LA-003, LA-009, LA-013, LA-014
-- baseCommit: `0e8b1e2ccd9dca5a21022af82941c42a5c166fb2`
-- resultCommit: `SELF`
-- filesChanged: `prompt_compiler.ts`; Team context/manifest and Workflow/Eval/Private-Eval/server model-budget callers; focused synthetic budget fixture and affected Team/Eval/prompt tests; roadmap fact/risk documents and both execution ledgers.
-- testsAdded: initial missing-`ModelContextRegistry` characterization; known/unknown model and incomplete legacy-budget launch denial; tool/history/output reserve overflow and `needs_compaction`; SHA-bound untrusted envelope with closing-tag, bidi and zero-width neutralization; actual Team tool-schema projection injection; updated Team/Eval route regression fixtures use explicit synthetic model metadata.
-- commandsExecuted: `npm exec --no -- tsx tests/prompt_compiler.test.ts` first failed because `ModelContextRegistry` was absent, then passed; focused Team context, Private Eval Single/Team, Eval route, workflow plan, subagent activity and Team workflow foundation tests; root and Desktop typecheck; roadmap test/validation; execution-ledger JSON parse; `git diff --check` passed.
-- migration: no canonical data migration. New Team/Eval Run preparation requires a v2 `requestBudget`: immutable registry context/output values plus explicit tool/history/provider/safety/compaction components. Existing prompt-only manifests remain readable with their old hashes, but an old bare `tokenBudget` cannot authorize a new Run. Team calculates active ToolDefinition name/description/parameters before preparation; untrusted context is rendered only inside digest-bound envelopes. No real `data/**`, customer content, credential, public mirror or release material was read.
-- rollback: revert this ticket as one change; existing persisted v1 manifests remain readable. A rollback or partially supplied budget must block/new-Run rather than restore `overBudget -> ready`, unknown-model launch, raw untrusted interpolation or a second model-context authority.
-- deletedEntries: implicit bare-`tokenBudget` launch authorization; unwrapped task/evidence/style/findings/reference/transcript prompt interpolation; numeric-only synthetic route budgets.
-- remainingRisks: provider framing is a deterministic neutral-shape estimate, not a measured provider tokenizer/billing result; General/CAT have no current `PromptCompiler` caller and are not represented as migrated; native Pi system/tool serialization can change with Pi upgrades and requires requalification.
-- unverifiedRealMachineItems: real provider request tokens/billing and custom-model metadata; installed runtime/Keychain and packaged UI; accessibility/VoiceOver; process kill, power loss, disk full, signing/notarization and public mirror were not used.
-
-## LA-033 — Freeze explicit ExecutionProfile routing
-
-- status: completed
-- dependencies: LA-009, LA-032
-- baseCommit: `98b816ef`
-- resultCommit: `SELF`
-- filesChanged: `cat-data` ExecutionProfile contract/export; General coordinator, Host-to-Worker plan and standalone transport/client contract; server General model resolver; focused profile/General/route tests; roadmap fact/risk documents and both execution ledgers.
-- testsAdded: initial missing-export characterization for Fast/Balanced/Best/custom profile planning; profile budget/route mismatch and unconfigured-quality refusal; explicit model switch requires a new runtime epoch; General Worker receives the immutable profile plan and persists `custom`/`balanced`; standalone profile input/model conflict refusal.
-- commandsExecuted: `npm exec --no -- tsx tests/execution_profile.test.ts` first failed because `executionProfileSwitchCompatibility` was absent, then passed; `npm exec --no -- tsx tests/general_agent_runs.test.ts` initially proved the snapshot was still null, then passed; focused standalone route and General plan tests; root/Desktop typechecks; roadmap test/validation; execution-ledger JSON parse; `git diff --check` passed.
-- migration: no canonical data rewrite. New standalone General Runs resolve a server-owned, hash-bound `ExecutionProfilePlan` using the existing LA-032 `PromptRequestBudget`/`ModelContextRegistry`, carry it through the serialized Host-to-Worker plan and write its id into the new execution snapshot. Existing direct provider/model/effort choices become `custom`; the existing default compatibility route becomes `balanced`. Compact/fork re-resolve the exact stored provider/model/profile and reject legacy/no-profile or changed-profile routes rather than drift to current settings. No real `data/**`, customer content, provider credentials, public mirror or release material was read.
-- rollback: revert this ticket as one change. Legacy snapshots remain readable, but a rollback must keep unknown Fast/Best routes and models without verified LA-032 context/output metadata blocked; never infer quality/tool capability, silently choose a different model, mutate a live Pi session in place, or dual-write a profile authority.
-- deletedEntries: ambient General `executionProfile: null` for new main/delegated Runs; standalone transport ambiguity that combined a quality profile with explicit model/effort input.
-- remainingRisks: Fast/Best have no standalone production configuration/UI yet and therefore fail closed; CAT/Team/Eval quality-profile routing is not introduced here; profile budgets are planning metadata, not a claim that General/CAT invokes PromptCompiler or that provider framing/billing is measured; real Pi in-place model rebinding remains unproven and intentionally requires a new runtime epoch.
-- unverifiedRealMachineItems: real provider/custom-model metadata and token/billing behavior; installed runtime/Keychain; packaged UI/accessibility/VoiceOver; process kill, power loss, disk full, signing/notarization and public mirror were not used.
-
-## LA-034 — Derive only provenance-bound Segment ContextGraph context
-
-- status: completed
-- dependencies: LA-025, LA-029, LA-033
-- baseCommit: `fb70b4ec`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/{segment_context_graph,index}.ts`; `tests/segment_context_graph.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing-export characterization; immutable advisory-only graph/profile construction; node source SHA-256/revision provenance; targeted label/alias relevance selection; missing/hash/revision stale invalidation; empty provenance, invalid digest and invalid retrieval-limit refusal; no input mutation.
-- commandsExecuted: `npm exec --no -- tsx tests/segment_context_graph.test.ts` first failed because `assessSegmentContextGraphFreshness` was absent, then passed; `segment_evidence`, `project_context`, and `team_context_builder` regressions; root/Desktop typechecks; roadmap test/validation; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. `buildSegmentContextGraph()` is a pure caller-hydrated contract with no filesystem, SQLite, model, tool, route, worker, snapshot, proposal, decision or target write. A caller must provide each source's canonical ID, SHA-256 and positive revision; graph/profile observations remain `advisory_context` with `canCommit: false`. Retrieval first invalidates every node/signal whose any provenance is missing or has changed hash/revision, then ranks remaining graph nodes. Existing CAT Evidence, `SegmentEvidenceSnapshot`, Memory, Library and Project Truth owners/readers remain unchanged; no real `data/**`, customer material, credential, public mirror or release material was read.
-- rollback: revert this pure export/test together and continue using current evidence retrieval. Do not retain stale graph nodes, infer missing provenance, elevate graph observations into Evidence/authority, add a parallel writer, or silently reuse a changed source revision.
-- deletedEntries: none; no legacy graph, CAT evidence, source, data, runtime record or public-mirror object was deleted or rewritten.
-- remainingRisks: there is no server-side canonical provenance hydrator, CAT Tool/Run/UI integration, persisted graph snapshot, automatic entity extraction or proof that caller-supplied observations are true; graph remains deliberately non-authoritative and does not unify Memory/Library/Project Truth ownership.
-- unverifiedRealMachineItems: real `data/**`, customer evidence/asset revisions, server hydration, live Run/UI behavior, installed runtime/Keychain, provider behavior, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-035 — Route only safe TM reuse before expensive generation
-
-- status: completed
-- dependencies: LA-033, LA-034
-- baseCommit: `735b5b2a`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/{tm_candidate_pipeline,index}.ts`; `tests/tm_candidate_pipeline.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing-export characterization; reviewed exact TM/repetition skip path; advisory/conflicting/unknown safety rejection; high-fuzzy diff-repair-only candidate; complete source/context/constraint/asset/model/profile/prompt cache-key invalidation; proposal-input conversion only for ready candidates; immutable/no-input-mutation and invalid-digest refusal.
-- commandsExecuted: `npm exec --no -- tsx tests/tm_candidate_pipeline.test.ts` first failed because `CandidatePipelineCache` was absent, then passed; TM fuzzy retrieval, constraint-pack and proposal regressions; root/Desktop typechecks; roadmap test/validation; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. The pure planner hashes every source/context/constraint/asset/model/profile/prompt/TM/repetition component, selects only reviewed exact TM or confirmed same-revision repetition when caller-provided canonical constraint state is `verified`, and stores immutable plans only in an injected in-memory cache. A safe high-fuzzy reviewed row is only a `requires_diff_repair` seed; unknown/advisory/conflicting cases route to full generation. No model executes, no cache persists, and no proposal/target/Decision is written: `proposalInputFromCandidatePlan()` merely constructs the existing input that must still pass `createProposalSet` and later apply gates. No real `data/**`, customer content, credential, public mirror or release material was read.
-- rollback: revert this pure planner/export/test together and return to the current single-model proposal path. Do not cache a partial key, self-certify constraint safety, turn fuzzy seed text into a final proposal, promote advisory TM to safe reuse, persist a second cache authority, or bypass proposal/write gates.
-- deletedEntries: none; no TM row, proposal, target, cache file, writer, data or public-mirror object was deleted or rewritten.
-- remainingRisks: no server provenance/constraint hydration, semantic-continuity batching, model repair/full-generation executor, persistent cache, Run/Tool/router/UI integration, actual revision/quality evidence or real cache cost/latency measurement; the caller must not assert `reuseSafety: verified` without canonical constraint proof.
-- unverifiedRealMachineItems: real `data/**`, customer TM/asset/constraint revisions, server/Run/UI and provider execution, installed runtime/Keychain, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-036 — Emit only independent Critic findings
-
-- status: completed
-- dependencies: LA-035
-- baseCommit: `1beabc16`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/{independent_critic,index}.ts`; `tests/independent_critic.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing-export characterization; strict versioned/hash-bound advisory artifact round-trip; unknown/tampered JSON refusal; high-risk-only planning; separate actor/execution enforcement; citable evidence requirement; no-commit identity and finding-scoped targeted-repair boundary.
-- commandsExecuted: `npm exec --no -- tsx tests/independent_critic.test.ts` first failed because `createIndependentCriticArtifact` was absent, then passed; quality-audit, Team quality-ledger and Team workflow regressions; root/Desktop typechecks; roadmap test/validation; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. The pure contract accepts only high-risk candidate subjects, verifies critic actor and execution differ from the candidate producer, creates a strict immutable `advisory_finding` artifact with `canCommit:false`, and rejects audit-only/empty evidence. It neither starts a model nor writes a Quality/Team ledger, proposal, target or Decision. The only repair projection is the exact artifact finding IDs and its single segment ID. No real `data/**`, customer material, credential, public mirror or release material was read.
-- rollback: revert this pure artifact/export/test together and return to deterministic QA plus human review. Do not allow a critic to reuse the producer execution/actor, self-authorize a repair, create a broad batch scope, accept trace-only evidence, or write a proposal/target/Decision directly.
-- deletedEntries: none; no quality finding, proposal, target, ledger event, writer, data or public-mirror object was deleted or rewritten.
-- remainingRisks: no live Critic launch, calibrated high-risk policy, finding merge/review-priority logic, actual repair executor, ledger/proposal/Run/Tool/UI integration, or real provider/identity isolation proof.
-- unverifiedRealMachineItems: real `data/**`, customer evidence, actual high-risk work and provider execution, installed runtime/Keychain, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-037 — Restrict consistency repair to hit segments
-
-- status: completed
-- dependencies: LA-036
-- baseCommit: `bb3f97e9`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/{batch_consistency_repair,index}.ts`; `tests/batch_consistency_repair.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing-export characterization; existing open QA terminology/repetition/voice finding projection; ignored-finding exclusion; exact finding/segment causation; evidence-preserving terminology input; unrelated and locked-row repair refusal; no-repair default.
-- commandsExecuted: `npm exec --no -- tsx tests/batch_consistency_repair.test.ts` first failed because `buildBatchConsistencyPass` was absent, then passed; quality-audit/proposal/delivery-QA regressions; root/Desktop typechecks; roadmap test/validation; execution-ledger JSON parse; `git diff --check` passed.
-- migration: none. The pure adapter consumes existing open `QualityAuditReport` findings instead of creating a second consistency engine. It projects only the named terminology/duplicate-target/voice/register codes, binds a repair to the exact finding and segment, carries original evidence into `SegmentProposalInput`, and refuses locked rows. It neither invokes QA/model work nor creates/applies a proposal or target; no real `data/**`, customer material, credential, public mirror or release material was read.
-- rollback: revert this pure adapter/export/test together and retain current findings-only QA. Do not broaden repair to non-hit or locked rows, regenerate a Batch, drop finding evidence, or bypass existing proposal/write gates.
-- deletedEntries: none; no QA finding, proposal, target, writer, data or public-mirror object was deleted or rewritten.
-- remainingRisks: no automatic repair, proposal persistence, cross-batch consistency policy, actual audit/runtime/UI integration or real model/quality/cost measurements.
-- unverifiedRealMachineItems: real `data/**`, customer QA findings, production proposal/review UI, provider execution, installed runtime/Keychain, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-038 — Validate all API external input through shared strict schemas
-
-- status: completed
-- dependencies: LA-008
-- baseCommit: `d8e6f893`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/{strict_api_contract,server}.ts`; route adapters for agent permission, standalone/Project Task, Task queue, batch, asset, Library, upload and Voice inputs; focused route fixtures; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,RISK_REGISTER,MIGRATION_MATRIX,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing shared-contract export characterization; JSON content type, bounded body, object-only body, unknown/prototype field, strict boolean/string/array and no-filter refusal; declared-field vocabulary acceptance/rejection; source field-use scan proving every `body.<field>` used by server routes is declared; standalone and permission unknown-field regressions.
-- commandsExecuted: `npm exec --no -- tsx tests/strict_api_contract.test.ts` first failed because `strict_api_contract` was absent, then passed; local transport, permission, standalone/Project Task, Task queue, batch/delivery QA, Voice/upload, asset/Library/workflow artifact/Team route regressions; root and Desktop typechecks; roadmap test/validation; `release:check`; execution-ledger JSON parse; `git diff --check` passed. `rc:status` was not run because it writes a timestamped report under forbidden `data/reports`; no workaround was used. One initial desktop command used a nonexistent relative test path and was rerun successfully with `node --test apps/desktop/tests/security.test.mjs`.
-- migration: no data migration and no writer change. Every production server `readBody` now calls one strict JSON parser: supplied content type must be `application/json`, byte limits remain route-aware, root input must be a JSON object, and every top-level field must belong to the canonical vocabulary. The test scans server/route body-property consumers so a new undeclared field fails CI. Permission, standalone Task, Project Task and queue add exact schemas; shared helpers and CAT route callers reject malformed boolean/string/array input rather than coercing or filtering it. Legacy `segmentSource` remains accepted only for wire compatibility and is ignored before source authority is derived. No real `data/**`, customer material, credentials, public mirror or release material was read.
-- rollback: revert the parser/vocabulary, route adapters and tests together. Do not restore `Boolean(value)`, silent array filtering, prototype-key acceptance, unknown-to-allow behavior, a separate route parser, or client-authored source authority.
-- deletedEntries: direct `server.ts` use of loose `readLocalJsonBody`; string-to-boolean coercions in batch/upload/Voice request paths; silent filtering of malformed request arrays in migrated helpers.
-- remainingRisks: the shared request vocabulary is not response DTO generation; many legacy route groups still rely on existing domain validators for endpoint-specific value constraints; `workspace-client.ts` still owns hand-written response types and generic Electron `api.request` remains until LA-039/LA-040.
-- unverifiedRealMachineItems: real `data/**`, customer requests, installed runtime/Keychain, packaged Electron/XSS behavior, provider execution, process kill/power loss/disk full, signing/notarization and public mirror were not used.
-
-## LA-039 — Compile Electron main/preload through one IPC contract
-
-- status: completed
-- dependencies: LA-038
-- baseCommit: `d4e8c56f`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/{main.ts,preload.cts,ipc-contract.cts,desktop-security.mjs,renderer/desktop.d.ts}`; `apps/desktop/tsconfig.electron.json` and manifest/build/package staging allowlist; Electron security/command-palette/packaging/local-update tests plus new IPC contract test; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,RISK_REGISTER,MIGRATION_MATRIX,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing shared IPC contract characterization; shared source/import/channel/compiled-allowlist assertion. Existing security, command palette, packaging and updater tests now assert the TypeScript/contract entry rather than retired JS/CJS source paths.
-- commandsExecuted: `node --test apps/desktop/tests/ipc-contract.test.mjs` first failed because `ipc-contract.cts` was absent, then passed; Electron TypeScript compile initially exposed widened legacy helper literals and implicit preload callback parameters, then passed after explicit boundary types; `npm --prefix apps/desktop run build`; IPC/security/packaging/local-update tests; complete `npm --prefix apps/desktop test` (153 tests plus 3 activity tests); desktop and root typechecks; the first `npm run roadmap:test` rejected a missing LA-039 -> R-020 risk mapping, then passed after the mapping was restored; roadmap validation, release check, execution-ledger JSON parse and `git diff --check` passed. `rc:status` was not run because it writes a timestamped report under forbidden `data/reports`; no workaround was used.
-- migration: no data migration, server writer or API capability change. `main.mjs` moved to `main.ts`, `preload.cjs` to `preload.cts`, and both use the single CommonJS-emitted `ipc-contract.cts` for channels, stream update shape and fixed App commands. The renderer derives its App command type from that contract. The desktop build compiles the executable boundary to `dist/electron`; package metadata/staging points at the compiled `main.js` and includes every compiled sibling module its relative imports resolve. The generic `api.request` bridge remains unchanged for LA-040.
-- rollback: revert the manifest, TypeScript entry sources, shared contract, build config, staging allowlist and tests together to the prior two source entries. Do not leave dual main/preload entrypoints, a mixed JS/TS authority boundary, a stale asar allowlist, or a compiled main whose sibling imports are absent.
-- deletedEntries: `apps/desktop/src/main.mjs`; `apps/desktop/src/preload.cjs`; duplicate hard-coded IPC channel/App-command declarations in those entrypoints.
-- remainingRisks: generic `api.request` still permits any existing local API path; response DTO/client generation and fixed capability IPC remain LA-040; `revealPath` still accepts renderer path text until LA-041; source build and packaging tests are not a signed/installed macOS package proof.
-- unverifiedRealMachineItems: real `data/**`, customer material, installed runtime/Keychain, packaged Electron/XSS behavior, real macOS signing/notarization/VoiceOver, process kill/power loss/disk full, provider execution and public mirror were not used.
-
-## LA-040 — Restrict renderer workspace transport to fixed capabilities
-
-- status: completed
-- dependencies: LA-039
-- baseCommit: `c089213d`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/{ipc-contract.cts,workspace-capabilities.cjs,workspace-capabilities.d.cts,main.ts,preload.cts,renderer/data/workspace-client.ts,renderer/desktop.d.ts}`; `apps/desktop/scripts/packaging-config.mjs`; capability-aware desktop workspace-client/security/IPC/packaging tests; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,RISK_REGISTER,MIGRATION_MATRIX,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: capability lookup and resolution characterization; unknown method/path, capability/path mismatch and extra-field refusal; static bridge-removal assertions; package-allowlist coverage for the compiled capability authority. Existing route tests migrate their mocks to the fixed invocation and retain their canonical HTTP route assertions through the same resolver.
-- commandsExecuted: `node --test apps/desktop/tests/workspace-capability-contract.test.mjs` first failed because `workspaceCapabilityFor` did not exist, then passed; source build/typecheck and a focused CAT workspace-client test initially failed because the renderer referenced only an emitted `.cjs` contract, then passed after the single source-loadable capability authority was introduced; migrated workspace-client regressions; final `npm --prefix apps/desktop run build && npm --prefix apps/desktop test` passed (156 desktop tests plus 3 activity tests); package allowlist test first failed because `workspace-capabilities.cjs` was absent, then passed after the allowlist update; focused IPC/security/packaging tests, root/Desktop typechecks, roadmap test first rejected an invalid R-014 -> LA-040 owner mapping and then passed after the mapping was restored, roadmap validation, release check, execution-ledger JSON parse and `git diff --check` passed. `rc:status` was not run because it writes a timestamped report under forbidden `data/reports`; no workaround was used.
-- migration: no data migration and no server writer change. `workspace-capabilities.cjs` is the one normal workspace capability authority, mapping a fixed capability to one HTTP method and pathname template. `workspace-client.ts` first maps its local method/path intent to that capability; the renderer crosses the boundary only with `{ capability, path, body? }`. Preload validates the exact envelope and main repeats the validation, derives the method itself, and only then calls `requestRuntime`. The generic `api.request` preload surface, `api:request` channel and main handler are deleted; no temporary or permanent dual bridge remains. Stream APIs remain distinct fixed IPC operations. The compiled capability module is included in the ASAR source allowlist. No real `data/**`, customer material, credential, public mirror or release material was read.
-- rollback: revert the capability authority, IPC channel/surfaces, renderer adapter, compiled allowlist and tests as one unit. Do not restore a permanent generic request bridge, renderer-chosen HTTP method, unregistered pathname, permissive unknown field, or a second capability registry.
-- deletedEntries: `IPC_CHANNELS.apiRequest`; `api:request`; preload `api.request(input)`; main generic `requestRuntime(input)` handler.
-- remainingRisks: endpoint-specific query/value schemas and response DTO/client generation remain incomplete; every new normal workspace endpoint must be registered and tested before renderer exposure; `revealPath` and native file handles still accept renderer path authority until LA-041; source/build evidence is not an installed signed macOS/XSS proof.
-- unverifiedRealMachineItems: real `data/**`, customer material, installed runtime/Keychain, packaged Electron/XSS and same-user native-process behavior, real signing/notarization/VoiceOver, provider execution, process kill/power loss/disk full and public mirror were not used.
-
-## LA-041 — Resolve renderer native operations through opaque handles only
-
-- status: completed
-- dependencies: LA-039, LA-040
-- baseCommit: `4f2e610d`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/{main.ts,preload.cts,ipc-contract.cts,native-file-handles.mjs,renderer/desktop.d.ts,renderer/data/workspace-client.ts,renderer/{onboarding,assets,conversation,library,settings,workspace,inspector}/*}`; `apps/desktop/scripts/packaging-config.mjs`; native-handle, security, onboarding, asset and packaging tests; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,RISK_REGISTER,MIGRATION_MATRIX,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: missing native-handle registry characterization; forged extra field, unknown ID, type mismatch, selected-file replacement through symlink/inode change, canonical Project-root escape and picker cancellation tests; source guards that reject renderer raw native-path IPC and assert the compiled package allowlist.
-- commandsExecuted: `node --test tests/native-file-handles.test.mjs` first failed because `native-file-handles.mjs` was absent, then passed; focused assets/onboarding/security/native-handle/Rich Artifact tests passed; desktop typecheck passed; Electron build initially exposed one implicit picker callback type and then passed; full `npm --prefix apps/desktop test` initially exposed outdated asset/onboarding/security/packaging contracts, then passed with 159 desktop tests plus 3 activity tests; root typecheck, roadmap test, roadmap validation, release check, execution-ledger JSON parse and `git diff --check` passed. `rc:status` was not run because it writes a timestamped report under forbidden `data/reports`; no workaround was used.
-- migration: no data migration and no writer change. `native-file-handles.mjs` is the sole ephemeral main-process native-path authority: picker output is `{id,name}` only; main binds an ID to canonical realpath, inode/device, use kind and TTL, and rechecks it before use. Project creation, batch import, Library import, `.lapkg` preview/activation, Chat file grants and document evidence accept only handles at the renderer boundary and main maps them to the unchanged strict server wire. Project asset refresh uses a canonical server Project manifest plus in-root relative paths; Project reveal uses canonical Project ID; maintenance candidate and Rich Artifact export outputs are redacted to opaque handles. The old `revealPath(path)` channel and renderer API are deleted; there is no legacy raw-path fallback or dual write. No real `data/**`, customer material, credential, public mirror or release material was read.
-- rollback: revert the native-handle registry, IPC/preload/main resolver, renderer adapters, compiled allowlist, tests and this migration documentation together. Do not restore `revealPath`, raw `rootPath`/`filePath`/`sourcePath`/`sourcePaths`/`archivePath` renderer fields, a cached path in renderer state, or a permanent legacy fallback.
-- deletedEntries: `IPC_CHANNELS.revealPath`; preload `system.revealPath(path)`; main `system:reveal-path` handler; renderer raw picker/path payloads for Project, Batch/Asset/Library/Package, Chat grant, document evidence, maintenance activation and Rich Artifact export display.
-- remainingRisks: endpoint-specific query/value schemas and response DTO/client generation remain incomplete; newly added native operations must be handle/ID-registered and covered before renderer exposure; source/build evidence does not prove a signed/installed Electron package, XSS/same-user native process or long-lived handle expiry behavior.
-- unverifiedRealMachineItems: real `data/**`, customer material, installed runtime/Keychain, packaged Electron/XSS and same-user native-process behavior, real signing/notarization/VoiceOver, provider execution, process kill/power loss/disk full, long-lived handle expiry and public mirror were not used.
-
-## LA-042 — Rebuild selected Task facts through snapshot plus ordered events
-
-- status: completed
-- dependencies: LA-008, LA-038
-- baseCommit: `595253fe`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/data/{task-events,workspace-store}.ts`; `apps/desktop/tests/task-events.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,MIGRATION_MATRIX,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing `TaskProjectionStore` export characterization; one-projection snapshot replacement and ordered event application; duplicate cursor no-op; gap preserves last projection; late lower-cursor snapshot refusal and canonical reload replacement.
-- commandsExecuted: `node --import tsx --test tests/task-events.test.ts` first failed because `TaskProjectionStore` was absent, then passed; the stale-snapshot assertion first failed because `replace` regressed cursor `task-one:3` to `task-one:2`, then passed after the cursor guard; focused Task projection/Decision/permission/standalone Chat regressions passed; desktop typecheck and production build passed; full desktop test passed with 160 tests plus 3 activity tests; root typecheck, roadmap test, roadmap validation, release check, execution-ledger JSON parse and `git diff --check` passed. `rc:status` remains skipped because it writes a timestamped report under forbidden `data/reports`; no workaround was used.
-- migration: no data migration, server writer or schema change. `TaskProjectionStore` is the sole selected-Task renderer product-fact owner: it receives only a server-parsed snapshot or one ordered canonical event. `WorkspaceStore` subscribes and publishes that projection into its existing state facade, while local selection/request/UI state remains outside the projection. Selected Task open/create/rename/archive/restore/Decision responses use `replace`; SSE uses `apply`; duplicate events are ignored, gaps trigger canonical reload without mutation, and an older cursor snapshot cannot regress confirmed facts. No second Task/Run store, dual write or real `data/**` access was introduced.
-- rollback: revert the projection class, WorkspaceStore adapter, tests and this documentation together. Do not restore direct selected-Task snapshot/event writes in action callbacks, a local Run/Decision/Artifact fact model, or a permanent second projection store.
-- deletedEntries: direct selected-Task `WorkspaceState.task` mutation paths for action snapshots and SSE events; the old `applyTaskEvent`-to-facade event path.
-- remainingRisks: `WorkspaceStore` still combines projection publication with non-Task UI/request concerns; background streams currently notify/reconcile rather than retaining complete background Task projections; bounded stream coalescing and app-level event-provider extraction remain LA-043; source tests do not prove real Electron reload/XSS/long-session behavior.
-- unverifiedRealMachineItems: real `data/**`, customer material, installed runtime/Keychain, packaged Electron/XSS and same-user native-process behavior, provider execution, real macOS signing/notarization/VoiceOver, long-lived event streams, process kill/power loss/disk full and public mirror were not used.
-
-## LA-043 — Bound live stream updates while preserving ordered terminal events
-
-- status: completed
-- dependencies: LA-012, LA-042
-- baseCommit: `5df03d21`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/conversation/{TaskConversation,stream-event-coalescer}.ts`; `apps/desktop/src/renderer/conversation/stream-event-coalescer.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,MIGRATION_MATRIX,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`.
-- testsAdded: initial missing coalescer-module characterization; 20fps 50ms delta bound with lossless text merge; flush-before-tool/Decision/final ordering; hidden-window explicit flush and Task-switch clear.
-- commandsExecuted: `node --import tsx --test src/renderer/conversation/stream-event-coalescer.test.ts` first failed because the module was absent, then passed; focused coalescer/live-reply/TaskProjection regressions passed. The first desktop typecheck rejected Node-specific test imports in the renderer test tsconfig; the test was converted to the existing local harness and typecheck passed. Desktop production build, full desktop test (161 tests plus 3 activity tests), root typecheck, roadmap test, roadmap validation, release check, execution-ledger JSON parse and `git diff --check` passed. `rc:status` was not run because it writes a timestamped report under forbidden `data/reports`; no workaround was used.
-- migration: no data migration, schema or writer change. `StreamEventCoalescer` is the sole ephemeral live-text batching authority for `TaskConversation`: it batches only non-empty `assistant_delta` payloads at a 50ms minimum interval and preserves the first payload identity while concatenating text. Any other stream payload flushes pending text then dispatches immediately, so final, permission/Decision, tool and queue events cannot be delayed or reordered behind a delta. Hidden-window transition flushes; Task switches and unmount clear obsolete ephemeral text. Canonical Task snapshot/event projection remains immediate and unchanged; no dual event model was added.
-- rollback: revert the coalescer, TaskConversation adapter, tests and this documentation together. Immediate delta delivery is acceptable for diagnosis, but do not defer or drop canonical events, reintroduce animation-frame-only unbounded update behavior, or let terminal/Decision/tool/queue pass a pending delta.
-- deletedEntries: direct `requestAnimationFrame`/`cancelAnimationFrame` delta path and its parallel pending text/frame refs in `TaskConversation`.
-- remainingRisks: no separate Global Event Provider yet; background Task streams only notify/reconcile; real Electron visibility throttling, long conversations, CPU/memory and accessibility behavior remain unverified.
-- unverifiedRealMachineItems: real `data/**`, customer material, installed runtime/Keychain, packaged Electron/XSS and same-user native-process behavior, provider execution, real macOS backgrounding/VoiceOver/signing/notarization, long-lived streams, process kill/power loss/disk full and public mirror were not used.
-
-## LA-117 — Isolate every root test child from checkout data
-
-- status: completed
-- dependencies: LA-106, LA-043
-- baseCommit: `f386bd61`
-- resultCommit: SELF
-- filesChanged: `scripts/test-discovery.ts`; `tests/test_discovery.test.ts`; `docs/roadmap/{G5_PRODUCT_REPORT,CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,MIGRATION_MATRIX,EXECUTION_LEDGER,IMPLEMENTATION_QUEUE}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: inherited synthetic-root override; per-child distinct synthetic repo/Pi-agent root and `finally` cleanup; direct literal `npm run server` launcher inheritance refusal
-- commandsExecuted: focused `test_discovery` initially failed because the child-environment export was absent, then because the runner seam was absent, then because two children shared a root, and finally because the direct-launch guard export was absent; it passed after each required boundary was implemented. `tests/server_root_override.test.ts` and root typecheck passed. Roadmap test/validation, release check, execution-ledger JSON parse and `git diff --check` passed. `npm test` was deliberately not reissued: G5 requires a fresh safe-full-suite approval, and no wrapper/filter/environment-only substitute was used.
-- migration: none. The test-only root runner now creates a distinct temporary synthetic repository and Pi-agent directory for each selected root-test child, overwrites inherited root variables, and removes that root in `finally`. It refuses a direct literal `spawn`/`spawnSync("npm", ["run", "server"])` test launcher unless its source inherits `process.env`. Production server-root resolution, data writers, schemas, package roots, and runtime behavior remain unchanged; no real `data/**`, home Pi trust, customer content, public mirror, credential, or signing material was read or changed.
-- rollback: revert the runner/helper/test/documentation change together and retain the G5 block. Do not reintroduce a root suite that inherits checkout data, use a shell wrapper or filtered suite as Gate evidence, or silently fall back to production root resolution under test mode.
-- deletedEntries: no persistent entry; every LA-117 synthetic root is cleaned after its child process returns.
-- remainingRisks: the direct-launch check is source-level and covers literal `npm run server` launchers only; dynamically constructed or deliberately environment-stripping subprocesses are not OS-sandboxed. A fresh complete root/security/recovery/Desktop/macOS G5 execution remains required before Stage continuation.
-- unverifiedRealMachineItems: full root-suite behavior under the fresh guard, real `data/**`, real home Pi trust, customer content, installed runtime, signing/notarization, process kill, power loss, disk full, production rollback, and public mirror were not used.
-
-## LA-118 — Run root-test children from a no-data synthetic cwd
-
-- status: completed
-- dependencies: LA-117
-- baseCommit: `17bb944e`
-- resultCommit: `SELF`
-- filesChanged: `scripts/test-discovery.ts`; `tests/test_discovery.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,EXECUTION_LEDGER,G5_PRODUCT_REPORT,IMPLEMENTATION_QUEUE,MIGRATION_MATRIX,MODULE_AND_DATA_INVENTORY,RISK_REGISTER}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: RED missing-allowlisted-source-view characterization; no-`data/**`/no-`.git` synthetic cwd assertion; allowlisted source-view links; absolute checkout test-module path and synthetic child cwd assertion
-- commandsExecuted: `npm exec --no -- tsx tests/test_discovery.test.ts` first failed because the synthetic child cwd did not expose the required allowlisted `apps` source view, then passed after the view/runner seam was implemented. `npm run test:roadmap` passed through the actual root runner (231 discovered tests; 2 roadmap children). Root and Desktop typechecks passed; `git diff --check` passed. Full root/security/recovery/Desktop/macOS G5 commands remain pending and are not inferred from this focused evidence.
-- migration: none. The test-only runner now creates every child cwd under a fresh temporary root, copies only root `package.json`, `package-lock.json` and `tsconfig.json`, links only `apps`/`contracts`/`docs`/`node_modules`/`packages`/`patches`/`scripts`/`tests`, creates an empty synthetic `.pi` configuration and a dedicated Pi-agent directory, and invokes the test module by absolute checkout path. `data/**`, `.git`, home paths and every unlisted checkout entry are absent from the child cwd. Production root resolution, data writers, test selection and server behavior remain unchanged; no real `data/**`, customer content, public mirror, credential or signing material was read or changed.
-- rollback: revert the source-view helper, child-cwd/absolute-file runner seam, characterization and documentation together; retain the G5 block. Do not restore checkout cwd, link `data`/`.git`/home, replace the view with a shell wrapper or test filter, silently fall back to a production root, or claim source-level containment is an OS sandbox.
-- deletedEntries: no persistent entry; each source-view root, `.pi` configuration and Pi-agent directory is removed in `finally` after its child exits.
-- remainingRisks: linked source entries remain source-level exposure rather than an OS-enforced read-only snapshot; dynamically constructed or environment-stripping subprocesses are not comprehensively contained. A fresh direct full root/security/recovery/Desktop/macOS G5 execution remains mandatory before Phase 6.
-- unverifiedRealMachineItems: full root-suite behavior under the no-data cwd guard, real `data/**`, real home Pi trust, customer content, installed runtime, signing/notarization, process kill, power loss, disk full, production rollback and public mirror were not used.
-
-## LA-119 — Whitelist only tracked Pi materials required by root tests
-
-- status: completed
-- dependencies: LA-118
-- baseCommit: `fc3b40ad`
-- resultCommit: `SELF`
-- filesChanged: `scripts/test-discovery.ts`; `tests/test_discovery.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,EXECUTION_LEDGER,G5_PRODUCT_REPORT,IMPLEMENTATION_QUEUE,MIGRATION_MATRIX,MODULE_AND_DATA_INVENTORY,RISK_REGISTER}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: RED missing synthetic constitution characterization; exact synthetic `.pi` entry allowlist; Team-agent-link presence; memory-extension byte parity; explicit absence of `.pi/npm` and unrelated `cat-tools.ts`
-- commandsExecuted: the prior direct `npm test` passed two root children then failed at `cat_prompt_isolation` with `ENOENT .pi/APPEND_SYSTEM.md`; no data path was accessed. `npm exec --no -- tsx tests/test_discovery.test.ts` then reproduced that missing-file failure and passed after the precise allowlist was implemented. Focused `cat_prompt_isolation`, `team_role_agents` and `memory_tools` tests passed. The actual `npm run test:roadmap` runner subset, root/Desktop typechecks, roadmap validation, release check and `git diff --check` passed. A fresh direct full root/security/recovery/Desktop/macOS G5 execution remains pending and is not inferred from focused evidence.
-- migration: none. The test-only synthetic `.pi` retains empty synthetic settings, skills and prompts plus the dedicated temporary Pi-agent directory. It copies exactly `.pi/APPEND_SYSTEM.md` and `.pi/extensions/memory.ts`, and links exactly the tracked `.pi/agents` directory. It does not link or load source `.pi/settings.json`, `.pi/npm`, project skills, other extensions, user Pi trust, `data/**`, `.git` or home content. Production Pi resource policy, runtime loading, server root resolution, data writers and test selection remain unchanged; no real `data/**`, customer content, credential, public mirror or signing material was read or changed.
-- rollback: revert the three Pi-material source-view entries, characterization and documentation together; retain the G5 block. Do not substitute the entire `.pi`, project settings, `npm` package tree, other executable extensions, user trust, a shell wrapper, a test filter or a production-root fallback.
-- deletedEntries: no persistent entry; every synthetic `.pi` and Pi-agent directory remains inside the per-child temporary root and is removed in `finally`.
-- remainingRisks: the linked Team profile directory remains source-level exposure rather than an OS-enforced read-only snapshot; future cwd-sensitive tests may require separately reviewed static materials. Dynamically constructed or environment-stripping subprocesses are not comprehensively contained. A fresh direct full root/security/recovery/Desktop/macOS G5 execution remains mandatory before Phase 6.
-- unverifiedRealMachineItems: full root-suite behavior under the no-data synthetic cwd/Pi-material guard, real `data/**`, real home Pi trust, customer content, installed runtime, signing/notarization, process kill, power loss, disk full, production rollback and public mirror were not used.
-
-## LA-120 — Preserve only the tracked Dev project context in test cwd
-
-- status: completed
-- dependencies: LA-119
-- baseCommit: `5bd60d4f`
-- resultCommit: `SELF`
-- filesChanged: `scripts/test-discovery.ts`; `tests/test_discovery.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,EXECUTION_LEDGER,G5_PRODUCT_REPORT,IMPLEMENTATION_QUEUE,MIGRATION_MATRIX,MODULE_AND_DATA_INVENTORY,RISK_REGISTER}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: RED missing synthetic `AGENTS.md` characterization; exact copied-byte check; synthetic root-entry allowlist includes the lone Dev context file
-- commandsExecuted: the prior direct `npm test` passed two root children and the CAT preset checks, then failed at the Dev preset assertion because Pi could not discover root `AGENTS.md` from synthetic cwd; no data path was accessed. `npm exec --no -- tsx tests/test_discovery.test.ts` then reproduced that missing-file failure and passed after the single-file allowlist was implemented. Focused `cat_prompt_isolation` passed. The actual `npm run test:roadmap` runner subset, root/Desktop typechecks, roadmap validation, release check and `git diff --check` passed. A fresh direct full root/security/recovery/Desktop/macOS G5 execution remains pending and is not inferred from focused evidence.
-- migration: none. The test-only child root now copies exactly one additional tracked root file, `AGENTS.md`, because Pi's Dev preset calls `loadProjectContextFiles` with the child cwd. No other root prose, docs, parent directory, `.git`, home path, `.pi` setting/package/trust, `data/**`, production root, runtime prompt policy, data writer or test selection changes. No real `data/**`, customer content, credential, public mirror or signing material was read or changed.
-- rollback: revert the one copied `AGENTS.md` allowlist entry, characterization and documentation together; retain the G5 block. Do not disable Dev project context, copy README/all docs, link a checkout ancestor, or use a shell wrapper, test filter or production-root fallback.
-- deletedEntries: no persistent entry; the copied Dev context remains in the per-child temporary root and is removed in `finally`.
-- remainingRisks: the copied `AGENTS.md` is a source snapshot only at child creation and future cwd-sensitive tests may require separately reviewed static materials. Dynamically constructed or environment-stripping subprocesses are not comprehensively contained. A fresh direct full root/security/recovery/Desktop/macOS G5 execution remains mandatory before Phase 6.
-- unverifiedRealMachineItems: full root-suite behavior under the no-data synthetic cwd/Pi-material/Dev-context guard, real `data/**`, real home Pi trust, customer content, installed runtime, signing/notarization, process kill, power loss, disk full, production rollback and public mirror were not used.
-
-## LA-121 — Whitelist the Team child extension only for root tests
-
-- status: completed
-- dependencies: LA-120
-- baseCommit: `56a7a8bd`
-- resultCommit: `SELF`
-- filesChanged: `scripts/test-discovery.ts`; `tests/test_discovery.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,EXECUTION_LEDGER,G5_PRODUCT_REPORT,IMPLEMENTATION_QUEUE,MIGRATION_MATRIX,MODULE_AND_DATA_INVENTORY,RISK_REGISTER}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: RED missing synthetic Team-child-extension characterization; exact copied-byte check for `team-evidence-child.ts` while retaining unrelated-extension absence
-- commandsExecuted: the prior direct `npm test` passed six root children and failed at `team_evidence_child_runtime` because the production Pi loader could not find `.pi/extensions/team-evidence-child.ts` in synthetic cwd; no data path was accessed. `npm exec --no -- tsx tests/test_discovery.test.ts` then reproduced that missing-file failure and passed after the single-file allowlist was implemented. Focused `team_evidence_child_runtime` passed. The actual `npm run test:roadmap` runner subset, root/Desktop typechecks, roadmap validation, release check and `git diff --check` passed. A fresh direct full root/security/recovery/Desktop/macOS G5 execution remains pending and is not inferred from focused evidence.
-- migration: none. The test-only synthetic `.pi/extensions` now copies exactly `.pi/extensions/team-evidence-child.ts` in addition to earlier explicitly required static files. Empty synthetic settings still do not automatically load project extensions; `.pi/npm`, all other extensions, project settings, skills, home trust, `data/**`, `.git`, production root, Team runtime and Pi resource policy remain unchanged. No real `data/**`, customer content, credential, public mirror or signing material was read or changed.
-- rollback: revert the one copied Team extension, characterization and documentation together; retain the G5 block. Do not replace the allowlist with all `.pi/extensions`, the package tree, a user trust directory, shell wrapper, test filter or production-root fallback.
-- deletedEntries: no persistent entry; the copied Team extension remains inside each per-child temporary root and is removed in `finally`.
-- remainingRisks: this explicit extension copy is source-level exposure rather than an OS-enforced immutable snapshot; future cwd-sensitive tests may require separately reviewed static materials. Dynamically constructed or environment-stripping subprocesses are not comprehensively contained. A fresh direct full root/security/recovery/Desktop/macOS G5 execution remains mandatory before Phase 6.
-- unverifiedRealMachineItems: full root-suite behavior under the no-data synthetic cwd/Pi-material/Dev-context/Team-extension guard, real `data/**`, real home Pi trust, customer content, installed runtime, signing/notarization, process kill, power loss, disk full, production rollback and public mirror were not used.
-
-## LA-122 — Point the writer-lease guard at canonical Electron source
-
-- status: completed
-- dependencies: LA-121
-- baseCommit: `e8144775`
-- resultCommit: `SELF`
-- filesChanged: `tests/data_root_writer_lease.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,EXECUTION_LEDGER,G5_PRODUCT_REPORT,IMPLEMENTATION_QUEUE,MIGRATION_MATRIX,RISK_REGISTER}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: the existing full-root failure characterizes the obsolete deleted `main.mjs` source path; the guard now reads canonical `main.ts` and retains the exact `requestSingleInstanceLock` assertion
-- commandsExecuted: direct full `npm test` ran more than 200 root tests (with only the declared missing Managed E5 pack skip) then failed because `data_root_writer_lease` tried to read deleted `apps/desktop/src/main.mjs`. Focused `npm exec --no -- tsx tests/data_root_writer_lease.test.ts` passed after the one-path test update. Root roadmap subset, root/Desktop typechecks, roadmap validation, release check and `git diff --check` passed. A fresh direct full root/security/recovery/Desktop/macOS G5 execution remains pending and is not inferred from focused evidence.
-- migration: none. This is a test-contract migration only: LA-039 previously removed `main.mjs` and established `main.ts` as the single Electron entry; the writer-lease source guard now observes that canonical entry. Data-root lease acquisition, server startup ordering, Electron runtime, source entry ownership, data writers, schemas and `data/**` remain unchanged; no real data, customer content, credential, public mirror or signing material was read or changed.
-- rollback: revert the test guard and documentation together; retain the G5 block. Do not restore a `main.mjs` compatibility entry, create a dual entrypoint, weaken the single-instance assertion or bypass the full root recheck.
-- deletedEntries: none; no source, data, lease or public object was deleted or changed by this test-only repair.
-- remainingRisks: the fourth G5 root execution failed after broad progress and all full root/security/recovery/Desktop/macOS evidence must be freshly rerun. Installed Electron, process kill/power loss/disk full, real data and public mirror remain unverified.
-- unverifiedRealMachineItems: full root-suite behavior after the canonical-entry guard, real `data/**`, customer content, installed runtime, signing/notarization, process kill, power loss, disk full, production rollback and public mirror were not used.
-
-## LA-044 — Composer actions follow only the canonical active Run
-
-- status: completed
-- dependencies: LA-042, LA-043
-- baseCommit: `8376687f`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/{composer/composer-model.ts,composer/index.ts,composer/composer-model.test.ts,conversation/TaskConversation.tsx}`; `apps/desktop/tests/codex-ui-contract.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: RED characterization for an absent or dangling `activeRunId` with historical stoppable Runs; Desktop UI contract that forbids the historical `findLast(stopAvailable)` and last-Run fallbacks
-- commandsExecuted: focused `composer-model` test first failed because `selectCanonicalActiveRun` did not exist, then passed after implementation. The first complete Desktop suite passed (161 Node plus 3 Electron activity tests), while Desktop typecheck correctly failed because the new selector was not exported through the Composer barrel; adding that sole export fixed the integration. Focused UI-contract test passed; complete Desktop suite then passed again (161+3). Root and Desktop typecheck passed; `git diff --check` passed.
-- migration: none. Composer action state now resolves only `snapshot.activeRunId` against the server-projected Run list. A missing or dangling pointer yields no active Run, so the Renderer cannot locally resurrect historical `stopAvailable` metadata or the most recent Run as stop/steer/follow-up authority. Queue mutations and Decision state remain server-owned; local request in-flight indicators are not Run, queue, or Decision facts. No schema, storage, runtime writer, data root, or public mirror changed.
-- rollback: revert the selector, consumer, tests, and documentation together. Do not restore `findLast(stopAvailable)`, latest-Run fallback, local queue snapshot, hidden Run, or any other Renderer lifecycle authority.
-- deletedEntries: the local historical active-Run fallback only; no persistent data or public object was deleted.
-- remainingRisks: this proves source/contract behavior, not a live reconnect race or installed-app accessibility path. The UI Gate still requires real keyboard, 200% zoom, VoiceOver, long-thread, and screenshot evidence.
-- unverifiedRealMachineItems: live server reload while an active Run transitions, real keyboard and assistive-technology operation, installed Electron, provider execution, customer data, signing/notarization, and public mirror were not used.
-
-## LA-045 — Model resumable Team work as a canonical recovery timeline item
-
-- status: completed
-- dependencies: LA-011, LA-042
-- baseCommit: `db8d2416`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/conversation/{conversation-model.ts,conversation-model.test.ts,ConversationItems.tsx}`; `docs/roadmap/{CURRENT_REALITY_REPORT,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: RED canonical snapshot with a stopped, `resumeAvailable` Team Run requires exactly one `recovery` item and no duplicate terminal `run` status item
-- commandsExecuted: focused conversation-model test first failed with missing recovery item, then passed. Complete Desktop test passed (162 Node plus 3 Electron activity tests); Desktop typecheck, root typecheck, ledger JSON parse, roadmap test/validation and `git diff --check` passed.
-- migration: none. Only a server-projected Team Run with `resumeAvailable` is emitted as `ConversationItem.kind = recovery`; it keeps the existing canonical timestamp/order and renders through the existing server-owned resume action. Other terminal Runs retain their existing status item. No Task, Run, Activity, Artifact, Decision, queue, persistence, or runtime writer changed.
-- rollback: revert the recovery variant, renderer adapter, test and docs together; retain the existing generic Run status row. Do not synthesize recovery from local errors or restore a second recovery state machine.
-- deletedEntries: the generic terminal-Run representation for a resumable Team Run only; no persistent entry deleted.
-- remainingRisks: source/contract coverage does not prove real long-thread virtualization, installed-app keyboard discovery, or VoiceOver.
-- unverifiedRealMachineItems: real Team recovery after restart, long-thread/10k-item behavior, installed Electron, accessibility, provider execution, customer data, signing/notarization and public mirror.
-
-## LA-046 — Bind pending Decisions to the server contract
-
-- status: completed
-- dependencies: LA-014, LA-038, LA-042
-- baseCommit: `0838dae7`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/task_workspace_contract.ts`; `packages/cat-server/src/{task_decision_binding,task_decision_executor,task_decision_interactions,task_extension_interactions,task_pipeline_projection}.ts`; `packages/cat-server/src/routes/workflow_routes.ts`; `apps/desktop/src/renderer/conversation/{DecisionInteraction.tsx,conversation-items.css}`; `apps/desktop/src/renderer/inspector/ContextInspector.tsx`; `tests/{task_decision_binding,task_workspace_routes}.test.ts`; `apps/desktop/tests/codex-ui-contract.test.ts`; roadmap facts and ledgers
-- testsAdded: RED server binding contract for missing/schema/content/plan/expiry mismatches; existing Task decision route fixtures now carry server bindings; Desktop contract proves cards show only server-issued facts without `Date`-based inference
-- commandsExecuted: focused binding, Task-route and extension-interaction tests; Desktop UI contract; full root and Desktop suites; root/Desktop typecheck; roadmap test/validation; diff check
-- migration: no persistent data migration. `TaskDecision.decisionBinding` is an optional DTO field solely for snapshot readability, but missing legacy binding is non-executable. The sole creator/validator is `cat-server/task_decision_binding.ts`; schema v1 binds canonical Decision content, effective Run plan hash and an expiry. Temporary server policy is a 30-day lifetime from `createdAt`; any future tuning requires a versioned server contract, never Renderer derivation. Every current producer writes once, and execution/group interaction routes reject mismatch or expiry with 409; cancellation can clear stale requests.
-- rollback: revert the binding creation, validation, read-only UI, contracts and docs together. Do not restore execution of unbound legacy decisions, derive facts in the Renderer, or introduce a second client writer.
-- deletedEntries: obsolete assumption that an unbound pending Decision can execute; no persistent record deleted
-- remainingRisks: synthetic tests do not prove installed Electron, real clock skew/timezone behavior, long-lived production snapshots or customer workflows. Unknown Decision kinds remain non-executable unless an existing server contract authorizes them.
-- unverifiedRealMachineItems: installed Electron decision flow, real server clock/expiry behavior and real customer workflow evidence; `data/**` was not read
-
-## LA-047 — Keep 10k-row CAT editing independent from whole-batch status aggregation
-
-- status: completed
-- dependencies: LA-025, LA-034, LA-042
-- baseCommit: `270f50c6`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/cat/CatWorkspace.tsx`; `apps/desktop/tests/{cat-editor,codex-ui-contract}.test.ts`; `docs/roadmap/{CURRENT_REALITY_REPORT,EXECUTION_LEDGER}.md`; `docs/roadmap/execution-ledger.json`
-- testsAdded: RED CAT-status aggregation contract proving a selected unsaved draft buffer cannot re-trigger whole-batch aggregation; 10k filter/navigation nearest-rank p95 under 50ms; CAT keyboard, VoiceOver grid, 200%-zoom reflow, and QA/Delivery discoverability contracts
-- commandsExecuted: focused `node --test tests/cat-editor.test.ts` first failed because `batchStats` depended on `draft.buffer`, then passed after the canonical-only dependency change; focused `node --test tests/codex-ui-contract.test.ts` passed; complete `npm test` in `apps/desktop` passed (164 Node tests plus 3 Electron activity tests); Desktop and root `npm run typecheck` passed.
-- migration: none. The full-batch status aggregate now depends only on the selected segment's canonical target/status, so keystrokes retain the selected-row counter/editor path without rescanning 10k batch rows. Existing server CAS (`expectedSegmentUpdatedAt`), 409 conflict UX, locked-row refusal, server-owned tag contracts, virtualizer, QA and Delivery server routes remain unchanged. No data format, writer, Task projection, storage authority, `data/**`, customer content, public mirror, credential, or signing material was read or changed.
-- rollback: revert the CAT dependency change, its characterization/performance/a11y contracts, and documentation together. Do not replace canonical CAS/conflict/lock/tag/QA/Delivery behavior with local caches, last-write-wins, inferred tags, or a dual writer.
-- deletedEntries: the unnecessary unsaved-draft dependency of the whole-batch status aggregate only; no persistent entry was deleted.
-- remainingRisks: the p95 evidence is a synthetic Node model benchmark, while keyboard/VoiceOver/zoom evidence is a source/DOM contract. Installed-Electron rendering, real 10k source distributions, screen-reader operation, long editing sessions, GPU/memory behavior, and real project QA/Delivery operations remain unproven.
-- unverifiedRealMachineItems: real 10k-row Batch, 200% zoom and VoiceOver in an installed Electron app; live server conflict under load; provider execution; customer data; signing/notarization; public mirror.
-
-## LA-048 — Project canonical Document Router facts and correction artifacts
-
-- status: completed
-- dependencies: LA-029, LA-030, LA-042
-- baseCommit: `814dcd3c`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/{application/document_evidence_application_port.ts,routes/document_capability_routes.ts,strict_api_contract.ts}`; `apps/desktop/src/renderer/{data/workspace-client.ts,inspector/{ContextInspector.tsx,document-artifact-model.ts,inspector.css}}`; focused route/Inspector tests; roadmap reality/ledger records.
-- testsAdded: RED correction-route test proving a correction is a new parent-linked Artifact whose Router block has `userCorrected:true` while the original stays unchanged; RED Desktop projection test proving the Inspector displays only canonical Router page/backend/reason facts and offers only textual blocks as correction targets.
-- commandsExecuted: focused synthetic route and Desktop Inspector tests failed before their implementations and passed after; the first full root suite found the missing strict external `blockId` vocabulary entry, which was added; final `npm test` passed 242 discovered root tests (managed E5 declared skip), `npm --prefix apps/desktop test` passed 166 Node plus 3 Electron activity tests, root/Desktop typecheck and `git diff --check` passed.
-- migration: existing document Artifacts remain readable. A correction is an append-only server-owned Artifact/Activity on the existing canonical Run: server hydrates artifact/scope/thread/source and validates the existing Router text block; the client only supplies task/artifact/block IDs and replacement text. It copies immutable Router provenance, marks exactly the replacement block `userCorrected:true`, attaches parent/source digest/locator/before/after facts, and never rewrites the source or original Artifact. The Inspector hides internal artifact paths, projects only server Router facts, and makes canonical blocked pages explicitly unavailable. No capability fallback, second writer, data migration, `data/**`, customer content, public mirror, credential, signing material or managed pack was read or changed.
-- rollback: revert this Ticket as one unit. Do not retain a renderer-only correction form, client-authored scope/backend/path, an in-place original Artifact edit, a source-file write, or system/cloud fallback after rollback.
-- deletedEntries: Inspector's generic raw Router/internal artifact-path dump for document evidence; job facts now have a typed server projection.
-- remainingRisks: optional backends remain unqualified; correction persistence is synthetic-only and does not prove package/UI/VoiceOver or real document scale.
-- unverifiedRealMachineItems: installed managed document capabilities, real Document jobs/provenance/correction, package UI, VoiceOver, customer documents, signing/notarization and public mirror.
-
-## LA-049 — Consolidate canonical top-level navigation
-
-- status: completed
-- dependencies: LA-046, LA-047, LA-048
-- baseCommit: `6074a1db`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/tests/codex-ui-contract.test.ts`; roadmap reality/ledger records.
-- testsAdded: characterization that the maintained shell keeps Chats, Projects (localized “项目”), Library and Settings reachable; Library remains scoped to canonical Task/Project selection, Packages live in Settings, the native Settings command aliases that surface, and Stable does not restore Eval or Maintainer execution navigation.
-- commandsExecuted: focused Desktop navigation contract first exposed that the localized Project destination is labelled “项目”, then passed with that canonical label; `npm --prefix apps/desktop test` passed 167 Node plus 3 Electron activity tests; `npm run mac:test` passed the same 167+3 suite; root/Desktop typecheck, roadmap validation/test, ledger JSON parse and `git diff --check` passed.
-- migration: none. The existing server-backed scope/selection, native command aliases, 480px sidebar dismissal and Settings return-to-prior-scope path are already the one maintained navigation implementation. No URL/deep-link router exists or is introduced, no data/route/writer moves, dual UI state, `data/**`, customer content, public mirror, credential, signing material or managed runtime changed.
-- rollback: revert the characterization and records together. Do not create a second Renderer navigation state, revive a production Eval/Maintainer entry, or move Packages back to a duplicate top-level surface.
-- deletedEntries: none; retained Eval/Maintainer implementation is owned by the later LA-050 migration/deletion Epic, not this navigation Ticket.
-- remainingRisks: installed Electron discoverability, 480px/200%/VoiceOver behavior and retained Eval/Maintainer migration to CI/tools remain unproven.
-- unverifiedRealMachineItems: installed-app navigation, keyboard/VoiceOver discoverability, screenshot matrix, remote CI and public mirror.
-
-## LA-050 — Product-exit Epic child-ticket plan
-
-- status: children_planned
-- dependencies: LA-017, LA-049, LA-060, LA-061
-- baseCommit: `3e516cb3`
-- resultCommit: `SELF`
-- childTickets: LA-129 Maintainer developer/CI parity; LA-130 Private Eval harness parity; LA-131 shared historical export; LA-132 Maintainer production consumer removal; LA-133 Private Eval production consumer removal.
-- scope: planning only. Each child has one writer/surface invariant, explicit dependency, migration limit, test command family and rollback; the Epic itself remains non-executable.
-- migration: none. Stable Maintainer/Eval routes remain disabled for mutation; no tool, harness, export, route, UI, history, `data/**`, customer content, public mirror, credential, signing material or managed runtime changed by this planning record.
-- rollback: revert the child-ticket definition and risk/deletion coverage together; do not execute the Epic directly or reopen Stable mutation as a substitute for a child implementation.
-- deletedEntries: none.
-- remainingRisks: R-023 remains until all five child Tickets complete and the Epic is explicitly closed; installed/real history and external CI behavior are unverified.
-
-## LA-052 — Make npm the sole workspace, lockfile, and install authority
-
-- status: completed
-- dependencies: LA-000
-- baseCommit: `e1a449b8`
-- resultCommit: `SELF`
-- filesChanged: root `package.json`/`package-lock.json`; deleted `pnpm-workspace.yaml` and `apps/desktop/package-lock.json`; CI cache/install; root desktop scripts and local updater; installation docs; deletion/current-reality records; workspace and updater tests.
-- testsAdded: RED `tests/npm_workspace.test.ts` contract for root `packages/*` plus `apps/*`, root lock workspace link, no desktop/pnpm workspace lock, retained Native Capability closure, root workspace scripts, and one CI lock/install path; updater contract that rejects a second desktop `npm install`.
-- commandsExecuted: `npm exec --no -- tsx tests/npm_workspace.test.ts` first failed because root workspaces omitted `apps/*`, then passed; `node --test apps/desktop/tests/local-update.test.mjs` first failed because the updater still separately installed desktop, then passed; `npm ci --offline --ignore-scripts` correctly failed only because the local cache lacked lock-pinned `postcss-8.5.20`; approved `npm ci --ignore-scripts` then completed clean installation (443 packages); root typecheck; `npm run mac:test` (164 Desktop Node plus 3 isolated Electron activity tests); `npm run mac:build`; fresh `npm test` (232 root tests); security, recovery, release, roadmap test/validation, and diff checks passed; deletion-before/after desktop direct-lock hash parity passed for 14 dependencies (`2e8faf1ece4f5638534d58fc7cc4db7c88ddcec49be2afcaa5bcef0c7392d9a5`); `rc:status` was not run because it unconditionally writes forbidden `data/reports`.
-- migration: root workspaces now cover `packages/*` and `apps/*`; the root lock contains the desktop workspace payload/link and is the sole product workspace install authority. CI and the local updater no longer invoke an independent desktop install. The desktop Native Capability `package-lock.json` and `.pi/npm` remain isolated non-workspace source closures. No runtime/data schema, authority/writer, customer content, `data/**`, public mirror, credential, signing material, or managed runtime was read or changed.
-- rollback: revert this Ticket as one unit to restore the exact prior manifests, locks, CI, updater, tests and docs. Do not retain a second desktop installer or lockfile alongside the root workspace after a revert-forward; select one canonical install authority.
-- deletedEntries: `pnpm-workspace.yaml`; `apps/desktop/package-lock.json`; CI cache/independent `npm --prefix apps/desktop ci`; local updater's second desktop install.
-- remainingRisks: the clean install reported 12 npm audit findings (8 moderate, 4 high), intentionally not remediated by this lock-authority Ticket; direct dependency hash parity and packaging-contract tests do not prove byte-for-byte signed/notarized artifacts; `rc:status` remains forbidden under the no-`data/**` campaign rule.
-- unverifiedRealMachineItems: signed/notarized/installed package artifact parity, update/rollback on a managed installation, external developer pnpm habits, provider execution, customer data, and public mirror.
-
-## LA-054 — Split and pin CI without lowering the macOS gate
-
-- status: completed_for_local_campaign
-- dependencies: LA-053
-- baseCommit: `b40e13fc`
-- resultCommit: `SELF`
-- filesChanged: `.github/workflows/{ci,mac-beta,mac-stable-release}.yml`; `tests/ci_workflow.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED workflow contract for the six required jobs, suite commands, root test-inventory artifact, SHA-only Actions, no `rc:status`, and temporary full `legacy-verify` rollback job.
-- commandsExecuted: `npm exec --no -- tsx tests/ci_workflow.test.ts` first failed because the monolithic `verify` job had no `validate` job, then passed after the split; it failed a second time because the old job had been removed before remote parity existed, then passed with `legacy-verify`; Ruby YAML parse passed for all three workflows (with a host PATH permission warning only); local unit/security/recovery/roadmap suite commands, root typecheck, mac build/test, release check, fresh full `npm test` (233 tests), `git diff --check`, and static no-floating-action/no-`rc:status` guards passed.
-- migration: CI now has separately visible validate/unit/security/recovery/macos/release results, each with a clean root install. `validate` uploads only the discovered test-path inventory; `macos` retains production desktop build and mac test. `legacy-verify` retains the prior full local-equivalent gate without the unsafe `rc:status` write until remote suite parity is observed. Checkout, setup-node and artifact actions in all workflows use full verified commit SHA pins. No product runtime, schema, `data/**`, customer content, public mirror, credentials, signing material, release, or managed runtime changed.
-- rollback: retain or revert to `legacy-verify` if any remote split job fails; remove that temporary job only in a separately recorded deletion after the private candidate branch has all six remote jobs green. Do not re-add `rc:status`, a floating Action tag, or an unpinned dependency as a fallback.
-- deletedEntries: monolithic primary `verify` job; floating `actions/checkout@v4` and `actions/setup-node@v4` references in release workflows; unsafe CI `rc:status` execution.
-- remainingRisks: remote GitHub Actions execution, artifact retention/download behavior, hosted-macOS dependency setup and the split-suite classifier have not been observed on this candidate branch; the temporary legacy job is intentionally duplicated test execution, not a second product writer, and must be removed after remote parity evidence.
-- unverifiedRealMachineItems: remote CI, artifact download, signed/notarized package, installed-app/update/rollback, provider execution, customer data and public mirror.
-
-## LA-055 — Composition-root Epic decomposition and closure
-
-- status: completed; Epic was never directly implemented
-- dependencies: LA-008, LA-010, LA-014, LA-023, LA-038
-- baseCommit: `a46b2d4c`
-- resultCommit: `SELF`
-- evidence: the original 5,217-line `server.ts` mixed HTTP, filesystem, Pi/runtime, domain persistence, worker/coordinator and route modules. LA-123 froze the five port boundaries; LA-124 removed its route-local direct FS/Pi debt; LA-125 moved Project Task Run orchestration into one injected coordinator; LA-126 added the CI AST graph; LA-127 removed its only Settings Pi-route exception. The final graph has no route direct FS/Pi edge except the exact LA-050-owned Maintainer filesystem deletion candidate.
-- childTickets: LA-123 application-port inventory/contract (`113527ce`); LA-124 route transport-only migration (`ffc924c2`); LA-125 composition (`c91af8b2`); LA-126 import-boundary guard (`595991df`); LA-127 Settings permission edge (`a60504f4`).
-- commandsExecuted: child RED/green and specified regressions; final `npm run architecture:check`; authorized no-`data/**` root `npm test` (239 discovered tests); root/Desktop typecheck; `npm run mac:test` (164 Desktop plus 3 isolated Electron activity tests); roadmap validation and diff checks.
-- migration: no schema/data migration, dual writer, second session lifecycle, global service locator or Electron lifecycle was introduced. Existing canonical writers, active Run/worker/lease instances, transport DTOs and CAT gates remain singular. `data/**`, customer content, credentials, signing material, managed runtime, public mirror and release were not read or changed.
-- rollback: revert individual child Tickets in dependency-safe reverse order. Do not restore a route-local duplicate operation, an inline Project Task Run implementation, an unowned broad architecture exception, a global lookup or a second lifecycle/state authority.
-- deletedEntries: route-local FS/Pi operations recorded by LA-124; server-local Project Task Run/compaction helpers recorded by LA-125; LA-127 route-local permission contract helpers and its exact temporary architecture exception.
-- remainingRisks: constraints are synthetic/source/application-boundary evidence. The LA-050 Maintainer filesystem deletion candidate remains; broader server startup/General/Eval composition, remote CI, installed runtime, real providers/packages/documents, accessibility and signing are not proven.
-- unverifiedRealMachineItems: all remote/installed/runtime/provider/customer-data/signing/public-mirror evidence remains unverified.
-
-## LA-123 — Freeze application route-port authority inventory
-
-- status: completed
-- dependencies: LA-008, LA-010, LA-014, LA-023, LA-038
-- baseCommit: `a46b2d4c`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/application_port_inventory.ts`; `tests/application_port_inventory.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED missing-inventory contract; exact five-port IDs; validated-route input/canonical-output/authority fields; every recorded direct FS/Pi route import remains present only as an LA-124-owned debt.
-- commandsExecuted: `npm exec --no -- tsx tests/application_port_inventory.test.ts` first failed with missing module, then passed; root typecheck, roadmap test/validation, root discovery execution, ledger JSON parse and diff check.
-- migration: none. The inventory is non-dispatch metadata used only as a characterization contract; no HTTP route, Task/Run/Package/Document writer, Pi Session, filesystem operation, schema, `data/**`, customer content, public mirror, credential, signing material or managed runtime changed.
-- rollback: revert the inventory, test and records together. Do not replace it with a global service locator, inferred authority, an unowned broad exception, or a route-level compatibility writer.
-- deletedEntries: none.
-- remainingRisks: inventory proves only the listed direct route dependencies; it neither removes them nor proves all business/state decisions have moved. LA-124 must migrate the recorded operations behind typed application ports before a direct-import guard can become a denial.
-- unverifiedRealMachineItems: route behavior under installed runtime/provider/real Package/Document inputs, customer data, signing/notarization, remote CI and public mirror.
-
-## LA-124 — Delegate route-local filesystem and Pi boundaries through application ports
-
-- status: completed
-- dependencies: LA-123
-- baseCommit: `113527ce`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/application/{task_run_application_port,workflow_application_port,package_archive_application_port,document_evidence_application_port}.ts`; four migrated route modules; application-port inventory; route/port regression tests; roadmap reality/ledger records.
-- testsAdded: RED inventory denial for the four recorded FS/Pi imports plus named port delegation; synthetic `.lapkg` archive-port regular-file/symlink characterization; existing Document evidence and Team route regressions now execute their application ports.
-- commandsExecuted: inventory test first failed because LA-123 debt remained; focused route/port suite initially exposed a missing `await` in migrated Team output fallback, then passed after the parity repair; `npm run typecheck`; focused inventory/package/document/Team suite; authorized synthetic-root `npm test` (235 discovered root tests); `npm run roadmap:test`; `npm run roadmap:validate`; ledger JSON parse; `git diff --check`.
-- migration: Task capability policy, Team filesystem/Pi child preparation/activity/output handling, Package local archive inspection, and Document grant/OCR/canonical evidence append now each have one typed application port. Routes retain transport DTO parsing/mapping and call the port; the canonical Task/Run/Package/Document writers and server-owned Team active-Run authority remain the same. No schema, data migration, dual writer, `data/**`, customer content, credential, signing material, public mirror, release, or managed runtime changed.
-- rollback: revert this Ticket as one unit to restore the prior route-local operations. Do not leave an application port and route-local implementation both active, introduce a global service locator, or substitute an allow-all archive/grant/Pi fallback.
-- deletedEntries: route-local Task capability allowlist; route-local Workflow FS/Pi child preparation/output/activity/rollback helpers; route-local `.lapkg` filesystem reader; route-local Document grant/OCR/evidence persistence helpers.
-- remainingRisks: this Ticket denies only LA-123’s recorded direct route FS/Pi debt. Endpoint/domain orchestration is not claimed to be wholly decomposed; LA-125 must isolate composition wiring and LA-126 must make broader import-direction regressions CI-visible. Existing route tests do not prove installed runtime, arbitrary large archives, real Package/Document inputs, Provider calls, or remote CI behavior.
-- unverifiedRealMachineItems: installed Electron/runtime, real Package/Document inputs, provider/Team child execution, remote CI/artifact behavior, customer data, signing/notarization, release and public mirror.
-
-## LA-125 — Move Project Task Run orchestration out of the server composition root
-
-- status: completed
-- dependencies: LA-123, LA-124
-- baseCommit: `ffc924c2`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/application/project_task_run_coordinator.ts`; `packages/cat-server/src/server.ts`; `tests/composition_root_boundary.test.ts`; `tests/cat_worker_cutover.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED composition-root characterization rejecting inline `runAgentStreamingUnlocked` and `compactProjectAgentSession`; worker-cutover characterization now proves the application coordinator creates the CAT worker session, binds the same worker identity, and persists the same execution snapshot.
-- commandsExecuted: composition characterization first failed while `server.ts` still owned the Run implementation; `npm run typecheck`; focused composition/worker/Task-route/projection/queue/stop/worker-boundary suite; authorized no-`data/**` synthetic-root `npm test` (236 discovered root tests); `npm run desktop:test` and `npm run mac:test` (164 Desktop tests plus 3 isolated Electron activity tests plus Desktop typecheck); `npm run roadmap:test`; `npm run roadmap:validate`; JSON parse; `git diff --check`.
-- migration: `ProjectTaskRunCoordinator` now owns Project Task Run state decisions and Pi session business orchestration, including compaction activity. `server.ts` only composes the existing keyed queue, `ActiveAgentRunRegistry`, `TaskMessageQueueCoordinator`, CAT worker supervisor, permission/Team adapters, stores and route runtime adapter. No schema/data migration, dual writer, second session lifecycle, global service locator, Electron behavior, `data/**`, customer content, credential, signing material, public mirror, release or managed runtime changed.
-- rollback: revert this Ticket as one unit to restore the former inline Project Task coordinator. Do not retain an inline and an application Run implementation together, recreate a second worker/registry/queue, or replace injected authority with a global lookup or fallback.
-- deletedEntries: inline `runAgentStreamingUnlocked`, inline Project Task compaction/activity implementation, and its server-local Run helper surface; the old `cat_worker_cutover` server-location assertion.
-- remainingRisks: the composition/worker tests are synthetic and source/application-boundary evidence; `server.ts` still owns broader startup, migration, general/Eval and transport concerns. LA-126 must enforce the complete dependency graph in CI rather than rely on this Ticket's focused guard.
-- unverifiedRealMachineItems: installed Electron/managed runtime, real Provider/Team child/Package/Document execution, remote CI/artifacts, accessibility/VoiceOver, customer data, signing/notarization, release and public mirror.
-
-## LA-126 — Enforce audited architecture import direction in CI
-
-- status: completed
-- dependencies: LA-124, LA-125
-- baseCommit: `c91af8b2`
-- resultCommit: `SELF`
-- filesChanged: `scripts/architecture-import-guard.ts`; root `package.json`; `.github/workflows/ci.yml`; architecture/CI contract tests; implementation queue/risk/deletion coverage; roadmap reality/ledger records.
-- testsAdded: RED missing architecture-guard module; forbidden route-FS fixture; forbidden application-to-route fixture; RED CI assertion that `validate` runs `architecture:check`; exception owner/reason plus queue/deletion-coverage characterization.
-- commandsExecuted: focused architecture/CI tests first failed for missing guard, missing CI command, and missing LA-127 risk mapping respectively; then passed with `npm run architecture:check`; `npm run typecheck`; roadmap contract validation; full synthetic-root and Desktop/mac regressions recorded after the documentation update; `git diff --check`.
-- migration: none. The guard reads source only. CI `validate` now invokes the same local `architecture:check` command. It uses AST import declarations to prohibit application -> route/server and route -> direct FS/Pi edges, while preserving the existing canonical writers, active Run/worker/lease objects, route DTOs and Electron lifecycle. The exact Maintainer FS exception is owned by LA-050 deletion; the exact Settings permission Pi exception is owned by newly registered LA-127 and is machine-checked for queue/deletion coverage. No schema/data migration, dual writer, runtime fallback, `data/**`, customer content, credential, signing material, public mirror, release or managed runtime changed.
-- rollback: revert the script, CI command, tests and exception inventory together. Do not remove the guard, replace an exact exception with a glob/directory allowlist, suppress a violation in test discovery, or retain an ownerless exception.
-- deletedEntries: no production entry. The previously unguarded architecture import edge policy is replaced by the audited graph contract; no behavior or canonical authority was deleted.
-- remainingRisks: two exact temporary edges remain and are visible: `agent_permission_routes.ts -> @linguist-agent/cat-runtime` until LA-127, and the blocked production Maintainer filesystem route until LA-050 removal. The current graph does not yet prove all server startup/General/Eval domain orchestration is decomposed, installed runtime behavior, remote CI or actual production usage.
-- unverifiedRealMachineItems: remote CI execution/artifact behavior, installed Electron/runtime, Provider/Team child/Package/Document inputs, accessibility/VoiceOver, customer data, signing/notarization, release and public mirror.
-
-## LA-128 — Serialize legacy Project quality-ledger appends before the first await
-
-- status: completed
-- dependencies: LA-098
-- baseCommit: `595991df`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/quality_decision_ledger.ts`; `tests/quality_decision_ledger_concurrency.test.ts`; implementation queue/risk/reality/ledger records.
-- testsAdded: the existing full-suite concurrent finding/waiver characterization first failed with `openFindings=1`; a new 32-root concurrent append regression asserts ordered sequence and a resolved finding after each same-Project append race.
-- commandsExecuted: focused original and new ledger concurrency tests; root and Desktop typechecks; architecture graph; authorized no-`data/**` full synthetic-root `npm test` (239 discovered tests); `npm run mac:test` (164 Desktop plus 3 isolated Electron activity tests); roadmap and diff checks recorded after this documentation update. The full suite also contained pending LA-127 source changes, but the two Tickets share no modified runtime module.
-- migration: the legacy per-process queue now becomes visible before `assertCatGovernanceLegacyAllowed()` can yield. Each queued operation then verifies marker authority, reads, validates, hashes and appends in order. SQLite persistence remains the first and sole authority when installed; marker-after-start behavior still rejects the legacy writer. No schema/data migration, dual writer, fallback, route, Electron or cross-process locking claim changed; `data/**`, customer content, credentials, signing material, managed runtime, public mirror and release were not read or changed.
-- rollback: revert the queue-establishment move, regression, and records together. Do not sort events on read, suppress an append error, relax hash/waiver assertions, create a second writer or claim cross-process serialization.
-- deletedEntries: none; the correction removes the asynchronous gap before the existing per-path queue, not a product entry.
-- remainingRisks: cross-process ledger contention, process-kill/power-loss, real historical Project sizes and production rollback remain unproven R-011 work; the pending LA-127 route migration is unrelated and must independently complete its full verification.
-- unverifiedRealMachineItems: remote CI/artifacts, installed Electron/runtime, Provider/Team child/Package/Document inputs, accessibility/VoiceOver, customer data, signing/notarization, release and public mirror.
-
-## LA-127 — Delegate permission contracts through the Settings application port
-
-- status: completed
-- dependencies: LA-126
-- baseCommit: `595991df`; intervening independent repair: `1b8e68b8` (LA-128)
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-server/src/application/settings_permission_application_port.ts`; `agent_permission_routes.ts`; `server.ts`; permission/application-port tests; architecture exception/deletion candidate; roadmap reality/ledger records.
-- testsAdded: RED import of the missing Settings permission port; application behavior for strict custom rules, invalid `full`, locked CAT-domain rejection and built contract; route inventory now rejects the direct Pi runtime import and requires the named Settings port.
-- commandsExecuted: the new application-port test first failed with `ERR_MODULE_NOT_FOUND`, then passed; focused permission/application-port/import-graph suite passed (4 tests); `npm run architecture:check` first hit the local sandbox's `tsx` IPC `EPERM` and then passed in the authorized no-data execution environment; root and Desktop typechecks passed; authorized no-`data/**` full synthetic-root `npm test` passed with 239 discovered tests; `npm run mac:test` passed (164 Desktop plus 3 isolated Electron activity tests); roadmap and diff checks recorded after this documentation update.
-- migration: strict permission patch normalization and contract construction now have one Settings application port. Both global and Project HTTP routes only parse transport input, call that port, then hand its patch to the existing canonical server-owned writer. The pending-decision registry and persistence remain route dependencies; no mode/rule defaults, writer, schema, Pi session, Electron behavior, data migration, dual write or fallback changed. `data/**`, customer content, credentials, signing material, managed runtime, public mirror and release were not read or changed.
-- rollback: revert the Settings port, route delegation, type import, tests, exception removal and records together. Do not retain a route-local normalization copy beside the port, recreate a direct Pi import as a broad exception, or change invalid/unknown input into allow.
-- deletedEntries: route-local permission patch schema/rule validator/contract helper; `agent_permission_routes.ts -> @linguist-agent/cat-runtime` architecture exception; `agent-permission-route-direct-runtime-import` deletion candidate.
-- remainingRisks: the blocked production Maintainer filesystem edge remains until LA-050; import/source contracts do not prove all server startup/General/Eval orchestration, installed runtime behavior, remote CI or production usage.
-- unverifiedRealMachineItems: remote CI/artifacts, installed Electron/runtime, Provider/Team child/Package/Document inputs, accessibility/VoiceOver, customer data, signing/notarization, release and public mirror.
-
-## LA-129 — Move Maintainer candidate build to an explicit developer/CI tool
-
-- status: completed
-- dependencies: LA-017, LA-049, LA-060
-- baseCommit: `3d1c67c2`
-- resultCommit: `SELF`
-- filesChanged: `scripts/maintainer-candidate.ts`; `tests/maintainer_candidate_tool.test.ts`; root `package.json`; roadmap reality/risk/ledger records.
-- testsAdded: RED tool contract (module missing before implementation): preview requires explicit `--repo`/`--target-pi`/`--candidate-root` and rejects unknown/duplicate options; build reads the explicit `--plan` file, rejects a `--plan-hash` mismatch before invoking the core, and hands the exact plan plus approved hash into the existing isolated build without a second preview.
-- commandsExecuted: focused `npm exec --no -- tsx tests/maintainer_candidate_tool.test.ts` (2/2), `tests/maintainer_routes.test.ts` (Stable 403 `maintainer_disabled_in_stable` retained), `tests/maintainer.test.ts`; root and Desktop typechecks; authorized no-`data/**` full synthetic-root `npm test` (243 discovered tests, new tool test discovered and executed); `npm --prefix apps/desktop test` (167 Node plus 3 isolated Electron activity tests); `npm run mac:test`; roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the Maintainer candidate build now runs only through the explicit `maintainer:candidate` developer/CI entry. Preview requires explicit repo/target-pi/candidate-root inputs; build requires an explicit plan file and its exact plan hash, verifies the hash before calling the retained `maintainer.ts` core, and never starts a product Agent, writes the current runtime, or reads real `data/**`. Stable Maintainer routes/UI remain disabled (403); no server route, writer, schema, Electron behavior, candidate data, dual execution path or fallback changed. `data/**`, customer content, credentials, signing material, managed runtime, public mirror and release were not read or changed.
-- rollback: delete the new tool entry, its test and the `maintainer:candidate` script together. Do not let the server execute candidate builds, restore production mutation routes, or infer repo/target/output from ambient state.
-- deletedEntries: none; the retained Maintainer core stays unchanged for LA-131 history export and LA-132 removal.
-- remainingRisks: R-023 stays open until LA-130/131/132/133 complete; the tool contract is synthetic-only and does not prove a real isolated worktree build, remote CI execution, or the production-surface removal.
-- unverifiedRealMachineItems: real developer/CI candidate build on a managed installation, remote CI/artifacts, installed Electron/runtime, customer data, signing/notarization, release and public mirror.
-
-## UI Replication Series Registration (LA-134 through LA-142)
-
-- status: children_planned
-- dependencies: LA-042, LA-043
-- baseCommit: `d3f01a9d`
-- resultCommit: `SELF`
-- authorization: on 2026-07-24 the user explicitly directed a bold frontend replication against `docs/ui/codex-ui-spec-full.md`, confirmed the document is acceptable for use inside this private repository, and confirmed it will be removed by the existing public-mirror sanitization before any public push. Recorded in `IMPLEMENTATION_QUEUE.md` §10.5 and `RISK_REGISTER.md` R-032; `docs/ui/LA_UI_BEHAVIOR_SPEC.md` remains the only public UI behavior contract; backend truth, CAT hard rails and permission policy still outrank the visual spec; no brand assets, logos, proprietary source or full internal copy may be replicated; the `CODEX_UI_CONTRACT.md` stack constraint (no Tailwind/Framer Motion/Radix migration) remains in force.
-- childTickets: LA-134 design-token single source; LA-135 unified 46px title bar and shell chrome; LA-136 sidebar and command palette; LA-137 composer chrome and single composer assembly; LA-138 queued-message tray; LA-139 thread feed anatomy; LA-140 decision/plan/tool cards; LA-141 power slider completion; LA-142 motion library.
-- gapEvidence: renderer inventory 2026-07-24 — title-bar 28px/46px mismatch, duplicated dark token block, duplicated composer assembly (BatchReady vs TaskConversation), Workspace fallback toolbar, double `product-workspace.css` import, no plan/tool/auto-review semantic cards, minimal motion set, no superellipse radius engine.
-- migration: none. This planning record changes no runtime, route, writer, schema, Electron behavior, `data/**`, customer content, credential, signing material, public mirror or managed runtime.
-- rollback: revert the queue/risk/gap-matrix registration together; do not execute the series as one bulk PR or weaken the per-ticket RED-first rule.
-- deletedEntries: none.
-- remainingRisks: R-032 stays open until all nine child tickets complete; visual evidence remains source/DOM contract until the LA-051 screenshot matrix and real-machine P3 run.
-- unverifiedRealMachineItems: installed Electron visuals, real screenshot matrix, VoiceOver, 10k rows, long thread, signing/notarization, public mirror.
-
-## LA-134 — Complete the design-token layer as the single source
-
-- status: completed
-- dependencies: LA-042, LA-043
-- baseCommit: `96ee5cd5`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/styles/tokens.css`; `apps/desktop/src/renderer/theme-choice.ts`; `apps/desktop/tests/design-tokens.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `design-tokens.test.ts` — dark declarations single-sourced (exactly one `:root[data-theme="dark"]`, no `prefers-color-scheme` duplicate, theme-choice resolves and follows OS changes); superellipse engine (`@supports` scale 1.25 + shape, computed radii, pill); semantic button four-state fills for primary/secondary/tertiary with dark primary text evidence; spec elevations, icon scale, shell metrics (46/36/40 toolbar, sidebar clamp, nav row 29px, settings row 64px, composer 28px/22px), container scale, z tiers; canonical-token guard. All five failed before implementation (one regex was then corrected to the optional-call matchMedia syntax) and passed after.
-- commandsExecuted: focused `node --test tests/design-tokens.test.ts` RED then green; `tests/codex-ui-contract.test.ts` regression (12/12); root and Desktop typechecks; full `npm --prefix apps/desktop test` (172 Node plus 3 isolated Electron activity tests); diff check.
-- migration: `tokens.css` keeps every existing `--la-*` name and value while adding the semantic button/elevation/icon/shell/container/z vocabulary and converting radii to the scaled engine; the duplicated `@media (prefers-color-scheme: dark)` block is deleted, and `theme-choice.ts` now always resolves the effective theme (system via `matchMedia`, with an OS-change listener) into `data-theme`, so dark declarations exist exactly once. The spec's dark `--color-background-button-primary: gray-1000` row conflicts with its own send-button evidence (foreground fill + near-black text); LA resolved primary toward the component evidence in both themes. No component restyle, runtime, route, writer, schema, Electron behavior, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the token completion, theme resolution, test and records together. Do not restore the duplicated dark block, a second palette, or per-component hard-coded radii scales.
-- deletedEntries: duplicated `@media (prefers-color-scheme: dark)` token block (~65 lines).
-- remainingRisks: R-032 stays open for LA-135 through LA-142; superellipse rendering depends on engine support and is source-contract evidence only until the LA-051 screenshot matrix; 1.25× radii on supporting engines is an intentional spec-faithful visual change not yet screenshot-verified.
-- unverifiedRealMachineItems: installed Electron light/dark rendering, superellipse engine behavior, real screenshot matrix, VoiceOver, signing/notarization, public mirror.
-
-## LA-135 — Unify the 46px title bar and shell chrome
-
-- status: completed
-- dependencies: LA-134
-- baseCommit: `637e75dc`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/{main.tsx,styles.css,styles/tokens.css}`; `apps/desktop/src/renderer/shell/product-workspace.css`; `apps/desktop/src/renderer/workspace/{Workspace.tsx,workspace.css}`; `apps/desktop/tests/shell-chrome.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `shell-chrome.test.ts` — single draggable 46px title bar with tokenized height and traffic-light inset (28px strip absent from root and stylesheet, drag/no-drag regions intact, `--la-safe-header-left` drives the show-sidebar button); single `product-workspace.css` import site; Workspace fallback toolbar absent with `renderToolbar` required. All three failed before implementation and passed after.
-- commandsExecuted: focused `node --test tests/shell-chrome.test.ts` RED then green; `tests/codex-ui-contract.test.ts` regression (12/12); Desktop typecheck; full `npm --prefix apps/desktop test` (175 Node plus 3 isolated Electron activity tests); `npm run mac:test`; roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the existing 46px `.product-toolbar` is now the only draggable title bar (its height consumes `--la-height-toolbar`; interactive chrome stays no-drag); the redundant 28px `.desktop-drag-region` element and rule are deleted; the traffic-light inset moves from a hard-coded 74px to the `--la-safe-header-left: 78px` token (x:16 + ~54px buttons + breathing room); the dead `.workspace-toolbar` fallback (sole consumer always passed `renderToolbar`) and its styles are deleted and `renderToolbar` is now a required shell input; `product-workspace.css` is imported once by `ProductWorkspace.tsx` instead of both globally and per-component. Drag semantics, window options security parameters, sidebar chrome drag row, and all toolbar behaviors unchanged. No runtime, route, writer, schema, Electron security option, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the chrome merge, required toolbar input, single import, token inset and records together. Do not restore a second drag strip, a duplicate toolbar, or a hard-coded traffic-light margin.
-- deletedEntries: `.desktop-drag-region` element and CSS rule; `.workspace-toolbar` fallback markup and styles; global `product-workspace.css` import in `styles.css`.
-- remainingRisks: R-032 stays open for LA-136 through LA-142; drag-region and safe-inset behavior are source-contract evidence until installed-app and screenshot verification.
-- unverifiedRealMachineItems: installed Electron dragging/traffic-light interplay at all window sizes and zoom, real screenshot matrix, VoiceOver, signing/notarization, public mirror.
-
-## LA-136 — Replicate the sidebar and command palette anatomy
-
-- status: completed
-- dependencies: LA-134
-- baseCommit: `90532de1`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/workspace/workspace.css`; `apps/desktop/src/renderer/command/{CommandPalette.tsx,command-model.ts,command-palette.css}`; `apps/desktop/tests/sidebar-palette.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `sidebar-palette.test.ts` — shared sidebar width token + 72px footer + collapsed entrance offset; cmdk dialog anatomy (520px cap, takeover radius, 440px/90vh-64px list, group-heading style); typed groups with stable flat indices (`groupCommandResults` export, heading render, flat `command-result-${index}` ids, unchanged `aria-activedescendant`). All three failed before implementation and passed after.
-- commandsExecuted: focused `node --test tests/sidebar-palette.test.ts` RED then green; `tests/{codex-ui-contract,command-palette,workspace-sidebar}.test.ts` regressions (23 tests); Desktop typecheck; full `npm --prefix apps/desktop test` (178 Node plus 3 isolated Electron activity tests); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: sidebar width consolidates to the shared `--la-sidebar-width` clamp token and the footer reaches the spec 72px height; the command palette adopts the cmdk dialog anatomy (520px cap, 16px-base radius, 440px list with viewport headroom, hidden scrollbar, contained overscroll) and now renders results as typed groups （命令→Chat→项目→Batch→Task) via a new pure `groupCommandResults` helper while keeping flat option indices for `aria-activedescendant`. LA's richer two-line result rows are deliberately retained over the spec's single-line 24px rows; pin/hover is a persisted-preference feature intentionally not replicated (attention buckets cover ordering); the collapsed-sidebar translateX(-8px) entrance and mobile overlay remain. Navigation state stays canonical-scope-backed; no new frontend state machine, runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the token consolidation, palette anatomy, grouping and records together. Do not regress result rows to single-line, introduce renderer-owned pin state, or duplicate the width clamp outside the token.
-- deletedEntries: local `--workspace-sidebar-width` literal clamp (now the shared token); 640px/600px dialog widths; 448px list cap.
-- remainingRisks: R-032 stays open for LA-137 through LA-142; grouped palette interaction and sidebar metrics are source-contract evidence until installed-app and screenshot verification.
-- unverifiedRealMachineItems: installed Electron palette grouping/keyboard flow, real screenshot matrix, VoiceOver group semantics, signing/notarization, public mirror.
-
-## LA-137 — Replicate composer chrome and unify the composer assembly
-
-- status: completed
-- dependencies: LA-134
-- baseCommit: `40ee4051`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/composer/{AgentComposer.tsx,composer.css,composer-workbench.tsx,index.ts}`; `apps/desktop/src/renderer/workspace/Workspace.tsx`; `apps/desktop/src/renderer/conversation/TaskConversation.tsx`; `apps/desktop/tests/composer-chrome.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `composer-chrome.test.ts` — surface shadow is the elevation token with backdrop blur and squircle retained; slash menu consumes the radius token; attachment area keeps spec 8px/6px padding and 12px chips; placeholder pseudo-element mechanism (label `data-placeholder`, `:placeholder-shown` `::after` absolute/nowrap/ellipsis/0.5/no-pointer, native placeholder transparent); single asset/model control assembly shared by BatchReady and TaskConversation. All three failed before implementation (placeholder assertions were then rewritten to per-declaration block matching) and passed after.
-- commandsExecuted: focused `node --test tests/composer-chrome.test.ts` RED then green; `tests/{codex-ui-contract,task-composer}.test.ts` regressions; Desktop typecheck; full `npm --prefix apps/desktop test` (181 Node plus 3 isolated Electron activity tests); `npm run mac:test`; roadmap validation/test and diff checks recorded after this documentation update.
-- migration: composer surface shadow moves to `--la-elevation-prominent` (LA's stronger focus-within state, backdrop blur and squircle engine retained); slash menu radius consumes `--la-radius-takeover`; attachment area adopts the spec 8px/6px padding and the 12px composer-radius-minus-8 chip geometry (replacing pills); the placeholder now renders through the spec pseudo-element mechanism with the native placeholder kept accessible but visually transparent across single-line and multiline layouts. The duplicated composer assembly is unified in `composer/composer-workbench.tsx` (`ComposerAssetControls`/`ComposerModelControls`); send/stop/create semantics stay with each assembly. Drag-to-drop files and blocked/inert composer states are not existing LA features and were not faked. Canonical Run/queue state sources, send/queue/steer semantics, runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime unchanged.
-- rollback: revert the chrome token moves, placeholder mechanism, assembly unification and records together. Do not restore per-assembly disclosure wiring copies or a second placeholder mechanism.
-- deletedEntries: hand-wired `ComposerAddDisclosure` blocks in BatchReady and TaskConversation; hand-wired `ContextUsageDisclosure`/`ModelDisclosure` pairs; 999px attachment pill radius; custom three-layer surface shadow (now the token); native-only placeholder rendering.
-- remainingRisks: R-032 stays open for LA-138 through LA-142; placeholder pseudo-element interaction with IME composition and long CJK placeholders is source-contract evidence until installed-app verification.
-- unverifiedRealMachineItems: installed Electron composer rendering at all layouts/zooms/themes, real screenshot matrix, VoiceOver placeholder announcement, signing/notarization, public mirror.
-
-## LA-138 — Complete the queued-message tray row motion and editing state
-
-- status: completed
-- dependencies: LA-137
-- baseCommit: `528ef0f5`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/composer/{QueuedMessageList.tsx,composer.css}`; `apps/desktop/tests/queued-tray.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `queued-tray.test.ts` — `queued-row-enter` keyframes (opacity + translateY cue on the micro duration token, applied to rows); `data-editing` row state with handle/actions dimmed to 0.6 and non-interactive while the editor stays usable; actions group carries the spec `Queued message actions` label. All three failed before implementation and passed after.
-- commandsExecuted: focused `node --test tests/queued-tray.test.ts` RED then green; `tests/codex-ui-contract.test.ts` regression (12/12); Desktop typecheck; full `npm --prefix apps/desktop test` (184 Node plus 3 isolated Electron activity tests); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: queued rows now enter with the spec 0.18s-class opacity/spatial transition (measured-height wrappers deliberately replaced by a translate cue; reduced motion is handled by the global rule); the editing row exposes `data-editing` and dims its handle/actions to 0.6 with pointer input removed (the dim rules sit after the hover rules so hover cannot resurrect the actions); the actions group is labelled. The existing tray contract stays intact: 30dvh cap, 1px rhythm, hover-revealed handle/actions, Retry/Steer/Edit/Delete/Pause/Resume, paused remedy copy, interrupted/delivery-failed reasons, the alertdialog clear confirmation, and the server-owned queue as the only truth. No runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the row animation, editing state, action label and records together. Do not introduce per-row measured-height wrappers or renderer-owned queue state.
-- deletedEntries: none; the tray was already functionally complete and this ticket added the missing motion/editing/label layer.
-- remainingRisks: R-032 stays open for LA-139 through LA-142; row animation timing and editing dim are source-contract evidence until installed-app verification.
-- unverifiedRealMachineItems: installed Electron queue tray animation/editing, real screenshot matrix, VoiceOver group announcement, signing/notarization, public mirror.
-
-## LA-139 — Apply the spec density rules to the thread feed
-
-- status: completed
-- dependencies: LA-134
-- baseCommit: `8656ee13`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/conversation/{ConversationItems.tsx,conversation-items.css}`; `apps/desktop/tests/thread-anatomy.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `thread-anatomy.test.ts` — conversation timestamps (activity/document/process/artifact `<time>`) default to `opacity: 0` and reveal on hover/focus-within while run-boundary status stays visible; the user bubble carries a hover/focus-revealed copy action with the spec `Copy message`/`Copied` aria pair and a clipboard write. Both failed before implementation and passed after.
-- commandsExecuted: focused `node --test tests/thread-anatomy.test.ts` RED then green; `tests/codex-ui-contract.test.ts` regression (12/12); Desktop typecheck; full `npm --prefix apps/desktop test` (186 Node plus 3 isolated Electron activity tests); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the thread feed now follows the two spec-confirmed information-density rules — ambient timestamps hide until hover or keyboard focus (status elements such as the run boundary, thinking elapsed and specialist duration stay visible, keeping the same information available to keyboard and assistive technology), and the user bubble gains a hover-revealed inline copy action (1.6s copied reset, ghost 24px circle). Process group two-tone hover brightening, the `· N 次` trailing, the Worked divider, and the 32px jump-to-latest with working dots were already compliant and are now locked by regression; the spec reasoning 140px cap does not apply because LA reasoning is content-free. Canonical item protocol, virtualization and coalescing untouched; no runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the timestamp reveal, copy action and records together. Do not hide status-bearing time elements or reintroduce always-on ambient timestamps.
-- deletedEntries: none.
-- remainingRisks: R-032 stays open for LA-140 through LA-142; hover-reveal discoverability and copy interaction are source-contract evidence until installed-app verification.
-- unverifiedRealMachineItems: installed Electron timestamp/copy discoverability, real screenshot matrix, VoiceOver focus order, signing/notarization, public mirror.
-
-## LA-140 — Align decision cards and derive the model-change divider
-
-- status: completed
-- dependencies: LA-139
-- baseCommit: `85147695`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/conversation/{PermissionRequestSurface.tsx,ConversationItems.tsx,conversation-model.ts,conversation-items.css,conversation-model.test.ts}`; `apps/desktop/tests/decision-cards.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `decision-cards.test.ts` — approval shell 20px + elevation token; Enter/Esc kbd chips with the spec kbd geometry; model-change items derived from canonical execution snapshots and rendered as the inline divider with flanking hairlines and a reveal tooltip. Plus a pure behavior test in `conversation-model.test.ts`: exactly one divider for gpt-a→gpt-b, none for the same model or missing snapshots, positioned before the run-started boundary. All failed before implementation and passed after.
-- commandsExecuted: focused `node --test tests/decision-cards.test.ts` RED then green; `tests/{codex-ui-contract,decisions,permissions}.test.ts` regressions; `src/renderer/conversation/conversation-model.test.ts`; Desktop typecheck; full `npm --prefix apps/desktop test` (188 Node plus 3 isolated Electron activity tests); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the approval surface now keeps the spec rounded-3xl 20px shell with `--la-elevation-prominent`, and its primary/deny buttons carry the spec kbd hints (16px, 6px radius, currentColor 10%, aria-hidden) — keyboard behavior already existed via approval-keys. Model changes now appear in the timeline: the conversation model derives `(providerId, modelId)` transitions between consecutive Runs from canonical `executionSnapshots` (legacy epochs and missing snapshots yield nothing), inserts them at order -1 before the run-started boundary, and renders the spec inline divider with an ⓘ warning tooltip; `itemSearchText`, `itemMatchesKind` and the size estimator cover the new kind. Plan cards/Step pills are deliberately not fabricated (no canonical structured todo data — needs a backend ticket); the auto-review card and 200px file-preview list are likewise out of scope for missing features/data. Decision binding, approval semantics, runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime unchanged.
-- rollback: revert the shell alignment, kbd hints, model-change derivation and records together. Do not derive model changes from renderer preference state or fabricate plan progress.
-- deletedEntries: none.
-- remainingRisks: R-032 stays open for LA-141 and LA-142; model-change derivation depends on server-populated execution snapshots and is synthetic/source evidence until installed-app verification.
-- unverifiedRealMachineItems: installed Electron approval card and model-change divider, real screenshot matrix, VoiceOver tooltip/kbd announcement, signing/notarization, public mirror.
-
-## LA-141 — Complete the power slider endpoint labels
-
-- status: completed
-- dependencies: LA-134
-- baseCommit: `4a7cc03f`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/composer/{ComposerPowerSlider.tsx,composer.css}`; `apps/desktop/tests/power-slider.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `power-slider.test.ts` — endpoint labels (更快↔更强) render with aria-hidden, `holding` tracks pointer drag and keyboard focus via `data-holding`, endpoints reveal under the holding state with the micro opacity transition and stay pointer-transparent; geometry/keyboard/value-text/reset regression lock. The endpoint test failed before implementation and passed after; the regression lock passed throughout.
-- commandsExecuted: focused `node --test tests/power-slider.test.ts` RED then green; `tests/codex-ui-contract.test.ts` and `src/renderer/composer/composer-power.test.ts` regressions; Desktop typecheck; full `npm --prefix apps/desktop test` (190 Node plus 3 isolated Electron activity tests); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: while the thumb is held or keyboard-focused, the track now reveals the spec endpoint labels (aria-hidden, micro-duration fade, pointer-events none). The 24px track/28px thumb/4px ticks, 0.3s spring, keyboard map, `{value}, {n} of 7.` value text and reset button were already compliant and are locked by regression. Advanced view (model+effort bundles), Fast mode (no production route under LA-033) and the Ultra usage warning (no usage-metering concept) are server-side features that do not exist and were not faked; they await real feature tickets. ExecutionProfile routing, thinking-level persistence, runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime unchanged.
-- rollback: revert the endpoint labels and records together. Do not introduce fake Fast/Ultra/Advanced controls.
-- deletedEntries: none.
-- remainingRisks: R-032 stays open for LA-142; endpoint reveal interaction is source-contract evidence until installed-app verification.
-- unverifiedRealMachineItems: installed Electron slider endpoint interaction, real screenshot matrix, VoiceOver value announcement, signing/notarization, public mirror.
-
-## LA-142 — Land the motion library (series finale)
-
-- status: completed
-- dependencies: LA-134
-- baseCommit: `22804d7e`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/styles/{tokens.css,base.css}`; `apps/desktop/src/renderer/workspace/workspace.css`; `apps/desktop/src/renderer/conversation/conversation-items.css`; `apps/desktop/src/renderer/composer/QueuedMessageList.tsx`; `apps/desktop/tests/motion-library.test.ts`; roadmap reality/risk/ledger records.
-- testsAdded: RED `motion-library.test.ts` — shimmer `steps(48, end)` cadence; token-owned pulse (`--la-animate-pulse` + `la-pulse` keyframes) consumed by the pending-permission badge; @property-driven scroll edge-fade system (`--la-top-fade`/`--la-bottom-fade`, `la-edge-fade`, `.la-scroll-fade-y` with `scroll(self block)`) consumed by the queue tray. All three failed before implementation (the la-pulse regex was then corrected for the 0.5 literal) and passed after.
-- commandsExecuted: focused `node --test tests/motion-library.test.ts` RED then green; `tests/{codex-ui-contract,queued-tray,workspace-sidebar}.test.ts` regressions; Desktop typecheck; full `npm --prefix apps/desktop test` (193 Node plus 3 isolated Electron activity tests); `npm run mac:test`; roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the loading shimmer now sweeps with the spec steps(48) cadence; the pending-permission badge pulses via the new token-owned `--la-animate-pulse`; the queue tray scrolls with the spec edge fade through a new @property-driven scroll-fade system (graceful degradation to the declared default when scroll-driven animations are unsupported, never hiding content). Codex-only keyframes (browser-sidebar, sync-dot, snake, startup blossom) have no LA surfaces and were not copied; tokens without consumers (`--la-ease-in`, `--la-cubic-enter`) were not created per the repository PR rule. Reduced motion remains handled by the global rule. R-032 turns mitigated by source evidence with the series complete; visual evidence still awaits the LA-051 screenshot matrix and real-machine P3. No runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the cadence change, pulse token, scroll-fade system and records together. Do not copy Codex-only animations onto surfaces that do not exist or create consumerless motion tokens.
-- deletedEntries: none.
-- remainingRisks: scroll-driven animation support is engine-dependent (degradation is safe by construction); all nine series tickets are complete, and remaining evidence is source/DOM contract until the LA-051 screenshot matrix, installed-app verification and real-machine P3.
-- unverifiedRealMachineItems: installed Electron motion rendering, scroll-fade behavior, reduced-motion parity on real macOS, real screenshot matrix, VoiceOver, signing/notarization, public mirror.
-
-## LA-143 — Differentiate power slider motion per gear
-
-- status: completed
-- dependencies: LA-141
-- baseCommit: `7b6d25af`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/composer/{ComposerPowerSlider.tsx,composer.css}`; `apps/desktop/tests/power-slider-motion.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `power-slider-motion.test.ts` — gear-graded fill follows the thumb geometry (`data-index`, fill width formula, 12px radius, accent gradient, 0.3s spring width transition); commit fires a deterministic 12-particle burst (30° spacing, 6ms stagger, `--particle-x/y` offsets, `la-particle-burst .62s cubic-bezier(.25,1,.5,1)` with a 22% 1.28 overshoot); ambient 3px glowing track particles stream only at the max gear. All three failed before implementation and passed after.
-- commandsExecuted: focused `node --test tests/power-slider-motion.test.ts` RED then green; `tests/{power-slider,codex-ui-contract}.test.ts` and `src/renderer/composer/composer-power.test.ts` regressions; Desktop typecheck; full `npm --prefix apps/desktop test` (196 Node plus 3 isolated Electron activity tests); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the slider gains three presentation-only motion layers requested by the user on 2026-07-24 (prettier, per-gear differentiation): a gear-graded fill following the thumb, a 12-particle burst on every commit (pointer and keyboard alike, cleaned up after 700ms), and an ambient particle stream at the max gear only. Gear semantics, persistence, value announcement, endpoint labels and reduced-motion handling are unchanged (the global rule disables all three layers under reduced motion). No fake Fast mode, no runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the motion layers and records together. Do not alter gear semantics or reintroduce a fake Fast mode for these effects.
-- deletedEntries: none.
-- remainingRisks: burst/particle rendering and fill transition are source-contract evidence until installed-app verification; continuous particles at max add a minor animation cost, bounded to three 3px dots and disabled under reduced motion.
-- unverifiedRealMachineItems: installed Electron slider motion, real screenshot matrix, reduced-motion parity on real macOS, VoiceOver, signing/notarization, public mirror.
-
-## LA-144 — Add the strictly validated todo_list rich artifact block
-
-- status: completed
-- dependencies: LA-042
-- baseCommit: `88fc04e1`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/rich_artifact.ts`; `apps/desktop/src/renderer/inspector/{RichArtifactPreview.tsx,inspector.css}`; `tests/rich_artifact_todo_block.test.ts`; `apps/desktop/tests/rich-artifact-todo.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED root `rich_artifact_todo_block.test.ts` — strict status enum, caption, round-trip; unknown status/duplicate ids/empty items rejected; inert HTML export renders completed todos with strikethrough. RED desktop `rich-artifact-todo.test.ts` — preview renders the block with per-item status and inspector strikethrough/in-progress styles. All four failed before implementation and passed after.
-- commandsExecuted: focused root and desktop block tests RED then green; `tests/rich_artifact.test.ts` regression; root and Desktop typechecks; full root `npm test` (tool capability manifest, roadmap validator and worker boundary suites pass) and `npm --prefix apps/desktop test` (197 Node plus 3 isolated Electron activity tests); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: rich artifact schema v1 gains the `todo_list` block — items carry a stable identifier, ≤2,000-character text and a strict `pending | in_progress | completed` status (≤500 items, unique ids, non-empty); the inert HTML export renders status markers and completed strikethrough with the same CSP; the Electron preview renders the block with ✓/◐/○ markers, completed strikethrough and an in-progress accent. All seven existing block types and the executable-markup ban are unchanged; no artifact type, runtime, route, writer, schema migration, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the block schema, preview, export and records together. Do not loosen the executable-markup ban or add the block without the strict status enum.
-- deletedEntries: none.
-- remainingRisks: the block is schema/renderer-only until LA-145 gives it a canonical writer; export/preview rendering is source-contract evidence until installed-app verification.
-- unverifiedRealMachineItems: installed Electron todo block rendering, real screenshot matrix, VoiceOver list semantics, signing/notarization, public mirror.
-
-## LA-145 — Add the agent_plan artifact type and host-owned update tool
-
-- status: completed
-- dependencies: LA-014, LA-144
-- baseCommit: `f226363e`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/task_workspace_contract.ts`; `contracts/schemas/task-workspace-common.v2.schema.json`; `packages/cat-runtime/src/{toolCapabilities.ts,generalSessionPlan.ts,createGeneralAgentSession.ts,agentRuntimePort.ts}`; `packages/cat-tools/src/{update-plan-tool.ts,index.ts}`; `packages/cat-server/src/{general_worker_rpc.ts,general_worker_runtime.ts,general_agent_runs.ts}`; `apps/desktop/src/renderer/{conversation/ConversationItems.tsx,inspector/ContextInspector.tsx}`; `tests/{agent_plan_tool.test.ts,general_session_plan.test.ts}`; roadmap reality/ledger records.
-- testsAdded: RED `agent_plan_tool.test.ts` (6) — `agent_plan` accepted while unknown types stay rejected; strict payload validation (empty/unknown status/duplicate ids/NUL/unexpected fields); version increments 1→2 with a `plan` activity referencing the artifact inside the active run; stale run rejected; `assertProductionToolCapabilities` covers `agent_plan_update`; `parseServerToolRequest` envelope strictness. Plus `general_session_plan.test.ts` assertions: registered (not initial-active) for Run-backed sessions.
-- commandsExecuted: focused `tests/agent_plan_tool.test.ts` RED (missing exports) then green; `tests/{tool_capability_manifest,general_session_plan,general_agent_session,worker_execution_boundary,task_workspace_contract,rich_artifact,rich_artifact_todo_block}.test.ts` regressions; root and Desktop typechecks; full root `npm test` (capability manifest, roadmap validator, worker boundary pass) and `npm --prefix apps/desktop test` (198 Node plus 3 isolated Electron activity tests, including the in-flight LA-146 plan-model unit test); `npm run mac:test`; roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the canonical contract gains the `agent_plan` artifact type (union, ARTIFACT_TYPES, v2 schema enum, two exhaustive renderer label maps). The General Worker gains a `server_tool` bridge kind: the worker stub only sends `bridge_request`; the Host validates the envelope (`parseServerToolRequest`) and dispatches to `updateAgentPlanArtifact`, which strictly validates the full todo payload and, guarded by the task's still-active run (snapshot pre-check plus `expectedActiveRun`), appends the next writer-versioned `agent-plan:<taskId>` artifact and a `plan` activity via one `appendGenerated` call. The main-Run, compaction and fork call sites inject the handler; delegated read-only children do not register the tool. The tool is registered through `toolSurface` (document-context gate, not initial-active — the model activates it via capability_search), carries a new `task-plan` capability kind with a cat-governance/non-picker manifest, and is built by `createUpdatePlanTool` (defineTool + Typebox) with a system-prompt hint. The Worker never opens the workspace for this tool. Bridge cancellation is not implemented (remaining risk). No schema migration, runtime fallback, second writer, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the artifact type, bridge kind, tool, handler and records together. Do not let the Worker write canonical Task truth, register the tool without capability metadata, or accept client-supplied artifact versions.
-- deletedEntries: none.
-- remainingRisks: the bridge has no cancellation (a hung host handler is bounded by the RPC timeout); CAT Project runs are not wired (standalone only by design of this ticket); evidence is synthetic/source-level until an installed-app Run exercises the tool end to end.
-- unverifiedRealMachineItems: installed Electron end-to-end plan tool execution, real screenshot matrix, VoiceOver, signing/notarization, public mirror.
-
-## LA-146 — Render the Plan card and Step pill from the canonical plan
-
-- status: completed
-- dependencies: LA-139, LA-145
-- baseCommit: `e4bad218`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/conversation/{plan-model.ts,plan-model.test.ts,ConversationItems.tsx,TaskConversation.tsx,conversation-items.css}`; `apps/desktop/tests/plan-card.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `plan-card.test.ts` (2) — agent_plan artifacts bypass the generic artifact card; summary sentences, aria-expanded toggle, todo status/strikethrough, 7rem/20rem height states, chevron rotation; the pill derives from the canonical snapshot with ring/dashoffset, Step n/N, all-complete dot and a reveal popover. Plus `plan-model.test.ts` pure behavior (3): newest version parsing, spec step order, ring geometry. All failed before implementation and passed after.
-- commandsExecuted: focused `node --test tests/plan-card.test.ts` RED then green; `src/renderer/conversation/{plan-model,conversation-model}.test.ts`; Desktop typecheck; full `npm --prefix apps/desktop test` (200 Node plus 3 isolated Electron activity tests); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the agent_plan artifact now renders as the spec Plan card in the timeline (progress summary header, chevron toggle, index + status-icon todo rows with completed strikethrough, 7rem preview / 20rem expanded heights), and a Step pill sits above the composer (hidden while a permission surface replaces it): progress ring with spring dashoffset or the spec all-complete dot, `Step n / N`, and a hover/focus popover carrying the full plan. Tasks without a plan artifact render nothing; progress derives only from the canonical projection — the Renderer fabricates nothing. No runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the card, pill, model and records together. Do not derive plan progress from renderer-local state or render a plan from markdown parsing.
-- deletedEntries: none.
-- remainingRisks: card/pill rendering is source-contract evidence until an installed-app Run produces a real plan; the pill derives from the single per-task plan artifact, so very old plans stay visible until updated (by design of LA-145's per-task id).
-- unverifiedRealMachineItems: installed Electron Plan card and pill rendering, real screenshot matrix, VoiceOver expanded-state announcement, signing/notarization, public mirror.
-
-## LA-147 — Add the agent_present artifact type and host-owned present tool
-
-- status: completed
-- dependencies: LA-145
-- baseCommit: `64f43ce2`
-- resultCommit: `SELF`
-- filesChanged: `packages/cat-data/src/task_workspace_contract.ts`; `contracts/schemas/task-workspace-common.v2.schema.json`; `packages/cat-runtime/src/{toolCapabilities.ts,generalSessionPlan.ts,createGeneralAgentSession.ts,agentRuntimePort.ts}`; `packages/cat-tools/src/{present-answer-tool.ts,index.ts}`; `packages/cat-server/src/{general_worker_rpc.ts,general_worker_runtime.ts,general_agent_runs.ts}`; `apps/desktop/src/renderer/{conversation/ConversationItems.tsx,inspector/ContextInspector.tsx}`; `tests/agent_present_tool.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `agent_present_tool.test.ts` (8) — `agent_present` accepted while unknown types stay rejected; strict payload validation (empty/missing blocks, unexpected fields, executable HTML, unknown table columns rejected; `todo_list`/`image`/`page_overlay` not presentable); every present call writes a brand-new version-1 artifact plus an `artifact_update` activity inside the active run; stale run rejected; `assertProductionToolCapabilities` covers `agent_present`; `parseServerToolRequest` accepts the new envelope and still rejects unregistered tools; `routeGeneralServerTool` dispatches by tool name and rejects loudly when a handler is missing; registered (not initial-active) for Run-backed sessions. All failed before implementation and passed after.
-- commandsExecuted: focused `tests/agent_present_tool.test.ts` RED (missing exports) then green; `tests/{agent_plan_tool,general_session_plan,rich_artifact,rich_artifact_todo_block,tool_capability_manifest,task_workspace_contract,strict_api_contract}.test.ts` regressions; root and Desktop typechecks; full root `npm test` (EXIT=0) and `npm --prefix apps/desktop test` (200 Node plus 3 isolated Electron activity tests, EXIT=0); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: the canonical contract gains the `agent_present` artifact type (union, ARTIFACT_TYPES, v2 schema enum, two exhaustive renderer label maps). The model-facing `agent_present` tool (defineTool + Typebox, `createPresentAnswerTool`) accepts a declarative block document — markdown, table, chart, diff and file_reference blocks only; todo stays exclusive to `agent_plan_update` and evidence blocks are not model-presentable. The worker stub sends the same `server_tool` bridge kind with the tool name; the Host validates the envelope (`parseServerToolRequest` allowlist), routes by name (`routeGeneralServerTool`, no silent fallback when a handler is absent) and dispatches to `presentAgentAnswerArtifact`, which strictly validates via the shared rich-artifact parser, server-stamps title/generator/createdAt, and — guarded by the still-active run — appends a brand-new `agent-present:<taskId>:<uuid>` artifact plus an `artifact_update` activity in one `appendGenerated` call. The three Run call sites inject the handler; delegated read-only children do not register the tool. Registered through `toolSurface` (document-context gate, not initial-active — the model activates via capability_search), carrying a new `task-present` capability kind with a cat-governance/non-picker manifest, plus a system-prompt hint. The Worker never opens the workspace for this tool. No schema migration, runtime fallback, second writer, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the artifact type, bridge entry, routing, tool, handler and records together. Do not let the Worker write canonical Task truth, open todo_list/image/page_overlay to the model, or route server tools without a named handler.
-- deletedEntries: none.
-- remainingRisks: the bridge has no cancellation (bounded by the RPC timeout, same as LA-145); CAT Project runs are not wired (standalone only by design); the timeline card lands in LA-148 — until then the artifact is visible via the generic artifact card and Inspector; evidence is synthetic/source-level until an installed-app Run exercises the tool end to end.
-- unverifiedRealMachineItems: installed Electron end-to-end present tool execution, real screenshot matrix, VoiceOver, signing/notarization, public mirror.
-
-## LA-148 — Render agent_present artifacts as timeline Answer cards
-
-- status: completed
-- dependencies: LA-146, LA-147
-- baseCommit: `43284785`
-- resultCommit: `SELF`
-- filesChanged: `apps/desktop/src/renderer/conversation/{present-model.ts,present-model.test.ts,ConversationItems.tsx,conversation-items.css}`; `apps/desktop/src/renderer/inspector/RichArtifactPreview.tsx`; `apps/desktop/tests/present-card.test.ts`; roadmap reality/ledger records.
-- testsAdded: RED `present-card.test.ts` (1) — agent_present artifacts bypass the generic artifact card; PresentCard parses through the pure model; invalid documents render nothing; blocks pass untouched to the shared `RichArtifactBlockView`; expanded default, aria-expanded toggle, preview cap, expanded scroll, chevron rotation, inspect affordance. Plus colocated `present-model.test.ts` pure behavior (2): block order/title fidelity; non-present type, schema mismatch, executable HTML and missing documents all return null. All failed before implementation and passed after.
-- commandsExecuted: focused `node --test tests/present-card.test.ts` RED then green; `src/renderer/conversation/{present-model,plan-model,conversation-model}.test.ts`; `tests/plan-card.test.ts` regression; Desktop typecheck; full `npm --prefix apps/desktop test` (202 Node plus 3 isolated Electron activity tests, EXIT=0); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: agent_present artifacts now render as Answer cards in the conversation timeline (title header with block count, chevron toggle, 9rem preview / 32rem scrolling expanded body, inspect-and-export affordance opening the canonical artifact). The canonical block renderer is exported once (`RichArtifactBlockView`) and shared between Inspector and timeline — no duplicated block truth; blocks pass through unmodified, invalid payloads render nothing, and multiple present artifacts appear independently in chronological order. Tasks without present artifacts render nothing. No runtime, route, writer, schema, `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: revert the card, model, shared export and records together. Do not duplicate the block renderer in conversation code or render present content from markdown guessing.
-- deletedEntries: none.
-- remainingRisks: card rendering is source-contract evidence until an installed-app Run produces a real present artifact; very large tables/charts stay inside the 32rem scrolling body by design.
-- unverifiedRealMachineItems: installed Electron Answer card rendering, real screenshot matrix, VoiceOver toggle announcement, signing/notarization, public mirror.
-
-## LA-130 — Private Eval executes only via the explicit synthetic-root harness
-
-- status: completed
-- dependencies: LA-017, LA-049, LA-061
-- baseCommit: `e347fdd2`
-- resultCommit: `SELF`
-- filesChanged: `scripts/private-eval.ts`; `tests/private_eval_harness.test.ts`; `package.json`; roadmap reality/ledger records.
-- testsAdded: RED `private_eval_harness.test.ts` (6) — strict args (missing `--root`/`--adapter`, unknown option, illegal mode, usage error); production `data/` root refused (the test locates the production tree via `import.meta.url`, independent of the synthetic-root suite cwd); single parity (completed status, 2 outputs, `canonical_single_batch` manifest, `referenceIncluded:false`/`writeMode:"none"`, per-segment mechanicalQa, comparison report on disk); team parity (`canonical_team_workflow` manifest, isolated `private-eval-*` project cleaned up); generation failure fails the run with the error preserved instead of fabricating success; Stable route still 403s `private_eval_disabled_in_stable` before reading the body. All failed before implementation (module missing) and passed after; the first full-suite run caught the cwd-dependent assertion and the hardened test now passes standalone and under test-discovery.
-- commandsExecuted: focused `tests/private_eval_harness.test.ts` RED then green; `tests/{eval_routes,private_eval,private_eval_canonical_single,private_eval_team_adapter,private_eval_session,eval_task_run_projection,sqlite_workflow_eval,maintainer_candidate_tool,harness_eval_smoke}.test.ts` regressions; root and Desktop typechecks; `npm run mac:test` (EXIT=0); CLI smoke `npm run eval:private run --mode single` on a throwaway synthetic root (completed, 2 outputs, report written); full root `npm test` (recorded below); roadmap validation/test and diff checks recorded after this documentation update.
-- migration: Private Eval gains the explicit CI/developer entry point `npm run eval:private run --mode single|team --root <synthetic-root> --set-id <id> --label <label> --source-root <dir> --adapter synthetic --source-locale <locale> --target-locale <locale>`. The harness strictly parses arguments, refuses any root inside the production `data/` tree, and drives only canonical modules — `createPrivateEvalSet`/`createPrivateEvalRun`/`executePrivateEvalRun`/`renderPrivateEvalComparison` plus the same batch runners the production route uses (`runPrivateEvalCanonicalSingle`/`runPrivateEvalCanonicalTeam`) with the same per-segment mechanical QA, memoized single batch call, and isolated-team project lifecycle. The only synthetic boundary is the model: a deterministic no-model generate (single) and a deterministic pi-subagents-style child runner (team), both clearly marked `[synthetic]` with an explicit synthetic prompt budget. No production route/UI was reopened (Stable still 403s mutations before body parsing), no Eval history/set/run/output/scorecard/comparison was read or rewritten, and no `data/**`, customer content, credential, signing material, public mirror or managed runtime changed.
-- rollback: delete the harness, its tests and the npm script together. Do not wire harness execution back into the production route/UI or point it at the production data tree.
-- deletedEntries: none.
-- remainingRisks: the synthetic adapter proves the canonical run/output/status contract without a model; real-model CI execution needs a future reviewed adapter (LA-131 export parity and LA-133 route removal are separate tickets); the harness does not yet support checkpoint resume.
-- unverifiedRealMachineItems: real-model Eval execution, installed-app behavior, signing/notarization, public mirror.
+# Execution Ledger — Linguist Agent Rebuild (Proma-based)
+
+> 计划：《Linguist Agent：基于 Proma 的产品重建执行计划》v1.0（2026-07-25）
+> 机读账本：`docs/roadmap/execution-ledger.json`
+> 本账本自 PB-001 起在新仓 `linguist-agent-next` 维护。PB-000 在旧仓执行，其完整记录见旧仓 `docs/roadmap/PB_REBUILD_EXECUTION_LEDGER.md` 与 `LEGACY_FREEZE_REPORT.md`（tag `la-v2-legacy-freeze-2026-07-25`）。
+> 状态等级（计划 §3.3）：`implemented` → `unit_verified` → `integration_verified` → `packaged_app_verified` → `real_machine_verified` → `release_qualified`。禁止只写 `completed`。
+
+## PB-000：冻结旧 LA（旧仓执行，存档引用）
+
+- **状态**：`unit_verified`
+- **repo**：`/Users/<local>/Desktop/linguist-agent`，分支 `legacy/platform`，tag `la-v2-legacy-freeze-2026-07-25`
+- **baseCommit**：`60c504e55d098a96b78f26fdc08a14f506d5eb14` → **resultCommit**：`c2014227b34c45294dafe9bab6f65346f4c3a654`
+- 详情见旧仓 `LEGACY_FREEZE_REPORT.md`。
+
+## PB-001：创建 Proma 衍生新仓
+
+- **状态**：`unit_verified`（git 级验证通过；install/typecheck/test/打包属 PB-003/PB-004）
+- **依赖**：PB-000 ✅
+- **baseCommit**：`702a8221bdeb6f3db7dc514b8e93e2a5a52f68df`（upstream main HEAD，基线 SHA）
+- **resultCommit**：`SELF`（沿用旧仓账本惯例：包含本条目的不可变 commit 即 result 引用）
+- **改动文件**：
+  - `docs/architecture/UPSTREAM_BASELINE.md`（新增）
+  - `docs/roadmap/EXECUTION_LEDGER.md`（新增，本文件）
+  - `docs/roadmap/execution-ledger.json`（新增）
+- **实际操作**：
+  - `git clone https://github.com/proma-ai/Proma /Users/<local>/Desktop/linguist-agent-next`（完整历史）
+  - `git remote rename origin upstream`
+  - `origin`（私人远端）未配置：用户尚未准备，按计划记为待办，未伪造
+  - 产品分支：`main` 即产品主线（计划 §11.2），未另建分支
+  - 未改任何代码；未执行 install/typecheck/test
+- **验证**：
+  - `git log --oneline -5`：HEAD = 基线 SHA + 本票 docs commit
+  - `git remote -v`：仅 `upstream → proma-ai/Proma`
+  - `git status --short`：提交后干净
+- **knownLimitations**：
+  - 本机未安装 bun，PB-003 的 `bun install --frozen-lockfile` 前需先装 bun；
+  - 无 `origin`，本仓 commits 目前仅存本机；
+  - Electron 39.5.1 下 `node:sqlite` 可用性未验证（计划 §5.7 要求在 PB-003/PB-004 验证）。
+- **rollback**：`git reset --hard 702a8221bdeb6f3db7dc514b8e93e2a5a52f68df`（仅回退本票 docs commit；如需整体回退则删除 `linguist-agent-next/` 目录）
+
+## PB-002：许可证与来源治理
+
+- **状态**：`unit_verified`（文档/配置级验证通过；无代码改动）
+- **依赖**：PB-001 ✅
+- **baseCommit**：PB-001 的 resultCommit（`85a7d69d`）
+- **resultCommit**：`SELF`
+- **改动文件**：
+  - `NOTICE.md`（新增，根目录）：LA 为 Proma 衍生作品、整体 AGPL-3.0；Proma 版权保留；OpenWorker/MIT 与 codex/Apache-2.0 复制规则；开源 codex ≠ OpenAI 闭源客户端
+  - `ATTRIBUTION.md`（新增，根目录）：四个来源的角色与许可
+  - `docs/attribution/SOURCE_PROVENANCE.md`（新增）：来源总表、基线固定、四类复制登记规则、逐条登记表（已登记 PB-001 整仓 clone）
+  - `docs/attribution/PRIVATE_RESEARCH_POLICY.md`（新增）：私人研究资料定义、存放位置、允许入仓的衍生成果边界、公开镜像前检查命令
+  - `.gitignore`（追加）：`linguist-agent-research-private/`、`THREE_APPS_PIXEL_SPEC.md`、`codex-ui-spec-full.md`、`codex-teardown/`、`asar-src/`、`*.asar`、`*.dmg`
+- **未做**：未改 `LICENSE`（Proma AGPL-3.0 原样保留）；未删除任何 Proma 版权；未提交任何逆向规格
+- **验证**：
+  - `shasum -a 256 LICENSE` 仍为 `0d96a4ff…9abcb0`（未动）
+  - `git check-ignore` 验证新增排除规则生效
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - `docs/product/LA_PRODUCT_UI_SPEC.md` 尚未编写（属后续 UI 批次，私人规格在旧仓/下载目录，未迁入）；
+  - 公开镜像前检查命令列入 Batch 11，本轮未执行（仓库尚无私有内容可误伤）。
+- **rollback**：`git reset --hard 85a7d69d`
+
+## PB-003：原版 Proma 开发基线
+
+- **状态**：`real_machine_verified`（限定范围：install/typecheck/test/build/dev 启动均在本机实测通过；2 条上游测试失败为环境限制已记录，非本票引入）
+- **依赖**：PB-001 ✅（bun 已在本票安装）
+- **baseCommit**：PB-002 的 resultCommit（`9e234bd0`）
+- **resultCommit**：`SELF`
+- **改动文件**：`docs/architecture/DEV_BASELINE_REPORT.md`（新增，含全部实测日志）、账本
+- **实测结果**（详见 DEV_BASELINE_REPORT.md）：
+  - bun 1.3.14 安装至 `~/.bun`；`bun install --frozen-lockfile` ✅（1200 包）
+  - `bun run typecheck` ✅ 6/6 包 exit 0
+  - `bun test` ⚠️ 480 pass / 2 fail（`agent-session-manager.test.ts`、`channel-runtime-api-key.test.ts`：纯 Bun 下无法 import electron 命名导出，上游测试环境限制）
+  - `bun run electron:build` ✅ exit 0
+  - `bun run electron:dev` ✅ 真机完整启动（IPC、工作区、托盘、快捷键、调度器全部就绪，无 preload 错误），验证后停止
+  - node:sqlite 探针：Electron 内嵌 Node 22.22.0，`DatabaseSync` ✅；`db.backup` ❌ 不存在（Node 23.4 才加入）；`VACUUM INTO` 兜底 ✅——结论供 PB-024 使用
+- **macOS 权限**：启动未请求任何系统权限
+- **Provider**：真实对话需真实 API Key（首启自动建 DeepSeek 预设渠道）→ PB-004 Fake Model Server 必要性确认
+- **knownLimitations**：
+  - 2 条上游测试失败未修（不属本票；PB-004 真 Electron harness 建立后再评估）；
+  - 未做打包 smoke（属 PB-004）；
+  - 环境副作用：`~/.bun` 安装、`~/.proma-dev/` 由 dev 启动创建。
+- **rollback**：`git reset --hard 9e234bd0`（环境侧可选 `rm -rf ~/.bun ~/.proma-dev`）
+
+## PB-004：打包 Electron 基线与 Hermetic Smoke
+
+- **状态**：`packaged_app_verified`（打包应用上 18/18 断言通过，连续两次完整运行 exit 0；未做真实用户数据/真实 Key 验证，故不达 real_machine_verified）
+- **依赖**：PB-003 ✅
+- **baseCommit**：PB-003 的 resultCommit（`c58bc069`）
+- **resultCommit**：`SELF`
+- **改动文件**：
+  - `apps/electron/scripts/smoke/fake-model-server.ts`（新增：OpenAI 兼容 Fake Model Server，6 场景 + 非流式标题响应）
+  - `apps/electron/scripts/smoke/run-g0-smoke.ts`（新增：playwright-core `_electron` 打包应用 smoke runner）
+  - `apps/electron/package.json`（新增 `smoke:pack`/`smoke:g0` 脚本 + devDep `playwright-core@1.62.0` 精确版本）
+  - `bun.lock`（playwright-core 锁文件）
+  - `docs/roadmap/G0_BASELINE_REPORT.md`（新增，含全部实测日志与逐项 PASS/FAIL）
+  - 账本（本文件 + `execution-ledger.json`）
+  - **未改动任何产品运行时代码**（src/ 零改动）
+- **实测结果**（详见 G0_BASELINE_REPORT.md）：
+  - `bun run smoke:pack` ✅ 未签名 dir 包 `out/mac-arm64/Proma.app`
+  - `bun run smoke:g0` ✅ **18 PASS / 0 FAIL** ×2 次（clean build；打包启动；preload API；临时 HOME 配置；创建对话；发送「你能帮我做什么」；流式文本 DOM 中间态；thinking delta；tool call 事件 + role:"tool" 续接往返；唯一最终 DOM；429→重试成功；400 上下文错误；中途停止 + stopped 持久化；同 HOME 重启恢复 API+DOM）
+  - 断言路径：全部 Chat 运行时路径（sendMessage → chat-service → OpenAIAdapter → SSE）；DOM 断言覆盖流式中间态/最终文本/重启可见；事件断言经 preload 真实 IPC 订阅
+- **关键发现**：playwright-core 在 bun 下无法完成 Electron inspector ws 握手 → runner 必须用 Node（≥22.18，本机 nvm v22.22.2）运行；主/辅窗口同载 index.html，需按 `?window=` 过滤主窗口
+- **knownLimitations**：
+  - 打包 smoke 环境 safeStorage 不可用（明文兜底，channel-manager 既有逻辑）；
+  - 未签名包自动更新 ENOENT 报错（预期内）；
+  - reasoning 折叠块未做 DOM 断言（事件级覆盖）；
+  - Pi agent 路径（createAgentSession）未覆盖，留待后续票。
+- **rollback**：`git reset --hard c58bc069`（环境侧可选 `rm -rf apps/electron/out`）
+
+## PB-010：LA 品牌基础（minimal branding）
+
+- **状态**：`packaged_app_verified`（打包应用 18/18 断言通过；typecheck 6/6；`bun test` 480 pass / 2 既有环境失败与基线一致）
+- **依赖**：PB-004 ✅
+- **baseCommit**：PB-004 的 resultCommit（`155203c8`）
+- **resultCommit**：`SELF`
+- **改动文件**：
+  - `apps/electron/electron-builder.yml`（appId `com.linguistagent.app`（开发值，最终签名身份 PB-114 定）、productName `Linguist Agent`、copyright 加 LA 衍生行、麦克风用途文案、fileAssociations 显示名；扩展名 `proma-backup`/`proma-share` 与 publish 配置不变）
+  - `apps/electron/package.json`（description）
+  - `apps/electron/src/renderer/index.html`（document title）
+  - `apps/electron/src/main/menu.ts`（macOS 应用菜单）
+  - `apps/electron/src/main/tray.ts`（托盘 tooltip）
+  - `apps/electron/src/main/index.ts`（单实例锁提示、启动错误对话框）
+  - `apps/electron/src/renderer/components/settings/AboutSettings.tsx`（关于页：Linguist Agent + 版本 + 「基于 Proma 构建 / Built on Proma (AGPL-3.0)」归属行并链接上游仓库）
+  - `apps/electron/src/renderer/components/onboarding/OnboardingView.tsx`、`tutorial/TutorialBanner.tsx`、`App.tsx`、`quick-task/QuickTaskApp.tsx`、`agent/AskUserBanner.tsx`、`voice-dictation/VoiceDictationApp.tsx`（shell UI 用户可见产品名字符串）
+  - `apps/electron/resources/icon.svg`、`icon.png`、`icon.icns`、`icon.ico`（原创 LA 字母图标，替换 Proma 条纹图标）
+  - `apps/electron/resources/proma-logos/icon.svg`、`iconTemplate{,@2x,@3x}.png`（原创 LA 托盘 Template 图标，路径不变）
+  - `apps/electron/scripts/generate-la-icon.mjs`（新增：SDF + 超采样纯数学绘制，仅需 pngjs，产物即上述图标）
+  - `apps/electron/resources/generate-icons.sh`（头部注释/提示语与 LA 图标对齐）
+  - `apps/electron/scripts/smoke/run-g0-smoke.ts`（打包产物路径改为 glob `out/mac-arm64/*.app`，不再写死 Proma.app）
+  - `README.md`（替换为 LA 中文 README：Proma 衍生、AGPL-3.0、链接 NOTICE/ATTRIBUTION/UPSTREAM_BASELINE）
+  - `README.en.md`（顶部加 LA 说明注记，Proma 原文保留）
+  - `docs/architecture/USERDATA_LAYOUT.md`（新增：userData 子目录策略）
+  - 账本（本文件 + `execution-ledger.json`）
+- **图标方案**：自绘 "LA" 几何字母（L + A 笔画，A 横杠琥珀色点缀），SVG 为源（`resources/icon.svg`），由 `scripts/generate-la-icon.mjs` 以 SDF + 4x/2x 超采样盒式降采样渲染 PNG（1024/各 iconset 尺寸/256），`iconutil` 产出 icns，256 PNG 内嵌为 ico（PNG-in-ICO）；托盘 Template 为同字形无背景版本（22/44/66）。未复制 Proma/OpenAI/OpenWorker 任何品牌资产，未使用品牌字体。
+- **后续修正（2026-07-26，`fix(PB-010)`）**：用户确认应恢复旧 LA 的既有自有设计；从冻结旧仓的 `apps/desktop/resources/AppIcon.icns` 导出并登记为 `resources/icon-source.png`，`icon.png`、`icon.icns`、`icon.ico` 与 `icon.svg` 均以此为源。生成脚本同步改为从该保留源重建三种平台格式，避免以后重新生成时回退为紫色字母图标；托盘 Template 未改。
+- **未做（留后续票）**：
+  - 设置子页/功能文案中仍有 "Proma" 字样（MemorySettings、ChannelForm、VoiceInputSettings、EnvironmentCheck*、Automations、AgentSkills 等）——属深度文案票，不在 minimal branding 范围；
+  - `ChannelSettings` 的 Proma 商业版渠道推广卡（指向 proma.cool，第三方服务）与 `PromaLogoSettings`/`AppearanceSettings` 的 Proma 品牌 Logo 变体下载功能（`resources/proma-logos/proma-*.png`、`renderer/assets/bots/proma-logos/`）未动；
+  - 最终签名身份（证书/Team ID/正式 appId）在 PB-114；
+  - 配置根 `.proma`/`.proma-dev`、内部包名 `@proma/*`、IPC 频道名、localStorage 键、文件扩展名按票要求保持不变。
+- **实测结果**：
+  - `bun run typecheck` ✅ 6/6 exit 0
+  - `bun test` ✅ 480 pass / 2 fail（与 PB-003 基线一致的两条上游环境限制失败，未变差）
+  - `cd apps/electron && rm -rf out && bun run smoke:pack` ✅ 未签名 dir 包 `out/mac-arm64/Linguist Agent.app`
+  - `bun run smoke:g0`（= `node scripts/smoke/run-g0-smoke.ts`）✅ **18 PASS / 0 FAIL**，exit 0
+  - 后续修正：`node apps/electron/scripts/generate-la-icon.mjs` ✅；新 `icon.icns` 与打包 `Linguist Agent.app/Contents/Resources/icon.icns` SHA-256 一致（PNG 同样一致）
+- **knownLimitations**：
+  - 未签名 dir 包；bundle id 为开发值；
+  - Dock 图标/应用名在已安装旧 Proma.app 的机器上并存（数据目录共享 `.proma`，属预期）；
+  - 上文「未做」清单。
+- **rollback**：`git reset --hard 155203c8`（环境侧可选 `rm -rf apps/electron/out`）
+
+## PB-011：Pi 成为唯一可见 Runtime（D-002）
+
+- **状态**：`packaged_app_verified`（打包应用 18/18 断言通过；typecheck 6/6；`bun test` 483 pass / 2 既有环境失败与基线一致）
+- **依赖**：PB-010 ✅
+- **baseCommit**：PB-010 的 resultCommit（`f13f1557`）
+- **resultCommit**：`SELF`
+- **产品决策**：D-002——首版只向用户展示 Pi runtime；隐藏 Claude/Pi 双内核 UI，但 Claude 实现代码、测试、`scripts/sync-runtime-deps.ts` 打包同步全部保留，未删一行；Claude 移除仅在第一条完整 CAT 路径通过后重新评估。完整策略见 `docs/architecture/RUNTIME_POLICY.md`（新建会话默认值矩阵、隐藏清单、维护者触达 Claude 的三条路径、Batch 3/4 只允许创建 Pi 会话的约束）。
+- **改动文件**：
+  - `apps/electron/src/renderer/lib/runtime-policy.ts`（新增：统一可见性开关 `AGENT_RUNTIME_SWITCHER_VISIBLE = false`，改回 true 即恢复双内核 UI）
+  - `apps/electron/src/renderer/components/agent/AgentView.tsx`（输入工具栏 `AgentRuntimeSelector` 由开关门控隐藏；组件与 `handleAgentRuntimeChange` 保留）
+  - `apps/electron/src/renderer/components/automation/AutomationFormView.tsx`（「Agent 内核」选择器块连同双内核说明文案由开关门控隐藏；新草稿默认 runtime 本就走 `agentRuntimeAtom` 缺省 pi）
+  - `apps/electron/src/renderer/components/settings/ChannelSettings.tsx`（渠道行 Claude Agent Core 徽章由开关门控隐藏，Pi 徽章保留）
+  - `apps/electron/src/main/lib/feishu-bridge.ts`（远程 Bot 建会话缺省回退 `?? 'claude'` → `?? 'pi'`；settings-service 缺省本已是 pi，此为对齐兜底）
+  - `apps/electron/src/main/lib/settings-service.test.ts`（新增 3 条：settings.json 缺失/缺字段时 agentRuntime 解析为 pi；维护者持久化 claude 覆盖仍被尊重）
+  - `docs/architecture/RUNTIME_POLICY.md`（新增）
+  - 账本（本文件 + `execution-ledger.json`）
+- **既有默认值核查（无需改动，已确认为 pi）**：`types/settings.ts` `DEFAULT_AGENT_RUNTIME='pi'`、`settings-service.ts` 回退、`ipc.ts` `CREATE_SESSION` 与自动化 upsert、`agent-session-manager.ts` 默认参数、`agentRuntimeAtom`、`automation-manager.ts`/`automation-atoms.ts` 新建默认、`bridge-command-handler.ts`；快速任务窗口与语音输入均汇入 `CREATE_SESSION` 路径。历史数据兼容回退（旧会话/旧自动化缺 runtime 按 claude）刻意保留。
+- **未做**：未删 Claude runtime 任何代码/测试/同步；未改 Pi adapter 内部；未动 chat-service；`updateSessionAgentRuntime` IPC 保留为维护者通道。
+- **实测结果**：
+  - `bun run typecheck` ✅ 6/6 exit 0
+  - `bun test` ✅ 483 pass / 2 fail（480 基线 + 新增 3 条；2 条失败为 PB-003 起既有上游环境限制：`agent-session-manager.test.ts`、`channel-runtime-api-key.test.ts` 纯 bun 下无法 import electron 命名导出，未变差）
+  - `cd apps/electron && rm -rf out && bun run smoke:pack` ✅ 未签名 dir 包 `out/mac-arm64/Linguist Agent.app`
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**，exit 0
+- **knownLimitations**：
+  - 维护者仍可在 settings.json 写 `"agentRuntime": "claude"` 使新建会话走 Claude（刻意保留的逃生门，见 RUNTIME_POLICY.md §3）；
+  - 打包 smoke 全部断言走 Chat 运行时路径（PB-004 起即如此），Pi agent 路径仍未被 smoke 覆盖；
+  - 编辑历史 Claude 自动任务时，模型选择区仍可能出现「Agent 兼容渠道」提示分支（隐藏路径兼容，不影响新建）。
+- **rollback**：`git reset --hard f13f1557`（环境侧可选 `rm -rf apps/electron/out`）
+
+## PB-012：隐藏 v1 不需要的产品面（D-007，统一 Feature Flags）
+
+- **状态**：`packaged_app_verified`（打包应用 18/18 断言通过；typecheck 6/6；`bun test` 488 pass / 2 既有环境失败与基线一致）
+- **依赖**：PB-011 ✅
+- **baseCommit**：PB-011 的 resultCommit（`d8954aac`）
+- **resultCommit**：`SELF`
+- **产品决策**：D-007——v1 不包含第三方扩展市场、团队/自动化/远程机器人等产品面。隐藏不删除：全部开关集中在唯一模块 `apps/electron/src/renderer/lib/feature-flags.ts`（无散落 `if (false)`），任一开关改回 `true` 即恢复对应产品面，无需其他改动。完整清单与恢复方式见 `docs/architecture/FEATURE_FLAGS.md`。
+- **开关清单（全部默认 `false`）**：
+  - `AGENT_RUNTIME_SWITCHER_VISIBLE`（D-002/PB-011，本票从 `lib/runtime-policy.ts` 迁入统一模块，3 个消费方已改 import；原文件删除）
+  - `REMOTE_BOTS_SETTINGS_VISIBLE`：设置「远程连接」标签页（BotHubSettings：飞书/钉钉/微信 Bot 配置 + 用法页 + PromaLogoSettings 品牌素材页）
+  - `AUTOMATIONS_VISIBLE`：侧边栏自动任务入口（展开态 + 收起态 Rail）、侧边栏合成「自动任务」会话分组、主区 automations 路由与任务表单（MainArea 回落普通会话视图）、消息内「来自 Proma 定时任务」徽章
+  - `PROMA_PROMO_VISIBLE`：渠道设置 Proma 商业版推广卡（proma.cool）、ChannelForm 第三方 Base URL 风险弹窗内商业版推广段落、通用设置「Git/PR 标识」推广开关
+- **改动文件**：
+  - `apps/electron/src/renderer/lib/feature-flags.ts`（新增，统一开关模块）
+  - `apps/electron/src/renderer/lib/feature-flags.test.ts`（新增 5 条：开关集合完整性 + 各开关默认 false 守卫）
+  - `apps/electron/src/renderer/lib/runtime-policy.ts`（删除，迁入 feature-flags.ts）
+  - `apps/electron/src/renderer/components/settings/SettingsPanel.tsx`（`BOTS_TAB` 由开关门控）
+  - `apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx`（自动任务展开入口 / Rail 按钮 / 合成分组门控）
+  - `apps/electron/src/renderer/components/tabs/MainArea.tsx`（automations 路由 + 表单渲染门控）
+  - `apps/electron/src/renderer/components/agent/SDKMessageRenderer.tsx`（`ScheduledRunBadge` 门控）
+  - `apps/electron/src/renderer/components/settings/ChannelSettings.tsx`（`PromaProviderCard` 门控 + import 迁移）
+  - `apps/electron/src/renderer/components/settings/ChannelForm.tsx`（推广段落门控）
+  - `apps/electron/src/renderer/components/settings/GeneralSettings.tsx`（Git/PR 标识开关门控）
+  - `apps/electron/src/renderer/components/agent/AgentView.tsx`、`automation/AutomationFormView.tsx`（import 迁移至 feature-flags）
+  - `docs/architecture/FEATURE_FLAGS.md`（新增）、`docs/architecture/RUNTIME_POLICY.md`（引用更新）
+  - 账本（本文件 + `execution-ledger.json`）
+- **保留未动**：主进程 Bridge/调度器/IPC 全部原样（`feishu-bridge*.ts`、`dingtalk-bridge*.ts`、`wechat-bridge.ts`、`automation-manager.ts`、`main/ipc.ts` 对应段落），已配置的 Bridge 与定时任务照常运行；chat / agent(Pi) / workspace / channels / skills / memory 等 v1 面未动。
+- **刻意保持可见（判断记录）**：教程横幅与教程 Tab（PB-010 已改品牌为 Linguist Agent 教程，属功能性 onboarding 非营销）；MemorySettings 的 Nowledge「实验性」平台说明与 AboutSettings 的 WSL（实验性）选项（第三方集成说明，非独立实验性产品面）。
+- **实测结果**：
+  - `bun run typecheck` ✅ 6/6 exit 0
+  - `bun test` ✅ 488 pass / 2 fail（483 基线 + 新增 5 条；2 条失败为 PB-003 起既有上游环境限制，未变差）
+  - `cd apps/electron && bun run smoke:pack` ✅ 未签名 dir 包 `out/mac-arm64/Linguist Agent.app`
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**，exit 0
+- **knownLimitations**：
+  - 「Git/PR 标识」仅隐藏开关 UI，主进程 git attribution 默认仍开启（`Made-with: Proma` trailer 仍会附加）；是否改默认属独立品牌决策，建议后续品牌票处理；
+  - SettingsPanel 教程 Tab label 仍为「Proma 教程」（文案品牌遗留，建议深度文案票处理）；
+  - 已存在的自动任务会话在开关关闭时不出现在侧边栏任何分组（任务照常执行；开关恢复即回归）；
+  - 打包 smoke 全部断言走 Chat 运行时路径（PB-004 起即如此），被隐藏面的恢复路径未被 smoke 覆盖。
+- **rollback**：`git reset --hard d8954aac`（环境侧可选 `rm -rf apps/electron/out`）
+
+## PB-013：Projects 导航壳
+
+- **状态**：`packaged_app_verified`（打包应用 18/18 断言通过；typecheck 6/6；`bun test` 489 pass / 2 既有环境失败与基线一致）
+- **依赖**：PB-012 ✅
+- **baseCommit**：PB-012 的 resultCommit（`ebac1978`）
+- **resultCommit**：`SELF`
+- **范围**：产品 IA（计划 §9.2）侧边栏新增「项目」入口（位于 Chats 与设置之间）+ 主区 `projects` 视图路由 + 空状态壳页。仅导航壳：**不含** CAT、项目存储、IPC、创建逻辑，未动任何 Proma 会话逻辑；项目数据层与项目内 Chat / CAT / QA / Artifacts / Files 顶栏属 Batch 3。
+- **开关**：新增 `LINGUIST_PROJECTS_VISIBLE = true`（`lib/feature-flags.ts`）——Projects 是 v1 FEATURE，默认可见，开关为对称与未来门控预留；改为 `false` 时侧边栏入口隐藏、MainArea projects 路由回落普通会话视图。已登记 `docs/architecture/FEATURE_FLAGS.md`（该文件标题与守卫测试同步更新：D-002/D-007 开关默认 false，本开关为例外默认 true）。
+- **改动文件**：
+  - `apps/electron/src/renderer/lib/feature-flags.ts`（新增开关）
+  - `apps/electron/src/renderer/lib/feature-flags.test.ts`（开关集合完整性断言同步 + 新增 1 条：本开关默认 true）
+  - `apps/electron/src/renderer/atoms/active-view.ts`（`ActiveView` 联合类型新增 `'projects'`）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectsView.tsx`（新增，空状态壳：标题「项目」+ 简述 + 「新建项目」占位按钮，点击 toast 提示「即将推出：项目功能将在后续版本提供」；布局约定对齐 AutomationsListView，自带 titlebar-drag-region）
+  - `apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx`（新增 `ProjectsSidebarEntry` 组件（样式对齐 AutomationSidebarEntry，无徽章）+ `handleOpenProjects` 切换回调；展开态条目插入对话列表与「已归档」入口之间，收起态 Rail 按钮插入底部设置头像上方；均用原生 `<button type="button">` 可键盘聚焦，样式/聚焦行为与既有条目一致）
+  - `apps/electron/src/renderer/components/tabs/MainArea.tsx`（`activeView === 'projects'` 全屏路由（取代 TabBar + TabContent，同 automations/agent-skills 模式）+ 开关关闭时的回落门控）
+  - `docs/architecture/FEATURE_FLAGS.md`（登记新开关）、账本（本文件 + `execution-ledger.json`）
+- **验收对照**：
+  - 侧边栏：展开态与收起态 Rail 均有「项目」入口，图标 + 标签 + active 态 + 键盘可聚焦，点击切换主区视图，再次点击回落对话视图 ✅
+  - Tab/Session 原行为无回归：未触碰 tab-atoms / 会话逻辑；`bun test` 与打包 smoke（含会话持久化、重启恢复断言）全绿 ✅
+  - 窄窗口可用：收起态 Rail 底部含「项目」按钮（FolderOpen 图标 + Tooltip「项目」）✅
+  - 键盘聚焦：入口为原生 button，可 Tab 聚焦，focus ring 与其他条目一致（沿用相同 className 模式）✅
+- **实测结果**：
+  - `bun run typecheck` ✅ 6/6 exit 0
+  - `bun test` ✅ 489 pass / 2 fail / 491 tests / 64 files（488 基线 + 新增 1 条；2 条失败为 PB-003 起既有上游环境限制：agent-session-manager、channel-runtime-api-key 纯 Bun 下无法 import electron 命名导出，未变差）
+  - `cd apps/electron && bun run smoke:pack` ✅ 未签名 dir 包 `out/mac-arm64/Linguist Agent.app`
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**，exit 0
+- **knownLimitations**：
+  - 「新建项目」为占位：仅 toast 提示，无创建逻辑/对话框/数据层（Batch 3 接入）；
+  - 新代码目录约定 `features/linguist/` 由 PB-014 正式化，本票先行落地首个文件；
+  - 打包 smoke 不覆盖 projects 路由点击路径（smoke 断言走 Chat 运行时路径，PB-004 起即如此）；projects 入口为纯渲染层切换，无 IPC。
+- **rollback**：`git reset --hard ebac1978`（环境侧可选 `rm -rf apps/electron/out`）
+
+## PB-014：上游修改边界测试（Proma Core Touchpoints 登记 + 边界强制）
+
+- **状态**：`unit_verified`（边界测试正/反向断言 + 负向实测均通过；typecheck 6/6；`bun test` 无回归。本票为 docs/test-only，打包 smoke 不适用，未重跑 smoke:pack）
+- **依赖**：PB-013 ✅
+- **baseCommit**：PB-013 的 resultCommit（`ba548207`）
+- **resultCommit**：`SELF`
+- **范围**：建立（1）Proma 核心修改登记册——自基线 `702a8221` 起全部 39 个触点（人读 `docs/architecture/PROMA_CORE_TOUCHPOINTS.md` + 机读 `docs/architecture/proma-touchpoints.json`，每条含票号与原因，按 PB 票分组）；（2）自动化边界测试 `tests/upstream-boundary.test.ts`（3 条：登记册格式良构；diff vs 基线无未登记改动；无 stale 登记条目）；（3）根脚本 `bun run check:boundaries`。
+- **规则（写入 PROMA_CORE_TOUCHPOINTS.md，对后续批次生效）**：新 LA 代码必须进约定路径（`renderer/features/linguist/`、`main/lib/linguist/`、`packages/linguist-*/`、`resources/linguist-skills/`、`tests/`、`docs/`、`apps/electron/scripts/smoke/`；白名单另含 `.gitignore`/`NOTICE.md`/`ATTRIBUTION.md`/`README*`）；修改任何 Proma 核心文件必须在**同一 commit** 内登记 JSON + MD（票号 + 原因）；边界测试即强制执行。
+- **触点统计（39 条，按主票归组；6 条为多票共改）**：PB-004 ×2（apps/electron/package.json、bun.lock）；PB-010 ×18（electron-builder.yml、图标 ×8、generate-icons.sh、generate-la-icon.mjs、main/index.ts、menu.ts、tray.ts、index.html、App.tsx + 6 个 shell 组件品牌文案、AboutSettings 归属行）；PB-011 ×3（feishu-bridge.ts、settings-service.test.ts、AgentView/AutomationFormView/ChannelSettings 门控中归 PB-011 的 3 文件计入主票）；PB-012 ×8（feature-flags.ts/.test.ts、SettingsPanel、LeftSidebar、MainArea、SDKMessageRenderer、ChannelForm、GeneralSettings 等）；PB-013 ×3（active-view.ts、LeftSidebar、MainArea 的 PB-013 部分）；PB-014 ×1（根 package.json 新增 check:boundaries）。多票共改 6 文件：apps/electron/package.json、AgentView.tsx、AutomationFormView.tsx、ChannelSettings.tsx、LeftSidebar.tsx、MainArea.tsx。
+- **边界测试行为**：比较 `git diff --name-only <baseline>...HEAD`（HEAD 已提交内容，未提交改动不在 diff 中），故须 pre-push/门禁运行；git 不可用或基线缺失时打印警告跳过，不令套件失败。
+- **实测结果**：
+  - `bun run typecheck` ✅ 6/6 exit 0
+  - `bun test`（提交前）491 pass / 3 fail：2 条既有环境失败 + 1 条边界 stale-check（package.json 改动尚未提交，符合「比较 HEAD」的预期行为）；提交后复跑见下
+  - **负向实测（证明测试会正确失败）**：临时 commit `2a0485a6`（改动未登记的 `apps/electron/src/main/lib/chat-service.ts` + 新建越界文件 `apps/electron/src/renderer/components/StrayLaWidget.ts`）→ `bun run check:boundaries` **FAIL**，报错准确列出两个越界文件（"Unregistered Proma-core modifications detected"），exit 1 → `git reset --hard HEAD~1` 还原，工作区干净
+  - 提交后：`bun run check:boundaries` ✅ 3/3 pass；`bun test` ✅ 492 pass / 2 fail（2 条为 PB-003 起既有上游环境限制，未变差）
+- **knownLimitations**：
+  - 未提交/未跟踪改动不在 diff 中，本地开发期间测试可能漏报——须在 pre-push/CI 门禁运行；
+  - 打包 smoke 本票不适用（docs/test-only），未重跑；
+  - colocated 测试（settings-service.test.ts、feature-flags.test.ts）与 feature-flags.ts 属 LA 新文件但位于 Proma 目录（上游 colocated 惯例 / 需被 Proma 组件直接 import），已登记为例外触点。
+- **rollback**：`git reset --hard ba548207`
+
+## G1 门禁：Batch 1 收口（计划 §14 / §28）
+
+- **状态**：`gate_passed`（四项门禁标准全绿；详见 `docs/roadmap/G1_REPORT.md`）
+- **依赖**：PB-014 ✅
+- **baseCommit**：PB-014 的 resultCommit（`c4bb4c6f`）
+- **resultCommit**：`SELF`
+- **范围**：门禁执行 + 测试基础设施。新增 G1 Pi 流式探针（补齐 G0 未覆盖的 Pi AGENT 路径打包冒烟），不改任何产品运行时代码（src/ 下零改动）。
+- **改动文件**：
+  - `apps/electron/scripts/smoke/probe-pi-stream.ts`（新增，PB-014 白名单路径）
+  - `apps/electron/package.json`（新增 `smoke:g1` 脚本；该文件为 PB-004 已登记触点）
+  - `docs/roadmap/G1_REPORT.md`（新增，逐项 PASS/FAIL + 实际日志证据）
+  - 账本（本文件 + `execution-ledger.json`）
+- **门禁逐项结果**：
+  1. 原有 packaged smoke 仍全绿 ✅ `node scripts/smoke/run-g0-smoke.ts` → **18 PASS / 0 FAIL**，exit 0（第 3 次运行；前 2 次各 1 个互不相同的 harness 层 UI 自动化抖动，非产品断言失败，详见 G1_REPORT.md §5）
+  2. LA 品牌 App 能打开 ✅ `Linguist Agent.app` 启动，首屏品牌断言 `[PASS] main-window-loaded — …「欢迎使用 Linguist Agent 下一代桌面 AI 软件…」（首启 Onboarding 门禁页）`
+  3. Pi 能流式回答 ✅ `node scripts/smoke/probe-pi-stream.ts` 首次运行 **12 PASS / 0 FAIL**，exit 0：`fake-text` 场景 5 个 `_partial` 文本事件（含无最终标记的中间帧）+ STREAM_COMPLETE 恰好 1 次；`fake-thinking` 场景 6 个 `_partial` thinking 事件含 `REASONING_DELTA_MARKER_G0` + STREAM_COMPLETE 恰好 1 次；fake server 日志证明请求由 Pi 路径发出（`#1 fake-text stream=true → 200`、`#2 fake-thinking stream=true → 200`）
+  4. 静态检查 ✅ `bun run typecheck` 6/6 exit 0；`bun test` 492 pass / 2 fail（2 条为 PB-003 起既有上游环境限制：纯 Bun 下 electron 命名导出不可 import，与基线一致）；`bun run check:boundaries` 3/3 pass（提交后复跑同）
+- **knownLimitations**：
+  - G0 runner 存在 harness 层 UI 抖动（本轮 3 跑 2 抖，失败点互不相同且均为自动化时序问题；产品代码与 PB-013 连续 18/18 验证版本逐字节一致）——若复现率升高应开 PB-FIX 加固 runner；
+  - runner/probe 必须用系统 Node（≥22.18）运行，bun 下 playwright-core ws 握手挂起（PB-004 发现）；
+  - safeStorage 明文兜底、未签名包自动更新 ENOENT 为打包 smoke 环境既有预期行为；
+  - Pi 探针为事件级断言（真实 IPC 订阅），未做 Agent 模式 DOM 断言；未覆盖 Pi 工具执行/权限路径。
+- **rollback**：`git reset --hard c4bb4c6f`（环境侧可选 `rm -rf apps/electron/out`）
+
+## PB-020：CAT Extraction Matrix（CAT 抽取矩阵）
+
+- **状态**：`unit_verified`（docs-only 票据；交付文档经逐节复核，`bun run check:boundaries` 通过；无代码改动，打包 smoke 不适用未重跑）
+- **依赖**：PB-014 ✅
+- **baseCommit**：G1 的 resultCommit（`939e52cb`）
+- **resultCommit**：`SELF`
+- **范围**：按重建计划 §15 PB-020，在复制任何代码之前识别旧 LA（`legacy/platform` 冻结分支）中真正值得迁移的 CAT 领域资产，产出 `docs/migration/CAT_EXTRACTION_MATRIX.md`（新增，唯一交付物）。分析方法：旧仓 `packages/` 全量清点（7 包 324 个 src 文件）+ 每文件 import 耦合扫描 + 分组深读（含 4 路并行只读分析）+ 测试/fixture 密度统计 + 旧数据布局从代码反推（未读 `data/**` 客户内容）。
+- **矩阵内容**：旧仓包清单；~90 个 CAT 候选文件逐行矩阵（当前路径/领域职责/依赖/纯度/耦合/现有测试/迁入目标/结论）；领域测试与 synthetic fixtures 清单（含 `tests/fixtures/memoq/sample.mqxliff`）；旧数据布局知识（`data/projects/<id>/project.json` 等，供 linguist-legacy-migration）；推荐抽取顺序 S1-S6 映射 PB-021/023/024（PB-021/023 标题为 §4 包序推断，已在文中标注需对照计划原文校准，PB-024=Store 有新仓证据）；绝对不迁移清单（逐条理由）；10 条风险（双存储分叉/审计泄漏/外部进程依赖/重复实现漂移/测试缺口/ICU 两处实现/游戏特化渗入/并发假设/jszip 依赖/客户数据隔离）。
+- **头条结论**：`cat-formats` 全包 + cat-data 约 18 个纯域文件可 copy；~35 个文件 rewrite-small（内核值钱、IO/编排/外部进程依赖要换）；`cat-server`/`cat-runtime`/`cat-mcp` 整体黑名单。最大移植债：`workbook_mapping.ts` 内嵌 ~550 行 Python、`document_assets.ts` 依赖 python3/pdftotext、`tm_import.ts` 同步 sqlite3 CLI、`termbase.ts` 依赖 mdbtools CLI。测试缺口：`termbase/glossary/term_history/workbook_mapping/table_batch` 无专属测试。
+- **未做**：未复制任何代码（本票分析-only）；未读取旧仓 `data/**`；旧仓零改动（完成后 `git -C /Users/<local>/Desktop/linguist-agent status --porcelain` 与票前基线逐字节一致，仅票前已存在的 5 条 untracked）。
+- **验证**：
+  - `bun run check:boundaries` ✅ 3/3 pass（提交后复跑；本票改动全部位于白名单 `docs/` 路径）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 计划原文（LA_PROMA_BASED_REBUILD_EXECUTION_PLAN_CN.md）不在两个仓库内，PB-021/023 标题按 §4 包序推断，仅 PB-024=Store 有新仓证据（DEV_BASELINE_REPORT node:sqlite 探针）；
+  - 旧仓测试为顶层 assert 脚本风格，矩阵中测试计数为 `assert.*` 调用数，非 test-runner 用例数；
+  - Library/Memory（assistant_library/assistant_memory 及对应工具）去留为产品决策项，矩阵默认 do-not-port(v1 待定）。
+- **rollback**：`git reset --hard 939e52cb`
+
+## PB-021：建立 linguist-cat-core 纯领域包
+
+- **状态**：`unit_verified`（新包 typecheck exit 0、31 条领域测试全绿、根 `bun run typecheck` 7/7、`bun test` 与基线一致无回归、`check:boundaries` 3/3；未接入 store/tools，integration 属后续票）
+- **依赖**：PB-020 ✅
+- **baseCommit**：PB-020 的 resultCommit（`ca49e312`）
+- **resultCommit**：`SELF`
+- **范围**：按计划 §4.1 建立纯 TypeScript CAT 领域包 `@linguist/cat-core`（`packages/linguist-cat-core/`），零运行时依赖、零 IO（不 import Proma/Pi/Electron/Node fs/SQLite/React）。**全部代码按计划 schema 全新编写，未从旧仓逐字复制任何行**（仅参考旧仓 `batch_workspace.ts` 的 `SegmentRevisionConflictError` 语义，已登记 SOURCE_PROVENANCE.md）。本票不含 QA 规则/标签规则（PB-052/PB-070 范围）。
+- **改动文件**：
+  - `packages/linguist-cat-core/package.json`（新增：`@linguist/cat-core`，private，type module，exports `./src/index.ts`，`typecheck` 脚本对齐 house style，零 dependencies）
+  - `packages/linguist-cat-core/tsconfig.json`（新增：extends 根 tsconfig）
+  - `packages/linguist-cat-core/src/ids.ts`（新增：branded id 类型 ProjectId/AssetId/SegmentId/ProposalId/QaFindingId；FNV-1a 64 位确定性哈希；可注入熵 `EntropySource` + `createSeededEntropy`；`generateProjectId` 随机、`derive*Id` 内容派生；格式校验器）
+  - `packages/linguist-cat-core/src/errors.ts`（新增：`DomainError` 基类 + 6 个类型化错误，稳定 code：SEGMENT_LOCKED/REVISION_CONFLICT/STALE_PROPOSAL/UNKNOWN_SEGMENT/INVALID_STATE_TRANSITION/INVALID_ID；StaleProposalError 继承 RevisionConflictError）
+  - `packages/linguist-cat-core/src/project.ts`（新增：`LinguistProject`（schemaVersion 1，计划 schema 逐字段）+ `createProject`/`archiveProject`）
+  - `packages/linguist-cat-core/src/asset.ts`（新增：`Asset`（id/projectId/formatId/originalFilename/sourceSha256/segmentCount）+ `createAsset`）
+  - `packages/linguist-cat-core/src/segment.ts`（新增：`Segment`（计划 schema）+ `SegmentRevision` + `applyTargetEdit`（CAS：revision 不匹配抛 RevisionConflictError，绝不覆盖；locked 抛 SegmentLockedError；每次接受写入产生 revision 条目）+ lock/unlock + 确定性 `compareSegments`/`sortSegments`）
+  - `packages/linguist-cat-core/src/proposal.ts`（新增：`TranslationProposal`（计划 schema）+ 生命周期 create(pending)→accept/reject/supersede；`acceptProposal` 强制 baseRevision CAS + 非锁定 + pending，stale 抛 StaleProposalError；接受后段更新 + 提案 accepted + revision 条目 source='proposal'）
+  - `packages/linguist-cat-core/src/qa-finding.ts`（新增：`QaFinding` 类型（计划 PB-070 schema）+ open→resolved/waived 状态机不变量，无规则引擎）
+  - `packages/linguist-cat-core/src/index.ts`（新增：barrel）
+  - `packages/linguist-cat-core/src/{ids,segment,proposal,qa-finding,errors,serialization}.test.ts`（新增：31 条测试——revision 递增+CAS 冲突、locked 拒绝编辑与接受提案、stale 提案类型化拒绝、accept 全链路、supersede/reject 语义、确定性 ID 与稳定排序、全实体 JSON 往返、错误 code 稳定性）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（登记：本票全新编写、无逐字复制）
+  - `docs/architecture/proma-touchpoints.json`（allowedNewPaths `packages/linguist-` → `packages/linguist-*`：原条目与 PROMA_CORE_TOUCHPOINTS.md 文档的 `packages/linguist-*/` 语义不一致（匹配器只对含 `*` 或以 `/` 结尾的条目做前缀匹配），属本票首次触发的潜在 bug，按文档语义修正；docs/ 白名单内，无需触点登记）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留 PB-022+）**：QA 规则/标签规则/ICU（PB-052/PB-070）；格式 Adapter（PB-022）；持久化（PB-024）；包未被任何消费方 import（依赖方向 cat-core ← formats ← store ← tools，消费方属后续票）。
+- **验证（实测）**：
+  - `bun run --filter='@linguist/cat-core' typecheck` ✅ exit 0（新包被根 workspaces `packages/*` 自动收编，无需改根配置）
+  - `bun run typecheck` ✅ 7/7 包 exit 0（含新包）
+  - `bun test` ✅ 523 pass / 2 fail（492 基线 + 新增 31；2 条失败为 PB-003 起既有上游环境限制：agent-session-manager、channel-runtime-api-key 纯 Bun 下无法 import electron 命名导出，未变差）
+  - `bun run check:boundaries` ✅ 3/3 pass（提交后复跑；首次提交后曾因登记册 `packages/linguist-` 缺 `*` 前缀匹配失败，修正登记册后复跑通过；全部新文件位于白名单 `packages/linguist-*` 与 `docs/`）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - `SegmentContext` 计划只引用未定义，本包取最小形状（note/origin/meta），后续票如需扩展在此演进；
+  - 打包 smoke 不适用（纯领域包，无 Electron 面）；
+  - 根 `bun.lock` 未变（新包零运行时依赖，devDep typescript 由根已提供）。
+- **rollback**：`git reset --hard ca49e312`
+
+## PB-022：格式 Adapter 接口 + round-trip 测试 Harness
+
+- **状态**：`unit_verified`（新包 typecheck exit 0、20 条测试全绿、根 `bun run typecheck` 8/8、`bun test` 543 pass 与基线一致无回归、`check:boundaries` 3/3；无具体真实格式——XLIFF/CSV/JSON 属 PB-023）
+- **依赖**：PB-021 ✅
+- **baseCommit**：PB-021 的 resultCommit（`ac154fec`）
+- **resultCommit**：`SELF`
+- **范围**：按计划 §6.1/§6.3 建立 `@linguist/cat-formats`（`packages/linguist-cat-formats/`）：`CatFormatAdapter` 接口（签名照计划 §6.1 原文）、`ImportedCatAsset` 类型（asset 信息 + 段 + warnings + originalBytes echo + sourceSha256）、Adapter Registry（register/list/detectAll/detectBest，按 detect 分数降序、同分稳定保持注册顺序）、通用 round-trip 测试 harness（`src/testing/` 子路径导出）、`FakeAdapter` 测试夹具（不注册进任何生产 registry）、类型化格式错误（稳定 code）。**全部代码全新编写，未从旧仓 cat-formats 逐字复制任何行**（已登记 SOURCE_PROVENANCE.md）。
+- **关键设计**：
+  - 导入时段无 `id`/`assetId`（store 尚未分配资产）：`ImportedCatSegment = Omit<Segment, 'id' | 'assetId'>`，绑定用 `bindImportedSegments(segments, assetId)`——ID 由 assetId+ordinal+key 内容派生，重导入稳定；
+  - 格式错误不继承 cat-core `DomainError`（其 `code` 字段类型为封闭联合 `DomainErrorCode`，子类化新 code 会破坏类型契约），改为复刻同模式：`FormatError` 基类 + 4 个稳定 code（FORMAT_PARSE_ERROR/FORMAT_EXPORT_ERROR/FORMAT_SEGMENT_LOST/FORMAT_UNSUPPORTED）；
+  - SHA-256 为纯 TS 无依赖实现（`src/hash.ts`，FIPS 180-4 新实现），运行时无关（Node/浏览器均可 import），`HashFn` 可注入；测试与 node:crypto 交叉验证；
+  - registry 默认空：FakeAdapter 与 harness 经 `./testing` 子路径导出，生产 import 面保持精简；
+  - harness `assertRoundTrip(adapter, bytes, opts)`：import → 校验 sourceSha256 已记录 → 确定性建 project/asset（cat-core 注入熵）→ 绑定段 ID → 未修改导出字节稳定断言（可关）→ 经 cat-core `applyTargetEdit` CAS 修改子集目标 → 以 originalBytes 为模板导出 → 重导入 → 断言计数相等、ID 相等且有序、源文未变、未修改目标一致、已修改目标已应用、adapter 不变量逐段成立。静默丢段抛 `FormatSegmentLostError`（含丢失段 ID），绝不降级为 warning。
+- **改动文件**：
+  - `packages/linguist-cat-formats/package.json`（新增：`@linguist/cat-formats`，private，deps 仅 `@linguist/cat-core: workspace:*`，`.` 与 `./testing` 两个 exports）
+  - `packages/linguist-cat-formats/tsconfig.json`（新增：extends 根 tsconfig）
+  - `packages/linguist-cat-formats/src/errors.ts`（新增：FormatError + 4 类型化错误）
+  - `packages/linguist-cat-formats/src/hash.ts`（新增：纯 TS SHA-256 + HashFn）
+  - `packages/linguist-cat-formats/src/adapter.ts`（新增：CatFormatAdapter/ImportedCatAsset/ImportedCatSegment/bindImportedSegments）
+  - `packages/linguist-cat-formats/src/registry.ts`（新增：CatFormatRegistry）
+  - `packages/linguist-cat-formats/src/index.ts`（新增：barrel）
+  - `packages/linguist-cat-formats/src/testing/{index,harness,fake-adapter}.ts`（新增：harness + FakeAdapter/BadSegmentDropAdapter 负夹具 + encodeFakeTsv）
+  - `packages/linguist-cat-formats/src/{errors,hash,registry}.test.ts`、`src/testing/harness.test.ts`（新增：20 条测试——SHA-256 标准向量+node:crypto 交叉验证；错误 code 稳定性；registry 注册/排序/魔数胜过扩展名/未知扩展名→FORMAT_UNSUPPORTED；harness 正路径（默认修改子集、空目标编辑、CJK/Unicode、不变量断言）；负路径（静默丢段→FORMAT_SEGMENT_LOST、非法 UTF-8/缺 TAB 行→FORMAT_PARSE_ERROR 带行号、非字节稳定导出→FORMAT_EXPORT_ERROR、谎报 sourceSha256→FORMAT_PARSE_ERROR））
+  - `docs/attribution/SOURCE_PROVENANCE.md`（登记：全新编写、无逐字复制）
+  - `bun.lock`（workspace 锁文件条目：`@linguist/cat-core` 与 `@linguist/cat-formats`，bun install 自动写入，无外部依赖；PB-004 已登记触点，本票追加登记）
+  - `docs/architecture/proma-touchpoints.json` + `docs/architecture/PROMA_CORE_TOUCHPOINTS.md`（bun.lock 条目改为 PB-004, PB-022 多票共改；条目总数 39 不变，多票共改文件 6 → 7）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留 PB-023+）**：具体真实格式 adapter（XLIFF/CSV/JSON 等，PB-023 每格式一个 commit）；store 接入（PB-024）；registry 未被任何生产消费方使用。
+- **验证（实测）**：
+  - `bun run --filter='@linguist/cat-formats' typecheck` ✅ exit 0
+  - `bun test packages/linguist-cat-formats` ✅ 20 pass / 0 fail
+  - `bun run typecheck` ✅ 8/8 包 exit 0（含新包）
+  - `bun test` ✅ 543 pass / 2 fail（523 基线 + 新增 20；2 条失败为 PB-003 起既有上游环境限制：agent-session-manager、channel-runtime-api-key 纯 Bun 下无法 import electron 命名导出，未变差）
+  - `bun run check:boundaries` ✅ 3/3 pass（提交后复跑；全部新文件位于白名单 `packages/linguist-*` 与 `docs/`）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 段 ID 由 ordinal+key 派生：静默丢段除计数外露外还会引起后续段 ID 漂移（harness 负路径测试已固化该行为）；
+  - 字节稳定断言默认开启，要求输入为规范形式（canonical）字节；PB-023 真实格式如无法满足需在 adapter 测试内显式关闭并记录理由；
+  - 打包 smoke 不适用（纯领域包，无 Electron 面）；
+  - `bun.lock` 仅增 workspace 条目（PB-021 的包因当时未跑 install 一并记入），无外部依赖变化。
+- **rollback**：`git reset --hard ac154fec`
+
+## PB-023：迁入格式 Adapter（XLIFF leg 1/3）
+
+- **状态**：`unit_verified`（包 typecheck exit 0、35 条包内测试全绿、根 `bun run typecheck` 8/8、`bun test` 558 pass 与基线一致无回归、`check:boundaries` 3/3）
+- **说明**：XLIFF leg（1/3）——本 commit 仅含 XLIFF/MXLIFF adapter；CSV 与 JSON leg 由后续 commit 各自追加账本记录。
+- **依赖**：PB-022 ✅
+- **baseCommit**：PB-022 的 resultCommit（`49d18af6`）
+- **resultCommit**：`SELF`
+- **范围**：`XliffAdapter`（`packages/linguist-cat-formats/src/adapters/xliff.ts`，id `xliff_1_2`，扩展名 `.xliff/.xlf/.mqxliff`）支持 XLIFF 1.2 `<xliff><file><body><trans-unit>` 与 memoQ MQXLIFF 变体：source/target 提取、inline 标签（`<g>`/`<x/>`/`<ph>`/`<bpt>/<ept>`）在段字符串中逐字保留、`translate="no"`（trans-unit 或 file 级）与 `mq:locked` → locked、`id`→key（`resname` 兜底，再兜底合成 `#tu-<ordinal>` 并记 warning）、`note`→context.note、`resname`→context.origin、空/缺失/自闭合 `<target>` → 空 target + untranslated、`state`/`state-qualifier`/`mq:status` 保守状态映射（adapter 文件头有完整文档）、XML 实体与 CDATA、Unicode/CJK。导出为模板式：以 originalBytes 为模板按 key 定位 trans-unit，目标未变的段字节不动（未修改导出逐字节稳定，harness 默认断言开启且通过），仅重写被改段的 `<target>`（缺失时插到 `<source>` 后，非空写入带 `state="translated"`）；未知 key / 缺失段 / 源文不符 / 锁定段目标被改 → FormatExportError，绝不静默跳过。
+- **来源**：`xliff-xml.ts` 的 XML 工具函数逻辑复制自旧仓 `cat-formats/src/generic_xliff.ts`（风格适配），`sample.mqxliff` fixture 逐字复制（合成，已读核实）——均已登记 SOURCE_PROVENANCE.md；adapter 本体与 fixtures `mini_game_ui.xliff`/`placeholder_cases.xliff` 全新编写。
+- **改动文件**：
+  - `packages/linguist-cat-formats/src/adapters/xliff-xml.ts`（新增：无依赖 XML 工具函数，逻辑复制自旧仓 generic_xliff.ts）
+  - `packages/linguist-cat-formats/src/adapters/xliff.ts`（新增：XliffAdapter，全新编写）
+  - `packages/linguist-cat-formats/src/adapters/xliff.test.ts`（新增：15 条测试）
+  - `packages/linguist-cat-formats/src/index.ts`（导出 XliffAdapter/XLIFF_ADAPTER_ID）
+  - `tests/linguist-fixtures/mini_game_ui.xliff`、`tests/linguist-fixtures/placeholder_cases.xliff`（新增合成 fixture，本仓自写）
+  - `tests/linguist-fixtures/sample.mqxliff`（旧仓合成 fixture 逐字复制）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（两条复制登记）
+  - 账本（本文件 + `execution-ledger.json`）
+- **验证（实测）**：
+  - `bun run --filter='@linguist/cat-formats' typecheck` ✅ exit 0
+  - `bun test packages/linguist-cat-formats` ✅ 35 pass / 0 fail（20 基线 + 新增 15）
+  - `bun run typecheck` ✅ 8/8 包 exit 0
+  - `bun test` ✅ 558 pass / 2 fail（543 基线 + 新增 15；2 条失败为 PB-003 起既有上游环境限制：agent-session-manager、channel-runtime-api-key 纯 Bun 下无法 import electron 命名导出，未变差）
+  - `bun run check:boundaries` ✅ 3/3 pass（提交后复跑；`tests/` 与 `packages/linguist-*` 均在 allowedNewPaths 白名单，无需新增登记）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 不支持 XLIFF 2.0（`<unit>/<segment>`）——import 抛 typed FORMAT_PARSE_ERROR 明确说明；
+  - MQXLIFF 回写不更新 `mq:status`/`mq:lastchangedtimestamp`，也不把 `<ph>/<bpt>/<ept>` 载荷解包成 val= 占位符（旧仓 mqxliff.ts 行为）——标签逐字往返替代；
+  - trans-unit 缺主 `<target>` 时，`<alt-trans>` 内的 target 可能被误当主 target（与旧仓解析器同行为）；alt-trans 其余内容字节不动；
+  - 被修改段按规范形重编码（文本转义、标签逐字、CDATA 不重包），与非规范原始字节形态可能不同但解码内容一致；未修改段逐字节稳定；
+  - 打包 smoke 不适用（纯领域包）；`bun.lock` 未变（零新增依赖，未引入 @xmldom/xmldom——沿用旧仓手写 XML 工具）。
+- **rollback**：`git reset --hard 49d18af6`
+
+
+## PB-023：迁入格式 Adapter（CSV leg 2/3）
+
+- **状态**：`unit_verified`（包 typecheck exit 0、49 条包内测试全绿、根 `bun run typecheck` 8/8、`bun test` 572 pass 与基线一致无回归、`check:boundaries` 3/3）
+- **说明**：CSV leg（2/3）——本 commit 仅含 CSV/TSV adapter；JSON leg 由后续 commit 追加账本记录。
+- **依赖**：PB-022 ✅
+- **baseCommit**：PB-023 XLIFF leg 的 resultCommit（`8800b2d7`）
+- **resultCommit**：`SELF`
+- **范围**：`CsvAdapter`（`packages/linguist-cat-formats/src/adapters/csv.ts`，id `csv_rfc4180`，扩展名 `.csv/.tsv`）RFC-4180 风格解析：引号字段、`""` 转义、引号内嵌入换行、CRLF/LF/孤立 CR 行尾、UTF-8 BOM 剥离（导出时重挂，未修改导出逐字节稳定——需 `TextDecoder ignoreBOM: true`，默认会吞 BOM，已固化进测试）。TSV 为同一 parser + tab 分隔符（引号语义保留，文件头有文档）；分隔符由表头 sniff（comma/tab/semicolon 候选中表头字段最多者胜，`.tsv` 时 tab 优先，任何候选下表头 <2 字段 => FORMAT_PARSE_ERROR）。列映射默认别名（归一化：trim+小写+去 `[\s_/-]`）：key=key/id/segmentid/uniquekey/唯一键，source=source/src/sourcetext/源文/原文（必需，缺失 => FORMAT_PARSE_ERROR），target=target/tgt/translation/targettext/译文/翻译（缺失 => 全空 target 且导出拒绝写改动），locked=locked/lock/锁定（true/yes/1 => locked，导出只读不写回），context=context/note/notes/comment/备注（=> context.note）；全部可用 `new CsvAdapter({ columns })` 显式覆盖（显式名不在表头 => FORMAT_PARSE_ERROR）。无 key 列或 key 单元格为空 => 合成 `#row-<ordinal>` + warning（code `csv.synthesized_key`）；重复 key => FORMAT_PARSE_ERROR。状态映射刻意最小：空 target => untranslated，否则 translated。行字段多于表头 => FORMAT_PARSE_ERROR（绝不静默丢数据）；少于表头 => 补 ''（导出时若该段 target 被改则在记录末尾补写单元格）。未闭合引号、闭引号后有多余字符 => FORMAT_PARSE_ERROR。导出为模板式：以 originalBytes 为模板按 key 定位行，target 未变的行字节不动（harness 字节稳定断言开启且通过，含 BOM/CRLF 变体），仅重写被改行的 target 字段原始 span（含分隔符/引号/换行时按 RFC 加引号）；未知 key / 缺失段 / 源文不符 / 锁定行 target 被改 / 无 target 列而有改动 / 导出输入重复 key => FormatExportError，绝不静默跳过。
+- **来源**：无逐字复制——adapter、fixtures、测试全部全新编写（仅参考旧仓 `cat-formats/src/table_csv.ts`/`table_columns.ts` 的列别名思路与 csv_paste 语义；旧解析器按行切分不支持引号内嵌换行、写出时整文件重编码不保字节，本实现为按 RFC-4180 + 模板 span 重写新写）——已登记 SOURCE_PROVENANCE.md。
+- **改动文件**：
+  - `packages/linguist-cat-formats/src/adapters/csv.ts`（新增：CsvAdapter，全新编写）
+  - `packages/linguist-cat-formats/src/adapters/csv.test.ts`（新增：14 条测试）
+  - `packages/linguist-cat-formats/src/index.ts`（导出 CsvAdapter/CSV_ADAPTER_ID/CsvColumnMapping/CsvAdapterOptions）
+  - `tests/linguist-fixtures/mini_dialogue.csv`（新增合成 fixture，8 段游戏对白：quoted 逗号、引号内嵌换行、`""` 转义、CJK、空 target、1 锁定行、speaker 在 key/context）
+  - `tests/linguist-fixtures/terminology.csv`（新增合成 fixture，term,translation,note 6 行，供后续 TB 票复用）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（一条全新编写登记）
+  - 账本（本文件 + `execution-ledger.json`）
+- **验证（实测）**：
+  - `bun run --filter='@linguist/cat-formats' typecheck` ✅ exit 0
+  - `bun test packages/linguist-cat-formats` ✅ 49 pass / 0 fail（35 基线 + 新增 14）
+  - `bun run typecheck` ✅ 8/8 包 exit 0
+  - `bun test` ✅ 572 pass / 2 fail（558 基线 + 新增 14；2 条失败为 PB-003 起既有上游环境限制：agent-session-manager、channel-runtime-api-key 纯 Bun 下无法 import electron 命名导出，未变差）
+  - `bun run check:boundaries` ✅ 3/3 pass（提交后复跑；`tests/` 与 `packages/linguist-*` 均在 allowedNewPaths 白名单，无需新增登记）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 表头行必需（首个非空记录）；无表头 CSV 拒绝导入；
+  - 非字段首字符的 `"` 按字面处理（宽松，偏离严格 RFC）；闭引号后仅允许分隔符/行尾/EOF，否则 typed error；
+  - 空行被跳过（不携带数据，其字节保留在导出模板中）；
+  - locked 列导出只读（锁定状态变化不写回，只重写 target 文本）；CSV 无审校状态，status 仅 untranslated/translated；
+  - 分隔符按文件 sniff，文件内混用分隔符视为畸形将解析失败；
+  - 打包 smoke 不适用（纯领域包）；`bun.lock` 未变（零新增依赖）。
+- **rollback**：`git reset --hard 8800b2d7`
+
+## PB-023：迁入格式 Adapter（JSON leg 3/3，本票收口）
+
+- **状态**：`unit_verified`（包 typecheck exit 0、65 条包内测试全绿、根 `bun run typecheck` 8/8、`bun test` 588 pass 与基线一致无回归、`check:boundaries` 3/3）
+- **说明**：JSON leg（3/3）——本 commit 仅含 JSON adapter；**PB-023 三条腿（XLIFF/CSV/JSON）至此全部完成，本票收口**。
+- **依赖**：PB-022 ✅
+- **baseCommit**：PB-023 CSV leg 的 resultCommit（`a34421e5`）
+- **resultCommit**：`SELF`
+- **范围**：`JsonAdapter`（`packages/linguist-cat-formats/src/adapters/json.ts`，id `json_i18n`，扩展名 `.json`）按计划 §6.2 可配置 key/value 映射。两种形状：（1）flat/嵌套 i18n 键值对象——字符串叶成段，key 为 dotted path（路径段转义 `\`→`\\`、`.`→`\.`，raw key 含字面点不会与嵌套分隔符冲突）；**flat 是源文件语义：source=叶值、target 从 '' 开始（匹配游戏本地化 JSON 源文件），导出把被改 target 写进叶值产出译文文件，重导入将译文读作新源文（预期产品流，文件头与测试均有文档）**；空字符串叶是段；数字/布尔/null/嵌套数组不是段、作为模板内容逐字节保留。（2）顶层条目数组——字段名默认 id/source/target/locked，可 `new JsonAdapter({ arrayMapping })` 覆盖（即可配置映射）；source 字段必需（非对象条目或缺字符串 source => 跳过 + `json.entry_skipped` warning，绝不静默）；id 缺失/为空/重复 => 合成 `#idx-<ordinal>` + `json.synthesized_key` warning（同 CSV leg 策略）；`locked: true`（严格布尔）=> locked 段；缺 target 字段 => ''，导出被改时在 source 字段后插入 `"target": "..."`（空白风格按文件 sniff）。解析器为严格 RFC-8259 手写 parser（不用 JSON.parse），记录每个字符串/值 token 的 raw span + 解码值（`\"` `\\` `\uXXXX` 含代理对均解码）；重复 decoded key：import 取最后值（JSON.parse 语义）+ `json.duplicate_key` warning，导出拒绝（FormatExportError，按 key splice 有歧义绝不静默）；UTF-8 BOM 剥离解析、导出重挂（未修改导出逐字节稳定）。detect：二进制/非 UTF-8/非 JSON/无 i18n 内容 => 0；`.json`+内容 => 0.8；仅内容 => 0.4（低于 XLIFF/CSV 的 0.9/0.5，JSON 更通用）。导出模板式：未变 target 的叶字节不动（harness 字节稳定断言开启且通过，含 BOM 变体），仅重写被改叶的 raw span（JSON.stringify 规范转义）；未知 key / 缺失段 / 源文不符 / 锁定条目被改 / 导出输入重复 key / 模板含重复 raw key => FormatExportError。
+- **来源**：无逐字复制——adapter、fixture、测试全部全新编写（旧仓无等价 span 跟踪 JSON 模板实现可参考；仅沿用 CSV leg 的合成 key/warning 策略）——已登记 SOURCE_PROVENANCE.md。
+- **改动文件**：
+  - `packages/linguist-cat-formats/src/adapters/json.ts`（新增：JsonAdapter，全新编写）
+  - `packages/linguist-cat-formats/src/adapters/json.test.ts`（新增：16 条测试）
+  - `packages/linguist-cat-formats/src/index.ts`（导出 JsonAdapter/JSON_ADAPTER_ID/JsonArrayMapping/JsonAdapterOptions）
+  - `tests/linguist-fixtures/mini_items.json`（新增合成 fixture，8 段游戏物品：嵌套分组、CJK、`{count}` 占位符、`\n`/`\"`/`\\`/`\u00e9` 转义、空字符串叶、version/premium_only/event_end 非字符串叶）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（一条全新编写登记）
+  - 账本（本文件 + `execution-ledger.json`）
+- **验证（实测）**：
+  - `bun run --filter='@linguist/cat-formats' typecheck` ✅ exit 0
+  - `bun test packages/linguist-cat-formats` ✅ 65 pass / 0 fail（49 基线 + 新增 16）
+  - `bun run typecheck` ✅ 8/8 包 exit 0
+  - `bun test` ✅ 588 pass / 2 fail（572 基线 + 新增 16；2 条失败为 PB-003 起既有上游环境限制：agent-session-manager、channel-runtime-api-key 纯 Bun 下无法 import electron 命名导出，未变差）
+  - `bun run check:boundaries` ✅ 3/3 pass（提交后复跑；`tests/` 与 `packages/linguist-*` 均在 allowedNewPaths 白名单，无需新增登记）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - flat 形状的导出是「源文件 => 译文文件」语义（译文写进叶值），harness 的 source 保持断言不适用于被改叶——harness 对 flat 以 `modify: () => null` 验证字节稳定/绑定/重导入路径，被编辑导出的精确 splice 与重导入语义由专项测试固化；
+  - 嵌套数组为不透明模板内容，其中字符串不成段（条目列表请用顶层数组形状）；
+  - 缺失 target 字段的插入为行内（source 字段后 `, "target": "..."`，空格风格按文件 sniff），不复刻多行缩进；
+  - locked 标志导出只读（锁定状态变化不写回，只重写 target 文本）；
+  - 被编辑叶按 JSON.stringify 规范重编码（转义风格可能与原始 raw 形态不同，解码内容一致）；未动叶逐字节稳定；
+  - 打包 smoke 不适用（纯领域包）；`bun.lock` 未变（零新增依赖）。
+- **rollback**：`git reset --hard a34421e5`
+
+## PB-024：建立 linguist-cat-store（每项目 SQLite 存储）
+
+- **状态**：`unit_verified`（新包 typecheck exit 0、40 条 node --test 存储测试全绿、根 `bun run typecheck` 9/9、`bun test` 与基线一致无回归、`check:boundaries` 3/3；未接入 Electron 主进程/CLI，integration 属 PB-025+）
+- **依赖**：PB-023 ✅
+- **baseCommit**：PB-023 JSON leg 的 resultCommit（`8a127727`）
+- **resultCommit**：`SELF`
+- **范围**：按计划 §5.2/§5.4/§5.7 建立 `@linguist/cat-store`（`packages/linguist-cat-store/`）：每项目一个 `cat.db`（node:sqlite DatabaseSync），`projects.json` 项目索引 + 项目目录骨架，schema migrations（fail-closed），五个 repository（assets/segments/proposals/qa_findings/exports），VACUUM INTO 备份，只读打开模式。依赖 `@linguist/cat-core`（领域不变量全部由领域层执行）+ `@linguist/cat-formats`（ImportedCatAsset 绑定）。**全部代码全新编写，未从旧仓 storage-sqlite 复制任何行**（仅参考其 pragma/schema_migrations 模式，已登记 SOURCE_PROVENANCE.md）。
+- **关键发现（node:sqlite 兼容性，实测）**：
+  - **bun 1.3.14 完全没有 node:sqlite**（`import 'node:sqlite'` 抛 "No such built-in module"）——store 测试**无法**在 `bun test` 下运行；
+  - 系统 Node v22.22.2 可跑：node:sqlite 自 22.5 起免 flag；`.ts` 测试经 `--experimental-transform-types`（cat-core 用了 constructor parameter properties，strip-only 模式不支持）+ 自定义 ESM resolve hook（house 风格扩展名省略的相对导入）+ workspace 符号链接解析全部实测通过；
+  - 结论：store 测试套件以 `*.nodetest.ts` 命名（bun 的 `.test.ts` 匹配器不会拾取，根 `bun test` 计数不变），由包内 `bun run test`（= `node --test`）运行；`node:sqlite` 经 createRequire 惰性加载，`probeSqliteRuntime()` 在任何运行时安全返回探针结果；
+  - Electron 39.5.1（Node 22.22.0）`db.backup()` 不存在（Node 23.4+），备份走 `VACUUM INTO` 兜底——探针 `hasBackupApi` 供将来切换。
+- **设计要点**：
+  - 计划 §5.2 目录布局逐字实现（`projects.json` + `projects/<id>/{project.json,cat.db,source/,blobs/,exports/,backups/}`）；linguist 根目录**一律构造注入**，绝不硬编码 `~/.proma`（测试全用 mkdtemp）；
+  - 迁移：`schema_migrations(version, applied_at, description)`，有序迁移列表逐条事务应用；磁盘 schema 比代码新 → `StoreSchemaTooNewError`（STORE_SCHEMA_TOO_NEW，fail closed，只读打开同样拒绝）；
+  - pragma：WAL + synchronous=FULL + foreign_keys=ON + busy_timeout=5000（可写打开；只读打开跳过 journal_mode）；测试逐项断言（含 busy_timeout 返回列名为 `timeout`、synchronous FULL=2 的实测修正）；
+  - 类型化 store 错误复刻 cat-formats 模式：`StoreError` 基类 + 稳定 code（STORE_SQLITE_UNAVAILABLE/STORE_SCHEMA_TOO_NEW/STORE_NOT_FOUND/STORE_INDEX_CORRUPT/STORE_READ_ONLY/STORE_BUSY/STORE_PROJECT_EXISTS）；领域错误（REVISION_CONFLICT/SEGMENT_LOCKED/STALE_PROPOSAL/...）原样穿透，绝不包装；
+  - 所有多语句写入走 `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` 事务助手：资产导入（asset+全部 segments 一个事务）、CAS 段编辑（segment 更新 + revision 条目一个事务）、提案接受（提案状态 + 段更新 + revision 条目一个事务，stale/locked 回滚）、QA rerun（删 open + 插新一个事务）；回滚由诱发失败测试固化；
+  - CAS/锁定/提案生命周期全部委托 cat-core（applyTargetEdit/acceptProposal/...），store 不重新实现领域规则；QA rerun 语义：替换 open findings、保留 resolved/waived 历史、同内容复发重开（内容派生 id + INSERT OR REPLACE）；
+  - projects.json 原子写（同目录 tmp+rename，无残留）；索引损坏 → STORE_INDEX_CORRUPT 明确报错，绝不猜测重置；
+  - 备份：`VACUUM INTO backups/cat-<timestamp>.db` + 复制 project.json；备份文件可只读重开且数据完整（测试固化）；restore 属 PB-111；
+  - 确定性：clock/entropy 全链可注入（迁移 applied_at、revision createdAt、备份时间戳、项目 id）。
+- **改动文件**：
+  - `packages/linguist-cat-store/package.json`（新增：`@linguist/cat-store`，deps `@linguist/cat-core`/`@linguist/cat-formats` workspace:*；`typecheck` 脚本对齐 house style；`test` 脚本 = node --test 运行器）
+  - `packages/linguist-cat-store/tsconfig.json`（新增：extends 根 tsconfig）
+  - `packages/linguist-cat-store/src/errors.ts`（新增：StoreError + 7 个类型化错误 + sqlite errcode 翻译）
+  - `packages/linguist-cat-store/src/runtime.ts`（新增：`probeSqliteRuntime()` + createRequire 惰性加载 + node:sqlite 最小结构类型）
+  - `packages/linguist-cat-store/src/schema.ts`（新增：SCHEMA_VERSION=1 + 迁移列表，计划 §5.4 九表逐字）
+  - `packages/linguist-cat-store/src/database.ts`（新增：CatDatabase——pragma、迁移应用、fail-closed、只读打开、事务助手、错误翻译）
+  - `packages/linguist-cat-store/src/project-index.ts`（新增：ProjectIndex——projects.json CRUD/archive、原子写、项目目录骨架、project.json 读写、损坏检测）
+  - `packages/linguist-cat-store/src/project-database.ts`（新增：ProjectDatabase——一个 cat.db + 五个 repository 的句柄）
+  - `packages/linguist-cat-store/src/repositories/{rows,assets,segments,proposals,qa-findings,exports}.ts`（新增：全部参数化 SQL，row↔domain 单一映射点）
+  - `packages/linguist-cat-store/src/backup.ts`（新增：VACUUM INTO 备份 + project.json 复制，backup API 探测分支）
+  - `packages/linguist-cat-store/src/store.ts`（新增：CatStore 门面——项目生命周期 + openProject + backupProject）
+  - `packages/linguist-cat-store/src/index.ts`（新增：barrel）
+  - `packages/linguist-cat-store/src/testkit.ts`（新增：mkdtemp/确定性 clock/seeded entropy/合成 ImportedCatAsset 助手）
+  - `packages/linguist-cat-store/src/{runtime,database,project-index,assets,segments,proposals,qa-findings,exports,backup,store}.nodetest.ts`（新增：40 条测试，node --test 运行）
+  - `packages/linguist-cat-store/test/{loader-hooks,register-ts-loader}.mjs`（新增：node 运行器的扩展名省略导入 resolve hook，bun 从不加载）
+  - `bun.lock`（workspace 锁文件条目，bun install 自动写入，无外部依赖；PB-004/PB-022 已登记触点，本票追加登记）
+  - `docs/architecture/proma-touchpoints.json` + `docs/architecture/PROMA_CORE_TOUCHPOINTS.md`（bun.lock 条目改为 PB-004, PB-022, PB-024 多票共改；条目总数 39 不变，多票共改文件 7 不变）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（登记：整包全新编写、无逐字复制）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留 PB-025+）**：restore（PB-111）；TM/TB 功能（term_entries/tm_units 仅建表，Batch 8）；source/blobs 内容写入（导入管道落 source 原始字节属 CLI/IPC 票）；Electron 主进程/CLI 接入（PB-025）；迁移扫描器（只读打开已备好）。
+- **验证（实测）**：
+  - `bun run --filter='@linguist/cat-store' typecheck` ✅ exit 0
+  - `cd packages/linguist-cat-store && bun run test` ✅ **40 pass / 0 fail**（node v22.22.2 --test；含迁移应用+too-new 拒绝、pragma 逐项、项目索引 CRUD/归档/损坏、1000 段单事务导入 sanity（<5s 断言，实测毫秒级）、CAS 成功/冲突/锁定、revision 历史、提案 accept/reject/supersede/stale+回滚、QA rerun 替换+状态机、exports 记录、备份只读重开数据完整、只读模式逐 repository 拒写）
+  - `bun run typecheck` ✅ 9/9 包 exit 0（含新包）
+  - `bun test` ✅ 588 pass / 2 fail（与 PB-023 基线逐数一致；`*.nodetest.ts` 不被 bun 拾取已实测确认；2 条失败为 PB-003 起既有上游环境限制，未变差）
+  - `bun run check:boundaries` ✅ 3/3 pass（提交后复跑；全部新文件位于白名单 `packages/linguist-*` 与 `docs/`）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - bun 无 node:sqlite → 该包测试必须在 node 下跑（包内 `test` 脚本；根 `bun test` 不覆盖本包）；
+  - `db.backup()` 在当前 Node/Electron 不存在，备份固定走 VACUUM INTO（探针 `hasBackupApi` 分支为将来 Node≥23.4 预留，当前死代码路径，未被测试覆盖）；
+  - VACUUM INTO 目标已存在会失败——备份时间戳注入，同毫秒重复备份会报错（未做冲突重命名）；
+  - node:sqlite 行为实测修正：synchronous FULL 查询值为 2、busy_timeout 查询列名为 `timeout`、`.get()` 返回 null-prototype 对象（deepEqual 需展开）；
+  - 打包 smoke 不适用（纯存储包，无 Electron 面）。
+- **rollback**：`git reset --hard 8a127727`
+
+## PB-025：Headless CAT CLI Vertical Slice（含 store source blob 能力 + interim 最小 QA）
+
+- **状态**：`integration_verified`（CLI 端到端切片以真子进程对 xliff/csv/json 三格式全通过：建项目→导入→列段→CAS 编辑→QA→导出→重导入比对，含全部正反路径与进程内只读重开库审计断言；typecheck 9/9、`bun test` 588/2 与基线一致、store nodetests 59/59、`check:boundaries` 3/3；无 Electron 面，不声明 packaged/real_machine）
+- **依赖**：PB-024 ✅
+- **baseCommit**：PB-024 的 resultCommit（`e450103c`）
+- **resultCommit**：`SELF`
+- **范围**：按计划 G2 前要求实现 headless CAT CLI 垂直切片。CLI 落于 `packages/linguist-cat-store/src/cli.ts`（§4 包清单无独立 CLI 包，入 cat-store 不丑化），node 下运行（node:sqlite），与包测试同一套 runner flags；7 子命令 `create-project/import/segments/edit/qa/export/verify`；`runCli(argv, io)` 注入 IO、`--seed`/`--now` 注入熵/时钟；stdout `key: value` + 集合 JSONL，stderr `error[<CODE>]`，退出码 0/1/2/3/4/5/6（用法/未找到/领域拒绝/格式错误/verify 不一致）。**同时补齐 PB-024 交接缺口**：`ProjectDatabase.saveAssetSource/readAssetSource`——原始字节持久化 `source/<assetId><ext>`（原子写、读写两侧校验 `sourceSha256`，新增稳定错误码 `STORE_ASSET_SOURCE_MISMATCH`，只读句柄拒写），主进程导入管道后续复用同一能力。**interim 最小 QA**（`src/minimal-qa.ts`，EMPTY_TARGET + {curly}/`<tag>` 占位符多重集比对，输出 cat-core `OpenQaFindingInput`，三处标注 interim，PB-070 替换，刻意不做成规则引擎）。全部代码全新编写（已登记 SOURCE_PROVENANCE.md）。
+- **改动文件**：
+  - `packages/linguist-cat-store/src/cli.ts`（新增：CLI 本体 + 文档化调用/退出码头注释）
+  - `packages/linguist-cat-store/src/minimal-qa.ts`（新增：interim 最小 QA）
+  - `packages/linguist-cat-store/src/asset-source.ts`（新增：source blob 文件名/原子写/读取助手）
+  - `packages/linguist-cat-store/src/project-database.ts`（新增 `sourceDir`/`saveAssetSource`/`readAssetSource`）
+  - `packages/linguist-cat-store/src/errors.ts`（新增 `STORE_ASSET_SOURCE_MISMATCH` + `StoreAssetSourceMismatchError`）
+  - `packages/linguist-cat-store/src/index.ts`（barrel 导出新错误类与 `assetSourceFileName`）
+  - `packages/linguist-cat-store/src/asset-source.nodetest.ts`（新增 7 条）、`src/minimal-qa.nodetest.ts`（新增 8 条）、`src/cli-slice.nodetest.ts`（新增 4 条：3 条逐格式端到端切片 + 1 条退出码矩阵）
+  - `packages/linguist-cat-store/package.json`（新增 `cli` 脚本 = 文档化 node 调用）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（一条全新编写登记）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做**：QA Core（PB-070）；UI/IPC/Agent Tool（G2 后批次）；重复导入/同毫秒重复导出的冲突重命名（如实记为限制）；restore（PB-111）；TM/TB（Batch 8）。
+- **验证（实测）**：
+  - `bun run --filter='@linguist/cat-store' typecheck` ✅ exit 0
+  - `cd packages/linguist-cat-store && bun run test` ✅ **59 pass / 0 fail**（40 基线 + 19 新增：asset-source 7、minimal-qa 8、cli-slice 4；切片每格式 ~16 次真 CLI 子进程调用，断言含未修改导出逐字节稳定、CAS 冲突 exit 4 + 正确 revision 成功、锁定段拒绝、QA 发现 planted 空目标与人为占位符失配、export→verify OK、篡改导出 exit 6、库内 exports 审计与 revision 历史）
+  - `bun run typecheck` ✅ 9/9 包 exit 0
+  - `bun test` ✅ 588 pass / 2 fail（与 PB-024 基线逐数一致；2 条为 PB-003 起既有上游环境限制，未变差）
+  - `bun run check:boundaries` ✅ 3/3 pass（提交前 + 提交后复跑）
+  - 手工证据跑（`/tmp/g2-evidence-*` 三格式完整切片，真实输出摘录见 `docs/roadmap/G2_REPORT.md` §4）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - CLI 必须在 node 下运行（bun 无 node:sqlite）；`bun run cli` 仅为 spawn node 的壳；
+  - 最小 QA 为 interim（两条规则；inline 标签逐字比对，合法改写标签属性的译文会误报），PB-070 整体替换；
+  - 重复导入同一文件以 sqlite 主键冲突失败（退出码 1，未类型化）；同毫秒同内容重复导出会使审计记录 id 冲突；
+  - `--now` 为单次调用常量；`segments --limit` 默认 500（export/qa/verify 内部自动分页取全量）；
+  - 打包 smoke 不适用（纯 CLI/存储面）。
+- **rollback**：`git reset --hard e450103c`
+
+## G2 门禁：Batch 2 收口 — CLI Vertical Slice 完全通过（计划 §14）
+
+- **状态**：`gate_passed`（门禁唯一硬标准达成：CLI 垂直切片对全部三种 fixture 格式完整通过；详见 `docs/roadmap/G2_REPORT.md`）
+- **依赖**：PB-025 ✅
+- **baseCommit**：PB-025 的 resultCommit（`SELF`，门禁执行与切片实现同提交）
+- **resultCommit**：`SELF`
+- **范围**：门禁执行 + 报告。新增 `docs/roadmap/G2_REPORT.md`（逐格式逐阶段真实 CLI 输出证据 + 全部验证命令与结果 + 环境 + 已知限制）；零产品代码改动（CLI/测试属 PB-025 本体）。
+- **改动文件**：
+  - `docs/roadmap/G2_REPORT.md`（新增）
+  - 账本（本文件 + `execution-ledger.json`）
+- **门禁逐项结果**：
+  1. CLI Vertical Slice 完全通过（三格式）✅ — XLIFF/CSV/JSON 各在独立 mkdtemp root 走通 create-project→import→segments→CAS edit→qa→export→verify 全阶段；正反路径实测：CAS 陈旧 revision exit 4（`REVISION_CONFLICT`）、正确 revision 成功、锁定段 exit 4（`SEGMENT_LOCKED`，xliff/csv 两腿；json fixture 无 locked 条目已如实记录）、QA 发现 planted 空目标与人为占位符失配（rerun 后消除）、未修改导出逐字节稳定、export→verify `verify: OK`、篡改导出 exit 6 并指名 mismatch 段（真实输出证据见 G2_REPORT.md §4.1–4.3）
+  2. 静态检查与测试基线 ✅ — `bun run typecheck` 9/9 exit 0；`bun test` 588 pass / 2 fail（2 条为 PB-003 起既有上游环境限制，与基线一致）；`cd packages/linguist-cat-store && bun run test` 59 pass / 0 fail；`bun run check:boundaries` 3/3（提交前 + 提交后复跑）
+  3. Hermetic ✅ — 无网络、无真实用户数据、synthetic fixtures + mkdtemp roots、`--seed`/`--now` 注入保证确定性、无后台残留（G2_REPORT.md §5）
+- **knownLimitations**：
+  - CLI 必须 node 运行（node:sqlite；Electron 主进程接入天然满足）；
+  - 最小 QA 为 interim，PB-070 替换（三处标注）；
+  - 重复导入/同毫秒重复导出的冲突未类型化（见 PB-025 条目）；
+  - 打包 smoke 不适用（无 Electron 面）。
+- **G2 结论**：`gate_passed` — 自本提交起解除「未通过前禁止开始 UI 和 Agent Tool」限制。
+- **rollback**：`git reset --hard e450103c`
+
+## PB-030：主进程 Linguist 项目服务（LinguistProjectService）
+
+- **状态**：`integration_verified`（服务级 node --test 15/15 + bun 纯逻辑 12/12 + store 回归 59/59 + typecheck 9/9 + 根 bun test 600/2 与基线一致 + check:boundaries 3/3 + 打包 smoke 18/18 + 打包应用实测 init 探针 OK；无 IPC/UI 面，不声明 packaged_app_verified——打包 smoke 不覆盖本服务行为）
+- **依赖**：PB-025 ✅
+- **baseCommit**：PB-025 的 resultCommit（`0b01bb62`）
+- **resultCommit**：`SELF`
+- **范围**：按计划 §4 在约定路径 `apps/electron/src/main/lib/linguist/` 建立主进程 CAT 项目服务。能力：项目 list/create/get/archive、项目路径解析、cat.db 句柄缓存（显式 close；归档项目一律只读打开——fail closed；归档时丢弃缓存句柄）、结构化健康检查（project.json 可解析 / cat.db 可开 / schema 版本匹配 / source blob sha256 抽查 20 上限）、备份（委托 store VACUUM INTO，返回 linguist 根相对路径）、导入管道 `importAsset(projectId, {bytes, filename})`（registry detectBest → adapter.import → insertImported 单事务 → saveAssetSource；>50MB 抛 IMPORT_TOO_LARGE；归档抛 PROJECT_ARCHIVED；FORMAT_UNSUPPORTED 等类型化错误原样穿透）。启动探针：init() 运行 probeSqliteRuntime()，sqlite 不可用 → degraded（索引仍可读写，DB 操作抛 STORE_SQLITE_UNAVAILABLE），主进程不崩溃。日志只记 id/计数/错误码（计划 §7.4），不记文件名/文本。全部代码全新编写（已登记 SOURCE_PROVENANCE.md）。
+- **关键发现与修正（esbuild 打包兼容性，实测）**：esbuild `--format=cjs` 把 `import.meta` 替换为空对象（`import.meta.url === undefined`），cat-store `runtime.ts` 原 `createRequire(import.meta.url)` 在打包主进程里必抛 `ERR_INVALID_ARG_VALUE`、探针恒为不可用——**打包应用里 CAT 持久化会被静默降级**。修正为 `createNodeRequire()`：import.meta.url → `__filename`（CJS 束内即 dist/main.cjs）→ cwd 三级兜底；对 node:sqlite 内置模块基准只需合法。验证：整个 store 链 esbuild 打 CJS 束后 node 执行探针 ok:true + CatStore 建项/开库/migration 全通；打包应用手动启动实测输出 `[Linguist] CAT 项目服务已初始化（node v22.22.0，备份: VACUUM INTO）`。
+- **promaWorkspaceId 关联决策**：创建项目时缺省按 agent-workspace-manager 的 id 约定（`randomUUID()`，同 createAgentWorkspace）分配工作区 **id 引用**写入项目元数据；调用方可显式传入既有工作区 id。**不创建真实 agent 工作区**（不写 agent-workspaces.json、不复制 skills——避免重名冲突与副作用）；真实工作区创建/绑定属 PB-034 会话逻辑。已在代码头注释与账本记录。
+- **改动文件**：
+  - `apps/electron/src/main/lib/linguist/project-service.ts`（新增：LinguistProjectService + 单例 init/get/closeAllLinguistProjectHandles）
+  - `apps/electron/src/main/lib/linguist/errors.ts`（新增：LINGUIST_SERVICE_ERROR_CODES 四码 + 4 个类型化错误 + mapStoreError + errorCodeOf；store/format/domain 错误穿透约定）
+  - `apps/electron/src/main/lib/linguist/paths.ts`（新增：resolveLinguistRootDir/projectPaths/toRootRelativePath 纯函数）
+  - `apps/electron/src/main/lib/linguist/format-registry.ts`（新增：默认 registry 登记 Xliff/Csv/Json adapter）
+  - `apps/electron/src/main/lib/linguist/project-service.nodetest.ts`（新增 9 条：生命周期/默认工作区分配器/归档只读+写拒绝/句柄缓存语义/健康+三类损坏报告/归档项目健康检查/备份可开副本/未找到映射）
+  - `apps/electron/src/main/lib/linguist/import-pipeline.nodetest.ts`（新增 6 条：xliff/csv/json 端到端导入、不支持格式穿透、50MB+1 拒绝且零写入、类路径 filename 仅作元数据不触盘）
+  - `apps/electron/src/main/lib/linguist/errors.test.ts` + `paths.test.ts`（新增 bun 纯逻辑测试 12 条：错误码契约/映射/穿透/路径解析/根外拒绝；不触 DB）
+  - `apps/electron/src/main/lib/linguist/test/{loader-hooks,register-ts-loader}.mjs`（新增：node 运行器扩展名省略 resolve hook，复用 cat-store 同目录模式）、`test/service-testkit.ts`（mkdtemp/注入时钟熵/工作区分配器/fixture 读取助手）
+  - `packages/linguist-cat-store/src/runtime.ts`（修正：createNodeRequire 三级基准，见上；allowedNewPaths 内无需登记）
+  - `apps/electron/src/main/index.ts`（**已登记触点**：bootstrap 经 `safeRun('initLinguistProjectService', …)` 接线——仅实例化+探针，不注册 IPC（PB-031）；before-quit 增加 closeAllLinguistProjectHandles 清理）
+  - `apps/electron/package.json`（**已登记触点**：新增 `test:linguist` 脚本 = node --test 跑 `*.nodetest.ts`；devDeps +@linguist/cat-core/cat-formats/cat-store workspace:*，对齐 @proma/* 惯例）
+  - `bun.lock`（**已登记触点**：上述 devDeps 的 workspace 锁文件条目，bun install 自动写入，无外部依赖）
+  - `docs/architecture/proma-touchpoints.json` + `PROMA_CORE_TOUCHPOINTS.md`（三条既有条目 ticket 追加 PB-030；总览表补 PB-024 行（PB-024 改 bun.lock 原表漏记）+ 多票共改文件数 7→8；条目总数 39 不变）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（一条全新编写登记）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留后续票）**：IPC handler/schema（PB-031）、UI（PB-032）、导入 IPC 接线（PB-033）、真实 Proma 工作区创建/绑定与会话逻辑（PB-034）、restore（PB-111）。
+- **验证（实测）**：
+  - `cd apps/electron && bun run test:linguist` ✅ **15 pass / 0 fail**（node v22.22.2 --test；覆盖票要求全项：create/list/archive 生命周期、归档只读+写拒绝、健康报告 healthy+三类 broken、备份可开副本、xliff/csv/json fixture 端到端、超限拒绝、无路径 API 形状）
+  - `bun test apps/electron/src/main/lib/linguist/` ✅ **12 pass / 0 fail**（bun 安全纯逻辑，不触 DB；确认 bun 不拾取 `*.nodetest.ts`）
+  - `cd packages/linguist-cat-store && bun run test` ✅ **59 pass / 0 fail**（runtime.ts 修正在 node ESM 下零回归）
+  - esbuild CJS 束探针：`esbuild --bundle --format=cjs`（store 整链）后 node 执行 → `PROBE {"ok":true,"node":"v22.22.2"}` + `DB_OK schemaVersion = 1`
+  - `bun run typecheck` ✅ 9/9 包 exit 0
+  - `bun test` ✅ **600 pass / 2 fail**（588 基线 + 新增 12；2 条失败为 PB-003 起既有上游环境限制 agent-session-manager/channel-runtime-api-key，逐名核对未变差）
+  - `bun run check:boundaries` ✅ 3/3（提交前；提交后复跑）
+  - `cd apps/electron && bun run smoke:pack` ✅（esbuild 主束含服务全部模块，已 grep 证实）
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**（含重启恢复两腿）
+  - 打包应用手动启动（临时 HOME）✅ 主进程日志输出 `[Linguist] CAT 项目服务已初始化（node v22.22.0，备份: VACUUM INTO）`
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 本机首次 smoke 运行被 macOS Keychain 提示（SecurityAgent）卡死在渠道种子步骤（safeStorage 弹窗无人响应；与本票代码无关——7-25 基线日志显示当时 safeStorage 不可用直走明文）。`kill -9` SecurityAgent 后应用回退明文存储（与基线日志同一语义），复跑 18/18；该弹窗为本机环境态，非确定性复现，smoke harness 对其不 hermetic（如实记录）。
+  - bun 无 node:sqlite → 服务测试必须 node 下跑（`test:linguist`；根 `bun test` 不覆盖 `*.nodetest.ts`，与 cat-store 同一约束）；
+  - smoke 的 stdout 管道在 playwright launch 后才挂接，启动早期日志（含 `[Linguist]` init 行）不进 smoke artifacts——打包证据以手动启动实测为准；
+  - promaWorkspaceId 为 id 引用（未建真实工作区，PB-034）；重复导入同一文件仍以 sqlite 主键冲突失败（未类型化，沿用 PB-025 限制）；
+  - 健康检查 source 抽查上限 20 条（spot-check 语义，非全量）；`importAsset` 的 insertImported 与 saveAssetSource 非同一事务（blob 写失败会留无 blob 资产行，健康检查可检出）。
+- **rollback**：`git reset --hard 0b01bb62`
+
+## PB-031：Linguist 项目 Typed IPC（计划 §7.2 六通道）
+
+- **状态**：`integration_verified`（处理器级 node --test 25/25 + bun 契约/形状守卫 7/7 + store 回归 62/62 + typecheck 9/9 + 根 bun test 与基线一致（提交后 607/2）+ check:boundaries 提交后 3/3 + 打包 smoke 18/18；无 renderer UI 面（PB-032/033），不声明 packaged_app_verified——打包 smoke 不覆盖通道行为）
+- **依赖**：PB-030 ✅
+- **baseCommit**：PB-030 的 resultCommit（`cc9a72f2`）
+- **resultCommit**：`SELF`
+- **范围**：按计划 §7.2 落地 6 个项目域 typed 通道（`linguist.projects.{list,create,open,import,getSummary,archive}`），三层结构：shared 契约（`packages/shared/src/types/linguist.ts`）→ 主进程处理器（`apps/electron/src/main/lib/linguist/project-ipc.ts`，不依赖 electron、node --test 直接驱动）→ ipc.ts 薄适配器（注入真实 `dialog.showOpenDialog` picker）→ preload 扁平方法（`linguistProjects{List,Create,Open,Import,GetSummary,Archive}`，house 惯例）。
+- **关键设计决策（结果信封，刻意偏离 house 直返+throw 惯例）**：Electron `ipcRenderer.invoke` 会把 handler 抛出的错误包装为 "Error invoking remote method ..." 并丢弃自定义 `code` 属性，而稳定机器可读错误码是计划 §7.4 硬规则——故 6 通道全部返回 `LinguistIpcResult<T> = {ok:true,data}|{ok:false,error:{code,message}}` 信封。错误码目录 24 个（IPC 层 INVALID_INPUT/INTERNAL + 服务层 4 + store 8 + format 4 + domain 6 穿透）；已知类型化错误透传 code+message，未知错误收敛 INTERNAL + 通用文案（无 stack/内部文本泄露，日志只记 name）。已在 shared 契约头注释、project-ipc.ts 头注释、ipc.ts 注释三处记录该选择。
+- **导入选择器流程（计划 §7.4 合规）**：handler 先校验 projectId 形状 → 服务校验项目存在/未归档（弹窗前失败，picker 调用计数有测试断言为 0）→ 主进程开原生 picker（filters: .xliff/.xlf/.mqxliff/.csv/.tsv/.json）→ 取消返回 `{cancelled:true}`（typed 结果，非错误）→ 主进程 stat 大小护栏（50MB，先于读盘；服务层对 bytes 还有第二道）→ 读盘 → `importAsset({bytes, filename: basename})`。renderer 永不提交路径/字节，返回服务结果 + 被选中文件 basename（展示元数据）。
+- **open 语义**：打开（并缓存）项目 DB 句柄（归档强制只读）+ 返回元数据 + 健康报告（复用 PB-030 checkProjectHealth，spot-check 上限 20）——非 UI 导航。getSummary 走新增的窄方法 `getProjectSummary(id)`：元数据 + 资产 COUNT(*) + 段 GROUP BY status（cat-store 仓库新增 `countByProject()`/`countByStatus()`，不加载段行）。
+- **改动文件**：
+  - `packages/shared/src/types/linguist.ts`（新增，**已登记触点**：6 通道名常量 / 24 稳定错误码目录 / `LinguistIpcResult<T>` 信封 / 请求响应线格式（领域类型 JSON 镜像，@proma/shared 不依赖 linguist 包）/ 校验常量——id `prj-<16hex>`、BCP-47 形状 locale ≤35、name trim 非空 ≤120、workspaceId ≤128、导入扩展名白名单与 50MB 上限）
+  - `packages/shared/src/types/index.ts`（**已登记触点**：桶文件追加 export）
+  - `apps/electron/src/main/lib/linguist/project-ipc.ts`（新增：`createLinguistProjectIpc({getService})` 处理器工厂——输入校验（INVALID_INPUT）、错误映射（穿透/INTERNAL）、picker 抽象；服务惰性解析适配 bootstrap 注册先于 init 的顺序）
+  - `apps/electron/src/main/ipc.ts`（**已登记触点**：6 通道薄适配器注册 + 导入通道注入真实 picker）
+  - `apps/electron/src/preload/index.ts`（**已登记触点**：ElectronAPI 接口 + 实现各增 6 方法）
+  - `apps/electron/src/main/lib/linguist/project-service.ts`（新增 `getProjectSummary(id)` 窄方法 + `LinguistProjectSummary` 类型；复用缓存句柄，归档自动只读）
+  - `packages/linguist-cat-store/src/repositories/{assets,segments}.ts`（各增一个廉价计数只读方法；白名单路径无需登记）+ 对应 nodetest 追加 3 条
+  - `apps/electron/src/main/lib/linguist/project-ipc.nodetest.ts`（新增 10 条：happy path 全通道、15 组校验负例 INVALID_INPUT、未知项目 4 通道 PROJECT_NOT_FOUND、导入取消/成功/归档拒前/超限/不支持格式/坏 id 不触发 picker、未类型化错误收敛 INTERNAL 不泄露内部文本）
+  - `apps/electron/src/main/lib/linguist/ipc-contract.test.ts`（新增 7 条 bun 安全守卫：6 通道名精确匹配计划 §7.2、24 错误码目录完整性、id/locale 模式正反例、上限常量、preload/ipc.ts 源码形状断言）
+  - `apps/electron/src/main/lib/linguist/test/service-testkit.ts`（追加 `fixturePath` 助手——picker stub 需真实文件路径）
+  - `docs/architecture/proma-touchpoints.json` + `PROMA_CORE_TOUCHPOINTS.md`（新增 4 条 PB-031 登记；总览表补 PB-031 行；条目总数 39→43，多票共改文件数 8 不变）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留后续票）**：renderer UI（PB-032 项目列表/摘要、PB-033 导入入口）；段级通道（query/CAS edit/QA，复用同信封模式与 open 缓存句柄）；真实 Proma 工作区创建/绑定（PB-034）；备份/恢复通道（PB-111）。
+- **验证（实测）**：
+  - `cd apps/electron && bun run test:linguist` ✅ **25 pass / 0 fail**（node v22.22.2 --test；PB-030 的 15 + 本票 10）
+  - `bun test apps/electron/src/main/lib/linguist/` ✅ **19 pass / 0 fail**（PB-030 的 12 + 本票 7；确认 bun 不拾取 `*.nodetest.ts`）
+  - `cd packages/linguist-cat-store && bun run test` ✅ **62 pass / 0 fail**（59 + 新增计数方法 3 条）
+  - `bun run typecheck` ✅ 9/9 包 exit 0
+  - `bun test`（提交前）606 pass / 3 fail：2 条既有上游环境限制（agent-session-manager/channel-runtime-api-key，与基线一致）+ 边界 stale-entry 检查对 4 条**未提交**新登记的固有失败（该测试 diff HEAD，登记与代码同票提交前必然 stale）；提交后复跑 ✅ **607 pass / 2 fail** 与基线一致
+  - `bun run check:boundaries`（提交前 2/3，同上固有原因）→ 提交后复跑 ✅ **3/3**
+  - `cd apps/electron && bun run smoke:pack` ✅（esbuild 主束含 project-ipc 全链，已 grep 证实）
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**（含重启恢复两腿）。**SecurityAgent 弹窗复现并处置**：首跑卡在 safeStorage 的 macOS Keychain 提示（SecurityAgent 进程挂起无人响应，应用 bootstrap 停在选择器播种前、主窗口未创建，smoke 报「未找到主窗口」2 PASS / 1 FAIL）——与 PB-030 记录同型、与本票代码无关（手动启动实测复现同一卡点后确认）；`kill -9` 该 SecurityAgent 提示进程后应用回退明文存储（与基线日志同一语义），复跑 18/18（复跑中段该提示又出现一次，再次 kill 后流程继续）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 本机打包 smoke 首跑再次遭遇 macOS Keychain 提示（SecurityAgent，safeStorage）挂起——bootstrap 卡住、主窗口未创建（2 PASS / 1 FAIL）；与本票代码无关（手动启动实测复现同一卡点；PB-030 同型记录）。`kill -9` 该提示进程后应用回退明文存储（与基线日志同一语义），复跑 18/18；smoke harness 对此机环境态不 hermetic（如实记录）；
+  - bun 无 node:sqlite → 处理器测试必须 node 下跑（`test:linguist`；根 `bun test` 不覆盖 `*.nodetest.ts`，与 PB-030 同一约束）；
+  - open 通道复用完整健康报告（source blob 抽查上限 20），为用户触发的低频操作可接受；如需更廉价的 open 摘要可后续拆分；
+  - 导入大小护栏为 stat-then-read（TOCTOU 窗口由服务层 bytes 第二道护栏兜底）；picker 由用户选择文件，选择器过滤器之外的绕过（如手动输入文件名）由 registry detectBest 内容探测兜底（FORMAT_UNSUPPORTED）；
+  - getSummary/open 对未归档项目缓存可写句柄（createProject 已预建 cat.db，无实际建库副作用）；degraded 模式下 DB 依赖通道以 STORE_SQLITE_UNAVAILABLE 信封降级（list/create 索引路径仍可用）；
+  - 通道尚无 in-app UI 消费方（PB-032/033），打包 smoke 只覆盖应用启动不覆盖通道行为——通道行为证据以 node --test 为准。
+- **rollback**：`git reset --hard cc9a72f2`
+
+## PB-032：Project 列表与创建 UI（ProjectsView 真实页面）
+
+- **状态**：`packaged_app_verified`（bun 纯逻辑 24/24 + typecheck 9/9 + 根 bun test 631/2 与基线一致 + check:boundaries 提交前 3/3 + 打包 smoke 18/18 + 打包应用 UI 探针 13/13——真实 UI 驱动走完 空状态→创建→列表→详情（健康）→归档→已归档分组 全环）
+- **依赖**：PB-031 ✅
+- **baseCommit**：PB-031 的 resultCommit（`51a6356f`）
+- **resultCommit**：`SELF`
+- **范围**：把 PB-013 的 ProjectsView 壳替换为真实「项目」页（全部位于白名单 `apps/electron/src/renderer/features/linguist/projects/`）。列表：挂载即 `linguistProjectsList({includeArchived:true})`，加载骨架 / 错误横幅（role="alert" + 重试）/ 空状态（真实创建 CTA）三态；活跃项目按「最近」（updatedAt 降序，代码内注记该定义可后续替换）排列为卡片；段/资产计数由 `linguistProjectsGetSummary` 逐卡并发补拉（不阻塞列表，失败单独降级「计数不可用」）。创建：Radix Dialog 表单（名称/源语言/目标语言），客户端预校验镜像 IPC 规则（trim 非空 ≤120；BCP-47 形状 ≤35——复用 shared 常量），提交成功 toast + 刷新，信封错误码映射为 24 码中文文案显示在对话框内。归档：ConfirmDialog → IPC → 刷新；已归档分组默认折叠（Collapsible），归档卡片虚线边框 + 「已归档」徽章视觉区分。打开：卡片点击 → `linguistProjectsOpen` → 最小详情头部（名称/语言对/时间/健康徽章/六格计数 + Chat/CAT/QA/Artifacts/Files「即将推出」占位）。
+- **失败/修复渲染**：open 信封失败（PROJECT_UNHEALTHY / PROJECT_NOT_FOUND / STORE_* 等类型化错误）→ 可恢复错误态（中文文案 + 稳定码 + 重试/返回列表，不 crash）；open 成功但 healthy=false → 头部与卡片显示「需要修复」警告徽章（图标+文字，非纯色指示）+ 失败检查项清单（仅检查项标签 + detail 错误码/计数——契约保证无客户文本）。会话内 open 带回的健康报告以 React state 记录，驱动卡片角标。
+- **数据纪律（计划 §9.5）**：atom 只放四个 UI 状态（创建对话框开合、表单草稿、选中项目 id、归档分组折叠态，`projects-atoms.ts`）；列表/摘要/健康报告以 React state 持当次 IPC 拉取结果，任何变更（创建/归档/返回列表）后重新拉取，无客户端真源镜像。导入 UI 整体留 PB-033（卡片/详情均无导入按钮，仅详情占位文案提及）。
+- **改动文件**：
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectsView.tsx`（重写：壳 → 真实列表页 + 三态 + 归档确认 + 详情切换）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectCreateDialog.tsx`（新增：创建表单 + 预校验 + 错误码中文化）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectCard.tsx`（新增：项目卡片 + 归档/健康徽章 + 摘要占位三态）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectDetailPanel.tsx`（新增：最小详情——open 状态机 + 健康 + 计数 + 工作台占位）
+  - `apps/electron/src/renderer/features/linguist/projects/projects-atoms.ts`（新增：四个 UI 状态 atom，§9.5）
+  - `apps/electron/src/renderer/features/linguist/projects/project-utils.ts`（新增：纯函数——recent 排序/归档分组/预校验/24 码中文映射/健康摘要/时间格式化）
+  - `apps/electron/src/renderer/features/linguist/projects/project-utils.test.ts`（新增 bun 测试 24 条：排序/分组/校验正反例/错误映射完备性（对照契约 24 码目录）/健康摘要/时间格式化注入 now 确定性）
+  - `apps/electron/scripts/smoke/probe-projects-view.ts`（新增**常驻探针**：tmp HOME 起打包应用，真实 UI 驱动 13 断言——空状态/对话框开合/创建/卡片计数/IPC 真源交叉核对/详情健康/归档确认/归档分组展开/tmp HOME 隔离；node 运行，与 G0/G1 同一约束）
+  - `apps/electron/src/renderer/lib/feature-flags.ts`、`atoms/active-view.ts`、`components/tabs/MainArea.tsx`（**已登记触点**：陈旧「导航壳」注释随真实页面落地更新，仅注释、零逻辑；三处登记 ticket 字段追加 PB-032）
+  - `docs/architecture/proma-touchpoints.json` + `PROMA_CORE_TOUCHPOINTS.md`（三条既有条目 ticket 追加 PB-032；总览表补 PB-032 行；条目总数 43 不变，多票共改文件数 8→10）
+  - `docs/architecture/FEATURE_FLAGS.md`（LINGUIST_PROJECTS_VISIBLE 条目同步真实页面说明）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留后续票）**：导入 UI（PB-033，经 `linguistProjectsImport`，`{cancelled:true}` 为正常分支）；项目内工作台标签页 Chat/CAT/QA/Artifacts/Files 与段级通道消费（Batch 6）；「最近」= updatedAt（未记录最近打开）；归档项目的只读打开体验与列表一致（恢复/修复工具后续票）。
+- **验证（实测）**：
+  - `bun test apps/electron/src/renderer/features/linguist/` ✅ **24 pass / 0 fail**
+  - `bun run typecheck` ✅ 9/9 包 exit 0
+  - `bun test`（提交前）✅ **631 pass / 2 fail**（607 基线 + 新增 24；2 条失败为 PB-003 起既有上游环境限制 agent-session-manager/channel-runtime-api-key，逐名核对未变差）
+  - `bun run check:boundaries` ✅ 3/3（提交前；提交后复跑）
+  - `cd apps/electron && bun run smoke:pack` ✅（dist/renderer 束含 `project-create-name`，已 grep 证实；最终代码二次打包后验证）
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**（含重启恢复两腿）。**SecurityAgent 弹窗复现并处置**：首跑卡在 safeStorage 的 macOS Keychain 提示（与 PB-030/031 同型、与本票代码无关），`kill -9` 该提示进程后应用回退明文存储，流程继续并 18/18
+  - `node scripts/smoke/probe-projects-view.ts` ✅ **13 PASS / 0 FAIL**（真实 UI 全环：空状态 → 创建（`prj-bf5c7b6ca459f414`）→ 卡片计数 0 段·0 资产 → 详情健康徽章 → 归档 → 已归档分组；主进程 list 交叉核对一致；数据落 tmp HOME 的 `.proma/linguist`。运行初同样出现一次 SecurityAgent 提示，kill 后继续）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 本机 smoke/探针运行再次遭遇 macOS Keychain 提示（SecurityAgent，safeStorage）——G0 与探针各出现一次，kill 后应用回退明文存储（与基线日志同一语义），均复跑/继续通过；与本票代码无关（PB-030/031 同型记录），harness 对此机环境态不 hermetic（如实记录）；
+  - 探针只走 UI happy path + 真源交叉核对；错误横幅/需要修复徽章的损坏项目路径由 bun 纯逻辑测试与 PB-030/031 服务级测试覆盖（打包应用内人为造损坏项目会破坏 hermetic 性，未做）；
+  - 健康角标仅反映会话内最近一次 open 的结果（列表首渲染不逐卡跑健康检查——open 全量健康报告含 source 抽查，逐卡跑代价不值得；PB-031 已注记）；
+  - 「最近」排序 = updatedAt（创建/归档会改写；未记录最近打开时间）；
+  - locale 输入为自由文本 + 形状校验（刻意不查表，与 IPC 同一策略）；创建后自动选中/自动打开新项目未做（保守交互，可后续评估）。
+- **rollback**：`git reset --hard 51a6356f`
+
+## PB-033：导入 UI（ProjectDetailPanel 资产区 + getSummary 资产列表扩展）
+
+- **状态**：`packaged_app_verified`（nodetest 27/27 + bun 纯逻辑 27/27 + typecheck 9/9 + 根 bun test 634/2 与基线一致 + check:boundaries 3/3 + 打包 smoke G0 18/18 + 新探针 probe-import 11/11 + PB-032 探针回归 13/13）
+- **依赖**：PB-032 ✅
+- **baseCommit**：PB-032 的 resultCommit（`2829f7e5`）
+- **resultCommit**：`SELF`
+- **范围**：详情面板落地「资产（文件）」区（新文件 `ProjectAssetsSection.tsx`）。「导入文件」按钮 → `linguistProjectsImport`（主进程原生选择器 + 主进程读盘解析，renderer 永不提交路径/字节，计划 §7.4 由设计满足）；归档（只读）项目按钮禁用并附原因提示「已归档项目为只读，无法导入」。忙碌态为**诚实的 indeterminate**（role="status" 阶段文案「导入中（读取并解析文件）」+ 区块 aria-busy）——导入是单次 invoke（读取+解析+落库在主进程内完成），无分阶段事件流，**刻意不伪造 determinate 进度**。成功 → 成功 toast + 经 `onSummaryRefresh` 重拉 getSummary（真源）后新资产出现在列表；资产行 = 文件名 / formatId 徽章 / 段数 / 截断 SHA-256（`truncateSha256`，title 含完整值）+ 带 aria-label 的复制按钮 + 「导入于」（以导入完成即重拉时刻近似——领域 Asset 不携带导入时间戳）+ adapter 警告可展开（aria-expanded；警告仅存于导入结果，摘要不含，故仅刚导入行内联）。信封失败 → 行内 role="alert" 错误区（中文文案 + 稳定码，`describeLinguistIpcError`）+「重试」（重开选择器）；用户取消（`{cancelled:true}` 正常分支）→ 轻 toast「已取消导入」。同一项目多资产在列表累积。
+- **getSummary 扩展（缺口的补齐方案）**：`LinguistProjectSummary` 新增 `assets: LinguistAssetInfo[]`（assetId / filename / formatId / segmentCount / sourceSha256，服务层 `listByProject()` 资产元数据行映射，按创建序，与 assetCount 同源；不加载段行 / source blob）。**通道不变、无新 IPC 通道、24 码目录不变**；触点登记三处（shared/types/linguist.ts 契约扩展 + main/ipc.ts 与 preload/index.ts 注释随动），服务/处理器在白名单 linguist 路径。
+- **失败/异常语义**：归档项目导入被主进程在弹窗前拒绝（PROJECT_ARCHIVED，按钮层面已先行禁用）；超大文件（IMPORT_TOO_LARGE）、不支持格式（FORMAT_UNSUPPORTED）、解析失败（FORMAT_PARSE_ERROR）等全部经既有 24 码中文化走行内错误区；重复导入同一字节+文件名的资产在 store 层撞内容派生 id（UNIQUE → INTERNAL 信封，PB-024 设计），如实展示——专用类型化「重复资产」码刻意不在本票新增（留后续）。
+- **数据纪律（计划 §9.5）**：无新 atom——导入忙碌/错误/最近导入结果/警告展开态均为组件局部 React state（短暂 UI 状态）；资产列表永远是 getSummary 当次拉取结果（ProjectDetailPanel 持有），导入成功后重拉，无客户端真源镜像。
+- **改动文件**：
+  - `packages/shared/src/types/linguist.ts`（**已登记触点**：新增 `LinguistAssetInfo` 线格式类型；`LinguistProjectSummary.assets` 扩展；注释更新）
+  - `apps/electron/src/main/lib/linguist/project-service.ts`（白名单：`getProjectSummary` 映射 `listByProject()` 元数据行入摘要）
+  - `apps/electron/src/main/lib/linguist/project-ipc.ts`（白名单：getSummary 注释随动，逻辑不变）
+  - `apps/electron/src/main/ipc.ts`（**已登记触点**：GET_SUMMARY 注册处注释随动，仅注释）
+  - `apps/electron/src/preload/index.ts`（**已登记触点**：`linguistProjectsGetSummary` 文档注释随动，方法面不变）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectAssetsSection.tsx`（新增：导入入口 + 忙碌/失败/取消三态 + 资产列表 + 警告展开 + 摘要复制）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectDetailPanel.tsx`（`refreshSummary` 重拉 + 资产区挂载 + 陈旧占位文案更新）
+  - `apps/electron/src/renderer/features/linguist/projects/project-utils.ts`（新增纯函数 `truncateSha256`）+ `project-utils.test.ts`（3 条新 bun 测试）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectCard.tsx`（仅注释：导入入口位置说明随 PB-033 落地更新）
+  - `apps/electron/src/main/lib/linguist/project-service.nodetest.ts`（新增服务级测试：空项目 assets=[] → 两次导入按创建序累积、字段与导入结果一一对应、恰好五键、64-hex sha）
+  - `apps/electron/src/main/lib/linguist/project-ipc.nodetest.ts`（新增线格式测试：信封穿透的 assets 形状与导入结果一致）
+  - `apps/electron/scripts/smoke/probe-import.ts`（新增**常驻探针**：启动前用 PB-025 headless CLI（`process.execPath` 运行）在 tmp HOME 的 `.proma/linguist` 根播种 项目A（2 资产）+ 项目B（空），再驱动打包应用——卡片计数 16 段·2 资产 / 详情资产区 / 导入按钮可用 / 行渲染（文件名·formatId·段数·截断摘要）/ 复制按钮 / 页内 getSummary 交叉核对（sha 与播种一致）/ 真实 UI 归档项目B后导入按钮禁用+只读提示 / tmp HOME 隔离，11 断言。**原生文件选择器不可被 Playwright 驱动**——完整导入流由 nodetest（stub picker）覆盖，原生对话框路径留人工 QA）
+  - `docs/architecture/proma-touchpoints.json` + `PROMA_CORE_TOUCHPOINTS.md`（三条既有条目 ticket 追加 PB-033；总览表补 PB-033 行；新增 PB-033 分节；条目总数 43 不变，多票共改文件数 10→13）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留后续票）**：determinate/分阶段导入进度（需主→渲染进度事件流，本票如实 indeterminate 并在 knownLimitations 记录）；原生对话框端到端驱动（人工 QA）；重复资产类型化错误码（现为 INTERNAL 穿透）；工作台标签页（Batch 6）。
+- **验证（实测）**：
+  - `cd apps/electron && bun run test:linguist` ✅ **27 pass / 0 fail**（node v22.22.2 --test；PB-031 的 25 + 本票 2：服务级 assets 形状 + IPC 线格式）
+  - `bun test apps/electron/src/renderer/features/linguist/` ✅ **27 pass / 0 fail**（PB-032 的 24 + 本票 3）
+  - `bun run typecheck` ✅ 9/9 包 exit 0
+  - `bun test` ✅ **634 pass / 2 fail**（631 基线 + 新增 3；2 条失败为 PB-003 起既有上游环境限制 agent-session-manager/channel-runtime-api-key，逐名核对未变差）
+  - `bun run check:boundaries` ✅ 3/3（提交前；提交后复跑）
+  - `cd apps/electron && bun run smoke:pack` ✅（dist/renderer 束含「导入中（读取并解析文件）」，已 grep 证实）
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**（含重启恢复两腿）。**SecurityAgent 弹窗复现并处置**：全壳初始化触及 safeStorage 的 macOS Keychain 提示（SecurityAgent 进程挂起无人响应）——与 PB-030/031/032 同型、与本票代码无关；`kill -9` 该提示进程后应用回退明文存储（与基线日志同一语义），流程继续并 18/18
+  - `node scripts/smoke/probe-import.ts` ✅ **11 PASS / 0 FAIL**（CLI 播种 `prj-614f11af2c92cb72`（8+8 段）→ 卡片计数 → 详情资产区 → 导入按钮可用 → 行渲染 → 复制按钮 → IPC getSummary 交叉核对（assets=2，sha 与播种一致）→ 归档禁用+提示；SecurityAgent 提示在 reload 时出现并被 kill，探针继续。前两次尝试在同一提示处超时（未识别前），处置后通过）
+  - `node scripts/smoke/probe-projects-view.ts` ✅ **13 PASS / 0 FAIL**（PB-032 探针在 PB-033 打包上的回归；同样在 reload 时 kill 一次 SecurityAgent 提示）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 导入进度为诚实的 indeterminate（单次 invoke 无分阶段事件）；determinate/分阶段进度需主→渲染流式事件（后续票）；
+  - 原生文件选择器不可被 Playwright 驱动：打包探针覆盖「到选择器为止」的 UI 接线（按钮在场/可用/归档禁用）与 CLI 播种真实数据下的资产区渲染；完整导入流（stub picker → 服务 → 摘要联动）由 node --test 覆盖；原生对话框端到端路径需人工 QA；
+  - 警告展开渲染走的是「导入结果」路径（警告只存于导入结果，摘要不含），打包探针无法驱动导入故未覆盖该渲染——由纯逻辑与契约测试兜底；
+  - 重复导入同一字节+文件名的资产在 store 层撞内容派生 id（UNIQUE → INTERNAL 信封），UI 如实走行内错误区；专用类型化码未在本票新增；
+  - 资产行无真实导入时间戳（领域 Asset 不携带）；「导入于」仅对刚导入行显示，取导入完成（摘要重拉）时刻；
+  - 本机 G0 与两个探针运行均复现 macOS Keychain 提示（SecurityAgent，safeStorage）——kill 后应用回退明文存储（与基线日志同一语义），全部通过；与本票代码无关（PB-030/031/032 同型记录），harness 对此机环境态不 hermetic（如实记录）；
+  - bun 无 node:sqlite → 服务/处理器测试必须 node 下跑（`test:linguist`；根 `bun test` 不覆盖 `*.nodetest.ts`，与 PB-030 同一约束）。
+- **rollback**：`git reset --hard 2829f7e5`
+
+## PB-034：项目会话绑定（Project → Session Binding；项目对话 = Pi Agent 会话）
+
+- **状态**：`packaged_app_verified`（nodetest 38/38（+11）+ bun 纯逻辑 54/54（+8）+ typecheck 9/9 + 根 bun test 提交后 642/2 与基线一致 + check:boundaries 提交后 3/3 + 打包 smoke G0 18/18 + 新探针 probe-project-session 17/17 + PB-032 探针回归 13/13（含本票更新断言）+ PB-033 探针回归 11/11）
+- **依赖**：PB-033 ✅
+- **baseCommit**：PB-033 的 resultCommit（`a92f2920`）
+- **resultCommit**：`SELF`
+- **范围**：项目对话**就是 Pi Agent 会话**（证据：PB-011 起 Pi 为唯一可见 runtime；Agent 会话栈已有完整持久化/流式/工作区机制，另起会话类型会重复整套栈）——会话元数据携带项目绑定，绑定随 `agent-sessions.json` 持久化。绑定 = `AgentSessionMeta` 新增两个冻结可选字段 `linguistProjectId?` / `linguistProjectName?`（名称快照；普通会话绝不携带）。唯一写入点：`createAgentSession` 第 6 可选参数 `linguistBinding`；**创建后冻结**——`updateAgentSessionMeta` 类型白名单刻意不含这两字段，并在运行时强制保持原值（防御 any 断言绕过），无任何重绑定 API。
+- **绑定状态实时解析（关键实现发现）**：`resolveLinguistBindingStatus`（白名单 `main/lib/linguist/session-binding.ts`）按调用实时求值 active/archived/missing——store `getProject` 只读 `projects.json` 索引，索引缺条目本身**不区分**「已归档」与「目录缺失」，故 missing 需额外一次廉价 fs 检查（`existsSync` 项目目录 + 解析 `project.json`）；不做该检查 missing 会被误报为 archived（实测发现后修正）。状态不落库，永不腐化。
+- **归档只读的主进程硬强制（硬规则 4）**：`agent-orchestrator.ts` `sendMessage` preflight（sessionMeta 加载后、`channel_disabled` 检查前，:1018）调用 `checkLinguistSessionSendBlock(sessionMeta, getLinguistProjectService)`——归档 → `reportPreflightError`（`ErrorCode` 新增 `linguist_project_archived`；持久化 TypedError 进会话 JSONL，用户消息照常落盘——会话可读语义）；`queueMessage`（:2670）同一闸门（throw）。missing / 未绑定 / 服务不可解析 → **fail-open**（规则 5 降级语义：会话保持可用）。renderer 另有徽章/通告/禁用按钮，但真实强制点在主进程（探针以 fake server 0 请求证实）。
+- **新 IPC（信封风格，零新错误码）**：`linguist.sessions.{createForProject,listForProject,getBinding}` 三通道，handler 在白名单 `main/lib/linguist/session-ipc.ts`（复用 PB-031 信封——`ipcRenderer.invoke` 丢弃自定义 code 的既有论证）；信封助手抽取为 `main/lib/linguist/ipc-envelope.ts`（project-ipc.ts 逻辑不变的重构）。24 码目录不变（复用 PROJECT_NOT_FOUND / PROJECT_ARCHIVED / INVALID_INPUT）。preload 扁平方法 `linguistSessions{CreateForProject,ListForProject,GetBinding}`。
+- **Renderer**：详情面板 Chat tab 落地（`role="tab"` 真实选中态，替换「项目工作台即将推出」占位）——`ProjectChatsSection.tsx`：项目对话列表（recent 排序）+「新建项目对话」+ 空状态「尚无项目对话」；归档项目新建禁用 + 只读提示、列表仍可读可打开。会话头部：徽章 `LinguistSessionBindingBadge`（项目名 + 已归档/项目缺失）+ 横条 `LinguistSessionBindingNotice`（归档只读/缺失降级），唯一挂载点 `AgentHeader.tsx`（**AgentView 未改动**）；组件/hook/纯函数在白名单 `renderer/features/linguist/session-binding/`。数据纪律（计划 §9.5）：绑定状态经 IPC 实时拉取，atom 不镜像真源。
+- **改动文件**：
+  - `packages/shared/src/types/agent.ts`（**已登记触点**：绑定两字段 + `linguist_project_archived` 错误码）
+  - `packages/shared/src/types/linguist.ts`（**已登记触点**，兼 PB-031/033：三通道常量 + 会话绑定线格式；24 码目录不变）
+  - `apps/electron/src/main/lib/agent-session-manager.ts`（**已登记触点**：`AgentSessionLinguistBinding` + createAgentSession 第 6 参数 + updateAgentSessionMeta 运行时冻结）
+  - `apps/electron/src/main/lib/agent-orchestrator.ts`（**已登记触点**：sendMessage/queueMessage 两处归档发送闸门）
+  - `apps/electron/src/main/lib/linguist/session-binding.ts`（新增，白名单：状态解析/创建/列表/发送闸门）
+  - `apps/electron/src/main/lib/linguist/session-ipc.ts` + `ipc-envelope.ts`（新增，白名单；project-ipc.ts 信封抽取重构，逻辑不变）
+  - `apps/electron/src/main/ipc.ts`（**已登记触点**：三通道注册）+ `apps/electron/src/preload/index.ts`（**已登记触点**：三个扁平方法）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectChatsSection.tsx`（新增）+ `ProjectDetailPanel.tsx`（Chat tab 落地 + 挂载对话区）
+  - `apps/electron/src/renderer/features/linguist/session-binding/`（新增：useLinguistSessionBinding.ts / LinguistSessionBindingBadge.tsx（含 Notice）/ binding-utils.ts）
+  - `apps/electron/src/renderer/components/agent/AgentHeader.tsx`（**已登记触点**：徽章/通告挂载点）
+  - 测试：`session-binding.nodetest.ts`（6）+ `session-ipc.nodetest.ts`（5）+ `ipc-contract.test.ts`（+3）+ `binding-utils.test.ts`（+5）+ 测试基建 `test/electron-stub.mjs`（bare electron 打桩）与 `test/loader-hooks.mjs`（目录导入解析）
+  - `apps/electron/scripts/smoke/probe-project-session.ts`（新增**常驻探针**，17 断言）+ `probe-projects-view.ts`（第 6 断言随 Chat tab 落地更新）
+  - `docs/architecture/proma-touchpoints.json` + `PROMA_CORE_TOUCHPOINTS.md`（4 条新登记 + 3 条既有追加；总览表补 PB-034 行；条目总数 43→47，多票共改文件数 13 不变）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留后续票）**：重绑定/解绑 API（刻意不做——冻结语义）；项目改名同步会话快照名（快照语义，刻意）；CAT/QA/Artifacts/Files 工作台标签页（Batch 6）；段级通道消费；missing 项目的会话清理工具。
+- **验证（实测）**：
+  - `cd apps/electron && bun run test:linguist` ✅ **38 pass / 0 fail**（node v22.22.2 --test；PB-033 的 27 + 本票 11）
+  - `bun test apps/electron/src/main/lib/linguist/ apps/electron/src/renderer/features/linguist/` ✅ **54 pass / 0 fail**（main 22 + renderer 32；确认 bun 不拾取 `*.nodetest.ts`）
+  - `bun run typecheck` ✅ 9/9 包 exit 0
+  - `bun test` 提交前 641 pass / 3 fail（2 条 PB-003 起既有上游环境限制逐名核对 + 边界 stale-entry 对未提交登记的固有失败，PB-031 同型）→ 提交后复跑 ✅ **642 pass / 2 fail**（634 基线 + 新增 8）
+  - `bun run check:boundaries` 提交前 2/3（同上固有原因）→ 提交后复跑 ✅ **3/3**
+  - `cd apps/electron && bun run smoke:pack` ✅（renderer 束含「尚无项目对话」/`linguist-project-badge`，dist/main.cjs 含 `linguist.sessions`×6 与 `linguist_project_archived`，preload.cjs 含 `linguist.sessions`×3，均已 grep 证实）
+  - `node scripts/smoke/probe-project-session.ts` ✅ **17 PASS / 0 FAIL**（逐项见 G3_REPORT.md §4：CLI 播种 `prj-195e4c7cefb885fd`（8 段）→ Chat tab 真实可选中 → UI 新建项目对话 → 徽章含项目名 → IPC 交叉核对（runtime=pi，meta.linguistProjectId 一致）→ 普通会话未绑定 → IPC 归档 → 列表只读/新建禁用 → **发送主进程阻断（STREAM_ERROR 含「只读」+ JSONL 落盘 linguist_project_archived + 用户消息持久化 + fake server 0 请求）** → 历史可读 → 删项目目录**真实重启** → 徽章 missing + 降级通告 + 绑定持久化（listForProject=1）+ 项目视图存活 → tmp HOME 隔离）
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**（含重启恢复两腿；G0 面零回归）
+  - `node scripts/smoke/probe-projects-view.ts` ✅ **13 PASS / 0 FAIL**（PB-032 探针回归 + 本票更新的 Chat tab 断言；前两次尝试均被 SecurityAgent stall 干扰——见 knownLimitations——看门狗即时 kill 后通过）
+  - `node scripts/smoke/probe-import.ts` ✅ **11 PASS / 0 FAIL**（PB-033 探针回归）
+  - `git status --short` 提交后干净
+- **knownLimitations**：
+  - 本机探针运行继续遭遇 macOS Keychain 提示（SecurityAgent，safeStorage）——G0 与三个探针各 1 次，kill 后应用回退明文存储（与基线日志同一语义）流程继续；probe-projects-view 两次失败尝试均由此引起（stall 耗尽对话框/reload 超时预算，主进程日志无异常），看门狗即时 kill 后 13/13；与本票代码无关（PB-030/031/032/033 同型记录），harness 对此机环境态不 hermetic（如实记录）；
+  - missing 判定依赖一次廉价 fs 检查（existsSync + project.json 解析），在发送 preflight / getBinding 时执行（实测无感知开销）；
+  - 绑定无重绑定 API、名称快照不随项目改名更新（均为刻意的冻结/快照语义）；项目目录删除不可撤销 → 绑定会话永久 missing 降级（可读、发送不阻断）；
+  - 原生文件选择器端到端路径仍需人工 QA（PB-033 已记录，本票未触及导入面）；
+  - 探针只覆盖 Pi runtime 路径（项目对话固定 `agentRuntime='pi'`）；Claude runtime 的绑定会话走 orchestrator 公共 preflight 同一闸门，由 nodetest 覆盖；
+  - bun 无 node:sqlite → 绑定/处理器测试必须 node 下跑（`test:linguist`；根 `bun test` 不覆盖 `*.nodetest.ts`，与 PB-030 起同一约束）。
+- **rollback**：`git reset --hard a92f2920`
+
+## G3 门禁：Batch 3 收口 — 真实 Electron：创建 Project、导入、重启、再次打开，数据完整（计划 §14）
+
+- **状态**：`gate_passed`（门禁唯一硬标准达成：打包应用全环实测通过；详见 `docs/roadmap/G3_REPORT.md`）
+- **依赖**：PB-034 ✅
+- **baseCommit**：PB-034 的 resultCommit（`SELF`，门禁执行与 PB-034 同提交）
+- **resultCommit**：`SELF`
+- **范围**：门禁执行 + 报告。新增 `docs/roadmap/G3_REPORT.md`（全环证据 + 17 断言实录 + 全部验证命令与结果 + 环境 + 已知限制）；零产品代码改动（探针/测试属 PB-034 本体）。
+- **改动文件**：
+  - `docs/roadmap/G3_REPORT.md`（新增）
+  - 账本（本文件 + `execution-ledger.json`）
+- **门禁逐项结果**：
+  1. 真实 Electron 全环 ✅ — 创建 Project（CLI 播种 `prj-195e4c7cefb885fd` / `prj-fb2fa227eba0dedd` + UI 创建 `prj-35e6123607674971` 主进程交叉核对）→ 导入（真实 fixture 8+8 段，卡片计数/资产区/sha 交叉核对一致）→ 重启（probe-project-session 真实 relaunch 腿 + G0 两条重启恢复腿）→ 再次打开数据完整（绑定会话侧边栏在场、listForProject=1、历史消息渲染、agent-sessions.json 落盘绑定 id、段/资产数据一致）（G3_REPORT.md §3 标准 1）
+  2. 归档只读主进程硬强制 ✅ — fake model server 0 请求（到达模型前阻断）+ JSONL 落盘 `linguist_project_archived` + 用户消息持久化 + 列表只读/新建禁用/徽章/通告（§3 标准 2）
+  3. 静态检查与测试基线 ✅ — typecheck 9/9；根 bun test 提交后 642 pass / 2 fail（2 条为 PB-003 起既有上游环境限制，与基线一致）；test:linguist 38/0；bun linguist 范围 54/0；check:boundaries 提交后 3/3（§3 标准 3）
+  4. 四个常驻探针全绿 ✅ — probe-project-session 17/17、run-g0-smoke 18/18、probe-projects-view 13/13、probe-import 11/11（§3 标准 4）
+  5. Hermetic ✅ — 四个探针各自 mkdtemp 临时 HOME + temp-home-isolation 断言、127.0.0.1 fake server、无真实用户数据、无后台残留（G3_REPORT.md §5）
+- **knownLimitations**：
+  - SecurityAgent（safeStorage Keychain 提示）对本机探针不 hermetic——PB-030~034 同型；本轮致 probe-projects-view 两次失败尝试，看门狗即时 kill 后 13/13（非代码回归，如实记录）；
+  - 原生文件选择器端到端需人工 QA；
+  - 绑定冻结/快照语义为刻意设计（无重绑定、快照名不随改名）；
+  - bun 无 node:sqlite → node --test 约束同 PB-030 起各票。
+- **G3 结论**：`gate_passed` — 真实 Electron 全环「创建 Project、导入、重启、再次打开，数据完整」达成。
+- **rollback**：`git reset --hard a92f2920`
+
+## PB-040：常驻项目 Skill（Project Assistant Skill；仅项目会话注入）
+
+- **状态**：`packaged_app_verified`（nodetest 45/45（+7）+ bun 内容门禁 4/4 + typecheck 9/9 + 根 bun test 提交前 646/2 与基线一致 + check:boundaries 3/3 + 打包 smoke G0 18/18 + 新探针 probe-project-skill 10/10 + PB-032/033/034 探针回归 13/13、11/11、17/17）
+- **依赖**：PB-034 ✅
+- **baseCommit**：PB-034 的 resultCommit（`6987ad26`）
+- **resultCommit**：`SELF`
+- **范围**：计划 §8.1/§8.4 最小常驻项目 Skill——七条中文不变量逐字入 `resources/linguist-skills/project-assistant/SKILL.md`（frontmatter 仅 name/description/version，零工具授予、零机器路径），经既有 `additionalSkillPaths` 缝**只对项目绑定会话注入**，普通会话零注入。Skill 只声明工作守则：不注册工具、不扩大文件范围、不绕过 Proposal、不声称 QA 通过、不做交付（§8.4）。
+- **Skill 到达模型的机制（关键实现发现）**：Pi SDK `DefaultResourceLoader`（`noSkills: true` + `additionalSkillPaths` + Proma override 白名单过滤）→ 含 SKILL.md 的目录即 Skill 根 → `_rebuildSystemPrompt` 把 `<available_skills>`（name/description/location）追加进 system prompt（Proma customPrompt 分支同样追加，前提是 read 工具在场——Proma 内建 `createReadToolDefinition` 即 `read`）→ 模型按需 read 正文。**不变量是建议性引导**：正文非每轮内联，模型读到才生效；`<location>` 为打包后绝对路径属 SDK 设计（「prompt 不含本机绝对路径」规则针对 Skill **正文**，由 bun 门禁强制执行）。
+- **注入规则**（`main/lib/linguist/project-skill.ts` 的 `resolveLinguistSessionSkillPaths`，每次发送实时重解析、不落会话状态，resume 走同一解析自然一致）：普通会话（无 linguistProjectId）→ []；绑定 active → 注入；**绑定 archived → 仍注入**（如实记录的选择：归档会话发送已被 PB-034 主进程闸门阻断，Skill 注入与否不影响只读语义，保持「绑定在场且项目数据完整即注入」单一规则，不为不可达分支设特例）；绑定 missing → []（降级）；服务不可解析 / SKILL.md 缺失 → []（fail closed 记警告，绝不掀翻发送链路）。queueMessage 无需改动——复用 sendMessage 建立的活跃 Pi 会话。
+- **路径解析**（`getDefaultProjectSkillDir`）：打包 = `process.resourcesPath/linguist-skills/project-assistant`（electron-builder extraResources 新增仓根 `resources/linguist-skills` → `linguist-skills`，对照 `../../tutorial` 模式；**只进 Resources，不同步 ~/.proma**——用户不可改，注入完全由主进程按绑定控制）；开发 = 束后 `dist/` 上溯三级到仓根（含 SKILL.md 才返回，否则 undefined 降级）。模块不 import electron（node --test 直驱；ESM 上下文无 __dirname/resourcesPath → undefined，测试经显式 skillDir + 临时 resourcesPath 注入，打包布局由探针端到端覆盖）。
+- **Orchestrator 缝**（已登记触点，`agent-orchestrator.ts:1664`）：Pi queryOptions 装配处原 `...(workspaceSlug ? { additionalSkillPaths: [...] } : {})` 扩展为工作区 Skill 目录 + `resolveLinguistSessionSkillPaths(sessionMeta, getLinguistProjectService)` 合并数组；项目对话本无工作区（此前无任何 additionalSkillPaths），普通会话/无绑定保持原状零注入。
+- **改动文件**：
+  - `resources/linguist-skills/project-assistant/SKILL.md`（新增，白名单路径：七条不变量逐字 + 「CAT 工具由系统提供」指针 + 不授予能力声明；frontmatter name=linguist-project-assistant）
+  - `apps/electron/electron-builder.yml`（**已登记触点**，兼 PB-010：extraResources 新增 linguist-skills 一项）
+  - `apps/electron/src/main/lib/agent-orchestrator.ts`（**已登记触点**，兼 PB-034：additionalSkillPaths 缝扩展 + import）
+  - `apps/electron/src/main/lib/linguist/project-skill.ts`（新增，白名单：解析规则 + 默认目录解析 + 注入规则单一真源）
+  - `apps/electron/src/main/lib/linguist/project-skill.nodetest.ts`（新增 7 条：普通会话无/active 有/archived 有（记录选择）/missing 无/未知项目无/服务抛错 fail closed/SKILL.md 缺失降级/重启 resume 一致/默认目录两分支）
+  - `tests/linguist-project-skill.test.ts`（新增 4 条 bun 内容门禁：七条不变量逐字在场、frontmatter 键白名单（无工具/权限授予）、全文无 POSIX 绝对路径/~/盘符/当前 homedir——「TM/TB」词内斜杠不计）
+  - `apps/electron/scripts/smoke/probe-project-skill.ts`（新增**常驻探针**，10 断言；断言点如实记录：Skill 是否到达模型的唯一诚实端到端观测面 = 真实发往模型的 HTTP 请求体——fake model server 新增 opt-in `captureSystemPrompt`（默认关闭，既有探针零影响），直接断言请求体 system prompt 的 `<available_skills>`）
+  - `apps/electron/scripts/smoke/fake-model-server.ts`（白名单路径：opt-in system prompt 捕获，加性可选字段）
+  - `apps/electron/scripts/smoke/probe-projects-view.ts`（**预存在缺陷修复**，非 PB-040 功能：两处 `新建项目` 定位器 `.first()` 歧义——侧边栏「项目」分组头部有同名 aria-label 图标按钮（工作区分组入口，无文本内容，打开的是侧边栏内联输入而非对话框），本机时序下 DOM 序先于视图 CTA 被误中；改 `filter({ hasText: '新建项目' })` 两状态唯一。**base 复现证明非本票回归**：同一失败在 stash 掉本票两文件重打包后逐字节复现；对话框功能本身正常（诊断脚本逐按钮验证））
+  - `docs/architecture/proma-touchpoints.json` + `PROMA_CORE_TOUCHPOINTS.md`（2 条既有条目追加 PB-040 + 总览表 PB-040 行；条目总数 47 不变，多票共改文件 13→15）
+  - 账本（本文件 + `execution-ledger.json`）
+- **未做（留后续票）**：不变量仅建议性引导（正文非每轮内联；CAT customTools 落地后由工具描述/闸门硬强制，Batch 4）；archived 注入与否不影响只读语义（发送闸门在上游）；Skill 无版本同步机制（不同于 default-skills 的 ~/.proma 同步——刻意，防用户篡改）；`<location>` 绝对路径泄漏属 SDK 设计未改。
+- **验证（实测）**：
+  - `bun run typecheck` ✅ 9/9 包 exit 0
+  - `bun test tests/linguist-project-skill.test.ts` ✅ 4/4
+  - `bun test` 提交前 ✅ **646 pass / 2 fail**（642 基线 + 新增 4；2 条为 PB-003 起既有上游环境限制逐名核对：agent-session-manager / channel-runtime-api-key 的 electron 模块导入）
+  - `bun run check:boundaries` 提交前 ✅ 3/3（两触点文件相对基线本就有改动，无 stale；新文件全落白名单）
+  - `cd apps/electron && bun run test:linguist` ✅ **45 pass / 0 fail**（node v22.22.2 --test；PB-034 的 38 + 本票 7）
+  - `cd apps/electron && bun run smoke:pack` ✅（产物 `Contents/Resources/linguist-skills/project-assistant/SKILL.md` 在场；dist/main.cjs 含解析代码，均已证实）
+  - `node scripts/smoke/probe-project-skill.ts` ✅ **10 PASS / 0 FAIL**（CLI 播种 → UI 新建项目对话 → 首发请求 system prompt 含 `<name>linguist-project-assistant</name>` 且 location 指向打包 `Contents/Resources/linguist-skills/project-assistant/SKILL.md` → 同会话第二条（resume 路径）仍含 → 普通会话请求不含 → tmp HOME 隔离）
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ **18 PASS / 0 FAIL**
+  - `node scripts/smoke/probe-project-session.ts` ✅ **17 PASS / 0 FAIL**（PB-034 回归）
+  - `node scripts/smoke/probe-projects-view.ts` ✅ **13 PASS / 0 FAIL**（定位器修复后；修复前在本票构建 3 连失败 + base 构建 1 次复现，均为同一定位器歧义）
+  - `node scripts/smoke/probe-import.ts` ✅ **11 PASS / 0 FAIL**（PB-033 回归）
+- **knownLimitations**：
+  - 本机探针运行继续遭遇 macOS Keychain 提示（SecurityAgent，safeStorage）——probe-project-skill 首次运行 1 次，kill 后应用回退明文存储流程继续（PB-030~034 同型记录），与本票代码无关；后续运行由 5s 看门狗护航；
+  - 不变量为建议性引导（见「未做」）；`<location>` 绝对路径属 SDK 设计；
+  - archived 仍注入为记录的选择（发送已被 PB-034 闸门阻断，规则单一优先）；
+  - node --test ESM 上下文不覆盖开发 CJS 束的 __dirname 分支（由显式注入 + 打包探针 + bun 仓根布局门禁兜底）；
+  - bun 无 node:sqlite → 解析矩阵测试必须 node 下跑（`test:linguist`；根 `bun test` 不覆盖 `*.nodetest.ts`，PB-030 起同一约束）。
+- **rollback**：`git reset --hard 6987ad26`
+
+## PB-041：只读 CAT 工具（read-only CAT Tools；计划 §7.3 v1 只读腿）
+
+- **状态**：`unit_verified`
+- **依赖**：PB-040 ✅
+- **baseCommit**：PB-040 的 resultCommit（`8110ab77`）
+- **resultCommit**：`SELF`
+- **范围**：新包 `packages/linguist-cat-tools/`（`@linguist/cat-tools`）——计划 §7.3 v1 只读腿五个工具（`cat_project_summary` / `cat_list_assets` / `cat_get_segments` / `cat_search_tm` / `cat_search_terms`）实现为 Pi ToolDefinition（`defineTool`，形状以 SDK dist 类型为准：name/label/description/parameters(TypeBox)/execute→`{content, details}`）。propose/QA/export 工具留 PB-051/071/072；accept/commit 工具按计划 §7.3 第二清单**永久不做**。
+- **绑定模型（计划 PB-041 硬规则）**：工具实现**绝不**接受来自模型输入的 projectId/assetId-from-nowhere——`createLinguistCatTools(deps)` 的 `deps.resolveProject(callInfo)` 由宿主注入，每次工具执行实时调用（返回 `ResolvedLinguistCatProject | LinguistCatToolError`；抛类型化错误等价穿透）。Electron 侧由 PB-042 从会话元数据实现；本票测试用 fakes。`callInfo` 只含 toolName/toolCallId，不含模型参数。
+- **错误模型**：Pi 惯例为 **throw on failure**（pi-agent-core AgentTool 文档明示，内建 read 工具同款）——类型化 `LinguistCatToolError` 携带稳定 code（`BINDING_MISSING` / `PROJECT_MISSING` / `ASSET_NOT_FOUND` / `INVALID_ARGUMENT`），消息统一 `[CODE]` 前缀使 code 对模型可见；store/domain 类型化错误（STORE_SQLITE_UNAVAILABLE 等）原样穿透不包装。
+- **输出约束（计划 §7.4）**：标准分页信封 `{items, total, limit, offset, hasMore}`；硬上限 segments 100 / assets 200 / TM/TB 50（超限 **clamp + note**，非错误——如实记录的选择）；total 走新增 `SegmentsRepository.count`（COUNT(*)，与 query 共享 WHERE 构造，不加载行）；ids 全为内容派生稳定 id；**零绝对路径**（递归扫描测试断言）；**零日志**（工具包无任何 console 调用，测试断言——「不记录客户文本」的最简合规）。
+- **TM/TB**：tm_units/term_entries 表在 Batch 8 前为空——本票在 cat-store 新增**只读** `TmUnitsRepository`/`TermEntriesRepository`（project_id 作用域、LIKE 转义、search+count），空表返回 `{results: [], note}` 干净空结果而非错误；播种行测试证明搜索为真（非硬编码空）。
+- **归档语义（如实记录）**：归档项目打开即只读（PB-030 fail-closed），只读对**读取**无影响——工具在归档只读句柄上正常工作，summary 携带 `archived: true` + note；写拒绝是 store/service 层职责，不在本票。
+- **改动文件**：
+  - `packages/linguist-cat-tools/`（整包新增：`src/{index,types,errors,pagination,factory}.ts`、`src/{pagination,errors}.test.ts`（bun 纯测试）、`src/tools.nodetest.ts`（node --test 真实 store）、`test/` 两个 `.mjs` loader（复用 cat-store 同名模式）、package.json/tsconfig.json）
+  - `packages/linguist-cat-store/src/repositories/segments.ts`（白名单：新增 `count()`；WHERE 构造提取为共享函数防漂移）
+  - `packages/linguist-cat-store/src/repositories/{tm-units,term-entries}.ts`（白名单新增只读仓库）
+  - `packages/linguist-cat-store/src/{project-database,index}.ts`（白名单：仓库接线 + 导出）
+  - `bun.lock`（**已登记触点**，追加 PB-041：workspace 锁文件条目；无新增第三方包——chalk/jiti/semver 的 hoist 归位随新 dependent 变为 pi-coding-agent 版本胜出，chalk4 消费方全保留嵌套 4.x，`build:main` 实测通过）
+  - `docs/architecture/proma-touchpoints.json` + `PROMA_CORE_TOUCHPOINTS.md`（bun.lock 条目追加 PB-041 + 总览表 PB-041 行；条目总数 47 不变）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（整包新写登记）
+  - 账本（本文件 + `execution-ledger.json`）
+- **验证（实测）**：
+  - `bun run typecheck` ✅ **10/10** 包 exit 0（基线 9 + 新包）
+  - `cd packages/linguist-cat-tools && bun run test` ✅ **14 pass / 0 fail**（node v22 --test：五工具 happy path、分页边界（offset 越界/clamp+note/hasMore/跨页顺序一致）、精确 id、assetId/status/search 过滤、LIKE 通配符字面化、空 TM/TB 干净空、播种行真搜索、绑定错误矩阵（unbound→BINDING_MISSING 五工具全测/missing→PROJECT_MISSING/resolver 抛 StoreSqliteUnavailableError 原样穿透）、归档只读句柄读取正常、递归无绝对路径扫描 + JSON round-trip + 零 console 输出、10k 段 21 次分页查询 p95<500ms 上限实测 ~ms 级且结果硬封顶 100 条）
+  - `bun test`（包内纯测试）✅ 10/10（分页 clamp/INVALID_ARGUMENT 矩阵、错误码注册表稳定 + `[CODE]` 前缀）
+  - 根 `bun test` ✅ **656 pass / 2 fail**（基线 646 + 新增 10；2 条为 PB-003 起既有上游环境限制逐名核对：agent-session-manager / channel-runtime-api-key 的 electron 模块导入）
+  - `bun run check:boundaries`（提交后）✅ 3/3（新文件全落白名单 `packages/linguist-*`/`docs/`；bun.lock 为已登记条目）
+  - `cd apps/electron && bun run test:linguist` ✅ 45/0（本票无 Electron 改动，回归确认）
+  - `cd packages/linguist-cat-store && bun run test` ✅ 62/0（store 既有测试不受影响）
+- **knownLimitations**：
+  - `cat_list_assets` 的分页在内存切片（`listByProject()` 全量资产**元数据**行后 slice）——资产为文件级（数十量级），段级体量永不加载；与 PB-031 summary 同一数据源。段级分页走 SQL LIMIT/OFFSET + COUNT(*)。
+  - 空 TM/TB 时 clamp note 被空结果 note 覆盖（limit 仍生效为 50；两 note 互斥，空结果语义优先）。
+  - `now`/`entropy` deps 为 PB-051+ propose 腿预留，只读腿未使用（接口占位，文档明示）。
+  - bun 无 node:sqlite → 行为测试必须 node 下跑（包 `test` 脚本；根 `bun test` 不覆盖 `*.nodetest.ts`，PB-030 起同一约束）。
+- **rollback**：`git reset --hard 8110ab77`
+
+## PB-042：将 CAT Tools 接入 Pi `customTools`
+
+- **状态**：`real_machine_verified`
+- **依赖**：PB-041 ✅
+- **baseCommit**：`9e4d1415`
+- **resultCommit**：`SELF`
+- **范围**：项目绑定会话按冻结的 `linguistProjectId` 装配 PB-041 的 5 个只读 CAT 工具；普通会话不装配。工具调用时实时解析项目状态，missing 返回 `PROJECT_MISSING`；归档发送仍由 PB-034 主进程闸门阻断。合并前检查与内建/MCP 工具重名并 fail loud。
+- **关键修复**：初次打包启动暴露 `ERR_PACKAGE_PATH_NOT_EXPORTED`：CAT 工厂运行时引入 ESM-only `@earendil-works/pi-coding-agent`，而 Electron 主进程为 CJS。已改为类型导入 + 本地类型保持恒等函数，并把该包移至 devDependency；打包应用随后可正常启动并完成工具 round-trip。
+- **改动文件**：
+  - `apps/electron/src/main/lib/agent-orchestrator.ts`、`apps/electron/package.json`、`bun.lock`（已登记 Proma 触点；Electron 版本 0.15.11→0.15.12）
+  - `apps/electron/src/main/lib/linguist/session-cat-tools.ts`、`session-cat-tools.nodetest.ts`
+  - `packages/linguist-cat-tools/src/factory.ts`、`tools.nodetest.ts`、`package.json`（0.0.0→0.0.1）
+  - `apps/electron/scripts/smoke/fake-model-server.ts`、`probe-cat-tools.ts`
+  - `docs/architecture/{proma-touchpoints.json,PROMA_CORE_TOUCHPOINTS.md}`、`docs/attribution/SOURCE_PROVENANCE.md`
+  - 账本（本文件 + `execution-ledger.json`）
+- **验证（实测）**：
+  - `bun run typecheck` ✅ 10/10
+  - `cd apps/electron && bun run test:linguist` ✅ 49/0
+  - `cd packages/linguist-cat-tools && bun run test` ✅ 14/0
+  - `bun test` ✅ 656/2（2 条 PB-003 起既有 Electron/Bun 环境失败，未增加）
+  - `bun run check:boundaries` ✅ 3/3
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ 18/18
+  - `node scripts/smoke/probe-cat-tools.ts` ✅ 13/13（打包 App：项目会话向模型广告 5 个 CAT 工具；`cat_get_segments` 读取真实临时项目并把含 `Health Potion` 的 tool result 回送模型；resume 仍绑定；普通会话无 CAT）
+- **knownLimitations**：
+  - macOS `SecurityAgent` 在两个打包探针的渠道 seed 阶段各阻塞一次；按既有环境处置终止后 safeStorage 回退，探针全绿。该环境限制自 PB-030 起存在。
+  - 本票只接入既有 5 个只读工具；Proposal/QA/export 写能力按后续票增加，accept/commit 工具仍严格不存在。
+- **rollback**：`git reset --hard 9e4d1415`
+
+## PB-043：Tool Activity 文案
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-042 ✅
+- **baseCommit**：`31ba4fa4`
+- **resultCommit**：`SELF`
+- **范围**：复用 Proma 既有 `getToolPhrase` 单一入口，为五个 CAT 工具增加中文活动主标题；Agent 与 Chat 渲染路径自动共享。`cat_get_segments` 显示「读取 N 个片段」，`cat_search_terms` 显示「搜索术语 “…”」，其余为检查项目摘要、查看项目文件、查找翻译记忆。辅助 display name 同步中文化，不以 `cat_*` JSON 函数名作主标题。
+- **改动文件**：
+  - `apps/electron/src/renderer/components/agent/tool-phrase.ts`、`tool-utils.ts`、`tool-phrase.test.ts`（Proma 触点已登记）
+  - `apps/electron/package.json`、`bun.lock`（0.15.12→0.15.13；既有触点追加 PB-043）
+  - `docs/architecture/{proma-touchpoints.json,PROMA_CORE_TOUCHPOINTS.md}`
+  - 账本（本文件 + `execution-ledger.json`）
+- **验证（实测）**：
+  - `bun test apps/electron/src/renderer/components/agent/tool-phrase.test.ts` ✅ 2/2（12 assertions）
+  - `bun run typecheck` ✅ 10/10
+  - `bun test`（提交前）657 pass / 3 fail：新增文案测试已通过；2 条为 PB-003 起既有环境失败；第 3 条仅因边界测试按 HEAD 检查、当前触点尚未提交，提交后复跑。
+  - `bun test`（提交后）✅ 658 pass / 2 fail（仅余两条既有环境失败）；`bun run check:boundaries` ✅ 3/3。
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅
+  - `node scripts/smoke/run-g0-smoke.ts`：首次被 `SecurityAgent` 耗尽窗口超时（2 pass / 1 environment fail）；清理后同一产物重跑 ✅ 18/18。
+- **knownLimitations**：
+  - 本票没有为 CAT 结果增加专用可视化；仍复用既有展开结果面，符合仅改活动文案的票面范围。
+  - macOS `SecurityAgent` 非 hermetic，首次 G0 失败已如实记录。
+- **rollback**：`git reset --hard 31ba4fa4`
+
+## PB-044：Project Chat 真机 Smoke
+
+- **状态**：`real_machine_verified`
+- **依赖**：PB-043 ✅
+- **baseCommit**：`6f9dc85c`
+- **resultCommit**：`SELF`
+- **范围**：复用 PB-042 的打包态 CAT 工具探针，增加计划规定的精确脚本：项目会话发送「总结这个项目」→ fake model 请求 `cat_project_summary` → 打包 Electron 执行真实 CAT 工具并把含项目名的 tool result 回送模型 → fake model 以 3 个内容 chunk 流式返回 final。没有新增产品功能。
+- **关键修复**：
+  - `sendAndWaitComplete()` 改为等待当前会话的 complete 计数增加，避免同会话多轮时误把历史 complete 当本轮完成。
+  - fake model 仅在最后一条消息为 `role:"tool"` 时进入 tool-result follow-up；原 `.some()` 会被会话历史中的旧工具消息误触发，导致后续独立工具轮次被跳过。
+- **改动文件**：
+  - `apps/electron/scripts/smoke/probe-cat-tools.ts`、`fake-model-server.ts`
+  - `apps/electron/package.json`、`bun.lock`（0.15.13→0.15.14；既有 Proma 触点追加 PB-044）
+  - `docs/architecture/{proma-touchpoints.json,PROMA_CORE_TOUCHPOINTS.md}`
+  - 账本（本文件 + `execution-ledger.json`）
+- **验证（实测）**：
+  - 失败测试（实现前）✅：`node scripts/smoke/probe-cat-tools.ts` 因缺少 `FAKE_CAT_SUMMARY_TOOL_NAME` / `G4_SUMMARY_MARKER` 导出而失败。
+  - 功能红测 ✅：初版场景暴露历史 tool message 误判，`g4-project-summary-roundtrip` 显示 tool=false/result=false；修正 follow-up 判定后通过。
+  - `bun run typecheck` ✅ 10/10
+  - `bun test` ✅ 658 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅
+  - `node scripts/smoke/probe-cat-tools.ts` ✅ 14/14；G4 断言实录：`cat_project_summary=true`、tool result 含项目名、final marker 到达、5 个 text events、complete=true。
+- **knownLimitations**：
+  - 首次功能运行受 `SecurityAgent` safeStorage 弹窗影响而关闭；另一次由旧打包 App 进程占用 single-instance 锁导致无主窗口。清理精确进程后，同一产物 14/14；均为本机环境态，不是产品失败。
+  - 这是确定性 fake model 的真实打包 Electron 工具往返，不是外部 Provider/公网 API 验证。
+- **rollback**：`git reset --hard 6f9dc85c`
+
+## G4 门禁：CAT Tool 与 Skill 接入 Pi
+
+- **状态**：`gate_passed`
+- **依赖**：PB-044 ✅
+- **baseCommit**：`c5d878b9`
+- **resultCommit**：`SELF`
+- **范围**：仅执行 Batch 4 Gate、生成 `docs/roadmap/G4_REPORT.md` 并更新双账本；没有产品代码改动。
+- **门禁结果**：
+  1. 打包 Electron 精确主链 ✅：「总结这个项目」→ `cat_project_summary` → 真实 tool result 含项目名 → 5 个流式 text events → complete（probe-cat-tools 14/14）。
+  2. Skill 与绑定 ✅：Project Skill 10/10；项目会话绑定/归档硬阻断/重启降级 17/17。
+  3. Proma 回归 ✅：G0 18/18，覆盖 text/thinking/tool、Stop、Retry、context error、持久化与重启。
+  4. 静态与单元 ✅：typecheck 10/10；test:linguist 49/49；cat-tools 14/14；boundaries 3/3；根 bun test 658/2（仅两条既有 PB-003 环境失败）。
+  5. Hermetic ✅：临时 HOME + synthetic fixtures + 本地 fake model；不触碰真实用户数据。
+- **knownLimitations**：
+  - 清理了一条更早遗留的 `/tmp/pb042-head-check` 循环进程；它会持续抢 Electron single-instance，清理前运行不作为 Gate 证据。
+  - `SecurityAgent` safeStorage 弹窗仍非 hermetic；逐次终止后应用按既有行为回落 plaintext，最终四个探针均完整退出码 0。
+  - 本 Gate 不验证外部 Provider；写能力属于后续 Batch。
+- **结论**：`gate_passed`；详见 `docs/roadmap/G4_REPORT.md`。
+- **rollback**：`git reset --hard c5d878b9`
+
+## PB-050：Proposal Domain 和 Repository
+
+- **状态**：`integration_verified`
+- **依赖**：G4 ✅
+- **baseCommit**：`ddf87203`
+- **resultCommit**：`SELF`
+- **范围**：在既有 `cat-core` Proposal 生命周期和 `ProposalsRepository` 两个 seam 内补齐本票，不新增平行 service。Proposal 新增 `expired` 终态；Repository 新增原子批量创建/接受、pending 查询和 stale 过期，单条接口复用批量事务实现。
+- **关键语义**：
+  - 创建时主仓库强制 unknown/locked/baseRevision 检查；任一项失败整批回滚。
+  - 内容派生 ID 相同且仍 pending 时幂等返回既有行；terminal Proposal 不得复活为 pending。
+  - `acceptMany` 去重输入 ID，并在一个 `BEGIN IMMEDIATE` 事务中更新 Proposal、Segment 与 SegmentRevision；任一 stale/locked/not-found/非法状态使全选回滚。
+  - `expireStale` 只把 `base_revision <> segment.revision` 的 pending Proposal 标为 expired；`listPending` 自动排除。
+- **改动文件**：
+  - `packages/linguist-cat-core/src/{proposal.ts,proposal.test.ts,index.ts}` + `package.json`（0.0.1）
+  - `packages/linguist-cat-store/src/repositories/proposals.ts`、`src/proposals.nodetest.ts` + `package.json`（0.0.1）
+  - `bun.lock`（既有 Proma 触点追加 PB-050；仅 workspace patch 版本，无新增依赖）
+  - `docs/architecture/{proma-touchpoints.json,PROMA_CORE_TOUCHPOINTS.md}`
+  - 账本（本文件 + `execution-ledger.json`）
+- **TDD 实录**：
+  - RED：`expireProposal` 导出不存在；duplicate pending 触发 SQLite UNIQUE；`insertPendingMany` / `acceptMany` / `expireStale` 方法不存在。
+  - GREEN：core Proposal 21/21（含 serialization）；cat-store 68/68，其中 Proposal repository 12 条全绿。
+- **验证（实测）**：
+  - `bun test packages/linguist-cat-core/src/proposal.test.ts packages/linguist-cat-core/src/serialization.test.ts` ✅ 21/21
+  - `cd packages/linguist-cat-store && bun run test` ✅ 68/68（PB-050 后 Proposal 子集 12 条）
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：659 pass / 2 fail（新增 1 个 bun 生命周期测试；仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+- **knownLimitations**：
+  - 单批最多 50 是 `cat_propose_translations` 的信任边界，留 PB-051 强制；Repository 本身不设业务批量上限。
+  - stale accept 仍抛 `STALE_PROPOSAL` 并保持 pending（事务失败不得附带状态写）；调用 `expireStale` 才显式物化 expired 状态。
+  - 内容派生 ID 不含 evidence/model/session 元数据；pending duplicate 采用 first-write-wins，terminal duplicate 明确拒绝，绝不改写历史归属。
+- **rollback**：`git reset --hard ddf87203`
+
+## PB-051：`cat_propose_translations` Proposal Tool
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-050 ✅
+- **baseCommit**：`93598fca`
+- **resultCommit**：`SELF`
+- **范围**：在既有 `createLinguistCatTools` 工厂内追加一个 Proposal ToolDefinition，直接复用 PB-050 `insertPendingMany` 深接口和 cat-store 既有 placeholder/tag QA，不新增平行 service。会话 resolver 注入 `sessionId` / `modelId` provenance；Tool Activity 复用 Proma 既有统一短语入口。
+- **关键语义**：
+  - 输入仅含 `segmentProposals`，不接受 `projectId`；每次 1–50 条，整批原子创建。
+  - 空目标、placeholder/tag signature 不一致、unknown、locked、stale 均拒绝；任一失败不留下 Proposal。
+  - 成功只写 pending Proposal 并返回 Proposal ID；Segment target/revision 保持不变。
+  - 工具集合明确不含 accept/commit；归档项目由 cat-store read-only guard 拒绝 Proposal 写入。
+- **改动文件**：
+  - `packages/linguist-cat-tools/src/{factory.ts,types.ts,index.ts,tools.nodetest.ts}` + `package.json`（0.0.2）
+  - `packages/linguist-cat-store/src/index.ts` + `package.json`（复用导出 minimalQaSegment，0.0.2）
+  - `apps/electron/src/main/lib/linguist/session-cat-tools.ts` + nodetest（会话 provenance）
+  - `apps/electron/src/renderer/components/agent/{tool-phrase.ts,tool-utils.ts,tool-phrase.test.ts}`（既有触点追加 PB-051）
+  - `apps/electron/scripts/smoke/probe-cat-tools.ts`（打包产物六工具广告/resume 守卫）
+  - `apps/electron/package.json`（0.15.15）、`bun.lock`、触点文档与双账本
+- **TDD 实录**：
+  - RED：工具未注册；随后暴露 factory 数量、provenance、binding 参数遗漏。
+  - RED：空白目标被接受；加入 trim 信任边界与既有 deterministic placeholder/tag QA 后转绿。
+  - RED：主进程会话创建的 Proposal 缺少 `sessionId`；在现有 session resolver 注入 metadata 后转绿。
+  - RED：UI 回退显示原始 `cat_propose_translations`；复用统一 Tool Activity 映射后转绿。
+- **验证（实测）**：
+  - `cd packages/linguist-cat-tools && bun run test` ✅ 16/16（真实 node:sqlite）
+  - `cd apps/electron && bun run test:linguist` ✅ 49/49
+  - `bun test apps/electron/src/renderer/components/agent/tool-phrase.test.ts` ✅ 2/2（14 assertions）
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：659 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅
+  - `node scripts/smoke/probe-cat-tools.ts` ✅ 14/14；项目会话首发/resume 含 6 个 CAT tools，普通会话 0 个。
+- **knownLimitations**：
+  - 打包探针证明新工具进入真实 packaged Pi tools 数组；Proposal 写入执行由主进程真实 SQLite 集成测试证明。完整 packaged「Agent 产生 Proposal → 用户接受 → Segment 更新」属于 G5，不在本票伪造。
+  - 第一次探针被重新出现的 `/tmp/pb042-head-check` 遗留循环抢占 single-instance 后人工中止；终止 PID 88975 及子进程后，同一产物最终 14/14。
+  - 最终探针遇到已知 SecurityAgent safeStorage 弹窗；终止该弹窗进程后按既有逻辑回落 plaintext 并完成。模型为本地 deterministic fake，不代表外部 Provider。
+- **rollback**：`git reset --hard 93598fca`
+
+## PB-052：确定性硬规则
+
+- **状态**：`integration_verified`
+- **依赖**：PB-051 ✅
+- **baseCommit**：`e326417c`
+- **resultCommit**：`SELF`
+- **范围**：在纯 `@linguist/cat-core` 新增单一 `runDeterministicHardRules` 写入门，并替换 Proposal Tool 对 interim minimal QA 的直接依赖。规则整合自冻结旧仓四个纯 QA 模块并显著收窄：零 IO、零 waiver、零 Agent 解释通道、结构化稳定 violation；来源与修改范围已登记。
+- **规则目录**：
+  - locked segment；
+  - `{name}` / `{0}` / printf / template placeholder 多重集；
+  - XML/format tag 的 open/close/self + 结构 id 属性签名；
+  - 标准 ICU plural/select/selectordinal（含嵌套 branch）与旧 `{name:a|b}` arity；
+  - hard/literal newline；
+  - required terminology / forbidden terms（显式规则输入）；
+  - canonical number 与 alphanumeric token 多重集。
+- **关键语义**：
+  - 规则结果完全由输入确定；同输入逐字相同，不存在 waiver 参数。
+  - Proposal Tool 在写 repository 前执行硬门；任一格式/数字规则失败返回稳定 rule code，整批零写入。
+  - locked 仍由 PB-050 repository 抛领域 `SegmentLockedError`，避免工具层把稳定领域错误降格成通用参数错误。
+- **改动文件**：
+  - `packages/linguist-cat-core/src/{hard-rules.ts,hard-rules.test.ts,index.ts}` + `package.json`（0.0.2）
+  - `packages/linguist-cat-tools/src/{factory.ts,tools.nodetest.ts}` + `package.json`（0.0.3）
+  - `apps/electron/package.json`（0.15.16）、`bun.lock`
+  - `docs/attribution/SOURCE_PROVENANCE.md`、触点文档、双账本
+- **TDD 实录**：
+  - RED：测试无法 import `./hard-rules`。
+  - GREEN 后集成红：原 Proposal fixture 丢失源数字，3 条 node:sqlite 测试被新硬门正确拒绝；修正 fixture 保留数字后 16/16。
+  - typecheck 首轮暴露测试中的 branded `AssetId` 与 rule code 宽化；改用 `asAssetId` 和精确联合类型后 10/10。
+- **验证（实测）**：
+  - `bun test packages/linguist-cat-core/src/hard-rules.test.ts packages/linguist-cat-core/src/proposal.test.ts` ✅ 21/21（硬规则 5 条）
+  - `cd packages/linguist-cat-tools && bun run test` ✅ 16/16（真实 node:sqlite，含 newline/number 写前拒绝）
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：664 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+- **knownLimitations**：
+  - required/forbidden terminology 已是可执行纯规则，但当前 Project 尚无术语治理配置入口；PB-080 把真实 TB 状态映射进该输入。现阶段 Proposal Tool 执行格式/ICU/newline/number/token/locked 规则。
+  - Project 自定义 tag rule registry 未迁入；当前 v1 三种格式的 XML/rich/format tag 由通用结构签名覆盖。若 PB-080 前出现非 XML 私有 tag 真实格式，再以显式规则输入扩展，不猜测。
+  - 这不是 PB-070 的 Finding 生命周期/全项目 QA runner；本票只负责写入前硬阻断。
+- **rollback**：`git reset --hard e326417c`
+
+## PB-053：Proposal 人工审核 IPC
+
+- **状态**：`integration_verified`
+- **依赖**：PB-050、PB-052 ✅
+- **baseCommit**：`40b48cfe`
+- **resultCommit**：`SELF`
+- **范围**：深化既有 `ProposalsRepository` 并薄接七个 typed IPC：pending 列表、diff、接受、拒绝、编辑后接受、批量接受、批量拒绝。写操作仅经 renderer preload 暴露，Pi customTools 仍只有六个 CAT 工具且没有 accept/commit。
+- **关键语义**：
+  - schema v2 新增项目内 `proposal_mutations` 幂等记录；同 key + 同请求逐字重放既有结果，同 key + 不同请求返回冲突，结果与 Proposal/Segment 变更同事务提交。
+  - 所有接受/拒绝均校验 UI 提供的 `expectedRevision`；批量最多 50 且单事务，任一 stale/not-found/locked/非法状态整批回滚。
+  - edit-and-accept 先跑 PB-052 硬规则；内容变化时创建新的内容派生 Proposal，原 Proposal 标 superseded，再接受新 Proposal，绝不改写原 Proposal 的内容身份。
+  - 主进程信任边界校验 project/proposal id、revision、非空 idempotency key、非空编辑目标和 selection 去重；沿用既有 24 码信封目录。
+- **改动文件**：
+  - `packages/linguist-cat-store/src/{schema.ts,repositories/proposals.ts,index.ts,proposals.nodetest.ts}` + `package.json`（schema v2；版本 0.0.3）
+  - `packages/shared/src/types/linguist.ts` + `package.json`（七通道与线类型；版本 0.1.44）
+  - `apps/electron/src/main/lib/linguist/{proposal-ipc.ts,proposal-ipc.nodetest.ts,ipc-contract.test.ts}`
+  - `apps/electron/src/{main/ipc.ts,preload/index.ts}` + `package.json`（0.15.17）
+  - `apps/electron/scripts/smoke/run-g0-smoke.ts`（临时 `--user-data-dir`，修复与已安装应用共享单实例锁/localStorage 的 hermetic 缺口）
+  - `bun.lock`、触点文档与双账本
+- **TDD 实录**：
+  - Repository RED：`acceptSelected` / `rejectSelected` / `editAndAccept` 不存在，12 pass / 3 fail；实现后 Proposal 子集 15/15。
+  - IPC RED：`proposal-ipc.ts` 不存在；实现七通道后真实服务 + SQLite 集成 1/1。
+  - 打包首轮暴露 smoke 仅替换 HOME、未隔离 Electron userData，已安装应用抢单实例锁；在既有 launch seam 加临时 userData 后成功独立启动。
+- **验证（实测）**：
+  - `cd packages/linguist-cat-store && bun run test` ✅ 71/71
+  - `cd apps/electron && bun run test:linguist` ✅ 50/50
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：666 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅（0.15.17 未签名产物）
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ 18/18；独立临时 userData 启动，已安装应用无需退出。期间已知 SecurityAgent 弹窗终止后回落 plaintext。
+- **knownLimitations**：
+  - 打包验证覆盖 main/preload 构建与 G0 回归；当前尚无 Proposal Review UI，因此未伪造 packaged Proposal 接受操作，状态保留 `integration_verified`。完整「Agent 产生 Proposal → 用户接受 → Segment 更新」由 PB-054 + G5 验证。
+  - 幂等结果保存在各项目 `cat.db` 内，无跨项目 key 全局唯一要求；这是项目隔离语义。
+  - schema v2 只追加新表，无 v1 数据重写；备份/恢复会自然包含该表。
+- **rollback**：`git reset --hard 40b48cfe`
+
+## PB-054：Proposal Inbox
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-053 ✅
+- **baseCommit**：`296d9bee`
+- **resultCommit**：`SELF`
+- **范围**：在 Project 详情新增独立「建议」页，消费 PB-053 的既有 typed preload API，完整展示 source、current/proposed target、差异、warnings、model/session、版本冲突与锁定状态，并提供接受、拒绝、编辑后接受。没有新增 Proposal mutation、Agent 写工具或第三方依赖。
+- **关键语义**：
+  - Inbox 只列 pending Proposal；每项 diff 从主进程读取当前 Segment revision，冲突/locked 时阻止接受与编辑，mutation 仍由主进程 CAS 最终裁决。
+  - 每次人工操作生成唯一 idempotency key；成功后同时刷新 Inbox 与项目摘要，stale/revision/state 冲突会提示并重新读取。
+  - 已归档项目只读；错误、空态、加载态和刷新均有可见状态。
+  - 差异显示采用 Unicode 安全的共同前后缀算法，短译文场景无需新增 diff 依赖。
+- **改动文件**：
+  - `apps/electron/src/renderer/features/linguist/projects/{ProposalInbox.tsx,proposal-inbox-utils.ts,proposal-inbox-utils.test.ts,ProjectDetailPanel.tsx}`
+  - `apps/electron/scripts/smoke/{fake-model-server.ts,probe-cat-tools.ts}`（G5 fake Proposal 场景与打包纵向断言；临时 Electron userData 隔离）
+  - `apps/electron/package.json` + `bun.lock`（0.15.18；无新增依赖）
+  - 触点文档与双账本
+- **TDD 实录**：
+  - RED：`proposal-inbox-utils.test.ts` 因差异工具模块不存在而失败；实现共同前后缀差异与冲突码识别后 2/2。
+  - G5 探针在同一真实打包 App 内新增三项：Agent 只创建 Proposal、Inbox 展示建议、人工接受后 SQLite Segment target=`生命药水` 且 revision=1。
+- **验证（实测）**：
+  - `bun test apps/electron/src/renderer/features/linguist/projects/proposal-inbox-utils.test.ts` ✅ 2/2
+  - 精确 UI/IPC 选择 ✅ 14/14；`cd apps/electron && bun run test:linguist` ✅ 50/50
+  - `cd packages/linguist-cat-tools && bun run test` ✅ 16/16
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：668 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅（0.15.18 未签名产物）
+  - `node scripts/smoke/probe-cat-tools.ts` ✅ 17/17；真实打包 Electron 完成 Agent Proposal → Inbox → 人工接受 → Segment revision 变化，且 Agent accept/commit/reject tools=0。
+- **knownLimitations**：
+  - 差异视图突出单个连续替换区；多处分散编辑不会生成最短编辑脚本。当前短译文审核足够，真实用户验证不足时再换成熟 diff 实现。
+  - 批量选择 API 已在 PB-053 存在，但本票按计划只交付单项 accept/reject/edit；批量 Review 属 PB-064。
+  - 打包探针使用确定性本地 fake model，不声称外部 Provider 验证。
+  - 首次 channel seed 命中已知 macOS SecurityAgent safeStorage 弹窗；终止弹窗后应用按既有 plaintext 降级，完整探针退出码 0。
+- **rollback**：`git reset --hard 296d9bee`
+
+## G5 门禁：Translation Proposal
+
+- **状态**：`gate_passed`
+- **依赖**：PB-054 ✅
+- **baseCommit**：`cd9dc5a9`
+- **resultCommit**：`SELF`
+- **范围**：仅执行 Batch 5 Gate、生成 `docs/roadmap/G5_REPORT.md` 并更新双账本；没有产品代码改动。
+- **门禁结果**：
+  1. 打包 Electron 精确主链 ✅：项目 Agent 调 `cat_propose_translations` 产生 pending Proposal；Project「建议」页可见；用户点击接受后 Segment target=`生命药水`、revision 0→1（probe-cat-tools 17/17）。
+  2. Agent 权限边界 ✅：模型可见工具中 accept/commit/reject=0；Proposal 创建不写 Segment。
+  3. Proposal 数据与硬规则 ✅：cat-store 71/71；cat-tools 16/16，覆盖 max-50、locked、CAS、placeholder/tag/ICU/newline/number/token 与原子回滚。
+  4. Proma 回归 ✅：G0 打包 smoke 18/18；typecheck 10/10；test:linguist 50/50；boundaries 3/3；根 bun test 668/2（仅两条既有 PB-003 环境失败）。
+  5. Hermetic ✅：临时 HOME + 独立 Electron userData + synthetic fixture + 本地 fake model；不触碰真实用户数据。
+- **knownLimitations**：
+  - 打包探针使用确定性本地 fake model，不验证外部 Provider。
+  - Inbox 单项审核与共同前后缀差异的上限已在 PB-054 记录；批量 Review 属 PB-064。
+  - 两个打包探针均命中已知 SecurityAgent safeStorage 弹窗；终止弹窗后应用按既有 plaintext 降级，完整运行退出码 0。
+- **结论**：`gate_passed`；详见 `docs/roadmap/G5_REPORT.md`。
+- **rollback**：`git reset --hard cd9dc5a9`
+
+## PB-060：CAT Tab 和数据查询
+
+- **状态**：`packaged_app_verified`
+- **依赖**：G5 ✅
+- **baseCommit**：`3be90253`
+- **resultCommit**：`SELF`
+- **范围**：启用 Project 独立 CAT tab，以一个只读 typed IPC 提供 asset list、Segment 分页、asset/status filter、source/target search 与同条件 COUNT；renderer 只保存筛选器和 opaque selected IDs，不把 Segment 真相放进 atom，也不耦合 Chat。
+- **调用链**：`CatWorkspace` → preload `linguistCatQuery` → `linguist.cat.query` → `cat-workspace-ipc.ts` 信任边界 → `LinguistProjectService.queryCatWorkspace` → 既有 `AssetsRepository.listByProject` + `SegmentsRepository.query/count`。
+- **关键语义**：
+  - 主进程严格校验 project/asset id、四种 status、limit 1~200、offset≥0、search≤500；沿用 24 码信封，不新增错误码。
+  - Segment query/count 复用同一既有 WHERE builder，搜索中的 `%/_` 仍按字面量处理。
+  - UI 当前一页 100 行，原生 input/select，展示总数、分页和选择计数；selected IDs 使用 Jotai `ReadonlySet`，项目切换时清空。
+  - 本票不提前实现 PB-061 虚拟化、PB-062 编辑、PB-063 Rail 或 PB-064 Proposal 操作。
+- **改动文件**：
+  - `packages/shared/src/types/linguist.ts` + `package.json`（只读 channel、线类型、边界常量；0.1.45）
+  - `apps/electron/src/main/lib/linguist/{cat-workspace-ipc.ts,cat-workspace-ipc.nodetest.ts,project-service.ts,ipc-contract.test.ts}`
+  - `apps/electron/src/{main/ipc.ts,preload/index.ts}` + `package.json`（0.15.19）
+  - `apps/electron/src/renderer/features/linguist/projects/{CatWorkspace.tsx,cat-workspace-atoms.ts,ProjectDetailPanel.tsx}`
+  - `apps/electron/scripts/smoke/probe-import.ts`（临时 Electron userData + PB-060 真实 UI 查询/搜索/选择）
+  - `bun.lock`、触点文档与双账本
+- **TDD 实录**：
+  - RED：`cat-workspace-ipc.nodetest.ts` 因 `cat-workspace-ipc.ts` 不存在而 `ERR_MODULE_NOT_FOUND`。
+  - GREEN：真实 node:sqlite 项目导入 8 段，分页/asset list/count/search 与 6 类非法输入均通过，2/2。
+- **验证（实测）**：
+  - 精确 `cat-workspace-ipc.nodetest.ts` ✅ 2/2；IPC contract ✅ 14/14
+  - `cd apps/electron && bun run test:linguist` ✅ 52/52
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：670 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅（0.15.19 未签名产物）
+  - `node scripts/smoke/probe-import.ts` ✅ 14/14；真实打包 UI 显示 16 段/两资产、搜索 Health 得 1 段、选择计数为 1，数据在临时 HOME。
+- **knownLimitations**：
+  - 当前是 PB-060 的分页数据浏览面，不声称 10k Grid 性能或 scroll anchor；PB-061 将在同一 tab 用 TanStack Virtual/Table 消费分页接口。
+  - selected IDs 跨页/筛选保留但尚无批量动作；Proposal 批量操作属于 PB-064。
+  - 原生导入 picker 仍无法由 Playwright 驱动，继续由真实服务 + stub picker 集成测试覆盖；本票未改变该路径。
+  - 打包探针首次 channel seed 命中已知 SecurityAgent safeStorage 弹窗；终止后应用按既有 plaintext 降级，完整探针 14/14、退出码 0。
+- **rollback**：`git reset --hard 3be90253`
+
+## PB-061：虚拟化 Segment Grid
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-060 ✅
+- **baseCommit**：`ca058f86`
+- **resultCommit**：`SELF`
+- **范围**：用 `@tanstack/react-virtual@3.14.7` 将 CAT tab 的分页列表替换为固定行高虚拟 Grid，列为 `# / Status / Source / Target / QA`；支持 10k、稳定 Segment key、滚动锚点、选中行与 locked 文案。没有引入 Table、第二份全量 atom 或编辑行为。
+- **数据策略**：
+  - 首个过滤请求只额外返回按 SQL 确定序排列的 10k Segment IDs，作为 Virtualizer stable key；正文仍按 200 行窗口从主进程读取。
+  - renderer atom 只存 filters 与 selected ID Set；当前正文窗口仅存在组件 state，滚到新窗口后丢弃旧窗口，避免逐步缓存全量 Segment。
+  - Virtualizer 固定估算/实际行高 68px、overscan 8；Source/Target 最多两行，避免测量变化导致锚点跳动。
+  - QA 列先保留明确 `—`，真实 Finding 属 PB-070/071。
+- **改动文件**：
+  - `apps/electron/src/renderer/features/linguist/projects/{CatWorkspace.tsx,cat-virtual-utils.ts,cat-virtual-utils.test.ts}`
+  - `packages/linguist-cat-store/src/repositories/segments.ts` + `segments.nodetest.ts` + `package.json`（稳定 ID index；0.0.4）
+  - `packages/shared/src/types/linguist.ts` + `package.json`（includeIndex/segmentIds；0.1.46）
+  - `apps/electron/src/main/lib/linguist/{project-service.ts,cat-workspace-ipc.ts,cat-workspace-ipc.nodetest.ts}`
+  - `apps/electron/package.json` + `bun.lock`（react-virtual 3.14.7 / virtual-core 3.17.5；Electron 0.15.20）
+  - `apps/electron/scripts/smoke/probe-import.ts`（运行时生成 synthetic 10k CSV 并测真实打包 Grid）
+  - 来源登记、触点文档与双账本
+- **TDD 实录**：
+  - RED 1：CAT IPC 测试读取 `segmentIds.length` 时 undefined。
+  - RED 2：`cat-virtual-utils.test.ts` 因模块不存在失败。
+  - GREEN：稳定 ID index + 跨页 window offset 计算 4/4；真实 IPC 2/2。
+- **验证（实测）**：
+  - `cat-virtual-utils.test.ts` ✅ 2/2；CAT IPC ✅ 2/2
+  - `cd packages/linguist-cat-store && bun run test` ✅ 71/71
+  - `cd apps/electron && bun run test:linguist` ✅ 52/52
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：672 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅（0.15.20 未签名产物）
+  - `node scripts/smoke/probe-import.ts` ✅ 18/18：10k 导入 339ms；单次端到端精确搜索 52ms（非 p95）；末行可见；DOM 16 rows；500ms 锚点漂移 0px；第 10000 行可选且显示「已锁定」。
+- **knownLimitations**：
+  - 52ms 是一次本机端到端样本，不是计划要求的 p95；G6 前需多次采样才可声明 p95≤200ms。
+  - 固定 68px 行高与两行截断是本票的 Grid 性能取舍；PB-063 Context Rail 提供完整上下文，PB-062 编辑态可在当前行临时扩展。
+  - 页面窗口采用丢弃式缓存；快速来回跨越 200 行边界会重新查询 SQLite。只有实测磁盘/IPC 成为瓶颈时才增加有界 LRU。
+  - QA 列暂无 Finding，显示 `—`；不伪造 PB-070 状态。
+  - 打包探针首次 channel seed 命中已知 SecurityAgent safeStorage 弹窗；终止后应用按既有 plaintext 降级，完整探针退出码 0。
+- **rollback**：`git reset --hard ca058f86`
+
+## PB-062：人工编辑与 CAS
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-061 ✅
+- **baseCommit**：`a303dea1`
+- **resultCommit**：`SELF`
+- **范围**：在虚拟 Grid Target cell 增加显式人工编辑态；草稿本地保存，主进程 mutation 只走 `SegmentsRepository.applyTargetEdit(expectedRevision)`。支持 IME composition、multiline、Escape、Cmd+Enter、可见保存/取消按钮、locked/archived 禁编与冲突刷新；没有 auto-save。
+- **调用链**：`TargetCell` → preload `linguistCatEditSegment` → `linguist.cat.editSegment` → `cat-workspace-ipc.ts` 校验 → `LinguistProjectService.editSegment` 归档守卫 → Repository CAS transaction（Segment + revision）。
+- **关键语义**：
+  - renderer 提交 `projectId/segmentId/target/expectedRevision`；主进程验证 id/type/revision≥0，不信任 DOM。
+  - IME composition 期间 Cmd+Enter 返回 no-op；compositionend 后 Cmd+Enter 才保存。Escape 只丢本地草稿。
+  - stale 返回 `REVISION_CONFLICT` 后重新取当前 200 行窗口，提示并显示并发内容，绝不覆盖。
+  - 无状态/搜索过滤时成功后只替换当前 Map 行，保持虚拟滚动锚点；状态/搜索过滤在写后重查索引，避免已不匹配行残留。
+  - 当前 Segment ID 进入 Jotai；draft/saving 只属于正在编辑的虚拟行。
+- **改动文件**：
+  - `packages/shared/src/types/linguist.ts` + `package.json`（edit channel/request/result；0.1.47）
+  - `apps/electron/src/main/lib/linguist/{project-service.ts,cat-workspace-ipc.ts,cat-workspace-ipc.nodetest.ts,ipc-contract.test.ts}`
+  - `apps/electron/src/{main/ipc.ts,preload/index.ts}` + `package.json`（0.15.21）
+  - `apps/electron/src/renderer/features/linguist/projects/{CatWorkspace.tsx,cat-workspace-atoms.ts,cat-edit-utils.ts,cat-edit-utils.test.ts,ProjectDetailPanel.tsx}`
+  - `apps/electron/scripts/smoke/probe-import.ts`（IME/multiline/Escape/CLI 并发 CAS/locked 真机断言）
+  - `bun.lock`、触点文档与双账本
+- **TDD 实录**：
+  - RED 1：真实 IPC 测试失败 `ipc.edit is not a function`。
+  - RED 2：keyboard/IME 测试因 `cat-edit-utils.ts` 不存在失败。
+  - GREEN：真实 SQLite multiline/CAS/stale/locked + 4 类非法输入 3/3；键盘纯逻辑 2/2。
+- **验证（实测）**：
+  - CAT IPC ✅ 3/3；edit utils + IPC contract ✅ 16/16
+  - `cd apps/electron && bun run test:linguist` ✅ 53/53
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：674 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅（0.15.21 未签名产物）
+  - `node scripts/smoke/probe-import.ts` ✅ 21/21：composition 中未提交；multiline 保存 revision 1；Escape 不变；CLI 并发写 revision 2 后 UI 冲突刷新且未覆盖；第 10000 行 locked 编辑禁用。
+- **knownLimitations**：
+  - 按计划不做 auto-save；离开未保存编辑行会丢弃本地草稿，只有显式保存落盘。
+  - 过滤条件下保存会重建 ID 索引并滚回结果顶部；保留过滤后相对锚点留到有真实长列表编辑反馈时再做。
+  - 固定 108px 行高容纳双行 textarea 与操作提示；PB-063 Rail 提供完整上下文，未引入动态测量。
+  - 真机并发由同一临时项目的外部 CLI 写模拟，不声称多设备同步。
+  - 打包探针首次 channel seed 命中已知 SecurityAgent safeStorage 弹窗；终止后应用按既有 plaintext 降级，完整探针 21/21、退出码 0。
+- **rollback**：`git reset --hard a303dea1`
+
+## PB-063：Context Rail
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-062 ✅
+- **baseCommit**：`c29eebe0`
+- **resultCommit**：`SELF`
+- **范围**：CAT Grid 右侧增加只读 Context Rail，含 Segment / TM / Terms / QA / Evidence 五个 Tab。当前 Segment 详情按 opaque id 从主进程读取，不依赖虚拟 Grid 当前加载窗口；Evidence 显示真实待审 Proposal 引用。
+- **调用链**：Grid Source cell → `catActiveSegmentIdAtom` → `CatContextRail` → preload `linguistCatGetContext` → `linguist.cat.getContext` → `cat-workspace-ipc.ts` 校验 → `LinguistProjectService.getSegmentContext` → Segment/Proposal Repository。
+- **关键语义**：
+  - Rail 只读，不提前加入 PB-064 Proposal 操作。
+  - Segment 与 pending Proposal 来自主进程 CatStore；滚动导致虚拟行卸载后详情仍可重取。
+  - TM/TB 写入属于 PB-080，QA Finding 属于 PB-070；当前 Tab 明确显示暂无匹配/尚未运行，不伪造通过状态。
+  - Evidence 只显示 Proposal 的 `evidenceRefs` / `termRefs`；没有真实引用时显示空态。
+  - current Segment id 与 Rail tab 使用 Jotai；不在 renderer 保存 Segment 真相。
+- **改动文件**：
+  - `packages/shared/src/types/linguist.ts` + `package.json`（getContext channel/request/result；0.1.48）
+  - `apps/electron/src/main/lib/linguist/{project-service.ts,cat-workspace-ipc.ts,cat-workspace-ipc.nodetest.ts,ipc-contract.test.ts}`
+  - `apps/electron/src/{main/ipc.ts,preload/index.ts}` + `package.json`（0.15.22）
+  - `apps/electron/src/renderer/features/linguist/projects/{CatWorkspace.tsx,CatContextRail.tsx,cat-workspace-atoms.ts}`
+  - `apps/electron/scripts/smoke/probe-import.ts`
+  - `bun.lock`、触点文档与双账本
+- **TDD 实录**：
+  - RED：真实 SQLite IPC 测试失败 `ipc.getContext is not a function`。
+  - GREEN：按 Segment id 返回真实 Segment 与 pending Proposal/evidence，非法 id 返回 `INVALID_INPUT`，4/4。
+- **验证（实测）**：
+  - CAT IPC ✅ 4/4；IPC contract/edit utils ✅ 16/16
+  - `cd apps/electron && bun run test:linguist` ✅ 54/54
+  - `cd packages/linguist-cat-store && bun run test` ✅ 71/71
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：674 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅（0.15.22 未签名产物）
+  - `node scripts/smoke/probe-import.ts` ✅ 22/22：真实 Segment、五 Tab、TM/Terms/QA/Evidence 空态及既有 10k/CAS 回归全部通过。
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ 18/18。
+- **knownLimitations**：
+  - TM/Terms 暂无写入面，真实匹配在 PB-080 接入；本票不读取空表后伪造建议。
+  - QA Finding 在 PB-070 前不存在，因此 QA Tab 只显示“尚未运行”，不声称 QA 通过。
+  - Evidence 当前只对应 pending Proposal 的显式引用；接受/拒绝操作属于 PB-064。
+  - 打包探针首次 channel seed 命中已知 SecurityAgent safeStorage 弹窗；终止后应用按既有 plaintext 降级，完整 probe 22/22、G0 18/18。
+- **rollback**：`git reset --hard c29eebe0`
+
+## PB-064：Proposal Review 集成
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-063 ✅
+- **baseCommit**：`c3541153`
+- **resultCommit**：`SELF`
+- **范围**：CAT Grid 显示待审/过期建议；Context Rail 展示 inline diff 并提供人工接受/拒绝；Grid 选择集复用 PB-053 的原子 selected IPC 批量审核（单次≤50）。Agent 仍无 accept/commit 工具。
+- **调用链**：Grid/Rail → preload `linguistProposals*` / `linguistCatGetContext` → PB-053 Proposal IPC → Repository CAS transaction。批量操作先读取当前 Segment revision，不信任 Proposal 的旧 baseRevision。
+- **关键语义**：
+  - stale/locked/archived 禁止接受；stale 仍可拒绝。真实竞争冲突显示稳定码并刷新当前状态，绝不覆盖。
+  - 批量接受/拒绝只包含当前选择中仍有 pending Proposal 的 Segment，超过 50 明确禁用。
+  - fake model 的多轮 `cat-proposal` 场景只解析最新 user turn，避免历史 segmentId 污染后续工具调用。
+- **改动文件**：
+  - `apps/electron/src/renderer/features/linguist/projects/{CatWorkspace.tsx,CatContextRail.tsx,proposal-inbox-utils.ts,proposal-inbox-utils.test.ts}`
+  - `apps/electron/scripts/smoke/{fake-model-server.ts,probe-cat-tools.ts}`
+  - `apps/electron/package.json` + `bun.lock`（Electron 0.15.23，无新增依赖）
+  - 触点文档与双账本
+- **TDD 实录**：
+  - RED：批量审核 revision 映射测试因 `proposalMutationItems` 尚未导出而失败。
+  - GREEN：映射仅保留 pending Proposal，并使用当前 Segment revision，Proposal utils 3/3。
+  - 首次打包探针暴露 fake model 错取首个历史 segmentId；修正为最新 user turn 后完整探针 19/19。
+- **验证（实测）**：
+  - Proposal/edit utils ✅ 5/5；`cd apps/electron && bun run test:linguist` ✅ 54/54
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：675 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅（0.15.23 未签名产物）
+  - `node scripts/smoke/probe-cat-tools.ts` ✅ 19/19：Agent Proposal、Grid/Rail diff、接受、批量拒绝、真实 revision 竞争冲突/stale。
+  - `node scripts/smoke/probe-import.ts` ✅ 22/22：10k/CAS/Context Rail 回归。
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ 18/18。
+- **knownLimitations**：
+  - Proposal 列表在 CAT mount 与人工审核后刷新；若后台会话在 CAT 保持打开时新增建议，当前没有 Proposal push event，切换 Tab 后会重载。
+  - inline diff 沿用 PB-054 的共同前后缀算法，不做词级 diff；复杂语言学 diff 只有出现明确审核需求时再引入。
+  - 打包探针命中已知 SecurityAgent safeStorage 弹窗；终止后应用按既有 plaintext 降级，三个探针均完整通过。
+- **rollback**：`git reset --hard c3541153`
+
+## PB-065：键盘与无障碍
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-064 ✅
+- **baseCommit**：`9e91a215`
+- **resultCommit**：`SELF`
+- **范围**：虚拟 Grid 行支持 ArrowUp/ArrowDown、有界滚动和可见焦点；Enter 进入 Target 编辑，既有 Escape/IME/Cmd+Enter 语义不变；“下一个未翻译”按真实查询结果循环定位。row/status/source/target/QA 提供读屏标签，状态与 Proposal 均有文字，不只靠颜色。
+- **调用链**：行键盘事件 → `adjacentRowIndex` → TanStack Virtual `scrollToIndex` → 延迟页面加载 → DOM focus；未翻译快捷键 → 既有只读 `linguistCatQuery(status=untranslated, includeIndex=true)` → `nextSegmentId` → 同一虚拟焦点入口。
+- **关键语义**：
+  - interactive child 自己处理键盘，行 Arrow/Enter 只在 row 本体获得焦点时触发，避免 textarea 光标被劫持。
+  - locked/archived 行 Enter 不进入编辑；边界 Arrow 不越界；未翻译定位末尾后回绕。
+  - QA Finding 属 PB-070/071；当前“下一个 QA 问题”明确显示“尚未运行 QA”并禁用，不伪造 Finding。
+- **改动文件**：
+  - `apps/electron/src/renderer/features/linguist/projects/{CatWorkspace.tsx,cat-virtual-utils.ts,cat-virtual-utils.test.ts}`
+  - `apps/electron/scripts/smoke/{probe-import.ts,probe-cat-tools.ts}`（键盘/a11y、20 次搜索 p95、同 HOME 重启）
+  - `apps/electron/package.json` + `bun.lock`（Electron 0.15.24，无新增依赖）
+  - 触点文档与双账本
+- **TDD 实录**：
+  - RED：`adjacentRowIndex` / `nextSegmentId` 尚未导出，测试模块加载失败。
+  - GREEN：上下界行移动与匹配 ID 循环定位 2 个新增测试通过；与编辑键盘测试合计 6/6。
+- **验证（实测）**：
+  - 键盘/虚拟工具测试 ✅ 6/6；`cd apps/electron && bun run test:linguist` ✅ 54/54
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：677 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅（0.15.24 未签名产物）
+  - `node scripts/smoke/probe-import.ts` ✅ 24/24：10k Grid、Arrow/焦点/读屏标签、Enter/Escape、Next untranslated；20 次搜索 p95=62ms≤200ms。
+  - `node scripts/smoke/probe-cat-tools.ts` ✅ 20/20：Agent Proposal 在 Grid 审核，同一临时 HOME 重启后译文恢复且 pending=0。
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ 18/18。
+- **knownLimitations**：
+  - “下一个 QA 问题”在真实 QA Finding 接入前明确禁用；PB-070/071 应复用当前虚拟焦点入口连接 open Finding ID 索引。
+  - 只实现计划要求的上下行 Arrow；左右 Arrow 留给 textarea 光标/未来单元格导航，不额外建立二维焦点模型。
+  - p95 为本机未签名打包应用、单次运行中的 20 个端到端样本，不外推为所有硬件基准。
+  - 打包探针命中已知 SecurityAgent safeStorage 弹窗；终止后应用按既有 plaintext 降级，三个探针完整通过。
+- **rollback**：`git reset --hard 9e91a215`
+
+## G6 门禁：CAT Workspace
+
+- **状态**：`gate_passed`
+- **依赖**：PB-065 ✅
+- **baseCommit**：`6364ea75`
+- **resultCommit**：`SELF`
+- **范围**：仅执行 Batch 6 Gate、生成 `docs/roadmap/G6_REPORT.md` 并更新双账本；没有产品代码改动。
+- **门禁结果**：
+  1. 10k 真机打包应用 ✅：末行可见，DOM 13 rows，500ms 锚点漂移 0px；20 次端到端搜索 p95=62ms≤200ms（probe-import 24/24）。
+  2. Grid Proposal Review ✅：项目 Agent 只能创建 Proposal；Grid/Rail 人工接受后 target=`生命药水`、revision=1；批量/冲突/stale 同样通过。
+  3. 重启恢复 ✅：真正关闭 packaged Electron 并以同一临时 HOME 重启；已接受译文可见，pending Proposal=0（probe-cat-tools 20/20）。
+  4. 键盘/a11y ✅：Arrow row focus、Enter edit、Escape、Next untranslated、显式 row/cell 标签和文字状态通过；QA 未运行入口诚实禁用。
+  5. Proma 回归 ✅：G0 18/18；typecheck 10/10；test:linguist 54/54；cat-store 71/71；cat-tools 16/16；boundaries 3/3；根 bun test 677/2（仅既有两条环境失败）。
+- **knownLimitations**：
+  - QA Finding 属 PB-070/071；当前不伪造 Next QA issue。
+  - p95 是当前机器未签名产物的 20 个样本，不外推为通用硬件结论。
+  - fake model 不验证外部 Provider；SecurityAgent 终止后走既有 plaintext fallback。
+- **结论**：`gate_passed`；详见 `docs/roadmap/G6_REPORT.md`。
+- **rollback**：`git reset --hard 6364ea75`
+
+## PB-070：QA Core
+
+- **状态**：`unit_verified`
+- **依赖**：G6 ✅
+- **baseCommit**：`6393d83d`
+- **resultCommit**：`SELF`
+- **范围**：在纯 `@linguist/cat-core` 新增确定性 QA Core，覆盖计划首版 11 条规则：placeholder/tag/empty target/forbidden/required/number/whitespace/repeated punctuation/source equals target/inconsistent repeated source/target length。
+- **调用链**：`runQa(segments, options)` → 复用 PB-052 `runDeterministicHardRules` 的结构签名与术语/数字判定 → 补充展示型规则 → 稳定按 Segment 顺序/code 输出 `OpenQaFindingInput[]`。
+- **关键语义**：
+  - empty、placeholder、tag、术语和数字为 blocking；空白、重复标点、源译相同、重复源文不一致与长度为 warning。
+  - locked/空源文跳过；相同源文的多个非空 target 才触发 consistency；同一 Segment 同 code 去重。
+  - 长度使用 Unicode code point；默认仅 source≥10 时检查 0.4~2.5 比例，阈值可由明确调用方覆盖。
+- **改动文件**：
+  - `packages/linguist-cat-core/src/{qa-core.ts,qa-core.test.ts,qa-finding.ts,index.ts}` + `package.json`（0.0.3）
+  - `bun.lock`、触点文档与双账本
+- **TDD 实录**：
+  - RED：测试因 `./qa-core` 不存在而模块加载失败。
+  - GREEN：完整 11 码目录/severity、健康内容、locked 与输入反序确定性 2/2；关联 hard-rule/lifecycle 合计 17/17。
+- **验证（实测）**：
+  - `bun test packages/linguist-cat-core/src/qa-core.test.ts packages/linguist-cat-core/src/hard-rules.test.ts packages/linguist-cat-core/src/qa-finding.test.ts` ✅ 17/17
+  - `bun run typecheck` ✅ 10/10
+  - 根 `bun test`：679 pass / 2 fail（仅 PB-003 起两条既有 Electron/Bun 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+- **knownLimitations**：
+  - 本票是纯规则核心，不持久化/展示 Finding；Repository、Tool 与 UI 属 PB-071。
+  - required/forbidden term 由调用方显式传入；项目 TM/TB 管理在 PB-080 接入前不推测术语。
+  - 长度阈值是可配置启发式 warning，不作为 blocking 导出门。
+- **rollback**：`git reset --hard 6393d83d`
+
+## PB-071：QA Tool 与 UI
+
+- **状态**：`packaged_app_verified`
+- **依赖**：PB-070 ✅
+- **baseCommit**：`4fbffb29`（PB-070；其后 `5dcd197a` 为用户明确要求的独立图标修正）
+- **resultCommit**：`SELF`
+- **范围**：将 PB-070 的确定性 QA 接入每项目 SQLite、Pi 工具和 CAT Workspace。Agent 仅可 `cat_run_qa` / `cat_get_qa_findings`；用户 UI 才可在编辑后标记 resolved，或记录原因后 waive。
+- **调用链**：Agent/UI → `@linguist/cat-tools` 或 renderer → preload → QA IPC → `LinguistProjectService` → `QaFindingsRepository` / `runQa`；UI 跳转复用 PB-065 的虚拟 Grid 焦点路径。
+- **关键语义**：
+  - run QA 以一次事务替换当前 open Finding，保留已 resolved/waived 的历史；相同问题再次出现时重开。
+  - Finding 绑定产生时的 Segment revision；“标记解决”只允许该 Segment 已被人工编辑到更高 revision，waive 必填原因。
+  - QA 面板支持 status/severity 筛选、分页、跳转、运行/重跑；10k Grid 不把总项目 Finding 数伪装成单行状态。
+  - 临时 HOME 的打包 smoke 通过显式 `LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS=1` 不触发 macOS Keychain；正常应用未设置此变量，仍使用 safeStorage。
+- **改动文件**：
+  - `packages/linguist-cat-store/{package.json,src/{schema.ts,index.ts,qa-runner.ts,qa-runner.nodetest.ts,qa-findings.nodetest.ts,repositories/{rows.ts,qa-findings.ts}}}`（schema v3、revision/waiver、project runner）
+  - `packages/linguist-cat-tools/{package.json,src/{types.ts,factory.ts,tools.nodetest.ts}}`（仅两项 QA Agent 工具）
+  - `packages/shared/{package.json,src/types/linguist.ts}`（四 QA IPC 契约；0.1.49）
+  - `apps/electron/src/main/{ipc.ts,lib/channel-manager.ts,lib/channel-runtime-api-key.test.ts,lib/linguist/{project-service.ts,cat-workspace-ipc.ts,cat-workspace-ipc.nodetest.ts,ipc-contract.test.ts,session-cat-tools.ts,session-cat-tools.nodetest.ts}}` + `src/preload/index.ts`
+  - `apps/electron/src/renderer/{components/agent/{tool-phrase.ts,tool-phrase.test.ts,tool-utils.ts},features/linguist/projects/{QaFindingsPanel.tsx,CatWorkspace.tsx,CatContextRail.tsx}}`
+  - `apps/electron/scripts/smoke/{fake-model-server.ts,probe-cat-tools.ts,probe-import.ts,run-g0-smoke.ts,probe-pi-stream.ts,probe-project-{session,skill}.ts,probe-projects-view.ts}` + Electron `package.json`（0.15.25）
+  - 触点登记与双账本
+- **TDD 实录**：
+  - RED：store `qa-runner.nodetest.ts` 因 runner 不存在失败；GREEN：真实 SQLite 验证 revision、豁免原因与重跑生命周期。
+  - RED：CAT tools / session tools 断言只有旧 6 个工具；GREEN：8 个工具中仅 QA 的 run/list 为新增，resolve/waive/commit 永不存在。
+  - RED：IPC contract 缺四个 QA channel；GREEN：主进程、preload、稳定码信封与 renderer 工作流完整对齐。
+- **验证（实测）**：
+  - `cd packages/linguist-cat-store && bun run test` ✅ 72/72
+  - `cd packages/linguist-cat-tools && bun run test` ✅ 17/17
+  - `cd apps/electron && bun run test:linguist` ✅ 55/55；`bun test src/main/lib/channel-runtime-api-key.test.ts` ✅ 3/3
+  - `bun run typecheck` ✅ 10/10；根 `bun test` ✅ 679 pass / 2 fail（PB-003 起既有 Electron/Bun 环境失败）；`bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅ 未签名 `out/mac-arm64/Linguist Agent.app`
+  - `node scripts/smoke/probe-import.ts` ✅ 26/26：run/filter/jump、编辑后 resolve、带原因 waive、rerun、10k Grid/CAS/a11y 回归。
+  - `node scripts/smoke/probe-cat-tools.ts` ✅ 21/21：Agent 运行 QA、读取结果、无 resolve/waive/commit 工具、同 HOME 重启回归。
+  - `node scripts/smoke/run-g0-smoke.ts` ✅ 18/18，临时 HOME seed 无 Keychain 弹窗。
+- **knownLimitations**：
+  - required/forbidden terminology 仍是明确传入的确定性 QA 规则；项目 TB 管理和真实术语配置留 PB-080。
+  - QA 解决/豁免不向 Agent 暴露；这是产品权限边界，不是工具能力缺失。
+  - smoke plaintext 开关只用于 hermetic 临时 HOME；用户正常渠道凭证仍依赖 OS safeStorage，若用户自己的旧 Keychain 项损坏，需在 macOS 对话框中恢复默认并重新录入相应密钥。
+- **rollback**：`git revert <PB-071 resultCommit>`（保留先前的 PB-010 图标修正）
+
+## PB-072：Export Adapter
+
+- **状态**：`integration_verified`
+- **依赖**：PB-071 ✅
+- **baseCommit**：`06a10b93`
+- **resultCommit**：`SELF`
+- **范围**：从已校验的 source blob 与当前 Segment target 生成每资产 staging artifact；不覆盖 source，先 reimport 验证，再写 digest 和 SQLite artifact metadata。开放 blocking QA 默认 fail closed，唯一放行路径是 PB-071 人工 resolve/带理由的 waive。
+- **调用链**：human export action（PB-073 接 UI）→ `LinguistProjectService.stageExport` → per-asset `QaFindingsRepository.count` → `stageAssetExport` → format adapter export → reimport compare → `projects/<id>/exports/` 原子写入 → `ExportsRepository.record`。
+- **关键语义**：
+  - QA gate 按 asset 范围查询 `status=open AND severity=blocking`，不会被其他资产的历史 Finding 误阻；无 bypass 参数，waive reason 继续保存在 QA 审核记录中。
+  - 每个 staging 文件名带 SHA-256 前缀；不同内容不复写旧 artifact，旧 metadata 永远指向其原始 digest。
+  - reimport 必须保留相同 stable position / 有效文本（target 非空取 target，否则取 source）；丢段抛 `FORMAT_SEGMENT_LOST` 且不创建文件或 metadata。
+- **改动文件**：
+  - `packages/linguist-cat-store/{package.json,src/{export-staging.ts,export-staging.nodetest.ts,index.ts,repositories/qa-findings.ts}}`（0.0.6，staging/reimport/digest/metadata 与 asset QA 查询）
+  - `apps/electron/src/main/lib/linguist/{project-service.ts,project-service.nodetest.ts,errors.ts,errors.test.ts,ipc-contract.test.ts}`（QA export gate 与 `EXPORT_BLOCKED_BY_QA`）
+  - `packages/shared/{package.json,src/types/linguist.ts}`、`apps/electron/{package.json,src/renderer/features/linguist/projects/{project-utils.ts,project-utils.test.ts}}`、`bun.lock`（0.1.50 / 0.15.26 及中文错误文案）
+  - Proma 触点登记与双账本
+- **TDD 实录**：
+  - RED：`export-staging.nodetest.ts` 引用不存在的 staging 模块而失败；GREEN：真实 SQLite source blob 经过 adapter export/reimport 后才原子写入，故意丢段 adapter 被 `FORMAT_SEGMENT_LOST` 拒绝且 exports/ 为空。
+  - RED：服务测试调用不存在的 `stageExport`，并要求 blocking Finding 零 artifact；GREEN：按 asset 计数、人工 waive 后导出、source 字节不变与 metadata 记录均在真实 node:sqlite 验证。
+  - RED：新增第 25 个稳定错误码使 IPC/renderer 完备性断言失败；GREEN：两处目录和中文文案表同步为 25，防止契约漂移。
+- **验证（实测）**：
+  - `cd packages/linguist-cat-store && bun run test` ✅ 74/74
+  - `cd apps/electron && bun run test:linguist` ✅ 56/56
+  - `bun test apps/electron/src/main/lib/linguist/errors.test.ts apps/electron/src/main/lib/linguist/ipc-contract.test.ts apps/electron/src/renderer/features/linguist/projects/project-utils.test.ts` ✅ 49/49
+  - `bun run typecheck` ✅ 10/10；`bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅ 未签名 `out/mac-arm64/Linguist Agent.app`（0.15.26）。
+- **knownLimitations**：
+  - 本票只生成主进程持有的 staging artifact；native Save dialog、文件 copy 与用户成功反馈属于 PB-073，当前未伪造 renderer 导出入口。
+  - QA waiver 理由持久化在对应 Finding；artifact metadata 记录 artifact 的 digest、段数与创建时刻，PB-080 前不新增宽泛审计 JSON 模型。
+- **rollback**：`git revert <PB-072 resultCommit>`
+
+## PB-073：Native Save
+
+- **状态**：`integration_verified`
+- **依赖**：PB-072 ✅
+- **baseCommit**：`1c1735f5`
+- **resultCommit**：`SELF`
+- **范围**：资产行的人工导出入口、主进程 verified staging → 原生 Save dialog → copy 链路，以及 renderer-safe 的无路径导出契约；不增加 Agent 导出工具、不改变 PB-072 的 QA gate 或 source preservation。
+- **调用链**：资产行「导出」→ preload `linguistExportsSaveAsset({projectId, assetId})` → `createLinguistExportIpc.saveAsset` → `stageExport`（blocking QA / reimport / digest）→ `dialog.showSaveDialog` → `copyFileSync` → 无路径 artifact 成功提示。
+- **关键语义**：
+  - renderer 输入仅有 `projectId` 和 `assetId`；响应 artifact 只有 id、assetId、SHA-256、段数和创建时刻，绝不泄露 staging、项目或用户目标路径。
+  - 非法 asset、归档项目与 blocking QA 都在 native Save picker 前以稳定信封拒绝；取消是 `{cancelled:true}` 正常分支。
+  - 原生默认文件名是原资产 basename，内部 digest 文件名只留在项目 `exports/` staging；copy 失败收敛为既有 `INTERNAL`，不泄露本机路径。
+- **改动文件**：
+  - `apps/electron/src/main/lib/linguist/{export-ipc.ts,export-ipc.nodetest.ts,project-service.ts}`、`packages/linguist-cat-store/src/export-staging.ts`（主进程交付链与默认 basename）
+  - `packages/shared/{package.json,src/types/linguist.ts}`、`apps/electron/{package.json,src/main/ipc.ts,src/preload/index.ts}`、`bun.lock`（`linguist.exports.saveAsset` 契约与 0.0.7 / 0.1.51 / 0.15.27）
+  - `apps/electron/src/renderer/features/linguist/projects/ProjectAssetsSection.tsx`（逐资产导出、忙碌/取消/失败/a11y 反馈）与 `apps/electron/scripts/smoke/probe-import.ts`（打包 UI 接线与 QA 筛选竞态等待）
+  - `apps/electron/src/main/lib/linguist/ipc-contract.test.ts`、Proma 触点登记与双账本
+- **TDD 实录**：
+  - RED：新增 `export-ipc.nodetest.ts` 引用不存在的处理器，`test:linguist` 如预期报 `ERR_MODULE_NOT_FOUND`；GREEN：真实 SQLite 项目验证 staging/copy、取消、非法 asset、blocking QA、归档项目均符合信封与 picker 前置边界。
+  - 契约测试固定唯一 Save 通道及 preload/main 接线；打包 UI 探针固定每资产导出按钮与非法 asset 在 native dialog 前拒绝。
+- **验证（实测）**：
+  - `cd packages/linguist-cat-store && bun run test` ✅ 74/74
+  - `cd apps/electron && bun run test:linguist` ✅ 59/59；`bun test src/main/lib/linguist/ipc-contract.test.ts` ✅ 16/16
+  - `bun run typecheck` ✅ 10/10；`bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `bun test` ⚠️ 681 pass / 2 fail：既有 pure-Bun 下 Electron named export 环境失败（`agent-session-manager.test.ts`、`channel-runtime-api-key.test.ts`），与本票无关。
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅ 未签名 `out/mac-arm64/Linguist Agent.app`（0.15.27）；`node scripts/smoke/probe-import.ts` ✅ 28/28（导出入口/预检、CAT 10k、QA、重启隔离均通过）。
+- **knownLimitations**：
+  - Playwright 无法驱动 macOS 原生 Save 面板；主进程 copy 由真实 SQLite + picker stub 验证，打包 UI 已验证入口与预检，但用户选择实际落盘目标的真机操作尚未手动验收，故不标记 `packaged_app_verified` 或 `real_machine_verified`。
+  - 单次取消仍保留 PB-072 已验证的项目 staging artifact/metadata；它不会写用户目标，也不会触碰 source。
+- **rollback**：`git revert <PB-073 resultCommit>`
+
+## PB-074：完整纵向 E2E
+
+- **状态**：`real_machine_verified`
+- **依赖**：PB-073 ✅
+- **baseCommit**：`0f22d8e1`
+- **resultCommit**：`SELF`
+- **范围**：新增打包应用的自动纵向探针：UI 创建项目与项目 Chat → preload 发送的模型工具往返 → Proposal → 人工接受 → QA blocking 导出 → 处理/豁免 → adapter export/reimport verify → 同 HOME 重启恢复。原生 Open/Save、用户选择目标后的 UI 重导入与重启后 CAT 核验由真机 Gate 完成，绝不以 CLI 伪装完成。
+- **调用链**：`fake-cat-pb074` → `cat_get_segments` → 真实 tool result 中的 `id/revision` → `cat_propose_translations` → Context Rail 人工接受 → QA 人工豁免 → `LinguistProjectService` QA gate；导出 adapter reparse/持久化复用 PB-072/PB-073。
+- **关键语义**：
+  - fake model 不从用户提示偷取 Segment ID；只有收到真实 `cat_get_segments` 的 `items[0].id/revision` 后才创建 Proposal。
+  - 导出前强制断言 `EMPTY_TARGET` 阻断真实 `linguistExportsSaveAsset`；接受后确认 `REPEATED_PUNCTUATION` 带原因豁免且 open/blocking 为零。
+  - 自动探针只对可控制的打包 App 路径给 PASS；原生文件对话框两项始终打印 `MANUAL`，不计为通过。
+- **改动文件**：
+  - `apps/electron/scripts/smoke/{fake-model-server.ts,probe-pb074-e2e.ts}`（严格工具依赖 fake 场景与 11 项自动打包纵向断言）
+  - `apps/electron/package.json` / `bun.lock`（`smoke:g7`，Electron 0.15.28）
+  - Proma 触点登记与双账本
+- **验证（实测）**：
+  - `bun run typecheck` ✅ 10/10
+  - `cd packages/linguist-cat-store && bun run test` ✅ 74/74；`cd apps/electron && bun run test:linguist` ✅ 59/59
+  - 根 `bun test` ⚠️ 681 pass / 2 fail（仅 PB-003 起既有 pure-Bun Electron named export 环境失败）
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅ 未签名 `out/mac-arm64/Linguist Agent.app`（0.15.28）
+  - `cd apps/electron && node scripts/smoke/probe-pb074-e2e.ts` ✅ **11 PASS / 0 FAIL / 2 MANUAL**：打包 App UI 项目/Chat、真实 Pi Tool result → Proposal、人工审核/QA、blocking gate、adapter reparse、重启恢复均通过。
+  - 真机 Gate（同一 0.15.28 打包产物的隔离测试副本；仅为规避 macOS 单实例而修改 bundle ID/显示名并 ad-hoc 重签，`app.asar` 未改）✅ 临时 `HOME` / `--user-data-dir` 均实际落盘；native Open 导入 synthetic `mini_game_ui.xliff` 7 段 → 手动编辑 `欢迎回来，{player}！` → QA 0 Finding → native Save 至新目标 `mini_game_ui_g7.xliff` → 第二 CAT 项目 native Open 重导入 7 段并显示该译文 → 真实退出、同一临时根重启、再次打开 CAT 后仍显示 7 段与该译文。fixture SHA-256 `5a6ce10ce092…a6d90be`，导出 SHA-256 `50c4fc283583…8ede08a`（预期因译文变化而不同）。
+- **knownLimitations**：
+  - 自动 adapter `export/verify` 不等同于产品的 native Save IPC；native Save/用户目标 copy/UI 重导入已由上述真机步骤覆盖。
+  - fake model 是 hermetic 测试模型，不代表用户的真实供应商 Key/模型质量；真实项目应先用副本做小范围验收。
+  - 项目 Chat 由 UI 打开，消息经 preload IPC 发送；本票没有覆盖 Composer DOM 输入/发送控件。
+- **rollback**：`git revert <PB-074 resultCommit>`
+
+## G7 门禁：可交付纵向产品
+
+- **状态**：`gate_passed`
+- **依赖**：PB-074 ✅
+- **baseCommit**：`b1ea513d`
+- **resultCommit**：`SELF`
+- **范围**：仅执行 Batch 7 Gate、生成 `docs/roadmap/G7_REPORT.md` 并更新双账本；没有产品代码改动。
+- **门禁结果**：
+  1. 完整纵向链 ✅：两条互补 packaged run 覆盖 UI 创建项目、7 段 XLIFF 导入、项目 Chat 真实 tool result → Proposal、人工接受、QA blocking/waiver、adapter export/reimport 与同 HOME 重启（PB-074 11 PASS / 0 FAIL / 2 MANUAL）。
+  2. 原生文件流 ✅：隔离真机通过 native Open 导入 7 段 → 手动编辑 → QA 0 Finding → native Save → 第二 CAT 项目 native Open 重导入并显示译文 → 真正退出/重启后再核验 CAT 译文。
+  3. 产品回归 ✅：typecheck 10/10；test:linguist 59/59；cat-store 74/74；cat-tools 17/17；boundaries 3/3；G0 18/18；probe-import 28/28；probe-cat-tools 21/21；根 bun test 681/2（仅既有 Electron/Bun 环境失败）。
+- **knownLimitations**：
+  - fake model 不验证外部 Provider 或真实项目的模型质量。
+  - 自动项目 Chat 消息由 preload IPC 发送，不覆盖 Composer DOM；原生 Open/Save 已另行真机实测。
+  - 仅验证当前 macOS arm64 未签名产物；签名、公证与其他平台留 Batch 11。
+- **结论**：`gate_passed`；详见 `docs/roadmap/G7_REPORT.md`。
+- **rollback**：`git reset --hard b1ea513d`
+
+## PB-080：TM/TB 管理（Reference）
+
+- **状态**：`integration_verified`
+- **依赖**：G7 ✅
+- **baseCommit**：`3293e8d2`
+- **resultCommit**：`SELF`
+- **范围**：计划 §21 PB-080——导入 TMX/CSV TM 与 term CSV/TBX；exact/fuzzy search；term status；case sensitivity；notes；UI 管理；Tool 查询。不做复杂向量检索。
+- **施工记录**：本票由 Codex 施工至未提交半成品后停止，由 Kimi 接手：核验全部测试与类型、对齐一处过时测试断言（行为不变）、补触点登记（含 PB-073/074 漏记的 reason）、跑打包验证、补双账本并提交。
+- **调用链**：renderer `ReferenceManager`（白名单 UI）→ preload `linguistReferences*` 五方法 → `LINGUIST_REFERENCE_IPC_CHANNELS` 五通道 → 白名单 `reference-ipc.ts` 校验 → `LinguistProjectService` → cat-formats TMX/TBX/CSV 解析 → cat-store tm-units/term-entries 仓储（schema v4）。import 通道由主进程注入真实 `dialog.showOpenDialog` picker，renderer 永不提交路径/字节；archived 项目在 picker 打开前即被拒绝。Context Rail 经只读 getContext 展示当前段 tmMatches/termMatches。
+- **关键语义**：
+  - TM：内容派生稳定 id；同源文不同译文共存；重复导入 unchanged 幂等；内容 id 冲突与跨项目写入被拒绝；read-only 项目句柄拒绝写。
+  - 匹配：exact/contains/fuzzy 确定性打分（dice coefficient / token Jaccard + 阈值），排序确定性（exact < contains < fuzzy、score 降序）；score 是文字相似度，不是模型置信度，绝非向量检索（计划明确不做）。
+  - 术语：status 四态（allowed/preferred/forbidden/deprecated）、caseSensitive、note；同一术语多个 preferred 译文只标 `conflict`，不擅自选第一条；批量导入事务回滚。
+  - TMX/TBX 解析基于新增 runtime dep `@xmldom/xmldom@^0.8.11`（MIT）；xml-parser 拒绝内部实体声明防 XXE；locale 歧义不猜测，零有效翻译对/畸形 XML 明确失败；CSV 复用既有 RFC-4180 读取器（`parseDelimitedTable`），不复制第二套 parser。
+  - 空库工具提示改为可行动文案（"Import TMX or CSV into this project…"）。
+- **改动文件**：
+  - `packages/linguist-cat-formats/{package.json,src/{xml-parser.ts,tmx.ts,tbx.ts,xml-import.test.ts,adapters/csv.ts,index.ts}}`（0.0.1）
+  - `packages/linguist-cat-store/{package.json,src/{schema.ts,project-database.ts,index.ts,repositories/{tm-units.ts,term-entries.ts},references.nodetest.ts,database.nodetest.ts}}`（0.0.8）
+  - `packages/linguist-cat-tools/{package.json,src/{factory.ts,types.ts,tools.nodetest.ts}}`（0.0.5）
+  - `packages/shared/{package.json,src/types/linguist.ts}`（0.1.52；错误码目录不变）
+  - `apps/electron/{package.json,src/main/ipc.ts,src/preload/index.ts,src/main/lib/linguist/{project-service.ts,reference-ipc.ts,reference-ipc.nodetest.ts,session-cat-tools.nodetest.ts},src/renderer/features/linguist/projects/{ReferenceManager.tsx,CatContextRail.tsx,CatWorkspace.tsx}}`（0.15.29）
+  - `bun.lock`、Proma 触点登记（6 条既有条目追加 PB-080）与双账本
+- **TDD 实录**：
+  - 接手核验：`session-cat-tools.nodetest.ts` 两处空库 note 断言仍匹配旧文案而 RED；GREEN：对齐到 cat-tools 已更新的新文案（行为未改，测试追平）。
+  - 测试覆盖：references.nodetest.ts 8 例（幂等/打分排序/项目隔离与 id 冲突/只读拒绝/upsert 项目域/大小写+状态+冲突排序/批量回滚）、reference-ipc.nodetest.ts 2 例（picker 导入后项目域可见；archived 拒绝先于 picker）、xml-import.test.ts 7 例（namespace 与 lang/locale 歧义不猜/畸形与零有效对明确失败/TBX v2+v3/拒绝内部实体声明）。
+- **验证（实测）**：
+  - `bun run typecheck` ✅ 10/10
+  - `cd packages/linguist-cat-store && bun run test` ✅ 83/83；`cd packages/linguist-cat-tools && bun run test` ✅ 17/17；`bun test packages/linguist-cat-formats` ✅ 72/72
+  - `cd apps/electron && bun run test:linguist` ✅ 61/61
+  - 根 `bun test` ⚠️ 688 pass / 2 fail（仅 PB-003 起既有 pure-Bun Electron named export 环境失败）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` ✅ 未签名 `out/mac-arm64/Linguist Agent.app`（0.15.29；@xmldom 经 esbuild 束入主进程运行时无错）
+  - `cd apps/electron && node scripts/smoke/probe-cat-tools.ts` ✅ 21 PASS / 0 FAIL（打包 CAT 探针回归）
+- **knownLimitations**：
+  - Reference UI/IPC 无打包 App 点击级探针；打包验证为构建 + 既有 CAT 探针回归，特性覆盖在主进程 nodetest 层（含真实 picker 注入与项目隔离）。
+  - fuzzy 是确定性文字相似度（dice/token Jaccard），非向量语义检索；score 不表示模型置信度。
+  - "notes" 落在术语 note 与 TM origin；TMX/TBX 未识别自定义属性不导入，locale 歧义与零有效对明确报错而非静默猜测。
+- **rollback**：`git revert <PB-080 resultCommit>`
+
+## PB-081：XLSX 双语格式 Adapter
+
+- **状态**：`integration_verified`
+- **依赖**：PB-080 ✅
+- **baseCommit**：`176006a2`
+- **resultCommit**：`SELF`
+- **范围**：计划 §21 PB-081「更多格式」。范围决策：计划列表 PO/XLSX/SRT/VTT/ASS 中仅 XLSX 有旧仓真实需求证据（旧导入路由支持 .xlsx + office workers + workbook_mapping.ts），按「只有现有真实工作需求高的格式才做」只做 XLSX；PO/SRT/VTT/ASS 不做，需求出现时单独立票。Trados（SDLXLIFF）与 Phrase（MXLIFF / bilingual DOCX）经用户 2026-07-26 明确为常态需求，立项 PB-086/PB-087/PB-088（用户授权扩围，各自独立提交）。
+- **施工记录**：adapter 与测试由 Kimi coder subagent 按 CSV adapter 契约施工，Kimi 复核 diff、独立重跑全部验收命令、补触点登记与双账本并提交。
+- **关键语义**：
+  - 纯字节 adapter（jszip 容器 + @xmldom 读 workbook/rels/sharedStrings 值 + 自写 namespace 容忍扫描器做 sheet 字符串手术）；import/export 共用同一条管线保证两侧 key/source/target 一致。
+  - 列映射与 CSV adapter 同一套别名表（csv.ts 导出复用，未复制第二份）：key/source/target/locked/context + 中文别名；synthesized `#row-<ordinal>` key + warning；重复 key 报错。
+  - 字节稳定硬规则：导出先全量校验（未知 key/丢段/源文不匹配/locked 变更/重复 key → FormatExportError），无改动直接返回 originalBytes；有改动仅替换目标 worksheet 条目，其余条目内容字节一致（测试显式断言）。
+  - 变化 target 单元格改写为 inlineStr（保留 r/s 属性），不碰 sharedStrings.xml；XML 转义含 `\r`→`&#xD;`、C0 控制字符 `_xHHHH_`、字面 `_xHHHH_` 先 `_x005F_` 保护；首尾空白写 `xml:space="preserve"`。
+- **改动文件**：
+  - `packages/linguist-cat-formats/{package.json,src/{index.ts,adapters/{csv.ts,xlsx.ts,xlsx.test.ts}}}`（0.0.2；csv.ts 仅加 export 关键字，行为零变化；新增 runtime dep jszip@^3.10.1）
+  - `packages/shared/{package.json,src/types/linguist.ts}`（0.1.53；导入白名单加 'xlsx'）
+  - `apps/electron/{package.json,src/main/lib/linguist/{format-registry.ts,project-ipc.ts,ipc-contract.test.ts}}`（0.15.30；注册第四 adapter、picker 标签同步、契约断言同步）
+  - `bun.lock`、Proma 触点登记（4 条既有条目追加 PB-081）与双账本
+- **TDD 实录**：xlsx.test.ts 20 例（detect 置信度、表头别名含中文、synthesized key、重复 key、locked 读写与导出拒绝、未修改导出字节一致、修改导出→重导入 target 可见、未修改条目字节一致断言、XML 转义含 `_xHHHH_` 往返、多 sheet warning、公式/错误单元格行为）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 10/10
+  - `bun test packages/linguist-cat-formats` ✅ 92/92（xlsx 20 + 既有 72）
+  - `cd apps/electron && bun run test:linguist` ✅ 61/61
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - 仓根 `bun test` ✅ 708 pass / 2 fail（仅 PB-003 起既有 Electron named-export 环境失败，与本票文件无引用关系）
+- **knownLimitations**：
+  - v1 单 worksheet（第一个 sheet，多表给 `xlsx.multi_sheet` warning）；旧 LA 的交互式多 sheet 列映射 UI 未迁——约定式别名列覆盖常见表头，交互映射需求出现时单独立票。
+  - 单元格按存储文本读取：数字不格式化、日期保持序列号；布尔读作 TRUE/FALSE；错误单元格读空 + warning；公式只读缓存值、永不求值。
+  - 修改导出的 zip 容器字节可与原文件不同（未修改条目内容字节一致；未修改导出返回原始字节）。
+  - 打包 App 未对本票重跑 smoke:pack（adapter 纯字节、jszip 为纯 JS；打包验证随下一打包票或 G8 覆盖）。
+- **rollback**：`git revert <PB-081 resultCommit>`
+
+## PB-086：Trados SDLXLIFF Adapter
+
+- **状态**：`integration_verified`
+- **依赖**：PB-081 ✅
+- **baseCommit**：`f0806c5e`
+- **resultCommit**：`SELF`
+- **范围**：用户 2026-07-26 授权扩围（"实际项目里 Trados/Phrase 文件是常态需求"），Trados SDLXLIFF 双语格式支持。SDLXLIFF = XLIFF 1.2 + sdl: 命名空间。
+- **施工记录**：Kimi coder subagent 施工（旧仓 sdlxliff.ts 语义提取 + provenance 登记），Kimi 复核 diff、独立重跑全部验收命令、补触点登记与双账本并提交。
+- **关键语义**：
+  - 独立 `SdlXliffAdapter`（不扩展 XliffAdapter）：分段 trans-unit（`<seg-source><mrk mtype="seg" mid>`）按 mrk 拆成多逻辑段（key=mid），与 XliffAdapter 的"一 unit 一段"模型在解析/导出三处分叉，扩展会浑浊契约并威胁既有 xliff 测试；`xliff.ts` 仅 `statusFromXliff` 加 export（零行为变化）。
+  - locked：file/trans-unit `translate="no"` 整 unit 锁定；`<sdl:seg locked="1|true|yes|locked">` 按 mrk 锁定（与旧仓一致）。
+  - status：空 target → untranslated；conf=ApprovedTranslation/ApprovedSignOff → reviewed；conf=Translated → translated（偏差：旧三档只能落 draft）；其余非空 → draft；非分段 unit 复用 plain-XLIFF `statusFromXliff`（偏差：旧一律 draft）。
+  - detect 置信度与 XliffAdapter 不互抢（.sdlxliff+sdl 命名空间 0.95 vs 0.5；显式 .xliff/.mqxliff 改名文件按扩展名优先降级——已文档化；plain xliff 绝不误判 0 vs 0.9），registry 层测试锁定。
+  - 导出硬规则同族：未修改返回原字节、分段 target 按 mrk inner splice、locked 拒绝、丢段报错；sdl: 元数据（conf/locked/modified_on）不回写、分段 target 不写 state=（避免误标兄弟段）、inline tag 逐字往返（与 memoQ 政策一致，偏差全文见 sdlxliff.ts 头注释）。
+- **改动文件**：
+  - `packages/linguist-cat-formats/{package.json,src/{index.ts,adapters/{sdlxliff.ts,sdlxliff.test.ts,xliff.ts}}}`（0.0.3；xliff.ts 仅加 export）
+  - `packages/shared/{package.json,src/types/linguist.ts}`（0.1.54；白名单加 'sdlxliff'）
+  - `apps/electron/{package.json,src/main/lib/linguist/{format-registry.ts,project-ipc.ts,ipc-contract.test.ts}}`（0.15.31；注册第五 adapter）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（sdl 语义提取与 fixture 形状参考登记）
+  - Proma 触点登记（3 条既有条目追加 PB-086）与双账本；零新依赖（bun.lock 不变）
+- **TDD 实录**：sdlxliff.test.ts 13 例（detect 评分矩阵、registry 不互锁、mrk 拆段/locked/conf 映射、非分段映射、warning 路径、harness round-trip、byte-stable 抽查、mrk 补写/target 创建、错误路径）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 10/10
+  - `bun test packages/linguist-cat-formats` ✅ 106/106（新 13 + 既有 93 不回归）
+  - `cd apps/electron && bun run test:linguist` ✅ 61/61；`bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+- **knownLimitations**：
+  - sdl 字节被显式改名 `.xliff` 时按扩展名路由到 XliffAdapter（mrk 逐字留在单段、无 sdl 语义）——刻意的"扩展名优先"降级，改一行置信度即可切换为内容优先。
+  - sdl: 元数据不回写；真实客户 sdlxliff 兼容性未验证（旧仓 outputs/ 下真实样本按纪律未触碰，需用户提供脱敏样本）。
+  - 打包 App 未重跑 smoke:pack（零新依赖、纯字节 adapter；打包验证随 G8 覆盖）。
+- **rollback**：`git revert <PB-086 resultCommit>`
+
+## PB-087：Phrase MXLIFF Adapter
+
+- **状态**：`integration_verified`
+- **依赖**：PB-086 ✅
+- **baseCommit**：`13139218`
+- **resultCommit**：`SELF`
+- **范围**：用户 2026-07-26 授权扩围（"实际项目里 Trados/Phrase 文件是常态需求"），Phrase (Memsource) MXLIFF 双语格式支持。MXLIFF = XLIFF 1.2 + `m:` 命名空间（`xmlns:m="http://www.memsource.com/mxlf/2.0"`）。
+- **施工记录**：Kimi coder subagent 施工（旧仓 phrase_mxliff.ts / batch_workspace.ts 语义提取 + provenance 登记），Kimi 复核 diff（adapter 全文 + 接线 diff）、独立重跑全部验收命令、补触点登记与双账本并提交。
+- **关键语义**：
+  - 独立 `PhraseMxliffAdapter`（id `phrase_mxliff_1_2`，不扩展 XliffAdapter）：段模型平坦（一 trans-unit 一段，与 plain XLIFF 同形，无 seg-source/mrk 拆段），但 `m:` 方言携带独立状态契约（confirmed 工作流级别、group 上下文、locked 属性族），按 PB-086 同原则单独立 adapter；零行为变化复用 xliff-xml 层。
+  - locked：file/trans-unit `translate="no"` 或 truthy `m:locked`（回落 plain `locked`；取值 1/true/yes/locked 不区分大小写）→ locked（旧仓 isLocked 一致）。
+  - status：空 target → untranslated；truthy `m:confirmed`（非 ''/"0"/"false"）数值级别 ≥2 → reviewed、其余真值 → translated（偏差：旧三档单确认层，本仓四档拆 translated/reviewed，与 PB-086 conf 映射同原则）；无 confirmed 回退 `statusFromXliff`（偏差：旧完全忽略 state）。
+  - context：trans-unit `<note>` → context.note；无 note 时经 `m:para-id` 查 group `<context context-type="x-key-note">` 兜底；`resname` → context.origin；`m:para-id` 仅身份元数据，绝不做 key（多个 trans-unit 可共享段落）。
+  - detect 置信度不互抢：m 命名空间+.mxliff → 0.95（压 XliffAdapter 0.5）；m 命名空间+其他扩展名 → 0.7（显式 .xliff/.mqxliff 仍由 XliffAdapter 0.9 优先，扩展名优先降级同 PB-086）；仅 .mxliff 无命名空间 → 0.4（让位 plain XLIFF 0.5）；皆无 → 0。
+  - 导出硬规则同族：未修改返回原字节、仅重写变更 target（缺失则创建于 source 后、自闭合展开）、非空写入 target 打 state="translated"、locked 拒绝、丢段/未知 key/源不匹配报错；`m:` 元数据（confirmed/modified-at/level-edited/locked/para-id/trans-origin）绝不回写（偏差：旧仓导出会打 confirmed 时间戳）、tag 与 `{n}` 占位符逐字往返（偏差：旧仓对配对 master XLIFF 做 rehydration，本票不做）。
+- **改动文件**：
+  - `packages/linguist-cat-formats/{package.json,src/{index.ts,adapters/{phrasemxliff.ts,phrasemxliff.test.ts}}}`（0.0.4）
+  - `packages/shared/{package.json,src/types/linguist.ts}`（0.1.55；白名单加 'mxliff'）
+  - `apps/electron/{package.json,src/main/lib/linguist/{format-registry.ts,project-ipc.ts,ipc-contract.test.ts}}`（0.15.32；注册第六个 adapter）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（m: 语义提取登记）
+  - Proma 触点登记（3 条既有条目追加 PB-087）与双账本；零新依赖（bun.lock 不变）
+- **TDD 实录**：phrasemxliff.test.ts 14 例（detect 评分矩阵、registry 不互锁、locked/confirmed 级别映射、state 回退、group note 兜底、para-id 不作 key、missing id warning、harness round-trip、byte-stable 抽查、target 创建/自闭合展开、locked/丢段错误路径）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 10/10
+  - `bun test packages/linguist-cat-formats` ✅ 120/120（新 14 + 既有 106 不回归）
+  - `cd apps/electron && bun run test:linguist` ✅ 61/61；`bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+- **knownLimitations**：
+  - mxliff 字节被显式改名 `.xliff` 时按扩展名路由到 XliffAdapter（m: 元数据逐字保留但无语义映射）——刻意的"扩展名优先"降级，与 PB-086 同政策。
+  - `m:` 元数据不回写；master XLIFF 配对 rehydration 不做（旧仓该能力依赖工作区配对文件，需求出现时单独立票）；真实客户 mxliff 兼容性未验证（旧仓真实样本按纪律未触碰，需用户提供脱敏样本）。
+  - 打包 App 未重跑 smoke:pack（零新依赖、纯字节 adapter；打包验证随 G8 覆盖）。
+- **rollback**：`git revert <PB-087 resultCommit>`
+
+## PB-088：Phrase Bilingual DOCX Adapter
+
+- **状态**：`integration_verified`
+- **依赖**：PB-087 ✅
+- **baseCommit**：`4d39e888`
+- **resultCommit**：`SELF`
+- **范围**：用户 2026-07-26 授权扩围（"实际项目里 Trados/Phrase 文件是常态需求"），Phrase (Memsource) bilingual DOCX 双语格式支持。多表 WordprocessingML 包：metadata/intro 表 + 内容表（逻辑列 [ID, ICU, #, Source, Target, Status, Comment]）。
+- **施工记录**：Kimi 先行格式调研（旧仓写侧语义 + 第三方 OSS Supervertaler-Workbench 格式知识交叉验证列布局/段 id 形状/表检测；仅知识不抄码），Kimi coder subagent 施工，Kimi 复核 adapter 全文与接线 diff、独立重跑全部验收命令、补触点登记与双账本并提交。
+- **关键语义**：
+  - 独立 `PhraseDocxAdapter`（id `phrase_bilingual_docx_1`，extensions ['.docx']）：段行 = `<w:tr>` 内 ≥5 `<w:tc>` 且首格 trim 非空含 `:`（段 id 形状 `<base32>:<index>`）且非表头行（任一格含 `Source (xx)`/`Target (xx)` 字样）；key=cells[0]、source=cells[3]、target=cells[4]（`<w:t>` 拼接 + 实体解码，旧仓 cellText 语义）；重复 key 报错；8-grid 变体（Source 格 gridSpan=2）在原始 XML 层仍 7 格，正则扫描天然兼容。
+  - status：空 target → untranslated；非空一律 draft（保守偏差：Phrase 状态码目录未公开文档化，不臆测；cells[5] 原值只读 surfaced 到 context.note=`Phrase status: <值>`）；locked 恒 false（灰底是列锁定非段锁定）；cells[2]（#）→ context.origin。
+  - `{N}`/`{N>text<N}`/`<N}`/`{N><N}` 占位符逐字保留（同 PB-087 政策）。
+  - detect：非 zip/无 word/document.xml/无 Phrase 段行形状 → 0（普通 DOCX 刻意不认领，落无 adapter 类型错误；xlsx 带 xl/ 条目天然不互抢）；命中形状 .docx → 0.9、其他扩展名 → 0.7。
+  - 导出硬规则同 zip 族（PB-081）：无变更返回原字节；变更段只重写本行 cells[4]（旧仓 rewriteCellText 等价：首 `<w:t>` 写入+强制 xml:space="preserve"、其余清空、无 `<w:t>` 则 `</w:tc>` 前插入完整 run）；空串 target 合法；unknown key/丢段/source 不匹配报错；变更时 jszip DEFLATE 重打包只换 word/document.xml（容器字节形状可不同，内容等价，已文档化）。
+- **改动文件**：
+  - `packages/linguist-cat-formats/{package.json,src/{index.ts,adapters/{phrasedocx.ts,phrasedocx.test.ts}}}`（0.0.5）
+  - `packages/shared/{package.json,src/types/linguist.ts}`（0.1.56；白名单加 'docx'）
+  - `apps/electron/{package.json,src/main/lib/linguist/{format-registry.ts,project-ipc.ts,ipc-contract.test.ts}}`（0.15.33；注册第七个 adapter）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（旧仓写侧语义 + Supervertaler 格式知识参考登记）
+  - Proma 触点登记（3 条既有条目追加 PB-088）与双账本；零新依赖（bun.lock 不变）
+- **TDD 实录**：phrasedocx.test.ts 14 例（detect 评分矩阵、registry 五 adapter 不互抢、段模型/表头跳过/非段行跳过、占位符逐字、实体解码、context 映射、重复 id、harness round-trip、byte-stable 抽查、target 重写/无 `<w:t>` 插入/xml:space/多空格、空串写入、错误路径）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 10/10
+  - `bun test packages/linguist-cat-formats` ✅ 134/134（新 14 + 既有 120 不回归）
+  - `cd apps/electron && bun run test:linguist` ✅ 61/61；`bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+- **knownLimitations**：
+  - Status 码目录未解读（非空 target 一律 draft 待人工分诊）；Comment 列不 surfaced；普通 DOCX 不支持（刻意）。
+  - 正则扫描假定机器生成的 `w:` 前缀 WordprocessingML（同族取舍）；真实客户 Phrase DOCX 兼容性未验证（仅合成 fixture，真实样本需用户提供脱敏版）。
+  - 打包 App 未重跑 smoke:pack（零新依赖；打包验证随 G8 覆盖）。
+- **rollback**：`git revert <PB-088 resultCommit>`
+
+## PB-083：Review Skill 和 Finding（Independent Critic）
+
+- **状态**：`integration_verified`
+- **依赖**：PB-071（QA Finding 体系）✅、PB-053（Proposal 人工审核链）✅
+- **baseCommit**：`894d44f7`
+- **resultCommit**：`SELF`
+- **范围**：计划 Batch 8 PB-083，唯一硬约束"Review 只产生 Finding 或修订 Proposal，不能直接 Commit"。提取规格 docs/roadmap/LEGACY_EXTRACTION_SPEC.md PB-083 小节。
+- **施工记录**：Kimi 先行集成侦察（skill 缝/工具工厂/store 现状/旧契约逐行），定身份派生与持久化设计；Kimi coder subagent 施工；Kimi 复核（验收独立重跑含 node --test 层、工具/ schema/仓储/skill diff 全看）、补 cat-core 版本 bump（subagent 遗漏，0.0.3→0.0.4）、触点登记与双账本并提交。
+- **关键语义**：
+  - cat-core 新增 `independent-critic.ts`（旧仓 222 行契约全量提取，行为逐字保真：类别五档、严重度三档与新仓 QaFindingSeverity 逐字一致、subject 单高风险段、独立性断言、canonical JSON sha256 完整性链、内容派生 artifactId/findingId、deepFreeze、targetedRepairScope 只圈范围）与 `evidence.ts`（write_policy 证据可引用判定随迁：6 条 audit-only 前缀正则 + 两函数）。
+  - cat-store schema v5：`critic_artifacts(artifact_id PK, segment_id, created_at, artifact_json)` + 段索引；repository 幂等 insert（INSERT OR IGNORE）/getById/listBySegment，读取经 parseIndependentCriticArtifact 重验 hash；新增 `qaFindings.insertOpen`（不擦除既有 open findings 的追加写，供工具单事务组合）。
+  - cat-tools 第九个工具 `cat_submit_critic_review`：模型入参仅 segmentId/candidateProposalId/findings[1~20]；**身份与哈希全部运行时派生**——critic=`session:<sessionId>`（无绑定会话直接拒写）、profileHash=评审 SKILL.md 字节 sha256（回退 `linguist-critic-profile:v1`，skill 字节经 electron 装配层注入，tools 包保持 Electron-free）；candidate 按 store proposal 行派生（不存在/跨项目/段不匹配拒绝；candidateHash=sha256(canonical{proposalId,segmentId,target,revision})；无 sessionId 的提案回退 `proposal:<id>` 合成身份）；同会话评审自己提案 → 契约独立性断言抛错（刻意闸门，拒绝后零落库）。
+  - 落库：单事务双写 critic_artifacts + QA findings（code=`CRITIC_<CATEGORY>`、severity 透传、message=explanation、status open）；返回 artifactId/findingIds/qaFindingIds/repairScope；重复提交幂等。
+  - 评审 Skill 资产 `resources/linguist-skills/project-reviewer/SKILL.md`（frontmatter 对齐 project-assistant）：只读、证据纪律（禁 tool trace）、不评审自己产出、修订只走人工审核 Proposal、绝不声称 QA 通过/写段/导出；extraResources 整目录自动随包。
+  - "不能直接 Commit"结构性落实：工具无任何段/目标写路径；suggestedRepair 只是建议文本，修订经既有 cat_propose_translations 人工审核链。
+- **改动文件**：
+  - `packages/linguist-cat-core/{package.json,src/{index.ts,evidence.ts,evidence.test.ts,independent-critic.ts,independent-critic.test.ts}}`（0.0.4）
+  - `packages/linguist-cat-store/{package.json,src/{index.ts,schema.ts,project-database.ts,repositories/{rows.ts,critic-artifacts.ts,qa-findings.ts},critic-artifacts.nodetest.ts,qa-findings.nodetest.ts}}`（0.0.9）
+  - `packages/linguist-cat-tools/{package.json,src/{index.ts,types.ts,factory.ts,tools.nodetest.ts}}`（0.0.6）
+  - `apps/electron/{package.json,src/main/lib/linguist/{session-cat-tools.ts,session-cat-tools.nodetest.ts}}`（0.15.34）
+  - `resources/linguist-skills/project-reviewer/SKILL.md`（新）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（PB-083 提取登记）
+  - Proma 触点登记（1 条既有条目追加 PB-083）与双账本；零新依赖（bun.lock 不变）
+- **TDD 实录**：cat-core +20（critic 18：全部错误路径/独立性/hash 篡改/deepFreeze/确定性 + evidence 2）；cat-store +5（迁移升版/round-trip/幂等/按段查询 + insertOpen 1）；cat-tools +5（happy path 双写/同会话拒绝/proposal 不存在/audit-only 证据拒绝/空 findings 拒绝）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 10/10
+  - `bun test packages/linguist-cat-{core,store,tools}` ✅ 69/69（bun 层）
+  - `cd packages/linguist-cat-store && bun run test` ✅ 88/88（node --test 层，+5 不回归）
+  - `cd packages/linguist-cat-tools && bun run test` ✅ 22/22（node --test 层，+5 不回归）
+  - `cd apps/electron && bun run test:linguist` ✅ 61/61；`bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+- **knownLimitations**：
+  - 评审会话启动编排与技能注入切换未做（PB-082 Best 档负责）；当前能力=契约+工具+skill 资产，尚无自动触发路径。
+  - subject.risk 恒 'high'（planIndependentCritic 已导出留给 PB-082 策略层）；无 sessionId 的旧提案用合成 candidate 身份（独立性退化为恒真，已文档化）。
+  - QA UI 未加 critic 专用展示（finding 以 CRITIC_* code 出现在既有 QA 面板）；artifact JSON 无 UI 查看器。
+  - 打包 App 未重跑 smoke:pack（随 G8 覆盖）。
+- **rollback**：`git revert <PB-083 resultCommit>`
+
+## PB-082：质量策略档 Fast / Balanced / Best（计划 §21）
+
+- **状态**：`integration_verified`
+- **依赖**：PB-040（常驻项目 Skill 注入缝）✅、PB-034（项目会话绑定/归档闸门）✅、PB-083（评审 Skill 与工具）✅
+- **baseCommit**：`4854c863`
+- **resultCommit**：`SELF`
+- **范围**：计划 Batch 8 PB-082：三档质量策略（fast/balanced/best）存项目、按档切换注入策略 Skill、评审角色会话标记与发起编排；刻意不做模型 Router（用户显式选模型不变）。
+- **施工记录**：Kimi 定设计决策（profile 存 project.json 可选字段缺省 balanced、normalize 不抛错、评审按钮全档可见、reviewer 经 AgentSessionMeta.linguistSessionRole 冻结标记、三个 strategy skill 目录、初始评审指令经既有 createForProject+sendMessage 编排、不做自动 critic 编排）；Kimi coder subagent 施工；Kimi 复核（验收独立重跑、quality-profile/project-skill/策略 skill/ProposalInbox/service diff 全看）、触点登记（7 条）与双账本并提交。
+- **关键语义**：
+  - cat-core `quality-profile.ts`：`LinguistQualityProfile` 三档 union；`normalizeQualityProfile`（absent/unknown → balanced，永不抛错，读取路径兜底，不回写）；`QUALITY_PROFILE_POLICIES` 策略表（fast：大批次打满 50 段/单轮/不逐段查 TM/TB；balanced：10~20 段/拿不准先查库；best：≤5~10 段/逐段查库+提案后请用户发起独立评审）；纯数据不做 Router。
+  - 持久化：project.json 可选 `qualityProfile?`（PB-082 前旧文件无此键天然兼容；createProject 不写）；cat-store `setQualityProfile`（projects.json 索引 + project.json 双写、updatedAt 刷新；读取经 normalize 兜底）；归档拒绝落在服务层 LinguistProjectArchivedError（同 editSegment/runQa 模式；store 无 archived 错误码本票不新增——subagent 偏离记录，合理）。
+  - IPC：shared 新增 `SET_QUALITY_PROFILE` 通道与线类型（LinguistQualityProfile 镜像重定义、LinguistProjectInfo.qualityProfile 必有值经 toProjectInfo 边界收敛）；project-ipc 三档字面量严格校验（INVALID_INPUT）；createForProject 请求 `role?: 'reviewer'`（session-ipc 只收 'reviewer' 字面量）；`ChatSessionInfo.role` 映射 assistant/reviewer。
+  - 角色冻结：`AgentSessionMeta.linguistSessionRole?: 'reviewer'`（缺省=assistant 刻意不落库）；updateAgentSessionMeta 白名单不含该字段且展开 updates 后强制恢复原值（含 any 断言绕过，同 linguistProjectId 绑定冻结模式）。
+  - Skill 注入矩阵（project-skill.ts，每次发送实时重解析）：普通会话 [] ；评审会话（role=reviewer）只注入 project-reviewer；普通项目会话注入 project-assistant + strategy-<profile>；missing [] ；archived 仍注入（发送被 PB-034 闸门阻断）；策略读取失败/缺 SKILL.md → 只注入 project-assistant；服务不可解析/常驻目录缺 SKILL.md → []（全 fail closed）。
+  - 策略 Skill 资产三目录（frontmatter 对齐 project-assistant，extraResources 整目录随包）：各档工作方式（批次/查库/评审）+ 纪律重申（不直接写段/不声称 QA 通过/不导出）+ 不注册工具不扩权声明。
+  - renderer：ProjectDetailPanel 三段选择器（radio + 当前档一句说明，归档禁用，IPC 响应就地刷新）；ProjectChatsSection 评审会话「评审」徽标；ProposalInbox pending 行「独立评审」按钮（全档可见、归档禁用、防重复点击、无渠道 toast）→ createForProject(role:'reviewer') → sendAgentMessage 评审指令（fire-and-forget，失败只 toast 会话仍可手动补发）→ 跳转新会话。
+- **改动文件**：
+  - `packages/linguist-cat-core/{package.json,src/{index.ts,project.ts,quality-profile.ts,quality-profile.test.ts}}`（0.0.5）
+  - `packages/linguist-cat-store/{package.json,src/{project-index.ts,project-index.nodetest.ts}}`（0.0.10）
+  - `packages/shared/{package.json,src/types/{linguist.ts,agent.ts}}`（0.1.57）
+  - `apps/electron/{package.json,src/main/{ipc.ts,lib/agent-session-manager.ts,lib/linguist/{project-service.ts,project-ipc.ts,project-skill.ts,session-binding.ts,session-ipc.ts,session-cat-tools.ts,*.nodetest.ts,ipc-contract.test.ts}},src/preload/index.ts,src/renderer/features/linguist/projects/{ProjectDetailPanel.tsx,ProposalInbox.tsx,ProjectChatsSection.tsx,project-utils.ts,proposal-inbox-utils.ts,*.test.ts}}`（0.15.35）
+  - `resources/linguist-skills/strategy-{fast,balanced,best}/SKILL.md`（新）
+  - Proma 触点登记（7 条既有条目追加 PB-082）与双账本；零新依赖（bun.lock 不变）
+- **TDD 实录**：cat-core +4（normalize 兜底/策略表形状）；cat-store +4（setQualityProfile 双写/归档读取 normalize 兼容，另改 1 条 round-trip 断言）；electron main nodetest +4（service 归档拒绝/ipc 校验/session-binding role/session-ipc role）+ project-skill 重写 9 条注入矩阵 + ipc-contract 6→7 通道；renderer +5（project-utils 3、proposal-inbox-utils 2）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 10/10
+  - `bun test packages/linguist-cat-{core,store,tools}` ✅ 73/73（bun 层）
+  - `cd packages/linguist-cat-store && bun run test` ✅ 92/92（node --test 层）
+  - `cd packages/linguist-cat-tools && bun run test` ✅ 22/22（node --test 层）
+  - `cd apps/electron && bun run test:linguist` ✅ 67/67
+  - `bun test apps/electron/src/renderer/features/linguist/projects` ✅ 41/41
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - 根 `bun test` 779 pass / 2 fail（PB-003 起既有 Electron named-export 环境失败，非本票引入）
+- **knownLimitations**：
+  - 策略档只改 guidance（批次/查库/评审要求），不切模型/参数（Router 刻意不做）；评审发起是人工按钮，无自动 critic 编排。
+  - Fast/Balanced 档不强制评审（reviewPass 仅 best=true），但按钮全档可发起（策略决定是否要求，不限制能否）。
+  - Best 档盲评验收（产出质量是否显著更好）属 PB-085，阻塞于真实 API Key + 人工盲评。
+  - 打包 App 未重跑 smoke:pack（随 G8 覆盖）。
+- **rollback**：`git revert <PB-082 resultCommit>`
+
+## PB-084：Batch Consistency（批量一致性定点修复）
+
+- **状态**：`integration_verified`
+- **依赖**：PB-080（确定性 QA 4 码）✅、PB-083（CRITIC_ 3 码与评审行）✅、PB-053（Proposal 人工审核链）✅
+- **baseCommit**：`ac6f8774`
+- **resultCommit**：`SELF`
+- **范围**：计划 Batch 8 PB-084：只检查并修复命中 Segment（repeated source / terminology / character names / punctuation / voice profile），禁止全 Batch 无差别重翻。提取规格 docs/roadmap/LEGACY_EXTRACTION_SPEC.md PB-084 小节。
+- **施工记录**：Kimi 定设计决策（7 码集合=确定性 4 码 ∪ critic 3 码；evidenceSources/changeType 按规格丢弃；cat-core 投影 + 第十个工具 check-only/repair 两模式；不做 UI）；Kimi coder subagent 施工；Kimi 复核（验收独立重跑、batch-consistency 全文与 factory diff 全看）、provenance 登记、触点登记（1 条）与双账本并提交。
+- **关键语义**：
+  - cat-core `batch-consistency.ts`：`BATCH_CONSISTENCY_CODES` 7 码（INCONSISTENT_REPEATED_SOURCE/REQUIRED_TERM/FORBIDDEN_TERM/REPEATED_PUNCTUATION ∪ CRITIC_CONSISTENCY/CRITIC_VOICE/CRITIC_TERMINOLOGY）；`buildBatchConsistencyPass` 纯投影（只看 open+一致性码，不重查不重跑，authority='advisory_finding'/canCommit=false 烧死，deepFreeze）；按 source 分组，建议 target=组内 NFKC+trim 归一化非空 target 多数计票（平票取 compareSegments 序首个，归一化只用于计票、返回代表段原文）；锁定段参与计票（审校基准）但绝不生成 proposal；全空组只报告；引用缺失段的 finding 忽略不掀翻。
+  - `targetedRepairProposalInputs`：只为「当前 target 与建议值归一化后不同」的未锁定段生成 CreateProposalInput（baseRevision 当前 revision，evidenceRefs 带该段 finding ids）；已一致段跳过 → 重跑幂等。
+  - 工具 `cat_run_batch_consistency`（第 10 个）：check-only（默认）**零写库**——确定性 QA 用与 cat_run_qa 相同的 runQa 引擎内存重算，与库中 open findings（含 CRITIC_ 行）按内容派生 id 合并去重；刻意不走 store runProjectQa（它会 DELETE 所有 open findings 抹掉 critic 评审行）。repair：同款确定性硬门校验（锁定码除外）+ `db.proposals.insertPendingMany`（与 cat_propose_translations 同一仓储路径），绝不写段；单段违规/缺段记入 skipped（hard rule <CODE> / segment missing / no suggested target / already consistent 四档原因）不掀翻整批。
+  - 幂等三重保障：已一致段投影层跳过；proposal id 内容派生（同输入同 id）；insertPendingMany 对相同 pending 行去重。nodetest 实测同态重跑 proposalIds 相同、无重复行。
+  - 装配层零功能改动（工厂数组自动包含新工具），session-cat-tools 仅注释同步；renderer 零改动；shared/cat-store 未动。
+- **改动文件**：
+  - `packages/linguist-cat-core/{package.json,src/{index.ts,batch-consistency.ts,batch-consistency.test.ts}}`（0.0.6）
+  - `packages/linguist-cat-tools/{package.json,src/{types.ts,factory.ts,index.ts,tools.nodetest.ts}}`（0.0.7）
+  - `apps/electron/{package.json,src/main/lib/linguist/{session-cat-tools.ts,session-cat-tools.nodetest.ts}}`（0.15.36；仅注释同步）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（PB-084 提取登记）
+  - Proma 触点登记（1 条既有条目追加 PB-084）与双账本；零新依赖（bun.lock 不变）
+- **TDD 实录**：cat-core +8（7 码过滤/分组/计票/平票/锁定投票不修复/全空组/缺失段忽略/幂等跳过）；cat-tools +4（check-only 零写库含 CRITIC_ 合并/repair 落 pending 同路径/硬门跳过/同态重跑幂等）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 10/10
+  - `bun test packages/linguist-cat-{core,store,tools}` ✅ 81/81（bun 层）
+  - `cd packages/linguist-cat-store && bun run test` ✅ 92/92（node --test 层）
+  - `cd packages/linguist-cat-tools && bun run test` ✅ 26/26（node --test 层）
+  - `cd apps/electron && bun run test:linguist` ✅ 67/67
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+- **knownLimitations**：
+  - 组成员由 findings 驱动：runQa 跳过锁定段，锁定段只有被持久化 CRITIC_ finding 引用时才入组投票。
+  - 单段组建议值=自身译文 → repair 不产生 proposal（already-consistent）；此类修复需模型经 cat_propose_translations 自拟译文。
+  - character names 无独立确定性 code（由 CRITIC_CONSISTENCY 覆盖）；check-only 的 QA 是内存重算，不落库（库中 open 行不变）。
+  - repair 报告 groups 未分页（规模受项目大小天然约束）；probe-cat-tools.ts 保持 PB-042 时代 8 工具探针清单（PB-083 同例，另票处理）。
+  - 打包 App 未重跑 smoke:pack（随 G8 覆盖）。
+- **rollback**：`git revert <PB-084 resultCommit>`
+
+## G8 门禁：质量与格式扩展
+
+- **状态**：`gate_blocked`（自动证据全绿；硬标准待 PB-085 人工盲评）
+- **依赖**：PB-080 ✅、PB-081 ✅、PB-082 ✅、PB-083 ✅、PB-084 ✅、PB-086 ✅、PB-087 ✅、PB-088 ✅；PB-085 blocked（备料 `c5900116`）
+- **baseCommit**：`7ab2af48`
+- **resultCommit**：`SELF`
+- **范围**：执行 Batch 8 Gate、生成 `docs/roadmap/G8_REPORT.md` 并更新双账本；另含一处探针文案修正（`2c355aa5`，PB-080 空态文案追平），没有产品代码改动。
+- **门禁结果**：
+  1. 自动化回归 ✅：typecheck 10/10；根 bun test 787 pass / 2 fail（仅 PB-003 起既有环境失败）；cat 包 bun 层 81/81；cat-store 92/92；cat-tools 26/26；test:linguist 67/67；renderer 41/41；boundaries 3/3。
+  2. 打包与探针 ✅：smoke:pack PASS（0.15.36 未签名产物）；G0 18/18；probe-import 28/28（首轮 27/1 为空态文案过时断言，已追平并如实记录）；probe-cat-tools 21/21；PB-074 纵向 11 PASS / 0 FAIL / 2 MANUAL（同 G7 口径）。
+  3. 硬标准 ⛔ BLOCKED：Balanced 可靠默认 + Best 可测收益需 PB-085 人工盲评（真实 API Key 三档产出 + 用户打分）；判定式已预写（备料 §3：Balanced 三维 ≥4 且 blocking ≤10%；Best 两维 +0.5 或 blocking 降 50%），不以 fake model 或自评冒充。
+- **knownLimitations**：硬标准未判定；策略档不切模型参数；PB-086~088 真实客户样本未验证（合成 fixture）；仅 macOS arm64 未签名产物。
+- **结论**：`gate_blocked`；详见 `docs/roadmap/G8_REPORT.md`。annotated tag `pb-g8-quality-strategies` 标记 Batch 8 代码状态；PB-085 完成后按预备判定式复核升级。Batch 9 与质量档无技术依赖，继续推进。
+- **rollback**：`git reset --hard 7ab2af48`（仅撤销 gate 文档与探针修正）
+
+## PB-090：Legacy Scanner（只读旧布局扫描 CLI）
+
+- **状态**：`integration_verified`
+- **依赖**：G8（代码状态）✅；docs/migration/CAT_EXTRACTION_MATRIX.md §5（布局蓝本）✅
+- **baseCommit**：`755ea81f`
+- **resultCommit**：`SELF`
+- **范围**：计划 §22 PB-090：独立 CLI 直接读取旧目录副本（不启动旧 cat-server），输出 project list/health/source roots/internal uploads/assets/segments/TM/TB/proposals/chat presence/unsupported fields/digest；不得修改原数据。判定信号输出归本票，处置决策归 PB-091/092。
+- **施工记录**：Kimi 派 explore subagent 完成布局侦察（旧仓源码行号级，未触 data/**）并定两项决策（包名 linguist-legacy-migration 用 MATRIX 预定位；chat presence 只报存在+条目数）；Kimi coder subagent 施工；Kimi 复核（验收独立重跑、bun.lock 偏离逐行核验、readOnly 红线 grep 核验）、provenance/触点登记与双账本并提交。
+- **关键语义**：
+  - 新包 `@linguist/legacy-migration@0.0.1`（零 npm 依赖，仅 devDep typescript；sha256 用 node:crypto 自写保持零 workspace 依赖）。
+  - 版本 oracle：`data/.schema.json` 存在=v2 缺失=v1；读取优先级 SQLite 权威（authority-v1.json marker）→ read-cache JSON → legacy JSON，逐域标注 DataSource；authority 激活时严格不读 legacy JSON 为权威值（忠实旧仓 assertCatCoreLegacyAllowed 语义），legacy 文件仅作 digest/分叉证据。
+  - 只读红线：SQLite 一律 `DatabaseSync(path, {readOnly:true})`；src 零写 API（grep 核验）；nodetest 含扫描前后目录快照逐字节相等 + 固定时钟两次 stdout 全等。
+  - HealthSignal 13 码（sqlite-authority-active/sqlite-db-missing/sqlite-unreadable/sqlite-legacy-divergence/read-cache-missing-projection/orphan-project/orphan-sqlite-project/project-id-mismatch/root-missing/external-root-with-managed-uploads/internal-copy-only/invalid-permission-mode/file-unreadable），info|warning|error 三级；root-missing 降级 workspace-only 继续扫（旧仓同场景直接 ENOENT 崩溃，scanner 自 catch）。
+  - UnsupportedField 五 scope（manifest/agent-settings/project-files/batch/segment）永不抛；invalid `full` permission 记信号+unsupported 不中断（blocker 原文要求）。
+  - digest：关键文件（project.json/tm.json/termbase.json/chat.json/batches/*/batch.json/uploads/*）各自 sha256+bytes；项目 digest=按 relPath 排序三元组清单 JSON 的 sha256；segments/TM/TB 只报计数与 status 分布。
+  - CLI 复刻 cat-store 模式：COMMANDS 表驱动、parseFlags 严格白名单（最小扩展 booleanFlags 支持 --json 免值）、stdout key:value+JSONL、stderr error[CODE]、exit 0/1/2/3、runCli(argv,io) 可注入（同步版）、invokedAsMain 守卫。
+- **改动文件**：
+  - `packages/linguist-legacy-migration/`（整包新写：package.json/tsconfig/test 两 loader/src{layout,model,sqlite-probe,scan,report,cli,index}.ts + scan/cli.nodetest.ts）（0.0.1）
+  - `bun.lock`（登记新 workspace 包 + 同步 HEAD 既有但 lock 滞后的 5 个版本漂移：electron 0.15.36/cat-core 0.0.6/cat-formats 0.0.5/cat-store 0.0.10/cat-tools 0.0.7；漂移先于本票存在，frozen install 此前必失败；零依赖解析变化——subagent 偏离记录，Kimi 逐行核验接受）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（PB-090 提取登记）
+  - Proma 触点登记（bun.lock 1 条既有条目追加 PB-090）与双账本
+- **TDD 实录**：13 例 node --test——六情形各一棵树（正常 v1/正常 v2+SQLite/invalid permission/root-missing+internal-copy-only×2/orphan 双向）+ digest 变更敏感 + read-cache 回退（authority 在 sqlite 损坏→source=read-cache+sqlite-unreadable+read-cache-missing-projection）+ 只读保证；cli.nodetest 6 例 spawnSync 真实子进程冒烟（含树快照与固定时钟重放）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 11/11（新增 @linguist/legacy-migration）
+  - `cd packages/linguist-legacy-migration && bun run test` ✅ 13/13（node --test 层）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - bun.lock 偏离核验：HEAD package.json 五版本与 lock 同步值逐一比对一致，无依赖解析变化 ✅
+- **knownLimitations**：
+  - 未在真实旧数据上验证（铁律禁读 data/**，全部合成树）；真实复制样本验证归 G9。
+  - SQLite 批量枚举 listBatches 为 O(全部 batch)（scanner 定位可接受）；read-cache 缺投影只发信号不重试。
+  - chat presence 不校验 session 完整性（已决策）；quarantine 无旧仓 CAT 对应物，信号供 PB-091/092。
+  - 根 AGENTS.md 包清单未登记 linguist-* 包（先于本票滞后，该文件声明经允许后修改）——未动，待用户统一处理。
+- **rollback**：`git revert <PB-090 resultCommit>`
+
+## PB-091：Legacy Project Import（旧项目导入新 Project）
+
+- **状态**：`integration_verified`
+- **依赖**：PB-090（scanner/布局/digest/sqlite-probe）✅
+- **baseCommit**：`914f3d5c`
+- **resultCommit**：`SELF`
+- **范围**：计划 §22 PB-091：从旧数据副本导入新 Project；必保 Segment order/source/target/locked/revisions 最终语义/TM/TB/QA 状态/artifact references/source digest；不迁旧 Agent Runtime state。
+- **施工记录**：Kimi 派 explore subagent（agent-50 恢复，带 PB-090 上下文）完成接入点侦察，定 12 项决策（confirmed→translated 不升 reviewed、proposals/QA 原件归档不入库、artifact=source blob+exports 复制、sidecar 回滚落点、确定性项目 id 幂等拒绝等）；Kimi coder subagent 施工；Kimi 复核（验收独立重跑、bun.lock 偏离核验、写路径仅落 target-root 核验）、provenance/触点登记与双账本并提交。
+- **关键语义**：
+  - 写库全走 store 公共 API（createProject/assets.insert/tmUnits.importMany/termEntries.importMany/qaFindings.insertOpen+transition/saveAssetSource），绕过 adapter 直建 Segment 行，不经 LinguistProjectService；提取走 PB-090 authority 链（sqlite→read-cache→legacy JSON，v2 cutover 项目迁权威投影）。
+  - 段映射：数组序→ordinal；旧 id→key；新 id=deriveSegmentId(assetId,ordinal,key)；new/draft/confirmed→untranslated/draft/translated（未知→draft+计数）；locked 1:1；revision=0 无历史行；sourceHash=fnv1a64；duplicate*/originalTarget/rawSource/rawTarget/confirmationLevel/tuId/updatedAt 等→context.meta 保证据；unresolved* 6 导入期计算字段丢弃计数。
+  - TM/TB：tm 五列直搬（origin 无 CHECK 原值）+9 字段丢弃计数；term 默认 allowed、term_history current→preferred/deprecated 系→deprecated、conflict→allowed+计数；override→preferred 合成条目、note 严格按旧 overrideToEntry 公式。
+  - QA：每 batch 最新 report（generatedAt 最大）+ ledger review（findingId 键最新 wins）；blocker/warning/advisory→blocking/warning/info；ignore_with_reason/accepted_risk→waived（空 reason 回退文案因 store 强制非空）；fix_required/query→open；无 segmentId 丢弃计数；ledger 链验证失败→全部 open+仍归档（链不可信则 review 不可信）。
+  - proposals 不入库（计划必保清单无；旧 set 模型与新 live CAS 不兼容）：原 JSON 归档 legacy-archive/proposals/+计数；exports/ 递归原样复制（sha256+path 入报告）；quality_decision_ledger.jsonl 只验后归档。
+  - 三 source 情形：external 在→字节 sha256+blob；uploads 后缀匹配（多候选取数字前缀最大+歧义 note）；全丢→source_sha256=PB-090 batch.json digest 合成值+导出不可用标注（不伪造可运行项目）；paste 类直接丢失分支。
+  - format_id 原样落库六项映射（xliff_2_0/未知值原样+exportUnavailable）；同 sourceFile 撞 asset id→后者 skipped+计数。
+  - 幂等：确定性 projectId（seed 缺省 `legacy\0<projectId>`）→重复导入 targetConflict 拒写（CLI exit 4）；回滚：sidecar legacy-import.json 七字段+报告 rollback 两行；--dry-run 零写盘（冒烟验证 target 目录不存在）。
+- **改动文件**：
+  - `packages/linguist-legacy-migration/{package.json,bun.lock 联动,src/{extract,map,import,report-import}.ts 新增,src/{cli,index,layout,scan}.ts 修改,src/{map,import}.nodetest.ts 新增}`（0.0.2；新增 workspace 依赖 cat-core/cat-formats/cat-store）
+  - `bun.lock`（workspace 依赖登记，+6 行，零 npm 解析变化）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（PB-091 提取登记）
+  - Proma 触点登记（bun.lock 1 条既有条目追加 PB-091）与双账本
+- **TDD 实录**：+21 例（map 14：状态矩阵/format 7 映射/段列与派生 id/context 装配/TM 丢弃矩阵/history 分组/override note 公式 5 变体/QA severity/ledger 最新 wins/finding 全路径/最新报告 tie-break；import 7：大端到端三 source 情形+撞 id+QA waive/open/drop+归档逐字节+sidecar 七字段+readOnly 重开校验、dry-run 零写、重复导入拒绝、CLI exit 码、flag 覆盖、ledger 链 4 边界、无效 ledger→全开仍归档）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 11/11
+  - `cd packages/linguist-legacy-migration && bun run test` ✅ 40/40（PB-090 既有 19 + 新增 21）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - 写路径核验：mkdir/writeFile 仅落 options.targetRoot（archive+sidecar），旧树只读 ✅
+  - subagent 冒烟实录：dry-run 零写；实跑 new-project 落库；重复导入 exit 4；cat-store CLI 读回段计数与状态正确（Kimi 复核报告采信，测试层已覆盖同路径）
+- **knownLimitations**：
+  - 未在真实旧数据副本验证（归 G9）；governance SQLite 投影（proposals/ledger/checklist）未读——authority=sqlite 且文件层缺失时 QA/proposals 少迁（报告 notes 显示）。
+  - createProject 后中途抛错留半成品目录，需按报告 rollback 手工回滚（未做自动回滚，与决策一致）。
+  - dry-run 计数为投影值；batches/*/reports/*.md 渲染物未归档（proposals 原 JSON 已归档，可重渲染）。
+  - 根 bun test 未全量跑（验收清单外；既有 2 条环境失败与本票无关）。
+- **rollback**：`git revert <PB-091 resultCommit>`
+
+## PB-092：损坏和跨 root Project（处置层）
+
+- **状态**：`integration_verified`
+- **依赖**：PB-090（信号层）✅、PB-091（导入层）✅
+- **baseCommit**：`0f850304`（其间夹用户图标独立 commit，本票改动与其无交集）
+- **resultCommit**：`SELF`
+- **范围**：计划 §22 PB-092：六 Release Blocker 情形处置——invalid `full` permission、manifest root 已删除、external root + managed uploads、internal copy only、orphan project、quarantine。
+- **施工记录**：Kimi 派 explore subagent（agent-50 恢复）完成差距分析，定 8 项决策（external-source 默认 copy 不强制、--salvage-orphan opt-in、quarantined 独立 disposition、blob-store 回退层、chat 三载体归档、chat-only 建 metadata-only 项目、invalid permission 只回声、拒绝报告化 exit 5）；Kimi coder subagent 施工；Kimi 复核（验收独立重跑、disposition.ts 全文审阅）、provenance/触点登记与双账本并提交。
+- **关键语义**：
+  - disposition 五值词表（imported/partial/archived-only/quarantined/error），推导纯函数优先级：quarantined > error > partial（任何降级）> archived-only（零 CAT 数据有归档）> imported；partial 压 archived-only（CAT 有损不许报成干净归档）；TM-only 项目归 imported。
+  - external source 用户选择：`--external-source=copy|reference` 默认 copy；reference 不读 external 字节（测试断言产物 blob=uploads 字节、sourceSha256≠sha256(external)），路径记 sidecar.externalSourceRoot+报告。
+  - v2 managed copy 恢复：extract 经 sqlite-probe 既有只读连接扩 kind='source' 读 source_refs 投影；resolveBatchSource 在 uploads 失败后按 sha256 读 CAS blob（读时重算 sha256+核字节数），命中→sourceResolution='blob-store' 真实字节落新 blob；篡改→lost+note。
+  - orphan 路由纯函数：manifest 缺失/坏→默认 quarantined（零写盘+完整 ImportReport JSON on stdout+exit 5），--salvage-orphan 且 batch 带语言对→salvage（目录名为名+notes 标注）；orphan-sqlite（ghost）只 quarantined+evidence{readCacheHasProjections, blobStoreBlobs}；纯未知 id 仍 exit 3。
+  - chat 三载体：chat.json 字节归档 legacy-archive/chat/、_pi_sessions 清单+行数、agent_events.jsonl 永不导入（hidden_reasoning_trace）；无 sessionId 行记 malformed_chat_session 计数；chat-only 项目（无 batch 且 TM/TB 空）建 metadata-only 项目 disposition=archived-only+sidecar archivedOnly:true（零 asset 不伪造可运行项目）。
+  - invalid `full` permission：extract 增 agent_settings probe，导入永不阻断，invalid-permission-mode 信号回声（evidence.permissionMode='full'）。
+  - ImportReport 增 disposition/refusal/signals/externalSource/chat 五组字段（version 保持 1 纯增量），PB-094 直接消费。
+- **改动文件**：
+  - `packages/linguist-legacy-migration/{package.json,src/{disposition.ts,disposition.nodetest.ts} 新增,src/{extract,import,sqlite-probe,scan,layout,report-import,cli,index}.ts 修改,src/{import,cli}.nodetest.ts 扩展}`（0.0.3；零新依赖，bun.lock 不变）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（PB-092 提取登记）
+  - Proma 触点登记（PROMA_CORE_TOUCHPOINTS.md 表格行+小节；JSON 零变化）与双账本
+- **TDD 实录**：+30 例（disposition 14 纯函数推导/路由全分支；import +14 六情形端到端——invalid permission 不阻断+回声、root-missing→lost→partial、external copy/reference（未读断言）、internal copy v1 回归、v2 blob-store 真 SQLite fixture+篡改→lost、orphan 默认 quarantined 零写盘、salvage 建成、orphan-sqlite evidence、chat-only archived-only+逐字节归档、missing-locales quarantined；cli +2 子进程 exit 5/flag 校验）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 11/11
+  - `cd packages/linguist-legacy-migration && bun run test` ✅ 70/70（40 既有 + 30 新增）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - subagent 冒烟实录：scan --json 双项目信号、import --dry-run、reference --json、orphan exit=5+quarantined 报告+target 零写入（测试层覆盖同路径，Kimi 采信）
+- **knownLimitations**：
+  - 未在真实旧数据副本验证（归 G9）；governance SQLite 投影（proposals/ledger/checklist）仍未读（债务未消，本票只新增 cat-core source_refs 一层）。
+  - transcript 渲染与 _pi_sessions 字节归档归 PB-093；本票只保 chat.json 字节+presence/计数。
+  - reference 模式 external 路径进 sidecar/报告（用户机器私有路径，用户可见——已决策）。
+- **rollback**：`git revert <PB-092 resultCommit>`
+
+## PB-093：Legacy Chat Transcript（旧聊天只读归档转录）
+
+- **状态**：`integration_verified`
+- **依赖**：PB-092（chat 三载体与报告骨架）✅
+- **baseCommit**：`2188b465`
+- **resultCommit**：`SELF`
+- **范围**：计划 §22 PB-093：chat.json → 只读静态 transcript 归档（不迁入可继续会话）；_pi_sessions 字节逐字归档；报告纯增量供 PB-094 Verify。
+- **施工记录**：Kimi 派 coder subagent（agent-54）施工；Kimi 复核（验收独立重跑、chat-transcript.ts 全文与 import/extract diff 审阅）、provenance/触点登记与双账本并提交。
+- **关键语义**：
+  - `renderChatTranscript` 纯渲染器（chat-transcript.ts）：零 Date.now/Math.random、archivedAt 全注入时钟，同输入字节全等（测试锁定+冒烟三方 sha256 一致）；PB-094 Verify 可重渲染比对 sha256。
+  - 横幅声明只读归档（旧 Runtime/Tool/Prompt/Session 语义不兼容）；provenance 四元组（legacyProjectId/sourceDigest=PB-090 digest/archivedAt/generator）。
+  - session 分组：Map 插入序保原行序，节按首行 ts 码元序、同 ts 按 sessionId 字典序；无 sessionId 行进「未分配会话」节（malformed_chat_session 口径不变）。
+  - 五 kind：user/assistant→`### 用户/助手 · <ts>` verbatim（assistant 附 usage 行，固定七字段序、String(n) 无 locale）；tool→单行引用块 verbatim+toolCallId（旧 Runtime 单行摘要，args/result 从不入 chat.json，未虚构）；system/error 及域外 kind→标签行。
+  - malformed（非对象/缺 ts/kind/text）→ tilde 围栏附录原文 JSON 逐行（JSON 行首永不可能是 ~~~，无法破栏）+malformedRows 计数；消息原文零 md 转义（notes 声明）。
+  - 空数组/非数组→transcript=null 不落盘；transcript 计划在写盘前计算（dry-run/conflict 报告同样携带）。
+  - _pi_sessions/*.jsonl 字节逐字归档 legacy-archive/chat/pi-sessions/（不解析不渲染，可含 thinking 属用户自有数据）；extract 保留 sha256+字节引用，写入的=哈希过的（消除 TOCTOU）。
+  - 报告纯增量：`chat.transcript{path,sha256,bytes,sessions,rows,malformedRows,unassignedRows}|null`+`piSessionsArchived`；`ArchiveEntry.kind` 增 'chat-transcript'|'pi-session'；quarantined 报告 transcript=null/piSessionsArchived=0 与 PB-092 一致；版本 0.0.4。
+- **改动文件**：
+  - `packages/linguist-legacy-migration/{package.json,src/{chat-transcript.ts,chat-transcript.nodetest.ts} 新增,src/{extract,import,report-import,cli,index}.ts 修改,src/{import,cli}.nodetest.ts 扩展}`（0.0.4；零新依赖，bun.lock 不变）
+  - `docs/attribution/SOURCE_PROVENANCE.md`（PB-093 提取登记）
+  - Proma 触点登记（PROMA_CORE_TOUCHPOINTS.md 小节；JSON 零变化）与双账本
+- **TDD 实录**：+9 例（渲染器 7：五 kind/usage 有无/session 分组排序与同 ts 平局/malformed+未分配/空数组→null/中文多字节+反引号+围栏透传/落盘逐字节 golden；import +5：transcript=null 主端到端、chat-only 断言扩展、sha256 入报告且与盘上一致、pi-session 逐字节含 thinking fixture、重复导入拒绝/dry-run 零写；cli +2：--json transcript 字段+text 模式行、无 chat 项目 transcript=null）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 11/11
+  - `cd packages/linguist-legacy-migration && bun run test` ✅ 84/84（70 既有原位扩展 + 14 新增/扩展断言）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - subagent 冒烟实录（Kimi 采信，测试层覆盖同路径）：合成树 import --json（--now 钉死）exit 0；transcript.md/pi-sessions 落盘；手工重渲染 sha256 三方（re-render/report/on-disk）全等 MATCH:true；pi-session Buffer.compare 字节全等；旧树 4 原文件零改动。
+- **knownLimitations**：
+  - 未在真实旧数据副本验证（归 G9）；超大历史单文件渲染未分页（全量行驻留内存，留 G9 实测后定）。
+  - renderer 查看器不在本票（仅静态 md 产物）；_pi_sessions 只归档不解析不渲染（票旨）。
+  - 原文 verbatim 意味着含 ###/~~~ 的原文在 md 渲染器中可能影响排版（字节确定性不受影响，notes 已声明）。
+  - transcript 无独立 written 字段（按票定接口形状）；governance SQLite 投影仍未读（PB-091 起既有债务）。
+- **rollback**：`git revert <PB-093 resultCommit>`
+
+## PB-094：Legacy Migration UI/Report（迁移向导）
+
+- **状态**：`integration_verified`
+- **依赖**：PB-090（扫描）✅、PB-091（导入）✅、PB-092（处置）✅、PB-093（transcript/verify 钩子）✅
+- **baseCommit**：`1234ea91`
+- **resultCommit**：`SELF`
+- **范围**：计划 §22 PB-094：Electron 内迁移向导 Scan→Preview→Select→Import→Verify→Report；Batch 9 收官票。
+- **施工记录**：Kimi 派 explore subagent（agent-50 恢复）完成 UI 落点侦察并定 7 项决策（整页替换非 Dialog、pickAndScan 合一、verify 并入 import、线类型投影、同步+setImmediate、targetRoot=service.rootDir、报告内存渲染）；Kimi 派 coder subagent（agent-55）施工；Kimi 复核（验收独立重跑、时钟钉住确定性枢纽/ipc 注册/ProjectsView diff 审阅）、触点登记与双账本并提交。
+- **关键语义**：
+  - 主进程编排 migration-service.ts：pickAndScan 时留存旧根为会话状态，import 只接受上次扫描出现过的 id（路径分隔符拒绝）——§7.4 renderer 永不提交路径结构性落实；degraded sqlite→STORE_SQLITE_UNAVAILABLE（picker 调用前拒绝，nodetest 断言 picker 0 次）。
+  - 同步 importLegacyProject 循环 + 每项目 setImmediate 让出 + 进度事件（{projectId,phase:'import'|'verify',index,total}，逐项目两事件严格序）；PROGRESS 为 main→renderer 单向不注册 handle。
+  - verify 并入 import 通道：①transcript-rerender（读 sidecar provenance+归档 chat.json 重渲染比 sha256；确定性前提=importSelected 每项目钉住单一时钟使 sidecar.importedAt===transcript archivedAt）②transcript-bytes（落盘字节比对抓写后篡改）③store 三项计数（readOnly 重开比对 assets/segments/tm/term/qa）④store-reopen 异常；零写入项目 skipped、targetConflict 跳过①②仍做幂等复验。
+  - 通道 3 个：pickAndScan（picker+扫描合一，取消→{cancelled:true} 正常分支）、import（入参 id 列表+options，响应聚合报告）、progress（事件）；线类型 9 个为 UI 投影（无 digest/逐文件清单/sqlite 细节）。
+  - renderer 六步整页向导（仿 selectedProjectIdAtom 切换，非 Dialog）：入口=ProjectsView 标题栏「迁移向导」次级按钮+EmptyState「从旧版迁移」；报告页 5 张 disposition 计数卡片（固定序，空组省略）+每项目行（tone 图标+chip+验证徽章+展开详情）+rollback 文本；报告不持久化。
+  - degraded 入口形态：域内无 status 查询通道且 3 通道决策锁定→服务防御性错误码+wizard 整页阻断态（效果等同入口禁用，subagent 偏离记录，合理）。
+- **改动文件**：
+  - `apps/electron/src/main/lib/linguist/{migration-service,migration-ipc}.ts + 两 nodetest`（新建）
+  - `apps/electron/src/renderer/features/linguist/migration/{MigrationWizard.tsx,migration-wizard-utils.ts,migration-wizard-utils.test.ts}`（新建）
+  - `packages/shared/src/types/linguist.ts`（通道组+线类型；0.1.58）、`apps/electron/src/{main/ipc.ts,preload/index.ts}`（薄注册+typed API）、`apps/electron/src/renderer/features/linguist/projects/ProjectsView.tsx`（两入口+整页切换）、`apps/electron/package.json`（+devDep @linguist/legacy-migration；0.15.37）、`bun.lock`（workspace 登记+版本追平，+4/−3 零 npm 解析变化）
+  - Proma 触点登记（JSON 5 条既有条目追加 PB-094 + MD 小节）与双账本；provenance 无新登记（零旧仓提取，全部新写消费迁移包既有导出）。
+- **TDD 实录**：+22 例（service 8：投影形状/ScanRootError 映射/全链路+进度严格序/篡改两分支/targetConflict 复验/目录消失错误条目/INVALID_INPUT/degraded；ipc 8：cancelled/degraded 先于 picker/错目录/投影/11 校验负例/无扫描/happy path/INTERNAL 收敛；wizard-utils 6：步骤映射/百分比/分组序/标签色调/默认全选）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun run typecheck` ✅ 11/11
+  - `cd apps/electron && bun run test:linguist` ✅ 83/83（migration 新测试 16 条）
+  - `bun test`（根）✅ 793 pass / 2 fail（PB-093 起既有环境失败 agent-session-manager/channel-runtime-api-key，bun 直接加载 electron 主进程模块所致，与本票无关；wizard-utils 6/6 pass）
+  - `bun run check:boundaries` ✅ 3/3；`git diff --check` ✅
+  - `cd apps/electron && bun run build:main` ✅ dist/main.cjs 27.6mb，`grep -c linguist-legacy-import`=4（迁移包已束入）；build:preload ✅
+- **knownLimitations**：
+  - 单个超大项目导入仍同步阻塞主进程（每项目间 setImmediate 让出+进度事件缓解；决策既定未上 worker_threads）。
+  - sqliteOnlyProjects（无目录的 SQLite 投影）不在向导列出/可选（扫描器单列；其导入永远 quarantine，覆盖属后续票）。
+  - 报告仅内存渲染不持久化；中途退出不可找回（数据已落 targetRoot，重跑按 targetConflict 幂等拒绝）。
+  - targetConflict 项目 verify 跳过 transcript 两检查项（设计上）；迁移运行中不可取消（wizard running 相位禁用退出并提示）。
+  - 未在真实旧数据副本端到端验证（归 G9）；真机 smoke（隔离 HOME 走完向导）归 G9 环节。
+- **rollback**：`git revert <PB-094 resultCommit>`
+
+## G9 门禁：Legacy 数据迁移
+
+- **状态**：`gate_blocked`（自动证据全绿；硬标准待用户在真实旧数据副本上复跑）
+- **依赖**：PB-090 ✅、PB-091 ✅、PB-092 ✅、PB-093 ✅、PB-094 ✅
+- **baseCommit**：`cfde479b`
+- **resultCommit**：`SELF`
+- **范围**：执行 Batch 9 Gate、生成 `docs/roadmap/G9_REPORT.md` 并更新双账本；没有产品代码改动。
+- **门禁结果**：
+  1. 自动化回归 ✅：typecheck 11/11；根 bun test 793 pass / 2 fail（仅 PB-003 起既有环境失败）；migration 包 84/84；test:linguist 83/83（含 migration 16）；boundaries 3/3；build:main PASS（迁移包束入 main.cjs）。
+  2. 安全红线 ✅：scanner 源目录零写 API+扫描前后快照逐字节相等（PB-090 测试锁定）；quarantine 零写盘+exit 5（PB-092）；transcript 重渲染 sha256 三方一致与篡改两分支（PB-093/094）；确定性 projectId 幂等拒写+dry-run 零写（PB-091）。
+  3. 硬标准 ⛔ BLOCKED：计划要求「在旧数据的复制样本上通过；绝不直接先改真实 data/**」。真实旧数据位于旧仓 data/**，按纪律不读不复制，只能由用户制作脱敏副本并提供路径；不以合成树冒充真实数据。复核协议（扫描→导入零 error→verify 全绿→三项人工抽查→副本前后逐字节相等）已预写于 G9_REPORT.md §6。
+- **knownLimitations**：硬标准未判定；governance SQLite 投影未读（PB-091 起挂账）；sqliteOnlyProjects 不可选；超大项目同步阻塞；报告不持久化；真机 smoke 留副本复跑时一并执行。
+- **结论**：`gate_blocked`；详见 `docs/roadmap/G9_REPORT.md`。annotated tag `pb-g9-legacy-migration` 标记 Batch 9 代码状态；用户提供副本后按 §6 协议复核升级。Batch 10 与迁移数据无技术依赖，继续推进。
+
+## PB-082 修正（2026-07-27 用户决策）：全档逐段查库
+
+- **状态**：`integration_verified`（跟随 PB-082 的语义修正）
+- **baseCommit**：`a39d6da6`
+- **resultCommit**：`SELF`
+- **背景**：用户在客户端实测发现只有 Best 档逐段查 TM/TB，指出真实本地化译员每一段都必须参考项目资产（翻译/审校/proofreading 都靠资产确认准确性）——逐段查库是基线实践而非高档特权。用户拍板：三档全部逐段查库，档位差异只在批次大小/打磨轮次/独立评审。
+- **改动**（5 文件）：cat-core `quality-profile.ts`（fast.consultTmTb false→true、fast/balanced guidance 文案、字段与策略表注释记录决策）与其测试断言；`strategy-fast`/`strategy-balanced` SKILL.md（frontmatter description+正文条改「逐段查库为全档基线」）；`project-utils.ts` 两档 UI 说明文案。`strategy-best` 本就逐段查库，零改动。
+- **验证（实测）**：`bun test packages/linguist-cat-core/src/quality-profile.test.ts` ✅ 4/4；`bun test apps/electron/src/renderer/features/linguist/projects` ✅ 41/41；`bun run typecheck` ✅ 11/11。历史账本 PB-082 条目保留原文（历史记录不改写，以本条目为准）。
+
+## PB-100：LA Design Tokens（设计令牌层）
+
+- **状态**：`integration_verified`
+- **依赖**：G9 ✅（Batch 10 首票）
+- **baseCommit**：`72cce3f8`
+- **resultCommit**：`SELF`
+- **范围**：计划 §23 PB-100：建立 LA 自有 token 层（colors/typography/spacing/radius/elevation/motion/light-dark/reduced-motion）；不复制品牌资产；只建层不迁移组件。
+- **施工记录**：仓内已有 2026-07-25 草案 `docs/design/LA_DESIGN_TOKENS_DRAFT.md`；Kimi 派 explore subagent（agent-50 恢复）核实草案与仓内现状全符并完成落点侦察，定 10 项决策；Kimi 派 coder subagent（agent-56）施工；Kimi 复核（验收独立重跑、token 增量与影响面审阅）、触点登记与双账本并提交。规格书 `THREE_APPS_PIXEL_SPEC.md` 为私人研究资料不入仓，token 值全部 LA 原创带来源标注。
+- **关键语义**：
+  - globals.css `@layer base` 尾部追加增量块（既有 2455 行零重排）：status success/warning/info 各三件套（本体+soft 浅底+foreground，HSL 三通道，:root/.dark 双套）、--foreground-faint、--scrim、--border-strong/--border-light（color-mix(in oklab) 从 foreground 派生 12%/5%）、--duration-instant/fast/normal/slow+--ease-standard/enter（仅 :root）、全局 reduced-motion 一条规则（duration→0.01ms、iteration→1、scroll-behavior auto；terminal 主题 3 处局部规则保留互补）。
+  - tailwind.config.js theme.extend 增量：colors 增 status 三色+scrim+faint（HSL 通道+<alpha-value> 照既有写法）；fontSize 语义阶梯 badge 10/xs 11/sm 12/base 13/lg 14/heading-sm~xl 16/18/20/24——**base 刻意 16→13px**（对齐仓内 linguist 组件事实密度，全仓 text-base 9 处/text-lg 12 处/text-sm 283 处/text-xs 420 处统一缩档，用户 2026-07-27 拍板确认）；transitionDuration/TimingFunction 指向 motion 变量；safelist/keyframes/animation 不动。
+  - 10 项决策（用户拍板/授权默认）：accent 主色不动待拍板；特殊主题去留归 PB-113；proma- 前缀键不改名；字体策略沿用；base=13px；spacing 不建独立层；composer 22px 不采用；status=success/warning/info/destructive（violet 评审色迁移归 PB-104）；reduced-motion 仅跟随系统；布局锚点归 PB-102。
+  - 34 处 raw palette 状态色（amber/emerald/red/violet）不迁移——PB-101~104 逐域迁移到新 status 层，本票只建层。
+- **改动文件**：
+  - `apps/electron/src/renderer/styles/globals.css`（新触点，追加增量块）、`apps/electron/tailwind.config.js`（新触点，extend 增量）
+  - `docs/design/LA_DESIGN_TOKENS.md`（正式版新建，草案保留不动）、`tests/design-tokens.test.ts`（37 条契约断言新建）
+  - Proma 触点登记（JSON +2 新条目 + MD 小节）与双账本；provenance 无新登记（零旧仓提取，值为 LA 原创）。
+- **TDD 实录**：+37 例契约断言（双套齐备 19/HSL 三通道格式 13 含派生豁免/全局 reduced-motion 非主题限定 3/safelist↔THEME_STYLES 同步 1/config↔css 变量交叉 1）。
+- **验证（实测，Kimi 独立重跑）**：
+  - `bun test tests/design-tokens.test.ts` ✅ 37/37
+  - `bun test`（根）✅ 830 pass / 2 fail（PB-093 起既有环境失败，与本票无关）
+  - `bun run typecheck` ✅ 11/11；`git diff --check` ✅
+  - `cd apps/electron && bun run build` ✅ vite 15.26s（产物 CSS 双套 token 各 2 处、color-mix 4 处、reduced-motion 5 处）
+  - `bun run check:boundaries`（commit 后复跑）✅ 3/3（两个新触点已登记）
+- **knownLimitations**：
+  - text-base 缩档影响 9 处 Proma 通用界面组件（spinner 默认尺寸注释失真，PB-101 迁移时一并修正）；fontSize 语义缩档为全仓统一视觉决策（用户已确认）。
+  - 全局 reduced-motion 使 animate-spin 静止于首帧（97 处，视觉静态圆弧，功能无损；spinner→静态文案降级归 PB-101~104）。
+  - 特殊主题未按主题微调 status 配色（dark 特殊主题吃 .dark 值行为正确）；--accent-soft 未建（待 accent 拍板）；34 处 raw palette 未迁移（归 PB-101~104）。
+  - 测试为文本级断言非 CSS AST；多窗口样式注入路径未查（PB-105 矩阵覆盖次窗口时需补查）。
+- **rollback**：`git revert <PB-100 resultCommit>`
+
+## PB-095：项目资产六类（调研衍生插票，Batch 10 前）
+
+- **日期**：2026-07-27
+- **resultCommit**：`SELF`
+- **范围**：用户 2026-07-27 拍板的六类资产骨架（Style Guide 规则行+✅❌/术语+句式（句式带审批流）/TM/Context/Tech Constraints/Game DNA），依据 `docs/research/LOCALIZATION_ASSET_TAXONOMY.md`；存储+每会话系统上下文注入+工具按需查询+管理 UI。TM 已有零改动。
+- **施工记录**：explore subagent（agent-50 resume）侦察定落点与注入缝；Kimi 拍板（schema v6 单迁移全包、句式独立表、Context 只做存储+目录注入+按需读、注入预算数值、Context 检索归后续）；coder subagent（agent-59）施工；Kimi 独立验收并复核出图片显示链漏判（coder 称无先例，实际 `local-file-protocol.ts` proma-file:// token 门控正是先例），打回补课后复验全绿。
+- **关键语义**：
+  - schema v6 单迁移（照 v4 多语句先例）：style_guide_rules（group_key/rule_text/source_example/good/bad_example/screenshot_ref 预留）/sentence_patterns（draft_target+suggested_target 对照、status confirmed/pending/rejected 审批流）/context_docs（doc|image、blob_relpath+text_extract）/tech_constraints（length|rich_text|tag_note、scope 可空=全局、value_json）/voice_profiles（speaker/register/person/tone_markers/taboos JSON）五表 + term_entries ALTER 三列（module/category/image_ref 可空零回填）。
+  - 注入矩阵（project-assets-prompt.ts，electron-free）：全量进上下文=Style Guide/Tech Constraints/Voice Profiles/Context 目录；工具按需=术语+句式/TM/Context 全文。预算硬顶+截断 note：100条/8k、50角色/6k、4k、40条/2k（Kimi 拍板值）。普通会话/missing 空串、archived 仍注入（发送闸门在 PB-034）、读取失败 fail closed。
+  - 新工具 cat_search_sentence_patterns（query/textType/status+分页）与 cat_read_context_doc（字符分页，image 只回元数据）；cat_search_terms 响应扩三标注列。
+  - 图片显示链：image 条目 previewUrl 经既有 registerPromaFilePath 下发（TTL 1h/500 条/realpath 围栏）；resolveContextDocBlobPath 双重 realpath 围栏在项目 blobs 目录内，越界/缺字节/内存库一律降级省略不抛错；仅 query 通道下发。
+  - UI 四面板：StyleGuidePanel（分组+✅❌对照列）/VoiceProfilePanel（speaker 行编辑，编辑→更新/取消，修了无 id 创建路径幂等返回旧行的真 bug）/ContextDocsPanel（导入/note/图片内联显示）/SentencePatternsPanel（ReferenceManager 第三 tab，状态 chips+CSV 导入）。
+- **验证（实测，Kimi 独立重跑）**：typecheck 11/11；根 bun test 845 pass/2 fail（既有环境失败零新增）；test:linguist 94/94；build:main 成功；git diff --check 干净；check:boundaries（commit 后复跑）。
+- **knownLimitations**：
+  - screenshot_ref 列已预留，IPC v1 不开放写入与显示；图片不入系统上下文（只进目录清单）。
+  - Context 检索与 DOCX/PDF 抽取归后续票（纯文本/md 直存 ≤200k 字符）；tech_constraints 的 QA 消费归 PB-097；techConstraints 查询忽略 query 子串过滤。
+  - 注入预算数值无既有依据可援引（Kimi 拍板）；renderer query 返回 items 有 `as LinguistXxxInfo[]` 强转（union 所致）。
+- **rollback**：`git revert <PB-095 resultCommit>`
+
+## PB-096：QA 契约对齐 + Xbench 类检查覆盖（调研衍生插票）
+
+- **日期**：2026-07-27
+- **resultCommit**：`SELF`
+- **范围**：用户 2026-07-27 拍板「全盘采纳《通用缺陷等级》，硬性 QA 规则同时覆盖传统 Xbench 类检查」：severity 三值→L0-L4 五档、新增 disposition 四值与 issueType 29 枚举、术语 QA 接线修复、glossaryPolicy 三策略、批次 1 确定性检查迁移。
+- **施工记录**：explore subagent（agent-57）侦察（旧仓 25 项 xbench-like 清单、接线缺口、迁移面）；Kimi 抽查核实关键声明（29 枚举逐行计数、runProjectQa 无参缺口、conflict 标志）；coder subagent（agent-64）施工；Kimi 独立验收（全套件重跑、id 派生不变抽查、v7 SQL 顺序审查）。
+- **关键语义**：
+  - 契约单一事实来源 `issue-type.ts`：29 枚举 + QA_CODE_ISSUE_MAPPING（code→issueType/severity/disposition，如 PLACEHOLDER/TAG=L0 defect、硬术语=L1、REQUIRED_TERM prefer 档=L2 needs_review、GLOSSARY_CONFLICT=L2 query、未知码兜底 other/L2/defect）。finding id 派生公式不变（segmentId+code+message），新字段不进 id，resolved/waived 历史不断链。
+  - schema v7：qa_findings ADD issue_type/disposition + 按 code SQL 回填 severity 五值；迁移顺序刻意 disposition 先行（依赖旧三值判 info）；CRITIC_% 保留旧档映射（blocking→L1/warning→L2/info→L4）。
+  - 术语接线修既有缺口（factory.ts:436/project-service.ts:772 无参调用）：term_entries→QaRunOptions；glossaryPolicy 项目级可选字段（qualityProfile 先例，normalize 回落 prefer 不回写）；forbidden 恒定 L1 阻断，preferred 按 strict=L1/prefer=L2 needs_review/off=L4 info 升降级；GLOSSARY_CONFLICT 独立成码恒 L2 query。
+  - 批次 1 十五新码：NEWLINE/EDGE_WHITESPACE/DOUBLE_SPACE/UNPAIRED_SYMBOL/UNPAIRED_QUOTE/REPEATED_WORD/EMAIL/URL/ALPHANUMERIC/TARGET_SOURCE_INCONSISTENCY/FULLWIDTH_PUNCTUATION/RESIDUAL_CJK/GLOSSARY_CONFLICT/UPPERCASE/CAMELCASE（后两 opt-in）；既有 11 码 code/message 零改动。
+  - critic 直产五档 severity+issueType（disposition=needs_review）；导出闸门改 open 的 L0+L1 计数；PB-091 mapQaSeverity 三值→五值（placeholder/tag/icu blocker 特判 L0），open/waived 不动。
+- **验证（实测，Kimi 独立重跑）**：typecheck 11/11；根 bun test 862 pass/2 fail（既有环境失败零新增）；test:linguist 94/94；cat-store 112/112；cat-tools 29/29；legacy-migration 84/84；build:main 成功；diff --check 干净；check:boundaries（commit 后复跑）。
+- **knownLimitations**：
+  - 批次 2（tag profile 依赖项）待 PB-097；批次 3 拼写/checklist 不做（不引 nspell 新依赖）。
+  - replaceForProject 重跑清 open CRITIC_ 行保留现状（既有已知坑+注释）；长度比检查保持默认开（防回归有意偏离简报）；迁移层旧蛇形码 issueType 落 other 兜底。
+  - issue_type 以契约文件实际 29 条为准（用户口径 30 为记忆偏差，已对齐）。
+- **rollback**：`git revert <PB-096 resultCommit>`
+
+## PB-097：Tag profile 正则自识别引擎（调研衍生插票）
+
+- **日期**：2026-07-27
+- **resultCommit**：`SELF`
+- **范围**：用户拍板「旧 LA tag 尝试不一定正确，按你的思路来」：内置族注册表+项目 tagProfile 手工登记、匹配→span 签名、round-trip 多重集守恒机器硬判、成对配平栈校验、QA 契约对接。编辑器锁定归后续批次。
+- **施工记录**：explore subagent（agent-58）侦察（旧仓八缺陷清单+四层设计）；Kimi 抽查（无既有测试锁定调序=违规）；coder subagent（agent-65）施工；Kimi 独立验收（全套件重跑+调序/Grm/嵌套测试抽查）。
+- **关键语义**：
+  - 内置六族（全线性正则）：xml 成对（属性全量进签名）/bbcode 全族/brace-num/brace-named/printf 全族（%1$s/%.2f/%03d/%%）/escape；项目族优先级压内置族、编译 memoize、签名 `kind:familyId:骨架|排序属性多重集`（空值属性计入）。
+  - tagProfile 挂 project.json 可选字段（normalizeTagProfile 绝不抛错不回写，同 qualityProfile/glossaryPolicy 先例）；targetLocales 激活条件（全串或 base 命中忽略大小写）。
+  - 守恒算法：多重集比较不比顺序（用户拍板允许调序）；成对 tag 栈算法验配平+交叉嵌套 invalid；extra=missing 同罪；ICU 内 {N} 由 brace-num 族单独验（不被 withoutSpans 抹掉）。
+  - 三新 violation code 按 PB-096 契约落 L0 defect（placeholders_variables/format_tags）；XML 守恒复用既有 TAG_SIGNATURE_MISMATCH；占位符族与既有宽松签名去重。
+  - 旧仓八缺陷逐条修复对应见交接报告；校验链四处接线缺省=仅内置族，PB-052 既有测试零破坏。
+- **验证（实测，Kimi 独立重跑）**：typecheck 11/11；根 bun test 879 pass/2 fail（既有零新增）；cat-core 102/102；cat-store 113/113；cat-tools 30/30；test:linguist 95/95；build:main 成功；diff --check 干净；check:boundaries（commit 后复跑）。
+- **knownLimitations**：
+  - ReDoS lint 保守（量词嵌套组 pattern 被拒，签名层兜底）；printf 散文误命中与旧仓同级；源不配平时跳过目标配对校验（有意设计）。
+  - shared DTO 未加 tagProfile（直读 cat-core 类型）；编辑器 span 锁/LLM discovery/editSegment 拦截/tech_constraints QA 消费归后续。
+- **rollback**：`git revert <PB-097 resultCommit>`
+
+## PB-101：Thread 与 Composer 视觉精修（计划 §23）
+
+- **日期**：2026-07-27
+- **resultCommit**：`SELF`
+- **范围**：计划 §23 PB-101 全项：user bubble / assistant document flow / Thinking live+collapsed / Tool group / Worked divider / Queue/Steer / model changed / recovery / max width / long thread virtualization。在 Proma 现有组件上优化，不重写数据层。
+- **施工记录**：explore subagent（agent-66）侦察（组件清单/34 处口径对账/OpenWorker 吸收点/测试缝）；Kimi 拍板（Thinking 保留默认展开只补双态、虚拟化改 content-visibility 原生方案、Queue 只做视觉、raw palette 按域迁移）；coder subagent（agent-67）施工；Kimi 独立验收（全套件重跑+content-visibility/divider diff 审查）。
+- **关键语义**：
+  - Thinking 双态：live "Thinking…"静态圆点/完成 "Thought process"；虚线边框/max-h 5.6em/默认展开偏好全保留（OpenWorker 默认折叠不采用）。
+  - Worked divider「Worked for Xs · N steps」与 Model changed divider「模型已切换：A → B」均纯派生（turn-divider-utils.ts 14 测试），不碰数据层。
+  - 长线程：content-visibility:auto+contain-intrinsic-size 原生窗口化（isStreaming 不启用；StickToBottom/minimap 兼容性注释块；1000-turn 基线归 PB-105）。
+  - raw palette 本域 22 站点迁移（retry 横幅 16 行/AgentView 提示条/Placeholder 徽章/tool-result 三文件）；豁免 3 条契约登记（diff 增删色/shell $ 绿）。
+  - 契约测试 tests/no-raw-palette.test.ts（7 文件断言+豁免失效会红）。
+- **验证（实测，Kimi 独立重跑）**：typecheck 11/11；根 bun test 901 pass/2 fail（既有零新增）；test:linguist 95/95；no-raw-palette 8/8；build:main 成功；diff --check 干净；check:boundaries（commit 后复跑）。
+- **knownLimitations**：user bubble 共享组件 Chat 同生效；Thinking live 启发式判定；spinner 注释失真实际 4 行（简报口径 9 处混淆）；task-list/get 蓝绿同站点补全；bash stderr dark 对比度取舍；ProcessBlockGroup 无实际可改项；max-width/PermissionDeniedNotice/ContextUsageBadge/violet 归后续票。
+- **rollback**：`git revert <PB-101 resultCommit>`
+
+## PB-102 — Shell 与 Right Rail 精修（计划 §23）
+
+- 日期：2026-07-26
+- resultCommit：SELF（本票 commit 后回填见 git log）
+- 范围：Skills 一级入口降 footer；Right Rail 上下文编排（right-rail-policy 纯函数，projects/CAT 视图让位 CatContextRail）；Agent Rail「交付物」区（linguist.exports.list 只读通道 + DeliverablesSection，点击回走 PB-073 native Save）；6 个布局锚点 token（globals.css/tailwind 增量）；settings 14 + agent-skills 5 + chat 2 + diff 2 + session-preview 1 共 26 文件 raw palette 迁语义 token（6 条装饰豁免登记 no-raw-palette 契约）。
+- 施工记录：explore 侦察 → coder 施工（40 文件：3 新 37 改）→ 我独立验收 + 审关键 diff（right-rail-policy/DeliverablesSection/listExportFiles/AppShell/no-raw-palette/LeftSidebar）→ 触点登记 67→93 → 双账本。
+- 关键语义：§7.4 信任边界——renderer 只提交 projectId，主进程读 exports/ 目录返回 basename/大小/mtime + staging 文件名解析的 assetId，绝无路径；两套 Rail 不合并只编排；无绑定项目交付物整区不渲染。
+- 验证：typecheck 11/11；根 bun test 934 pass / 2 fail（与 PB-003 起既有基线完全相同）；test:linguist 97/97（+2）；no-raw-palette 34/34（+26）；build:main/preload/renderer 全过；git diff --check 干净；right-rail-policy 6/6。
+- knownLimitations：交付物仅 native Save 无「直接打开/Finder 显示」（需新通道留后续）；Skills 总数徽章随降级移除（更新点保留）；toolbar 高度/64rem 锚点本域无确定性命中未强行应用；projects/CAT 视图 Agent Rail 不再显示（票面要求的行为变化）；既有 blue-/orange- 不在五色契约内保留。
+- rollback：git revert 本票 commit。
+
+## PB-103 — Approval / Plan / Compaction 精修（计划 §23）
+
+- 日期：2026-07-26
+- resultCommit：SELF（本票 commit 后回填见 git log）
+- 范围：三交互横幅 inline 化（AgentMessages inlineBanner 插槽，复用 StickToBottom 滚动）；PermissionBanner 作用域摘要（permission-scope 纯函数）+ dangerLevel 文字徽章 + decisionReason 行；ExitPlanModeBanner 计划正文条件展示（toolInput.plan 非空才渲染，可折叠）；压缩 failed 态「重试压缩」接既有 handleCompact；审批族 raw palette 迁 token（PermissionBanner/ContextUsageBadge/SDKMessageRenderer/TaskProgressOverlay/TaskProgressCard + mention-suggestions 2 条装饰豁免）。
+- 施工记录：explore 侦察（含 shared 契约预查：toolInput.plan 已在请求对象上，纯渲染条件）→ coder 施工（12 文件：2 新 10 改）→ 我独立验收 + 审关键 diff（permission-scope/AgentView 挂载/AgentMessages 插槽/ExitPlanModeBanner 计划区/no-raw-palette）→ 触点登记 93→100 → 双账本。
+- 关键语义：composer 显隐（hasBannerOverlay/hasBlockingRequests）逐字未改，inline 仅改挂载位置；Plan 展示判定 `typeof toolInput.plan === 'string' && 非空`，无计划数据整区不出现；Model changed divider 与 error recovery 票面项由 PB-101/既有 _errorActions 体系覆盖，零重复建设。
+- 验证：typecheck 11/11；根 bun test 957 pass / 2 fail（既有基线）；test:linguist 97/97；no-raw-palette 40/40（+6）；build:main/preload/renderer 全过；git diff --check 干净。
+- knownLimitations：composer 显隐语义未改；PermissionDeniedNotice 只读；decisionReason/sdkDescription 相同不去重；inlineBanner 仅首次出现滚动；mention-suggestions violet 装饰图标一并豁免（小扩大）。
+- rollback：git revert 本票 commit。
+
+## PB-104 — CAT 视觉精修（计划 §23）
+
+- 日期：2026-07-26
+- resultCommit：SELF（本票 commit 后回填见 git log）
+- 范围：票面九项（row density 108→88 / source-target 层级 / proposal diff 豁免保持 / QA badges warning 计数 / term chips 冲突 warning / status 彩色徽章+Lock / batch action sticky / empty-loading-error 统一 / narrow viewport rail min-h 断点限定）+ violet 评审色 token 化（--review 三件套 + 两处迁移）+ linguist 域 raw palette 收尾（8 文件迁移 + 4 条 diff 豁免登记）。
+- 施工记录：explore 侦察（与 PB-103 并行，精确行号对账修正既有粗扫数字）→ 我拍板九项落实方式 → coder 施工（14 文件全修改零新增）→ 我独立验收 + 审关键 diff（review token/globals/tailwind/CatWorkspace/grep 复核）→ 触点登记 100→101 → 双账本。
+- 关键语义：review 语义色进 token 层（violet-500 色相族，light 258 60% 44% / dark 258 75% 70%）；diff 增删红绿保持视觉登记豁免（与 PB-101 ContentBlock 同语义先例）；票面九项全部落白名单 linguist 域，零数据层改动。
+- 验证：typecheck 11/11；根 bun test 965 pass / 2 fail（既有基线）；test:linguist 97/97；no-raw-palette 48/48（+8）；build:main/preload/renderer 全过；git diff --check 干净；grep 复核仅剩 4 条豁免行；review token 进构建产物。
+- knownLimitations：<1100px 无溢出为人工推理（真机截图归 PB-105）；ContextRail/QA 面板 error 无重试（无回调不建数据流）；编辑态超高既有行为；批量条 sticky 相对页面滚动；diff 红绿保持 raw（豁免）。
+- rollback：git revert 本票 commit。
+
+## PB-110 — CAT 安全审查（计划 §24）
+
+- 日期：2026-07-26
+- resultCommit：SELF（本票 commit 后回填见 git log）
+- 范围：八项安全证明（跨 Project 隔离/无任意 path/locked 拒写/stale revision 拒覆盖/export 不覆盖源/logs 无正文/archived·missing fail closed/malformed 无部分写入）。1~5、7 项经权威侦察确认既有强制点+测试已证明；本票补齐：工具级归档写拒绝测试、proposal-ipc 七通道归档腿、主进程 console SENTINEL 无正文钉住、三处 error.message 透传改 name/code 纪律、importAsset 两步次序对齐 blob 先行。
+- 施工记录：explore 侦察（26KB 逐项证据报告，与 PB-105 并行）→ 我拍板五项缺口 → coder 施工（11 文件，与 PB-105 文件面不相交）→ 我独立验收 + 审关键 diff（importAsset 调换/warn 纪律）→ 0 触点 → 双账本。
+- 关键语义：importAsset 崩溃窗口从「asset 行在、source blob 缺」（导出硬失败态）变为「孤儿 blob」（重导入幂等覆盖、危害低）；日志纪律对齐 ipc-envelope（未类型化错误只记 name/code，绝不透传 message）。
+- 验证：typecheck 11/11；test:linguist 97→103/103；cat-store 114/114（+1）；cat-tools 30/30+10/10；cat-core 102/102；根 bun test 965/2 基线一致；git diff --check 干净。
+- knownLimitations：archive 在途事务竞态（窄窗口无抓手）；exports//source/ symlink 面（本机威胁模型外）；原生 Save 自选目的地覆盖原文件（对话框语义）；Save 取消留 staging artifact（设计如此）。
+- rollback：git revert 本票 commit。
+
+## PB-111 — Backup / Restore（计划 §24）
+
+- 日期：2026-07-26
+- resultCommit：SELF（本票 commit 后回填见 git log）
+- 范围：票面七项全链路——全量目录备份（cat.db VACUUM INTO + project.json + source/ + blobs/ + manifest.json 全文件 sha256）、verifyBackup（逐文件校验+quick_check+只读打开 fail closed）、restore preview（摘要对比+schema+willMigrate）、整体替换 restore（pre-restore 快照+aside-staging 三段替换+失败自动回滚）、旧格式显式不兼容（STORE_BACKUP_LEGACY 仅预览降级）、UI（ProjectBackupsSection 备份区+恢复预览对话框）。
+- 施工记录：explore 侦察（既有 backup.ts/句柄缓存/schema 机制/攻击面）→ 我拍板产物格式与 restore 语义 → coder 施工（17 文件，与 PB-105 并行文件面不相交）→ 我独立验收 + 审关键 diff（restore.ts 原子性/shared 契约/readBackupName 白名单）→ 触点 101（+0 新，3 追加）→ 双账本。
+- 关键语义：verify 不过不动盘；任何 restore 失败从 pre-restore 快照回滚，快照始终保留；归档项目可备份可预览不可恢复；§7.4 坚守（renderer 只提交 projectId+backupName 白名单形状）。
+- 验证：typecheck 11/11；根 967/2 基线；test:linguist 110/110（+7）；cat-store 125/125（+11）；no-raw-palette 49/49；build 三端全过；diff --check 干净。
+- knownLimitations：quick_check 页级损坏无法真实模拟（垃圾字节用例覆盖）；restore 后项目名标题栏需重开；pre-restore 快照不可经 API 恢复；恢复中途 IO 错误非类型化码（回滚仍执行）；旧格式仅预览。
+- rollback：git revert 本票 commit。
+
+## PB-105 — 视觉、无障碍和性能矩阵（计划 §23，自动化部分）
+
+- 日期：2026-07-27
+- resultCommit：407cabd4
+- 范围：39 项自动化矩阵探针（尺寸×主题 18 格、zoom200、reduced-motion、10k 网格、1000-turn 三格、axe 三视图）+ axe-core@4.12.1 + AppShell 窄视口防破版真实修复；证据 21 截图+2 JSON 入仓 docs/roadmap/g10-evidence/。
+- 施工记录：explore 侦察（探针基础设施/播种/矩阵驱动方式/axe 可行性）→ coder 施工+5 轮打包实测 → 我独立验收（抽看 2 张截图确认真实渲染、复核 matrix-results.json 逐格、审 AppShell diff、版本同步 0.15.40）→ 触点 101（3 追加）→ 提交。
+- 关键语义：G10 硬标准「不允许源码字符串截图」满足——playwright 驱动打包 .app 真实渲染；布局断言以 in-page 几何为准（zoom200 的 page.screenshot 是 CDP artifact，native capturePage 对照闭环）。
+- 验证：矩阵 35 PASS / 1 FAIL（perf-1000turn-open 10.5s 带证据）/ 3 axe WARN；typecheck 11/11；根 967/2；test:linguist 110/110；no-raw-palette 49/49；boundaries 3/3。
+- knownLimitations：1000-turn 首挂载 10.5s（React/markdown 成本，另立票）；axe 存量违反仅记录（建议专项票）；手工项（VoiceOver/keyboard/IME/drag-resize/DMG 真机）未执行。
+- rollback：git revert 407cabd4。
+
+## G10 — Batch 10 门禁：UI、性能、无障碍产品化
+
+- 日期：2026-07-27
+- 状态：**GATE PASSED**
+- 报告：docs/roadmap/G10_REPORT.md；证据：docs/roadmap/g10-evidence/
+- 硬标准「不允许以源码字符串截图替代真实渲染」：PASS（21 张真实渲染截图 + in-page 几何断言）。
+- 票级：PB-100~105 全部 integration_verified。
+- 记账：perf-1000turn-open FAIL 与 axe WARN 带证据入 G10_REPORT §7；手工项未执行如实记录。
+- tag：pb-g10-productization（annotated）。
+
+## PB-112 — Proma Upstream Sync Rehearsal（计划 §24）
+
+- 日期：2026-07-27
+- resultCommit：SELF（本票 commit 后回填见 git log）
+- 范围：同步策略文档化（docs/architecture/UPSTREAM_SYNC.md：里程碑节奏、sync 分支纪律、只解登记触点冲突、G7 smoke 验证门）+ 首次演练执行。
+- 施工记录：我亲自执行（git 操作不委托）：fetch upstream → 实测 upstream/main = 基线 702a8221（零前进，领先 0/91）→ sync/rehearsal-2026-07-27 分支 merge → Already up to date → 删分支 → 文档+账本。
+- 关键语义：零增量干跑证明链路可用；触点登记簿未经实战检验（无冲突可解）；「冲突太多优先调 LA 边界不放弃同步」写入策略本体。
+- 验证：ls-remote 实测；merge-base=基线；演练前后工作树零变化；check:boundaries 3/3。
+- knownLimitations：登记簿未经真实冲突检验；upstream ErlichLiu/* 特性分支活跃但策略只跟 main。
+- rollback：git revert（纯文档票）。
+
+## PB-113：隐藏评估与图标/教程去品牌化（2026-07-27）
+
+- 范围：①AppearanceSettings 13 个 Proma logo 图标变体并入 PROMA_PROMO_VISIBLE 门控（flag off 选择器仅剩 default/LA；png 不删；主进程 resolveAppIconPath 同名常量兜底，历史存储值解析回 icon.png 不改写存储；renderer 高亮兜底）；②教程品牌修正（Tab label「使用教程」、TUTORIAL_TAB_TITLE、附件文件名、教程 H1）。六项隐藏评估（Claude Runtime/remote bots/Automation/coding-only tools/特殊主题/settings 分区）结论全部维持隐藏不删，记档 FEATURE_FLAGS.md。
+- 施工记录：coder subagent 施工（6 代码文件）；我独立验收 + 审 diff + 触点登记（4 新 + 2 追加，101→105）+ FEATURE_FLAGS.md 评估记档 + 版本 0.15.41。
+- 验证：typecheck 11/11；根 bun test 967/2（基线一致）；test:linguist 110/110；no-raw-palette 49/49；build:renderer ✓。
+- knownLimitations：tutorial.md 正文约 40 处品牌词另票；欢迎对话文案待拍板；主/渲双常量手工同步。
+- rollback：git revert 本票 commit。
+
+## PB-114：签名、公证和更新（2026-07-27）
+
+- 范围：票面 11 项逐项裁定（PB114_RELEASE_READINESS.md）。实际改动：electron-builder.yml publish ErlichLiu/Proma → wangyu-sg/linguist-agent-public（update channel 解冻指 LA 公开仓）；win fileAssociations 显示名补改 LA；版本 0.15.42。
+- 施工记录：我亲自执行（小改动+实测票）：侦察（explore subagent）→ 两处 yml 修改 → smoke:pack 全链路 → DMG 实测 → codesign/asar/Info.plist 验证 → 登记（+3 多票共改，105 不变）。
+- 验证：smoke:pack ✓（runtime-deps 137）；产物 bundle id/0.15.42/asar+unpacked ✓；DMG 256MB+blockmap ✓；codesign adhoc（无凭据正确行为）。
+- knownLimitations：Developer ID/公证 blocked（无凭据）；update channel 实通 blocked（公开仓未建，PB-116 后解）；app 级回滚不建设（allowDowngrade=false 刻意，fail-closed 防降级损坏）；release-notes 缺 34 篇另票。
+- rollback：git revert 本票 commit。
+
+## PB-115：公开发行治理（2026-07-27）
+
+- 范围：票面 12 项全落地——AGPL LICENSE 原样已合规；NOTICE +Modifications/Source 两节；ATTRIBUTION +Modifications to Proma；SECURITY.md（Security Advisories 主渠道，7d/30d 目标）；CONTRIBUTING.md（DCO）；THIRD_PARTY_NOTICES.md（claude-agent-sdk 专有、4 Anthropic skills、Apache/MIT/OFL 各段、双许可选择记录）；SBOM.md + sbom-full.json（415 包实测）；license:scan 脚本+CI job；About 页 Source Code/Third-Party Notices 行；Proma 链接统一 proma-ai/Proma。
+- 施工记录：explore 侦察 → 我拍板 5 项裁决 → coder 施工 → 我独立复跑 license:scan + 审全部 diff + 回退 user-agent.ts 三文件（UA 白名单）→ 登记（+5 既有追加，105 不变）→ 版本 0.15.43。
+- 验证：license:scan 门禁通过（415 包，黑名单零命中）；typecheck 11/11；根 967/2；linguist 120/120；palette 49/49；build ✓；check:boundaries 3/3；复制核查零命中。
+- knownLimitations：Anthropic 专有组件再分发依据待产品负责人最终确认；x64/win 平台包 SBOM 待查；更新回退 URL 仍指上游 releases（产品裁决）；上游原文链接有意保留；UA URL 保持旧值（白名单）；逐文件许可头另票。
+- rollback：git revert 本票 commit。
+
+## PB-089：CAT 资产源文件预览（2026-07-27，计划外增补票）
+
+- 范围：linguist.project.previewAssetSource 通道（ast- id 校验、realpath 双重围栏、text/html/url 三态分派、200k 截断护栏）+ ProjectAssetsSection 预览按钮（归档不禁用）+ LinguistAssetPreview 对话框（DOMPurify 消毒）+ 10 例 nodetest。
+- 施工记录：explore 侦察（选项 A 设计定型）→ 我拍板范围（pdf/tmx 不做、归档允许）→ coder 施工 → 我审 diff 补 DOMPurify → 联合验收 → 登记（+5 既有追加，105 不变）→ 版本 0.15.44。
+- 验证：test:linguist 120/120；typecheck 11/11；根 967/2；palette 49/49；build ✓。
+- knownLimitations：pdf/tmx 无内联预览（tmx 走 url 降级）；docx 无提取纯文本；50MB+ → INTERNAL；PB-089 编号为账本约定（计划无此号）。
+- rollback：git revert 本票 commit。
+
+## PB-116：公开镜像清洗（2026-07-27）
+
+- 范围：候选分支 audit/proma-based-candidate-v1 推送至 wangyu-sg/linguist-agent-public（head 185eb161）；公共 main 未触碰。策略 = 基线 702a8221 原样历史 + LA squash 单 commit；清洗 = 删 5 张上游真实截图 + scrub 三组用户绝对路径；proma-logos 保留（上游自有+构建依赖，理由记档）。
+- 施工记录：我亲自执行（git 重操作不委托）：预检复核 → ls-tree 核实命中项皆上游已公开 → worktree 建候选分支 → checkout main 树 → 清洗 → squash commit → 13 项自动检查 → 推送 → gh api 双向核验（分支 head/main 未动）→ 清理 worktree。
+- 验证：13 项检查全过；scrub 零残留；推送与 main 未动均 gh api 实测。
+- knownLimitations：README 死链待最终审计裁决；候选树未构建验证；合并公开 main 待 G11+用户批准。
+- rollback：远端删分支 + 本地 git branch -D。
+
+## PB-117：最终审计包（2026-07-27）
+
+- 范围：docs/release/ 四报告（FINAL_PRODUCT_REPORT/FINAL_TEST_REPORT/KNOWN_LIMITATIONS/PUBLIC_MIRROR_MANIFEST），审计者速查块十项齐全；版本 0.15.45。
+- 施工记录：我亲自归并（85 条账本实测数据，无 subagent 代笔最终审计）；数据全部可溯源到各票 verification。
+- 验证：四报告数据与账本交叉核对；commit range 702a8221..HEAD=98。
+- knownLimitations：静态快照，后续票落地后需修订。
+- rollback：git revert 本票 commit。
+
+## G11：Batch 11 门禁（2026-07-27）— gate_blocked
+
+- 判据：无 P0/P1 ✅、G7 ✅、G10 ✅、signed/notarized 明确 blocked ✅、公开候选清洗 ✅（13 项全过+推送核验）；**G9 ❌（真实数据复跑未执行）**；合并公开 main 待用户最终审计。
+- 判定：gate_blocked（唯一硬阻塞 G9；解除路径 G11_REPORT 在案）。annotated tag：pb-g11-release-audit。
+- knownLimitations：G8 blocked（PB-085 盲评）属同一总账非票面判据；不伪造通过。
+
+## PB-085：人工盲评（追记，2026-07-27）— blocked
+
+- 状态：备料完成（c5900116 协议+双批+评分表+指标规格；72cce3f8 记录用户排期决策），执行 blocked。阻塞：真实 API Key + 用户人工评分。用户拍板：全部工单交付、app 流畅后执行。
+- 影响：G8 硬判据悬置，G8 保持 gate_blocked；不伪造通过。
+- 说明：此条目为账本追记（备料两 commit 早已入库），补齐计划票面覆盖（67/67）。
+
+## G0：Batch 0 门禁（追记，2026-07-27）— gate_passed
+
+- 说明：G0_BASELINE_REPORT.md 与 annotated tag pb-g0-proma-baseline 自 Batch 0 起在案；本条为补齐「G0–G11 逐票记录」的账本追记。基线 702a8221 冻结 + G0 冒烟 18/18。
+
+## PB-090-followup：scanner 真零触碰修复（2026-07-27）
+
+- 起因：G9 真实数据复跑（用户授权只读）实测抓出——readOnly 打开 WAL 库回写 -shm（SQLite 文档行为，非用户数据），违反「源树逐字节不动」硬承诺。
+- 修复：sqlite-probe 打开前把 db/wal/shm 三件套拷入 mkdtemp 暂存目录，开暂存副本，close 清理；无法暂存则不开库（降级 read-cache）。
+- 验证：84/84；typecheck 11/11；根 967/2；全新副本全协议复跑副本+原始双 1905 文件逐字节相等。
+- knownLimitations：tmpdir 清理 best-effort。
+- rollback：git revert。
+
+## G9 升级 gate_passed + G11 连带升级（2026-07-27）
+
+- 用户授权旧数据只读复跑（不出本机、不进公开镜像）。按 G9_REPORT §6 写死协议对真实副本（197MB/1905 文件）执行：scan exit 0 → 15/15 import（14 imported/1 partial 去重，0 error/0 quarantined）→ readOnly verify 全绿 + 幂等 exit=4 → 抽查 3 项目一致 → 首轮字节比对抓出 -shm 回写（PB-090-followup 修复 54af6dc0）→ 全新副本复跑副本+原始双 1905 逐字节相等。
+- G9 升级 gate_passed（G9_REPORT §9）；G11 判据 3 转 PASS → G11 升级 gate_passed（合并公开 main 待用户最终审计，属流程要求非门禁失败）。
+- 剩余 blocked：G8（PB-085 盲评，等 API Key + 用户评分）、签名/公证（凭据）。

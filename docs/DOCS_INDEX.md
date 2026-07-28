@@ -1,66 +1,57 @@
-# Documentation index
+# Linguist Agent 文档索引
 
-This index routes readers to current truth. Git and `CHANGELOG.md` retain history; completed plans and obsolete frontend handoffs do not remain active documentation.
+更新时间：2026-07-29
 
-## Canonical documents
+## 从这里开始
 
-| Document | Purpose |
-| --- | --- |
-| `README.md` | Current entry point, boundaries, commands, repository map |
-| `PRODUCT.md` | Stable product identity and principles |
-| `docs/VISION.md` | Stable finished-product direction for General Core and localization expertise |
-| `AGENTS.md` | Repository rules for coding agents |
-| `TODO.md` | Unfinished work only |
-| `docs/AGENT_CONTEXT.md` | Fast current-state technical brief |
-| `docs/HANDOFF.md` | Current takeover and verification boundary |
-| `docs/ARCHITECTURE.md` | Current component/data/runtime architecture |
-| `docs/BOUNDARIES.md` | General, Pi-resource, CAT-domain, and runtime-prompt ownership boundaries |
-| `docs/CODEX_UI_CONTRACT.md` | Durable professional Electron interaction, responsive, and accessibility contract |
-| `docs/EXPRESSIVE_QUALITY_FLOOR_CONTRACT.md` | Server-owned voice, expressive QA, and constraint-pack contract |
-| `docs/OPERATOR_GUIDE.md` | Human operating workflow |
-| `docs/PI_RESOURCE_POLICY.md` | Pi resource and bridge trust policy |
-| `docs/RUNTIME_BORROWED_PATTERNS.md` | Stable runtime patterns LA intentionally reuses |
-| `docs/KNOWN_RISKS.md` | RC-consumed risk register |
-| `docs/RELEASE_CANDIDATE.md` | Synthetic two-batch RC method |
-| `docs/DOCUMENTATION_MAINTENANCE.md` | Source-of-truth and sync rules |
-| `docs/adr/0001-sqlite-storage-boundary.md` | Accepted LA-062 storage authority, migration, backup, rollback and export boundary |
-| `.pi/APPEND_SYSTEM.md` | Always-on CAT runtime constitution; no roadmap/history |
+1. [README.md](../README.md) — 产品身份、三模式、架构和开发入口。
+2. [AGENTS.md](../AGENTS.md) — 当前仓库执行与安全约束。
+3. [HANDOFF.md](./HANDOFF.md) — 当前交付、验证、安装和下一步。
+4. [TODO.md](../TODO.md) — 只列未完成事项。
 
-## Refactor control plane
+## 当前状态真源
 
-`TODO.md` is the human unfinished-work entry. The following seven documents are the sole detailed refactor control plane and are validated together by `npm run roadmap:test`:
+- [LINGUIST_FUSION_CURRENT_REALITY.md](./roadmap/LINGUIST_FUSION_CURRENT_REALITY.md)
+- [linguist-fusion-queue.json](./roadmap/linguist-fusion-queue.json)
+- [LINGUIST_FUSION_QUEUE.md](./roadmap/LINGUIST_FUSION_QUEUE.md)
+- [KNOWN_LIMITATIONS.md](./release/KNOWN_LIMITATIONS.md)
 
-- `docs/roadmap/CURRENT_REALITY_REPORT.md`
-- `docs/roadmap/MODULE_AND_DATA_INVENTORY.md`
-- `docs/roadmap/RISK_REGISTER.md`
-- `docs/roadmap/DELETION_CANDIDATES.md`
-- `docs/roadmap/MIGRATION_MATRIX.md`
-- `docs/roadmap/UI_GAP_MATRIX.md`
-- `docs/roadmap/IMPLEMENTATION_QUEUE.md`
+## 架构与边界
 
-The earlier master blueprint is design input only and cannot authorize work. Epic, Gate, and Decision rows in the queue are non-executable.
+- [UPSTREAM_BASELINE.md](./architecture/UPSTREAM_BASELINE.md) — 固定 Proma 基线。
+- [PROMA_CORE_TOUCHPOINTS.md](./architecture/PROMA_CORE_TOUCHPOINTS.md) — 所有 Proma 核心修改登记。
+- [proma-touchpoints.json](./architecture/proma-touchpoints.json) — 机读触点真源。
+- [USERDATA_LAYOUT.md](./architecture/USERDATA_LAYOUT.md) — `.linguist-agent` 数据布局与 Provider 导入。
+- [RUNTIME_POLICY.md](./architecture/RUNTIME_POLICY.md) — Runtime 边界。
+- [FEATURE_FLAGS.md](./architecture/FEATURE_FLAGS.md) — 功能旗标。
 
-## Maintained frontend
+## 当前实施计划
 
-- `apps/desktop/README.md`: Electron entry and commands.
-- `apps/desktop/docs/PRODUCT_LOGIC.md`: renderer behavior and product mapping.
-- `apps/desktop/docs/electron-acceptance/`: acceptance harness protocol and baselines.
-- `DESIGN.md`: current visual language.
-- `design-qa.md`: open real-machine P3 checklist.
-- `docs/ui/LA_UI_BEHAVIOR_SPEC.md`: LA-owned clean-room, public UI behavior contract.
-- `docs/ui/codex-ui-spec-full.md`: restricted historical research input only; non-canonical and not an implementation contract. Retention in public distribution remains a user/legal decision.
+- [LINGUIST_MODE_AND_CAT_WORKBENCH_IMPLEMENTATION_PLAN_CN.md](./roadmap/LINGUIST_MODE_AND_CAT_WORKBENCH_IMPLEMENTATION_PLAN_CN.md)
+- [LINGUIST_FUSION_EXECUTION_LEDGER.md](./roadmap/LINGUIST_FUSION_EXECUTION_LEDGER.md)
 
-There is no maintained SwiftUI or browser frontend. Any prose that treats `apps/mac`, `packages/cat-web`, Swift, or Sparkle as current is wrong.
+计划解释目标；当前实现状态必须回到队列和 Current Reality 核对。
 
-## Current evidence reports
+## 关键 Gate 证据
 
-- `docs/reports/PI_GENERAL_AGENT_REBUILD_20260720.md`: dated standalone General Core, resource trust, Library/RAG/memory, Package Center, document capabilities, Maintainer, and Codex UI evidence.
-- `docs/reports/ELECTRON_NATIVE_EXPERIENCE_ACCEPTANCE_20260717.md`: Electron UI, performance, notification, keybinding, signing, and explicit manual gaps.
-- `docs/reports/ELECTRON_P3_MANUAL_PARTIAL_20260718.md`: direct packaged-app evidence that narrows but does not close the real-machine P3 gates.
-No report may contain customer rows, production-runtime identifiers, credentials, or personal paths. Reports are dated evidence, not current instructions, and never override code, tests, the canonical documents above, or `TODO.md`.
+- [G8_REPORT.md](./roadmap/G8_REPORT.md) — 三档质量自动链已实现；真实盲评仍阻断。
+- [G9_REPORT.md](./roadmap/G9_REPORT.md) — 真实旧数据副本复跑已通过。
+- [G10_REPORT.md](./roadmap/G10_REPORT.md) — 自动化已修复，人工产品资格仍阻断。
+- [AC007_LONG_THREAD_REPORT.md](./roadmap/AC007_LONG_THREAD_REPORT.md) — 长线程 selector 更正与 packaged 数据。
+- [G11_REPORT.md](./roadmap/G11_REPORT.md) — 历史发布/合规证据，不代表当前个人 Alpha 要公开发行。
 
-## History
+## 发布与归属
 
-- `CHANGELOG.md`: version history.
-- `docs/archive/**`: explicitly archived reference only.
-- Git history: deleted plans, retired frontend details, integration ancestry, and completed handoffs.
+- [NOTICE.md](../NOTICE.md)
+- [ATTRIBUTION.md](../ATTRIBUTION.md)
+- [SOURCE_PROVENANCE.md](./attribution/SOURCE_PROVENANCE.md)
+- [KNOWN_LIMITATIONS.md](./release/KNOWN_LIMITATIONS.md)
+
+公开镜像、签名、公证和 SBOM 文件保留为历史/未来发行资料；当前没有公众发布计划。
+
+## 维护
+
+- [DOCUMENTATION_MAINTENANCE.md](./DOCUMENTATION_MAINTENANCE.md)
+- Codex Skill：`/Users/<local>/.codex/skills/linguist-agent-doc-sync/SKILL.md`
+
+不要从历史报告反向覆盖当前状态；先核对代码、manifest、队列 JSON 和真实命令输出。

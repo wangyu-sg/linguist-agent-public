@@ -1,9 +1,0 @@
-{
-  "name": "@linguist-agent/cat-formats",
-  "version": "2.32.7",
-  "private": true,
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}

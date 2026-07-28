@@ -1,59 +1,75 @@
-# Documentation maintenance
+# Linguist Agent 文档维护规则
 
-Documentation follows current behavior. Code, contracts, tests, manifests/lockfile, and observed runtime output outrank prose.
+更新时间：2026-07-29
 
-## Owners
+## 事实优先级
 
-- `PRODUCT.md`: stable identity and principles.
-- `README.md`: current entry, boundaries, repository map, commands.
-- `AGENTS.md`: agent rules and truth hierarchy.
-- `docs/AGENT_CONTEXT.md`: fast technical state.
-- `docs/HANDOFF.md`: current takeover and verification scope.
-- `TODO.md`: unfinished work only.
-- `docs/roadmap/{CURRENT_REALITY_REPORT,MODULE_AND_DATA_INVENTORY,RISK_REGISTER,DELETION_CANDIDATES,MIGRATION_MATRIX,UI_GAP_MATRIX,IMPLEMENTATION_QUEUE}.md`: the single detailed refactor control plane; it is changed and validated as one consistency unit.
-- `docs/ARCHITECTURE.md`: current component/data/runtime design.
-- `docs/adr/*.md`: accepted architecture decisions and their explicit remaining evidence gates; never planned behavior presented as current state.
-- `docs/EXPRESSIVE_QUALITY_FLOOR_CONTRACT.md`: server-owned expressive QA and constraint-pack contract.
-- `docs/OPERATOR_GUIDE.md`: human operating workflow.
-- `docs/DOCS_INDEX.md`: inventory and routing.
-- `.pi/APPEND_SYSTEM.md`: timeless CAT runtime behavior only.
-- `CHANGELOG.md`: version history only.
+文档冲突时按以下顺序裁决：
 
-## Update rules
+```text
+代码 / package.json / 锁文件 / 测试 / 真实运行输出
+> docs/roadmap/linguist-fusion-queue.json
+> LINGUIST_FUSION_CURRENT_REALITY.md
+> README / AGENTS / HANDOFF / TODO
+> 历史 Gate、Release 与审计报告
+```
 
-1. Inspect the implementation and tests that own the claim.
-2. Update the smallest canonical document set.
-3. Delete superseded “current state”, completed plans, and handoff prose. Git already preserves history.
-4. Put the human backlog entry in `TODO.md`; detailed refactor facts, risks, migration/deletion coverage, UI gaps, and executable ticket metadata belong only in the seven-document roadmap control plane. Dated reports remain evidence, not backlog.
-5. Keep dated reports as evidence only. State their scope and limitations, and never let them override current docs.
-6. Never claim installed-app, managed-runtime, production-data, accessibility, visual, or linguistic quality state without direct matching evidence.
-7. Never copy credentials, customer rows, private source paths, or acceptance runtime output into docs.
+历史报告保留当时的版本、命令和证据；需要更正时追加“后续更正”，不要把旧数字悄悄改成当前数字。
 
-## What not to maintain
+## 文档职责
 
-- parallel frontend histories after a frontend is deleted;
-- version-by-version implementation narratives in current architecture docs;
-- exhaustive lists of every source file or test;
-- feature claims derived only from source grep;
-- branch-specific handoffs after integration;
-- “historical current state” paragraphs that future agents must mentally negate.
+| 文件 | 只记录什么 |
+|---|---|
+| `README.md` / `README.en.md` | 当前产品身份、架构、使用与开发入口 |
+| `AGENTS.md` | 当前仓库执行约束、技术事实和安全边界 |
+| `docs/HANDOFF.md` | 下一会话无需聊天历史即可继续的当前交接 |
+| `TODO.md` | 仍未完成且可行动的事项 |
+| `docs/DOCS_INDEX.md` | 文档地图与真源 |
+| `LINGUIST_FUSION_CURRENT_REALITY.md` | 可验证的当前代码/工作区事实 |
+| `linguist-fusion-queue.json` | 机器可读工单/Gate 状态 |
+| `LINGUIST_FUSION_QUEUE.md` | 队列的人读投影 |
+| `docs/roadmap/*_REPORT.md` | 历史或专项证据 |
 
-## Required synchronization
+不要在 README、AGENTS 或 HANDOFF 中复制整份执行账本；应链接真源。
 
-- Version change: package/workspace manifests, lockfile, release markers, current docs, and `CHANGELOG.md`.
-- Product-model/API change: contracts, fixtures, tests, `README.md`, `AGENT_CONTEXT`, `HANDOFF`, and architecture as needed.
-- Frontend/release change: `apps/desktop` docs, acceptance report, root commands, architecture, and release/RC scripts.
-- Open/closed gate: `TODO.md`, then the scoped evidence report if one exists.
-- Pi/runtime policy change: `PI_RESOURCE_POLICY.md`, `RUNTIME_BORROWED_PATTERNS.md`, runtime tests, and only then current summaries.
+## 何时同步
 
-## Verification
+出现以下任一变化时执行同步：
 
-Always run:
+- 产品模式、用户流程、数据根或安全边界变化；
+- 包版本、Runtime、构建/打包策略变化；
+- Gate 状态或验证数字变化；
+- worktree/分支、当前 HEAD 或下一步变化；
+- 新增/删除 canonical 文档；
+- 用户要求 deep doc sync、handoff 或 clean workspace。
+
+README 与 AGENTS 的修改仍需用户允许；一次明确的“同步全部文档”授权可覆盖同一收口任务。
+
+## 同步步骤
+
+1. 先读代码、manifest、队列 JSON 和最新真实命令输出。
+2. 搜索旧版本、旧数据根、旧 SDK、过期 Gate 结论、废弃 worktree 和“已完成/待完成”冲突。
+3. 更新最小 canonical 集合。
+4. 区分自动证据与人工证据。
+5. 验证 JSON、链接和 Markdown 基础格式。
+6. 公开同步前扫描当前公开树和将变为可达的提交历史；个人署名只允许 `Henry Wang` 或 `Wang Yu`。
+7. 运行：
 
 ```bash
 git diff --check
-npm run release:check
-npm run roadmap:test
+jq empty docs/roadmap/linguist-fusion-queue.json
+bun run check:boundaries
+node --test tests/linguist-fusion-architecture.test.mjs
 ```
 
-Run `npm run rc:status` when current markers, risk language, frontend surface inventory, or RC instructions change. Use `rg` to confirm deleted frontend/branch/roadmap claims are not still presented as current.
+代码事实同时变化时还要运行相应 typecheck/test；最终交付按 `docs/HANDOFF.md` 记录完整命令。
+
+## 禁止事项
+
+- 不把 Fake Model 写成翻译质量证据。
+- 不把 packaged smoke 写成 VoiceOver/IME/键盘人工验证。
+- 不把个人 Alpha 写成公开 Release Candidate。
+- 不从旧 `/Users/<local>/Desktop/linguist-agent` 复制状态覆盖当前仓库；旧仓只作历史/迁移证据。
+- 不把未跟踪或临时目录中的唯一结论留给下一会话。
+- 不写无法由仓库或真实输出验证的数字、commit 或版本。
+- 不在公开文档、许可署名、提交说明或 Release metadata 中写作者的中文姓名；只使用 `Henry Wang` 或 `Wang Yu`。

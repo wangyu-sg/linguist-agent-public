@@ -1,92 +1,53 @@
 {
-  "name": "linguist-agent",
-  "version": "2.32.7",
-  "private": true,
+  "name": "proma",
+  "version": "0.1.1",
+  "description": "The next gen ai software with general agents",
   "type": "module",
-  "description": "Pi-native, local-macOS-first general agent with a professional game-localization layer",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/wangyu-sg/linguist-agent.git"
-  },
-  "keywords": [
-    "cat",
-    "localization",
-    "translation",
-    "pi-agent",
-    "game-localization",
-    "xliff",
-    "mxliff"
-  ],
+  "private": true,
+  "packageManager": "bun@1.3.14",
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
-    "start": "bash scripts/la-start.sh",
-    "stop": "bash scripts/la-stop.sh",
-    "tdai:setup": "bash scripts/tdai-setup.sh",
-    "tdai:start": "bash scripts/tdai-start.sh",
-    "server": "tsx packages/cat-server/src/server.ts",
-    "server:install": "tsx packages/cat-server/src/install_resident.ts",
-    "la": "npm run server",
-    "mac:build": "npm run desktop:build",
-    "mac:test": "npm run desktop:test && npm --workspace @linguist-agent/desktop run typecheck",
-    "mac:verify": "npm run desktop:package && npm run desktop:verify",
-    "mac:run": "npm run desktop:run",
-    "mac:update-local": "bash scripts/mac-local-update.sh --install",
-    "desktop:build": "npm --workspace @linguist-agent/desktop run build",
-    "desktop:test": "npm --workspace @linguist-agent/desktop run test",
-    "desktop:verify": "npm --workspace @linguist-agent/desktop run verify",
-    "desktop:package": "npm --workspace @linguist-agent/desktop run package",
-    "desktop:run": "npm --workspace @linguist-agent/desktop run run",
-    "desktop:runtime:acceptance": "npm --workspace @linguist-agent/desktop run runtime:acceptance",
-    "onboard:spike": "tsx scripts/spike-onboard.ts",
-    "alpha:real": "tsx scripts/alpha-real-project.ts",
-    "beta:candidate": "tsx scripts/beta-delivery-candidate.ts",
-    "rc:readiness": "tsx scripts/rc-readiness.ts",
-    "rc:regression": "tsx scripts/rc-regression.ts",
-    "rc:status": "tsx scripts/rc-status.ts",
-    "rc:gate": "tsx scripts/rc-gate.ts",
-    "version:sync": "tsx scripts/version-sync.ts",
-    "release:check": "tsx scripts/release-check.ts",
-    "release:mac": "tsx scripts/mac-release.ts",
-    "release:mac:publish": "tsx scripts/mac-release.ts --publish",
-    "runtime:health": "tsx tests/runtime_health.test.ts",
-    "maintainer:candidate": "tsx scripts/maintainer-candidate.ts",
-    "eval:private": "tsx scripts/private-eval.ts",
-    "primary:readiness": "tsx scripts/primary-use-readiness.ts",
-    "completion:audit": "tsx scripts/completion-audit.ts",
-    "roadmap:validate": "tsx scripts/validate-roadmap.ts",
-    "architecture:check": "tsx scripts/architecture-import-guard.ts",
-    "roadmap:test": "tsx tests/validate_roadmap.test.ts",
-    "storage:audit": "tsx scripts/export-sqlite-audit.ts",
-    "phrase:spike": "tsx scripts/spike-phrase-parse.ts",
-    "spike:tm": "tsx scripts/spike-tm-lookup.ts",
-    "test:legacy:pre": "tsx tests/sandbox_coordinator.test.ts && tsx tests/native_capability_packages.test.ts && tsx tests/cat_prompt_isolation.test.ts && tsx tests/private_eval_session.test.ts && tsx tests/private_eval_canonical_single.test.ts && tsx tests/team_child_rpc_adapter.test.ts",
-    "test:legacy": "tsx tests/team_evidence_child_runtime.test.ts && tsx tests/team_context_builder.test.ts && tsx tests/team_engineering_gate.test.ts && tsx tests/phrase_mxliff.test.ts && tsx tests/batch_workspace.test.ts && tsx tests/workspace_io.test.ts && tsx tests/evidence_tools.test.ts && tsx tests/proposals.test.ts && tsx tests/intake_tools.test.ts && tsx tests/delivery_export.test.ts && tsx tests/delivery_gate_failure.test.ts && tsx tests/delivery_readiness.test.ts && tsx tests/platform_ops.test.ts && tsx tests/sdlxliff.test.ts && tsx tests/sdlxliff_gtag.test.ts && tsx tests/mqxliff.test.ts && tsx tests/generic_batch_formats.test.ts && tsx tests/tag_rules_discovery.test.ts && tsx tests/segment_evidence.test.ts && tsx tests/quality_audit.test.ts && tsx tests/quality_waiver_tool.test.ts && tsx tests/voice_route.test.ts && tsx tests/voice_tools.test.ts && tsx tests/expressive_audit.test.ts && tsx tests/constraint_pack.test.ts && tsx tests/customer_returns.test.ts && tsx tests/tag_rules_route.test.ts && tsx tests/tag_rules_gate.test.ts && tsx tests/icu_branch_arity_eval.test.ts && tsx tests/mac_release.test.ts && tsx tests/quality_scorecard.test.ts && tsx tests/quality_scorecard_delta.test.ts && tsx tests/runtime_session.test.ts && tsx tests/session_stats.test.ts && tsx tests/session_titles.test.ts && tsx tests/task_auto_title.test.ts && tsx tests/pi_runtime_overrides.test.ts && tsx tests/pi_model_compat.test.ts && tsx tests/runtime_hooks.test.ts && tsx tests/agent_permissions.test.ts && tsx tests/permission_decisions.test.ts && tsx tests/cat_data_store_guard.test.ts && tsx tests/harness_eval_smoke.test.ts && tsx tests/concurrency.test.ts && tsx tests/pi_resource_policy.test.ts && tsx tests/mcp_bridge_policy.test.ts && tsx tests/pi_keychain_credentials.test.ts && tsx tests/pi_provider_auth.test.ts && tsx tests/pi_auth_login.test.ts && tsx tests/custom_models_document.test.ts && tsx tests/pi_trust.test.ts && tsx tests/pi_packages.test.ts && tsx tests/pi_package_executor.test.ts && tsx tests/native_capability_patches.test.ts && tsx tests/task_run_resources.test.ts && tsx tests/verified_pi_binary.test.ts && tsx tests/task_extension_interactions.test.ts && tsx tests/task_extension_reconciliation.test.ts && tsx tests/pi_keybindings.test.ts && tsx tests/pi_themes.test.ts && tsx tests/pi_sessions.test.ts && tsx tests/resident_runtime.test.ts && tsx tests/install_resident_cli.test.ts && tsx tests/project_guidance.test.ts && tsx tests/task_workspace_contract.test.ts && tsx tests/task_workspace.test.ts && tsx tests/task_workspace_routes.test.ts && tsx tests/task_message_queue.test.ts && tsx tests/single_task_run_projection.test.ts && tsx tests/eval_task_run_projection.test.ts && tsx tests/subagent_task_activity_bridge.test.ts && tsx tests/subagent_task_activity_workflow.test.ts && tsx tests/agent_events.test.ts && tsx tests/agent_tool_catalog.test.ts && tsx tests/project_health.test.ts && tsx tests/project_context.test.ts && tsx tests/context_readiness.test.ts && tsx tests/tool_catalog.test.ts && tsx tests/agent_run_options.test.ts && tsx tests/pi_usage_parity.test.ts && tsx tests/workflow_plan.test.ts && tsx tests/tag_engine_unify.test.ts && tsx tests/projects_index.test.ts && tsx tests/import_upload.test.ts && tsx tests/asset_routes.test.ts && tsx tests/asset_api.test.ts && tsx tests/asset_vectors.test.ts && tsx tests/asset_rag_hybrid.test.ts && tsx tests/asset_tdai_rag.test.ts && tsx tests/asset_rag_eval.test.ts && tsx tests/runtime_storage.test.ts && tsx tests/runtime_migrations.test.ts && tsx tests/legacy_task_backfill.test.ts && tsx tests/runtime_health.test.ts && tsx tests/memory_status.test.ts && tsx tests/memory_tools.test.ts && tsx tests/cat_stream_rules.test.ts && tsx tests/cat_self_healing.test.ts && tsx tests/real_alpha.test.ts && tsx tests/beta_candidate.test.ts && tsx tests/rc_regression.test.ts && tsx tests/rc_gate.test.ts && tsx tests/release_candidate.test.ts && tsx tests/readiness_decisions.test.ts && tsx tests/primary_use_readiness.test.ts && tsx tests/completion_audit.test.ts && tsx tests/pi_settings_parity.test.ts && tsx tests/web_tool_parity.test.ts && tsx tests/gate_evidence.test.ts && tsx tests/tm_reviewed_writeback.test.ts && tsx tests/tm_fuzzy_retrieval.test.ts && tsx tests/qa_terminology.test.ts && tsx tests/qa_write_gate.test.ts && tsx tests/authority_policy.test.ts && tsx tests/workflow_artifacts.test.ts && tsx tests/active_agent_runs.test.ts && tsx tests/task_session_stop_bridge.test.ts && tsx tests/private_eval.test.ts && tsx tests/private_eval_team_adapter.test.ts && tsx tests/eval_routes.test.ts && tsx tests/delivery_qa.test.ts && tsx tests/team_delivery_gate.test.ts && tsx tests/team_workflow_foundation.test.ts && tsx tests/team_role_agents.test.ts && tsx tests/quality_decision_ledger.test.ts && tsx tests/team_quality_decision_ledger.test.ts && tsx tests/prompt_compiler.test.ts && tsx tests/local_transport_security.test.ts && tsx tests/runtime_compatibility.test.ts && tsx tests/cat_safety_kernel.test.ts && tsx tests/team_run_plan.test.ts && tsx tests/team_workflow_contract.test.ts && tsx tests/task_package_team_capability.test.ts && tsx tests/team_package_preflight.test.ts && tsx tests/notification_preferences.test.ts",
-    "test:legacy:post": "tsx tests/runtime_schema_v2_migration.test.ts && tsx tests/standalone_task_routes.test.ts && tsx tests/pi_extension_trust.test.ts && tsx tests/general_agent_session.test.ts && tsx tests/general_agent_runs.test.ts && tsx tests/direct_image_attachments.test.ts && tsx tests/dynamic_tool_loading.test.ts && tsx tests/asset_rag_multilingual_eval.test.ts && tsx tests/assistant_library.test.ts && tsx tests/assistant_library_routes.test.ts && tsx tests/assistant_memory.test.ts && tsx tests/package_center.test.ts && tsx tests/package_center_routes.test.ts && tsx tests/rich_artifact.test.ts && tsx tests/document_capabilities.test.ts && tsx tests/document_capability_routes.test.ts && tsx tests/document_capability_tools.test.ts && tsx tests/document_qualification.test.ts && tsx tests/document_qualification_runner.test.ts && tsx tests/managed_document_installer.test.ts && tsx tests/maintainer.test.ts && tsx tests/maintainer_agent_session.test.ts && tsx tests/maintainer_routes.test.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "node --import tsx scripts/test-discovery.ts",
-    "test:list": "node --import tsx scripts/test-discovery.ts --list",
-    "test:unit": "node --import tsx scripts/test-discovery.ts --suite unit",
-    "test:security": "node --import tsx scripts/test-discovery.ts --suite security",
-    "test:recovery": "node --import tsx scripts/test-discovery.ts --suite recovery",
-    "test:roadmap": "node --import tsx scripts/test-discovery.ts --suite roadmap"
-  },
-  "dependencies": {
-    "@earendil-works/pi-ai": "0.80.10",
-    "@earendil-works/pi-coding-agent": "0.80.10",
-    "jszip": "3.10.1",
-    "tar": "7.5.20"
+    "dev": "bun run --filter='@proma/electron' dev",
+    "electron:dev": "bun run --filter='@proma/electron' dev",
+    "electron:build": "bun run --filter='@proma/electron' build",
+    "electron:start": "bun run --filter='@proma/electron' start",
+    "build": "bun run --filter='*' build",
+    "typecheck": "bun run --filter='*' typecheck",
+    "test": "bun test",
+    "check:boundaries": "bun test tests/upstream-boundary.test.ts",
+    "license:scan": "bun scripts/license-scan.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "ajv": "8.20.0",
-    "tsx": "^4.20.0",
-    "typescript": "^5.8.0"
+    "@types/bun": "1.3.6",
+    "@types/dompurify": "^3.2.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "dompurify": "^3.4.2",
+    "license-checker-rseidelsohn": "^5.0.1",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "jotai": "^2.17.1"
   },
   "overrides": {
-    "protobufjs": "7.6.4",
-    "ws": "8.21.0"
+    "@anthropic-ai/claude-agent-sdk": "0.3.201",
+    "@anthropic-ai/claude-agent-sdk-darwin-arm64": "0.3.201",
+    "@anthropic-ai/claude-agent-sdk-darwin-x64": "0.3.201",
+    "@anthropic-ai/claude-agent-sdk-win32-arm64": "0.3.201",
+    "@anthropic-ai/claude-agent-sdk-win32-x64": "0.3.201",
+    "@earendil-works/pi-agent-core": "0.80.9",
+    "@earendil-works/pi-ai": "0.80.9",
+    "@earendil-works/pi-coding-agent": "0.80.9",
+    "@earendil-works/pi-tui": "0.80.9"
+  },
+  "patchedDependencies": {
+    "@earendil-works/pi-ai@0.80.9": "patches/@earendil-works%2Fpi-ai@0.80.9.patch"
   }
 }

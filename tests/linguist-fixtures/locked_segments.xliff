@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic fixture for locked-segment handling (PB-091 locked migration,
+  PB-110 "locked segments cannot be proposed / committed").
+
+  Lock expression rationale: the repo's memoQ sample (sample.mqxliff) contains
+  no locked segments, so there is no memoQ-specific locked marker to copy.
+  This fixture therefore uses the XLIFF 1.2 standard translate attribute,
+  matching the convention already used by placeholder_cases.xliff
+  (trans-unit id="edge.locked") and mini_game_ui.xliff (id="legal.copyright"):
+    - locked:            translate="no"
+    - explicitly unlocked: translate="yes"
+    - unmarked:          no translate attribute (default semantics apply)
+  All content is synthetic; no customer or real-project text.
+-->
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+  <file original="synthetic-locked-segments.po" source-language="en-US" target-language="zh-CN" datatype="x-synthetic">
+    <header>
+      <tool tool-id="LA" tool-name="Linguist Agent synthetic fixture" tool-version="1" tool-company="Linguist Agent"/>
+    </header>
+    <body>
+      <trans-unit id="lock.legal.copyright" translate="no">
+        <source>© 2026 Synth Studios. All rights reserved.</source>
+        <target state="final">© 2026 Synth Studios. All rights reserved.</target>
+        <note>Locked legal string; do not translate.</note>
+      </trans-unit>
+      <trans-unit id="lock.brand.title" translate="no">
+        <source>Aetheria Online</source>
+        <target state="final">Aetheria Online</target>
+        <note>Locked brand name; keep as-is in all locales.</note>
+      </trans-unit>
+      <trans-unit id="lock.ui.version" translate="no">
+        <source>Version 1.4.2-synthetic</source>
+        <target state="final">Version 1.4.2-synthetic</target>
+        <note>Locked build string; QA compares it verbatim.</note>
+      </trans-unit>
+      <trans-unit id="lock.debug.command" translate="no">
+        <source>/give {player_name} item_%d</source>
+        <target state="final">/give {player_name} item_%d</target>
+        <note>Locked debug command; placeholders are positional.</note>
+      </trans-unit>
+      <trans-unit id="lock.credits.engine" translate="no">
+        <source>Powered by SynthEngine™</source>
+        <target state="final">Powered by SynthEngine™</target>
+        <note>Locked engine credit; legal requirement.</note>
+      </trans-unit>
+      <trans-unit id="open.menu.start" translate="yes">
+        <source>Start Game</source>
+        <target state="translated">开始游戏</target>
+        <note>Explicitly unlocked: proposals and commits allowed.</note>
+      </trans-unit>
+      <trans-unit id="open.hud.score" translate="yes">
+        <source>Score: {score}</source>
+        <target state="translated">得分：{score}</target>
+      </trans-unit>
+      <trans-unit id="open.dlg.village.welcome" translate="yes">
+        <source>Welcome to Mistvale, traveler.</source>
+        <target state="translated">欢迎来到迷雾谷，旅人。</target>
+      </trans-unit>
+      <trans-unit id="open.sys.save" translate="yes">
+        <source>Progress saved in slot %d.</source>
+        <target state="translated">进度已保存到栏位 %d。</target>
+      </trans-unit>
+      <trans-unit id="open.qst.main.desc" translate="yes">
+        <source>Collect {count} moonstones for Elder Rowan.</source>
+        <target state="translated">为罗文长老收集 {count} 枚月石。</target>
+        <note>Explicitly unlocked quest objective.</note>
+      </trans-unit>
+      <trans-unit id="plain.menu.options">
+        <source>Options</source>
+        <target state="final">选项</target>
+        <note>No translate attribute; default (unlocked) semantics.</note>
+      </trans-unit>
+      <trans-unit id="plain.hud.lives">
+        <source>Lives: <x id="1" equiv-text="{lives}"/></source>
+        <target state="translated">生命值：<x id="1" equiv-text="{lives}"/></target>
+      </trans-unit>
+      <trans-unit id="plain.dlg.shop.greeting">
+        <source>Everything's for sale, friend.</source>
+        <target state="translated">所有东西都卖，朋友。</target>
+      </trans-unit>
+      <trans-unit id="plain.tip.potion">
+        <source>Tip: Health potions restore {amount} HP.</source>
+        <target state="translated">提示：生命药水可恢复 {amount} 点生命值。</target>
+      </trans-unit>
+      <trans-unit id="plain.sys.confirm">
+        <source>Are you sure?</source>
+        <target state="translated">确定吗？</target>
+      </trans-unit>
+      <trans-unit id="plain.player.welcome">
+        <source>Welcome back, {player_name}!</source>
+        <target state="new"></target>
+        <note>Unmarked and untranslated: eligible for a new proposal.</note>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

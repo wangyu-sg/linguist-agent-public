@@ -1,90 +1,93 @@
 # Linguist Agent
 
-Linguist Agent is a Pi-native, local-macOS-first general work Agent with a professional game-localization layer. Start a no-project Chat for ordinary local work, or enter a Project when the task needs bilingual evidence, CAT editing, deterministic QA, and delivery authority.
+Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
-## Current source state
+> Proma 的完整通用 Agent / Chat 产品能力 + Linguist Agent 的专业 CAT 内核与工作台。
 
-- Product version: `v2.32.7`.
-- `apps/desktop` is the only maintained frontend. It is an Electron macOS client over the authenticated loopback `cat-server` API. SwiftUI `apps/mac` and browser `packages/cat-web` are deleted.
-- Canonical truth is `Task → Run → Agent thread → Activity / Artifact / Decision`; a Task owner is either standalone or Project. Project Tasks may additionally carry Batch, locale, and Segment scope.
-- Standalone and Project Tasks use the same Pi General Core and native message delivery: steer now, durable follow-up queue, pause/resume, edit/delete/reorder/retry, Stop, and compaction. The server owns durable queue identity and Pi owns execution.
-- Composer attachments are real next-Run inputs: standalone Chat uses explicit revocable file grants, Project uses registered assets, and PNG/JPEG/WebP are passed through Pi's native image channel only when the selected model supports image input. Other files remain authorized tool/OCR inputs rather than a false multimodal claim.
-- Model selection is one atomically saved, Mac-local provider/model preference for both Composer and Settings; it applies only to a new Run and is never reset just because a message was sent. OAuth and API-key Provider connections are managed beside that current model choice.
-- A pending Pi/tool permission replaces the current Composer with a Task-scoped Codex-style approval surface and is recovered from the canonical permission endpoint if an event stream reconnects. It never becomes a global dialog, an unlabelled timeout, or a silent fallback.
-- Settings can explicitly restart or repair the managed runtime and can preview then plan-hash-confirm rebuildable-cache cleanup. These actions do not implicitly grant permissions or delete durable Task/Project data.
-- Standalone Chats add a private workspace, explicit file grants, and digest-bound resource trust, but no CAT or delivery authority. Project Tasks add the CAT Expert Layer: Assets, TM/TB/glossary, bilingual Segments, proposals, locks, QA, Team roles, and delivery gates.
-- Personal/Project Library supports lexical, local multilingual-E5 vector, and hybrid retrieval. Confirmed Memory is proposed then user-confirmed, has explicit personal/client/franchise/project/locale scope, validity and conflict/supersede history, and enters a Run only through a host-selected immutable lexical/local-semantic snapshot; an unavailable managed E5 pack is shown as lexical-only. Memory is never Evidence. Legacy TDAI capture/store/recall is retired, with only explicit read-only migration candidates awaiting user confirmation.
-- Package Center discovers the Pi community catalog, then uses a preview/hash/risk-approval quarantine flow before a managed Package can enter a future Run. Catalog browsing never executes Package code.
-- Managed document capabilities cover local Office/PDF operations and PaddleOCR evidence. Their declarative Rich Artifacts can combine markdown, tables, charts, images, page overlays, diffs, and file references, then export through an explicit native save flow as inert HTML, PDF, or PNG. MinerU is implemented as a fail-closed Labs capability but remains unqualified on this machine.
-- Stable does not expose or execute Maintainer mutations. Existing maintenance artifacts remain readable in canonical Task history; the isolated candidate implementation is retained only for later migration to developer/CI tooling.
-- Stable does not expose or execute Private Eval mutations. Existing Eval sets, Runs, outputs, scorecards, comparisons, and canonical Task artifacts remain available through read-only APIs pending migration to the CI eval harness.
-- Pi is exact-pinned at `0.80.10` across manifests and lockfiles. Upgrade the Pi dependency family together.
+本项目是 [Proma](https://github.com/proma-ai/Proma) 的 AGPL-3.0 衍生作品。Proma 的版权归原作者所有；来源与固定基线见 [NOTICE.md](./NOTICE.md)、[ATTRIBUTION.md](./ATTRIBUTION.md) 和 [UPSTREAM_BASELINE.md](./docs/architecture/UPSTREAM_BASELINE.md)。
 
-These are repository/source and test facts. They do not prove that an installed app or managed Application Support runtime matches this checkout; verify those surfaces separately.
+[English README](./README.en.md)
 
-## Start here
+## 当前状态
 
-```bash
-npm ci
-npm run typecheck
-npm test
-npm run mac:build
-npm run mac:test
-npm run mac:verify
+当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。主体路线已经稳定，不再更换 Proma 底座，也不把 Proma 的 Agent、Chat、Skills、MCP、Automations 或远程集成删掉。
+
+应用提供三个并列主模式：
+
+- **Agent**：Proma 原生完整 Agent 工作区，支持 Claude / Pi Runtime、工具、Thinking、权限、Queue / Steer、Skills、MCP 和工作区文件。
+- **Chat**：Proma 原生多 Provider 对话、附件、工具、上下文控制与并排比较。
+- **Linguist**：项目、资产、虚拟化 Segment Grid、人工编辑、Proposal 审核、TM / TB、Context、确定性 QA、阶段确认、交付预检、导出、备份与恢复。
+
+Linguist 模式嵌入同一个 Proma `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA 规则直接提交 Segment。
+
+## 架构
+
+```text
+Proma Desktop App
+├── Agent / Chat / Skills / MCP / Automations / Providers
+└── Linguist Mode
+    ├── Workbench + 原生 Agent Rail
+    ├── Session-bound CAT Tools
+    ├── Electron Linguist Services / IPC
+    └── @linguist/cat-core
+        └── 纯领域模型、Proposal、Evidence、QA、Critic、Consistency
 ```
 
-Run the development server with `npm run la`. Run the worktree-local Electron package with `npm run mac:run`; it does not install into `/Applications`.
+关键边界：
 
-## Product boundaries
+- `packages/linguist-cat-core` 不依赖 React、Electron、Proma UI 或 SQLite。
+- `packages/linguist-cat-store` 负责每项目 `cat.db`、原始资产、备份与导出记录。
+- `packages/linguist-cat-tools` 的项目身份只来自 Session binding，12 个工具按项目、参考资料、QA、Proposal/Critic 分模块。
+- `LinguistProjectService` 保持单一对外接口，内部按生命周期、资源、质量与交付拆分。
+- Proma 核心触点受 [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md) 和架构测试约束。
 
-- No-project Chat is a first-class Task, not a disguised Home Agent and not a temporary pre-Project screen.
-- General Chat inherits only non-executable Pi resources resolved for its selected directory and trust decision. Stable Runs exclude user, project, and managed Package Extension paths and load only LA-owned inline runtime factories; each Run keeps an immutable resource snapshot and conflict inventory.
-- Missing configured Pi Packages fail visibly at General Run startup. Startup does not auto-install them as a side effect.
-- Task-scoped Main, Team, Eval, Quality, and Delivery work share one canonical chronology. Specialist follow-up creates a scoped Run; it does not create a second permanent chat model.
-- CAT writes, proposal application, locked rows, formatting signatures, QA disposition, and delivery export remain server-gated regardless of Agent autonomy settings.
-- TM, TB, glossary, assets, Project files, and returned URLs/excerpts can be evidence. Tool trace and recalled memory alone are not evidence.
-- Historical Pi JSONL and migrated Home history are inspectable records, not alternate runnable product state.
-- Runtime/package/document/maintenance mutations retain preview, digest, plan-hash, authority, and active-Run checks. Never copy customer data, managed runtime data, or acceptance output into Git.
-- No silent fallback: a missing capability, permission denial, resource change, or failed Run must surface explicitly.
+## 数据目录
 
-## Repository map
+正式版使用 `~/.linguist-agent/`，开发版使用 `~/.linguist-agent-dev/`；CAT 数据位于其 `linguist/` 子目录。通用会话和设置继续使用 JSON / JSONL，CAT 项目使用独立 SQLite 数据库与受管 source/blobs/exports 目录。
 
-- `packages/cat-data`: durable Task ownership, Project/CAT truth, Library, memory, document capability contracts, standalone grants, evidence, QA, and delivery.
-- `packages/cat-runtime`: General/CAT/Maintainer Pi session construction, immutable resource snapshots, permissions, sandboxing, native compaction, dynamic tools, and delegation adapters.
-- `packages/cat-tools`: General Library/memory/document tools plus CAT tools and deterministic write/evidence gates.
-- `packages/cat-server`: authenticated loopback APIs, active-run ownership, standalone/Project Task projection, Package Center, capability qualification, Maintainer, Settings, and runtime lifecycle.
-- `packages/cat-formats`: bilingual file adapters.
-- `apps/desktop`: Electron main/preload trust boundary, professional workspaces, packaging, notifications, and acceptance harnesses.
-- `contracts/schemas`: versioned client/server Task wire contracts.
-- `.pi/APPEND_SYSTEM.md`: always-on CAT runtime constitution; do not put roadmap or release history there.
+旧 `~/.proma(-dev)/channels.json` 只会在用户从「设置 → 模型配置」显式执行 Provider 导入时读取；不会迁移 Proma 会话、设置、工作区或 CAT 数据。详见 [USERDATA_LAYOUT.md](./docs/architecture/USERDATA_LAYOUT.md)。
 
-## Documentation
+## 开发与验证
 
-- Stable identity: `PRODUCT.md`
-- Current brief: `AGENTS.md`, `docs/AGENT_CONTEXT.md`
-- Current handoff and open work: `docs/HANDOFF.md`, `TODO.md`
-- Architecture and runtime policy: `docs/ARCHITECTURE.md`, `docs/PI_RESOURCE_POLICY.md`
-- UI implementation contract: `docs/CODEX_UI_CONTRACT.md`
-- Operator workflow: `docs/OPERATOR_GUIDE.md`
-- Document inventory: `docs/DOCS_INDEX.md`
-- Dated General/Pi rebuild evidence: `docs/reports/PI_GENERAL_AGENT_REBUILD_20260720.md`
-
-`CHANGELOG.md` is history, not the roadmap.
-
-## License and contributions
-
-This source tree does not currently include an open-source license. Public visibility permits inspection and issue reporting but does not grant redistribution, modification, or commercial-use rights. Choose and add an explicit license and contribution policy before accepting external code contributions.
-
-## Release and RC checks
+仓库固定使用 Bun 1.3.14。
 
 ```bash
-npm run release:check
-npm run release:mac -- --dry-run
-npm run runtime:health
-npm run rc:status
-npm run rc:regression -- --project rc-isolated-final
-npm run rc:gate -- --project rc-isolated-final --batch b1 --batch b2
-git diff --check
+bun install --frozen-lockfile
+bun run typecheck
+bun test
+bun run check:boundaries
+node --test tests/linguist-fusion-architecture.test.mjs
+bun run --filter='@proma/electron' test:linguist
 ```
 
-Use only an isolated synthetic Project for final RC evidence unless the user explicitly authorizes another scope. Open human quality, real-machine P3, MinerU, and release-authority gates are listed in `TODO.md`; green automation does not substitute for them.
+开发与构建：
+
+```bash
+bun run dev
+bun run electron:build
+
+cd apps/electron
+bun run smoke:pack
+bun run smoke:vertical
+```
+
+CI 覆盖 frozen install、类型检查、根测试、CAT 分层测试、Linguist 主进程测试、架构边界、许可扫描和 Electron build。
+
+## 尚未完成的人工 Gate
+
+代码实现和自动化验证不等于产品资格。当前仍需在真实使用中完成：
+
+- 原生 IME composition 与 Native Save 防覆盖手工验证；
+- VoiceOver、完整键盘路径和拖拽手感；
+- Fast / Balanced / Best 的真实游戏文本盲评；
+- 14 天连续个人日用与问题回收。
+
+签名、公证、公开更新渠道和跨平台发布不属于当前个人 Alpha 目标。完整状态见 [HANDOFF.md](./docs/HANDOFF.md)、[TODO.md](./TODO.md) 和 [LINGUIST_FUSION_QUEUE.md](./docs/roadmap/LINGUIST_FUSION_QUEUE.md)。
+
+## 文档
+
+文档入口与事实优先级见 [DOCS_INDEX.md](./docs/DOCS_INDEX.md)；维护规则见 [DOCUMENTATION_MAINTENANCE.md](./docs/DOCUMENTATION_MAINTENANCE.md)。
+
+## 许可
+
+[AGPL-3.0](./LICENSE)。保留 Proma 及其他上游组件要求的版权、NOTICE 和第三方归属。

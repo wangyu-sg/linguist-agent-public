@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+  <file original="synthetic-game-ui.po" source-language="en-US" target-language="zh-CN" datatype="x-synthetic">
+    <header>
+      <tool tool-id="LA" tool-name="Linguist Agent synthetic fixture" tool-version="1" tool-company="Linguist Agent"/>
+    </header>
+    <body>
+      <trans-unit id="menu.start">
+        <source>Start Game</source>
+        <target state="translated">开始游戏</target>
+        <note>Main menu primary button.</note>
+      </trans-unit>
+      <trans-unit id="menu.options">
+        <source>Options</source>
+        <target state="final">选项</target>
+      </trans-unit>
+      <trans-unit id="hud.score">
+        <source>Score: {score}</source>
+        <target state="translated">得分：{score}</target>
+      </trans-unit>
+      <trans-unit id="hud.continue">
+        <source>Press <g id="1" ctype="bold">Enter</g> to continue</source>
+        <target state="translated">按 <g id="1" ctype="bold">Enter</g> 继续</target>
+        <note>Keep the key name in English.</note>
+      </trans-unit>
+      <trans-unit id="player.welcome">
+        <source>Welcome back, {player}!</source>
+      </trans-unit>
+      <trans-unit id="hud.lives">
+        <source>Lives: <x id="1" equiv-text="{lives}"/></source>
+        <target state="translated">生命值：<x id="1" equiv-text="{lives}"/></target>
+      </trans-unit>
+      <trans-unit id="legal.copyright" translate="no">
+        <source>© 2026 Synth Studios</source>
+        <target state="final">© 2026 Synth Studios</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

@@ -1,8 +1,0 @@
-{
-  "schemaVersion": 1,
-  "id": "synthetic-native-light-v1",
-  "issuedAt": "2026-07-24T00:00:00.000Z",
-  "expiresAt": "2026-08-24T00:00:00.000Z",
-  "benchmarkReportSha256": "75c0c0c186640f2d6f30761c00bc4ec2cba7ea950f274385fcd539b54d805664",
-  "nativeTextCoverage": 0.8
-}

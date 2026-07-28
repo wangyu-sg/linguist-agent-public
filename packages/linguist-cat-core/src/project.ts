@@ -1,0 +1,90 @@
+/**
+ * LinguistProject — plan-mandated schema (schemaVersion 1). Pure data.
+ */
+
+import { generateProjectId, type EntropySource, type ProjectId } from './ids'
+import type { LinguistGlossaryPolicy } from './glossary-policy'
+import type { LinguistQualityProfile } from './quality-profile'
+import { normalizeQaProfile, type QaProfile } from './qa-profile'
+import type { LinguistTagProfile } from './tag-profile'
+import {
+  normalizeWorkflowStage,
+  type WorkflowOutputStatusPolicy,
+  type WorkflowStage,
+} from './workflow'
+
+export interface LinguistProject {
+  schemaVersion: 1
+  id: ProjectId
+  name: string
+  sourceLocale: string
+  targetLocale: string
+  promaWorkspaceId: string
+  createdAt: string
+  updatedAt: string
+  archivedAt?: string
+  /**
+   * Quality strategy tier (PB-082, plan §21). Optional for forward
+   * compatibility with pre-PB-082 project.json files; reads normalize
+   * absent/unknown values to 'balanced' (see quality-profile.ts).
+   */
+  qualityProfile?: LinguistQualityProfile
+  /**
+   * 术语执行策略（PB-096，契约《通用缺陷等级》）。可选字段，同
+   * qualityProfile 先例：旧 project.json 无此键，读取经
+   * normalizeGlossaryPolicy 回落 'prefer'，绝不主动回写。
+   */
+  glossaryPolicy?: LinguistGlossaryPolicy
+  /**
+   * 项目 tag 族登记表（PB-097）。可选字段，同 qualityProfile 先例：旧
+   * project.json 无此键，读取经 normalizeTagProfile 回落 undefined
+   * （= 仅内置族），绝不主动回写。项目族手工登记，不做 LLM 自动发现。
+   */
+  tagProfile?: LinguistTagProfile
+  /** 当前项目承担的 T/E/P 任务阶段；旧项目读取时规范化为 translation。 */
+  workflowStage?: WorkflowStage
+  /** 格式原生状态的项目级覆盖策略。 */
+  outputStatusPolicy?: WorkflowOutputStatusPolicy
+  /** 确定性 QA 的项目预设；旧项目读取为 general。 */
+  qaProfile?: QaProfile
+}
+
+export interface CreateProjectInput {
+  name: string
+  sourceLocale: string
+  targetLocale: string
+  promaWorkspaceId: string
+  workflowStage?: WorkflowStage
+  outputStatusPolicy?: WorkflowOutputStatusPolicy
+  qaProfile?: QaProfile
+}
+
+export interface CreateProjectDeps {
+  entropy?: EntropySource
+  /** ISO timestamp; inject for determinism. */
+  now?: string
+}
+
+export function createProject(input: CreateProjectInput, deps: CreateProjectDeps = {}): LinguistProject {
+  const now = deps.now ?? new Date().toISOString()
+  return {
+    schemaVersion: 1,
+    id: generateProjectId(deps.entropy),
+    name: input.name,
+    sourceLocale: input.sourceLocale,
+    targetLocale: input.targetLocale,
+    promaWorkspaceId: input.promaWorkspaceId,
+    workflowStage: normalizeWorkflowStage(input.workflowStage),
+    qaProfile: normalizeQaProfile(input.qaProfile),
+    ...(input.outputStatusPolicy !== undefined
+      ? { outputStatusPolicy: input.outputStatusPolicy }
+      : {}),
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+/** Archive is metadata-only; returns a new project object. */
+export function archiveProject(project: LinguistProject, now: string): LinguistProject {
+  return { ...project, archivedAt: now, updatedAt: now }
+}
