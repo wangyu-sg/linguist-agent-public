@@ -14,14 +14,20 @@
 - 清理 Context DOCX、UX handoff 与 calibration 的 worktree/分支；
 - 同步 README、AGENTS、队列、Current Reality、G10、Known Limitations；
 - 更新本地 `linguist-agent-doc-sync` Skill。
+- 清除公开文档中的中文姓名署名，新增自动隐私护栏，并把净化源码同步到
+  `wangyu-sg/linguist-agent-public`；这不是公众安装包 Release。
 
 ## 当前代码基线
 
 - 分支：`main`
-- 最近生产/验证提交：`5ac2b60d fix(smoke): follow scoped QA waiver action`
+- 最近生产提交：`5ac2b60d fix(smoke): follow scoped QA waiver action`
+- 最近隐私护栏提交：`ac434544 chore(privacy): enforce public identity attribution`
 - Electron 版本：`0.15.133`
 - CAT Tools 版本：`0.0.13`
 - worktree：仅 `/Users/<local>/Desktop/linguist-agent-next`
+- 公开净化快照：`e877a211`（Proma 基线 + 单个净化 Alpha 快照）
+- 公开 main 合并点：`b8ce7e0a`（保留旧公共 main 与 Proma 两侧历史）
+- 公开远端分支：只保留 `main`；历史 audit 候选与同步临时分支均已清理
 
 最终文档提交位于上述生产/验证提交之后；以 `git log -1` 为准。
 
@@ -30,8 +36,10 @@
 | 检查 | 结果 |
 |---|---|
 | 全 workspace typecheck | 11 / 11 workspace，exit 0 |
-| 根 Bun 测试 | 1,267 pass / 0 fail |
-| Architecture boundaries | 3 pass / 0 fail |
+| 根 Bun 测试 | 1,270 pass / 0 fail |
+| 公开身份隐私护栏 | 1 pass / 0 fail；候选树与可达历史扫描 0 命中 |
+| 公开镜像净化护栏 | 1 pass / 0 fail；旧 LA 私有路径与真实项目标识 0 命中 |
+| Architecture boundaries | 4 pass / 0 fail；公开路径净化只允许精确占位符替换 |
 | Fusion architecture | 9 pass / 0 fail |
 | Electron Linguist nodetest | 143 / 143 |
 | CAT Core + Formats | 246 pass / 0 fail |
@@ -60,7 +68,7 @@ roundtrip 和 Native Open/Save 仍是明确记录的人工/后续证据，不折
 
 ## 用户数据边界
 
-- 不触碰真实项目 `<real-project>`。
+- 不触碰本机真实项目（公开文档不记录其 ID）。
 - 正式数据根是 `~/.linguist-agent/`；开发根是 `~/.linguist-agent-dev/`。
 - Provider 只在「设置 → 模型配置」由用户显式从旧 Proma 导入。
 - 测试与 smoke 必须使用临时 userData。

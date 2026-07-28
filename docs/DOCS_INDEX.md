@@ -46,8 +46,10 @@
 - [ATTRIBUTION.md](../ATTRIBUTION.md)
 - [SOURCE_PROVENANCE.md](./attribution/SOURCE_PROVENANCE.md)
 - [KNOWN_LIMITATIONS.md](./release/KNOWN_LIMITATIONS.md)
+- [PUBLIC_MIRROR_MANIFEST.md](./release/PUBLIC_MIRROR_MANIFEST.md) — 当前公开源码镜像坐标、历史结构与隐私门禁。
+- [PB116_MIRROR_CLEANSE.md](./release/PB116_MIRROR_CLEANSE.md) — 初次清洗证据与 2026-07-29 后续更正。
 
-公开镜像、签名、公证和 SBOM 文件保留为历史/未来发行资料；当前没有公众发布计划。
+公开源码镜像已经同步；签名、公证、公众安装包和更新渠道仍只是历史/未来发行资料，当前没有公众发布计划。
 
 ## 维护
 

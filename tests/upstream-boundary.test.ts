@@ -3,7 +3,8 @@
  *
  * 对比 `git diff --name-only <baseline>...HEAD`，强制：
  *   a. 每个相对基线有改动的文件，要么落在 allowedNewPaths 白名单内，
- *      要么已登记在 docs/architecture/proma-touchpoints.json；
+ *      要么已登记在 docs/architecture/proma-touchpoints.json，要么只做
+ *      公开镜像规定的本机路径占位符替换；
  *   b. 反向：登记册里每个文件相对基线确实仍有改动（stale 条目失败）。
  *
  * 注意：本测试比较的是 HEAD（已提交内容），未提交/未跟踪文件不在 diff 中，
@@ -20,6 +21,12 @@ import { dirname, join } from 'node:path'
 
 const REPO_ROOT = dirname(import.meta.dir)
 const REGISTRY_PATH = join(REPO_ROOT, 'docs/architecture/proma-touchpoints.json')
+const USER_ROOT = '/Users'
+const PUBLIC_PATH_SCRUBS = [
+  [`${USER_ROOT}/${['wang', 'yu'].join('')}`, `${USER_ROOT}/<local>`],
+  [`${USER_ROOT}/${['guo', 'hao'].join('')}`, `${USER_ROOT}/<author>`],
+  [`${USER_ROOT}/${['big', 'mouth'].join('')}`, `${USER_ROOT}/<user>`],
+] as const
 
 interface Touchpoint {
   file: string
@@ -56,6 +63,45 @@ export function isAllowedNewPath(file: string, allowedNewPaths: string[]): boole
   return false
 }
 
+export function applyPublicPathScrubs(content: string): string {
+  return PUBLIC_PATH_SCRUBS.reduce(
+    (scrubbed, [localPath, placeholder]) =>
+      scrubbed.replaceAll(localPath, placeholder),
+    content,
+  )
+}
+
+export function isExactPublicPathScrub(
+  baselineContent: string,
+  candidateContent: string,
+): boolean {
+  const scrubbed = applyPublicPathScrubs(baselineContent)
+  return scrubbed !== baselineContent && scrubbed === candidateContent
+}
+
+function readRevisionFile(revision: string, file: string): string | null {
+  try {
+    return execFileSync('git', ['show', `${revision}:${file}`], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch {
+    return null
+  }
+}
+
+function isPublicPathScrubOnly(file: string, baseline: string): boolean {
+  const baselineContent = readRevisionFile(baseline, file)
+  const headContent = readRevisionFile('HEAD', file)
+  return (
+    baselineContent !== null &&
+    headContent !== null &&
+    isExactPublicPathScrub(baselineContent, headContent)
+  )
+}
+
 /** 返回相对基线的改动文件列表；git 不可用或基线缺失时返回 null（调用方跳过）。 */
 function changedFilesVsBaseline(baseline: string): string[] | null {
   try {
@@ -90,6 +136,19 @@ test('registry is well-formed (no git required)', () => {
   }
 })
 
+test('public mirror path scrub allows exact placeholders only', () => {
+  const baseline = PUBLIC_PATH_SCRUBS.map(
+    ([localPath], index) => `path${index}=${localPath}/fixture`,
+  ).join('\n')
+  const scrubbed = PUBLIC_PATH_SCRUBS.map(
+    ([, placeholder], index) => `path${index}=${placeholder}/fixture`,
+  ).join('\n')
+
+  expect(isExactPublicPathScrub(baseline, scrubbed)).toBe(true)
+  expect(isExactPublicPathScrub(baseline, `${scrubbed}\nfunctional-change=true`)).toBe(false)
+  expect(isExactPublicPathScrub(baseline, baseline)).toBe(false)
+})
+
 test('no unregistered upstream modification (diff vs baseline)', () => {
   const registry = loadRegistry()
   const changed = changedFilesVsBaseline(registry.baseline)
@@ -101,11 +160,14 @@ test('no unregistered upstream modification (diff vs baseline)', () => {
   }
   const registered = new Set(registry.touchpoints.map((tp) => tp.file))
   const unregistered = changed.filter(
-    (file) => !isAllowedNewPath(file, registry.allowedNewPaths) && !registered.has(file)
+    (file) =>
+      !isAllowedNewPath(file, registry.allowedNewPaths) &&
+      !registered.has(file) &&
+      !isPublicPathScrubOnly(file, registry.baseline),
   )
   expect(
     unregistered,
-    `Unregistered Proma-core modifications detected. Register each file in docs/architecture/proma-touchpoints.json (+ PROMA_CORE_TOUCHPOINTS.md) with ticket and reason, or move new LA files into the allowed linguist paths:\n${unregistered.map((f) => `  - ${f}`).join('\n')}`
+    `Unregistered Proma-core modifications detected. Register each file in docs/architecture/proma-touchpoints.json (+ PROMA_CORE_TOUCHPOINTS.md) with ticket and reason, move new LA files into the allowed linguist paths, or limit public sanitation to the exact machine-path placeholders:\n${unregistered.map((f) => `  - ${f}`).join('\n')}`
   ).toEqual([])
 })
 

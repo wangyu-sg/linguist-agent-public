@@ -1,9 +1,21 @@
 # PB-116 公开镜像清洗记录（PB116_MIRROR_CLEANSE）
 
-日期：2026-07-27
-目标公开仓：`wangyu-sg/linguist-agent-public`（PUBLIC，已存在，main 为旧 LA lineage 两次提交）
-候选分支：`audit/proma-based-candidate-v1` —— **已推送**，head = `185eb1614ff66e6a2a4658117b339e374ad853d5`
-公共 `main`：**未触碰**（推送前后实测 = `81392346…`，计划 §25.2 + G11：最终审计后才允许合并）
+初次执行日期：2026-07-27
+目标公开仓：`wangyu-sg/linguist-agent-public`（PUBLIC，初次同步时 main 为旧 LA lineage 两次提交）
+初次候选分支：`audit/proma-based-candidate-v1`，当时 head = `185eb1614ff66e6a2a4658117b339e374ad853d5`
+初次同步时公共 `main`：未触碰（当时为 `81392346…`）
+
+> **2026-07-29 后续更正**：公开前复核发现初次候选在 3 份文档中有
+> 10 处不应公开的中文姓名署名。当前树已统一改为 `Henry Wang`，并新增
+> 自动文档护栏。当前源码生成净化快照
+> `e877a211715f251df704b662f39526ae7a94d504`，只作为公共 `main`
+> 的 Proma 历史父提交，不保留独立远端候选分支。用户批准同步后，公共
+> `main` 通过双亲合并
+> `b8ce7e0a6a2df555884971d57687d6dc09951c6f` 快进，保留旧公共 main
+> 两次提交和完整 Proma 基线历史，没有强推 main。验证 main 后删除
+> `audit/proma-based-candidate-v1`，远端只保留 `main`。当前公开树和
+> 全部可达提交历史的禁用姓名扫描均为零命中。该动作只是公开源码镜像同步，
+> 不代表计划发布面向公众的安装包。
 
 ## 历史策略（已拍板）
 
@@ -24,6 +36,27 @@
 | `apps/electron/resources/proma-logos/` | **保留** | 上游自有品牌资产 + 构建依赖（AppearanceSettings 13 个 png import），fork 惯例 + attribution 在案；删除会破坏候选树可构建性 |
 | `proma-thinking/`、README 族、tutorial/ | **保留** | 上游原文内容，AGPL 衍生保留 attribution 义务；README.en.md 对已删截图的引用将成为死链（已记录） |
 | LICENSE / NOTICE / ATTRIBUTION / SECURITY / CONTRIBUTING / THIRD_PARTY_NOTICES | 保留（义务性） | 计划 2429 行合规底线 |
+
+### 旧 LA 清单复核（2026-07-29）
+
+清单不是凭记忆重建。以旧仓 `LEGACY_FREEZE_REPORT.md` 为第一证据，再对比旧
+私有冻结树 `60c504e55d098a96b78f26fdc08a14f506d5eb14` 与旧公共
+`main` 树 `813923460424a444b10ac24e092bdfa10db9fdb7`：
+
+- 始终拒绝运行时 `data/`、`sessions/`、`tmp/quarantine/`、
+  `.data-root-writer-lease/`、密钥配置、本机 Pi 状态、日志和反向工程产物；
+- 旧私有树存在、旧公共树排除的 3 份跟踪文档是
+  `docs/CODEX_UI_CONTRACT.md`、
+  `docs/roadmap/LA_Evolution_Master_Blueprint_for_Codex_CN.md` 和
+  `docs/ui/codex-ui-spec-full.md`；
+- 未跟踪且保持私有的 UI 资料还包括 `docs/ui/CODEX_DESIGN_SPEC.md` 与
+  `docs/ui/THREE_APPS_PIXEL_SPEC.md`；
+- `OPENWORKER_DESIGN_SPEC.md` 与 `PROMA_DESIGN_SPEC.md` 后来被明确加入旧
+  公共树，不列入拒绝清单。
+
+上述边界已写入 `tests/public-mirror-cleanliness.test.mjs`；同一护栏还阻止
+已知真实项目标识重新进入公开源码。架构边界检查只允许与 Proma 基线逐字
+比对后确认属于三类路径占位符替换的公开净化，不因此放宽其他上游修改。
 
 ## 自动检查（候选树实测，全部通过）
 
@@ -51,4 +84,5 @@
 
 - README.en.md / tutorial-v2.md 对已删截图与 `img.erlich.fun` 图床的引用为死链（上游原文不改，最终审计时裁决是否重写 README 族）。
 - 候选树未做构建验证（squash 快照与 main 树仅差清洗动作；main 树构建证据见 PB-114 实测）。
-- 候选分支合入公开 `main`：G11 最终审计后由用户批准执行（本票不触碰）。
+- Git 托管平台可能暂存已经失去 branch/tag 引用的旧 object；仓库内引用和后续
+  同步已经清除，若仍能通过旧 SHA 直接访问，只能由托管平台完成物理清除。

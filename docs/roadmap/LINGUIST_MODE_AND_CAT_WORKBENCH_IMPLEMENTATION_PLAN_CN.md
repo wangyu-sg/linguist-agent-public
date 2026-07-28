@@ -2,7 +2,9 @@
 
 > **版本**：1.0
 > **编制日期**：2026-07-27
-> **代码基线**：`wangyu-sg/linguist-agent-public` 分支 `audit/proma-based-candidate-v1`，公开候选提交 `185eb16`
+> **实施起点**：`wangyu-sg/linguist-agent-public` 初次候选提交 `185eb16`。该
+> 提交只用于说明本计划的历史差异基线；当前公开分支坐标见
+> `docs/release/PUBLIC_MIRROR_MANIFEST.md`。
 > **上游基线**：Proma `702a822`
 > **适用工作仓库**：以私有最新工作仓库为准；开始实施前必须记录实际 HEAD 与本基线差异
 > **产品阶段**：个人日用 Alpha，不面向公众发布

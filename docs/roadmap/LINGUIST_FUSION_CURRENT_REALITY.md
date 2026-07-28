@@ -8,13 +8,15 @@
 |---|---|
 | 工作仓库 | `/Users/<local>/Desktop/linguist-agent-next` |
 | 分支 | `main` |
-| 最近代码 HEAD | `5ac2b60d2296c7b8fb7ea5221d7d1d1079c097f8` |
-| 最近代码提交 | `fix(smoke): follow scoped QA waiver action` |
-| 历史公开候选 | `185eb16`（不是当前 HEAD） |
+| 最近生产 HEAD | `5ac2b60d2296c7b8fb7ea5221d7d1d1079c097f8` |
+| 最近生产提交 | `fix(smoke): follow scoped QA waiver action` |
+| 最近隐私护栏提交 | `ac434544 chore(privacy): enforce public identity attribution` |
+| 公开净化快照 | `e877a211`（公共 main 的 Proma 历史父提交，不是独立远端分支） |
+| 公开 main 合并点 | `b8ce7e0a`（保留旧公共 main 与 Proma 两侧历史） |
 | 固定 Proma 基线 | `702a8221bdeb6f3db7dc514b8e93e2a5a52f68df` |
-| 相对 `upstream/main` | ahead 216 commits（最近代码 HEAD） |
+| 相对 `upstream/main` | ahead 219 commits（隐私护栏提交后） |
 | worktree | 仅主工作区；Context DOCX 与 UX/Proma calibration 辅助 worktree 已合入或确认等价后删除 |
-| 发布范围 | 个人日用 Alpha；当前没有公众发布计划 |
+| 发布范围 | 个人日用 Alpha；公开源码镜像已同步，但没有公众安装包发布计划 |
 
 本文更新发生在最近代码 HEAD 之后，因此最终文档提交 hash 以 `git log -1` 为准；代码基线不做自引用 hash。
 
@@ -93,8 +95,10 @@ Linguist CAT Core / Store / Tools / Workbench
 | 检查 | 结果 |
 |---|---|
 | 全 workspace typecheck | 11 / 11 workspace，exit 0 |
-| 根 Bun 测试 | 1,267 pass / 0 fail |
-| Architecture boundaries | 3 pass / 0 fail |
+| 根 Bun 测试 | 1,270 pass / 0 fail |
+| 公开身份隐私护栏 | 1 pass / 0 fail；候选树、可达历史和 Git metadata 零命中 |
+| 公开镜像净化护栏 | 1 pass / 0 fail；旧 LA 私有路径与真实项目标识零命中 |
+| Architecture boundaries | 4 pass / 0 fail；公开路径净化只允许精确占位符替换 |
 | Fusion architecture | 9 pass / 0 fail |
 | Electron Linguist nodetest | 143 pass / 0 fail |
 | CAT Core + Formats | 246 pass / 0 fail |
