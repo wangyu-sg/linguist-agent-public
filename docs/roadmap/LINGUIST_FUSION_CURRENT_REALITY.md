@@ -8,16 +8,17 @@
 |---|---|
 | 工作仓库 | `/Users/<local>/Desktop/linguist-agent-next` |
 | 分支 | `main` |
-| 实现与首轮文档 HEAD | `06ab894643253f64ce79deac45a293cd5d610b2b` |
+| 实现、安装与首轮文档 HEAD | `cd33ccf5210646fd37095e9e8e69787901831c37` |
 | 固定 Proma 基线 | `702a8221bdeb6f3db7dc514b8e93e2a5a52f68df` |
-| 相对 `upstream/main` | ahead 242（安装文档提交前快照） |
+| 相对 `upstream/main` | ahead 243（远端结果文档提交前快照） |
 | Bun | `1.3.14` |
 | Electron App | `0.15.137` |
 | shared | `0.1.78` |
 | CAT Core / Store / Tools | `0.0.12` / `0.0.24` / `0.0.17` |
 | CAT schema | `13` |
 | worktree | 主工作区保留两份用户自有 `electron-user-data-path*` 修改；辅助 Codex worktree 仍在 |
-| 发布范围 | 个人日用 Alpha；用户已授权公开源码同步，尚未制作公众 Release |
+| 公开源码镜像 | `origin/main` 实现快照 `9ed5e8dd113a06cde0e04ac5fae884303ebfad83` |
+| 发布范围 | 个人日用 Alpha；公开源码已同步，未制作公众安装包 Release |
 
 本文档提交发生在实现 HEAD 之后，因此不尝试记录自引用的最终文档 commit。
 
@@ -96,8 +97,9 @@ Packaged vertical 的 `runStatus=passed`、`coverageStatus=partial`。自动覆�
 
 - `/Applications/Linguist Agent.app` 已替换为 clean HEAD 构建的 `0.15.137`；安装版 `app.asar` SHA-256 为 `f32b15263a962d1777cd8663aee89323ae65374796611a01270a74dad8aa6c9f`。
 - 安装后使用隔离 HOME / userData 启动成功并确认 1 个窗口，随后已按真实数据环境重新打开；旧 `0.15.134` 在废纸篓中可恢复。
-- 最近核对的公开仓 Actions Run `30408252952` 仍失败于 SDK Linux 平台包许可 allowlist。
-- 本地修复、Actions Node 24 pin、许可扫描和完整矩阵均通过；用户已授权同步，但在真实 push/Run 完成前远端 CI 仍不能写成已绿。
+- 公开源码实现快照 `9ed5e8dd113a06cde0e04ac5fae884303ebfad83` 已 fast-forward 到 `origin/main`，没有强推。
+- GitHub Actions CI Run `30450830504` 成功；frozen install、typecheck、根/CAT/Electron 测试、boundary、fusion、许可扫描和 Electron build 全绿。
+- AC-001 已升级为 `integration_verified`。公开源码 CI 绿色不等于签名安装包、人工产品资格或 Release qualification。
 
 ## 7. 仍未完成的真实 Gate
 

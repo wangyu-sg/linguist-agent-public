@@ -40,7 +40,7 @@
 - [G10_REPORT.md](./roadmap/G10_REPORT.md) — 自动化已修复，人工产品资格仍阻断。
 - [AC007_LONG_THREAD_REPORT.md](./roadmap/AC007_LONG_THREAD_REPORT.md) — 长线程 selector 更正与 packaged 数据。
 - [G11_REPORT.md](./roadmap/G11_REPORT.md) — 历史发布/合规证据，不代表当前个人 Alpha 要公开发行。
-- [LA_CI_001_BASELINE.md](./release/LA_CI_001_BASELINE.md) — 最近远端 CI 失败事实、本地修复与尚未重跑边界。
+- [LA_CI_001_BASELINE.md](./release/LA_CI_001_BASELINE.md) — 远端 CI 历史失败、本地修复与成功关闭证据。
 
 ## 发布与归属
 

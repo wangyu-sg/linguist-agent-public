@@ -29,8 +29,8 @@ Linguist Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 ## 当前代码基线
 
 - 分支：`main`
-- 实现与首轮文档 HEAD：`06ab894643253f64ce79deac45a293cd5d610b2b`
-- 相对 `upstream/main`：ahead 242（安装文档提交前快照）
+- 实现、安装与首轮文档 HEAD：`cd33ccf5210646fd37095e9e8e69787901831c37`
+- 相对 `upstream/main`：ahead 243（远端结果文档提交前快照）
 - Bun：`1.3.14`
 - Electron App：`0.15.137`
 - shared：`0.1.78`
@@ -81,16 +81,17 @@ Packaged vertical 报告：
 
 ## 外部状态
 
-- 最近核对的公开仓 GitHub Actions Run `30408252952` 仍为失败。
-- 本地已修复 SDK 平台包许可 allowlist 与 Node 24 Actions pin，并通过完整本地矩阵。
-- 用户已授权公开源码同步；当前仍未 push，因此不能声称远端 CI 已恢复绿色。
+- 公开源码实现快照：`origin/main` 的 `9ed5e8dd113a06cde0e04ac5fae884303ebfad83`。
+- 该快照以旧公开 `main` 为父，只含净化后的已提交树；本地 243 个施工提交和未提交文件没有进入公开历史。
+- GitHub Actions CI Run `30450830504`：`success`；validate job 1m49s。
+- frozen install、typecheck、根/CAT/Electron 测试、boundary、fusion、许可扫描和 Electron build 全部通过，AC-001 已关闭为 `integration_verified`。
+- 这是公开源码镜像同步，不是公众安装包 Release。
 
 ## 下一步只剩证据
 
-1. 推送净化后的公开源码快照并核对远端 CI；
-2. 真机 IME、Native Open/Save、VoiceOver、keyboard-only、拖拽/resize；
-3. 真实 Provider/模型与真实客户格式样本；
-4. Fast / Balanced / Best 真实游戏文本盲评；
-5. 14 天连续个人日用。
+1. 真机 IME、Native Open/Save、VoiceOver、keyboard-only、拖拽/resize；
+2. 真实 Provider/模型与真实客户格式样本；
+3. Fast / Balanced / Best 真实游戏文本盲评；
+4. 14 天连续个人日用。
 
 通用文件撤销继续使用 Proma File Rewind；外部 MCP/程序副作用只记录，不承诺结构化回滚。不要把这些证据缺口解释为需要重写架构。

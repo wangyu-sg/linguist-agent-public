@@ -6,12 +6,11 @@
 
 ## A. 尚缺的外部与人工证据
 
-1. **远端 CI**：最近核对的公开仓 Run `30408252952` 仍失败。本地已修复许可 allowlist 和 Actions pin，但本轮未 push/重跑，不能声明远端绿色。
-2. **真实 Provider**：Fake Model packaged smoke 覆盖 Agent/Chat/CAT 流程，不证明真实 Pi/Claude Provider、网络重试、权限和模型质量。
-3. **LF-048**：真实 macOS IME composition 与 Native Open/Save 对话框仍需人工操作。
-4. **AC-009**：VoiceOver、完整 keyboard-only、拖拽/resize 手感仍未验证。
-5. **AC-010**：Fast / Balanced / Best 只有离线评估框架；真实游戏文本盲评尚未执行。
-6. **AC-011**：尚未完成连续 14 天真实项目使用。
+1. **真实 Provider**：Fake Model packaged smoke 覆盖 Agent/Chat/CAT 流程，不证明真实 Pi/Claude Provider、网络重试、权限和模型质量。
+2. **LF-048**：真实 macOS IME composition 与 Native Open/Save 对话框仍需人工操作。
+3. **AC-009**：VoiceOver、完整 keyboard-only、拖拽/resize 手感仍未验证。
+4. **AC-010**：Fast / Balanced / Best 只有离线评估框架；真实游戏文本盲评尚未执行。
+5. **AC-011**：尚未完成连续 14 天真实项目使用。
 
 ## B. 当前功能边界
 
@@ -44,3 +43,4 @@
 - Project/Session binding、数据库身份、导出路径和恢复流程均 fail closed。
 - 所有 BrowserWindow 已固定隔离、sandbox、禁用 Node integration 并启用 webSecurity。
 - 根测试不再容忍已知失败；当前 clean source 全仓为 1,320 pass / 0 fail。
+- 公开源码实现快照 `9ed5e8dd` 的 GitHub Actions Run `30450830504` 已成功，历史许可扫描失败已关闭。

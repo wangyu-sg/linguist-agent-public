@@ -57,7 +57,7 @@ LF-048 / LF-078 仍只受真实 IME 与 Native Open/Save 证据阻断；旧 UI �
 
 | ID | 内容 | 状态 |
 |---|---|---|
-| AC-001 | Push/PR CI、固定 Bun、根测试零失败 | **gate_blocked** |
+| AC-001 | Push/PR CI、固定 Bun、根测试零失败 | **integration_verified** |
 | AC-002 | Release/build resource fail closed | **integration_verified** |
 | AC-003 | `.linguist-agent` 数据根与 Provider-only 导入 | **unit_verified** |
 | AC-004 | BrowserWindow 显式安全选项 | **integration_verified** |
@@ -69,11 +69,11 @@ LF-048 / LF-078 仍只受真实 IME 与 Native Open/Save 证据阻断；旧 UI �
 | AC-010 | G8 真实游戏文本盲评 | **gate_blocked** |
 | AC-011 | 14 天自由日用 | **gate_blocked** |
 
-AC-001 的本地实现与矩阵已绿，但最近远端 Run `30408252952` 仍失败；本轮未 push，故保持 blocked。
+AC-001 已由公开源码实现快照 `9ed5e8dd` 的 GitHub Actions Run `30450830504` 关闭：validate job 成功，许可扫描与 Electron build 均通过。
 
 ## 最终验证快照
 
-- 实现与首轮文档 HEAD：`06ab894643253f64ce79deac45a293cd5d610b2b`
+- 实现、安装与首轮文档 HEAD：`cd33ccf5210646fd37095e9e8e69787901831c37`
 - 版本：Electron `0.15.137`，CAT Core/Store/Tools `0.0.12/0.0.24/0.0.17`
 - clean source：typecheck 11/11；根 1,320；Electron 164；Core 116；Store 209；Tools 39；boundary 4；fusion 9；均 0 fail。
 - 许可：417 个第三方依赖，门禁通过。
@@ -86,9 +86,8 @@ AC-001 的本地实现与矩阵已绿，但最近远端 Run `30408252952` 仍失
 
 只补远端/人工/持续使用证据：
 
-1. 推送净化后的公开源码快照并重跑远端 CI；
-2. IME、Native Open/Save、VoiceOver、keyboard-only、drag/resize；
-3. 真实 Provider/模型、真实客户格式与三档盲评；
-4. 14 天连续日用。
+1. IME、Native Open/Save、VoiceOver、keyboard-only、drag/resize；
+2. 真实 Provider/模型、真实客户格式与三档盲评；
+3. 14 天连续日用。
 
 暂不新增格式、OCR、多 Agent Team、自动模型路由或 Extension 市场。

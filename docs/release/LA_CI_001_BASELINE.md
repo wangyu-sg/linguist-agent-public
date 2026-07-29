@@ -46,6 +46,13 @@
 | smoke:pack | 未签名 macOS arm64 打包通过 |
 | packaged Agent / Chat / Linguist | 12 / 18 / 17，均 0 fail；Linguist 2 manual |
 
-## 尚未验证
+## 远端关闭证据
 
-用户已授权公开源码同步，但当前尚未 push。远端最近状态仍是上述失败 Run，不能把本地绿色矩阵写成“远端 CI 已绿”。只有净化快照推送触发同一 reusable workflow 并成功后，LA-CI-001 的远端门禁才可关闭。
+- 公开源码实现快照：`9ed5e8dd113a06cde0e04ac5fae884303ebfad83`
+- GitHub Actions Run：`30450830504`
+- 事件：`push`
+- validate job：`success`，1m49s
+
+该 Run 的 frozen install、typecheck、根测试、CAT Core/Store/Tools、Linguist 主进程与安全测试、架构边界、Fusion、依赖许可扫描和 Electron build 全部成功。LA-CI-001 因而升级为 `integration_verified`。
+
+这只关闭公开源码 CI。它不替代 packaged smoke、签名/公证、真实 Provider、人工无障碍/IME/Native Save 或产品资格。

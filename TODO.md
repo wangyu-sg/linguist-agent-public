@@ -26,7 +26,6 @@
 
 ## 外部验证
 
-- [ ] 将本地 CI 修复推送后重跑公开仓 workflow；当前最近远端 Run 仍为失败，不能写成 CI 已绿。
 - [ ] 使用真实 Provider/模型验证 Pi、Claude、Prompt 降级、Thinking、权限与 CAT Tool 链。
 - [ ] 用代表性真实客户文件复跑导入、编辑、QA、导出、重导入与恢复。
 

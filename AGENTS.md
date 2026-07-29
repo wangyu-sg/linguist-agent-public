@@ -23,7 +23,7 @@ Linguist Agent 不是精简版 Proma，也不是旧 LA 的继续修补。当前�
 ```text
 Proma 的完整 Agent + Chat 产品底座
 +
-Linguist Agent 的 CAT Core / Store / Tools / Workbench
+Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 ```
 
 必须保留 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations、远程桥、Preview、权限、Thinking、Queue / Steer 等完整能力。Linguist 是第三个并列模式，不得复制或替换原生 Agent/Chat。

@@ -8,7 +8,8 @@
 ```text
 公开仓        https://github.com/wangyu-sg/linguist-agent-public（PUBLIC）
 公开分支      main（远端唯一长期分支）
-净化快照      e877a211715f251df704b662f39526ae7a94d504
+初次净化快照  e877a211715f251df704b662f39526ae7a94d504
+最新实现快照  9ed5e8dd113a06cde0e04ac5fae884303ebfad83
 基线根        702a8221bdeb6f3db7dc514b8e93e2a5a52f68df（上游历史 SHA 原样）
 main 合并点    b8ce7e0a6a2df555884971d57687d6dc09951c6f
 同步性质      公开源码镜像；不是公众安装包 Release
@@ -22,10 +23,12 @@ main 合并点    b8ce7e0a6a2df555884971d57687d6dc09951c6f
   公共 main 是普通 fast-forward，旧公共历史和 Proma 历史都保留。
 - 初次候选 `185eb161` 因隐私署名复核失败，在公共 main 验证后删除其
   `audit/proma-based-candidate-v1` 分支；它不再由公开 branch/tag 引用。
+- `a879f185` → `9ed5e8dd`：在现有公开 `main` 上追加单个增量净化快照；
+  本地施工历史不进入公开可达历史，远端仍是普通 fast-forward。
 
 ## 内容清单
 
-**保留（义务性/构建必需）**：LICENSE（AGPL-3.0 原样）、NOTICE.md、ATTRIBUTION.md、SECURITY.md、CONTRIBUTING.md、THIRD_PARTY_NOTICES.md、docs/release/SBOM.md + sbom-full.json、全部源码与 linguist-* 包、proma-logos（上游自有品牌资产 + 构建依赖）、proma-thinking/ 与 README 族（上游原文）、docs/ 全套施工与账本文档（路径已 scrub）。
+**保留（义务性/构建必需）**：LICENSE（AGPL-3.0 原样）、NOTICE.md、ATTRIBUTION.md、SECURITY.md、CONTRIBUTING.md、THIRD_PARTY_NOTICES.md、docs/release/SBOM.md + sbom-full.json、全部源码与 linguist-* 包、proma-logos（上游自有品牌资产 + 构建依赖）、proma-thinking/ 上游原文、当前 Linguist Agent README，以及 docs/ 全套施工与账本文档（路径已 scrub）。
 
 **删除**：docs/assets/screenshots/proma-*.png 5 张（上游作者真实使用痕迹，隐私）。
 
@@ -71,13 +74,20 @@ data/** 不存在；.env* 零命中；无凭据命名文件；无客户文件/�
 - `tests/public-mirror-cleanliness.test.mjs` 自动阻止旧 LA 私有资料和真实项目标识回归；
 - 作者公开署名只允许 `Henry Wang` 或 `Wang Yu`。
 
+2026-07-29 优化快照验证：
+
+- 当前树路径/身份护栏、根测试 1,320/0、typecheck 11/11、boundary 4/0、
+  fusion/隐私 11/0 和 417 依赖许可扫描均通过；
+- GitHub Actions Run `30450830504` 成功，含 Electron build；
+- 当前公开 README 不再引用已删除的 5 张截图。
+
 ## 已知瑕疵
 
-- README.en.md / tutorial-v2.md 对已删截图与 img.erlich.fun 图床的引用为死链。
-- 候选树未单独构建验证（与 main 树仅差清洗动作；main 树构建证据 PB-114）。
+- 继承的 tutorial 仍依赖上游 `img.erlich.fun` 外部图床，镜像不控制其可用性。
+- 签名、公证、公众安装包与跨平台 Release qualification 未执行。
 
 ## 当前边界
 
-用户已明确批准同步公开源码 main。签名、公证、公众安装包、公开更新渠道和
-Release qualification 仍不在当前个人 Alpha 范围内。远端审计候选分支已
-清理，只保留 `main`。
+用户已明确批准同步公开源码 main；实现快照 `9ed5e8dd` 已推送并通过远端
+CI。签名、公证、公众安装包、公开更新渠道和 Release qualification 仍不在
+当前个人 Alpha 范围内。远端只保留长期分支 `main`。

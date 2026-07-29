@@ -7,11 +7,11 @@
   "baseline": {
     "publicCandidate": "185eb16",
     "upstream": "702a822",
-    "recordedHead": "06ab894643253f64ce79deac45a293cd5d610b2b",
+    "recordedHead": "cd33ccf5210646fd37095e9e8e69787901831c37",
     "branch": "main",
     "upstreamRemote": "upstream",
     "mergeBaseWithPublicCandidate": "702a8221bdeb6f3db7dc514b8e93e2a5a52f68df",
-    "aheadOfUpstream": 242,
+    "aheadOfUpstream": 243,
     "workingTree": "main keeps two user-owned electron-user-data-path changes unstaged; auxiliary Codex worktrees remain after their commits were integrated"
   },
   "policy": {
@@ -19,7 +19,7 @@
     "noProductionChangesInLF000": true,
     "oldProjectCatUi": "frozen-except-P0",
     "alphaPlanRemainsEffective": true,
-    "publicPush": false
+    "publicPush": true
   },
   "items": [
     {"id":"LF-000","kind":"ticket","title":"注册本计划、盘点当前私有 HEAD、生成代码事实差异","depends":"无","status":"unit_verified","executable":true},
@@ -97,7 +97,7 @@
     {"id":"LF-088","kind":"ticket","title":"Quick Health、worker-thread Full Scrub 与 Backup/Restore fault matrix","depends":"LF-072,086,087","status":"integration_verified","executable":true,"evidence":"Quick Health 有界抽样；Full Scrub 使用真实 worker_threads 并覆盖 v13 引用链；备份 staging/原子发布、symlink 拒绝、恢复 journal/快照/回滚及故障矩阵已验证。"},
     {"id":"LF-089","kind":"ticket","title":"schema v13 Proposal Issuance/Provenance 与 Required/Forbidden gate","depends":"LF-081,084,087","status":"integration_verified","executable":true,"evidence":"Proposal 内容/Issuance 分离、迁移/backfill/rollback、真实 turn provenance 和 Required term 中央 hard gate 已通过 Core/Store/Tools/Electron 矩阵。"},
     {"id":"LF-090","kind":"ticket","title":"数据库 identity 写前验证与 migration fail closed","depends":"LF-087,089","status":"integration_verified","executable":true,"evidence":"application_id、user_version、schema_migrations 与 project.json identity 在任何 migration 写入前联合验证；未知数据库字节/mtime 保持不变。"},
-    {"id":"AC-001","kind":"ticket","title":"Push/PR CI、固定 Bun/Actions、根测试零失败","depends":"LF-000","status":"gate_blocked","executable":true,"evidence":"本地 clean 矩阵、许可扫描与 Actions Node 24 pin 已绿；最近远端 Run 30408252952 仍失败，本轮未 push/重跑，不能宣称远端 CI 已绿。"},
+    {"id":"AC-001","kind":"ticket","title":"Push/PR CI、固定 Bun/Actions、根测试零失败","depends":"LF-000","status":"integration_verified","executable":true,"evidence":"净化后的公开源码实现快照 9ed5e8dd 已 fast-forward 到 origin/main；GitHub Actions Run 30450830504 的 validate job 成功，frozen install、typecheck、根/CAT/Electron 测试、boundary、fusion、许可扫描和 Electron build 全部通过。"},
     {"id":"AC-002","kind":"ticket","title":"Release Workflow fail-closed、去除 `build:resources || true`","depends":"AC-001","status":"integration_verified","executable":true},
     {"id":"AC-003","kind":"ticket","title":"数据根迁到 `.linguist-agent`，产品身份与 Provider 导入","depends":"LF-069","status":"unit_verified","executable":true,"evidence":"当前数据根已隔离为 .linguist-agent/.linguist-agent-dev；设置→模型配置提供显式 Proma Provider-only 导入，旧密钥经 safeStorage 解密再加密，任一失败时零写入，最终配置同目录原子替换，Channel ID 冲突确定性跳过。Provider/UI/CLI BDD 13 pass、Linguist 132 pass、全 workspace typecheck 与 boundaries 通过；未执行 packaged 验证。"},
     {"id":"AC-004","kind":"ticket","title":"所有 BrowserWindow 显式安全选项","depends":"AC-001","status":"integration_verified","executable":true},
