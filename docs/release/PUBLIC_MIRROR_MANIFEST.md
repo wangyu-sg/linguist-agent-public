@@ -1,7 +1,7 @@
 # PUBLIC_MIRROR_MANIFEST — 公开镜像清单（PB-117）
 
 初次日期：2026-07-27
-最近同步：2026-07-29
+最近同步：2026-07-30
 
 ## 镜像坐标
 
@@ -9,7 +9,7 @@
 公开仓        https://github.com/wangyu-sg/linguist-agent-public（PUBLIC）
 公开分支      main（远端唯一长期分支）
 初次净化快照  e877a211715f251df704b662f39526ae7a94d504
-最新实现快照  9ed5e8dd113a06cde0e04ac5fae884303ebfad83
+最新实现快照  14331d30cd61470cc0a47878cf31a7724479cae7
 基线根        702a8221bdeb6f3db7dc514b8e93e2a5a52f68df（上游历史 SHA 原样）
 main 合并点    b8ce7e0a6a2df555884971d57687d6dc09951c6f
 同步性质      公开源码镜像；不是公众安装包 Release
@@ -25,6 +25,8 @@ main 合并点    b8ce7e0a6a2df555884971d57687d6dc09951c6f
   `audit/proma-based-candidate-v1` 分支；它不再由公开 branch/tag 引用。
 - `a879f185` → `9ed5e8dd`：在现有公开 `main` 上追加单个增量净化快照；
   本地施工历史不进入公开可达历史，远端仍是普通 fast-forward。
+- `9ed5e8dd` → `d8959427`：记录该优化快照的公开 CI 结果。
+- `d8959427` → `8660d32f` → `14331d30`：依次追加共享 Linguist 侧栏/会话复制实现与项目菜单绘制修复；每次都从最新公开 `main` 创建净化快照并普通 fast-forward。
 
 ## 内容清单
 
@@ -81,6 +83,13 @@ data/** 不存在；.env* 零命中；无凭据命名文件；无客户文件/�
 - GitHub Actions Run `30450830504` 成功，含 Electron build；
 - 当前公开 README 不再引用已删除的 5 张截图。
 
+2026-07-30 共享侧栏与菜单修复验证：
+
+- 实现快照 `8660d32f` 的 GitHub Actions Run `30478305394` 成功；
+- 菜单修复快照 `14331d30` 的 GitHub Actions Run `30480198628` 成功；
+- 修复候选的 frozen install、typecheck 11/11、根测试 1,347/0、boundary 4/0 和公开身份/隐私守卫均通过；
+- 当前树路径/凭据/私有资料扫描与可达历史作者身份扫描通过，推送没有携带本地施工历史或两份用户自有未暂存文件。
+
 ## 已知瑕疵
 
 - 继承的 tutorial 仍依赖上游 `img.erlich.fun` 外部图床，镜像不控制其可用性。
@@ -88,6 +97,6 @@ data/** 不存在；.env* 零命中；无凭据命名文件；无客户文件/�
 
 ## 当前边界
 
-用户已明确批准同步公开源码 main；实现快照 `9ed5e8dd` 已推送并通过远端
-CI。签名、公证、公众安装包、公开更新渠道和 Release qualification 仍不在
+用户已明确批准同步公开源码 main；最新实现/修复快照 `14331d30` 已推送并通过
+远端 CI。签名、公证、公众安装包、公开更新渠道和 Release qualification 仍不在
 当前个人 Alpha 范围内。远端只保留长期分支 `main`。

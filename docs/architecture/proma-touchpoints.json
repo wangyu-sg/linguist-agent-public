@@ -333,6 +333,11 @@
       "reason": "LF-072：复用原生确认对话框时增加 confirmDisabled，删除项目名称未精确匹配前禁用提交；主进程仍执行同一强校验。"
     },
     {
+      "file": "apps/electron/src/renderer/components/ui/sheet.tsx",
+      "ticket": "LF-092",
+      "reason": "LF-092：共享 Sheet 关闭按钮复用既有 titlebar-no-drag，避免 Electron 标题栏拖拽区吞掉点击；不改变 Radix open/onOpenChange 语义。"
+    },
+    {
       "file": "apps/electron/src/renderer/components/voice-dictation/VoiceDictationApp.tsx",
       "ticket": "PB-010",
       "reason": "品牌基础：语音输入窗口用户可见产品名字符串。"
@@ -1145,12 +1150,12 @@
     {
       "file": "apps/electron/src/renderer/components/session-tree/ProjectSessionTreeGroupHeader.test.tsx",
       "ticket": "LF-091",
-      "reason": "BDD 锁定 Agent/Linguist 共用紧凑项目头的展开、拖拽、名称与动作插槽行为。"
+      "reason": "BDD 锁定 Agent/Linguist 共用紧凑项目头的展开、拖拽、名称与动作插槽行为，并防止动作按钮重新嵌套进整行 ContextMenuTrigger。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/ProjectSessionTreeGroupHeader.tsx",
       "ticket": "LF-091",
-      "reason": "Agent/Linguist 共用的紧凑 project header，统一展开箭头、拖拽手柄、名称点击与动作菜单插槽。"
+      "reason": "Agent/Linguist 共用的紧凑 project header，统一展开箭头、拖拽手柄、名称点击与动作菜单插槽；动作插槽保持为 ContextMenuTrigger 的兄弟节点，使左键 Dropdown 与整行右键菜单可同时工作。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/agent-session-tree.test.ts",

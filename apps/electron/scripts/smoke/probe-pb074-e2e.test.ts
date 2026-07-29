@@ -81,8 +81,18 @@ describe('LF-026 packaged 探针合同', () => {
     expect(probe).toContain('section[aria-label="资产（文件）"]')
     expect(probe).toContain('projectSettings.assets.getByRole(')
     expect(probe).toContain("{ name: '导出 mini_game_ui.xliff', exact: true }")
-    expect(probe).toContain("projectSettings.sheet.waitFor({ state: 'hidden'")
+    expect(probe).toContain("{ name: 'Close', exact: true }")
+    expect(probe).toContain('await closeProjectSettings.click()')
+    expect(probe).toContain("'lf092-project-settings-close-button'")
     expect(probe).not.toContain("launched.page.getByRole(\n        'button',\n        { name: '导出 mini_game_ui.xliff' },")
+  })
+
+  test('Given an unchanged target in review, When Cmd+Enter is pressed, Then the packaged probe verifies stage confirmation without a text revision', () => {
+    expect(probe).toContain("workflowStage: 'editing'")
+    expect(probe).toContain("name: '确认审校并前进'")
+    expect(probe).toContain("await editor.press('Meta+Enter')")
+    expect(probe).toContain("'lf092-clean-target-cmd-enter-confirms-review'")
+    expect(probe).toContain('after?.revision === before?.revision')
   })
 })
 

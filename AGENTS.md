@@ -35,7 +35,7 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.15.139` |
+| Electron App | `@proma/electron 0.15.140` |
 | Electron | `39.5.1` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |

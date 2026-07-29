@@ -103,6 +103,7 @@ interface PersistedLinguistState {
 interface PackagedSegmentState {
   target: string
   revision: number
+  currentStageState: string
 }
 
 function countNonDominantPixels(pngBytes: Buffer): number {
@@ -796,24 +797,63 @@ async function readPackagedSegmentState(
   page: Page,
   projectId: string,
   segmentId: string,
+  search = 'Welcome back',
 ): Promise<PackagedSegmentState | undefined> {
   return page.evaluate(async (input) => {
     const result = await (window as unknown as {
       electronAPI: {
         linguistCatQuery: (request: unknown) => Promise<
-          { ok: true; data: { segments: Array<{ id: string; target: string; revision: number }> } }
+          {
+            ok: true
+            data: {
+              segments: Array<{
+                id: string
+                target: string
+                revision: number
+                currentStageState: string
+              }>
+            }
+          }
           | { ok: false; error: { code: string } }
         >
       }
     }).electronAPI.linguistCatQuery({
       projectId: input.projectId,
-      search: 'Welcome back',
+      search: input.search,
       limit: 10,
       offset: 0,
     })
     if (!result.ok) throw new Error(`读取片段失败: ${result.error.code}`)
     return result.data.segments.find((segment) => segment.id === input.segmentId)
-  }, { projectId, segmentId })
+  }, { projectId, segmentId, search })
+}
+
+async function verifyCleanTargetConfirmShortcut(
+  page: Page,
+  workspace: Locator,
+  projectId: string,
+  segmentId: string,
+): Promise<void> {
+  const row = workspace.locator(`[role="row"][data-segment-id="${segmentId}"]`)
+  await row.getByRole('button', { name: /编辑原始行 \d+ 译文/u }).click()
+  const editor = row.getByRole('textbox', { name: /编辑原始行 \d+ 译文/u })
+  const confirm = row.getByRole('button', { name: '确认审校并前进', exact: true })
+  await editor.waitFor({ timeout: 30_000 })
+  const before = await readPackagedSegmentState(page, projectId, segmentId, 'Start Game')
+  const enabled = await confirm.isEnabled()
+  await editor.press('Meta+Enter')
+  let after: PackagedSegmentState | undefined
+  const confirmed = await waitFor(async () => {
+    after = await readPackagedSegmentState(page, projectId, segmentId, 'Start Game')
+    return after?.currentStageState === 'confirmed'
+  }, 30_000)
+  check(
+    'lf092-clean-target-cmd-enter-confirms-review',
+    enabled && confirmed && after?.target === before?.target && after?.revision === before?.revision,
+    `enabled=${enabled}，stage=${after?.currentStageState ?? '<missing>'}` +
+    `，target unchanged=${after?.target === before?.target}` +
+    `，revision=${before?.revision ?? '<missing>'}→${after?.revision ?? '<missing>'}`,
+  )
 }
 
 async function runLanguageResourceDockGate(
@@ -1361,6 +1401,30 @@ async function main(): Promise<void> {
       `，侧栏 aria-current=${navigation.sidebarCurrentCorrect}` +
       `，Project Tab=${navigation.projectTabVisible}，Asset/Segment=${navigation.locationVisible}`,
     )
+    if (!LF026_ONLY && !LF056_ONLY) {
+      const workflowStage = await launched.page.evaluate(async (id) => {
+        const result = await (window as unknown as {
+          electronAPI: {
+            linguistProjectsSetWorkflowConfig: (request: unknown) => Promise<
+              { ok: true; data: { workflowStage?: string } }
+              | { ok: false; error: { code: string } }
+            >
+          }
+        }).electronAPI.linguistProjectsSetWorkflowConfig({
+          projectId: id,
+          workflowStage: 'editing',
+          outputStatusPolicy: null,
+          qaProfile: 'general',
+        })
+        if (!result.ok) throw new Error(`设置审校阶段失败: ${result.error.code}`)
+        return result.data.workflowStage
+      }, projectId)
+      check(
+        'lf092-review-workflow-fixture',
+        workflowStage === 'editing',
+        `workflowStage=${workflowStage ?? '<missing>'}`,
+      )
+    }
     if (LF056_ONLY) {
       const workspace = launched.page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
       await runLanguageResourceDockGate(
@@ -1404,6 +1468,19 @@ async function main(): Promise<void> {
     }
 
     if (!LF026_ONLY && !LF056_ONLY) {
+      const workspace = launched.page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
+      await workspace.waitFor({ timeout: 30_000 })
+      await verifyCleanTargetConfirmShortcut(
+        launched.page,
+        workspace,
+        projectId,
+        alternateSegmentId,
+      )
+      await workspace
+        .locator(`[role="row"][data-segment-id="${segmentId}"]`)
+        .getByRole('button', { name: /查看原始行 \d+ 上下文/u })
+        .click()
+
       const projectSession = await createAndOpenProjectSessionViaSidebar(launched.page, projectId)
       sessionId = projectSession.sessionId
       const persistedBeforeExit = await waitFor(
@@ -1418,7 +1495,6 @@ async function main(): Promise<void> {
       )
 
       if (server === undefined) throw new Error('Fake Model Server 未启动')
-      const workspace = launched.page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
       await workspace.waitFor({ timeout: 30_000 })
       const agentSettings = await launched.page.evaluate(async () => {
         const settings = await (window as unknown as {
@@ -1633,8 +1709,21 @@ async function main(): Promise<void> {
         'native-save-dialog',
         '不点击原生 Save；PB-073 注入 picker nodetest 覆盖 staging→Save→copy，仍需人工真机点选一次',
       )
-      await launched.page.keyboard.press('Escape')
-      await projectSettings.sheet.waitFor({ state: 'hidden', timeout: 30_000 })
+      const closeProjectSettings = projectSettings.sheet.getByRole(
+        'button',
+        { name: 'Close', exact: true },
+      )
+      const closeButtonReady = await closeProjectSettings.isVisible()
+      await closeProjectSettings.click()
+      const projectSettingsClosed = await waitFor(
+        async () => !await projectSettings.sheet.isVisible(),
+        30_000,
+      )
+      check(
+        'lf092-project-settings-close-button',
+        closeButtonReady && projectSettingsClosed,
+        `close visible=${closeButtonReady}，sheet hidden=${projectSettingsClosed}`,
+      )
       const persistedAtExit = await waitFor(
         () => isPersistedLinguistState(launched!.page, projectId, assetId, segmentId, sessionId),
         10_000,

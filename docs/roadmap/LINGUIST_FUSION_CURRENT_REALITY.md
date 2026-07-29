@@ -1,6 +1,6 @@
 # Linguist Fusion 当前事实
 
-> 更新日期：2026-07-29。代码、manifest、测试和真实运行输出优先于历史报告。
+> 更新日期：2026-07-30。代码、manifest、测试和真实运行输出优先于历史报告。
 
 ## 1. 可信基线
 
@@ -8,16 +8,16 @@
 |---|---|
 | 工作仓库 | `/Users/<local>/Desktop/linguist-agent-next` |
 | 分支 | `main` |
-| 实现、安装与首轮文档 HEAD | `cd33ccf5210646fd37095e9e8e69787901831c37` |
+| 本轮实现与安装 HEAD | `b39108605bf18a798fc5877f78051afc9fe9587a` |
 | 固定 Proma 基线 | `702a8221bdeb6f3db7dc514b8e93e2a5a52f68df` |
-| 相对 `upstream/main` | ahead 243（远端结果文档提交前快照） |
+| 相对 `upstream/main` | ahead 254（本文档提交前快照） |
 | Bun | `1.3.14` |
-| Electron App | `0.15.137` |
-| shared | `0.1.78` |
-| CAT Core / Store / Tools | `0.0.12` / `0.0.24` / `0.0.17` |
+| Electron App | `0.15.139` |
+| shared | `0.1.79` |
+| CAT Core / Store / Tools | `0.0.12` / `0.0.25` / `0.0.17` |
 | CAT schema | `13` |
-| worktree | 主工作区保留两份用户自有 `electron-user-data-path*` 修改；辅助 Codex worktree 仍在 |
-| 公开源码镜像 | `origin/main` 实现快照 `9ed5e8dd113a06cde0e04ac5fae884303ebfad83` |
+| worktree | 主工作区只保留两份用户自有 `electron-user-data-path*` 修改未暂存；临时验证 worktree 不作为交付源 |
+| 公开源码镜像 | 实现 `8660d32fd330d74284db1acb6a82d72b6efb6ec4`；菜单修复 `14331d30cd61470cc0a47878cf31a7724479cae7` |
 | 发布范围 | 个人日用 Alpha；公开源码已同步，未制作公众安装包 Release |
 
 本文档提交发生在实现 HEAD 之后，因此不尝试记录自引用的最终文档 commit。
@@ -34,6 +34,10 @@ Linguist Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 
 - `PrimaryAppMode = 'agent' | 'chat' | 'linguist'`。
 - Agent / Chat 保持 Proma 原生能力；Linguist 是第三个并列主模式。
+- Agent 与 Linguist 复用同一项目/会话树组件；Agent 排除带 `linguistProjectId` 的会话，Linguist 只显示项目绑定会话。
+- Linguist 项目行支持创建会话、重命名、设置、归档、活跃顺序拖拽；统一归档入口覆盖会话、项目与缺失项目历史，受限状态下所有写操作 fail closed。
+- Linguist 跨项目操作是复制而非迁移。主进程重新验证源 binding、目标项目和 Claude/Pi 原生分叉资格，失败回滚，副本不携带工作区文件、附件、委派、自动化或运行状态。
+- 普通新会话可在 Agent、Chat、Linguist 间选择；Linguist Full Agent 不显示错误的 Agent/Chat 选择器，项目绑定会话不会恢复到 Agent 默认工作区。
 - Workbench Rail 与 Full Agent 复用同一个 `AgentView`、Session、消息、Thinking、工具、权限和 Store。
 - Linguist Profile 在各 Runtime 的 Proma Base 上叠加 Profile、Role、Strategy、Project Digest 与冻结 Turn Context；缺层时显式 degraded，不静默退化成普通 Agent。
 - 项目 Session 使用受管项目 CWD，Session actions 与实体类型 authority 在主进程校验。
@@ -81,24 +85,25 @@ Linguist Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 |---|---|
 | frozen install | Bun 1.3.14，exit 0 |
 | workspace typecheck | 11 / 11 |
-| 根 Bun 测试 | 1,320 pass / 0 fail |
+| 根 Bun 测试 | 1,347 pass / 0 fail |
 | Architecture boundaries | 4 pass / 0 fail |
 | Fusion architecture | 9 pass / 0 fail |
-| Electron Linguist | 164 pass / 0 fail |
-| CAT Core / Store / Tools | 116 / 209 / 39，均 0 fail |
+| Electron Linguist | 175 pass / 0 fail |
+| CAT Core / Store / Tools | 116 / 217 / 39，均 0 fail；Store 在并行资源抖动后隔离复跑 217 / 217 |
 | license scan | 417 个第三方依赖，门禁通过 |
 | build / runtime sync | 通过；137 个 runtime 依赖同步 |
 | smoke:pack | 未签名 macOS arm64 打包通过 |
 | packaged Agent / Chat / Linguist | 12 / 18 / 17，均 0 fail；Linguist 另有 2 manual |
 
-Packaged vertical 的 `runStatus=passed`、`coverageStatus=partial`。自动覆盖仍缺 Agent Stop/Retry packaged UI、Chat→Agent roundtrip 与 Native Open/Save，不能升级成完整产品资格。
+Packaged vertical 的 `runStatus=passed`、`coverageStatus=partial`，`app.asar` SHA-256 为 `091971f36f6b075d49159fc0b4d6f2cac6683148fa548aefb078eaf6aea32567`。项目菜单额外通过 `10,389` 个非背景像素的绘制检测。自动覆盖仍缺 Agent Stop/Retry packaged UI、Chat→Agent roundtrip 与 Native Open/Save，不能升级成完整产品资格。
 
 ## 6. 安装与外部状态
 
-- `/Applications/Linguist Agent.app` 已替换为 clean HEAD 构建的 `0.15.137`；安装版 `app.asar` SHA-256 为 `f32b15263a962d1777cd8663aee89323ae65374796611a01270a74dad8aa6c9f`。
-- 安装后使用隔离 HOME / userData 启动成功并确认 1 个窗口，随后已按真实数据环境重新打开；旧 `0.15.134` 在废纸篓中可恢复。
-- 公开源码实现快照 `9ed5e8dd113a06cde0e04ac5fae884303ebfad83` 已 fast-forward 到 `origin/main`，没有强推。
-- GitHub Actions CI Run `30450830504` 成功；frozen install、typecheck、根/CAT/Electron 测试、boundary、fusion、许可扫描和 Electron build 全绿。
+- 本轮起点源码与 `/Applications/Linguist Agent.app` 均为 `0.15.137`；旧文档中的 `0.15.134` 不是本轮起点事实。
+- `/Applications/Linguist Agent.app` 已替换为 clean HEAD 构建的 `0.15.139`；安装版 `app.asar` SHA-256 为 `091971f36f6b075d49159fc0b4d6f2cac6683148fa548aefb078eaf6aea32567`，与 packaged 产物一致。
+- 安装版已按正常用户数据环境重新打开并确认 1 个主窗口。被替换的 `0.15.138` 在废纸篓中可恢复；`/Applications/LinguistAgent.app` 未修改。
+- 公开实现快照 `8660d32fd330d74284db1acb6a82d72b6efb6ec4` 与菜单修复 `14331d30cd61470cc0a47878cf31a7724479cae7` 均已普通 fast-forward 到 `origin/main`，没有强推。
+- GitHub Actions CI Runs `30478305394` 与 `30480198628` 成功；frozen install、typecheck、根/CAT/Electron 测试、boundary、fusion、许可扫描和 Electron build 全绿。
 - AC-001 已升级为 `integration_verified`。公开源码 CI 绿色不等于签名安装包、人工产品资格或 Release qualification。
 
 ## 7. 仍未完成的真实 Gate

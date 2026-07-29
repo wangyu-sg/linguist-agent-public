@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   canCommitTarget,
+  canConfirmTarget,
   editKeyAction,
   targetSaveCompletion,
 } from './cat-edit-utils'
@@ -132,5 +133,13 @@ describe('LF-045 Target 保存工作流', () => {
     expect(canCommitTarget({ ...editable, composing: true })).toBeFalse()
     expect(canCommitTarget({ ...editable, conflict: true })).toBeFalse()
     expect(canCommitTarget({ ...editable, dirty: false })).toBeFalse()
+  })
+
+  test('given 译文未修改 when 按 Cmd/Ctrl+Enter then 仍允许确认当前阶段', () => {
+    expect(canConfirmTarget({ ...editable, dirty: false })).toBeTrue()
+    expect(canConfirmTarget({ ...editable, dirty: false, archived: true })).toBeFalse()
+    expect(canConfirmTarget({ ...editable, dirty: false, locked: true })).toBeFalse()
+    expect(canConfirmTarget({ ...editable, dirty: false, composing: true })).toBeFalse()
+    expect(canConfirmTarget({ ...editable, dirty: false, conflict: true })).toBeFalse()
   })
 })

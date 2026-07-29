@@ -920,7 +920,13 @@ Linguist feature 内组合 Proma 原生模块
 - `AgentSessionActionsMenu.tsx` 通过注入动作区分语义：普通 Agent 保留“迁移到其他项目”，Linguist 只提供“复制到其他项目”，不允许拖拽或菜单 move；相应菜单、搜索、共享树与共享项目头行为由本票新增测试触点覆盖。
 - `@proma/shared → main IPC/handler/service → preload → Renderer Jotai/action` 四层同步项目 rename/reorder 与会话 copy eligibility/copy 契约。项目身份、目标 binding、可复制状态及目标项目健康状态由主进程在执行时重新验证；空白会话复制或 Claude/Pi 原生分支复制均创建独立根会话，失败时回滚半成品历史与元数据，且不复制委派、工作区文件、`.context`、临时文件、附件队列、自动化或运行状态。
 - `ProjectsView` 收敛为无项目时的创建/迁移起始页和未选项目提示；旧 Linguist Migration Wizard 移至现有“设置 → 数据迁移”。
-- 版本同步为 `@proma/electron 0.15.138`、`@proma/shared 0.1.79`、`@linguist/cat-store 0.0.25`，并同步 `bun.lock`；零新依赖、零 CAT schema 变化。
+- 初次版本同步为 `@proma/electron 0.15.138`、`@proma/shared 0.1.79`、`@linguist/cat-store 0.0.25`；项目操作按钮从整行 `ContextMenuTrigger` 中移出，保留右键菜单并修复左键 Dropdown 不绘制的问题，Electron 随修复同步为 `0.15.139`。`bun.lock` 已同步；零新依赖、零 CAT schema 变化。
+
+## LF-092：CAT 确认快捷键与 Sheet 关闭交互
+
+- `features/linguist/projects/TargetEditor.tsx` 与纯函数测试位于 Linguist 白名单：未改译文时 `Cmd/Ctrl+Enter` 跳过无意义的译文写入，仍调用既有阶段确认与前进链；locked、archived、IME、冲突和保护规则继续 fail closed。
+- `components/ui/sheet.tsx`（新触点）— 共享 Sheet 的关闭按钮加入既有 `titlebar-no-drag`，避免 Electron 标题栏拖拽区吞掉点击；所有 Sheet 复用同一修复。
+- 打包纵向探针实际执行“审校阶段未改译文 → `Cmd+Enter` → confirmed”与项目设置关闭按钮点击。Electron 同步 `0.15.139 → 0.15.140`；零新依赖、零 CAT schema 变化。
 
 ## LF-075：删除旧 CatContextRail
 

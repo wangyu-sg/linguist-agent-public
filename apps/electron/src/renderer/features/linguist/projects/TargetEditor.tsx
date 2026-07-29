@@ -3,6 +3,7 @@ import type { LinguistSegmentInfo } from '@proma/shared'
 import { Check, Loader2, Redo2, Undo2, X } from 'lucide-react'
 import {
   canCommitTarget,
+  canConfirmTarget,
   editKeyAction,
   targetSaveCompletion,
   type TargetSaveResult,
@@ -279,7 +280,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
       () => targetProtectionViolations(segment, state.value),
       [segment, state.value],
     )
-    const canCommit = canCommitTarget({
+    const commitAvailability = {
       archived,
       locked: segment.locked,
       dirty,
@@ -288,7 +289,9 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
       composing: state.composing,
       hasViolations: violations.length > 0,
       conflict,
-    })
+    }
+    const canCommit = canCommitTarget(commitAvailability)
+    const canConfirm = onSaved !== undefined && canConfirmTarget(commitAvailability)
 
     React.useEffect(() => {
       const previous = previousSegmentRef.current
@@ -397,7 +400,11 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
     }, [handle, onHandleChange])
 
     const save = async (advance: boolean): Promise<void> => {
-      if (!canCommit || composingRef.current) return
+      if ((advance ? !canConfirm : !canCommit) || composingRef.current) return
+      if (advance && !dirty) {
+        onSaved?.(true)
+        return
+      }
       setSaving(true)
       try {
         const completion = targetSaveCompletion(await onSave(state.value), advance)
@@ -614,7 +621,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
               aria-label={`${confirmLabel}并前进`}
               aria-keyshortcuts="Meta+Enter Control+Enter"
               onClick={() => void save(true)}
-              disabled={!canCommit}
+              disabled={!canConfirm}
               className="rounded bg-primary px-1.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-35"
             >
               {confirmLabel}并前进

@@ -39,6 +39,16 @@ const summary: LinguistProjectSummary = {
 }
 
 describe('ProjectSettingsSheet', () => {
+  test('given 右侧设置浮窗 when 点击右上角关闭按钮 then 关闭按钮不能落入标题栏拖拽区', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/ui/sheet.tsx', import.meta.url),
+    ).text()
+    const closeTag = source.match(/<SheetPrimitive\.Close[\s\S]*?>/)?.[0]
+
+    expect(closeTag).toBeDefined()
+    expect(closeTag).toContain('titlebar-no-drag')
+  })
+
   test('given 已打开的项目 when 打开项目设置 then 显示项目元信息和资源分类入口', () => {
     const html = renderToStaticMarkup(
       <ProjectSettingsSheetBody

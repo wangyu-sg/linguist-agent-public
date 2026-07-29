@@ -12,6 +12,8 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
 当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。主体路线已经稳定，不再更换 Proma 底座，也不把 Proma 的 Agent、Chat、Skills、MCP、Automations 或远程集成删掉。
 
+当前自动验证基线为 Electron `0.15.139`、shared `0.1.79`、CAT Store `0.0.25`；干净源码构建出的打包应用与本机安装应用的 `app.asar` 已核对一致。自动化通过不代表下文人工 Gate 已完成。
+
 应用提供三个并列主模式：
 
 - **Agent**：Proma 原生完整 Agent 工作区，支持 Claude / Pi Runtime、工具、Thinking、权限、Queue / Steer、Skills、MCP 和工作区文件。

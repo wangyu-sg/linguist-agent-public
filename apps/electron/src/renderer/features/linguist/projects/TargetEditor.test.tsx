@@ -121,6 +121,7 @@ describe('LF-044/LF-047 TargetEditor', () => {
         onCancel={() => {}}
         onSave={async () => 'saved'}
         onReload={async () => segment}
+        onSaved={() => {}}
       />,
     )
 
@@ -136,7 +137,9 @@ describe('LF-044/LF-047 TargetEditor', () => {
     expect(html).toContain('⌘/Ctrl+S 保存')
     expect(html).toContain('role="status"')
     expect(html).toMatch(/aria-label="保存译文"[^>]*disabled=""/)
-    expect(html).toContain('aria-label="确认审校并前进"')
+    const confirmButton = html.match(/<button[^>]*aria-label="确认审校并前进"[^>]*>/)?.[0]
+    expect(confirmButton).toBeDefined()
+    expect(confirmButton).not.toContain('disabled=')
     expect(html).toContain('确认审校并前进')
     expect(html).toContain('取消')
   })

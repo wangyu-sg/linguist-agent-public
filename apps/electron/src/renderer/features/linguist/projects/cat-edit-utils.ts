@@ -30,6 +30,10 @@ export function canCommitTarget(input: TargetCommitAvailability): boolean {
     && !input.conflict
 }
 
+export function canConfirmTarget(input: TargetCommitAvailability): boolean {
+  return canCommitTarget({ ...input, dirty: true })
+}
+
 export function targetSaveCompletion(
   result: TargetSaveResult,
   advance: boolean,

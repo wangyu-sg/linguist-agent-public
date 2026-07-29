@@ -12,6 +12,8 @@ This repository is an AGPL-3.0 derivative of [Proma](https://github.com/proma-ai
 
 The product is a **personal-use Alpha** for sustained real localization work. A public release is not currently planned. The architecture is no longer being rebuilt: Proma remains the full general-purpose Agent and Chat product, while Linguist adds a first-class localization mode.
 
+The current automated baseline is Electron `0.15.139`, shared `0.1.79`, and CAT Store `0.0.25`. The app packaged from a clean source tree and the installed app have matching `app.asar` content. Passing automation does not complete the human gates listed below.
+
 The app has three peer modes:
 
 - **Agent** — Proma's complete Agent workspace with Claude and Pi runtimes, tool activity, thinking, permissions, Queue / Steer, Skills, MCP, and workspace files.
