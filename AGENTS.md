@@ -170,6 +170,7 @@ CAT 写入规则：
 - 模型只能创建 pending Proposal；
 - 读取工具不得写入；
 - QA、Critic 和 consistency repair 不能直接提交 Segment；
+- CAT 编辑器的 `Cmd/Ctrl+Enter` 表示确认当前阶段并前进，即使译文未改也必须可用；`Cmd/Ctrl+S` 仍只保存实际修改；
 - Segment 写入必须经过人工操作、revision CAS、locked 与 hard-rule 检查；
 - 导出必须从受管 source blob 生成，先过 QA / 阶段预检并重新导入验证；
 - 输出给模型和 renderer 的 DTO 不暴露绝对本机路径。

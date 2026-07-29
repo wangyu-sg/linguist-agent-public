@@ -12,7 +12,7 @@ This repository is an AGPL-3.0 derivative of [Proma](https://github.com/proma-ai
 
 The product is a **personal-use Alpha** for sustained real localization work. A public release is not currently planned. The architecture is no longer being rebuilt: Proma remains the full general-purpose Agent and Chat product, while Linguist adds a first-class localization mode.
 
-The current automated baseline is Electron `0.15.139`, shared `0.1.79`, and CAT Store `0.0.25`. The app packaged from a clean source tree and the installed app have matching `app.asar` content. Passing automation does not complete the human gates listed below.
+The current automated baseline is Electron `0.15.140`, shared `0.1.79`, and CAT Store `0.0.25`. The app packaged from a clean source tree and the installed app have matching `app.asar` content. Passing automation does not complete the human gates listed below.
 
 The app has three peer modes:
 
@@ -23,6 +23,8 @@ The app has three peer modes:
 The Linguist sidebar is always “project → bound sessions.” Session rows and tree behavior are shared with Agent, including status, MiniMap, delegation, pinning, recents, and archives; Agent mode excludes every project-bound session. Selecting a project opens its Workbench, while selecting a session opens the same full `AgentView`. Cross-project actions create an independent copy, keep the source project open, and offer an action to open the copy.
 
 Linguist is a first-class Agent Profile. It layers versioned Profile, Role, Fast / Balanced / Best Strategy, Project Digest, and per-turn Context on top of the Proma base. It embeds the same Proma `AgentView`; it does not create a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. Agent tools may create reviewable Proposals, but cannot bypass human acceptance, CAS revisions, locked segments, tags, QA, or Required/Forbidden term gates.
+
+In the CAT editor, `Cmd/Ctrl+Enter` confirms the current workflow stage and advances even when the target is unchanged. Close buttons on project settings and other right-side sheets remain clickable inside Electron title-bar regions.
 
 ## Architecture
 

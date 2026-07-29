@@ -12,7 +12,7 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
 当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。主体路线已经稳定，不再更换 Proma 底座，也不把 Proma 的 Agent、Chat、Skills、MCP、Automations 或远程集成删掉。
 
-当前自动验证基线为 Electron `0.15.139`、shared `0.1.79`、CAT Store `0.0.25`；干净源码构建出的打包应用与本机安装应用的 `app.asar` 已核对一致。自动化通过不代表下文人工 Gate 已完成。
+当前自动验证基线为 Electron `0.15.140`、shared `0.1.79`、CAT Store `0.0.25`；干净源码构建出的打包应用与本机安装应用的 `app.asar` 已核对一致。自动化通过不代表下文人工 Gate 已完成。
 
 应用提供三个并列主模式：
 
@@ -23,6 +23,8 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 Linguist 左侧栏固定为“项目 → 绑定会话”：会话行与 Agent 侧栏复用同一组件和树行为（状态、MiniMap、委派、置顶、最近会话与归档），Agent 模式则排除所有项目绑定会话。点击项目进入 Workbench，点击会话进入同一个 Full `AgentView`；跨项目操作是创建独立副本，成功后仍停留在源项目，并可从提示打开副本。
 
 Linguist 是一等 Agent Profile：在 Proma Base 上叠加版本化的 Profile、Role、Fast / Balanced / Best Strategy、Project Digest 与每轮 Context。它嵌入同一个 Proma `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA/Required/Forbidden 规则直接提交 Segment。
+
+CAT 编辑器中，`Cmd/Ctrl+Enter` 用于确认当前阶段并前进，即使译文没有变化也可执行；项目设置等右侧浮窗的关闭按钮在 Electron 标题栏区域保持可点击。
 
 ## 架构
 

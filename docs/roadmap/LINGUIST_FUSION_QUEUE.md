@@ -50,8 +50,10 @@ LF-048 / LF-078 仍只受真实 IME 与 Native Open/Save 证据阻断；旧 UI �
 | LF-088 | Quick Health、worker-thread Full Scrub、Backup/Restore fault matrix | **integration_verified** |
 | LF-089 | schema v13 Proposal Issuance/Provenance 与 Required/Forbidden gate | **integration_verified** |
 | LF-090 | 数据库 identity 写前验证与 migration fail closed | **integration_verified** |
+| LF-091 | 共享侧栏树、项目归档/搜索与复制到其他项目 | **packaged_verified** |
+| LF-092 | CAT 无改动确认快捷键与共享 Sheet 关闭交互 | **packaged_verified** |
 
-这些状态表示工程实现与 clean 本地矩阵通过；现有 packaged vertical 没有逐项操作所有新 UI，所以不把 LF-079~090 标为 `packaged_verified`。
+LF-079~090 表示工程实现与 clean 本地矩阵通过；现有 packaged vertical 没有逐项操作其全部新 UI。LF-091/092 具有对应的打包应用交互证据，因此单独标为 `packaged_verified`。
 
 ## 个人 Alpha 门禁
 
@@ -69,18 +71,18 @@ LF-048 / LF-078 仍只受真实 IME 与 Native Open/Save 证据阻断；旧 UI �
 | AC-010 | G8 真实游戏文本盲评 | **gate_blocked** |
 | AC-011 | 14 天自由日用 | **gate_blocked** |
 
-AC-001 已由公开源码实现快照 `9ed5e8dd` 的 GitHub Actions Run `30450830504` 关闭：validate job 成功，许可扫描与 Electron build 均通过。
+AC-001 的最新证据是公开源码快照 `2fe3c472` 的 GitHub Actions Run `30482338219`：validate job 成功，frozen install、typecheck、根/CAT/Electron 测试、boundary、fusion、许可扫描与 Electron build 均通过。
 
 ## 最终验证快照
 
-- 实现、安装与首轮文档 HEAD：`cd33ccf5210646fd37095e9e8e69787901831c37`
-- 版本：Electron `0.15.137`，CAT Core/Store/Tools `0.0.12/0.0.24/0.0.17`
-- clean source：typecheck 11/11；根 1,320；Electron 164；Core 116；Store 209；Tools 39；boundary 4；fusion 9；均 0 fail。
+- 实现与安装 HEAD：`730a360e73d68992b6ca1855ab71234c62f86b33`
+- 版本：Electron `0.15.140`，shared `0.1.79`，CAT Core/Store/Tools `0.0.12/0.0.25/0.0.17`
+- clean source：typecheck 11/11；根 1,350；Electron 175；Core 116；Store 217；Tools 39；boundary 4；fusion 9；均 0 fail。
 - 许可：417 个第三方依赖，门禁通过。
 - build/pack：通过；137 个 runtime 依赖同步。
-- packaged vertical：Agent 12/0、Chat 18/0、Linguist 17/0/2 manual；`runStatus=passed`、`coverageStatus=partial`。
-- `app.asar` SHA-256：`f32b15263a962d1777cd8663aee89323ae65374796611a01270a74dad8aa6c9f`。
-- 本机 `/Applications/Linguist Agent.app` 已替换为 clean HEAD 构建的 `0.15.137`；隔离启动与 1 个主窗口已验证，旧 `0.15.134` 位于废纸篓。
+- packaged vertical：Agent 12/0、Chat 18/0、Linguist 20/0/2 manual；`runStatus=passed`、`coverageStatus=partial`。
+- `app.asar` SHA-256：`95066d73f003502f9792f6afe302df5b560e199ab0680834581818cfb23e5138`。
+- 本机 `/Applications/Linguist Agent.app` 已替换为 clean HEAD 构建的 `0.15.140`；隔离与正常环境启动均确认 1 个主窗口，旧 `0.15.139` 位于废纸篓。
 
 ## 下一步
 

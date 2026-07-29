@@ -1,6 +1,6 @@
 # KNOWN_LIMITATIONS — 当前已知限制
 
-更新日期：2026-07-29
+更新日期：2026-07-30
 
 > 当前目标是作者本人使用的个人 Alpha。自动化、打包 smoke、真机操作、远端 CI 和 Release qualification 是不同证据等级。
 
@@ -42,5 +42,5 @@
 - 数据根已隔离为 `~/.linguist-agent(-dev)`；旧 Proma 根只供显式 Provider-only 导入。
 - Project/Session binding、数据库身份、导出路径和恢复流程均 fail closed。
 - 所有 BrowserWindow 已固定隔离、sandbox、禁用 Node integration 并启用 webSecurity。
-- 根测试不再容忍已知失败；当前 clean source 全仓为 1,320 pass / 0 fail。
-- 公开源码实现快照 `9ed5e8dd` 的 GitHub Actions Run `30450830504` 已成功，历史许可扫描失败已关闭。
+- 根测试不再容忍已知失败；当前 clean source 全仓为 1,350 pass / 0 fail。
+- 公开源码完整交互修复快照 `2fe3c472` 的 GitHub Actions Run `30482338219` 已成功，历史许可扫描失败已关闭。
