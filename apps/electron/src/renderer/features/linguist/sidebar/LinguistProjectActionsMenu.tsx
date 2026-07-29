@@ -107,12 +107,12 @@ export function LinguistProjectActionsMenu(
         <button
           type="button"
           aria-label={`管理项目 ${props.project.name}`}
-          className="absolute right-0 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-foreground/35 opacity-0 transition-colors hover:bg-foreground/[0.055] hover:text-foreground/65 group-hover/project:opacity-100 data-[state=open]:opacity-100"
+          className="absolute right-0 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-foreground/35 opacity-0 transition-colors hover:bg-foreground/[0.055] hover:text-foreground/65 group-hover/project:opacity-100 data-[state=open]:opacity-100 titlebar-no-drag"
         >
           <MoreHorizontal size={14} aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40 p-0.5">
+      <DropdownMenuContent align="end" className="z-[9999] w-40 p-0.5">
         <LinguistProjectActionItems {...props} variant="dropdown" />
       </DropdownMenuContent>
     </DropdownMenu>

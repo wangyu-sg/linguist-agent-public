@@ -42,4 +42,14 @@ describe('ProjectSessionTreeGroupHeader', () => {
     expect(html).toContain('aria-label="展开项目 示例项目"')
     expect(html).toContain('项目动作')
   })
+
+  test('given 项目同时有右键菜单和动作槽 when 渲染 then 动作槽不嵌套在右键触发器内', () => {
+    const html = renderHeader({
+      contextMenuItems: <span>右键动作</span>,
+      actions: <button type="button" aria-label="项目动作">项目动作</button>,
+    })
+
+    expect(html).toContain('data-state="closed"')
+    expect(html).toContain('</div><button type="button" aria-label="项目动作">')
+  })
 })

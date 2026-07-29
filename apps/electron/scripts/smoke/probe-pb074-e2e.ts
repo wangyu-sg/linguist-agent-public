@@ -33,6 +33,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright-core'
+import { PNG } from 'pngjs'
 import {
   FAKE_CAT_PROPOSAL_TOOL_NAME,
   FAKE_CAT_TOOL_NAME,
@@ -102,6 +103,24 @@ interface PersistedLinguistState {
 interface PackagedSegmentState {
   target: string
   revision: number
+}
+
+function countNonDominantPixels(pngBytes: Buffer): number {
+  const image = PNG.sync.read(pngBytes)
+  const colors = new Map<number, number>()
+  let dominantCount = 0
+  for (let index = 0; index < image.data.length; index += 4) {
+    const color = (
+      (image.data[index]! << 24)
+      | (image.data[index + 1]! << 16)
+      | (image.data[index + 2]! << 8)
+      | image.data[index + 3]!
+    ) >>> 0
+    const count = (colors.get(color) ?? 0) + 1
+    colors.set(color, count)
+    dominantCount = Math.max(dominantCount, count)
+  }
+  return image.width * image.height - dominantCount
 }
 
 const results: CheckResult[] = []
@@ -580,6 +599,8 @@ async function openLinguistWorkbenchAndSelectLocation(
   legacyManagementRemoved: boolean
   multipleProjectsDiscoverable: boolean
   projectListEvidence: string
+  projectActionsMenuPainted: boolean
+  projectActionsMenuEvidence: string
   sidebarCurrentCorrect: boolean
   projectTabVisible: boolean
   locationVisible: boolean
@@ -627,6 +648,18 @@ async function openLinguistWorkbenchAndSelectLocation(
     'button',
     { name: '管理项目', exact: true },
   ).count() === 0
+  await projectList.getByRole(
+    'button',
+    { name: `管理项目 ${PROJECT_NAME}`, exact: true },
+  ).click()
+  const projectActionsMenu = page.locator('[role="menu"]').filter({ hasText: '重命名' })
+  await projectActionsMenu.waitFor({ state: 'visible', timeout: 10_000 })
+  const projectActionsPaintedPixels = countNonDominantPixels(
+    await projectActionsMenu.screenshot(),
+  )
+  const projectActionsMenuPainted = projectActionsPaintedPixels > 100
+  const projectActionsMenuEvidence = `非背景像素=${projectActionsPaintedPixels}`
+  await page.keyboard.press('Escape')
 
   await projectButton.click()
   const workspace = page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
@@ -667,6 +700,8 @@ async function openLinguistWorkbenchAndSelectLocation(
     legacyManagementRemoved,
     multipleProjectsDiscoverable,
     projectListEvidence,
+    projectActionsMenuPainted,
+    projectActionsMenuEvidence,
     sidebarCurrentCorrect,
     projectTabVisible,
     locationVisible: locationVisible && roundtripLocationVisible,
@@ -1314,12 +1349,15 @@ async function main(): Promise<void> {
       navigation.modesDiscoverable
         && navigation.legacyManagementRemoved
         && navigation.multipleProjectsDiscoverable
+        && navigation.projectActionsMenuPainted
         && navigation.sidebarCurrentCorrect
         && navigation.projectTabVisible
         && navigation.locationVisible,
       `三模式=${navigation.modesDiscoverable}，旧管理入口已移除=${navigation.legacyManagementRemoved}` +
       `，两个项目身份明确=${navigation.multipleProjectsDiscoverable}` +
       `（${navigation.projectListEvidence}）` +
+      `，项目菜单已绘制=${navigation.projectActionsMenuPainted}` +
+      `（${navigation.projectActionsMenuEvidence}）` +
       `，侧栏 aria-current=${navigation.sidebarCurrentCorrect}` +
       `，Project Tab=${navigation.projectTabVisible}，Asset/Segment=${navigation.locationVisible}`,
     )

@@ -52,8 +52,8 @@ export function ProjectSessionTreeGroupHeader({
   contextMenuItems,
   nameButtonClassName,
 }: ProjectSessionTreeGroupHeaderProps): React.ReactElement {
-  const header = (
-    <div className="group/project relative flex translate-x-[2px] items-center">
+  const headerContent = (
+    <>
       {draggable && (
         <span
           draggable
@@ -131,18 +131,24 @@ export function ProjectSessionTreeGroupHeader({
       )}
 
       {hint}
-      {actions}
-    </div>
+    </>
   )
 
-  if (!contextMenuItems) return header
-
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{header}</ContextMenuTrigger>
-      <ContextMenuContent className="w-40 p-0.5">
-        {contextMenuItems}
-      </ContextMenuContent>
-    </ContextMenu>
+    <div className="group/project relative flex translate-x-[2px] items-center">
+      {contextMenuItems ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div className="flex min-w-0 flex-1 items-center">
+              {headerContent}
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-40 p-0.5">
+            {contextMenuItems}
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : headerContent}
+      {actions}
+    </div>
   )
 }
