@@ -25,8 +25,8 @@ const agentSessionActionsMenu = source(
 const agentSessionTreeItem = source(
   'apps/electron/src/renderer/components/session-tree/AgentSessionTreeItem.tsx',
 )
-const linguistSessionTreeItem = source(
-  'apps/electron/src/renderer/features/linguist/sidebar/LinguistSessionTreeItem.tsx',
+const linguistSidebarContent = source(
+  'apps/electron/src/renderer/features/linguist/sidebar/LinguistSidebarContent.tsx',
 )
 const projectAgentRail = source(
   'apps/electron/src/renderer/features/linguist/projects/ProjectAgentRail.tsx',
@@ -138,12 +138,14 @@ describe('Agent Full 模式行为契约', () => {
 
   test('Given ordinary Agent and Linguist sessions, When rendering actions, Then they share one menu and Linguist cannot move projects', () => {
     expect(leftSidebar).toContain('<AgentSessionActionsMenu')
-    expect(linguistSessionTreeItem).toContain('<AgentSessionActionsMenu')
     expect(leftSidebar).toContain('<AgentSessionTreeItem')
-    expect(linguistSessionTreeItem).toContain('<AgentSessionTreeItem')
+    expect(leftSidebar).toContain('<LinguistSidebarContent SessionRowComponent={AgentSessionItem} />')
+    expect(linguistSidebarContent).toContain('<SessionRowComponent')
     expect(agentSessionTreeItem).toContain("event.key === 'Escape'")
-    expect(agentSessionActionsMenu).toContain('canMove && onMove')
-    expect(linguistSessionTreeItem).not.toContain('onMove=')
+    expect(agentSessionActionsMenu).toContain('visible: hasAction && (canMove || transferLabel !== undefined)')
+    expect(linguistSidebarContent).toContain('transferLabel="复制到其他项目"')
+    expect(linguistSidebarContent).toContain('onRequestMove={() => onCopySession?.(')
+    expect(linguistSidebarContent).not.toContain('迁移到其他项目')
     expect(leftSidebar).toContain("setPendingDeleteTarget({ kind: 'agent-session', id })")
     expect(leftSidebar).toContain("setPendingDeleteTarget({ kind: 'chat-conversation', id })")
   })

@@ -19,8 +19,11 @@
 
 import {
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
+  type AgentSessionMeta,
   type LinguistIpcResult,
   type LinguistProjectChatSessionInfo,
+  type LinguistSessionCopyEligibilityResult,
+  type LinguistSessionCopyToProjectResult,
   type LinguistSessionCreateForProjectResult,
   type LinguistSessionDetachBindingResult,
   type LinguistSessionGetBindingResult,
@@ -37,10 +40,15 @@ import {
   detachAgentSessionLinguistBinding,
   getAgentSessionMeta,
 } from '../agent-session-manager'
+import {
+  copyLinguistSessionToProject,
+  getLinguistSessionCopyEligibility,
+} from './session-copy'
 
 /** 惰性解析服务单例：注册 IPC 时服务可能尚未 init（index.ts bootstrap 顺序）。 */
 export interface LinguistSessionIpcDeps {
   getService: () => LinguistProjectService
+  isSessionActive: (sessionId: string) => boolean
 }
 
 /** Agent 会话 id 校验：非空字符串（uuid 形状由创建方保证，此处不过度约束）。 */
@@ -74,6 +82,37 @@ function readOptionalRole(record: Record<string, unknown>): 'reviewer' | 'audito
     invalid(`role must be 'reviewer' or 'auditor' when provided`)
   }
   return value
+}
+
+export function toRendererCopyResult(
+  session: AgentSessionMeta,
+): LinguistSessionCopyToProjectResult {
+  return {
+    id: session.id,
+    title: session.title,
+    ...(session.channelId !== undefined ? { channelId: session.channelId } : {}),
+    ...(session.modelId !== undefined ? { modelId: session.modelId } : {}),
+    ...(session.agentRuntime !== undefined ? { agentRuntime: session.agentRuntime } : {}),
+    ...(session.codexFastMode !== undefined ? { codexFastMode: session.codexFastMode } : {}),
+    ...(session.openAIThinkingLevel !== undefined
+      ? { openAIThinkingLevel: session.openAIThinkingLevel }
+      : {}),
+    ...(session.permissionMode !== undefined ? { permissionMode: session.permissionMode } : {}),
+    ...(session.linguistProjectId !== undefined
+      ? { linguistProjectId: session.linguistProjectId }
+      : {}),
+    ...(session.linguistProjectName !== undefined
+      ? { linguistProjectName: session.linguistProjectName }
+      : {}),
+    ...(session.linguistSessionRole !== undefined
+      ? { linguistSessionRole: session.linguistSessionRole }
+      : {}),
+    ...(session.linguistStrategy !== undefined
+      ? { linguistStrategy: session.linguistStrategy }
+      : {}),
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+  }
 }
 
 export function createLinguistSessionIpc(deps: LinguistSessionIpcDeps) {
@@ -152,6 +191,29 @@ export function createLinguistSessionIpc(deps: LinguistSessionIpcDeps) {
           detached: before?.linguistProjectId !== undefined && session !== null,
           session,
         }
+      })
+    },
+
+    /** 只返回稳定模式/阻断原因，不暴露主进程原生分叉节点 ID。 */
+    getCopyEligibility(input: unknown): Promise<LinguistIpcResult<LinguistSessionCopyEligibilityResult>> {
+      return wrap(() => {
+        const sessionId = readSessionId(assertRecord(input))
+        const result = getLinguistSessionCopyEligibility(deps, sessionId)
+        return result.eligible
+          ? { eligible: true, mode: result.mode }
+          : result
+      })
+    },
+
+    /** 主进程重新验证源 binding、运行状态、目标项目与历史 artifact。 */
+    copyToProject(input: unknown): Promise<LinguistIpcResult<LinguistSessionCopyToProjectResult>> {
+      return wrap(async () => {
+        const record = assertRecord(input)
+        const session = await copyLinguistSessionToProject(deps, {
+          sessionId: readSessionId(record),
+          targetProjectId: readProjectId({ projectId: record.targetProjectId }),
+        })
+        return toRendererCopyResult(session)
       })
     },
   }

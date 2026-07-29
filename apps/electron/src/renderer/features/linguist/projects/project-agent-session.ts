@@ -41,6 +41,22 @@ export function selectProjectAgentSession(
   return true
 }
 
+/** 归档/只读历史专用；只放宽会话 archived，不放宽项目绑定身份。 */
+export function selectProjectAgentSessionForHistory(
+  store: JotaiStore,
+  projectId: string,
+  sessionId: string,
+): boolean {
+  const session = store.get(agentSessionsAtom).find((item) => item.id === sessionId)
+  if (session?.linguistProjectId !== projectId) return false
+  store.set(projectCurrentAgentSessionIdMapAtom, (previous) => {
+    const next = new Map(previous)
+    next.set(projectId, sessionId)
+    return next
+  })
+  return true
+}
+
 export function selectFallbackLinguistSession(
   store: JotaiStore,
   projectId: string,

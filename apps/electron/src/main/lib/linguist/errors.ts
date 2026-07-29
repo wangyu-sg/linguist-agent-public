@@ -34,6 +34,10 @@ export const LINGUIST_SERVICE_ERROR_CODES = {
   PROJECT_DELETE_REQUIRES_ARCHIVE: 'PROJECT_DELETE_REQUIRES_ARCHIVE',
   /** 删除确认名与当前项目名不一致。 */
   PROJECT_DELETE_CONFIRMATION_MISMATCH: 'PROJECT_DELETE_CONFIRMATION_MISMATCH',
+  /** Renderer 提交的活跃项目顺序已过期或不是当前完整集合。 */
+  PROJECT_ORDER_CONFLICT: 'PROJECT_ORDER_CONFLICT',
+  /** 会话当前状态不能安全地复制到另一个 Linguist 项目。 */
+  SESSION_COPY_BLOCKED: 'SESSION_COPY_BLOCKED',
 } as const
 
 export type LinguistServiceErrorCode =

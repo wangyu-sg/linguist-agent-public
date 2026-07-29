@@ -33,7 +33,7 @@ const modes: { value: AppMode; label: string; icon: React.ReactNode }[] = MODE_S
 
 const navigationKeys = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
 
-export function ModeSwitcher(): React.ReactElement {
+export function ModeSwitcher({ ariaLabel = '主工作模式' }: { ariaLabel?: string } = {}): React.ReactElement {
   const mode = useAtomValue(appModeAtom)
   const switchMode = useSwitchAppMode()
   const modeButtonRefs = React.useRef(new Map<AppMode, HTMLButtonElement>())
@@ -55,7 +55,7 @@ export function ModeSwitcher(): React.ReactElement {
     <div className="pt-2 titlebar-drag-region select-none">
       <div
         role="tablist"
-        aria-label="主工作模式"
+        aria-label={ariaLabel}
         className="relative flex rounded-xl p-1 titlebar-drag-region mode-switcher-track sidebar-control-surface"
       >
         {/* 滑动背景指示器 */}

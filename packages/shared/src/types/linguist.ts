@@ -32,6 +32,10 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   IMPORT: 'linguist.projects.import',
   /** 项目摘要（元数据 + 资产列表 + 按状态分段的段计数） */
   GET_SUMMARY: 'linguist.projects.getSummary',
+  /** 重命名项目（沿用项目名校验；归档项目只读） */
+  RENAME: 'linguist.projects.rename',
+  /** 原子保存全部活跃项目顺序；归档项目保持原相对顺序 */
+  REORDER_ACTIVE: 'linguist.projects.reorderActive',
   /** 归档项目 */
   ARCHIVE: 'linguist.projects.archive',
   /** 可恢复删除（仅已归档项目 + 精确项目名确认） */
@@ -79,6 +83,10 @@ export const LINGUIST_SESSION_IPC_CHANNELS = {
   GET_BINDING: 'linguist.sessions.getBinding',
   /** 永久解除项目绑定；解绑后会话作为普通 Agent 继续，不能重新绑定 */
   DETACH_BINDING: 'linguist.sessions.detachBinding',
+  /** 查询会话能否安全复制到另一个 Linguist 项目 */
+  GET_COPY_ELIGIBILITY: 'linguist.sessions.getCopyEligibility',
+  /** 在主进程验证目标后创建独立的跨项目副本 */
+  COPY_TO_PROJECT: 'linguist.sessions.copyToProject',
 } as const
 
 export type LinguistSessionIpcChannel =
@@ -350,6 +358,8 @@ export const LINGUIST_IPC_ERROR_CODES = {
   CONTEXT_DOC_EXTRACT_FAILED: 'CONTEXT_DOC_EXTRACT_FAILED',
   PROJECT_DELETE_REQUIRES_ARCHIVE: 'PROJECT_DELETE_REQUIRES_ARCHIVE',
   PROJECT_DELETE_CONFIRMATION_MISMATCH: 'PROJECT_DELETE_CONFIRMATION_MISMATCH',
+  PROJECT_ORDER_CONFLICT: 'PROJECT_ORDER_CONFLICT',
+  SESSION_COPY_BLOCKED: 'SESSION_COPY_BLOCKED',
 
   // ---- cat-store 穿透（packages/linguist-cat-store/src/errors.ts）----
   STORE_SQLITE_UNAVAILABLE: 'STORE_SQLITE_UNAVAILABLE',
@@ -729,6 +739,20 @@ export type LinguistProjectImportResult =
 export interface LinguistProjectGetSummaryRequest {
   projectId: string
 }
+
+export interface LinguistProjectRenameRequest {
+  projectId: string
+  name: string
+}
+
+export type LinguistProjectRenameResult = LinguistProjectInfo
+
+export interface LinguistProjectReorderRequest {
+  /** 必须恰好包含当前全部活跃项目 id，且不得重复。 */
+  orderedProjectIds: string[]
+}
+
+export type LinguistProjectReorderResult = LinguistProjectInfo[]
 
 /**
  * 项目摘要：元数据 + 资产列表/计数 + 按状态段计数。
@@ -1741,6 +1765,51 @@ export interface LinguistSessionDetachBindingResult {
   /** 未知会话为 null；其余返回解绑后的权威会话元数据。 */
   session: import('./agent').AgentSessionMeta | null
 }
+
+export type LinguistSessionCopyBlockReason =
+  | 'SESSION_NOT_FOUND'
+  | 'NOT_LINGUIST_SESSION'
+  | 'RUNNING'
+  | 'NO_COMPLETED_ASSISTANT'
+  | 'HISTORY_UNREADABLE'
+
+export interface LinguistSessionCopyEligibilityRequest {
+  sessionId: string
+}
+
+export type LinguistSessionCopyEligibilityResult =
+  | {
+      eligible: true
+      mode: 'blank' | 'fork'
+    }
+  | {
+      eligible: false
+      reason: LinguistSessionCopyBlockReason
+      message: string
+    }
+
+export interface LinguistSessionCopyToProjectRequest {
+  sessionId: string
+  targetProjectId: string
+}
+
+export type LinguistSessionCopyToProjectResult = Pick<
+  import('./agent').AgentSessionMeta,
+  | 'id'
+  | 'title'
+  | 'channelId'
+  | 'modelId'
+  | 'agentRuntime'
+  | 'codexFastMode'
+  | 'openAIThinkingLevel'
+  | 'permissionMode'
+  | 'linguistProjectId'
+  | 'linguistProjectName'
+  | 'linguistSessionRole'
+  | 'linguistStrategy'
+  | 'createdAt'
+  | 'updatedAt'
+>
 
 // ===== Proposal 人工审核请求 / 响应契约（PB-053）=====
 

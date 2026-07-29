@@ -45,7 +45,7 @@ const FORBIDDEN_CAT_CORE_IMPORTS = [
 
 /**
  * 这些是已登记的组合缝；允许删除，不允许未登记新增 importer。
- * App Shell / TabContent 负责把 Linguist 产品面组合进 Proma 壳；
+ * App Shell / TabContent、全局搜索与设置页负责把 Linguist 产品面组合进 Proma 壳；
  * AgentView 的 contextSummary 是计划明确允许的窄 prop；AgentHeader / SidePanel
  * 是待后续 fusion 工单收窄的历史触点。
  */
@@ -55,6 +55,8 @@ const REGISTERED_PROMA_TO_LINGUIST_IMPORTERS = new Set([
   'apps/electron/src/renderer/components/agent/SidePanel.tsx',
   'apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx',
   'apps/electron/src/renderer/components/app-shell/ModeSwitcher.tsx',
+  'apps/electron/src/renderer/components/app-shell/SearchDialog.tsx',
+  'apps/electron/src/renderer/components/settings/MigrationSettings.tsx',
   'apps/electron/src/renderer/components/tabs/MainArea.tsx',
   'apps/electron/src/renderer/components/tabs/TabContent.tsx',
 ])

@@ -6,6 +6,7 @@ import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-sessi
 import {
   ensureProjectAgentSession,
   selectFallbackLinguistSession,
+  selectProjectAgentSessionForHistory,
 } from './project-agent-session'
 
 function session(id: string, projectId: string): AgentSessionMeta {
@@ -58,6 +59,18 @@ describe('Project Agent Session 懒创建', () => {
     expect(store.get(projectCurrentAgentSessionIdMapAtom)).toEqual(new Map([
       ['beta', 'beta-current'],
     ]))
+  })
+
+  test('given 归档会话 when 显式查看历史 then 只允许同项目并保留选择', () => {
+    const store = createStore()
+    store.set(agentSessionsAtom, [
+      { ...session('alpha-history', 'alpha'), archived: true },
+      { ...session('beta-history', 'beta'), archived: true },
+    ])
+
+    expect(selectProjectAgentSessionForHistory(store, 'alpha', 'beta-history')).toBeFalse()
+    expect(selectProjectAgentSessionForHistory(store, 'alpha', 'alpha-history')).toBeTrue()
+    expect(store.get(projectCurrentAgentSessionIdMapAtom).get('alpha')).toBe('alpha-history')
   })
 
   test('given 项目已有有效会话 when 首次需要 Agent then 复用会话且不调用创建 IPC', async () => {

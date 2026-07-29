@@ -57,6 +57,8 @@ import {
   type LinguistProjectInfo,
   type LinguistProjectListResult,
   type LinguistProjectOpenResult,
+  type LinguistProjectRenameResult,
+  type LinguistProjectReorderResult,
   type LinguistProjectRestoreResult,
   type LinguistProjectSetQualityProfileResult,
   type LinguistProjectSetWorkflowConfigResult,
@@ -318,6 +320,31 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
             ? { outputStatusPolicy }
             : {}),
         }))
+      })
+    },
+
+    /** linguist.projects.rename — 复用创建项目的名称校验。 */
+    rename(input: unknown): Promise<LinguistIpcResult<LinguistProjectRenameResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        return toProjectInfo(getService().renameProject(
+          readProjectId(record),
+          readProjectName(record),
+        ))
+      })
+    },
+
+    /** linguist.projects.reorderActive — 必须提交完整且无重复的活跃项目集合。 */
+    reorderActive(input: unknown): Promise<LinguistIpcResult<LinguistProjectReorderResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        if (!Array.isArray(record.orderedProjectIds)) {
+          invalid('orderedProjectIds must be an array')
+        }
+        const orderedProjectIds = record.orderedProjectIds.map((projectId) =>
+          readProjectId({ projectId }),
+        )
+        return getService().reorderActiveProjects(orderedProjectIds).map(toProjectInfo)
       })
     },
 

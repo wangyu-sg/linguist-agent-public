@@ -128,6 +128,10 @@ import type {
   LinguistProjectListRequest,
   LinguistProjectOpenRequest,
   LinguistProjectOpenResult,
+  LinguistProjectRenameRequest,
+  LinguistProjectRenameResult,
+  LinguistProjectReorderRequest,
+  LinguistProjectReorderResult,
   LinguistIntegrityCancelRequest,
   LinguistIntegrityCancelResult,
   LinguistIntegrityExportReportRequest,
@@ -152,6 +156,10 @@ import type {
   LinguistSessionGetBindingResult,
   LinguistSessionListForProjectRequest,
   LinguistSessionListForProjectResult,
+  LinguistSessionCopyEligibilityRequest,
+  LinguistSessionCopyEligibilityResult,
+  LinguistSessionCopyToProjectRequest,
+  LinguistSessionCopyToProjectResult,
   LinguistProposalListPendingRequest,
   LinguistProposalListPendingResult,
   LinguistProposalListRequest,
@@ -1225,6 +1233,14 @@ export interface ElectronAPI {
   linguistProjectsGetSummary: (
     input: LinguistProjectGetSummaryRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectSummary>>
+  /** 重命名 CAT 项目；归档项目拒绝写入 */
+  linguistProjectsRename: (
+    input: LinguistProjectRenameRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectRenameResult>>
+  /** 原子保存完整的活跃项目顺序 */
+  linguistProjectsReorderActive: (
+    input: LinguistProjectReorderRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectReorderResult>>
   /** 归档 CAT 项目 */
   linguistProjectsArchive: (
     input: LinguistProjectArchiveRequest,
@@ -1407,6 +1423,14 @@ export interface ElectronAPI {
   linguistSessionsDetachBinding: (
     input: LinguistSessionDetachBindingRequest,
   ) => Promise<LinguistIpcResult<LinguistSessionDetachBindingResult>>
+  /** 查询会话当前能否安全跨项目复制 */
+  linguistSessionsGetCopyEligibility: (
+    input: LinguistSessionCopyEligibilityRequest,
+  ) => Promise<LinguistIpcResult<LinguistSessionCopyEligibilityResult>>
+  /** 创建目标项目绑定的独立会话副本 */
+  linguistSessionsCopyToProject: (
+    input: LinguistSessionCopyToProjectRequest,
+  ) => Promise<LinguistIpcResult<LinguistSessionCopyToProjectResult>>
 
   // ===== Linguist Proposal 人工审核（PB-053）=====
   linguistProposalsList: (
@@ -2842,6 +2866,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.IMPORT, input),
   linguistProjectsGetSummary: (input: LinguistProjectGetSummaryRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.GET_SUMMARY, input),
+  linguistProjectsRename: (input: LinguistProjectRenameRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.RENAME, input),
+  linguistProjectsReorderActive: (input: LinguistProjectReorderRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.REORDER_ACTIVE, input),
   linguistProjectsArchive: (input: LinguistProjectArchiveRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.ARCHIVE, input),
   linguistProjectsDelete: (input: LinguistProjectDeleteRequest) =>
@@ -2951,6 +2979,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_SESSION_IPC_CHANNELS.GET_BINDING, input),
   linguistSessionsDetachBinding: (input: LinguistSessionDetachBindingRequest) =>
     ipcRenderer.invoke(LINGUIST_SESSION_IPC_CHANNELS.DETACH_BINDING, input),
+  linguistSessionsGetCopyEligibility: (input: LinguistSessionCopyEligibilityRequest) =>
+    ipcRenderer.invoke(LINGUIST_SESSION_IPC_CHANNELS.GET_COPY_ELIGIBILITY, input),
+  linguistSessionsCopyToProject: (input: LinguistSessionCopyToProjectRequest) =>
+    ipcRenderer.invoke(LINGUIST_SESSION_IPC_CHANNELS.COPY_TO_PROJECT, input),
 
   // ===== Linguist Proposal 人工审核（PB-053）=====
   linguistProposalsList: (input: LinguistProposalListRequest) =>

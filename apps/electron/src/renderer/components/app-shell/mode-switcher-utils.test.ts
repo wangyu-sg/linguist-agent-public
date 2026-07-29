@@ -5,6 +5,7 @@ import {
   findSessionToRestore,
   getModeSliderTranslateX,
   getNextMode,
+  getWelcomeModeOptions,
 } from './mode-switcher-utils'
 
 describe('ModeSwitcher 三模式导航', () => {
@@ -34,6 +35,20 @@ describe('ModeSwitcher 三模式导航', () => {
     expect(canRestoreSessionForMode('agent')).toBe(true)
     expect(canRestoreSessionForMode('chat')).toBe(true)
     expect(canRestoreSessionForMode('linguist')).toBe(false)
+  })
+
+  test('given 普通空白页与 Linguist 会话空白页 when 计算模式入口 then 普通页提供三模式而 Linguist 不显示切换器', () => {
+    expect(getWelcomeModeOptions('agent').map((item) => item.value)).toEqual([
+      'agent',
+      'chat',
+      'linguist',
+    ])
+    expect(getWelcomeModeOptions('chat').map((item) => item.value)).toEqual([
+      'agent',
+      'chat',
+      'linguist',
+    ])
+    expect(getWelcomeModeOptions('linguist')).toEqual([])
   })
 
   test('given 跨模式标签 when 恢复空 Chat then 不复用 Linguist 项目并要求创建草稿', () => {
@@ -70,5 +85,23 @@ describe('ModeSwitcher 三模式导航', () => {
       [],
       new Set(['draft']),
     )).toBeNull()
+  })
+
+  test('given Linguist 绑定会话与普通 Agent 会话 when 恢复 Agent 模式 then 不选择 Linguist 会话', () => {
+    expect(findSessionToRestore(
+      'agent',
+      [
+        {
+          id: 'linguist',
+          title: '项目会话',
+          archived: false,
+          linguistProjectId: 'project-a',
+        },
+        { id: 'ordinary', title: '普通会话', archived: false },
+      ],
+      'linguist',
+      [],
+      new Set(),
+    )).toEqual({ id: 'ordinary', title: '普通会话', archived: false })
   })
 })

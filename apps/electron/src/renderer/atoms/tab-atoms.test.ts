@@ -265,6 +265,30 @@ describe('Localization Project Tab', () => {
       }],
       activeTabId: 'linguist-project:archived',
     }, new Set(), new Map([['archived', 'archived']]))
-    expect(archived.tabs[0]).toMatchObject({ repairState: 'archived' })
+    expect(archived.tabs[0]).toEqual({
+      id: 'linguist-project:archived',
+      type: 'linguist-project',
+      projectId: 'archived',
+      title: '归档项目',
+      repairState: undefined,
+    })
+  })
+
+  test('given 缺失项目的历史会话仍存在 when 恢复 then 保留只读历史选择', () => {
+    const restored = restorePersistedTabState({
+      tabs: [{
+        id: 'linguist-project:deleted',
+        type: 'linguist-project',
+        projectId: 'deleted',
+        title: '已删除项目',
+        historySessionId: 'agent-history',
+      }],
+      activeTabId: 'linguist-project:deleted',
+    }, new Set(['agent-history']), new Map())
+
+    expect(restored.tabs[0]).toMatchObject({
+      repairState: 'missing',
+      historySessionId: 'agent-history',
+    })
   })
 })

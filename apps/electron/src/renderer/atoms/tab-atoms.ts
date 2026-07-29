@@ -77,6 +77,8 @@ export interface LocalizationProjectTab {
   projectId: string
   title: string
   repairState?: LocalizationProjectRepairState
+  /** 项目目录缺失时仍可由唯一 AgentView 打开的绑定会话历史。 */
+  historySessionId?: string
 }
 
 /** 标签页数据；Project Tab 刻意不携带 sessionId。 */
@@ -324,7 +326,12 @@ export function openLocalizationProjectTab(
       tab.type === 'linguist-project' && tab.projectId === item.projectId,
   )
   const projectTab: LocalizationProjectTab = existing
-    ? { ...existing, title: item.title, repairState: undefined }
+    ? {
+        ...existing,
+        title: item.title,
+        repairState: undefined,
+        historySessionId: undefined,
+      }
     : { id, type: 'linguist-project', projectId: item.projectId, title: item.title }
 
   return {
@@ -387,7 +394,13 @@ export function restorePersistedTabState(
         title: typeof tab.title === 'string' && tab.title.length > 0
           ? tab.title
           : '本地化项目',
-        repairState: status === 'active' ? undefined : status ?? 'missing',
+        // 归档项目由主进程强制只读打开；只有索引中不存在的项目进入修复态。
+        repairState: status === undefined ? 'missing' : undefined,
+        ...(status === undefined
+          && typeof tab.historySessionId === 'string'
+          && validSessionIds.has(tab.historySessionId)
+          ? { historySessionId: tab.historySessionId }
+          : {}),
       })
     }
   }

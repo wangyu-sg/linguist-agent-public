@@ -35,15 +35,16 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.15.137` |
+| Electron App | `@proma/electron 0.15.138` |
 | Electron | `39.5.1` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.0.3` |
+| Shared | `@proma/shared 0.1.79` |
 | Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
 | Pi Runtime | `@earendil-works/pi-* 0.80.9` |
 | CAT Core | `@linguist/cat-core 0.0.12` |
-| CAT Store | `@linguist/cat-store 0.0.24` |
+| CAT Store | `@linguist/cat-store 0.0.25` |
 | CAT Tools | `@linguist/cat-tools 0.0.17` |
 | CAT schema | `13` |
 
@@ -110,7 +111,10 @@ bun run smoke:vertical
 - Agent / Chat 必须保持原生 Proma 行为和界面。
 - Linguist 使用一等 `LocalizationProjectTab` 和 project-scoped Jotai 状态。
 - Workbench 内嵌同一个 `AgentView` 的 rail presentation。
+- Agent 会话树必须排除带 `linguistProjectId` 的会话；Linguist 侧栏只展示项目绑定会话，并复用 Agent 的会话行与树行为。
+- Linguist 中点击项目进入 Workbench，点击会话进入 Full `AgentView`；归档或缺失项目的历史只能只读打开，发送与 CAT mutation 必须 fail closed。
 - 禁止新增 `LinguistAgentView`、`LinguistComposer`、`LinguistThinkingBlock`、`LinguistToolCard`、`LinguistApprovalCard` 或第二套 Agent Session Store。
+- 禁止新增第二套 Session tree 状态、排序、委派、置顶、最近会话或 MiniMap 行为实现；项目域只提供分组与动作适配。
 - CAT 编辑、Proposal、QA、TM/TB、Context、Preview 和设置位于 `renderer/features/linguist/**`。
 
 核心 Renderer 组合仍在：
@@ -133,6 +137,8 @@ bun run smoke:vertical
 ```
 
 Renderer 不得向 CAT 服务提交任意文件系统路径或任意 projectId authority。项目身份来自当前 Session binding 或主进程验证后的 Project Tab context。
+
+项目重命名、活跃项目排序与 Linguist 会话复制都由主进程重新校验。排序请求必须是当前活跃项目 ID 的完整无重复排列；复制目标必须是其他活跃且健康的项目。Renderer 不得提交目标 binding、原生分叉 ID 或路径，复制任一步失败必须回滚半成品且不得改变源会话。
 
 所有 BrowserWindow 必须显式设置：
 

@@ -7,7 +7,19 @@
  * - missing / unavailable：历史可读，发送 fail closed，等待修复或显式解绑。
  */
 
-import type { LinguistSessionBindingStatus } from '@proma/shared'
+import type {
+  AgentSessionMeta,
+  LinguistSessionBindingInfo,
+  LinguistSessionBindingStatus,
+} from '@proma/shared'
+
+/** 绑定状态未解析时同样只读；主进程发送闸门仍是最终权威。 */
+export function isLinguistSessionReadOnly(
+  session: Pick<AgentSessionMeta, 'linguistProjectId'> | null | undefined,
+  binding: LinguistSessionBindingInfo | undefined,
+): boolean {
+  return Boolean(session?.linguistProjectId && binding?.status !== 'active')
+}
 
 /** 徽章上项目名后的状态后缀；active 无后缀。 */
 export function bindingStatusLabel(status: LinguistSessionBindingStatus): string | null {

@@ -24,11 +24,11 @@ export function serializeProjectAgentSessionIds(
   return Object.fromEntries(selections)
 }
 
-function isUsableProjectSession(
+function isSelectableProjectSession(
   session: AgentSessionMeta,
   projectId: string,
 ): boolean {
-  return session.linguistProjectId === projectId && session.archived !== true
+  return session.linguistProjectId === projectId
 }
 
 export function resolveProjectAgentSessionIds(
@@ -40,7 +40,7 @@ export function resolveProjectAgentSessionIds(
 
   for (const [projectId, sessionId] of preferences) {
     const session = sessionsById.get(sessionId)
-    if (session && isUsableProjectSession(session, projectId)) {
+    if (session && isSelectableProjectSession(session, projectId)) {
       resolved.set(projectId, sessionId)
     }
   }

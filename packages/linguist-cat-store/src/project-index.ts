@@ -39,6 +39,7 @@ import {
   StoreIndexCorruptError,
   StoreNotFoundError,
   StoreProjectExistsError,
+  StoreProjectOrderConflictError,
 } from './errors'
 
 /** Subdirectories scaffolded inside every project dir (plan §5.2). */
@@ -172,9 +173,51 @@ export class ProjectIndex {
     if (!current) throw new StoreNotFoundError('project', projectId)
     const updated: LinguistProject = { ...current, ...patch, updatedAt: this.now() }
     index.projects[i] = updated
-    this.writeIndex(index)
     this.writeProjectMeta(updated)
+    try {
+      this.writeIndex(index)
+    } catch (error) {
+      try {
+        this.writeProjectMeta(current)
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          `Project metadata rollback failed: ${projectId}`,
+        )
+      }
+      throw error
+    }
     return updated
+  }
+
+  /** Rename through the existing atomic metadata update path. */
+  rename(projectId: string, name: string): LinguistProject {
+    return this.update(projectId, { name })
+  }
+
+  /** Reorder every active project; archived projects remain ordered behind them. */
+  reorderActive(orderedProjectIds: readonly string[]): LinguistProject[] {
+    const index = this.readIndex()
+    const activeProjects = index.projects.filter((project) => project.archivedAt === undefined)
+    const activeById = new Map<string, LinguistProject>(
+      activeProjects.map((project) => [project.id, project]),
+    )
+    if (new Set(orderedProjectIds).size !== orderedProjectIds.length) {
+      throw new StoreProjectOrderConflictError('ordered project ids contain duplicates')
+    }
+    if (orderedProjectIds.length !== activeProjects.length) {
+      throw new StoreProjectOrderConflictError('ordered project ids do not include every active project')
+    }
+    if (orderedProjectIds.some((projectId) => !activeById.has(projectId))) {
+      throw new StoreProjectOrderConflictError('ordered project ids contain an unknown or archived project')
+    }
+    const reordered = orderedProjectIds.map((projectId) => activeById.get(projectId)!)
+    index.projects = [
+      ...reordered,
+      ...index.projects.filter((project) => project.archivedAt !== undefined),
+    ]
+    this.writeIndex(index)
+    return reordered
   }
 
   /**

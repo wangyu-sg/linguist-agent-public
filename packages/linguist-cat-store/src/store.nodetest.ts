@@ -105,6 +105,35 @@ function prepareV12Project(
   return { dbPath, manifestPath }
 }
 
+test('facade: renameProject updates project metadata', () => {
+  const store = new CatStore({
+    rootDir: makeTempDir(),
+    entropy: makeEntropy(),
+    now: makeClock(),
+  })
+  const project = store.createProject(INPUT)
+
+  assert.equal(store.renameProject(project.id, 'Renamed').name, 'Renamed')
+  assert.equal(store.getProject(project.id).name, 'Renamed')
+})
+
+test('facade: reorderActiveProjects returns the persisted active order', () => {
+  const store = new CatStore({ rootDir: makeTempDir(), now: makeClock() })
+  const projectA = store.createProject(
+    { ...INPUT, name: 'A' },
+    { entropy: makeEntropy('a') },
+  )
+  const projectB = store.createProject(
+    { ...INPUT, name: 'B' },
+    { entropy: makeEntropy('b') },
+  )
+
+  const reordered = store.reorderActiveProjects([projectB.id, projectA.id])
+
+  assert.deepEqual(reordered.map((project) => project.id), [projectB.id, projectA.id])
+  assert.deepEqual(store.listProjects().map((project) => project.id), [projectB.id, projectA.id])
+})
+
 test('facade: first writable open records an honest database snapshot in project.json', () => {
   const rootDir = makeTempDir()
   const store = new CatStore({

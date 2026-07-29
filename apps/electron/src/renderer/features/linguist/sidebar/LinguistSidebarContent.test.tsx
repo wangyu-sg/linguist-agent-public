@@ -6,9 +6,39 @@ import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/tab-atoms'
 import {
   LinguistSidebarContentView,
+  moveProjectId,
   registerCreatedProjectSession,
   selectProjectAgentSession,
+  type SharedProjectSessionRowProps,
 } from './LinguistSidebarContent'
+
+function TestSessionRow({
+  session,
+  active,
+  workspaceName,
+  transferLabel,
+  historyOnlyActions,
+  delegationSummary,
+  onSelect,
+}: SharedProjectSessionRowProps): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-label={`选择会话 ${session.title}`}
+      aria-current={active || undefined}
+      data-history-only={historyOnlyActions || undefined}
+      onClick={() => onSelect(session.id, session.title)}
+    >
+      {session.title}
+      {workspaceName && <span>{workspaceName}</span>}
+      {transferLabel && <span>{transferLabel}</span>}
+      {delegationSummary && (
+        <span data-delegation-count={delegationSummary.total} />
+      )}
+      <span aria-label={`管理会话 ${session.title}`} />
+    </button>
+  )
+}
 
 function project(id: string, archived = false): LinguistProjectInfo {
   return {
@@ -38,7 +68,7 @@ function session(
     linguistProjectName: `项目 ${projectId}`,
     archived,
     createdAt: 1,
-    updatedAt: 2,
+    updatedAt: Date.now(),
   }
 }
 
@@ -102,19 +132,19 @@ describe('LinguistSidebarContent', () => {
     expect(html).not.toContain('项目 archived')
   })
 
-  test('given Linguist 侧栏 when 渲染 then 提供当前状态可见的项目管理次级入口', () => {
+  test('given Linguist 侧栏 when 渲染 then 标题栏提供创建且底部只有统一归档入口', () => {
     const html = renderToStaticMarkup(
       <LinguistSidebarContentView
         state={{ status: 'ready', projects: [project('active')] }}
         onRetry={() => {}}
         onOpenProject={() => {}}
-        onOpenProjectManagement={() => {}}
-        projectManagementActive
+        onCreateProject={() => {}}
       />,
     )
 
-    expect(html).toContain('aria-label="管理项目"')
-    expect(html).toContain('aria-current="page"')
+    expect(html).toContain('aria-label="新建本地化项目"')
+    expect(html).toContain('已归档')
+    expect(html).not.toContain('管理项目</')
   })
 
   test('given 多项目原生 Agent 会话 when 渲染侧栏 then 项目下只显示自身未归档会话和新建入口', () => {
@@ -134,8 +164,10 @@ describe('LinguistSidebarContent', () => {
           ordinarySession,
         ]}
         currentSessionIds={new Map([['alpha', 'alpha-current']])}
+        activeProjectId="alpha"
         onRetry={() => {}}
         onOpenProject={() => {}}
+        SessionRowComponent={TestSessionRow}
         onSelectSession={() => {}}
         onCreateSession={() => {}}
       />,
@@ -158,6 +190,7 @@ describe('LinguistSidebarContent', () => {
         sessions={[session('alpha-current', 'alpha')]}
         onRetry={() => {}}
         onOpenProject={() => {}}
+        SessionRowComponent={TestSessionRow}
         onSelectSession={() => {}}
         onCreateSession={() => {}}
         onOpenProjectSettings={() => {}}
@@ -170,7 +203,86 @@ describe('LinguistSidebarContent', () => {
 
     expect(html).toContain('aria-label="管理项目 项目 alpha"')
     expect(html).toContain('aria-label="管理会话 会话 alpha-current"')
+    expect(html).toContain('复制到其他项目')
     expect(html).not.toContain('迁移到其他项目')
+  })
+
+  test('given 置顶母会话含未置顶委派子会话 when 渲染 then 置顶区保留子树且项目组不重复', () => {
+    const root = session('root', 'alpha')
+    root.pinned = true
+    const child = session('child', 'alpha')
+    child.parentSessionId = root.id
+    child.sourceDelegationId = 'delegation-1'
+    const html = renderToStaticMarkup(
+      <LinguistSidebarContentView
+        state={{ status: 'ready', projects: [project('alpha')] }}
+        sessions={[root, child]}
+        onRetry={() => {}}
+        onOpenProject={() => {}}
+        SessionRowComponent={TestSessionRow}
+      />,
+    )
+
+    expect(html.match(/会话 root/g)?.length).toBe(3)
+    expect(html).toContain('data-delegation-count="1"')
+    expect(html).not.toContain('会话 child')
+  })
+
+  test('given 三天外空闲会话和阻塞会话 when 渲染项目预览 then 只保留阻塞会话', () => {
+    const now = 10 * 86_400_000
+    const oldIdle = session('old-idle', 'alpha')
+    oldIdle.updatedAt = 1
+    const blocked = session('blocked', 'alpha')
+    blocked.updatedAt = 1
+    const html = renderToStaticMarkup(
+      <LinguistSidebarContentView
+        state={{ status: 'ready', projects: [project('alpha')] }}
+        sessions={[oldIdle, blocked]}
+        indicatorMap={new Map([['blocked', 'blocked']])}
+        relativeTimeNow={now}
+        onRetry={() => {}}
+        onOpenProject={() => {}}
+        SessionRowComponent={TestSessionRow}
+      />,
+    )
+
+    expect(html).not.toContain('会话 old-idle')
+    expect(html).toContain('会话 blocked')
+  })
+
+  test('given 活跃项目顺序 when 键盘上移或下移 then 复用不可变排序结果', () => {
+    expect(moveProjectId(['a', 'b', 'c'], 'b', -1)).toEqual(['b', 'a', 'c'])
+    expect(moveProjectId(['a', 'b', 'c'], 'b', 1)).toEqual(['a', 'c', 'b'])
+    expect(moveProjectId(['a', 'b'], 'a', -1)).toEqual(['a', 'b'])
+  })
+
+  test('given 归档会话、归档项目和缺失项目 when 打开统一归档入口 then 分组三类只读历史', () => {
+    const missing = session('missing-session', 'missing')
+    missing.linguistProjectName = '已删除项目'
+    const html = renderToStaticMarkup(
+      <LinguistSidebarContentView
+        state={{
+          status: 'ready',
+          projects: [project('active'), project('archived', true)],
+        }}
+        archiveView
+        sessions={[
+          session('active-archived', 'active', true),
+          session('archived-project-session', 'archived'),
+          missing,
+        ]}
+        onRetry={() => {}}
+        onOpenProject={() => {}}
+        SessionRowComponent={TestSessionRow}
+        onSelectSession={() => {}}
+      />,
+    )
+
+    expect(html).toContain('活跃项目中的已归档会话')
+    expect(html).toContain('已归档项目')
+    expect(html).toContain('缺失或已删除的项目')
+    expect(html).toContain('已删除项目')
+    expect(html).toContain('data-history-only="true"')
   })
 
   test('given 项目会话操作失败 when 渲染侧栏 then 错误在对应项目下可见', () => {

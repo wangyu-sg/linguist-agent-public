@@ -18,6 +18,8 @@ The app has three peer modes:
 - **Chat** — Proma's multi-provider conversations, attachments, tools, context controls, and parallel comparison.
 - **Linguist** — projects, assets, a virtualized Segment Grid, human editing, Proposal review, TM / TB, Context, deterministic QA, workflow confirmation, run summaries and safe undo, delivery preflight, export, integrity scrubbing, backup, and restore.
 
+The Linguist sidebar is always “project → bound sessions.” Session rows and tree behavior are shared with Agent, including status, MiniMap, delegation, pinning, recents, and archives; Agent mode excludes every project-bound session. Selecting a project opens its Workbench, while selecting a session opens the same full `AgentView`. Cross-project actions create an independent copy, keep the source project open, and offer an action to open the copy.
+
 Linguist is a first-class Agent Profile. It layers versioned Profile, Role, Fast / Balanced / Best Strategy, Project Digest, and per-turn Context on top of the Proma base. It embeds the same Proma `AgentView`; it does not create a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. Agent tools may create reviewable Proposals, but cannot bypass human acceptance, CAS revisions, locked segments, tags, QA, or Required/Forbidden term gates.
 
 ## Architecture
@@ -41,13 +43,14 @@ Important boundaries:
 - `LinguistProjectService` remains the compatibility facade while lifecycle, resources, quality, and delivery live in separate modules.
 - Proposal content is stored separately from each issuance and its provenance. Long-running work uses Jobs/Checkpoints, idempotent mutations, a durable outbox, and run-scoped undo.
 - Project open performs only bounded Quick Health checks. Full Integrity Scrub runs in a worker thread and checks all managed digests, SQLite/reference lineage, exports, and Session workspaces.
+- Session copy is revalidated in the main process against the source binding, an active and healthy target project, and native Claude/Pi fork eligibility. The Renderer cannot provide bindings, native IDs, or paths. Copies omit workspace files, `.context`, attachments, delegation, automation, and run state; partial copies are rolled back.
 - Proma core changes are registered in [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md) and enforced by architecture tests.
 
 ## Local data
 
 Production data lives under `~/.linguist-agent/`; development uses `~/.linguist-agent-dev/`. General Proma conversations and settings remain JSON / JSONL files. CAT projects use an isolated SQLite database plus managed source, blob, export, and backup directories.
 
-The old `~/.proma(-dev)/channels.json` is read only when the user explicitly chooses **Settings → Model configuration → Import from Proma**. That action imports Provider configuration only; it does not migrate sessions, settings, workspaces, or CAT data. See [USERDATA_LAYOUT.md](./docs/architecture/USERDATA_LAYOUT.md).
+The old `~/.proma(-dev)/channels.json` is read only when the user explicitly chooses **Settings → Model configuration → Import from Proma**. That action imports Provider configuration only; it does not migrate sessions, settings, workspaces, or CAT data. Legacy Linguist project and session migration now lives under **Settings → Data migration**. See [USERDATA_LAYOUT.md](./docs/architecture/USERDATA_LAYOUT.md).
 
 ## Development
 

@@ -85,6 +85,47 @@ test('happy path: create → list → open → getSummary → archive（信封 o
   }
 })
 
+test('rename and active reorder validate at IPC boundary and preserve archived tail', async () => {
+  const service = makeService()
+  try {
+    const ipc = makeIpc(service)
+    const first = service.createProject({ ...INPUT, name: '一' })
+    const second = service.createProject({ ...INPUT, name: '二' })
+    const archived = service.createProject({ ...INPUT, name: '归档' })
+    service.archiveProject(archived.id)
+
+    const renamed = await ipc.rename({ projectId: first.id, name: '新名称' })
+    assert.equal(renamed.ok, true)
+    if (renamed.ok) assert.equal(renamed.data.name, '新名称')
+
+    const reordered = await ipc.reorderActive({
+      orderedProjectIds: [second.id, first.id],
+    })
+    assert.equal(reordered.ok, true)
+    if (reordered.ok) {
+      assert.deepEqual(reordered.data.map((project) => project.id), [second.id, first.id])
+    }
+    assert.deepEqual(
+      service.listProjects({ includeArchived: true }).map((project) => project.id),
+      [second.id, first.id, archived.id],
+    )
+
+    const incomplete = await ipc.reorderActive({ orderedProjectIds: [first.id] })
+    assert.equal(incomplete.ok, false)
+    if (!incomplete.ok) assert.equal(incomplete.error.code, 'PROJECT_ORDER_CONFLICT')
+
+    const invalidName = await ipc.rename({ projectId: first.id, name: '   ' })
+    assert.equal(invalidName.ok, false)
+    if (!invalidName.ok) assert.equal(invalidName.error.code, 'INVALID_INPUT')
+
+    const archivedRename = await ipc.rename({ projectId: archived.id, name: '不可改名' })
+    assert.equal(archivedRename.ok, false)
+    if (!archivedRename.ok) assert.equal(archivedRename.error.code, 'PROJECT_ARCHIVED')
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('delete: requires archive and exact project-name confirmation, then moves project out of index', async () => {
   const service = makeService()
   try {

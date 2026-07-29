@@ -4,7 +4,30 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { bindingNoticeCopy, bindingStatusLabel } from './binding-utils'
+import {
+  bindingNoticeCopy,
+  bindingStatusLabel,
+  isLinguistSessionReadOnly,
+} from './binding-utils'
+
+describe('isLinguistSessionReadOnly', () => {
+  const session = { linguistProjectId: 'project-1' }
+  const binding = {
+    sessionId: 'session-1',
+    projectId: 'project-1',
+    projectName: '项目一',
+    status: 'active' as const,
+  }
+
+  test('普通会话和 active 绑定可发送，未解析或异常绑定只读', () => {
+    expect(isLinguistSessionReadOnly({}, undefined)).toBe(false)
+    expect(isLinguistSessionReadOnly(session, binding)).toBe(false)
+    expect(isLinguistSessionReadOnly(session, undefined)).toBe(true)
+    expect(isLinguistSessionReadOnly(session, { ...binding, status: 'archived' })).toBe(true)
+    expect(isLinguistSessionReadOnly(session, { ...binding, status: 'missing' })).toBe(true)
+    expect(isLinguistSessionReadOnly(session, { ...binding, status: 'unavailable' })).toBe(true)
+  })
+})
 
 describe('bindingStatusLabel', () => {
   test('active has no suffix; blocked states have stable labels', () => {

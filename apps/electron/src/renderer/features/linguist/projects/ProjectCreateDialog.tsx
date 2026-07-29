@@ -17,6 +17,7 @@ import * as React from 'react'
 import { useAtom } from 'jotai'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+import type { LinguistProjectInfo } from '@proma/shared'
 import {
   Dialog,
   DialogContent,
@@ -50,8 +51,8 @@ interface FormErrors {
 }
 
 interface ProjectCreateDialogProps {
-  /** 创建成功后调用（父级刷新项目列表） */
-  onCreated: () => void
+  /** 创建成功后调用；调用方立即打开权威返回的项目。 */
+  onCreated: (project: LinguistProjectInfo) => void
 }
 
 export function ProjectCreateDialog({ onCreated }: ProjectCreateDialogProps): React.ReactElement {
@@ -107,7 +108,7 @@ export function ProjectCreateDialog({ onCreated }: ProjectCreateDialogProps): Re
         setDraft(DEFAULT_PROJECT_CREATE_DRAFT)
         setErrors({})
         setOpen(false)
-        onCreated()
+        onCreated(result.data)
       } else {
         setErrors({ form: describeLinguistIpcError(result.error) })
       }

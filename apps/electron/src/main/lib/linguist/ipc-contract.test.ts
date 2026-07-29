@@ -99,24 +99,28 @@ describe('linguist proposal IPC channel contract (PB-053)', () => {
 })
 
 describe('linguist session IPC channel contract (PB-034)', () => {
-  test('exactly the four session-binding channel names, dotted form', () => {
+  test('session binding and cross-project copy channel names stay exact', () => {
     expect(LINGUIST_SESSION_IPC_CHANNELS).toEqual({
       CREATE_FOR_PROJECT: 'linguist.sessions.createForProject',
       LIST_FOR_PROJECT: 'linguist.sessions.listForProject',
       GET_BINDING: 'linguist.sessions.getBinding',
       DETACH_BINDING: 'linguist.sessions.detachBinding',
+      GET_COPY_ELIGIBILITY: 'linguist.sessions.getCopyEligibility',
+      COPY_TO_PROJECT: 'linguist.sessions.copyToProject',
     })
   })
 })
 
 describe('linguist project IPC channel contract (plan §7.2)', () => {
-  test('exactly the twelve mandated channel names, dotted form (LF-072 增加可恢复删除)', () => {
+  test('project lifecycle and ordering channel names stay exact', () => {
     expect(LINGUIST_PROJECT_IPC_CHANNELS).toEqual({
       LIST: 'linguist.projects.list',
       CREATE: 'linguist.projects.create',
       OPEN: 'linguist.projects.open',
       IMPORT: 'linguist.projects.import',
       GET_SUMMARY: 'linguist.projects.getSummary',
+      RENAME: 'linguist.projects.rename',
+      REORDER_ACTIVE: 'linguist.projects.reorderActive',
       ARCHIVE: 'linguist.projects.archive',
       DELETE: 'linguist.projects.delete',
       SET_QUALITY_PROFILE: 'linguist.projects.setQualityProfile',
@@ -128,10 +132,10 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
     })
   })
 
-  test('stable error-code catalog is complete (31 codes)', () => {
+  test('stable error-code catalog is complete (33 codes)', () => {
     const codes: string[] = Object.values(LINGUIST_IPC_ERROR_CODES)
-    expect(codes.length).toBe(31)
-    expect(new Set(codes).size).toBe(31)
+    expect(codes.length).toBe(33)
+    expect(new Set(codes).size).toBe(33)
     // IPC 层
     expect(codes).toContain('INVALID_INPUT')
     expect(codes).toContain('INTERNAL')
@@ -253,6 +257,8 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     'linguistProjectsOpen',
     'linguistProjectsImport',
     'linguistProjectsGetSummary',
+    'linguistProjectsRename',
+    'linguistProjectsReorderActive',
     'linguistProjectsArchive',
     'linguistProjectsDelete',
     'linguistProjectsSetQualityProfile',
@@ -301,19 +307,19 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     }
   })
 
-  test('preload exposes the twelve linguistProjects*/linguistBackups* methods wired to the channels', () => {
+  test('preload exposes all linguistProjects*/linguistBackups* methods wired to the channels', () => {
     for (const method of PRELOAD_METHODS) {
       expect(preloadSource).toContain(`${method}:`)
     }
     expect(preloadSource).toContain('LINGUIST_PROJECT_IPC_CHANNELS')
-    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'GET_SUMMARY', 'ARCHIVE', 'DELETE', 'SET_QUALITY_PROFILE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
+    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'SET_QUALITY_PROFILE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
       expect(preloadSource).toContain(`LINGUIST_PROJECT_IPC_CHANNELS.${member}`)
     }
   })
 
-  test('ipc.ts registers all twelve channels with the dialog picker injected for import', () => {
+  test('ipc.ts registers all project channels with the dialog picker injected for import', () => {
     expect(ipcSource).toContain('createLinguistProjectIpc')
-    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'GET_SUMMARY', 'ARCHIVE', 'DELETE', 'SET_QUALITY_PROFILE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
+    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'SET_QUALITY_PROFILE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
       expect(ipcSource).toContain(`LINGUIST_PROJECT_IPC_CHANNELS.${member}`)
     }
     expect(ipcSource).toContain('dialog.showOpenDialog')
@@ -356,20 +362,22 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     'linguistSessionsListForProject',
     'linguistSessionsGetBinding',
     'linguistSessionsDetachBinding',
+    'linguistSessionsGetCopyEligibility',
+    'linguistSessionsCopyToProject',
   ] as const
 
   test('preload exposes all linguistSessions* methods wired to the channels', () => {
     for (const method of PRELOAD_SESSION_METHODS) {
       expect(preloadSource).toContain(`${method}:`)
     }
-    for (const member of ['CREATE_FOR_PROJECT', 'LIST_FOR_PROJECT', 'GET_BINDING', 'DETACH_BINDING']) {
+    for (const member of ['CREATE_FOR_PROJECT', 'LIST_FOR_PROJECT', 'GET_BINDING', 'DETACH_BINDING', 'GET_COPY_ELIGIBILITY', 'COPY_TO_PROJECT']) {
       expect(preloadSource).toContain(`LINGUIST_SESSION_IPC_CHANNELS.${member}`)
     }
   })
 
-  test('ipc.ts registers all four session-binding channels', () => {
+  test('ipc.ts registers session binding and copy channels', () => {
     expect(ipcSource).toContain('createLinguistSessionIpc')
-    for (const member of ['CREATE_FOR_PROJECT', 'LIST_FOR_PROJECT', 'GET_BINDING', 'DETACH_BINDING']) {
+    for (const member of ['CREATE_FOR_PROJECT', 'LIST_FOR_PROJECT', 'GET_BINDING', 'DETACH_BINDING', 'GET_COPY_ELIGIBILITY', 'COPY_TO_PROJECT']) {
       expect(ipcSource).toContain(`LINGUIST_SESSION_IPC_CHANNELS.${member}`)
     }
   })

@@ -28,6 +28,8 @@ export const STORE_ERROR_CODES = {
   STORE_BUSY: 'STORE_BUSY',
   /** createProject was called for a project that already exists. */
   STORE_PROJECT_EXISTS: 'STORE_PROJECT_EXISTS',
+  /** Active project reorder input is stale or is not an exact permutation. */
+  PROJECT_ORDER_CONFLICT: 'PROJECT_ORDER_CONFLICT',
   /** A source blob's bytes do not match the asset row's sourceSha256. */
   STORE_ASSET_SOURCE_MISMATCH: 'STORE_ASSET_SOURCE_MISMATCH',
   /** A backup failed verification (manifest / sha256 / quick_check / schema). */
@@ -143,6 +145,15 @@ export class StoreProjectExistsError extends StoreError {
   constructor(readonly projectId: string) {
     super(`Project already exists: ${projectId}.`)
     this.name = 'StoreProjectExistsError'
+  }
+}
+
+/** Active project reorder input is not an exact permutation of the current active ids. */
+export class StoreProjectOrderConflictError extends StoreError {
+  readonly code = STORE_ERROR_CODES.PROJECT_ORDER_CONFLICT
+  constructor(readonly detail: string) {
+    super(`Active project order conflict: ${detail}. Refresh the project list and retry.`)
+    this.name = 'StoreProjectOrderConflictError'
   }
 }
 

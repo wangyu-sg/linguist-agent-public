@@ -127,7 +127,7 @@ export function validateLocaleInput(value: string, fieldLabel: string): string |
 // ===== 错误码中文化 =====
 
 /**
- * 31 个稳定错误码（含交付预检与 Context DOCX 诊断）的中文可读文案。
+ * 稳定错误码（含项目排序与会话复制）的中文可读文案。
  * Record<LinguistIpcErrorCode, string> 由编译器保证与契约目录一一对应；
  * project-utils.test.ts 另有运行时完备性断言。
  */
@@ -143,6 +143,8 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
   CONTEXT_DOC_EXTRACT_FAILED: 'DOCX 文本读取失败；文件可能损坏、加密、仅含图片或不是有效 DOCX',
   PROJECT_DELETE_REQUIRES_ARCHIVE: '请先归档项目，再执行删除',
   PROJECT_DELETE_CONFIRMATION_MISMATCH: '项目名称确认不匹配，已取消删除',
+  PROJECT_ORDER_CONFLICT: '项目顺序已变化，请刷新后重试',
+  SESSION_COPY_BLOCKED: '当前会话状态不能安全复制到其他项目',
   STORE_SQLITE_UNAVAILABLE: '本机 SQLite 运行时不可用，项目数据库暂无法访问',
   STORE_SCHEMA_TOO_NEW: '项目数据由更新版本的应用创建，请升级应用后再打开',
   STORE_NOT_FOUND: '项目存储不存在',

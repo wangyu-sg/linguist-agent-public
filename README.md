@@ -18,6 +18,8 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 - **Chat**：Proma 原生多 Provider 对话、附件、工具、上下文控制与并排比较。
 - **Linguist**：项目、资产、虚拟化 Segment Grid、人工编辑、Proposal 审核、TM / TB、Context、确定性 QA、阶段确认、运行摘要/安全撤销、交付预检、导出、完整性扫描、备份与恢复。
 
+Linguist 左侧栏固定为“项目 → 绑定会话”：会话行与 Agent 侧栏复用同一组件和树行为（状态、MiniMap、委派、置顶、最近会话与归档），Agent 模式则排除所有项目绑定会话。点击项目进入 Workbench，点击会话进入同一个 Full `AgentView`；跨项目操作是创建独立副本，成功后仍停留在源项目，并可从提示打开副本。
+
 Linguist 是一等 Agent Profile：在 Proma Base 上叠加版本化的 Profile、Role、Fast / Balanced / Best Strategy、Project Digest 与每轮 Context。它嵌入同一个 Proma `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA/Required/Forbidden 规则直接提交 Segment。
 
 ## 架构
@@ -41,13 +43,14 @@ Proma Desktop App
 - `LinguistProjectService` 保持单一对外接口，内部按生命周期、资源、质量与交付拆分。
 - Proposal 内容与每次 Issuance/Provenance 分离持久化；长任务使用 Job/Checkpoint、幂等 mutation、durable outbox 和按运行撤销。
 - 项目打开只做有界 Quick Health；Full Integrity Scrub 在独立 worker thread 中检查全量摘要、SQLite/引用链、导出与 Session workspace。
+- 会话复制由主进程重新验证源 Session binding、目标项目活跃/健康状态与 Claude/Pi 原生分叉条件；Renderer 不能提交 binding、原生 ID 或路径。副本不携带工作区文件、`.context`、附件、委派、自动化或运行状态，失败时回滚半成品。
 - Proma 核心触点受 [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md) 和架构测试约束。
 
 ## 数据目录
 
 正式版使用 `~/.linguist-agent/`，开发版使用 `~/.linguist-agent-dev/`；CAT 数据位于其 `linguist/` 子目录。通用会话和设置继续使用 JSON / JSONL，CAT 项目使用独立 SQLite 数据库与受管 source/blobs/exports 目录。
 
-旧 `~/.proma(-dev)/channels.json` 只会在用户从「设置 → 模型配置」显式执行 Provider 导入时读取；不会迁移 Proma 会话、设置、工作区或 CAT 数据。详见 [USERDATA_LAYOUT.md](./docs/architecture/USERDATA_LAYOUT.md)。
+旧 `~/.proma(-dev)/channels.json` 只会在用户从「设置 → 模型配置」显式执行 Provider 导入时读取；不会迁移 Proma 会话、设置、工作区或 CAT 数据。旧 Linguist 项目与会话的数据迁移入口位于「设置 → 数据迁移」。详见 [USERDATA_LAYOUT.md](./docs/architecture/USERDATA_LAYOUT.md)。
 
 ## 开发与验证
 

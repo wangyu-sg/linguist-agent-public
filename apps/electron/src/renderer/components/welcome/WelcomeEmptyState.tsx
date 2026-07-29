@@ -4,18 +4,17 @@
  * 在没有会话时展示：
  * 1. 个性化时段问候
  * 2. 平台感知的小 Tips
- * 3. Chat/Agent 模式切换 Tab
+ * 3. 普通空白页显示三模式入口；Linguist 会话不显示跨模式选择
  */
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
-import { Lightbulb, MessageSquare, Bot } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Lightbulb } from 'lucide-react'
 import { userProfileAtom } from '@/atoms/user-profile'
 import { appModeAtom } from '@/atoms/app-mode'
-import { themeStyleAtom } from '@/atoms/theme'
 import { getRandomTip, getPlatform, type Tip } from '@/lib/tips'
-import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
+import { ModeSwitcher } from '@/components/app-shell/ModeSwitcher'
+import { getWelcomeModeOptions } from '@/components/app-shell/mode-switcher-utils'
 
 /** 根据小时返回时段问候 */
 function getGreeting(hour: number): string {
@@ -25,17 +24,9 @@ function getGreeting(hour: number): string {
   return '晚上好'
 }
 
-/** 模式配置 */
-const MODE_CONFIG: Record<'agent' | 'chat', { icon: React.ReactNode; label: string }> = {
-  chat: { icon: <MessageSquare size={15} />, label: 'Chat' },
-  agent: { icon: <Bot size={15} />, label: 'Agent' },
-}
-
 export function WelcomeEmptyState(): React.ReactElement {
   const userProfile = useAtomValue(userProfileAtom)
   const mode = useAtomValue(appModeAtom)
-  const switchMode = useSwitchAppMode()
-  const themeStyle = useAtomValue(themeStyleAtom)
 
   // 稳定的随机 Tip（组件挂载时选一条）
   const [tip] = React.useState<Tip>(() => getRandomTip(getPlatform()))
@@ -43,13 +34,6 @@ export function WelcomeEmptyState(): React.ReactElement {
   const hour = new Date().getHours()
   const greeting = getGreeting(hour)
   const displayName = userProfile.userName || '用户'
-
-  // 森息晨光主题下选中按钮使用主色
-  const selectedColor = themeStyle === 'forest-light' ? '#4a7858' : undefined
-
-  const handleModeSwitch = React.useCallback((targetMode: 'agent' | 'chat'): void => {
-    switchMode(targetMode)
-  }, [switchMode])
 
   return (
     <div className="welcome-empty-state flex h-full flex-col items-center justify-center gap-6 px-4">
@@ -64,36 +48,11 @@ export function WelcomeEmptyState(): React.ReactElement {
         <span>{tip.text}</span>
       </div>
 
-      {/* 模式切换 Tab */}
-      <div className="relative flex rounded-xl bg-muted/60 p-1">
-        {/* 滑动背景指示器 */}
-        <div
-          className={cn(
-            'absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-in-out',
-            mode === 'agent' ? 'translate-x-0' : 'translate-x-full',
-          )}
-        />
-        {(['agent', 'chat'] as const).map((m) => {
-          const config = MODE_CONFIG[m]
-          const isSelected = mode === m
-          return (
-            <button
-              key={m}
-              onClick={() => handleModeSwitch(m)}
-              style={isSelected && selectedColor ? { color: selectedColor } : undefined}
-              className={cn(
-                'relative z-[1] flex items-center gap-1.5 rounded-lg px-5 py-1.5 text-[13px] font-medium transition-colors duration-200',
-                isSelected
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {config.icon}
-              {config.label}
-            </button>
-          )
-        })}
-      </div>
+      {getWelcomeModeOptions(mode).length > 0 && (
+        <div className="w-[320px]">
+          <ModeSwitcher ariaLabel="新会话模式" />
+        </div>
+      )}
     </div>
   )
 }

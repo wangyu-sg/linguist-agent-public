@@ -16,8 +16,9 @@
  */
 
 import * as React from 'react'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { Search, X, MessageSquare, Bot, Archive, Loader2 } from 'lucide-react'
+import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
+import { Search, X, MessageSquare, Bot, Archive, Loader2, Languages } from 'lucide-react'
+import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogPortal, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { searchDialogOpenAtom } from '@/atoms/search-atoms'
@@ -36,15 +37,20 @@ import {
   useSessionMiniMapHover,
 } from '@/components/session-preview/SessionMiniMapPopover'
 import type {
+  AgentSessionMeta,
   MessageSearchResult,
   AgentMessageSearchResult,
 } from '@proma/shared'
+import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
+import { describeLinguistIpcError } from '@/features/linguist/projects/project-utils'
+import { linguistProjectListStateAtom } from '@/features/linguist/projects/project-list-atoms'
 
 /** 标题搜索结果项 */
 interface TitleResult {
   id: string
   title: string
-  type: 'chat' | 'agent'
+  type: 'chat' | 'agent' | 'linguist'
+  projectName?: string
   archived?: boolean
   updatedAt: number
 }
@@ -53,7 +59,8 @@ interface TitleResult {
 interface ContentResult {
   id: string
   title: string
-  type: 'chat' | 'agent'
+  type: 'chat' | 'agent' | 'linguist'
+  projectName?: string
   messageId: string
   snippet: string
   matchStart: number
@@ -62,6 +69,20 @@ interface ContentResult {
 }
 
 type SearchResult = TitleResult | ContentResult
+
+export function getAgentSearchIdentity(
+  session: Pick<AgentSessionMeta, 'linguistProjectId' | 'linguistProjectName'> | undefined,
+  projectNames?: ReadonlyMap<string, string>,
+): { type: 'agent' | 'linguist'; projectName?: string } {
+  return session?.linguistProjectId
+    ? {
+        type: 'linguist',
+        projectName: projectNames?.get(session.linguistProjectId)
+          ?? session.linguistProjectName
+          ?? session.linguistProjectId,
+      }
+    : { type: 'agent' }
+}
 
 function isContentResult(result: SearchResult): result is ContentResult {
   return 'snippet' in result
@@ -121,6 +142,8 @@ function HighlightSnippet({ snippet, matchStart, matchLength }: {
 function SearchResultIcon({ result }: { result: SearchResult }): React.ReactElement {
   return result.type === 'chat' ? (
     <MessageSquare size={14} className="flex-shrink-0 text-foreground/40" />
+  ) : result.type === 'linguist' ? (
+    <Languages size={14} className="flex-shrink-0 text-violet-500/70" />
   ) : (
     <Bot size={14} className="flex-shrink-0 text-blue-500/70" />
   )
@@ -147,7 +170,11 @@ function SearchResultRow({
 }: SearchResultRowProps): React.ReactElement {
   const preview = useSessionMiniMapHover(400)
   const isContent = isContentResult(result)
-  const wsName = result.type === 'agent' ? getAgentWorkspaceName(result.id) : undefined
+  const wsName = result.type === 'linguist'
+    ? result.projectName
+    : result.type === 'agent'
+      ? getAgentWorkspaceName(result.id)
+      : undefined
 
   return (
     <>
@@ -195,7 +222,7 @@ function SearchResultRow({
       </button>
       <SessionMiniMapPopover
         target={{
-          type: result.type,
+          type: result.type === 'linguist' ? 'agent' : result.type,
           sessionId: result.id,
           title: result.title,
           workspaceName: wsName,
@@ -211,9 +238,11 @@ function SearchResultRow({
 }
 
 export function SearchDialog(): React.ReactElement {
+  const store = useStore()
   const [open, setOpen] = useAtom(searchDialogOpenAtom)
   const conversations = useAtomValue(conversationsAtom)
   const agentSessions = useAtomValue(agentSessionsAtom)
+  const linguistProjectListState = useAtomValue(linguistProjectListStateAtom)
   const agentWorkspaces = useAtomValue(agentWorkspacesAtom)
   const channels = useAtomValue(channelsAtom)
   const currentAgentChannelId = useAtomValue(agentChannelIdAtom)
@@ -227,6 +256,14 @@ export function SearchDialog(): React.ReactElement {
     for (const w of agentWorkspaces) map.set(w.id, w.name)
     return map
   }, [agentWorkspaces])
+  const linguistProjectNameMap = React.useMemo(
+    () => new Map(
+      linguistProjectListState.status === 'ready'
+        ? linguistProjectListState.projects.map((project) => [project.id, project.name])
+        : [],
+    ),
+    [linguistProjectListState],
+  )
 
   const getAgentWorkspaceName = React.useCallback((sessionId: string): string | undefined => {
     const session = agentSessions.find((s) => s.id === sessionId)
@@ -301,7 +338,13 @@ export function SearchDialog(): React.ReactElement {
         .map((c) => ({ id: c.id, title: c.title, type: 'chat' as const, archived: c.archived, updatedAt: c.updatedAt })),
       ...agentSessions
         .filter((s) => s.title.toLowerCase().includes(qLower))
-        .map((s) => ({ id: s.id, title: s.title, type: 'agent' as const, archived: s.archived, updatedAt: s.updatedAt })),
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          ...getAgentSearchIdentity(s, linguistProjectNameMap),
+          archived: s.archived,
+          updatedAt: s.updatedAt,
+        })),
     ]
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, 20)
@@ -330,16 +373,19 @@ export function SearchDialog(): React.ReactElement {
         }))
       const agentContent: ContentResult[] = (agentResults as AgentMessageSearchResult[])
         .filter((r) => !titleIds.has(r.sessionId))
-        .map((r) => ({
-          id: r.sessionId,
-          title: r.sessionTitle,
-          type: 'agent' as const,
-          messageId: r.messageId,
-          snippet: r.snippet,
-          matchStart: r.matchStart,
-          matchLength: r.matchLength,
-          archived: r.archived,
-        }))
+        .map((r) => {
+          const session = agentSessions.find((item) => item.id === r.sessionId)
+          return {
+            id: r.sessionId,
+            title: r.sessionTitle,
+            ...getAgentSearchIdentity(session, linguistProjectNameMap),
+            messageId: r.messageId,
+            snippet: r.snippet,
+            matchStart: r.matchStart,
+            matchLength: r.matchLength,
+            archived: r.archived,
+          }
+        })
 
       setContentResults([...chatContent, ...agentContent])
     } catch (error) {
@@ -348,7 +394,7 @@ export function SearchDialog(): React.ReactElement {
     } finally {
       if (token === searchTokenRef.current) setLoading(false)
     }
-  }, [query, conversations, agentSessions])
+  }, [query, conversations, agentSessions, linguistProjectNameMap])
 
   const handleAgentSearch = React.useCallback(async () => {
     const q = query.trim()
@@ -390,18 +436,27 @@ export function SearchDialog(): React.ReactElement {
   // 导航到对话/会话
   const navigateToResult = React.useCallback((result: TitleResult | ContentResult) => {
     setOpen(false)
-    setActiveView('conversations')
 
     if (result.type === 'chat') {
+      setActiveView('conversations')
       const conv = conversations.find((c) => c.id === result.id)
       const title = conv?.title ?? result.title
       openSession('chat', result.id, title)
-    } else {
+    } else if (result.type === 'agent') {
+      setActiveView('conversations')
       const session = agentSessions.find((s) => s.id === result.id)
       const title = session?.title ?? result.title
       openSession('agent', result.id, title)
+    } else {
+      void openLinguistAgentSession(store, result.id).then((opened) => {
+        if (!opened.ok) {
+          toast.error('打开 Linguist 会话失败', {
+            description: describeLinguistIpcError(opened.error),
+          })
+        }
+      })
     }
-  }, [setOpen, setActiveView, openSession, conversations, agentSessions])
+  }, [setOpen, setActiveView, openSession, conversations, agentSessions, store])
 
   /**
    * Enter 键语义：

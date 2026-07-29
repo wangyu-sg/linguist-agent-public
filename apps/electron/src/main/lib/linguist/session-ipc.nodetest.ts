@@ -24,7 +24,7 @@ import { projectPaths } from './paths'
 const tempHome = makeTempDir()
 process.env.HOME = tempHome
 
-const { createLinguistSessionIpc } = await import('./session-ipc')
+const { createLinguistSessionIpc, toRendererCopyResult } = await import('./session-ipc')
 const binding = await import('./session-binding')
 
 const service = new LinguistProjectService({
@@ -34,7 +34,10 @@ const service = new LinguistProjectService({
 })
 service.init()
 
-const ipc = createLinguistSessionIpc({ getService: () => service })
+const ipc = createLinguistSessionIpc({
+  getService: () => service,
+  isSessionActive: () => false,
+})
 const INPUT = { name: 'IPC 绑定项目', sourceLocale: 'en', targetLocale: 'zh-CN' } as const
 
 test('createForProject: happy path returns bound Pi session meta', async () => {
@@ -50,6 +53,63 @@ test('createForProject: happy path returns bound Pi session meta', async () => {
   const titled = await ipc.createForProject({ projectId: project.id, title: '自定义标题' })
   assert.ok(titled.ok)
   if (titled.ok) assert.equal(titled.data.title, '自定义标题')
+})
+
+test('copy eligibility/copy: blank session creates an independent target binding', async () => {
+  const sourceProject = service.createProject({ ...INPUT, name: 'IPC 复制源' })
+  const targetProject = service.createProject({ ...INPUT, name: 'IPC 复制目标' })
+  const source = binding.createLinguistProjectChatSession(service, {
+    projectId: sourceProject.id,
+    title: '复制测试',
+  })
+
+  const eligibility = await ipc.getCopyEligibility({ sessionId: source.id })
+  assert.deepEqual(eligibility, { ok: true, data: { eligible: true, mode: 'blank' } })
+
+  const copied = await ipc.copyToProject({
+    sessionId: source.id,
+    targetProjectId: targetProject.id,
+  })
+  assert.equal(copied.ok, true, JSON.stringify(copied))
+  if (copied.ok) {
+    assert.notEqual(copied.data.id, source.id)
+    assert.equal(copied.data.title, '复制测试（副本）')
+    assert.equal(copied.data.linguistProjectId, targetProject.id)
+  }
+
+  const invalid = await ipc.copyToProject({ sessionId: source.id, targetProjectId: 'bad' })
+  assert.equal(invalid.ok, false)
+  if (!invalid.ok) assert.equal(invalid.error.code, LINGUIST_IPC_ERROR_CODES.INVALID_INPUT)
+})
+
+test('copy result projection never exposes native ids or absolute paths', () => {
+  const projected = toRendererCopyResult({
+    id: 'copied',
+    title: '副本',
+    createdAt: 1,
+    updatedAt: 1,
+    sdkSessionId: 'native-id',
+    piSessionFile: '/private/pi.jsonl',
+    piEntryBindings: { assistant: 'entry-id' },
+    forkSourceDir: '/private/source',
+    forkSourceSdkSessionId: 'source-native-id',
+    resumeAtMessageUuid: 'message-id',
+    attachedDirectories: ['/private/dir'],
+    attachedFiles: ['/private/file'],
+  })
+
+  for (const key of [
+    'sdkSessionId',
+    'piSessionFile',
+    'piEntryBindings',
+    'forkSourceDir',
+    'forkSourceSdkSessionId',
+    'resumeAtMessageUuid',
+    'attachedDirectories',
+    'attachedFiles',
+  ]) {
+    assert.equal(Object.hasOwn(projected, key), false, key)
+  }
 })
 
 test('createForProject: unknown / malformed / archived project rejected with stable codes', async () => {
@@ -212,6 +272,7 @@ test('getBinding reports unavailable and detachBinding permanently converts to o
     role: 'reviewer',
   })
   const unavailableIpc = createLinguistSessionIpc({
+    isSessionActive: () => false,
     getService: () => {
       throw new Error('service unavailable')
     },
@@ -256,6 +317,7 @@ test('getBinding reports unavailable and detachBinding permanently converts to o
 
 test('untyped service errors collapse to INTERNAL without leaking internals', async () => {
   const exploding = createLinguistSessionIpc({
+    isSessionActive: () => false,
     getService: () => {
       throw new Error('secret internal detail')
     },

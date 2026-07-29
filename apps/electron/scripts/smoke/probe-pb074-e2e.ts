@@ -393,8 +393,8 @@ async function createProjectViaUi(page: Page): Promise<string> {
   await page.locator('#project-create-source').fill('en-US')
   await page.locator('#project-create-target').fill('zh-CN')
   await page.getByRole('dialog').getByRole('button', { name: '创建项目' }).click()
-  const projectManagementList = page.getByText('最近项目', { exact: true }).locator('..')
-  await projectManagementList.getByRole(
+  const projectList = await resolveVisibleLinguistProjectList(page)
+  await projectList.list.getByRole(
     'button',
     { name: `打开项目 ${PROJECT_NAME}`, exact: true },
   ).waitFor({ timeout: 30_000 })
@@ -525,10 +525,10 @@ async function isPersistedLinguistState(
     && (sessionId === undefined || state.projectSessionId === sessionId)
 }
 
-async function createAndSelectProjectSessionViaSidebar(
+async function createAndOpenProjectSessionViaSidebar(
   page: Page,
   projectId: string,
-): Promise<{ sessionId: string; workbenchPreserved: boolean }> {
+): Promise<{ sessionId: string; fullAgentOpened: boolean }> {
   const resolvedProjectList = await resolveVisibleLinguistProjectList(page)
   if (resolvedProjectList.visibleCount !== 1) {
     throw new Error(
@@ -555,14 +555,19 @@ async function createAndSelectProjectSessionViaSidebar(
   }, 30_000)
   if (!created) throw new Error(`项目 Session 创建异常: ${createdSessionIds.length}`)
   const sessionId = createdSessionIds[0]!
-  const sessionList = page.getByRole('list', { name: `${PROJECT_NAME} 的项目会话`, exact: true })
-  const selectedSession = sessionList.getByRole('button', { name: /选择会话 /u, exact: false })
-  await selectedSession.waitFor({ timeout: 30_000 })
-  await selectedSession.click()
-  const workbenchPreserved = await workspace.isVisible()
-    && await selectedSession.getAttribute('aria-current') === 'true'
+  const fullAgent = page.locator(
+    'aside[aria-label="项目 Agent"][data-workbench-slot="agent-full"]',
+  )
+  await fullAgent.waitFor({ timeout: 30_000 })
+  const returnToWorkbench = fullAgent.getByRole(
+    'button',
+    { name: '返回本地化工作台', exact: true },
+  )
+  const fullAgentOpened = await returnToWorkbench.isVisible()
     && await projectButton.getAttribute('aria-current') === 'page'
-  return { sessionId, workbenchPreserved }
+  await returnToWorkbench.click()
+  await workspace.waitFor({ timeout: 30_000 })
+  return { sessionId, fullAgentOpened }
 }
 
 async function openLinguistWorkbenchAndSelectLocation(
@@ -572,7 +577,7 @@ async function openLinguistWorkbenchAndSelectLocation(
   segmentId: string,
 ): Promise<{
   modesDiscoverable: boolean
-  managementReachable: boolean
+  legacyManagementRemoved: boolean
   multipleProjectsDiscoverable: boolean
   projectListEvidence: string
   sidebarCurrentCorrect: boolean
@@ -618,11 +623,10 @@ async function openLinguistWorkbenchAndSelectLocation(
     `，visibleLists=${resolvedProjectList.visibleCount}，rows=${projectRowCount}` +
     `，main=${mainCount}/${mainVisible}，distractor=${distractorCount}/${distractorVisible}` +
     `，labels=${JSON.stringify(projectLabels)}`
-  const managementButton = page.getByRole('button', { name: '管理项目', exact: true })
-  await managementButton.click()
-  const managementReachable = await page.getByRole('heading', { name: '项目', exact: true }).first()
-    .waitFor({ timeout: 30_000 }).then(() => true).catch(() => false)
-  const managementCurrent = await managementButton.getAttribute('aria-current') === 'page'
+  const legacyManagementRemoved = await page.getByRole(
+    'button',
+    { name: '管理项目', exact: true },
+  ).count() === 0
 
   await projectButton.click()
   const workspace = page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
@@ -640,9 +644,7 @@ async function openLinguistWorkbenchAndSelectLocation(
       && state.tab.projectId === projectId
       && state.tab.sessionId === undefined
   }, 10_000)
-  const sidebarCurrentCorrect = managementCurrent
-    && await projectButton.getAttribute('aria-current') === 'page'
-    && await managementButton.getAttribute('aria-current') !== 'page'
+  const sidebarCurrentCorrect = await projectButton.getAttribute('aria-current') === 'page'
 
   const asset = workspace.locator(`[data-asset-id="${assetId}"]`)
   await asset.click()
@@ -662,7 +664,7 @@ async function openLinguistWorkbenchAndSelectLocation(
     && await status.getByText(`当前片段：${segmentId}`, { exact: true }).isVisible()
   return {
     modesDiscoverable,
-    managementReachable,
+    legacyManagementRemoved,
     multipleProjectsDiscoverable,
     projectListEvidence,
     sidebarCurrentCorrect,
@@ -1310,12 +1312,12 @@ async function main(): Promise<void> {
     check(
       'lf026-linguist-navigation-discoverable',
       navigation.modesDiscoverable
-        && navigation.managementReachable
+        && navigation.legacyManagementRemoved
         && navigation.multipleProjectsDiscoverable
         && navigation.sidebarCurrentCorrect
         && navigation.projectTabVisible
         && navigation.locationVisible,
-      `三模式=${navigation.modesDiscoverable}，管理入口=${navigation.managementReachable}` +
+      `三模式=${navigation.modesDiscoverable}，旧管理入口已移除=${navigation.legacyManagementRemoved}` +
       `，两个项目身份明确=${navigation.multipleProjectsDiscoverable}` +
       `（${navigation.projectListEvidence}）` +
       `，侧栏 aria-current=${navigation.sidebarCurrentCorrect}` +
@@ -1364,7 +1366,7 @@ async function main(): Promise<void> {
     }
 
     if (!LF026_ONLY && !LF056_ONLY) {
-      const projectSession = await createAndSelectProjectSessionViaSidebar(launched.page, projectId)
+      const projectSession = await createAndOpenProjectSessionViaSidebar(launched.page, projectId)
       sessionId = projectSession.sessionId
       const persistedBeforeExit = await waitFor(
         () => isPersistedLinguistState(launched!.page, projectId, assetId, segmentId, sessionId),
@@ -1372,8 +1374,8 @@ async function main(): Promise<void> {
       )
       check(
         'lf026-sidebar-session-and-persistence',
-        projectSession.workbenchPreserved && persistedBeforeExit,
-        `侧栏 Session=${sessionId}，Workbench=${projectSession.workbenchPreserved}` +
+        projectSession.fullAgentOpened && persistedBeforeExit,
+        `侧栏 Session=${sessionId}，Full Agent=${projectSession.fullAgentOpened}` +
         `，tab/location/session 已持久化=${persistedBeforeExit}`,
       )
 

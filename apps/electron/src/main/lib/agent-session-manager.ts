@@ -8,12 +8,12 @@
  * 照搬 conversation-manager.ts 的模式。
  */
 
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync, readdirSync, createReadStream, createWriteStream, type WriteStream } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync, readdirSync, createReadStream, createWriteStream, accessSync, constants, type WriteStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { writeJsonFileAtomic, writeTextFileAtomic, readJsonFileSafe } from './safe-file'
 import { randomUUID } from 'node:crypto'
 import { rmSyncWithRetry, renameWithRetry } from './fs-retry'
-import { join, resolve, dirname } from 'node:path'
+import { join, resolve, dirname, sep } from 'node:path'
 import {
   getAgentSessionsIndexPath,
   getAgentSessionsDir,
@@ -232,6 +232,18 @@ export interface AgentSessionLinguistBinding {
   linguistStrategy?: AgentSessionMeta['linguistStrategy']
 }
 
+/**
+ * 主进程内部的分叉策略。Renderer 只能提交 ForkSessionInput，不能提供绑定、
+ * 路径或文件复制策略；Linguist 跨项目复制由主进程验证项目后使用本接口。
+ */
+export interface AgentSessionForkOptions {
+  title: string
+  linguistBinding: AgentSessionLinguistBinding
+  copyWorkspaceFiles: false
+  inheritSessionConfig: true
+  requirePortableArtifacts: true
+}
+
 function frozenLinguistBinding(
   session: AgentSessionMeta,
 ): AgentSessionLinguistBinding | undefined {
@@ -251,6 +263,21 @@ function frozenLinguistBinding(
 function managedSessionDir(session: AgentSessionMeta): string | undefined {
   const scope = resolveAgentExecutionScope(session)
   return scope.kind === 'home' ? undefined : scope.cwd
+}
+
+function inheritedSessionConfig(
+  source: AgentSessionMeta,
+): Partial<Pick<
+  AgentSessionMeta,
+  'codexFastMode' | 'openAIThinkingLevel' | 'permissionMode'
+>> {
+  return {
+    ...(source.codexFastMode !== undefined ? { codexFastMode: source.codexFastMode } : {}),
+    ...(source.openAIThinkingLevel !== undefined
+      ? { openAIThinkingLevel: source.openAIThinkingLevel }
+      : {}),
+    ...(source.permissionMode !== undefined ? { permissionMode: source.permissionMode } : {}),
+  }
 }
 
 /**
@@ -284,11 +311,11 @@ export function createAgentSession(
     updatedAt: now,
   }
 
-  index.sessions.push(meta)
-  writeIndex(index)
-
   // 确保消息目录存在
   getAgentSessionsDir()
+
+  index.sessions.push(meta)
+  writeIndex(index)
 
   // 若有工作区，创建 session 级别子文件夹并初始化 .claude / .context
   if (workspaceId) {
@@ -337,6 +364,36 @@ export function createAgentSession(
 
   console.log(`[Agent 会话] 已创建会话: ${meta.title} (${meta.id})`)
   return meta
+}
+
+/**
+ * 创建不带历史的 Linguist 跨项目副本。只继承运行配置；工作区、附件、侧栏
+ * 状态、自动化与委派字段均由新会话默认值清空。
+ */
+export function createBlankLinguistSessionCopy(
+  source: AgentSessionMeta,
+  title: string,
+  linguistBinding: AgentSessionLinguistBinding,
+): AgentSessionMeta {
+  const created = createAgentSession(
+    title,
+    source.channelId,
+    undefined,
+    source.modelId,
+    source.agentRuntime ?? 'claude',
+    linguistBinding,
+  )
+  try {
+    const inherited = inheritedSessionConfig(source)
+    return Object.keys(inherited).length === 0
+      ? created
+      : updateAgentSessionMeta(created.id, inherited)
+  } catch (error) {
+    try {
+      deleteAgentSession(created.id, { discardLinguistWorkspace: true })
+    } catch { /* 保留原始错误 */ }
+    throw error
+  }
 }
 
 /**
@@ -550,10 +607,52 @@ export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta 
   return updated
 }
 
+function cleanupClaudeSdkSessionArtifacts(sessionIds: readonly string[]): void {
+  if (sessionIds.length === 0) return
+  const sdkConfigDir = getSdkConfigDir()
+  const fileHistoryDir = join(sdkConfigDir, 'file-history')
+  for (const sessionId of sessionIds) {
+    const historyDir = join(fileHistoryDir, sessionId)
+    if (existsSync(historyDir)) {
+      try {
+        rmSyncWithRetry(historyDir, { recursive: true, force: true })
+      } catch (error) {
+        console.warn(`[Agent 会话] 清理 file-history 失败 (${sessionId}):`, error)
+      }
+    }
+  }
+
+  const projectsDir = join(sdkConfigDir, 'projects')
+  if (!existsSync(projectsDir)) return
+  try {
+    for (const hashDir of readdirSync(projectsDir)) {
+      const projectDir = join(projectsDir, hashDir)
+      for (const sessionId of sessionIds) {
+        const sessionFile = join(projectDir, `${sessionId}.jsonl`)
+        if (existsSync(sessionFile)) {
+          try {
+            unlinkSync(sessionFile)
+          } catch (error) {
+            console.warn(`[Agent 会话] 清理 SDK session 文件失败 (${sessionId}):`, error)
+          }
+        }
+      }
+      try {
+        if (readdirSync(projectDir).length === 0) {
+          rmSyncWithRetry(projectDir, { recursive: true })
+        }
+      } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+}
+
 /**
  * 删除会话
  */
-export function deleteAgentSession(id: string): void {
+export function deleteAgentSession(
+  id: string,
+  options: { discardLinguistWorkspace?: boolean } = {},
+): void {
   const index = readIndex()
   const idx = index.sessions.findIndex((s) => s.id === id)
 
@@ -575,17 +674,24 @@ export function deleteAgentSession(id: string): void {
     }
   }
 
-  // Linguist 工作目录保留到受管 Trash；普通 Agent 沿用物理清理语义。
+  // 正常删除保留到受管 Trash；尚未对外的创建失败可直接丢弃半成品。
   if (removed.linguistProjectId) {
     try {
-      const trashed = moveLinguistSessionWorkspaceToTrash(
-        getConfigDir(),
-        removed.linguistProjectId,
-        id,
-      )
-      if (trashed) console.log(`[Agent 会话] 已将 Linguist session 工作目录移入 Trash: ${id}`)
+      if (options.discardLinguistWorkspace) {
+        const sessionDir = managedSessionDir(removed)
+        if (sessionDir && existsSync(sessionDir)) {
+          rmSyncWithRetry(sessionDir, { recursive: true, force: true })
+        }
+      } else {
+        const trashed = moveLinguistSessionWorkspaceToTrash(
+          getConfigDir(),
+          removed.linguistProjectId,
+          id,
+        )
+        if (trashed) console.log(`[Agent 会话] 已将 Linguist session 工作目录移入 Trash: ${id}`)
+      }
     } catch (error) {
-      console.warn(`[Agent 会话] 移动 Linguist session 工作目录失败 (${id}):`, error)
+      console.warn(`[Agent 会话] 清理 Linguist session 工作目录失败 (${id}):`, error)
     }
   } else if (removed.workspaceId) {
     const ws = getAgentWorkspace(removed.workspaceId)
@@ -607,45 +713,18 @@ export function deleteAgentSession(id: string): void {
   // 清理 Nano Banana 生图历史
   clearNanoBananaAgentHistory(id)
 
-  // 清理 SDK 关联数据（file-history 和 projects 下的 session JSONL）
-  const sdkSessionIds = [removed.sdkSessionId, removed.forkSourceSdkSessionId].filter(Boolean) as string[]
-  if (sdkSessionIds.length > 0) {
-    const sdkConfigDir = getSdkConfigDir()
-
-    const fileHistoryDir = join(sdkConfigDir, 'file-history')
-    for (const sid of sdkSessionIds) {
-      const histDir = join(fileHistoryDir, sid)
-      if (existsSync(histDir)) {
-        try {
-          rmSyncWithRetry(histDir, { recursive: true, force: true })
-          console.log(`[Agent 会话] 已清理 file-history: ${sid}`)
-        } catch (e) {
-          console.warn(`[Agent 会话] 清理 file-history 失败 (${sid}):`, e)
-        }
-      }
-    }
-
-    const projectsDir = join(sdkConfigDir, 'projects')
-    if (existsSync(projectsDir)) {
+  cleanupClaudeSdkSessionArtifacts(
+    [removed.sdkSessionId, removed.forkSourceSdkSessionId].filter(Boolean) as string[],
+  )
+  if (options.discardLinguistWorkspace && removed.piSessionFile) {
+    const managedPiRoot = resolve(getSdkConfigDir(), 'sessions')
+    const artifact = resolve(removed.piSessionFile)
+    if (artifact.startsWith(`${managedPiRoot}${sep}`) && existsSync(artifact)) {
       try {
-        for (const hashDir of readdirSync(projectsDir)) {
-          const projPath = join(projectsDir, hashDir)
-          for (const sid of sdkSessionIds) {
-            const sessionFile = join(projPath, `${sid}.jsonl`)
-            if (existsSync(sessionFile)) {
-              try {
-                unlinkSync(sessionFile)
-                console.log(`[Agent 会话] 已清理 SDK session 文件: ${sessionFile}`)
-              } catch (e) {
-                console.warn('[Agent 会话] 清理 SDK session 文件失败:', e)
-              }
-            }
-          }
-          try {
-            if (readdirSync(projPath).length === 0) rmSyncWithRetry(projPath, { recursive: true })
-          } catch { /* ignore */ }
-        }
-      } catch { /* ignore */ }
+        unlinkSync(artifact)
+      } catch (error) {
+        console.warn(`[Agent 会话] 清理 Pi session artifact 失败 (${id}):`, error)
+      }
     }
   }
 }
@@ -816,7 +895,10 @@ export function migrateChatToAgentSession(conversationId: string, agentSessionId
  *
  * @returns 新创建的会话元数据
  */
-export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSessionMeta> {
+export async function forkAgentSession(
+  input: ForkSessionInput,
+  options?: AgentSessionForkOptions,
+): Promise<AgentSessionMeta> {
   const { sessionId, upToMessageUuid } = input
 
   // 1. 获取源会话元数据
@@ -830,7 +912,7 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
   }
 
   if (sourceMeta.agentRuntime === 'pi') {
-    return forkPiAgentSession(sourceMeta, input)
+    return forkPiAgentSession(sourceMeta, input, options)
   }
 
   const forkModelId = input.modelId !== undefined
@@ -892,25 +974,38 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
   }
 
   // 4. 创建 Proma 新会话，立即设置 sdkSessionId
-  const forkTitle = `${sourceMeta.title} (fork)`
-  const newMeta = createAgentSession(
-    forkTitle,
-    sourceMeta.channelId,
-    sourceMeta.workspaceId,
-    forkModelId,
-    'claude',
-    frozenLinguistBinding(sourceMeta),
-  )
+  const forkTitle = options?.title ?? `${sourceMeta.title} (fork)`
+  let newMeta: AgentSessionMeta
+  try {
+    newMeta = createAgentSession(
+      forkTitle,
+      sourceMeta.channelId,
+      options ? undefined : sourceMeta.workspaceId,
+      forkModelId,
+      'claude',
+      options?.linguistBinding ?? frozenLinguistBinding(sourceMeta),
+    )
+  } catch (error) {
+    cleanupClaudeSdkSessionArtifacts([forkResult.sessionId])
+    throw error
+  }
 
-  updateAgentSessionMeta(newMeta.id, {
-    sdkSessionId: forkResult.sessionId,
-    forkSourceDir: sourceDir,
-    forkSourceSdkSessionId: forkSourceSdkSessionId,
-  })
-  // 同步返回值（updateAgentSessionMeta 已写入磁盘，这里让调用方拿到最新值）
-  newMeta.sdkSessionId = forkResult.sessionId
-  newMeta.forkSourceDir = sourceDir
-  newMeta.forkSourceSdkSessionId = forkSourceSdkSessionId
+  try {
+    const inherited = options?.inheritSessionConfig ? inheritedSessionConfig(sourceMeta) : {}
+    const sourceMetadata = options
+      ? {}
+      : {
+          forkSourceDir: sourceDir,
+          forkSourceSdkSessionId,
+        }
+    updateAgentSessionMeta(newMeta.id, {
+      sdkSessionId: forkResult.sessionId,
+      ...sourceMetadata,
+      ...inherited,
+    })
+    // 同步返回值（updateAgentSessionMeta 已写入磁盘，这里让调用方拿到最新值）
+    newMeta.sdkSessionId = forkResult.sessionId
+    Object.assign(newMeta, sourceMetadata, inherited)
 
   // 4.4 计算 fork 目标会话的 cwd（新会话目录），后续多个步骤需要用到
   const destDir = sourceDir ? managedSessionDir(newMeta) : undefined
@@ -933,9 +1028,13 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
         const copiedLines = await copyTextFileWithPathRewrite(sourceJsonl, destJsonl, sourceDir, destDir)
         console.log(`[Agent 会话] 已将 SDK session JSONL 复制到 fork 目标目录并改写路径: ${destJsonl} (${copiedLines} 行)`)
       } catch (err) {
+        if (options?.requirePortableArtifacts) throw err
         console.warn(`[Agent 会话] 复制 SDK session JSONL 失败，fork 后首轮可能触发上下文回填:`, err)
       }
     } else {
+      if (options?.requirePortableArtifacts) {
+        throw new Error(`未找到 SDK session JSONL (${forkResult.sessionId})`)
+      }
       console.warn(`[Agent 会话] 未找到 SDK session JSONL (${forkResult.sessionId})，fork 后首轮可能触发上下文回填`)
     }
   }
@@ -944,7 +1043,7 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
   // 保留 .context/，但跳过依赖、构建产物和 Git 元数据，避免 fork 点击时同步复制巨量目录拖垮主进程。
   // .context/ 必须保留 — Proma 约定 .context/note.md、todo.md、plan/ 等是会话上下文，
   // 如果不复制，fork 后这些参考资料会丢失或被 Claude 误回源目录读取。
-  if (sourceDir && destDir) {
+  if ((!options || options.copyWorkspaceFiles) && sourceDir && destDir) {
     try {
       const copyResult = copyForkWorkspaceFiles(sourceDir, destDir)
       console.log(
@@ -966,19 +1065,30 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
     sourceSessionId: sessionId,
     destSessionId: newMeta.id,
     upToMessageUuid,
+    includeCompletingResult: options?.requirePortableArtifacts,
     sourceDir,
     destDir,
   })
 
   console.log(`[Agent 会话] 分叉会话已创建（SDK 原生 fork）: ${sourceMeta.title} → ${forkTitle} (${copiedMessages} 条消息, sdkSessionId=${forkResult.sessionId})`)
-  return newMeta
+    return newMeta
+  } catch (error) {
+    try {
+      deleteAgentSession(newMeta.id, { discardLinguistWorkspace: Boolean(options) })
+    } catch { /* 保留原始错误 */ }
+    throw error
+  }
 }
 
 /**
  * Pi 的 session 是 append-only tree。分叉必须由 SessionManager 导出目标 branch，
  * 不能只复制 Proma 的展示 JSONL，否则下一轮 resume 仍会看到被截断的上下文。
  */
-async function forkPiAgentSession(sourceMeta: AgentSessionMeta, input: ForkSessionInput): Promise<AgentSessionMeta> {
+async function forkPiAgentSession(
+  sourceMeta: AgentSessionMeta,
+  input: ForkSessionInput,
+  options?: AgentSessionForkOptions,
+): Promise<AgentSessionMeta> {
   const targetUuid = input.upToMessageUuid
   if (!targetUuid) throw new Error('Pi 分叉需要指定一条已完成的 assistant 消息')
   const entryId = sourceMeta.piEntryBindings?.[targetUuid]
@@ -992,49 +1102,73 @@ async function forkPiAgentSession(sourceMeta: AgentSessionMeta, input: ForkSessi
     : sourceMeta.modelId
   const sourceDir = managedSessionDir(sourceMeta)
   const newMeta = createAgentSession(
-    `${sourceMeta.title} (fork)`,
+    options?.title ?? `${sourceMeta.title} (fork)`,
     sourceMeta.channelId,
-    sourceMeta.workspaceId,
+    options ? undefined : sourceMeta.workspaceId,
     forkModelId,
     'pi',
-    frozenLinguistBinding(sourceMeta),
+    options?.linguistBinding ?? frozenLinguistBinding(sourceMeta),
   )
-  const destDir = sourceDir ? managedSessionDir(newMeta) : undefined
+  let branchFile: string | undefined
+  let piSessionFile: string | undefined
 
   try {
+    const destDir = sourceDir ? managedSessionDir(newMeta) : undefined
     const sdk = await import('@earendil-works/pi-coding-agent')
     const sessionDir = join(getSdkConfigDir(), 'sessions')
     const sourceManager = sdk.SessionManager.open(sourceMeta.piSessionFile, sessionDir, sourceDir)
-    const branchFile = sourceManager.createBranchedSession(entryId)
+    branchFile = sourceManager.createBranchedSession(entryId)
     if (!branchFile || !existsSync(branchFile)) {
       throw new Error('Pi 未能生成分叉 session artifact')
     }
     const forkedManager = sdk.SessionManager.forkFrom(branchFile, destDir ?? sourceDir ?? process.cwd(), sessionDir)
-    const piSessionFile = forkedManager.getSessionFile()
+    piSessionFile = forkedManager.getSessionFile()
     if (!piSessionFile || !existsSync(piSessionFile)) throw new Error('Pi 分叉 artifact 校验失败')
 
+    const inherited = options?.inheritSessionConfig ? inheritedSessionConfig(sourceMeta) : {}
+    const sourceMetadata = options ? {} : { forkSourceDir: sourceDir }
     updateAgentSessionMeta(newMeta.id, {
       sdkSessionId: forkedManager.getSessionId(),
       piSessionFile,
       piEntryBindings: { ...(sourceMeta.piEntryBindings ?? {}) },
-      forkSourceDir: sourceDir,
+      ...sourceMetadata,
+      ...inherited,
     })
     newMeta.sdkSessionId = forkedManager.getSessionId()
     newMeta.piSessionFile = piSessionFile
     newMeta.piEntryBindings = { ...(sourceMeta.piEntryBindings ?? {}) }
+    Object.assign(newMeta, sourceMetadata, inherited)
 
-    if (sourceDir && destDir) copyForkWorkspaceFiles(sourceDir, destDir)
+    if ((!options || options.copyWorkspaceFiles) && sourceDir && destDir) {
+      copyForkWorkspaceFiles(sourceDir, destDir)
+    }
     await copyForkStoredSDKMessages({
       sourceSessionId: sourceMeta.id,
       destSessionId: newMeta.id,
       upToMessageUuid: targetUuid,
+      includeCompletingResult: options?.requirePortableArtifacts,
       sourceDir,
       destDir,
     })
+    if (
+      branchFile
+      && branchFile !== piSessionFile
+      && branchFile !== sourceMeta.piSessionFile
+      && existsSync(branchFile)
+    ) {
+      unlinkSync(branchFile)
+    }
     return newMeta
   } catch (error) {
     // 尚未对外返回的新 session 可安全清理，避免留下会被侧栏打开的半成品。
-    try { deleteAgentSession(newMeta.id) } catch { /* 保留原始错误 */ }
+    try {
+      deleteAgentSession(newMeta.id, { discardLinguistWorkspace: Boolean(options) })
+    } catch { /* 保留原始错误 */ }
+    for (const artifact of new Set([branchFile, piSessionFile])) {
+      if (artifact && artifact !== sourceMeta.piSessionFile && existsSync(artifact)) {
+        try { unlinkSync(artifact) } catch { /* 保留原始错误 */ }
+      }
+    }
     throw error
   }
 }
@@ -1138,14 +1272,16 @@ interface CopyForkStoredSDKMessagesInput {
   sourceSessionId: string
   destSessionId: string
   upToMessageUuid?: string
+  includeCompletingResult?: boolean
   sourceDir?: string
   destDir?: string
 }
 
-async function copyForkStoredSDKMessages({
+export async function copyForkStoredSDKMessages({
   sourceSessionId,
   destSessionId,
   upToMessageUuid,
+  includeCompletingResult = false,
   sourceDir,
   destDir,
 }: CopyForkStoredSDKMessagesInput): Promise<number> {
@@ -1155,6 +1291,7 @@ async function copyForkStoredSDKMessages({
   const destPath = getAgentSessionMessagesPath(destSessionId)
   const out = createWriteStream(destPath, { flags: 'a', encoding: 'utf-8' })
   let copiedCount = 0
+  let targetReached = false
 
   try {
     for await (const msg of readStoredSDKMessages(sourcePath)) {
@@ -1162,6 +1299,15 @@ async function copyForkStoredSDKMessages({
       copiedCount += 1
 
       if (upToMessageUuid && getStoredMessageUuid(msg) === upToMessageUuid) {
+        if (!includeCompletingResult) break
+        targetReached = true
+        continue
+      }
+      if (
+        targetReached
+        && msg.type === 'result'
+        && (msg as { subtype?: string }).subtype === 'success'
+      ) {
         break
       }
     }
@@ -1474,6 +1620,21 @@ function findSdkSessionJsonl(sdkSessionId: string, _projectDir?: string): string
   }
 
   return undefined
+}
+
+/** 仅返回 artifact 是否在受管 SDK 存储中可发现，不向 Renderer 暴露路径。 */
+export function hasAgentSessionNativeForkArtifact(session: AgentSessionMeta): boolean {
+  if (!session.sdkSessionId) return false
+  const artifact = session.agentRuntime === 'pi'
+    ? session.piSessionFile
+    : findSdkSessionJsonl(session.sdkSessionId)
+  if (!artifact) return false
+  try {
+    accessSync(artifact, constants.R_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**

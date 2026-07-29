@@ -202,8 +202,9 @@ Linguist feature 内组合 Proma 原生模块
 | LF-087 | 0（+3 多票共改） | Stable ID v2：shared 与原生 CAT Tool Result 同时接受历史 v1 和完整 SHA-256 v2 |
 | LF-088 | 0（+5 多票共改） | Quick Health、Full Integrity Scrub 与恢复完整性：独立 worker、typed IPC/bridge、受管备份恢复 |
 | LF-089 | 0（+2 多票共改） | Proposal Issuance 与 Required 术语：当前 Turn 的真实生成 provenance 接入既有 Agent 编排，shared 扩展兼容 DTO |
+| LF-091 | 6（+23 多票共改） | Linguist 项目/会话树统一、正确模式搜索与由主进程授权的跨项目会话复制 |
 
-合计 **222 条**（其中 62 条属多票共改文件，完整清单见 proma-touchpoints.json——ticket 字段以逗号列出全部相关票；代表性文件：apps/electron/package.json、main/ipc.ts、preload/index.ts、agent-orchestrator.ts、packages/shared/src/types/linguist.ts、AgentView.tsx、SDKMessageRenderer.tsx、AgentMessages.tsx、LeftSidebar.tsx、globals.css、tailwind.config.js、bun.lock 等）。
+合计 **228 条**（其中 70 条属多票共改文件，完整清单见 proma-touchpoints.json——ticket 字段以逗号列出全部相关票；代表性文件：apps/electron/package.json、main/ipc.ts、preload/index.ts、agent-orchestrator.ts、packages/shared/src/types/linguist.ts、AgentView.tsx、SDKMessageRenderer.tsx、AgentMessages.tsx、LeftSidebar.tsx、globals.css、tailwind.config.js、bun.lock 等）。
 
 ## PB-004：打包 Electron 基线与 Hermetic Smoke
 
@@ -901,6 +902,7 @@ Linguist feature 内组合 Proma 原生模块
 - `renderer/lib/feature-flags.ts` 与测试（既有触点）— 删除只服务旧入口的 `LINGUIST_PROJECTS_VISIBLE`；其余 Proma 功能开关不变。
 - `components/tabs/MainArea.tsx`、`components/app-shell/AppShell.tsx`、`renderer/atoms/active-view.ts` 与 `active-view.test.ts`（既有触点）— 保留 `activeView='projects'`，但仅作为 `LinguistSidebarContent` 次级“管理项目”入口的管理路由；主区与 Agent Rail 共用模式归一化，日常项目工作继续由一等 Project Tab 承载。
 - `apps/electron/package.json` / `bun.lock`（既有触点）— Electron 0.15.102 → 0.15.103；零新依赖。
+- 当前导航事实由 LF-091 supersede：次级“管理项目”入口已删除，`ProjectsView` 收敛为轻量起始页，旧项目迁移入口移至“设置 → 数据迁移”；本节保留 LF-077 当时的交付事实。
 
 ## LF-082：Linguist Rail / Session 原生管理面
 
@@ -909,6 +911,16 @@ Linguist feature 内组合 Proma 原生模块
 - `src/types/settings.ts`（既有触点）— Workbench 位置新增 `closed | rail | full` presentation；旧 `agentRailOpen` 只读兼容并在下一次保存时迁移。
 - Rail / Full、Linguist Session fallback、Project menu 与 BDD 均位于 Linguist feature 白名单；继续复用同一个 `AgentView`、项目级 Jotai 状态和已有稳定 IPC。
 - 按主任务协调，本提交不修改 `apps/electron/package.json`、`bun.lock` 或版本号；零新依赖。
+- 当前会话树与跨项目操作事实由 LF-091 supersede：Linguist 复用同一 project header、session row 与 tree selector；仍禁止 move，改为主进程重新校验并授权的 copy。
+
+## LF-091：Linguist 左侧栏统一与跨项目复制
+
+- `components/app-shell/LeftSidebar.tsx`、`components/session-tree/ProjectSessionTreeGroupHeader.tsx`、`agent-session-tree.ts` 与既有 `AgentSessionTreeItem` / `AgentSessionActionsMenu`（新旧触点）— Agent 与 Linguist 复用同一 project header、session row 和 tree selector；普通 Agent 在全部树区排除带 `linguistProjectId` 的绑定会话，Linguist 仅投影绑定会话，并保留项目级折叠、全局置顶、近期、归档及缺失项目历史。
+- `SearchDialog.tsx`、`MigrationSettings.tsx`、`mode-switcher-utils.ts`、`project-agent-session-atoms.ts`、`tab-atoms.ts`、`TabContent.tsx` 与 `AgentView.tsx`（既有触点）— 搜索与快捷切换按实体身份进入正确模式、项目和会话；已归档项目打开只读 Workbench，缺失项目历史继续复用同一个 `AgentView`，发送与 CAT 写入 fail closed；架构测试白名单同步登记全局搜索与设置页两个组合根。
+- `AgentSessionActionsMenu.tsx` 通过注入动作区分语义：普通 Agent 保留“迁移到其他项目”，Linguist 只提供“复制到其他项目”，不允许拖拽或菜单 move；相应菜单、搜索、共享树与共享项目头行为由本票新增测试触点覆盖。
+- `@proma/shared → main IPC/handler/service → preload → Renderer Jotai/action` 四层同步项目 rename/reorder 与会话 copy eligibility/copy 契约。项目身份、目标 binding、可复制状态及目标项目健康状态由主进程在执行时重新验证；空白会话复制或 Claude/Pi 原生分支复制均创建独立根会话，失败时回滚半成品历史与元数据，且不复制委派、工作区文件、`.context`、临时文件、附件队列、自动化或运行状态。
+- `ProjectsView` 收敛为无项目时的创建/迁移起始页和未选项目提示；旧 Linguist Migration Wizard 移至现有“设置 → 数据迁移”。
+- 版本同步为 `@proma/electron 0.15.138`、`@proma/shared 0.1.79`、`@linguist/cat-store 0.0.25`，并同步 `bun.lock`；零新依赖、零 CAT schema 变化。
 
 ## LF-075：删除旧 CatContextRail
 

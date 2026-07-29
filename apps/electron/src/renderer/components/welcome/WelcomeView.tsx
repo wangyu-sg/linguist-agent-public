@@ -18,6 +18,7 @@ import { tabsAtom, activeTabIdAtom, openTab } from '@/atoms/tab-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { restoreLastLocalizationProject } from '@/lib/linguist-navigation'
+import { isOrdinaryAgentSession } from '@/components/session-tree/agent-session-tree'
 
 export function WelcomeView(): React.ReactElement {
   const mode = useAtomValue(appModeAtom)
@@ -126,7 +127,10 @@ export function WelcomeView(): React.ReactElement {
         // Agent 模式：按当前工作区过滤
         // 1. 优先复用现有非归档、非 draft 会话
         const existing = freshSessions.find(
-          (s) => !s.archived && s.workspaceId === currentWs && !currentDrafts.has(s.id),
+          (s) => isOrdinaryAgentSession(s)
+            && !s.archived
+            && s.workspaceId === currentWs
+            && !currentDrafts.has(s.id),
         )
         if (existing) {
           const result = openTab(currentTabs, {
@@ -140,7 +144,10 @@ export function WelcomeView(): React.ReactElement {
         }
         // 2. 检查是否已有 draft 会话（当前工作区），复用而不是创建新的
         const draftSession = freshSessions.find(
-          (s) => !s.archived && s.workspaceId === currentWs && currentDrafts.has(s.id),
+          (s) => isOrdinaryAgentSession(s)
+            && !s.archived
+            && s.workspaceId === currentWs
+            && currentDrafts.has(s.id),
         )
         if (draftSession) {
           const result = openTab(currentTabs, {

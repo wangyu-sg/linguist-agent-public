@@ -12,6 +12,7 @@ interface RestorableSession {
   id: string
   title: string
   archived?: boolean
+  linguistProjectId?: string
 }
 
 interface RestorableTab {
@@ -33,13 +34,25 @@ export function findSessionToRestore(
   tabs: readonly RestorableTab[],
   draftSessionIds: ReadonlySet<string>,
 ): RestorableSession | null {
-  const last = lastId ? sessions.find((session) => session.id === lastId) : undefined
+  const eligibleSessions = mode === 'agent'
+    ? sessions.filter((session) => !session.linguistProjectId)
+    : sessions
+  const last = lastId ? eligibleSessions.find((session) => session.id === lastId) : undefined
   if (last) return last
 
-  const tab = tabs.find((item) => item.type === mode && item.sessionId)
+  const eligibleIds = new Set(eligibleSessions.map((session) => session.id))
+  const tab = tabs.find((item) => (
+    item.type === mode
+    && item.sessionId
+    && eligibleIds.has(item.sessionId)
+  ))
   if (tab?.sessionId) return { id: tab.sessionId, title: tab.title }
 
-  return sessions.find((session) => !session.archived && !draftSessionIds.has(session.id)) ?? null
+  return eligibleSessions.find((session) => !session.archived && !draftSessionIds.has(session.id)) ?? null
+}
+
+export function getWelcomeModeOptions(mode: AppMode): typeof MODE_SWITCHER_MODES | readonly [] {
+  return mode === 'linguist' ? [] : MODE_SWITCHER_MODES
 }
 
 export function getModeSliderTranslateX(mode: AppMode): number {

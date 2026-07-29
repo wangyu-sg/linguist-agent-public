@@ -21,6 +21,7 @@ export {
   StoreError,
   StoreIndexCorruptError,
   StoreNotFoundError,
+  StoreProjectOrderConflictError,
   StoreProjectExistsError,
   StoreReadOnlyError,
   StoreSchemaTooNewError,

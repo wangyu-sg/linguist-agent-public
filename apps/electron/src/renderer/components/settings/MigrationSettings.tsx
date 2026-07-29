@@ -20,12 +20,15 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  HardDriveDownload,
 } from 'lucide-react'
 import { SettingsSection } from './primitives'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { agentWorkspacesAtom } from '@/atoms/agent-atoms'
 import { migrationImportDialogOpenAtom } from '@/atoms/migration-atoms'
 import { cn } from '@/lib/utils'
+import { MigrationWizard } from '@/features/linguist/migration/MigrationWizard'
+import { refreshLinguistProjectListAtom } from '@/features/linguist/projects/project-list-atoms'
 
 type MigrationMode = 'personal' | 'share'
 type MigrationComponent = 'sessions' | 'skills' | 'mcp' | 'channels' | 'chattools'
@@ -64,6 +67,8 @@ const COMPONENT_LABELS: Record<MigrationComponent, string> = {
 }
 
 export function MigrationSettings(): React.ReactElement {
+  const [legacyWizardOpen, setLegacyWizardOpen] = React.useState(false)
+  const refreshLinguistProjects = useSetAtom(refreshLinguistProjectListAtom)
   // ── 导出状态 ──────────────────────────────────────
   const [exportMode, setExportMode] = React.useState<MigrationMode>('personal')
   const [shareComponents, setShareComponents] = React.useState<Set<MigrationComponent>>(
@@ -230,8 +235,36 @@ export function MigrationSettings(): React.ReactElement {
     })
   }
 
+  if (legacyWizardOpen) {
+    return (
+      <MigrationWizard
+        onExit={(dirty) => {
+          setLegacyWizardOpen(false)
+          if (dirty) refreshLinguistProjects()
+        }}
+      />
+    )
+  }
+
   return (
     <div className="space-y-8">
+      <SettingsSection
+        title="旧版 Linguist 项目"
+        description="从旧版 Linguist Agent 数据根扫描、预览并选择性迁移项目。"
+      >
+        <button
+          type="button"
+          onClick={() => setLegacyWizardOpen(true)}
+          className={cn(
+            'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
+            'border border-border hover:bg-muted/50',
+          )}
+        >
+          <HardDriveDownload size={16} />
+          打开旧版项目迁移
+        </button>
+      </SettingsSection>
+
       {/* ── 导出区块 ──────────────────────────────── */}
       <SettingsSection
         title="导出备份"

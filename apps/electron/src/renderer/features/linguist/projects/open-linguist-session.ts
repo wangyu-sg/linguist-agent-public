@@ -1,0 +1,98 @@
+import type { createStore } from 'jotai/vanilla'
+import type {
+  AgentSessionMeta,
+  LinguistIpcResult,
+  LinguistProjectOpenRequest,
+  LinguistProjectOpenResult,
+} from '@proma/shared'
+import { agentSessionsAtom } from '@/atoms/agent-atoms'
+import {
+  openLocalizationProjectTab,
+  tabsAtom,
+} from '@/atoms/tab-atoms'
+import { enterLinguistNavigation } from '@/lib/linguist-navigation'
+import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
+import { openLocalizationProject } from './open-localization-project'
+import {
+  selectProjectAgentSession,
+  selectProjectAgentSessionForHistory,
+} from './project-agent-session'
+
+type JotaiStore = ReturnType<typeof createStore>
+type OpenProject = (
+  input: LinguistProjectOpenRequest,
+) => Promise<LinguistIpcResult<LinguistProjectOpenResult>>
+
+export interface OpenLinguistSessionResult {
+  projectId: string
+  readOnlyHistory: boolean
+}
+
+function openMissingProjectHistory(
+  store: JotaiStore,
+  session: AgentSessionMeta,
+): void {
+  const projectId = session.linguistProjectId!
+  const opened = openLocalizationProjectTab(store.get(tabsAtom), {
+    projectId,
+    title: session.linguistProjectName ?? projectId,
+  })
+  store.set(
+    tabsAtom,
+    opened.tabs.map((tab) =>
+      tab.id === opened.activeTabId && tab.type === 'linguist-project'
+        ? {
+            ...tab,
+            repairState: 'missing' as const,
+            historySessionId: session.id,
+          }
+        : tab,
+    ),
+  )
+  enterLinguistNavigation(store, opened.activeTabId, 'conversations')
+}
+
+/** 所有 Linguist 会话入口共用：先打开权威项目，再选择同一个 AgentView。 */
+export async function openLinguistAgentSession(
+  store: JotaiStore,
+  sessionId: string,
+  openProject: OpenProject = (input) => window.electronAPI.linguistProjectsOpen(input),
+): Promise<LinguistIpcResult<OpenLinguistSessionResult>> {
+  const session = store.get(agentSessionsAtom).find((item) => item.id === sessionId)
+  const projectId = session?.linguistProjectId
+  if (!session || !projectId) {
+    return {
+      ok: false,
+      error: { code: 'INVALID_INPUT', message: '会话不是 Linguist 项目会话' },
+    }
+  }
+
+  const opened = await openLocalizationProject(store, projectId, openProject)
+  if (!opened.ok) {
+    if (
+      opened.error.code === 'PROJECT_NOT_FOUND'
+      || opened.error.code === 'PROJECT_UNHEALTHY'
+      || opened.error.code === 'STORE_NOT_FOUND'
+    ) {
+      openMissingProjectHistory(store, session)
+      return { ok: true, data: { projectId, readOnlyHistory: true } }
+    }
+    return opened
+  }
+
+  const readOnlyHistory = opened.data.project.archivedAt !== undefined
+    || session.archived === true
+  const selected = readOnlyHistory
+    ? selectProjectAgentSessionForHistory(store, projectId, sessionId)
+    : selectProjectAgentSession(store, projectId, sessionId)
+  if (!selected) {
+    return {
+      ok: false,
+      error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
+    }
+  }
+  store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
+    agentPresentation: 'full',
+  })
+  return { ok: true, data: { projectId, readOnlyHistory } }
+}

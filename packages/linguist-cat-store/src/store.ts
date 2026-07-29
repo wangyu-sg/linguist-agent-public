@@ -94,6 +94,14 @@ export class CatStore {
     return this.index.update(projectId, patch)
   }
 
+  renameProject(projectId: string, name: string): LinguistProject {
+    return this.index.rename(projectId, name)
+  }
+
+  reorderActiveProjects(orderedProjectIds: readonly string[]): LinguistProject[] {
+    return this.index.reorderActive(orderedProjectIds)
+  }
+
   archiveProject(projectId: string): LinguistProject {
     return this.index.archive(projectId)
   }

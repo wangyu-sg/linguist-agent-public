@@ -1,10 +1,17 @@
-import { FolderOpen, MessageSquarePlus, MoreHorizontal, Settings } from 'lucide-react'
+import {
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  FolderOpen,
+  MessageSquarePlus,
+  MoreHorizontal,
+  Pencil,
+  Settings,
+  Trash2,
+} from 'lucide-react'
 import type { LinguistProjectInfo } from '@proma/shared'
 import {
-  ContextMenu,
-  ContextMenuContent,
   ContextMenuItem,
-  ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import {
   DropdownMenu,
@@ -13,65 +20,101 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-interface LinguistProjectActionsMenuProps {
+export interface LinguistProjectActionsMenuProps {
   project: LinguistProjectInfo
   onOpen: () => void
-  onCreateSession: () => void
+  onCreateSession?: () => void
+  onRename?: () => void
+  onArchive?: () => void
   onOpenSettings: () => void
-  children: React.ReactNode
+  onDelete?: () => void
+  canMoveUp?: boolean
+  canMoveDown?: boolean
+  onMoveUp?: () => void
+  onMoveDown?: () => void
 }
 
-export function LinguistProjectActionsMenu({
+export function LinguistProjectActionItems({
   project,
   onOpen,
   onCreateSession,
+  onRename,
+  onArchive,
   onOpenSettings,
-  children,
-}: LinguistProjectActionsMenuProps): React.ReactElement {
-  const items = (variant: 'context' | 'dropdown'): React.ReactElement => {
-    const Item = variant === 'context' ? ContextMenuItem : DropdownMenuItem
-    return (
-      <>
+  onDelete,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMoveUp,
+  onMoveDown,
+  variant,
+}: LinguistProjectActionsMenuProps & {
+  variant: 'context' | 'dropdown'
+}): React.ReactElement {
+  const Item = variant === 'context' ? ContextMenuItem : DropdownMenuItem
+  const archived = project.archivedAt !== undefined
+  return (
+    <>
+      {archived ? (
         <Item className="py-1 text-xs" onSelect={onOpen}>
           <FolderOpen size={14} />
-          打开项目
+          只读打开
         </Item>
-        <Item className="py-1 text-xs" onSelect={onCreateSession}>
-          <MessageSquarePlus size={14} />
-          新建助理会话
+      ) : (
+        <>
+          <Item className="py-1 text-xs" onSelect={onCreateSession}>
+            <MessageSquarePlus size={14} />
+            新建会话
+          </Item>
+          <Item className="py-1 text-xs" onSelect={onRename}>
+            <Pencil size={14} />
+            重命名
+          </Item>
+          <Item className="py-1 text-xs" disabled={!canMoveUp} onSelect={onMoveUp}>
+            <ArrowUp size={14} />
+            上移项目
+          </Item>
+          <Item className="py-1 text-xs" disabled={!canMoveDown} onSelect={onMoveDown}>
+            <ArrowDown size={14} />
+            下移项目
+          </Item>
+        </>
+      )}
+      <Item className="py-1 text-xs" onSelect={onOpenSettings}>
+        <Settings size={14} />
+        项目设置
+      </Item>
+      {archived ? (
+        <Item className="py-1 text-xs text-destructive" onSelect={onDelete}>
+          <Trash2 size={14} />
+          删除项目
         </Item>
-        <Item className="py-1 text-xs" onSelect={onOpenSettings}>
-          <Settings size={14} />
-          项目设置
+      ) : (
+        <Item className="py-1 text-xs text-destructive" onSelect={onArchive}>
+          <Archive size={14} />
+          归档项目
         </Item>
-      </>
-    )
-  }
+      )}
+    </>
+  )
+}
 
+export function LinguistProjectActionsMenu(
+  props: LinguistProjectActionsMenuProps,
+): React.ReactElement {
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div className="flex items-center">
-          {children}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={`管理项目 ${project.name}`}
-                className="mr-1 flex size-7 flex-shrink-0 items-center justify-center rounded-md text-foreground/45 transition-colors hover:bg-foreground/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <MoreHorizontal size={14} aria-hidden="true" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40 p-0.5">
-              {items('dropdown')}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-40 p-0.5">
-        {items('context')}
-      </ContextMenuContent>
-    </ContextMenu>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`管理项目 ${props.project.name}`}
+          className="absolute right-0 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-foreground/35 opacity-0 transition-colors hover:bg-foreground/[0.055] hover:text-foreground/65 group-hover/project:opacity-100 data-[state=open]:opacity-100"
+        >
+          <MoreHorizontal size={14} aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40 p-0.5">
+        <LinguistProjectActionItems {...props} variant="dropdown" />
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

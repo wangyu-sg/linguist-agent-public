@@ -41,7 +41,7 @@ describe('Project Agent Session 恢复', () => {
     ]))
   })
 
-  test('given 上次选择已归档或丢失 when 恢复 then 回退到项目最新有效会话', () => {
+  test('given 显式选择已归档历史 when 恢复 then 保留只读历史；丢失选择才回退', () => {
     const sessions = [
       session('alpha-archived', 'alpha', 40, true),
       session('alpha-latest', 'alpha', 30),
@@ -54,7 +54,7 @@ describe('Project Agent Session 恢复', () => {
         ['beta', 'missing'],
       ]),
       sessions,
-    )).toEqual(new Map([['alpha', 'alpha-latest']]))
+    )).toEqual(new Map([['alpha', 'alpha-archived']]))
   })
 
   test('given 项目没有会话 when 恢复 then 不创建也不产生选择', () => {

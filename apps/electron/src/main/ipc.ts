@@ -4706,6 +4706,16 @@ export function registerIpcHandlers(): void {
   )
 
   ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.RENAME,
+    async (_, input: unknown) => linguistProjectIpc.rename(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.REORDER_ACTIVE,
+    async (_, input: unknown) => linguistProjectIpc.reorderActive(input)
+  )
+
+  ipcMain.handle(
     LINGUIST_PROJECT_IPC_CHANNELS.ARCHIVE,
     async (_, input: unknown) => linguistProjectIpc.archive(input)
   )
@@ -4964,7 +4974,10 @@ export function registerIpcHandlers(): void {
   // 「项目对话」= 携带冻结 linguistProjectId 绑定的 Pi Agent 会话。同一信封
   // 约定（LinguistIpcResult，绝不抛出）；处理器逻辑在 lib/linguist/
   // session-ipc.ts + session-binding.ts（不依赖 electron，node --test 驱动）。
-  const linguistSessionIpc = createLinguistSessionIpc({ getService: getLinguistProjectService })
+  const linguistSessionIpc = createLinguistSessionIpc({
+    getService: getLinguistProjectService,
+    isSessionActive: isAgentSessionActive,
+  })
 
   // 项目内创建对话：绑定在创建时写入并冻结；归档项目拒绝创建（PROJECT_ARCHIVED）。
   ipcMain.handle(
@@ -4988,5 +5001,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     LINGUIST_SESSION_IPC_CHANNELS.DETACH_BINDING,
     async (_, input: unknown) => linguistSessionIpc.detachBinding(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.GET_COPY_ELIGIBILITY,
+    async (_, input: unknown) => linguistSessionIpc.getCopyEligibility(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.COPY_TO_PROJECT,
+    async (_, input: unknown) => linguistSessionIpc.copyToProject(input)
   )
 }

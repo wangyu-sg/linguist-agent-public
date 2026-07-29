@@ -250,6 +250,15 @@ export class LinguistProjectService {
     return project
   }
 
+  renameProject(projectId: string, name: string): LinguistProject {
+    this.assertProjectWritable(projectId)
+    return this.call(() => this.store.renameProject(projectId, name), projectId)
+  }
+
+  reorderActiveProjects(orderedProjectIds: string[]): LinguistProject[] {
+    return this.call(() => this.store.reorderActiveProjects(orderedProjectIds))
+  }
+
   /**
    * 归档（元数据操作）。归档后关闭并丢弃缓存句柄——句柄重新打开时
    * 一律只读（fail closed）。

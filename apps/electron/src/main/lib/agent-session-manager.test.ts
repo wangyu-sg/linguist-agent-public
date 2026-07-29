@@ -160,6 +160,39 @@ describe('Agent 会话 JSONL 读取', () => {
   })
 })
 
+describe('Agent 会话分叉历史', () => {
+  test('复制到 assistant 截断点时保留完成该轮的 success result', async () => {
+    writeAgentSessionJsonl('fork-source', [
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: '已完成' }] },
+        parent_tool_use_id: null,
+        uuid: 'assistant-complete',
+      }),
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        session_id: 'sdk-source',
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: '不应复制' },
+        parent_tool_use_id: null,
+      }),
+    ])
+
+    await manager.copyForkStoredSDKMessages({
+      sourceSessionId: 'fork-source',
+      destSessionId: 'fork-dest',
+      upToMessageUuid: 'assistant-complete',
+      includeCompletingResult: true,
+    })
+
+    expect(manager.getAgentSessionSDKMessages('fork-dest').map((message) => message.type))
+      .toEqual(['assistant', 'result'])
+  })
+})
+
 describe('Agent 会话 runtime 元数据', () => {
   test('Given 已保存 OpenAI medium 默认值 When 新建 Pi 或 Claude 会话 Then 默认并持久化 medium', () => {
     const settingsPath = join(tempHome, '.linguist-agent', 'settings.json')

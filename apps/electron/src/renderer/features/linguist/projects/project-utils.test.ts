@@ -145,12 +145,12 @@ describe('validateLocaleInput（镜像 IPC readLocale：BCP-47 形状 + ≤35）
   })
 })
 
-describe('LINGUIST_IPC_ERROR_MESSAGES（31 码中文化）', () => {
-  test('映射表与契约错误码目录一一对应（31 个，无多无缺）', () => {
+describe('LINGUIST_IPC_ERROR_MESSAGES（稳定码中文化）', () => {
+  test('映射表与契约错误码目录一一对应（33 个，无多无缺）', () => {
     const contractCodes = Object.values(LINGUIST_IPC_ERROR_CODES).sort()
     const mappedCodes = Object.keys(LINGUIST_IPC_ERROR_MESSAGES).sort()
     expect(mappedCodes).toEqual(contractCodes)
-    expect(mappedCodes.length).toBe(31)
+    expect(mappedCodes.length).toBe(33)
   })
 
   test('describeLinguistIpcError：文案 + 稳定码后缀', () => {
