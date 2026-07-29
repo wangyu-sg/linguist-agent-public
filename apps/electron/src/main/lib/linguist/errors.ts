@@ -9,7 +9,11 @@
  * 本层只定义服务语义级错误（项目不存在 / 已归档 / 不健康 / 导入超限）。
  */
 
-import { StoreIndexCorruptError, StoreNotFoundError } from '@linguist/cat-store'
+import {
+  StoreDatabaseIdentityError,
+  StoreIndexCorruptError,
+  StoreNotFoundError,
+} from '@linguist/cat-store'
 
 export const LINGUIST_SERVICE_ERROR_CODES = {
   /** 项目 id 不在项目索引中。 */
@@ -169,8 +173,8 @@ export function mapStoreError(err: unknown, projectId?: string): unknown {
       )
     }
   }
-  if (err instanceof StoreIndexCorruptError) {
-    return new LinguistProjectUnhealthyError(projectId ?? 'unknown', 'STORE_INDEX_CORRUPT')
+  if (err instanceof StoreIndexCorruptError || err instanceof StoreDatabaseIdentityError) {
+    return new LinguistProjectUnhealthyError(projectId ?? 'unknown', err.code)
   }
   return err
 }

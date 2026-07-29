@@ -357,8 +357,13 @@ export class ProjectQuality {
     db: ProjectDatabase,
     findings: readonly PersistedQaFinding[],
   ): CatQaFinding[] {
+    const segments = new Map(
+      db.segments
+        .getByIds([...new Set(findings.map((finding) => finding.segmentId))])
+        .map((segment) => [segment.id as string, segment]),
+    )
     return findings.flatMap((finding) => {
-      const segment = db.segments.getById(finding.segmentId)
+      const segment = segments.get(finding.segmentId)
       if (segment === undefined) return []
       return [{
         id: finding.id,

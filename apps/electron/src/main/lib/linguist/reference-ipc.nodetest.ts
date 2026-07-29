@@ -25,7 +25,10 @@ test('PB-080 reference IPC: main-process picker imports TM and TB, then exposes 
     const tmPath = join(temp, 'memory.csv')
     const tbPath = join(temp, 'terms.csv')
     writeFileSync(tmPath, 'source,target\nHealth Potion,生命药水\n')
-    writeFileSync(tbPath, 'term,translation,status,case_sensitive,note\nPotion,药水,preferred,true,项目术语\n')
+    writeFileSync(
+      tbPath,
+      'term,translation,status,case_sensitive,note\nPotion,药水,preferred,true,项目术语\nHealth Potion,生命药水,required,false,强制术语\n',
+    )
     const ipc = createLinguistReferenceIpc({ getService: () => service })
 
     const tm = await ipc.import({ projectId: project.id, kind: 'tm' }, picker([tmPath]).picker)
@@ -47,6 +50,19 @@ test('PB-080 reference IPC: main-process picker imports TM and TB, then exposes 
       caseSensitive: true,
       note: '项目术语',
     })
+    const requiredTerms = await ipc.queryTerms({
+      projectId: project.id,
+      status: 'required',
+      limit: 10,
+      offset: 0,
+    })
+    assert.equal(requiredTerms.ok, true)
+    if (requiredTerms.ok) {
+      assert.deepEqual(
+        requiredTerms.data.items.map(({ term, translation, status }) => ({ term, translation, status })),
+        [{ term: 'Health Potion', translation: '生命药水', status: 'required' }],
+      )
+    }
     const isolated = await ipc.queryTm({ projectId: other.id, query: 'Health', limit: 10, offset: 0 })
     assert.equal(isolated.ok, true)
     if (isolated.ok) assert.equal(isolated.data.total, 0)

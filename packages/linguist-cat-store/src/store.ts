@@ -21,10 +21,23 @@ import {
   type ProjectBackupEntry,
   type ProjectBackupResult,
 } from './backup'
-import { StoreNotFoundError } from './errors'
-import { restoreProjectBackup, type RestoreBackupResult } from './restore'
+import {
+  StoreBusyError,
+  StoreDatabaseIdentityError,
+  StoreNotFoundError,
+} from './errors'
+import {
+  recoverInterruptedRestore,
+  restoreProjectBackup,
+  type RestoreBackupResult,
+} from './restore'
+import { LINGUIST_APPLICATION_ID } from './database'
 import { ProjectDatabase } from './project-database'
-import { ProjectIndex, type RemovedProject } from './project-index'
+import {
+  ProjectIndex,
+  readProjectManifestFile,
+  type RemovedProject,
+} from './project-index'
 
 export interface CatStoreOptions {
   /** Linguist root dir (e.g. ~/.linguist-agent/linguist). Required — never hardcoded. */
@@ -33,6 +46,8 @@ export interface CatStoreOptions {
   entropy?: EntropySource
   /** Clock for timestamps (index, migrations, revisions, backups). */
   now?: () => string
+  /** Host application version recorded in project.json migration metadata. */
+  applicationVersion?: string
 }
 
 export interface OpenProjectOptions {
@@ -50,7 +65,10 @@ export class CatStore {
     this.rootDir = options.rootDir
     this.now = options.now ?? (() => new Date().toISOString())
     if (options.entropy !== undefined) this.entropy = options.entropy
-    this.index = new ProjectIndex(options.rootDir, { now: this.now })
+    this.index = new ProjectIndex(options.rootDir, {
+      now: this.now,
+      applicationVersion: options.applicationVersion ?? 'unknown',
+    })
   }
 
   listProjects(filter: { includeArchived?: boolean } = {}): LinguistProject[] {
@@ -91,12 +109,41 @@ export class CatStore {
    */
   openProject(projectId: string, options: OpenProjectOptions = {}): ProjectDatabase {
     const project = this.index.get(projectId) // throws StoreNotFoundError
+    recoverInterruptedRestore(this.index.projectDir(project.id), project.id)
+    const trustedManifest = this.index.readProjectManifest(project.id)
+    if (trustedManifest.id !== project.id) {
+      throw new StoreDatabaseIdentityError(
+        this.index.projectMetaPath(project.id),
+        `directory/index project ${project.id} does not match manifest ${trustedManifest.id}`,
+      )
+    }
     const dbPath = this.index.projectDbPath(project.id)
-    return ProjectDatabase.open(dbPath, {
+    const handle = ProjectDatabase.open(dbPath, {
       projectId: project.id,
+      trustedManifest,
       readOnly: options.readOnly ?? false,
       now: this.now,
     })
+    if (handle.readOnly) return handle
+    try {
+      const checkpoint = handle.catDb.db.prepare('PRAGMA wal_checkpoint(FULL)').get() as {
+        busy: number
+        log: number
+        checkpointed: number
+      }
+      if (checkpoint.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
+        throw new StoreBusyError('checkpoint database identity snapshot')
+      }
+      this.index.recordDatabaseIdentity(project.id, {
+        applicationId: LINGUIST_APPLICATION_ID,
+        schemaVersion: handle.schemaVersion,
+        migrated: handle.catDb.identityChanged,
+      })
+      return handle
+    } catch (error) {
+      handle.close()
+      throw error
+    }
   }
 
   /**
@@ -132,8 +179,12 @@ export class CatStore {
     const project = this.index.get(projectId)
     const backupPath = resolveBackupPath(this.index.projectDir(project.id), backupName)
     const dbPath = LEGACY_BACKUP_FILE_PATTERN.test(backupName) ? backupPath : join(backupPath, 'cat.db')
+    const trustedManifest = LEGACY_BACKUP_FILE_PATTERN.test(backupName)
+      ? stripDatabaseIdentity(this.index.readProjectManifest(project.id))
+      : readProjectManifestFile(join(backupPath, 'project.json'))
     return ProjectDatabase.open(dbPath, {
       projectId: project.id,
+      trustedManifest,
       readOnly: true,
       now: this.now,
     })
@@ -147,6 +198,22 @@ export class CatStore {
    */
   restoreProject(projectId: string, backupName: string): RestoreBackupResult {
     const project = this.index.get(projectId)
-    return restoreProjectBackup(this.index.projectDir(project.id), backupName, this.now())
+    return restoreProjectBackup(
+      this.index.projectDir(project.id),
+      backupName,
+      this.now(),
+      project.id,
+      undefined,
+      (input) => {
+        this.index.recordDatabaseIdentity(project.id, input)
+      },
+    )
   }
+}
+
+function stripDatabaseIdentity(
+  manifest: ReturnType<ProjectIndex['readProjectManifest']>,
+): ReturnType<ProjectIndex['readProjectManifest']> {
+  const { databaseIdentity: _databaseIdentity, ...project } = manifest
+  return project
 }

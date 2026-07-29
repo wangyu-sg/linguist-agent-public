@@ -3,7 +3,10 @@ import { createStore } from 'jotai/vanilla'
 import type { AgentSessionMeta, LinguistIpcResult } from '@proma/shared'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
-import { ensureProjectAgentSession } from './project-agent-session'
+import {
+  ensureProjectAgentSession,
+  selectFallbackLinguistSession,
+} from './project-agent-session'
 
 function session(id: string, projectId: string): AgentSessionMeta {
   return {
@@ -18,6 +21,45 @@ function session(id: string, projectId: string): AgentSessionMeta {
 }
 
 describe('Project Agent Session 懒创建', () => {
+  test('given 当前项目会话被移除 when 选择 fallback then 只在同项目优先 pinned 再按最近更新', () => {
+    const store = createStore()
+    store.set(agentSessionsAtom, [
+      { ...session('alpha-current', 'alpha'), updatedAt: 10 },
+      { ...session('alpha-recent', 'alpha'), updatedAt: 30 },
+      { ...session('alpha-pinned', 'alpha'), pinned: true, updatedAt: 20 },
+      { ...session('alpha-archived', 'alpha'), archived: true, pinned: true, updatedAt: 40 },
+      { ...session('beta-pinned', 'beta'), pinned: true, updatedAt: 50 },
+    ])
+    store.set(projectCurrentAgentSessionIdMapAtom, new Map([
+      ['alpha', 'alpha-current'],
+      ['beta', 'beta-pinned'],
+    ]))
+
+    expect(selectFallbackLinguistSession(store, 'alpha', 'alpha-current'))
+      .toBe('alpha-pinned')
+    expect(store.get(projectCurrentAgentSessionIdMapAtom)).toEqual(new Map([
+      ['alpha', 'alpha-pinned'],
+      ['beta', 'beta-pinned'],
+    ]))
+  })
+
+  test('given 当前项目没有其他活跃会话 when 选择 fallback then 清除指针且不借用其他项目会话', () => {
+    const store = createStore()
+    store.set(agentSessionsAtom, [
+      { ...session('alpha-current', 'alpha'), archived: true },
+      session('beta-current', 'beta'),
+    ])
+    store.set(projectCurrentAgentSessionIdMapAtom, new Map([
+      ['alpha', 'alpha-current'],
+      ['beta', 'beta-current'],
+    ]))
+
+    expect(selectFallbackLinguistSession(store, 'alpha', 'alpha-current')).toBeUndefined()
+    expect(store.get(projectCurrentAgentSessionIdMapAtom)).toEqual(new Map([
+      ['beta', 'beta-current'],
+    ]))
+  })
+
   test('given 项目已有有效会话 when 首次需要 Agent then 复用会话且不调用创建 IPC', async () => {
     const store = createStore()
     const existing = session('alpha-existing', 'alpha')

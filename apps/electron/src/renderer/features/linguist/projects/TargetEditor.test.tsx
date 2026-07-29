@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { LinguistSegmentInfo } from '@proma/shared'
 import {
   TargetEditor,
+  TARGET_UNDO_MAX_CHARACTERS,
+  TARGET_UNDO_MAX_OPERATIONS,
   createTargetDraftState,
   insertTargetText,
   targetDraftReducer,
@@ -35,6 +37,22 @@ describe('LF-044/LF-047 TargetEditor', () => {
     expect(state.value).toBe('初始')
     state = targetDraftReducer(state, { type: 'redo' })
     expect(state.value).toBe('第一次')
+  })
+
+  test('given 长编辑会话 when 持续输入 then Undo 历史同时受操作数与字符预算限制', () => {
+    let state = createTargetDraftState('初始')
+    for (let index = 0; index < TARGET_UNDO_MAX_OPERATIONS + 50; index += 1) {
+      state = targetDraftReducer(state, { type: 'commit', value: `译文-${index}` })
+    }
+    expect(state.past).toHaveLength(TARGET_UNDO_MAX_OPERATIONS)
+
+    state = createTargetDraftState('初始')
+    const largeEdit = '译'.repeat(Math.ceil(TARGET_UNDO_MAX_CHARACTERS / 3))
+    for (let index = 0; index < 5; index += 1) {
+      state = targetDraftReducer(state, { type: 'commit', value: `${index}${largeEdit}` })
+    }
+    expect(state.past.reduce((total, value) => total + value.length, 0))
+      .toBeLessThanOrEqual(TARGET_UNDO_MAX_CHARACTERS)
   })
 
   test('given IME composition when 产生多个中间值 then 只留下一个可撤销步骤', () => {

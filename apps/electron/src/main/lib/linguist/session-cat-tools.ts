@@ -7,7 +7,7 @@
  *
  * 装配规则（每次发送重建工具数组；绑定状态绝不缓存）：
  * - 普通会话（无 linguistProjectId）→ []（硬规则：普通 Chat 的 Tool 列表无 CAT）；
- * - 项目绑定会话（active / archived / missing 均装配）→ 12 个工具。projectId 永远
+ * - 项目绑定会话（active / archived / missing 均装配）→ 15 个工具。projectId 永远
  *   来自冻结的会话绑定（PB-034），工具入参不含 projectId——计划 §7.2「Tool 每次都
  *   验证 Session projectId 与输入 projectId 一致」由构造满足（根本没有该输入）；
  * - cat_submit_critic_review 的评审身份由工具运行时派生：criticId/executionId
@@ -19,7 +19,7 @@
  *   无从得知 CAT 能力存在过，失败不可读；
  * - archived 仍装配但不可达（inert）：发送已被 PB-034 主进程闸门阻断
  *   （checkLinguistSessionSendBlock）；即便到达，openProject 对归档项目强制只读
- *   打开；Proposal 写工具（含 cat_run_batch_consistency 的 repair 模式）会被
+ *   打开；Proposal 写工具（含 cat_create_consistency_proposals）会被
  *   只读 store 二次拒绝；
  * - resolveProject 在每次工具调用时实时重解析（resolveLinguistBindingStatus +
  *   getProject + openProject）：归档/删除目录即刻反映，重启/resume 走同一构造
@@ -36,6 +36,7 @@
  */
 
 import type { AgentSessionMeta, LinguistProjectMutationEvent } from '@proma/shared'
+import type { LinguistGenerationProvenance } from '@linguist/cat-core'
 import {
   createLinguistCatTools,
   LinguistCatProjectMissingError,
@@ -44,16 +45,27 @@ import {
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveLinguistBindingStatus, type LinguistServiceResolver } from './session-binding'
+import {
+  runLinguistConsistencyWorker,
+  runLinguistQaWorker,
+} from './cat-job-worker-client'
 
 export type LinguistProjectMutationSink = (event: LinguistProjectMutationEvent) => void
 
 const projectMutationRevisions = new Map<string, number>()
 
+export function getLinguistProjectMutationRevision(projectId: string): number {
+  return projectMutationRevisions.get(projectId) ?? 0
+}
+
 export function createLinguistProjectMutationEvent(
   projectId: string,
   mutation: Omit<LinguistProjectMutationEvent, 'projectId' | 'revision'>,
 ): LinguistProjectMutationEvent {
-  const revision = (projectMutationRevisions.get(projectId) ?? 0) + 1
+  const revision = Math.max(
+    (projectMutationRevisions.get(projectId) ?? 0) + 1,
+    mutation.sequence ?? 0,
+  )
   projectMutationRevisions.set(projectId, revision)
   return { projectId, revision, ...mutation }
 }
@@ -83,7 +95,7 @@ function resolveCriticSkillBytes(): Uint8Array | undefined {
 }
 
 /**
- * 计算会话应装配的 Linguist CAT 工具（0 或 12 个），供 orchestrator 合并进
+ * 计算会话应装配的 Linguist CAT 工具（0 或 15 个），供 orchestrator 合并进
  * Pi queryOptions.customTools。规则见模块头注释；本函数自身不触碰服务
  * （构建工具数组是纯操作），服务只在工具被调用时经 resolver 触达。
  */
@@ -94,6 +106,7 @@ export function resolveLinguistSessionCatTools(
   > | undefined,
   getService: LinguistServiceResolver,
   onProjectMutation?: LinguistProjectMutationSink,
+  generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance,
 ) {
   const projectId = session?.linguistProjectId
   if (!projectId) return []
@@ -115,11 +128,14 @@ export function resolveLinguistSessionCatTools(
       ? { sessionMode: 'independent-audit' as const }
       : {}),
     criticSkillBytes: resolveCriticSkillBytes,
+    consistencyWorker: runLinguistConsistencyWorker,
+    qaWorker: runLinguistQaWorker,
     onMutation: (mutation) => {
       const event = createLinguistProjectMutationEvent(projectId, mutation)
       onProjectMutation?.(event)
     },
     ...(session.modelId !== undefined ? { modelId: session.modelId } : {}),
+    ...(generationProvenance === undefined ? {} : { generationProvenance }),
   })
 }
 

@@ -29,7 +29,7 @@
     },
     {
       "file": "apps/electron/package.json",
-      "ticket": "PB-004, PB-010, PB-030, PB-042, PB-043, PB-044, PB-051, PB-052, PB-053, PB-054, PB-060, PB-061, PB-062, PB-063, PB-064, PB-065, PB-071, PB-072, PB-073, PB-074, PB-080, PB-081, PB-086, PB-087, PB-088, PB-083, PB-082, PB-084, PB-094, PB-095, PB-096, PB-105, PB-113, PB-114, PB-115, PB-089, AC-001, LF-010, LF-030, AC-002, LF-011, LF-031, LF-012, LF-013, AC-004, LF-003, LF-014, LF-020, LF-015, LF-021, LF-016, LF-022, LF-040, LF-023, AC-007, LF-041, LF-032, LF-024, LF-033, LF-060, LF-025, AC-005, LF-034, LF-061, LF-035, LF-042, LF-062, LF-043, LF-050, LF-070, LF-054, LF-044, LF-063, LF-071, LF-064, LF-072, LF-055, LF-045, LF-065, LF-066, LF-073, LF-046, LF-047, LF-051, LF-052, LF-067, LF-068, LF-053, LF-048, AC-006, AC-008, LF-074, LF-077, LF-075",
+      "ticket": "PB-004, PB-010, PB-030, PB-042, PB-043, PB-044, PB-051, PB-052, PB-053, PB-054, PB-060, PB-061, PB-062, PB-063, PB-064, PB-065, PB-071, PB-072, PB-073, PB-074, PB-080, PB-081, PB-086, PB-087, PB-088, PB-083, PB-082, PB-084, PB-094, PB-095, PB-096, PB-105, PB-113, PB-114, PB-115, PB-089, AC-001, LF-010, LF-030, AC-002, LF-011, LF-031, LF-012, LF-013, AC-004, LF-003, LF-014, LF-020, LF-015, LF-021, LF-016, LF-022, LF-040, LF-023, AC-007, LF-041, LF-032, LF-024, LF-033, LF-060, LF-025, AC-005, LF-034, LF-061, LF-035, LF-042, LF-062, LF-043, LF-050, LF-070, LF-054, LF-044, LF-063, LF-071, LF-064, LF-072, LF-055, LF-045, LF-065, LF-066, LF-073, LF-046, LF-047, LF-051, LF-052, LF-067, LF-068, LF-053, LF-048, AC-006, AC-008, LF-074, LF-077, LF-075, LF-080, LF-083, LF-088",
       "reason": "PB-004：新增 smoke:pack/smoke:g0 脚本与 devDep playwright-core@1.62.0（精确版本）。PB-010：description 品牌文案。PB-030：新增 test:linguist 脚本（node --test 运行 CAT 项目服务 *.nodetest.ts，bun 无 node:sqlite）与 devDeps @linguist/cat-core/@linguist/cat-formats/@linguist/cat-store（workspace:*，主进程 LinguistProjectService 依赖，对齐 @proma/* 既有登记方式）。 PB-042：新增 devDep @linguist/cat-tools（workspace:*，主进程 session-cat-tools.ts 依赖，对齐 PB-030 三个 @linguist/* 既有登记方式；esbuild 束进 main.cjs）。PB-043：Electron 包 patch 版本 0.15.12→0.15.13。PB-044：打包真机 smoke 工单同步 patch 版本 0.15.13→0.15.14。PB-051：Proposal 工具接入同步 patch 版本 0.15.14→0.15.15。PB-052：确定性硬门接入同步 patch 版本 0.15.15→0.15.16。PB-053：Proposal 人工审核 IPC 同步 patch 版本 0.15.16→0.15.17。PB-054：Proposal Inbox 与 G5 打包纵向探针同步 patch 版本 0.15.17→0.15.18。PB-060：CAT Workspace 查询面同步 0.15.18→0.15.19。PB-061：新增精确依赖 @tanstack/react-virtual@3.14.7 并同步 Electron 0.15.20。PB-062：人工 CAS 编辑同步 Electron 0.15.21。PB-063：只读 Context Rail 同步 Electron 0.15.22。PB-064：CAT Grid Proposal 审核集成同步 Electron 0.15.23。PB-065：CAT 键盘与无障碍同步 Electron 0.15.24。PB-071：QA Tool/UI/IPC 与 Hermetic Keychain 回归修正同步 0.15.25。PB-072：导出 staging/reimport 验证/QA 阻断错误接线同步 0.15.26。PB-073：Native Save 同步 0.15.27。PB-074：新增 smoke:g7 并同步 0.15.28。PB-080：TM/TB reference IPC 与管理 UI 同步 0.15.29。PB-081：XLSX adapter 接入与 picker 标签同步 0.15.30。PB-086：SDLXLIFF adapter 接入与 picker 标签同步 0.15.31；零新依赖（bun.lock 不变）。PB-087：Phrase MXLIFF adapter 接入与 picker 标签同步 0.15.32；零新依赖（bun.lock 不变）。PB-088：Phrase bilingual DOCX adapter 接入与 picker 标签同步 0.15.33；零新依赖（bun.lock 不变）。PB-083：cat_submit_critic_review 工具接线与评审 Skill 资产同步 0.15.34；零新依赖（bun.lock 不变）。PB-082：质量策略档三段选择器、评审会话徽标与「独立评审」按钮编排同步 0.15.35；零新依赖（bun.lock 不变）。PB-084：cat_run_batch_consistency 装配层注释同步（工具由工厂数组自动包含，无功能改动）0.15.36；零新依赖（bun.lock 不变）。 PB-094：版本 0.15.36→0.15.37；devDeps 新增 @linguist/legacy-migration（workspace:*，主进程 migration-service 编排依赖，对齐既有四个 @linguist/* 既有登记方式；esbuild build:main 束进 main.cjs 已实测）。 PB-095：@proma/electron 版本同步 0.15.37→0.15.38；零新依赖。 PB-096：@proma/electron 版本同步 0.15.38→0.15.39；零新依赖。 PB-105：devDeps 新增 axe-core@4.12.1（精确版本，矩阵探针经 page.addScriptTag 注入 node_modules/axe-core/axe.min.js，运行时零网络）；版本同步 0.15.39→0.15.40。 PB-113/PB-114：版本 0.15.41/0.15.42。 PB-115：版本 0.15.43。 PB-089：版本 0.15.44。 LF-067：Proposal Inline Review 与终态同步，Electron 版本同步 0.15.95→0.15.96；零新依赖。 LF-068：项目 Agent 快捷动作复用原生 pending prompt 与发送链，Electron 版本同步 0.15.96→0.15.97；零新依赖。 LF-053：QA 面板迁入 Bottom Dock 并复用既有 Workbench 跳转与刷新能力，Electron 版本同步 0.15.97→0.15.98；零新依赖。 LF-048：Segment Grid 双击编辑源码缺口补齐，Electron 版本同步 0.15.98→0.15.99；零新依赖。 AC-006：Native Save 防覆盖与受管根 realpath 围栏，Electron 版本同步 0.15.99→0.15.100；零新依赖。 AC-008：Electron patch 版本同步 0.15.100→0.15.101；零新依赖。"
     },
     {
@@ -89,18 +89,23 @@
     },
     {
       "file": "apps/electron/src/main/index.ts",
-      "ticket": "PB-010, PB-030, AC-004",
+      "ticket": "PB-010, PB-030, AC-004, LF-088",
       "reason": "PB-010 品牌基础：单实例锁提示、启动错误对话框的用户可见产品名字符串。PB-030：bootstrap 内经 safeRun 接线 initLinguistProjectService（仅实例化 + sqlite 探针，不注册 IPC——属 PB-031）；before-quit 增加 closeAllLinguistProjectHandles 清理。AC-004：主窗口显式固定 contextIsolation、sandbox、nodeIntegration 与 webSecurity 安全边界。"
     },
     {
       "file": "apps/electron/src/main/ipc.ts",
-      "ticket": "PB-031, PB-033, PB-034, PB-053, PB-060, PB-062, PB-063, PB-071, PB-073, PB-080, PB-082, PB-094, PB-095, PB-102, PB-111, PB-113, PB-089, AC-005, LF-072, LF-067",
-      "reason": "Linguist 项目 typed IPC：注册 6 个计划 §7.2 通道（linguist.projects.{list,create,open,import,getSummary,archive}）的薄适配器——处理器逻辑在 lib/linguist/project-ipc.ts（白名单路径），此处仅接线 + 为导入通道注入真实 dialog.showOpenDialog picker（renderer 永不提交路径/字节，计划 §7.4）。全部通道返回 LinguistIpcResult 信封（稳定错误码；刻意偏离 house 直返+throw 惯例，理由见代码注释与 shared/types/linguist.ts）。PB-033：getSummary 注册处注释随契约扩展（响应含资产元数据列表 assets）更新——仅注释，通道与校验不变。 PB-034：注册 linguist.sessions.{createForProject,listForProject,getBinding} 三个会话绑定通道的薄适配器（同一 LinguistIpcResult 信封约定；处理器逻辑在白名单 lib/linguist/session-ipc.ts + session-binding.ts）。PB-053：注册七个 linguist.proposals.* 人工审核通道，处理器位于白名单 proposal-ipc.ts；不进入 Agent tools。PB-060：注册只读 linguist.cat.query，校验与查询逻辑位于白名单 cat-workspace-ipc.ts。PB-062：注册 renderer-only linguist.cat.editSegment CAS 通道，不进入 Agent tools。PB-063：注册只读 linguist.cat.getContext，处理器位于白名单 cat-workspace-ipc.ts。PB-071：注册 QA run/list/resolve/waive 四通道；业务校验在白名单 cat-workspace-ipc.ts。PB-080：注册五个 linguist.references.* 通道（queryTm/queryTerms/import/upsertTerm/delete）薄适配器；处理器位于白名单 reference-ipc.ts，import 通道注入真实 dialog.showOpenDialog picker（renderer 永不提交路径/字节）。PB-073：注册导出 staging/native Save 通道。PB-082：注册 linguist.projects.setQualityProfile 通道。 PB-094：薄注册 linguist.migration.pickAndScan/import 两个 handle（picker 注入 dialog.showOpenDialog openDirectory；PROGRESS 为 main→renderer 单向事件经 event.sender.send 推送含 isDestroyed 守卫，不注册 handle）。 PB-095：注册 linguist.assets.* 五通道薄 handle（importContextDoc 注入主进程 picker；registerPreviewUrl 注入既有 registerPromaFilePath）。 PB-102：注册 linguist.exports.list 只读通道 handler。 PB-111：注册备份/恢复四通道（:4660-4679）。 PB-113：resolveAppIconPath 增 PROMA_APP_ICON_VARIANTS_VISIBLE 主进程兜底——隐藏期间历史存储的 Proma 图标变体一律解析回 icon.png，不改写用户存储值。 PB-089：注册 linguist.project.previewAssetSource（注入 file-preview-service 惰性 import 转换栈 + registerPromaFilePath）。 LF-067：为 renderer-only Proposal 审核注入 host-owned proposal-reviewed mutation 广播，失败与幂等重放不发成功事件。"
+      "ticket": "PB-031, PB-033, PB-034, PB-053, PB-060, PB-062, PB-063, PB-071, PB-073, PB-080, PB-082, PB-094, PB-095, PB-102, PB-111, PB-113, PB-089, AC-005, LF-072, LF-067, LF-086, LF-083, LF-088",
+      "reason": "Linguist 项目 typed IPC：注册 6 个计划 §7.2 通道（linguist.projects.{list,create,open,import,getSummary,archive}）的薄适配器——处理器逻辑在 lib/linguist/project-ipc.ts（白名单路径），此处仅接线 + 为导入通道注入真实 dialog.showOpenDialog picker（renderer 永不提交路径/字节，计划 §7.4）。全部通道返回 LinguistIpcResult 信封（稳定错误码；刻意偏离 house 直返+throw 惯例，理由见代码注释与 shared/types/linguist.ts）。PB-033：getSummary 注册处注释随契约扩展（响应含资产元数据列表 assets）更新——仅注释，通道与校验不变。 PB-034：注册 linguist.sessions.{createForProject,listForProject,getBinding} 三个会话绑定通道的薄适配器（同一 LinguistIpcResult 信封约定；处理器逻辑在白名单 lib/linguist/session-ipc.ts + session-binding.ts）。PB-053：注册七个 linguist.proposals.* 人工审核通道，处理器位于白名单 proposal-ipc.ts；不进入 Agent tools。PB-060：注册只读 linguist.cat.query，校验与查询逻辑位于白名单 cat-workspace-ipc.ts。PB-062：注册 renderer-only linguist.cat.editSegment CAS 通道，不进入 Agent tools。PB-063：注册只读 linguist.cat.getContext，处理器位于白名单 cat-workspace-ipc.ts。PB-071：注册 QA run/list/resolve/waive 四通道；业务校验在白名单 cat-workspace-ipc.ts。PB-080：注册五个 linguist.references.* 通道（queryTm/queryTerms/import/upsertTerm/delete）薄适配器；处理器位于白名单 reference-ipc.ts，import 通道注入真实 dialog.showOpenDialog picker（renderer 永不提交路径/字节）。PB-073：注册导出 staging/native Save 通道。PB-082：注册 linguist.projects.setQualityProfile 通道。 PB-094：薄注册 linguist.migration.pickAndScan/import 两个 handle（picker 注入 dialog.showOpenDialog openDirectory；PROGRESS 为 main→renderer 单向事件经 event.sender.send 推送含 isDestroyed 守卫，不注册 handle）。 PB-095：注册 linguist.assets.* 五通道薄 handle（importContextDoc 注入主进程 picker；registerPreviewUrl 注入既有 registerPromaFilePath）。 PB-102：注册 linguist.exports.list 只读通道 handler。 PB-111：注册备份/恢复四通道（:4660-4679）。 PB-113：resolveAppIconPath 增 PROMA_APP_ICON_VARIANTS_VISIBLE 主进程兜底——隐藏期间历史存储的 Proma 图标变体一律解析回 icon.png，不改写用户存储值。 PB-089：注册 linguist.project.previewAssetSource（注入 file-preview-service 惰性 import 转换栈 + registerPromaFilePath）。 LF-067：为 renderer-only Proposal 审核注入 host-owned proposal-reviewed mutation 广播，失败与幂等重放不发成功事件。 LF-086：薄注册 Linguist Diagnostics 状态、脱敏预览和显式导出三通道；实现与校验位于白名单 diagnostics-ipc.ts。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-orchestrator.ts",
-      "ticket": "PB-034, PB-040, PB-042, PB-095, PB-115, LF-062, LF-063",
-      "reason": "项目会话绑定生命周期硬规则 4 的主进程强制点：sendMessage preflight 在会话元数据加载后调用 checkLinguistSessionSendBlock（白名单 lib/linguist/session-binding.ts），绑定项目已归档 → reportPreflightError 持久化 TypedError（linguist_project_archived）并终止本轮；queueMessage 流式追加同一闸门（抛出同文案错误）。missing/未绑定/服务不可解析放行（fail-open，会话降级为普通 Pi 会话）。 PB-040：sendMessage 的 Pi queryOptions 装配处在既有 additionalSkillPaths 缝上追加 resolveLinguistSessionSkillPaths(sessionMeta, getLinguistProjectService)（白名单 lib/linguist/project-skill.ts）——项目绑定会话 active/archived 注入常驻 project-assistant Skill，missing/普通会话/服务不可解析不注入（fail closed）；每次发送实时重解析，resume 一致，Skill 列表不持久化。 PB-042：sendMessage 的 Pi customTools 装配处追加 resolveLinguistSessionCatTools(sessionMeta, getLinguistProjectService)（白名单 lib/linguist/session-cat-tools.ts，仅 pi runtime 构建）——普通会话 []；项目绑定会话 active/archived/missing 均装配五个只读 CAT 工具（missing 时工具调用抛 PROJECT_MISSING 对模型可读；archived 发送已被 PB-034 闸门阻断，inert）；合并前 assertNoLinguistCatToolNameConflict 对既有 piBuiltinTools/piMcpTools 撞名 fail loud；工具数组每次发送重建、绑定每次调用实时重解析，resume/queueMessage 复用同一活跃 Pi 会话自然一致。 PB-095：systemPrompt 尾部追加 buildLinguistProjectAssetsPrompt 一行接线（六类项目资产摘要注入；普通会话/missing 绑定空串，fail closed）。 PB-115：「报告问题」外链统一 proma-ai/Proma/issues。LF-062：发送与流式追加均在主进程验证每 Turn Linguist snapshot 的 binding/ownership，验证后注入 host-owned 结构块并随用户 Turn 持久化；普通 Agent 禁止携带伪造 Context。"
+      "ticket": "PB-034, PB-040, PB-042, PB-095, PB-115, LF-062, LF-063, LF-079, LF-080, LF-086, LF-089",
+      "reason": "项目会话绑定生命周期硬规则 4 的主进程强制点：sendMessage preflight 在会话元数据加载后调用 checkLinguistSessionSendBlock（白名单 lib/linguist/session-binding.ts），绑定项目已归档 → reportPreflightError 持久化 TypedError（linguist_project_archived）并终止本轮；queueMessage 流式追加同一闸门（抛出同文案错误）。missing/未绑定/服务不可解析放行（fail-open，会话降级为普通 Pi 会话）。 PB-040：sendMessage 的 Pi queryOptions 装配处在既有 additionalSkillPaths 缝上追加 resolveLinguistSessionSkillPaths(sessionMeta, getLinguistProjectService)（白名单 lib/linguist/project-skill.ts）——项目绑定会话 active/archived 注入常驻 project-assistant Skill，missing/普通会话/服务不可解析不注入（fail closed）；每次发送实时重解析，resume 一致，Skill 列表不持久化。 PB-042：sendMessage 的 Pi customTools 装配处追加 resolveLinguistSessionCatTools(sessionMeta, getLinguistProjectService)（白名单 lib/linguist/session-cat-tools.ts，仅 pi runtime 构建）——普通会话 []；项目绑定会话 active/archived/missing 均装配五个只读 CAT 工具（missing 时工具调用抛 PROJECT_MISSING 对模型可读；archived 发送已被 PB-034 闸门阻断，inert）；合并前 assertNoLinguistCatToolNameConflict 对既有 piBuiltinTools/piMcpTools 撞名 fail loud；工具数组每次发送重建、绑定每次调用实时重解析，resume/queueMessage 复用同一活跃 Pi 会话自然一致。 PB-095：systemPrompt 尾部经 buildLinguistProjectAssetsPrompt 兼容 seam 注入项目资产。 PB-115：「报告问题」外链统一 proma-ai/Proma/issues。LF-062：发送与流式追加均在主进程验证每 Turn Linguist snapshot 的 binding/ownership，验证后注入 host-owned 结构块并随用户 Turn 持久化；普通 Agent 禁止携带伪造 Context。LF-079：在既有 buildSystemPrompt/preset 之后单次构建 Linguist Prompt overlay，Pi 与 Claude 两条原生 Runtime 均追加同一 Profile/Role/Strategy/Digest；Proma Base、Provider、Permission、Thinking 与 Tool 装配保持原所有者。LF-080：Send/Rewind 按持久化 AgentProfile 解析统一 Execution Scope；Proma Base 能力原样继承，CAT Overlay 对 Pi 使用 customTools、对 Claude 使用进程内 SDK MCP，重名 fail loud，Plan 模式只放行明确只读的 CAT MCP 工具。 LF-086：发送链只记录实际 Runtime、Base/Overlay tool 数与时间，不复制 Session 或 Agent 状态。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts",
+      "ticket": "LF-085",
+      "reason": "Pi SDK 只把 AgentToolResult.content 发给模型；在既有 session.agent.convertToLlm seam 前临时展开 CAT details，使模型获得完整且有界的结构化结果，同时 JSONL 仍只持久化短 content + 单份 details。非 CAT、不可序列化 details 与原生 Provider/Tool 流程保持不变。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-service.ts",
@@ -109,8 +114,8 @@
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-manager.ts",
-      "ticket": "PB-034, PB-082, AC-005",
-      "reason": "会话绑定写入与冻结：createAgentSession 新增第 6 可选参数 linguistBinding（仅项目内创建路径传入，linguistProjectId + 项目名快照，随索引持久化）；updateAgentSessionMeta 类型白名单刻意不含绑定字段，并在展开 updates 后强制恢复 existing 值（防御 any 断言绕过）——绑定创建时冻结，无任何重绑定 API（硬规则 2/3）。PB-082：绑定扩展 linguistSessionRole（仅 reviewer 落库），同属创建时冻结——白名单不含且展开 updates 后强制恢复原值。"
+      "ticket": "PB-034, PB-082, AC-005, LF-080",
+      "reason": "会话绑定写入与冻结：createAgentSession 新增第 6 可选参数 linguistBinding（仅项目内创建路径传入，linguistProjectId + 项目名快照，随索引持久化）；updateAgentSessionMeta 类型白名单刻意不含绑定字段，并在展开 updates 后强制恢复 existing 值（防御 any 断言绕过）——绑定创建时冻结，无任何重绑定 API（硬规则 2/3）。PB-082：绑定扩展 linguistSessionRole（仅 reviewer 落库），同属创建时冻结——白名单不含且展开 updates 后强制恢复原值。LF-080：冻结策略随 Fork 保留，Fork/Rewind 统一解析执行目录，删除 Linguist Session 时将 CWD 移入受管 Trash。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-manager.test.ts",
@@ -164,8 +169,8 @@
     },
     {
       "file": "apps/electron/src/preload/index.ts",
-      "ticket": "PB-031, PB-033, PB-034, PB-053, PB-060, PB-062, PB-063, PB-071, PB-073, PB-080, PB-082, PB-094, PB-095, PB-102, PB-111, PB-089, AC-005, LF-063, LF-072",
-      "reason": "Linguist 项目 typed IPC 的 preload 面：ElectronAPI 接口与实现各新增 6 个方法（linguistProjects{List,Create,Open,Import,GetSummary,Archive}），按 house 扁平方法惯例经 contextBridge 暴露，类型来自 @proma/shared 的 PB-031 契约。PB-033：linguistProjectsGetSummary 文档注释随契约扩展（LinguistProjectSummary 含 assets 列表）更新——方法面不变。 PB-034：ElectronAPI 接口与实现各新增 3 个方法（linguistSessions{CreateForProject,ListForProject,GetBinding}），按 house 扁平方法惯例经 contextBridge 暴露。PB-053：ElectronAPI 接口与实现新增七个 linguistProposals* 人工审核方法。PB-060：新增只读 linguistCatQuery 方法。PB-062：新增人工 CAS `linguistCatEditSegment` 方法。PB-063：新增只读 linguistCatGetContext 方法。PB-071：新增 linguistCatRunQa/ListQaFindings/ResolveQaFinding/WaiveQaFinding 四方法。PB-080：ElectronAPI 接口与实现新增 linguistReferences{QueryTm,QueryTerms,Import,UpsertTerm,Delete} 五方法。PB-073：导出 staging/native Save 方法。PB-082：linguistProjectsSetQualityProfile 方法。 PB-094：typed 声明+实现 3 个迁移向导 API（linguistMigrationPickAndScan/Import/onLinguistMigrationProgress 订阅返回 unsubscribe）。 PB-095：linguistAssets{Query,Upsert,Delete,ImportContextDoc,ImportSentencePatterns} 五个 typed 方法。 PB-102：linguistExportsList 桥接方法与类型。 PB-111：linguistProjectsBackup/linguistBackupsList/linguistBackupsPreviewRestore/linguistBackupsRestore 四桥接。 PB-089：linguistProjectsPreviewAssetSource 类型声明 + invoke 绑定。"
+      "ticket": "PB-031, PB-033, PB-034, PB-053, PB-060, PB-062, PB-063, PB-071, PB-073, PB-080, PB-082, PB-094, PB-095, PB-102, PB-111, PB-089, AC-005, LF-063, LF-072, LF-086, LF-083, LF-088",
+      "reason": "Linguist 项目 typed IPC 的 preload 面：ElectronAPI 接口与实现各新增 6 个方法（linguistProjects{List,Create,Open,Import,GetSummary,Archive}），按 house 扁平方法惯例经 contextBridge 暴露，类型来自 @proma/shared 的 PB-031 契约。PB-033：linguistProjectsGetSummary 文档注释随契约扩展（LinguistProjectSummary 含 assets 列表）更新——方法面不变。 PB-034：ElectronAPI 接口与实现各新增 3 个方法（linguistSessions{CreateForProject,ListForProject,GetBinding}），按 house 扁平方法惯例经 contextBridge 暴露。PB-053：ElectronAPI 接口与实现新增七个 linguistProposals* 人工审核方法。PB-060：新增只读 linguistCatQuery 方法。PB-062：新增人工 CAS `linguistCatEditSegment` 方法。PB-063：新增只读 linguistCatGetContext 方法。PB-071：新增 linguistCatRunQa/ListQaFindings/ResolveQaFinding/WaiveQaFinding 四方法。PB-080：ElectronAPI 接口与实现新增 linguistReferences{QueryTm,QueryTerms,Import,UpsertTerm,Delete} 五方法。PB-073：导出 staging/native Save 方法。PB-082：linguistProjectsSetQualityProfile 方法。 PB-094：typed 声明+实现 3 个迁移向导 API（linguistMigrationPickAndScan/Import/onLinguistMigrationProgress 订阅返回 unsubscribe）。 PB-095：linguistAssets{Query,Upsert,Delete,ImportContextDoc,ImportSentencePatterns} 五个 typed 方法。 PB-102：linguistExportsList 桥接方法与类型。 PB-111：linguistProjectsBackup/linguistBackupsList/linguistBackupsPreviewRestore/linguistBackupsRestore 四桥接。 PB-089：linguistProjectsPreviewAssetSource 类型声明 + invoke 绑定。 LF-086：新增 Diagnostics 状态、预览、导出三项 typed bridge。"
     },
     {
       "file": "apps/electron/src/renderer/App.tsx",
@@ -229,13 +234,13 @@
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/cat-result.tsx",
-      "ticket": "LF-065, LF-066, LF-067",
-      "reason": "LF-065：CAT Tool 结果只投影统计摘要，不展示客户正文或本机路径；继续复用 Proma 原生 Tool Result 容器。LF-066：仅严格 Project/Segment ID 显示可访问导航按钮，并写入窄 Jotai 请求。LF-067：仅对可信 Proposal ID 回查 Store 终态并订阅 proposal-reviewed 刷新审核摘要；失败不伪造状态。"
+      "ticket": "LF-065, LF-066, LF-067, LF-085, LF-087",
+      "reason": "LF-065：CAT Tool 结果只投影统计摘要，不展示客户正文或本机路径；继续复用 Proma 原生 Tool Result 容器。LF-066：仅严格 Project/Segment ID 显示可访问导航按钮，并写入窄 Jotai 请求。LF-067：仅对可信 Proposal ID 回查 Store 终态并订阅 proposal-reviewed 刷新审核摘要；失败不伪造状态。LF-085：仅当结构化 details 可生成既有安全摘要时才序列化给 Renderer；补齐 Translation Context、Proposal Snapshot、句式库和 Context Doc 四类摘要，畸形/未来工具仍使用持久化短 content。LF-087：复用 shared Proposal Stable ID v1/v2 校验，历史 Timeline 与新建完整 digest 都可回查，不增加第二套 Renderer。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/cat-result.test.tsx",
-      "ticket": "LF-065, LF-066, LF-067",
-      "reason": "LF-065：BDD 覆盖十类 CAT 结果摘要、客户正文隐藏及错误/畸形/未知 payload 安全回退。LF-066：严格 ID 才显示导航动作，伪造/混合 ID 降级为不可点击摘要。LF-067：覆盖严格 Proposal ID、Store 终态回查与 mutation 后刷新。"
+      "ticket": "LF-065, LF-066, LF-067, LF-085, LF-087",
+      "reason": "LF-065：BDD 覆盖十类 CAT 结果摘要、客户正文隐藏及错误/畸形/未知 payload 安全回退。LF-066：严格 ID 才显示导航动作，伪造/混合 ID 降级为不可点击摘要。LF-067：覆盖严格 Proposal ID、Store 终态回查与 mutation 后刷新。LF-085：覆盖 Timeline details 安全投影、客户正文隐藏、未知工具和循环对象降级。LF-087：覆盖 v1 与 v2 Proposal ID 同时可信、畸形 digest 继续 fail closed。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/cat-result-navigation-atoms.ts",
@@ -249,8 +254,28 @@
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx",
-      "ticket": "PB-012, PB-013, PB-102, LF-012, LF-014, LF-021, AC-008",
-      "reason": "PB-012/PB-013/PB-102：既有自动任务门控、Projects 入口和 Sidebar 精修。LF-012：折叠 Rail 增加 Linguist 图标入口；Agent/Chat 保留会话恢复。LF-014：折叠入口切入 Linguist 时恢复最后打开的 Project Tab。LF-021：展开状态接入独立 LinguistSidebarContent，不复刻 Agent/Chat 会话树。 AC-008：补齐侧栏图标按钮/会话操作的语义标签，改用原生 button 承担会话选择，并提升最近更新时间对比度。"
+      "ticket": "PB-012, PB-013, PB-102, LF-012, LF-014, LF-021, AC-008, LF-082",
+      "reason": "PB-012/PB-013/PB-102：既有自动任务门控、Projects 入口和 Sidebar 精修。LF-012：折叠 Rail 增加 Linguist 图标入口；Agent/Chat 保留会话恢复。LF-014：折叠入口切入 Linguist 时恢复最后打开的 Project Tab。LF-021：展开状态接入独立 LinguistSidebarContent，不复刻 Agent/Chat 会话树。 AC-008：补齐侧栏图标按钮/会话操作的语义标签，改用原生 button 承担会话选择，并提升最近更新时间对比度。LF-082：删除确认按实体类型分派，普通 Agent 会话行复用共享 Session item / actions；委派、移动、状态与预览能力不变。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/session-tree/AgentSessionActionsMenu.tsx",
+      "ticket": "LF-082",
+      "reason": "普通 Agent 与 Linguist 共用的最小 Session actions 菜单；能力由调用方收窄，Linguist 不开放跨项目移动。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/session-tree/AgentSessionTreeItem.tsx",
+      "ticket": "LF-082",
+      "reason": "普通 Agent 与 Linguist 共用的最小 Session 标题、inline rename 与键盘焦点 primitive；两侧状态、预览和项目语义仍由各自组合层提供。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/session-tree/session-actions.test.ts",
+      "ticket": "LF-082",
+      "reason": "BDD 验证 Linguist Session 删除按实体类型走 Agent Session 删除入口，不依赖当前 appMode。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/session-tree/session-actions.ts",
+      "ticket": "LF-082",
+      "reason": "Chat、Agent、Linguist Session 的 typed 删除目标与单一分派入口，避免由当前 appMode 猜测实体类型。"
     },
     {
       "file": "apps/electron/src/renderer/components/automation/AutomationFormView.tsx",
@@ -329,7 +354,7 @@
     },
     {
       "file": "bun.lock",
-      "ticket": "PB-004, PB-022, PB-024, PB-030, PB-041, PB-042, PB-043, PB-044, PB-050, PB-051, PB-052, PB-053, PB-054, PB-060, PB-061, PB-062, PB-063, PB-064, PB-065, PB-070, PB-072, PB-073, PB-074, PB-080, PB-081, PB-090, PB-091, PB-094, PB-095, PB-096, PB-105, PB-113, PB-114, PB-115, PB-089, AC-001, LF-010, LF-030, AC-002, LF-011, LF-031, LF-012, LF-013, AC-004, LF-003, LF-014, LF-020, LF-015, LF-021, LF-016, LF-022, LF-040, LF-023, AC-007, LF-041, LF-032, LF-024, LF-033, LF-060, LF-025, AC-005, LF-034, LF-061, LF-035, LF-042, LF-062, LF-043, LF-050, LF-070, LF-054, LF-044, LF-063, LF-071, LF-064, LF-072, LF-055, LF-045, LF-065, LF-066, LF-073, LF-046, LF-047, LF-051, LF-052, LF-067, LF-068, LF-053, LF-048, AC-006, AC-008, LF-074, LF-077, LF-075",
+      "ticket": "PB-004, PB-022, PB-024, PB-030, PB-041, PB-042, PB-043, PB-044, PB-050, PB-051, PB-052, PB-053, PB-054, PB-060, PB-061, PB-062, PB-063, PB-064, PB-065, PB-070, PB-072, PB-073, PB-074, PB-080, PB-081, PB-090, PB-091, PB-094, PB-095, PB-096, PB-105, PB-113, PB-114, PB-115, PB-089, AC-001, LF-010, LF-030, AC-002, LF-011, LF-031, LF-012, LF-013, AC-004, LF-003, LF-014, LF-020, LF-015, LF-021, LF-016, LF-022, LF-040, LF-023, AC-007, LF-041, LF-032, LF-024, LF-033, LF-060, LF-025, AC-005, LF-034, LF-061, LF-035, LF-042, LF-062, LF-043, LF-050, LF-070, LF-054, LF-044, LF-063, LF-071, LF-064, LF-072, LF-055, LF-045, LF-065, LF-066, LF-073, LF-046, LF-047, LF-051, LF-052, LF-067, LF-068, LF-053, LF-048, AC-006, AC-008, LF-074, LF-077, LF-075, LF-084, LF-083",
       "reason": "PB-004：playwright-core@1.62.0 devDependency 的锁文件条目（与 apps/electron/package.json 同票改动）。PB-022：新增 packages/linguist-cat-core 与 packages/linguist-cat-formats 的 workspace 锁文件条目（bun install 自动写入；PB-021 未跑 install，两条一并记入；无外部依赖）。PB-024：新增 packages/linguist-cat-store 的 workspace 锁文件条目（bun install 自动写入；无外部依赖）。PB-030：apps/electron 新增 @linguist/cat-core/@linguist/cat-formats/@linguist/cat-store devDeps 的锁文件条目（bun install 自动写入；无外部依赖）。PB-041：新增 packages/linguist-cat-tools 的 workspace 锁文件条目（bun install 自动写入；新外部依赖仅 pi-coding-agent/typebox 的既有锁定版本引用，无新增第三方包；bun install 顺带将 chalk/jiti/semver 的 hoist 归位改为 pi-coding-agent 依赖胜出（既有版本换位置，chalk4 消费方全部保留嵌套 4.x，无版本新增/删除，build:main 实测通过））。 PB-042：apps/electron 新增 @linguist/cat-tools devDep 的锁文件条目（bun install 自动写入；无新增第三方包）。PB-043：同步 Electron 包 patch 版本 0.15.13。PB-044：同步 Electron 包 patch 版本 0.15.14。PB-050：同步 @linguist/cat-core 与 @linguist/cat-store patch 版本 0.0.1。PB-051：同步 @linguist/cat-store/@linguist-cat-tools 到 0.0.2 与 Electron 到 0.15.15。PB-052：同步 cat-core 0.0.2、cat-tools 0.0.3、Electron 0.15.16；无新增依赖。PB-053：同步 cat-store 0.0.3、shared 0.1.44、Electron 0.15.17；无新增依赖。PB-054：同步 Electron 0.15.18；无新增依赖。PB-060：同步 shared 0.1.45 与 Electron 0.15.19；无新增依赖。PB-061：新增 @tanstack/react-virtual@3.14.7 / virtual-core@3.17.5，版本同步 cat-store 0.0.4、shared 0.1.46、Electron 0.15.20；bun add 同时把先前锁文件中与 package.json 不一致的 cat-core 0.0.3→0.0.2、cat-store 0.0.2→0.0.3 纠正后再递增 cat-store。PB-062：同步 shared 0.1.47 与 Electron 0.15.21；无新增依赖。PB-063：同步 shared 0.1.48 与 Electron 0.15.22；无新增依赖。PB-064：同步 Electron 0.15.23；无新增依赖。PB-065：同步 Electron 0.15.24；无新增依赖。PB-070：同步 cat-core 0.0.3；无新增依赖。PB-072：修正 lock 中此前未随 package.json 前移的 workspace 版本，并同步 cat-store 0.0.6、shared 0.1.50、Electron 0.15.26；无新增依赖。PB-073/PB-074：同步 shared 0.1.51 与 Electron 0.15.27/0.15.28；无新增依赖。PB-080：cat-formats 新增 runtime dep @xmldom/xmldom@^0.8.11（TMX/TBX 解析，MIT；xml-parser 拒绝内部实体声明防 XXE），同步 cat-formats 0.0.1、cat-store 0.0.8、cat-tools 0.0.5、shared 0.1.52、Electron 0.15.29。PB-081：cat-formats 新增 runtime dep jszip@^3.10.1（XLSX zip 容器读写，MIT/GPL-3.0 双许可取 MIT；此前仅作 Electron 依赖，本次为 cat-formats 直接声明），同步 cat-formats 0.0.2、shared 0.1.53、Electron 0.15.30。PB-090：登记新 workspace 包 @linguist/legacy-migration 0.0.1（零 npm 依赖），并同步 HEAD 既有但 lock 滞后的 5 个版本漂移（electron 0.15.36/cat-core 0.0.6/cat-formats 0.0.5/cat-store 0.0.10/cat-tools 0.0.7——漂移先于本票存在，frozen install 此前必失败；零依赖解析变化）。PB-091：@linguist/legacy-migration 0.0.1→0.0.2 新增三个 workspace 依赖（cat-core/cat-formats/cat-store）；零 npm 依赖解析变化。 PB-094：@linguist/legacy-migration workspace 依赖登记 + apps/electron 版本同步 + legacy-migration 版本追平 0.0.4（PB-093 包版本已在先，lock 滞后校正）；零 npm 解析变化。 PB-095：shared/electron 两行版本字段同步，零依赖解析变化。 PB-096：shared/electron 两处版本字段同步，零依赖解析变化。 PB-105：axe-core@4.12.1 锁定条目。 PB-113/PB-114：版本字段同步。 PB-115：license-checker-rseidelsohn 锁文件条目 + 版本字段同步。 PB-089：版本字段同步。 LF-067：同步 Electron 0.15.96 与 CAT Store 0.0.13；零新增依赖。 LF-068：同步 Electron 0.15.97；零新增依赖。 LF-053：同步 Electron 0.15.98；零新增依赖。 LF-048：同步 Electron 0.15.99；零新增依赖。 AC-006：同步 Electron 0.15.100 与 CAT Store 0.0.14；零新增依赖。 AC-008：同步 Electron 与 @proma/ui 版本字段；零新依赖解析变化。"
     },
     {
@@ -339,18 +364,28 @@
     },
     {
       "file": "packages/shared/package.json",
-      "ticket": "PB-053, PB-060, PB-061, PB-062, PB-063, PB-071, PB-072, PB-073, PB-080, PB-081, PB-086, PB-087, PB-088, PB-082, PB-095, PB-096, LF-060, AC-005, LF-042, LF-062, LF-063, LF-072",
-      "reason": "PB-053 Proposal IPC 契约扩展同步 @proma/shared patch 版本 0.1.43→0.1.44；无依赖变化。PB-060 CAT Workspace 查询契约同步 0.1.44→0.1.45。PB-061 稳定 Segment ID 索引契约同步 0.1.45→0.1.46。PB-062 人工 Segment CAS 编辑契约同步 0.1.46→0.1.47。PB-063 Context Rail 契约同步 0.1.47→0.1.48。PB-071 QA IPC 契约同步 0.1.48→0.1.49。PB-072 导出 QA 阻断错误码同步 0.1.49→0.1.50。PB-073 Native Save 导出契约同步 0.1.50→0.1.51。PB-080 TM/TB reference 契约同步 0.1.51→0.1.52；无依赖变化。PB-081 XLSX 导入扩展名契约同步 0.1.52→0.1.53；无依赖变化。PB-086 SDLXLIFF 导入扩展名契约同步 0.1.53→0.1.54；无依赖变化。PB-087 MXLIFF 导入扩展名契约同步 0.1.54→0.1.55；无依赖变化。PB-088 DOCX 导入扩展名契约同步 0.1.55→0.1.56；无依赖变化。PB-082：质量策略档/评审角色线契约同步 0.1.56→0.1.57；无依赖变化。 PB-095：@proma/shared 版本同步 0.1.58→0.1.59。 PB-096：@proma/shared 版本同步 0.1.59→0.1.60。LF-060：LinguistTurnContextV1 契约同步 0.1.60→0.1.61；无依赖变化。"
+      "ticket": "PB-053, PB-060, PB-061, PB-062, PB-063, PB-071, PB-072, PB-073, PB-080, PB-081, PB-086, PB-087, PB-088, PB-082, PB-095, PB-096, LF-060, AC-005, LF-042, LF-062, LF-063, LF-072, LF-080, LF-084, LF-083",
+      "reason": "PB-053 Proposal IPC 契约扩展同步 @proma/shared patch 版本 0.1.43→0.1.44；无依赖变化。PB-060 CAT Workspace 查询契约同步 0.1.44→0.1.45。PB-061 稳定 Segment ID 索引契约同步 0.1.45→0.1.46。PB-062 人工 Segment CAS 编辑契约同步 0.1.46→0.1.47。PB-063 Context Rail 契约同步 0.1.47→0.1.48。PB-071 QA IPC 契约同步 0.1.48→0.1.49。PB-072 导出 QA 阻断错误码同步 0.1.49→0.1.50。PB-073 Native Save 导出契约同步 0.1.50→0.1.51。PB-080 TM/TB reference 契约同步 0.1.51→0.1.52；无依赖变化。PB-081 XLSX 导入扩展名契约同步 0.1.52→0.1.53；无依赖变化。PB-086 SDLXLIFF 导入扩展名契约同步 0.1.53→0.1.54；无依赖变化。PB-087 MXLIFF 导入扩展名契约同步 0.1.54→0.1.55；无依赖变化。PB-088 DOCX 导入扩展名契约同步 0.1.55→0.1.56；无依赖变化。PB-082：质量策略档/评审角色线契约同步 0.1.56→0.1.57；无依赖变化。 PB-095：@proma/shared 版本同步 0.1.58→0.1.59。 PB-096：@proma/shared 版本同步 0.1.59→0.1.60。LF-060：LinguistTurnContextV1 契约同步 0.1.60→0.1.61；无依赖变化。LF-080：AgentProfile 共享契约同步 0.1.73→0.1.74；无依赖变化。"
     },
     {
       "file": "packages/shared/src/types/agent.ts",
-      "ticket": "PB-034, PB-082, AC-005, LF-062",
-      "reason": "AgentSessionMeta 新增 linguistProjectId?/linguistProjectName?（创建时冻结的项目绑定 + 名称快照；普通会话绝不携带）；ErrorCode 新增 linguist_project_archived（归档项目绑定会话发送被主进程拒绝的 preflight TypedError 码）。PB-082：AgentSessionMeta.linguistSessionRole?: 'reviewer'（缺省=assistant 刻意不落库；创建时冻结）。LF-062：Agent 发送、队列与 SDK 用户历史消息增加可选只读 LinguistTurnContextV1。"
+      "ticket": "PB-034, PB-082, AC-005, LF-062, LF-080",
+      "reason": "AgentSessionMeta 新增 linguistProjectId?/linguistProjectName?（创建时冻结的项目绑定 + 名称快照；普通会话绝不携带）；ErrorCode 新增 linguist_project_archived（归档项目绑定会话发送被主进程拒绝的 preflight TypedError 码）。PB-082：AgentSessionMeta.linguistSessionRole?: 'reviewer'（缺省=assistant 刻意不落库；创建时冻结）。LF-062：Agent 发送、队列与 SDK 用户历史消息增加可选只读 LinguistTurnContextV1。LF-080：新增创建时冻结的 linguistStrategy，历史会话兼容 balanced。"
     },
     {
       "file": "packages/shared/src/types/index.ts",
-      "ticket": "PB-031, LF-060",
-      "reason": "PB-031：types 桶文件追加 export * from './linguist'。LF-060：追加 export * from './linguist-turn-context'，向 shared 消费方暴露严格 V1 契约。"
+      "ticket": "PB-031, LF-060, LF-080",
+      "reason": "PB-031：types 桶文件追加 export * from './linguist'。LF-060：追加 export * from './linguist-turn-context'，向 shared 消费方暴露严格 V1 契约。LF-080：导出 AgentProfile 共享契约。"
+    },
+    {
+      "file": "packages/shared/src/types/agent-profile.test.ts",
+      "ticket": "LF-080",
+      "reason": "BDD 回归：General/Linguist 身份、历史默认值及 Linguist 对残留 workspaceId 的优先级。"
+    },
+    {
+      "file": "packages/shared/src/types/agent-profile.ts",
+      "ticket": "LF-080",
+      "reason": "AgentProfile 判别联合与 metadata 解析真源；Linguist role/strategy 不再从 UI mode 猜测。"
     },
     {
       "file": "packages/shared/src/types/linguist-turn-context.test.ts",
@@ -364,8 +399,8 @@
     },
     {
       "file": "packages/shared/src/types/linguist.ts",
-      "ticket": "PB-031, PB-033, PB-034, PB-053, PB-060, PB-061, PB-062, PB-063, PB-071, PB-072, PB-073, PB-080, PB-081, PB-086, PB-087, PB-088, PB-082, PB-094, PB-095, PB-096, PB-102, PB-111, PB-089, AC-005, LF-042, LF-063, LF-072",
-      "reason": "新增 Linguist 项目 IPC 契约文件（Proma shared 区新文件，故登记）：6 通道名常量（计划 §7.2 点名）、25 个稳定错误码目录（IPC 2 + 服务 5 + store 8 + format 4 + domain 6）、LinguistIpcResult 信封、请求/响应线格式类型（领域类型 JSON 镜像，@proma/shared 不依赖 linguist 包）、校验常量（id/locale 形状、名称/ locale 长度上限、导入扩展名白名单与 50MB 上限）。PB-033：LinguistProjectSummary 扩展 assets: LinguistAssetInfo[]（资产元数据列表：assetId/filename/formatId/segmentCount/sourceSha256；getSummary 通道不变、无新通道）。 PB-034：契约扩展——LINGUIST_SESSION_IPC_CHANNELS 三通道常量 + 会话绑定线格式类型（LinguistSessionBindingStatus/Info、LinguistProjectChatSessionInfo、create/list/getBinding 请求响应；创建结果复用 AgentSessionMeta）；24 个错误码目录不变（复用 PROJECT_NOT_FOUND/PROJECT_ARCHIVED/INVALID_INPUT）。PB-053：新增七个 Proposal 人工审核通道与 Proposal/diff/CAS/idempotency 请求响应线类型；错误码目录不变。PB-060：新增只读 linguist.cat.query、资产/Segment 线类型与分页/搜索边界常量；错误码目录不变。PB-061：query 增加 includeIndex 与 segmentIds，首个过滤请求只取稳定 ID 索引，后续虚拟页不重复传输索引。PB-062：新增 editSegment 请求/响应、Segment id pattern 与 CAT edit channel；错误码仍复用 REVISION_CONFLICT/SEGMENT_LOCKED/PROJECT_ARCHIVED/INVALID_INPUT。PB-063：新增只读 getContext 请求/响应与当前 Segment/待审 Proposal 线类型；错误码目录不变。PB-071：新增 QA Finding 线格式、四个 CAT QA IPC 常量/请求响应和 pagination 上限；稳定错误码目录不变。PB-072：新增 EXPORT_BLOCKED_BY_QA，表明只有人工 review 的解决/waive 才可打开导出门。PB-073：新增 LINGUIST_EXPORT_IPC_CHANNELS 与 staging/native Save 请求响应。PB-080：新增 LINGUIST_REFERENCE_IPC_CHANNELS 五通道常量、LINGUIST_REFERENCE_ID_PATTERN 与 TM/TB 线类型（LinguistTmInfo/LinguistTmMatchInfo、LinguistTermInfo/LinguistTermMatchInfo、term status 四态与 caseSensitive、preferred 冲突标记、查询/导入/upsert/delete 请求响应）；LinguistCatContextResult 增加 tmMatches/termMatches；稳定错误码目录不变。PB-081：LINGUIST_IMPORT_FILE_EXTENSIONS 末尾增加 'xlsx'（XLSX 双语 adapter 落地，picker 动态消费该常量）；错误码目录不变。PB-086：白名单末尾增加 'sdlxliff'（Trados SDLXLIFF adapter 落地）；错误码目录不变。PB-087：白名单末尾增加 'mxliff'（Phrase MXLIFF adapter 落地）；错误码目录不变。PB-088：白名单末尾增加 'docx'（Phrase bilingual DOCX adapter 落地；普通 DOCX 由 detect 拒绝，落无 adapter 类型错误）；错误码目录不变。PB-082：SET_QUALITY_PROFILE 通道、LinguistQualityProfile 线类型（镜像重定义）、LinguistProjectInfo.qualityProfile（必有值）、createForProject 请求 role?: 'reviewer' 与 ChatSessionInfo.role。 PB-094：新增 LINGUIST_MIGRATION_IPC_CHANNELS 三通道组（pickAndScan/import/progress 事件）与 9 个迁移向导线类型（ScanReport/ImportReport 的 UI 投影，刻意非全镜像；shared 不依赖 linguist 包按镜像模式重定义）。 PB-095：LINGUIST_ASSETS_IPC_CHANNELS 五通道组（query/upsert/delete/importContextDoc/importSentencePatterns）与六类项目资产线类型（StyleGuideRule/SentencePattern/ContextDoc 含 image previewUrl/TechConstraint/VoiceProfile；term 条目扩 module/category/imageRef 三标注列）；shared 0.1.58→0.1.59。 PB-096：QA 契约五档 severity（L0-L4）+ disposition 四值 + issueType 29 枚举全链路 DTO；CatRunQaResult 改 severityCounts/dispositionCounts；disposition 筛选 IPC 契约；shared 0.1.59→0.1.60。 PB-102：LINGUIST_EXPORT_IPC_CHANNELS.LIST 通道 + LinguistExportListRequest/LinguistExportFileInfo/LinguistExportListResult 类型（renderer 只提交 projectId，响应仅 basename/大小/时间，绝无路径，计划 §7.4）。 PB-111：LINGUIST_PROJECT_IPC_CHANNELS +BACKUP/LIST_BACKUPS/PREVIEW_RESTORE/RESTORE 四通道、STORE_BACKUP_CORRUPT/STORE_BACKUP_LEGACY 两错误码、备份名白名单双正则（backup-<ts>/cat-<ts>.db）、备份/恢复线类型八项（renderer 只提交 projectId+backupName，响应绝无绝对路径）。 PB-089：LINGUIST_ASSET_PREVIEW_IPC_CHANNELS 独立通道组（刻意单数 project.*，避开 ipc-contract 复数通道组硬断言）+ LinguistAssetPreviewRequest/Result 三态 union 契约。"
+      "ticket": "PB-031, PB-033, PB-034, PB-053, PB-060, PB-061, PB-062, PB-063, PB-071, PB-072, PB-073, PB-080, PB-081, PB-086, PB-087, PB-088, PB-082, PB-094, PB-095, PB-096, PB-102, PB-111, PB-089, AC-005, LF-042, LF-063, LF-072, LF-086, LF-084, LF-083, LF-088, LF-089",
+      "reason": "新增 Linguist 项目 IPC 契约文件（Proma shared 区新文件，故登记）：6 通道名常量（计划 §7.2 点名）、25 个稳定错误码目录（IPC 2 + 服务 5 + store 8 + format 4 + domain 6）、LinguistIpcResult 信封、请求/响应线格式类型（领域类型 JSON 镜像，@proma/shared 不依赖 linguist 包）、校验常量（id/locale 形状、名称/ locale 长度上限、导入扩展名白名单与 50MB 上限）。PB-033：LinguistProjectSummary 扩展 assets: LinguistAssetInfo[]（资产元数据列表：assetId/filename/formatId/segmentCount/sourceSha256；getSummary 通道不变、无新通道）。 PB-034：契约扩展——LINGUIST_SESSION_IPC_CHANNELS 三通道常量 + 会话绑定线格式类型（LinguistSessionBindingStatus/Info、LinguistProjectChatSessionInfo、create/list/getBinding 请求响应；创建结果复用 AgentSessionMeta）；24 个错误码目录不变（复用 PROJECT_NOT_FOUND/PROJECT_ARCHIVED/INVALID_INPUT）。PB-053：新增七个 Proposal 人工审核通道与 Proposal/diff/CAS/idempotency 请求响应线类型；错误码目录不变。PB-060：新增只读 linguist.cat.query、资产/Segment 线类型与分页/搜索边界常量；错误码目录不变。PB-061：query 增加 includeIndex 与 segmentIds，首个过滤请求只取稳定 ID 索引，后续虚拟页不重复传输索引。PB-062：新增 editSegment 请求/响应、Segment id pattern 与 CAT edit channel；错误码仍复用 REVISION_CONFLICT/SEGMENT_LOCKED/PROJECT_ARCHIVED/INVALID_INPUT。PB-063：新增只读 getContext 请求/响应与当前 Segment/待审 Proposal 线类型；错误码目录不变。PB-071：新增 QA Finding 线格式、四个 CAT QA IPC 常量/请求响应和 pagination 上限；稳定错误码目录不变。PB-072：新增 EXPORT_BLOCKED_BY_QA，表明只有人工 review 的解决/waive 才可打开导出门。PB-073：新增 LINGUIST_EXPORT_IPC_CHANNELS 与 staging/native Save 请求响应。PB-080：新增 LINGUIST_REFERENCE_IPC_CHANNELS 五通道常量、LINGUIST_REFERENCE_ID_PATTERN 与 TM/TB 线类型（LinguistTmInfo/LinguistTmMatchInfo、LinguistTermInfo/LinguistTermMatchInfo、term status 四态与 caseSensitive、preferred 冲突标记、查询/导入/upsert/delete 请求响应）；LinguistCatContextResult 增加 tmMatches/termMatches；稳定错误码目录不变。PB-081：LINGUIST_IMPORT_FILE_EXTENSIONS 末尾增加 'xlsx'（XLSX 双语 adapter 落地，picker 动态消费该常量）；错误码目录不变。PB-086：白名单末尾增加 'sdlxliff'（Trados SDLXLIFF adapter 落地）；错误码目录不变。PB-087：白名单末尾增加 'mxliff'（Phrase MXLIFF adapter 落地）；错误码目录不变。PB-088：白名单末尾增加 'docx'（Phrase bilingual DOCX adapter 落地；普通 DOCX 由 detect 拒绝，落无 adapter 类型错误）；错误码目录不变。PB-082：SET_QUALITY_PROFILE 通道、LinguistQualityProfile 线类型（镜像重定义）、LinguistProjectInfo.qualityProfile（必有值）、createForProject 请求 role?: 'reviewer' 与 ChatSessionInfo.role。 PB-094：新增 LINGUIST_MIGRATION_IPC_CHANNELS 三通道组（pickAndScan/import/progress 事件）与 9 个迁移向导线类型（ScanReport/ImportReport 的 UI 投影，刻意非全镜像；shared 不依赖 linguist 包按镜像模式重定义）。 PB-095：LINGUIST_ASSETS_IPC_CHANNELS 五通道组（query/upsert/delete/importContextDoc/importSentencePatterns）与六类项目资产线类型（StyleGuideRule/SentencePattern/ContextDoc 含 image previewUrl/TechConstraint/VoiceProfile；term 条目扩 module/category/imageRef 三标注列）；shared 0.1.58→0.1.59。 PB-096：QA 契约五档 severity（L0-L4）+ disposition 四值 + issueType 29 枚举全链路 DTO；CatRunQaResult 改 severityCounts/dispositionCounts；disposition 筛选 IPC 契约；shared 0.1.59→0.1.60。 PB-102：LINGUIST_EXPORT_IPC_CHANNELS.LIST 通道 + LinguistExportListRequest/LinguistExportFileInfo/LinguistExportListResult 类型（renderer 只提交 projectId，响应仅 basename/大小/时间，绝无路径，计划 §7.4）。 PB-111：LINGUIST_PROJECT_IPC_CHANNELS +BACKUP/LIST_BACKUPS/PREVIEW_RESTORE/RESTORE 四通道、STORE_BACKUP_CORRUPT/STORE_BACKUP_LEGACY 两错误码、备份名白名单双正则（backup-<ts>/cat-<ts>.db）、备份/恢复线类型八项（renderer 只提交 projectId+backupName，响应绝无绝对路径）。 PB-089：LINGUIST_ASSET_PREVIEW_IPC_CHANNELS 独立通道组（刻意单数 project.*，避开 ipc-contract 复数通道组硬断言）+ LinguistAssetPreviewRequest/Result 三态 union 契约。 LF-086：导出验证元数据与 Diagnostics/Prompt/真实指标 DTO、三通道常量；不新增错误码。 LF-087：内容派生 Asset/Segment/Proposal/QA/TM/TB/项目资产 Stable ID 校验同时接受历史 v1 与完整 SHA-256 v2；随机 Project ID 契约不变。"
     },
     {
       "file": "packages/shared/src/types/linguist-asset-info.test.ts",
@@ -404,8 +439,8 @@
     },
     {
       "file": "apps/electron/src/renderer/components/agent/ContentBlock.tsx",
-      "ticket": "PB-101",
-      "reason": "PB-101 Thread/Composer 精修：ThinkingBlock isLive 双态标签（live \"Thinking…\"静态圆点/完成 \"Thought process\"）；2 处 Loader2 spinner motion-reduce 静态降级。"
+      "ticket": "PB-101, LF-085",
+      "reason": "PB-101 Thread/Composer 精修：ThinkingBlock isLive 双态标签（live \"Thinking…\"静态圆点/完成 \"Thought process\"）；2 处 Loader2 spinner motion-reduce 静态降级。LF-085：原生 Tool Result 查找在 CAT 安全摘要可用时优先消费 SDKUserMessage.tool_use_result；普通工具和畸形 details 继续使用原 content。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentMessageQueue.tsx",
@@ -644,8 +679,8 @@
     },
     {
       "file": ".github/workflows/release.yml",
-      "ticket": "PB-115, AC-001, AC-002",
-      "reason": "依赖许可门禁：PB-115 最初为独立非阻塞 job。AC-001 固定 Actions commit SHA 与 Bun 1.3.14。AC-002 改为调用完整可复用 CI，三个发布构建显式依赖验证成功；macOS 最终重试失败显式退出非零。"
+      "ticket": "PB-115, AC-001, AC-002, LF-080",
+      "reason": "依赖许可门禁：PB-115 最初为独立非阻塞 job。AC-001 固定 Actions commit SHA 与 Bun 1.3.14。AC-002 改为调用完整可复用 CI，三个发布构建显式依赖验证成功；macOS 最终重试失败显式退出非零。LF-080：Actions 更新到已核验的 Node 24 版本并保持 commit SHA 固定。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/app-mode.ts",
@@ -779,8 +814,8 @@
     },
     {
       "file": "apps/electron/src/types/settings.ts",
-      "ticket": "LF-032, LF-024, LF-034",
-      "reason": "LF-032：AppSettings 增加 Project→Agent Session ID 映射；仅持久化 opaque ID，不复制项目或会话内容。LF-024：增加每项目 Workbench Asset/Segment 位置偏好，同样只保存 opaque ID。LF-034：沿用同一项目偏好增加 Agent Rail 开合与宽度。"
+      "ticket": "LF-032, LF-024, LF-034, LF-082",
+      "reason": "LF-032：AppSettings 增加 Project→Agent Session ID 映射；仅持久化 opaque ID，不复制项目或会话内容。LF-024：增加每项目 Workbench Asset/Segment 位置偏好，同样只保存 opaque ID。LF-034：沿用同一项目偏好增加 Agent Rail 开合与宽度。LF-082：Rail 开合升级为 closed/rail/full presentation；旧 agentRailOpen 只读兼容并在保存时迁移。"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/conversation.tsx",

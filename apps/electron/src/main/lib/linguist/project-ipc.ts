@@ -253,13 +253,13 @@ function readBackupName(record: Record<string, unknown>): string {
 }
 
 /**
- * PB-089：CAT 资产 id 严格校验（ast-<16 hex>；与 PB-095 的 sgr/spn/…
+ * PB-089：CAT 资产 Stable ID 严格校验（与 PB-095 的 sgr/spn/…
  * 项目资产 id 区分——本通道只接受 CAT 导入资产）。
  */
 function readCatAssetId(record: Record<string, unknown>): string {
   const value = record.assetId
   if (typeof value !== 'string' || !LINGUIST_ASSET_ID_PATTERN.test(value)) {
-    invalid('assetId must match ast-<16 lowercase hex>')
+    invalid('assetId must be a valid Stable ID')
   }
   return value
 }

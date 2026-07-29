@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import {
   INDEPENDENT_CRITIC_CATEGORIES,
+  createCriticReviewArtifact,
   createIndependentCriticArtifact,
   independentCriticCandidateHash,
   independentCriticProfileHash,
+  parseCriticReviewArtifact,
   parseIndependentCriticArtifact,
   planIndependentCritic,
   targetedRepairScopeFromCriticArtifact,
@@ -70,10 +72,10 @@ describe('createIndependentCriticArtifact（正常路径 + 确定性 + 冻结）
     expect(artifact.schemaVersion).toBe(1)
     expect(artifact.authority).toBe('advisory_finding')
     expect(artifact.canCommit).toBe(false)
-    expect(artifact.artifactId.startsWith('critic:')).toBe(true)
+    expect(artifact.artifactId).toMatch(/^critic_v2_[a-f0-9]{64}$/)
     expect(artifact.artifactHash).toMatch(/^[a-f0-9]{64}$/)
     expect(artifact.findings.length).toBe(1)
-    expect(artifact.findings[0]!.findingId.startsWith('cf:')).toBe(true)
+    expect(artifact.findings[0]!.findingId).toMatch(/^cf_v2_[a-f0-9]{64}$/)
     expect(artifact.findings[0]!.criticId).toBe(CRITIC.criticId)
 
     const again = createIndependentCriticArtifact(makeRequest())
@@ -198,6 +200,40 @@ describe('createIndependentCriticArtifact（拒绝路径逐字保真）', () => 
 })
 
 describe('parseIndependentCriticArtifact（严格解析 + 完整性校验）', () => {
+  test('历史 v1 artifact/finding id 仍可完整解析', () => {
+    const legacy = {
+      schemaVersion: 1,
+      authority: 'advisory_finding',
+      canCommit: false,
+      artifactId: 'critic:131056e17d6ccfdfe57a84d8',
+      subject: {
+        segmentId: 'seg-legacy',
+        risk: 'high',
+        candidateId: 'prp-legacy',
+        candidateHash: 'b'.repeat(64),
+        candidateExecutionId: 'candidate-exec',
+        candidateProducerId: 'producer',
+      },
+      critic: {
+        criticId: 'critic',
+        executionId: 'critic-exec',
+        profileHash: 'a'.repeat(64),
+      },
+      findings: [{
+        findingId: 'cf:e7fed8ca13b54b7fe03fe82d',
+        criticId: 'critic',
+        category: 'fidelity',
+        severity: 'L2',
+        issueType: 'omission',
+        evidenceRefs: ['tm:legacy'],
+        explanation: 'legacy',
+      }],
+      artifactHash: 'b1a96837561d8a9fb5797de31e4ac602a7ffc38541196984ee05724f009b2fbd',
+    }
+
+    expect(parseIndependentCriticArtifact(legacy).artifactId).toBe(legacy.artifactId)
+  })
+
   test('round-trip：create → parse 幂等，hash/id 不变', () => {
     const artifact = createIndependentCriticArtifact(
       makeRequest({
@@ -304,6 +340,114 @@ describe('targetedRepairScopeFromCriticArtifact（只圈范围，不能施工）
     expect(() => targetedRepairScopeFromCriticArtifact(artifact, { findingIds: [] })).toThrow(
       'Requested Critic finding was not found in this artifact.',
     )
+  })
+})
+
+describe('Critic Review v2（snapshot 绑定 + 判别式 verdict）', () => {
+  const reviewer = {
+    ...CRITIC,
+    sessionId: CRITIC.executionId,
+    modelId: 'review-model',
+    promptVersion: 'c'.repeat(64),
+    generation: {
+      sessionId: CRITIC.executionId,
+      runId: 'critic-run',
+      toolCallId: 'critic-call',
+      modelProvider: 'anthropic',
+      modelId: 'review-model',
+      runtime: 'claude',
+      role: 'reviewer' as const,
+      strategy: 'best' as const,
+      linguistPromptVersion: '2.0.0',
+      promptHash: '1'.repeat(64),
+      projectDigestHash: '2'.repeat(64),
+      projectDigestRevision: 'project-r1',
+      turnContextVersion: 1,
+      turnContextSnapshot: '{"activeSegmentId":"seg-1"}',
+      turnContextHash: '3'.repeat(64),
+      toolsetHash: '4'.repeat(64),
+    },
+  }
+  const snapshot = {
+    snapshotId: 'psn:prp-demo-1',
+    snapshotHash: 'd'.repeat(64),
+    proposalId: SUBJECT.candidateId,
+  }
+
+  test('pass/issues/abstain 都可持久化表达，且 hash 篡改失败', () => {
+    const pass = createCriticReviewArtifact({
+      schemaVersion: 2,
+      snapshot,
+      subject: SUBJECT,
+      reviewer,
+      verdict: 'pass',
+      summary: '无实质问题。',
+      findings: [],
+    })
+    expect(parseCriticReviewArtifact(mutableClone(pass))).toEqual(pass)
+    expect(pass.artifactId).toMatch(/^critic_v2_[a-f0-9]{64}$/)
+    expect(pass.findings).toEqual([])
+    expect(pass.reviewer.generation?.toolsetHash).toBe('4'.repeat(64))
+
+    const issues = createCriticReviewArtifact({
+      schemaVersion: 2,
+      snapshot,
+      subject: SUBJECT,
+      reviewer,
+      verdict: 'issues',
+      summary: '发现漏译。',
+      findings: [FINDING],
+    })
+    expect(issues.findings).toHaveLength(1)
+
+    const abstain = createCriticReviewArtifact({
+      schemaVersion: 2,
+      snapshot,
+      subject: SUBJECT,
+      reviewer,
+      verdict: 'abstain',
+      reason: '缺少角色语气证据。',
+      findings: [],
+    })
+    expect(abstain.reason).toBe('缺少角色语气证据。')
+
+    const tampered = mutableClone(pass)
+    tampered.snapshot.snapshotHash = 'e'.repeat(64)
+    expect(() => parseCriticReviewArtifact(tampered)).toThrow('Critic Review artifactId changed.')
+  })
+
+  test('历史 v1 Critic Review artifact id 仍可完整解析', () => {
+    const legacy = {
+      schemaVersion: 2,
+      authority: 'advisory_finding',
+      canCommit: false,
+      snapshot: {
+        snapshotId: 'psn:prp-legacy',
+        snapshotHash: 'd'.repeat(64),
+        proposalId: 'prp-legacy',
+      },
+      subject: {
+        segmentId: 'seg-legacy',
+        risk: 'high',
+        candidateId: 'prp-legacy',
+        candidateHash: 'b'.repeat(64),
+        candidateExecutionId: 'candidate-exec',
+        candidateProducerId: 'producer',
+      },
+      reviewer: {
+        criticId: 'critic',
+        executionId: 'critic-exec',
+        profileHash: 'a'.repeat(64),
+        sessionId: 'critic-exec',
+        promptVersion: 'c'.repeat(64),
+      },
+      verdict: 'pass',
+      findings: [],
+      artifactId: 'critic:71a1f749df806c82e472c1bf',
+      artifactHash: '963e9b8243f4bedb6db7e7123b355f94a3c2967c5c9a819e7a33aab618c6ef38',
+    }
+
+    expect(parseCriticReviewArtifact(legacy).artifactId).toBe(legacy.artifactId)
   })
 })
 

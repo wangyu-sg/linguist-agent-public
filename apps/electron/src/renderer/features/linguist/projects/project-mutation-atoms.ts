@@ -1,9 +1,17 @@
 import { atom } from 'jotai'
 import { atomFamily } from 'jotai/utils'
-import type { LinguistProjectMutationEvent } from '@proma/shared'
+import type {
+  LinguistIpcResult,
+  LinguistProjectEventAckRequest,
+  LinguistProjectEventAckResult,
+  LinguistProjectEventListRequest,
+  LinguistProjectEventListResult,
+  LinguistProjectMutationEvent,
+} from '@proma/shared'
 
 export interface ProjectMutationState {
   lastRevision: number
+  lastSequence: number
   latest?: {
     event: LinguistProjectMutationEvent
     gap: boolean
@@ -26,6 +34,7 @@ type MutationSubscriber = (
 
 export const INITIAL_PROJECT_MUTATION_STATE: ProjectMutationState = {
   lastRevision: 0,
+  lastSequence: 0,
 }
 
 export const linguistProjectMutationStateAtomFamily = atomFamily(
@@ -50,14 +59,78 @@ export function reduceProjectMutation(
   current: ProjectMutationState,
   event: LinguistProjectMutationEvent,
 ): ProjectMutationState {
-  if (event.projectId !== projectId || event.revision <= current.lastRevision) return current
+  if (event.projectId !== projectId) return current
+  const nextRevision = Math.max(current.lastRevision, event.revision)
+  const nextSequence = event.sequence === undefined
+    ? current.lastSequence
+    : Math.max(current.lastSequence, event.sequence)
+  if (nextRevision === current.lastRevision && nextSequence === current.lastSequence) return current
+  const gap = event.sequence === undefined
+    ? event.revision > current.lastRevision + 1
+    : event.sequence > current.lastSequence + 1
   return {
-    lastRevision: event.revision,
+    lastRevision: nextRevision,
+    lastSequence: nextSequence,
     latest: {
       event,
-      gap: event.revision > current.lastRevision + 1,
+      gap,
     },
   }
+}
+
+type ProjectEventPull = (
+  input: LinguistProjectEventListRequest,
+) => Promise<LinguistIpcResult<LinguistProjectEventListResult>>
+
+type ProjectEventAck = (
+  input: LinguistProjectEventAckRequest,
+) => Promise<LinguistIpcResult<LinguistProjectEventAckResult>>
+
+/** 重连或发现 gap 时从 durable outbox 补拉；读取成功应用后才显式 ack。 */
+export async function replayProjectMutations(
+  projectId: string,
+  current: ProjectMutationState,
+  options: {
+    consumerId?: string
+    pull?: ProjectEventPull
+    ack?: ProjectEventAck
+  } = {},
+): Promise<ProjectMutationState> {
+  const pull = options.pull ?? ((input) => window.electronAPI.linguistCatListProjectEvents(input))
+  const ack = options.ack ?? ((input) => window.electronAPI.linguistCatAckProjectEvents(input))
+  let next = current
+  let afterSequence = current.lastSequence
+  let replayedCount = 0
+  while (true) {
+    const result = await pull({ projectId, afterSequence, limit: 100 })
+    if (!result.ok) throw new Error(result.error.code)
+    for (const event of result.data.events) {
+      if (
+        event.projectId !== projectId ||
+        event.sequence === undefined ||
+        event.sequence !== afterSequence + 1
+      ) {
+        throw new Error('INVALID_PROJECT_EVENT_REPLAY')
+      }
+      afterSequence = event.sequence
+      next = reduceProjectMutation(projectId, next, event)
+      replayedCount += 1
+    }
+    if (!result.data.hasMore) break
+    if (result.data.events.length === 0) throw new Error('PROJECT_EVENT_REPLAY_STALLED')
+  }
+  if (replayedCount > 1 && next.latest !== undefined) {
+    next = { ...next, latest: { ...next.latest, gap: true } }
+  }
+  if (next.lastSequence > 0) {
+    const acknowledged = await ack({
+      projectId,
+      consumerId: options.consumerId ?? 'renderer-workbench-v1',
+      throughSequence: next.lastSequence,
+    })
+    if (!acknowledged.ok) throw new Error(acknowledged.error.code)
+  }
+  return next
 }
 
 export function getProjectMutationRefreshPlan(
@@ -132,6 +205,18 @@ export function getProjectMutationRefreshPlan(
         segments: plan.segmentIds.length > 0 ? 'affected-pages' : 'none',
         proposals: (event.proposalIds?.length ?? 0) > 0,
         qa: (event.qaFindingIds?.length ?? 0) > 0,
+        context: true,
+        resources: true,
+      }
+    case 'job-updated':
+      return plan
+    case 'run-undone':
+      return {
+        ...plan,
+        summary: true,
+        segments: 'current-page',
+        proposals: true,
+        qa: true,
         context: true,
         resources: true,
       }

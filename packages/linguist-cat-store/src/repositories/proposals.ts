@@ -10,6 +10,7 @@
 
 import {
   acceptProposal,
+  createProposalIssuance,
   createProposal,
   expireProposal,
   InvalidStateTransitionError,
@@ -23,15 +24,27 @@ import {
   type AcceptProposalOptions,
   type AcceptProposalResult,
   type CreateProposalInput,
-  type LinguistTagProfile,
+  type DeterministicHardRuleInput,
   type ProposalId,
+  type ProposalIssuance,
+  type ProposalIssuanceInput,
   type ProposalStatus,
+  type Segment,
   type SegmentId,
   type TranslationProposal,
 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
-import { proposalFromRow, proposalToParams, segmentFromRow, type ProposalRow, type SegmentRow } from './rows'
+import {
+  proposalFromRow,
+  proposalIssuanceFromRow,
+  proposalIssuanceToParams,
+  proposalToParams,
+  segmentFromRow,
+  type ProposalIssuanceRow,
+  type ProposalRow,
+  type SegmentRow,
+} from './rows'
 
 export interface ProposalMutationItem {
   proposalId: ProposalId | string
@@ -42,15 +55,23 @@ export type IdempotentProposalMutation<T> =
   | { ok: true; result: T; replayed: boolean }
   | { ok: false; conflict: true }
 
-export interface EditAndAcceptInput extends ProposalMutationItem {
+export type ProposalHardRuleOptions = Pick<
+  DeterministicHardRuleInput,
+  'requiredTerminology' | 'forbiddenTerms' | 'tagProfile'
+>
+
+export type ProposalAcceptOptions = AcceptProposalOptions & ProposalHardRuleOptions
+export interface ProposalCreateOptions extends ProposalHardRuleOptions {
+  issuance?: ProposalIssuanceInput
+}
+
+export interface EditAndAcceptInput extends ProposalMutationItem, ProposalHardRuleOptions {
   editedTarget: string
   idempotencyKey: string
   now?: string
-  /** PB-097：项目 tag 族登记表（调用方从 project.json 解析）；缺省 = 仅内置族。 */
-  tagProfile?: LinguistTagProfile
 }
 
-export interface ReissueTerminalProposalInput extends ProposalMutationItem {
+export interface ReissueTerminalProposalInput extends ProposalMutationItem, ProposalHardRuleOptions {
   idempotencyKey: string
   runId?: string
   now?: string
@@ -60,6 +81,29 @@ export interface ProposalListFilter {
   status?: ProposalStatus
   limit?: number
   offset?: number
+}
+
+export interface ProposalWithDiff {
+  proposal: TranslationProposal
+  originalOrdinal: number
+  source: string
+  currentTarget: string
+  proposedTarget: string
+  currentRevision: number
+  baseRevision: number
+  locked: boolean
+  issuanceCount: number
+  latestIssuance: ProposalIssuance
+}
+
+interface ProposalDiffRow extends ProposalRow {
+  segment_ordinal: number
+  segment_source: string
+  segment_target: string
+  segment_revision: number
+  segment_locked: number
+  issuance_count: number
+  latest_issuance_json: string | null
 }
 
 interface ProposalMutationRow {
@@ -72,17 +116,24 @@ export class ProposalsRepository {
   constructor(private readonly db: CatDatabase) {}
 
   /** Create + insert a pending proposal (id is content-derived). */
-  insertPending(input: CreateProposalInput): TranslationProposal {
-    return this.insertPendingMany([input])[0]!
+  insertPending(
+    input: CreateProposalInput,
+    options: ProposalCreateOptions = {},
+  ): TranslationProposal {
+    return this.insertPendingMany([input], options)[0]!
   }
 
   /** Validate and insert a proposal batch in one transaction. Exact pending duplicates are idempotent. */
-  insertPendingMany(inputs: readonly CreateProposalInput[]): TranslationProposal[] {
+  insertPendingMany(
+    inputs: readonly CreateProposalInput[],
+    options: ProposalCreateOptions = {},
+  ): TranslationProposal[] {
     if (inputs.length === 0) return []
     return this.db.transaction(`insert ${inputs.length} proposals`, () => {
+      const hardRuleOptions = this.mergeHardRuleOptions(options)
       const proposals = new Map<string, TranslationProposal>()
       for (const input of inputs) {
-        const proposal = this.insertPendingWithinTransaction(input)
+        const proposal = this.insertPendingWithinTransaction(input, hardRuleOptions, options.issuance)
         if (proposals.has(proposal.id)) continue
         proposals.set(proposal.id, proposal)
       }
@@ -90,16 +141,19 @@ export class ProposalsRepository {
     })
   }
 
-  private insertPendingWithinTransaction(input: CreateProposalInput): TranslationProposal {
-    return this.insertPendingProposalWithinTransaction(createProposal(input))
+  private insertPendingWithinTransaction(
+    input: CreateProposalInput,
+    options: ProposalHardRuleOptions,
+    issuance?: ProposalIssuanceInput,
+  ): TranslationProposal {
+    return this.insertPendingProposalWithinTransaction(createProposal(input), options, issuance)
   }
 
   private insertPendingProposalWithinTransaction(
     proposal: TranslationProposal,
+    options: ProposalHardRuleOptions,
+    issuanceInput?: ProposalIssuanceInput,
   ): TranslationProposal {
-    const existing = this.getById(proposal.id)
-    if (existing?.status === 'pending') return existing
-    if (existing) throw new InvalidStateTransitionError('proposal', existing.status, 'pending')
     const row = this.db.db
       .prepare('SELECT * FROM segments WHERE id = ?')
       .get(proposal.segmentId) as SegmentRow | undefined
@@ -109,19 +163,144 @@ export class ProposalsRepository {
     if (segment.revision !== proposal.baseRevision) {
       throw new StaleProposalError(proposal.id, segment.id, proposal.baseRevision, segment.revision)
     }
+    this.assertHardRules(segment, proposal.proposedTarget, options, 'pending')
+    const existing = this.getById(proposal.id)
+    if (existing && existing.status !== 'pending') {
+      throw new InvalidStateTransitionError('proposal', existing.status, 'pending')
+    }
+    if (!existing) {
+      this.db.db
+        .prepare(
+          `INSERT INTO proposals (
+             id, segment_id, base_revision, proposed_target,
+             evidence_refs_json, term_refs_json, warnings_json,
+             model_id, session_id, run_id,
+             reissued_from_proposal_id, supersedes_proposal_id,
+             created_at, status
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(...proposalToParams(proposal))
+    }
+    this.insertIssuance(proposal, issuanceInput)
+    return existing ?? proposal
+  }
+
+  private insertIssuance(
+    proposal: TranslationProposal,
+    input?: ProposalIssuanceInput,
+  ): ProposalIssuance {
+    const issuance = createProposalIssuance(proposal, input)
+    const existing = this.db.db
+      .prepare('SELECT * FROM proposal_issuances WHERE issuance_id = ?')
+      .get(issuance.id) as ProposalIssuanceRow | undefined
+    if (existing) {
+      const persisted = proposalIssuanceFromRow(existing)
+      if (
+        JSON.stringify(proposalIssuanceToParams(persisted)) !==
+        JSON.stringify(proposalIssuanceToParams(issuance))
+      ) {
+        throw new InvalidStateTransitionError('proposal-issuance', issuance.id, 'retry')
+      }
+      return persisted
+    }
     this.db.db
       .prepare(
-        `INSERT INTO proposals (
-           id, segment_id, base_revision, proposed_target,
-           evidence_refs_json, term_refs_json, warnings_json,
-           model_id, session_id, run_id,
-           reissued_from_proposal_id, supersedes_proposal_id,
-           created_at, status
-         )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO proposal_issuances (
+           issuance_id, proposal_id, idempotency_key, session_id, run_id, tool_call_id,
+           model_provider, model_id, runtime, role, strategy, linguist_prompt_version,
+           prompt_hash, project_digest_hash, project_digest_revision,
+           turn_context_version, turn_context_snapshot_json, turn_context_hash,
+           toolset_hash, evidence_refs_json, term_refs_json, created_at
+         ) VALUES (${Array.from({ length: 22 }, () => '?').join(', ')})`,
       )
-      .run(...proposalToParams(proposal))
-    return proposal
+      .run(...proposalIssuanceToParams(issuance))
+    return issuance
+  }
+
+  listIssuances(proposalId: ProposalId | string): ProposalIssuance[] {
+    if (this.db.schemaVersion < 13) {
+      const proposal = this.getById(proposalId)
+      return proposal === undefined ? [] : [this.legacyIssuance(proposal)]
+    }
+    return (this.db.db
+      .prepare(
+        'SELECT * FROM proposal_issuances WHERE proposal_id = ? ORDER BY created_at, issuance_id',
+      )
+      .all(proposalId) as ProposalIssuanceRow[]).map(proposalIssuanceFromRow)
+  }
+
+  private legacyIssuance(proposal: TranslationProposal): ProposalIssuance {
+    return createProposalIssuance(proposal, {
+      idempotencyKey: `legacy:${proposal.id}`,
+      createdAt: proposal.createdAt,
+    })
+  }
+
+  private storedHardRules(): Pick<
+    DeterministicHardRuleInput,
+    'requiredTerminology' | 'forbiddenTerms'
+  > {
+    const rows = this.db.db
+      .prepare(
+        `SELECT term, translation, status, case_sensitive
+         FROM term_entries
+         WHERE status IN ('required', 'forbidden')
+         ORDER BY id`,
+      )
+      .all() as Array<{
+        term: string
+        translation: string
+        status: 'required' | 'forbidden'
+        case_sensitive: number
+      }>
+    return {
+      requiredTerminology: rows
+        .filter((row) => row.status === 'required')
+        .map((row) => ({
+          sourceTerm: row.term,
+          targetTerm: row.translation,
+          caseSensitive: row.case_sensitive === 1,
+        })),
+      forbiddenTerms: rows
+        .filter((row) => row.status === 'forbidden')
+        .map((row) => ({
+          sourceTerm: row.term,
+          term: row.translation,
+          caseSensitive: row.case_sensitive === 1,
+        })),
+    }
+  }
+
+  private mergeHardRuleOptions(options: ProposalHardRuleOptions): ProposalHardRuleOptions {
+    const stored = this.storedHardRules()
+    return {
+      ...options,
+      requiredTerminology: [
+        ...(stored.requiredTerminology ?? []),
+        ...(options.requiredTerminology ?? []),
+      ],
+      forbiddenTerms: [
+        ...(stored.forbiddenTerms ?? []),
+        ...(options.forbiddenTerms ?? []),
+      ],
+    }
+  }
+
+  private assertHardRules(
+    segment: Segment,
+    proposedTarget: string,
+    options: ProposalHardRuleOptions,
+    to: 'pending' | 'accepted',
+  ): void {
+    const violation = runDeterministicHardRules({
+      segment,
+      proposedTarget,
+      ...options,
+    }).violations[0]
+    if (violation !== undefined) {
+      throw new InvalidStateTransitionError('proposal-hard-rules', violation.code, to)
+    }
   }
 
   getById(proposalId: ProposalId | string): TranslationProposal | undefined {
@@ -167,6 +346,73 @@ export class ProposalsRepository {
             .all(filter.status, limit, offset)
     ) as ProposalRow[]
     return rows.map(proposalFromRow)
+  }
+
+  /** Proposal inbox projection in one JOIN query; avoids list + per-row segment reads. */
+  listWithDiffs(filter: ProposalListFilter = {}): ProposalWithDiff[] {
+    const limit = filter.limit ?? 500
+    const offset = filter.offset ?? 0
+    const legacySchema = this.db.schemaVersion < 13
+    const issuanceProjection = legacySchema
+      ? '0 AS issuance_count, NULL AS latest_issuance_json'
+      : `(SELECT COUNT(*) FROM proposal_issuances pi
+           WHERE pi.proposal_id = p.id) AS issuance_count,
+         (SELECT json_object(
+           'issuance_id', pi.issuance_id, 'proposal_id', pi.proposal_id,
+           'idempotency_key', pi.idempotency_key, 'session_id', pi.session_id,
+           'run_id', pi.run_id, 'tool_call_id', pi.tool_call_id,
+           'model_provider', pi.model_provider, 'model_id', pi.model_id,
+           'runtime', pi.runtime, 'role', pi.role, 'strategy', pi.strategy,
+           'linguist_prompt_version', pi.linguist_prompt_version,
+           'prompt_hash', pi.prompt_hash, 'project_digest_hash', pi.project_digest_hash,
+           'project_digest_revision', pi.project_digest_revision,
+           'turn_context_version', pi.turn_context_version,
+           'turn_context_snapshot_json', pi.turn_context_snapshot_json,
+           'turn_context_hash', pi.turn_context_hash, 'toolset_hash', pi.toolset_hash,
+           'evidence_refs_json', pi.evidence_refs_json,
+           'term_refs_json', pi.term_refs_json, 'created_at', pi.created_at
+         ) FROM proposal_issuances pi WHERE pi.proposal_id = p.id
+           ORDER BY pi.created_at DESC, pi.issuance_id DESC LIMIT 1) AS latest_issuance_json`
+    const select = `
+      SELECT p.*,
+             s.ordinal AS segment_ordinal,
+             s.source AS segment_source,
+             s.target AS segment_target,
+             s.revision AS segment_revision,
+             s.locked AS segment_locked,
+             ${issuanceProjection}
+      FROM proposals p
+      INNER JOIN segments s ON s.id = p.segment_id`
+    const rows = (
+      filter.status === undefined
+        ? this.db.db
+            .prepare(`${select} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`)
+            .all(limit, offset)
+        : this.db.db
+            .prepare(`${select} WHERE p.status = ? ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`)
+            .all(filter.status, limit, offset)
+    ) as ProposalDiffRow[]
+    return rows.map((row) => {
+      const proposal = proposalFromRow(row)
+      if (!legacySchema && row.latest_issuance_json === null) {
+        throw new Error(`Proposal issuance not found: ${proposal.id}`)
+      }
+      const latestIssuance = row.latest_issuance_json === null
+        ? this.legacyIssuance(proposal)
+        : proposalIssuanceFromRow(JSON.parse(row.latest_issuance_json) as ProposalIssuanceRow)
+      return {
+        proposal,
+        originalOrdinal: row.segment_ordinal + 1,
+        source: row.segment_source,
+        currentTarget: row.segment_target,
+        proposedTarget: proposal.proposedTarget,
+        currentRevision: row.segment_revision,
+        baseRevision: proposal.baseRevision,
+        locked: row.segment_locked !== 0,
+        issuanceCount: legacySchema ? 1 : Number(row.issuance_count),
+        latestIssuance,
+      }
+    })
   }
 
   count(status?: ProposalStatus): number {
@@ -219,39 +465,43 @@ export class ProposalsRepository {
    * InvalidStateTransitionError / StaleProposalError propagate unchanged
    * and roll the transaction back.
    */
-  accept(proposalId: ProposalId | string, options: AcceptProposalOptions = {}): AcceptProposalResult {
+  accept(proposalId: ProposalId | string, options: ProposalAcceptOptions = {}): AcceptProposalResult {
     return this.acceptMany([proposalId], options)[0]!
   }
 
   /** Accept selected proposals as one transaction; any conflict rolls back the whole selection. */
   acceptMany(
     proposalIds: readonly (ProposalId | string)[],
-    options: AcceptProposalOptions = {},
+    options: ProposalAcceptOptions = {},
   ): AcceptProposalResult[] {
     const uniqueIds = [...new Set(proposalIds)]
     if (uniqueIds.length === 0) return []
-    return this.db.transaction(`accept ${uniqueIds.length} proposals`, () =>
-      uniqueIds.map((proposalId) => this.acceptWithinTransaction(proposalId, options)),
-    )
+    return this.db.transaction(`accept ${uniqueIds.length} proposals`, () => {
+      const hardRuleOptions = this.mergeHardRuleOptions(options)
+      return uniqueIds.map((proposalId) =>
+        this.acceptWithinTransaction(proposalId, hardRuleOptions),
+      )
+    })
   }
 
   acceptSelected(
     items: readonly ProposalMutationItem[],
     idempotencyKey: string,
-    options: AcceptProposalOptions = {},
+    options: ProposalAcceptOptions = {},
   ): IdempotentProposalMutation<AcceptProposalResult[]> {
     const request = { items, now: options.now ?? null }
-    return this.idempotentMutation('accept-selected', idempotencyKey, request, () =>
-      this.uniqueItems(items).map((item) => {
+    return this.idempotentMutation('accept-selected', idempotencyKey, request, () => {
+      const hardRuleOptions = this.mergeHardRuleOptions(options)
+      return this.uniqueItems(items).map((item) => {
         this.assertExpectedRevision(item)
-        return this.acceptWithinTransaction(item.proposalId, options)
-      }),
-    )
+        return this.acceptWithinTransaction(item.proposalId, hardRuleOptions)
+      })
+    })
   }
 
   private acceptWithinTransaction(
     proposalId: ProposalId | string,
-    options: AcceptProposalOptions,
+    options: ProposalAcceptOptions,
   ): AcceptProposalResult {
     const proposal = this.getById(proposalId)
     if (!proposal) throw new StoreNotFoundError('proposal', proposalId)
@@ -259,7 +509,9 @@ export class ProposalsRepository {
       .prepare('SELECT * FROM segments WHERE id = ?')
       .get(proposal.segmentId) as SegmentRow | undefined
     if (!segmentRow) throw new UnknownSegmentError(proposal.segmentId, `Proposal ${proposalId}`)
-    const result = acceptProposal(segmentFromRow(segmentRow), proposal, options)
+    const segment = segmentFromRow(segmentRow)
+    const result = acceptProposal(segment, proposal, options)
+    this.assertHardRules(segment, proposal.proposedTarget, options, 'accepted')
     this.db.db
       .prepare('UPDATE proposals SET status = ? WHERE id = ?')
       .run(result.proposal.status, proposalId)
@@ -307,24 +559,9 @@ export class ProposalsRepository {
       if (original.status !== 'pending') {
         throw new InvalidStateTransitionError('proposal', original.status, 'accepted')
       }
+      const hardRuleOptions = this.mergeHardRuleOptions(input)
       if (input.editedTarget === original.proposedTarget) {
-        return this.acceptWithinTransaction(original.id, { now: input.now })
-      }
-      const segmentRow = this.db.db
-        .prepare('SELECT * FROM segments WHERE id = ?')
-        .get(original.segmentId) as SegmentRow | undefined
-      if (!segmentRow) throw new UnknownSegmentError(original.segmentId, `Proposal ${original.id}`)
-      const hardRules = runDeterministicHardRules({
-        segment: segmentFromRow(segmentRow),
-        proposedTarget: input.editedTarget,
-        ...(input.tagProfile !== undefined ? { tagProfile: input.tagProfile } : {}),
-      })
-      if (!hardRules.ok) {
-        throw new InvalidStateTransitionError(
-          'proposal-hard-rules',
-          hardRules.violations[0]!.code,
-          'accepted',
-        )
+        return this.acceptWithinTransaction(original.id, hardRuleOptions)
       }
       const edited = this.insertPendingWithinTransaction({
         segmentId: original.segmentId,
@@ -339,9 +576,13 @@ export class ProposalsRepository {
         supersedesProposalId: original.id,
         issuanceKey: `edit-and-accept:${input.idempotencyKey}`,
         ...(input.now !== undefined ? { now: input.now } : {}),
+      }, hardRuleOptions, {
+        idempotencyKey: `edit-and-accept:${input.idempotencyKey}`,
+        runId: `human-edit:${input.idempotencyKey}`,
+        ...(input.now === undefined ? {} : { createdAt: input.now }),
       })
       this.transitionTerminalWithinTransaction(original.id, 'superseded')
-      return this.acceptWithinTransaction(edited.id, { now: input.now })
+      return this.acceptWithinTransaction(edited.id, hardRuleOptions)
     })
   }
 
@@ -361,12 +602,17 @@ export class ProposalsRepository {
         .prepare('SELECT * FROM segments WHERE id = ?')
         .get(original.segmentId) as SegmentRow | undefined
       if (!segment) throw new UnknownSegmentError(original.segmentId, `Proposal ${original.id}`)
+      const hardRuleOptions = this.mergeHardRuleOptions(input)
       return this.insertPendingProposalWithinTransaction(reissueProposal(original, {
         baseRevision: segment.revision,
         reissueKey: idempotencyKey,
         runId: input.runId ?? `human-reconcile:${idempotencyKey}`,
         ...(input.now !== undefined ? { now: input.now } : {}),
-      }))
+      }), hardRuleOptions, {
+        idempotencyKey: `reissue-terminal:${idempotencyKey}`,
+        runId: input.runId ?? `human-reconcile:${idempotencyKey}`,
+        ...(input.now === undefined ? {} : { createdAt: input.now }),
+      })
     })
   }
 

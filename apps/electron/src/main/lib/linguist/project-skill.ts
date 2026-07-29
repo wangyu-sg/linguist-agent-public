@@ -1,33 +1,12 @@
 /**
- * Linguist 常驻项目 Skill 解析（PB-040；计划 §8.1/§8.4「最小常驻项目 Skill」；
- * PB-082 扩展质量策略档与评审角色）。
+ * Linguist Role/Strategy Prompt 与 Pi Skill 路径解析。
  *
- * 「项目对话」（携带 linguistProjectId 的 Pi Agent 会话，PB-034）在既有
- * additionalSkillPaths 缝上追加内置 `linguist-skills/` 下的 Skill 目录，
- * 使工作守则出现在该会话的可用 Skill 列表中（Pi SDK 追加进 system prompt，
- * 模型按需 read SKILL.md 正文）。Skill 只声明不变量：不注册工具、不扩大文件
- * 范围、不绕过 Proposal、不声称 QA 通过、不做交付（计划 §8.4）。
- *
- * 注入矩阵（每次发送实时重解析；不持久化 Skill 列表，resume 走同一解析自然一致）：
- * - 普通会话（无 linguistProjectId）→ 不注入（[]）；
- * - 评审会话（meta.linguistSessionRole === 'reviewer'）→ 只注入
- *   `project-reviewer` 目录（独立评审守则，PB-083/PB-082）；
- * - 普通项目会话 → 注入 `project-assistant` + 项目当前质量策略档的
- *   `strategy-<profile>` 目录（计划 §21：fast/balanced/best；profile 经
- *   service 实时读取并规范化）；
- * - 绑定 missing（项目目录缺失/损坏）→ 不注入（会话降级为普通 Pi 会话）；
- * - 绑定 archived → 仍注入。归档会话的发送已被 PB-034 主进程闸门阻断
- *   （checkLinguistSessionSendBlock），Skill 注入与否不影响只读语义；
- *   保持「绑定在场且项目数据完整即注入」的单一规则，避免为不可达分支设特例；
- * - 策略档读取失败 / strategy 目录缺 SKILL.md → 只注入 project-assistant
- *   （fail closed 降级，策略缺省不影响常驻守则）；
- * - 服务不可解析 / project-assistant（评审会话为 project-reviewer）目录缺
- *   SKILL.md → 不注入（fail closed，记警告，绝不因 Skill 解析故障掀翻发送链路）。
- *
- * 本模块刻意不 import electron：node --test 直接驱动（同 session-binding.ts）。
+ * Prompt 层校验 Bundle 的 name/version/正文预算；失效时返回同版本编译内置
+ * fallback。既有 additionalSkillPaths 行为保持不变，供 Pi 按需发现 Skills。
  */
 
-import { existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { normalizeQualityProfile } from '@linguist/cat-core'
 import type { AgentSessionMeta } from '@proma/shared'
@@ -56,6 +35,170 @@ export const LINGUIST_STRATEGY_SKILL_NAMES = {
   balanced: 'linguist-strategy-balanced',
   best: 'linguist-strategy-best',
 } as const
+
+export const LINGUIST_ROLE_SKILL_VERSION = '1.0.1'
+export const LINGUIST_STRATEGY_SKILL_VERSION = '1.0.1'
+const LINGUIST_PROMPT_SKILL_MAX_CHARS = 6000
+
+export type LinguistPromptRole = 'assistant' | 'reviewer' | 'auditor'
+
+export interface LinguistPromptSkillLayer {
+  readonly version: string
+  readonly hash: string
+  readonly content: string
+  readonly source: 'bundle' | 'fallback'
+}
+
+export interface LinguistPromptSkillResolution {
+  readonly role: LinguistPromptRole
+  readonly roleLayer: LinguistPromptSkillLayer
+  readonly strategy?: keyof typeof LINGUIST_STRATEGY_SKILL_NAMES
+  readonly strategyLayer?: LinguistPromptSkillLayer
+  readonly fallbackLayers: readonly ('role' | 'strategy')[]
+}
+
+const ROLE_SKILL_CONFIG = {
+  assistant: {
+    dir: 'project-assistant',
+    name: LINGUIST_PROJECT_SKILL_NAME,
+    content: `# Linguist Project Assistant
+
+你正在一个 Linguist Project 中工作。使用 CAT Tool 读取和提出修改；不要直接修改源资产。Proposal 不等于已接受译文，QA 结果由确定性工具产生。
+
+先理解任务范围、语言对、文本功能、角色/场景和技术约束，再以批次读取相关上下文并生成候选，只对高风险段追加检索。引用 Segment ID、TM/TB 或项目证据；无法确定时标记歧义，不要伪造事实。
+
+项目正式译文只通过 CAT Proposal 工作流提交。报告完成范围、关键选择、Proposal 数量、QA 问题和未解决项，不复述 Workbench 已可见的大量正文。`,
+  },
+  reviewer: {
+    dir: 'project-reviewer',
+    name: LINGUIST_REVIEWER_SKILL_NAME,
+    content: `# Linguist Reviewer
+
+你是当前 Linguist Project 的独立二审。基于指定 Proposal Snapshot 判断候选是否准确、自然、符合项目规则、角色声音、上下文和技术约束。
+
+无实质问题时提交 pass；存在问题时提交 issues，每条 Finding 给出问题类型、严重度、证据、解释和可执行建议；上下文不足时提交 abstain。Suggested Target 是建议，不代表已修改或已接受。`,
+  },
+  auditor: {
+    dir: 'project-auditor',
+    name: LINGUIST_AUDITOR_SKILL_NAME,
+    content: `# Linguist Quality Auditor
+
+你负责工作流盲审。系统提供的审计证据默认不含 Producer 结论和已有 QA；先基于 Source、Target、项目规则和必要上下文独立判断。
+
+不要主动寻找既有结论。若任务要求追查历史或来源，可以使用 Proma 通用工具，但需记录额外查看的信息。输出区分通过、发现问题和无法判断，并记录证据与置信度。`,
+  },
+} as const
+
+const STRATEGY_SKILL_CONFIG = {
+  fast: {
+    dir: 'strategy-fast',
+    name: LINGUIST_STRATEGY_SKILL_NAMES.fast,
+    content: `# Fast Strategy
+
+每批优先处理 20–50 个上下文相近的 Segment。一次取得批量上下文，只对剧情关键、上下文冲突、专名不确定、格式复杂或低置信段追加检索；提交批量 Proposal 并运行范围 QA，只报告数量、关键风险和未处理段。`,
+  },
+  balanced: {
+    dir: 'strategy-balanced',
+    name: LINGUIST_STRATEGY_SKILL_NAMES.balanced,
+    content: `# Balanced Strategy
+
+每批处理 10–25 个上下文相关的 Segment。批量取得 TM、TB、邻接段、角色与技术约束，翻译后自查语义、自然度、角色口吻、术语、数字、Tag、占位符与前后文一致性；提交 Proposal、运行范围 QA，并集中列出需人工选择的歧义。`,
+  },
+  best: {
+    dir: 'strategy-best',
+    name: LINGUIST_STRATEGY_SKILL_NAMES.best,
+    content: `# Best Strategy
+
+每批通常处理 5–10 个 Segment，关键文案可更小。一次取得完整上下文，再按需深入项目资料或外部参考；核对世界观、角色声音、叙事意图、游戏功能、文化适配与技术约束。提交 Proposal、运行 QA，并为具体 Proposal Snapshot 请求独立 Reviewer。`,
+  },
+} as const
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function fallbackLayer(version: string, content: string): LinguistPromptSkillLayer {
+  return {
+    version,
+    hash: sha256(content),
+    content,
+    source: 'fallback',
+  }
+}
+
+function loadPromptSkill(
+  skillsRoot: string | undefined,
+  config: { readonly dir: string; readonly name: string; readonly content: string },
+  version: string,
+): LinguistPromptSkillLayer {
+  const fallback = fallbackLayer(version, config.content)
+  if (skillsRoot === undefined) return fallback
+  try {
+    const source = readFileSync(join(skillsRoot, config.dir, 'SKILL.md'), 'utf8')
+    const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]+)$/)
+    if (match === null) return fallback
+    const name = match[1]!.match(/^name:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, '')
+    const bundledVersion = match[1]!.match(/^version:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, '')
+    const content = match[2]!.trim()
+    if (
+      name !== config.name
+      || bundledVersion !== version
+      || content.length === 0
+      || content.length > LINGUIST_PROMPT_SKILL_MAX_CHARS
+    ) return fallback
+    return {
+      version,
+      hash: sha256(content),
+      content,
+      source: 'bundle',
+    }
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * 解析 Role/Strategy Prompt 层。可更新 Skill Bundle 缺失、损坏或版本不匹配时，
+ * 返回同版本编译内置 fallback；调用方据 source 显式标记降级，不会退化为 General。
+ */
+export function resolveLinguistPromptSkillLayers(
+  session: Pick<AgentSessionMeta, 'linguistProjectId' | 'linguistSessionRole'>,
+  getService: LinguistServiceResolver,
+  skillsRoot: string | undefined = getDefaultLinguistSkillsRoot(),
+): LinguistPromptSkillResolution {
+  const role: LinguistPromptRole = session.linguistSessionRole ?? 'assistant'
+  const roleConfig = ROLE_SKILL_CONFIG[role]
+  const roleLayer = loadPromptSkill(
+    skillsRoot,
+    roleConfig,
+    LINGUIST_ROLE_SKILL_VERSION,
+  )
+  const fallbackLayers: Array<'role' | 'strategy'> = []
+  if (roleLayer.source === 'fallback') fallbackLayers.push('role')
+
+  if (role !== 'assistant') {
+    return { role, roleLayer, fallbackLayers }
+  }
+
+  let strategy: keyof typeof LINGUIST_STRATEGY_SKILL_NAMES = 'balanced'
+  let strategyProfileUnavailable = false
+  try {
+    strategy = normalizeQualityProfile(getService().getProject(session.linguistProjectId!).qualityProfile)
+  } catch {
+    strategyProfileUnavailable = true
+  }
+  const strategyConfig = STRATEGY_SKILL_CONFIG[strategy]
+  const loadedStrategy = loadPromptSkill(
+    skillsRoot,
+    strategyConfig,
+    LINGUIST_STRATEGY_SKILL_VERSION,
+  )
+  const strategyLayer = strategyProfileUnavailable
+    ? fallbackLayer(LINGUIST_STRATEGY_SKILL_VERSION, strategyConfig.content)
+    : loadedStrategy
+  if (strategyLayer.source === 'fallback') fallbackLayers.push('strategy')
+  return { role, roleLayer, strategy, strategyLayer, fallbackLayers }
+}
 
 /**
  * 解析内置 `linguist-skills/` 根目录（project-assistant / project-reviewer /
@@ -107,13 +250,13 @@ export function resolveLinguistSessionSkillPaths(
     if (session.linguistSessionRole === 'reviewer') {
       const reviewerDir = skillDirIfPresent(join(skillsRoot, 'project-reviewer'))
       if (reviewerDir === undefined) return []
-      console.log(`[Linguist Skill] 评审会话注入评审 Skill（${status}）: ${reviewerDir}`)
+      console.log(`[Linguist Skill] 评审会话注入评审 Skill（${status}）`)
       return [reviewerDir]
     }
     if (session.linguistSessionRole === 'auditor') {
       const auditorDir = skillDirIfPresent(join(skillsRoot, 'project-auditor'))
       if (auditorDir === undefined) return []
-      console.log(`[Linguist Skill] 盲审会话注入独立审计 Skill（${status}）: ${auditorDir}`)
+      console.log(`[Linguist Skill] 盲审会话注入独立审计 Skill（${status}）`)
       return [auditorDir]
     }
 

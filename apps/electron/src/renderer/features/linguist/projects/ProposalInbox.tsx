@@ -132,22 +132,9 @@ export function ProposalInbox({
         setState({ status: 'error', message: describeLinguistIpcError(list.error) })
         return
       }
-      const diffs = await Promise.all(
-        list.data.items.map((proposal) =>
-          window.electronAPI.linguistProposalsGetDiff({
-            projectId,
-            proposalId: proposal.id,
-          }),
-        ),
-      )
-      const failed = diffs.find((result) => !result.ok)
-      if (failed !== undefined && !failed.ok) {
-        setState({ status: 'error', message: describeLinguistIpcError(failed.error) })
-        return
-      }
       setState({
         status: 'ready',
-        proposals: diffs.flatMap((result) => (result.ok ? [result.data] : [])),
+        proposals: list.data.items,
         total: list.data.total,
         offset: list.data.offset,
         hasMore: list.data.hasMore,
@@ -705,9 +692,23 @@ function ProposalCard({
 
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-foreground/35">
         <span>创建：{formatTimestamp(diff.proposal.createdAt)}</span>
-        {diff.proposal.modelId && <span>模型：{diff.proposal.modelId}</span>}
-        {diff.proposal.sessionId && <span>会话：{diff.proposal.sessionId}</span>}
-        {diff.proposal.runId && <span>批次：{diff.proposal.runId}</span>}
+        <span>生成记录：{diff.issuanceCount ?? 1} 次</span>
+        {(diff.latestIssuance?.modelId ?? diff.proposal.modelId) && (
+          <span>模型：{diff.latestIssuance?.modelId ?? diff.proposal.modelId}</span>
+        )}
+        {(diff.latestIssuance?.sessionId ?? diff.proposal.sessionId) && (
+          <span>会话：{diff.latestIssuance?.sessionId ?? diff.proposal.sessionId}</span>
+        )}
+        {(diff.latestIssuance?.runId ?? diff.proposal.runId) && (
+          <span>批次：{diff.latestIssuance?.runId ?? diff.proposal.runId}</span>
+        )}
+        {diff.latestIssuance?.runtime && <span>Runtime：{diff.latestIssuance.runtime}</span>}
+        {diff.latestIssuance?.modelProvider && (
+          <span>Provider：{diff.latestIssuance.modelProvider}</span>
+        )}
+        {diff.latestIssuance?.toolCallId && (
+          <span>Tool call：{diff.latestIssuance.toolCallId}</span>
+        )}
         {diff.proposal.reissuedFromProposalId && (
           <span>重新提出自：{diff.proposal.reissuedFromProposalId}</span>
         )}

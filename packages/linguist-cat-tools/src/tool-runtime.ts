@@ -2,7 +2,11 @@ import type {
   AgentToolResult,
   ToolDefinition,
 } from '@earendil-works/pi-coding-agent'
-import type { Segment } from '@linguist/cat-core'
+import type {
+  LinguistGenerationProvenance,
+  ProposalIssuanceInput,
+  Segment,
+} from '@linguist/cat-core'
 import type { TSchema } from 'typebox'
 import type {
   CatSegmentListItem,
@@ -20,7 +24,16 @@ export const defineTool = <
   tool: ToolDefinition<TParams, TDetails, TState>,
 ) => tool
 
-/** 将 DTO 序列化；导航元数据只携带首个句段锚点，保持结果有界。 */
+function summarizeToolResult(details: object): string {
+  const fields = Object.entries(details).flatMap(([key, value]) => {
+    if (typeof value === 'number' || typeof value === 'boolean') return [`${key}=${String(value)}`]
+    if (Array.isArray(value)) return [`${key}=${value.length}`]
+    return []
+  })
+  return `CAT tool result${fields.length > 0 ? `: ${fields.join(', ')}` : ''}. Structured data is available in details.`
+}
+
+/** 导航元数据只携带首个句段锚点；content 保持短摘要，不复制 details。 */
 export function toolResult<TDetails extends object>(
   dto: TDetails,
   projectId?: string,
@@ -38,7 +51,7 @@ export function toolResult<TDetails extends object>(
   return {
     content: [{
       type: 'text',
-      text: JSON.stringify(details, null, 2),
+      text: summarizeToolResult(details),
     }],
     details,
   }
@@ -67,13 +80,35 @@ export interface CatToolRuntime {
     toolCallId: string,
   ) => ResolvedLinguistCatProject
   notifyMutation: (mutation: LinguistCatToolMutation) => void
-  proposalRunId: (toolCallId: string) => string
+  proposalProvenance: (
+    toolCallId: string,
+  ) => ProposalIssuanceInput & { toolCallId: string; runId: string }
 }
 
 /** 把宿主 authority 与通知策略集中在一处，具体 Tool 只实现领域行为。 */
 export function createCatToolRuntime(
   deps: LinguistCatToolsDeps,
 ): CatToolRuntime {
+  const proposalProvenance = (
+    toolCallId: string,
+  ): ProposalIssuanceInput & { toolCallId: string; runId: string } => {
+    const provided: LinguistGenerationProvenance = deps.generationProvenance?.(toolCallId) ?? {}
+    return {
+      ...provided,
+      ...(provided.sessionId === undefined && deps.sessionId !== undefined
+        ? { sessionId: deps.sessionId }
+        : {}),
+      ...(provided.modelId === undefined && deps.modelId !== undefined
+        ? { modelId: deps.modelId }
+        : {}),
+      toolCallId,
+      runId:
+        provided.runId
+        ?? (deps.sessionId === undefined
+          ? `tool:${toolCallId}`
+          : `run:${deps.sessionId}:${toolCallId}`),
+    }
+  }
   return {
     deps,
     resolveBoundProject(toolName, toolCallId) {
@@ -88,8 +123,6 @@ export function createCatToolRuntime(
         // 写入已经提交；通知失败不能伪装成失败并诱发模型重复写。
       }
     },
-    proposalRunId(toolCallId) {
-      return `run:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`
-    },
+    proposalProvenance,
   }
 }

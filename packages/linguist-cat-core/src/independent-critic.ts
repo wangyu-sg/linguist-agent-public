@@ -2,10 +2,9 @@
  * Independent Critic artifact contract (PB-083).
  *
  * Extracted from legacy linguist-agent@la-v2-legacy-freeze-2026-07-25
- * `packages/cat-data/src/independent_critic.ts` — behavior preserved
- * verbatim (same validation cases, same error messages, same id/hash
- * derivation), style converted to this repo's conventions, and
- * `isCitableEvidenceSource` now comes from the local `./evidence` module.
+ * `packages/cat-data/src/independent_critic.ts`; validation and error
+ * behavior remain compatible. New ids use Stable ID v2 while parsers retain
+ * legacy id support. `isCitableEvidenceSource` comes from `./evidence`.
  *
  * Independent Critics produce versioned advisory artifacts only. A separate
  * owner may later decide whether to create a proposal; this module has no
@@ -19,14 +18,16 @@
  * without re-implementing this module's canonicalization.
  */
 
-import { createHash } from 'node:crypto'
 import { isCitableEvidenceSource } from './evidence'
+import { sha256Hex } from './hash'
+import { deriveStableIdV2 } from './ids'
 import {
   QA_FINDING_SEVERITIES,
   QA_ISSUE_TYPES,
   type QaFindingSeverity,
   type QaIssueType,
 } from './issue-type'
+import type { LinguistGenerationProvenance } from './proposal-issuance'
 
 export const INDEPENDENT_CRITIC_CATEGORIES = ['fidelity', 'naturalness', 'terminology', 'voice', 'consistency'] as const
 export type IndependentCriticCategory = (typeof INDEPENDENT_CRITIC_CATEGORIES)[number]
@@ -83,6 +84,50 @@ export interface IndependentCriticRequest {
   findings: IndependentCriticFindingDraft[]
 }
 
+export type CriticReviewVerdict = 'pass' | 'issues' | 'abstain'
+
+export interface CriticReviewSnapshotRef {
+  snapshotId: string
+  snapshotHash: string
+  proposalId: string
+}
+
+export interface CriticReviewerProvenance extends IndependentCriticIdentity {
+  sessionId: string
+  modelId?: string
+  /** SHA-256 of the exact reviewer prompt/skill bytes used for the review. */
+  promptVersion: string
+  generation?: LinguistGenerationProvenance
+}
+
+export interface CriticReviewArtifact {
+  schemaVersion: 2
+  authority: 'advisory_finding'
+  canCommit: false
+  artifactId: string
+  snapshot: CriticReviewSnapshotRef
+  subject: IndependentCriticSubject
+  reviewer: CriticReviewerProvenance
+  verdict: CriticReviewVerdict
+  summary?: string
+  reason?: string
+  findings: IndependentCriticFinding[]
+  artifactHash: string
+}
+
+export type CreateCriticReviewRequest =
+  & {
+    schemaVersion: 2
+    snapshot: CriticReviewSnapshotRef
+    subject: IndependentCriticSubject
+    reviewer: CriticReviewerProvenance
+  }
+  & (
+    | { verdict: 'pass'; summary?: string; findings: [] }
+    | { verdict: 'issues'; summary: string; findings: IndependentCriticFindingDraft[] }
+    | { verdict: 'abstain'; reason: string; findings: [] }
+  )
+
 export type IndependentCriticPlan =
   | { kind: 'not_required'; reason: 'Independent Critic is reserved for high-risk segments.' }
   | { kind: 'required'; requiredRoles: ['fidelity', 'naturalness', 'terminology', 'voice'] }
@@ -95,6 +140,12 @@ export interface CriticTargetedRepairScope {
 }
 
 const SHA256 = /^[a-f0-9]{64}$/u
+const LEGACY_ARTIFACT_ID = /^critic:[a-f0-9]{24}$/u
+const V2_ARTIFACT_ID = /^critic_v2_[a-f0-9]{64}$/u
+const LEGACY_FINDING_ID = /^cf:[a-f0-9]{24}$/u
+const V2_FINDING_ID = /^cf_v2_[a-f0-9]{64}$/u
+type ContentIdVersion = 'v1' | 'v2'
+const textEncoder = new TextEncoder()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -122,7 +173,24 @@ function canonicalize(value: unknown): unknown {
 }
 
 function hash(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex')
+  return sha256Hex(textEncoder.encode(JSON.stringify(canonicalize(value))))
+}
+
+function contentId(entityType: 'critic' | 'cf', value: unknown, version: ContentIdVersion): string {
+  const content = JSON.stringify(canonicalize(value))
+  return version === 'v1'
+    ? `${entityType}:${sha256Hex(textEncoder.encode(content)).slice(0, 24)}`
+    : deriveStableIdV2(entityType, [content])
+}
+
+function readArtifactId(value: unknown, label: string): {
+  id: string
+  version: ContentIdVersion
+} {
+  const id = text(value, 'artifactId')
+  if (LEGACY_ARTIFACT_ID.test(id)) return { id, version: 'v1' }
+  if (V2_ARTIFACT_ID.test(id)) return { id, version: 'v2' }
+  throw new Error(`${label} artifactId changed.`)
 }
 
 function deepFreeze<T>(value: T): T {
@@ -157,6 +225,114 @@ function parseCritic(value: unknown, label = 'critic'): IndependentCriticIdentit
   }
 }
 
+function parseReviewSnapshot(value: unknown): CriticReviewSnapshotRef {
+  if (!isRecord(value)) throw new Error('snapshot must be an object.')
+  knownFields(value, ['snapshotId', 'snapshotHash', 'proposalId'], 'snapshot')
+  return {
+    snapshotId: text(value.snapshotId, 'snapshot.snapshotId'),
+    snapshotHash: sha256(value.snapshotHash, 'snapshot.snapshotHash'),
+    proposalId: text(value.proposalId, 'snapshot.proposalId'),
+  }
+}
+
+function parseReviewer(value: unknown): CriticReviewerProvenance {
+  if (!isRecord(value)) throw new Error('reviewer must be an object.')
+  knownFields(
+    value,
+    ['criticId', 'executionId', 'profileHash', 'sessionId', 'modelId', 'promptVersion', 'generation'],
+    'reviewer',
+  )
+  const identity = parseCritic({
+    criticId: value.criticId,
+    executionId: value.executionId,
+    profileHash: value.profileHash,
+  }, 'reviewer')
+  const sessionId = text(value.sessionId, 'reviewer.sessionId')
+  if (sessionId !== identity.executionId) {
+    throw new Error('reviewer.sessionId must match reviewer.executionId.')
+  }
+  return {
+    ...identity,
+    sessionId,
+    ...(value.modelId === undefined ? {} : { modelId: text(value.modelId, 'reviewer.modelId') }),
+    promptVersion: sha256(value.promptVersion, 'reviewer.promptVersion'),
+    ...(value.generation === undefined
+      ? {}
+      : { generation: parseGenerationProvenance(value.generation) }),
+  }
+}
+
+function parseGenerationProvenance(value: unknown): LinguistGenerationProvenance {
+  if (!isRecord(value)) throw new Error('reviewer.generation must be an object.')
+  const fields = [
+    'sessionId',
+    'runId',
+    'toolCallId',
+    'modelProvider',
+    'modelId',
+    'runtime',
+    'role',
+    'strategy',
+    'linguistPromptVersion',
+    'promptHash',
+    'projectDigestHash',
+    'projectDigestRevision',
+    'turnContextVersion',
+    'turnContextSnapshot',
+    'turnContextHash',
+    'toolsetHash',
+  ] as const
+  knownFields(value, fields, 'reviewer.generation')
+  const result: LinguistGenerationProvenance = {}
+  for (const field of [
+    'sessionId',
+    'runId',
+    'toolCallId',
+    'modelProvider',
+    'modelId',
+    'runtime',
+    'linguistPromptVersion',
+    'projectDigestRevision',
+  ] as const) {
+    if (value[field] !== undefined) result[field] = text(value[field], `reviewer.generation.${field}`)
+  }
+  for (const field of ['promptHash', 'projectDigestHash', 'turnContextHash', 'toolsetHash'] as const) {
+    if (value[field] !== undefined) result[field] = sha256(value[field], `reviewer.generation.${field}`)
+  }
+  if (value.role !== undefined) {
+    if (!(['assistant', 'reviewer', 'auditor'] as const).includes(value.role as never)) {
+      throw new Error('reviewer.generation.role is invalid.')
+    }
+    result.role = value.role as NonNullable<LinguistGenerationProvenance['role']>
+  }
+  if (value.strategy !== undefined) {
+    if (!(['fast', 'balanced', 'best'] as const).includes(value.strategy as never)) {
+      throw new Error('reviewer.generation.strategy is invalid.')
+    }
+    result.strategy = value.strategy as NonNullable<LinguistGenerationProvenance['strategy']>
+  }
+  if (value.turnContextVersion !== undefined) {
+    if (!Number.isInteger(value.turnContextVersion) || (value.turnContextVersion as number) < 0) {
+      throw new Error('reviewer.generation.turnContextVersion must be a non-negative integer.')
+    }
+    result.turnContextVersion = value.turnContextVersion as number
+  }
+  if (value.turnContextSnapshot !== undefined) {
+    const snapshot = text(value.turnContextSnapshot, 'reviewer.generation.turnContextSnapshot')
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(snapshot)
+    } catch {
+      throw new Error('reviewer.generation.turnContextSnapshot must be JSON.')
+    }
+    if (JSON.stringify(canonicalize(parsed)) !== snapshot) {
+      throw new Error('reviewer.generation.turnContextSnapshot must be canonical JSON.')
+    }
+    result.turnContextSnapshot = snapshot
+  }
+  return result
+}
+
 function parseEvidence(value: unknown, label: string): string[] {
   if (!Array.isArray(value) || !value.length) throw new Error(`${label} must contain citable evidenceRefs.`)
   const refs = value.map((entry, index) => text(entry, `${label}[${index}]`))
@@ -188,8 +364,30 @@ function assertIndependent(subject: IndependentCriticSubject, critic: Independen
   if (subject.candidateProducerId === critic.criticId) throw new Error('Independent Critic must use a different actor from the candidate producer.')
 }
 
-function artifactWithoutHash(subject: IndependentCriticSubject, critic: IndependentCriticIdentity, findings: IndependentCriticFinding[]): Omit<IndependentCriticArtifact, 'artifactHash'> {
-  const artifactId = `critic:${hash({ subject, critic, findings }).slice(0, 24)}`
+function createFindings(
+  subject: IndependentCriticSubject,
+  critic: IndependentCriticIdentity,
+  drafts: readonly IndependentCriticFindingDraft[],
+  version: ContentIdVersion,
+): IndependentCriticFinding[] {
+  if (!drafts.length) throw new Error('Independent Critic requires at least one structured finding.')
+  return drafts.map((finding, index) => {
+    const draft = parseFindingDraft(finding, `findings[${index}]`)
+    return {
+      findingId: contentId('cf', { subject, critic, draft, index }, version),
+      criticId: critic.criticId,
+      ...draft,
+    }
+  })
+}
+
+function artifactWithoutHash(
+  subject: IndependentCriticSubject,
+  critic: IndependentCriticIdentity,
+  findings: IndependentCriticFinding[],
+  version: ContentIdVersion,
+): Omit<IndependentCriticArtifact, 'artifactHash'> {
+  const artifactId = contentId('critic', { subject, critic, findings }, version)
   return { schemaVersion: 1, authority: 'advisory_finding', canCommit: false, artifactId, subject, critic, findings }
 }
 
@@ -203,16 +401,8 @@ export function createIndependentCriticArtifact(request: IndependentCriticReques
   const subject = parseSubject(request.subject)
   const critic = parseCritic(request.critic)
   assertIndependent(subject, critic)
-  if (!request.findings.length) throw new Error('Independent Critic requires at least one structured finding.')
-  const findings = request.findings.map((finding, index) => {
-    const draft = parseFindingDraft(finding, `findings[${index}]`)
-    return {
-      findingId: `cf:${hash({ subject, critic, draft, index }).slice(0, 24)}`,
-      criticId: critic.criticId,
-      ...draft,
-    }
-  })
-  const withoutHash = artifactWithoutHash(subject, critic, findings)
+  const findings = createFindings(subject, critic, request.findings, 'v2')
+  const withoutHash = artifactWithoutHash(subject, critic, findings, 'v2')
   return deepFreeze({ ...withoutHash, artifactHash: hash(withoutHash) })
 }
 
@@ -225,18 +415,151 @@ export function parseIndependentCriticArtifact(value: unknown): IndependentCriti
   const subject = parseSubject(value.subject)
   const critic = parseCritic(value.critic)
   assertIndependent(subject, critic)
+  const { id: storedArtifactId, version } = readArtifactId(value.artifactId, 'Independent Critic')
   const findings = value.findings.map((finding, index) => {
     if (!isRecord(finding)) throw new Error(`findings[${index}] must be an object.`)
     knownFields(finding, ['findingId', 'criticId', 'category', 'severity', 'issueType', 'evidenceRefs', 'explanation', 'suggestedRepair'], `findings[${index}]`)
     const draft = parseFindingDraft(finding, `findings[${index}]`, true)
     const findingId = text(finding.findingId, `findings[${index}].findingId`)
+    if (!(version === 'v1' ? LEGACY_FINDING_ID : V2_FINDING_ID).test(findingId)) {
+      throw new Error(`findings[${index}] findingId changed.`)
+    }
     if (text(finding.criticId, `findings[${index}].criticId`) !== critic.criticId) throw new Error(`findings[${index}] criticId differs from artifact critic.`)
     return { findingId, criticId: critic.criticId, ...draft }
   })
   if (!findings.length || new Set(findings.map((finding) => finding.findingId)).size !== findings.length) throw new Error('Independent Critic findings must be non-empty and uniquely identified.')
-  const withoutHash = artifactWithoutHash(subject, critic, findings)
-  if (text(value.artifactId, 'artifactId') !== withoutHash.artifactId) throw new Error('Independent Critic artifactId changed.')
+  const withoutHash = artifactWithoutHash(subject, critic, findings, version)
+  if (storedArtifactId !== withoutHash.artifactId) throw new Error('Independent Critic artifactId changed.')
   if (sha256(value.artifactHash, 'artifactHash') !== hash(withoutHash)) throw new Error('Independent Critic artifactHash changed.')
+  return deepFreeze({ ...withoutHash, artifactHash: hash(withoutHash) })
+}
+
+function createCriticReviewFields(
+  request: CreateCriticReviewRequest,
+  version: ContentIdVersion,
+): Omit<CriticReviewArtifact, 'artifactId' | 'artifactHash'> {
+  if (!isRecord(request) || request.schemaVersion !== 2 || !Array.isArray(request.findings)) {
+    throw new Error('Unsupported Critic Review request.')
+  }
+  const snapshot = parseReviewSnapshot(request.snapshot)
+  const subject = parseSubject(request.subject)
+  const reviewer = parseReviewer(request.reviewer)
+  assertIndependent(subject, reviewer)
+  if (snapshot.proposalId !== subject.candidateId) {
+    throw new Error('Critic Review snapshot proposal differs from the candidate.')
+  }
+  if (!(['pass', 'issues', 'abstain'] as const).includes(request.verdict)) {
+    throw new Error('Critic Review verdict is invalid.')
+  }
+  const summary = 'summary' in request && request.summary !== undefined
+    ? text(request.summary, 'summary')
+    : undefined
+  const reason = 'reason' in request && request.reason !== undefined
+    ? text(request.reason, 'reason')
+    : undefined
+  let findings: IndependentCriticFinding[] = []
+  if (request.verdict === 'issues') {
+    if (summary === undefined) throw new Error('Issues review requires a summary.')
+    findings = createFindings(subject, {
+      criticId: reviewer.criticId,
+      executionId: reviewer.executionId,
+      profileHash: reviewer.profileHash,
+    }, request.findings, version)
+    if (reason !== undefined) throw new Error('Issues review cannot contain an abstain reason.')
+  } else {
+    if (request.findings.length > 0) throw new Error(`${request.verdict} review cannot contain findings.`)
+    if (request.verdict === 'abstain' && reason === undefined) {
+      throw new Error('Abstain review requires a reason.')
+    }
+    if (request.verdict === 'pass' && reason !== undefined) {
+      throw new Error('Pass review cannot contain an abstain reason.')
+    }
+  }
+  return {
+    schemaVersion: 2,
+    authority: 'advisory_finding',
+    canCommit: false,
+    snapshot,
+    subject,
+    reviewer,
+    verdict: request.verdict,
+    ...(summary === undefined ? {} : { summary }),
+    ...(reason === undefined ? {} : { reason }),
+    findings,
+  }
+}
+
+export function createCriticReviewArtifact(request: CreateCriticReviewRequest): CriticReviewArtifact {
+  const fields = createCriticReviewFields(request, 'v2')
+  const artifactId = contentId('critic', fields, 'v2')
+  const withoutHash = { ...fields, artifactId }
+  return deepFreeze({ ...withoutHash, artifactHash: hash(withoutHash) })
+}
+
+export function parseCriticReviewArtifact(value: unknown): CriticReviewArtifact {
+  if (!isRecord(value)) throw new Error('Critic Review artifact must be an object.')
+  knownFields(
+    value,
+    [
+      'schemaVersion',
+      'authority',
+      'canCommit',
+      'artifactId',
+      'snapshot',
+      'subject',
+      'reviewer',
+      'verdict',
+      'summary',
+      'reason',
+      'findings',
+      'artifactHash',
+    ],
+    'Critic Review artifact',
+  )
+  if (
+    value.schemaVersion !== 2 ||
+    value.authority !== 'advisory_finding' ||
+    value.canCommit !== false ||
+    !Array.isArray(value.findings)
+  ) {
+    throw new Error('Critic Review artifact contract is invalid.')
+  }
+  const { id: storedArtifactId, version } = readArtifactId(value.artifactId, 'Critic Review')
+  const fields = createCriticReviewFields({
+    schemaVersion: 2,
+    snapshot: value.snapshot as CriticReviewSnapshotRef,
+    subject: value.subject as IndependentCriticSubject,
+    reviewer: value.reviewer as CriticReviewerProvenance,
+    verdict: value.verdict as CriticReviewVerdict,
+    ...(value.summary === undefined ? {} : { summary: value.summary as string }),
+    ...(value.reason === undefined ? {} : { reason: value.reason as string }),
+    findings: value.findings.map((finding) => {
+      if (!isRecord(finding)) return finding as never
+      const { findingId: _findingId, criticId: _criticId, ...draft } = finding
+      return draft as unknown as IndependentCriticFindingDraft
+    }),
+  } as CreateCriticReviewRequest, version)
+  const artifactId = contentId('critic', fields, version)
+  if (storedArtifactId !== artifactId) {
+    throw new Error('Critic Review artifactId changed.')
+  }
+  const withoutHash = { ...fields, artifactId }
+  if (sha256(value.artifactHash, 'artifactHash') !== hash(withoutHash)) {
+    throw new Error('Critic Review artifactHash changed.')
+  }
+  const storedFindingIds = value.findings.map((finding, index) =>
+    isRecord(finding) ? text(finding.findingId, `findings[${index}].findingId`) : '',
+  )
+  const storedCriticIds = value.findings.map((finding, index) =>
+    isRecord(finding) ? text(finding.criticId, `findings[${index}].criticId`) : '',
+  )
+  if (
+    storedFindingIds.length !== fields.findings.length ||
+    storedFindingIds.some((findingId, index) => findingId !== fields.findings[index]!.findingId) ||
+    storedCriticIds.some((criticId) => criticId !== fields.reviewer.criticId)
+  ) {
+    throw new Error('Critic Review finding identity changed.')
+  }
   return deepFreeze({ ...withoutHash, artifactHash: hash(withoutHash) })
 }
 
@@ -273,5 +596,5 @@ export function independentCriticCandidateHash(input: {
 
 /** Critic profile hash: bare sha256 of the reviewer skill bytes (or fallback profile string). */
 export function independentCriticProfileHash(profileBytes: string | Uint8Array): string {
-  return createHash('sha256').update(profileBytes).digest('hex')
+  return sha256Hex(typeof profileBytes === 'string' ? textEncoder.encode(profileBytes) : profileBytes)
 }

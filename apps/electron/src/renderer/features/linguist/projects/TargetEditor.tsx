@@ -33,6 +33,9 @@ export type TargetDraftAction =
   | { type: 'undo' }
   | { type: 'redo' }
 
+export const TARGET_UNDO_MAX_OPERATIONS = 200
+export const TARGET_UNDO_MAX_CHARACTERS = 200_000
+
 export interface TargetTextSelection {
   start: number
   end: number
@@ -85,12 +88,46 @@ export function createTargetDraftState(value: string): TargetDraftState {
   }
 }
 
+function boundDraftHistory(
+  past: readonly string[],
+  future: readonly string[],
+  futureFirst = false,
+): Pick<TargetDraftState, 'past' | 'future'> {
+  let operations = TARGET_UNDO_MAX_OPERATIONS
+  let characters = TARGET_UNDO_MAX_CHARACTERS
+  const take = (values: readonly string[], nearestAtStart: boolean): string[] => {
+    const kept: string[] = []
+    if (nearestAtStart) {
+      for (const value of values) {
+        if (operations === 0 || value.length > characters) break
+        kept.push(value)
+        operations -= 1
+        characters -= value.length
+      }
+      return kept
+    }
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+      const value = values[index]!
+      if (operations === 0 || value.length > characters) break
+      kept.unshift(value)
+      operations -= 1
+      characters -= value.length
+    }
+    return kept
+  }
+  if (futureFirst) {
+    const boundedFuture = take(future, true)
+    return { past: take(past, false), future: boundedFuture }
+  }
+  const boundedPast = take(past, false)
+  return { past: boundedPast, future: take(future, true) }
+}
+
 function commitDraft(state: TargetDraftState, value: string): TargetDraftState {
   if (value === state.value) return state
   return {
     value,
-    past: [...state.past, state.value],
-    future: [],
+    ...boundDraftHistory([...state.past, state.value], []),
     composing: false,
   }
 }
@@ -117,8 +154,7 @@ export function targetDraftReducer(
       }
       return {
         value: action.value,
-        past: [...state.past, compositionBase],
-        future: [],
+        ...boundDraftHistory([...state.past, compositionBase], []),
         composing: false,
       }
     }
@@ -127,8 +163,11 @@ export function targetDraftReducer(
       const value = state.past.at(-1)!
       return {
         value,
-        past: state.past.slice(0, -1),
-        future: [state.value, ...state.future],
+        ...boundDraftHistory(
+          state.past.slice(0, -1),
+          [state.value, ...state.future],
+          true,
+        ),
         composing: false,
       }
     }
@@ -137,8 +176,7 @@ export function targetDraftReducer(
       const [value, ...future] = state.future
       return {
         value: value!,
-        past: [...state.past, state.value],
-        future,
+        ...boundDraftHistory([...state.past, state.value], future),
         composing: false,
       }
     }

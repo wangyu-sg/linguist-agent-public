@@ -1,6 +1,6 @@
 /**
  * PB-110 主进程日志卫生（node --test）：钉住计划 §7.4「logs 不泄漏客户
- * 正文」在 linguist 服务层的纪律（cat-tools 包的等价断言见
+ * 正文、API Key 或绝对路径」在 linguist 服务层的纪律（cat-tools 包的等价断言见
  * tools.nodetest.ts 的 zero console 用例）。
  *
  * 做法：劫持 console.log/info/warn/error，跑一轮含敏感标记串的真实项目
@@ -13,10 +13,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { resolveLinguistSessionSkillPaths } from './project-skill'
 import { INPUT, makeService } from './test/service-testkit'
 
 const SENTINEL = 'SENTINEL_SECRET_7f3a9'
+const API_KEY_SENTINEL = 'sk-api-key-sentinel-7f3a9'
 
 /** 正文与译文都埋 sentinel 的最小 XLIFF（全 translated，QA 无阻断项）。 */
 const SENTINEL_XLIFF = `<?xml version="1.0" encoding="UTF-8"?>
@@ -24,8 +27,8 @@ const SENTINEL_XLIFF = `<?xml version="1.0" encoding="UTF-8"?>
   <file original="sentinel.po" source-language="en" target-language="zh-CN" datatype="x-synthetic">
     <body>
       <trans-unit id="secret.alpha">
-        <source>${SENTINEL} launch sequence</source>
-        <target state="translated">启动序列 ${SENTINEL}</target>
+        <source>${SENTINEL} launch sequence ${API_KEY_SENTINEL}</source>
+        <target state="translated">启动序列 ${SENTINEL} ${API_KEY_SENTINEL}</target>
       </trans-unit>
       <trans-unit id="secret.beta">
         <source>Second line with ${SENTINEL} inside</source>
@@ -48,8 +51,14 @@ function serialize(args: unknown[]): string {
     .join(' ')
 }
 
-test('PB-110: 含客户正文的全流程跑完，主进程 console 输出绝不含正文 sentinel', async () => {
+test('LA-OBS-001: Linguist 全流程默认日志不含正文、API key 或绝对路径', async () => {
   const service = makeService()
+  const managedRoot = service.rootDir
+  const skillsRoot = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..', '..', '..', '..', '..', '..',
+    'resources', 'linguist-skills',
+  )
   const captured: string[] = []
   const original = {
     log: console.log,
@@ -66,6 +75,10 @@ test('PB-110: 含客户正文的全流程跑完，主进程 console 输出绝不
   console.error = capture
   try {
     const project = service.createProject(INPUT)
+    assert.equal(resolveLinguistSessionSkillPaths({
+      linguistProjectId: project.id,
+      linguistSessionRole: 'reviewer',
+    }, () => service, skillsRoot).length, 1)
     const imported = await service.importAsset(project.id, {
       bytes: new TextEncoder().encode(SENTINEL_XLIFF),
       filename: 'sentinel.xliff',
@@ -82,9 +95,11 @@ test('PB-110: 含客户正文的全流程跑完，主进程 console 输出绝不
     const db = service.openProject(project.id)
     const segments = db.segments.query({ limit: 10 })
     assert.ok(segments.some((segment) => segment.source.includes(SENTINEL)))
+    assert.ok(segments.some((segment) => segment.source.includes(API_KEY_SENTINEL)))
     assert.ok(segments.some((segment) => segment.target.includes(SENTINEL)))
     const exportedFiles = service.listExportFiles(project.id)
     assert.equal(exportedFiles.length, 1)
+    assert.equal(exportedFiles[0]!.assetId, imported.assetId)
     const exportedBytes = readFileSync(
       join(service.getProjectPaths(project.id).exportsDir, exportedFiles[0]!.filename),
       'utf8',
@@ -102,5 +117,8 @@ test('PB-110: 含客户正文的全流程跑完，主进程 console 输出绝不
   assert.ok(captured.length > 0, '全流程应产生日志（否则本断言空转）')
   for (const line of captured) {
     assert.ok(!line.includes(SENTINEL), `console 输出泄漏客户正文: ${line}`)
+    assert.ok(!line.includes(API_KEY_SENTINEL), `console 输出泄漏 API key: ${line}`)
+    assert.ok(!line.includes(managedRoot), `console 输出泄漏绝对路径: ${line}`)
+    assert.ok(!line.includes(skillsRoot), `console 输出泄漏 Skill 绝对路径: ${line}`)
   }
 })

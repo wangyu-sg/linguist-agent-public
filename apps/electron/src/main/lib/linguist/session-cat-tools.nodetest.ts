@@ -2,7 +2,7 @@
  * PB-042 session-cat-tools nodetest（node --test；真实 LinguistProjectService +
  * 真实会话元数据 + 真实 fixture 导入，无 mock）：
  *
- * - 项目对话（active）→ 12 个工具；经应用 resolver 端到端驱动 execute：
+ * - 项目对话（active）→ 15 个工具；经应用 resolver 端到端驱动 execute：
  *   summary/list_assets/get_segments 对 mkdtemp 项目 + mini_items.json 播种
  *   断言真实 DTO（资产 id、段计数、段 id 跨调用稳定、assetId/status 过滤、
  *   未知 assetId → ASSET_NOT_FOUND、空 TM/TB 干净空 + note）；
@@ -61,8 +61,9 @@ async function invoke(tool: SessionCatTool, params: unknown): Promise<Record<str
   const result = await tool.execute('call-1', params as never, undefined, undefined, {} as never)
   const block = result.content[0]
   assert.ok(block && block.type === 'text', 'tool result must start with a text block')
-  // content 文本与 details 承载同一 DTO；解析文本证明 JSON 可序列化
-  return JSON.parse(block.text) as Record<string, unknown>
+  assert.match(block.text, /^CAT tool result/, 'content 只承载短摘要，不复制完整 DTO')
+  assert.ok(result.details !== undefined, '结构化 DTO 必须由 details 承载')
+  return result.details as unknown as Record<string, unknown>
 }
 
 function collectStrings(value: unknown, out: string[] = []): string[] {
@@ -82,7 +83,7 @@ function collectStrings(value: unknown, out: string[] = []): string[] {
 
 const PROJECT_INPUT = { name: 'CAT 工具项目', sourceLocale: 'en', targetLocale: 'zh-CN' } as const
 
-test('bound active session: twelve CAT tools execute end-to-end against a real seeded project', async () => {
+test('bound active session: CAT tools execute end-to-end against a real seeded project', async () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT })
   const imported = await service.importAsset(project.id, {
@@ -93,7 +94,29 @@ test('bound active session: twelve CAT tools execute end-to-end against a real s
 
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
   assert.equal(meta.linguistProjectId, project.id)
-  const tools = catTools.resolveLinguistSessionCatTools({ ...meta, modelId: 'fake-model' }, () => service)
+  const tools = catTools.resolveLinguistSessionCatTools(
+    { ...meta, modelId: 'fake-model' },
+    () => service,
+    undefined,
+    (toolCallId) => ({
+      sessionId: meta.id,
+      runId: 'agent-turn-1',
+      toolCallId,
+      modelProvider: 'anthropic',
+      modelId: 'fake-model',
+      runtime: 'claude',
+      role: 'assistant',
+      strategy: 'balanced',
+      linguistPromptVersion: '2.0.0',
+      promptHash: '1'.repeat(64),
+      projectDigestHash: '2'.repeat(64),
+      projectDigestRevision: 'project-r1',
+      turnContextVersion: 1,
+      turnContextSnapshot: '{"schemaVersion":1}',
+      turnContextHash: '3'.repeat(64),
+      toolsetHash: '4'.repeat(64),
+    }),
+  )
   assert.deepEqual(tools.map((t) => t.name), [...LINGUIST_CAT_TOOL_NAMES])
   assert.equal(
     tools.some((tool) => /accept|reject/i.test(tool.name)),
@@ -183,6 +206,12 @@ test('bound active session: twelve CAT tools execute end-to-end against a real s
   const proposal = service.openProject(project.id).proposals.getById(proposalId)
   assert.equal(proposal?.sessionId, meta.id)
   assert.equal(proposal?.modelId, 'fake-model')
+  const issuance = service.openProject(project.id).proposals.listIssuances(proposalId)[0]!
+  assert.equal(issuance.runId, 'agent-turn-1')
+  assert.equal(issuance.toolCallId, 'call-1')
+  assert.equal(issuance.runtime, 'claude')
+  assert.equal(issuance.modelProvider, 'anthropic')
+  assert.equal(issuance.toolsetHash, '4'.repeat(64))
   assert.equal(service.openProject(project.id).segments.getById(proposedSegment.id)?.target, proposedSegment.target)
 
   // 输出纪律：summary/segments DTO 递归无绝对路径（linguist root 绝不出现）
@@ -226,20 +255,34 @@ test('LF-063: bound CAT writes emit ordered host-owned project mutation events; 
     }],
   })
   await invoke(toolByName(tools, 'cat_run_qa'), {})
+  const durableEvents = service.openProject(project.id).runs.listEvents()
 
   assert.equal(mutations.length, 2)
   assert.deepEqual(mutations[0], {
     projectId: project.id,
     revision: mutations[0]!.revision,
+    sequence: 1,
     kind: 'proposal-created',
     segmentIds: [segment.id],
     proposalIds: proposal.proposalIds,
   })
   assert.equal(mutations[1]!.projectId, project.id)
-  assert.equal(mutations[1]!.revision, mutations[0]!.revision + 1)
+  assert.ok(mutations[1]!.revision > mutations[0]!.revision)
+  assert.equal(mutations[1]!.sequence, 5)
   assert.equal(mutations[1]!.kind, 'qa-updated')
   assert.ok((mutations[1]!.segmentIds?.length ?? 0) > 0)
   assert.ok((mutations[1]!.qaFindingIds?.length ?? 0) > 0)
+  assert.deepEqual(
+    durableEvents.map((event) => [event.sequence, event.kind, event.job?.status ?? null]),
+    [
+      [1, 'proposal-created', null],
+      [2, 'job-updated', 'pending'],
+      [3, 'job-updated', 'running'],
+      [4, 'job-updated', 'running'],
+      [5, 'qa-updated', null],
+      [6, 'job-updated', 'completed'],
+    ],
+  )
 
   service.closeAll()
 })
@@ -285,6 +328,7 @@ test('auditor binding receives only evidence reads; Proposal/QA conclusions and 
     'cat_project_summary',
     'cat_list_assets',
     'cat_get_segments',
+    'cat_get_translation_context',
     'cat_search_tm',
     'cat_search_terms',
     'cat_search_sentence_patterns',
@@ -331,7 +375,7 @@ test('PB-110 archived project: write tools reject with STORE_READ_ONLY and write
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT, name: '归档写拒绝项目' })
   // 播种同 source 译文分歧的段（2×译文一 + 1×译文不同），让
-  // cat_run_batch_consistency 的 repair 模式产生真实修复输入——无修复
+  // consistency plan/apply 产生真实修复输入——无修复
   // 输入时 repair 根本不会发起写，覆盖不到只读拒绝路径。
   const seededDb = service.openProject(project.id)
   const repeated = (ordinal: number, target: string) => ({
@@ -363,6 +407,7 @@ test('PB-110 archived project: write tools reject with STORE_READ_ONLY and write
   // 归档前：拿到一个可提议的段（baseRevision 对齐，排除参数类拒绝路径）
   const segmentsBefore = (await invoke(toolByName(tools, 'cat_get_segments'), {})) as unknown as PagedResult<CatSegmentListItem>
   const target = segmentsBefore.items.find((segment) => !segment.locked)!
+  const inconsistent = segmentsBefore.items.find((segment) => segment.target === '译文不同')!
 
   service.archiveProject(project.id)
 
@@ -391,11 +436,19 @@ test('PB-110 archived project: write tools reject with STORE_READ_ONLY and write
     assertStoreReadOnly,
   )
   await assert.rejects(invoke(toolByName(tools, 'cat_run_qa'), {}), assertStoreReadOnly)
-  // repair 模式：分组建议「译文一」，对分歧段发起 proposal 写入 → 只读拒绝
-  const repair = await invoke(toolByName(tools, 'cat_run_batch_consistency'), { mode: 'check-only' })
-  assert.ok((repair.findingCount as number) > 0, '前置：一致性分歧必须存在，否则 repair 无写路径')
+  // plan 只读；apply 对显式选择发起 Proposal 写入 → 只读拒绝
+  const plan = await invoke(toolByName(tools, 'cat_plan_consistency_repairs'), {})
+  assert.ok((plan.findingCount as number) > 0, '前置：一致性分歧必须存在，否则 apply 无写路径')
+  const group = (plan.groups as Array<{ groupId: string }>)[0]!
   await assert.rejects(
-    invoke(toolByName(tools, 'cat_run_batch_consistency'), { mode: 'repair' }),
+    invoke(toolByName(tools, 'cat_create_consistency_proposals'), {
+      planId: plan.planId,
+      selections: [{
+        groupId: group.groupId,
+        proposedTarget: '译文一',
+        segmentIds: [inconsistent.id],
+      }],
+    }),
     assertStoreReadOnly,
   )
 

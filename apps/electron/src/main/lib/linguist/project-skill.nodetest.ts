@@ -85,6 +85,98 @@ test('repo-bundled skills sanity: project roles and strategies carry the expecte
   })
 })
 
+test('LA-PROMPT-002/003/005: bundled Prompt Skills match golden hashes and fallback keeps the same version', () => {
+  const service = makeServiceOnLinguistRoot()
+  try {
+    const project = service.createProject({ ...PROJECT_INPUT, name: 'Prompt Golden 项目' })
+    const assistant = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+    const expectedStrategyHashes = {
+      fast: '60db5be10f64462077306e7c8b27ada78bc63f600cef78fad6d7ccd2d631f3bd',
+      balanced: '5e99c1792b1e3dbb43d1cd2b72ee7b60350cb27fe84290c6872c18caae3281c2',
+      best: 'e2021c6726a65ea0e8bc2740ebaa98bccae9aafab2ef5f8cbce8ee5c5c514595',
+    } as const
+
+    for (const profile of ['fast', 'balanced', 'best'] as const) {
+      service.setQualityProfile(project.id, profile)
+      const resolved = skill.resolveLinguistPromptSkillLayers(
+        assistant,
+        () => service,
+        REPO_SKILLS_ROOT,
+      )
+      assert.equal(resolved.roleLayer.version, '1.0.1')
+      assert.equal(resolved.roleLayer.source, 'bundle')
+      assert.equal(
+        resolved.roleLayer.hash,
+        'f840d82070d0f146ef9df643626b518e7af746886ee8809ed6f81249ffdcc977',
+      )
+      assert.equal(resolved.strategy, profile)
+      assert.equal(resolved.strategyLayer?.version, '1.0.1')
+      assert.equal(resolved.strategyLayer?.source, 'bundle')
+      assert.equal(resolved.strategyLayer?.hash, expectedStrategyHashes[profile])
+      assert.doesNotMatch(resolved.strategyLayer!.content, /逐段(?:查|调用)|每段都用/)
+      for (const roleInvariant of [
+        'Proposal 不等于已接受译文',
+        'QA 结果由确定性工具产生',
+        '不要直接修改源资产',
+      ]) {
+        assert.ok(!resolved.strategyLayer!.content.includes(roleInvariant))
+      }
+      assert.deepEqual(resolved.fallbackLayers, [])
+    }
+
+    const reviewerProject = service.createProject({ ...PROJECT_INPUT, name: 'Reviewer Golden 项目' })
+    const reviewer = binding.createLinguistProjectChatSession(service, {
+      projectId: reviewerProject.id,
+      role: 'reviewer',
+    })
+    const reviewerLayer = skill.resolveLinguistPromptSkillLayers(
+      reviewer,
+      () => service,
+      REPO_SKILLS_ROOT,
+    )
+    assert.equal(
+      reviewerLayer.roleLayer.hash,
+      '61920f7a03e00fa98287c184e670050fe921ec62236b6fef37a1712de91c8fa8',
+    )
+    assert.match(reviewerLayer.roleLayer.content, /verdict=pass/)
+    assert.match(reviewerLayer.roleLayer.content, /verdict=issues/)
+    assert.match(reviewerLayer.roleLayer.content, /verdict=abstain/)
+    assert.equal(reviewerLayer.strategyLayer, undefined)
+
+    const auditorProject = service.createProject({ ...PROJECT_INPUT, name: 'Auditor Golden 项目' })
+    const auditor = binding.createLinguistProjectChatSession(service, {
+      projectId: auditorProject.id,
+      role: 'auditor',
+    })
+    const auditorLayer = skill.resolveLinguistPromptSkillLayers(
+      auditor,
+      () => service,
+      REPO_SKILLS_ROOT,
+    )
+    assert.equal(
+      auditorLayer.roleLayer.hash,
+      '8abb4f23c7b2d42a8515ae936f8fd27ba1f66a1a9704b4e553624685c468cf2f',
+    )
+    assert.match(auditorLayer.roleLayer.content, /Proma 通用工具/)
+    assert.doesNotMatch(auditorLayer.roleLayer.content, /绝对沙箱|无法访问任何信息/)
+    assert.equal(auditorLayer.strategyLayer, undefined)
+
+    const missingBundleRoot = makeTempDir()
+    const fallback = skill.resolveLinguistPromptSkillLayers(
+      assistant,
+      () => service,
+      missingBundleRoot,
+    )
+    assert.equal(fallback.roleLayer.version, '1.0.1')
+    assert.equal(fallback.roleLayer.source, 'fallback')
+    assert.equal(fallback.strategyLayer?.version, '1.0.1')
+    assert.equal(fallback.strategyLayer?.source, 'fallback')
+    assert.deepEqual(fallback.fallbackLayers, ['role', 'strategy'])
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('auditor session gets only the blind-audit skill', () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT, name: '盲审项目' })

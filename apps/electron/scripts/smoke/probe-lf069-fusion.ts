@@ -774,7 +774,9 @@ async function main(): Promise<void> {
       (segment) => initialRequest?.messageText.includes(segment.id) === true,
     )
     const proposalToolAdvertised = initialRequest?.toolNames.includes(CAT_PROPOSAL_TOOL) === true
-    const proposalIds = toolFollowup?.toolResultText.match(/prp-[0-9a-f]{16}/g) ?? []
+    const proposalIds = toolFollowup?.toolResultText.match(
+      /prp(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})/g,
+    ) ?? []
     const toolEvent = events.toolUses.some(
       (event) => event.sessionId === sessionId && event.name === CAT_PROPOSAL_TOOL,
     )

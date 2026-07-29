@@ -89,7 +89,7 @@ for (const key of Object.keys(process.env)) {
 }
 
 import { createApplicationMenu } from './menu'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, stopAllLinguistIntegrityScrubs } from './ipc'
 import { createTray, destroyTray, getTray } from './tray'
 import { initializeRuntime } from './lib/runtime-init'
 import { seedDefaultSkills } from './lib/config-paths'
@@ -690,6 +690,7 @@ app.on('before-quit', () => {
   // 停止定时任务调度器
   stopScheduler()
   // 关闭 Linguist CAT 项目 DB 句柄（WAL 正常 checkpoint；未初始化时为空操作）
+  stopAllLinguistIntegrityScrubs()
   closeAllLinguistProjectHandles()
   // 释放飞书同步防休眠
   stopFeishuSyncSleepBlocker()

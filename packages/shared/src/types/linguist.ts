@@ -53,6 +53,17 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
 export type LinguistProjectIpcChannel =
   (typeof LINGUIST_PROJECT_IPC_CHANNELS)[keyof typeof LINGUIST_PROJECT_IPC_CHANNELS]
 
+/** 全量完整性扫描独立通道；生产执行体必须是 Worker，不与 Quick Health 混用。 */
+export const LINGUIST_INTEGRITY_IPC_CHANNELS = {
+  START: 'linguist.integrity.start',
+  CANCEL: 'linguist.integrity.cancel',
+  EXPORT_REPORT: 'linguist.integrity.exportReport',
+  PROGRESS: 'linguist.integrity.progress',
+} as const
+
+export type LinguistIntegrityIpcChannel =
+  (typeof LINGUIST_INTEGRITY_IPC_CHANNELS)[keyof typeof LINGUIST_INTEGRITY_IPC_CHANNELS]
+
 // ===== 会话绑定通道（PB-034；计划 §7.2「Project → Session 绑定」）=====
 //
 // 「项目对话」= 携带 linguistProjectId 绑定的 Pi Agent 会话（AgentSessionMeta）。
@@ -104,6 +115,10 @@ export const LINGUIST_CAT_IPC_CHANNELS = {
   RESOLVE_QA_FINDING: 'linguist.cat.resolveQaFinding',
   WAIVE_QA_FINDING: 'linguist.cat.waiveQaFinding',
   WAIVE_QA_FINDINGS_BULK: 'linguist.cat.waiveQaFindingsBulk',
+  LIST_PROJECT_EVENTS: 'linguist.cat.listProjectEvents',
+  ACK_PROJECT_EVENTS: 'linguist.cat.ackProjectEvents',
+  GET_LATEST_RUN_SUMMARY: 'linguist.cat.getLatestRunSummary',
+  UNDO_LATEST_RUN: 'linguist.cat.undoLatestRun',
   /** Agent CAT Tool 成功提交项目写入后的主进程下行事件。 */
   PROJECT_MUTATION: 'linguist.cat.projectMutation',
 } as const
@@ -113,7 +128,10 @@ export type LinguistCatIpcChannel =
 
 export interface LinguistProjectMutationEvent {
   projectId: string
+  /** 当前主进程内推送顺序；renderer 重连以 sequence 为持久游标。 */
   revision: number
+  /** cat.db outbox 的持久序号；旧的人工作业通知可以缺省。 */
+  sequence?: number
   kind:
     | 'proposal-created'
     | 'proposal-reviewed'
@@ -121,9 +139,98 @@ export interface LinguistProjectMutationEvent {
     | 'qa-updated'
     | 'asset-updated'
     | 'project-updated'
+    | 'job-updated'
+    | 'run-undone'
+  runId?: string
+  toolCallId?: string
   segmentIds?: readonly string[]
   proposalIds?: readonly string[]
   qaFindingIds?: readonly string[]
+  jobId?: string
+  job?: {
+    status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+    cursor: number
+    total: number
+    completed: number
+    failed: number
+  }
+}
+
+export interface LinguistProjectEventListRequest {
+  projectId: string
+  afterSequence: number
+  limit?: number
+}
+
+export interface LinguistProjectEventListResult {
+  events: LinguistProjectMutationEvent[]
+  hasMore: boolean
+}
+
+export interface LinguistProjectEventAckRequest {
+  projectId: string
+  consumerId: string
+  throughSequence: number
+}
+
+export interface LinguistProjectEventAckResult {
+  consumerId: string
+  sequence: number
+  ackedAt: string
+}
+
+export interface LinguistRunSummaryRequest {
+  projectId: string
+}
+
+export interface LinguistRunUndoRequest {
+  projectId: string
+  sessionId: string
+  expectedRunId: string
+}
+
+export interface LinguistRunChangeSummary {
+  schemaVersion: 1
+  projectId: string
+  runId: string
+  job?: {
+    jobId: string
+    status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+    scopedSegments: number
+    cursor: number
+    completedSegments: number
+    failedSegments: number
+  }
+  mutationCount: number
+  changes: {
+    proposalsCreated: number
+    qaFindingsCreated: number
+    qaFindingsUpdated: number
+    criticReviewsCreated: number
+    filesTouched: number
+    total: number
+    undone: number
+  }
+  eventSequence?: { first: number; last: number }
+  canUndo: boolean
+}
+
+export interface LinguistLatestRunSummaryResult {
+  summary: LinguistRunChangeSummary | null
+}
+
+export interface LinguistRunUndoResult {
+  runId: string
+  status: 'completed' | 'partial' | 'refused' | 'already-undone'
+  reverted: Array<{
+    entityType: 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
+    entityId: string
+  }>
+  refused: Array<{
+    entityType: 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
+    entityId: string
+    reason: string
+  }>
 }
 
 // ===== TM / 术语库通道（PB-080；原生导入、管理与只读查询）=====
@@ -150,6 +257,17 @@ export const LINGUIST_EXPORT_IPC_CHANNELS = {
 
 export type LinguistExportIpcChannel =
   (typeof LINGUIST_EXPORT_IPC_CHANNELS)[keyof typeof LINGUIST_EXPORT_IPC_CHANNELS]
+
+// ===== 诊断通道（LA-OBS-001；Prompt 状态 + 显式脱敏包）=====
+
+export const LINGUIST_DIAGNOSTICS_IPC_CHANNELS = {
+  GET_STATUS: 'linguist.diagnostics.getStatus',
+  PREVIEW_BUNDLE: 'linguist.diagnostics.previewBundle',
+  EXPORT_BUNDLE: 'linguist.diagnostics.exportBundle',
+} as const
+
+export type LinguistDiagnosticsIpcChannel =
+  (typeof LINGUIST_DIAGNOSTICS_IPC_CHANNELS)[keyof typeof LINGUIST_DIAGNOSTICS_IPC_CHANNELS]
 
 // ===== Legacy 迁移向导通道（PB-094；计划 §22）=====
 //
@@ -277,23 +395,23 @@ export type LinguistIpcResult<T> =
 
 // ===== 校验常量（主进程 handler 强制执行；renderer 可用于预校验）=====
 
-/** 项目 id 形状：`prj-<16 位小写 hex>`（对齐 cat-core ids.ts 的 ID_PATTERN）。 */
+/** 随机项目 id 保持历史形状：`prj-<16 位小写 hex>`。 */
 export const LINGUIST_PROJECT_ID_PATTERN = /^prj-[0-9a-f]{16}$/
 
-/** 资产 id 形状：`ast-<16 位小写 hex>`。 */
-export const LINGUIST_ASSET_ID_PATTERN = /^ast-[0-9a-f]{16}$/
+/** 内容派生 id 同时接受历史 v1 与新建 v2；项目 id 仍为随机 v1。 */
+export const LINGUIST_ASSET_ID_PATTERN = /^ast(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
 
-/** Segment id 形状：`seg-<16 位小写 hex>`。 */
-export const LINGUIST_SEGMENT_ID_PATTERN = /^seg-[0-9a-f]{16}$/
+export const LINGUIST_SEGMENT_ID_PATTERN = /^seg(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
 
-/** QA Finding id 形状：`qaf-<16 位小写 hex>`。 */
-export const LINGUIST_QA_FINDING_ID_PATTERN = /^qaf-[0-9a-f]{16}$/
+export const LINGUIST_PROPOSAL_ID_PATTERN = /^prp(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
+
+export const LINGUIST_QA_FINDING_ID_PATTERN = /^qaf(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
 
 /** TM / TB 记录 id：内容派生且仅在项目内有意义。 */
-export const LINGUIST_REFERENCE_ID_PATTERN = /^(?:tmu|ter)-[0-9a-f]{16}$/
+export const LINGUIST_REFERENCE_ID_PATTERN = /^(?:tmu|ter)(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
 
 /** PB-095 项目资产 id：sgr/spn/ctx/tcn/vpr 五前缀，内容派生且仅在项目内有意义。 */
-export const LINGUIST_PROJECT_ASSET_ID_PATTERN = /^(?:sgr|spn|ctx|tcn|vpr)-[0-9a-f]{16}$/
+export const LINGUIST_PROJECT_ASSET_ID_PATTERN = /^(?:sgr|spn|ctx|tcn|vpr)(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
 
 /**
  * BCP-47 风格 locale 形状：2-3 字母语言标签 + 可选 `-xx` 子标签序列
@@ -389,21 +507,137 @@ export type LinguistSegmentStatus = 'untranslated' | 'draft' | 'translated' | 'r
 /** 按状态的段计数（四个状态键齐全，缺省为 0）。 */
 export type LinguistSegmentStatusCounts = Record<LinguistSegmentStatus, number>
 
-/** 单项健康检查（对齐 PB-030 LinguistProjectHealthCheck）。 */
+/** Quick Health 单项检查；完整性范围必须显式，避免把抽样说成全量。 */
 export interface LinguistProjectHealthCheckInfo {
   id: 'project_json' | 'cat_db_open' | 'schema_version' | 'asset_sources'
   ok: boolean
+  scope: 'complete' | 'sampled'
+  checkedItems?: number
+  totalItems?: number
   /** 仅含错误码 / 计数，绝无客户文本。 */
   detail?: string
 }
 
-/** 健康报告（对齐 PB-030 LinguistProjectHealthReport）。 */
+/** 打开项目时的轻量 Quick Health，不代表完整性全检。 */
 export interface LinguistProjectHealthReport {
+  kind: 'quick'
   projectId: string
   healthy: boolean
   checkedAt: string
   checks: LinguistProjectHealthCheckInfo[]
 }
+
+export type LinguistIntegrityCheckId =
+  | 'project_manifest'
+  | 'schema_version'
+  | 'source_digests'
+  | 'blob_digests'
+  | 'sqlite_integrity'
+  | 'foreign_keys'
+  | 'orphans'
+  | 'proposal_references'
+  | 'qa_references'
+  | 'review_references'
+  | 'event_sequence'
+  | 'job_lineage'
+  | 'run_lineage'
+  | 'export_manifests'
+  | 'session_workspaces'
+
+export interface LinguistIntegrityProblem {
+  /** 稳定机器码与数量；不携带路径、文件名或客户内容。 */
+  code: string
+  count: number
+}
+
+export interface LinguistIntegrityCheck {
+  id: LinguistIntegrityCheckId
+  status: 'passed' | 'failed' | 'unavailable'
+  checkedItems: number
+  failedItems: number
+  unavailableItems: number
+  problems: LinguistIntegrityProblem[]
+}
+
+/** Full Integrity Scrub 的实时结果；不同于打开项目时的 Quick Health。 */
+export interface LinguistIntegrityScrubReport {
+  schemaVersion: 1
+  kind: 'full'
+  projectId: string
+  jobId: string
+  executor: 'worker_thread'
+  workerThreadId: number
+  outcome: 'passed' | 'failed' | 'incomplete'
+  startedAt: string
+  completedAt: string
+  checks: LinguistIntegrityCheck[]
+}
+
+export interface LinguistIntegrityScrubProgress {
+  checkId: LinguistIntegrityCheckId
+  completedItems: number
+  totalItems: number
+  completedChecks: number
+  totalChecks: number
+  percent: number
+}
+
+export type LinguistIntegrityScrubEvent =
+  | {
+    projectId: string
+    jobId: string
+    state: 'running'
+    progress: LinguistIntegrityScrubProgress
+  }
+  | {
+    projectId: string
+    jobId: string
+    state: 'completed'
+    report: LinguistIntegrityScrubReport
+  }
+  | {
+    projectId: string
+    jobId: string
+    state: 'cancelled'
+  }
+  | {
+    projectId: string
+    jobId: string
+    state: 'failed'
+    errorCode: 'WORKER_FAILED'
+  }
+
+export interface LinguistIntegrityStartRequest {
+  projectId: string
+}
+
+export interface LinguistIntegrityStartResult {
+  jobId: string
+}
+
+export interface LinguistIntegrityCancelRequest {
+  projectId: string
+  jobId: string
+}
+
+export interface LinguistIntegrityCancelResult {
+  cancelled: boolean
+}
+
+export interface LinguistIntegrityExportReportRequest {
+  projectId: string
+  jobId: string
+}
+
+export type LinguistIntegrityExportReportResult =
+  | { cancelled: true }
+  | {
+    cancelled: false
+    filename: string
+    sha256: string
+    sizeBytes: number
+    verifiedAt: string
+  }
 
 /** 导入警告（cat-formats ImportWarning 的线格式镜像）。 */
 export interface LinguistImportWarning {
@@ -722,7 +956,7 @@ export interface LinguistTmMatchInfo extends LinguistTmInfo {
   matchType: LinguistTmMatchType
 }
 
-export type LinguistTermStatus = 'allowed' | 'preferred' | 'forbidden' | 'deprecated'
+export type LinguistTermStatus = 'allowed' | 'preferred' | 'required' | 'forbidden' | 'deprecated'
 export type LinguistTermMatchType = 'exact' | 'contains'
 
 export interface LinguistTermInfo {
@@ -747,6 +981,7 @@ export interface LinguistTermMatchInfo extends LinguistTermInfo {
 export interface LinguistReferenceQueryRequest {
   projectId: string
   query?: string
+  status?: LinguistTermStatus
   limit?: number
   offset?: number
 }
@@ -1004,7 +1239,7 @@ export interface LinguistSentencePatternImportResult {
 
 export interface LinguistAssetPreviewRequest {
   projectId: string
-  /** CAT 资产 opaque id（ast-<16 hex>；主进程强制形状校验）。 */
+  /** CAT 资产 opaque id（Stable ID v1/v2；主进程强制形状校验）。 */
   assetId: string
 }
 
@@ -1208,6 +1443,14 @@ export interface LinguistExportArtifactInfo {
   createdAt: string
 }
 
+export interface LinguistExportDeliveryVerification {
+  sha256: string
+  sizeBytes: number
+  verifiedAt: string
+  /** 客户正文无关的项目状态指纹；段 revision/状态变化即改变。 */
+  projectRevision: string
+}
+
 export type LinguistExportSaveAssetResult =
   | { cancelled: true }
   | {
@@ -1215,6 +1458,7 @@ export type LinguistExportSaveAssetResult =
       /** 用户目标文件的 basename，仅供成功提示。 */
       filename: string
       artifact: LinguistExportArtifactInfo
+      delivery: LinguistExportDeliveryVerification
       verifiedSegments: number
       preparation: LinguistPrepareDeliveryResult
     }
@@ -1236,9 +1480,196 @@ export interface LinguistExportFileInfo {
   sizeBytes: number
   /** epoch ms。 */
   modifiedAt: number
+  /** manifest 校验通过时提供；历史或损坏 manifest 缺省。 */
+  sha256?: string
+  createdAt?: string
+  verifiedAt?: string
+  projectRevision?: string
+  /** true 表示项目段 revision/状态已晚于该交付物。 */
+  stale?: boolean
 }
 
 export type LinguistExportListResult = LinguistExportFileInfo[]
+
+// ===== Prompt / Observability / 隐私诊断包（LA-OBS-001）=====
+
+export interface LinguistDiagnosticsRequest {
+  projectId: string
+  sessionId?: string
+  /** 用户点击“重新探测”时为 true；主进程仍执行同一真实 Prompt 构建。 */
+  retry?: boolean
+}
+
+export interface LinguistPromptStatusInfo {
+  profileVersion: string
+  profileHash: string
+  role: 'assistant' | 'reviewer' | 'auditor'
+  roleVersion: string
+  roleHash: string
+  strategy?: LinguistQualityProfile
+  strategyVersion?: string
+  strategyHash?: string
+  projectDigestVersion: string
+  projectDigestHash: string
+  projectDigestRevision: string
+  projectDigestStatus: 'ready' | 'partial' | 'unavailable'
+  promptHash: string
+  degraded: boolean
+  fallbackLayers: Array<'role' | 'strategy' | 'project_digest'>
+  retryable: boolean
+}
+
+export interface LinguistDiagnosticsQaMetrics {
+  openErrors: number
+  openWarnings: number
+  pendingProposals: number
+}
+
+export interface LinguistDiagnosticsRetryMetrics {
+  attempts: number
+  lastAttemptAt?: string
+  lastRecovered?: boolean
+}
+
+export interface LinguistDiagnosticsEventGap {
+  latestSequence: number
+  acknowledgedSequence: number
+  pending: number
+}
+
+export type LinguistDiagnosticsJobStatus =
+  | 'pending'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export interface LinguistDevDiagnostics {
+  profile?: {
+    kind: 'linguist'
+    role: 'assistant' | 'reviewer' | 'auditor'
+    strategy: LinguistQualityProfile
+  }
+  agentRuntime?: import('./agent-provider').AgentRuntime
+  sessionCwd?: string
+  tools: {
+    /** Claude SDK 不公开基础工具清单时为 null，不用 MCP server 数冒充。 */
+    base: number | null
+    overlay: number
+    observedAt?: string
+  }
+  trace: {
+    projectId: string
+    sessionId?: string
+    runId?: string
+    jobId?: string
+    toolCallId?: string
+    eventSequence: number
+    availableFields: Array<
+      'projectId' | 'sessionId' | 'runId' | 'jobId' | 'toolCallId' | 'eventSequence'
+    >
+    unavailableFields: Array<'runId' | 'jobId' | 'stepId' | 'toolCallId'>
+  }
+  metrics: {
+    promptProbeLatencyMs: number
+    promptProbeResultBytes: number
+    qa: LinguistDiagnosticsQaMetrics
+    retry: LinguistDiagnosticsRetryMetrics
+    eventGap: LinguistDiagnosticsEventGap
+  }
+  promptCacheSize: number
+  recentJob:
+    | { status: 'not_available' }
+    | {
+      status: LinguistDiagnosticsJobStatus
+      jobId: string
+      runId: string
+      runtime: string
+      cursor: number
+      total: number
+    }
+  worker: {
+    mode: 'node-worker_threads' | 'not_observed'
+    status: LinguistDiagnosticsJobStatus | 'idle' | 'degraded'
+  }
+}
+
+export interface LinguistDiagnosticsStatus {
+  projectRevision: string
+  prompt: LinguistPromptStatusInfo
+  /** 生产构建省略绝对 CWD 与内部关联字段；Prompt 健康仍始终可见。 */
+  dev?: LinguistDevDiagnostics
+}
+
+export interface LinguistDiagnosticBundle {
+  schemaVersion: 1
+  createdAt: string
+  privacy: {
+    redacted: true
+    autoUpload: false
+    contains: {
+      filenames: false
+      contentSnippets: false
+      customerText: false
+      absolutePaths: false
+      secrets: false
+      hiddenReasoning: false
+    }
+  }
+  correlation: {
+    projectFingerprint: string
+    sessionFingerprint?: string
+    runFingerprint?: string
+    jobFingerprint?: string
+    toolCallFingerprint?: string
+    eventSequence: number
+    availableTraceFields: Array<
+      | 'projectFingerprint'
+      | 'sessionFingerprint'
+      | 'runFingerprint'
+      | 'jobFingerprint'
+      | 'toolCallFingerprint'
+      | 'eventSequence'
+    >
+    unavailableTraceFields: Array<
+      'runFingerprint' | 'jobFingerprint' | 'stepId' | 'toolCallFingerprint'
+    >
+  }
+  projectRevision: string
+  prompt: LinguistPromptStatusInfo
+  metrics: {
+    promptProbeLatencyMs: number
+    promptProbeResultBytes: number
+    qa: LinguistDiagnosticsQaMetrics
+    retry: LinguistDiagnosticsRetryMetrics
+    eventGap: LinguistDiagnosticsEventGap
+  }
+  runtime: {
+    agentRuntime?: import('./agent-provider').AgentRuntime
+    baseToolCount: number | null
+    overlayToolCount: number
+    promptCacheSize: number
+    workerMode: 'node-worker_threads' | 'not_observed'
+    workerStatus: LinguistDiagnosticsJobStatus | 'idle' | 'degraded'
+    recentJobStatus: LinguistDiagnosticsJobStatus | 'not_available'
+  }
+}
+
+export interface LinguistDiagnosticBundlePreviewResult {
+  bundle: LinguistDiagnosticBundle
+  sizeBytes: number
+}
+
+export type LinguistDiagnosticBundleExportResult =
+  | { cancelled: true }
+  | {
+    cancelled: false
+    filename: string
+    sha256: string
+    sizeBytes: number
+    verifiedAt: string
+  }
 
 // ===== 会话绑定请求 / 响应契约（PB-034）=====
 
@@ -1337,6 +1768,31 @@ export interface LinguistProposalInfo {
   status: LinguistProposalStatus
 }
 
+export interface LinguistProposalIssuanceInfo {
+  id: string
+  proposalId: string
+  idempotencyKey?: string
+  sessionId?: string
+  runId?: string
+  toolCallId?: string
+  modelProvider?: string
+  modelId?: string
+  runtime?: string
+  role?: 'assistant' | 'reviewer' | 'auditor'
+  strategy?: 'fast' | 'balanced' | 'best'
+  linguistPromptVersion?: string
+  promptHash?: string
+  projectDigestHash?: string
+  projectDigestRevision?: string
+  turnContextVersion?: number
+  turnContextSnapshot?: string
+  turnContextHash?: string
+  toolsetHash?: string
+  evidenceRefs: string[]
+  termRefs: string[]
+  createdAt: string
+}
+
 export interface LinguistProposalDiff {
   proposal: LinguistProposalInfo
   originalOrdinal: number
@@ -1346,6 +1802,9 @@ export interface LinguistProposalDiff {
   currentRevision: number
   baseRevision: number
   locked: boolean
+  /** Optional only for wire compatibility with pre-v13 clients. */
+  issuanceCount?: number
+  latestIssuance?: LinguistProposalIssuanceInfo
 }
 
 export interface LinguistProposalMutationItem {
@@ -1366,7 +1825,8 @@ export interface LinguistProposalListRequest extends LinguistProposalListPending
 }
 
 export interface LinguistProposalListResult {
-  items: LinguistProposalInfo[]
+  /** Proposal + current Segment snapshot, projected by one Store JOIN query. */
+  items: LinguistProposalDiff[]
   total: number
   limit: number
   offset: number

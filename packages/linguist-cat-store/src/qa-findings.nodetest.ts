@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { asSegmentId, InvalidStateTransitionError } from '@linguist/cat-core'
+import {
+  asSegmentId,
+  fnv1a64,
+  InvalidStateTransitionError,
+  sha256Hex,
+} from '@linguist/cat-core'
 import { StoreNotFoundError } from './errors'
 import { CatStore } from './store'
 import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
@@ -23,6 +28,7 @@ test('replaceForSegment: rerun replaces open findings, keeps resolved/waived his
     ])
     assert.equal(first.length, 2)
     assert.ok(first.every((f) => f.status === 'open'))
+    assert.ok(first.every((f) => /^qaf_v2_[0-9a-f]{64}$/.test(f.id)))
 
     // resolve one finding, then rerun: open ones are replaced, resolved stays
     db.qaFindings.transition(first[0]!.id, 'resolved')
@@ -32,30 +38,169 @@ test('replaceForSegment: rerun replaces open findings, keeps resolved/waived his
     assert.equal(rerun.length, 1)
 
     const all = db.qaFindings.list({ segmentId: seg })
-    assert.equal(all.length, 2, 'resolved finding kept + new open finding')
+    assert.equal(all.length, 3, 'resolved findings stay auditable + new open finding')
     assert.deepEqual(
       all.map((f) => `${f.code}:${f.status}`).sort(),
-      ['NUMBER_MISMATCH:resolved', 'TAG_MISMATCH:open'],
+      ['NUMBER_MISMATCH:resolved', 'TAG_MISMATCH:open', 'TRAILING_SPACE:resolved'],
     )
     assert.equal(db.qaFindings.list({ segmentId: seg, status: 'open' }).length, 1)
-    assert.equal(db.qaFindings.list({ status: 'resolved' }).length, 1)
+    assert.equal(db.qaFindings.list({ status: 'resolved' }).length, 2)
   } finally {
     db.close()
   }
 })
 
-test('replaceForSegment: a recurring resolved finding reopens (problem still present)', () => {
+test('replaceForSegment: a recurring resolved finding stays resolved until explicit reopen', () => {
   const { db, segments } = setup()
   try {
     const seg = segments[0]!.id
     const input = { segmentId: seg, code: 'NUMBER_MISMATCH', severity: 'L1' as const, message: 'number missing' }
     const [finding] = db.qaFindings.replaceForSegment(seg, [input])
     db.qaFindings.transition(finding!.id, 'resolved')
-    // same content -> same content-derived id -> row replaced and reopened
+    // Same revision/rule/evidence is another occurrence, not an implicit reopen.
     db.qaFindings.replaceForSegment(seg, [input])
     const after = db.qaFindings.getById(finding!.id)
-    assert.equal(after?.status, 'open')
+    assert.equal(after?.status, 'resolved')
     assert.equal(db.qaFindings.list({ segmentId: seg }).length, 1)
+    const occurrences = db.qaFindings.listOccurrences(finding!.id)
+    assert.equal(occurrences.length, 2)
+    assert.ok(occurrences.every((item) => /^qao_v2_[0-9a-f]{64}$/.test(item.occurrenceId)))
+    assert.ok(db.qaFindings
+      .listStatusEvents(finding!.id)
+      .every((item) => /^qse_v2_[0-9a-f]{64}$/.test(item.eventId)))
+  } finally {
+    db.close()
+  }
+})
+
+test('replaceForSegment: rerun reuses a persisted v1 identity without rewriting its id', () => {
+  const { db, segments } = setup()
+  try {
+    const segmentId = segments[0]!.id
+    const code = 'NUMBER_MISMATCH'
+    const message = 'number missing'
+    const legacyId = `qaf-${fnv1a64(`${segmentId}${code}${message}`)}`
+    const legacyEvidenceHash = sha256Hex(new TextEncoder().encode(legacyId))
+    db.catDb.db.prepare(`
+      INSERT INTO qa_findings (
+        id, segment_id, code, severity, issue_type, disposition, message, status,
+        segment_revision, rule_version, evidence_hash, first_seen_run_id, created_at
+      ) VALUES (?, ?, ?, 'L1', 'numbers_units_dates', 'defect', ?, 'open',
+        0, 'deterministic-v1', ?, 'legacy-run', '2026-01-01T00:00:00.000Z')
+    `).run(legacyId, segmentId, code, message, legacyEvidenceHash)
+
+    const [rerun] = db.qaFindings.replaceForSegment(segmentId, [{
+      segmentId,
+      code,
+      severity: 'L1',
+      message,
+    }])
+
+    assert.equal(rerun!.id, legacyId)
+    assert.equal(db.qaFindings.list({ segmentId }).length, 1)
+  } finally {
+    db.close()
+  }
+})
+
+test('QA lifecycle matrix: occurrences preserve terminal evidence; revision/rule changes create new identities', () => {
+  const { db, segments } = setup()
+  try {
+    const [firstSegment, secondSegment] = segments
+    const inputs = [
+      {
+        segmentId: firstSegment!.id,
+        code: 'NUMBER_MISMATCH',
+        severity: 'L1' as const,
+        message: 'number missing',
+        evidenceHash: 'number-token-42',
+      },
+      {
+        segmentId: secondSegment!.id,
+        code: 'TAG_MISMATCH',
+        severity: 'L0' as const,
+        message: 'tag missing',
+        evidenceHash: 'tag-x',
+      },
+    ]
+    const revisions = new Map(segments.map((segment) => [String(segment.id), segment.revision]))
+    const first = db.qaFindings.replaceForProject(inputs, revisions, {
+      runId: 'qa:run-1',
+      observedAt: '2026-07-29T01:00:00.000Z',
+      ruleVersion: 'rules-v1',
+    })
+    const rerun = db.qaFindings.replaceForProject(inputs, revisions, {
+      runId: 'qa:run-2',
+      observedAt: '2026-07-29T01:01:00.000Z',
+      ruleVersion: 'rules-v1',
+    })
+    assert.deepEqual(rerun.map((finding) => finding.id), first.map((finding) => finding.id))
+    assert.ok(first.every((finding) => db.qaFindings.listOccurrences(finding.id).length === 2))
+
+    db.qaFindings.transition(first[0]!.id, 'waived', {
+      reason: '数字由运行时注入',
+      operator: 'reviewer-1',
+      at: '2026-07-29T01:02:00.000Z',
+    })
+    db.qaFindings.transition(first[1]!.id, 'resolved')
+    db.qaFindings.replaceForProject(inputs, revisions, {
+      runId: 'qa:run-3',
+      observedAt: '2026-07-29T01:03:00.000Z',
+      ruleVersion: 'rules-v1',
+    })
+    const waived = db.qaFindings.getById(first[0]!.id)
+    assert.equal(waived?.status, 'waived')
+    assert.equal(waived?.waiverReason, '数字由运行时注入')
+    assert.equal(waived?.waivedBy, 'reviewer-1')
+    assert.equal(db.qaFindings.getById(first[1]!.id)?.status, 'resolved')
+
+    db.segments.applyTargetEdit(firstSegment!.id, 'revision one', 0)
+    const [newRevision] = db.qaFindings.replaceForSegment(firstSegment!.id, [inputs[0]!], {
+      runId: 'qa:run-4',
+      observedAt: '2026-07-29T01:04:00.000Z',
+      ruleVersion: 'rules-v1',
+    })
+    assert.notEqual(newRevision!.id, first[0]!.id)
+    assert.equal(newRevision!.segmentRevision, 1)
+    assert.equal(db.qaFindings.getById(first[0]!.id)?.status, 'waived')
+
+    const [newRule] = db.qaFindings.replaceForSegment(firstSegment!.id, [inputs[0]!], {
+      runId: 'qa:run-5',
+      observedAt: '2026-07-29T01:05:00.000Z',
+      ruleVersion: 'rules-v2',
+    })
+    assert.notEqual(newRule!.id, newRevision!.id)
+    assert.equal(newRule!.ruleVersion, 'rules-v2')
+    assert.equal(db.qaFindings.getById(newRevision!.id)?.status, 'resolved')
+
+    db.qaFindings.replaceForSegment(firstSegment!.id, [], {
+      runId: 'qa:run-6',
+      observedAt: '2026-07-29T01:06:00.000Z',
+      ruleVersion: 'rules-v2',
+    })
+    assert.equal(db.qaFindings.getById(newRule!.id)?.status, 'resolved')
+    assert.ok(
+      db.qaFindings
+        .listStatusEvents(newRule!.id)
+        .some((event) => event.reason === 'not observed in QA rerun'),
+    )
+
+    const [critic] = db.qaFindings.insertOpen([{
+      segmentId: firstSegment!.id,
+      code: 'CRITIC_FIDELITY',
+      severity: 'L2',
+      message: 'review evidence',
+      evidenceHash: 'critic-finding-1',
+    }], { runId: 'critic:run-1', observedAt: '2026-07-29T01:07:00.000Z' })
+    db.qaFindings.replaceForProject([], new Map(segments.map((segment) => [
+      String(segment.id),
+      db.segments.getById(segment.id)!.revision,
+    ])), {
+      runId: 'qa:run-7',
+      observedAt: '2026-07-29T01:08:00.000Z',
+      ruleVersion: 'rules-v2',
+    })
+    assert.equal(db.qaFindings.getById(critic!.id)?.status, 'open')
   } finally {
     db.close()
   }
@@ -139,7 +284,7 @@ test('waiveMany: 同一理由/操作者原子豁免精确 finding ids，失败�
   }
 })
 
-test('insertOpen: advisory inserts keep existing rows, stay idempotent, reopen identical reviewed rows', () => {
+test('insertOpen: advisory inserts keep existing rows, stay idempotent, preserve terminal rows', () => {
   const { db, segments } = setup()
   try {
     const seg = segments[0]!.id
@@ -165,11 +310,12 @@ test('insertOpen: advisory inserts keep existing rows, stay idempotent, reopen i
     )
     assert.equal(db.qaFindings.list({ segmentId: seg }).length, 2)
 
-    // a resolved row with identical content reopens (problem reviewed but still present)
+    // A resolved row with identical identity remains terminal; reopen is explicit.
     const critic = inserted[0]!
     db.qaFindings.transition(critic.id, 'resolved')
     db.qaFindings.insertOpen([{ segmentId: seg, code: 'CRITIC_FIDELITY', severity: 'L2', message: '译文漏译。' }])
-    assert.equal(db.qaFindings.getById(critic.id)?.status, 'open')
+    assert.equal(db.qaFindings.getById(critic.id)?.status, 'resolved')
+    assert.equal(db.qaFindings.transition(critic.id, 'open').status, 'open')
 
     // unknown segment fails closed
     assert.throws(

@@ -17,7 +17,7 @@
   "@anthropic-ai/sdk@0.91.1": {
     "licenses": "MIT",
     "repository": "https://github.com/anthropics/anthropic-sdk-typescript",
-    "path": "apps/electron/node_modules/@anthropic-ai/sdk"
+    "path": "node_modules/@earendil-works/pi-ai/node_modules/@anthropic-ai/sdk"
   },
   "@anthropic-ai/sdk@0.93.0": {
     "licenses": "MIT",
@@ -27,127 +27,127 @@
   "@aws-crypto/sha256-browser@5.2.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-crypto-helpers",
-    "path": "apps/electron/node_modules/@aws-crypto/sha256-browser"
+    "path": "node_modules/@aws-crypto/sha256-browser"
   },
   "@aws-crypto/sha256-js@5.2.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-crypto-helpers",
-    "path": "apps/electron/node_modules/@aws-crypto/sha256-js"
+    "path": "node_modules/@aws-crypto/sha256-js"
   },
   "@aws-crypto/supports-web-crypto@5.2.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-crypto-helpers",
-    "path": "apps/electron/node_modules/@aws-crypto/supports-web-crypto"
+    "path": "node_modules/@aws-crypto/supports-web-crypto"
   },
   "@aws-crypto/util@5.2.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-crypto-helpers",
-    "path": "apps/electron/node_modules/@aws-crypto/util"
+    "path": "node_modules/@aws-crypto/util"
   },
   "@aws-sdk/client-bedrock-runtime@3.1048.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/client-bedrock-runtime"
+    "path": "node_modules/@aws-sdk/client-bedrock-runtime"
   },
   "@aws-sdk/core@3.975.1": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/core"
+    "path": "node_modules/@aws-sdk/core"
   },
   "@aws-sdk/credential-provider-env@3.972.57": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-env"
+    "path": "node_modules/@aws-sdk/credential-provider-env"
   },
   "@aws-sdk/credential-provider-http@3.972.59": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-http"
+    "path": "node_modules/@aws-sdk/credential-provider-http"
   },
   "@aws-sdk/credential-provider-ini@3.973.1": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-ini"
+    "path": "node_modules/@aws-sdk/credential-provider-ini"
   },
   "@aws-sdk/credential-provider-login@3.972.63": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-login"
+    "path": "node_modules/@aws-sdk/credential-provider-login"
   },
   "@aws-sdk/credential-provider-node@3.972.66": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-node"
+    "path": "node_modules/@aws-sdk/credential-provider-node"
   },
   "@aws-sdk/credential-provider-process@3.972.57": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-process"
+    "path": "node_modules/@aws-sdk/credential-provider-process"
   },
   "@aws-sdk/credential-provider-sso@3.973.1": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-sso"
+    "path": "node_modules/@aws-sdk/credential-provider-sso"
   },
   "@aws-sdk/credential-provider-web-identity@3.972.63": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-web-identity"
+    "path": "node_modules/@aws-sdk/credential-provider-web-identity"
   },
   "@aws-sdk/eventstream-handler-node@3.972.26": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/eventstream-handler-node"
+    "path": "node_modules/@aws-sdk/eventstream-handler-node"
   },
   "@aws-sdk/middleware-eventstream@3.972.22": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/middleware-eventstream"
+    "path": "node_modules/@aws-sdk/middleware-eventstream"
   },
   "@aws-sdk/middleware-websocket@3.972.39": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/middleware-websocket"
+    "path": "node_modules/@aws-sdk/middleware-websocket"
   },
   "@aws-sdk/nested-clients@3.997.31": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/nested-clients"
+    "path": "node_modules/@aws-sdk/nested-clients"
   },
   "@aws-sdk/signature-v4-multi-region@3.996.39": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/signature-v4-multi-region"
+    "path": "node_modules/@aws-sdk/signature-v4-multi-region"
   },
   "@aws-sdk/token-providers@3.1048.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/client-bedrock-runtime/node_modules/@aws-sdk/token-providers"
+    "path": "node_modules/@aws-sdk/token-providers"
   },
   "@aws-sdk/token-providers@3.1083.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-sso/node_modules/@aws-sdk/token-providers"
+    "path": "node_modules/@aws-sdk/credential-provider-sso/node_modules/@aws-sdk/token-providers"
   },
   "@aws-sdk/types@3.974.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/types"
+    "path": "node_modules/@aws-sdk/types"
   },
   "@aws-sdk/util-locate-window@3.965.8": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/util-locate-window"
+    "path": "node_modules/@aws-sdk/util-locate-window"
   },
   "@aws-sdk/xml-builder@3.972.34": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/aws/aws-sdk-js-v3",
-    "path": "apps/electron/node_modules/@aws-sdk/xml-builder"
+    "path": "node_modules/@aws-sdk/xml-builder"
   },
   "@aws/lambda-invoke-store@0.3.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/awslabs/aws-lambda-invoke-store",
-    "path": "apps/electron/node_modules/@aws/lambda-invoke-store"
+    "path": "node_modules/@aws/lambda-invoke-store"
   },
   "@babel/runtime@7.28.6": {
     "licenses": "MIT",
@@ -167,32 +167,42 @@
   "@earendil-works/pi-agent-core@0.80.9": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi",
-    "path": "apps/electron/node_modules/@earendil-works/pi-agent-core"
+    "path": "node_modules/@earendil-works/pi-agent-core"
   },
   "@earendil-works/pi-ai@0.80.9": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi",
-    "path": "apps/electron/node_modules/@earendil-works/pi-ai"
+    "path": "node_modules/@earendil-works/pi-ai"
   },
   "@earendil-works/pi-coding-agent@0.80.9": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi",
-    "path": "apps/electron/node_modules/@earendil-works/pi-coding-agent"
+    "path": "node_modules/@earendil-works/pi-coding-agent"
   },
   "@earendil-works/pi-tui@0.80.9": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi",
-    "path": "apps/electron/node_modules/@earendil-works/pi-tui"
+    "path": "node_modules/@earendil-works/pi-tui"
   },
   "@fontsource-variable/inter@5.2.8": {
     "licenses": "OFL-1.1",
     "repository": "https://github.com/fontsource/font-files",
     "path": "node_modules/@fontsource-variable/inter"
   },
+  "@formatjs/icu-messageformat-parser@3.5.15": {
+    "licenses": "MIT",
+    "repository": "https://github.com/formatjs/formatjs",
+    "path": "node_modules/@formatjs/icu-messageformat-parser"
+  },
+  "@formatjs/icu-skeleton-parser@2.1.11": {
+    "licenses": "MIT",
+    "repository": "https://github.com/formatjs/formatjs",
+    "path": "node_modules/@formatjs/icu-skeleton-parser"
+  },
   "@google/genai@1.52.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/googleapis/js-genai",
-    "path": "apps/electron/node_modules/@google/genai"
+    "path": "node_modules/@google/genai"
   },
   "@hono/node-server@1.19.9": {
     "licenses": "MIT",
@@ -213,19 +223,19 @@
     "licenses": "MIT",
     "repository": "https://github.com/badlogic/clipboard",
     "optional": true,
-    "path": "apps/electron/node_modules/@mariozechner/clipboard-darwin-arm64"
+    "path": "node_modules/@mariozechner/clipboard-darwin-arm64"
   },
   "@mariozechner/clipboard-darwin-universal@0.3.9": {
     "licenses": "MIT",
     "repository": "https://github.com/badlogic/clipboard",
     "optional": true,
-    "path": "apps/electron/node_modules/@mariozechner/clipboard-darwin-universal"
+    "path": "node_modules/@mariozechner/clipboard-darwin-universal"
   },
   "@mariozechner/clipboard@0.3.9": {
     "licenses": "MIT",
     "repository": "https://github.com/badlogic/clipboard",
     "optional": true,
-    "path": "apps/electron/node_modules/@mariozechner/clipboard"
+    "path": "node_modules/@mariozechner/clipboard"
   },
   "@mermaid-js/parser@1.1.1": {
     "licenses": "MIT",
@@ -235,7 +245,7 @@
   "@mistralai/mistralai@2.2.6": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/mistralai/client-ts",
-    "path": "apps/electron/node_modules/@mistralai/mistralai"
+    "path": "node_modules/@mistralai/mistralai"
   },
   "@modelcontextprotocol/sdk@1.29.0": {
     "licenses": "MIT",
@@ -246,23 +256,23 @@
     "licenses": "MIT",
     "repository": "https://github.com/Brooooooklyn/canvas",
     "optional": true,
-    "path": "apps/electron/node_modules/@napi-rs/canvas-darwin-arm64"
+    "path": "node_modules/@napi-rs/canvas-darwin-arm64"
   },
   "@napi-rs/canvas@0.1.100": {
     "licenses": "MIT",
     "repository": "https://github.com/Brooooooklyn/canvas",
     "optional": true,
-    "path": "apps/electron/node_modules/@napi-rs/canvas"
+    "path": "node_modules/@napi-rs/canvas"
   },
   "@opentelemetry/api@1.9.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/open-telemetry/opentelemetry-js",
-    "path": "apps/electron/node_modules/@opentelemetry/api"
+    "path": "node_modules/@opentelemetry/api"
   },
   "@opentelemetry/semantic-conventions@1.42.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/open-telemetry/opentelemetry-js",
-    "path": "apps/electron/node_modules/@opentelemetry/semantic-conventions"
+    "path": "node_modules/@opentelemetry/semantic-conventions"
   },
   "@pierre/diffs@1.1.20": {
     "licenses": "Apache-2.0*",
@@ -276,52 +286,52 @@
   "@protobufjs/aspromise@1.1.2": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/aspromise"
+    "path": "node_modules/@protobufjs/aspromise"
   },
   "@protobufjs/base64@1.1.2": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/base64"
+    "path": "node_modules/@protobufjs/base64"
   },
   "@protobufjs/codegen@2.0.4": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/codegen"
+    "path": "node_modules/@protobufjs/codegen"
   },
   "@protobufjs/eventemitter@1.1.0": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/eventemitter"
+    "path": "node_modules/@protobufjs/eventemitter"
   },
   "@protobufjs/fetch@1.1.0": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/fetch"
+    "path": "node_modules/@protobufjs/fetch"
   },
   "@protobufjs/float@1.0.2": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/float"
+    "path": "node_modules/@protobufjs/float"
   },
   "@protobufjs/inquire@1.1.0": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/inquire"
+    "path": "node_modules/@protobufjs/inquire"
   },
   "@protobufjs/path@1.1.2": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/path"
+    "path": "node_modules/@protobufjs/path"
   },
   "@protobufjs/pool@1.1.0": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/pool"
+    "path": "node_modules/@protobufjs/pool"
   },
   "@protobufjs/utf8@1.1.0": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/dcodeIO/protobuf.js",
-    "path": "apps/electron/node_modules/@protobufjs/utf8"
+    "path": "node_modules/@protobufjs/utf8"
   },
   "@shikijs/core@3.22.0": {
     "licenses": "MIT",
@@ -376,57 +386,57 @@
   "@silvia-odwyer/photon-node@0.3.4": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/silvia-odwyer/photon",
-    "path": "apps/electron/node_modules/@silvia-odwyer/photon-node"
+    "path": "node_modules/@silvia-odwyer/photon-node"
   },
   "@smithy/core@3.29.2": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/smithy-lang/smithy-typescript",
-    "path": "apps/electron/node_modules/@smithy/core"
+    "path": "node_modules/@smithy/core"
   },
   "@smithy/credential-provider-imds@4.4.7": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/smithy-lang/smithy-typescript",
-    "path": "apps/electron/node_modules/@smithy/credential-provider-imds"
+    "path": "node_modules/@smithy/credential-provider-imds"
   },
   "@smithy/fetch-http-handler@5.6.4": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/smithy-lang/smithy-typescript",
-    "path": "apps/electron/node_modules/@smithy/fetch-http-handler"
+    "path": "node_modules/@smithy/fetch-http-handler"
   },
   "@smithy/is-array-buffer@2.2.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/awslabs/smithy-typescript",
-    "path": "apps/electron/node_modules/@smithy/is-array-buffer"
+    "path": "node_modules/@smithy/is-array-buffer"
   },
   "@smithy/node-http-handler@4.7.3": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/smithy-lang/smithy-typescript",
-    "path": "apps/electron/node_modules/@aws-sdk/client-bedrock-runtime/node_modules/@smithy/node-http-handler"
+    "path": "node_modules/@smithy/node-http-handler"
   },
   "@smithy/node-http-handler@4.9.4": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/smithy-lang/smithy-typescript",
-    "path": "apps/electron/node_modules/@aws-sdk/credential-provider-http/node_modules/@smithy/node-http-handler"
+    "path": "node_modules/@aws-sdk/credential-provider-http/node_modules/@smithy/node-http-handler"
   },
   "@smithy/signature-v4@5.6.3": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/smithy-lang/smithy-typescript",
-    "path": "apps/electron/node_modules/@smithy/signature-v4"
+    "path": "node_modules/@smithy/signature-v4"
   },
   "@smithy/types@4.16.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/smithy-lang/smithy-typescript",
-    "path": "apps/electron/node_modules/@smithy/types"
+    "path": "node_modules/@smithy/types"
   },
   "@smithy/util-buffer-from@2.2.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/awslabs/smithy-typescript",
-    "path": "apps/electron/node_modules/@smithy/util-buffer-from"
+    "path": "node_modules/@smithy/util-buffer-from"
   },
   "@smithy/util-utf8@2.3.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/awslabs/smithy-typescript",
-    "path": "apps/electron/node_modules/@smithy/util-utf8"
+    "path": "node_modules/@smithy/util-utf8"
   },
   "@tanstack/react-virtual@3.14.7": {
     "licenses": "MIT",
@@ -611,12 +621,12 @@
   "@types/node@25.0.10": {
     "licenses": "MIT",
     "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped",
-    "path": "apps/electron/node_modules/protobufjs/node_modules/@types/node"
+    "path": "node_modules/protobufjs/node_modules/@types/node"
   },
   "@types/retry@0.12.0": {
     "licenses": "MIT",
     "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped",
-    "path": "apps/electron/node_modules/@types/retry"
+    "path": "node_modules/@types/retry"
   },
   "@types/trusted-types@2.0.7": {
     "licenses": "MIT",
@@ -657,7 +667,7 @@
   "agent-base@7.1.4": {
     "licenses": "MIT",
     "repository": "https://github.com/TooTallNate/proxy-agents",
-    "path": "apps/electron/node_modules/agent-base"
+    "path": "node_modules/agent-base"
   },
   "ajv-formats@3.0.1": {
     "licenses": "MIT",
@@ -677,12 +687,12 @@
   "balanced-match@4.0.4": {
     "licenses": "MIT",
     "repository": "https://github.com/juliangruber/balanced-match",
-    "path": "apps/electron/node_modules/balanced-match"
+    "path": "node_modules/balanced-match"
   },
   "base64-js@1.5.1": {
     "licenses": "MIT",
     "repository": "https://github.com/beatgammit/base64-js",
-    "path": "apps/electron/node_modules/base64-js"
+    "path": "node_modules/base64-js"
   },
   "beautiful-mermaid@1.1.3": {
     "licenses": "MIT",
@@ -692,7 +702,7 @@
   "bignumber.js@9.3.1": {
     "licenses": "MIT",
     "repository": "https://github.com/MikeMcl/bignumber.js",
-    "path": "apps/electron/node_modules/bignumber.js"
+    "path": "node_modules/bignumber.js"
   },
   "bluebird@3.4.7": {
     "licenses": "MIT",
@@ -707,17 +717,17 @@
   "bowser@2.14.1": {
     "licenses": "MIT",
     "repository": "https://github.com/bowser-js/bowser",
-    "path": "apps/electron/node_modules/bowser"
+    "path": "node_modules/bowser"
   },
   "brace-expansion@5.0.7": {
     "licenses": "MIT",
     "repository": "https://github.com/juliangruber/brace-expansion",
-    "path": "apps/electron/node_modules/brace-expansion"
+    "path": "node_modules/brace-expansion"
   },
   "buffer-equal-constant-time@1.0.1": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/goinstant/buffer-equal-constant-time",
-    "path": "apps/electron/node_modules/buffer-equal-constant-time"
+    "path": "node_modules/buffer-equal-constant-time"
   },
   "bytes@3.1.2": {
     "licenses": "MIT",
@@ -742,7 +752,7 @@
   "chalk@5.6.2": {
     "licenses": "MIT",
     "repository": "https://github.com/chalk/chalk",
-    "path": "apps/electron/node_modules/@earendil-works/pi-coding-agent/node_modules/chalk"
+    "path": "node_modules/@earendil-works/pi-coding-agent/node_modules/chalk"
   },
   "character-entities-html4@2.1.0": {
     "licenses": "MIT",
@@ -1014,7 +1024,7 @@
   "data-uri-to-buffer@4.0.1": {
     "licenses": "MIT",
     "repository": "https://github.com/TooTallNate/node-data-uri-to-buffer",
-    "path": "apps/electron/node_modules/data-uri-to-buffer"
+    "path": "node_modules/data-uri-to-buffer"
   },
   "dayjs@1.11.21": {
     "licenses": "MIT",
@@ -1054,7 +1064,7 @@
   "diff@8.0.4": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/kpdecker/jsdiff",
-    "path": "apps/electron/node_modules/diff"
+    "path": "node_modules/diff"
   },
   "dingbat-to-unicode@1.0.1": {
     "licenses": "BSD-2-Clause",
@@ -1079,7 +1089,7 @@
   "ecdsa-sig-formatter@1.0.11": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/Brightspace/node-ecdsa-sig-formatter",
-    "path": "apps/electron/node_modules/ecdsa-sig-formatter"
+    "path": "node_modules/ecdsa-sig-formatter"
   },
   "ee-first@1.1.1": {
     "licenses": "MIT",
@@ -1154,7 +1164,7 @@
   "extend@3.0.2": {
     "licenses": "MIT",
     "repository": "https://github.com/justmoon/node-extend",
-    "path": "apps/electron/node_modules/extend"
+    "path": "node_modules/extend"
   },
   "fast-deep-equal@3.1.3": {
     "licenses": "MIT",
@@ -1169,7 +1179,7 @@
   "fetch-blob@3.2.0": {
     "licenses": "MIT",
     "repository": "https://github.com/node-fetch/fetch-blob",
-    "path": "apps/electron/node_modules/fetch-blob"
+    "path": "node_modules/fetch-blob"
   },
   "finalhandler@2.1.1": {
     "licenses": "MIT",
@@ -1179,7 +1189,7 @@
   "formdata-polyfill@4.0.10": {
     "licenses": "MIT",
     "repository": "git+https://jimmywarting@github.com/jimmywarting/FormData",
-    "path": "apps/electron/node_modules/formdata-polyfill"
+    "path": "node_modules/formdata-polyfill"
   },
   "forwarded@0.2.0": {
     "licenses": "MIT",
@@ -1199,17 +1209,17 @@
   "gaxios@7.2.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/googleapis/google-cloud-node",
-    "path": "apps/electron/node_modules/gaxios"
+    "path": "node_modules/gaxios"
   },
   "gcp-metadata@8.1.2": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/googleapis/google-cloud-node-core",
-    "path": "apps/electron/node_modules/gcp-metadata"
+    "path": "node_modules/gcp-metadata"
   },
   "get-east-asian-width@1.6.0": {
     "licenses": "MIT",
     "repository": "https://github.com/sindresorhus/get-east-asian-width",
-    "path": "apps/electron/node_modules/get-east-asian-width"
+    "path": "node_modules/get-east-asian-width"
   },
   "get-intrinsic@1.3.0": {
     "licenses": "MIT",
@@ -1224,17 +1234,17 @@
   "glob@13.0.6": {
     "licenses": "BlueOak-1.0.0",
     "repository": "https://github.com/isaacs/node-glob",
-    "path": "apps/electron/node_modules/glob"
+    "path": "node_modules/glob"
   },
   "google-auth-library@10.9.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/googleapis/google-cloud-node",
-    "path": "apps/electron/node_modules/google-auth-library"
+    "path": "node_modules/google-auth-library"
   },
   "google-logging-utils@1.1.3": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/googleapis/google-cloud-node-core",
-    "path": "apps/electron/node_modules/google-logging-utils"
+    "path": "node_modules/google-logging-utils"
   },
   "gopd@1.2.0": {
     "licenses": "MIT",
@@ -1244,7 +1254,7 @@
   "graceful-fs@4.2.11": {
     "licenses": "ISC",
     "repository": "https://github.com/isaacs/node-graceful-fs",
-    "path": "apps/electron/node_modules/graceful-fs"
+    "path": "node_modules/graceful-fs"
   },
   "hachure-fill@0.5.2": {
     "licenses": "MIT",
@@ -1274,7 +1284,7 @@
   "highlight.js@10.7.3": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/highlightjs/highlight.js",
-    "path": "apps/electron/node_modules/@earendil-works/pi-coding-agent/node_modules/highlight.js"
+    "path": "node_modules/@earendil-works/pi-coding-agent/node_modules/highlight.js"
   },
   "highlight.js@11.11.1": {
     "licenses": "BSD-3-Clause",
@@ -1289,7 +1299,7 @@
   "hosted-git-info@9.0.3": {
     "licenses": "ISC",
     "repository": "https://github.com/npm/hosted-git-info",
-    "path": "apps/electron/node_modules/hosted-git-info"
+    "path": "node_modules/hosted-git-info"
   },
   "html-void-elements@3.0.0": {
     "licenses": "MIT",
@@ -1304,12 +1314,12 @@
   "http-proxy-agent@7.0.2": {
     "licenses": "MIT",
     "repository": "https://github.com/TooTallNate/proxy-agents",
-    "path": "apps/electron/node_modules/http-proxy-agent"
+    "path": "node_modules/http-proxy-agent"
   },
   "https-proxy-agent@7.0.6": {
     "licenses": "MIT",
     "repository": "https://github.com/TooTallNate/proxy-agents",
-    "path": "apps/electron/node_modules/https-proxy-agent"
+    "path": "node_modules/https-proxy-agent"
   },
   "iconv-lite@0.6.3": {
     "licenses": "MIT",
@@ -1324,7 +1334,7 @@
   "ignore@7.0.5": {
     "licenses": "MIT",
     "repository": "https://github.com/kaelzhang/node-ignore",
-    "path": "apps/electron/node_modules/ignore"
+    "path": "node_modules/ignore"
   },
   "immediate@3.0.6": {
     "licenses": "MIT",
@@ -1379,7 +1389,7 @@
   "jiti@2.7.0": {
     "licenses": "MIT",
     "repository": "https://github.com/unjs/jiti",
-    "path": "apps/electron/node_modules/@earendil-works/pi-coding-agent/node_modules/jiti"
+    "path": "node_modules/jiti"
   },
   "jose@6.1.3": {
     "licenses": "MIT",
@@ -1399,7 +1409,7 @@
   "json-bigint@1.0.0": {
     "licenses": "MIT",
     "repository": "https://github.com/sidorares/json-bigint",
-    "path": "apps/electron/node_modules/json-bigint"
+    "path": "node_modules/json-bigint"
   },
   "json-schema-to-ts@3.1.1": {
     "licenses": "MIT",
@@ -1424,12 +1434,12 @@
   "jwa@2.0.1": {
     "licenses": "MIT",
     "repository": "https://github.com/brianloveswords/node-jwa",
-    "path": "apps/electron/node_modules/jwa"
+    "path": "node_modules/jwa"
   },
   "jws@4.0.1": {
     "licenses": "MIT",
     "repository": "https://github.com/brianloveswords/node-jws",
-    "path": "apps/electron/node_modules/jws"
+    "path": "node_modules/jws"
   },
   "katex@0.16.33": {
     "licenses": "MIT",
@@ -1464,7 +1474,7 @@
   "long@5.3.2": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/dcodeIO/long.js",
-    "path": "apps/electron/node_modules/long"
+    "path": "node_modules/long"
   },
   "loose-envify@1.4.0": {
     "licenses": "MIT",
@@ -1484,7 +1494,7 @@
   "lru-cache@11.5.2": {
     "licenses": "BlueOak-1.0.0",
     "repository": "https://github.com/isaacs/node-lru-cache",
-    "path": "apps/electron/node_modules/lru-cache"
+    "path": "node_modules/lru-cache"
   },
   "mammoth@1.12.0": {
     "licenses": "BSD-2-Clause",
@@ -1499,7 +1509,7 @@
   "marked@18.0.5": {
     "licenses": "MIT",
     "repository": "https://github.com/markedjs/marked",
-    "path": "apps/electron/node_modules/@earendil-works/pi-tui/node_modules/marked"
+    "path": "node_modules/@earendil-works/pi-tui/node_modules/marked"
   },
   "math-intrinsics@1.1.0": {
     "licenses": "MIT",
@@ -1564,12 +1574,12 @@
   "minimatch@10.2.5": {
     "licenses": "BlueOak-1.0.0",
     "repository": "https://github.com/isaacs/minimatch",
-    "path": "apps/electron/node_modules/minimatch"
+    "path": "node_modules/minimatch"
   },
   "minipass@7.1.3": {
     "licenses": "BlueOak-1.0.0",
     "repository": "https://github.com/isaacs/minipass",
-    "path": "apps/electron/node_modules/minipass"
+    "path": "node_modules/minipass"
   },
   "ms@2.1.3": {
     "licenses": "MIT",
@@ -1584,12 +1594,12 @@
   "node-domexception@1.0.0": {
     "licenses": "MIT",
     "repository": "https://github.com/jimmywarting/node-domexception",
-    "path": "apps/electron/node_modules/node-domexception"
+    "path": "node_modules/node-domexception"
   },
   "node-fetch@3.3.2": {
     "licenses": "MIT",
     "repository": "https://github.com/node-fetch/node-fetch",
-    "path": "apps/electron/node_modules/node-fetch"
+    "path": "node_modules/node-fetch"
   },
   "object-assign@4.1.1": {
     "licenses": "MIT",
@@ -1624,7 +1634,7 @@
   "openai@6.26.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/openai/openai-node",
-    "path": "apps/electron/node_modules/openai"
+    "path": "node_modules/openai"
   },
   "option@0.2.4": {
     "licenses": "BSD-2-Clause",
@@ -1634,7 +1644,7 @@
   "p-retry@4.6.2": {
     "licenses": "MIT",
     "repository": "https://github.com/sindresorhus/p-retry",
-    "path": "apps/electron/node_modules/p-retry"
+    "path": "node_modules/p-retry"
   },
   "package-manager-detector@1.6.0": {
     "licenses": "MIT",
@@ -1654,7 +1664,7 @@
   "partial-json@0.1.7": {
     "licenses": "MIT",
     "repository": "https://github.com/promplate/partial-json-parser-js",
-    "path": "apps/electron/node_modules/partial-json"
+    "path": "node_modules/partial-json"
   },
   "path-data-parser@0.1.0": {
     "licenses": "MIT",
@@ -1674,7 +1684,7 @@
   "path-scurry@2.0.2": {
     "licenses": "BlueOak-1.0.0",
     "repository": "https://github.com/isaacs/path-scurry",
-    "path": "apps/electron/node_modules/path-scurry"
+    "path": "node_modules/path-scurry"
   },
   "path-to-regexp@8.3.0": {
     "licenses": "MIT",
@@ -1684,7 +1694,7 @@
   "pdfjs-dist@4.10.38": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/mozilla/pdf.js",
-    "path": "apps/electron/node_modules/pdfjs-dist"
+    "path": "node_modules/pdfjs-dist"
   },
   "pkce-challenge@5.0.1": {
     "licenses": "MIT",
@@ -1709,7 +1719,7 @@
   "proper-lockfile@4.1.2": {
     "licenses": "MIT",
     "repository": "https://github.com/moxystudio/node-proper-lockfile",
-    "path": "apps/electron/node_modules/proper-lockfile"
+    "path": "node_modules/proper-lockfile"
   },
   "property-information@7.1.0": {
     "licenses": "MIT",
@@ -1719,7 +1729,7 @@
   "protobufjs@7.5.4": {
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/protobufjs/protobuf.js",
-    "path": "apps/electron/node_modules/protobufjs"
+    "path": "node_modules/protobufjs"
   },
   "proxy-addr@2.0.7": {
     "licenses": "MIT",
@@ -1779,12 +1789,12 @@
   "retry@0.12.0": {
     "licenses": "MIT",
     "repository": "https://github.com/tim-kos/node-retry",
-    "path": "apps/electron/node_modules/proper-lockfile/node_modules/retry"
+    "path": "node_modules/retry"
   },
   "retry@0.13.1": {
     "licenses": "MIT",
     "repository": "https://github.com/tim-kos/node-retry",
-    "path": "apps/electron/node_modules/p-retry/node_modules/retry"
+    "path": "node_modules/p-retry/node_modules/retry"
   },
   "robust-predicates@3.0.3": {
     "licenses": "Unlicense",
@@ -1814,7 +1824,7 @@
   "safe-buffer@5.2.1": {
     "licenses": "MIT",
     "repository": "https://github.com/feross/safe-buffer",
-    "path": "apps/electron/node_modules/ecdsa-sig-formatter/node_modules/safe-buffer"
+    "path": "node_modules/ecdsa-sig-formatter/node_modules/safe-buffer"
   },
   "safer-buffer@2.1.2": {
     "licenses": "MIT",
@@ -1829,7 +1839,7 @@
   "semver@7.8.0": {
     "licenses": "ISC",
     "repository": "https://github.com/npm/node-semver",
-    "path": "apps/electron/node_modules/@earendil-works/pi-coding-agent/node_modules/semver"
+    "path": "node_modules/semver"
   },
   "send@1.2.1": {
     "licenses": "MIT",
@@ -1889,7 +1899,7 @@
   "signal-exit@3.0.7": {
     "licenses": "ISC",
     "repository": "https://github.com/tapjs/signal-exit",
-    "path": "apps/electron/node_modules/signal-exit"
+    "path": "node_modules/signal-exit"
   },
   "space-separated-tokens@2.0.2": {
     "licenses": "MIT",
@@ -1949,7 +1959,7 @@
   "tslib@2.8.1": {
     "licenses": "0BSD",
     "repository": "https://github.com/Microsoft/tslib",
-    "path": "apps/electron/node_modules/tslib"
+    "path": "node_modules/tslib"
   },
   "type-is@2.0.1": {
     "licenses": "MIT",
@@ -1974,12 +1984,12 @@
   "undici-types@7.16.0": {
     "licenses": "MIT",
     "repository": "https://github.com/nodejs/undici",
-    "path": "apps/electron/node_modules/protobufjs/node_modules/@types/node/node_modules/undici-types"
+    "path": "node_modules/protobufjs/node_modules/@types/node/node_modules/undici-types"
   },
   "undici@8.5.0": {
     "licenses": "MIT",
     "repository": "https://github.com/nodejs/undici",
-    "path": "apps/electron/node_modules/@earendil-works/pi-coding-agent/node_modules/undici"
+    "path": "node_modules/@earendil-works/pi-coding-agent/node_modules/undici"
   },
   "unist-util-is@6.0.1": {
     "licenses": "MIT",
@@ -2039,7 +2049,7 @@
   "web-streams-polyfill@3.3.3": {
     "licenses": "MIT",
     "repository": "https://github.com/MattiasBuelens/web-streams-polyfill",
-    "path": "apps/electron/node_modules/web-streams-polyfill"
+    "path": "node_modules/web-streams-polyfill"
   },
   "which@2.0.2": {
     "licenses": "ISC",
@@ -2054,7 +2064,7 @@
   "ws@8.19.0": {
     "licenses": "MIT",
     "repository": "https://github.com/websockets/ws",
-    "path": "apps/electron/node_modules/ws"
+    "path": "node_modules/ws"
   },
   "xmlbuilder@10.1.1": {
     "licenses": "MIT",
@@ -2064,7 +2074,7 @@
   "yaml@2.9.0": {
     "licenses": "ISC",
     "repository": "https://github.com/eemeli/yaml",
-    "path": "apps/electron/node_modules/yaml"
+    "path": "node_modules/yaml"
   },
   "zod-to-json-schema@3.25.1": {
     "licenses": "ISC",

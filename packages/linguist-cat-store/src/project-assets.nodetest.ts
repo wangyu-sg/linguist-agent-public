@@ -29,7 +29,7 @@ test('schema v6: fresh open migrates to version 6 and creates the project-asset 
   const project = store.createProject({ name: 'P', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'ws' })
   const db = store.openProject(project.id)
   try {
-    assert.equal(SCHEMA_VERSION, 10)
+    assert.ok(SCHEMA_VERSION >= 6)
     assert.equal(db.schemaVersion, SCHEMA_VERSION)
     assert.ok(db.catDb.appliedMigrations.some((migration) => migration.version === 6))
     const names = tableNames(db.catDb)

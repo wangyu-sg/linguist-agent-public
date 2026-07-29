@@ -76,6 +76,7 @@ const CAT_TOOL_NAMES = [
 ] as const
 /** mini_items.json 中的已知源文叶子（工具结果必须携带，证明读的是真实项目库） */
 const SEEDED_SOURCE = 'Health Potion'
+const PROPOSAL_ID_PATTERN = /prp(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})/
 
 function resolvePackagedBinary(): string {
   const outDir = join(APP_DIR, 'out', 'mac-arm64')
@@ -575,14 +576,15 @@ async function main(): Promise<void> {
     const proposalFinalSeen = proposalEvents.texts.some(
       (event) => event.sessionId === sessionId && event.text.includes(G5_PROPOSAL_MARKER),
     )
+    const proposalIdSeen = PROPOSAL_ID_PATTERN.test(proposalToolResult)
     check(
       'g5-agent-creates-proposal-only',
       proposalDone
         && proposalToolSeen
-        && proposalToolResult.includes('prp-')
+        && proposalIdSeen
         && proposalFinalSeen
         && forbiddenWriteTools.length === 0,
-      `tool=${proposalToolSeen}，result 含 proposalId=${proposalToolResult.includes('prp-')}` +
+      `tool=${proposalToolSeen}，result 含 proposalId=${proposalIdSeen}` +
       `，final=${proposalFinalSeen}，Agent accept/commit/reject tools=${forbiddenWriteTools.length}`,
     )
 

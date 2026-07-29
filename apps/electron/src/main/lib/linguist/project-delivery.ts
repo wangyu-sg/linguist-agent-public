@@ -15,8 +15,10 @@ import {
   LinguistProjectArchivedError,
   mapStoreError,
 } from './errors'
+import { recordLinguistExportManifest } from './export-manifest'
 import { buildDeliveryReport } from './project-delivery-report'
 import type { ProjectModuleContext } from './project-module-context'
+import { computeLinguistProjectRevision } from './project-revision'
 import type {
   ImportAssetInput,
   ImportAssetResult,
@@ -235,13 +237,20 @@ export class ProjectDelivery {
       )
     }
     try {
-      return await stageAssetExport({
+      const staged = await stageAssetExport({
         project,
         projectDir: this.context.getProjectPaths(projectId).projectDir,
         db,
         assetId,
         adapter,
       })
+      recordLinguistExportManifest({
+        exportsDir: this.context.getProjectPaths(projectId).exportsDir,
+        stagingPath: staged.stagingPath,
+        artifact: staged.artifact,
+        projectRevision: computeLinguistProjectRevision(project, db),
+      })
+      return staged
     } catch (err) {
       throw mapStoreError(err, projectId)
     }

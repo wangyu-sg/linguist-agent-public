@@ -31,7 +31,7 @@ test('sentence patterns: importMany is idempotent and defaults status to pending
 
     const all = db.sentencePatterns.list()
     assert.equal(all.length, 2)
-    assert.ok(all.every((pattern) => pattern.id.startsWith('spn-')))
+    assert.ok(all.every((pattern) => /^spn_v2_[0-9a-f]{64}$/.test(pattern.id)))
     assert.ok(all.every((pattern) => pattern.status === 'pending'))
     assert.equal(all[0]!.suggestedTarget, '暴击！')
   } finally {

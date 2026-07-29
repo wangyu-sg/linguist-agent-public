@@ -1,5 +1,6 @@
 import { runQa, type QaRunOptions } from '@linguist/cat-core'
 import type { ProjectDatabase } from './project-database'
+import type { QaRunPersistence } from './repositories/qa-findings'
 import type { PersistedQaFinding } from './repositories/rows'
 
 /**
@@ -33,6 +34,7 @@ export function buildQaTermOptions(db: ProjectDatabase): Pick<
 export function runProjectQa(
   db: ProjectDatabase,
   options: QaRunOptions = {},
+  persistence: QaRunPersistence = {},
 ): PersistedQaFinding[] {
   const total = db.segments.count()
   const segments = total === 0 ? [] : db.segments.query({ limit: total })
@@ -44,5 +46,6 @@ export function runProjectQa(
       ...Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)),
     }),
     new Map(segments.map((segment) => [segment.id as string, segment.revision])),
+    { ruleVersion: 'deterministic-v1', ...persistence },
   )
 }

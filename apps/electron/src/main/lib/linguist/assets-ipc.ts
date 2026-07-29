@@ -83,7 +83,7 @@ function readKind(record: Record<string, unknown>): LinguistProjectAssetKind {
 
 function readAssetId(value: unknown, label = 'id'): string {
   if (typeof value !== 'string' || !LINGUIST_PROJECT_ASSET_ID_PATTERN.test(value)) {
-    invalid(`${label} must be a project-asset opaque id (sgr/spn/ctx/tcn/vpr-<16 hex>)`)
+    invalid(`${label} must be a valid project-asset Stable ID`)
   }
   return value
 }

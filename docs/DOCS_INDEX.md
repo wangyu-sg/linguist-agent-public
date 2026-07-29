@@ -21,6 +21,7 @@
 - [UPSTREAM_BASELINE.md](./architecture/UPSTREAM_BASELINE.md) — 固定 Proma 基线。
 - [PROMA_CORE_TOUCHPOINTS.md](./architecture/PROMA_CORE_TOUCHPOINTS.md) — 所有 Proma 核心修改登记。
 - [proma-touchpoints.json](./architecture/proma-touchpoints.json) — 机读触点真源。
+- [ADR-LINGUIST-AS-VERTICAL-AGENT-PROFILE.md](./adr/ADR-LINGUIST-AS-VERTICAL-AGENT-PROFILE.md) — Linguist 作为 Proma 垂直 Profile 的固定决策。
 - [USERDATA_LAYOUT.md](./architecture/USERDATA_LAYOUT.md) — `.linguist-agent` 数据布局与 Provider 导入。
 - [RUNTIME_POLICY.md](./architecture/RUNTIME_POLICY.md) — Runtime 边界。
 - [FEATURE_FLAGS.md](./architecture/FEATURE_FLAGS.md) — 功能旗标。
@@ -39,6 +40,7 @@
 - [G10_REPORT.md](./roadmap/G10_REPORT.md) — 自动化已修复，人工产品资格仍阻断。
 - [AC007_LONG_THREAD_REPORT.md](./roadmap/AC007_LONG_THREAD_REPORT.md) — 长线程 selector 更正与 packaged 数据。
 - [G11_REPORT.md](./roadmap/G11_REPORT.md) — 历史发布/合规证据，不代表当前个人 Alpha 要公开发行。
+- [LA_CI_001_BASELINE.md](./release/LA_CI_001_BASELINE.md) — 最近远端 CI 失败事实、本地修复与尚未重跑边界。
 
 ## 发布与归属
 

@@ -1,11 +1,11 @@
 /**
  * Sentence patterns repository (PB-095, schema v6): reference sentence
  * patterns (源文 + 草稿/建议译文) with a confirmed/pending/rejected
- * review status. Ids are content-derived (`spn-` + sha256) so CSV
+ * review status. Ids are content-derived Stable ID v2 values, so CSV
  * re-imports are idempotent (same convention as TM/TB importMany).
  */
 
-import { createHash } from 'node:crypto'
+import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 import {
@@ -42,13 +42,12 @@ export interface SentencePatternSearch {
 }
 
 function stableId(projectId: string, input: SentencePatternInput): string {
-  const content = JSON.stringify([
+  return deriveStableIdV2('spn', [
     projectId,
     input.textType ?? null,
     input.module ?? null,
     input.source,
   ])
-  return `spn-${createHash('sha256').update(content).digest('hex').slice(0, 16)}`
 }
 
 /** Escape LIKE wildcards so query is a literal substring match. */

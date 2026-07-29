@@ -1,14 +1,18 @@
-import { normalizeQaProfile } from '@linguist/cat-core'
+import { normalizeQaProfile, runQa } from '@linguist/cat-core'
 import {
-  runProjectQa,
+  buildQaTermOptions,
+  type IdempotentRunMutation,
   type QaFindingListFilter,
 } from '@linguist/cat-store'
 import { Type } from 'typebox'
+import { runQaWorkerJob, type WorkerJobProgress } from './job-runner'
 import { pageHasMore, resolvePage } from './pagination'
 import {
   CAT_TOOL_PAGE_LIMITS,
   type CatQaFindingItem,
   type CatRunQaResult,
+  type CatWorkerJobProgress,
+  type LinguistQaWorkerResult,
   type PagedResult,
 } from './types'
 import {
@@ -17,11 +21,16 @@ import {
   type CatToolRuntime,
 } from './tool-runtime'
 
+const RUN_QA_PARAMETERS = Type.Object({})
+
 /** 确定性 QA 执行与 Finding 读取；不提供 resolve/waive。 */
 export function createQaTools(runtime: CatToolRuntime) {
   const { deps, notifyMutation, resolveBoundProject } = runtime
 
-  const runQaTool = defineTool({
+  const runQaTool = defineTool<
+    typeof RUN_QA_PARAMETERS,
+    CatRunQaResult | CatWorkerJobProgress
+  >({
     name: 'cat_run_qa',
     label: 'CAT run QA',
     description:
@@ -31,38 +40,142 @@ export function createQaTools(runtime: CatToolRuntime) {
     promptGuidelines: [
       'Report findings to the user; never claim they are resolved or waived.',
     ],
-    parameters: Type.Object({}),
-    async execute(toolCallId) {
-      // PB-096 术语接线：runProjectQa 内部从 term_entries 构建术语规则；
+    parameters: RUN_QA_PARAMETERS,
+    async execute(toolCallId, _params, signal, onUpdate) {
+      // PB-096：term_entries、项目 profile 与 tagProfile 一起冻结进 worker snapshot。
       // 项目 glossaryPolicy 决定 preferred 偏离的定级（forbidden 永远阻断）。
       // PB-097：项目 tagProfile 进同一道确定性 QA（缺省 = 仅内置族）。
       const { project, db } = resolveBoundProject('cat_run_qa', toolCallId)
-      const findings = runProjectQa(db, {
+      const runId = `qa:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`
+      const total = db.segments.count()
+      const segments = total === 0 ? [] : db.segments.query({ limit: total })
+      const qaOptions = {
+        ...buildQaTermOptions(db),
         glossaryPolicy: project.glossaryPolicy,
         profile: normalizeQaProfile(project.qaProfile),
         ...(project.tagProfile !== undefined ? { tagProfile: project.tagProfile } : {}),
-      })
-      const severityCounts: CatRunQaResult['severityCounts'] = { L0: 0, L1: 0, L2: 0, L3: 0, L4: 0 }
-      const dispositionCounts: CatRunQaResult['dispositionCounts'] = { defect: 0, needs_review: 0, query: 0, info: 0 }
-      for (const finding of findings) {
-        severityCounts[finding.severity] += 1
-        dispositionCounts[finding.disposition] += 1
       }
-      const dto: CatRunQaResult = {
-        total: findings.length,
-        severityCounts,
-        dispositionCounts,
-      }
-      notifyMutation({
-        kind: 'qa-updated',
-        segmentIds: [...new Set(findings.map((finding) => finding.segmentId as string))],
-        qaFindingIds: findings.map((finding) => finding.id as string),
+      const commit = (
+        workerResult: LinguistQaWorkerResult,
+        completedSegmentIds: readonly string[],
+      ) => db.runs.executeMutation({
+        identity: {
+          runId,
+          toolCallId,
+          idempotencyKey: `cat_run_qa:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`,
+        },
+        operation: 'cat_run_qa',
+        payload: {},
+        mutate: () => {
+          const before = new Map(
+            db.qaFindings.list().map((finding) => [finding.id as string, finding]),
+          )
+          const persistence = {
+            runId,
+            ...(deps.now === undefined ? {} : { observedAt: deps.now() }),
+            ruleVersion: 'deterministic-v1',
+          }
+          const inputsBySegment = Map.groupBy(
+            workerResult.findings,
+            (finding) => finding.segmentId as string,
+          )
+          const findings = completedSegmentIds.flatMap((segmentId) =>
+            db.qaFindings.replaceForSegment(
+              segmentId,
+              inputsBySegment.get(segmentId) ?? [],
+              persistence,
+            ))
+          const severityCounts: CatRunQaResult['severityCounts'] =
+            { L0: 0, L1: 0, L2: 0, L3: 0, L4: 0 }
+          const dispositionCounts: CatRunQaResult['dispositionCounts'] =
+            { defect: 0, needs_review: 0, query: 0, info: 0 }
+          for (const finding of findings) {
+            severityCounts[finding.severity] += 1
+            dispositionCounts[finding.disposition] += 1
+          }
+          const dto: CatRunQaResult = {
+            total: findings.length,
+            severityCounts,
+            dispositionCounts,
+          }
+          const changes = db.qaFindings.list().flatMap((finding) => {
+            const previous = before.get(finding.id as string)
+            if (previous !== undefined && JSON.stringify(previous) === JSON.stringify(finding)) {
+              return []
+            }
+            return [{
+              entityType: 'qa-finding' as const,
+              entityId: finding.id as string,
+              changeKind: previous === undefined ? 'created' as const : 'updated' as const,
+              segmentId: finding.segmentId as string,
+              expectedRevision: finding.segmentRevision,
+              ...(previous === undefined ? {} : { before: previous }),
+              after: finding,
+            }]
+          })
+          return {
+            result: dto,
+            changes,
+            event: {
+              kind: 'qa-updated' as const,
+              segmentIds: [...new Set(findings.map((finding) => finding.segmentId as string))],
+              qaFindingIds: findings.map((finding) => finding.id as string),
+            },
+          }
+        },
       })
-      return toolResult(
-        dto,
-        deps.resultProjectId,
-        findings.map((finding) => finding.segmentId as string),
-      )
+
+      let mutation: IdempotentRunMutation<CatRunQaResult>
+      if (segments.length === 0) {
+        mutation = commit({ findings: [], workerThreadId: 0 }, [])
+      } else {
+        let latestProgress: WorkerJobProgress | undefined
+        const publishProgress = (phase?: 'started' | 'completed'): void => {
+          if (latestProgress === undefined) return
+          onUpdate?.({
+            content: [{
+              type: 'text',
+              text: phase === undefined
+                ? `CAT QA job ${latestProgress.status}: ${latestProgress.cursor}/${latestProgress.total}`
+                : `CAT QA worker ${phase}: ${latestProgress.cursor}/${latestProgress.total}`,
+            }],
+            details: { jobProgress: latestProgress },
+          })
+        }
+        const qaWorker = deps.qaWorker ?? (async (request) => ({
+          findings: runQa(request.segments, request.options),
+          workerThreadId: 0,
+        }))
+        mutation = await runQaWorkerJob({
+          db,
+          runId,
+          sessionId: deps.sessionId ?? 'session-unavailable',
+          segmentIds: segments.map((segment) => segment.id as string),
+          ...(deps.modelId === undefined ? {} : { modelId: deps.modelId }),
+          signal,
+          onProgress: (next) => {
+            latestProgress = next
+            publishProgress()
+          },
+          compute: async (_job, workerSignal) => ({
+            result: await qaWorker(
+              { segments, options: qaOptions },
+              workerSignal,
+              (phase) => publishProgress(phase),
+            ),
+          }),
+          commit: (workerResult, job) => commit(workerResult, job.completedSegmentIds),
+        })
+      }
+      if (!mutation.replayed && mutation.event !== undefined) {
+        notifyMutation({
+          kind: 'qa-updated',
+          sequence: mutation.event.sequence,
+          segmentIds: mutation.event.segmentIds,
+          qaFindingIds: mutation.event.qaFindingIds,
+        })
+      }
+      return toolResult(mutation.result, deps.resultProjectId, mutation.event?.segmentIds)
     },
   })
 
@@ -106,18 +219,41 @@ export function createQaTools(runtime: CatToolRuntime) {
       }
       const findings = db.qaFindings.list({ ...filter, limit: page.limit, offset: page.offset })
       const total = db.qaFindings.count(filter)
-      const items: CatQaFindingItem[] = findings.map((finding) => ({
-        id: finding.id as string,
-        segmentId: finding.segmentId as string,
-        code: finding.code,
-        severity: finding.severity,
-        issueType: finding.issueType,
-        disposition: finding.disposition,
-        message: finding.message,
-        status: finding.status,
-        segmentRevision: finding.segmentRevision,
-        ...(finding.waiverReason !== undefined ? { waiverReason: finding.waiverReason } : {}),
-      }))
+      const items: CatQaFindingItem[] = findings.map((finding) => {
+        const criticReviews = db.criticArtifacts
+          .traceByQaFindingId(finding.id as string)
+          .flatMap(({ artifact, criticFindingId }) =>
+            artifact.schemaVersion === 2
+              ? [{
+                  reviewId: artifact.artifactId,
+                  criticFindingId,
+                  proposalId: artifact.snapshot.proposalId,
+                  snapshotId: artifact.snapshot.snapshotId,
+                  snapshotHash: artifact.snapshot.snapshotHash,
+                  reviewerSessionId: artifact.reviewer.sessionId,
+                  ...(artifact.reviewer.modelId === undefined
+                    ? {}
+                    : { reviewerModelId: artifact.reviewer.modelId }),
+                  promptVersion: artifact.reviewer.promptVersion,
+                }]
+              : [])
+        return {
+          id: finding.id as string,
+          segmentId: finding.segmentId as string,
+          code: finding.code,
+          severity: finding.severity,
+          issueType: finding.issueType,
+          disposition: finding.disposition,
+          message: finding.message,
+          status: finding.status,
+          segmentRevision: finding.segmentRevision,
+          ruleVersion: finding.ruleVersion,
+          evidenceHash: finding.evidenceHash,
+          firstSeenRunId: finding.firstSeenRunId,
+          ...(finding.waiverReason !== undefined ? { waiverReason: finding.waiverReason } : {}),
+          ...(criticReviews.length === 0 ? {} : { criticReviews }),
+        }
+      })
       const dto: PagedResult<CatQaFindingItem> = {
         items,
         total,

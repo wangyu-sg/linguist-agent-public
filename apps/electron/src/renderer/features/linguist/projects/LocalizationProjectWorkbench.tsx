@@ -13,6 +13,7 @@ import {
   activeTabIdAtom,
   closeTab,
   createLocalizationProjectTabId,
+  projectCurrentAgentSessionIdMapAtom,
   tabsAtom,
 } from '@/atoms/tab-atoms'
 import { SegmentEditor } from './SegmentEditor'
@@ -25,13 +26,21 @@ import {
 } from './LinguistWorkbenchShell'
 import { describeLinguistIpcError } from './project-utils'
 import { refreshLinguistProjectListAtom } from './project-list-atoms'
-import { clearLinguistWorkbenchUiStateAtom } from './cat-workspace-atoms'
+import {
+  clearLinguistWorkbenchUiStateAtom,
+  disposeLinguistWorkbenchAtomFamiliesAtom,
+} from './cat-workspace-atoms'
 import {
   getProjectMutationRefreshPlan,
   linguistProjectMutationStateAtomFamily,
   reduceProjectMutation,
+  replayProjectMutations,
   subscribeToProjectMutations,
 } from './project-mutation-atoms'
+import {
+  ProjectRunSummary,
+  linguistProjectRunSummaryAtomFamily,
+} from './ProjectRunSummary'
 
 interface LoadingState {
   status: 'loading'
@@ -97,9 +106,11 @@ export function LocalizationProjectWorkbench({
   const store = useStore()
   const refreshProjectList = useSetAtom(refreshLinguistProjectListAtom)
   const clearWorkbenchUiState = useSetAtom(clearLinguistWorkbenchUiStateAtom)
+  const disposeWorkbenchAtoms = useSetAtom(disposeLinguistWorkbenchAtomFamiliesAtom)
   const mutationAtom = linguistProjectMutationStateAtomFamily(projectId)
   const mutationState = useAtomValue(mutationAtom)
   const setMutationState = useSetAtom(mutationAtom)
+  const currentAgentSessionId = useAtomValue(projectCurrentAgentSessionIdMapAtom).get(projectId)
   const mutationRefreshPlan = getProjectMutationRefreshPlan(mutationState)
   const [state, setState] = React.useState<LocalizationProjectWorkbenchState>({
     status: 'loading',
@@ -114,10 +125,57 @@ export function LocalizationProjectWorkbench({
     setSummaryRefreshToken((current) => current + 1)
   }, [])
 
-  React.useEffect(() => subscribeToProjectMutations(
-    projectId,
-    (event) => setMutationState((current) => reduceProjectMutation(projectId, current, event)),
-  ), [projectId, setMutationState])
+  React.useEffect(() => {
+    let cancelled = false
+    let syncing = false
+    let resync = false
+    const synchronize = async (): Promise<void> => {
+      if (syncing) {
+        resync = true
+        return
+      }
+      syncing = true
+      try {
+        do {
+          resync = false
+          const replayed = await replayProjectMutations(projectId, store.get(mutationAtom))
+          if (!cancelled) {
+            setMutationState((current) =>
+              current.lastSequence > replayed.lastSequence
+                ? current
+                : {
+                    ...replayed,
+                    lastRevision: Math.max(current.lastRevision, replayed.lastRevision),
+                  })
+          }
+        } while (resync && !cancelled)
+      } finally {
+        syncing = false
+      }
+    }
+    const unsubscribe = subscribeToProjectMutations(projectId, (event) => {
+      if (event.sequence !== undefined) {
+        void synchronize().catch(() => {
+          if (!cancelled) {
+            setMutationState((current) => reduceProjectMutation(projectId, current, event))
+          }
+        })
+        return
+      }
+      setMutationState((current) => reduceProjectMutation(projectId, current, event))
+    })
+    void synchronize().catch(() => {})
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [mutationAtom, projectId, setMutationState, store])
+
+  React.useEffect(() => () => {
+    disposeWorkbenchAtoms(projectId)
+    linguistProjectMutationStateAtomFamily.remove(projectId)
+    linguistProjectRunSummaryAtomFamily.remove(projectId)
+  }, [disposeWorkbenchAtoms, projectId])
 
   React.useEffect(() => {
     const lastHandledRevision = handledSummaryMutationRevisions.current.get(projectId)
@@ -216,8 +274,9 @@ export function LocalizationProjectWorkbench({
       )}
       agentRail={(
         <ProjectAgentRail
-          projectId={state.project.id}
-          projectName={state.project.name}
+          projectId={currentProject.id}
+          projectName={currentProject.name}
+          qualityProfile={currentProject.qualityProfile}
           assets={summaryState.status === 'ready' ? summaryState.summary.assets : []}
         />
       )}
@@ -237,12 +296,22 @@ export function LocalizationProjectWorkbench({
         />
       )}
     >
-      <SegmentEditor
-        projectId={currentProject.id}
-        archived={currentProject.archivedAt !== undefined}
-        workflowStage={currentProject.workflowStage ?? 'translation'}
-        onProjectSummaryInvalidated={invalidateSummary}
-      />
+      <div className="flex h-full min-h-0 flex-col">
+        <ProjectRunSummary
+          projectId={currentProject.id}
+          sessionId={currentAgentSessionId}
+          archived={currentProject.archivedAt !== undefined}
+          refreshSequence={mutationState.lastSequence}
+        />
+        <div className="min-h-0 flex-1">
+          <SegmentEditor
+            projectId={currentProject.id}
+            archived={currentProject.archivedAt !== undefined}
+            workflowStage={currentProject.workflowStage ?? 'translation'}
+            onProjectSummaryInvalidated={invalidateSummary}
+          />
+        </div>
+      </div>
     </LinguistWorkbenchShell>
   )
 }

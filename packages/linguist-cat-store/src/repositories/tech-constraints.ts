@@ -5,7 +5,7 @@
  * QA 消费归 PB-097，本层只做存取。
  */
 
-import { createHash } from 'node:crypto'
+import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 import {
@@ -35,8 +35,7 @@ export interface TechConstraintSearch {
 }
 
 function stableId(projectId: string, input: TechConstraintInput): string {
-  const content = JSON.stringify([projectId, input.kind, input.scope ?? null, input.valueJson])
-  return `tcn-${createHash('sha256').update(content).digest('hex').slice(0, 16)}`
+  return deriveStableIdV2('tcn', [projectId, input.kind, input.scope ?? null, input.valueJson])
 }
 
 function buildWhere(projectId: string, filter: TechConstraintSearch): { where: string; params: unknown[] } {

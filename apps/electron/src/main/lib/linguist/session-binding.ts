@@ -28,6 +28,7 @@ import type {
   LinguistSessionBindingStatus,
   TypedError,
 } from '@proma/shared'
+import { normalizeQualityProfile } from '@linguist/cat-core'
 import { createAgentSession, listAgentSessions } from '../agent-session-manager'
 import { LinguistProjectArchivedError } from './errors'
 import type { LinguistProjectService } from './project-service'
@@ -107,6 +108,7 @@ export function createLinguistProjectChatSession(
   return createAgentSession(title, undefined, undefined, undefined, 'pi', {
     linguistProjectId: project.id,
     linguistProjectName: project.name,
+    linguistStrategy: normalizeQualityProfile(project.qualityProfile),
     ...(input.role !== undefined ? { linguistSessionRole: input.role } : {}),
   })
 }

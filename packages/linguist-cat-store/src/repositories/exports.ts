@@ -5,7 +5,7 @@
  * layer (later tickets); this table is the audit trail.
  */
 
-import { fnv1a64, type ProjectId } from '@linguist/cat-core'
+import { deriveStableIdV2, type ProjectId } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 
 export interface ExportRecord {
@@ -76,7 +76,7 @@ export class ExportsRepository {
 
       const createdAt = input.now ?? this.now()
       const record: ExportRecord = {
-        id: `exp-${fnv1a64(`${input.assetId}${input.sha256}${createdAt}`)}`,
+        id: deriveStableIdV2('exp', [input.assetId, input.sha256, createdAt]),
         projectId: this.projectId,
         assetId: input.assetId,
         path: input.path,

@@ -25,7 +25,7 @@ test('tech constraints: upsert create/update round-trip; scope omitted means glo
       valueJson: JSON.stringify({ maxChars: 40 }),
       note: '技能描述上限',
     })
-    assert.ok(created.id.startsWith('tcn-'))
+    assert.match(created.id, /^tcn_v2_[0-9a-f]{64}$/)
     assert.equal(created.scope, undefined)
     assert.deepEqual(db.techConstraints.get(created.id), created)
 

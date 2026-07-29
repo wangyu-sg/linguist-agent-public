@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, LINGUIST_PROJECT_IPC_CHANNELS, LINGUIST_SESSION_IPC_CHANNELS, LINGUIST_PROPOSAL_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, LINGUIST_EXPORT_IPC_CHANNELS, LINGUIST_REFERENCE_IPC_CHANNELS, LINGUIST_ASSETS_IPC_CHANNELS, LINGUIST_MIGRATION_IPC_CHANNELS, LINGUIST_ASSET_PREVIEW_IPC_CHANNELS } from '@proma/shared'
+import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, LINGUIST_PROJECT_IPC_CHANNELS, LINGUIST_INTEGRITY_IPC_CHANNELS, LINGUIST_SESSION_IPC_CHANNELS, LINGUIST_PROPOSAL_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, LINGUIST_EXPORT_IPC_CHANNELS, LINGUIST_DIAGNOSTICS_IPC_CHANNELS, LINGUIST_REFERENCE_IPC_CHANNELS, LINGUIST_ASSETS_IPC_CHANNELS, LINGUIST_MIGRATION_IPC_CHANNELS, LINGUIST_ASSET_PREVIEW_IPC_CHANNELS } from '@proma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   RuntimeStatus,
@@ -128,6 +128,13 @@ import type {
   LinguistProjectListRequest,
   LinguistProjectOpenRequest,
   LinguistProjectOpenResult,
+  LinguistIntegrityCancelRequest,
+  LinguistIntegrityCancelResult,
+  LinguistIntegrityExportReportRequest,
+  LinguistIntegrityExportReportResult,
+  LinguistIntegrityScrubEvent,
+  LinguistIntegrityStartRequest,
+  LinguistIntegrityStartResult,
   LinguistProjectRestoreRequest,
   LinguistProjectRestoreResult,
   LinguistProjectSetQualityProfileRequest,
@@ -179,7 +186,15 @@ import type {
   LinguistCatWaiveQaFindingRequest,
   LinguistCatWaiveQaFindingsBulkRequest,
   LinguistCatWaiveQaFindingsBulkResult,
+  LinguistProjectEventAckRequest,
+  LinguistProjectEventAckResult,
+  LinguistProjectEventListRequest,
+  LinguistProjectEventListResult,
   LinguistProjectMutationEvent,
+  LinguistRunSummaryRequest,
+  LinguistLatestRunSummaryResult,
+  LinguistRunUndoRequest,
+  LinguistRunUndoResult,
   LinguistQaFindingInfo,
   LinguistExportSaveAssetRequest,
   LinguistExportSaveAssetResult,
@@ -187,6 +202,10 @@ import type {
   LinguistPrepareDeliveryResult,
   LinguistExportListRequest,
   LinguistExportListResult,
+  LinguistDiagnosticsRequest,
+  LinguistDiagnosticsStatus,
+  LinguistDiagnosticBundlePreviewResult,
+  LinguistDiagnosticBundleExportResult,
   LinguistReferenceDeleteRequest,
   LinguistReferenceDeleteResult,
   LinguistReferenceImportRequest,
@@ -1238,6 +1257,18 @@ export interface ElectronAPI {
   linguistBackupsRestore: (
     input: LinguistProjectRestoreRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectRestoreResult>>
+  linguistIntegrityStart: (
+    input: LinguistIntegrityStartRequest,
+  ) => Promise<LinguistIpcResult<LinguistIntegrityStartResult>>
+  linguistIntegrityCancel: (
+    input: LinguistIntegrityCancelRequest,
+  ) => Promise<LinguistIpcResult<LinguistIntegrityCancelResult>>
+  linguistIntegrityExportReport: (
+    input: LinguistIntegrityExportReportRequest,
+  ) => Promise<LinguistIpcResult<LinguistIntegrityExportReportResult>>
+  onLinguistIntegrityProgress: (
+    callback: (event: LinguistIntegrityScrubEvent) => void,
+  ) => () => void
   /** PB-089：CAT 资产源文件预览（纯读，归档项目可用；text/html/url 三态分派） */
   linguistProjectsPreviewAssetSource: (
     input: LinguistAssetPreviewRequest,
@@ -1253,6 +1284,15 @@ export interface ElectronAPI {
   linguistExportsList: (
     input: LinguistExportListRequest,
   ) => Promise<LinguistIpcResult<LinguistExportListResult>>
+  linguistDiagnosticsGetStatus: (
+    input: LinguistDiagnosticsRequest,
+  ) => Promise<LinguistIpcResult<LinguistDiagnosticsStatus>>
+  linguistDiagnosticsPreviewBundle: (
+    input: LinguistDiagnosticsRequest,
+  ) => Promise<LinguistIpcResult<LinguistDiagnosticBundlePreviewResult>>
+  linguistDiagnosticsExportBundle: (
+    input: LinguistDiagnosticsRequest,
+  ) => Promise<LinguistIpcResult<LinguistDiagnosticBundleExportResult>>
   /** CAT Workspace 只读资产/段分页查询。 */
   linguistCatQuery: (
     input: LinguistCatQueryRequest,
@@ -1294,6 +1334,22 @@ export interface ElectronAPI {
   linguistCatWaiveQaFindingsBulk: (
     input: LinguistCatWaiveQaFindingsBulkRequest,
   ) => Promise<LinguistIpcResult<LinguistCatWaiveQaFindingsBulkResult>>
+  /** 按持久序号补拉项目事件；纯读，不隐式 ack。 */
+  linguistCatListProjectEvents: (
+    input: LinguistProjectEventListRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectEventListResult>>
+  /** renderer 成功应用事件后显式提交单调 ack。 */
+  linguistCatAckProjectEvents: (
+    input: LinguistProjectEventAckRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectEventAckResult>>
+  /** 读取最近一次产生持久项目事件的运行摘要。 */
+  linguistCatGetLatestRunSummary: (
+    input: LinguistRunSummaryRequest,
+  ) => Promise<LinguistIpcResult<LinguistLatestRunSummaryResult>>
+  /** 由主进程校验 Session authority 后撤销最近一次可证明的 CAT 变更。 */
+  linguistCatUndoLatestRun: (
+    input: LinguistRunUndoRequest,
+  ) => Promise<LinguistIpcResult<LinguistRunUndoResult>>
   /** Agent CAT Tool 已提交项目写入；返回 unsubscribe。 */
   onLinguistProjectMutation: (
     callback: (event: LinguistProjectMutationEvent) => void,
@@ -2803,6 +2859,17 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.PREVIEW_RESTORE, input),
   linguistBackupsRestore: (input: LinguistProjectRestoreRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.RESTORE, input),
+  linguistIntegrityStart: (input: LinguistIntegrityStartRequest) =>
+    ipcRenderer.invoke(LINGUIST_INTEGRITY_IPC_CHANNELS.START, input),
+  linguistIntegrityCancel: (input: LinguistIntegrityCancelRequest) =>
+    ipcRenderer.invoke(LINGUIST_INTEGRITY_IPC_CHANNELS.CANCEL, input),
+  linguistIntegrityExportReport: (input: LinguistIntegrityExportReportRequest) =>
+    ipcRenderer.invoke(LINGUIST_INTEGRITY_IPC_CHANNELS.EXPORT_REPORT, input),
+  onLinguistIntegrityProgress: (callback: (event: LinguistIntegrityScrubEvent) => void) => {
+    const listener = (_: unknown, event: LinguistIntegrityScrubEvent): void => callback(event)
+    ipcRenderer.on(LINGUIST_INTEGRITY_IPC_CHANNELS.PROGRESS, listener)
+    return () => { ipcRenderer.removeListener(LINGUIST_INTEGRITY_IPC_CHANNELS.PROGRESS, listener) }
+  },
   // ===== Linguist 资产源文件预览（PB-089）=====
   linguistProjectsPreviewAssetSource: (input: LinguistAssetPreviewRequest) =>
     ipcRenderer.invoke(LINGUIST_ASSET_PREVIEW_IPC_CHANNELS.PREVIEW_SOURCE, input),
@@ -2812,6 +2879,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_EXPORT_IPC_CHANNELS.SAVE_ASSET, input),
   linguistExportsList: (input: LinguistExportListRequest) =>
     ipcRenderer.invoke(LINGUIST_EXPORT_IPC_CHANNELS.LIST, input),
+  linguistDiagnosticsGetStatus: (input: LinguistDiagnosticsRequest) =>
+    ipcRenderer.invoke(LINGUIST_DIAGNOSTICS_IPC_CHANNELS.GET_STATUS, input),
+  linguistDiagnosticsPreviewBundle: (input: LinguistDiagnosticsRequest) =>
+    ipcRenderer.invoke(LINGUIST_DIAGNOSTICS_IPC_CHANNELS.PREVIEW_BUNDLE, input),
+  linguistDiagnosticsExportBundle: (input: LinguistDiagnosticsRequest) =>
+    ipcRenderer.invoke(LINGUIST_DIAGNOSTICS_IPC_CHANNELS.EXPORT_BUNDLE, input),
   linguistCatQuery: (input: LinguistCatQueryRequest) =>
     ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.QUERY, input),
   linguistCatEditSegment: (input: LinguistCatEditSegmentRequest) =>
@@ -2834,6 +2907,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.WAIVE_QA_FINDING, input),
   linguistCatWaiveQaFindingsBulk: (input: LinguistCatWaiveQaFindingsBulkRequest) =>
     ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.WAIVE_QA_FINDINGS_BULK, input),
+  linguistCatListProjectEvents: (input: LinguistProjectEventListRequest) =>
+    ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.LIST_PROJECT_EVENTS, input),
+  linguistCatAckProjectEvents: (input: LinguistProjectEventAckRequest) =>
+    ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.ACK_PROJECT_EVENTS, input),
+  linguistCatGetLatestRunSummary: (input: LinguistRunSummaryRequest) =>
+    ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.GET_LATEST_RUN_SUMMARY, input),
+  linguistCatUndoLatestRun: (input: LinguistRunUndoRequest) =>
+    ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.UNDO_LATEST_RUN, input),
   onLinguistProjectMutation: (callback: (event: LinguistProjectMutationEvent) => void) => {
     const listener = (_: unknown, event: LinguistProjectMutationEvent): void => callback(event)
     ipcRenderer.on(LINGUIST_CAT_IPC_CHANNELS.PROJECT_MUTATION, listener)

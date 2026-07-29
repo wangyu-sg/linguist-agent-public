@@ -184,7 +184,10 @@ test('LF-062: validated context becomes a host-owned structured block without cu
 
   const block = buildLinguistTurnContextBlock(context)
 
-  assert.match(block, /^<linguist_turn_context schema_version="1">/)
+  assert.match(
+    block,
+    /^<linguist_turn_context version="1" schema_version="1" trust="project-data">/,
+  )
   assert.match(block, /"projectId":"prj-0123456789abcdef"/)
   assert.doesNotMatch(block, /sourceText|targetText|\/Users\//)
 })

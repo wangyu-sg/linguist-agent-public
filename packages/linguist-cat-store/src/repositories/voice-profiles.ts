@@ -1,11 +1,11 @@
 /**
  * Voice profiles repository (PB-095, schema v6): per-speaker voice rows
  * (语域/人称/语气标记/禁忌). Ids are content-derived per (project,
- * speaker, textType)：`vpr-` + sha256 — 同一 speaker+textType 重复创建
+ * speaker, textType) 的 Stable ID v2——同一 speaker+textType 重复创建
  * 幂等返回既有行，编辑走显式 id 的 upsert 路径。
  */
 
-import { createHash } from 'node:crypto'
+import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 import {
@@ -39,8 +39,7 @@ export interface VoiceProfileSearch {
 }
 
 function stableId(projectId: string, input: VoiceProfileInput): string {
-  const content = JSON.stringify([projectId, input.speaker, input.textType ?? null])
-  return `vpr-${createHash('sha256').update(content).digest('hex').slice(0, 16)}`
+  return deriveStableIdV2('vpr', [projectId, input.speaker, input.textType ?? null])
 }
 
 /** Escape LIKE wildcards so query is a literal substring match. */

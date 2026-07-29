@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import type {
   LinguistIpcResult,
   LinguistProjectInfo,
@@ -27,6 +28,7 @@ const openedProject: LinguistIpcResult<LinguistProjectOpenResult> = {
   data: {
     project,
     health: {
+      kind: 'quick',
       projectId: 'prj-0000000000000001',
       healthy: true,
       checkedAt: '2026-07-01T08:00:00.000Z',
@@ -36,6 +38,16 @@ const openedProject: LinguistIpcResult<LinguistProjectOpenResult> = {
 }
 
 describe('LocalizationProjectWorkbench', () => {
+  test('durable project sequence refreshes the run summary and its project atom is disposed', () => {
+    const source = readFileSync(
+      new URL('./LocalizationProjectWorkbench.tsx', import.meta.url),
+      'utf8',
+    )
+    expect(source).toContain('refreshSequence={mutationState.lastSequence}')
+    expect(source).toContain('sessionId={currentAgentSessionId}')
+    expect(source).toContain('linguistProjectRunSummaryAtomFamily.remove(projectId)')
+  })
+
   test('given 冷启动恢复的正常 Project Tab when 工作台挂载 then 先打开项目再进入 CAT 工作区', async () => {
     const requests: LinguistProjectOpenRequest[] = []
 

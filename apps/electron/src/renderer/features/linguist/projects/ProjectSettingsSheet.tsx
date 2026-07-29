@@ -3,6 +3,7 @@ import type { LinguistProjectInfo, LinguistProjectSummary } from '@proma/shared'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ContextDocsPanel } from './ContextDocsPanel'
+import { ProjectDiagnosticsSettings } from './ProjectDiagnosticsSettings'
 import { ProjectMaintenanceSettings } from './ProjectMaintenanceSettings'
 import { ProjectWorkflowSettings } from './ProjectWorkflowSettings'
 import { ProjectAssetsSection } from './ProjectAssetsSection'
@@ -71,6 +72,7 @@ export function ProjectSettingsSheetBody({
         <TabsTrigger value="project">项目</TabsTrigger>
         <TabsTrigger value="resources">资源</TabsTrigger>
         <TabsTrigger value="maintenance">维护</TabsTrigger>
+        <TabsTrigger value="diagnostics">诊断</TabsTrigger>
       </TabsList>
       <TabsContent value="project">
         <section aria-label="项目元信息" className="rounded-xl bg-muted/50 p-4 shadow-sm">
@@ -106,6 +108,9 @@ export function ProjectSettingsSheetBody({
           onProjectArchived={onProjectArchived}
           onProjectDeleted={onProjectDeleted}
         />
+      </TabsContent>
+      <TabsContent value="diagnostics">
+        <ProjectDiagnosticsSettings key={project.id} projectId={project.id} />
       </TabsContent>
     </Tabs>
   )

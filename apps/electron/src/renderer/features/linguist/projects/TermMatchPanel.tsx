@@ -40,6 +40,7 @@ type TermMatchState =
 
 const TERM_STATUS_LABELS: Record<LinguistTermStatus, string> = {
   preferred: '首选',
+  required: '必需',
   allowed: '允许',
   forbidden: '禁用',
   deprecated: '已弃用',

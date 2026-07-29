@@ -51,7 +51,7 @@ test('assets IPC: style guide / tech constraint / voice profile CRUD round-trip'
     assert.equal(rule.ok, true)
     if (!rule.ok) return
     const ruleId = (rule.data as { id: string }).id
-    assert.ok(ruleId.startsWith('sgr-'))
+    assert.match(ruleId, /^sgr_v2_[0-9a-f]{64}$/)
 
     const listed = await ipc.query({ projectId: project.id, kind: 'styleGuideRules', query: '逗号' })
     assert.equal(listed.ok, true)

@@ -15,14 +15,30 @@
  * 静态表回填）lands in schema v7 (PB-096).
  */
 
+import { createProposalIssuance } from '@linguist/cat-core'
+import type { SqliteDatabase } from './runtime'
+import {
+  proposalFromRow,
+  proposalIssuanceToParams,
+  type ProposalRow,
+} from './repositories/rows'
+
+export interface SchemaValidation {
+  sql: string
+  expected: number
+}
+
 export interface SchemaMigration {
   version: number
   description: string
   sql: string
+  prerequisites?: readonly SchemaValidation[]
+  backfill?: (db: SqliteDatabase) => void
+  validations?: readonly SchemaValidation[]
 }
 
 /** Current schema version this build understands. */
-export const SCHEMA_VERSION = 10
+export const SCHEMA_VERSION = 13
 
 const MIGRATION_1_SQL = `
 CREATE TABLE assets (
@@ -147,6 +163,25 @@ CREATE INDEX idx_tm_units_project_locales
 CREATE INDEX idx_term_entries_project_status
   ON term_entries(project_id, status, created_at, id);
 `
+
+function backfillProposalIssuances(db: SqliteDatabase): void {
+  const insert = db.prepare(`
+    INSERT INTO proposal_issuances (
+      issuance_id, proposal_id, idempotency_key, session_id, run_id, tool_call_id,
+      model_provider, model_id, runtime, role, strategy, linguist_prompt_version,
+      prompt_hash, project_digest_hash, project_digest_revision,
+      turn_context_version, turn_context_snapshot_json, turn_context_hash,
+      toolset_hash, evidence_refs_json, term_refs_json, created_at
+    ) VALUES (${Array.from({ length: 22 }, () => '?').join(', ')})
+  `)
+  for (const row of db.prepare('SELECT * FROM proposals ORDER BY created_at, id').all() as ProposalRow[]) {
+    const proposal = proposalFromRow(row)
+    insert.run(...proposalIssuanceToParams(createProposalIssuance(proposal, {
+      idempotencyKey: `legacy:${proposal.id}`,
+      createdAt: proposal.createdAt,
+    })))
+  }
+}
 
 const MIGRATION_5_SQL = `
 CREATE TABLE critic_artifacts (
@@ -374,6 +409,198 @@ ALTER TABLE qa_findings ADD COLUMN waived_by TEXT;
 ALTER TABLE qa_findings ADD COLUMN waived_at TEXT;
 `
 
+const MIGRATION_11_SQL = `
+ALTER TABLE qa_findings ADD COLUMN rule_version TEXT NOT NULL DEFAULT 'legacy';
+ALTER TABLE qa_findings ADD COLUMN evidence_hash TEXT NOT NULL DEFAULT '';
+ALTER TABLE qa_findings ADD COLUMN first_seen_run_id TEXT NOT NULL DEFAULT 'legacy';
+ALTER TABLE qa_findings ADD COLUMN created_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z';
+
+UPDATE qa_findings SET evidence_hash = id WHERE evidence_hash = '';
+
+CREATE INDEX idx_qa_findings_identity
+  ON qa_findings(segment_id, segment_revision, code, rule_version, evidence_hash);
+
+CREATE TABLE qa_finding_occurrences (
+  occurrence_id TEXT PRIMARY KEY,
+  finding_id TEXT NOT NULL REFERENCES qa_findings(id) ON DELETE CASCADE,
+  qa_run_id TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  UNIQUE(finding_id, qa_run_id)
+);
+CREATE INDEX idx_qa_finding_occurrences_finding
+  ON qa_finding_occurrences(finding_id, observed_at, occurrence_id);
+
+CREATE TABLE qa_finding_status_events (
+  event_id TEXT PRIMARY KEY,
+  finding_id TEXT NOT NULL REFERENCES qa_findings(id) ON DELETE CASCADE,
+  from_status TEXT,
+  to_status TEXT NOT NULL,
+  actor_type TEXT NOT NULL,
+  actor_id TEXT,
+  reason TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_qa_finding_status_events_finding
+  ON qa_finding_status_events(finding_id, created_at, event_id);
+
+INSERT INTO qa_finding_occurrences
+  (occurrence_id, finding_id, qa_run_id, observed_at)
+SELECT
+  'qao:legacy:' || id,
+  id,
+  'legacy',
+  created_at
+FROM qa_findings;
+
+INSERT INTO qa_finding_status_events
+  (event_id, finding_id, from_status, to_status, actor_type, actor_id, reason, created_at)
+SELECT
+  'qse:legacy:' || id,
+  id,
+  NULL,
+  status,
+  CASE WHEN waived_by IS NULL THEN 'system' ELSE 'human' END,
+  waived_by,
+  waiver_reason,
+  COALESCE(waived_at, created_at)
+FROM qa_findings;
+
+CREATE TABLE critic_finding_qa_links (
+  artifact_id TEXT NOT NULL REFERENCES critic_artifacts(artifact_id) ON DELETE CASCADE,
+  critic_finding_id TEXT NOT NULL,
+  qa_finding_id TEXT NOT NULL REFERENCES qa_findings(id) ON DELETE CASCADE,
+  PRIMARY KEY (artifact_id, critic_finding_id, qa_finding_id)
+);
+CREATE INDEX idx_critic_finding_qa_links_qa
+  ON critic_finding_qa_links(qa_finding_id);
+`
+
+const MIGRATION_12_SQL = `
+ALTER TABLE proposal_mutations ADD COLUMN run_id TEXT;
+ALTER TABLE proposal_mutations ADD COLUMN tool_call_id TEXT;
+ALTER TABLE proposal_mutations ADD COLUMN event_sequence INTEGER;
+
+CREATE TABLE translation_jobs (
+  job_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  strategy TEXT NOT NULL CHECK(strategy IN ('fast', 'balanced', 'best')),
+  status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled')),
+  segment_ids_json TEXT NOT NULL,
+  base_revisions_json TEXT NOT NULL,
+  cursor INTEGER NOT NULL CHECK(cursor >= 0),
+  completed_segment_ids_json TEXT NOT NULL,
+  failed_segment_ids_json TEXT NOT NULL,
+  proposal_ids_json TEXT NOT NULL,
+  open_item_ids_json TEXT NOT NULL,
+  provenance_json TEXT NOT NULL,
+  failure_code TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_translation_jobs_session_status
+  ON translation_jobs(session_id, status, updated_at, job_id);
+CREATE INDEX idx_translation_jobs_run
+  ON translation_jobs(run_id, created_at, job_id);
+
+CREATE TABLE project_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  event_key TEXT NOT NULL UNIQUE,
+  run_id TEXT,
+  kind TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_project_events_run
+  ON project_events(run_id, sequence);
+
+CREATE TABLE project_event_acks (
+  consumer_id TEXT PRIMARY KEY,
+  sequence INTEGER NOT NULL CHECK(sequence >= 0),
+  acked_at TEXT NOT NULL
+);
+
+CREATE TABLE run_changes (
+  change_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  mutation_key TEXT NOT NULL REFERENCES proposal_mutations(idempotency_key),
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  change_kind TEXT NOT NULL CHECK(change_kind IN ('created', 'updated', 'deleted', 'touched')),
+  segment_id TEXT,
+  expected_revision INTEGER,
+  before_json TEXT,
+  after_json TEXT,
+  created_at TEXT NOT NULL,
+  undone_at TEXT
+);
+CREATE INDEX idx_run_changes_run
+  ON run_changes(run_id, change_id);
+`
+
+const MIGRATION_13_SQL = `
+CREATE TABLE proposal_issuances (
+  issuance_id TEXT PRIMARY KEY,
+  proposal_id TEXT NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+  idempotency_key TEXT,
+  session_id TEXT,
+  run_id TEXT,
+  tool_call_id TEXT,
+  model_provider TEXT,
+  model_id TEXT,
+  runtime TEXT,
+  role TEXT CHECK (role IS NULL OR role IN ('assistant', 'reviewer', 'auditor')),
+  strategy TEXT CHECK (strategy IS NULL OR strategy IN ('fast', 'balanced', 'best')),
+  linguist_prompt_version TEXT,
+  prompt_hash TEXT,
+  project_digest_hash TEXT,
+  project_digest_revision TEXT,
+  turn_context_version INTEGER,
+  turn_context_snapshot_json TEXT,
+  turn_context_hash TEXT,
+  toolset_hash TEXT,
+  evidence_refs_json TEXT NOT NULL,
+  term_refs_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (proposal_id, idempotency_key)
+);
+CREATE INDEX idx_proposal_issuances_proposal
+  ON proposal_issuances(proposal_id, created_at, issuance_id);
+
+ALTER TABLE term_entries RENAME TO term_entries_v12;
+
+CREATE TABLE term_entries (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  term TEXT NOT NULL,
+  translation TEXT NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'allowed'
+    CHECK (status IN ('allowed', 'preferred', 'required', 'forbidden', 'deprecated')),
+  case_sensitive INTEGER NOT NULL DEFAULT 0
+    CHECK (case_sensitive IN (0, 1)),
+  module TEXT,
+  category TEXT,
+  image_ref TEXT
+);
+
+INSERT INTO term_entries (
+  id, project_id, term, translation, note, created_at, status,
+  case_sensitive, module, category, image_ref
+)
+SELECT
+  id, project_id, term, translation, note, created_at, status,
+  case_sensitive, module, category, image_ref
+FROM term_entries_v12;
+
+DROP TABLE term_entries_v12;
+CREATE INDEX idx_term_entries_project_status
+  ON term_entries(project_id, status, created_at, id);
+`
+
 export const MIGRATIONS: readonly SchemaMigration[] = [
   { version: 1, description: 'initial CAT schema (plan 5.4)', sql: MIGRATION_1_SQL },
   { version: 2, description: 'idempotent human proposal mutations (PB-053)', sql: MIGRATION_2_SQL },
@@ -385,4 +612,53 @@ export const MIGRATIONS: readonly SchemaMigration[] = [
   { version: 8, description: 'T/E/P stage state and confirmation audit', sql: MIGRATION_8_SQL },
   { version: 9, description: 'proposal run provenance and explicit reconciliation lineage', sql: MIGRATION_9_SQL },
   { version: 10, description: 'QA waiver operator and timestamp evidence', sql: MIGRATION_10_SQL },
+  { version: 11, description: 'QA finding identity, occurrence/status history, and critic trace links', sql: MIGRATION_11_SQL },
+  { version: 12, description: 'durable translation jobs, run recovery, and project event outbox', sql: MIGRATION_12_SQL },
+  {
+    version: 13,
+    description: 'required terminology and proposal issuance provenance',
+    sql: MIGRATION_13_SQL,
+    prerequisites: [
+      {
+        sql: 'SELECT CASE WHEN MAX(version) = 12 THEN 0 ELSE 1 END AS violations FROM schema_migrations',
+        expected: 0,
+      },
+      {
+        sql: `SELECT 5 - COUNT(*) AS violations
+              FROM sqlite_master
+              WHERE type = 'table'
+                AND name IN ('proposals', 'term_entries', 'translation_jobs', 'project_events', 'run_changes')`,
+        expected: 0,
+      },
+    ],
+    backfill: backfillProposalIssuances,
+    validations: [
+      {
+        sql: `SELECT COUNT(*) AS violations
+              FROM proposals p
+              LEFT JOIN proposal_issuances i ON i.proposal_id = p.id
+              WHERE i.issuance_id IS NULL`,
+        expected: 0,
+      },
+      {
+        sql: `SELECT COUNT(*) AS violations
+              FROM proposal_issuances i
+              LEFT JOIN proposals p ON p.id = i.proposal_id
+              WHERE p.id IS NULL`,
+        expected: 0,
+      },
+      {
+        sql: `SELECT COUNT(*) AS violations
+              FROM term_entries
+              WHERE status NOT IN ('allowed', 'preferred', 'required', 'forbidden', 'deprecated')`,
+        expected: 0,
+      },
+      {
+        sql: `SELECT COUNT(*) AS violations
+              FROM proposal_issuances
+              WHERE issuance_id NOT LIKE 'pis_v2_%'`,
+        expected: 0,
+      },
+    ],
+  },
 ]

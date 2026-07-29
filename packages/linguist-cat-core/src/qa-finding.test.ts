@@ -17,7 +17,7 @@ describe('QA Finding（类型 + 不变量，无规则引擎）', () => {
       message: '数字不一致：源 3 处，译文 2 处',
     })
     expect(finding.status).toBe('open')
-    expect(finding.id).toMatch(/^qaf-/)
+    expect(finding.id).toMatch(/^qaf_v2_[0-9a-f]{64}$/)
     // PB-096：issueType/disposition 缺省按 code 静态映射表回填
     expect(finding.issueType).toBe('numbers_units_dates')
     expect(finding.disposition).toBe('defect')

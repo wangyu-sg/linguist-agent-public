@@ -70,6 +70,7 @@ function parseTermStatus(value: string, filename: string, row: number): TermEntr
   if (
     normalized === 'allowed'
     || normalized === 'preferred'
+    || normalized === 'required'
     || normalized === 'forbidden'
     || normalized === 'deprecated'
   ) {

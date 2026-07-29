@@ -14,18 +14,28 @@
  */
 
 import type {
+  BatchConsistencyDimensions,
+  BatchConsistencyPass,
   LinguistProject,
+  LinguistGenerationProvenance,
+  ProposalIssuance,
+  OpenQaFindingInput,
+  QaFinding,
   QaFindingDisposition,
   QaFindingSeverity,
   QaFindingStatus,
   QaIssueType,
+  QaRunOptions,
+  Segment,
   SegmentStatus,
+  TagToken,
 } from '@linguist/cat-core'
 import type {
   ContextDocKind,
   ProjectDatabase,
   SentencePattern,
   TermEntry,
+  TermEntryMatch,
   TmUnit,
   TmUnitMatch,
 } from '@linguist/cat-store'
@@ -36,13 +46,16 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_project_summary',
   'cat_list_assets',
   'cat_get_segments',
+  'cat_get_translation_context',
+  'cat_get_proposal_snapshot',
   'cat_search_tm',
   'cat_search_terms',
   'cat_propose_translations',
   'cat_run_qa',
   'cat_get_qa_findings',
   'cat_submit_critic_review',
-  'cat_run_batch_consistency',
+  'cat_plan_consistency_repairs',
+  'cat_create_consistency_proposals',
   'cat_search_sentence_patterns',
   'cat_read_context_doc',
 ] as const
@@ -76,6 +89,39 @@ export type ResolveLinguistCatProject = (
   call: LinguistCatToolCallInfo,
 ) => ResolvedLinguistCatProject | LinguistCatToolError
 
+export interface LinguistQaWorkerRequest {
+  segments: readonly Segment[]
+  options: QaRunOptions
+}
+
+export interface LinguistQaWorkerResult {
+  findings: OpenQaFindingInput[]
+  workerThreadId: number
+}
+
+export type LinguistQaWorker = (
+  request: LinguistQaWorkerRequest,
+  signal?: AbortSignal,
+  onProgress?: (phase: 'started' | 'completed') => void,
+) => Promise<LinguistQaWorkerResult>
+
+export interface LinguistConsistencyWorkerRequest {
+  segments: readonly Segment[]
+  options: QaRunOptions
+  persistedFindings: readonly QaFinding[]
+}
+
+export interface LinguistConsistencyWorkerResult {
+  pass: BatchConsistencyPass
+  workerThreadId: number
+}
+
+export type LinguistConsistencyWorker = (
+  request: LinguistConsistencyWorkerRequest,
+  signal?: AbortSignal,
+  onProgress?: (phase: 'started' | 'completed') => void,
+) => Promise<LinguistConsistencyWorkerResult>
+
 export interface LinguistCatToolsDeps {
   resolveProject: ResolveLinguistCatProject
   /**
@@ -94,6 +140,8 @@ export interface LinguistCatToolsDeps {
   modelId?: string
   /** Stored as Proposal provenance when present. */
   sessionId?: string
+  /** Current-turn host provenance; resolved locally per tool call. */
+  generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance
   /**
    * independent-audit exposes evidence reads only. It intentionally omits
    * existing QA conclusions, Proposal candidates and every write tool.
@@ -106,11 +154,17 @@ export interface LinguistCatToolsDeps {
    * 'linguist-critic-profile:v1' (the model never supplies identity).
    */
   criticSkillBytes?: () => string | Uint8Array | undefined
+  /** Electron injects the packaged node:worker_threads QA entry. */
+  qaWorker?: LinguistQaWorker
+  /** Electron injects the same packaged worker for full-project consistency analysis. */
+  consistencyWorker?: LinguistConsistencyWorker
 }
 
 /** CAT Tool 已提交的项目内变更；不含 projectId，避免模型输入影响项目 authority。 */
 export interface LinguistCatToolMutation {
   kind: 'proposal-created' | 'qa-updated' | 'project-updated'
+  /** cat.db outbox sequence; the host adds its transient push revision. */
+  sequence?: number
   segmentIds?: readonly string[]
   proposalIds?: readonly string[]
   qaFindingIds?: readonly string[]
@@ -120,6 +174,7 @@ export interface LinguistCatToolMutation {
 export const CAT_TOOL_PAGE_LIMITS = {
   listAssets: { defaultLimit: 50, maxLimit: 200 },
   getSegments: { defaultLimit: 20, maxLimit: 100 },
+  getTranslationContext: { defaultLimit: 50, maxLimit: 50 },
   searchTm: { defaultLimit: 20, maxLimit: 50 },
   searchTerms: { defaultLimit: 20, maxLimit: 50 },
   getQaFindings: { defaultLimit: 20, maxLimit: 100 },
@@ -186,6 +241,86 @@ export interface CatSegmentListItem {
   target: string
 }
 
+export interface CatSegmentBrief {
+  segmentId: string
+  revision: number
+  source: string
+  currentTarget: string
+}
+
+export interface CatEvidenceRef {
+  id: string
+  kind: 'segment-revision' | 'neighbor' | 'term' | 'tm'
+}
+
+export interface SegmentTranslationContext {
+  segmentId: string
+  assetId: string
+  revision: number
+  source: string
+  currentTarget: string
+  speaker?: string
+  notes?: string
+  previous: CatSegmentBrief[]
+  next: CatSegmentBrief[]
+  tags: TagToken[]
+  placeholderSignature: string[]
+  /** 仅承载项目明确声明的 Required authority；不得把 preferred 升格。 */
+  requiredTerms: TermEntryMatch[]
+  forbiddenTerms: TermEntryMatch[]
+  preferredTerms: TermEntryMatch[]
+  tmMatches: TmUnitMatch[]
+  warnings: string[]
+  evidence: CatEvidenceRef[]
+}
+
+export interface CatGetTranslationContextResult {
+  contexts: SegmentTranslationContext[]
+  totalRequested: number
+  /** Echoes the opaque input cursor; null is the first page. */
+  cursor: string | null
+  truncated: boolean
+  nextCursor?: string
+  suggestedSegmentIds?: string[]
+  maxBytes: number
+  usedBytes: number
+}
+
+export type CatProposalReviewSnapshotStatus =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'stale'
+
+export interface CatProposalReviewSnapshot {
+  snapshotId: string
+  snapshotHash: string
+  proposalId: string
+  status: CatProposalReviewSnapshotStatus
+  segmentId: string
+  assetId: string
+  source: string
+  currentTarget: string
+  proposedTarget: string
+  currentRevision: number
+  baseRevision: number
+  sourceLocale: string
+  targetLocale: string
+  context: {
+    speaker?: string
+    notes?: string
+    previous: CatSegmentBrief[]
+    next: CatSegmentBrief[]
+  }
+  evidence: Array<{
+    id: string
+    kind: 'segment-revision' | 'proposal-evidence' | 'term'
+  }>
+  issuanceCount: number
+  issuances: ProposalIssuance[]
+  producer: ProposalIssuance
+}
+
 /** Search envelope: capped results + total match count + optional note. */
 export interface CatSearchResult<TItem> {
   query: string
@@ -243,11 +378,13 @@ export interface CatProposeTranslationsResult {
 
 /** Result of cat_submit_critic_review (PB-083): advisory artifact + finding ids only. */
 export interface CatSubmitCriticReviewResult {
+  reviewId: string
   artifactId: string
+  verdict: 'pass' | 'issues' | 'abstain'
   findingIds: string[]
   qaFindingIds: string[]
   /** Advisory scope only — canCommit is burned to false; repairs go through proposals. */
-  repairScope: {
+  repairScope?: {
     authority: 'advisory_finding'
     canCommit: false
     segmentIds: string[]
@@ -262,6 +399,17 @@ export interface CatRunQaResult {
   dispositionCounts: Record<QaFindingDisposition, number>
 }
 
+export interface CatWorkerJobProgress {
+  jobProgress: {
+    jobId: string
+    status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+    cursor: number
+    total: number
+    completed: number
+    failed: number
+  }
+}
+
 export interface CatQaFindingItem {
   id: string
   segmentId: string
@@ -272,10 +420,23 @@ export interface CatQaFindingItem {
   message: string
   status: QaFindingStatus
   segmentRevision: number
+  ruleVersion: string
+  evidenceHash: string
+  firstSeenRunId: string
   waiverReason?: string
+  criticReviews?: Array<{
+    reviewId: string
+    criticFindingId: string
+    proposalId: string
+    snapshotId: string
+    snapshotHash: string
+    reviewerSessionId: string
+    reviewerModelId?: string
+    promptVersion: string
+  }>
 }
 
-/** cat_run_batch_consistency（PB-084）分组报告里的一条 finding。 */
+/** consistency plan 分组报告里的一条 finding。 */
 export interface CatBatchConsistencyFindingItem {
   findingId: string
   segmentId: string
@@ -285,32 +446,30 @@ export interface CatBatchConsistencyFindingItem {
   locked: boolean
 }
 
-/** 同 source 的一组一致性命中 + 组内多数非空 target 建议。 */
+/** 同 normalized source 的一致性命中与候选；候选计数不代表自动真理。 */
 export interface CatBatchConsistencyGroupItem {
+  groupId: string
   source: string
+  normalizedSource: string
   segmentIds: string[]
   findingIds: string[]
-  /** 组内多数非空 target（NFKC+trim 归一化计票）；组内全空时缺省。 */
-  suggestedTarget?: string
+  candidateTargets: Array<{ target: string; count: number; lockedCount: number }>
+  dimensions: BatchConsistencyDimensions
   findings: CatBatchConsistencyFindingItem[]
 }
 
-/**
- * cat_run_batch_consistency 结果。check-only 只报告（绝不写库）；repair
- * 额外创建 pending proposals（与 cat_propose_translations 同一审核链），
- * 绝不直接改段。
- */
-export interface CatRunBatchConsistencyResult {
-  mode: 'check-only' | 'repair'
+/** cat_plan_consistency_repairs：只读快照，planId 绑定 revision/target/lock/finding。 */
+export interface CatConsistencyPlanResult {
+  planId: string
   findingCount: number
   groupCount: number
   groups: CatBatchConsistencyGroupItem[]
-  /** repair 模式：新建/复用的 pending proposal ids（内容派生，幂等）。 */
-  proposalIds?: string[]
-  /** repair 模式的可信工具执行批次。 */
-  runId?: string
-  /** repair 模式：未自动修复的段及原因。 */
-  skipped?: Array<{ segmentId: string; reason: string }>
-  /** Present when there are no open consistency findings. */
   note?: string
+}
+
+/** cat_create_consistency_proposals：仅显式选择生成 pending Proposal。 */
+export interface CatCreateConsistencyProposalsResult {
+  planId: string
+  runId: string
+  proposalIds: string[]
 }

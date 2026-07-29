@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   BATCH_CONSISTENCY_CODES,
   buildBatchConsistencyPass,
-  targetedRepairProposalInputs,
+  selectedConsistencyProposalInputs,
   type BatchConsistencyPass,
 } from './batch-consistency'
 import type { AssetId, SegmentId } from './ids'
@@ -67,7 +67,8 @@ describe('PB-084 batch consistency projection', () => {
     })
     expect(pass.authority).toBe('advisory_finding')
     expect(pass.canCommit).toBe(false)
-    expect(pass.schemaVersion).toBe(1)
+    expect(pass.schemaVersion).toBe(2)
+    expect(pass.planId).toMatch(/^csp-[0-9a-f]{16}$/)
     expect(pass.findingCount).toBe(1)
     expect(pass.groups).toHaveLength(1)
     expect(pass.groups[0]!.findingIds).toEqual([open.id])
@@ -107,29 +108,36 @@ describe('PB-084 batch consistency projection', () => {
     expect(pass.findingCount).toBe(3)
   })
 
-  test('建议 target：多数获胜；平票取文档序首个；归一化只用于计票', () => {
+  test('候选 target 只报告计数，不自动成为修复真理', () => {
     const { segments, findings } = majorityFixture()
     const pass = buildBatchConsistencyPass({ findings, segments })
-    expect(pass.groups[0]!.suggestedTarget).toBe('译文甲')
+    expect(pass.groups[0]!.groupId).toMatch(/^csg-[0-9a-f]{16}$/)
+    expect(pass.groups[0]!.candidateTargets).toEqual([
+      { target: '译文甲', count: 2, lockedCount: 0 },
+      { target: '译文乙', count: 1, lockedCount: 0 },
+    ])
+    expect(selectedConsistencyProposalInputs(pass, [])).toEqual([])
 
-    // 平票：甲/乙各一票 → 排序后首个段（ordinal 小者）的变体获胜
+    // 平票只维持确定性展示顺序，不产生隐式选择。
     const tie = buildBatchConsistencyPass({
       findings: [finding(segments[0]!, 'INCONSISTENT_REPEATED_SOURCE'), finding(segments[2]!, 'INCONSISTENT_REPEATED_SOURCE')],
       segments: [segments[0]!, segments[2]!],
     })
-    expect(tie.groups[0]!.suggestedTarget).toBe('译文甲')
+    expect(tie.groups[0]!.candidateTargets.map((item) => item.target)).toEqual(['译文甲', '译文乙'])
 
-    // NFKC+trim 归一化：首尾空白/全半角差异不另立变体，但返回代表段原文
+    // NFKC+trim 归一化：首尾空白/全半角差异不另立变体，返回首个代表原文。
     const half = segment(5, { source: 'Repeated', target: '译文甲 ' })
     const full = segment(6, { source: 'Repeated', target: '译文甲' })
     const normalized = buildBatchConsistencyPass({
       findings: [finding(half, 'INCONSISTENT_REPEATED_SOURCE'), finding(full, 'INCONSISTENT_REPEATED_SOURCE')],
       segments: [half, full],
     })
-    expect(normalized.groups[0]!.suggestedTarget).toBe('译文甲 ')
+    expect(normalized.groups[0]!.candidateTargets).toEqual([
+      { target: '译文甲 ', count: 2, lockedCount: 0 },
+    ])
   })
 
-  test('锁定段 target 参与计票；全空组无建议 target', () => {
+  test('锁定段仅作为标记过的候选上下文；全空组无候选 target', () => {
     const unlockedA = segment(1, { source: 'Repeated', target: '译文乙' })
     const unlockedB = segment(2, { source: 'Repeated', target: '译文丙' })
     const locked = segment(3, { source: 'Repeated', target: '译文乙', locked: true })
@@ -137,8 +145,11 @@ describe('PB-084 batch consistency projection', () => {
       findings: [unlockedA, unlockedB, locked].map((seg) => finding(seg, 'INCONSISTENT_REPEATED_SOURCE')),
       segments: [unlockedA, unlockedB, locked],
     })
-    // 乙 2 票（含锁定段）胜 → 建议乙；锁定段自身不修复
-    expect(pass.groups[0]!.suggestedTarget).toBe('译文乙')
+    expect(pass.groups[0]!.candidateTargets[0]).toEqual({
+      target: '译文乙',
+      count: 2,
+      lockedCount: 1,
+    })
 
     const emptyA = segment(4, { source: 'Empty', target: '', status: 'untranslated' })
     const emptyB = segment(5, { source: 'Empty', target: '  ', status: 'untranslated' })
@@ -146,31 +157,42 @@ describe('PB-084 batch consistency projection', () => {
       findings: [finding(emptyA, 'CRITIC_CONSISTENCY'), finding(emptyB, 'CRITIC_CONSISTENCY')],
       segments: [emptyA, emptyB],
     })
-    expect(emptyPass.groups[0]!.suggestedTarget).toBeUndefined()
+    expect(emptyPass.groups[0]!.candidateTargets).toEqual([])
   })
 
-  test('targetedRepairProposalInputs：只覆盖受影响段；锁定/已一致/无建议跳过', () => {
+  test('apply 只接受显式 group/target/segment 选择，锁定与越界选择 fail closed', () => {
     const { segments, findings } = majorityFixture()
     const locked = segment(4, { source: 'Repeated', target: '译文丁', locked: true, revision: 9 })
-    const noSuggestionA = segment(5, { source: 'Solo', target: '独立译文' })
     const pass = buildBatchConsistencyPass({
       findings: [
         ...findings,
         finding(locked, 'INCONSISTENT_REPEATED_SOURCE'),
-        finding(noSuggestionA, 'REQUIRED_TERM'),
       ],
-      segments: [...segments, locked, noSuggestionA],
+      segments: [...segments, locked],
     })
-    const inputs = targetedRepairProposalInputs(pass)
-    // Repeated 组：建议甲（甲3票 vs 乙/丁各1票）→ 仅乙段（revision 4）出 proposal；
-    // 甲两段已一致、锁定段跳过；Solo 组单段自一致 → 无 proposal
+    const group = pass.groups[0]!
+    const inputs = selectedConsistencyProposalInputs(pass, [{
+      groupId: group.groupId,
+      proposedTarget: '人工审定译文',
+      segmentIds: [segments[2]!.id],
+    }])
     expect(inputs).toHaveLength(1)
     expect(inputs[0]).toEqual({
       segmentId: segments[2]!.id,
       baseRevision: 4,
-      proposedTarget: '译文甲',
+      proposedTarget: '人工审定译文',
       evidenceRefs: [finding(segments[2]!, 'INCONSISTENT_REPEATED_SOURCE').id as string],
     })
+    expect(() => selectedConsistencyProposalInputs(pass, [{
+      groupId: group.groupId,
+      proposedTarget: '不能改锁定段',
+      segmentIds: [locked.id],
+    }])).toThrow(/locked/)
+    expect(() => selectedConsistencyProposalInputs(pass, [{
+      groupId: 'csg-0000000000000000',
+      proposedTarget: '未知组',
+      segmentIds: [segments[2]!.id],
+    }])).toThrow(/Unknown consistency group/)
   })
 
   test('确定性 + 幂等：乱序输入同输出；输入不被修改；返回已冻结', () => {
@@ -182,15 +204,26 @@ describe('PB-084 batch consistency projection', () => {
       segments: [...segments].reverse(),
     })
     expect(pass).toEqual(shuffled)
-    expect(targetedRepairProposalInputs(pass)).toEqual(targetedRepairProposalInputs(shuffled))
     expect(JSON.stringify({ segments, findings })).toBe(snapshot)
     expect(Object.isFrozen(pass)).toBe(true)
     expect(Object.isFrozen(pass.groups)).toBe(true)
-    expect(Object.isFrozen(targetedRepairProposalInputs(pass))).toBe(true)
-    // 幂等：修复提案被接受后（段 target 变为建议值），重跑不再生成新 proposal
+    const selection = [{
+      groupId: pass.groups[0]!.groupId,
+      proposedTarget: '译文甲',
+      segmentIds: [segments[2]!.id],
+    }]
+    expect(selectedConsistencyProposalInputs(pass, selection)).toEqual(
+      selectedConsistencyProposalInputs(shuffled, selection),
+    )
+    expect(Object.isFrozen(selectedConsistencyProposalInputs(pass, selection))).toBe(true)
+    // 已与显式 target 一致的段不再生成重复 proposal。
     const repaired = segments.map((seg) => ({ ...seg, target: '译文甲', revision: seg.revision + 1 }))
     const converged: BatchConsistencyPass = buildBatchConsistencyPass({ findings, segments: repaired })
-    expect(targetedRepairProposalInputs(converged)).toEqual([])
+    expect(selectedConsistencyProposalInputs(converged, [{
+      groupId: converged.groups[0]!.groupId,
+      proposedTarget: '译文甲',
+      segmentIds: repaired.map((segment) => segment.id),
+    }])).toEqual([])
   })
 
   test('引用未知段的 finding 被忽略，不掀翻整批', () => {

@@ -5,6 +5,7 @@ import {
   readCatResultLocation,
   readProposalResultIdentity,
   loadProposalReviewStatuses,
+  serializeCatToolResultDetails,
   summarizeProposalReviewStatuses,
 } from './cat-result'
 
@@ -139,6 +140,27 @@ describe('CAT Tool Result 原生摘要', () => {
     expect(renderResult('cat_run_qa', 'error fallback marker', true)).toContain('error fallback marker')
   })
 
+  test('given Timeline 同时保存短摘要与 details when 展开 then 只为可安全摘要的 CAT payload 使用 details', () => {
+    const details = {
+      contexts: [{ source: PRIVATE_TEXT }],
+      totalRequested: 1,
+      truncated: false,
+    }
+    const serialized = serializeCatToolResultDetails('cat_get_translation_context', details)
+    expect(serialized).toBe(JSON.stringify(details))
+    expect(renderResult('cat_get_translation_context', serialized!)).toContain('已读取 1 / 1 个片段')
+    expect(renderResult('cat_get_translation_context', serialized!)).not.toContain(PRIVATE_TEXT)
+    expect(serializeCatToolResultDetails('cat_future_tool', details)).toBeUndefined()
+
+    const circular: Record<string, unknown> = {
+      contexts: [],
+      totalRequested: 0,
+      truncated: false,
+    }
+    circular.self = circular
+    expect(serializeCatToolResultDetails('cat_get_translation_context', circular)).toBeUndefined()
+  })
+
   test('given 严格 Project/Segment ID when 渲染摘要 then 只为可信位置显示原生按钮', () => {
     const projectOnly = renderResult('cat_run_qa', {
       projectId: PROJECT_ID,
@@ -173,7 +195,7 @@ describe('CAT Tool Result 原生摘要', () => {
   })
 
   test('given 持久化 proposal tool_result when Timeline 重开 then 只接受可信身份并汇总 DB 终态', () => {
-    const proposalIds = ['prp-0000000000000001', 'prp-0000000000000002']
+    const proposalIds = ['prp-0000000000000001', `prp_v2_${'a'.repeat(64)}`]
     expect(readProposalResultIdentity('cat_propose_translations', {
       projectId: PROJECT_ID,
       proposalIds,

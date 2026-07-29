@@ -1,9 +1,9 @@
 {
   "name": "@linguist/cat-core",
-  "version": "0.0.9",
+  "version": "0.0.12",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Pure CAT domain model for Linguist Agent: projects, assets, segments, proposals, QA findings. No IO, no runtime dependencies.",
+  "description": "Pure CAT domain model for Linguist Agent: projects, assets, segments, proposals, QA findings. No IO.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -12,6 +12,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@formatjs/icu-messageformat-parser": "3.5.15"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

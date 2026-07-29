@@ -14,6 +14,7 @@
  * clear message; the store never guesses or silently resets it.
  */
 
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -34,6 +35,7 @@ import {
   type WorkflowStage,
 } from '@linguist/cat-core'
 import {
+  StoreDatabaseIdentityError,
   StoreIndexCorruptError,
   StoreNotFoundError,
   StoreProjectExistsError,
@@ -52,6 +54,32 @@ interface ProjectIndexFile {
 export interface ProjectIndexOptions {
   /** Injected clock; defaults to wall time. */
   now?: () => string
+  /** Calling application version; injected by the host, never read from Electron here. */
+  applicationVersion?: string
+}
+
+export interface MainDatabaseSnapshot {
+  /** This is a point-in-time digest of cat.db after a FULL WAL checkpoint, not live integrity state. */
+  state: 'post-migration-checkpoint'
+  sizeBytes: number
+  sha256: string
+  measuredAt: string
+}
+
+export interface ProjectDatabaseIdentity {
+  version: 1
+  projectId: string
+  createdByVersion: string
+  applicationId?: number
+  schemaVersion?: number
+  lastMigratedByVersion?: string
+  mainFileSnapshot?: MainDatabaseSnapshot
+  [key: string]: unknown
+}
+
+export interface ProjectManifest extends LinguistProject {
+  databaseIdentity?: ProjectDatabaseIdentity
+  [key: string]: unknown
 }
 
 export interface RemovedProject {
@@ -70,10 +98,12 @@ export interface SetWorkflowConfigInput {
 export class ProjectIndex {
   readonly rootDir: string
   private readonly now: () => string
+  private readonly applicationVersion: string
 
   constructor(rootDir: string, options: ProjectIndexOptions = {}) {
     this.rootDir = rootDir
     this.now = options.now ?? (() => new Date().toISOString())
+    this.applicationVersion = options.applicationVersion ?? 'unknown'
   }
 
   get indexPath(): string {
@@ -119,7 +149,13 @@ export class ProjectIndex {
     for (const sub of PROJECT_SUBDIRS) {
       mkdirSync(join(dir, sub), { recursive: true })
     }
-    this.writeProjectMeta(project)
+    this.writeProjectMeta(project, {
+      databaseIdentity: {
+        version: 1,
+        projectId: project.id,
+        createdByVersion: this.applicationVersion,
+      },
+    })
     index.projects.push(project)
     this.writeIndex(index)
     return project
@@ -246,21 +282,57 @@ export class ProjectIndex {
 
   /** Read project.json metadata from a project dir. */
   readProjectMeta(projectId: string): LinguistProject {
-    const path = this.projectMetaPath(projectId)
-    if (!existsSync(path)) throw new StoreNotFoundError('project metadata', path)
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(readFileSync(path, 'utf8'))
-    } catch (err) {
-      throw new StoreIndexCorruptError(path, err instanceof Error ? err.message : String(err))
-    }
-    assertValidProject(parsed, path)
-    normalizeProjectQualityProfile(parsed)
-    return parsed
+    const { databaseIdentity: _databaseIdentity, ...project } = this.readProjectManifest(projectId)
+    return project
   }
 
-  private writeProjectMeta(project: LinguistProject): void {
-    atomicWriteJson(this.projectMetaPath(project.id), project)
+  readProjectManifest(projectId: string): ProjectManifest {
+    const path = this.projectMetaPath(projectId)
+    if (!existsSync(path)) throw new StoreNotFoundError('project metadata', path)
+    return readProjectManifestFile(path)
+  }
+
+  recordDatabaseIdentity(
+    projectId: string,
+    input: {
+      applicationId: number
+      schemaVersion: number
+      migrated: boolean
+    },
+  ): ProjectManifest {
+    const manifest = this.readProjectManifest(projectId)
+    const dbPath = this.projectDbPath(projectId)
+    const bytes = readFileSync(dbPath)
+    const previous = manifest.databaseIdentity
+    const databaseIdentity: ProjectDatabaseIdentity = {
+      ...previous,
+      version: 1,
+      projectId,
+      createdByVersion: previous?.createdByVersion ?? 'unknown',
+      applicationId: input.applicationId,
+      schemaVersion: input.schemaVersion,
+      lastMigratedByVersion: input.migrated
+        ? this.applicationVersion
+        : previous?.lastMigratedByVersion ?? 'unknown',
+      mainFileSnapshot: {
+        state: 'post-migration-checkpoint',
+        sizeBytes: bytes.byteLength,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        measuredAt: this.now(),
+      },
+    }
+    const updated = { ...manifest, databaseIdentity }
+    atomicWriteJson(this.projectMetaPath(projectId), updated)
+    return updated
+  }
+
+  private writeProjectMeta(
+    project: LinguistProject,
+    extension: Partial<ProjectManifest> = {},
+  ): void {
+    const path = this.projectMetaPath(project.id)
+    const existing = existsSync(path) ? readProjectManifestFile(path) : undefined
+    atomicWriteJson(path, { ...existing, ...extension, ...project })
   }
 
   private readIndex(): ProjectIndexFile {
@@ -298,7 +370,20 @@ export class ProjectIndex {
   }
 }
 
-function assertValidProject(value: unknown, filePath: string): asserts value is LinguistProject {
+export function readProjectManifestFile(filePath: string): ProjectManifest {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(filePath, 'utf8'))
+  } catch (err) {
+    throw new StoreIndexCorruptError(filePath, err instanceof Error ? err.message : String(err))
+  }
+  assertValidProject(parsed, filePath)
+  assertValidDatabaseIdentity(parsed.databaseIdentity, parsed.id, filePath)
+  normalizeProjectQualityProfile(parsed)
+  return parsed
+}
+
+function assertValidProject(value: unknown, filePath: string): asserts value is ProjectManifest {
   const p = value as Partial<LinguistProject> | null
   if (
     typeof p !== 'object' ||
@@ -313,6 +398,30 @@ function assertValidProject(value: unknown, filePath: string): asserts value is 
     typeof p.updatedAt !== 'string'
   ) {
     throw new StoreIndexCorruptError(filePath, `invalid project entry: ${JSON.stringify(value)}`)
+  }
+}
+
+function assertValidDatabaseIdentity(
+  value: unknown,
+  projectId: string,
+  filePath: string,
+): asserts value is ProjectDatabaseIdentity | undefined {
+  if (value === undefined) return
+  const identity = value as Partial<ProjectDatabaseIdentity> | null
+  if (
+    typeof identity !== 'object'
+    || identity === null
+    || identity.version !== 1
+    || typeof identity.createdByVersion !== 'string'
+    || identity.createdByVersion.length === 0
+  ) {
+    throw new StoreIndexCorruptError(filePath, 'invalid databaseIdentity')
+  }
+  if (identity.projectId !== projectId) {
+    throw new StoreDatabaseIdentityError(
+      filePath,
+      `manifest project id ${projectId} does not match databaseIdentity ${String(identity.projectId)}`,
+    )
   }
 }
 

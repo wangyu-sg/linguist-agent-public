@@ -58,10 +58,11 @@ describe('ProjectCard', () => {
         project={project}
         summaryState={{ status: 'loading' }}
         health={{
+          kind: 'quick',
           projectId: project.id,
           healthy: false,
           checkedAt: '2026-07-02T08:00:00.000Z',
-          checks: [{ id: 'cat_db_open', ok: false, detail: 'STORE_NOT_FOUND' }],
+          checks: [{ id: 'cat_db_open', ok: false, scope: 'complete', detail: 'STORE_NOT_FOUND' }],
         }}
         onOpen={() => undefined}
         onSettings={() => undefined}

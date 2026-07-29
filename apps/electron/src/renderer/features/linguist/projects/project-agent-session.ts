@@ -41,6 +41,31 @@ export function selectProjectAgentSession(
   return true
 }
 
+export function selectFallbackLinguistSession(
+  store: JotaiStore,
+  projectId: string,
+  excludedSessionId: string,
+): string | undefined {
+  const fallback = store.get(agentSessionsAtom)
+    .filter((session) =>
+      session.id !== excludedSessionId
+      && isUsableProjectSession(session, projectId),
+    )
+    .sort((left, right) =>
+      Number(!!right.pinned) - Number(!!left.pinned)
+      || right.updatedAt - left.updatedAt
+      || left.id.localeCompare(right.id),
+    )[0]
+
+  store.set(projectCurrentAgentSessionIdMapAtom, (previous) => {
+    const next = new Map(previous)
+    if (fallback) next.set(projectId, fallback.id)
+    else next.delete(projectId)
+    return next
+  })
+  return fallback?.id
+}
+
 export function registerCreatedProjectSession(
   store: JotaiStore,
   projectId: string,

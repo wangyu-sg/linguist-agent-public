@@ -181,7 +181,7 @@ export function describeLinguistIpcError(error: LinguistIpcError): string {
   return `${base}（${error.code}）`
 }
 
-// ===== 健康报告 =====
+// ===== Quick Health 报告 =====
 
 /** 健康报告中未通过的检查项。 */
 export function failedHealthChecks(
@@ -194,7 +194,7 @@ const HEALTH_CHECK_LABELS: Record<LinguistProjectHealthCheckInfo['id'], string> 
   project_json: '项目元数据',
   cat_db_open: '翻译数据库',
   schema_version: '数据库版本',
-  asset_sources: '资产源校验',
+  asset_sources: '资产源有界抽样',
 }
 
 /** 检查项 id → 中文标签；未知 id 原样返回（契约外 id 不 crash）。 */

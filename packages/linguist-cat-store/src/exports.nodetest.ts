@@ -21,7 +21,7 @@ test('record: identical staged artifact is idempotent; different content creates
       segmentCount: 3,
       now: '2026-01-03T00:00:00.000Z',
     })
-    assert.match(record.id, /^exp-[0-9a-f]{16}$/)
+    assert.match(record.id, /^exp_v2_[0-9a-f]{64}$/)
     assert.equal(record.projectId, project.id)
     assert.equal(record.createdAt, '2026-01-03T00:00:00.000Z')
 

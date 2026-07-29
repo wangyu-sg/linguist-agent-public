@@ -16,9 +16,9 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
 - **Agent**：Proma 原生完整 Agent 工作区，支持 Claude / Pi Runtime、工具、Thinking、权限、Queue / Steer、Skills、MCP 和工作区文件。
 - **Chat**：Proma 原生多 Provider 对话、附件、工具、上下文控制与并排比较。
-- **Linguist**：项目、资产、虚拟化 Segment Grid、人工编辑、Proposal 审核、TM / TB、Context、确定性 QA、阶段确认、交付预检、导出、备份与恢复。
+- **Linguist**：项目、资产、虚拟化 Segment Grid、人工编辑、Proposal 审核、TM / TB、Context、确定性 QA、阶段确认、运行摘要/安全撤销、交付预检、导出、完整性扫描、备份与恢复。
 
-Linguist 模式嵌入同一个 Proma `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA 规则直接提交 Segment。
+Linguist 是一等 Agent Profile：在 Proma Base 上叠加版本化的 Profile、Role、Fast / Balanced / Best Strategy、Project Digest 与每轮 Context。它嵌入同一个 Proma `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA/Required/Forbidden 规则直接提交 Segment。
 
 ## 架构
 
@@ -37,8 +37,10 @@ Proma Desktop App
 
 - `packages/linguist-cat-core` 不依赖 React、Electron、Proma UI 或 SQLite。
 - `packages/linguist-cat-store` 负责每项目 `cat.db`、原始资产、备份与导出记录。
-- `packages/linguist-cat-tools` 的项目身份只来自 Session binding，12 个工具按项目、参考资料、QA、Proposal/Critic 分模块。
+- `packages/linguist-cat-tools` 的项目身份只来自 Session binding，15 个工具按项目、参考资料、QA、Proposal/Critic 分模块。
 - `LinguistProjectService` 保持单一对外接口，内部按生命周期、资源、质量与交付拆分。
+- Proposal 内容与每次 Issuance/Provenance 分离持久化；长任务使用 Job/Checkpoint、幂等 mutation、durable outbox 和按运行撤销。
+- 项目打开只做有界 Quick Health；Full Integrity Scrub 在独立 worker thread 中检查全量摘要、SQLite/引用链、导出与 Session workspace。
 - Proma 核心触点受 [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md) 和架构测试约束。
 
 ## 数据目录
@@ -80,6 +82,7 @@ CI 覆盖 frozen install、类型检查、根测试、CAT 分层测试、Linguis
 - 原生 IME composition 与 Native Save 防覆盖手工验证；
 - VoiceOver、完整键盘路径和拖拽手感；
 - Fast / Balanced / Best 的真实游戏文本盲评；
+- 真实 Provider/模型链路与真实客户格式样本回归；
 - 14 天连续个人日用与问题回收。
 
 签名、公证、公开更新渠道和跨平台发布不属于当前个人 Alpha 目标。完整状态见 [HANDOFF.md](./docs/HANDOFF.md)、[TODO.md](./TODO.md) 和 [LINGUIST_FUSION_QUEUE.md](./docs/roadmap/LINGUIST_FUSION_QUEUE.md)。

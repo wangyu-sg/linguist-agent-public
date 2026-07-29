@@ -122,6 +122,8 @@ export function LinguistWorkbenchShell({
   } | null>(null)
   const summary = summaryState.status === 'ready' ? summaryState.summary : undefined
   const activeAsset = summary?.assets.find((asset) => asset.assetId === uiState.activeAssetId)
+  const agentOpen = uiState.agentPresentation !== 'closed'
+  const agentFull = uiState.agentPresentation === 'full'
   const progressLabel = summaryState.status === 'ready'
     ? stageProgressSummary(
         project.workflowStage ?? 'translation',
@@ -345,11 +347,13 @@ export function LinguistWorkbenchShell({
               type="button"
               variant="ghost"
               size="sm"
-              aria-pressed={uiState.agentRailOpen}
-              onClick={() => setUiState({ agentRailOpen: !uiState.agentRailOpen })}
-              className={cn(uiState.agentRailOpen && 'bg-accent/70')}
+              aria-pressed={agentOpen}
+              onClick={() => setUiState({
+                agentPresentation: agentOpen ? 'closed' : 'rail',
+              })}
+              className={cn(agentOpen && 'bg-accent/70')}
             >
-              {uiState.agentRailOpen
+              {agentOpen
                 ? <PanelRight aria-hidden="true" />
                 : <Bot aria-hidden="true" />}
               Agent
@@ -378,7 +382,7 @@ export function LinguistWorkbenchShell({
       />
 
       <div className="relative flex min-h-0 flex-1">
-        {assetNavigator !== undefined && uiState.assetNavigatorOpen && (
+        {!agentFull && assetNavigator !== undefined && uiState.assetNavigatorOpen && (
           <aside
             aria-label="资产导航"
             data-workbench-slot="asset-navigator"
@@ -420,13 +424,16 @@ export function LinguistWorkbenchShell({
 
         <div
           data-workbench-slot="cat-column"
-          className="relative flex min-h-0 min-w-[32rem] flex-1 flex-col max-md:min-w-0"
+          className={cn(
+            'relative min-h-0 min-w-[32rem] flex-1 flex-col max-md:min-w-0',
+            agentFull ? 'hidden' : 'flex',
+          )}
         >
           <main data-workbench-slot="segment-grid" className="min-h-0 min-w-0 flex-1 overflow-hidden">
             {children}
           </main>
 
-          {bottomDock !== undefined && uiState.bottomDockOpen && (
+          {!agentFull && bottomDock !== undefined && uiState.bottomDockOpen && (
             <section
               aria-label="语言资源面板"
               data-workbench-slot="bottom-dock"
@@ -467,14 +474,20 @@ export function LinguistWorkbenchShell({
           )}
         </div>
 
-        {agentRail !== undefined && uiState.agentRailOpen && (
+        {agentRail !== undefined && agentOpen && (
           <aside
             aria-label="项目 Agent"
-            data-workbench-slot="agent-rail"
-            className="relative min-h-0 shrink-0 overflow-hidden bg-content-area/55 shadow-[-1px_0_0_hsl(var(--border)/0.45)] xl:max-w-[var(--agent-rail-inline-max)] max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-20 max-xl:max-w-[calc(100%-3rem)] max-xl:bg-content-area max-xl:shadow-xl"
-            style={agentRailStyle}
+            data-workbench-slot={agentFull ? 'agent-full' : 'agent-rail'}
+            data-linguist-agent-presentation={uiState.agentPresentation}
+            className={cn(
+              'relative min-h-0 overflow-hidden bg-content-area/55',
+              agentFull
+                ? 'flex-1'
+                : 'shrink-0 shadow-[-1px_0_0_hsl(var(--border)/0.45)] xl:max-w-[var(--agent-rail-inline-max)] max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-20 max-xl:max-w-[calc(100%-3rem)] max-xl:bg-content-area max-xl:shadow-xl',
+            )}
+            style={agentFull ? undefined : agentRailStyle}
           >
-            <div
+            {!agentFull && <div
               role="separator"
               aria-label="调整项目 Agent 宽度"
               aria-orientation="vertical"
@@ -502,13 +515,13 @@ export function LinguistWorkbenchShell({
                 data-resize-grip="true"
                 className="pointer-events-none absolute inset-y-4 left-1/2 w-px -translate-x-1/2 rounded-full bg-border transition-colors group-hover:bg-primary/70 group-focus-visible:bg-primary"
               />
-            </div>
+            </div>}
             {agentRail}
           </aside>
         )}
       </div>
 
-      <footer
+      {!agentFull && <footer
         aria-label="本地化工作台状态栏"
         className="flex min-h-7 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-content-area px-4 py-1 text-[11px] text-muted-foreground shadow-[0_-1px_0_hsl(var(--border)/0.35)]"
       >
@@ -528,7 +541,7 @@ export function LinguistWorkbenchShell({
           )}
         </div>
         <span className="hidden sm:inline">↑↓ 切换片段 · Enter 编辑 · Esc 取消</span>
-      </footer>
+      </footer>}
     </section>
   )
 }

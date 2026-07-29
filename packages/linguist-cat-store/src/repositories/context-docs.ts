@@ -6,7 +6,7 @@
  * the service layer composes blob removal (best-effort) on top.
  */
 
-import { createHash } from 'node:crypto'
+import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 import {
@@ -35,13 +35,12 @@ export interface ContextDocSearch {
 }
 
 function stableId(projectId: string, input: ContextDocInput): string {
-  const content = JSON.stringify([
+  return deriveStableIdV2('ctx', [
     projectId,
     input.kind,
     input.originalFilename,
     input.sha256 ?? null,
   ])
-  return `ctx-${createHash('sha256').update(content).digest('hex').slice(0, 16)}`
 }
 
 /** Escape LIKE wildcards so query is a literal substring match. */

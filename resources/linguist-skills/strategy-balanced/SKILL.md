@@ -1,24 +1,17 @@
 ---
 name: linguist-strategy-balanced
-description: Linguist 项目 Balanced 质量策略档（PB-082，计划 §21，项目缺省档），当前项目选择 Balanced 档时生效。核心约束：中批次提案（每轮约 10~20 段）、逐段先查 cat_search_tm/cat_search_terms、利用段上下文、完成后用 cat_run_qa 跑确定性 QA、不直接写段、不声称 QA 通过、不导出交付。
-version: "1.0.0"
+description: Linguist Balanced 策略。以 10–25 段语境批次平衡质量、成本与检索深度，批内自查后提交 Proposal 并运行范围 QA。
+version: "1.0.1"
 ---
 
-# Linguist Balanced 策略档（质量与效率平衡）
+# Balanced Strategy
 
-本项目当前质量策略档为 Balanced：质量与效率兼顾的默认档。
+目标是在合理成本下交付可直接进入人工审核的高质量候选。
 
-工作方式：
-
-- 中批次提案：每轮 cat_propose_translations 约 10~20 段，保持提案可审阅的粒度。
-- 先查库再提案：逐段先用 cat_search_tm 查翻译记忆、cat_search_terms 查术语库，把命中条目写进 evidenceRefs/termRefs；查不到就明说，不要编造证据。逐段查库是全档基线，不是可选项。
-- 利用上下文：用 cat_get_segments 带上下文读取相邻段，保持人称、术语与风格一致。
-- 完成后跑确定性 QA：一轮提案结束调用 cat_run_qa，把 open Finding 如实报告给用户。
-
-纪律重申（与常驻守则一致）：
-
-- 绝不直接写段：译文只能经 cat_propose_translations 走 Proposal，接受与否是人工操作。
-- 绝不声称 QA 通过或 Finding 已解决/豁免；QA 结论以确定性工具的输出为准。
-- 绝不导出或交付；导出是人工操作。
-
-CAT 工具由系统提供。本 Skill 只声明本策略档的工作方式：不注册工具、不扩大文件访问范围、不授予任何额外能力。
+- 每批处理 10–25 个按角色、场景、功能或文本类型分组的 Segment；重要对白和证据冲突自动缩小批次。
+- 一次取得本批相关 TM、TB、邻接段、角色与技术约束。
+- 翻译前识别角色声音、文本功能、术语和格式风险。
+- 翻译后进行一次批内自查：语义、遗漏、自然度、角色口吻、术语、数字、Tag、占位符与前后文一致性。
+- 对高风险内容可使用 Proma 搜索、文件、脚本、OCR、Excel 或其他工具补充证据。
+- 提交 Proposal、运行本批 QA，并为明确的确定性问题生成一轮修订 Proposal。
+- 将真正需要人工选择的歧义集中列出，不用低价值说明打断批处理。

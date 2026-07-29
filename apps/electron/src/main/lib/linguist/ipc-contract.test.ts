@@ -18,15 +18,22 @@ import {
   LINGUIST_CAT_IPC_CHANNELS,
   LINGUIST_CAT_PAGE_MAX,
   LINGUIST_CAT_SEARCH_MAX_LENGTH,
+  LINGUIST_DIAGNOSTICS_IPC_CHANNELS,
   LINGUIST_EXPORT_IPC_CHANNELS,
   LINGUIST_IPC_ERROR_CODES,
   LINGUIST_LEGACY_BACKUP_NAME_PATTERN,
   LINGUIST_LOCALE_MAX_LENGTH,
   LINGUIST_LOCALE_PATTERN,
+  LINGUIST_ASSET_ID_PATTERN,
   LINGUIST_PROJECT_ID_PATTERN,
+  LINGUIST_PROJECT_ASSET_ID_PATTERN,
   LINGUIST_PROJECT_IPC_CHANNELS,
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
+  LINGUIST_PROPOSAL_ID_PATTERN,
   LINGUIST_PROPOSAL_IPC_CHANNELS,
+  LINGUIST_QA_FINDING_ID_PATTERN,
+  LINGUIST_REFERENCE_ID_PATTERN,
+  LINGUIST_SEGMENT_ID_PATTERN,
   LINGUIST_SESSION_IPC_CHANNELS,
 } from '@proma/shared'
 
@@ -44,6 +51,10 @@ test('query, human-only CAS edit, context, and QA channels', () => {
       RESOLVE_QA_FINDING: 'linguist.cat.resolveQaFinding',
       WAIVE_QA_FINDING: 'linguist.cat.waiveQaFinding',
       WAIVE_QA_FINDINGS_BULK: 'linguist.cat.waiveQaFindingsBulk',
+      LIST_PROJECT_EVENTS: 'linguist.cat.listProjectEvents',
+      ACK_PROJECT_EVENTS: 'linguist.cat.ackProjectEvents',
+      GET_LATEST_RUN_SUMMARY: 'linguist.cat.getLatestRunSummary',
+      UNDO_LATEST_RUN: 'linguist.cat.undoLatestRun',
       PROJECT_MUTATION: 'linguist.cat.projectMutation',
     })
     expect(LINGUIST_CAT_PAGE_MAX).toBe(200)
@@ -57,6 +68,16 @@ describe('linguist native export IPC contract (PB-073)', () => {
       PREPARE_ASSET: 'linguist.exports.prepareAsset',
       SAVE_ASSET: 'linguist.exports.saveAsset',
       LIST: 'linguist.exports.list',
+    })
+  })
+})
+
+describe('linguist diagnostics IPC contract (LA-OBS-001)', () => {
+  test('status, redacted preview and explicit export channels stay exact', () => {
+    expect(LINGUIST_DIAGNOSTICS_IPC_CHANNELS).toEqual({
+      GET_STATUS: 'linguist.diagnostics.getStatus',
+      PREVIEW_BUNDLE: 'linguist.diagnostics.previewBundle',
+      EXPORT_BUNDLE: 'linguist.diagnostics.exportBundle',
     })
   })
 })
@@ -171,6 +192,22 @@ describe('validation constants', () => {
     expect(LINGUIST_PROJECT_ID_PATTERN.test('')).toBe(false)
   })
 
+  test('content-derived id patterns accept legacy v1 and full-digest v2 only', () => {
+    const digest = 'a'.repeat(64)
+    for (const [pattern, prefix] of [
+      [LINGUIST_ASSET_ID_PATTERN, 'ast'],
+      [LINGUIST_SEGMENT_ID_PATTERN, 'seg'],
+      [LINGUIST_PROPOSAL_ID_PATTERN, 'prp'],
+      [LINGUIST_QA_FINDING_ID_PATTERN, 'qaf'],
+      [LINGUIST_REFERENCE_ID_PATTERN, 'tmu'],
+      [LINGUIST_PROJECT_ASSET_ID_PATTERN, 'ctx'],
+    ] as const) {
+      expect(pattern.test(`${prefix}-0123456789abcdef`)).toBe(true)
+      expect(pattern.test(`${prefix}_v2_${digest}`)).toBe(true)
+      expect(pattern.test(`${prefix}_v2_${digest.slice(0, 63)}`)).toBe(false)
+    }
+  })
+
   test('locale pattern: BCP-47-ish shape', () => {
     for (const ok of ['en', 'zh', 'zh-CN', 'zh-Hant', 'zh-Hant-TW', 'pt-BR', 'en-US', 'de-CH-1901']) {
       expect(LINGUIST_LOCALE_PATTERN.test(ok)).toBe(true)
@@ -246,6 +283,24 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     expect(ipcSource).toContain('LINGUIST_CAT_IPC_CHANNELS.EDIT_SEGMENT')
   })
 
+  test('LA-EVENT-001 durable gap pull and explicit ack cross preload and main IPC', () => {
+    expect(preloadSource).toContain('linguistCatListProjectEvents:')
+    expect(preloadSource).toContain('linguistCatAckProjectEvents:')
+    for (const member of ['LIST_PROJECT_EVENTS', 'ACK_PROJECT_EVENTS']) {
+      expect(preloadSource).toContain(`LINGUIST_CAT_IPC_CHANNELS.${member}`)
+      expect(ipcSource).toContain(`LINGUIST_CAT_IPC_CHANNELS.${member}`)
+    }
+  })
+
+  test('K-004/K-005 run summary and host-authorized CAT undo cross preload and main IPC', () => {
+    expect(preloadSource).toContain('linguistCatGetLatestRunSummary:')
+    expect(preloadSource).toContain('linguistCatUndoLatestRun:')
+    for (const member of ['GET_LATEST_RUN_SUMMARY', 'UNDO_LATEST_RUN']) {
+      expect(preloadSource).toContain(`LINGUIST_CAT_IPC_CHANNELS.${member}`)
+      expect(ipcSource).toContain(`LINGUIST_CAT_IPC_CHANNELS.${member}`)
+    }
+  })
+
   test('preload exposes the twelve linguistProjects*/linguistBackups* methods wired to the channels', () => {
     for (const method of PRELOAD_METHODS) {
       expect(preloadSource).toContain(`${method}:`)
@@ -280,6 +335,20 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     expect(preloadSource).toContain('linguistExportsList:')
     expect(preloadSource).toContain('LINGUIST_EXPORT_IPC_CHANNELS.LIST')
     expect(ipcSource).toContain('LINGUIST_EXPORT_IPC_CHANNELS.LIST')
+  })
+
+  test('LA-OBS-001 diagnostics channels are wired through preload and ipc.ts', () => {
+    for (const member of ['GET_STATUS', 'PREVIEW_BUNDLE', 'EXPORT_BUNDLE']) {
+      expect(preloadSource).toContain(`LINGUIST_DIAGNOSTICS_IPC_CHANNELS.${member}`)
+      expect(ipcSource).toContain(`LINGUIST_DIAGNOSTICS_IPC_CHANNELS.${member}`)
+    }
+    for (const method of [
+      'linguistDiagnosticsGetStatus',
+      'linguistDiagnosticsPreviewBundle',
+      'linguistDiagnosticsExportBundle',
+    ]) {
+      expect(preloadSource).toContain(`${method}:`)
+    }
   })
 
   const PRELOAD_SESSION_METHODS = [

@@ -32,6 +32,7 @@ function openedProject(
         qualityProfile: 'balanced',
       },
       health: {
+        kind: 'quick',
         projectId,
         healthy: true,
         checkedAt: '2026-07-01T08:00:00.000Z',

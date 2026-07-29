@@ -32,7 +32,7 @@ test('schema v7 contract: fresh open reaches current schema and retains the QA c
   const project = store.createProject({ name: 'P', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'ws' })
   const db = store.openProject(project.id)
   try {
-    assert.equal(SCHEMA_VERSION, 10)
+    assert.ok(SCHEMA_VERSION >= 8)
     assert.equal(db.schemaVersion, SCHEMA_VERSION)
     assert.ok(db.catDb.appliedMigrations.some((migration) => migration.version === 7))
     assert.ok(db.catDb.appliedMigrations.some((migration) => migration.version === 8))

@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useSetAtom } from 'jotai'
 import {
   LINGUIST_PROJECT_ID_PATTERN,
+  LINGUIST_PROPOSAL_ID_PATTERN,
   LINGUIST_SEGMENT_ID_PATTERN,
   type LinguistIpcResult,
   type LinguistProposalDiff,
@@ -29,8 +30,6 @@ export interface ProposalResultIdentity {
   proposalIds: string[]
 }
 
-const PROPOSAL_ID_PATTERN = /^prp-[0-9a-f]{16}$/
-
 function parseObject(result: string): Record<string, unknown> | null {
   try {
     const value: unknown = JSON.parse(result)
@@ -53,6 +52,18 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export function serializeCatToolResultDetails(
+  toolName: string,
+  details: unknown,
+): string | undefined {
+  if (!isObject(details) || summarizeCatResult(toolName, details) === null) return undefined
+  try {
+    return JSON.stringify(details)
+  } catch {
+    return undefined
+  }
+}
+
 export function readProposalResultIdentity(
   toolName: string,
   payload: Record<string, unknown>,
@@ -68,7 +79,7 @@ export function readProposalResultIdentity(
     || payload.proposalIds.length === 0
     || payload.proposalIds.length > 50
     || !payload.proposalIds.every(
-      (proposalId) => typeof proposalId === 'string' && PROPOSAL_ID_PATTERN.test(proposalId),
+      (proposalId) => typeof proposalId === 'string' && LINGUIST_PROPOSAL_ID_PATTERN.test(proposalId),
     )
   ) return null
   return { projectId: payload.projectId, proposalIds: payload.proposalIds }
@@ -178,6 +189,27 @@ function summarizeCatResult(
         : null
     case 'cat_search_terms':
       return searchSummary(payload, '项目术语', '术语')
+    case 'cat_get_translation_context': {
+      const contexts = arrayLength(payload.contexts)
+      const total = count(payload.totalRequested)
+      if (contexts === null || total === null || typeof payload.truncated !== 'boolean') return null
+      return {
+        title: '翻译上下文',
+        detail: `已读取 ${contexts} / ${total} 个片段${payload.truncated ? '，可继续' : ''}`,
+      }
+    }
+    case 'cat_get_proposal_snapshot': {
+      const labels: Record<string, string> = {
+        pending: '待审核',
+        accepted: '已接受',
+        rejected: '已拒绝',
+        stale: '已过期',
+      }
+      const status = typeof payload.status === 'string' ? labels[payload.status] : undefined
+      return status === undefined || typeof payload.snapshotId !== 'string'
+        ? null
+        : { title: '提案快照', detail: `状态：${status}` }
+    }
     case 'cat_propose_translations': {
       const proposals = arrayLength(payload.proposalIds, true)
       return proposals === null
@@ -222,6 +254,15 @@ function summarizeCatResult(
             title: '批量一致性',
             detail: `${groups} 组发现 ${findings} 个问题，创建 ${proposals} 条待审核建议`,
           }
+    }
+    case 'cat_search_sentence_patterns':
+      return pagedSummary(payload, '句式库', '句式')
+    case 'cat_read_context_doc': {
+      const total = count(payload.totalChars)
+      const shown = typeof payload.text === 'string' ? payload.text.length : 0
+      return total === null || shown > total
+        ? null
+        : { title: '上下文文档', detail: `已读取 ${shown} / ${total} 个字符` }
     }
     default:
       return null

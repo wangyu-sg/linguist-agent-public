@@ -24,6 +24,7 @@ import { MessageResponse } from '@/components/ai-elements/message'
 import { getToolIcon, extractFilePath } from './tool-utils'
 import { getToolPhrase } from './tool-phrase'
 import { ToolResultRenderer } from './tool-result-renderers'
+import { serializeCatToolResultDetails } from './tool-result-renderers/cat-result'
 import { PreviewOpenButton } from './tool-result-renderers/preview-open-button'
 import { getTaskGetStatusLabel, parseTaskGetResult, type ParsedTaskGetResult } from './tool-result-renderers/task-get-result'
 import { parseTaskListResult, type ParsedTaskListItem } from './tool-result-renderers/task-list-result'
@@ -47,7 +48,11 @@ interface ToolResultData {
 }
 
 /** 在 allMessages 中查找匹配 toolUseId 的工具结果 */
-function useToolResult(toolUseId: string, allMessages: SDKMessage[]): ToolResultData | null {
+function useToolResult(
+  toolUseId: string,
+  toolName: string,
+  allMessages: SDKMessage[],
+): ToolResultData | null {
   return React.useMemo(() => {
     for (const msg of allMessages) {
       if (msg.type !== 'user') continue
@@ -59,14 +64,16 @@ function useToolResult(toolUseId: string, allMessages: SDKMessage[]): ToolResult
         if (block.type === 'tool_result') {
           const resultBlock = block as SDKToolResultBlock
           if (resultBlock.tool_use_id === toolUseId) {
-            let result: string | undefined
-            if (typeof resultBlock.content === 'string') {
-              result = resultBlock.content
-            } else if (Array.isArray(resultBlock.content)) {
-              result = (resultBlock.content as Array<{ type: string; text?: string }>)
-                .filter((c) => c.type === 'text' && typeof c.text === 'string')
-                .map((c) => c.text)
-                .join('\n')
+            let result = serializeCatToolResultDetails(toolName, userMsg.tool_use_result)
+            if (result === undefined) {
+              if (typeof resultBlock.content === 'string') {
+                result = resultBlock.content
+              } else if (Array.isArray(resultBlock.content)) {
+                result = (resultBlock.content as Array<{ type: string; text?: string }>)
+                  .filter((c) => c.type === 'text' && typeof c.text === 'string')
+                  .map((c) => c.text)
+                  .join('\n')
+              }
             }
             return { result, isError: resultBlock.is_error }
           }
@@ -74,7 +81,7 @@ function useToolResult(toolUseId: string, allMessages: SDKMessage[]): ToolResult
       }
     }
     return null
-  }, [toolUseId, allMessages])
+  }, [toolUseId, toolName, allMessages])
 }
 
 // ===== useSubAgentMeta Hook =====
@@ -336,7 +343,7 @@ interface ToolUseBlockProps {
 
 function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed = false, childBlocks, basePath, isStreaming }: ToolUseBlockProps): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
-  const toolResult = useToolResult(block.id, allMessages)
+  const toolResult = useToolResult(block.id, block.name, allMessages)
   const resultText = toolResult?.result
   const isError = toolResult?.isError === true
   const shouldShowResult = !!resultText

@@ -5,6 +5,7 @@ import {
   affectedLoadedPageOffsets,
   getProjectMutationRefreshPlan,
   reduceProjectMutation,
+  replayProjectMutations,
   subscribeToProjectMutations,
 } from './project-mutation-atoms'
 
@@ -122,6 +123,94 @@ describe('LF-064 Workbench mutation 增量刷新', () => {
       resources: true,
       segmentIds: ['segment-205'],
     })
+  })
+
+  test('given renderer reconnect when durable events 分页补拉 then 顺序应用后才 ack', async () => {
+    const calls: string[] = []
+    const events = [
+      {
+        projectId: 'project-a',
+        revision: 1,
+        sequence: 1,
+        kind: 'job-updated' as const,
+        jobId: 'job-1',
+        job: { status: 'running' as const, cursor: 1, total: 3, completed: 1, failed: 0 },
+      },
+      {
+        ...proposalCreated,
+        revision: 2,
+        sequence: 2,
+      },
+      {
+        projectId: 'project-a',
+        revision: 3,
+        sequence: 3,
+        kind: 'qa-updated' as const,
+        qaFindingIds: ['qa-1'],
+      },
+    ]
+    const replayed = await replayProjectMutations(
+      'project-a',
+      INITIAL_PROJECT_MUTATION_STATE,
+      {
+        consumerId: 'renderer-test',
+        pull: async ({ afterSequence }) => {
+          calls.push(`pull:${afterSequence}`)
+          return afterSequence === 0
+            ? { ok: true, data: { events: events.slice(0, 2), hasMore: true } }
+            : { ok: true, data: { events: events.slice(2), hasMore: false } }
+        },
+        ack: async ({ throughSequence }) => {
+          calls.push(`ack:${throughSequence}`)
+          return {
+            ok: true,
+            data: {
+              consumerId: 'renderer-test',
+              sequence: throughSequence,
+              ackedAt: '2026-07-29T00:00:00.000Z',
+            },
+          }
+        },
+      },
+    )
+
+    expect(calls).toEqual(['pull:0', 'pull:2', 'ack:3'])
+    expect(replayed.lastSequence).toBe(3)
+    expect(replayed.lastRevision).toBe(3)
+    expect(replayed.latest?.event.kind).toBe('qa-updated')
+    expect(replayed.latest?.gap).toBe(true)
+    expect(getProjectMutationRefreshPlan(replayed)).toMatchObject({
+      summary: true,
+      segments: 'current-page',
+      proposals: true,
+      qa: true,
+      context: true,
+      resources: true,
+    })
+  })
+
+  test('given malformed replay window when event sequence 重复或跳号 then fail closed 且不 ack', async () => {
+    for (const sequence of [2, 4]) {
+      let acknowledged = false
+      await expect(replayProjectMutations(
+        'project-a',
+        { ...INITIAL_PROJECT_MUTATION_STATE, lastSequence: 2 },
+        {
+          pull: async () => ({
+            ok: true,
+            data: {
+              events: [{ ...proposalCreated, revision: sequence, sequence }],
+              hasMore: false,
+            },
+          }),
+          ack: async () => {
+            acknowledged = true
+            throw new Error('must not ack')
+          },
+        },
+      )).rejects.toThrow('INVALID_PROJECT_EVENT_REPLAY')
+      expect(acknowledged).toBe(false)
+    }
   })
 
   test('given segment、QA 与 asset mutation when 规划刷新 then 分别命中行页、QA 与资源 seam', () => {

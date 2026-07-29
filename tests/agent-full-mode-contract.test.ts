@@ -19,6 +19,15 @@ const chatView = source('apps/electron/src/renderer/components/chat/ChatView.tsx
 const tabContent = source('apps/electron/src/renderer/components/tabs/TabContent.tsx')
 const mainArea = source('apps/electron/src/renderer/components/tabs/MainArea.tsx')
 const leftSidebar = source('apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx')
+const agentSessionActionsMenu = source(
+  'apps/electron/src/renderer/components/session-tree/AgentSessionActionsMenu.tsx',
+)
+const agentSessionTreeItem = source(
+  'apps/electron/src/renderer/components/session-tree/AgentSessionTreeItem.tsx',
+)
+const linguistSessionTreeItem = source(
+  'apps/electron/src/renderer/features/linguist/sidebar/LinguistSessionTreeItem.tsx',
+)
 const projectAgentRail = source(
   'apps/electron/src/renderer/features/linguist/projects/ProjectAgentRail.tsx',
 )
@@ -96,16 +105,22 @@ describe('Agent Full 模式行为契约', () => {
   test('Given a Linguist project, When its Agent rail opens, Then the Workbench mounts the native AgentView', () => {
     expect(localizationWorkbench).toContain('<ProjectAgentRail')
     expect(projectAgentRail).toContain('<AgentView')
-    expect(projectAgentRail).toContain('presentation="rail"')
+    expect(projectAgentRail).toContain('presentation={presentation}')
     expect(projectAgentRail).toContain('contextSummary={contextSummary}')
     expect(projectAgentRail).not.toContain('LinguistComposer')
     expect(projectAgentRail).not.toContain('LinguistAgentMessages')
   })
 
   test('Given a project Agent rail, When switching to Full and back, Then it reuses the same session and Project Tab seams', () => {
-    expect(projectAgentRail).toContain('useOpenSession')
-    expect(projectAgentRail).toContain("openSession('agent', sessionId, sessionTitle)")
-    expect(projectAgentRail).toContain('在完整 Agent Tab 中打开')
+    expect(projectAgentRail).not.toContain('useOpenSession')
+    expect(projectAgentRail).not.toContain("openSession('agent'")
+    expect(projectAgentRail).toContain("setUiState({ agentPresentation: 'full' })")
+    expect(projectAgentRail).toContain("setUiState({ agentPresentation: 'rail' })")
+    expect(projectAgentRail).toContain('presentation={presentation}')
+    expect(projectAgentRail).toContain('返回本地化工作台')
+    expect(projectAgentRail).toContain("event.key !== 'Escape'")
+    expect(projectAgentRail).toContain('aria-keyshortcuts="Escape"')
+    expect(projectAgentRail).toContain('expandButtonRef.current?.focus()')
     expect(linguistBindingBadge).toContain('openLocalizationProject(store, projectId)')
     expect(linguistBindingBadge).toContain('返回 Linguist 项目')
     expect(projectAgentRail.match(/<AgentView/g)).toHaveLength(1)
@@ -115,10 +130,22 @@ describe('Agent Full 模式行为契约', () => {
   test('Given a compact project Agent rail, When the CAT task needs space, Then Hide and Full controls stay beside its one-row actions', () => {
     expect(projectAgentRail).toContain('aria-label="项目 Agent 快捷动作"')
     expect(projectAgentRail).toContain('aria-label="收起项目 Agent"')
-    expect(projectAgentRail).toContain('setUiState({ agentRailOpen: false })')
-    expect(projectAgentRail).toContain('aria-label="在完整 Agent Tab 中打开"')
+    expect(projectAgentRail).toContain("setUiState({ agentPresentation: 'closed' })")
+    expect(projectAgentRail).toContain('aria-label="在 Linguist 中展开项目 Agent"')
     expect(projectAgentRail).toContain('className="h-7 min-w-0 px-2 text-[11px]"')
     expect(projectAgentRail).not.toMatch(/<p className="text-\[11px\] leading-4 text-muted-foreground">/)
+  })
+
+  test('Given ordinary Agent and Linguist sessions, When rendering actions, Then they share one menu and Linguist cannot move projects', () => {
+    expect(leftSidebar).toContain('<AgentSessionActionsMenu')
+    expect(linguistSessionTreeItem).toContain('<AgentSessionActionsMenu')
+    expect(leftSidebar).toContain('<AgentSessionTreeItem')
+    expect(linguistSessionTreeItem).toContain('<AgentSessionTreeItem')
+    expect(agentSessionTreeItem).toContain("event.key === 'Escape'")
+    expect(agentSessionActionsMenu).toContain('canMove && onMove')
+    expect(linguistSessionTreeItem).not.toContain('onMove=')
+    expect(leftSidebar).toContain("setPendingDeleteTarget({ kind: 'agent-session', id })")
+    expect(leftSidebar).toContain("setPendingDeleteTarget({ kind: 'chat-conversation', id })")
   })
 
   test('Given a running conversation, When messages update, Then tool lifecycle and recovery actions stay on the native renderer', () => {

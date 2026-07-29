@@ -30,7 +30,7 @@ test('voice profiles: upsert create/get round-trip with tone markers and taboos'
       notes: '年轻游侠',
       updatedBy: 'pm-a',
     })
-    assert.ok(created.id.startsWith('vpr-'))
+    assert.match(created.id, /^vpr_v2_[0-9a-f]{64}$/)
     assert.deepEqual(db.voiceProfiles.get(created.id), created)
 
     // 同 speaker+textType 重建幂等返回既有行。

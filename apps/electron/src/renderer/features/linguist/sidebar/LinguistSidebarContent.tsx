@@ -6,13 +6,18 @@ import {
   FolderOpen,
   Languages,
   Loader2,
-  MessageSquare,
   Plus,
   RefreshCw,
 } from 'lucide-react'
 import type { AgentSessionMeta, LinguistProjectInfo } from '@proma/shared'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
+import {
+  deleteSessionTarget,
+  type SessionDeleteTarget,
+} from '@/components/session-tree/session-actions'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import {
   activeTabAtom,
   projectCurrentAgentSessionIdMapAtom,
@@ -26,8 +31,12 @@ import { describeLinguistIpcError } from '../projects/project-utils'
 import { openLocalizationProject } from '../projects/open-localization-project'
 import {
   registerCreatedProjectSession,
+  selectFallbackLinguistSession,
   selectProjectAgentSession,
 } from '../projects/project-agent-session'
+import { linguistWorkbenchUiStateAtomFamily } from '../projects/cat-workspace-atoms'
+import { LinguistProjectActionsMenu } from './LinguistProjectActionsMenu'
+import { LinguistSessionTreeItem } from './LinguistSessionTreeItem'
 
 export {
   registerCreatedProjectSession,
@@ -47,6 +56,11 @@ interface LinguistSidebarContentViewProps {
   onOpenProjectManagement?: () => void
   onSelectSession?: (projectId: string, sessionId: string) => void
   onCreateSession?: (projectId: string) => void
+  onOpenProjectSettings?: (projectId: string) => void
+  onRenameSession?: (projectId: string, sessionId: string, title: string) => void
+  onTogglePinSession?: (projectId: string, sessionId: string) => void
+  onToggleArchiveSession?: (projectId: string, sessionId: string) => void
+  onDeleteSession?: (projectId: string, sessionId: string) => void
 }
 
 /** LF-021：Linguist 模式专属侧栏内容，不复刻 Agent / Chat 会话树。 */
@@ -63,6 +77,11 @@ export function LinguistSidebarContentView({
   onOpenProjectManagement,
   onSelectSession,
   onCreateSession,
+  onOpenProjectSettings,
+  onRenameSession,
+  onTogglePinSession,
+  onToggleArchiveSession,
+  onDeleteSession,
 }: LinguistSidebarContentViewProps): React.ReactElement {
   const projects = state.status === 'ready'
     ? state.projects.filter((project) => project.archivedAt === undefined)
@@ -133,6 +152,11 @@ export function LinguistSidebarContentView({
                 error={sessionError?.projectId === project.id ? sessionError.message : null}
                 onSelectSession={onSelectSession}
                 onCreateSession={onCreateSession}
+                onOpenSettings={onOpenProjectSettings}
+                onRenameSession={onRenameSession}
+                onTogglePinSession={onTogglePinSession}
+                onToggleArchiveSession={onToggleArchiveSession}
+                onDeleteSession={onDeleteSession}
               />
             ))}
           </ul>
@@ -167,6 +191,7 @@ export function LinguistSidebarContent(): React.ReactElement {
   const setActiveView = useSetAtom(activeViewAtom)
   const activeTab = useAtomValue(activeTabAtom)
   const sessions = useAtomValue(agentSessionsAtom)
+  const setSessions = useSetAtom(agentSessionsAtom)
   const currentSessionIds = useAtomValue(projectCurrentAgentSessionIdMapAtom)
   const store = useStore()
   const [creatingProjectId, setCreatingProjectId] = React.useState<string | null>(null)
@@ -174,6 +199,9 @@ export function LinguistSidebarContent(): React.ReactElement {
     projectId: string
     message: string
   } | null>(null)
+  const [pendingDeleteTarget, setPendingDeleteTarget] = React.useState<
+    Extract<SessionDeleteTarget, { kind: 'linguist-session' }> | null
+  >(null)
   const activeProjectId = activeTab?.type === 'linguist-project' ? activeTab.projectId : null
   const handleOpenProjectManagement = React.useCallback((): void => {
     setActiveView('projects')
@@ -253,25 +281,143 @@ export function LinguistSidebarContent(): React.ReactElement {
     store,
   ])
 
+  const selectFallbackAfterMutation = React.useCallback((
+    projectId: string,
+    sessionId: string,
+  ): void => {
+    if (!selectFallbackLinguistSession(store, projectId, sessionId)) {
+      store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
+        agentPresentation: 'closed',
+      })
+    }
+  }, [store])
+
+  const handleRenameSession = React.useCallback(async (
+    projectId: string,
+    sessionId: string,
+    title: string,
+  ): Promise<void> => {
+    try {
+      const updated = await window.electronAPI.updateAgentSessionTitle(sessionId, title)
+      setSessions((previous) => replaceAgentSessionInFreshnessOrder(previous, updated))
+    } catch {
+      setSessionError({ projectId, message: '重命名会话失败' })
+    }
+  }, [setSessions])
+
+  const handleTogglePinSession = React.useCallback(async (
+    projectId: string,
+    sessionId: string,
+  ): Promise<void> => {
+    try {
+      const updated = await window.electronAPI.togglePinAgentSession(sessionId)
+      setSessions((previous) => replaceAgentSessionInFreshnessOrder(previous, updated))
+    } catch {
+      setSessionError({ projectId, message: '更新会话置顶状态失败' })
+    }
+  }, [setSessions])
+
+  const handleToggleArchiveSession = React.useCallback(async (
+    projectId: string,
+    sessionId: string,
+  ): Promise<void> => {
+    try {
+      const updated = await window.electronAPI.toggleArchiveAgentSession(sessionId)
+      const wasCurrent = store.get(projectCurrentAgentSessionIdMapAtom).get(projectId) === sessionId
+      setSessions((previous) => replaceAgentSessionInFreshnessOrder(previous, updated))
+      if (updated.archived && wasCurrent) selectFallbackAfterMutation(projectId, sessionId)
+    } catch {
+      setSessionError({ projectId, message: '更新会话归档状态失败' })
+    }
+  }, [selectFallbackAfterMutation, setSessions, store])
+
+  const handleOpenProjectSettings = React.useCallback(async (
+    projectId: string,
+  ): Promise<void> => {
+    try {
+      if (activeProjectId !== projectId) {
+        const opened = await openLocalizationProject(store, projectId)
+        if (!opened.ok) {
+          setSessionError({ projectId, message: describeLinguistIpcError(opened.error) })
+          return
+        }
+      }
+      store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
+        projectSettingsOpen: true,
+      })
+    } catch {
+      setSessionError({ projectId, message: '打开项目设置失败' })
+    }
+  }, [activeProjectId, store])
+
+  const handleConfirmDeleteSession = React.useCallback(async (): Promise<void> => {
+    const target = pendingDeleteTarget
+    if (!target) return
+    try {
+      await deleteSessionTarget(target, {
+        deleteChatConversation: window.electronAPI.deleteConversation,
+        deleteAgentSession: window.electronAPI.deleteAgentSession,
+      })
+      const wasCurrent = store.get(projectCurrentAgentSessionIdMapAtom)
+        .get(target.projectId) === target.id
+      const nextSessions = await window.electronAPI.listAgentSessions()
+        .catch(() => store.get(agentSessionsAtom).filter((session) => session.id !== target.id))
+      store.set(agentSessionsAtom, nextSessions)
+      if (wasCurrent) selectFallbackAfterMutation(target.projectId, target.id)
+      toast.success('会话已删除')
+    } catch {
+      setSessionError({ projectId: target.projectId, message: '删除会话失败' })
+    } finally {
+      setPendingDeleteTarget(null)
+    }
+  }, [pendingDeleteTarget, selectFallbackAfterMutation, store])
+
   return (
-    <LinguistSidebarContentView
-      state={state}
-      onRetry={refresh}
-      activeProjectId={activeProjectId}
-      projectManagementActive={activeView === 'projects'}
-      onOpenProject={handleOpenProject}
-      onOpenProjectManagement={handleOpenProjectManagement}
-      sessions={sessions}
-      currentSessionIds={currentSessionIds}
-      creatingProjectId={creatingProjectId}
-      sessionError={sessionError}
-      onSelectSession={(projectId, sessionId) => {
-        void handleSelectSession(projectId, sessionId)
-      }}
-      onCreateSession={(projectId) => {
-        void handleCreateSession(projectId)
-      }}
-    />
+    <>
+      <LinguistSidebarContentView
+        state={state}
+        onRetry={refresh}
+        activeProjectId={activeProjectId}
+        projectManagementActive={activeView === 'projects'}
+        onOpenProject={handleOpenProject}
+        onOpenProjectManagement={handleOpenProjectManagement}
+        sessions={sessions}
+        currentSessionIds={currentSessionIds}
+        creatingProjectId={creatingProjectId}
+        sessionError={sessionError}
+        onSelectSession={(projectId, sessionId) => {
+          void handleSelectSession(projectId, sessionId)
+        }}
+        onCreateSession={(projectId) => {
+          void handleCreateSession(projectId)
+        }}
+        onOpenProjectSettings={(projectId) => {
+          void handleOpenProjectSettings(projectId)
+        }}
+        onRenameSession={(projectId, sessionId, title) => {
+          void handleRenameSession(projectId, sessionId, title)
+        }}
+        onTogglePinSession={(projectId, sessionId) => {
+          void handleTogglePinSession(projectId, sessionId)
+        }}
+        onToggleArchiveSession={(projectId, sessionId) => {
+          void handleToggleArchiveSession(projectId, sessionId)
+        }}
+        onDeleteSession={(projectId, sessionId) => {
+          setPendingDeleteTarget({ kind: 'linguist-session', projectId, id: sessionId })
+        }}
+      />
+      <ConfirmDialog
+        open={pendingDeleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteTarget(null)
+        }}
+        title="确认删除会话"
+        description="删除后将无法恢复，确定要删除这个会话吗？"
+        confirmLabel="删除"
+        onConfirm={handleConfirmDeleteSession}
+      />
+    </>
   )
 }
 
@@ -285,6 +431,11 @@ function ProjectRow({
   error,
   onSelectSession,
   onCreateSession,
+  onOpenSettings,
+  onRenameSession,
+  onTogglePinSession,
+  onToggleArchiveSession,
+  onDeleteSession,
 }: {
   project: LinguistProjectInfo
   active: boolean
@@ -295,47 +446,60 @@ function ProjectRow({
   error: string | null
   onSelectSession?: (projectId: string, sessionId: string) => void
   onCreateSession?: (projectId: string) => void
+  onOpenSettings?: (projectId: string) => void
+  onRenameSession?: (projectId: string, sessionId: string, title: string) => void
+  onTogglePinSession?: (projectId: string, sessionId: string) => void
+  onToggleArchiveSession?: (projectId: string, sessionId: string) => void
+  onDeleteSession?: (projectId: string, sessionId: string) => void
 }): React.ReactElement {
   return (
     <li className="flex flex-col gap-0.5">
-      <div className={`flex items-center rounded-[10px] transition-colors ${
-        active
-          ? 'bg-primary/[0.12] text-foreground'
-          : 'text-foreground/75 hover:bg-foreground/[0.06]'
-      }`}
+      <LinguistProjectActionsMenu
+        project={project}
+        onOpen={() => onOpen(project.id)}
+        onCreateSession={() => onCreateSession?.(project.id)}
+        onOpenSettings={() => onOpenSettings?.(project.id)}
       >
-        <button
-          type="button"
-          aria-label={`打开项目 ${project.name}`}
-          aria-current={active ? 'page' : undefined}
-          onClick={() => onOpen(project.id)}
-          className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left"
+        <div
+          className={`flex min-w-0 flex-1 items-center rounded-[10px] transition-colors ${
+            active
+              ? 'bg-primary/[0.12] text-foreground'
+              : 'text-foreground/75 hover:bg-foreground/[0.06]'
+          }`}
         >
-          <span className="flex size-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/[0.08] text-primary/70">
-            <FolderOpen size={14} aria-hidden="true" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-medium">
-              {project.name}
+          <button
+            type="button"
+            aria-label={`打开项目 ${project.name}`}
+            aria-current={active ? 'page' : undefined}
+            onClick={() => onOpen(project.id)}
+            className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left"
+          >
+            <span className="flex size-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/[0.08] text-primary/70">
+              <FolderOpen size={14} aria-hidden="true" />
             </span>
-            <span className="block truncate font-mono text-[11px] text-foreground/60">
-              {project.sourceLocale} → {project.targetLocale}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-medium">
+                {project.name}
+              </span>
+              <span className="block truncate font-mono text-[11px] text-foreground/60">
+                {project.sourceLocale} → {project.targetLocale}
+              </span>
             </span>
-          </span>
-        </button>
-        <button
-          type="button"
-          aria-label={`在项目 ${project.name} 中新建会话`}
-          aria-busy={creating || undefined}
-          disabled={creating}
-          onClick={() => onCreateSession?.(project.id)}
-          className="mr-2 flex size-7 flex-shrink-0 items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/[0.08] hover:text-foreground disabled:cursor-wait disabled:opacity-50"
-        >
-          {creating
-            ? <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-            : <Plus size={14} aria-hidden="true" />}
-        </button>
-      </div>
+          </button>
+          <button
+            type="button"
+            aria-label={`在项目 ${project.name} 中新建会话`}
+            aria-busy={creating || undefined}
+            disabled={creating}
+            onClick={() => onCreateSession?.(project.id)}
+            className="flex size-7 flex-shrink-0 items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/[0.08] hover:text-foreground disabled:cursor-wait disabled:opacity-50"
+          >
+            {creating
+              ? <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+              : <Plus size={14} aria-hidden="true" />}
+          </button>
+        </div>
+      </LinguistProjectActionsMenu>
 
       {sessions.length > 0 && (
         <ul aria-label={`${project.name} 的项目会话`} className="ml-9 flex flex-col gap-0.5">
@@ -343,30 +507,15 @@ function ProjectRow({
             const selected = session.id === currentSessionId
             return (
               <li key={session.id}>
-                <button
-                  type="button"
-                  aria-label={`选择会话 ${session.title}`}
-                  aria-current={selected || undefined}
-                  onClick={() => onSelectSession?.(project.id, session.id)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
-                    selected
-                      ? 'bg-primary/[0.1] text-foreground'
-                      : 'text-foreground/55 hover:bg-foreground/[0.05] hover:text-foreground/75'
-                  }`}
-                >
-                  <MessageSquare size={12} className="flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate">{session.title}</span>
-                  {session.linguistSessionRole === 'reviewer' && (
-                    <span className="flex-shrink-0 rounded-full bg-review/10 px-1.5 py-0.5 text-[10px] text-review">
-                      评审
-                    </span>
-                  )}
-                  {session.linguistSessionRole === 'auditor' && (
-                    <span className="flex-shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                      盲审
-                    </span>
-                  )}
-                </button>
+                <LinguistSessionTreeItem
+                  session={session}
+                  selected={selected}
+                  onSelect={() => onSelectSession?.(project.id, session.id)}
+                  onRename={(title) => onRenameSession?.(project.id, session.id, title)}
+                  onTogglePin={() => onTogglePinSession?.(project.id, session.id)}
+                  onToggleArchive={() => onToggleArchiveSession?.(project.id, session.id)}
+                  onDelete={() => onDeleteSession?.(project.id, session.id)}
+                />
               </li>
             )
           })}

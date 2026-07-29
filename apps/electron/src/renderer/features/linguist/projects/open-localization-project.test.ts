@@ -49,6 +49,7 @@ describe('openLocalizationProject', () => {
       data: {
         project: project(),
         health: {
+          kind: 'quick',
           projectId: project().id,
           healthy: true,
           checkedAt: '2026-07-01T08:00:00.000Z',
@@ -131,7 +132,7 @@ describe('openLocalizationProject', () => {
       activeAssetId: 'asset-1',
       activeSegmentId: 'segment-1',
       selectedSegmentIds: ['segment-1', 'segment-2'],
-      agentRailOpen: true,
+      agentPresentation: 'rail',
       agentRailWidth: 512,
     })
 
@@ -140,6 +141,7 @@ describe('openLocalizationProject', () => {
       data: {
         project: project(),
         health: {
+          kind: 'quick',
           projectId: project().id,
           healthy: true,
           checkedAt: '2026-07-01T08:00:00.000Z',
@@ -156,7 +158,7 @@ describe('openLocalizationProject', () => {
       activeAssetId: 'asset-1',
       activeSegmentId: 'segment-1',
       selectedSegmentIds: ['segment-1', 'segment-2'],
-      agentRailOpen: true,
+      agentPresentation: 'rail',
       agentRailWidth: 512,
     })
   })

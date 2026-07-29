@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react'
+import { useAtom } from 'jotai'
+import { AlertTriangle, CheckCircle2, Download, Loader2, ShieldCheck, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { LinguistProjectHealthReport, LinguistProjectInfo } from '@proma/shared'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -11,6 +12,12 @@ import {
   describeLinguistIpcError,
   failedHealthChecks,
 } from './project-utils'
+import {
+  projectIntegrityStateAtomFamily,
+  reduceProjectIntegrityEvent,
+  subscribeToProjectIntegrity,
+  type ProjectIntegrityState,
+} from './project-integrity-atoms'
 
 interface ProjectMaintenanceSettingsProps {
   project: LinguistProjectInfo
@@ -34,6 +41,7 @@ export function ProjectMaintenanceSettings({
   onProjectDeleted,
 }: ProjectMaintenanceSettingsProps): React.ReactElement {
   const [healthState, setHealthState] = React.useState<ProjectHealthState>({ status: 'loading' })
+  const [integrityState, setIntegrityState] = useAtom(projectIntegrityStateAtomFamily(project.id))
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [confirmationName, setConfirmationName] = React.useState('')
   const [deleting, setDeleting] = React.useState(false)
@@ -57,6 +65,13 @@ export function ProjectMaintenanceSettings({
     }
   }, [project.id])
 
+  React.useEffect(
+    () => subscribeToProjectIntegrity(project.id, (event) => {
+      setIntegrityState((current) => reduceProjectIntegrityEvent(project.id, current, event))
+    }),
+    [project.id, setIntegrityState],
+  )
+
   const deleteProject = React.useCallback(async (): Promise<void> => {
     if (!archived || confirmationName !== project.name || deleting) return
     setDeleting(true)
@@ -71,8 +86,8 @@ export function ProjectMaintenanceSettings({
       }
       toast.success(`已将「${project.name}」移入可恢复删除区`, {
         description: result.data.recoveryName === undefined
-          ? '项目索引已清理。'
-          : `恢复目录：${result.data.recoveryName}`,
+          ? '项目索引已清理；Agent Session 及其工作目录已保留。'
+          : `恢复目录：${result.data.recoveryName}；Agent Session 及其工作目录已保留。`,
       })
       setDeleteOpen(false)
       onProjectDeleted?.(project.id)
@@ -92,6 +107,11 @@ export function ProjectMaintenanceSettings({
         onRestored={onSummaryRefresh}
       />
       <ProjectHealthSection state={healthState} />
+      <FullIntegrityScrubSection
+        projectId={project.id}
+        state={integrityState}
+        setState={setIntegrityState}
+      />
       <ProjectArchiveAction
         project={project}
         onArchived={(updated) => {
@@ -106,7 +126,7 @@ export function ProjectMaintenanceSettings({
             <h3 className="text-sm font-medium text-foreground">删除项目</h3>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {archived
-                ? '删除后完整项目目录会移入本地可恢复删除区，不会清除历史 Agent Session。'
+                ? '删除后仅 CAT 项目目录会移入本地可恢复删除区（受管 Trash）。历史 Agent Session 及其工作目录默认保留，不会一并移入；如需清理，请在 Agent 模式单独处理。'
                 : '请先归档项目；只有只读的已归档项目可以删除。'}
             </p>
           </div>
@@ -139,7 +159,11 @@ export function ProjectMaintenanceSettings({
         onConfirm={() => void deleteProject()}
       >
         <div className="space-y-3 text-sm text-muted-foreground">
-          <p>此操作会从项目列表移除项目。请输入完整项目名称确认：</p>
+          <p>
+            此操作只会将 CAT 项目目录移入受管 Trash；Agent Session
+            及其工作目录默认保留，不会按普通 Agent Workspace 删除。
+          </p>
+          <p>请输入完整项目名称确认：</p>
           <label className="block space-y-1">
             <span className="font-medium text-foreground">{project.name}</span>
             <input
@@ -156,26 +180,203 @@ export function ProjectMaintenanceSettings({
   )
 }
 
+const INTEGRITY_CHECK_LABELS: Record<string, string> = {
+  project_manifest: '项目清单',
+  schema_version: '数据库 schema',
+  source_digests: '全部 source digest',
+  blob_digests: '全部 blob digest',
+  sqlite_integrity: 'SQLite integrity_check',
+  foreign_keys: 'foreign_key_check',
+  orphans: '孤儿与项目作用域',
+  proposal_references: 'Proposal 引用',
+  qa_references: 'QA 引用与历史',
+  review_references: 'Review 引用',
+  event_sequence: '项目事件序列',
+  job_lineage: '任务 checkpoint lineage',
+  run_lineage: '运行变更 lineage',
+  export_manifests: '导出清单',
+  session_workspaces: 'Session Workspace 引用',
+}
+
+function FullIntegrityScrubSection({
+  projectId,
+  state,
+  setState,
+}: {
+  projectId: string
+  state: ProjectIntegrityState
+  setState: React.Dispatch<React.SetStateAction<ProjectIntegrityState>>
+}): React.ReactElement {
+  const running = state.status === 'starting' || state.status === 'running'
+
+  const start = async (): Promise<void> => {
+    if (running) return
+    setState({ status: 'starting' })
+    try {
+      const result = await window.electronAPI.linguistIntegrityStart({ projectId })
+      setState((current) => current.status !== 'starting'
+        ? current
+        : result.ok
+          ? { status: 'running', jobId: result.data.jobId }
+          : { status: 'error', message: describeLinguistIpcError(result.error) })
+    } catch {
+      setState({ status: 'error', message: '与主进程通信异常（INTERNAL）' })
+    }
+  }
+
+  const cancel = async (): Promise<void> => {
+    if (state.status !== 'running') return
+    try {
+      const result = await window.electronAPI.linguistIntegrityCancel({
+        projectId,
+        jobId: state.jobId,
+      })
+      if (!result.ok) setState({ status: 'error', message: describeLinguistIpcError(result.error) })
+    } catch {
+      setState({ status: 'error', message: '与主进程通信异常（INTERNAL）' })
+    }
+  }
+
+  const save = async (): Promise<void> => {
+    if (state.status !== 'completed') return
+    try {
+      const result = await window.electronAPI.linguistIntegrityExportReport({
+        projectId,
+        jobId: state.jobId,
+      })
+      if (!result.ok) {
+        toast.error('保存完整性报告失败', { description: describeLinguistIpcError(result.error) })
+      } else if (!result.data.cancelled) {
+        toast.success(`已保存脱敏报告：${result.data.filename}`)
+      }
+    } catch {
+      toast.error('保存完整性报告失败', { description: '与主进程通信异常（INTERNAL）' })
+    }
+  }
+
+  return (
+    <section aria-label="Full Integrity Scrub" className="rounded-xl bg-muted/50 p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <ShieldCheck className="size-4" aria-hidden="true" />
+            Full Integrity Scrub
+          </h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            在独立 Worker 中逐项全量检查 source/blob、SQLite、Proposal/QA/Review、事件与 job/run lineage、导出清单及 Session Workspace；无法可靠验证的项会明确标为 unavailable。
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          {state.status === 'running' && (
+            <button
+              type="button"
+              onClick={() => void cancel()}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-foreground/[0.05]"
+            >
+              <X className="size-3" aria-hidden="true" />
+              取消
+            </button>
+          )}
+          {state.status === 'completed' && (
+            <button
+              type="button"
+              onClick={() => void save()}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-foreground/[0.05]"
+            >
+              <Download className="size-3" aria-hidden="true" />
+              保存脱敏报告
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={running}
+            onClick={() => void start()}
+            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {running && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
+            {state.status === 'completed' ? '重新扫描' : running ? '扫描中' : '开始全量扫描'}
+          </button>
+        </div>
+      </div>
+      {state.status === 'running' && state.progress !== undefined && (
+        <div className="mt-3 space-y-1">
+          <div
+            role="progressbar"
+            aria-label="完整性扫描进度"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={state.progress.percent}
+            className="h-1.5 overflow-hidden rounded-full bg-border"
+          >
+            <div className="h-full bg-primary" style={{ width: `${state.progress.percent}%` }} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {INTEGRITY_CHECK_LABELS[state.progress.checkId] ?? state.progress.checkId} · {state.progress.percent}%
+          </p>
+        </div>
+      )}
+      {state.status === 'cancelled' && (
+        <p className="mt-2 text-xs text-muted-foreground">扫描已取消，未生成报告。</p>
+      )}
+      {state.status === 'error' && (
+        <p role="alert" className="mt-2 text-xs text-destructive">扫描失败：{state.message}</p>
+      )}
+      {state.status === 'completed' && (
+        <div className="mt-3 space-y-2">
+          <p className={state.report.outcome === 'passed' ? 'text-xs text-success' : 'text-xs text-warning'}>
+            {state.report.outcome === 'passed'
+              ? '全量检查通过'
+              : state.report.outcome === 'incomplete'
+                ? '扫描完成，但存在无法可靠验证的项目'
+                : '扫描发现完整性问题'}
+          </p>
+          <ul className="space-y-1 text-xs text-muted-foreground">
+            {state.report.checks
+              .filter((check) => check.status !== 'passed')
+              .map((check) => (
+                <li key={check.id}>
+                  {INTEGRITY_CHECK_LABELS[check.id] ?? check.id}：
+                  {check.status === 'failed' ? 'failed' : 'unavailable'}
+                  {check.problems.length > 0 && `（${check.problems.map((problem) => `${problem.code} × ${problem.count}`).join('、')}）`}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function ProjectHealthSection({ state }: { state: ProjectHealthState }): React.ReactElement {
   if (state.status === 'loading') {
-    return <p className="text-xs text-muted-foreground">正在检查项目健康状态…</p>
+    return (
+      <section aria-label="Quick Health" className="rounded-xl bg-muted/50 p-4 shadow-sm">
+        <p className="text-xs text-muted-foreground">正在运行 Quick Health…</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          仅检查数据库可打开、项目清单、schema 与最多 20 个 source blob，不代表完整性全检。
+        </p>
+      </section>
+    )
   }
   if (state.status === 'error') {
     return (
       <p role="alert" className="flex items-center gap-1.5 text-xs text-destructive">
         <AlertTriangle className="size-3" />
-        健康检查不可用：{state.message}
+        Quick Health 不可用：{state.message}
       </p>
     )
   }
 
   const failed = failedHealthChecks(state.health)
   return (
-    <section aria-label="项目健康" className="rounded-xl bg-muted/50 p-4 shadow-sm">
+    <section aria-label="Quick Health" className="rounded-xl bg-muted/50 p-4 shadow-sm">
       <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
         {state.health.healthy ? <CheckCircle2 className="size-4 text-success" /> : <AlertTriangle className="size-4 text-warning" />}
-        {state.health.healthy ? '项目健康' : '项目需要修复'}
+        {state.health.healthy ? 'Quick Health 未发现问题' : 'Quick Health 发现异常'}
       </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        仅检查数据库可打开、项目清单、schema 与最多 20 个 source blob，不代表完整性全检。
+      </p>
       {failed.length > 0 && (
         <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
           {failed.map((check) => (

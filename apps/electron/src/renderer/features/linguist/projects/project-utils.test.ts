@@ -49,10 +49,14 @@ function project(overrides: Partial<LinguistProjectInfo>): LinguistProjectInfo {
 
 function healthReport(checks: Array<{ id: LinguistProjectHealthReport['checks'][number]['id']; ok: boolean; detail?: string }>): LinguistProjectHealthReport {
   return {
+    kind: 'quick',
     projectId: 'prj-0000000000000000',
     healthy: checks.every((c) => c.ok),
     checkedAt: '2026-07-25T10:00:00.000Z',
-    checks,
+    checks: checks.map((check) => ({
+      ...check,
+      scope: check.id === 'asset_sources' ? 'sampled' : 'complete',
+    })),
   }
 }
 
@@ -207,7 +211,7 @@ describe('健康报告助手', () => {
     ])
     const text = summarizeFailedHealthChecks(report)
     expect(text).toContain('翻译数据库（STORE_BUSY）')
-    expect(text).toContain('资产源校验')
+    expect(text).toContain('资产源有界抽样')
   })
 
   test('全通过时 healthy=true 且无失败项', () => {

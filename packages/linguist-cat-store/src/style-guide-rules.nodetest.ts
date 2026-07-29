@@ -27,7 +27,7 @@ test('style guide rules: upsert create/get/list round-trip with examples', () =>
       badExample: '等等, 什么?',
       updatedBy: 'reviewer-a',
     })
-    assert.ok(created.id.startsWith('sgr-'))
+    assert.match(created.id, /^sgr_v2_[0-9a-f]{64}$/)
     assert.equal(created.updatedBy, 'reviewer-a')
     assert.equal(created.screenshotRef, undefined)
 

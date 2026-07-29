@@ -20,6 +20,7 @@ import {
   getAgentSessionMessagesPath,
   getAgentSessionWorkspacePath,
   getAgentWorkspacePath,
+  getConfigDir,
   getSdkConfigDir,
 } from './config-paths'
 import { getAgentWorkspace, getWorkspaceAutoMemoryDir } from './agent-workspace-manager'
@@ -49,6 +50,8 @@ import { convertLegacyMessage } from '@proma/session-core'
 import { clearNanoBananaAgentHistory } from './chat-tools/nano-banana-mcp'
 import { assertEnabledModelForChannel } from './agent-model-selection'
 import { copyForkWorkspaceFiles } from './agent-fork-workspace-copy'
+import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
+import { moveLinguistSessionWorkspaceToTrash } from './linguist/session-workspace'
 
 /**
  * 会话索引文件格式
@@ -226,6 +229,28 @@ export interface AgentSessionLinguistBinding {
   linguistProjectId: string
   linguistProjectName: string
   linguistSessionRole?: 'reviewer' | 'auditor'
+  linguistStrategy?: AgentSessionMeta['linguistStrategy']
+}
+
+function frozenLinguistBinding(
+  session: AgentSessionMeta,
+): AgentSessionLinguistBinding | undefined {
+  if (!session.linguistProjectId) return undefined
+  return {
+    linguistProjectId: session.linguistProjectId,
+    linguistProjectName: session.linguistProjectName ?? session.linguistProjectId,
+    ...(session.linguistSessionRole
+      ? { linguistSessionRole: session.linguistSessionRole }
+      : {}),
+    ...(session.linguistStrategy
+      ? { linguistStrategy: session.linguistStrategy }
+      : {}),
+  }
+}
+
+function managedSessionDir(session: AgentSessionMeta): string | undefined {
+  const scope = resolveAgentExecutionScope(session)
+  return scope.kind === 'home' ? undefined : scope.cwd
 }
 
 /**
@@ -486,10 +511,11 @@ export function updateAgentSessionMeta(
     ...updates,
     // Linguist 项目绑定在创建时冻结（PB-034 硬规则）：类型白名单刻意不含
     // 这两个字段，这里再防御 any 断言绕过——永远保持创建时的值。
-    // PB-082 的 linguistSessionRole 角色标记同理冻结。
+    // PB-082 的 role 与 LF-080 的 strategy 同理冻结。
     linguistProjectId: existing.linguistProjectId,
     linguistProjectName: existing.linguistProjectName,
     linguistSessionRole: existing.linguistSessionRole,
+    linguistStrategy: existing.linguistStrategy,
     ...(autoUnarchive ? { archived: false } : {}),
     updatedAt: isStarredOnly ? existing.updatedAt : Date.now(),
   }
@@ -517,6 +543,7 @@ export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta 
   delete updated.linguistProjectId
   delete updated.linguistProjectName
   delete updated.linguistSessionRole
+  delete updated.linguistStrategy
   index.sessions[idx] = updated
   writeIndex(index)
   console.log(`[Agent 会话] 已永久解除 Linguist 项目绑定: ${updated.id}`)
@@ -548,8 +575,19 @@ export function deleteAgentSession(id: string): void {
     }
   }
 
-  // 清理 session 工作目录
-  if (removed.workspaceId) {
+  // Linguist 工作目录保留到受管 Trash；普通 Agent 沿用物理清理语义。
+  if (removed.linguistProjectId) {
+    try {
+      const trashed = moveLinguistSessionWorkspaceToTrash(
+        getConfigDir(),
+        removed.linguistProjectId,
+        id,
+      )
+      if (trashed) console.log(`[Agent 会话] 已将 Linguist session 工作目录移入 Trash: ${id}`)
+    } catch (error) {
+      console.warn(`[Agent 会话] 移动 Linguist session 工作目录失败 (${id}):`, error)
+    }
+  } else if (removed.workspaceId) {
     const ws = getAgentWorkspace(removed.workspaceId)
     if (ws) {
       try {
@@ -804,13 +842,7 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
     : sourceMeta.modelId
 
   // 2. 确定源会话的工作目录（SDK 需要从此目录的项目空间读取 session 文件）
-  let sourceDir: string | undefined
-  if (sourceMeta.workspaceId) {
-    const ws = getAgentWorkspace(sourceMeta.workspaceId)
-    if (ws) {
-      sourceDir = getAgentSessionWorkspacePath(ws.slug, sessionId)
-    }
-  }
+  const sourceDir = managedSessionDir(sourceMeta)
 
   // 2.5 校验目标消息并确定其所属的 SDK session ID
   // - 当会话经历过 "session not found" 恢复后，sdkSessionId 会被替换为新的，
@@ -867,6 +899,7 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
     sourceMeta.workspaceId,
     forkModelId,
     'claude',
+    frozenLinguistBinding(sourceMeta),
   )
 
   updateAgentSessionMeta(newMeta.id, {
@@ -880,13 +913,7 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
   newMeta.forkSourceSdkSessionId = forkSourceSdkSessionId
 
   // 4.4 计算 fork 目标会话的 cwd（新会话目录），后续多个步骤需要用到
-  let destDir: string | undefined
-  if (sourceDir && sourceMeta.workspaceId) {
-    const ws = getAgentWorkspace(sourceMeta.workspaceId)
-    if (ws) {
-      destDir = getAgentSessionWorkspacePath(ws.slug, newMeta.id)
-    }
-  }
+  const destDir = sourceDir ? managedSessionDir(newMeta) : undefined
 
   // 4.5 将 SDK session JSONL 复制到 fork 自己的 project-hash 目录
   // SDK forkSession() 在源 cwd 的 project-hash 下创建 JSONL（如 projects/<hash-of-sourceDir>/<newId>.jsonl），
@@ -963,15 +990,16 @@ async function forkPiAgentSession(sourceMeta: AgentSessionMeta, input: ForkSessi
   const forkModelId = input.modelId !== undefined
     ? assertEnabledModelForChannel({ channelId: sourceMeta.channelId, modelId: input.modelId, purpose: '分叉 Pi Agent 会话' })
     : sourceMeta.modelId
-  const sourceDir = sourceMeta.workspaceId
-    ? getAgentWorkspace(sourceMeta.workspaceId)
-      ? getAgentSessionWorkspacePath(getAgentWorkspace(sourceMeta.workspaceId)!.slug, sourceMeta.id)
-      : undefined
-    : undefined
-  const newMeta = createAgentSession(`${sourceMeta.title} (fork)`, sourceMeta.channelId, sourceMeta.workspaceId, forkModelId, 'pi')
-  const destDir = sourceMeta.workspaceId && getAgentWorkspace(sourceMeta.workspaceId)
-    ? getAgentSessionWorkspacePath(getAgentWorkspace(sourceMeta.workspaceId)!.slug, newMeta.id)
-    : undefined
+  const sourceDir = managedSessionDir(sourceMeta)
+  const newMeta = createAgentSession(
+    `${sourceMeta.title} (fork)`,
+    sourceMeta.channelId,
+    sourceMeta.workspaceId,
+    forkModelId,
+    'pi',
+    frozenLinguistBinding(sourceMeta),
+  )
+  const destDir = sourceDir ? managedSessionDir(newMeta) : undefined
 
   try {
     const sdk = await import('@earendil-works/pi-coding-agent')
@@ -1018,9 +1046,7 @@ export async function rewindPiAgentSession(sessionId: string, assistantMessageUu
   const entryId = meta.piEntryBindings?.[assistantMessageUuid]
   if (!entryId) throw new Error('该 Pi 历史消息尚无 entry ID 映射，无法安全回退')
   if (!meta.piSessionFile || !existsSync(meta.piSessionFile)) throw new Error('未找到 Pi session artifact，无法安全回退')
-  const cwd = meta.workspaceId && getAgentWorkspace(meta.workspaceId)
-    ? getAgentSessionWorkspacePath(getAgentWorkspace(meta.workspaceId)!.slug, meta.id)
-    : process.cwd()
+  const cwd = resolveAgentExecutionScope(meta).cwd
   const sdk = await import('@earendil-works/pi-coding-agent')
   const manager = sdk.SessionManager.open(meta.piSessionFile, join(getSdkConfigDir(), 'sessions'), cwd)
   const branchFile = manager.createBranchedSession(entryId)

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createLinguistCatWorkspaceIpc } from './cat-workspace-ipc'
@@ -393,6 +393,201 @@ test('PB-071 QA: run/list are available to the Agent boundary, but resolve/waive
         && finding.waiverReason === '同规则批量确认'
         && finding.waivedBy === '测试审校员'))
     }
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('LA-EVENT-001 IPC: durable events are paged read-only, explicitly acked, and archived ack fails closed', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    await service.importAsset(project.id, {
+      bytes: readFileSync(fixturePath('mini_items.json')),
+      filename: 'mini_items.json',
+    })
+    const db = service.openProject(project.id)
+    const segment = db.segments.query({ limit: 1 })[0]!
+    db.runs.createJob({
+      jobId: 'job-ipc',
+      runId: 'run-ipc',
+      sessionId: 'session-ipc',
+      strategy: 'balanced',
+      segmentIds: [segment.id as string],
+      provenance: { schemaVersion: 1, runtime: 'worker' },
+    })
+    const ipc = createLinguistCatWorkspaceIpc({ getService: () => service })
+
+    const first = await ipc.listProjectEvents({
+      projectId: project.id,
+      afterSequence: 0,
+      limit: 1,
+    })
+    assert.equal(first.ok, true)
+    if (!first.ok) return
+    assert.equal(first.data.events.length, 1)
+    assert.equal(first.data.events[0]?.sequence, 1)
+    assert.equal(first.data.events[0]?.revision, 1)
+    assert.equal(first.data.events[0]?.kind, 'job-updated')
+    assert.equal(db.runs.getEventAck('renderer-ipc'), undefined, 'read must not acknowledge')
+
+    const acked = await ipc.ackProjectEvents({
+      projectId: project.id,
+      consumerId: 'renderer-ipc',
+      throughSequence: 1,
+    })
+    assert.equal(acked.ok, true)
+    if (acked.ok) assert.equal(acked.data.sequence, 1)
+
+    for (const input of [
+      { projectId: project.id, afterSequence: -1 },
+      { projectId: project.id, afterSequence: 0, limit: 201 },
+      { projectId: project.id, afterSequence: 0.5 },
+    ]) {
+      const invalid = await ipc.listProjectEvents(input)
+      assert.equal(invalid.ok, false)
+      if (!invalid.ok) assert.equal(invalid.error.code, 'INVALID_INPUT')
+    }
+
+    service.archiveProject(project.id)
+    const archivedRead = await ipc.listProjectEvents({
+      projectId: project.id,
+      afterSequence: 0,
+    })
+    assert.equal(archivedRead.ok, true)
+    const archivedAck = await ipc.ackProjectEvents({
+      projectId: project.id,
+      consumerId: 'renderer-ipc',
+      throughSequence: 1,
+    })
+    assert.equal(archivedAck.ok, false)
+    if (!archivedAck.ok) assert.equal(archivedAck.error.code, 'STORE_READ_ONLY')
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('K-004/K-005 IPC: latest run summary is project-scoped and undo derives actor/run authority in main', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    await service.importAsset(project.id, {
+      bytes: readFileSync(fixturePath('mini_items.json')),
+      filename: 'mini_items.json',
+    })
+    const db = service.openProject(project.id)
+    const segment = db.segments.query({ limit: 1 })[0]!
+    db.runs.createJob({
+      jobId: 'job-run-ui',
+      runId: 'run-ui',
+      sessionId: 'session-run-ui',
+      strategy: 'balanced',
+      segmentIds: [segment.id as string],
+      provenance: { schemaVersion: 1, runtime: 'node-worker_threads' },
+    })
+    const mutation = db.runs.executeMutation({
+      identity: {
+        runId: 'run-ui',
+        toolCallId: 'call-run-ui',
+        idempotencyKey: 'key-run-ui',
+      },
+      operation: 'cat_propose_translations',
+      payload: { segmentId: segment.id as string },
+      mutate: () => {
+        const proposal = db.proposals.insertPending({
+          segmentId: segment.id,
+          baseRevision: segment.revision,
+          proposedTarget: '待撤销译文',
+          runId: 'run-ui',
+        })
+        return {
+          result: { proposalId: proposal.id as string },
+          changes: [{
+            entityType: 'proposal' as const,
+            entityId: proposal.id as string,
+            changeKind: 'created' as const,
+            segmentId: segment.id as string,
+            expectedRevision: segment.revision,
+            after: proposal,
+          }],
+          event: {
+            kind: 'proposal-created' as const,
+            segmentIds: [segment.id as string],
+            proposalIds: [proposal.id as string],
+          },
+        }
+      },
+    })
+    const broadcasts: Array<{ kind: string; sequence?: number }> = []
+    const ipc = createLinguistCatWorkspaceIpc({
+      getService: () => service,
+      getSession: (sessionId) => sessionId === 'session-authorized'
+        ? { id: sessionId, linguistProjectId: project.id }
+        : undefined,
+      onProjectMutation: (event) => broadcasts.push(event),
+    })
+
+    const summary = await ipc.getLatestRunSummary({ projectId: project.id })
+    assert.equal(summary.ok, true)
+    if (!summary.ok) return
+    assert.equal(summary.data.summary?.runId, 'run-ui')
+    assert.equal(summary.data.summary?.changes.proposalsCreated, 1)
+    assert.equal(summary.data.summary?.canUndo, true)
+
+    const unauthorized = await ipc.undoLatestRun({
+      projectId: project.id,
+      sessionId: 'session-other',
+      expectedRunId: 'run-ui',
+    })
+    assert.equal(unauthorized.ok, false)
+    if (!unauthorized.ok) assert.equal(unauthorized.error.code, 'INVALID_INPUT')
+    assert.ok(db.proposals.getById(mutation.result.proposalId))
+
+    const undone = await ipc.undoLatestRun({
+      projectId: project.id,
+      sessionId: 'session-authorized',
+      expectedRunId: 'run-ui',
+    })
+    assert.equal(undone.ok, true)
+    if (!undone.ok) return
+    assert.equal(undone.data.status, 'completed')
+    assert.equal(undone.data.reverted.length, 1)
+    assert.equal(db.proposals.getById(mutation.result.proposalId), undefined)
+    assert.deepEqual(broadcasts.map((event) => event.kind), ['run-undone'])
+    assert.ok((broadcasts[0]?.sequence ?? 0) > 0)
+
+    db.runs.createJob({
+      jobId: 'job-run-new',
+      runId: 'run-new',
+      sessionId: 'session-run-ui',
+      strategy: 'balanced',
+      segmentIds: [segment.id as string],
+      provenance: { schemaVersion: 1, runtime: 'node-worker_threads' },
+    })
+    const stale = await ipc.undoLatestRun({
+      projectId: project.id,
+      sessionId: 'session-authorized',
+      expectedRunId: 'run-ui',
+    })
+    assert.equal(stale.ok, false)
+    if (!stale.ok) assert.equal(stale.error.code, 'INVALID_INPUT')
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('K-004 IPC: corrupted project manifest fails closed instead of returning an empty run summary', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const manifestPath = service.getProjectPaths(project.id).projectJsonPath
+    service.closeProject(project.id)
+    writeFileSync(manifestPath, '{oops', 'utf8')
+    const ipc = createLinguistCatWorkspaceIpc({ getService: () => service })
+
+    const result = await ipc.getLatestRunSummary({ projectId: project.id })
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.equal(result.error.code, 'PROJECT_UNHEALTHY')
   } finally {
     service.closeAll()
   }

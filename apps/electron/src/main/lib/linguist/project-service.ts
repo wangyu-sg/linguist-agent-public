@@ -26,7 +26,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, lstatSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
   normalizeWorkflowStage,
@@ -42,6 +42,7 @@ import {
   type WorkflowOutputStatusPolicy,
   type WorkflowStage,
 } from '@linguist/cat-core'
+import { getPromaVersion } from '@proma/core'
 import {
   type CatFormatRegistry,
 } from '@linguist/cat-formats'
@@ -79,6 +80,7 @@ import {
   LinguistProjectDeleteRequiresArchiveError,
   mapStoreError,
 } from './errors'
+import { readLinguistExportManifests } from './export-manifest'
 import { createDefaultCatFormatRegistry } from './format-registry'
 import {
   MAX_IMPORT_BYTES,
@@ -86,6 +88,7 @@ import {
 } from './project-delivery'
 import type { ProjectModuleContext } from './project-module-context'
 import { ProjectQuality } from './project-quality'
+import { computeLinguistProjectRevision } from './project-revision'
 import { ProjectResources } from './project-resources'
 import type {
   CatQaFinding,
@@ -140,6 +143,7 @@ export class LinguistProjectService {
   readonly rootDir: string
   private readonly entropy?: EntropySource
   private readonly now: () => string
+  private readonly applicationVersion: string
   private readonly workspaceAllocator: (projectName: string) => string
   private readonly registry: CatFormatRegistry
   private storeInstance?: CatStore
@@ -152,6 +156,7 @@ export class LinguistProjectService {
   constructor(options: LinguistProjectServiceOptions) {
     this.rootDir = options.rootDir
     this.now = options.now ?? (() => new Date().toISOString())
+    this.applicationVersion = options.applicationVersion ?? getPromaVersion()
     if (options.entropy !== undefined) this.entropy = options.entropy
     this.workspaceAllocator = options.workspaceAllocator ?? (() => randomUUID())
     this.registry = options.registry ?? createDefaultCatFormatRegistry()
@@ -177,6 +182,7 @@ export class LinguistProjectService {
       rootDir: this.rootDir,
       ...(this.entropy !== undefined ? { entropy: this.entropy } : {}),
       now: this.now,
+      applicationVersion: this.applicationVersion,
     })
     return this.storeInstance
   }
@@ -291,6 +297,12 @@ export class LinguistProjectService {
    */
   listExportFiles(projectId: string): LinguistExportFileInfo[] {
     const { exportsDir } = this.getProjectPaths(projectId)
+    const directory = lstatSync(exportsDir, { throwIfNoEntry: false })
+    if (directory === undefined) return []
+    if (directory.isSymbolicLink() || !directory.isDirectory()) {
+      console.warn(`[Linguist] 项目 ${projectId} exports 目录身份无效，拒绝列出`)
+      return []
+    }
     let entries: string[]
     try {
       entries = readdirSync(exportsDir)
@@ -298,20 +310,46 @@ export class LinguistProjectService {
       // exports/ 不存在（从未导出）= 空交付物列表，正常分支
       return []
     }
+    const project = this.getProject(projectId)
+    const db = this.openProject(projectId)
+    const currentRevision = computeLinguistProjectRevision(project, db)
+    const artifacts = new Map(
+      db.exports.listByProject().map((artifact) => [artifact.path, artifact]),
+    )
+    const manifests = readLinguistExportManifests(exportsDir)
     const files: LinguistExportFileInfo[] = []
     for (const name of entries) {
       if (name.startsWith('.') || name.includes('.tmp-')) continue
-      const stat = statSync(resolve(exportsDir, name), { throwIfNoEntry: false })
-      if (stat === undefined || !stat.isFile()) continue
+      const stat = lstatSync(resolve(exportsDir, name), { throwIfNoEntry: false })
+      if (stat === undefined || stat.isSymbolicLink() || !stat.isFile()) continue
       // staging 文件名形状：`<assetId>-<sha256:16>-<原文件名>`（export-staging.ts）
-      const assetId = name.slice(0, 20)
+      const assetId = /^(ast(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64}))-[0-9a-f]{16}-/.exec(name)?.[1]
+      const artifact = artifacts.get(`exports/${name}`)
+      const manifest = artifact === undefined
+        ? undefined
+        : manifests.get(artifact.id)
+      const verifiedManifest = manifest !== undefined
+        && manifest.assetId === artifact?.assetId
+        && manifest.sha256 === artifact.sha256
+        && manifest.sizeBytes === stat.size
+        ? manifest
+        : undefined
       files.push({
         filename: name,
-        ...(LINGUIST_ASSET_ID_PATTERN.test(assetId) && name.charAt(20) === '-'
+        ...(assetId !== undefined && LINGUIST_ASSET_ID_PATTERN.test(assetId)
           ? { assetId }
           : {}),
         sizeBytes: stat.size,
         modifiedAt: stat.mtimeMs,
+        ...(verifiedManifest === undefined
+          ? {}
+          : {
+            sha256: verifiedManifest.sha256,
+            createdAt: verifiedManifest.createdAt,
+            verifiedAt: verifiedManifest.verifiedAt,
+            projectRevision: verifiedManifest.projectRevision,
+            stale: verifiedManifest.projectRevision !== currentRevision,
+          }),
       })
     }
     // 最新导出在前
@@ -362,9 +400,9 @@ export class LinguistProjectService {
   }
 
   /**
-   * 项目健康检查：project.json 可解析、cat.db 可打开、schema 版本匹配、
-   * source blob 的 sha256 抽查（经 store 的 readAssetSource 校验）。
-   * 健康检查自身绝不抛存储错误——结果体现在报告里；项目不存在仍抛
+   * Quick Health：project.json 可解析、cat.db 可打开、schema 版本匹配、
+   * source blob 的 sha256 有界抽样（经 store 的 readAssetSource 校验）。
+   * Quick Health 自身绝不抛存储错误——结果体现在报告里；项目不存在仍抛
    * PROJECT_NOT_FOUND。临时只读句柄用毕即关，不复用缓存。
    */
   checkProjectHealth(projectId: string): LinguistProjectHealthReport {
@@ -374,9 +412,9 @@ export class LinguistProjectService {
     // 1. project.json 在场且可解析
     try {
       this.store.index.readProjectMeta(projectId)
-      checks.push({ id: 'project_json', ok: true })
+      checks.push({ id: 'project_json', ok: true, scope: 'complete' })
     } catch (err) {
-      checks.push({ id: 'project_json', ok: false, detail: errorCodeOf(err) })
+      checks.push({ id: 'project_json', ok: false, scope: 'complete', detail: errorCodeOf(err) })
     }
 
     // 2+3. cat.db 可打开 & schema 版本匹配（只读打开绝不迁移）
@@ -384,20 +422,21 @@ export class LinguistProjectService {
     let openError: string | undefined
     try {
       db = this.store.openProject(projectId, { readOnly: true })
-      checks.push({ id: 'cat_db_open', ok: true })
+      checks.push({ id: 'cat_db_open', ok: true, scope: 'complete' })
       checks.push(
         db.schemaVersion === SCHEMA_VERSION
-          ? { id: 'schema_version', ok: true, detail: `v${db.schemaVersion}` }
+          ? { id: 'schema_version', ok: true, scope: 'complete', detail: `v${db.schemaVersion}` }
           : {
               id: 'schema_version',
               ok: false,
+              scope: 'complete',
               detail: `schema v${db.schemaVersion} != expected v${SCHEMA_VERSION}`,
             },
       )
     } catch (err) {
       openError = errorCodeOf(err)
-      checks.push({ id: 'cat_db_open', ok: false, detail: openError })
-      checks.push({ id: 'schema_version', ok: false, detail: openError })
+      checks.push({ id: 'cat_db_open', ok: false, scope: 'complete', detail: openError })
+      checks.push({ id: 'schema_version', ok: false, scope: 'complete', detail: openError })
     }
 
     // 4. source blob 抽查（仅 DB 可开时）
@@ -417,10 +456,20 @@ export class LinguistProjectService {
         }
         checks.push(
           failed === 0
-            ? { id: 'asset_sources', ok: true, detail: `${sample.length} checked` }
+            ? {
+                id: 'asset_sources',
+                ok: true,
+                scope: 'sampled',
+                checkedItems: sample.length,
+                totalItems: assets.length,
+                detail: `${sample.length} checked`,
+              }
             : {
                 id: 'asset_sources',
                 ok: false,
+                scope: 'sampled',
+                checkedItems: sample.length,
+                totalItems: assets.length,
                 detail: `${failed}/${sample.length} failed (${[...failureCodes].sort().join(', ')})`,
               },
         )
@@ -428,12 +477,18 @@ export class LinguistProjectService {
         db.close()
       }
     } else {
-      checks.push({ id: 'asset_sources', ok: false, detail: openError ?? 'cat.db unopenable' })
+      checks.push({
+        id: 'asset_sources',
+        ok: false,
+        scope: 'sampled',
+        checkedItems: 0,
+        detail: openError ?? 'cat.db unopenable',
+      })
     }
 
     const healthy = checks.every((check) => check.ok)
-    console.log(`[Linguist] 项目健康检查: ${projectId} → ${healthy ? '健康' : '异常'}（${checks.filter((c) => !c.ok).length}/${checks.length} 项失败）`)
-    return { projectId, healthy, checkedAt: this.now(), checks }
+    console.log(`[Linguist] Quick Health: ${projectId} → ${healthy ? '未发现问题' : '异常'}（${checks.filter((c) => !c.ok).length}/${checks.length} 项失败）`)
+    return { kind: 'quick', projectId, healthy, checkedAt: this.now(), checks }
   }
 
   /**
@@ -485,7 +540,10 @@ export class LinguistProjectService {
 
     let verification: LinguistRestorePreview['verification']
     if (!isLegacy) {
-      const report = this.call(() => verifyBackup(join(backupsDir, backupName)), projectId)
+      const report = this.call(
+        () => verifyBackup(join(backupsDir, backupName), projectId),
+        projectId,
+      )
       verification = {
         ok: report.ok,
         ...(report.schemaVersion !== undefined ? { schemaVersion: report.schemaVersion } : {}),

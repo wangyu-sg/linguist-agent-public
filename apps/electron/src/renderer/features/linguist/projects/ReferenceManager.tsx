@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { LinguistTermInfo, LinguistTmInfo } from '@proma/shared'
+import type { LinguistTermInfo, LinguistTermStatus, LinguistTmInfo } from '@proma/shared'
 import { describeLinguistIpcError } from './project-utils'
 import { SentencePatternsPanel } from './SentencePatternsPanel'
 
@@ -12,6 +12,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
   const [query, setQuery] = React.useState('')
   const [tm, setTm] = React.useState<LinguistTmInfo[]>([])
   const [terms, setTerms] = React.useState<LinguistTermInfo[]>([])
+  const [termStatus, setTermStatus] = React.useState<'all' | LinguistTermStatus>('all')
   const [busy, setBusy] = React.useState(false)
   const refresh = React.useCallback(async (): Promise<void> => {
     if (tab === 'patterns') return
@@ -25,7 +26,13 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
         }
         setTm(result.data.items)
       } else {
-        const result = await window.electronAPI.linguistReferencesQueryTerms({ projectId, query, limit: 50, offset: 0 })
+        const result = await window.electronAPI.linguistReferencesQueryTerms({
+          projectId,
+          query,
+          ...(termStatus === 'all' ? {} : { status: termStatus }),
+          limit: 50,
+          offset: 0,
+        })
         if (!result.ok) {
           toast.error('读取参考库失败', { description: describeLinguistIpcError(result.error) })
           return
@@ -37,7 +44,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
     } finally {
       setBusy(false)
     }
-  }, [projectId, query, tab])
+  }, [projectId, query, tab, termStatus])
   React.useEffect(() => { void refresh() }, [refresh])
   const importReference = async (): Promise<void> => {
     setBusy(true)
@@ -69,7 +76,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
   return <details className="rounded-xl bg-content-area shadow-sm ring-1 ring-border/35">
     <summary className="cursor-pointer list-none px-3 py-2.5 text-[12px] font-medium text-foreground/70">TM / 术语库 / 句式管理</summary>
     <div className="space-y-2 border-t border-border/35 p-3">
-      <div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => setTab('tm')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'tm' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>翻译记忆</button><button type="button" onClick={() => setTab('terms')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'terms' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>术语库</button><button type="button" onClick={() => setTab('patterns')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'patterns' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>句式</button>{tab !== 'patterns' && <><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索" className="ml-auto h-7 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" /><button type="button" disabled={archived || busy} onClick={() => void importReference()} className="inline-flex items-center gap-1 rounded-md bg-foreground/[0.06] px-2 py-1 text-[11px] disabled:opacity-40"><Download size={11} />导入 {tab === 'tm' ? 'TMX/CSV' : 'TBX/CSV'}</button></>}</div>
+      <div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => setTab('tm')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'tm' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>翻译记忆</button><button type="button" onClick={() => setTab('terms')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'terms' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>术语库</button><button type="button" onClick={() => setTab('patterns')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'patterns' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>句式</button>{tab === 'terms' && <select aria-label="术语状态" value={termStatus} onChange={(event) => setTermStatus(event.target.value as 'all' | LinguistTermStatus)} className="h-7 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50"><option value="all">全部状态</option><option value="required">必需</option><option value="preferred">首选</option><option value="forbidden">禁用</option><option value="allowed">允许</option><option value="deprecated">已弃用</option></select>}{tab !== 'patterns' && <><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索" className="ml-auto h-7 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" /><button type="button" disabled={archived || busy} onClick={() => void importReference()} className="inline-flex items-center gap-1 rounded-md bg-foreground/[0.06] px-2 py-1 text-[11px] disabled:opacity-40"><Download size={11} />导入 {tab === 'tm' ? 'TMX/CSV' : 'TBX/CSV'}</button></>}</div>
       {tab === 'patterns' ? <SentencePatternsPanel projectId={projectId} archived={archived} /> : busy ? <p className="text-[11px] text-foreground/40">正在读取…</p> : items.length === 0 ? <p className="text-[11px] text-foreground/40">暂无记录</p> : <ul className="max-h-56 space-y-1 overflow-auto text-[11px]">{items.map((item) => <li key={item.id} className="flex items-center gap-2 rounded-md bg-foreground/[0.035] px-2 py-1.5"><span className="min-w-0 flex-1 break-words">{tab === 'tm' ? <>{(item as LinguistTmInfo).source}<span className="ml-2 text-foreground/45">{(item as LinguistTmInfo).target}</span></> : <>{(item as LinguistTermInfo).term}<span className="ml-2 text-foreground/45">{(item as LinguistTermInfo).translation} · {(item as LinguistTermInfo).status}</span></>}</span><button type="button" disabled={archived} onClick={() => void remove(item.id)} aria-label="删除参考记录" className="text-destructive disabled:opacity-40"><Trash2 size={12} /></button></li>)}</ul>}
     </div>
   </details>

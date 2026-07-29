@@ -57,6 +57,7 @@ const EXPORT_RELATIVE_PATH = 'exports/pb074-verified.xliff'
 const MODEL_ID = 'fake-cat-pb074'
 const LF026_ONLY = process.argv.includes('--lf026-only')
 const LF056_ONLY = process.argv.includes('--lf056-only')
+const PROPOSAL_ID_PATTERN = /prp(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})/
 
 interface CheckResult {
   name: string
@@ -1280,7 +1281,7 @@ async function main(): Promise<void> {
       const seeded = runLf056FixtureSeeder(linguistRoot, projectId, segmentId)
       check(
         'lf056-public-repository-fixture',
-        seeded.includes('"proposalId":"prp-'),
+        PROPOSAL_ID_PATTERN.test(seeded),
         `公共 repository fixture=${seeded}`,
       )
     }
@@ -1440,7 +1441,9 @@ async function main(): Promise<void> {
         (entry) => entry.hasToolMessage === true && entry.toolResultText?.includes(PB074_SOURCE) === true,
       )
       const proposalResultSeen = logs.some(
-        (entry) => entry.hasToolMessage === true && entry.toolResultText?.includes('prp-') === true,
+        (entry) => entry.hasToolMessage === true
+          && entry.toolResultText !== undefined
+          && PROPOSAL_ID_PATTERN.test(entry.toolResultText),
       )
       const finalSeen = events.texts.some(
         (event) => event.sessionId === sessionId && event.text.includes(PB074_FINAL_MARKER),
@@ -1624,7 +1627,7 @@ async function main(): Promise<void> {
       ])
       check(
         'export-reimport-verify',
-        exportId.startsWith('exp-')
+        /^exp_v2_[0-9a-f]{64}$/.test(exportId)
           && exportSha.length === 64
           && existsSync(exportPath)
           && cliField(verified, 'verify') === 'OK'

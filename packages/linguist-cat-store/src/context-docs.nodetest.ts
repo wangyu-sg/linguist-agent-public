@@ -31,7 +31,7 @@ test('context docs: insert/get round-trip incl. text extract; re-insert is idemp
       note: '世界观 v2',
       textExtract: '# 世界观\n王国与森林。',
     })
-    assert.ok(created.id.startsWith('ctx-'))
+    assert.match(created.id, /^ctx_v2_[0-9a-f]{64}$/)
     assert.deepEqual(db.contextDocs.get(created.id), created)
 
     const again = db.contextDocs.insert({

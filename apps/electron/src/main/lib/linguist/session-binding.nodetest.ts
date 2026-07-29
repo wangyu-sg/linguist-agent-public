@@ -21,7 +21,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentSessionMeta } from '@proma/shared'
 import { makeClock, makeEntropy, makeTempDir } from './test/service-testkit'
@@ -33,6 +33,7 @@ const tempHome = makeTempDir()
 process.env.HOME = tempHome
 
 const binding = await import('./session-binding')
+const executionScope = await import('./agent-execution-scope')
 const sessionManager = await import('../agent-session-manager')
 
 const LINGUIST_ROOT = join(tempHome, '.linguist-agent', 'linguist')
@@ -57,10 +58,12 @@ const PROJECT_INPUT = { name: '绑定项目', sourceLocale: 'en', targetLocale: 
 test('binding write: project chat carries frozen binding + name snapshot; normal chat does not', () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT })
+  service.setQualityProfile(project.id, 'best')
 
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
   assert.equal(meta.linguistProjectId, project.id)
   assert.equal(meta.linguistProjectName, '绑定项目')
+  assert.equal(meta.linguistStrategy, 'best')
   assert.equal(meta.agentRuntime, 'pi')
   // 缺省标题 = 项目名
   assert.equal(meta.title, '绑定项目')
@@ -81,8 +84,10 @@ test('binding write: project chat carries frozen binding + name snapshot; normal
   const persisted = onDisk.sessions.find((s) => s.id === meta.id)
   assert.equal(persisted?.linguistProjectId, project.id)
   assert.equal(persisted?.linguistProjectName, '绑定项目')
+  assert.equal(persisted?.linguistStrategy, 'best')
   const persistedNormal = onDisk.sessions.find((s) => s.id === normal.id)
   assert.equal(persistedNormal && 'linguistProjectId' in persistedNormal, false)
+  assert.equal(persistedNormal?.linguistStrategy, undefined)
 
   service.closeAll()
 })
@@ -115,6 +120,29 @@ test('binding freeze: no metadata update can rewrite the binding; other projects
   current = sessionManager.getAgentSessionMeta(meta.id)
   assert.equal(current?.linguistProjectId, projectA.id)
 
+  service.closeAll()
+})
+
+test('execution scope: Linguist session uses project cwd and delete moves it to managed Trash', () => {
+  const service = makeServiceOnLinguistRoot()
+  const project = service.createProject({ ...PROJECT_INPUT, name: '工作目录项目' })
+  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+
+  const scope = executionScope.resolveAgentExecutionScope(meta)
+  assert.equal(scope.kind, 'linguist-project')
+  assert.equal(
+    scope.cwd,
+    join(LINGUIST_ROOT, 'agent-workspaces', project.id, meta.id),
+  )
+  assert.equal(existsSync(join(scope.cwd, 'SESSION_MANIFEST.json')), true)
+
+  sessionManager.deleteAgentSession(meta.id)
+  assert.equal(existsSync(scope.cwd), false)
+  const trashDir = join(LINGUIST_ROOT, 'trash', 'agent-workspaces', project.id)
+  assert.equal(
+    readdirSync(trashDir).some((name) => name.startsWith(`${meta.id}-`)),
+    true,
+  )
   service.closeAll()
 })
 

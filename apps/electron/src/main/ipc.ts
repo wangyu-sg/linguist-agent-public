@@ -9,7 +9,7 @@ import { join, resolve, sep, dirname } from 'node:path'
 import { existsSync, realpathSync, rmSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, LINGUIST_PROJECT_IPC_CHANNELS, LINGUIST_SESSION_IPC_CHANNELS, LINGUIST_PROPOSAL_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, LINGUIST_EXPORT_IPC_CHANNELS, LINGUIST_REFERENCE_IPC_CHANNELS, LINGUIST_ASSETS_IPC_CHANNELS, LINGUIST_MIGRATION_IPC_CHANNELS, LINGUIST_ASSET_PREVIEW_IPC_CHANNELS, isPromaPermissionMode, normalizePathForCompare } from '@proma/shared'
+import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, LINGUIST_PROJECT_IPC_CHANNELS, LINGUIST_INTEGRITY_IPC_CHANNELS, LINGUIST_SESSION_IPC_CHANNELS, LINGUIST_PROPOSAL_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, LINGUIST_EXPORT_IPC_CHANNELS, LINGUIST_DIAGNOSTICS_IPC_CHANNELS, LINGUIST_REFERENCE_IPC_CHANNELS, LINGUIST_ASSETS_IPC_CHANNELS, LINGUIST_MIGRATION_IPC_CHANNELS, LINGUIST_ASSET_PREVIEW_IPC_CHANNELS, isPromaPermissionMode, normalizePathForCompare } from '@proma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, QUICK_TASK_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   QuickTaskSubmitInput,
@@ -199,7 +199,7 @@ import { runAgent, stopAgent, generateAgentTitle, saveFilesToAgentSession, saveF
 import { permissionService } from './lib/agent-permission-service'
 import { askUserService } from './lib/agent-ask-user-service'
 import { exitPlanService } from './lib/agent-exit-plan-service'
-import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceSkillsDir, getWorkspaceFilesDir, getScratchPadPath } from './lib/config-paths'
+import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceSkillsDir, getWorkspaceFilesDir, getScratchPadPath, getConfigDir } from './lib/config-paths'
 import { getCachedDefaultAppInfo, saveCachedDefaultAppInfo } from './lib/default-app-cache'
 import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from './lib/storage-service'
 import type { CleanupOptions } from './lib/storage-service'
@@ -280,12 +280,15 @@ import { getWeChatConfig } from './lib/wechat-config'
 import { wechatBridge } from './lib/wechat-bridge'
 import { getLinguistProjectService } from './lib/linguist/project-service'
 import { createLinguistProjectIpc } from './lib/linguist/project-ipc'
+import { createIntegrityScrubIpc } from './lib/linguist/integrity-scrub-ipc'
+import { IntegrityScrubService } from './lib/linguist/integrity-scrub-service'
 import { createLinguistSessionIpc } from './lib/linguist/session-ipc'
 import { createLinguistProposalIpc } from './lib/linguist/proposal-ipc'
 import { createLinguistCatWorkspaceIpc } from './lib/linguist/cat-workspace-ipc'
 import { createLinguistReferenceIpc } from './lib/linguist/reference-ipc'
 import { createLinguistAssetsIpc } from './lib/linguist/assets-ipc'
 import { createLinguistExportIpc } from './lib/linguist/export-ipc'
+import { createLinguistDiagnosticsIpc } from './lib/linguist/diagnostics-ipc'
 import { createLinguistMigrationIpc } from './lib/linguist/migration-ipc'
 import { getLinguistMigrationService } from './lib/linguist/migration-service'
 
@@ -847,6 +850,12 @@ function isAgentRuntime(value: unknown): value is AgentRuntime {
  * 直接引用 renderer 的开关模块，此处保持同名同值常量；恢复可见时两处一起改回。
  */
 const PROMA_APP_ICON_VARIANTS_VISIBLE = false
+let linguistIntegrityScrubService: IntegrityScrubService | undefined
+
+export function stopAllLinguistIntegrityScrubs(): void {
+  linguistIntegrityScrubService?.dispose()
+  linguistIntegrityScrubService = undefined
+}
 
 /**
  * 解析应用图标变体的文件路径
@@ -4649,6 +4658,19 @@ export function registerIpcHandlers(): void {
       registerPreviewUrl: registerPromaFilePath,
     },
   })
+  linguistIntegrityScrubService ??= new IntegrityScrubService({
+    getService: getLinguistProjectService,
+    workerScript: join(__dirname, 'linguist-integrity-scrub-worker.cjs'),
+    emit: (event) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send(LINGUIST_INTEGRITY_IPC_CHANNELS.PROGRESS, event)
+      }
+    },
+  })
+  const linguistIntegrityIpc = createIntegrityScrubIpc({
+    getProjectService: getLinguistProjectService,
+    scrub: linguistIntegrityScrubService,
+  })
 
   ipcMain.handle(
     LINGUIST_PROJECT_IPC_CHANNELS.LIST,
@@ -4723,6 +4745,26 @@ export function registerIpcHandlers(): void {
     async (_, input: unknown) => linguistProjectIpc.restore(input)
   )
 
+  // LF-088：Full Integrity Scrub 始终由独立 node:worker_threads 执行；
+  // renderer 只收进度/脱敏结果，也不能提交保存路径。
+  ipcMain.handle(
+    LINGUIST_INTEGRITY_IPC_CHANNELS.START,
+    async (_, input: unknown) => linguistIntegrityIpc.start(input)
+  )
+  ipcMain.handle(
+    LINGUIST_INTEGRITY_IPC_CHANNELS.CANCEL,
+    async (_, input: unknown) => linguistIntegrityIpc.cancel(input)
+  )
+  ipcMain.handle(
+    LINGUIST_INTEGRITY_IPC_CHANNELS.EXPORT_REPORT,
+    async (event, input: unknown) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      return linguistIntegrityIpc.exportReport(input, (options) =>
+        win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options)
+      )
+    }
+  )
+
   // PB-089：CAT 资产源文件预览（纯读，归档项目允许；三态分派在处理器内）。
   // 处理器在 project-ipc.ts（项目通道组共享受托服务），通道名独立成组
   // （linguist.project.* 单数），不影响 PB-031 契约守卫的 11 通道断言。
@@ -4747,6 +4789,30 @@ export function registerIpcHandlers(): void {
     async (event, input: unknown) => {
       const win = BrowserWindow.fromWebContents(event.sender)
       return linguistExportIpc.saveAsset(input, (options) =>
+        win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options)
+      )
+    }
+  )
+
+  const linguistDiagnosticsIpc = createLinguistDiagnosticsIpc({
+    getService: getLinguistProjectService,
+    getSession: getAgentSessionMeta,
+    getConfigDir,
+    isDevelopment: !app.isPackaged,
+  })
+  ipcMain.handle(
+    LINGUIST_DIAGNOSTICS_IPC_CHANNELS.GET_STATUS,
+    async (_, input: unknown) => linguistDiagnosticsIpc.getStatus(input)
+  )
+  ipcMain.handle(
+    LINGUIST_DIAGNOSTICS_IPC_CHANNELS.PREVIEW_BUNDLE,
+    async (_, input: unknown) => linguistDiagnosticsIpc.previewBundle(input)
+  )
+  ipcMain.handle(
+    LINGUIST_DIAGNOSTICS_IPC_CHANNELS.EXPORT_BUNDLE,
+    async (event, input: unknown) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      return linguistDiagnosticsIpc.exportBundle(input, (options) =>
         win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options)
       )
     }
@@ -4777,10 +4843,34 @@ export function registerIpcHandlers(): void {
       })
   )
 
+  const broadcastLinguistProjectMutation = (
+    mutation: LinguistProjectMutationEvent,
+  ): void => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+        try {
+          win.webContents.send(LINGUIST_CAT_IPC_CHANNELS.PROJECT_MUTATION, mutation)
+        } catch (error) {
+          console.error('[Linguist] 向 renderer 广播项目 mutation 失败:', error)
+        }
+      }
+    }
+  }
+
   // ===== Linguist CAT Workspace（PB-060/071；分页、编辑与人工 QA 审核）=====
   const linguistCatWorkspaceIpc = createLinguistCatWorkspaceIpc({
     getService: getLinguistProjectService,
+    getSession: getAgentSessionMeta,
+    onProjectMutation: broadcastLinguistProjectMutation,
   })
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.LIST_PROJECT_EVENTS, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.listProjectEvents(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.ACK_PROJECT_EVENTS, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.ackProjectEvents(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.GET_LATEST_RUN_SUMMARY, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.getLatestRunSummary(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.UNDO_LATEST_RUN, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.undoLatestRun(input))
   ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.QUERY, async (_, input: unknown) =>
     linguistCatWorkspaceIpc.query(input))
   ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.EDIT_SEGMENT, async (_, input: unknown) =>
@@ -4821,20 +4911,6 @@ export function registerIpcHandlers(): void {
     linguistReferenceIpc.upsertTerm(input))
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.DELETE, async (_, input: unknown) =>
     linguistReferenceIpc.delete(input))
-
-  const broadcastLinguistProjectMutation = (
-    mutation: LinguistProjectMutationEvent,
-  ): void => {
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
-        try {
-          win.webContents.send(LINGUIST_CAT_IPC_CHANNELS.PROJECT_MUTATION, mutation)
-        } catch (error) {
-          console.error('[Linguist] 向 renderer 广播项目 mutation 失败:', error)
-        }
-      }
-    }
-  }
 
   // ===== Linguist 项目资产（PB-095；六类资产 CRUD 与原生导入）=====
   const linguistAssetsIpc = createLinguistAssetsIpc({

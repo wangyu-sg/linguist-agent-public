@@ -16,9 +16,9 @@ The app has three peer modes:
 
 - **Agent** — Proma's complete Agent workspace with Claude and Pi runtimes, tool activity, thinking, permissions, Queue / Steer, Skills, MCP, and workspace files.
 - **Chat** — Proma's multi-provider conversations, attachments, tools, context controls, and parallel comparison.
-- **Linguist** — projects, assets, a virtualized Segment Grid, human editing, Proposal review, TM / TB, Context, deterministic QA, workflow confirmation, delivery preflight, export, backup, and restore.
+- **Linguist** — projects, assets, a virtualized Segment Grid, human editing, Proposal review, TM / TB, Context, deterministic QA, workflow confirmation, run summaries and safe undo, delivery preflight, export, integrity scrubbing, backup, and restore.
 
-Linguist embeds the same Proma `AgentView`; it does not create a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. Agent tools may create reviewable Proposals, but cannot bypass human acceptance, CAS revisions, locked segments, tags, or QA gates.
+Linguist is a first-class Agent Profile. It layers versioned Profile, Role, Fast / Balanced / Best Strategy, Project Digest, and per-turn Context on top of the Proma base. It embeds the same Proma `AgentView`; it does not create a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. Agent tools may create reviewable Proposals, but cannot bypass human acceptance, CAS revisions, locked segments, tags, QA, or Required/Forbidden term gates.
 
 ## Architecture
 
@@ -37,8 +37,10 @@ Important boundaries:
 
 - `@linguist/cat-core` has no React, Electron, Proma UI, or SQLite dependency.
 - `@linguist/cat-store` owns each project's `cat.db`, managed source assets, backups, and export records.
-- `@linguist/cat-tools` derives project identity only from the Session binding. Its 12 tools are split by project reads, references, QA, and Proposal/Critic behavior.
+- `@linguist/cat-tools` derives project identity only from the Session binding. Its 15 tools are split by project reads, references, QA, and Proposal/Critic behavior.
 - `LinguistProjectService` remains the compatibility facade while lifecycle, resources, quality, and delivery live in separate modules.
+- Proposal content is stored separately from each issuance and its provenance. Long-running work uses Jobs/Checkpoints, idempotent mutations, a durable outbox, and run-scoped undo.
+- Project open performs only bounded Quick Health checks. Full Integrity Scrub runs in a worker thread and checks all managed digests, SQLite/reference lineage, exports, and Session workspaces.
 - Proma core changes are registered in [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md) and enforced by architecture tests.
 
 ## Local data
@@ -80,6 +82,7 @@ Implemented code and automated verification are not the same as product qualific
 - real macOS IME composition and Native Save overwrite checks;
 - VoiceOver, complete keyboard-only paths, and drag/resize feel;
 - a blind evaluation of Fast / Balanced / Best using real game text;
+- real Provider/model runs and representative customer-format samples;
 - a 14-day personal-use run with issue capture.
 
 Signing, notarization, public update channels, and cross-platform release qualification are outside the current personal-use scope. See [HANDOFF.md](./docs/HANDOFF.md), [TODO.md](./TODO.md), and the [execution queue](./docs/roadmap/LINGUIST_FUSION_QUEUE.md).

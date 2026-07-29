@@ -1,13 +1,14 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
-import { Maximize2, PanelRightClose } from 'lucide-react'
+import { ArrowLeft, Maximize2, PanelRightClose } from 'lucide-react'
 import { createLinguistTurnContextV1 } from '@proma/shared'
 import type {
   AgentSessionMeta,
   LinguistAssetInfo,
   LinguistIpcError,
   LinguistIpcResult,
+  LinguistQualityProfile,
   LinguistSessionCreateForProjectRequest,
 } from '@proma/shared'
 import {
@@ -19,7 +20,6 @@ import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-sessi
 import { AgentView } from '@/components/agent/AgentView'
 import type { ComposerContextChip } from '@/features/linguist/composer/ComposerContextChips'
 import { Button } from '@/components/ui/button'
-import { useOpenSession } from '@/hooks/useOpenSession'
 import {
   captureLinguistTurnContextSnapshot,
   linguistWorkbenchUiStateAtomFamily,
@@ -192,20 +192,24 @@ export function createProjectAgentQuickActionPendingPrompt(
 interface ProjectAgentRailProps {
   projectId: string
   projectName: string
+  qualityProfile: LinguistQualityProfile
   assets?: readonly LinguistAssetInfo[]
 }
 
 export function ProjectAgentRail({
   projectId,
   projectName,
+  qualityProfile,
   assets = [],
 }: ProjectAgentRailProps): React.ReactElement {
   const store = useStore()
   const sessionId = useAtomValue(projectCurrentAgentSessionIdMapAtom).get(projectId)
   const sessions = useAtomValue(agentSessionsAtom)
   const setPendingPrompt = useSetAtom(agentPendingPromptAtom)
-  const openSession = useOpenSession()
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectId))
+  const presentation = uiState.agentPresentation === 'full' ? 'full' : 'rail'
+  const expandButtonRef = React.useRef<HTMLButtonElement>(null)
+  const previousPresentation = React.useRef(presentation)
   const [failure, setFailure] = React.useState<ProjectAgentRailFailure | null>(null)
   const [retryToken, setRetryToken] = React.useState(0)
   const clearSelectedSegments = React.useCallback((): void => {
@@ -249,58 +253,116 @@ export function ProjectAgentRail({
     }
   }, [projectId, retryToken, sessionId, store])
 
+  React.useEffect(() => {
+    const wasFull = previousPresentation.current === 'full'
+    previousPresentation.current = presentation
+    if (presentation === 'full') {
+      const handleKeyDown = (event: KeyboardEvent): void => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return
+        event.preventDefault()
+        setUiState({ agentPresentation: 'rail' })
+      }
+      window.addEventListener('keydown', handleKeyDown)
+      return () => window.removeEventListener('keydown', handleKeyDown)
+    }
+    if (wasFull) requestAnimationFrame(() => expandButtonRef.current?.focus())
+  }, [presentation, setUiState])
+
   if (sessionId) {
-    const sessionTitle = sessions.find((session) => session.id === sessionId)?.title ?? projectName
+    const session = sessions.find((item) => item.id === sessionId)
+    const role = session?.linguistSessionRole === 'reviewer'
+      ? 'Reviewer'
+      : session?.linguistSessionRole === 'auditor'
+        ? 'Auditor'
+        : 'Assistant'
+    const strategy = qualityProfile === 'fast'
+      ? 'Fast'
+      : qualityProfile === 'best'
+        ? 'Best'
+        : 'Balanced'
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-1 bg-content-area/70 px-2 py-1.5 shadow-sm">
-          <div
-            role="group"
-            aria-label="项目 Agent 快捷动作"
-            className="grid min-w-0 flex-1 grid-cols-3 gap-1"
-          >
-            {quickActions.map((action) => (
+          {presentation === 'full' && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="返回本地化工作台"
+              aria-keyshortcuts="Escape"
+              onClick={() => setUiState({ agentPresentation: 'rail' })}
+            >
+              <ArrowLeft aria-hidden="true" />
+              返回工作台
+            </Button>
+          )}
+          {presentation === 'full' && (
+            <div
+              aria-label={`项目 ${projectName}，角色 ${role}，策略 ${strategy}`}
+              className="min-w-0 flex-1 px-2"
+            >
+              <p className="truncate text-xs font-medium text-foreground">{projectName}</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {[role, strategy, ...contextSummary.slice(1).map((chip) => chip.label)].join(' · ')}
+              </p>
+            </div>
+          )}
+          {presentation === 'rail' && (
+            <div
+              role="group"
+              aria-label="项目 Agent 快捷动作"
+              className="grid min-w-0 flex-1 grid-cols-3 gap-1"
+            >
+              {quickActions.map((action) => (
+                <Button
+                  key={action.id}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={action.disabled}
+                  title={action.scope}
+                  onClick={() => runQuickAction(action.id)}
+                  className="h-7 min-w-0 px-2 text-[11px]"
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          {presentation === 'rail' && (
+            <div
+              role="group"
+              aria-label="项目 Agent rail 控制"
+              className="flex shrink-0 gap-0.5"
+            >
               <Button
-                key={action.id}
                 type="button"
-                variant="secondary"
-                size="sm"
-                disabled={action.disabled}
-                title={action.scope}
-                onClick={() => runQuickAction(action.id)}
-                className="h-7 min-w-0 px-2 text-[11px]"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="收起项目 Agent"
+                title="收起项目 Agent"
+                onClick={() => setUiState({ agentPresentation: 'closed' })}
               >
-                {action.label}
+                <PanelRightClose aria-hidden="true" />
               </Button>
-            ))}
-          </div>
-          <div role="group" aria-label="项目 Agent rail 控制" className="flex shrink-0 gap-0.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="收起项目 Agent"
-              title="收起项目 Agent"
-              onClick={() => setUiState({ agentRailOpen: false })}
-            >
-              <PanelRightClose aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="在完整 Agent Tab 中打开"
-              title="在完整 Agent Tab 中打开"
-              onClick={() => openSession('agent', sessionId, sessionTitle)}
-            >
-              <Maximize2 aria-hidden="true" />
-            </Button>
-          </div>
+              <Button
+                ref={expandButtonRef}
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="在 Linguist 中展开项目 Agent"
+                title="在 Linguist 中展开项目 Agent"
+                onClick={() => setUiState({ agentPresentation: 'full' })}
+              >
+                <Maximize2 aria-hidden="true" />
+              </Button>
+            </div>
+          )}
         </div>
         <div className="min-h-0 flex-1">
           <AgentView
             sessionId={sessionId}
-            presentation="rail"
+            presentation={presentation}
             contextSummary={contextSummary}
           />
         </div>

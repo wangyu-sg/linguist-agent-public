@@ -29,6 +29,7 @@ import type {
   StyleGuideRule,
   TechConstraint,
   TermEntry,
+  TermEntryStatus,
   TmUnit,
   VoiceProfile,
 } from '@linguist/cat-store'
@@ -47,6 +48,8 @@ export interface LinguistProjectServiceOptions {
   entropy?: EntropySource
   /** 时钟（时间戳/备份文件名）；注入可确定性复现。 */
   now?: () => string
+  /** 应用版本；生产默认复用 Host 已初始化的 Proma 版本。 */
+  applicationVersion?: string
   /** 工作区 id 分配器；缺省按 agent-workspace-manager 约定用 randomUUID。 */
   workspaceAllocator?: (projectName: string) => string
   /** 格式注册表；缺省登记 XLIFF/CSV/JSON。 */
@@ -96,11 +99,15 @@ export interface StageMutationBatchResult {
 export interface LinguistProjectHealthCheck {
   id: 'project_json' | 'cat_db_open' | 'schema_version' | 'asset_sources'
   ok: boolean
+  scope: 'complete' | 'sampled'
+  checkedItems?: number
+  totalItems?: number
   /** 仅含错误码 / 计数，绝无客户文本。 */
   detail?: string
 }
 
 export interface LinguistProjectHealthReport {
+  kind: 'quick'
   projectId: string
   healthy: boolean
   checkedAt: string
@@ -198,6 +205,7 @@ export interface TermReferenceMatch extends TermEntry {
 
 export interface ReferenceQuery {
   query?: string
+  status?: TermEntryStatus
   limit: number
   offset: number
 }

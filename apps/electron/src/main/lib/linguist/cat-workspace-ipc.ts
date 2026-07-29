@@ -16,6 +16,11 @@ import {
   type LinguistQaFindingInfo,
   type LinguistQaFindingSeverity,
   type LinguistIpcResult,
+  type LinguistLatestRunSummaryResult,
+  type LinguistProjectEventAckResult,
+  type LinguistProjectEventListResult,
+  type LinguistProjectMutationEvent,
+  type LinguistRunUndoResult,
   type LinguistSegmentStatus,
 } from '@proma/shared'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
@@ -38,9 +43,16 @@ const QA_DISPOSITIONS: ReadonlySet<string> = new Set(['defect', 'needs_review', 
 const QA_WAIVER_REASON_MAX_LENGTH = 500
 const QA_WAIVER_OPERATOR_MAX_LENGTH = 120
 const QA_CODE_MAX_LENGTH = 120
+const PROJECT_EVENT_PAGE_MAX = 200
 
 export interface LinguistCatWorkspaceIpcDeps {
   getService: () => LinguistProjectService
+  getSession?: (sessionId: string) => {
+    id: string
+    linguistProjectId?: string
+    archived?: boolean
+  } | undefined
+  onProjectMutation?: (event: LinguistProjectMutationEvent) => void
 }
 
 function optionalString(
@@ -64,10 +76,43 @@ function integer(
 }
 
 export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps) {
+  const readAuthorizedSession = (
+    record: Record<string, unknown>,
+    projectId: string,
+  ): { id: string } => {
+    const sessionId = record.sessionId
+    if (
+      typeof sessionId !== 'string'
+      || sessionId.trim() === ''
+      || sessionId.length > 200
+    ) {
+      invalid('sessionId must be a non-blank stable identifier')
+    }
+    const session = deps.getSession?.(sessionId)
+    if (
+      session === undefined
+      || session.archived === true
+      || session.linguistProjectId !== projectId
+    ) {
+      invalid('sessionId does not belong to the current Linguist project')
+    }
+    return session
+  }
+
+  const notifyRunUndone = (event: LinguistProjectMutationEvent): void => {
+    if (deps.onProjectMutation === undefined) return
+    try {
+      deps.onProjectMutation(event)
+    } catch (error) {
+      // 数据库 undo 已提交；通知失败不能把成功响应伪装成写失败。
+      console.error('[Linguist CAT] 广播 run undo mutation 失败:', error)
+    }
+  }
+
   const readSegmentId = (record: Record<string, unknown>): string => {
     const segmentId = record.segmentId
     if (typeof segmentId !== 'string' || !LINGUIST_SEGMENT_ID_PATTERN.test(segmentId)) {
-      invalid('segmentId must match seg-<16 lowercase hex>')
+      invalid('segmentId must be a valid Stable ID')
     }
     return segmentId
   }
@@ -75,7 +120,7 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
   const readFindingId = (record: Record<string, unknown>): string => {
     const findingId = record.findingId
     if (typeof findingId !== 'string' || !LINGUIST_QA_FINDING_ID_PATTERN.test(findingId)) {
-      invalid('findingId must match qaf-<16 lowercase hex>')
+      invalid('findingId must be a valid Stable ID')
     }
     return findingId
   }
@@ -112,13 +157,112 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
   }
 
   return {
+    getLatestRunSummary(input: unknown): Promise<LinguistIpcResult<LinguistLatestRunSummaryResult>> {
+      return wrap(() => {
+        const projectId = readProjectId(assertRecord(input))
+        return {
+          summary:
+            deps.getService().openProject(projectId).runs.getLatestRunChangeSummary() ?? null,
+        }
+      })
+    },
+
+    undoLatestRun(input: unknown): Promise<LinguistIpcResult<LinguistRunUndoResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const session = readAuthorizedSession(record, projectId)
+        const expectedRunId = record.expectedRunId
+        if (
+          typeof expectedRunId !== 'string'
+          || expectedRunId.trim() === ''
+          || expectedRunId.length > 200
+        ) {
+          invalid('expectedRunId must be a non-blank stable identifier')
+        }
+        const runs = deps.getService().openProject(projectId).runs
+        const summary = runs.getLatestRunChangeSummary()
+        if (summary === undefined) invalid('project has no durable Linguist run to undo')
+        if (summary.runId !== expectedRunId) {
+          invalid('latest run changed; refresh the run summary before undoing')
+        }
+        const result = runs.undoRun(summary.runId, { actorId: `workbench:${session.id}` })
+        if (result.event !== undefined) {
+          notifyRunUndone({
+            ...result.event,
+            revision: result.event.sequence,
+            sequence: result.event.sequence,
+          })
+        }
+        return {
+          runId: result.runId,
+          status: result.status,
+          reverted: result.reverted,
+          refused: result.refused,
+        }
+      })
+    },
+
+    listProjectEvents(input: unknown): Promise<LinguistIpcResult<LinguistProjectEventListResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const afterSequence = record.afterSequence
+        const limit = record.limit ?? 100
+        if (!Number.isInteger(afterSequence) || (afterSequence as number) < 0) {
+          invalid('afterSequence must be a non-negative integer')
+        }
+        if (
+          !Number.isInteger(limit) ||
+          (limit as number) < 1 ||
+          (limit as number) > PROJECT_EVENT_PAGE_MAX
+        ) {
+          invalid(`limit must be between 1 and ${PROJECT_EVENT_PAGE_MAX}`)
+        }
+        const rows = deps.getService().openProject(projectId).runs.listEvents(
+          afterSequence as number,
+          (limit as number) + 1,
+        )
+        return {
+          events: rows.slice(0, limit as number).map((event) => ({
+            ...event,
+            revision: event.sequence,
+            sequence: event.sequence,
+          })),
+          hasMore: rows.length > (limit as number),
+        }
+      })
+    },
+
+    ackProjectEvents(input: unknown): Promise<LinguistIpcResult<LinguistProjectEventAckResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const consumerId = record.consumerId
+        const throughSequence = record.throughSequence
+        if (
+          typeof consumerId !== 'string' ||
+          !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(consumerId)
+        ) {
+          invalid('consumerId must be an opaque identifier of at most 120 characters')
+        }
+        if (!Number.isInteger(throughSequence) || (throughSequence as number) < 0) {
+          invalid('throughSequence must be a non-negative integer')
+        }
+        return deps.getService().openProject(projectId).runs.ackEvents(
+          consumerId,
+          throughSequence as number,
+        )
+      })
+    },
+
     query(input: unknown): Promise<LinguistIpcResult<LinguistCatQueryResult>> {
       return wrap(() => {
         const record = assertRecord(input)
         const projectId = readProjectId(record)
         const assetId = optionalString(record, 'assetId')
         if (assetId !== undefined && !LINGUIST_ASSET_ID_PATTERN.test(assetId)) {
-          invalid('assetId must match ast-<16 lowercase hex>')
+          invalid('assetId must be a valid Stable ID')
         }
         const search = optionalString(record, 'search')
         if (search !== undefined && search.length > LINGUIST_CAT_SEARCH_MAX_LENGTH) {
@@ -266,7 +410,7 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
         const projectId = readProjectId(record)
         const segmentId = record.segmentId
         if (segmentId !== undefined && (typeof segmentId !== 'string' || !LINGUIST_SEGMENT_ID_PATTERN.test(segmentId))) {
-          invalid('segmentId must match seg-<16 lowercase hex>')
+          invalid('segmentId must be a valid Stable ID')
         }
         const code = record.code
         if (

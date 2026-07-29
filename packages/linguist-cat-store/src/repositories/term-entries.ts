@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto'
+import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 import type { ReferenceImportResult } from './tm-units'
 
-export type TermEntryStatus = 'allowed' | 'preferred' | 'forbidden' | 'deprecated'
+export type TermEntryStatus = 'allowed' | 'preferred' | 'required' | 'forbidden' | 'deprecated'
 
 export interface TermEntry {
   id: string
@@ -47,6 +47,10 @@ export interface TermMatchOptions {
   limit?: number
 }
 
+export interface TermMatchManyOptions extends Omit<TermMatchOptions, 'text'> {
+  texts: readonly string[]
+}
+
 export type TermMatchType = 'exact' | 'contains'
 
 export interface TermEntryMatch extends TermEntry {
@@ -69,7 +73,7 @@ interface TermEntryRow {
 }
 
 function stableId(projectId: string, input: TermEntryImportInput): string {
-  const content = JSON.stringify([
+  return deriveStableIdV2('ter', [
     projectId,
     input.term,
     input.translation,
@@ -77,7 +81,6 @@ function stableId(projectId: string, input: TermEntryImportInput): string {
     input.caseSensitive,
     input.note ?? null,
   ])
-  return `ter-${createHash('sha256').update(content).digest('hex').slice(0, 16)}`
 }
 
 /** Escape LIKE wildcards so query is a literal substring match. */
@@ -307,6 +310,14 @@ export class TermEntriesRepository {
   }
 
   findMatches(options: TermMatchOptions): TermEntryMatch[] {
+    return this.findMatchesMany({
+      texts: [options.text],
+      ...(options.statuses !== undefined ? { statuses: options.statuses } : {}),
+      ...(options.limit !== undefined ? { limit: options.limit } : {}),
+    }).get(options.text) ?? []
+  }
+
+  findMatchesMany(options: TermMatchManyOptions): ReadonlyMap<string, TermEntryMatch[]> {
     const params: unknown[] = [this.projectId]
     let statusClause = ''
     if (options.statuses !== undefined && options.statuses.length > 0) {
@@ -326,10 +337,22 @@ export class TermEntriesRepository {
       preferredTranslations.set(key, translations)
     }
 
+    return new Map(options.texts.map((text) => [
+      text,
+      this.matchRows(rows, preferredTranslations, text, options.limit ?? 20),
+    ]))
+  }
+
+  private matchRows(
+    rows: readonly TermEntryRow[],
+    preferredTranslations: ReadonlyMap<string, ReadonlySet<string>>,
+    rawText: string,
+    limit: number,
+  ): TermEntryMatch[] {
     const matches: TermEntryMatch[] = []
     for (const row of rows) {
       const foldCase = row.case_sensitive !== 1
-      const text = normalizeText(options.text, foldCase)
+      const text = normalizeText(rawText, foldCase)
       const term = normalizeText(row.term, foldCase)
       const matchType = text === term ? 'exact' : text.includes(term) ? 'contains' : undefined
       if (matchType === undefined) continue
@@ -342,10 +365,11 @@ export class TermEntriesRepository {
       })
     }
     const statusRank: Record<TermEntryStatus, number> = {
-      preferred: 0,
-      forbidden: 1,
-      allowed: 2,
-      deprecated: 3,
+      required: 0,
+      preferred: 1,
+      forbidden: 2,
+      allowed: 3,
+      deprecated: 4,
     }
     matches.sort((left, right) =>
       Number(left.matchType === 'contains') - Number(right.matchType === 'contains')
@@ -355,6 +379,6 @@ export class TermEntriesRepository {
       || compareText(normalizeText(left.translation), normalizeText(right.translation))
       || compareText(left.id, right.id),
     )
-    return matches.slice(0, options.limit ?? 20)
+    return matches.slice(0, limit)
   }
 }

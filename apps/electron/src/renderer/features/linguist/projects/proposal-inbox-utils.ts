@@ -199,14 +199,18 @@ export function groupProposalRuns(
   const groups = new Map<string, ProposalRunGroup>()
   for (const diff of diffs) {
     const proposal = diff.proposal
-    const runId = proposal.runId ?? 'legacy（无 run ID）'
+    const source = diff.latestIssuance
+    const runId = source?.runId ?? proposal.runId ?? 'legacy（无 run ID）'
+    const modelId = source?.modelId ?? proposal.modelId
+    const sessionId = source?.sessionId ?? proposal.sessionId
+    const createdAt = source?.createdAt ?? proposal.createdAt
     const existing = groups.get(runId)
     if (existing === undefined) {
       groups.set(runId, {
         runId,
-        createdAt: proposal.createdAt,
-        ...(proposal.modelId !== undefined ? { modelId: proposal.modelId } : {}),
-        ...(proposal.sessionId !== undefined ? { sessionId: proposal.sessionId } : {}),
+        createdAt,
+        ...(modelId === undefined ? {} : { modelId }),
+        ...(sessionId === undefined ? {} : { sessionId }),
         items: [diff],
         statusCounts: { [proposal.status]: 1 },
       })
@@ -214,7 +218,7 @@ export function groupProposalRuns(
     }
     existing.items.push(diff)
     existing.statusCounts[proposal.status] = (existing.statusCounts[proposal.status] ?? 0) + 1
-    if (proposal.createdAt > existing.createdAt) existing.createdAt = proposal.createdAt
+    if (createdAt > existing.createdAt) existing.createdAt = createdAt
   }
   return [...groups.values()].sort((left, right) =>
     right.createdAt.localeCompare(left.createdAt) || right.runId.localeCompare(left.runId))

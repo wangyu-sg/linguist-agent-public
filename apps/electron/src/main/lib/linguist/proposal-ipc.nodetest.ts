@@ -20,7 +20,7 @@ test('PB-053 Proposal IPC 覆盖人工 UI 的读写与批量审核通道', async
       segments.map((segment, index) => ({
         segmentId: segment.id,
         baseRevision: segment.revision,
-        proposedTarget: index === 0 ? '人工建议译文' : `建议译文 ${index}`,
+        proposedTarget: ['人工建议译文', '建议译文乙', '建议译文丙\n续行'][index]!,
       })),
     )
     const mutations: LinguistProjectMutationEvent[] = []
@@ -89,7 +89,7 @@ test('PB-053 Proposal IPC 覆盖人工 UI 的读写与批量审核通道', async
       segments.slice(0, 2).map((segment, index) => ({
         segmentId: segment.id,
         baseRevision: index === 0 ? 1 : 0,
-        proposedTarget: `第二轮 ${index}`,
+        proposedTarget: index === 0 ? '后续译文甲' : '后续译文乙',
       })),
     )
     const acceptedSelected = await ipc.acceptSelected({
@@ -123,6 +123,13 @@ test('PB-053 Proposal IPC 覆盖人工 UI 的读写与批量审核通道', async
     })
     assert.equal(invalid.ok, false)
     if (!invalid.ok) assert.equal(invalid.error.code, 'INVALID_INPUT')
+
+    const legacy = await ipc.getDiff({
+      projectId: project.id,
+      proposalId: 'prp-0000000000000000',
+    })
+    assert.equal(legacy.ok, false)
+    if (!legacy.ok) assert.equal(legacy.error.code, 'STORE_NOT_FOUND')
     assert.equal(mutations.length, 5, '失败 mutation 不得广播成功事件')
   } finally {
     service.closeAll()
@@ -164,7 +171,12 @@ test('项目级提案历史与终态重发：状态筛选、provenance、lineage
     assert.equal(rejected.ok, true)
     if (rejected.ok) {
       assert.equal(rejected.data.total, 1)
-      assert.equal(rejected.data.items[0]?.runId, 'candidate-run')
+      assert.equal(rejected.data.items[0]?.proposal.runId, 'candidate-run')
+      assert.equal(rejected.data.items[0]?.issuanceCount, 1)
+      assert.equal(rejected.data.items[0]?.latestIssuance?.runId, 'candidate-run')
+      assert.match(rejected.data.items[0]?.latestIssuance?.id ?? '', /^pis_v2_/)
+      assert.equal(rejected.data.items[0]?.source, segment.source)
+      assert.equal(rejected.data.items[0]?.currentRevision, segment.revision)
     }
 
     const input = {
@@ -192,7 +204,7 @@ test('项目级提案历史与终态重发：状态筛选、provenance、lineage
     if (all.ok) {
       assert.equal(all.data.total, 2)
       assert.deepEqual(
-        new Set(all.data.items.map((proposal) => proposal.status)),
+        new Set(all.data.items.map((item) => item.proposal.status)),
         new Set(['pending', 'rejected']),
       )
     }
@@ -215,7 +227,7 @@ test('PB-110 archived 项目：六个写通道 STORE_READ_ONLY 拒绝且无写�
       segments.map((segment, index) => ({
         segmentId: segment.id,
         baseRevision: segment.revision,
-        proposedTarget: `归档前建议 ${index}`,
+        proposedTarget: index === 0 ? '归档前建议甲' : '归档前建议乙',
       })),
     )
     const ipc = createLinguistProposalIpc({ getService: () => service })
@@ -269,7 +281,7 @@ test('PB-110 archived 项目：六个写通道 STORE_READ_ONLY 拒绝且无写�
     if (history.ok) assert.equal(history.data.total, pendingBefore)
     const diff = await ipc.getDiff({ projectId: project.id, proposalId: proposals[0]!.id })
     assert.equal(diff.ok, true)
-    if (diff.ok) assert.equal(diff.data.proposedTarget, '归档前建议 0')
+    if (diff.ok) assert.equal(diff.data.proposedTarget, '归档前建议甲')
   } finally {
     service.closeAll()
   }

@@ -3,8 +3,7 @@
  * staging、原生 Save 选择与复制，响应不暴露任何文件系统路径。
  */
 
-import { constants, copyFileSync, realpathSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename } from 'node:path'
 import {
   LINGUIST_ASSET_ID_PATTERN,
   type LinguistExportListResult,
@@ -17,10 +16,12 @@ import {
   LinguistDeliveryNotReadyError,
   LinguistExportBlockedByQaError,
 } from './errors'
+import { readLinguistExportManifests } from './export-manifest'
 import type {
   LinguistPreparedDelivery,
   LinguistProjectService,
 } from './project-service'
+import { copyFileVerified, SecureExportError } from './secure-export'
 
 export interface LinguistExportSavePickerOptions {
   title: string
@@ -36,41 +37,10 @@ export type LinguistExportSavePicker = (
   options: LinguistExportSavePickerOptions,
 ) => Promise<LinguistExportSavePickerResult>
 
-function isInside(root: string, target: string): boolean {
-  const pathFromRoot = relative(root, target)
-  return pathFromRoot === ''
-    || (pathFromRoot !== '..' && !pathFromRoot.startsWith(`..${sep}`) && !isAbsolute(pathFromRoot))
-}
-
-function validateDestination(rootDir: string, filePath: string): string {
-  if (filePath.trim() === '' || !isAbsolute(filePath)) {
-    invalid('导出目标必须是绝对文件路径')
-  }
-  const destination = resolve(filePath)
-  let canonicalParent: string
-  try {
-    canonicalParent = realpathSync(dirname(destination))
-  } catch {
-    invalid('导出目标目录不可用，请选择已有目录')
-  }
-  const canonicalDestination = join(canonicalParent, basename(destination))
-  if (isInside(realpathSync(resolve(rootDir)), canonicalDestination)) {
-    invalid('不能导出到 Linguist Agent 受管数据目录')
-  }
-  return canonicalDestination
-}
-
-function hasErrorCode(error: unknown, code: string): boolean {
-  return typeof error === 'object'
-    && error !== null
-    && 'code' in error
-    && error.code === code
-}
-
 function readAssetId(record: Record<string, unknown>): string {
   const assetId = record.assetId
   if (typeof assetId !== 'string' || !LINGUIST_ASSET_ID_PATTERN.test(assetId)) {
-    invalid('assetId must match ast-<16 lowercase hex>')
+    invalid('assetId must be a valid Stable ID')
   }
   return assetId
 }
@@ -148,13 +118,26 @@ export function createLinguistExportIpc(deps: {
           return { cancelled: true }
         }
 
-        const destination = validateDestination(service.rootDir, picked.filePath)
+        const manifest = readLinguistExportManifests(
+          service.getProjectPaths(projectId).exportsDir,
+        ).get(staged.artifact.id)
+        if (
+          manifest === undefined
+          || manifest.sha256 !== staged.artifact.sha256
+          || manifest.assetId !== staged.artifact.assetId
+        ) {
+          invalid('导出审计清单不可用，请重新生成交付物')
+        }
+        let delivery: ReturnType<typeof copyFileVerified>
         try {
-          copyFileSync(staged.stagingPath, destination, constants.COPYFILE_EXCL)
+          delivery = copyFileVerified({
+            managedRoot: service.rootDir,
+            sourcePath: staged.stagingPath,
+            destinationPath: picked.filePath,
+            expectedSha256: staged.artifact.sha256,
+          })
         } catch (error) {
-          if (hasErrorCode(error, 'EEXIST')) {
-            invalid('导出目标已存在，请选择新的文件名')
-          }
+          if (error instanceof SecureExportError) invalid(error.message)
           throw error
         }
         const { id, assetId: artifactAssetId, sha256, segmentCount, createdAt } = staged.artifact
@@ -163,13 +146,17 @@ export function createLinguistExportIpc(deps: {
         )
         return {
           cancelled: false,
-          filename: basename(destination),
+          filename: basename(picked.filePath),
           artifact: {
             id,
             assetId: artifactAssetId,
             sha256,
             segmentCount,
             createdAt,
+          },
+          delivery: {
+            ...delivery,
+            projectRevision: manifest.projectRevision,
           },
           verifiedSegments: staged.verifiedSegments,
           preparation: publicPreparation(prepared),

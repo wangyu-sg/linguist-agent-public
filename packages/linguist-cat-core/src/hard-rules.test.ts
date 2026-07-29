@@ -141,6 +141,43 @@ describe('PB-052 确定性硬规则', () => {
       DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH,
     )
   })
+
+  test('空译文、非法 Unicode 与 NUL 作为 Proposal hard gate fail closed', () => {
+    const codes = (proposedTarget: string) =>
+      runDeterministicHardRules({
+        segment: { ...segment, source: 'Save {name}' },
+        proposedTarget,
+      }).violations.map((violation) => violation.code)
+
+    expect(codes('   ')).toContain(DETERMINISTIC_HARD_RULE_CODES.EMPTY_TARGET)
+    expect(codes(`保存 ${String.fromCharCode(0xd800)}`)).toContain(
+      DETERMINISTIC_HARD_RULE_CODES.INVALID_TARGET_ENCODING,
+    )
+    expect(codes('保存\u0000{name}')).toContain(
+      DETERMINISTIC_HARD_RULE_CODES.INVALID_TARGET_ENCODING,
+    )
+  })
+
+  test('使用完整 ICU grammar 拒绝坏语法，并守恒 offset 与 number skeleton', () => {
+    const codes = (source: string, proposedTarget: string) =>
+      runDeterministicHardRules({
+        segment: { ...segment, source },
+        proposedTarget,
+      }).violations.map((violation) => violation.code)
+
+    expect(codes(
+      '{count, plural, offset:1 =0 {None} one {One} other {# items}}',
+      '{count, plural, offset:1 =0 {无} one {一项}}',
+    )).toContain(DETERMINISTIC_HARD_RULE_CODES.ICU_SYNTAX_INVALID)
+    expect(codes(
+      '{count, plural, offset:1 =0 {None} one {One} other {# items}}',
+      '{count, plural, offset:2 =0 {无} one {一项} other {# 项}}',
+    )).toContain(DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH)
+    expect(codes(
+      'Price: {price, number, ::currency/USD}',
+      '价格：{price, number, ::currency/CNY}',
+    )).toContain(DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH)
+  })
 })
 
 describe('PB-097 tag 族引擎', () => {

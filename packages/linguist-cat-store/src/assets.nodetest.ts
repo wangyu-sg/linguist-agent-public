@@ -17,11 +17,11 @@ test('insertImported: asset + segments in one transaction; ids are content-deriv
     const { asset, segments } = db.assets.insertImported(imported)
 
     assert.equal(asset.segmentCount, 3)
-    assert.match(asset.id, /^ast-[0-9a-f]{16}$/)
+    assert.match(asset.id, /^ast_v2_[0-9a-f]{64}$/)
     assert.equal(segments.length, 3)
     for (const s of segments) {
       assert.equal(s.assetId, asset.id)
-      assert.match(s.id, /^seg-[0-9a-f]{16}$/)
+      assert.match(s.id, /^seg_v2_[0-9a-f]{64}$/)
     }
     assert.equal(segments[0]?.context?.note, 'first segment')
 

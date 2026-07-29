@@ -16,6 +16,8 @@ export const STORE_ERROR_CODES = {
   STORE_SQLITE_UNAVAILABLE: 'STORE_SQLITE_UNAVAILABLE',
   /** The DB on disk has a NEWER schema than this code knows — fail closed. */
   STORE_SCHEMA_TOO_NEW: 'STORE_SCHEMA_TOO_NEW',
+  /** An existing SQLite file is not a verified Linguist CAT database. */
+  STORE_DATABASE_IDENTITY: 'STORE_DATABASE_IDENTITY',
   /** Project / asset / proposal / DB file does not exist. */
   STORE_NOT_FOUND: 'STORE_NOT_FOUND',
   /** projects.json exists but is not parseable / has an invalid shape. */
@@ -32,6 +34,12 @@ export const STORE_ERROR_CODES = {
   STORE_BACKUP_CORRUPT: 'STORE_BACKUP_CORRUPT',
   /** A pre-manifest (two-file) backup: restorable = false, preview only. */
   STORE_BACKUP_LEGACY: 'STORE_BACKUP_LEGACY',
+  /** A session attempted to access run state owned by another bound session. */
+  STORE_AUTHORITY: 'STORE_AUTHORITY',
+  /** A durable translation job transition/checkpoint violated its state contract. */
+  STORE_JOB_STATE: 'STORE_JOB_STATE',
+  /** An idempotency key was reused for a different operation, payload, or tool identity. */
+  STORE_IDEMPOTENCY_CONFLICT: 'STORE_IDEMPOTENCY_CONFLICT',
 } as const
 
 export type StoreErrorCode = (typeof STORE_ERROR_CODES)[keyof typeof STORE_ERROR_CODES]
@@ -69,6 +77,18 @@ export class StoreSchemaTooNewError extends StoreError {
         'Refusing to open (fail closed); upgrade the application.',
     )
     this.name = 'StoreSchemaTooNewError'
+  }
+}
+
+/** An existing SQLite file failed the read-only Linguist identity preflight. */
+export class StoreDatabaseIdentityError extends StoreError {
+  readonly code = STORE_ERROR_CODES.STORE_DATABASE_IDENTITY
+  constructor(
+    readonly dbPath: string,
+    readonly detail: string,
+  ) {
+    super(`Database ${dbPath} is not a verified Linguist CAT database: ${detail}. Refusing to modify it.`)
+    this.name = 'StoreDatabaseIdentityError'
   }
 }
 
@@ -177,6 +197,39 @@ export class StoreBackupLegacyError extends StoreError {
         'Restore is not supported for legacy backups; create a new backup instead.',
     )
     this.name = 'StoreBackupLegacyError'
+  }
+}
+
+/** Session-bound run state never accepts authority supplied by another session. */
+export class StoreAuthorityError extends StoreError {
+  readonly code = STORE_ERROR_CODES.STORE_AUTHORITY
+  constructor(
+    readonly entity: string,
+    readonly key: string,
+  ) {
+    super(`Bound session is not authorized to access ${entity}: ${key}.`)
+    this.name = 'StoreAuthorityError'
+  }
+}
+
+/** Invalid durable job transition/checkpoint; the transaction is rolled back. */
+export class StoreJobStateError extends StoreError {
+  readonly code = STORE_ERROR_CODES.STORE_JOB_STATE
+  constructor(
+    readonly jobId: string,
+    readonly detail: string,
+  ) {
+    super(`Translation job ${jobId} rejected: ${detail}.`)
+    this.name = 'StoreJobStateError'
+  }
+}
+
+/** Reusing a mutation key for different input is a hard conflict, never a retry. */
+export class StoreIdempotencyConflictError extends StoreError {
+  readonly code = STORE_ERROR_CODES.STORE_IDEMPOTENCY_CONFLICT
+  constructor(readonly idempotencyKey: string) {
+    super(`Idempotency key was reused with conflicting mutation input: ${idempotencyKey}.`)
+    this.name = 'StoreIdempotencyConflictError'
   }
 }
 

@@ -20,6 +20,7 @@ const BOTTOM_DOCK_TABS = [
 ] as const
 
 export type LinguistBottomDockTab = (typeof BOTTOM_DOCK_TABS)[number]
+export type LinguistAgentPresentation = 'closed' | 'rail' | 'full'
 
 export const ASSET_NAVIGATOR_MIN_WIDTH = 180
 export const ASSET_NAVIGATOR_DEFAULT_WIDTH = 240
@@ -60,7 +61,7 @@ export interface LinguistWorkbenchUiState {
   bottomDockOpen: boolean
   bottomDockTab: LinguistBottomDockTab
   bottomDockHeight: number
-  agentRailOpen: boolean
+  agentPresentation: LinguistAgentPresentation
   agentRailWidth: number
   projectSettingsOpen: boolean
   activeProjectAgentSessionId?: string
@@ -73,6 +74,8 @@ export interface LinguistWorkbenchLocation {
   activeSegmentId?: string
   assetNavigatorOpen?: boolean
   assetNavigatorWidth?: number
+  agentPresentation?: LinguistAgentPresentation
+  /** 仅用于读取旧 settings；序列化时统一写入 agentPresentation。 */
   agentRailOpen?: boolean
   agentRailWidth?: number
   bottomDockOpen?: boolean
@@ -143,7 +146,7 @@ function createWorkbenchUiState(projectId: string): StoredWorkbenchUiState {
     bottomDockOpen: true,
     bottomDockTab: 'tm',
     bottomDockHeight: BOTTOM_DOCK_DEFAULT_HEIGHT,
-    agentRailOpen: false,
+    agentPresentation: 'closed',
     agentRailWidth: AGENT_RAIL_DEFAULT_WIDTH,
     projectSettingsOpen: false,
     lastVisitedAt: new Date().toISOString(),
@@ -171,7 +174,13 @@ function getLocation(value: unknown): LinguistWorkbenchLocation | null {
     && Number.isFinite(raw.assetNavigatorWidth)
     ? clampAssetNavigatorWidth(raw.assetNavigatorWidth)
     : undefined
-  const agentRailOpen = typeof raw.agentRailOpen === 'boolean' ? raw.agentRailOpen : undefined
+  const agentPresentation = raw.agentPresentation === 'closed'
+    || raw.agentPresentation === 'rail'
+    || raw.agentPresentation === 'full'
+    ? raw.agentPresentation
+    : typeof raw.agentRailOpen === 'boolean'
+      ? raw.agentRailOpen ? 'rail' : 'closed'
+      : undefined
   const agentRailWidth = typeof raw.agentRailWidth === 'number' && Number.isFinite(raw.agentRailWidth)
     ? clampAgentRailWidth(raw.agentRailWidth)
     : undefined
@@ -189,7 +198,7 @@ function getLocation(value: unknown): LinguistWorkbenchLocation | null {
     && activeSegmentId === undefined
     && assetNavigatorOpen === undefined
     && assetNavigatorWidth === undefined
-    && agentRailOpen === undefined
+    && agentPresentation === undefined
     && agentRailWidth === undefined
     && bottomDockOpen === undefined
     && bottomDockTab === undefined
@@ -202,7 +211,7 @@ function getLocation(value: unknown): LinguistWorkbenchLocation | null {
     ...(activeSegmentId !== undefined ? { activeSegmentId } : {}),
     ...(assetNavigatorOpen !== undefined ? { assetNavigatorOpen } : {}),
     ...(assetNavigatorWidth !== undefined ? { assetNavigatorWidth } : {}),
-    ...(agentRailOpen !== undefined ? { agentRailOpen } : {}),
+    ...(agentPresentation !== undefined ? { agentPresentation } : {}),
     ...(agentRailWidth !== undefined ? { agentRailWidth } : {}),
     ...(bottomDockOpen !== undefined ? { bottomDockOpen } : {}),
     ...(bottomDockTab !== undefined ? { bottomDockTab } : {}),
@@ -373,6 +382,31 @@ export function linguistQaFindingsCapabilityAtomFamily(
   return created
 }
 
+export function getLinguistWorkbenchAtomFamilyCacheSizes(): {
+  workbench: number
+  targetEditor: number
+  qaFindings: number
+} {
+  return {
+    workbench: workbenchUiStateAtoms.size,
+    targetEditor: targetEditorCapabilityAtoms.size,
+    qaFindings: qaFindingsCapabilityAtoms.size,
+  }
+}
+
+export const disposeLinguistWorkbenchAtomFamiliesAtom = atom(
+  null,
+  (_get, set, projectId: string) => {
+    const capabilityAtom = targetEditorCapabilityAtoms.get(projectId)
+    if (capabilityAtom !== undefined) set(capabilityAtom, undefined)
+    const qaCapabilityAtom = qaFindingsCapabilityAtoms.get(projectId)
+    if (qaCapabilityAtom !== undefined) set(qaCapabilityAtom, undefined)
+    targetEditorCapabilityAtoms.delete(projectId)
+    qaFindingsCapabilityAtoms.delete(projectId)
+    workbenchUiStateAtoms.delete(projectId)
+  },
+)
+
 /**
  * LF-062：发送点击的唯一 Workbench snapshot seam。
  * 同一 Project atom 同时服务 Rail 与 Full Agent；共享构建器负责截断和深冻结。
@@ -404,12 +438,6 @@ export const clearLinguistWorkbenchUiStateAtom = atom(
       updated.delete(projectId)
       return updated
     })
-    const capabilityAtom = targetEditorCapabilityAtoms.get(projectId)
-    if (capabilityAtom !== undefined) set(capabilityAtom, undefined)
-    const qaCapabilityAtom = qaFindingsCapabilityAtoms.get(projectId)
-    if (qaCapabilityAtom !== undefined) set(qaCapabilityAtom, undefined)
-    targetEditorCapabilityAtoms.delete(projectId)
-    qaFindingsCapabilityAtoms.delete(projectId)
-    workbenchUiStateAtoms.delete(projectId)
+    set(disposeLinguistWorkbenchAtomFamiliesAtom, projectId)
   },
 )

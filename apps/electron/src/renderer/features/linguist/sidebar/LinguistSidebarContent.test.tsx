@@ -151,6 +151,28 @@ describe('LinguistSidebarContent', () => {
     expect(html).toContain('aria-label="在项目 项目 beta 中新建会话"')
   })
 
+  test('given Linguist 项目与会话 when 渲染侧栏 then 右键之外还有可聚焦的独立动作菜单', () => {
+    const html = renderToStaticMarkup(
+      <LinguistSidebarContentView
+        state={{ status: 'ready', projects: [project('alpha')] }}
+        sessions={[session('alpha-current', 'alpha')]}
+        onRetry={() => {}}
+        onOpenProject={() => {}}
+        onSelectSession={() => {}}
+        onCreateSession={() => {}}
+        onOpenProjectSettings={() => {}}
+        onRenameSession={() => {}}
+        onTogglePinSession={() => {}}
+        onToggleArchiveSession={() => {}}
+        onDeleteSession={() => {}}
+      />,
+    )
+
+    expect(html).toContain('aria-label="管理项目 项目 alpha"')
+    expect(html).toContain('aria-label="管理会话 会话 alpha-current"')
+    expect(html).not.toContain('迁移到其他项目')
+  })
+
   test('given 项目会话操作失败 when 渲染侧栏 then 错误在对应项目下可见', () => {
     const html = renderToStaticMarkup(
       <LinguistSidebarContentView

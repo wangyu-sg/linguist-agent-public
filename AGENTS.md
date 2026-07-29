@@ -35,16 +35,17 @@ Linguist Agent 的 CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.15.133` |
+| Electron App | `@proma/electron 0.15.137` |
 | Electron | `39.5.1` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.0.3` |
 | Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
 | Pi Runtime | `@earendil-works/pi-* 0.80.9` |
-| CAT Core | `@linguist/cat-core 0.0.9` |
-| CAT Store | `@linguist/cat-store 0.0.20` |
-| CAT Tools | `@linguist/cat-tools 0.0.13` |
+| CAT Core | `@linguist/cat-core 0.0.12` |
+| CAT Store | `@linguist/cat-store 0.0.24` |
+| CAT Tools | `@linguist/cat-tools 0.0.17` |
+| CAT schema | `13` |
 
 不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。
 
@@ -175,7 +176,7 @@ CAT 写入规则：
 - `project-delivery.ts`：导入、交付预检与导出；
 - `project-service-types.ts`：稳定调用合同。
 
-CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；12 个工具按 `project-tools`、`reference-tools`、`qa-tools`、`proposal-tools` 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。
+CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；15 个工具按 `project-tools`、`reference-tools`、`qa-tools`、`proposal-tools` 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。
 
 ## 数据目录
 

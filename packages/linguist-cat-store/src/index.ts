@@ -14,6 +14,10 @@ export {
   StoreBackupCorruptError,
   StoreBackupLegacyError,
   StoreBusyError,
+  StoreDatabaseIdentityError,
+  StoreAuthorityError,
+  StoreIdempotencyConflictError,
+  StoreJobStateError,
   StoreError,
   StoreIndexCorruptError,
   StoreNotFoundError,
@@ -37,15 +41,47 @@ export { MIGRATIONS, SCHEMA_VERSION, type SchemaMigration } from './schema'
 
 export {
   CatDatabase,
+  LINGUIST_APPLICATION_ID,
   type AppliedMigration,
   type OpenCatDatabaseOptions,
 } from './database'
 
-export { PROJECT_SUBDIRS, ProjectIndex, type ProjectIndexOptions } from './project-index'
+export {
+  PROJECT_SUBDIRS,
+  ProjectIndex,
+  readProjectManifestFile,
+  type MainDatabaseSnapshot,
+  type ProjectDatabaseIdentity,
+  type ProjectIndexOptions,
+  type ProjectManifest,
+} from './project-index'
 
 export { assetSourceFileName } from './asset-source'
 
 export { ProjectDatabase, type ProjectDatabaseOptions } from './project-database'
+
+export {
+  RunHarnessRepository,
+  type CheckpointTranslationJobInput,
+  type CreateTranslationJobInput,
+  type DurableProjectEvent,
+  type ExecuteRunMutationInput,
+  type IdempotentRunMutation,
+  type ProjectEventAck,
+  type ProjectEventInput,
+  type RunMutationChange,
+  type RunMutationIdentity,
+  type RunMutationOutcome,
+  type RunChangeSummaryV1,
+  type RunStateCapsuleV1,
+  type RunUndoResult,
+  type UndoRunOptions,
+  type TranslationJob,
+  type TranslationJobAuthority,
+  type TranslationJobProvenance,
+  type TranslationJobStatus,
+  type TranslationJobStrategy,
+} from './run-harness'
 
 export { AssetsRepository, type InsertImportedResult } from './repositories/assets'
 export { SegmentsRepository, type SegmentQuery } from './repositories/segments'
@@ -53,19 +89,31 @@ export {
   ProposalsRepository,
   type EditAndAcceptInput,
   type IdempotentProposalMutation,
+  type ProposalAcceptOptions,
+  type ProposalHardRuleOptions,
+  type ProposalListFilter,
   type ProposalMutationItem,
+  type ProposalWithDiff,
 } from './repositories/proposals'
 export {
   QaFindingsRepository,
   type QaFindingListFilter,
+  type QaFindingOccurrence,
+  type QaFindingPersistenceInput,
+  type QaFindingStatusEvent,
+  type QaRunPersistence,
 } from './repositories/qa-findings'
 export { CriticArtifactsRepository } from './repositories/critic-artifacts'
-export { type PersistedQaFinding } from './repositories/rows'
-export { runProjectQa } from './qa-runner'
+export {
+  type PersistedCriticArtifact,
+  type PersistedQaFinding,
+} from './repositories/rows'
+export { buildQaTermOptions, runProjectQa } from './qa-runner'
 export { ExportsRepository, type ExportRecord, type RecordExportInput } from './repositories/exports'
 export {
   TmUnitsRepository,
   type ReferenceImportResult,
+  type TmMatchManyOptions,
   type TmMatchOptions,
   type TmMatchType,
   type TmUnit,
@@ -81,6 +129,7 @@ export {
   type TermEntrySearch,
   type TermEntryStatus,
   type TermEntryUpsertInput,
+  type TermMatchManyOptions,
   type TermMatchOptions,
   type TermMatchType,
 } from './repositories/term-entries'
@@ -149,11 +198,31 @@ export {
   verifyBackup,
   type BackupManifest,
   type BackupManifestFile,
+  type BackupFaultInjector,
+  type BackupFaultPoint,
   type BackupVerification,
   type ProjectBackupEntry,
   type ProjectBackupResult,
 } from './backup'
 
-export { restoreProjectBackup, type RestoreBackupResult } from './restore'
+export {
+  RESTORE_TRANSACTION_FILE,
+  recoverInterruptedRestore,
+  restoreProjectBackup,
+  type RestoreBackupResult,
+  type RestoreFaultInjector,
+  type RestoreFaultPoint,
+} from './restore'
+
+export {
+  scanProjectIntegrity,
+  type ProjectIntegrityCheck,
+  type ProjectIntegrityCheckId,
+  type ProjectIntegrityProblem,
+  type ProjectIntegrityProgress,
+  type ProjectIntegrityReport,
+  type ProjectIntegrityStatus,
+  type ScanProjectIntegrityOptions,
+} from './integrity'
 
 export { CatStore, type CatStoreOptions, type OpenProjectOptions } from './store'

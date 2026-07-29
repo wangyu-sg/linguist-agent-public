@@ -5,7 +5,13 @@
  */
 
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  readFileSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
@@ -85,15 +91,33 @@ test('PB-073: stages, opens native Save picker, copies to user destination, and 
     assert.equal(result.data.filename, 'translated-dialogue.csv')
     assert.equal(result.data.verifiedSegments, imported.segmentCount)
     assert.equal(result.data.artifact.assetId, imported.assetId)
-    assert.match(result.data.artifact.id, /^exp-[0-9a-f]{16}$/)
+    assert.match(result.data.artifact.id, /^exp_v2_[0-9a-f]{64}$/)
     assert.match(result.data.artifact.sha256, /^[0-9a-f]{64}$/)
     assert.equal(result.data.artifact.segmentCount, imported.segmentCount)
     assert.deepEqual(
       Object.keys(result.data.artifact).sort(),
       ['assetId', 'createdAt', 'id', 'segmentCount', 'sha256'],
     )
+    assert.equal(result.data.delivery.sha256, result.data.artifact.sha256)
+    assert.equal(result.data.delivery.sizeBytes, readFileSync(destination).byteLength)
+    assert.match(result.data.delivery.projectRevision, /^rev-[0-9a-f]{64}$/)
+    assert.match(result.data.delivery.verifiedAt, /^\d{4}-\d{2}-\d{2}T/)
     assert.equal(existsSync(destination), true)
     assert.deepEqual(readFileSync(destination), readFileSync(join(service.getProjectPaths(project.id).projectDir, service.openProject(project.id).exports.listByAsset(imported.assetId)[0]!.path)))
+
+    const [listed] = service.listExportFiles(project.id)
+    assert.equal(listed?.sha256, result.data.artifact.sha256)
+    assert.equal(listed?.projectRevision, result.data.delivery.projectRevision)
+    assert.equal(listed?.stale, false)
+
+    const db = service.openProject(project.id)
+    const changed = db.segments.query({ assetId: imported.assetId, limit: 1 })[0]!
+    db.segments.applyTargetEdit(
+      changed.id,
+      `${changed.target}（导出后修改）`,
+      changed.revision,
+    )
+    assert.equal(service.listExportFiles(project.id)[0]?.stale, true)
   } finally {
     service.closeAll()
   }
@@ -149,9 +173,68 @@ test('AC-006: direct and symlinked destinations under managed data fail closed',
     assert.equal(aliased.ok, false)
     if (!aliased.ok) {
       assert.equal(aliased.error.code, 'INVALID_INPUT')
-      assert.match(aliased.error.message, /受管数据目录/)
+      assert.match(aliased.error.message, /受管数据目录|符号链接/)
     }
     assert.equal(existsSync(join(service.rootDir, 'blocked.csv')), false)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('LA-EXPORT-001: any symlinked destination ancestor fails closed without following it', async () => {
+  const service = makeService()
+  try {
+    const { project, imported } = await makeImportedAsset(service)
+    makeDeliveryReady(service, project.id, imported.assetId)
+    const realParent = makeTempDir()
+    const alias = join(makeTempDir(), 'destination-alias')
+    symlinkSync(realParent, alias, process.platform === 'win32' ? 'junction' : 'dir')
+    const destination = join(alias, 'translated.csv')
+
+    const result = await makeIpc(service).saveAsset(
+      { projectId: project.id, assetId: imported.assetId },
+      makePicker(destination).picker,
+    )
+
+    assert.equal(result.ok, false)
+    if (!result.ok) {
+      assert.equal(result.error.code, 'INVALID_INPUT')
+      assert.match(result.error.message, /符号链接/)
+      assert.equal(result.error.message.includes(alias), false)
+    }
+    assert.equal(existsSync(join(realParent, 'translated.csv')), false)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('LA-EXPORT-001: staging replaced by a symlink during Save picker fails closed', async () => {
+  const service = makeService()
+  try {
+    const { project, imported } = await makeImportedAsset(service)
+    makeDeliveryReady(service, project.id, imported.assetId)
+    const destination = join(makeTempDir(), 'translated.csv')
+    const attackerFile = join(makeTempDir(), 'attacker.csv')
+    writeFileSync(attackerFile, 'ATTACKER_BYTES')
+    const picker: LinguistExportSavePicker = async () => {
+      const artifact = service.openProject(project.id).exports.listByAsset(imported.assetId)[0]!
+      const stagingPath = join(service.getProjectPaths(project.id).projectDir, artifact.path)
+      unlinkSync(stagingPath)
+      symlinkSync(attackerFile, stagingPath, 'file')
+      return { canceled: false, filePath: destination }
+    }
+
+    const result = await makeIpc(service).saveAsset(
+      { projectId: project.id, assetId: imported.assetId },
+      picker,
+    )
+
+    assert.equal(result.ok, false)
+    if (!result.ok) {
+      assert.equal(result.error.code, 'INVALID_INPUT')
+      assert.match(result.error.message, /源文件|符号链接/)
+    }
+    assert.equal(existsSync(destination), false)
   } finally {
     service.closeAll()
   }
@@ -222,8 +305,46 @@ test('PB-102: list reads the project exports/ directory and returns path-free di
     assert.equal(file.sizeBytes > 0, true)
     assert.equal(typeof file.modifiedAt, 'number')
     // §7.4：投影绝不携带文件系统路径
-    assert.deepEqual(Object.keys(file).sort(), ['assetId', 'filename', 'modifiedAt', 'sizeBytes'])
+    assert.deepEqual(
+      Object.keys(file).sort(),
+      [
+        'assetId',
+        'createdAt',
+        'filename',
+        'modifiedAt',
+        'projectRevision',
+        'sha256',
+        'sizeBytes',
+        'stale',
+        'verifiedAt',
+      ],
+    )
     assert.equal(file.filename.includes('/'), false)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('LA-EXPORT-001: list ignores symlinked files under exports', async () => {
+  const service = makeService()
+  try {
+    const { project, imported } = await makeImportedAsset(service)
+    await service.stageExport(project.id, imported.assetId)
+    const external = join(makeTempDir(), 'external.csv')
+    writeFileSync(external, 'EXTERNAL')
+    symlinkSync(
+      external,
+      join(
+        service.getProjectPaths(project.id).exportsDir,
+        'ast-0000000000000000-0000000000000000-linked.csv',
+      ),
+      'file',
+    )
+
+    const result = await makeIpc(service).list({ projectId: project.id })
+
+    assert.equal(result.ok, true)
+    if (result.ok) assert.equal(result.data.length, 1)
   } finally {
     service.closeAll()
   }

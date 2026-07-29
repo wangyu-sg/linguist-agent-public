@@ -285,6 +285,8 @@ export interface AppSettings {
 export interface LinguistWorkbenchLocation {
   activeAssetId?: string
   activeSegmentId?: string
+  agentPresentation?: 'closed' | 'rail' | 'full'
+  /** 兼容读取旧 settings；新写入统一使用 agentPresentation。 */
   agentRailOpen?: boolean
   agentRailWidth?: number
 }

@@ -1,11 +1,11 @@
 /**
  * Style Guide rules repository (PB-095, schema v6): grouped style rules
- * with ✅/❌ example pairs. Ids are content-derived (`sgr-` + sha256),
+ * with ✅/❌ example pairs. Ids are content-derived Stable ID v2 values,
  * so re-creating an identical rule is idempotent; edits go through the
  * explicit-id upsert path (same convention as term entries).
  */
 
-import { createHash } from 'node:crypto'
+import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 import {
@@ -37,8 +37,7 @@ export interface StyleGuideRuleSearch {
 }
 
 function stableId(projectId: string, input: StyleGuideRuleInput): string {
-  const content = JSON.stringify([projectId, input.groupKey ?? null, input.ruleText])
-  return `sgr-${createHash('sha256').update(content).digest('hex').slice(0, 16)}`
+  return deriveStableIdV2('sgr', [projectId, input.groupKey ?? null, input.ruleText])
 }
 
 /** Escape LIKE wildcards so query is a literal substring match. */

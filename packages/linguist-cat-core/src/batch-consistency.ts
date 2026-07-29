@@ -14,27 +14,20 @@
  * - QA 来源由旧 QualityAuditReport 改为调用方传入的 QaFinding[]
  *   （store qa-findings repository 查询结果与/或内存 runQa 输出）。
  *
- * 本票新增语义（旧仓没有、规格未写死，按「同 source 组内多数非空 target」
- * 落地并在此写明）：
- * - 投影按 source 文本分组；每组选出「建议修复 target」：组内段先按
- *   compareSegments 排序，对 NFKC+trim 归一化后的非空 target 计票，多数
- *   变体获胜，平票取排序后首个段的变体（归一化只用于计票，返回的是代表
- *   段的原文 target）。「最新」维度在 core 层无时间源，首版不取。
- * - 锁定段的 target 仍参与计票（已锁定译文通常是审校基准），但锁定段
- *   自身绝不生成修复 proposal。
- * - 组内全部 target 为空 → 无 suggestedTarget，该组只报告不修复。
- * - targetedRepairProposalInputs 只为「当前 target 与建议值归一化后不同」
- *   的未锁定段生成 CreateProposalInput（baseRevision 取段当前 revision，
- *   evidenceRefs 带该段在本组的 finding ids 供人审追溯）；当前值已与建议
- *   一致的段跳过 —— 重复运行幂等，不产生新 proposal。
+ * 当前语义：
+ * - 按 NFKC/trim/空白归一后的 source 分组，并暴露现有 asset/context 维度；
+ * - target 只作为带 count/lockedCount 的候选展示，多数票不是自动真理；
+ * - planId 绑定 segment revision/target/lock 与 finding 快照；
+ * - 只有 selectedConsistencyProposalInputs 的显式 group/target/segment 选择
+ *   才生成 CreateProposalInput；锁定或越界选择 fail closed。
  * - finding 引用了 segments 输入里不存在的段时，该 finding 被忽略
  *   （投影是只读操作，绝不因单条脏数据掀翻整批）。
  */
 
-import type { QaFindingId, SegmentId } from './ids'
+import { fnv1a64, type QaFindingId, type SegmentId } from './ids'
 import type { CreateProposalInput } from './proposal'
-import { QA_RULE_CODES } from './qa-core'
-import type { QaFinding, QaFindingSeverity } from './qa-finding'
+import { QA_RULE_CODES, runQa, type QaRunOptions } from './qa-core'
+import { openQaFinding, type QaFinding, type QaFindingSeverity } from './qa-finding'
 import { compareSegments, type Segment } from './segment'
 
 /**
@@ -73,27 +66,64 @@ export interface BatchConsistencyGroupSegment {
   locked: boolean
 }
 
+export interface BatchConsistencyCandidateTarget {
+  target: string
+  count: number
+  /** 仅作来源标记，锁定候选不获得额外权重。 */
+  lockedCount: number
+}
+
+export interface BatchConsistencyDimensions {
+  assetIds: string[]
+  contextKeys: string[]
+  domains: string[]
+  stringTypes: string[]
+  speakers: string[]
+}
+
 export interface BatchConsistencyGroup {
+  groupId: string
   source: string
+  normalizedSource: string
   segmentIds: SegmentId[]
   findingIds: QaFindingId[]
-  /** 组内多数非空 target；组内全空时缺省（只报告，不生成修复）。 */
-  suggestedTarget?: string
+  candidateTargets: BatchConsistencyCandidateTarget[]
+  dimensions: BatchConsistencyDimensions
   segments: BatchConsistencyGroupSegment[]
   findings: BatchConsistencyFindingItem[]
 }
 
 export interface BatchConsistencyPass {
-  schemaVersion: 1
+  schemaVersion: 2
+  planId: string
   authority: 'advisory_finding'
   canCommit: false
   groups: BatchConsistencyGroup[]
   findingCount: number
 }
 
-/** 与 runQa 的 INCONSISTENT_REPEATED_SOURCE 判定同一归一化口径。 */
-function normalizeTarget(value: string): string {
-  return value.normalize('NFKC').trim()
+/**
+ * 在纯快照上合并确定性 QA 与已持久化 finding，再生成只读一致性计划。
+ * Worker 与无 Worker 的宿主共用同一计算，避免两条执行路径产生不同 planId。
+ */
+export function analyzeBatchConsistency(input: {
+  segments: readonly Segment[]
+  options?: QaRunOptions
+  persistedFindings?: readonly QaFinding[]
+}): BatchConsistencyPass {
+  const merged = new Map<string, QaFinding>()
+  for (const findingInput of runQa(input.segments, input.options)) {
+    const finding = openQaFinding(findingInput)
+    merged.set(finding.id as string, finding)
+  }
+  for (const finding of input.persistedFindings ?? []) {
+    if (!merged.has(finding.id as string)) merged.set(finding.id as string, finding)
+  }
+  return buildBatchConsistencyPass({ findings: [...merged.values()], segments: input.segments })
+}
+
+function normalizeText(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ')
 }
 
 function deepFreeze<T>(value: T): T {
@@ -105,24 +135,57 @@ function deepFreeze<T>(value: T): T {
 }
 
 /**
- * 多数计票选建议 target（规则见模块头注释）。segments 必须已按
- * compareSegments 排序 —— 平票时首个段的变体获胜（Map 插入序 + 严格大于
- * 才替换，保证确定性）。
+ * 候选计数只供 plan 展示，绝不隐式选择。segments 已按文档顺序排序，
+ * 同票时保留首次出现顺序。
  */
-function suggestTarget(segments: readonly Segment[]): string | undefined {
-  const votes = new Map<string, { count: number; target: string }>()
+function candidateTargets(segments: readonly Segment[]): BatchConsistencyCandidateTarget[] {
+  const votes = new Map<
+    string,
+    BatchConsistencyCandidateTarget & { firstIndex: number }
+  >()
   for (const segment of segments) {
-    const key = normalizeTarget(segment.target)
+    const key = normalizeText(segment.target)
     if (key === '') continue
     const entry = votes.get(key)
-    if (entry === undefined) votes.set(key, { count: 1, target: segment.target })
-    else entry.count += 1
+    if (entry === undefined) {
+      votes.set(key, {
+        count: 1,
+        target: segment.target,
+        lockedCount: segment.locked ? 1 : 0,
+        firstIndex: votes.size,
+      })
+    } else {
+      entry.count += 1
+      if (segment.locked) entry.lockedCount += 1
+    }
   }
-  let best: { count: number; target: string } | undefined
-  for (const entry of votes.values()) {
-    if (best === undefined || entry.count > best.count) best = entry
+  return [...votes.values()]
+    .sort((left, right) => right.count - left.count || left.firstIndex - right.firstIndex)
+    .map(({ firstIndex: _firstIndex, ...candidate }) => candidate)
+}
+
+function uniqueSorted(values: Iterable<string | undefined>): string[] {
+  return [...new Set([...values].filter((value): value is string => Boolean(value?.trim())))]
+    .sort((left, right) => left.localeCompare(right))
+}
+
+function dimensions(segments: readonly Segment[]): BatchConsistencyDimensions {
+  const meta = (segment: Segment, ...keys: string[]): string | undefined => {
+    for (const key of keys) {
+      const value = segment.context?.meta?.[key]
+      if (value?.trim()) return value
+    }
+    return undefined
   }
-  return best?.target
+  return {
+    assetIds: uniqueSorted(segments.map((segment) => segment.assetId as string)),
+    contextKeys: uniqueSorted(segments.map((segment) => segment.key)),
+    domains: uniqueSorted(segments.map((segment) => meta(segment, 'domain'))),
+    stringTypes: uniqueSorted(
+      segments.map((segment) => meta(segment, 'stringType', 'string_type')),
+    ),
+    speakers: uniqueSorted(segments.map((segment) => meta(segment, 'speaker'))),
+  }
 }
 
 /**
@@ -141,26 +204,30 @@ export function buildBatchConsistencyPass(input: {
     if (finding.status !== 'open' || !CONSISTENCY_CODE_SET.has(finding.code)) continue
     const segment = segmentsById.get(finding.segmentId as string)
     if (segment === undefined) continue
-    let group = groupsBySource.get(segment.source)
+    const normalizedSource = normalizeText(segment.source)
+    let group = groupsBySource.get(normalizedSource)
     if (group === undefined) {
       group = { segments: new Map(), findings: [] }
-      groupsBySource.set(segment.source, group)
+      groupsBySource.set(normalizedSource, group)
     }
     group.segments.set(segment.id as string, segment)
     group.findings.push(finding)
   }
   const groups: BatchConsistencyGroup[] = []
-  for (const [source, group] of groupsBySource) {
+  for (const [normalizedSource, group] of groupsBySource) {
     const segments = [...group.segments.values()].sort(compareSegments)
     const findings = [...group.findings].sort((left, right) =>
       (left.id as string).localeCompare(right.id as string),
     )
-    const suggestedTarget = suggestTarget(segments)
+    const groupDimensions = dimensions(segments)
     groups.push({
-      source,
+      groupId: `csg-${fnv1a64(normalizedSource)}`,
+      source: segments[0]!.source,
+      normalizedSource,
       segmentIds: segments.map((segment) => segment.id),
       findingIds: findings.map((finding) => finding.id),
-      ...(suggestedTarget !== undefined ? { suggestedTarget } : {}),
+      candidateTargets: candidateTargets(segments),
+      dimensions: groupDimensions,
       segments: segments.map((segment) => ({
         segmentId: segment.id,
         revision: segment.revision,
@@ -182,12 +249,18 @@ export function buildBatchConsistencyPass(input: {
   groups.sort((left, right) => {
     const a = segmentsById.get(left.segmentIds[0] as string)
     const b = segmentsById.get(right.segmentIds[0] as string)
-    if (a === undefined || b === undefined) return left.source.localeCompare(right.source)
+    if (a === undefined || b === undefined) return left.normalizedSource.localeCompare(right.normalizedSource)
     return compareSegments(a, b)
   })
   const findingCount = groups.reduce((sum, group) => sum + group.findings.length, 0)
+  const planId = `csp-${fnv1a64(JSON.stringify(groups.map((group) => ({
+    groupId: group.groupId,
+    segments: group.segments,
+    findingIds: group.findingIds,
+  }))))}`
   return deepFreeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
+    planId,
     authority: 'advisory_finding',
     canCommit: false,
     groups,
@@ -196,21 +269,44 @@ export function buildBatchConsistencyPass(input: {
 }
 
 /**
- * 把分组结果转成定点修复 proposal 输入：只覆盖「当前 target 与组建议值
- * 不一致」的未锁定段，绝不碰其他段。纯函数；返回数组已冻结。
+ * 把显式选择转成 Proposal 输入。无选择即零写入；未知组/段和锁定段
+ * fail closed，避免调用方把“候选多数”偷换成自动事实。
  */
-export function targetedRepairProposalInputs(pass: BatchConsistencyPass): CreateProposalInput[] {
+export interface ConsistencyRepairSelection {
+  groupId: string
+  proposedTarget: string
+  segmentIds: readonly SegmentId[]
+}
+
+export function selectedConsistencyProposalInputs(
+  pass: BatchConsistencyPass,
+  selections: readonly ConsistencyRepairSelection[],
+): CreateProposalInput[] {
   const inputs: CreateProposalInput[] = []
-  for (const group of pass.groups) {
-    if (group.suggestedTarget === undefined) continue
-    const suggested = normalizeTarget(group.suggestedTarget)
-    for (const segment of group.segments) {
-      if (segment.locked) continue
-      if (normalizeTarget(segment.target) === suggested) continue
+  const groups = new Map(pass.groups.map((group) => [group.groupId, group]))
+  const selectedGroups = new Set<string>()
+  for (const selection of selections) {
+    if (selectedGroups.has(selection.groupId)) {
+      throw new Error(`Duplicate consistency group selection: ${selection.groupId}.`)
+    }
+    selectedGroups.add(selection.groupId)
+    const group = groups.get(selection.groupId)
+    if (group === undefined) throw new Error(`Unknown consistency group: ${selection.groupId}.`)
+    if (selection.proposedTarget.trim() === '') {
+      throw new Error(`Consistency target is empty for group ${selection.groupId}.`)
+    }
+    const segments = new Map(group.segments.map((segment) => [segment.segmentId as string, segment]))
+    for (const segmentId of new Set(selection.segmentIds)) {
+      const segment = segments.get(segmentId as string)
+      if (segment === undefined) {
+        throw new Error(`Segment ${segmentId} is outside consistency group ${selection.groupId}.`)
+      }
+      if (segment.locked) throw new Error(`Segment ${segmentId} is locked.`)
+      if (normalizeText(segment.target) === normalizeText(selection.proposedTarget)) continue
       inputs.push({
         segmentId: segment.segmentId,
         baseRevision: segment.revision,
-        proposedTarget: group.suggestedTarget,
+        proposedTarget: selection.proposedTarget,
         evidenceRefs: group.findings
           .filter((finding) => finding.segmentId === segment.segmentId)
           .map((finding) => finding.findingId as string),

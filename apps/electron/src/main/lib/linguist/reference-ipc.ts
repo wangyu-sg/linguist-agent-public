@@ -12,6 +12,7 @@ import {
   type LinguistReferenceImportResult,
   type LinguistReferenceQueryResult,
   type LinguistTermInfo,
+  type LinguistTermStatus,
   type LinguistTermUpsertResult,
   type LinguistTmInfo,
 } from '@proma/shared'
@@ -19,7 +20,13 @@ import { LinguistImportTooLargeError } from './errors'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
 import type { LinguistProjectService } from './project-service'
 
-const TERM_STATUSES = new Set(['allowed', 'preferred', 'forbidden', 'deprecated'])
+const TERM_STATUSES = new Set<LinguistTermStatus>([
+  'allowed',
+  'preferred',
+  'required',
+  'forbidden',
+  'deprecated',
+])
 const REFERENCE_KINDS = new Set(['tm', 'terms'])
 const QUERY_MAX_LENGTH = 1_000
 const PAGE_MAX = 200
@@ -71,11 +78,24 @@ function readPage(record: Record<string, unknown>): { query?: string; limit: num
   }
 }
 
+function readTermPage(
+  record: Record<string, unknown>,
+): ReturnType<typeof readPage> & { status?: LinguistTermStatus } {
+  const status = record.status
+  if (status !== undefined && (typeof status !== 'string' || !TERM_STATUSES.has(status as LinguistTermStatus))) {
+    invalid('status must be a known term status')
+  }
+  return {
+    ...readPage(record),
+    ...(typeof status === 'string' ? { status: status as LinguistTermStatus } : {}),
+  }
+}
+
 function readTermInput(record: Record<string, unknown>): {
   id?: string
   term: string
   translation: string
-  status: 'allowed' | 'preferred' | 'forbidden' | 'deprecated'
+  status: LinguistTermStatus
   caseSensitive: boolean
   note?: string
   module?: string
@@ -100,7 +120,9 @@ function readTermInput(record: Record<string, unknown>): {
   if (typeof translation !== 'string' || translation.trim().length === 0 || translation.length > TERM_MAX_LENGTH) {
     invalid(`translation must be a non-blank string of at most ${TERM_MAX_LENGTH} characters`)
   }
-  if (typeof status !== 'string' || !TERM_STATUSES.has(status)) invalid('status must be a known term status')
+  if (typeof status !== 'string' || !TERM_STATUSES.has(status as LinguistTermStatus)) {
+    invalid('status must be a known term status')
+  }
   if (typeof caseSensitive !== 'boolean') invalid('caseSensitive must be a boolean')
   if (note !== undefined && (typeof note !== 'string' || note.length > NOTE_MAX_LENGTH)) {
     invalid(`note must be a string of at most ${NOTE_MAX_LENGTH} characters`)
@@ -115,7 +137,7 @@ function readTermInput(record: Record<string, unknown>): {
     ...(typeof id === 'string' ? { id } : {}),
     term: term.trim(),
     translation: translation.trim(),
-    status: status as 'allowed' | 'preferred' | 'forbidden' | 'deprecated',
+    status: status as LinguistTermStatus,
     caseSensitive,
     ...(typeof note === 'string' && note.trim() !== '' ? { note: note.trim() } : {}),
     ...(typeof module === 'string' && module.trim() !== '' ? { module: module.trim() } : {}),
@@ -139,7 +161,7 @@ export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
     queryTerms(input: unknown): Promise<LinguistIpcResult<LinguistReferenceQueryResult<LinguistTermInfo>>> {
       return wrap(() => {
         const record = assertRecord(input)
-        return getService().queryTermReferences(readProjectId(record), readPage(record))
+        return getService().queryTermReferences(readProjectId(record), readTermPage(record))
       })
     },
 

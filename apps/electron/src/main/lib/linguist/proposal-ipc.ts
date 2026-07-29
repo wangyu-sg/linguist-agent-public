@@ -15,6 +15,7 @@ import {
   type LinguistProposalListPendingResult,
   type LinguistProposalRejectResult,
   type LinguistProposalRejectSelectedResult,
+  LINGUIST_PROPOSAL_ID_PATTERN,
 } from '@proma/shared'
 import {
   StoreNotFoundError,
@@ -33,7 +34,6 @@ import {
   type LinguistProjectMutationSink,
 } from './session-cat-tools'
 
-const PROPOSAL_ID_PATTERN = /^prp-[0-9a-f]{16}$/
 const IDEMPOTENCY_KEY_MAX_LENGTH = 128
 const MAX_SELECTED = 50
 const MAX_LIST = 200
@@ -52,8 +52,8 @@ export interface LinguistProposalIpcDeps {
 
 function readProposalId(record: Record<string, unknown>): string {
   const value = record.proposalId
-  if (typeof value !== 'string' || !PROPOSAL_ID_PATTERN.test(value)) {
-    invalid('proposalId must match prp-<16 lowercase hex>')
+  if (typeof value !== 'string' || !LINGUIST_PROPOSAL_ID_PATTERN.test(value)) {
+    invalid('proposalId must be a valid Stable ID')
   }
   return value
 }
@@ -190,7 +190,7 @@ export function createLinguistProposalIpc(deps: LinguistProposalIpcDeps) {
         const record = assertRecord(input)
         const db = open(record)
         const filter = readListFilter(record)
-        const items = db.proposals.list(filter).map(proposalInfo)
+        const items = db.proposals.listWithDiffs(filter)
         const total = db.proposals.count(filter.status)
         return {
           items,
@@ -214,6 +214,7 @@ export function createLinguistProposalIpc(deps: LinguistProposalIpcDeps) {
         if (!proposal) throw new StoreNotFoundError('proposal', String(record.proposalId))
         const segment = db.segments.getById(proposal.segmentId)
         if (!segment) throw new StoreNotFoundError('segment', proposal.segmentId)
+        const issuances = db.proposals.listIssuances(proposal.id)
         return {
           proposal: proposalInfo(proposal),
           originalOrdinal: segment.ordinal + 1,
@@ -223,6 +224,8 @@ export function createLinguistProposalIpc(deps: LinguistProposalIpcDeps) {
           currentRevision: segment.revision,
           baseRevision: proposal.baseRevision,
           locked: segment.locked,
+          issuanceCount: issuances.length,
+          ...(issuances.at(-1) === undefined ? {} : { latestIssuance: issuances.at(-1)! }),
         }
       })
     },
@@ -230,13 +233,16 @@ export function createLinguistProposalIpc(deps: LinguistProposalIpcDeps) {
     accept(input: unknown): Promise<LinguistIpcResult<LinguistAcceptedProposalResult>> {
       return wrap(() => {
         const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const project = deps.getService().getProject(projectId)
         const result = open(record).proposals.acceptSelected(
           [readItem(record)],
           readIdempotencyKey(record),
+          project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile },
         )
         const mutation = unwrap(result)
         const value = mutation.value[0]!
-        if (!mutation.replayed) notifyReviewed(deps, readProjectId(record), [value.proposal])
+        if (!mutation.replayed) notifyReviewed(deps, projectId, [value.proposal])
         return accepted(value)
       })
     },
@@ -280,12 +286,18 @@ export function createLinguistProposalIpc(deps: LinguistProposalIpcDeps) {
     acceptSelected(input: unknown): Promise<LinguistIpcResult<LinguistProposalAcceptSelectedResult>> {
       return wrap(() => {
         const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const project = deps.getService().getProject(projectId)
         const mutation = unwrap(
-          open(record).proposals.acceptSelected(readItems(record), readIdempotencyKey(record)),
+          open(record).proposals.acceptSelected(
+            readItems(record),
+            readIdempotencyKey(record),
+            project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile },
+          ),
         )
         const values = mutation.value
         if (!mutation.replayed) {
-          notifyReviewed(deps, readProjectId(record), values.map((value) => value.proposal))
+          notifyReviewed(deps, projectId, values.map((value) => value.proposal))
         }
         return values.map(accepted)
       })
@@ -308,10 +320,12 @@ export function createLinguistProposalIpc(deps: LinguistProposalIpcDeps) {
         const record = assertRecord(input)
         const projectId = readProjectId(record)
         const idempotencyKey = readIdempotencyKey(record)
+        const project = deps.getService().getProject(projectId)
         const mutation = unwrap(open(record).proposals.reissueTerminal({
           ...readItem(record),
           idempotencyKey,
           runId: `human-reconcile:${idempotencyKey}`,
+          ...(project.tagProfile !== undefined ? { tagProfile: project.tagProfile } : {}),
         }))
         if (!mutation.replayed) notifyCreated(deps, projectId, [mutation.value])
         return proposalInfo(mutation.value)

@@ -1,4 +1,5 @@
 import type { ProviderType } from './channel'
+import type { LinguistQualityProfile } from './linguist'
 import type { LinguistTurnContextV1 } from './linguist-turn-context'
 
 /**
@@ -691,6 +692,8 @@ export interface AgentSessionMeta {
    * 创建时冻结；专用解绑 API 会与项目绑定一并永久清除。
    */
   linguistSessionRole?: 'reviewer' | 'auditor'
+  /** 创建时冻结的 Linguist 质量策略；历史会话缺省按 balanced 解析。 */
+  linguistStrategy?: LinguistQualityProfile
   /** 来源委派任务 ID（由 collaboration 工具生成，用于父子会话关联） */
   sourceDelegationId?: string
   /** 委派角色，用于 UI 和后续统计 */

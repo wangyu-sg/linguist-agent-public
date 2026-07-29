@@ -491,7 +491,9 @@ export async function startFakeModelServer(port = 0, options: FakeModelServerOpt
           const userText = typeof latestUser?.content === 'string'
             ? latestUser.content
             : JSON.stringify(latestUser?.content) ?? ''
-          const segmentId = userText.match(/\bsegmentId=(seg-[0-9a-f]{16})\b/)?.[1]
+          const segmentId = userText.match(
+            /\bsegmentId=(seg(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64}))\b/,
+          )?.[1]
           if (segmentId === undefined) {
             entry.respondedStatus = 400
             writeError(res, 400, { error: { message: 'fake-cat-proposal requires segmentId' } })

@@ -30,6 +30,19 @@ describe('LinguistTurnContextV1', () => {
     expect(Object.isFrozen(result.context.selectedSegmentIds)).toBe(true)
   })
 
+  test('Given 新建实体的 Stable ID v2 When 解析 Then 保留完整 digest', () => {
+    const digest = 'a'.repeat(64)
+    const result = parseLinguistTurnContextV1({
+      ...VALID_CONTEXT,
+      assetId: `ast_v2_${digest}`,
+      activeSegmentId: `seg_v2_${digest}`,
+      selectedSegmentIds: [`seg_v2_${digest}`],
+      activeQaFindingId: `qaf_v2_${digest}`,
+    })
+
+    expect(result.context.activeSegmentId).toBe(`seg_v2_${digest}`)
+  })
+
   test('Given Project-only 上下文 When 解析 Then 允许缺少资产、片段和 QA', () => {
     const result = parseLinguistTurnContextV1({
       schemaVersion: 1,

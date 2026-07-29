@@ -124,6 +124,100 @@ export class SegmentsRepository {
     return row === undefined ? undefined : segmentFromRow(row)
   }
 
+  /** 同一资产内的稳定邻接快照；不加载整份资产。 */
+  neighbors(
+    segmentId: SegmentId | string,
+    count: number,
+  ): { previous: Segment[]; next: Segment[] } {
+    const segment = this.getById(segmentId)
+    if (segment === undefined) throw new UnknownSegmentError(segmentId)
+    const previous = (
+      this.db.db
+        .prepare(
+          'SELECT * FROM segments WHERE asset_id = ? AND ordinal < ? ORDER BY ordinal DESC, key DESC, id DESC LIMIT ?',
+        )
+        .all(segment.assetId, segment.ordinal, count) as SegmentRow[]
+    ).map(segmentFromRow).reverse()
+    const next = (
+      this.db.db
+        .prepare(
+          'SELECT * FROM segments WHERE asset_id = ? AND ordinal > ? ORDER BY ordinal, key, id LIMIT ?',
+        )
+        .all(segment.assetId, segment.ordinal, count) as SegmentRow[]
+    ).map(segmentFromRow)
+    return { previous, next }
+  }
+
+  /** 多段邻接快照；用一次 window query 代替每段 previous/next 两次读取。 */
+  neighborsMany(
+    segments: readonly Segment[],
+    count: number,
+  ): ReadonlyMap<string, { previous: Segment[]; next: Segment[] }> {
+    const uniqueSegments = [...new Map(
+      segments.map((segment) => [segment.id as string, segment]),
+    ).values()]
+    const result = new Map(
+      uniqueSegments.map((segment) => [
+        segment.id as string,
+        { previous: [] as Segment[], next: [] as Segment[] },
+      ]),
+    )
+    if (uniqueSegments.length === 0 || count < 1) return result
+
+    const rows = this.db.db
+      .prepare(
+        `WITH requested(requested_id, asset_id, ordinal) AS (
+           VALUES ${uniqueSegments.map(() => '(?, ?, ?)').join(', ')}
+         ),
+         ranked AS (
+           SELECT requested.requested_id,
+                  segments.*,
+                  CASE
+                    WHEN segments.ordinal < requested.ordinal THEN 'previous'
+                    ELSE 'next'
+                  END AS neighbor_direction,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY requested.requested_id,
+                      CASE
+                        WHEN segments.ordinal < requested.ordinal THEN 'previous'
+                        ELSE 'next'
+                      END
+                    ORDER BY
+                      CASE WHEN segments.ordinal < requested.ordinal THEN segments.ordinal END DESC,
+                      CASE WHEN segments.ordinal > requested.ordinal THEN segments.ordinal END,
+                      CASE WHEN segments.ordinal < requested.ordinal THEN segments.key END DESC,
+                      CASE WHEN segments.ordinal > requested.ordinal THEN segments.key END,
+                      CASE WHEN segments.ordinal < requested.ordinal THEN segments.id END DESC,
+                      CASE WHEN segments.ordinal > requested.ordinal THEN segments.id END
+                  ) AS neighbor_rank
+           FROM requested
+           INNER JOIN segments
+             ON segments.asset_id = requested.asset_id
+            AND segments.ordinal <> requested.ordinal
+         )
+         SELECT * FROM ranked
+         WHERE neighbor_rank <= ?
+         ORDER BY requested_id, neighbor_direction, neighbor_rank`,
+      )
+      .all(
+        ...uniqueSegments.flatMap((segment) => [
+          segment.id,
+          segment.assetId,
+          segment.ordinal,
+        ]),
+        count,
+      ) as Array<SegmentRow & {
+        requested_id: string
+        neighbor_direction: 'previous' | 'next'
+        neighbor_rank: number
+      }>
+    for (const row of rows) {
+      result.get(row.requested_id)![row.neighbor_direction].push(segmentFromRow(row))
+    }
+    for (const neighbors of result.values()) neighbors.previous.reverse()
+    return result
+  }
+
   /**
    * Cheap per-status segment counts (GROUP BY, no row load) — for project
    * summaries that must stay O(count) regardless of project size (PB-031).
@@ -229,12 +323,12 @@ export class SegmentsRepository {
 
   /** Bulk fetch; unknown ids are silently omitted (order follows input). */
   getByIds(segmentIds: readonly (SegmentId | string)[]): Segment[] {
-    const found = new Map<string, Segment>()
-    const stmt = this.db.db.prepare('SELECT * FROM segments WHERE id = ?')
-    for (const id of segmentIds) {
-      const row = stmt.get(id) as SegmentRow | undefined
-      if (row) found.set(row.id, segmentFromRow(row))
-    }
+    const uniqueIds = [...new Set(segmentIds)]
+    if (uniqueIds.length === 0) return []
+    const rows = this.db.db
+      .prepare(`SELECT * FROM segments WHERE id IN (${uniqueIds.map(() => '?').join(', ')})`)
+      .all(...uniqueIds) as SegmentRow[]
+    const found = new Map(rows.map((row) => [row.id, segmentFromRow(row)]))
     const result: Segment[] = []
     for (const id of segmentIds) {
       const segment = found.get(id)

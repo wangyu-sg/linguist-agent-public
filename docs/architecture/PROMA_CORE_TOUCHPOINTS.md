@@ -194,8 +194,16 @@ Linguist feature 内组合 Proma 原生模块
 | LF-074 | 0（+2 多票共改） | 删除零消费者 ProjectDetail 工作导航；Electron 版本与 lock 走既有触点 |
 | LF-077 | 1（+8 多票共改） | 登记 active-view BDD；Projects 日常入口退役复用既有导航、Shell、版本触点 |
 | LF-075 | 0（+5 多票共改） | 删除白名单内 CatContextRail；Shell 注释、Rail policy 与 Electron 版本走既有触点 |
+| LF-082 | 4（+2 多票共改） | Linguist Rail / Full 复用原生 Session tree、actions 与项目级 presentation |
+| LF-080 | 2（+7 多票共改） | AgentProfile、项目 Session CWD、Proma/CAT Overlay 契约及 CI Node 24 收口 |
+| LF-084 | 0（+3 多票共改） | Proposal 列表单 JOIN diff DTO、rules/performance workspace 版本与 ICU parser 锁定 |
+| LF-085 | 1（+3 多票共改） | CAT Tool Result 保持单份持久化，并分别为 Pi 模型与原生 Renderer 安全投影 |
+| LF-086 | 0（+4 多票共改） | 导出安全与可观测性：Diagnostics IPC、typed bridge/DTO、Runtime 真实观测接线 |
+| LF-087 | 0（+3 多票共改） | Stable ID v2：shared 与原生 CAT Tool Result 同时接受历史 v1 和完整 SHA-256 v2 |
+| LF-088 | 0（+5 多票共改） | Quick Health、Full Integrity Scrub 与恢复完整性：独立 worker、typed IPC/bridge、受管备份恢复 |
+| LF-089 | 0（+2 多票共改） | Proposal Issuance 与 Required 术语：当前 Turn 的真实生成 provenance 接入既有 Agent 编排，shared 扩展兼容 DTO |
 
-合计 **170 条**（其中 61 条属多票共改文件，完整清单见 proma-touchpoints.json——ticket 字段以逗号列出全部相关票；代表性文件：apps/electron/package.json、main/ipc.ts、preload/index.ts、agent-orchestrator.ts、packages/shared/src/types/linguist.ts、AgentView.tsx、SDKMessageRenderer.tsx、AgentMessages.tsx、LeftSidebar.tsx、globals.css、tailwind.config.js、bun.lock 等）。
+合计 **222 条**（其中 62 条属多票共改文件，完整清单见 proma-touchpoints.json——ticket 字段以逗号列出全部相关票；代表性文件：apps/electron/package.json、main/ipc.ts、preload/index.ts、agent-orchestrator.ts、packages/shared/src/types/linguist.ts、AgentView.tsx、SDKMessageRenderer.tsx、AgentMessages.tsx、LeftSidebar.tsx、globals.css、tailwind.config.js、bun.lock 等）。
 
 ## PB-004：打包 Electron 基线与 Hermetic Smoke
 
@@ -537,7 +545,7 @@ Linguist feature 内组合 Proma 原生模块
 
 - `packages/shared/src/types/linguist.ts` / `packages/shared/package.json`（既有多票触点）— `LINGUIST_ASSETS_IPC_CHANNELS` 五通道组（query/upsert/delete/importContextDoc/importSentencePatterns）与六类线类型（含 ContextDoc.previewUrl 仅 image 下发；term 条目扩 module/category/imageRef）；shared 0.1.58→0.1.59。
 - `apps/electron/src/main/ipc.ts` / `src/preload/index.ts`（既有多票触点）— 五通道薄注册（importContextDoc 注入主进程 picker；registerPreviewUrl 注入既有 registerPromaFilePath token 门控协议）与五个 typed 方法。
-- `apps/electron/src/main/lib/agent-orchestrator.ts`（既有多票触点）— systemPrompt 尾部一行追加 `buildLinguistProjectAssetsPrompt`：项目绑定会话注入 Style Guide/Tech Constraints/Voice Profiles 全量 + Context 目录（预算硬顶+截断 note）；普通会话/missing 空串，读取失败 fail closed。
+- `apps/electron/src/main/lib/agent-orchestrator.ts`（既有多票触点）— systemPrompt 尾部经 `buildLinguistProjectAssetsPrompt` 兼容 seam 注入项目资产；LF-079 在同一 seam 上演进为分层 Prompt overlay。
 - `apps/electron/package.json` / `bun.lock`（既有多票触点）— 版本同步 0.15.37→0.15.38；零新依赖，lock 仅两行版本字段。
 - 存储与编排全部落在 Linguist 白名单：cat-store schema v6 单迁移（style_guide_rules/sentence_patterns/context_docs/tech_constraints/voice_profiles 五表 + term_entries 三列，照 v4 多语句先例）、blobs.ts 原子写、五个 repository；cat-tools 第 11/12 个工具 `cat_search_sentence_patterns`/`cat_read_context_doc`（分页硬顶 clamp+note 惯例）；main/lib/linguist 新增 assets-ipc/project-assets-prompt（均 electron-free 可测）；renderer 四面板 + 三 utils。
 - 图片显示链接论修正：coder 首轮判「无先例」，主 agent 复核发现 `local-file-protocol.ts`（proma-file:// token 门控）正是先例并打回补课——image 条目经 registerPromaFilePath 下发不透明 URL（TTL 1h/realpath 围栏），路径解析双重 realpath 围栏在项目 blobs 目录内，越界/缺字节一律降级省略不抛错。
@@ -894,6 +902,14 @@ Linguist feature 内组合 Proma 原生模块
 - `components/tabs/MainArea.tsx`、`components/app-shell/AppShell.tsx`、`renderer/atoms/active-view.ts` 与 `active-view.test.ts`（既有触点）— 保留 `activeView='projects'`，但仅作为 `LinguistSidebarContent` 次级“管理项目”入口的管理路由；主区与 Agent Rail 共用模式归一化，日常项目工作继续由一等 Project Tab 承载。
 - `apps/electron/package.json` / `bun.lock`（既有触点）— Electron 0.15.102 → 0.15.103；零新依赖。
 
+## LF-082：Linguist Rail / Session 原生管理面
+
+- `components/app-shell/LeftSidebar.tsx`（既有触点）— 删除确认改由实体类型分派，不再从当前 appMode 推测 Chat / Agent；普通 Agent 会话行复用共享 Session item / actions，既有委派、移动、状态与预览能力不变。
+- `components/session-tree/AgentSessionTreeItem.tsx`、`AgentSessionActionsMenu.tsx`、`session-actions.ts` 与 `session-actions.test.ts`（新触点）— 提取普通 Agent / Linguist 共用的最小标题编辑、会话动作菜单与 typed 删除分派；Linguist 不开放跨项目移动，不建立第二套 Session store/runtime。
+- `src/types/settings.ts`（既有触点）— Workbench 位置新增 `closed | rail | full` presentation；旧 `agentRailOpen` 只读兼容并在下一次保存时迁移。
+- Rail / Full、Linguist Session fallback、Project menu 与 BDD 均位于 Linguist feature 白名单；继续复用同一个 `AgentView`、项目级 Jotai 状态和已有稳定 IPC。
+- 按主任务协调，本提交不修改 `apps/electron/package.json`、`bun.lock` 或版本号；零新依赖。
+
 ## LF-075：删除旧 CatContextRail
 
 - 删除 Linguist 白名单路径内的 `CatContextRail.tsx`、`CatWorkspace` 唯一挂载点、专用 `CatContextTab` 与重复的 context mutation revision；
@@ -967,3 +983,125 @@ Linguist feature 内组合 Proma 原生模块
 - `LeftSidebar.tsx` 与 `TabBarItem.tsx` 移除嵌套交互控件：会话选择与关闭标签均由相邻原生 button 承担，键盘焦点可见。
 - 新增 `conversation.tsx`、`speech-button.tsx`、`ChatMessageItem.tsx`、`DiffPanelTabBar.tsx`、`CodeBlock.tsx` 触点及三处定向 BDD；`CodeBlock` 可键盘聚焦并说明水平滚动。
 - `apps/electron/package.json` / `packages/ui/package.json` / `bun.lock`（既有触点）— Electron 0.15.101、UI 0.1.10；零新依赖。
+
+## LF-080：Agent Vertical Profile、Execution Scope 与能力继承契约
+
+- `packages/shared/src/types/agent-profile.ts` 及 BDD 新增判别式 `AgentProfile`：Linguist
+  项目身份、角色与策略只从持久化 Session metadata 解析；历史会话兼容
+  assistant / balanced，且项目身份优先于残留 `workspaceId`。
+- `packages/shared/src/types/agent.ts` / `index.ts` 与
+  `apps/electron/src/main/lib/agent-session-manager.ts`（既有触点）— 冻结并导出
+  `linguistStrategy`；Fork 保留完整绑定，Fork / Rewind / Delete 统一走 Execution
+  Scope，Linguist Session 删除时把 CWD 移入受管 Trash。
+- `apps/electron/src/main/lib/agent-orchestrator.ts`（既有触点）— Send / Rewind
+  不再按当前 UI mode 或临时入参猜 cwd；Proma Base Tool/MCP 原样继承，Linguist
+  只追加 CAT Overlay。Pi 使用原生 customTools，Claude 复用同一 ToolDefinition
+  经进程内 SDK MCP 注入；重名 fail loud，Plan 模式未知或写 CAT 工具默认拒绝。
+- Execution Scope、Session Workspace、Tool Composer 与 Claude MCP adapter 位于
+  `main/lib/linguist/` allowed-new 路径；不复制 `cat.db`，不新增第二 Runtime、
+  AgentView 或 Session Store。
+- `.github/workflows/ci.yml`（allowed-new）与 `release.yml`（既有触点）使用已核验
+  的 Node 24 Action commit；license scanner 补齐 SDK 0.3.201 四个 Linux 平台包
+  的显式专有许可登记，不以通配符放行未来包。
+- `packages/shared/package.json` 0.1.73→0.1.74；
+  `apps/electron/package.json` 0.15.134→0.15.135；零新依赖。
+
+## LF-079：Linguist Prompt Overlay 复用 Proma Base
+
+- `apps/electron/src/main/lib/agent-orchestrator.ts`（既有多票触点）— 在既有 `buildSystemPrompt` / Claude `claude_code` preset 之后只构建一次 Linguist Prompt overlay，Pi 与 Claude 两条原生 Runtime 追加同一 Profile / Role / Strategy / Project Digest；Proma Base、Provider、Permission、Thinking 与 Tool 装配保持原所有者。
+- 分层 Prompt composer、同版本内置 fallback、项目数据边界、Digest 缓存与测试均位于 `main/lib/linguist/**`、`resources/linguist-skills/**` 和根 `tests/**` 白名单；零新依赖。
+
+## LF-083：Durable Job / Recovery / Project Event Outbox
+
+- `packages/shared/src/types/linguist.ts`、`packages/shared/package.json` 与
+  `bun.lock`（既有触点）— 新增项目事件 list/ack 通道、版本化事件/进度 DTO；
+  shared 0.1.75→0.1.76，cat-store 0.0.21→0.0.22，cat-tools
+  0.0.14→0.0.15；零新依赖。
+- `apps/electron/src/main/ipc.ts` 与 `apps/electron/src/preload/index.ts`
+  （既有触点）— 仅增加 durable event gap pull/显式 ack 的四层薄接线；
+  处理器、重连补拉与 Jotai 消费位于既有 Linguist 白名单。
+- `apps/electron/package.json`（既有触点）— 主进程构建/监听增加独立 CAT QA
+  worker entry，生产路径使用 `node:worker_threads`；按主任务协调不修改
+  Electron 版本。
+- Job/checkpoint、mutation idempotency、run summary/undo、SQLite outbox、
+  QA worker runner 与一致性 advisory adapter 均位于 `packages/linguist-*`
+  或 `main/lib/linguist/**` 白名单；复用同一 `cat.db`、事务、revision CAS
+  与 Session authority，零新依赖。LF-084 的显式 consistency plan/apply
+  mutation 已接入同一原子 receipt/outbox；一致性生产 worker 尚未接线，
+  本票不把 adapter 记为完整 LA-PERF-002。
+
+## LF-084：Rules / Performance hard gates 与批量上下文
+
+- `packages/shared/src/types/linguist.ts`（既有触点）— Proposal 列表项直接携带
+  Store 单 JOIN 生成的 diff DTO；Renderer 不再逐条发起详情 IPC。
+- `packages/shared/package.json` / `bun.lock`（既有触点）— shared 同步至
+  0.1.75；CAT Core 精确锁定 `@formatjs/icu-messageformat-parser@3.5.15`，
+  并同步 cat-core / cat-store / cat-tools 至 0.0.10 / 0.0.21 / 0.0.14。
+- `docs/release/sbom-full.json`（`docs/` 白名单）— 依生产闭包重生成 417 项
+  SBOM；新增 parser 与其 skeleton parser 均为 MIT，许可门禁通过。
+- hard rules、consistency plan/apply、批量 Store 查询、opaque context cursor 与
+  benchmark 均位于 `packages/linguist-*` 或 Electron Linguist 白名单；本票不改
+  Job/Outbox/Idempotency schema，也不登记尚未合并的 CAT worker/job runner。
+- 按集成边界，本提交不递增 `apps/electron/package.json`；Electron 源码版本由
+  主任务统一同步。
+
+## LF-085：CAT Tool Result 模型/UI 投影
+
+- `apps/electron/src/main/lib/adapters/pi-agent-adapter.ts`（新触点）— 复用 Pi
+  `convertToLlm` seam，在请求模型前把 `cat_*` 的结构化 `details` 临时变为
+  text content；持久化消息仍只有短摘要与单份 DTO，普通工具及不可序列化值不变。
+- `ContentBlock.tsx`、`tool-result-renderers/cat-result.tsx` 与既有 BDD（多票共改）
+  — Renderer 只在能够生成脱敏统计摘要时读取 `tool_use_result`；补齐新增四类
+  CAT 工具摘要，未知或畸形 payload 继续展示短 content，不展开客户正文。
+- 投影纯函数和测试位于 `main/lib/linguist/**` 白名单；零新依赖。
+
+## LF-086：安全导出与 Linguist Diagnostics
+
+- `apps/electron/src/main/ipc.ts` / `src/preload/index.ts` /
+  `packages/shared/src/types/linguist.ts`（既有多票触点）— 接线 Linguist-only
+  Diagnostics 状态、脱敏预览与显式导出，并扩展导出 digest / size / time /
+  project revision 线类型；处理器、加固复制和 UI 均位于 Linguist 白名单路径。
+- `apps/electron/src/main/lib/agent-orchestrator.ts`（既有多票触点）— 在既有
+  Runtime tool 组合完成后只记录真实 Runtime、Base / Overlay tool 数与时间，
+  供同一 Diagnostics seam 使用；不复制 Agent Session 状态。
+- 诊断包默认 allowlist 脱敏、仅用户预览后显式导出且不上传；Prompt 降级状态与
+  `retry: true` 重新探测复用真实 Prompt 构建。零新依赖、零 schema 变化。
+
+## LF-087：Stable ID v2 跨层兼容
+
+- `packages/shared/src/types/linguist.ts`（既有多票触点）— 内容派生
+  Asset、Segment、Proposal、QA、TM/TB 与项目资产校验同时接受历史 v1 和
+  新建的完整 SHA-256 v2；随机 Project ID 保持既有 v1 契约。
+- `tool-result-renderers/cat-result.tsx` 与既有 BDD（多票共改）— 直接复用
+  shared Proposal 校验；历史 Timeline 与新结果均可回查 Store，畸形 digest
+  继续 fail closed。
+- 生成、Store、main handler、smoke fixture 与其余测试均位于 Linguist
+  白名单；没有复制 Agent UI、状态源或 Runtime，零新依赖。
+
+## LF-088：Quick Health、Full Integrity Scrub 与恢复完整性
+
+- `apps/electron/src/main/ipc.ts` / `src/preload/index.ts` /
+  `packages/shared/src/types/linguist.ts`（既有多票触点）— 接线 Quick Health 与
+  Full Integrity Scrub 的 typed contract、进度、取消和原生脱敏报告保存；
+  renderer 不提交路径或 project authority。
+- `apps/electron/src/main/index.ts`（既有触点）— 退出前终止 Integrity workers；
+  `apps/electron/package.json`（既有触点）— build/watch 在保留 QA + Consistency
+  CAT worker 的同时构建独立 Integrity worker。
+- worker/service/UI 与 Store integrity/backup/restore 均位于 Linguist 白名单；
+  Full Scrub 使用 `node:worker_threads`，备份 staging 原子提交、恢复 fail closed。
+  不改 schema、数据 provenance、依赖、lock 或版本号。
+
+## LF-089：Proposal Issuance 与 Required 术语生产语义
+
+- `apps/electron/src/main/lib/agent-orchestrator.ts`（既有多票触点）— 每个发送
+  Turn 在局部闭包中复用一次 `buildLinguistProjectAssetsPromptWithStatus`，
+  把真实 Runtime / Provider / Model、Prompt 状态、验证后的 Turn Context
+  稳定快照与最终 Tool composition hash 传给 Pi / Claude 共用的 CAT tools；
+  不新增全局可变 provenance，也不让 Renderer 提交 authority。
+- `packages/shared/src/types/linguist.ts`（既有多票触点）— 术语状态增加
+  `required`，Proposal diff 增加兼容的 issuance count / latest provenance DTO；
+  历史线格式仍可缺省新字段。
+- Proposal Issuance v13 migration、历史 backfill、Required / Forbidden 中央 hard
+  gate、Critic provenance、Store / Tool / IPC / Renderer 接线与 BDD 均位于
+  `packages/linguist-*` 或 Electron Linguist 白名单；保留 v12 Harness 的
+  job/event/run_changes/receipt/outbox 结构与 Stable ID v2，零新依赖。

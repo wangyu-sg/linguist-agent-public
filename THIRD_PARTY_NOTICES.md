@@ -14,8 +14,8 @@
 
 ### @anthropic-ai/claude-agent-sdk（及其平台包）
 
-- 版本：0.3.201（平台包：`-darwin-arm64` / `-darwin-x64` / `-win32-arm64` /
-  `-win32-x64`，按目标平台随包分发其一）
+- 版本：0.3.201（平台包：Linux glibc / musl 的 arm64 / x64、macOS arm64 /
+  x64、Windows arm64 / x64，按目标平台随包分发其一）
 - 许可：**专有**（© Anthropic PBC, All rights reserved；package.json 声明
   "SEE LICENSE IN README.md"）
 - 来源：npm `@anthropic-ai/claude-agent-sdk`，

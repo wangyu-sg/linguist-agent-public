@@ -17,7 +17,7 @@
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
 import { toast } from 'sonner'
-import { Download, Loader2, Package, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Download, Loader2, Package, RefreshCw } from 'lucide-react'
 import type { LinguistExportFileInfo } from '@proma/shared'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { FileTypeIcon } from '@/components/file-browser'
@@ -153,7 +153,7 @@ export function DeliverablesSection({ sessionId }: { sessionId: string }): React
               tabIndex={clickable ? 0 : undefined}
               title={
                 clickable
-                  ? `${file.filename}\n点击经原生「保存」对话框导出副本`
+                  ? `${file.filename}\n${file.stale ? '项目在该交付物生成后已有修改；请重新导出。\n' : ''}点击经原生「保存」对话框导出副本`
                   : file.filename
               }
               onClick={clickable ? () => void handleSave(file) : undefined}
@@ -166,6 +166,15 @@ export function DeliverablesSection({ sessionId }: { sessionId: string }): React
               <span className="w-3.5 flex-shrink-0" />
               <FileTypeIcon name={displayName} isDirectory={false} />
               <span className="text-xs truncate flex-1">{displayName}</span>
+              {file.stale && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400"
+                  title="项目在该交付物生成后已有修改，请重新导出"
+                >
+                  <AlertTriangle className="size-3" aria-hidden="true" />
+                  旧修订
+                </span>
+              )}
               <span className="text-[10px] text-muted-foreground/60 tabular-nums flex-shrink-0">
                 {formatSize(file.sizeBytes)}
               </span>

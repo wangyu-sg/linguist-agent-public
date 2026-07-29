@@ -4,13 +4,16 @@
  */
 
 import {
+  parseCriticReviewArtifact,
   parseIndependentCriticArtifact,
   type Asset,
   type AssetId,
+  type CriticReviewArtifact,
   type CurrentStageState,
   type IndependentCriticArtifact,
   type ProjectId,
   type ProposalId,
+  type ProposalIssuance,
   type ProposalStatus,
   type QaFinding,
   type QaFindingDisposition,
@@ -191,6 +194,97 @@ export function proposalToParams(proposal: TranslationProposal): unknown[] {
   ]
 }
 
+export interface ProposalIssuanceRow {
+  issuance_id: string
+  proposal_id: string
+  idempotency_key: string | null
+  session_id: string | null
+  run_id: string | null
+  tool_call_id: string | null
+  model_provider: string | null
+  model_id: string | null
+  runtime: string | null
+  role: string | null
+  strategy: string | null
+  linguist_prompt_version: string | null
+  prompt_hash: string | null
+  project_digest_hash: string | null
+  project_digest_revision: string | null
+  turn_context_version: number | null
+  turn_context_snapshot_json: string | null
+  turn_context_hash: string | null
+  toolset_hash: string | null
+  evidence_refs_json: string
+  term_refs_json: string
+  created_at: string
+}
+
+export function proposalIssuanceFromRow(row: ProposalIssuanceRow): ProposalIssuance {
+  return {
+    id: row.issuance_id as ProposalIssuance['id'],
+    proposalId: row.proposal_id as ProposalIssuance['proposalId'],
+    ...(row.idempotency_key === null ? {} : { idempotencyKey: row.idempotency_key }),
+    ...(row.session_id === null ? {} : { sessionId: row.session_id }),
+    ...(row.run_id === null ? {} : { runId: row.run_id }),
+    ...(row.tool_call_id === null ? {} : { toolCallId: row.tool_call_id }),
+    ...(row.model_provider === null ? {} : { modelProvider: row.model_provider }),
+    ...(row.model_id === null ? {} : { modelId: row.model_id }),
+    ...(row.runtime === null ? {} : { runtime: row.runtime }),
+    ...(row.role === null ? {} : { role: row.role as NonNullable<ProposalIssuance['role']> }),
+    ...(row.strategy === null
+      ? {}
+      : { strategy: row.strategy as NonNullable<ProposalIssuance['strategy']> }),
+    ...(row.linguist_prompt_version === null
+      ? {}
+      : { linguistPromptVersion: row.linguist_prompt_version }),
+    ...(row.prompt_hash === null ? {} : { promptHash: row.prompt_hash }),
+    ...(row.project_digest_hash === null
+      ? {}
+      : { projectDigestHash: row.project_digest_hash }),
+    ...(row.project_digest_revision === null
+      ? {}
+      : { projectDigestRevision: row.project_digest_revision }),
+    ...(row.turn_context_version === null
+      ? {}
+      : { turnContextVersion: row.turn_context_version }),
+    ...(row.turn_context_snapshot_json === null
+      ? {}
+      : { turnContextSnapshot: row.turn_context_snapshot_json }),
+    ...(row.turn_context_hash === null ? {} : { turnContextHash: row.turn_context_hash }),
+    ...(row.toolset_hash === null ? {} : { toolsetHash: row.toolset_hash }),
+    evidenceRefs: JSON.parse(row.evidence_refs_json) as string[],
+    termRefs: JSON.parse(row.term_refs_json) as string[],
+    createdAt: row.created_at,
+  }
+}
+
+export function proposalIssuanceToParams(issuance: ProposalIssuance): unknown[] {
+  return [
+    issuance.id,
+    issuance.proposalId,
+    issuance.idempotencyKey ?? null,
+    issuance.sessionId ?? null,
+    issuance.runId ?? null,
+    issuance.toolCallId ?? null,
+    issuance.modelProvider ?? null,
+    issuance.modelId ?? null,
+    issuance.runtime ?? null,
+    issuance.role ?? null,
+    issuance.strategy ?? null,
+    issuance.linguistPromptVersion ?? null,
+    issuance.promptHash ?? null,
+    issuance.projectDigestHash ?? null,
+    issuance.projectDigestRevision ?? null,
+    issuance.turnContextVersion ?? null,
+    issuance.turnContextSnapshot ?? null,
+    issuance.turnContextHash ?? null,
+    issuance.toolsetHash ?? null,
+    JSON.stringify(issuance.evidenceRefs),
+    JSON.stringify(issuance.termRefs),
+    issuance.createdAt,
+  ]
+}
+
 export interface QaFindingRow {
   id: string
   segment_id: string
@@ -204,6 +298,10 @@ export interface QaFindingRow {
   waiver_reason: string | null
   waived_by: string | null
   waived_at: string | null
+  rule_version: string
+  evidence_hash: string
+  first_seen_run_id: string
+  created_at: string
 }
 
 export interface CriticArtifactRow {
@@ -218,12 +316,21 @@ export interface CriticArtifactRow {
  * artifactHash are re-derived and verified on every read, so a tampered row
  * fails loudly instead of silently returning altered review content.
  */
-export function criticArtifactFromRow(row: CriticArtifactRow): IndependentCriticArtifact {
-  return parseIndependentCriticArtifact(JSON.parse(row.artifact_json))
+export type PersistedCriticArtifact = IndependentCriticArtifact | CriticReviewArtifact
+
+export function criticArtifactFromRow(row: CriticArtifactRow): PersistedCriticArtifact {
+  const value = JSON.parse(row.artifact_json) as { schemaVersion?: unknown }
+  return value.schemaVersion === 2
+    ? parseCriticReviewArtifact(value)
+    : parseIndependentCriticArtifact(value)
 }
 
 export interface PersistedQaFinding extends QaFinding {
   segmentRevision: number
+  ruleVersion: string
+  evidenceHash: string
+  firstSeenRunId: string
+  createdAt: string
   waiverReason?: string
   waivedBy?: string
   waivedAt?: string
@@ -240,6 +347,10 @@ export function qaFindingFromRow(row: QaFindingRow): PersistedQaFinding {
     message: row.message,
     status: row.status as QaFindingStatus,
     segmentRevision: row.segment_revision,
+    ruleVersion: row.rule_version,
+    evidenceHash: row.evidence_hash,
+    firstSeenRunId: row.first_seen_run_id,
+    createdAt: row.created_at,
     ...(row.waiver_reason !== null ? { waiverReason: row.waiver_reason } : {}),
     ...(row.waived_by !== null ? { waivedBy: row.waived_by } : {}),
     ...(row.waived_at !== null ? { waivedAt: row.waived_at } : {}),

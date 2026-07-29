@@ -105,7 +105,7 @@ export function buildLinguistTurnContextBlock(
   context: Readonly<LinguistTurnContextV1>,
 ): string {
   return [
-    '<linguist_turn_context schema_version="1">',
+    '<linguist_turn_context version="1" schema_version="1" trust="project-data">',
     serializeLinguistTurnContextV1(context),
     '</linguist_turn_context>',
   ].join('\n')

@@ -17,6 +17,8 @@ export {
   type DomainErrorCode,
 } from './errors'
 
+export { sha256Hex, type HashFn } from './hash'
+
 export {
   ID_PATTERN,
   asAssetId,
@@ -30,15 +32,28 @@ export {
   deriveProposalId,
   deriveQaFindingId,
   deriveSegmentId,
+  deriveStableIdV2,
   fnv1a64,
   generateProjectId,
+  parseStableId,
   type AssetId,
   type EntropySource,
+  type ParsedStableId,
   type ProjectId,
   type ProposalId,
+  type ProposalIssuanceId,
   type QaFindingId,
   type SegmentId,
+  type StableIdField,
+  type StableIdVersion,
 } from './ids'
+
+export {
+  createProposalIssuance,
+  type LinguistGenerationProvenance,
+  type ProposalIssuance,
+  type ProposalIssuanceInput,
+} from './proposal-issuance'
 
 export {
   archiveProject,
@@ -177,8 +192,10 @@ export {
 export {
   INDEPENDENT_CRITIC_CATEGORIES,
   createIndependentCriticArtifact,
+  createCriticReviewArtifact,
   independentCriticCandidateHash,
   independentCriticProfileHash,
+  parseCriticReviewArtifact,
   parseIndependentCriticArtifact,
   planIndependentCritic,
   targetedRepairScopeFromCriticArtifact,
@@ -192,17 +209,26 @@ export {
   type IndependentCriticRequest,
   type IndependentCriticSeverity,
   type IndependentCriticSubject,
+  type CreateCriticReviewRequest,
+  type CriticReviewArtifact,
+  type CriticReviewerProvenance,
+  type CriticReviewSnapshotRef,
+  type CriticReviewVerdict,
 } from './independent-critic'
 
 export {
+  analyzeBatchConsistency,
   BATCH_CONSISTENCY_CODES,
   buildBatchConsistencyPass,
-  targetedRepairProposalInputs,
+  selectedConsistencyProposalInputs,
+  type BatchConsistencyCandidateTarget,
   type BatchConsistencyCode,
+  type BatchConsistencyDimensions,
   type BatchConsistencyFindingItem,
   type BatchConsistencyGroup,
   type BatchConsistencyGroupSegment,
   type BatchConsistencyPass,
+  type ConsistencyRepairSelection,
 } from './batch-consistency'
 
 export {

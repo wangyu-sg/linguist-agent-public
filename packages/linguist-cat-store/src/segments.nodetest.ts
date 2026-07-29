@@ -92,8 +92,72 @@ test('getById / getByIds: bulk fetch follows input order, unknown ids omitted', 
   try {
     assert.equal(db.segments.getById(segments[2]!.id)?.ordinal, 2)
     assert.equal(db.segments.getById('seg-0000000000000000'), undefined)
+    const sqlite = db.catDb.db
+    const prepare = sqlite.prepare.bind(sqlite)
+    let queryExecutions = 0
+    sqlite.prepare = ((sql: string) => {
+      const statement = prepare(sql)
+      if (!sql.includes('FROM segments WHERE id')) return statement
+      return new Proxy(statement, {
+        get(target, property) {
+          const value = Reflect.get(target, property, target)
+          if (property !== 'get' && property !== 'all') {
+            return typeof value === 'function' ? value.bind(target) : value
+          }
+          return (...args: unknown[]) => {
+            queryExecutions += 1
+            return Reflect.apply(value as (...values: unknown[]) => unknown, target, args)
+          }
+        },
+      })
+    }) as typeof sqlite.prepare
     const bulk = db.segments.getByIds([segments[2]!.id, 'seg-0000000000000000', segments[0]!.id])
     assert.deepEqual(bulk.map((s) => s.ordinal), [2, 0])
+    assert.equal(queryExecutions, 1, 'bulk fetch must execute one SQL query')
+  } finally {
+    db.close()
+  }
+})
+
+test('neighborsMany: two segment contexts execute one neighbor query and preserve local order', () => {
+  const { db, segments } = setup(6)
+  try {
+    const sqlite = db.catDb.db
+    const prepare = sqlite.prepare.bind(sqlite)
+    let queryExecutions = 0
+    sqlite.prepare = ((sql: string) => {
+      const statement = prepare(sql)
+      if (!sql.includes('WITH requested')) return statement
+      return new Proxy(statement, {
+        get(target, property) {
+          const value = Reflect.get(target, property, target)
+          if (property !== 'all') return typeof value === 'function' ? value.bind(target) : value
+          return (...args: unknown[]) => {
+            queryExecutions += 1
+            return Reflect.apply(value as (...values: unknown[]) => unknown, target, args)
+          }
+        },
+      })
+    }) as typeof sqlite.prepare
+
+    const neighbors = db.segments.neighborsMany([segments[2]!, segments[4]!], 2)
+    assert.deepEqual(
+      neighbors.get(segments[2]!.id)?.previous.map((segment) => segment.ordinal),
+      [0, 1],
+    )
+    assert.deepEqual(
+      neighbors.get(segments[2]!.id)?.next.map((segment) => segment.ordinal),
+      [3, 4],
+    )
+    assert.deepEqual(
+      neighbors.get(segments[4]!.id)?.previous.map((segment) => segment.ordinal),
+      [2, 3],
+    )
+    assert.deepEqual(
+      neighbors.get(segments[4]!.id)?.next.map((segment) => segment.ordinal),
+      [5],
+    )
+    assert.equal(queryExecutions, 1, 'batch neighbors must execute one SQL query')
   } finally {
     db.close()
   }

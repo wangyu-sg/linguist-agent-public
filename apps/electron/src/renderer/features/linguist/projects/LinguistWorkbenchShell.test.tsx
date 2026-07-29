@@ -117,7 +117,7 @@ describe('LinguistWorkbenchShell', () => {
 
   test('given 用户首次展开 Agent when 工作台重渲染 then 才挂载 rail 插槽', () => {
     const store = createStore()
-    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { agentRailOpen: true })
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { agentPresentation: 'rail' })
 
     const html = renderToStaticMarkup(
       <Provider store={store}>
@@ -147,9 +147,34 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).toContain('原生 Agent')
   })
 
+  test('given 项目 Agent 已展开 when 切换 Full then 留在同一 Linguist 布局并复用唯一 Agent host', () => {
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), {
+      agentPresentation: 'full',
+    })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={project}
+          summaryState={{ status: 'ready', summary }}
+          onSummaryRefresh={() => undefined}
+          agentRail={<div data-testid="native-agent">原生 Agent</div>}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
+    )
+
+    expect(html).toContain('data-workbench-slot="agent-full"')
+    expect(html).not.toContain('data-workbench-slot="agent-rail"')
+    expect(html).toContain('data-linguist-agent-presentation="full"')
+    expect(html.match(/data-testid="native-agent"/g)).toHaveLength(1)
+  })
+
   test('given 三个辅助面板均展开 when 渲染工作台 then Dock 仅占中央 CAT 列且 Rail 保持全高', () => {
     const store = createStore()
-    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { agentRailOpen: true })
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { agentPresentation: 'rail' })
 
     const html = renderToStaticMarkup(
       <Provider store={store}>

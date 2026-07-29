@@ -43,7 +43,7 @@ test('TM importMany: stable ids, same source with different targets, and repeat 
     assert.deepEqual(db.tmUnits.importMany(rows), { imported: 2, unchanged: 0 })
     const ids = db.tmUnits.list({ limit: 1 }).map((item) => item.id)
     assert.equal(ids.length, 1)
-    assert.match(ids[0]!, /^tmu-[0-9a-f]{16}$/)
+    assert.match(ids[0]!, /^tmu_v2_[0-9a-f]{64}$/)
     assert.deepEqual(db.tmUnits.importMany(rows), { imported: 0, unchanged: 2 })
     assert.deepEqual(db.tmUnits.list().map((item) => item.target), ['保存', '存储'])
   } finally {
@@ -82,6 +82,40 @@ test('TM findMatches: normalizes text, scores exact/contains/fuzzy, and sorts de
       })[1]?.matchType,
       'contains',
     )
+  } finally {
+    db.close()
+  }
+})
+
+test('TM/Term findMatchesMany 复用一次批量读取并保持逐文本匹配语义', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    db.tmUnits.importMany([
+      { source: 'Save game', target: '保存游戏', sourceLocale: 'en', targetLocale: 'zh-CN' },
+      { source: 'Load game', target: '加载游戏', sourceLocale: 'en', targetLocale: 'zh-CN' },
+    ])
+    db.termEntries.importMany([
+      { term: 'Save', translation: '保存', status: 'preferred', caseSensitive: false },
+      { term: 'game', translation: '游戏', status: 'allowed', caseSensitive: false },
+    ])
+
+    const tm = db.tmUnits.findMatchesMany({
+      sources: ['Save game', 'Load game'],
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      threshold: 0.6,
+      limit: 3,
+    })
+    assert.equal(tm.get('Save game')?.[0]?.target, '保存游戏')
+    assert.equal(tm.get('Load game')?.[0]?.target, '加载游戏')
+
+    const terms = db.termEntries.findMatchesMany({
+      texts: ['Save game', 'Load game'],
+      limit: 5,
+    })
+    assert.deepEqual(terms.get('Save game')?.map((item) => item.term), ['Save', 'game'])
+    assert.deepEqual(terms.get('Load game')?.map((item) => item.term), ['game'])
   } finally {
     db.close()
   }
@@ -147,7 +181,7 @@ test('term importMany/list: required fields persist and repeat import is unchang
     assert.deepEqual(db.termEntries.importMany(rows), { imported: 0, unchanged: 2 })
     const page = db.termEntries.list({ status: 'preferred', limit: 1 })
     assert.equal(page.length, 1)
-    assert.match(page[0]!.id, /^ter-[0-9a-f]{16}$/)
+    assert.match(page[0]!.id, /^ter_v2_[0-9a-f]{64}$/)
     assert.equal(page[0]!.status, 'preferred')
     assert.equal(page[0]!.caseSensitive, false)
     assert.equal(db.termEntries.count({ status: 'preferred' }), 2)

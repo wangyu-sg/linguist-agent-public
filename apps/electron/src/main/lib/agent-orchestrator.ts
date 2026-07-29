@@ -14,7 +14,7 @@
  * 完全解耦 Electron IPC，可独立测试（mock Adapter + EventBus）。
  */
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -32,6 +32,8 @@ import {
   inferAgentSdkContextWindow,
   isOpenAIReasoningSupportedModel,
   isAgentCompatibleProvider,
+  resolveAgentProfile,
+  serializeLinguistTurnContextV1,
 } from '@proma/shared'
 import type { PromaPermissionMode, AskUserRequest, ExitPlanModeRequest, SDKSystemMessage } from '@proma/shared'
 import type { ClaudeAgentQueryOptions } from './adapters/claude-agent-adapter'
@@ -47,7 +49,7 @@ import { getFetchFn } from './proxy-fetch'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
 import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, truncateSDKMessages, removeSDKErrorMessage, resolveUserUuidFromSDK, rewindFilesFromSnapshot, rewindPiAgentSession } from './agent-session-manager'
 import { getAgentWorkspace, getWorkspaceMcpConfig, ensurePluginManifest, getWorkspaceAutoMemoryDir, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles } from './agent-workspace-manager'
-import { getAgentWorkspacePath, getAgentSessionWorkspacePath, getSdkConfigDir, getWorkspaceFilesDir, getWorkspaceSkillsDir } from './config-paths'
+import { getAgentWorkspacePath, getSdkConfigDir, getWorkspaceFilesDir, getWorkspaceSkillsDir } from './config-paths'
 import { getRuntimeStatus } from './runtime-init'
 import { getSettings } from './settings-service'
 import { buildSystemPrompt, buildDynamicContext } from './agent-prompt-builder'
@@ -71,8 +73,21 @@ import {
   validateLinguistTurnContextForAgentTurn,
 } from './linguist/turn-context-validator'
 import { resolveLinguistSessionSkillPaths } from './linguist/project-skill'
-import { buildLinguistProjectAssetsPrompt } from './linguist/project-assets-prompt'
-import { assertNoLinguistCatToolNameConflict, resolveLinguistSessionCatTools } from './linguist/session-cat-tools'
+import { buildLinguistProjectAssetsPromptWithStatus } from './linguist/project-assets-prompt'
+import { resolveLinguistSessionCatTools } from './linguist/session-cat-tools'
+import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
+import {
+  composeAgentTools,
+  hashAgentToolComposition,
+} from './linguist/agent-tool-composition'
+import { recordLinguistRuntimeObservation } from './linguist/runtime-diagnostics'
+import {
+  createClaudeCatMcpServer,
+  isClaudeCatMcpTool,
+  isReadOnlyClaudeCatMcpTool,
+  LINGUIST_CAT_MCP_SERVER_NAME,
+  mergeClaudeMcpServers,
+} from './linguist/claude-cat-tool-server'
 import { buildPiMcpTools } from './adapters/pi-mcp-tools'
 import { buildAgentRuntimeEnv, mergeRuntimeEnv, type AgentRuntimeEnv } from './agent-runtime-env'
 import { isVisibleRunMessage } from './agent-run-message-visibility'
@@ -1220,28 +1235,27 @@ export class AgentOrchestrator {
         `[Agent 编排] 启动 ${agentRuntime} runtime — ${cliPath ? `binary: ${cliPath}, ` : ''}模型: ${modelId || DEFAULT_MODEL_ID}, resume: ${existingSdkSessionId ?? '无'}`,
       )
 
-      // 确定 Agent 工作目录
-      agentCwd = homedir()
-      workspaceSlug = undefined
-      workspace = undefined
-      if (workspaceId) {
-        const ws = getAgentWorkspace(workspaceId)
-        if (ws) {
-          agentCwd = getAgentSessionWorkspacePath(ws.slug, sessionId)
-          workspaceSlug = ws.slug
-          workspace = ws
-          console.log(`[Agent 编排] 使用 session 级别 cwd: ${agentCwd} (${ws.name}/${sessionId})`)
+      // 会话 metadata 是执行身份真源；Linguist 项目 cwd 优先于任何残留 workspaceId。
+      const executionScope = sessionMeta
+        ? resolveAgentExecutionScope(sessionMeta)
+        : { kind: 'home' as const, cwd: homedir() }
+      agentCwd = executionScope.cwd
+      workspaceSlug = executionScope.kind === 'agent-workspace'
+        ? executionScope.workspaceSlug
+        : undefined
+      workspace = executionScope.kind === 'agent-workspace'
+        ? getAgentWorkspace(executionScope.workspaceId)
+        : undefined
+      console.log(`[Agent 编排] 执行范围: ${executionScope.kind} (${sessionId})`)
 
-          if (agentRuntime === 'claude') {
-            ensurePluginManifest(ws.slug, ws.name)
-          }
+      if (executionScope.kind === 'agent-workspace' && agentRuntime === 'claude') {
+        ensurePluginManifest(executionScope.workspaceSlug, executionScope.workspaceName)
+      }
 
-          if (existingSdkSessionId) {
-            console.log(`[Agent 编排] 将尝试 resume: ${existingSdkSessionId}`)
-          } else {
-            console.log(`[Agent 编排] 无 sdkSessionId，将作为新会话启动（回填历史上下文）`)
-          }
-        }
+      if (existingSdkSessionId) {
+        console.log(`[Agent 编排] 将尝试 resume: ${existingSdkSessionId}`)
+      } else {
+        console.log(`[Agent 编排] 无 sdkSessionId，将作为新会话启动（回填历史上下文）`)
       }
 
       // 9.4.1 Fork session JSONL 迁移已在 forkAgentSession 中完成，
@@ -1604,6 +1618,12 @@ export class AgentOrchestrator {
               }
               return { behavior: 'deny' as const, message: '计划模式下不允许执行写操作，请在计划审批通过后再执行' }
             }
+            // Claude CAT 工具经 MCP 注入，但仍遵守 Plan 只读边界；未知工具默认拒绝。
+            if (isClaudeCatMcpTool(toolName)) {
+              return isReadOnlyClaudeCatMcpTool(toolName)
+                ? { behavior: 'allow' as const, updatedInput: input }
+                : { behavior: 'deny' as const, message: '计划模式下不允许执行 CAT 写入，请在计划审批通过后再执行' }
+            }
             // Chrome DevTools MCP 同时包含只读观察和会改变页面状态的操作。
             // 计划模式只允许快照、截图、网络列表等调研工具；点击、输入、脚本执行等需等计划通过。
             if (toolName.startsWith('mcp__chrome_devtools__')) {
@@ -1644,6 +1664,24 @@ export class AgentOrchestrator {
         permissionMode: initialPermissionMode,
         collaborationAvailable,
       }) + (automationContext ? `\n\n## 定时任务执行上下文\n\n${automationContext}` : '')
+      const agentProfile = resolveAgentProfile(sessionMeta)
+      const linguistPromptBuild = agentProfile.kind === 'linguist'
+        ? buildLinguistProjectAssetsPromptWithStatus(
+          sessionMeta as typeof sessionMeta & { linguistProjectId: string },
+          getLinguistProjectService,
+        )
+        : undefined
+      const linguistSystemPrompt = linguistPromptBuild?.prompt ?? ''
+      const linguistTurnContextSnapshot = validatedLinguistContext === undefined
+        ? undefined
+        : serializeLinguistTurnContextV1(validatedLinguistContext)
+      const linguistTurnContextHash = linguistTurnContextSnapshot === undefined
+        ? undefined
+        : createHash('sha256').update(linguistTurnContextSnapshot).digest('hex')
+      const linguistRunId = agentProfile.kind === 'linguist'
+        ? `agent-turn:${sessionId}:${randomUUID()}`
+        : undefined
+      let linguistToolsetHash: string | undefined
       const handleSessionId = (sdkSessionId: string, piSessionFile?: string): void => {
         // 仅在 session_id 真正变化时才持久化。SDK v2 几乎每条消息都会回调 onSessionId，
         // capturedSdkSessionId 已初始化为 existingSdkSessionId，并在 recovery 时同步重置。
@@ -1692,20 +1730,84 @@ export class AgentOrchestrator {
       // 工具数组每次发送重建、绑定状态每次调用实时重解析，resume/queueMessage
       // 复用 sendMessage 建立的活跃 Pi 会话，自然一致。cat_* 撞名属编程错误，
       // init 时 fail loud（绝不静默覆盖既有工具实现）。
-      const piLinguistCatTools = agentRuntime === 'pi'
+      const linguistCatTools = agentProfile.kind === 'linguist'
         ? resolveLinguistSessionCatTools(
           sessionMeta,
           getLinguistProjectService,
           callbacks.onLinguistProjectMutation,
+          (toolCallId) => ({
+            sessionId,
+            runId: linguistRunId!,
+            toolCallId,
+            modelProvider: channel.provider,
+            modelId: resolvedModel,
+            runtime: agentRuntime,
+            role: linguistPromptBuild!.status.role,
+            ...(linguistPromptBuild!.status.strategy === undefined
+              ? {}
+              : { strategy: linguistPromptBuild!.status.strategy }),
+            linguistPromptVersion: linguistPromptBuild!.status.profileVersion,
+            promptHash: linguistPromptBuild!.status.promptHash,
+            projectDigestHash: linguistPromptBuild!.status.projectDigestHash,
+            projectDigestRevision: linguistPromptBuild!.status.projectDigestRevision,
+            ...(linguistTurnContextSnapshot === undefined
+              ? {}
+              : {
+                  turnContextVersion: validatedLinguistContext!.schemaVersion,
+                  turnContextSnapshot: linguistTurnContextSnapshot,
+                  turnContextHash: linguistTurnContextHash!,
+                }),
+            ...(linguistToolsetHash === undefined
+              ? {}
+              : { toolsetHash: linguistToolsetHash }),
+          }),
         )
         : []
-      assertNoLinguistCatToolNameConflict(
-        [...piBuiltinTools, ...piMcpTools]
-          .map((tool) => (tool as { name?: unknown } | null | undefined)?.name)
-          .filter((name): name is string => typeof name === 'string'),
-        piLinguistCatTools,
+      const toolComposition = composeAgentTools(
+        agentProfile,
+        [...piBuiltinTools, ...piMcpTools] as Array<{ name: string }>,
+        () => agentRuntime === 'pi'
+          ? linguistCatTools
+          : [],
       )
-      const piCustomTools = [...piBuiltinTools, ...piMcpTools, ...piLinguistCatTools]
+      const piCustomTools = toolComposition.mergedTools
+      const claudeMcpServers = agentRuntime === 'claude' && linguistCatTools.length > 0
+        ? mergeClaudeMcpServers(mcpServers, {
+          [LINGUIST_CAT_MCP_SERVER_NAME]: await createClaudeCatMcpServer(linguistCatTools),
+        })
+        : mcpServers
+      if (agentProfile.kind === 'linguist') {
+        linguistToolsetHash = hashAgentToolComposition({
+          runtime: agentRuntime,
+          toolNames: agentRuntime === 'pi'
+            ? piCustomTools.map((tool) => tool.name)
+            : linguistCatTools.map((tool) => tool.name),
+          mcpServerNames: Object.keys(
+            agentRuntime === 'claude' ? claudeMcpServers : mcpServers,
+          ),
+          ...(agentRuntime === 'claude' ? { basePreset: 'claude_code' as const } : {}),
+        })
+      }
+      if (agentRuntime === 'pi') {
+        console.log(
+          `[Agent 能力] Proma=${toolComposition.baseTools.length}, Linguist CAT=${toolComposition.overlayTools.length}`,
+        )
+      } else if (linguistCatTools.length > 0) {
+        console.log(
+          `[Agent 能力] Proma MCP=${Object.keys(mcpServers).length}, Linguist CAT=${linguistCatTools.length}`,
+        )
+      }
+      if (agentProfile.kind === 'linguist') {
+        recordLinguistRuntimeObservation(sessionId, {
+          runtime: agentRuntime,
+          // Claude SDK 不公开基础工具清单；不拿 MCP server 数冒充 Tool 数。
+          baseToolCount: agentRuntime === 'pi'
+            ? toolComposition.baseTools.length
+            : null,
+          overlayToolCount: linguistCatTools.length,
+          observedAt: new Date().toISOString(),
+        })
+      }
       const queryOptions: ClaudeAgentQueryOptions | PiAgentQueryOptions = agentRuntime === 'pi' ? {
         agentRuntime: 'pi',
         sessionId,
@@ -1724,10 +1826,8 @@ export class AgentOrchestrator {
         ...(maxTurns != null && { maxTurns }),
         permissionMode: initialPermissionMode,
         canUseTool,
-        // PB-095：项目绑定会话追加六类项目资产摘要（Style Guide/技术约束/
-        // Voice Profiles/Context 目录；普通会话与 missing 绑定为空串，fail closed）。
         systemPrompt: systemPromptAppend + buildPiAdditionalDirectoriesPrompt(allAdditionalDirectories)
-          + buildLinguistProjectAssetsPrompt(sessionMeta, getLinguistProjectService),
+          + linguistSystemPrompt,
         resumeSessionId: existingSdkSessionId,
         piAgentDir: getSdkConfigDir(),
         piSessionDir: join(getSdkConfigDir(), 'sessions'),
@@ -1796,12 +1896,12 @@ export class AgentOrchestrator {
         systemPrompt: {
           type: 'preset',
           preset: 'claude_code',
-          append: systemPromptAppend,
+          append: systemPromptAppend + linguistSystemPrompt,
         },
         resumeSessionId: existingSdkSessionId,
         // 回退后 resume：从指定消息处继续（SDK 在同一 JSONL 内创建分支）
         ...(rewindResumeAt && { resumeSessionAt: rewindResumeAt }),
-        ...(Object.keys(mcpServers).length > 0 && { mcpServers }),
+        ...(Object.keys(claudeMcpServers).length > 0 && { mcpServers: claudeMcpServers }),
         strictMcpConfig: true,
         ...(workspaceSlug && {
           plugins: [{ type: 'local' as const, path: getAgentWorkspacePath(workspaceSlug), skipMcpDiscovery: true }],
@@ -2655,15 +2755,11 @@ export class AgentOrchestrator {
     }
 
     // 0.5 从 SDK session JSONL 解析对应的 user message UUID（rewindFiles 需要）
-    let projectDir: string | undefined
-    let workspaceSlug: string | undefined
-    if (sessionMeta.workspaceId) {
-      const ws = getAgentWorkspace(sessionMeta.workspaceId)
-      if (ws) {
-        workspaceSlug = ws.slug
-        projectDir = getAgentSessionWorkspacePath(ws.slug, sessionMeta.id)
-      }
-    }
+    const executionScope = resolveAgentExecutionScope(sessionMeta)
+    const projectDir = executionScope.kind === 'home' ? undefined : executionScope.cwd
+    const workspaceSlug = executionScope.kind === 'agent-workspace'
+      ? executionScope.workspaceSlug
+      : undefined
     const userMessageUuid = resolveUserUuidFromSDK(sessionMeta.sdkSessionId, assistantMessageUuid, projectDir, sessionMeta.forkSourceSdkSessionId)
     console.log(`[Agent 编排] 回退: 解析 user uuid=${userMessageUuid || '未找到'} (assistant uuid=${assistantMessageUuid}, forkSource=${sessionMeta.forkSourceSdkSessionId ?? 'none'})`)
 

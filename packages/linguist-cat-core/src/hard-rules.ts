@@ -6,6 +6,14 @@
  * Agent explanations cannot turn a violation into a pass.
  */
 
+import {
+  TYPE,
+  parse,
+  type DateElement,
+  type MessageFormatElement,
+  type NumberElement,
+  type TimeElement,
+} from '@formatjs/icu-messageformat-parser'
 import type { Segment } from './segment'
 import {
   pairingErrors,
@@ -17,12 +25,15 @@ import type { LinguistTagProfile } from './tag-profile'
 
 export const DETERMINISTIC_HARD_RULE_CODES = {
   LOCKED_SEGMENT: 'LOCKED_SEGMENT',
+  EMPTY_TARGET: 'EMPTY_TARGET',
+  INVALID_TARGET_ENCODING: 'INVALID_TARGET_ENCODING',
   PLACEHOLDER_SIGNATURE_MISMATCH: 'PLACEHOLDER_SIGNATURE_MISMATCH',
   TAG_SIGNATURE_MISMATCH: 'TAG_SIGNATURE_MISMATCH',
   // PB-097 tag 族引擎：占位符族守恒 / 富文本族守恒 / 成对配平与嵌套
   TAG_PLACEHOLDER_FAMILY_MISMATCH: 'TAG_PLACEHOLDER_FAMILY_MISMATCH',
   TAG_FAMILY_MISMATCH: 'TAG_FAMILY_MISMATCH',
   TAG_PAIRING_MISMATCH: 'TAG_PAIRING_MISMATCH',
+  ICU_SYNTAX_INVALID: 'ICU_SYNTAX_INVALID',
   ICU_SIGNATURE_MISMATCH: 'ICU_SIGNATURE_MISMATCH',
   NEWLINE_SIGNATURE_MISMATCH: 'NEWLINE_SIGNATURE_MISMATCH',
   REQUIRED_TERMINOLOGY_MISSING: 'REQUIRED_TERMINOLOGY_MISSING',
@@ -41,6 +52,8 @@ export interface RequiredTerminologyRule {
 }
 
 export interface ForbiddenTermRule {
+  /** When present, the target ban applies only if the source contains this term. */
+  sourceTerm?: string
   term: string
   caseSensitive?: boolean
 }
@@ -120,7 +133,7 @@ function branchRows(body: string): Array<{ key: string; value: string }> {
   return rows.sort((left, right) => left.key.localeCompare(right.key))
 }
 
-function icuSignature(value: string): { signature: string[]; spans: Span[] } {
+function legacyIcuSignature(value: string): { signature: string[]; spans: Span[] } {
   const signature: string[] = []
   const spans: Span[] = []
   for (let index = 0; index < value.length; index += 1) {
@@ -135,7 +148,7 @@ function icuSignature(value: string): { signature: string[]; spans: Span[] } {
       signature.push(`${argument}:${type}:${branches.map((branch) => branch.key).join('|')}`)
       for (const branch of branches) {
         signature.push(
-          ...icuSignature(branch.value).signature.map(
+          ...legacyIcuSignature(branch.value).signature.map(
             (nested) => `${argument}/${branch.key}/${nested}`,
           ),
         )
@@ -153,6 +166,115 @@ function icuSignature(value: string): { signature: string[]; spans: Span[] } {
     }
   }
   return { signature: signature.sort(), spans }
+}
+
+interface IcuSignature {
+  signature: string[]
+  spans: Span[]
+  syntaxError?: string
+  standard: boolean
+}
+
+function hasStandardIcu(value: string): boolean {
+  return /\{[^{}]+,\s*(?:plural|select|selectordinal|number|date|time)\b/iu.test(value)
+}
+
+function styleSignature(
+  style: NumberElement['style'] | DateElement['style'] | TimeElement['style'],
+): string {
+  if (style === undefined || style === null) return ''
+  if (typeof style === 'string') return style.trim()
+  if ('tokens' in style) {
+    return style.tokens
+      .map((token) => `${token.stem}/${token.options.join('/')}`)
+      .join('|')
+  }
+  return style.pattern
+}
+
+function astSignature(
+  elements: readonly MessageFormatElement[],
+  path = 'icu',
+  nested = false,
+): string[] {
+  const signature: string[] = []
+  for (const element of elements) {
+    if (element.type === TYPE.argument) {
+      if (nested) signature.push(`${path}:argument:${element.value}`)
+      continue
+    }
+    if (
+      element.type === TYPE.number
+      || element.type === TYPE.date
+      || element.type === TYPE.time
+    ) {
+      signature.push(`${path}:${TYPE[element.type]}:${element.value}:${styleSignature(element.style)}`)
+      continue
+    }
+    if (element.type === TYPE.select) {
+      const keys = Object.keys(element.options).sort()
+      signature.push(`${path}:select:${element.value}:${keys.join('|')}`)
+      for (const key of keys) {
+        signature.push(...astSignature(element.options[key]!.value, `${path}/${element.value}/${key}`, true))
+      }
+      continue
+    }
+    if (element.type === TYPE.plural) {
+      const keys = Object.keys(element.options).sort()
+      signature.push(
+        `${path}:plural:${element.value}:${element.pluralType}:offset:${element.offset}:${keys.join('|')}`,
+      )
+      for (const key of keys) {
+        signature.push(...astSignature(element.options[key]!.value, `${path}/${element.value}/${key}`, true))
+      }
+      continue
+    }
+    if (element.type === TYPE.pound) {
+      if (nested) signature.push(`${path}:pound`)
+      continue
+    }
+    if (element.type === TYPE.tag) {
+      signature.push(...astSignature(element.children, `${path}/tag:${element.value}`, nested))
+    }
+  }
+  return signature
+}
+
+function standardIcuSignature(value: string): IcuSignature {
+  try {
+    const ast = parse(value, {
+      ignoreTag: true,
+      requiresOtherClause: true,
+      shouldParseSkeletons: true,
+      captureLocation: true,
+    })
+    const spans = ast.flatMap((element): Span[] => {
+      if (
+        element.type !== TYPE.number
+        && element.type !== TYPE.date
+        && element.type !== TYPE.time
+        && element.type !== TYPE.select
+        && element.type !== TYPE.plural
+      ) return []
+      const location = element.location
+      return location === undefined
+        ? []
+        : [{ start: location.start.offset, end: location.end.offset }]
+    })
+    return { signature: astSignature(ast).sort(), spans, standard: true }
+  } catch (error) {
+    const fallback = legacyIcuSignature(value)
+    return {
+      ...fallback,
+      syntaxError: error instanceof Error ? error.message : 'invalid ICU message',
+      standard: false,
+    }
+  }
+}
+
+function icuSignature(value: string, forceStandard = false): IcuSignature {
+  if (forceStandard || hasStandardIcu(value)) return standardIcuSignature(value)
+  return { ...legacyIcuSignature(value), standard: false }
 }
 
 function withoutSpans(value: string, spans: readonly Span[]): string {
@@ -346,10 +468,25 @@ function mismatch(
   return same(expected, actual) ? undefined : { code, message, expected, actual }
 }
 
+function hasInvalidTargetEncoding(value: string): boolean {
+  if (value.includes('\u0000')) return true
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1)
+      if (index + 1 >= value.length || next < 0xdc00 || next > 0xdfff) return true
+      index += 1
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      return true
+    }
+  }
+  return false
+}
+
 export function runDeterministicHardRules(input: DeterministicHardRuleInput): DeterministicHardRuleResult {
   const { segment, proposedTarget } = input
   const sourceIcu = icuSignature(segment.source)
-  const targetIcu = icuSignature(proposedTarget)
+  const targetIcu = icuSignature(proposedTarget, sourceIcu.standard)
   // PB-097 tag 族管线：各侧用自身 ICU span（brace-named 跳过 ICU 分支体，
   // brace-num 不跳过——ICU 内 {0} 是真实占位符，单独验不漏检）。
   const sourceTags = scanTagTokens(segment.source, {
@@ -379,6 +516,22 @@ export function runDeterministicHardRules(input: DeterministicHardRuleInput): De
       ? {
           code: DETERMINISTIC_HARD_RULE_CODES.LOCKED_SEGMENT,
           message: `Segment ${segment.id} is locked.`,
+          expected: false,
+          actual: true,
+        }
+      : undefined,
+    segment.source.trim() !== '' && proposedTarget.trim() === ''
+      ? {
+          code: DETERMINISTIC_HARD_RULE_CODES.EMPTY_TARGET,
+          message: 'Target must not be empty when source has content.',
+          expected: false,
+          actual: true,
+        }
+      : undefined,
+    hasInvalidTargetEncoding(proposedTarget)
+      ? {
+          code: DETERMINISTIC_HARD_RULE_CODES.INVALID_TARGET_ENCODING,
+          message: 'Target contains NUL or an unpaired UTF-16 surrogate.',
           expected: false,
           actual: true,
         }
@@ -414,6 +567,14 @@ export function runDeterministicHardRules(input: DeterministicHardRuleInput): De
           message: 'Paired tags are unbalanced or illegally nested in target.',
           expected: [],
           actual: targetPairErrors,
+        }
+      : undefined,
+    targetIcu.syntaxError !== undefined
+      ? {
+          code: DETERMINISTIC_HARD_RULE_CODES.ICU_SYNTAX_INVALID,
+          message: `Target ICU message is invalid: ${targetIcu.syntaxError}.`,
+          expected: true,
+          actual: false,
         }
       : undefined,
     mismatch(
@@ -459,7 +620,16 @@ export function runDeterministicHardRules(input: DeterministicHardRuleInput): De
   }
   for (const rawRule of input.forbiddenTerms ?? []) {
     const rule = typeof rawRule === 'string' ? { term: rawRule } : rawRule
-    if (rule.term.trim() && normalizedIncludes(proposedTarget, rule.term, rule.caseSensitive)) {
+    const sourceMatches = rule.sourceTerm === undefined
+      || (
+        rule.sourceTerm.trim().length > 0
+        && normalizedIncludes(segment.source, rule.sourceTerm, rule.caseSensitive)
+      )
+    if (
+      sourceMatches
+      && rule.term.trim()
+      && normalizedIncludes(proposedTarget, rule.term, rule.caseSensitive)
+    ) {
       candidates.push({
         code: DETERMINISTIC_HARD_RULE_CODES.FORBIDDEN_TERM_PRESENT,
         message: `Forbidden term is present: ${rule.term}.`,

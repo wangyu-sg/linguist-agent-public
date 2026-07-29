@@ -170,12 +170,19 @@ test('health report: healthy project passes all checks', async () => {
     await service.importAsset(project.id, { bytes: readFixture('mini_items.json'), filename: 'mini_items.json' })
     const report = service.checkProjectHealth(project.id)
     assert.equal(report.projectId, project.id)
+    assert.equal(report.kind, 'quick')
     assert.equal(report.healthy, true)
     assert.deepEqual(
       report.checks.map((c) => c.id),
       ['project_json', 'cat_db_open', 'schema_version', 'asset_sources'],
     )
     assert.ok(report.checks.every((c) => c.ok))
+    assert.deepEqual(
+      report.checks.map((c) => c.scope),
+      ['complete', 'complete', 'complete', 'sampled'],
+    )
+    assert.equal(report.checks[3]?.checkedItems, 1)
+    assert.equal(report.checks[3]?.totalItems, 1)
     assert.match(report.checks[3]?.detail ?? '', /1 checked/)
   } finally {
     service.closeAll()
@@ -206,7 +213,8 @@ test('health report: missing cat.db / corrupt project.json / tampered source blo
     assert.equal(report.healthy, false)
     assert.equal(report.checks.find((c) => c.id === 'project_json')?.ok, false)
     assert.equal(report.checks.find((c) => c.id === 'project_json')?.detail, 'STORE_INDEX_CORRUPT')
-    assert.equal(report.checks.find((c) => c.id === 'cat_db_open')?.ok, true)
+    assert.equal(report.checks.find((c) => c.id === 'cat_db_open')?.ok, false)
+    assert.equal(report.checks.find((c) => c.id === 'cat_db_open')?.detail, 'STORE_INDEX_CORRUPT')
   } finally {
     s2.closeAll()
   }
@@ -480,7 +488,7 @@ test('Prepare Delivery: E 阶段先报告阻断，全部确认后验证 SDL 状�
     const pending = db.proposals.insertPending({
       segmentId: segments[0]!.id,
       baseRevision: segments[0]!.revision,
-      proposedTarget: 'Click {0} to begin',
+      proposedTarget: segments[0]!.target,
       evidenceRefs: [],
       termRefs: [],
       warnings: [],

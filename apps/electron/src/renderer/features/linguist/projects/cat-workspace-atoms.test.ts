@@ -7,6 +7,8 @@ import {
   captureLinguistTurnContextSnapshot,
   clearQaFindingsCapability,
   clearLinguistWorkbenchUiStateAtom,
+  disposeLinguistWorkbenchAtomFamiliesAtom,
+  getLinguistWorkbenchAtomFamilyCacheSizes,
   getInvalidLinguistWorkbenchLocationPatch,
   linguistQaFindingsCapabilityAtomFamily,
   linguistTargetEditorCapabilityAtomFamily,
@@ -166,7 +168,7 @@ describe('项目级 Workbench UI 状态', () => {
         activeSegmentId: 'segment-a',
         assetNavigatorOpen: false,
         assetNavigatorWidth: 300,
-        agentRailOpen: true,
+        agentPresentation: 'full',
         agentRailWidth: 560,
         bottomDockOpen: false,
         bottomDockTab: 'qa',
@@ -176,7 +178,7 @@ describe('项目级 Workbench UI 状态', () => {
         activeSegmentId: 'segment-b',
         assetNavigatorOpen: true,
         assetNavigatorWidth: 900,
-        agentRailOpen: false,
+        agentPresentation: 'closed',
         agentRailWidth: 900,
         bottomDockOpen: true,
         bottomDockTab: 'invalid',
@@ -187,7 +189,7 @@ describe('项目级 Workbench UI 状态', () => {
         activeAssetId: 42,
         assetNavigatorOpen: 'yes',
         assetNavigatorWidth: 'wide',
-        agentRailOpen: 'yes',
+        agentPresentation: 'wide',
         agentRailWidth: 'wide',
       },
     })
@@ -198,7 +200,7 @@ describe('项目级 Workbench UI 状态', () => {
         activeSegmentId: 'segment-a',
         assetNavigatorOpen: false,
         assetNavigatorWidth: 300,
-        agentRailOpen: true,
+        agentPresentation: 'full',
         agentRailWidth: 520,
         bottomDockOpen: false,
         bottomDockTab: 'qa',
@@ -208,7 +210,7 @@ describe('项目级 Workbench UI 状态', () => {
         activeSegmentId: 'segment-b',
         assetNavigatorOpen: true,
         assetNavigatorWidth: 420,
-        agentRailOpen: false,
+        agentPresentation: 'closed',
         agentRailWidth: 520,
         bottomDockOpen: true,
         bottomDockHeight: 480,
@@ -220,7 +222,7 @@ describe('项目级 Workbench UI 状态', () => {
         activeSegmentId: 'segment-a',
         assetNavigatorOpen: false,
         assetNavigatorWidth: 300,
-        agentRailOpen: true,
+        agentPresentation: 'full',
         agentRailWidth: 520,
         bottomDockOpen: false,
         bottomDockTab: 'qa',
@@ -230,11 +232,23 @@ describe('项目级 Workbench UI 状态', () => {
         activeSegmentId: 'segment-b',
         assetNavigatorOpen: true,
         assetNavigatorWidth: 420,
-        agentRailOpen: false,
+        agentPresentation: 'closed',
         agentRailWidth: 520,
         bottomDockOpen: true,
         bottomDockHeight: 480,
       },
+    })
+  })
+
+  test('given 旧版 Rail 开合偏好 when 解析并序列化 then 迁移到 agentPresentation', () => {
+    const locations = parseLinguistWorkbenchLocations({
+      'project-a': { agentRailOpen: true },
+      'project-b': { agentRailOpen: false },
+    })
+
+    expect(serializeLinguistWorkbenchLocations(locations)).toEqual({
+      'project-a': { agentPresentation: 'rail' },
+      'project-b': { agentPresentation: 'closed' },
     })
   })
 
@@ -260,7 +274,7 @@ describe('项目级 Workbench UI 状态', () => {
     const store = createStore()
     store.set(linguistWorkbenchUiStateAtomFamily('project-b'), {
       search: '正在编辑',
-      agentRailOpen: true,
+      agentPresentation: 'rail',
       agentRailWidth: 500,
     })
 
@@ -270,7 +284,7 @@ describe('项目级 Workbench UI 状态', () => {
         activeSegmentId: 'segment-a',
         assetNavigatorOpen: false,
         assetNavigatorWidth: 300,
-        agentRailOpen: true,
+        agentPresentation: 'rail',
         agentRailWidth: 560,
         bottomDockOpen: false,
         bottomDockTab: 'qa',
@@ -279,7 +293,7 @@ describe('项目级 Workbench UI 状态', () => {
       'project-b': {
         activeAssetId: 'asset-b',
         activeSegmentId: 'segment-b',
-        agentRailOpen: false,
+        agentPresentation: 'closed',
         agentRailWidth: 360,
       },
     })
@@ -287,7 +301,7 @@ describe('项目级 Workbench UI 状态', () => {
     expect(store.get(linguistWorkbenchUiStateAtomFamily('project-a'))).toMatchObject({
       activeAssetId: 'asset-a',
       activeSegmentId: 'segment-a',
-      agentRailOpen: true,
+      agentPresentation: 'rail',
       agentRailWidth: 520,
       bottomDockOpen: false,
       bottomDockTab: 'qa',
@@ -295,7 +309,7 @@ describe('项目级 Workbench UI 状态', () => {
     })
     const projectB = store.get(linguistWorkbenchUiStateAtomFamily('project-b'))
     expect(projectB.search).toBe('正在编辑')
-    expect(projectB.agentRailOpen).toBe(true)
+    expect(projectB.agentPresentation).toBe('rail')
     expect(projectB.agentRailWidth).toBe(500)
     expect(projectB.activeAssetId).toBeUndefined()
     expect(projectB.activeSegmentId).toBeUndefined()
@@ -318,7 +332,7 @@ describe('项目级 Workbench UI 状态', () => {
       bottomDockOpen: false,
       bottomDockTab: 'qa',
       bottomDockHeight: 320,
-      agentRailOpen: false,
+      agentPresentation: 'closed',
       agentRailWidth: 500,
     })
 
@@ -335,7 +349,7 @@ describe('项目级 Workbench UI 状态', () => {
       bottomDockOpen: false,
       bottomDockTab: 'qa',
       bottomDockHeight: 320,
-      agentRailOpen: false,
+      agentPresentation: 'closed',
       agentRailWidth: 500,
     })
     const stateB = store.get(projectB)
@@ -345,7 +359,7 @@ describe('项目级 Workbench UI 状态', () => {
       search: '',
       assetNavigatorOpen: true,
       bottomDockOpen: true,
-      agentRailOpen: false,
+      agentPresentation: 'closed',
     })
     expect(stateB.activeAssetId).toBeUndefined()
     expect(stateB.activeSegmentId).toBeUndefined()
@@ -358,7 +372,7 @@ describe('项目级 Workbench UI 状态', () => {
     store.set(linguistWorkbenchUiStateAtomFamily('project-a'), {
       assetNavigatorOpen: false,
       assetNavigatorWidth: 300,
-      agentRailOpen: true,
+      agentPresentation: 'full',
       agentRailWidth: 560,
       bottomDockOpen: false,
       bottomDockTab: 'qa',
@@ -367,7 +381,7 @@ describe('项目级 Workbench UI 状态', () => {
     store.set(linguistWorkbenchUiStateAtomFamily('project-b'), {
       assetNavigatorOpen: true,
       assetNavigatorWidth: 220,
-      agentRailOpen: false,
+      agentPresentation: 'closed',
       agentRailWidth: 360,
       bottomDockOpen: true,
       bottomDockTab: 'tm',
@@ -378,7 +392,7 @@ describe('项目级 Workbench UI 状态', () => {
       'project-a': {
         assetNavigatorOpen: false,
         assetNavigatorWidth: 300,
-        agentRailOpen: true,
+        agentPresentation: 'full',
         agentRailWidth: 520,
         bottomDockOpen: false,
         bottomDockTab: 'qa',
@@ -387,7 +401,7 @@ describe('项目级 Workbench UI 状态', () => {
       'project-b': {
         assetNavigatorOpen: true,
         assetNavigatorWidth: 220,
-        agentRailOpen: false,
+        agentPresentation: 'closed',
         agentRailWidth: 360,
         bottomDockOpen: true,
         bottomDockTab: 'tm',
@@ -415,6 +429,25 @@ describe('项目级 Workbench UI 状态', () => {
       search: 'continue',
       bottomDockTab: 'context',
     })
+  })
+
+  test('given 连续打开并关闭 500 个项目 when 释放 Workbench then Atom cache 不单向增长且位置状态可恢复', () => {
+    const store = createStore()
+    const before = getLinguistWorkbenchAtomFamilyCacheSizes()
+
+    for (let index = 0; index < 500; index += 1) {
+      const projectId = `project-cache-${index}`
+      const workbenchAtom = linguistWorkbenchUiStateAtomFamily(projectId)
+      linguistTargetEditorCapabilityAtomFamily(projectId)
+      linguistQaFindingsCapabilityAtomFamily(projectId)
+      store.set(workbenchAtom, { search: `query-${index}` })
+      store.set(disposeLinguistWorkbenchAtomFamiliesAtom, projectId)
+    }
+
+    expect(getLinguistWorkbenchAtomFamilyCacheSizes()).toEqual(before)
+    expect(store.get(linguistWorkbenchUiStateAtomFamily('project-cache-499')).search)
+      .toBe('query-499')
+    store.set(disposeLinguistWorkbenchAtomFamiliesAtom, 'project-cache-499')
   })
 
   test('given 项目已有 UI 状态 when 项目被删除 then 清理该项目且不影响其他项目', () => {

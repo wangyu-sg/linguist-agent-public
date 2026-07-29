@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 
@@ -41,6 +41,10 @@ export interface TmMatchOptions {
   limit?: number
 }
 
+export interface TmMatchManyOptions extends Omit<TmMatchOptions, 'source'> {
+  sources: readonly string[]
+}
+
 export type TmMatchType = 'exact' | 'contains' | 'fuzzy'
 
 export interface TmUnitMatch extends TmUnit {
@@ -60,7 +64,7 @@ interface TmUnitRow {
 }
 
 function stableId(projectId: string, input: TmUnitImportInput): string {
-  const content = JSON.stringify([
+  return deriveStableIdV2('tmu', [
     projectId,
     input.source,
     input.target,
@@ -68,7 +72,6 @@ function stableId(projectId: string, input: TmUnitImportInput): string {
     input.targetLocale,
     input.origin ?? null,
   ])
-  return `tmu-${createHash('sha256').update(content).digest('hex').slice(0, 16)}`
 }
 
 /** Escape LIKE wildcards so query is a literal substring match. */
@@ -247,18 +250,45 @@ export class TmUnitsRepository {
   }
 
   findMatches(options: TmMatchOptions): TmUnitMatch[] {
-    const query = normalizeText(options.source)
-    const threshold = options.threshold ?? 0.6
-    const params: unknown[] = [this.projectId, options.sourceLocale]
+    return this.matchRows(
+      this.matchRowsForLocales(options.sourceLocale, options.targetLocale),
+      options.source,
+      options.threshold ?? 0.6,
+      options.limit ?? 20,
+    )
+  }
+
+  findMatchesMany(options: TmMatchManyOptions): ReadonlyMap<string, TmUnitMatch[]> {
+    const rows = this.matchRowsForLocales(options.sourceLocale, options.targetLocale)
+    return new Map(options.sources.map((source) => [
+      source,
+      this.matchRows(rows, source, options.threshold ?? 0.6, options.limit ?? 20),
+    ]))
+  }
+
+  private matchRowsForLocales(
+    sourceLocale: string,
+    targetLocale?: string,
+  ): TmUnitRow[] {
+    const params: unknown[] = [this.projectId, sourceLocale]
     let targetClause = ''
-    if (options.targetLocale !== undefined) {
+    if (targetLocale !== undefined) {
       targetClause = ' AND target_locale = ?'
-      params.push(options.targetLocale)
+      params.push(targetLocale)
     }
     // ponytail: 当前按项目与 locale 做 O(n) 扫描；数据量实测成为瓶颈时再换 FTS/倒排索引。
-    const rows = this.db.db
+    return this.db.db
       .prepare(`SELECT * FROM tm_units WHERE project_id = ? AND source_locale = ?${targetClause}`)
       .all(...params) as TmUnitRow[]
+  }
+
+  private matchRows(
+    rows: readonly TmUnitRow[],
+    source: string,
+    threshold: number,
+    limit: number,
+  ): TmUnitMatch[] {
+    const query = normalizeText(source)
     const matches: TmUnitMatch[] = []
     for (const row of rows) {
       const candidate = normalizeText(row.source)
@@ -284,6 +314,6 @@ export class TmUnitsRepository {
       || compareText(normalizeText(left.target), normalizeText(right.target))
       || compareText(left.id, right.id),
     )
-    return matches.slice(0, options.limit ?? 20)
+    return matches.slice(0, limit)
   }
 }

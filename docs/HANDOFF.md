@@ -4,91 +4,93 @@
 
 ## 交付结论
 
-当前主线是完整 Proma Agent + Chat 与 Linguist CAT Workbench 的个人 Alpha。功能路线已稳定，不需要换底座或重写前端。
+`Linguist_Agent_Optimization_Blueprint_CN.md` 的工程实现已合入 `main`。当前产品仍是：
 
-本轮收口已完成：
+```text
+完整 Proma Agent + Chat
++
+Linguist Vertical Agent Profile + CAT Core / Store / Tools / Workbench
+```
 
-- 合入另一任务的 Context DOCX 修复；
-- `LinguistProjectService` 2,063 → 986 行，内部拆为 resources / quality / delivery / contracts；
-- CAT Tool Factory 1,045 → 60 行，12 个工具按领域拆分；
-- 清理 Context DOCX、UX handoff 与 calibration 的 worktree/分支；
-- 同步 README、AGENTS、队列、Current Reality、G10、Known Limitations；
-- 更新本地 `linguist-agent-doc-sync` Skill。
-- 清除公开文档中的中文姓名署名，新增自动隐私护栏，并把净化源码同步到
-  `wangyu-sg/linguist-agent-public`；这不是公众安装包 Release。
+没有第二套 Agent Runtime、Composer、消息流、Thinking、Tool Card、权限流或 Session Store。
+
+本轮完成的主要切片：
+
+- Linguist 一等 Agent Profile、Rail/Full 同会话 Shell、原生 Session actions 与项目 CWD；
+- Profile → Role → Strategy → Project Digest → Turn Context 的版本化 Prompt 组合、降级状态和离线评估集；
+- Translation Context、Proposal Snapshot、pass/issues/abstain、Critic→QA 与 QA 事件生命周期；
+- CAT Tool 结果投影/原生 UI、15 个 Session-bound 工具、选择/缓存/Undo 预算；
+- Job/Checkpoint、幂等 mutation、State Capsule、durable outbox、运行摘要与安全 CAT undo；
+- Required/Forbidden hard gate、ICU/placeholder、Consistency plan/apply、批量查询与 QA/Consistency worker；
+- Stable ID v2、数据库身份写前校验、schema v13 Proposal Issuance/Provenance；
+- 安全导出、trace/metrics/脱敏诊断、Quick Health、worker-thread Full Integrity Scrub；
+- staging 原子备份、symlink 拒绝、故障注入、恢复 journal、回滚快照与恢复后复核。
 
 ## 当前代码基线
 
 - 分支：`main`
-- 最近生产提交：`5ac2b60d fix(smoke): follow scoped QA waiver action`
-- 最近隐私护栏提交：`ac434544 chore(privacy): enforce public identity attribution`
-- Electron 版本：`0.15.133`
-- CAT Tools 版本：`0.0.13`
-- worktree：仅 `/Users/<local>/Desktop/linguist-agent-next`
-- 公开净化快照：`e877a211`（Proma 基线 + 单个净化 Alpha 快照）
-- 公开 main 合并点：`b8ce7e0a`（保留旧公共 main 与 Proma 两侧历史）
-- 公开远端分支：只保留 `main`；历史 audit 候选与同步临时分支均已清理
+- 实现与首轮文档 HEAD：`06ab894643253f64ce79deac45a293cd5d610b2b`
+- 相对 `upstream/main`：ahead 242（安装文档提交前快照）
+- Bun：`1.3.14`
+- Electron App：`0.15.137`
+- shared：`0.1.78`
+- CAT Core / Store / Tools：`0.0.12` / `0.0.24` / `0.0.17`
+- CAT schema：`13`
+- 工作树：用户自有的两份 `electron-user-data-path*` 修改保持未暂存；本轮未改写。
+- 辅助 Codex worktree 仍保留，主线所需提交均已 cherry-pick。
 
-最终文档提交位于上述生产/验证提交之后；以 `git log -1` 为准。
+本文档提交位于上述实现 HEAD 之后；不要把文档提交 hash 当成实现自引用 hash。
 
-## 已验证
+## 干净提交态验证
+
+最终矩阵在临时 detached clean worktree 上执行，未读取或写入真实用户数据根：
 
 | 检查 | 结果 |
 |---|---|
-| 全 workspace typecheck | 11 / 11 workspace，exit 0 |
-| 根 Bun 测试 | 1,270 pass / 0 fail |
-| 公开身份隐私护栏 | 1 pass / 0 fail；候选树与可达历史扫描 0 命中 |
-| 公开镜像净化护栏 | 1 pass / 0 fail；旧 LA 私有路径与真实项目标识 0 命中 |
-| Architecture boundaries | 4 pass / 0 fail；公开路径净化只允许精确占位符替换 |
+| frozen install | Bun 1.3.14，exit 0 |
+| workspace typecheck | 11 / 11 |
+| 根 Bun 测试 | 1,320 pass / 0 fail |
+| Architecture boundaries | 4 pass / 0 fail |
 | Fusion architecture | 9 pass / 0 fail |
-| Electron Linguist nodetest | 143 / 143 |
-| CAT Core + Formats | 246 pass / 0 fail |
-| CAT Store nodetest | 139 pass / 0 fail |
-| CAT Tools nodetest | 31 / 31 |
-| Legacy Migration nodetest | 84 pass / 0 fail |
-| Packaged Agent | 12 pass / 0 fail |
-| Packaged Chat | 18 pass / 0 fail |
-| Packaged Linguist | 17 pass / 0 fail / 2 manual |
+| Electron Linguist | 164 pass / 0 fail |
+| CAT Core | 116 pass / 0 fail |
+| CAT Store | 209 pass / 0 fail |
+| CAT Tools | 39 pass / 0 fail |
+| license scan | 417 个第三方依赖；门禁通过 |
+| Electron build | 通过；CAT job 与 integrity scrub worker 均生成 |
+| runtime dependency sync | 137 个同步，25 个未安装 optional 合理跳过 |
+| smoke:pack | 未签名 macOS arm64 App 打包通过 |
+| packaged Agent / Chat / Linguist | 12 / 18 / 17 pass，均 0 fail；Linguist 另有 2 manual |
 
-完整 packaged vertical 在干净提交 `5ac2b60d` 上通过；自动覆盖状态是
-`passed`，合同覆盖仍是 `partial`，因为 Agent Stop/Retry UI、Chat→Agent
-roundtrip 和 Native Open/Save 仍是明确记录的人工/后续证据，不折算成自动通过。
+Packaged vertical 报告：
+
+- `runStatus=passed`
+- `coverageStatus=partial`
+- `app.asar` SHA-256：`f32b15263a962d1777cd8663aee89323ae65374796611a01270a74dad8aa6c9f`
+- 保持 blocked：Agent Stop/Retry packaged UI、Chat→Agent roundtrip、Native Open/Save。
+
+这证明 clean source 可构建、可打包并通过现有自动纵向路径；不等于真实 Provider、全部新功能真机操作或 Release qualification。
 
 ## 本机安装
 
-- 安装位置：`/Applications/Linguist Agent.app`
-- 版本 / build：`0.15.133`
-- `app.asar` SHA-256：`d85e40e82a5df1a9250858cf5d8bf5277a158aea24497a37fbfdb178d39312a2`
-- 从安装位置使用临时 HOME 启动通过；窗口标题为 `Linguist Agent`，Chat / Agent / Linguist 三模式均可见。
-- `/Applications/LinguistAgent.app`（无空格，版本 `2.32.7`）未被修改。
+- `/Applications/Linguist Agent.app` 已由 `0.15.134` 替换为 clean HEAD 构建的 `0.15.137`。
+- 安装版 `app.asar` SHA-256：`f32b15263a962d1777cd8663aee89323ae65374796611a01270a74dad8aa6c9f`，与 packaged vertical 产物一致。
+- 安装后使用隔离 HOME / userData 启动成功，确认 1 个主窗口后退出；随后已按真实数据环境重新打开。
+- 旧 `0.15.134` 位于废纸篓 `Linguist Agent 0.15.134 before 06ab8946.app`，可恢复。
+- `/Applications/LinguistAgent.app`（无空格的另一 App）未修改。
 
-用户确认后，既有 `apps/electron/out/mac-arm64/Linguist Agent.app` 窗口已正常
-退出；退出前确认无流式任务和未发送输入。对应的可再生打包副本已删除，回收约
-816 MB；已安装 App 和 `out/smoke` 验证报告均保留。
+## 外部状态
 
-## 用户数据边界
+- 最近核对的公开仓 GitHub Actions Run `30408252952` 仍为失败。
+- 本地已修复 SDK 平台包许可 allowlist 与 Node 24 Actions pin，并通过完整本地矩阵。
+- 用户已授权公开源码同步；当前仍未 push，因此不能声称远端 CI 已恢复绿色。
 
-- 不触碰本机真实项目（公开文档不记录其 ID）。
-- 正式数据根是 `~/.linguist-agent/`；开发根是 `~/.linguist-agent-dev/`。
-- Provider 只在「设置 → 模型配置」由用户显式从旧 Proma 导入。
-- 测试与 smoke 必须使用临时 userData。
+## 下一步只剩证据
 
-## 下一步
+1. 推送净化后的公开源码快照并核对远端 CI；
+2. 真机 IME、Native Open/Save、VoiceOver、keyboard-only、拖拽/resize；
+3. 真实 Provider/模型与真实客户格式样本；
+4. Fast / Balanced / Best 真实游戏文本盲评；
+5. 14 天连续个人日用。
 
-从 `/Applications/Linguist Agent.app` 启动已安装的 `0.15.133`，开始 14 天真实项目使用。只优先处理：
-
-1. 崩溃、数据损坏、错绑、导出、恢复等 P0；
-2. 频繁阻断翻译/审校的 P1 UX；
-3. IME、Native Save、VoiceOver、键盘与拖拽的人工证据；
-4. 真实游戏文本 Fast / Balanced / Best 盲评。
-
-不新增格式、OCR、多 Agent Team、自动模型路由、扩展市场或公众发行工作。
-
-## 仍阻断的 Gate
-
-- LF-048：IME composition + Native Save 手工验证；
-- AC-009：G10 人工产品资格；
-- AC-010：真实文本盲评；
-- AC-011：14 天连续个人日用。
-
-这些是人工/使用证据缺口，不是继续推倒架构的理由。
+通用文件撤销继续使用 Proma File Rewind；外部 MCP/程序副作用只记录，不承诺结构化回滚。不要把这些证据缺口解释为需要重写架构。
