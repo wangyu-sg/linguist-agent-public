@@ -7,6 +7,8 @@
 - 机器可读全量产物：`docs/release/sbom-full.json`（432 个第三方包，本文件
   不重复列举）
 - 扫描日期：2026-08-05
+- 快照基准：macOS arm64；其它平台仍执行完整许可门禁，但不与平台专属
+  optional 依赖快照逐字比较。
 - 扫描口径：root + `packages/*` + `apps/*` 共 12 个 workspace 的
   `dependencies` / `optionalDependencies` / `peerDependencies` 闭包，并将实际
   随包交付的 Electron framework 纳入；

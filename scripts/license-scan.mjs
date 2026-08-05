@@ -12,7 +12,8 @@
  *    查找规则解析生产依赖闭包（含传递依赖、嵌套版本）；
  * 2. 用 license-checker-rseidelsohn 对根 node_modules 全量扫描一次，取其
  *    许可元数据（能识别 LICENSE 文件级 "Custom" 专有许可）；
- * 3. 写出或核验机器可读 SBOM：docs/release/sbom-full.json；
+ * 3. 在 darwin-arm64 写出或核验机器可读 SBOM：docs/release/sbom-full.json；
+ *    其它平台仍执行完整许可门禁，但不与平台专属快照逐字比较；
  * 4. 打印许可分布 summary；
  * 5. 门禁：命中黑名单许可（强 copyleft / 非开源 / 未知）即 exit 1，
  *    第一方包与 EXCEPTIONS 中的已登记豁免除外。
@@ -29,6 +30,9 @@ const checker = require('license-checker-rseidelsohn')
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT_FILE = path.join(root, 'docs/release/sbom-full.json')
 const CHECK_ONLY = process.argv.includes('--check')
+const REFERENCE_PLATFORM = 'darwin-arm64'
+const currentPlatform = `${process.platform}-${process.arch}`
+const isReferencePlatform = currentPlatform === REFERENCE_PLATFORM
 
 /** 第一方包（本仓 workspace 包，随产品整体以 AGPL-3.0 发布，不参与第三方许可门禁） */
 const FIRST_PARTY = /^(proma|@proma\/|@linguist\/)/
@@ -202,7 +206,6 @@ for (const [key, pkg] of closure) {
     licenses: String(licenses),
     ...(meta?.repository ? { repository: meta.repository } : {}),
     ...(pkg.optional ? { optional: true } : {}),
-    path: path.relative(root, pkg.dir),
   }
 }
 
@@ -225,18 +228,22 @@ const sorted = Object.fromEntries(
   Object.entries(thirdParty).sort(([a], [b]) => a.localeCompare(b)),
 )
 const output = JSON.stringify(sorted, null, 2) + '\n'
-if (CHECK_ONLY) {
+if (CHECK_ONLY && isReferencePlatform) {
   const existing = await fs.readFile(OUT_FILE, 'utf8').catch(() => '')
   if (existing !== output) violations.push(`${path.relative(root, OUT_FILE)} => 与当前依赖闭包不一致`)
-} else {
+} else if (!CHECK_ONLY && isReferencePlatform) {
   await fs.mkdir(path.dirname(OUT_FILE), { recursive: true })
   await fs.writeFile(OUT_FILE, output)
+} else if (!CHECK_ONLY) {
+  violations.push(`${path.relative(root, OUT_FILE)} => 只能在 ${REFERENCE_PLATFORM} 生成（当前 ${currentPlatform}）`)
 }
 
 // 输出
 console.log(`扫描 workspace：${workspaceDirs.length} 个（生产依赖闭包，含传递依赖）`)
 console.log(`第三方依赖：${Object.keys(thirdParty).length} 个`)
-console.log(`SBOM ${CHECK_ONLY ? '核验目标' : '已写出'}：${path.relative(root, OUT_FILE)}`)
+console.log(isReferencePlatform
+  ? `SBOM ${CHECK_ONLY ? '核验目标' : '已写出'}：${path.relative(root, OUT_FILE)}`
+  : `SBOM 快照比较：跳过（基准 ${REFERENCE_PLATFORM}，当前 ${currentPlatform}）`)
 console.log('\n许可分布：')
 for (const [lic, count] of Object.entries(summary).sort((a, b) => b[1] - a[1])) {
   console.log(`  ${lic}: ${count}`)
@@ -257,5 +264,5 @@ if (violations.length > 0) {
   for (const v of violations) console.error(`  ${v}`)
   process.exit(1)
 }
-if (CHECK_ONLY) console.log('\nSBOM 与当前依赖闭包一致。')
+if (CHECK_ONLY && isReferencePlatform) console.log('\nSBOM 与当前依赖闭包一致。')
 console.log('\n许可门禁通过（无黑名单许可）。')
