@@ -1,12 +1,15 @@
 import * as React from 'react'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useStore } from 'jotai'
 import { BellRing, Check, ListTodo, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ActivePlanningReminder } from '@proma/shared'
 import { activePlanningRemindersAtom, planningSelectedTodoIdAtom, planningTabAtom } from '@/atoms/planning-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
+import { appModeAtom } from '@/atoms/app-mode'
 import { notificationsEnabledAtom, notificationSoundEnabledAtom, notificationSoundsAtom, playNotificationSoundForType } from '@/atoms/notifications'
 import { Button } from '@/components/ui/button'
+
+type JotaiStore = ReturnType<typeof useStore>
 
 function formatTriggerTime(timestamp: number): string {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -20,12 +23,20 @@ function mergeReminders(current: ActivePlanningReminder[], incoming: ActivePlann
   return [...items.values()].sort((a, b) => (a.snoozedUntil ?? a.triggerAt) - (b.snoozedUntil ?? b.triggerAt))
 }
 
-/** 全局常驻提醒条。未确认提醒从 SQLite 恢复，不依赖一次性 toast 生命周期。 */
+/**
+ * 提醒条是全局入口；Linguist 不渲染 PlanningView，必须先回到可承载规划中心的 Agent 模式。
+ */
+export function openPlanningTodoFromReminder(store: JotaiStore, todoId: string): void {
+  store.set(planningTabAtom, 'todos')
+  store.set(planningSelectedTodoIdAtom, todoId)
+  store.set(appModeAtom, 'agent')
+  store.set(activeViewAtom, 'planning')
+}
+
+/** 全局常驻提醒条。未确认提醒从持久化存储恢复，不依赖一次性 toast 生命周期。 */
 export function PlanningReminderRail({ playSound = true }: { playSound?: boolean } = {}): React.ReactElement | null {
+  const store = useStore()
   const [reminders, setReminders] = useAtom(activePlanningRemindersAtom)
-  const setActiveView = useSetAtom(activeViewAtom)
-  const setPlanningTab = useSetAtom(planningTabAtom)
-  const setSelectedTodoId = useSetAtom(planningSelectedTodoIdAtom)
   const notificationsEnabled = useAtomValue(notificationsEnabledAtom)
   const soundEnabled = useAtomValue(notificationSoundEnabledAtom)
   const sounds = useAtomValue(notificationSoundsAtom)
@@ -69,9 +80,7 @@ export function PlanningReminderRail({ playSound = true }: { playSound?: boolean
     }
   }
   const openTodo = (reminder: ActivePlanningReminder): void => {
-    setPlanningTab('todos')
-    setSelectedTodoId(reminder.targetId)
-    setActiveView('planning')
+    openPlanningTodoFromReminder(store, reminder.targetId)
   }
   const snooze = async (id: string, minutes: number) => {
     try {

@@ -49,7 +49,7 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
       {step === 'welcome' && (
         <>
           <div className="mb-12 text-center">
-            <h1 className="text-4xl font-bold mb-4">欢迎使用 Proma</h1>
+            <h1 className="text-4xl font-bold mb-4">欢迎使用 Linguist Agent</h1>
             <p className="text-lg text-muted-foreground">
               下一代桌面 AI 软件，让通用 Agent 触手可及
             </p>
@@ -67,13 +67,13 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-foreground">查看使用教程</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    了解 Proma 的全部功能和使用技巧
+                    了解 Linguist Agent 的全部功能和使用技巧
                   </p>
                 </div>
               </button>
 
               <p className="text-sm text-muted-foreground pt-2">
-                自己或身边的人已经在用 Proma？直接导入现有配置
+                自己或身边的人已经在用 Linguist Agent？直接导入现有配置
               </p>
 
               <div className="grid grid-cols-2 gap-3">

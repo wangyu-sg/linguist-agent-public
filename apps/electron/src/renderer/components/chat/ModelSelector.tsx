@@ -293,6 +293,7 @@ export function ModelSelector({
             <Search className="size-5 text-muted-foreground/60 flex-shrink-0" />
             <input
               type="text"
+              aria-label="搜索模型"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleSearchKeyDown}

@@ -13,13 +13,21 @@ import { useAtom, useSetAtom } from 'jotai'
 import { Shield, ShieldAlert, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { allPendingPermissionRequestsAtom, agentStreamingStatesAtom, finalizeStreamingActivities } from '@/atoms/agent-atoms'
+import { summarizePermissionScope } from './permission-scope'
 import type { DangerLevel } from '@proma/shared'
 
 /** 危险等级对应的图标颜色 */
 const DANGER_ICON_STYLES: Record<DangerLevel, string> = {
-  safe: 'text-green-500',
+  safe: 'text-success',
   normal: 'text-primary',
-  dangerous: 'text-amber-500',
+  dangerous: 'text-warning',
+}
+
+/** 危险等级文字徽章（不只靠图标颜色传达风险） */
+const DANGER_BADGES: Record<DangerLevel, { label: string; className: string }> = {
+  safe: { label: '安全', className: 'bg-success/10 text-success' },
+  normal: { label: '需确认', className: 'bg-muted text-muted-foreground' },
+  dangerous: { label: '危险', className: 'bg-warning/15 text-warning' },
 }
 
 /** 解析工具显示名称（MCP 工具显示 server / tool） */
@@ -87,8 +95,17 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
   if (!request) return null
 
   const iconColor = DANGER_ICON_STYLES[request.dangerLevel]
+  const dangerBadge = DANGER_BADGES[request.dangerLevel]
   const isDangerous = request.dangerLevel === 'dangerous'
   const IconComponent = isDangerous ? ShieldAlert : Shield
+
+  // 作用域摘要：command 已有代码块展示，不重复；
+  // description 已在下方正文展示（无 sdkTitle 且 toolInput 为空）时也不重复
+  const scope = summarizePermissionScope(request)
+  const descriptionShownAsBody = !request.command && !request.sdkTitle && Object.keys(request.toolInput).length === 0
+  const showScope = scope != null
+    && scope.kind !== 'command'
+    && !(scope.kind === 'other' && descriptionShownAsBody)
 
   /** 响应权限请求 */
   const respond = async (behavior: 'allow' | 'deny', alwaysAllow = false): Promise<void> => {
@@ -121,7 +138,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
 
   return (
     <div
-      className="mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200"
+      className="rounded-xl border border-border/60 bg-card overflow-hidden animate-in slide-in-from-bottom-2 duration-200"
     >
       {/* 头部 */}
       <div className="flex items-center justify-between px-3 py-2">
@@ -129,6 +146,9 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           <IconComponent className={`size-4 ${iconColor}`} />
           <span className="text-sm font-medium">
             {isDangerous ? '危险操作需要确认' : '需要确认'}
+          </span>
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${dangerBadge.className}`}>
+            {dangerBadge.label}
           </span>
           {requests.length > 1 && (
             <span className="text-xs text-muted-foreground">
@@ -160,6 +180,19 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
         {/* SDK 详细描述（与标题不同时才展示） */}
         {request.sdkDescription && request.sdkDescription !== request.sdkTitle && (
           <p className="text-xs text-muted-foreground">{request.sdkDescription}</p>
+        )}
+        {/* 作用域摘要（command 已有代码块、description 已在正文展示时不重复） */}
+        {showScope && scope && (
+          <p className="text-xs text-muted-foreground truncate" title={scope.detail ? `${scope.primary} · ${scope.detail}` : scope.primary}>
+            <span className="font-mono">{scope.primary}</span>
+            {scope.detail && (
+              <span className="text-muted-foreground/60"> · {scope.detail}</span>
+            )}
+          </p>
+        )}
+        {/* SDK 决策原因（有值才展示） */}
+        {request.decisionReason && (
+          <p className="text-[11px] text-muted-foreground/70">{request.decisionReason}</p>
         )}
         {/* Bash 命令：始终展示代码块 */}
         {request.command ? (

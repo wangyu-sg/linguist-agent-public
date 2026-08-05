@@ -1,7 +1,7 @@
 /**
  * SidePanel — Agent 侧面板容器
  *
- * 直接展示文件浏览器，默认打开状态。
+ * 展示 Agent 的文件/改动/问答侧面板；嵌入式 Host 可限制为 chat-only，默认打开状态。
  * 切换按钮在面板关闭时显示活动指示点。
  */
 
@@ -21,6 +21,7 @@ import { FileBrowser, FileDropZone, FileTypeIcon, FileSearchBar, computeRevealAn
 import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { ChatView } from '@/components/chat/ChatView'
+import { DeliverablesSection } from '@/features/linguist/projects/DeliverablesSection'
 import {
   agentSidePanelOpenAtom,
   agentFileSourceFilterMapAtom,
@@ -66,10 +67,12 @@ interface SidePanelProps {
   sessionPath: string | null
   activeTab: AgentSidePanelTab
   onTabChange: (tab: AgentSidePanelTab) => void
+  /** 嵌入式 Host 只开放 Companion Chat 时隐藏 Files / Changes。 */
+  chatOnly?: boolean
   width?: number
 }
 
-export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, width = 280 }: SidePanelProps): React.ReactElement {
+export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chatOnly = false, width = 280 }: SidePanelProps): React.ReactElement {
   // per-session 侧面板状态（默认打开）
   const [isOpen, setIsOpen] = useAtom(agentSidePanelOpenAtom)
   const isWindows = React.useMemo(() => detectIsWindows(), [])
@@ -420,7 +423,9 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   const sideChatMap = useAtomValue(agentSideChatMapAtom)
   const setSideChatMap = useSetAtom(agentSideChatMapAtom)
   const sideChatConversationId = sideChatMap.get(sessionId) ?? null
-  const effectiveActiveTab: AgentSidePanelTab = activeTab === 'chat' && !sideChatConversationId
+  const effectiveActiveTab: AgentSidePanelTab = chatOnly
+    ? 'chat'
+    : activeTab === 'chat' && !sideChatConversationId
     ? 'files'
     : activeTab
 
@@ -461,7 +466,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
             onTabChange={onTabChange}
             onClose={() => setIsOpen(false)}
             onCloseChat={handleCloseChatTab}
-            showChatTab={Boolean(sideChatConversationId)}
+            showChatTab={chatOnly || Boolean(sideChatConversationId)}
+            chatOnly={chatOnly}
             isWindows={isWindows}
           />
 
@@ -542,6 +548,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
                     <div className="mb-1.5 ml-4 border-l-2 border-primary/40 pl-2 text-[11px] leading-4 text-foreground/75">
                       支持拖拽文件或文件夹到输入框，实现引用
                     </div>
+                    {/* 绑定 Linguist 项目时才由组件实际渲染；保持在统一 Files 宿主内。 */}
+                    {showSessionFiles && <DeliverablesSection sessionId={sessionId} />}
                     {showProjectFiles && wsAttachedFiles.length > 0 && (
                       <AttachedFilesSection
                         scope="project"

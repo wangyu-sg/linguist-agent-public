@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import * as os from 'node:os'
 import { join } from 'node:path'
 import { createStableDingTalkBotId } from './dingtalk-bot-identity'
+import { electronMock, resetElectronMock } from './test/electron-mock'
 
 type DingTalkConfigModule = typeof import('./dingtalk-config')
 type ConfigPathsModule = typeof import('./config-paths')
@@ -13,17 +14,7 @@ let tempHome: string
 const originalHome = process.env.HOME
 const originalPromaDev = process.env.PROMA_DEV
 
-mock.module('electron', () => ({
-  app: {
-    isPackaged: true,
-    getPath: () => join(process.env.HOME ?? tempHome, 'Library', 'Application Support'),
-  },
-  safeStorage: {
-    isEncryptionAvailable: () => false,
-    encryptString: (value: string) => Buffer.from(value),
-    decryptString: (value: Buffer) => value.toString('utf-8'),
-  },
-}))
+mock.module('electron', () => electronMock)
 
 mock.module('node:os', () => ({
   ...os,
@@ -39,8 +30,9 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
-  rmSync(join(tempHome, '.proma'), { recursive: true, force: true })
-  mkdirSync(join(tempHome, '.proma'), { recursive: true })
+  rmSync(join(tempHome, '.linguist-agent'), { recursive: true, force: true })
+  mkdirSync(join(tempHome, '.linguist-agent'), { recursive: true })
+  resetElectronMock()
 })
 
 afterAll(() => {

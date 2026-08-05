@@ -1,0 +1,128 @@
+import type {
+  AgentToolResult,
+  ToolDefinition,
+} from '@earendil-works/pi-coding-agent'
+import type {
+  LinguistGenerationProvenance,
+  ProposalIssuanceInput,
+  Segment,
+} from '@linguist/cat-core'
+import type { TSchema } from 'typebox'
+import type {
+  CatSegmentListItem,
+  LinguistCatToolMutation,
+  LinguistCatToolName,
+  LinguistCatToolsDeps,
+  ResolvedLinguistCatProject,
+} from './types'
+
+export const defineTool = <
+  TParams extends TSchema,
+  TDetails = unknown,
+  TState = unknown,
+>(
+  tool: ToolDefinition<TParams, TDetails, TState>,
+) => tool
+
+function summarizeToolResult(details: object): string {
+  const fields = Object.entries(details).flatMap(([key, value]) => {
+    if (typeof value === 'number' || typeof value === 'boolean') return [`${key}=${String(value)}`]
+    if (Array.isArray(value)) return [`${key}=${value.length}`]
+    return []
+  })
+  return `CAT tool result${fields.length > 0 ? `: ${fields.join(', ')}` : ''}. Structured data is available in details.`
+}
+
+/** 导航元数据只携带首个句段锚点；content 保持短摘要，不复制 details。 */
+export function toolResult<TDetails extends object>(
+  dto: TDetails,
+  projectId?: string,
+  segmentIds?: readonly string[],
+): AgentToolResult<TDetails> {
+  const details: TDetails = projectId === undefined
+    ? dto
+    : {
+        ...dto,
+        projectId,
+        ...(segmentIds?.[0] !== undefined
+          ? { segmentId: segmentIds[0] }
+          : {}),
+      }
+  return {
+    content: [{
+      type: 'text',
+      text: summarizeToolResult(details),
+    }],
+    details,
+  }
+}
+
+export function toSegmentItem(segment: Segment): CatSegmentListItem {
+  return {
+    segmentId: segment.id as string,
+    id: segment.id as string,
+    assetId: segment.assetId as string,
+    ordinal: segment.ordinal,
+    originalOrdinal: segment.ordinal + 1,
+    ...(segment.key !== undefined ? { key: segment.key } : {}),
+    status: segment.status,
+    locked: segment.locked,
+    revision: segment.revision,
+    source: segment.source,
+    target: segment.target,
+  }
+}
+
+export interface CatToolRuntime {
+  deps: LinguistCatToolsDeps
+  resolveBoundProject: (
+    toolName: LinguistCatToolName,
+    toolCallId: string,
+  ) => ResolvedLinguistCatProject
+  notifyMutation: (mutation: LinguistCatToolMutation) => void
+  proposalProvenance: (
+    toolCallId: string,
+  ) => ProposalIssuanceInput & { toolCallId: string; runId: string }
+}
+
+/** 把宿主 authority 与通知策略集中在一处，具体 Tool 只实现领域行为。 */
+export function createCatToolRuntime(
+  deps: LinguistCatToolsDeps,
+): CatToolRuntime {
+  const proposalProvenance = (
+    toolCallId: string,
+  ): ProposalIssuanceInput & { toolCallId: string; runId: string } => {
+    const provided: LinguistGenerationProvenance = deps.generationProvenance?.(toolCallId) ?? {}
+    return {
+      ...provided,
+      ...(provided.sessionId === undefined && deps.sessionId !== undefined
+        ? { sessionId: deps.sessionId }
+        : {}),
+      ...(provided.modelId === undefined && deps.modelId !== undefined
+        ? { modelId: deps.modelId }
+        : {}),
+      toolCallId,
+      runId:
+        provided.runId
+        ?? (deps.sessionId === undefined
+          ? `tool:${toolCallId}`
+          : `run:${deps.sessionId}:${toolCallId}`),
+    }
+  }
+  return {
+    deps,
+    resolveBoundProject(toolName, toolCallId) {
+      const resolved = deps.resolveProject({ toolName, toolCallId })
+      if (resolved instanceof Error) throw resolved
+      return resolved
+    },
+    notifyMutation(mutation) {
+      try {
+        deps.onMutation?.(mutation)
+      } catch {
+        // 写入已经提交；通知失败不能伪装成失败并诱发模型重复写。
+      }
+    },
+    proposalProvenance,
+  }
+}

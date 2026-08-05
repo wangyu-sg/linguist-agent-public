@@ -101,6 +101,8 @@ function createPlanningWindow(): BrowserWindow {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
     },
     ...titleBarOptions,
   })

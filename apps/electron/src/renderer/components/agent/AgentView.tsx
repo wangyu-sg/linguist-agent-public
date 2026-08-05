@@ -21,6 +21,14 @@ import { Box, CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles,
 import { AgentMessages } from './AgentMessages'
 import { AgentHeader } from './AgentHeader'
 import { AgentMessageQueue } from './AgentMessageQueue'
+import {
+  DEFAULT_AGENT_HOST_CAPABILITIES,
+  type AgentHostCapabilities,
+} from '@/host/contracts'
+import {
+  ComposerContextChips,
+  type ComposerContextChip,
+} from '@/features/linguist/composer/ComposerContextChips'
 import { ContextUsageBadge } from './ContextUsageBadge'
 import { PermissionBanner } from './PermissionBanner'
 import { PermissionModeSelector } from './PermissionModeSelector'
@@ -88,6 +96,7 @@ import {
   setSessionMessagesCache,
   agentDiffRefreshVersionAtom,
   agentSessionsAtom,
+  agentLinguistTurnContextCaptureAtom,
   agentAttachedDirectoriesMapAtom,
   agentAttachedFilesMapAtom,
   workspaceAttachedDirectoriesMapAtom,
@@ -106,7 +115,7 @@ import {
   allPendingExitPlanRequestsAtom,
   finalizeStreamingActivities,
 } from '@/atoms/agent-atoms'
-import type { AgentContextStatus } from '@/atoms/agent-atoms'
+import type { AgentContextStatus, AgentPendingPrompt } from '@/atoms/agent-atoms'
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { longTextPasteAsAttachmentEnabledAtom } from '@/atoms/ui-preferences'
 import { channelsAtom } from '@/atoms/chat-atoms'
@@ -116,6 +125,8 @@ import { AgentSessionProvider } from '@/contexts/session-context'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { sendWithCmdEnterAtom } from '@/atoms/shortcut-atoms'
 import { useOpenPreview } from '@/components/diff/preview-opener'
+import { linguistSessionBindingsAtom } from '@/features/linguist/session-binding/useLinguistSessionBinding'
+import { isLinguistSessionReadOnly } from '@/features/linguist/session-binding/binding-utils'
 import type { AgentRuntime, AgentSendInput, AgentPendingFile, AgentThinkingLevel, FileDialogLargeFile, FileDialogResult, ModelOption, ReasoningCapability, SDKMessage, SDKUserMessage, ProviderType } from '@proma/shared'
 import { inferAgentSdkContextWindow, inferContextWindow, inferReasoningTransport, isCodexFastModeSupportedModel, MAX_ATTACHMENT_SIZE, normalizeReasoningCapabilityLevel, normalizeReasoningLevel, resolveReasoningCapability, resolveReasoningProfile } from '@proma/shared'
 import { fileToBase64, formatFileNames, getFileParentPath } from '@/lib/file-utils'
@@ -154,7 +165,12 @@ interface PreparedAgentAttachment {
   additionalDirectories: string[]
 }
 
-function createUserSDKMessage(text: string, uuid?: string, createdAt = Date.now()): SDKMessage {
+function createUserSDKMessage(
+  text: string,
+  uuid?: string,
+  createdAt = Date.now(),
+  linguistContext?: AgentQueuedMessage['linguistContext'],
+): OptimisticSDKUserMessage {
   const message: OptimisticSDKUserMessage = {
     type: 'user',
     uuid,
@@ -163,8 +179,36 @@ function createUserSDKMessage(text: string, uuid?: string, createdAt = Date.now(
     },
     parent_tool_use_id: null,
     _createdAt: createdAt,
+    ...(linguistContext ? { linguistContext } : {}),
   }
   return message
+}
+
+export interface AgentPendingPromptTurn {
+  optimisticMessage: SDKUserMessage
+  sendInput: AgentSendInput
+}
+
+export function buildAgentPendingPromptTurn(
+  pendingPrompt: AgentPendingPrompt,
+  baseInput: Omit<AgentSendInput, 'userMessage' | 'linguistContext'>,
+  createdAt: number,
+): AgentPendingPromptTurn {
+  return {
+    optimisticMessage: createUserSDKMessage(
+      pendingPrompt.message,
+      undefined,
+      createdAt,
+      pendingPrompt.linguistContext,
+    ),
+    sendInput: {
+      ...baseInput,
+      userMessage: pendingPrompt.message,
+      ...(pendingPrompt.linguistContext
+        ? { linguistContext: pendingPrompt.linguistContext }
+        : {}),
+    },
+  }
 }
 
 function resolveRunContextWindow(
@@ -256,6 +300,7 @@ function normalizeOpenAIThinkingLevel(
 interface CodexThinkingConfig {
   thinkingLevel: AgentThinkingLevel
   levels: readonly OpenAIThinkingLevel[]
+  disabled: boolean
   onThinkingLevelChange: (level: AgentThinkingLevel) => void
 }
 
@@ -311,6 +356,9 @@ function AgentThinkingPopover({ agentThinking, onToggle, codexConfig }: AgentThi
           onClick={handleButtonClick}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          disabled={codexConfig?.disabled}
+          aria-label={isEnabled ? '关闭思考模式' : '开启思考模式'}
+          aria-pressed={isEnabled}
         >
           <Brain className="size-5" />
         </Button>
@@ -340,6 +388,7 @@ function AgentThinkingPopover({ agentThinking, onToggle, codexConfig }: AgentThi
                   min={0}
                   max={thinkingLevels.length - 1}
                   step={1}
+                  disabled={codexConfig.disabled}
                   aria-label="思考深度"
                 />
                 <div className="flex justify-between text-[10px] text-muted-foreground">
@@ -424,7 +473,7 @@ function AgentRuntimeSelector({ runtime, onChange }: AgentRuntimeSelectorProps):
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-[240px]">
           <p className="font-medium">{current.description}</p>
-          {current.notice && <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{current.notice}</p>}
+          {current.notice && <p className="mt-0.5 text-xs text-warning">{current.notice}</p>}
           <p className="mt-0.5 text-xs text-muted-foreground">切换当前会话下一轮使用的内核</p>
         </TooltipContent>
       </Tooltip>
@@ -460,7 +509,7 @@ function AgentRuntimeSelector({ runtime, onChange }: AgentRuntimeSelectorProps):
                           className={cn(
                             'rounded-sm px-1 py-px text-[10px] font-medium leading-tight',
                             option.badgeTone === 'deprecated'
-                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                              ? 'bg-warning-soft text-warning-foreground'
                               : 'bg-primary/10 text-primary'
                           )}
                         >
@@ -472,7 +521,7 @@ function AgentRuntimeSelector({ runtime, onChange }: AgentRuntimeSelectorProps):
                       {option.description}
                     </div>
                     {option.notice && (
-                      <div className="mt-0.5 whitespace-normal text-[11px] font-normal leading-snug text-amber-600 dark:text-amber-400">
+                      <div className="mt-0.5 whitespace-normal text-[11px] font-normal leading-snug text-warning">
                         {option.notice}
                       </div>
                     )}
@@ -488,7 +537,21 @@ function AgentRuntimeSelector({ runtime, onChange }: AgentRuntimeSelectorProps):
   )
 }
 
-export function AgentView({ sessionId }: { sessionId: string }): React.ReactElement {
+export interface AgentViewProps {
+  sessionId: string
+  presentation?: 'full' | 'rail'
+  contextSummary?: readonly ComposerContextChip[]
+  /** 嵌入式宿主的已验证能力；普通 Agent 页面保持原有完整能力。 */
+  hostCapabilities?: AgentHostCapabilities
+}
+
+export function AgentView({
+  sessionId,
+  presentation = 'full',
+  contextSummary = [],
+  hostCapabilities = DEFAULT_AGENT_HOST_CAPABILITIES,
+}: AgentViewProps): React.ReactElement {
+  const compact = presentation === 'rail'
   const [persistedSDKMessages, setPersistedSDKMessages] = React.useState<SDKMessage[]>([])
   const persistedSDKMessagesRef = React.useRef<SDKMessage[]>([])
   persistedSDKMessagesRef.current = persistedSDKMessages
@@ -517,6 +580,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const [defaultChannelId, setDefaultChannelId] = useAtom(agentChannelIdAtom)
   const [defaultModelId, setDefaultModelId] = useAtom(agentModelIdAtom)
   const sessions = useAtomValue(agentSessionsAtom)
+  const captureLinguistTurnContext = useAtomValue(agentLinguistTurnContextCaptureAtom)
   const planningGroups = useAtomValue(todoPlanningGroupsAtom)
   const [todoDialogOpen, setTodoDialogOpen] = React.useState(false)
   const [todoDraftTitle, setTodoDraftTitle] = React.useState('')
@@ -532,6 +596,11 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const sessionMeta = React.useMemo(
     () => sessions.find((s) => s.id === sessionId),
     [sessions, sessionId],
+  )
+  const linguistBindings = useAtomValue(linguistSessionBindingsAtom)
+  const linguistReadOnly = isLinguistSessionReadOnly(
+    sessionMeta,
+    linguistBindings[sessionId],
   )
   const sessionMetaChannelId = sessionMeta?.channelId
   const sessionMetaModelId = sessionMeta?.modelId
@@ -608,6 +677,18 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const permissionMode = permissionModeMap.get(sessionId) ?? persistedPermissionMode ?? defaultPermissionMode
   const isPermissionPlanMode = permissionMode === 'plan'
   const store = useStore()
+  const captureTurnContext = React.useCallback(() => {
+    const projectId = sessionMeta?.linguistProjectId
+    if (!projectId) return undefined
+    if (!captureLinguistTurnContext) return undefined
+    const snapshot = captureLinguistTurnContext(projectId)
+    if (snapshot.selectionTruncated) {
+      toast.info('已选片段超过上下文上限', {
+        description: `本轮仅携带前 ${snapshot.context.selectedSegmentIds.length} 个片段。`,
+      })
+    }
+    return snapshot.context
+  }, [captureLinguistTurnContext, sessionMeta?.linguistProjectId])
   const currentQuotedSelection = useAtomValue(currentQuotedSelectionAtom)
   const setQuotedSelectionMap = useSetAtom(quotedSelectionMapAtom)
   const openPreview = useOpenPreview()
@@ -1040,7 +1121,9 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     // 气泡显示用原文 text（保留 /skill:、#mcp:、&session:、&todo: 和 &calendar_event: 语法），
     // 让 message.tsx 的 remarkMentions 立即渲染出引用芯片；
     // 剥离后的 sdkText 仅用于传给 SDK，不作为展示文本。
-    appendLiveUserMessage(createUserSDKMessage(rawText, message.id, Date.now()))
+    appendLiveUserMessage(
+      createUserSDKMessage(rawText, message.id, Date.now(), message.linguistContext),
+    )
 
     try {
       await window.electronAPI.queueAgentMessage({
@@ -1052,6 +1135,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         ...(mentions.mentionedSkills.length > 0 && { mentionedSkills: mentions.mentionedSkills }),
         ...(mentions.mentionedMcpServers.length > 0 && { mentionedMcpServers: mentions.mentionedMcpServers }),
         ...(mentions.mentionedSessionIds.length > 0 && { mentionedSessionIds: mentions.mentionedSessionIds }),
+        ...(message.linguistContext && { linguistContext: message.linguistContext }),
         ...(mentions.mentionedTodoIds.length > 0 && { mentionedTodoIds: mentions.mentionedTodoIds }),
         ...(mentions.mentionedCalendarEventIds.length > 0 && { mentionedCalendarEventIds: mentions.mentionedCalendarEventIds }),
       })
@@ -1067,6 +1151,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     mentions: ReturnType<typeof parseQueuedMessageMentions>,
     channelId: string,
     queuedAdditionalDirectories: string[] = [],
+    linguistContext?: AgentQueuedMessage['linguistContext'],
   ): Promise<void> => {
     const streamStartedAt = Date.now()
     const additionalDirectoriesForRun = createBaseAdditionalDirectories()
@@ -1088,7 +1173,9 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       return map
     })
 
-    appendOptimisticPersistedMessage(createUserSDKMessage(displayText, undefined, streamStartedAt))
+    appendOptimisticPersistedMessage(
+      createUserSDKMessage(displayText, undefined, streamStartedAt, linguistContext),
+    )
 
     try {
       await window.electronAPI.sendAgentMessage({
@@ -1109,6 +1196,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         ...(mentions.mentionedSkills.length > 0 && { mentionedSkills: mentions.mentionedSkills }),
         ...(mentions.mentionedMcpServers.length > 0 && { mentionedMcpServers: mentions.mentionedMcpServers }),
         ...(mentions.mentionedSessionIds.length > 0 && { mentionedSessionIds: mentions.mentionedSessionIds }),
+        ...(linguistContext && { linguistContext }),
         ...(mentions.mentionedTodoIds.length > 0 && { mentionedTodoIds: mentions.mentionedTodoIds }),
         ...(mentions.mentionedCalendarEventIds.length > 0 && { mentionedCalendarEventIds: mentions.mentionedCalendarEventIds }),
       })
@@ -1163,7 +1251,14 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       } catch (error) {
         if (isStaleAgentQueueError(error)) {
           console.warn('[AgentView] 检测到陈旧的 Agent 追加通道，改为启动新一轮运行:', error)
-          await startQueuedMessageRun(payload.rawText, payload.sdkText, payload.mentions, agentChannelId, message.additionalDirectories)
+          await startQueuedMessageRun(
+            payload.rawText,
+            payload.sdkText,
+            payload.mentions,
+            agentChannelId,
+            message.additionalDirectories,
+            message.linguistContext,
+          )
           return
         }
         throw error
@@ -1171,7 +1266,14 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       return
     }
 
-    await startQueuedMessageRun(payload.rawText, payload.sdkText, payload.mentions, agentChannelId, message.additionalDirectories)
+    await startQueuedMessageRun(
+      payload.rawText,
+      payload.sdkText,
+      payload.mentions,
+      agentChannelId,
+      message.additionalDirectories,
+      message.linguistContext,
+    )
   }, [
     agentChannelId,
     backgroundWaiting,
@@ -1326,9 +1428,10 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     if (pendingPrompt.sessionId !== sessionId) return
     if (!agentChannelId || streaming) return
 
-    // 快照当前上下文
+    // 快照 pending 信封；项目上下文已在触发动作点击时冻结。
     const snapshot = {
       message: pendingPrompt.message,
+      linguistContext: pendingPrompt.linguistContext,
       // Agent 侧使用解码后的 SDK 文本（@file 路径还原为真实路径），
       // 展示/持久化保留编码原文（remarkMentions 解码显示）。
       sdkMessage: parseQueuedMessageMentions(pendingPrompt.message).cleanedText,
@@ -1358,7 +1461,6 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         return map
       })
 
-      // 乐观更新：SDKMessage 格式（Phase 4）
       const tempUserSDKMsg: SDKMessage = {
         type: 'user',
         message: {
@@ -1366,6 +1468,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         },
         parent_tool_use_id: null,
         _createdAt: Date.now(),
+        ...(snapshot.linguistContext ? { linguistContext: snapshot.linguistContext } : {}),
       } as unknown as SDKMessage
       appendOptimisticPersistedMessage(tempUserSDKMsg)
 
@@ -1386,6 +1489,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         ...(snapshot.mentionedTodoIds && snapshot.mentionedTodoIds.length > 0 && {
           mentionedTodoIds: snapshot.mentionedTodoIds,
         }),
+        ...(snapshot.linguistContext && { linguistContext: snapshot.linguistContext }),
       }
       window.electronAPI.sendAgentMessage(input).catch((error) => {
         console.error('[AgentView] 自动发送配置消息失败:', error)
@@ -2208,6 +2312,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       })
       return
     }
+    const linguistContext = captureTurnContext()
     const additionalDirectoriesForRun = createBaseAdditionalDirectories()
 
     if (streaming) {
@@ -2220,13 +2325,16 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       const quotedSelection = consumeQuotedSelection()
       setQueuedMessages((prev) => [
         ...prev,
-        createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, attachmentContext
-          ? {
+        createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, {
+          ...(attachmentContext
+            ? {
               fileReferenceBlock: attachmentContext.referenceBlock,
               attachments: attachmentContext.attachments,
               additionalDirectories: attachmentContext.additionalDirectories,
             }
-          : undefined),
+            : {}),
+          ...(linguistContext ? { linguistContext } : {}),
+        }),
       ])
       if (overrideText === undefined) {
         setInputContent('')
@@ -2250,13 +2358,16 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       if (pendingFilesSnapshot.length > 0 && !attachmentContext) return
 
       const quotedSelection = consumeQuotedSelection()
-      const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, attachmentContext
-        ? {
+      const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, {
+        ...(attachmentContext
+          ? {
             fileReferenceBlock: attachmentContext.referenceBlock,
             attachments: attachmentContext.attachments,
             additionalDirectories: attachmentContext.additionalDirectories,
           }
-        : undefined)
+          : {}),
+        ...(linguistContext ? { linguistContext } : {}),
+      })
       if (overrideText === undefined) {
         setInputContent('')
         setInputHtmlContent('')
@@ -2372,6 +2483,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       },
       parent_tool_use_id: null,
       _createdAt: Date.now(),
+      ...(linguistContext ? { linguistContext } : {}),
     } as unknown as SDKMessage
     appendOptimisticPersistedMessage(tempUserSDKMsg)
 
@@ -2389,6 +2501,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       ...(mentions.mentionedSkills.length > 0 && { mentionedSkills: mentions.mentionedSkills }),
       ...(mentions.mentionedMcpServers.length > 0 && { mentionedMcpServers: mentions.mentionedMcpServers }),
       ...(mentions.mentionedSessionIds.length > 0 && { mentionedSessionIds: mentions.mentionedSessionIds }),
+      ...(linguistContext && { linguistContext }),
       ...(mentions.mentionedTodoIds.length > 0 && { mentionedTodoIds: mentions.mentionedTodoIds }),
       ...(mentions.mentionedCalendarEventIds.length > 0 && { mentionedCalendarEventIds: mentions.mentionedCalendarEventIds }),
     }
@@ -2411,7 +2524,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         return map
       })
     })
-  }, [inputContent, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, sessionAgentRuntime, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, consumeQuotedSelection, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage])
+  }, [inputContent, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, sessionAgentRuntime, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, consumeQuotedSelection, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, captureTurnContext])
 
   /** 停止生成 */
   const handleStop = React.useCallback((): void => {
@@ -2788,7 +2901,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     (allAskUserRequests.get(sessionId)?.length ?? 0) > 0 ||
     (allExitPlanRequests.get(sessionId)?.length ?? 0) > 0
   const hasBlockingRequests = hasBannerOverlay || (allPermissionRequests.get(sessionId)?.length ?? 0) > 0
-  const canSendQueuedNow = messagesLoaded && (streaming || !messagesRefreshing) && !!agentChannelId && hasAvailableModel && !hasBlockingRequests
+  const canSendQueuedNow = !linguistReadOnly && messagesLoaded && (streaming || !messagesRefreshing) && !!agentChannelId && hasAvailableModel && !hasBlockingRequests
   const autoSendingQueuedRef = React.useRef(false)
   const queuedSendInFlightRef = React.useRef(false)
   const sendingQueuedMessageIdsRef = React.useRef<Set<string>>(new Set())
@@ -2905,7 +3018,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   }, [togglePreviewPanel])
 
   const hasTextInput = inputContent.trim().length > 0
-  const canSend = messagesLoaded && (streaming || !messagesRefreshing) && (hasTextInput || pendingFiles.length > 0 || !!suggestion) && agentChannelId !== null && hasAvailableModel && (!streaming || hasTextInput)
+  const canSend = !linguistReadOnly && messagesLoaded && (streaming || !messagesRefreshing) && (hasTextInput || pendingFiles.length > 0 || !!suggestion) && agentChannelId !== null && hasAvailableModel && (!streaming || hasTextInput)
 
   const inputToolbarItems = React.useMemo<ToolbarItem[]>(() => [
     ...(isCodexFastModeAvailable ? [{
@@ -2946,6 +3059,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
           codexConfig={isSessionThinkingAvailable ? {
             thinkingLevel: openAIThinkingLevel,
             levels: openAIThinkingLevels,
+            disabled: streaming || backgroundWaiting,
             onThinkingLevelChange: (level) => { void updateReasoningLevel(level) },
           } : undefined}
         />
@@ -3027,6 +3141,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
           size="icon"
           className={inputToolbarDangerButtonClass}
           onClick={handleStop}
+          aria-label="停止 Agent"
         >
           <Square className="size-[16px]" fill="currentColor" strokeWidth={0} />
         </Button>
@@ -3047,6 +3162,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       )}
       onClick={() => handleSend()}
       disabled={!canSend}
+      aria-label="发送消息"
     >
       <CornerDownLeft className="size-[22px]" />
     </Button>
@@ -3095,13 +3211,20 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   return (
     <>
     <AgentSessionProvider sessionId={sessionId}>
-      <div className="flex h-full min-h-0 flex-1 min-w-0 max-w-[min(72rem,100%)] flex-col overflow-hidden mx-auto">
+      <div
+        className={cn(
+          'flex h-full min-h-0 flex-1 min-w-0 flex-col overflow-hidden',
+          !compact && 'max-w-[min(72rem,100%)] mx-auto',
+        )}
+        data-agent-presentation={presentation}
+      >
         {/* Agent Header */}
-        <AgentHeader sessionId={sessionId} />
+        <AgentHeader sessionId={sessionId} compact={compact} />
 
-        {/* 消息区域 */}
+        {/* 消息区域（交互横幅内联在消息流末尾，随消息滚动） */}
         <AgentMessages
           sessionId={sessionId}
+          compact={compact}
           sessionModelId={agentModelId || undefined}
           messagesLoaded={messagesLoaded}
           persistedSDKMessages={persistedSDKMessages}
@@ -3111,29 +3234,35 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
           sessionPath={sessionPath}
           attachedDirs={allAttachedDirs}
           stoppedByUser={stoppedByUser}
-          onRetry={handleRetry}
-          onRetryInNewSession={handleRetryInNewSession}
+          onRetry={linguistReadOnly ? undefined : handleRetry}
+          onRetryInNewSession={linguistReadOnly ? undefined : handleRetryInNewSession}
           onRelinkProjectRoot={handleRelinkProjectRoot}
           onRestoreProjectRoot={() => setRestoreProjectRootDialogOpen(true)}
-          onFork={handleFork}
-          onRewind={handleRewindRequest}
+          onFork={linguistReadOnly ? undefined : handleFork}
+          onRewind={linguistReadOnly ? undefined : handleRewindRequest}
           onCreateTodo={handleOpenReplyTodoDialog}
-          onCompact={handleCompact}
+          onCompact={linguistReadOnly ? undefined : handleCompact}
+          hostCapabilities={hostCapabilities}
+          inlineBanner={hasBlockingRequests ? (
+            <div className="flex flex-col gap-2">
+              {/* 权限请求横幅 */}
+              <PermissionBanner sessionId={sessionId} />
+
+              {/* AskUserQuestion 交互式问答横幅 */}
+              <AskUserBanner sessionId={sessionId} />
+
+              {/* ExitPlanMode 计划审批横幅 */}
+              <ExitPlanModeBanner sessionId={sessionId} />
+            </div>
+          ) : undefined}
         />
-
-        {/* 权限请求横幅 */}
-        <PermissionBanner sessionId={sessionId} />
-
-        {/* AskUserQuestion 交互式问答横幅 */}
-        <AskUserBanner sessionId={sessionId} />
-
-
-        {/* ExitPlanMode 计划审批横幅 */}
-        <ExitPlanModeBanner sessionId={sessionId} />
 
         {/* 输入区域 — 交互横幅显示时隐藏，由横幅替代 */}
         {!hasBannerOverlay && (
-        <div className="px-2.5 pb-2.5 md:px-[18px] md:pb-[18px]" data-input-mode="agent">
+        <div
+          className={compact ? 'px-2 pb-2' : 'px-2.5 pb-2.5 md:px-[18px] md:pb-[18px]'}
+          data-input-mode="agent"
+        >
           <div
             className={cn(
               'rounded-[17px] border-[0.5px] border-border bg-background/70 backdrop-blur-sm transition-all duration-200',
@@ -3147,7 +3276,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
             {(isPlanMode || isPermissionPlanMode) && !isDragOver && <PlanModeDashedBorder />}
             {/* 无 Agent 渠道或无可用模型提示 */}
             {(!agentChannelId || !hasAvailableModel) && (
-              <div className="flex items-center gap-2 px-4 py-2 text-sm text-amber-600 dark:text-amber-400">
+              <div className="flex items-center gap-2 px-4 py-2 text-sm text-warning">
                 <Settings size={14} />
                 <span>{!agentChannelId ? '请在设置中选择 Agent 供应商' : '暂无可用模型，请在设置中启用 Agent 渠道并配置模型'}</span>
                 <button
@@ -3159,6 +3288,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                 </button>
               </div>
             )}
+
+            <ComposerContextChips chips={contextSummary} />
 
             {/* 附件 + 引用选中文本 Chip（同排并排） */}
             {(pendingFiles.length > 0 || currentQuotedSelection) && (
@@ -3254,7 +3385,11 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
             />
 
             {/* Footer 工具栏 — 容器变窄时尾部按钮自动折叠进「更多」Popover */}
-            <InputToolbarOverflow items={inputToolbarItems} trailing={inputTrailingNode} />
+            <InputToolbarOverflow
+              items={inputToolbarItems}
+              trailing={inputTrailingNode}
+              className={compact ? 'h-11 px-1.5 gap-2' : undefined}
+            />
           </div>
         </div>
         )}

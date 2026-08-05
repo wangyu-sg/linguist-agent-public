@@ -12,6 +12,7 @@ import {
   SCRATCH_PAD_ID,
   SCRATCH_PAD_TITLE,
   tabsAtom,
+  type SessionTab,
   type TabItem,
 } from '@/atoms/tab-atoms'
 import {
@@ -44,8 +45,10 @@ function findTargetAgentTab(
   tabs: TabItem[],
   sessions: ScratchPadAgentSession[],
   currentSessionId: string | null,
-): TabItem | null {
-  const existingAgentTab = [...tabs].reverse().find((tab) => tab.type === 'agent')
+): SessionTab | null {
+  const existingAgentTab = [...tabs].reverse().find(
+    (tab): tab is SessionTab => tab.type === 'agent',
+  )
   if (existingAgentTab) return existingAgentTab
   if (!currentSessionId) return null
 

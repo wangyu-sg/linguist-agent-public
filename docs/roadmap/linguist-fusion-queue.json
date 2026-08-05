@@ -1,0 +1,664 @@
+{
+  "schemaVersion": 2,
+  "plan": "docs/roadmap/LA_UNIFIED_MASTER_PLAN_V2.md",
+  "planVersion": "2.1",
+  "scope": "Proma v0.16.8 收敛 + Linguist 最小 Alpha（受权小批 Intake / Proposal CAT）",
+  "activePhase": "Phase 0",
+  "statusVocabulary": [
+    "TODO",
+    "IN_PROGRESS",
+    "BLOCKED",
+    "DONE",
+    "CANCELLED_WITH_REASON",
+    "VERIFIED_ALREADY_DONE"
+  ],
+  "baseline": {
+    "asOf": "2026-08-05",
+    "branch": "sync/proma-v0.16.8",
+    "head": "87a5393b",
+    "promaTargetTag": "v0.16.8",
+    "promaTargetCommit": "bde00f00323d6735a939d14dbce3b2f1a5b672bc",
+    "currentFacts": "CURRENT_FACTS.md",
+    "legacyQueue": "docs/archive/linguist-fusion-queue-v1.json",
+    "formalMergeCommit": "f3d2b431996523a4aa75ec2b027dcf0e932ef08f",
+    "localParent": "b84d65ac79ecf681fac21cf740a589da4aedbed4",
+    "upstreamParent": "bde00f00323d6735a939d14dbce3b2f1a5b672bc",
+    "promaBaseline": "docs/architecture/proma-baseline.json",
+    "touchpointLedger": "docs/architecture/proma-touchpoints.json",
+    "deviationsLedger": "docs/architecture/PROMA_DEVIATIONS.json"
+  },
+  "policy": {
+    "singleActiveQueue": true,
+    "legacyQueueArchived": true,
+    "oldFastBalancedBestGate": "superseded by LA-QUALITY-001",
+    "alphaGate": "LA-ALPHA-000",
+    "scopeRule": "Proma Agent/Chat/Provider/Skills/MCP/Automations/Preview/Permission/Thinking/Queue/Steer 等完整能力继续继承；Alpha 只推进最小可验证 CAT 闭环。",
+    "cancelRule": "CANCELLED_WITH_REASON 仅表示当前 Alpha 明确移出范围；真实项目触发后必须以证据创建 successor Ticket，不得直接复活旧票。"
+  },
+  "items": [
+    {
+      "id": "LA-MASTER-000",
+      "kind": "ticket",
+      "title": "当前事实、旧蓝图作废、基线冻结",
+      "priority": "P0",
+      "depends": "无",
+      "status": "DONE",
+      "evidence": "6e03458a docs: register unified master plan v2"
+    },
+    {
+      "id": "LA-SYNC-001",
+      "kind": "ticket",
+      "title": "备份、Tag、同步分支",
+      "priority": "P0",
+      "depends": "MASTER-000",
+      "status": "DONE",
+      "evidence": "pre-proma-0.16.8-sync-20260805 -> ab05305f; verified backup/restore manifest in ignored .local/backups/pre-proma-0.16.8-sync-20260805T010835+0800"
+    },
+    {
+      "id": "LA-SYNC-002",
+      "kind": "ticket",
+      "title": "正式 merge Proma v0.16.8",
+      "priority": "P0",
+      "depends": "SYNC-001",
+      "status": "DONE",
+      "evidence": "f3d2b431996523a4aa75ec2b027dcf0e932ef08f merged Proma v0.16.8; parents b84d65ac79ecf681fac21cf740a589da4aedbed4 and bde00f00323d6735a939d14dbce3b2f1a5b672bc."
+    },
+    {
+      "id": "LA-SYNC-003",
+      "kind": "ticket",
+      "title": "Runtime/Session 以上游为主合并",
+      "priority": "P0",
+      "depends": "SYNC-002",
+      "status": "DONE",
+      "evidence": "Runtime/session reconciliation is present in formal merge f3d2b431; subsequent Host Contract expansion remains separately tracked by LA-HOST-000."
+    },
+    {
+      "id": "LA-SYNC-004",
+      "kind": "ticket",
+      "title": "Agent Surface/Sidebar/Settings 合并",
+      "priority": "P0",
+      "depends": "SYNC-002",
+      "status": "DONE",
+      "evidence": "Native Agent surface, sidebar, and settings reconciliation is present in formal merge f3d2b431; it preserves the single Agent/Chat implementation."
+    },
+    {
+      "id": "LA-HOST-000",
+      "kind": "ticket",
+      "title": "建立本地 Host Contracts 与 Extension Registry",
+      "priority": "P0",
+      "depends": "SYNC-003/004",
+      "status": "DONE",
+      "evidence": "Static typed Host Contracts, read-only Extension Registry, and registerExtensions([linguistExtension]) composition root are implemented. Focused registry/surface tests and Electron typecheck pass; no dynamic plugin loader was added."
+    },
+    {
+      "id": "LA-SYNC-005",
+      "kind": "ticket",
+      "title": "依赖、Electron 43、Lock/SBOM/Build",
+      "priority": "P0",
+      "depends": "SYNC-003/004",
+      "status": "DONE",
+      "evidence": "Electron 43 dependency/lock/build work merged. 2026-08-05 smoke:pack PASS; smoke:vertical PASS: Agent 12/12, Chat 18/18, Linguist 21/21."
+    },
+    {
+      "id": "LA-SYNC-006",
+      "kind": "ticket",
+      "title": "Baseline/Touchpoints/Deviations 重置",
+      "priority": "P0",
+      "depends": "SYNC-005",
+      "status": "DONE",
+      "evidence": "Rebased baseline on bde00f00323d6735a939d14dbce3b2f1a5b672bc; post-cleanup ledger is 250 touchpoints (31 permanent product forks, 218 local host seams, 1 temporary). boundary 4/4 PASS; fusion architecture 9/9 PASS; Electron typecheck PASS; JSON parse and git diff --check PASS."
+    },
+    {
+      "id": "LA-SYNC-007",
+      "kind": "ticket",
+      "title": "v0.16.8 完整验证与 packaged smoke",
+      "priority": "P0",
+      "depends": "SYNC-006",
+      "status": "IN_PROGRESS",
+      "evidence": "smoke:pack PASS; smoke:vertical runStatus=passed: Agent 12/12, Chat 18/18, Linguist 21/21. The separate LF-048 manual branch verified Native Save overwrite rejection, unchanged source SHA, safe export, and reimport. Not DONE: coverageStatus=partial with 2 MANUAL and 3 BLOCKED gaps; Native Open is unverified and real IME is blocked because this macOS host only has the ABC input source."
+    },
+    {
+      "id": "LA-HOST-001",
+      "kind": "ticket",
+      "title": "Session-scoped Reference",
+      "priority": "P0",
+      "depends": "HOST-000",
+      "status": "DONE",
+      "evidence": "现有 Proma quotedSelectionMapAtom 以 sessionId 为 key，AgentHistorySelectionLayer、AgentView Composer/Send 共用同一 key；daec672d 新增两个 Linguist session + 一个普通 Agent 的隔离回归，quoted-selection/extension-registry 6/6 PASS。未新增第二套 Composer 或引用 Store。"
+    },
+    {
+      "id": "LA-HOST-002",
+      "kind": "ticket",
+      "title": "Linguist Companion Chat / Side Q&A",
+      "priority": "P0",
+      "depends": "HOST-001",
+      "status": "IN_PROGRESS",
+      "evidence": "d348df66：复用 Proma SidePanel/ChatView，新增 chatOnly tab bar；Linguist Rail/Full 开放 companionChat capability，打开历史选区问答后自动展开 Full 并保持 Linguist mode，文件/改动 Tab 不暴露。extension-registry、quoted-selection、DiffPanelTabBar 7/7 PASS；2026-08-05 smoke:pack 与 smoke:vertical 均 PASS（Agent 12/12、Chat 18/18、Linguist 21/21），仍缺真实机器 Companion Chat roundtrip。"
+    },
+    {
+      "id": "LA-HOST-003",
+      "kind": "ticket",
+      "title": "Agent/Linguist Auto-title",
+      "priority": "P1",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "024f51c0：Linguist 项目会话不再把项目名写入 title；未提供自定义标题时复用 Proma 默认‘新 Agent 会话’，首轮完成即可触发统一 auto-title，显式标题仍保留。session-binding/session-ipc 20/20 targeted nodetests PASS。"
+    },
+    {
+      "id": "LA-HOST-004",
+      "kind": "ticket",
+      "title": "Host Capability Manifest",
+      "priority": "P1",
+      "depends": "HOST-000",
+      "status": "DONE",
+      "evidence": "Linguist rail/full HostCapabilityManifest is registered and consumed by the shared AgentView controls. References, preview, attachments, slash menu, model controls, queue/steer, permissions, full presentation, and Companion Chat are available; File Panel remains explicitly false."
+    },
+    {
+      "id": "LA-HOST-005",
+      "kind": "ticket",
+      "title": "Embedded Host Parity Suite",
+      "priority": "P0",
+      "depends": "HOST-001/002/004",
+      "status": "DONE",
+      "evidence": "复用现有 Agent Full/Chat/Companion 合同测试，并在 extension-registry.test.ts 增加 Host Parity capability-key canary：Linguist Rail/Full 必须登记 DEFAULT_AGENT_HOST_CAPABILITIES 的全部键；20/20 targeted tests PASS。"
+    },
+    {
+      "id": "LA-ALPHA-000",
+      "kind": "gate",
+      "title": "最小个人 Alpha 入口 Gate",
+      "priority": "P0",
+      "depends": "SYNC-007/HOST-005/TRANS-001/REVIEW-001/DATA-001",
+      "status": "TODO",
+      "evidence": "仅当 Proma 基础验证、Host parity、Proposal 覆盖、Proposal Critic 和 QA 变更事件均有真实证据后，才进入个人 Alpha；不要求先实现蓝图中的长尾能力。"
+    },
+    {
+      "id": "LA-INTAKE-001",
+      "kind": "ticket",
+      "title": "Authorized single-file Project Intake Coordinator",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "IN_PROGRESS",
+      "evidence": "Alpha 单文件路径已由 UI 与 Agent 共用 Linguist ProjectDelivery.importAsset；Agent 通过当前会话显式附件的 opaque sourceToken 导入。完整 scan/plan/job coordinator API 不在当前 Alpha，目录扫描与 Durable Job 另待真实批量阻断后拆 successor。"
+    },
+    {
+      "id": "LA-INTAKE-002",
+      "kind": "ticket",
+      "title": "Candidate Scanner / Classifier",
+      "priority": "P0",
+      "depends": "INTAKE-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "当前 Alpha 不做目录级扫描器；只接受用户明确选择的单文件，目录扫描另待真实项目触发 successor Ticket。"
+    },
+    {
+      "id": "LA-INTAKE-003",
+      "kind": "ticket",
+      "title": "Exact duplicate / supported-format preflight",
+      "priority": "P0",
+      "depends": "INTAKE-001",
+      "status": "DONE",
+      "evidence": "be1ed6fd：importAsset 在格式解析前按输入 bytes 的 SHA-256 查项目已有源资产；exact duplicate 返回 skipped-duplicate、复用原资产且不新增行；新文件继续走 CatFormatRegistry.detectBest，unsupported 仍 fail closed。import-pipeline 8/8、project-ipc 15/15、Electron typecheck 全 workspace PASS。"
+    },
+    {
+      "id": "LA-INTAKE-004",
+      "kind": "ticket",
+      "title": "Durable Import Job",
+      "priority": "P0",
+      "depends": "INTAKE-003",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 只导入受控小批文件；持久 Job/目录扫描属于长任务扩展，须在真实批量阻断出现后再拆 successor。"
+    },
+    {
+      "id": "LA-INTAKE-005",
+      "kind": "ticket",
+      "title": "Agent Intake Tools (same service / source token)",
+      "priority": "P0",
+      "depends": "INTAKE-001/003",
+      "status": "DONE",
+      "evidence": "Agent CAT 工具新增 cat_list_intake_sources / cat_import_asset：仅列出会话 attachedFiles 的 basename/大小/状态，导入只接受 opaque sourceToken，宿主重验证附件后调用同一 ProjectDelivery.importAsset；包级 40/40、Electron Linguist 177/177、typecheck PASS。"
+    },
+    {
+      "id": "LA-INTAKE-006",
+      "kind": "ticket",
+      "title": "UI 使用同一 Intake Coordinator",
+      "priority": "P1",
+      "depends": "INTAKE-001/003",
+      "status": "DONE",
+      "evidence": "UI project-ipc 与 Agent source-token bridge 都只调用 LinguistProjectService.importAsset（内部同一个 ProjectDelivery）；因此 format detection、50MB limit、exact duplicate 与 store write 没有第二套实现。既有 project-ipc/import-pipeline 回归加 session intake 回归通过。"
+    },
+    {
+      "id": "LA-INTAKE-007",
+      "kind": "ticket",
+      "title": "Verification / Summary",
+      "priority": "P0",
+      "depends": "INTAKE-005/006",
+      "status": "TODO",
+      "evidence": "已有 source SHA-256、exact duplicate、受管 source blob 与 segment 事务写入的基础校验；尚无独立结构化 Verification Report，也没有检查下游 Proposal/QA/Review/Export 引用后再决定是否允许 Import Undo 的安全接口。"
+    },
+    {
+      "id": "LA-FORMAT-001",
+      "kind": "ticket",
+      "title": "私有 CAT Corpus Scanner",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-FORMAT-002",
+      "kind": "ticket",
+      "title": "真实格式矩阵与优先级报告",
+      "priority": "P0",
+      "depends": "FORMAT-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-FORMAT-003",
+      "kind": "ticket",
+      "title": "高频 TM Adapter（按扫描结果）",
+      "priority": "P1",
+      "depends": "FORMAT-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "未有真实私有 corpus 证明前不实现 SDLTM 等长尾容器；FORMAT-002 只产出矩阵和阻断证据。"
+    },
+    {
+      "id": "LA-FORMAT-004",
+      "kind": "ticket",
+      "title": "高频 TB Adapter（按扫描结果）",
+      "priority": "P1",
+      "depends": "FORMAT-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "未有真实私有 corpus 证明前不实现 SDLTB 等长尾容器；触发后创建带 fixture/许可核验的 successor。"
+    },
+    {
+      "id": "LA-TAG-000",
+      "kind": "ticket",
+      "title": "PB-097 事实核验与统一 Tag Model",
+      "priority": "P0",
+      "depends": "INTAKE-001/SYNC-007",
+      "status": "DONE",
+      "evidence": "现有 PB-097 tagProfile/tag-families 单一模型已接入 hard-rule、QA、Proposal Gate 与 project digest；38 个 core hard-rule/QA/tag tests、218 个 store tests 全部通过，未新增第二套 Tag Model。"
+    },
+    {
+      "id": "LA-TAG-001",
+      "kind": "ticket",
+      "title": "Deterministic + LLM Tag Discovery",
+      "priority": "P1",
+      "depends": "TAG-000",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 先统一既有 PB-097 scanner；未知 Tag discovery 需要真实项目样本后再进入 successor。"
+    },
+    {
+      "id": "LA-TAG-002",
+      "kind": "ticket",
+      "title": "Candidate lifecycle / Validator / UI",
+      "priority": "P1",
+      "depends": "TAG-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "没有真实未知 Tag 候选前不建设持久 Candidate 生命周期和管理 UI。"
+    },
+    {
+      "id": "LA-TAG-003",
+      "kind": "ticket",
+      "title": "编辑器原子 Tag 保护",
+      "priority": "P1",
+      "depends": "TAG-000",
+      "status": "DONE",
+      "evidence": "现有 TargetEditor/SegmentGrid 复用 splitProtectedText 与同一 hard-rule rail；丢失 Tag/Placeholder 时草稿不变、保存禁用，TargetEditor + SegmentGrid 17/17 renderer tests PASS，store proposals tagProfile edit/accept 也在 218/218 回归中通过。"
+    },
+    {
+      "id": "LA-PHRASE-001",
+      "kind": "ticket",
+      "title": "Phrase master-XLIFF pairing / rehydration",
+      "priority": "P0 条件触发",
+      "depends": "TAG-000/FORMAT-002",
+      "status": "BLOCKED",
+      "evidence": "当前没有真实 split-MXLIFF 交付样本；下一次真实 Phrase 交付触发时重开 successor，配对不确定必须 fail closed。"
+    },
+    {
+      "id": "LA-LEGACY-001",
+      "kind": "ticket",
+      "title": "一次性 Legacy CAT Parity Audit",
+      "priority": "P1",
+      "depends": "MASTER-000/TAG-000",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "当前 Alpha 不做旧仓库全面回填；以当前代码、已有架构测试和真实阻断驱动小范围审计。"
+    },
+    {
+      "id": "LA-QUALITY-001",
+      "kind": "ticket",
+      "title": "Execution Policy 取代质量档位",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-QUALITY-002",
+      "kind": "ticket",
+      "title": "零预支质量合同",
+      "priority": "P0",
+      "depends": "QUALITY-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-PROMPT-001",
+      "kind": "ticket",
+      "title": "Canonical Prompt Contract / Renderer",
+      "priority": "P0",
+      "depends": "QUALITY-002",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-PROMPT-002",
+      "kind": "ticket",
+      "title": "全局 Prompt Budget / Evidence / Degraded",
+      "priority": "P0",
+      "depends": "PROMPT-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-MEMORY-001",
+      "kind": "ticket",
+      "title": "3E Project Knowledge Store",
+      "priority": "P1",
+      "depends": "PROMPT-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 复用现有 Project Digest/TM/TB/Context；3E 持久记忆只有在真实项目反复证明缺口后再拆 successor。"
+    },
+    {
+      "id": "LA-MEMORY-002",
+      "kind": "ticket",
+      "title": "动态 Knowledge Retrieval",
+      "priority": "P1",
+      "depends": "MEMORY-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "未先有可验证的 3E 数据源，不建设第二套检索平台。"
+    },
+    {
+      "id": "LA-TRANS-001",
+      "kind": "ticket",
+      "title": "Translation Scope / Coverage Ledger",
+      "priority": "P0",
+      "depends": "QUALITY-002",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-TRANS-002",
+      "kind": "ticket",
+      "title": "Translate–Estimate–Refine Harness",
+      "priority": "P0",
+      "depends": "TRANS-001/PROMPT-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 先保证 Proposal + QA + 覆盖等式；TEaR 作为质量实验扩展，不能阻塞首个可日用闭环。"
+    },
+    {
+      "id": "LA-REVIEW-001",
+      "kind": "ticket",
+      "title": "Reviewer 改名 Proposal Critic",
+      "priority": "P0",
+      "depends": "QUALITY-002",
+      "status": "DONE",
+      "evidence": "现有 `cat_submit_critic_review` 已是独立 Proposal Critic：运行时派生 critic 身份，绑定 candidate snapshot，产出不可直接提交的 advisory artifact 与 QA findings；同会话独立性、stale snapshot、空 findings、跨项目和 profile hash 均有包级回归，未新增第二套 Reviewer 管线。"
+    },
+    {
+      "id": "LA-REVIEW-002",
+      "kind": "ticket",
+      "title": "Full Review Scope / Ledger",
+      "priority": "P0",
+      "depends": "TRANS-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "完整范围审校不是当前 Alpha 入口条件；保留现有 Proposal Critic 语义，真实需求出现后再实现 Full-Scope successor。"
+    },
+    {
+      "id": "LA-REVIEW-003",
+      "kind": "ticket",
+      "title": "Source-first Review Tools",
+      "priority": "P0",
+      "depends": "REVIEW-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "依赖 Full-Scope Review，当前不铺设第二套审校工具链。"
+    },
+    {
+      "id": "LA-REVIEW-004",
+      "kind": "ticket",
+      "title": "Full-Scope Reviewer / Review Proposals",
+      "priority": "P0",
+      "depends": "REVIEW-003/PROMPT-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "当前个人 Alpha 只承诺 Proposal Critic，不宣称全项目审校。"
+    },
+    {
+      "id": "LA-REVIEW-005",
+      "kind": "ticket",
+      "title": "Structured Audit Report",
+      "priority": "P1",
+      "depends": "REVIEW-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "完整审校审计报告随 Full-Scope successor 触发；当前使用 Run Summary/QA evidence。"
+    },
+    {
+      "id": "LA-CORRECT-001",
+      "kind": "ticket",
+      "title": "Tool root schema Object contract",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "03066ec0：cat_submit_critic_review 从根级 Union 改为根级 Object + verdict 字段判别；执行层继续校验 findings/summary/reason，避免 Pi/Claude 根 schema 兼容性问题。@linguist/cat-tools typecheck PASS；39/39 Node SQLite tool tests PASS。"
+    },
+    {
+      "id": "LA-CORRECT-002",
+      "kind": "ticket",
+      "title": "Numeric lexical ambiguity",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "47f3c0b3：数字硬门只保留明确数字、日期邻接月份和显式编号单位；May/March/August/First/One 词汇用法不再误阻断。@linguist/cat-core typecheck PASS；包测试 117/117 PASS。"
+    },
+    {
+      "id": "LA-CORRECT-003",
+      "kind": "ticket",
+      "title": "Term status / match policy",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "098caba3：TermEntriesRepository 对拉丁/数字术语采用 Unicode whole-word 边界，对 CJK 保持连续字符串匹配；art 不再命中 start，既有 required/preferred/forbidden 状态和冲突排序不变。@linguist/cat-store typecheck PASS；Node SQLite 测试 218/218 PASS。"
+    },
+    {
+      "id": "LA-CORRECT-004",
+      "kind": "ticket",
+      "title": "ICU / Placeholder profiles",
+      "priority": "P1",
+      "depends": "CORRECT-003",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 不扩建万能 placeholder parser；现有格式 adapters 和 hard rules 先覆盖已支持格式，真实阻断再拆 profile successor。"
+    },
+    {
+      "id": "LA-CONTEXT-001",
+      "kind": "ticket",
+      "title": "Snapshot-bound Cursor / Project Rules",
+      "priority": "P0",
+      "depends": "PROMPT-002",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-CONTEXT-002",
+      "kind": "ticket",
+      "title": "Minimum Context / no empty Source",
+      "priority": "P0",
+      "depends": "CONTEXT-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-CONTEXT-003",
+      "kind": "ticket",
+      "title": "Turn Scope V2 / Scope Snapshot",
+      "priority": "P1",
+      "depends": "CONTEXT-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-DATA-001",
+      "kind": "ticket",
+      "title": "QA complete Change Set / Outbox",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "962f21c7：QA 重跑事件同时携带本次完成的 segmentIds 与从 open→resolved 的 resolvedQaFindingIds；Shared / CAT Tool mutation DTO 与 durable project event 已同步，@linguist/cat-tools typecheck PASS、39/39 Node SQLite tool tests PASS。"
+    },
+    {
+      "id": "LA-DATA-002",
+      "kind": "ticket",
+      "title": "Session/Message Codec + Quarantine",
+      "priority": "P1",
+      "depends": "SYNC-007",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Proma Session/JSONL 先沿用上游路径；Alpha 不复制第二套 codec/quarantine，只有真实损坏样本才拆兼容修复。"
+    },
+    {
+      "id": "LA-DATA-003",
+      "kind": "ticket",
+      "title": "Toolset / Prompt / Review Provenance",
+      "priority": "P1",
+      "depends": "PROMPT-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 保留现有 Run Summary/Proposal provenance；不为未启用的 Full-Scope/Memory 建第二套 provenance 平台。"
+    },
+    {
+      "id": "LA-RUNTIME-001",
+      "kind": "ticket",
+      "title": "Linguist Session inherit Proma defaults",
+      "priority": "P0",
+      "depends": "SYNC-007/QUALITY-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-JOB-001",
+      "kind": "ticket",
+      "title": "Unified Chunked Job Engine",
+      "priority": "P1",
+      "depends": "INTAKE-004",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 不做 durable directory/import job；现有小批 run harness 继续使用，真实长任务阻断后再拆 successor。"
+    },
+    {
+      "id": "LA-JOB-002",
+      "kind": "ticket",
+      "title": "Chunked QA / Consistency / Integrity",
+      "priority": "P1",
+      "depends": "JOB-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "没有 10k/50k 真实项目证据前不做 Worker 扩展。"
+    },
+    {
+      "id": "LA-JOB-003",
+      "kind": "ticket",
+      "title": "Chunked Translation / Full Review",
+      "priority": "P1",
+      "depends": "JOB-001/TRANS-002/REVIEW-004",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "依赖已移出 Alpha 的 durable job 与 Full-Scope review；触发后按真实长任务拆 successor。"
+    },
+    {
+      "id": "LA-JOB-004",
+      "kind": "ticket",
+      "title": "Compaction State Capsule",
+      "priority": "P1",
+      "depends": "JOB-003",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Proma compaction 续跑继续由上游负责；Alpha 不在没有 durable job 的情况下伪造 LA capsule。"
+    },
+    {
+      "id": "LA-PERF-001",
+      "kind": "ticket",
+      "title": "Batch IPC / N+1 收口",
+      "priority": "P1",
+      "depends": "SYNC-007",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "当前 Alpha 列表规模不需要新批量 IPC；出现可测量 N+1 后再以调用证据拆 successor。"
+    },
+    {
+      "id": "LA-PERF-002",
+      "kind": "ticket",
+      "title": "1k/10k/50k 性能 Fixture",
+      "priority": "P1",
+      "depends": "JOB-002/003",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "没有 durable chunked job 就不生成大规模性能夹具；真实项目达到门槛后再建立最小基准。"
+    },
+    {
+      "id": "LA-OBS-001",
+      "kind": "ticket",
+      "title": "Trace / Metrics / Privacy Diagnostics",
+      "priority": "P2",
+      "depends": "JOB-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 先使用现有脱敏日志与 Run Summary；专项诊断包仅在真实故障无法定位时增加。"
+    },
+    {
+      "id": "LA-RESILIENCE-001",
+      "kind": "ticket",
+      "title": "Backup/Restore/Export 故障注入",
+      "priority": "P1",
+      "depends": "SYNC-007",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "已有 packaged Native Save/Export/Restore 证据；未出现新的数据故障前不扩写故障注入矩阵。"
+    },
+    {
+      "id": "LA-UI-001",
+      "kind": "ticket",
+      "title": "Cache / Undo / Selection / Aggregate Status",
+      "priority": "P2",
+      "depends": "HOST-005",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 不增加综合状态层；现有结构化 Proposal/Run Summary 足够，真实 UX 阻断后再拆 successor。"
+    },
+    {
+      "id": "LA-EVAL-001",
+      "kind": "ticket",
+      "title": "Web Chat / 旧 LA / 新 LA 基准",
+      "priority": "P0",
+      "depends": "ALPHA-000",
+      "status": "TODO",
+      "evidence": "仅在个人 Alpha 入口通过后做最小同模型对照；不以尚未启用的 TEaR/Full-Scope 功能作为前置。"
+    },
+    {
+      "id": "LA-EVAL-002",
+      "kind": "ticket",
+      "title": "Prompt/Model Regression Harness",
+      "priority": "P0",
+      "depends": "EVAL-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "先完成一次真实 Alpha 对照；没有稳定样本前不建设通用回归平台。"
+    },
+    {
+      "id": "LA-EVAL-003",
+      "kind": "ticket",
+      "title": "真实格式 Round-trip / Provider Matrix",
+      "priority": "P1",
+      "depends": "ALPHA-000",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-EVAL-004",
+      "kind": "ticket",
+      "title": "14 天日用与人工 Gate",
+      "priority": "P0",
+      "depends": "EVAL-003",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-UPSYNC-001",
+      "kind": "ticket",
+      "title": "Proma Sync Bot / Impact Report",
+      "priority": "P1",
+      "depends": "SYNC-006/HOST-005",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-DOCS-001",
+      "kind": "ticket",
+      "title": "README/ADR/旧蓝图/产品文案统一",
+      "priority": "P0",
+      "depends": "ALPHA-000",
+      "status": "TODO"
+    }
+  ]
+}

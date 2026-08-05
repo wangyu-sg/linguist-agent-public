@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "ticket": "LF-001",
+  "capturedAt": "2026-07-27T17:10:00+08:00",
+  "sourceCommit": "554ac7fb966e05ade09d3511889de566edf7712c",
+  "app": {
+    "path": "apps/electron/out/mac-arm64/Linguist Agent.app",
+    "version": "0.15.46",
+    "asarSha256": "4eeaa8660c9c800ae75b93d975b7163e5a3aba26caa09318ab1878397a792742"
+  },
+  "environment": {
+    "platform": "darwin-arm64",
+    "node": "22.22.2",
+    "bun": "1.3.14",
+    "isolation": "mkdtemp HOME plus isolated Electron userData"
+  },
+  "screenshots": [
+    {
+      "view": "agent",
+      "file": "agent-1280x820-light.png",
+      "sha256": "4b4192d3d700f030cf170ed14ae47d9d72fd31732efde9fa8a6a6c1bed8cba3f",
+      "fixture": "1000 turns / 2000 messages"
+    },
+    {
+      "view": "chat",
+      "file": "chat-1280x820-light.png",
+      "sha256": "a7ff36c80a4c00e86fab821269e0524b07b9c11f06da973b7d1767ab4e5a398a",
+      "fixture": "new empty conversation without provider"
+    },
+    {
+      "view": "projects",
+      "file": "projects-1280x820-light.png",
+      "sha256": "f028e5860c9f1a7ceec76384e712c910bb07b80979dba3f3b925ebc7ce7ba809",
+      "fixture": "synthetic 10k-segment project"
+    },
+    {
+      "view": "cat",
+      "file": "cat-1280x820-light.png",
+      "sha256": "5162808b2a165225a4b4e7409052e74f35f8ae40b03b2a33e693422fd11ad1c8",
+      "fixture": "synthetic 10k-segment project"
+    }
+  ],
+  "verification": {
+    "packageBuild": {
+      "status": "passed",
+      "command": "PATH=/Users/<local>/.bun/bin:$PATH /Users/<local>/.bun/bin/bun run smoke:pack"
+    },
+    "g0ChatSmoke": {
+      "status": "failed",
+      "passed": 8,
+      "failed": 1,
+      "failure": "The first conversation-open click was blocked by an open modal overlay."
+    },
+    "visualMatrix": {
+      "status": "conditional",
+      "passed": 35,
+      "failed": 1,
+      "warnings": 3,
+      "failure": "1000-turn initial open took 10474 ms, above the 10000 ms soft threshold.",
+      "warningsDetail": "Axe serious/critical findings remain in Agent, CAT, and Projects."
+    }
+  },
+  "gate": {
+    "id": "G-F0",
+    "status": "blocked",
+    "reasons": [
+      "Packaged Chat happy path is not green.",
+      "1000-turn initial-open performance exceeds the threshold.",
+      "Axe serious/critical findings remain."
+    ]
+  }
+}

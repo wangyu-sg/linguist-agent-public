@@ -36,7 +36,7 @@ export const settingsCloseRequestedAtom = atom(false)
  * 渠道表单有未保存内容时，SettingsPanel 确认放弃后再执行该导航。
  */
 export interface SettingsSessionNavigation {
-  type: TabType
+  type: Exclude<TabType, 'linguist-project'>
   sessionId: string
   title: string
 }

@@ -15,6 +15,7 @@ import { PreviewTabContent } from '@/components/diff/PreviewTabContent'
 import { MarkdownRichEditor } from '@/components/diff/MarkdownRichEditor'
 import { MarkdownToc } from '@/components/diff/MarkdownToc'
 import { ScratchPadView } from '@/components/scratch-pad/ScratchPadView'
+import { LocalizationProjectWorkbench } from '@/features/linguist/projects/LocalizationProjectWorkbench'
 import { TabErrorBoundary } from './TabErrorBoundary'
 
 export interface TabContentProps {
@@ -61,6 +62,37 @@ export function TabContent({ tabId }: TabContentProps): React.ReactElement {
       <TabErrorBoundary key={tab.id} sessionId={tab.sessionId}>
         <PreviewTabContent sessionId={tab.sessionId} />
       </TabErrorBoundary>
+    )
+  }
+
+  if (tab.type === 'linguist-project') {
+    if (tab.repairState !== 'missing') {
+      return <LocalizationProjectWorkbench projectId={tab.projectId} />
+    }
+    if (tab.historySessionId) {
+      return (
+        <div
+          data-testid="linguist-missing-project-history"
+          className="flex h-full min-h-0 flex-col"
+        >
+          <div className="shrink-0 border-b border-destructive/20 bg-destructive/[0.06] px-4 py-2 text-xs text-destructive">
+            项目目录不可用；当前仅显示会话历史，发送与 CAT 操作已阻断。
+          </div>
+          <div className="min-h-0 flex-1">
+            <TabErrorBoundary
+              key={tab.historySessionId}
+              sessionId={tab.historySessionId}
+            >
+              <AgentView sessionId={tab.historySessionId} />
+            </TabErrorBoundary>
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        项目不可用，请修复或关闭此标签页。
+      </div>
     )
   }
 

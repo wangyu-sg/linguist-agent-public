@@ -2,13 +2,13 @@
  * Agent 会话管理器
  *
  * 负责 Agent 会话的 CRUD 操作和消息持久化。
- * - 会话索引：~/.proma/agent-sessions.json（轻量元数据）
- * - 消息存储：~/.proma/agent-sessions/{id}.jsonl（JSONL 格式，逐行追加）
+ * - 会话索引：~/.linguist-agent/agent-sessions.json（轻量元数据）
+ * - 消息存储：~/.linguist-agent/agent-sessions/{id}.jsonl（JSONL 格式，逐行追加）
  *
  * 照搬 conversation-manager.ts 的模式。
  */
 
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync, readdirSync, createReadStream, createWriteStream, type WriteStream } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync, readdirSync, createReadStream, createWriteStream, accessSync, constants, type WriteStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { writeJsonFileAtomic, writeTextFileAtomic, readJsonFileSafe } from './safe-file'
 import { randomUUID } from 'node:crypto'
@@ -19,7 +19,9 @@ import {
   getAgentSessionsDir,
   getAgentSessionMessagesPath,
   getAgentSessionWorkspacePath,
+  resolveAgentSessionWorkspacePath,
   getAgentWorkspacePath,
+  getConfigDir,
   getSdkConfigDir,
 } from './config-paths'
 import {
@@ -57,6 +59,8 @@ import { convertLegacyMessage } from '@proma/session-core'
 import { clearNanoBananaAgentHistory } from './chat-tools/nano-banana-mcp'
 import { assertEnabledModelForChannel } from './agent-model-selection'
 import { copyForkWorkspaceFiles } from './agent-fork-workspace-copy'
+import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
+import { moveLinguistSessionWorkspaceToTrash } from './linguist/session-workspace'
 
 /**
  * 会话索引文件格式
@@ -314,6 +318,71 @@ export function ensureClaudeSessionSettings(workspaceId: string, sessionId: stri
 }
 
 /**
+ * Linguist 项目绑定（PB-034）：仅在项目内创建会话时写入，创建后冻结。
+ * updateAgentSessionMeta 刻意不接收这两个字段（类型白名单之外），
+ * 并在运行时强制保持原值（防御 any 断言绕过）。
+ * PB-082：评审会话在创建时附带 linguistSessionRole:'reviewer' 标记
+ * （缺省 = 普通助理会话，不写库），同样冻结。
+ */
+export interface AgentSessionLinguistBinding {
+  linguistProjectId: string
+  linguistProjectName: string
+  linguistSessionRole?: 'reviewer' | 'auditor'
+  linguistStrategy?: AgentSessionMeta['linguistStrategy']
+}
+
+/**
+ * 主进程内部的分叉策略。Renderer 只能提交 ForkSessionInput，不能提供绑定、
+ * 路径或文件复制策略；Linguist 跨项目复制由主进程验证项目后使用本接口。
+ */
+export interface AgentSessionForkOptions {
+  title: string
+  linguistBinding: AgentSessionLinguistBinding
+  copyWorkspaceFiles: false
+  inheritSessionConfig: true
+  requirePortableArtifacts: true
+}
+
+function frozenLinguistBinding(
+  session: AgentSessionMeta,
+): AgentSessionLinguistBinding | undefined {
+  if (!session.linguistProjectId) return undefined
+  return {
+    linguistProjectId: session.linguistProjectId,
+    linguistProjectName: session.linguistProjectName ?? session.linguistProjectId,
+    ...(session.linguistSessionRole
+      ? { linguistSessionRole: session.linguistSessionRole }
+      : {}),
+    ...(session.linguistStrategy
+      ? { linguistStrategy: session.linguistStrategy }
+      : {}),
+  }
+}
+
+function managedSessionDir(session: AgentSessionMeta): string | undefined {
+  const scope = resolveAgentExecutionScope(session)
+  return scope.kind === 'home' ? undefined : scope.cwd
+}
+
+function inheritedSessionConfig(
+  source: AgentSessionMeta,
+): Partial<Pick<
+  AgentSessionMeta,
+  'codexFastMode' | 'reasoningLevel' | 'openAIThinkingLevel' | 'permissionMode'
+>> {
+  return {
+    ...(source.codexFastMode !== undefined ? { codexFastMode: source.codexFastMode } : {}),
+    ...(source.reasoningLevel !== undefined
+      ? { reasoningLevel: source.reasoningLevel }
+      : {}),
+    ...(source.openAIThinkingLevel !== undefined
+      ? { openAIThinkingLevel: source.openAIThinkingLevel }
+      : {}),
+    ...(source.permissionMode !== undefined ? { permissionMode: source.permissionMode } : {}),
+  }
+}
+
+/**
  * 创建新会话
  */
 export function createAgentSession(
@@ -322,10 +391,19 @@ export function createAgentSession(
   workspaceId?: string,
   modelId?: string,
   agentRuntime: AgentRuntime = 'pi',
-  agentCwdMode?: AgentCwdMode,
+  agentCwdModeOrLinguistBinding?: AgentCwdMode | AgentSessionLinguistBinding,
+  linguistBindingOverride?: AgentSessionLinguistBinding,
 ): AgentSessionMeta {
   const index = readIndex()
   const now = Date.now()
+  // 第六参在 Linguist 引入前是 cwd mode；项目会话已经以 binding 作为第六参调用。
+  // 同时支持两种已发布调用形态，避免把 binding 误当 cwd mode 而丢失项目身份。
+  const agentCwdMode = typeof agentCwdModeOrLinguistBinding === 'string'
+    ? agentCwdModeOrLinguistBinding
+    : undefined
+  const linguistBinding = typeof agentCwdModeOrLinguistBinding === 'object'
+    ? agentCwdModeOrLinguistBinding
+    : linguistBindingOverride
 
   const settings = getSettings()
   const defaultThinkingLevel = settings.defaultOpenAIThinkingLevel
@@ -340,35 +418,80 @@ export function createAgentSession(
     agentRuntime,
     // 新会话继承已持久化的全局思考偏好，之后仍可按会话单独调整。
     reasoningLevel: defaultThinkingLevel,
+    ...(linguistBinding ? { ...linguistBinding } : {}),
     createdAt: now,
     updatedAt: now,
   }
 
-  index.sessions.push(meta)
-  writeIndex(index)
+  let indexWritten = false
+  try {
+    // 确保消息目录存在
+    getAgentSessionsDir()
 
-  // 确保消息目录存在
-  getAgentSessionsDir()
+    index.sessions.push(meta)
+    writeIndex(index)
+    indexWritten = true
 
-  // 若有工作区，创建 session 级别子文件夹和 Proma 工作台目录。
-  if (workspaceId) {
-    const ws = getAgentWorkspace(workspaceId)
-    if (ws) {
-      const sessionDir = getAgentSessionWorkspacePath(ws.slug, meta.id)
+    // 若有工作区，创建 session 级别子文件夹和 Proma 工作台目录。
+    if (workspaceId) {
+      const ws = getAgentWorkspace(workspaceId)
+      if (ws) {
+        const sessionDir = getAgentSessionWorkspacePath(ws.slug, meta.id)
 
-      // 仅 Claude runtime 需要此 SDK 配置；本地项目同样放在 Proma sidecar，避免污染用户项目根目录。
-      if (agentRuntime === 'claude') {
-        ensureClaudeSessionSettings(workspaceId, meta.id)
+        // 仅 Claude runtime 需要此 SDK 配置；本地项目同样放在 Proma sidecar，避免污染用户项目根目录。
+        if (agentRuntime === 'claude') {
+          ensureClaudeSessionSettings(workspaceId, meta.id)
+        }
+
+        // .context 是 Proma 的会话工作台，本地项目同样需要。
+        const contextDir = join(sessionDir, '.context')
+        if (!existsSync(contextDir)) mkdirSync(contextDir, { recursive: true })
       }
-
-      // .context 是 Proma 的会话工作台，本地项目同样需要。
-      const contextDir = join(sessionDir, '.context')
-      if (!existsSync(contextDir)) mkdirSync(contextDir, { recursive: true })
     }
-  }
 
-  console.log(`[Agent 会话] 已创建会话: ${meta.title} (${meta.id})`)
-  return meta
+    console.log(`[Agent 会话] 已创建会话: ${meta.title} (${meta.id})`)
+    return meta
+  } catch (error) {
+    // 索引已成功写入后，任何工作目录/Claude sidecar 初始化失败都不能留下可见的半成品会话。
+    if (indexWritten) {
+      try {
+        deleteAgentSession(meta.id, { discardLinguistWorkspace: true })
+      } catch (cleanupError) {
+        console.error(`[Agent 会话] 创建失败后清理半成品会话失败 (${meta.id}):`, cleanupError)
+      }
+    }
+    throw error
+  }
+}
+
+/**
+ * 创建不带历史的 Linguist 跨项目副本。只继承运行配置；工作区、附件、侧栏
+ * 状态、自动化与委派字段均由新会话默认值清空。
+ */
+export function createBlankLinguistSessionCopy(
+  source: AgentSessionMeta,
+  title: string,
+  linguistBinding: AgentSessionLinguistBinding,
+): AgentSessionMeta {
+  const created = createAgentSession(
+    title,
+    source.channelId,
+    undefined,
+    source.modelId,
+    source.agentRuntime ?? 'claude',
+    linguistBinding,
+  )
+  try {
+    const inherited = inheritedSessionConfig(source)
+    return Object.keys(inherited).length === 0
+      ? created
+      : updateAgentSessionMeta(created.id, inherited)
+  } catch (error) {
+    try {
+      deleteAgentSession(created.id, { discardLinguistWorkspace: true })
+    } catch { /* 保留原始错误 */ }
+    throw error
+  }
 }
 
 /**
@@ -541,6 +664,13 @@ export function updateAgentSessionMeta(
   const updated: AgentSessionMeta = {
     ...existing,
     ...updates,
+    // Linguist 项目绑定在创建时冻结（PB-034 硬规则）：类型白名单刻意不含
+    // 这两个字段，这里再防御 any 断言绕过——永远保持创建时的值。
+    // PB-082 的 role 与 LF-080 的 strategy 同理冻结。
+    linguistProjectId: existing.linguistProjectId,
+    linguistProjectName: existing.linguistProjectName,
+    linguistSessionRole: existing.linguistSessionRole,
+    linguistStrategy: existing.linguistStrategy,
     ...(autoUnarchive ? { archived: false } : {}),
     updatedAt: isStarredOnly ? existing.updatedAt : Date.now(),
   }
@@ -553,9 +683,74 @@ export function updateAgentSessionMeta(
 }
 
 /**
+ * 永久解除 Linguist 项目绑定。常规元数据更新仍无法改写绑定；只有用户显式
+ * 触发的此入口会同时清除项目快照和 reviewer 角色。未知会话返回 null。
+ */
+export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta | null {
+  const index = readIndex()
+  const idx = index.sessions.findIndex((session) => session.id === id)
+  if (idx === -1) return null
+
+  const existing = index.sessions[idx]!
+  if (!existing.linguistProjectId) return existing
+
+  const updated: AgentSessionMeta = { ...existing, updatedAt: Date.now() }
+  delete updated.linguistProjectId
+  delete updated.linguistProjectName
+  delete updated.linguistSessionRole
+  delete updated.linguistStrategy
+  index.sessions[idx] = updated
+  writeIndex(index)
+  console.log(`[Agent 会话] 已永久解除 Linguist 项目绑定: ${updated.id}`)
+  return updated
+}
+
+function cleanupClaudeSdkSessionArtifacts(sessionIds: readonly string[]): void {
+  if (sessionIds.length === 0) return
+  const sdkConfigDir = getSdkConfigDir()
+  const fileHistoryDir = join(sdkConfigDir, 'file-history')
+  for (const sessionId of sessionIds) {
+    const historyDir = join(fileHistoryDir, sessionId)
+    if (existsSync(historyDir)) {
+      try {
+        rmSyncWithRetry(historyDir, { recursive: true, force: true })
+      } catch (error) {
+        console.warn(`[Agent 会话] 清理 file-history 失败 (${sessionId}):`, error)
+      }
+    }
+  }
+
+  const projectsDir = join(sdkConfigDir, 'projects')
+  if (!existsSync(projectsDir)) return
+  try {
+    for (const hashDir of readdirSync(projectsDir)) {
+      const projectDir = join(projectsDir, hashDir)
+      for (const sessionId of sessionIds) {
+        const sessionFile = join(projectDir, `${sessionId}.jsonl`)
+        if (existsSync(sessionFile)) {
+          try {
+            unlinkSync(sessionFile)
+          } catch (error) {
+            console.warn(`[Agent 会话] 清理 SDK session 文件失败 (${sessionId}):`, error)
+          }
+        }
+      }
+      try {
+        if (readdirSync(projectDir).length === 0) {
+          rmSyncWithRetry(projectDir, { recursive: true })
+        }
+      } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+}
+
+/**
  * 删除会话
  */
-export function deleteAgentSession(id: string): void {
+export function deleteAgentSession(
+  id: string,
+  options: { discardLinguistWorkspace?: boolean } = {},
+): void {
   const index = readIndex()
   const idx = index.sessions.findIndex((s) => s.id === id)
 
@@ -577,12 +772,31 @@ export function deleteAgentSession(id: string): void {
     }
   }
 
-  // 清理 session 工作目录
-  if (removed.workspaceId) {
+  // 正常删除保留到受管 Trash；尚未对外的创建失败可直接丢弃半成品。
+  if (removed.linguistProjectId) {
+    try {
+      if (options.discardLinguistWorkspace) {
+        const sessionDir = managedSessionDir(removed)
+        if (sessionDir && existsSync(sessionDir)) {
+          rmSyncWithRetry(sessionDir, { recursive: true, force: true })
+        }
+      } else {
+        const trashed = moveLinguistSessionWorkspaceToTrash(
+          getConfigDir(),
+          removed.linguistProjectId,
+          id,
+        )
+        if (trashed) console.log(`[Agent 会话] 已将 Linguist session 工作目录移入 Trash: ${id}`)
+      }
+    } catch (error) {
+      console.warn(`[Agent 会话] 清理 Linguist session 工作目录失败 (${id}):`, error)
+    }
+  } else if (removed.workspaceId) {
     const ws = getAgentWorkspace(removed.workspaceId)
     if (ws) {
       try {
-        const sessionDir = getAgentSessionWorkspacePath(ws.slug, id)
+        // 删除路径不得通过 getAgentSessionWorkspacePath 反向创建目录。
+        const sessionDir = resolveAgentSessionWorkspacePath(ws.slug, id)
         if (existsSync(sessionDir)) {
           rmSyncWithRetry(sessionDir, { recursive: true, force: true })
           console.log(`[Agent 会话] 已清理 session 工作目录: ${sessionDir}`)
@@ -598,45 +812,18 @@ export function deleteAgentSession(id: string): void {
   // 清理 Nano Banana 生图历史
   clearNanoBananaAgentHistory(id)
 
-  // 清理 SDK 关联数据（file-history 和 projects 下的 session JSONL）
-  const sdkSessionIds = [removed.sdkSessionId, removed.forkSourceSdkSessionId].filter(Boolean) as string[]
-  if (sdkSessionIds.length > 0) {
-    const sdkConfigDir = getSdkConfigDir()
-
-    const fileHistoryDir = join(sdkConfigDir, 'file-history')
-    for (const sid of sdkSessionIds) {
-      const histDir = join(fileHistoryDir, sid)
-      if (existsSync(histDir)) {
-        try {
-          rmSyncWithRetry(histDir, { recursive: true, force: true })
-          console.log(`[Agent 会话] 已清理 file-history: ${sid}`)
-        } catch (e) {
-          console.warn(`[Agent 会话] 清理 file-history 失败 (${sid}):`, e)
-        }
-      }
-    }
-
-    const projectsDir = join(sdkConfigDir, 'projects')
-    if (existsSync(projectsDir)) {
+  cleanupClaudeSdkSessionArtifacts(
+    [removed.sdkSessionId, removed.forkSourceSdkSessionId].filter(Boolean) as string[],
+  )
+  if (options.discardLinguistWorkspace && removed.piSessionFile) {
+    const managedPiRoot = resolve(getSdkConfigDir(), 'sessions')
+    const artifact = resolve(removed.piSessionFile)
+    if (artifact.startsWith(`${managedPiRoot}${sep}`) && existsSync(artifact)) {
       try {
-        for (const hashDir of readdirSync(projectsDir)) {
-          const projPath = join(projectsDir, hashDir)
-          for (const sid of sdkSessionIds) {
-            const sessionFile = join(projPath, `${sid}.jsonl`)
-            if (existsSync(sessionFile)) {
-              try {
-                unlinkSync(sessionFile)
-                console.log(`[Agent 会话] 已清理 SDK session 文件: ${sessionFile}`)
-              } catch (e) {
-                console.warn('[Agent 会话] 清理 SDK session 文件失败:', e)
-              }
-            }
-          }
-          try {
-            if (readdirSync(projPath).length === 0) rmSyncWithRetry(projPath, { recursive: true })
-          } catch { /* ignore */ }
-        }
-      } catch { /* ignore */ }
+        unlinkSync(artifact)
+      } catch (error) {
+        console.warn(`[Agent 会话] 清理 Pi session artifact 失败 (${id}):`, error)
+      }
     }
   }
 }
@@ -716,6 +903,10 @@ export function moveSessionToWorkspace(sessionId: string, targetWorkspaceId: str
 
   const session = index.sessions[idx]!
 
+  if (session.linguistProjectId) {
+    throw new Error('Linguist 项目会话不能迁移到普通 Agent 项目')
+  }
+
   const targetWs = getAgentWorkspace(targetWorkspaceId)
   if (!targetWs) {
     throw new Error(`目标项目不存在: ${targetWorkspaceId}`)
@@ -723,6 +914,9 @@ export function moveSessionToWorkspace(sessionId: string, targetWorkspaceId: str
 
   const sessionTreeIds = collectSessionTreeIds(index.sessions, sessionId)
   const sessionsToMove = index.sessions.filter((item) => sessionTreeIds.has(item.id) && item.workspaceId !== targetWorkspaceId)
+  if (sessionsToMove.some((item) => item.linguistProjectId)) {
+    throw new Error('包含 Linguist 项目绑定的会话树不能迁移到普通 Agent 项目')
+  }
   if (sessionsToMove.length === 0) return session
 
   const now = Date.now()
@@ -807,7 +1001,10 @@ export function migrateChatToAgentSession(conversationId: string, agentSessionId
  *
  * @returns 新创建的会话元数据
  */
-export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSessionMeta> {
+export async function forkAgentSession(
+  input: ForkSessionInput,
+  options?: AgentSessionForkOptions,
+): Promise<AgentSessionMeta> {
   const { sessionId, upToMessageUuid } = input
 
   // 1. 获取源会话元数据
@@ -821,7 +1018,7 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
   }
 
   if (sourceMeta.agentRuntime === 'pi') {
-    return forkPiAgentSession(sourceMeta, input)
+    return forkPiAgentSession(sourceMeta, input, options)
   }
 
   const forkModelId = input.modelId !== undefined
@@ -836,8 +1033,14 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
   // sidecar 工作台单独解析，fork 时仍需复制其中的 .context 等会话临时文件。
   const workspace = sourceMeta.workspaceId ? getAgentWorkspace(sourceMeta.workspaceId) : undefined
   const sourceCwdMode = getAgentCwdMode(sourceMeta)
-  const sourceDir = resolveAgentCwd(workspace, sessionId, sourceCwdMode)
-  const sourceWorkbenchDir = resolveAgentWorkbenchDir(workspace, sessionId)
+  const sourceExecutionScope = resolveAgentExecutionScope(sourceMeta)
+  const sourceDir = sourceExecutionScope.kind === 'linguist-project'
+    ? sourceExecutionScope.cwd
+    : resolveAgentCwd(workspace, sessionId, sourceCwdMode)
+      ?? (sourceExecutionScope.kind === 'home' ? undefined : sourceExecutionScope.cwd)
+  const sourceWorkbenchDir = sourceExecutionScope.kind === 'linguist-project'
+    ? sourceExecutionScope.cwd
+    : resolveAgentWorkbenchDir(workspace, sessionId)
 
   // 2.5 校验目标消息并确定其所属的 SDK session ID
   // - 当会话经历过 "session not found" 恢复后，sdkSessionId 会被替换为新的，
@@ -887,29 +1090,57 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
   }
 
   // 4. 创建 Proma 新会话，立即设置 sdkSessionId
-  const forkTitle = `${sourceMeta.title} (fork)`
-  const newMeta = createAgentSession(
-    forkTitle,
-    sourceMeta.channelId,
-    sourceMeta.workspaceId,
-    forkModelId,
-    'claude',
-    sourceCwdMode,
-  )
+  const forkTitle = options?.title ?? `${sourceMeta.title} (fork)`
+  const destinationWorkspaceId = options || sourceExecutionScope.kind === 'linguist-project'
+    ? undefined
+    : sourceMeta.workspaceId
+  let newMeta: AgentSessionMeta
+  try {
+    newMeta = createAgentSession(
+      forkTitle,
+      sourceMeta.channelId,
+      destinationWorkspaceId,
+      forkModelId,
+      'claude',
+      sourceCwdMode,
+      options?.linguistBinding ?? frozenLinguistBinding(sourceMeta),
+    )
+  } catch (error) {
+    cleanupClaudeSdkSessionArtifacts([forkResult.sessionId])
+    throw error
+  }
 
-  updateAgentSessionMeta(newMeta.id, {
-    sdkSessionId: forkResult.sessionId,
-    forkSourceDir: sourceDir,
-    forkSourceSdkSessionId: forkSourceSdkSessionId,
-  })
-  // 同步返回值（updateAgentSessionMeta 已写入磁盘，这里让调用方拿到最新值）
-  newMeta.sdkSessionId = forkResult.sessionId
-  newMeta.forkSourceDir = sourceDir
-  newMeta.forkSourceSdkSessionId = forkSourceSdkSessionId
+  try {
+    const inherited = options?.inheritSessionConfig ? inheritedSessionConfig(sourceMeta) : {}
+    const sourceMetadata = options
+      ? {}
+      : {
+          forkSourceDir: sourceDir,
+          forkSourceSdkSessionId,
+        }
+    updateAgentSessionMeta(newMeta.id, {
+      sdkSessionId: forkResult.sessionId,
+      ...sourceMetadata,
+      ...inherited,
+    })
+    // 同步返回值（updateAgentSessionMeta 已写入磁盘，这里让调用方拿到最新值）
+    newMeta.sdkSessionId = forkResult.sessionId
+    Object.assign(newMeta, sourceMetadata, inherited)
 
   // 4.4 计算 fork 目标的 Agent cwd 与 sidecar 工作台目录。
-  const destDir = resolveAgentCwd(workspace, newMeta.id, newMeta.agentCwdMode)
-  const destWorkbenchDir = resolveAgentWorkbenchDir(workspace, newMeta.id)
+  const destinationWorkspace = newMeta.workspaceId
+    ? getAgentWorkspace(newMeta.workspaceId)
+    : undefined
+  const destinationExecutionScope = resolveAgentExecutionScope(newMeta)
+  const destDir = destinationExecutionScope.kind === 'linguist-project'
+    ? destinationExecutionScope.cwd
+    : resolveAgentCwd(destinationWorkspace, newMeta.id, newMeta.agentCwdMode)
+      ?? (destinationExecutionScope.kind === 'home'
+        ? undefined
+        : destinationExecutionScope.cwd)
+  const destWorkbenchDir = destinationExecutionScope.kind === 'linguist-project'
+    ? destinationExecutionScope.cwd
+    : resolveAgentWorkbenchDir(destinationWorkspace, newMeta.id)
 
   // 4.5 仅在源、目标 cwd 不同的历史会话 fork 场景中复制 SDK session JSONL。
   // SDK forkSession() 在源 cwd 的 project-hash 下创建 JSONL（如 projects/<hash-of-sourceDir>/<newId>.jsonl），
@@ -931,9 +1162,13 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
         const copiedLines = await copyTextFileWithPathRewrite(sourceJsonl, destJsonl, sourceDir, destDir)
         console.log(`[Agent 会话] 已将 SDK session JSONL 复制到 fork 目标目录并改写路径: ${destJsonl} (${copiedLines} 行)`)
       } catch (err) {
+        if (options?.requirePortableArtifacts) throw err
         console.warn(`[Agent 会话] 复制 SDK session JSONL 失败，fork 后首轮可能触发上下文回填:`, err)
       }
     } else {
+      if (options?.requirePortableArtifacts) {
+        throw new Error(`未找到 SDK session JSONL (${forkResult.sessionId})`)
+      }
       console.warn(`[Agent 会话] 未找到 SDK session JSONL (${forkResult.sessionId})，fork 后首轮可能触发上下文回填`)
     }
   }
@@ -942,7 +1177,7 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
   // 保留 .context/，但跳过依赖、构建产物和 Git 元数据，避免 fork 点击时同步复制巨量目录拖垮主进程。
   // .context/ 必须保留 — Proma 约定 .context/note.md、todo.md、plan/ 等是会话上下文，
   // 如果不复制，fork 后这些参考资料会丢失或被 Claude 误回源目录读取。
-  if (sourceWorkbenchDir && destWorkbenchDir) {
+  if ((!options || options.copyWorkspaceFiles) && sourceWorkbenchDir && destWorkbenchDir) {
     try {
       const copyResult = copyForkWorkspaceFiles(sourceWorkbenchDir, destWorkbenchDir)
       console.log(
@@ -964,19 +1199,30 @@ export async function forkAgentSession(input: ForkSessionInput): Promise<AgentSe
     sourceSessionId: sessionId,
     destSessionId: newMeta.id,
     upToMessageUuid,
+    includeCompletingResult: options?.requirePortableArtifacts,
     sourceDir,
     destDir,
   })
 
   console.log(`[Agent 会话] 分叉会话已创建（SDK 原生 fork）: ${sourceMeta.title} → ${forkTitle} (${copiedMessages} 条消息, sdkSessionId=${forkResult.sessionId})`)
-  return newMeta
+    return newMeta
+  } catch (error) {
+    try {
+      deleteAgentSession(newMeta.id, { discardLinguistWorkspace: Boolean(options) })
+    } catch { /* 保留原始错误 */ }
+    throw error
+  }
 }
 
 /**
  * Pi 的 session 是 append-only tree。分叉必须由 SessionManager 导出目标 branch，
  * 不能只复制 Proma 的展示 JSONL，否则下一轮 resume 仍会看到被截断的上下文。
  */
-async function forkPiAgentSession(sourceMeta: AgentSessionMeta, input: ForkSessionInput): Promise<AgentSessionMeta> {
+async function forkPiAgentSession(
+  sourceMeta: AgentSessionMeta,
+  input: ForkSessionInput,
+  options?: AgentSessionForkOptions,
+): Promise<AgentSessionMeta> {
   const targetUuid = input.upToMessageUuid
   if (!targetUuid) throw new Error('Pi 分叉需要指定一条已完成的 assistant 消息')
   const entryId = sourceMeta.piEntryBindings?.[targetUuid]
@@ -990,46 +1236,97 @@ async function forkPiAgentSession(sourceMeta: AgentSessionMeta, input: ForkSessi
     : sourceMeta.modelId
   const workspace = sourceMeta.workspaceId ? getAgentWorkspace(sourceMeta.workspaceId) : undefined
   const sourceCwdMode = getAgentCwdMode(sourceMeta)
-  const sourceDir = resolveAgentCwd(workspace, sourceMeta.id, sourceCwdMode)
-  const sourceWorkbenchDir = resolveAgentWorkbenchDir(workspace, sourceMeta.id)
-  const newMeta = createAgentSession(`${sourceMeta.title} (fork)`, sourceMeta.channelId, sourceMeta.workspaceId, forkModelId, 'pi', sourceCwdMode)
-  const destDir = resolveAgentCwd(workspace, newMeta.id, newMeta.agentCwdMode)
-  const destWorkbenchDir = resolveAgentWorkbenchDir(workspace, newMeta.id)
+  const sourceExecutionScope = resolveAgentExecutionScope(sourceMeta)
+  const sourceDir = sourceExecutionScope.kind === 'linguist-project'
+    ? sourceExecutionScope.cwd
+    : resolveAgentCwd(workspace, sourceMeta.id, sourceCwdMode)
+      ?? (sourceExecutionScope.kind === 'home' ? undefined : sourceExecutionScope.cwd)
+  const sourceWorkbenchDir = sourceExecutionScope.kind === 'linguist-project'
+    ? sourceExecutionScope.cwd
+    : resolveAgentWorkbenchDir(workspace, sourceMeta.id)
+  const newMeta = createAgentSession(
+    options?.title ?? `${sourceMeta.title} (fork)`,
+    sourceMeta.channelId,
+    options || sourceExecutionScope.kind === 'linguist-project'
+      ? undefined
+      : sourceMeta.workspaceId,
+    forkModelId,
+    'pi',
+    sourceCwdMode,
+    options?.linguistBinding ?? frozenLinguistBinding(sourceMeta),
+  )
+  let branchFile: string | undefined
+  let piSessionFile: string | undefined
+  const destinationWorkspace = newMeta.workspaceId
+    ? getAgentWorkspace(newMeta.workspaceId)
+    : undefined
+  const destinationExecutionScope = resolveAgentExecutionScope(newMeta)
+  const destDir = destinationExecutionScope.kind === 'linguist-project'
+    ? destinationExecutionScope.cwd
+    : resolveAgentCwd(destinationWorkspace, newMeta.id, newMeta.agentCwdMode)
+      ?? (destinationExecutionScope.kind === 'home'
+        ? undefined
+        : destinationExecutionScope.cwd)
+  const destWorkbenchDir = destinationExecutionScope.kind === 'linguist-project'
+    ? destinationExecutionScope.cwd
+    : resolveAgentWorkbenchDir(destinationWorkspace, newMeta.id)
 
   try {
     const sdk = await import('@earendil-works/pi-coding-agent')
     const sessionDir = join(getSdkConfigDir(), 'sessions')
     const sourceManager = sdk.SessionManager.open(sourceMeta.piSessionFile, sessionDir, sourceDir)
-    const branchFile = sourceManager.createBranchedSession(entryId)
+    branchFile = sourceManager.createBranchedSession(entryId)
     if (!branchFile || !existsSync(branchFile)) {
       throw new Error('Pi 未能生成分叉 session artifact')
     }
     const forkedManager = sdk.SessionManager.forkFrom(branchFile, destDir ?? sourceDir ?? process.cwd(), sessionDir)
-    const piSessionFile = forkedManager.getSessionFile()
+    piSessionFile = forkedManager.getSessionFile()
     if (!piSessionFile || !existsSync(piSessionFile)) throw new Error('Pi 分叉 artifact 校验失败')
 
+    const inherited = options?.inheritSessionConfig ? inheritedSessionConfig(sourceMeta) : {}
+    const sourceMetadata = options ? {} : { forkSourceDir: sourceDir }
     updateAgentSessionMeta(newMeta.id, {
       sdkSessionId: forkedManager.getSessionId(),
       piSessionFile,
       piEntryBindings: { ...(sourceMeta.piEntryBindings ?? {}) },
-      forkSourceDir: sourceDir,
+      ...sourceMetadata,
+      ...inherited,
     })
     newMeta.sdkSessionId = forkedManager.getSessionId()
     newMeta.piSessionFile = piSessionFile
     newMeta.piEntryBindings = { ...(sourceMeta.piEntryBindings ?? {}) }
+    Object.assign(newMeta, sourceMetadata, inherited)
 
-    if (sourceWorkbenchDir && destWorkbenchDir) copyForkWorkspaceFiles(sourceWorkbenchDir, destWorkbenchDir)
+    if ((!options || options.copyWorkspaceFiles) && sourceWorkbenchDir && destWorkbenchDir) {
+      copyForkWorkspaceFiles(sourceWorkbenchDir, destWorkbenchDir)
+    }
     await copyForkStoredSDKMessages({
       sourceSessionId: sourceMeta.id,
       destSessionId: newMeta.id,
       upToMessageUuid: targetUuid,
+      includeCompletingResult: options?.requirePortableArtifacts,
       sourceDir,
       destDir,
     })
+    if (
+      branchFile
+      && branchFile !== piSessionFile
+      && branchFile !== sourceMeta.piSessionFile
+      && existsSync(branchFile)
+    ) {
+      unlinkSync(branchFile)
+    }
     return newMeta
   } catch (error) {
     // 尚未对外返回的新 session 可安全清理，避免留下会被侧栏打开的半成品。
-    try { deleteAgentSession(newMeta.id) } catch { /* 保留原始错误 */ }
+    try {
+      deleteAgentSession(newMeta.id, { discardLinguistWorkspace: Boolean(options) })
+    } catch { /* 保留原始错误 */ }
+    for (const artifact of new Set([branchFile, piSessionFile])) {
+      if (artifact && artifact !== sourceMeta.piSessionFile && existsSync(artifact)) {
+        try { unlinkSync(artifact) } catch { /* 保留原始错误 */ }
+      }
+    }
     throw error
   }
 }
@@ -1042,7 +1339,10 @@ export async function rewindPiAgentSession(sessionId: string, assistantMessageUu
   if (!entryId) throw new Error('该 Pi 历史消息尚无 entry ID 映射，无法安全回退')
   if (!meta.piSessionFile || !existsSync(meta.piSessionFile)) throw new Error('未找到 Pi session artifact，无法安全回退')
   const workspace = meta.workspaceId ? getAgentWorkspace(meta.workspaceId) : undefined
-  const cwd = resolveAgentCwd(workspace, meta.id, meta.agentCwdMode) ?? process.cwd()
+  const executionScope = resolveAgentExecutionScope(meta)
+  const cwd = executionScope.kind === 'linguist-project'
+    ? executionScope.cwd
+    : resolveAgentCwd(workspace, meta.id, meta.agentCwdMode) ?? executionScope.cwd
   const sdk = await import('@earendil-works/pi-coding-agent')
   const manager = sdk.SessionManager.open(meta.piSessionFile, join(getSdkConfigDir(), 'sessions'), cwd)
   const branchFile = manager.createBranchedSession(entryId)
@@ -1134,14 +1434,16 @@ interface CopyForkStoredSDKMessagesInput {
   sourceSessionId: string
   destSessionId: string
   upToMessageUuid?: string
+  includeCompletingResult?: boolean
   sourceDir?: string
   destDir?: string
 }
 
-async function copyForkStoredSDKMessages({
+export async function copyForkStoredSDKMessages({
   sourceSessionId,
   destSessionId,
   upToMessageUuid,
+  includeCompletingResult = false,
   sourceDir,
   destDir,
 }: CopyForkStoredSDKMessagesInput): Promise<number> {
@@ -1151,6 +1453,7 @@ async function copyForkStoredSDKMessages({
   const destPath = getAgentSessionMessagesPath(destSessionId)
   const out = createWriteStream(destPath, { flags: 'a', encoding: 'utf-8' })
   let copiedCount = 0
+  let targetReached = false
 
   try {
     for await (const msg of readStoredSDKMessages(sourcePath)) {
@@ -1158,6 +1461,15 @@ async function copyForkStoredSDKMessages({
       copiedCount += 1
 
       if (upToMessageUuid && getStoredMessageUuid(msg) === upToMessageUuid) {
+        if (!includeCompletingResult) break
+        targetReached = true
+        continue
+      }
+      if (
+        targetReached
+        && msg.type === 'result'
+        && (msg as { subtype?: string }).subtype === 'success'
+      ) {
         break
       }
     }
@@ -1345,7 +1657,7 @@ export function removeSDKErrorMessage(id: string, errorUuid: string): boolean {
 /**
  * 从 SDK session JSONL 中查找指定 assistant message 之后最近的 user message UUID
  *
- * SDK session JSONL（~/.proma/sdk-config/projects/...）中的消息都带有 uuid，
+ * SDK session JSONL（~/.linguist-agent/sdk-config/projects/...）中的消息都带有 uuid，
  * 但 Proma 自己构造的 user message 没有 uuid。此函数直接读取 SDK 的 JSONL
  * 来解析 rewindFiles 所需的 user message UUID。
  *
@@ -1470,6 +1782,21 @@ function findSdkSessionJsonl(sdkSessionId: string, _projectDir?: string): string
   }
 
   return undefined
+}
+
+/** 仅返回 artifact 是否在受管 SDK 存储中可发现，不向 Renderer 暴露路径。 */
+export function hasAgentSessionNativeForkArtifact(session: AgentSessionMeta): boolean {
+  if (!session.sdkSessionId) return false
+  const artifact = session.agentRuntime === 'pi'
+    ? session.piSessionFile
+    : findSdkSessionJsonl(session.sdkSessionId)
+  if (!artifact) return false
+  try {
+    accessSync(artifact, constants.R_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Node 20–25 均兼容的最小 path API；测试可注入 Windows 路径语义。 */
@@ -1957,6 +2284,10 @@ function createSessionReferenceSearchResult(
  */
 export async function searchAgentSessionReferences(input: AgentSessionReferenceSearchInput): Promise<AgentSessionReferenceSearchResult[]> {
   const workspaceId = input?.workspaceId?.trim()
+  const currentSession = input?.excludeSessionId
+    ? getAgentSessionMeta(input.excludeSessionId)
+    : undefined
+  const currentLinguistProjectId = currentSession?.linguistProjectId
 
   const query = (input?.query ?? '').trim()
   const queryLower = query.toLowerCase()
@@ -1969,6 +2300,10 @@ export async function searchAgentSessionReferences(input: AgentSessionReferenceS
   const candidates = listAgentSessions()
     .filter((session) => !workspaceId || session.workspaceId === workspaceId)
     .filter((session) => !session.archived)
+    // 普通 Agent 只能引用普通会话；Linguist 只能引用同一项目的私有会话。
+    .filter((session) => currentLinguistProjectId
+      ? session.linguistProjectId === currentLinguistProjectId
+      : !session.linguistProjectId)
     .filter((session) => session.id !== input?.excludeSessionId)
 
   const results: AgentSessionReferenceSearchResult[] = []

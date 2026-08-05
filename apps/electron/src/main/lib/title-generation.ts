@@ -10,6 +10,10 @@ export const MAX_TITLE_LENGTH = 20
 const TITLE_PUNCTUATION = /^["'“”‘’「《]+|["'“”‘’」》]+$/g
 const MARKDOWN_PREFIX = /^(?:[#>*\-\d.)]\s*)+/
 const WHITESPACE = /\s+/g
+const FILE_TASK_TITLE = '文件任务'
+// 自动标题会进入会话列表和通知。绝对路径可能带用户名或客户目录；不做局部截断，
+// 以免路径含空格时留下尾段。
+const ABSOLUTE_LOCAL_PATH_MARKER = /(?:^|[\s@([{"'“‘「《：:])(?:~[\\/]|[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|private|var|tmp|Volumes|opt|etc|usr|mnt|media|data)(?:[\\/]|$)|\/[^\s/]+\/)/i
 
 /**
  * 从模型返回的原始标题内容中提取文本。
@@ -41,6 +45,7 @@ function extractTitleText(title: unknown): string {
 export function sanitizeGeneratedTitle(title: string | unknown): string | null {
   const text = extractTitleText(title)
   const cleaned = text.trim().replace(TITLE_PUNCTUATION, '').trim()
+  if (ABSOLUTE_LOCAL_PATH_MARKER.test(cleaned)) return FILE_TASK_TITLE
   return cleaned.slice(0, MAX_TITLE_LENGTH) || null
 }
 
@@ -63,5 +68,6 @@ export function createFallbackTitle(userMessage: string): string | null {
     .replace(WHITESPACE, ' ')
     .trim()
 
+  if (ABSOLUTE_LOCAL_PATH_MARKER.test(cleaned)) return FILE_TASK_TITLE
   return cleaned.slice(0, MAX_TITLE_LENGTH) || null
 }

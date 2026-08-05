@@ -2,8 +2,8 @@
  * 对话管理器
  *
  * 负责对话的 CRUD 操作和消息持久化。
- * - 对话索引：~/.proma/conversations.json（轻量元数据）
- * - 消息存储：~/.proma/conversations/{id}.jsonl（JSONL 格式，逐行追加）
+ * - 对话索引：~/.linguist-agent/conversations.json（轻量元数据）
+ * - 消息存储：~/.linguist-agent/conversations/{id}.jsonl（JSONL 格式，逐行追加）
  */
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync, unlinkSync, createReadStream } from 'node:fs'

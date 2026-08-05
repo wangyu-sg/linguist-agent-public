@@ -19,7 +19,7 @@ export function AgentPlaceholder(): React.ReactElement {
           使用 AI Agent 处理复杂任务，支持多步骤推理和工具调用
         </p>
       </div>
-      <div className="mt-4 px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium">
+      <div className="mt-4 px-3 py-1.5 rounded-full bg-warning-soft text-warning-foreground text-xs font-medium">
         即将推出
       </div>
     </div>

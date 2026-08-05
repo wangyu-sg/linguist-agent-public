@@ -1,4 +1,5 @@
 import type { QuotedSelection } from '@/atoms/preview-atoms'
+import type { LinguistTurnContextV1 } from '@proma/shared'
 
 export type QueueDropPlacement = 'before' | 'after'
 
@@ -17,6 +18,7 @@ export interface AgentQueuedMessage {
   fileReferenceBlock?: string
   attachments?: AgentQueuedAttachment[]
   additionalDirectories?: string[]
+  linguistContext?: Readonly<LinguistTurnContextV1>
 }
 
 export function createAgentQueuedMessage(
@@ -28,6 +30,7 @@ export function createAgentQueuedMessage(
     fileReferenceBlock?: string
     attachments?: AgentQueuedAttachment[]
     additionalDirectories?: string[]
+    linguistContext?: Readonly<LinguistTurnContextV1>
   },
 ): AgentQueuedMessage {
   const message: AgentQueuedMessage = {
@@ -39,6 +42,7 @@ export function createAgentQueuedMessage(
   if (options?.fileReferenceBlock) message.fileReferenceBlock = options.fileReferenceBlock
   if (options?.attachments && options.attachments.length > 0) message.attachments = options.attachments
   if (options?.additionalDirectories && options.additionalDirectories.length > 0) message.additionalDirectories = options.additionalDirectories
+  if (options?.linguistContext) message.linguistContext = options.linguistContext
   return message
 }
 

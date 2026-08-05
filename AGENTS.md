@@ -1,502 +1,277 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+本文件是 `/Users/<local>/Desktop/linguist-agent-next` 的当前执行指南。
 
-**重要提示：**
-- 当功能发生变化时，请保持此文件和 `README.md` 同步更新。请更新文档以反映当前状态，但是需要经过我的允许后再修改。
-- 所有的注释和日志优先采用中文，保留必要的专业术语部分。
-- 所有的依赖包的安装都要先进行搜索，综合判断依赖采用的版本，而不是默认采用某个版本。
-- 状态管理上我们全部采用 Jotai 来实现。
-- 这是个开源项目，本地存储优先，善用配置文件优于大部分默认采用 localstorage，不采用本地数据库方案。
-- 保证充分的组件化以及人类的可读性，每次完成改动后都要思考这一点，运行@code-simplifier 来简化优化代码，保持简单直接不过渡设计的风格。
-- 在 UI 设计上采用更现代的方案，UI 组件推荐采用 ShadcnUI，在合适的情况下，用卡片和阴影取代边框，用符合主题的饱满色彩，设置界面要设置背景，为未来做不同主题留下空间。
-- 采用 BDD 行为驱动开发的方案。
+## 用户约束
 
-## 项目概述
+- 功能事实变化时保持本文件与 `README.md` 同步；修改这两份文档前需获得用户允许。
+- 注释和日志优先使用中文，必要的专业术语保留英文。
+- 安装或升级依赖前先查官方来源与现有锁定，不默认使用 `latest`。
+- Renderer 状态统一使用 Jotai。
+- 通用 Agent/Chat 数据优先用配置文件、JSON 和 JSONL，不用 localStorage 作为权威持久化源。
+- CAT 项目已经使用每项目 SQLite `cat.db`；不要把 SQLite 扩散到通用配置，也不要为了“纯文件”重写现有 CAT Store。
+- 保持组件和模块可读；完成改动后主动简化，避免 God Module 和过度设计。
+- UI 使用现代方案，优先复用现有 Radix / Shadcn 风格 primitives、主题 token、卡片与层次；不要另造一套设计系统。
+- 采用 BDD：先写或确认可观察行为，再实现并回归。
+- 不得把“implemented / unit verified / packaged verified / real-machine verified / release qualified”混写为同一状态。
+- 公开文档、许可署名、提交说明和 Release metadata 中的作者姓名只允许使用 `Henry Wang` 或 `Wang Yu`；不得写中文姓名。公开推送前必须同时扫描当前公开树和将变为可达的提交历史。
 
-Proma 是一个集成通用 AI Agent 的下一代人工智能软件，采用 Electron 桌面应用架构。
+## 产品路线
 
-## Monorepo 结构
+Linguist Agent 不是精简版 Proma，也不是旧 LA 的继续修补。当前产品结构固定为：
 
-Bun workspace monorepo：
-
+```text
+Proma 的完整 Agent + Chat 产品底座
++
+Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 ```
-proma-v2/
+
+必须保留 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations、远程桥、Preview、权限、Thinking、Queue / Steer 等完整能力。Linguist 是第三个并列模式，不得复制或替换原生 Agent/Chat。
+
+当前目标是作者本人使用的个人 Alpha；没有公开发布计划。签名、公证、跨平台发行和公开更新渠道不是默认阻断项，但安全和数据完整性仍必须 fail closed。
+
+## 当前版本与技术栈
+
+| 层 | 当前事实 |
+|---|---|
+| Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
+| Electron App | `@proma/electron 0.16.15` |
+| Electron | `43.2.0` |
+| React | `18.3.1` |
+| Jotai | `2.17.1` |
+| Vite | `6.0.3` |
+| Shared | `@proma/shared 0.1.82` |
+| Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
+| Pi Runtime（Electron App） | `@earendil-works/pi-* 0.82.1` |
+| CAT Core | `@linguist/cat-core 0.0.13` |
+| CAT Store | `@linguist/cat-store 0.0.26` |
+| CAT Tools | `@linguist/cat-tools 0.0.20` |
+| CAT schema | `13` |
+
+不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。
+
+## Monorepo
+
+```text
+linguist-agent-next/
+├── apps/
+│   ├── electron/                    # Electron 主产品
+│   └── cli/                         # 本地 CLI
 ├── packages/
-│   ├── shared/     # 共享类型、IPC 通道常量、配置、工具函数 (v0.1.20)
-│   ├── core/       # AI Provider 适配器、代码高亮服务 (v0.2.9)
-│   └── ui/         # 共享 UI 组件 (CodeBlock, MermaidBlock) (v0.1.6)
-└── apps/
-    └── electron/   # Electron 桌面应用 (v0.10.7)
-        └── src/
-            ├── main/       # 主进程 + 服务层 (main/lib/)
-            ├── preload/    # IPC 上下文桥接
-            └── renderer/   # React UI (Vite + Tailwind + Radix UI)
+│   ├── shared/                      # @proma/shared
+│   ├── core/                        # Provider adapters
+│   ├── ui/                          # 共享 React UI
+│   ├── linguist-cat-core/           # 纯 CAT 领域
+│   ├── linguist-cat-formats/        # 格式 adapters
+│   ├── linguist-cat-store/          # 每项目 cat.db / blobs / backup
+│   ├── linguist-cat-tools/          # Session-bound Pi tools
+│   └── linguist-legacy-migration/   # 旧数据迁移
+├── resources/linguist-skills/       # 仅项目 Session 注入的 LA Skills
+├── tests/                           # 根架构/边界测试
+└── docs/
 ```
 
-**包命名规范**：`@proma/*` 作用域（`@proma/core`、`@proma/shared`、`@proma/ui`、`@proma/electron`）
-
-**依赖管理**：package.json 中使用 `workspace:*` 引用内部包
-
-### 包职责详解
-
-#### @proma/shared (v0.1.20)
-- **导出模块**：`./types`、`./config`、`./utils`、`./constants/permission-rules`
-- **关键类型**：`AgentMessage`、`ChatMessage`、`Channel`、`PermissionRequest`、`FeishuConfig`
-- **依赖**：无运行时依赖（仅 TypeScript）
-
-#### @proma/core (v0.2.9)
-- **导出模块**：`./providers`、`./highlight`、`./types`、`./utils`
-- **关键功能**：Provider 适配器注册表、代码高亮（Shiki）
-- **依赖**：`@proma/shared`、`shiki`
-- **Peer 依赖**：`@anthropic-ai/Codex-agent-sdk`、`@anthropic-ai/sdk`、`@modelcontextprotocol/sdk`
-
-#### @proma/ui (v0.1.6)
-- **关键组件**：共享 React UI 组件库
-- **依赖**：`@proma/core`、`beautiful-mermaid`、`mermaid`、`shiki`
-- **Peer 依赖**：`react@^18.3.0`、`react-dom@^18.3.0`
-
-#### @proma/electron (v0.10.7)
-- **职责**：Electron 桌面应用主体，集成所有包
-- **关键依赖**：
-  - `@anthropic-ai/Codex-agent-sdk@0.2.120` - Agent SDK
-  - `@larksuiteoapi/node-sdk` - 飞书集成
-  - Radix UI、TipTap、Tailwind CSS
-  - 文件解析：`pdf-parse`、`officeparser`、`word-extractor`
+内部包继续使用 `workspace:*`。包名保留 `@proma/*` 是上游继承事实，不代表产品仍与 Proma 共用用户数据根。
 
 ## 常用命令
 
 ```bash
-# 开发模式（推荐 - 自动启动 Vite + Electron + 热重载）
+bun install --frozen-lockfile
 bun run dev
-
-# 手动开发模式（调试时更稳定）
-# 终端 1: cd apps/electron && bun run dev:vite
-# 终端 2: cd apps/electron && bun run dev:electron
-
-# 构建并运行
-bun run electron:start
-
-# 仅构建
 bun run electron:build
-
-# 类型检查（所有包）
+bun run electron:start
 bun run typecheck
-
-# 单包类型检查
-cd packages/core && bun run typecheck
-
-# 测试
 bun test
-
-# 打包分发
-cd apps/electron
-bun run dist:mac      # macOS
-bun run dist:win      # Windows
-bun run dist:linux    # Linux
-bun run dist:fast     # 当前架构快速打包
+bun run check:boundaries
+node --test tests/linguist-fusion-architecture.test.mjs
+bun run --filter='@proma/electron' test:linguist
+bun run --filter='@linguist/cat-tools' test
 ```
 
-### Electron 构建脚本（`apps/electron/` 目录下）
+打包验证：
 
 ```bash
-bun run build:main        # esbuild → dist/main.cjs
-bun run build:preload     # esbuild → dist/preload.cjs
-bun run build:renderer    # Vite → dist/renderer/
-bun run build:resources   # 复制 resources/ 到 dist/
-bun run generate:icons    # 生成应用图标
+cd apps/electron
+bun run build
+bun run sync:runtime-deps
+bun run smoke:pack
+bun run smoke:vertical
 ```
 
-## 运行时环境
+`build:resources` 必须 fail closed；关键资源复制失败不得用 `|| true` 掩盖。
 
-使用 Bun 代替 Node.js/npm/pnpm：
+## 三模式与 Renderer
 
-- `bun install` 安装依赖，`bun run <script>` 运行脚本
-- `bun test` 运行测试（内置测试运行器，`import { test, expect } from "bun:test"`）
-- Bun 自动加载 .env 文件（无需 dotenv）
-- 优先使用 Bun 原生 API：`Bun.file` > `node:fs`，`Bun.$\`command\`` > `execa`
+`PrimaryAppMode` 只有：
 
-## 技术栈
-
-| 层级 | 技术 | 版本 |
-|------|------|------|
-| **运行时** | Bun | 1.2.5+ |
-| **语言** | TypeScript | 5.0.0+ |
-| **桌面框架** | Electron | 43.2.0 |
-| **前端框架** | React | 18.3.1 |
-| **状态管理** | Jotai | 2.17.1 |
-| **UI 组件** | Radix UI | 最新 |
-| **样式** | Tailwind CSS | 3.4.17 |
-| **富文本编辑器** | TipTap | 3.19.0 |
-| **代码高亮** | Shiki | 3.22.0 |
-| **Markdown** | React Markdown | 10.1.0 |
-| **图表** | Beautiful Mermaid | 最新 |
-| **数学公式** | KaTeX | 0.16+ |
-| **构建工具** | Vite | 6.0.3 |
-| **打包工具** | esbuild | 0.24.0+ |
-| **分发工具** | Electron Builder | 25.1.8 |
-| **Agent SDK** | @anthropic-ai/Codex-agent-sdk | 0.2.120 |
-| **飞书 SDK** | @larksuiteoapi/node-sdk | 最新 |
-
-## 核心架构
-
-### IPC 通信模式（最重要的架构模式）
-
-类型定义 → 主进程处理 → Preload 桥接 → 渲染进程调用：
-
-1. **类型 & 常量**：`@proma/shared` 定义 IPC 通道名称常量和请求/响应类型
-2. **主进程处理**：`main/ipc.ts`（57KB）注册 `ipcMain.handle()` 处理器，调用 `main/lib/` 服务
-3. **Preload 桥接**：`preload/index.ts` 通过 `contextBridge.exposeInMainWorld` 暴露类型安全的 API
-4. **渲染进程**：通过 `window.electronAPI.*` 调用，Jotai atoms 中封装调用逻辑
-
-添加新 IPC 通道时，需要同步修改这四个位置。
-
-#### 主要 IPC 通道组
-
-- `IPC_CHANNELS` - 基础通道（运行时、Git、环境）
-- `CHANNEL_IPC_CHANNELS` - 渠道管理
-- `CHAT_IPC_CHANNELS` - Chat 功能
-- `AGENT_IPC_CHANNELS` - Agent 功能
-- `ENVIRONMENT_IPC_CHANNELS` - 环境检查
-- `PROXY_IPC_CHANNELS` - 代理设置
-- `SYSTEM_PROMPT_IPC_CHANNELS` - 系统提示词
-- `CHAT_TOOL_IPC_CHANNELS` - Chat 工具
-- `FEISHU_IPC_CHANNELS` - 飞书集成
-- `GITHUB_RELEASE_IPC_CHANNELS` - GitHub 发布
-
-### 主进程服务层（`main/lib/`）
-
-#### 核心服务
-
-| 服务 | 职责 |
-|------|------|
-| `agent-orchestrator.ts` | Agent 核心编排层（71KB）：并发守卫、渠道查找、环境变量构建、SDK 路径解析、消息持久化、事件流处理、错误处理、自动标题生成 |
-| `agent-session-manager.ts` | Agent 会话管理：SDK 消息持久化、会话元数据 CRUD、JSONL 存储 |
-| `agent-prompt-builder.ts` | Agent 系统提示词构建（18KB）：动态上下文构建、内置 Agent 构建、工作区上下文注入 |
-| `agent-permission-service.ts` | Agent 权限管理：工具权限检查、权限模式管理 |
-| `agent-ask-user-service.ts` | Agent 用户交互：AskUser 请求处理 |
-| `agent-exit-plan-service.ts` | Agent 退出计划服务 |
-| `agent-workspace-manager.ts` | 工作区管理（16KB）：MCP Server 配置、Skills 配置、工作区 CRUD |
-| `chat-service.ts` | Chat 流式调用编排（20KB）：Provider 适配器集成、消息持久化、AbortController |
-| `conversation-manager.ts` | 对话管理（13KB）：对话 CRUD、JSONL 消息存储、置顶、上下文分割 |
-| `channel-manager.ts` | 渠道管理（16KB）：渠道 CRUD、API Key AES-256-GCM 加密（safeStorage）、连接测试、模型获取 |
-
-#### 集成服务
-
-| 服务 | 职责 |
-|------|------|
-| `feishu-bridge.ts` | 飞书集成（68KB）：消息同步、任务通知、OAuth 认证 |
-
-#### 工具与文件
-
-| 服务 | 职责 |
-|------|------|
-| `chat-tools/` | Chat 工具实现目录：内置工具函数 |
-| `workspace-watcher.ts` | 项目根目录、会话文件与附加目录监听：文件系统变化监控 |
-| `chat-tools-watcher.ts` | Chat 工具监听：工具配置变化监控 |
-| `attachment-service.ts` | 附件管理：存储/读取/删除、文件对话框 |
-| `document-parser.ts` | 文档解析：PDF/Office/文本文件提取 |
-
-#### 系统服务
-
-| 服务 | 职责 |
-|------|------|
-| `runtime-init.ts` | 运行时初始化：Shell 环境、Bun、Git 检测（`bun-finder.ts`、`git-detector.ts`、`shell-env.ts`） |
-| `config-paths.ts` | 配置路径管理：`~/.proma/` 目录结构 |
-| `user-profile-service.ts` | 用户档案持久化 |
-| `settings-service.ts` | 应用设置持久化（主题等） |
-| `updater/` | 自动更新：Electron Updater 集成 |
-
-### AI Provider 适配器（`packages/core/src/providers/`）
-
-基于适配器模式的多 Provider 支持，通过注册表统一管理：
-
-#### 核心架构
-- `ProviderAdapter` 接口：定义统一的 `sendMessage()` 流式方法
-- `provider-registry.ts`：Provider 注册表，按 `providerId` 查找适配器
-- `sse-reader.ts`：通用 SSE 流读取器（fetch + ReadableStream）
-
-#### 支持的 Provider
-
-| Provider | 适配器 | API 协议 | 特性 |
-|----------|--------|----------|------|
-| **Anthropic** | `anthropic-adapter.ts` | Messages API | extended_thinking、多模态 |
-| **OpenAI** | `openai-adapter.ts` | Chat Completions | 标准 OpenAI 协议 |
-| **DeepSeek** | `anthropic-adapter.ts` | Messages API | Anthropic 兼容 |
-| **智谱 AI** | `openai-adapter.ts` | Chat Completions | OpenAI 兼容 |
-| **MiniMax** | `anthropic-adapter.ts` | Messages API | Anthropic 兼容 |
-| **豆包** | `openai-adapter.ts` | Chat Completions | OpenAI 兼容 |
-| **通义千问** | `openai-adapter.ts` | Chat Completions | OpenAI 兼容 |
-| **Google** | `google-adapter.ts` | Generative Language API | Gemini 系列 |
-| **Custom** | `openai-adapter.ts` | Chat Completions | 自定义 OpenAI 兼容端点 |
-
-#### 多模态支持
-- **图片**：各 Provider 格式不同，适配器自动转换
-- **文档**：提取文本后注入 `<file>` XML 标签
-
-### Jotai 状态管理（`renderer/atoms/`）
-
-| Atom 文件 | 管理的状态 |
-|-----------|-----------|
-| `chat-atoms.ts` | 对话列表、当前消息、流式状态（Map 结构支持多对话并行）、模型选择、上下文设置、并排模式、思考模式、待上传附件 |
-| `agent-atoms.ts` | Agent 会话列表、当前会话、流式状态（`AgentStreamState`）、工作区选择、渠道选择、权限/AskUser 请求队列（按 sessionId Map） |
-| `active-view.ts` | 主面板视图切换（'conversations' / 'settings'） |
-| `app-mode.ts` | 应用模式（Chat / Agent） |
-| `settings-tab.ts` | 设置面板当前标签页 |
-| `theme.ts` | 主题模式（light / dark / system） |
-| `user-profile.ts` | 用户档案（姓名 + 头像） |
-| `updater.ts` | 自动更新状态（检查/下载/安装），优雅降级（updater 不可用时保持 idle） |
-
-### 渲染进程组件架构（`renderer/components/`）
-
-- **`app-shell/`**：三面板布局（LeftSidebar | NavigatorPanel | MainContentPanel），侧边栏含模式切换、置顶对话、日期分组列表、流式指示器
-- **`chat/`**：聊天核心 — ChatView（消息加载/流式订阅）、ChatHeader（模型选择/上下文设置）、ChatInput（Tiptap 富文本编辑器）、ChatMessages（消息列表/自动滚动）、ParallelChatMessages（并排模式）
-- **`agent/`**：Agent 模式 — AgentView（纯展示 + 交互，IPC 监听已提升到全局）、AgentHeader（渠道/模型选择）、AgentMessages（消息列表 + 工具活动）、ToolActivityItem（工具调用展示）、WorkspaceSelector（工作区切换）、PermissionBanner/AskUserBanner（权限/问答请求 UI）
-- **`settings/`**：设置面板 — GeneralSettings（用户档案）、AppearanceSettings（主题）、ChannelSettings（渠道管理）、ChannelForm（Provider 配置）、AgentSettings（Agent 渠道/工作区/MCP）、McpServerForm（MCP 服务器配置）、AboutSettings（版本/更新）、FeishuSettings（飞书集成）；含 `primitives/` 可复用表单组件
-- **`file-browser/`**：文件浏览器 — FileBrowser（会话文件与项目根目录文件树浏览）
-- **`ai-elements/`**：AI 展示组件 — Markdown 渲染、代码块、Mermaid 图、推理折叠、上下文分割线、富文本输入
-- **`ui/`**：Radix UI 组件（现代化设计，CSS 变量主题）
-
-### 全局 Hooks（`renderer/hooks/`）
-
-| Hook | 职责 |
-|------|------|
-| `useGlobalAgentListeners` | 全局 Agent IPC 监听器，在 `main.tsx` 顶层挂载，使用 `useStore()` 直接操作 atoms。处理流式事件、完成/错误、标题更新、权限请求、AskUser 请求，永不随组件卸载销毁 |
-| `useBackgroundTasks` | 后台任务管理（Agent/Shell 任务的增删改查），按 sessionId 隔离 |
-
-### 渲染进程初始化组件（`renderer/main.tsx`）
-
-| 组件 | 职责 |
-|------|------|
-| `ThemeInitializer` | 从主进程加载主题设置、监听系统主题变化、同步到 DOM |
-| `AgentSettingsInitializer` | 加载 Agent 渠道/模型/工作区设置、订阅 MCP/文件变化事件 |
-| `AgentListenersInitializer` | 挂载 `useGlobalAgentListeners`，全局 Agent IPC 监听 |
-| `UpdaterInitializer` | 订阅主进程推送的自动更新状态变化事件 |
-
-### 本地文件存储（`~/.proma/`）
-
-```
-~/.proma/
-├── channels.json           # 渠道配置（API Key 经 safeStorage 加密）
-├── conversations.json      # 对话索引（元数据，轻量）
-├── conversations/          # 消息存储
-│   └── {uuid}.jsonl        # 每对话一个 JSONL 文件，追加写入
-├── agent-sessions.json     # Agent 会话索引
-├── agent-sessions/         # Agent 会话消息存储
-│   └── {uuid}.jsonl        # 每会话一个 JSONL 文件
-├── agent-workspaces/       # Agent 工作区目录
-│   └── {workspace-slug}/
-│       ├── {session-id}/   # 会话工作目录
-│       ├── workspace-files/# 仅空白项目使用的 Proma 托管项目根
-│       ├── mcp.json        # MCP Server 配置
-│       └── skills/         # Skills 配置目录
-├── attachments/            # 附件文件
-│   └── {conversationId}/
-│       └── {uuid}.ext
-├── user-profile.json       # 用户档案 { userName, avatar }
-├── settings.json           # 应用设置 { themeMode }
-└── sdk-config/             # Agent SDK 配置目录
-    └── projects/           # SDK 项目配置
+```ts
+'agent' | 'chat' | 'linguist'
 ```
 
-**关键设计**：
-- JSON 配置 + JSONL 追加日志，无本地数据库，文件可移植
-- Agent 工作区按 slug 隔离，每个会话独立目录
-- MCP 配置和 Skills 按工作区管理
+- Agent / Chat 必须保持原生 Proma 行为和界面。
+- Linguist 使用一等 `LocalizationProjectTab` 和 project-scoped Jotai 状态。
+- Workbench 内嵌同一个 `AgentView` 的 rail presentation。
+- Agent 会话树必须排除带 `linguistProjectId` 的会话；Linguist 侧栏只展示项目绑定会话，并复用 Agent 的会话行与树行为。
+- Linguist 中点击项目进入 Workbench，点击会话进入 Full `AgentView`；归档或缺失项目的历史只能只读打开，发送与 CAT mutation 必须 fail closed。
+- 禁止新增 `LinguistAgentView`、`LinguistComposer`、`LinguistThinkingBlock`、`LinguistToolCard`、`LinguistApprovalCard` 或第二套 Agent Session Store。
+- 禁止新增第二套 Session tree 状态、排序、委派、置顶、最近会话或 MiniMap 行为实现；项目域只提供分组与动作适配。
+- CAT 编辑、Proposal、QA、TM/TB、Context、Preview 和设置位于 `renderer/features/linguist/**`。
+- 上游 v0.16.8 的 Planning（Todo、日程、提醒和 Agent 引用）、Agent Island、统一项目/会话文件能力与 Pi `0.82.1` Runtime 都是同一 Agent/Chat 底座的一部分。通过既有 main service、preload 和 Jotai 合同接入；不得为 Linguist 新建第二套 Planning、Island 或文件 authority 状态。
 
-## 构建工具
+核心 Renderer 组合仍在：
 
-- **主进程/Preload**：esbuild (`--bundle --platform=node --format=cjs --external:electron --external:@anthropic-ai/Codex-agent-sdk`)
-- **渲染进程**：Vite + React 插件 + Tailwind CSS + HMR
-- **开发热重载**：渲染进程 Vite HMR 即时生效；主进程/Preload 通过 electronmon 监听 dist 文件变化自动重启
-- **打包分发**：electron-builder（配置见 `electron-builder.yml`）
+- `renderer/main.tsx`：全局初始化和 IPC listeners；
+- `renderer/components/app-shell/`：模式、侧栏与主布局；
+- `renderer/components/agent/`：唯一 Agent UI；
+- `renderer/components/chat/`：唯一 Chat UI；
+- `renderer/features/linguist/`：Linguist 组合层。
 
-### 重要：打包配置注意事项
+## IPC 约定
 
-**Agent SDK 打包要求（必须遵守）：**
-- `@anthropic-ai/Codex-agent-sdk` 必须使用 `--external` 参数排除在 esbuild 打包之外
-- **0.2.113+ 架构变化**：SDK 主包已不再携带 JS CLI 入口（`cli.js`）和 `vendor/ripgrep/`，改为按平台分发 native binary（`Codex` / `Codex.exe`，单文件 214-252 MB），通过 `optionalDependencies` 安装到 `@anthropic-ai/Codex-agent-sdk-{platform}-{arch}/` 子包
-- `apps/electron/package.json` 必须显式声明当前 CI 矩阵覆盖的平台子包为 `optionalDependencies`（darwin-arm64 / darwin-x64 / win32-x64），否则 bun workspace 不会把它们链接到 `apps/electron/node_modules/`
-- `electron-builder.yml` 的 `files` 配置要同时包含主包和所有平台子包：
-  ```yaml
-  files:
-    - dist/**/*
-    - package.json
-    - node_modules/@anthropic-ai/Codex-agent-sdk/**/*
-    - node_modules/@anthropic-ai/Codex-agent-sdk-darwin-arm64/**/*
-    - node_modules/@anthropic-ai/Codex-agent-sdk-darwin-x64/**/*
-    - node_modules/@anthropic-ai/Codex-agent-sdk-win32-x64/**/*
-    - "!node_modules/@proma/**"
-  ```
-- SDK 主包和同级平台子包会被复制到 `app/node_modules/@anthropic-ai/`，Node.js 的模块解析能从 `app/dist/main.cjs` 找到
-- `agent-orchestrator.ts` 中 `resolveSDKCliPath()` 解析到 SDK 主包入口后，沿 `..` 到 `@anthropic-ai/` 同级目录，再拼 `Codex-agent-sdk-${platform}-${arch}/{Codex|Codex.exe}` 得到 binary 路径
+新增或修改 IPC 必须同步四层：
 
-**跨平台打包限制：**
-- optionalDependencies 的平台子包由包管理器按 `os`/`cpu` 字段筛选：Apple Silicon runner 只会装 darwin-arm64，不会装 darwin-x64（cpu 不匹配）
-- 因此当前 CI（macos-latest + windows-latest）**不支持在单个 macOS runner 上同时打 arm64 + x64 DMG**
-- 若要发布 darwin-x64 版本，需要在 macos-13（x64 runner）单独跑一次构建
-- Windows runner 默认 x64，打 win32-x64 正常
-
-**不使用 extraResources 放 binary 的原因：**
-- `extraResources` 会将文件复制到 `Contents/Resources/` 目录，路径与 node_modules 解析不一致
-- 直接使用 `files` 配置让 Node.js 的模块解析能正确找到 SDK
-
-**修改打包配置时的检查清单：**
-1. ✅ 确认 SDK 在 esbuild 中使用 `--external` 参数
-2. ✅ 确认 SDK 主包 + 所有目标平台子包都在 `files` 配置中
-3. ✅ 确认 `apps/electron/package.json` 的 `optionalDependencies` 列出了所有目标平台子包
-4. ✅ `bun install` 后验证 `apps/electron/node_modules/@anthropic-ai/Codex-agent-sdk-{platform}-{arch}/` symlink 存在且 binary 可执行
-5. ✅ 本地测试打包后的应用 Agent 功能（`CSC_IDENTITY_AUTO_DISCOVERY=false bun run dist:fast`）
-
-**其他依赖的打包策略：**
-- **原则**：只有 `electron` 和 `@anthropic-ai/Codex-agent-sdk` 需要标记为 `--external`
-- `electron`：由 Electron 运行时提供，必须 external
-- `@anthropic-ai/Codex-agent-sdk`：有特殊打包要求（含 214 MB native binary），必须 external + 在 files 中包含主包和平台子包
-- **所有其他依赖**（如 `electron-updater`、`undici`、`chokidar` 等）：应该让 esbuild 打包进 `main.cjs`
-  - ✅ 优点：避免遗漏子依赖，简化 electron-builder 配置
-  - ❌ 如果标记为 external：必须在 `electron-builder.yml` 的 `files` 中手动列出所有子依赖
-- **常见错误**：将普通 npm 包标记为 external 但忘记在 `files` 中包含，导致打包后找不到模块（如 `Cannot find module 'universalify'`）
-
-## 代码风格
-
-- 永远不要使用 `any` 类型 — 创建合适的 interface
-- 对象类型优先使用 interface 而不是 type
-- 尽可能使用 `import type` 进行仅类型导入
-- 注释和日志采用中文，保留专业术语
-- **路径别名**：`@/` → `apps/electron/src/renderer/`
-
-## TypeScript 配置
-
-- Module: `"Preserve"` + `"moduleResolution": "bundler"`
-- JSX: `"react-jsx"`，严格模式启用，Target: ESNext
-- 所有包 `"type": "module"`，导入时使用 `.ts` 扩展名
-
-## 版本管理
-
-提交代码时始终递增受影响包的 patch 版本（如 `0.1.18` → `0.1.19`），影响多个包则都要递增。
-
-### 默认 Skills 版本契约（`apps/electron/default-skills/`）
-
-修改任何 `default-skills/<skill>/` 内容时，**必须同步递增该 Skill `SKILL.md` frontmatter 的 `version` 字段**（patch +1）。
-
-**为什么**：`seedDefaultSkills()` 与 `upgradeDefaultSkillsInWorkspaces()` 通过 semver 比较决定是否将 bundle 中的 Skill 同步到老用户的 `~/.proma/default-skills/` 与各工作区。**version 不变 = 老用户拿不到新内容**。
-
-**早期实现曾用"无条件 cpSync"绕开这个约束**，但每次启动同步 4MB+ 文件会阻塞主进程导致启动卡顿，已恢复为 semver 比较（见 `config-paths.ts:seedDefaultSkills`、`agent-workspace-manager.ts:upgradeDefaultSkillsInWorkspaces`）。
-
-**新增 Skill 不需要先注入 default-skills 目录的旧版本**——`upgradeDefaultSkillsInWorkspaces` 会通过"目标缺失即注入"路径让所有老工作区自动获得。
-
-## Agent SDK 集成架构
-
-基于 `@anthropic-ai/Codex-agent-sdk@0.2.120` 实现 Agent 模式，与 Chat 模式并行。
-
-### 核心流程
-
-```
-用户输入 → agent-orchestrator.ts (SDK 编排)
-  ↓
-SDK query() → SDKMessage 流
-  ↓
-convertSDKMessage() → AgentEvent[]
-  ↓
-webContents.send() → IPC 推送
-  ↓
-useGlobalAgentListeners (全局监听) → store.set(atoms)
-  ↓
-React UI 更新
+```text
+@proma/shared 类型/通道
+→ main handler/service
+→ preload contextBridge
+→ renderer Jotai/action
 ```
 
-### 关键组件
+Renderer 不得向 CAT 服务提交任意文件系统路径或任意 projectId authority。项目身份来自当前 Session binding 或主进程验证后的 Project Tab context。
 
-#### agent-orchestrator.ts（核心编排层，71KB）
-- **并发守卫**：同一会话不允许并行请求
-- **渠道管理**：查找渠道 + API Key 解密
-- **环境构建**：环境变量 + SDK 路径解析
-- **消息持久化**：SDK 消息存储到 JSONL
-- **事件流处理**：文本累积 + 工具调用解析
-- **错误处理**：SDK 错误映射 + 重试逻辑
-- **自动标题**：首次对话自动生成标题
+项目重命名、活跃项目排序与 Linguist 会话复制都由主进程重新校验。排序请求必须是当前活跃项目 ID 的完整无重复排列；复制目标必须是其他活跃且健康的项目。Renderer 不得提交目标 binding、原生分叉 ID 或路径，复制任一步失败必须回滚半成品且不得改变源会话。
 
-#### agent-prompt-builder.ts（提示词构建，18KB）
-- **系统提示词生成**：基于工作区配置
-- **动态上下文构建**：注入工作区信息
-- **内置 Agent 构建**：预定义 Agent 配置
+所有 BrowserWindow 必须显式设置：
 
-#### agent-permission-service.ts（权限管理）
-- **工具权限检查**：基于权限规则
-- **权限模式管理**：safe / ask / allow-all
+```ts
+webPreferences: {
+  contextIsolation: true,
+  sandbox: true,
+  nodeIntegration: false,
+  webSecurity: true,
+}
+```
 
-### 关键设计
+## CAT 分层
 
-- **SDK 调用**：`sdk.query({ prompt, options: { apiKey, model, permissionMode, cwd, abortController } })`
-- **事件转换**：`convertSDKMessage()`（`@proma/shared`）将 SDK 原始消息转为统一的 `AgentEvent` 类型
-- **工具匹配**：`packages/shared/src/agent/tool-matching.ts` — 无状态 `ToolIndex` + `extractToolStarts` / `extractToolResults` 解析工具调用
-- **状态管理**：`applyAgentEvent()` 纯函数更新 `AgentStreamState`，支持流式增量更新
-- **全局 IPC 监听**：`useGlobalAgentListeners`（`renderer/hooks/`）在 `main.tsx` 顶层挂载，通过 `useStore()` 直接操作 atoms，永不销毁。确保页面切换（如设置页）时流式输出、权限请求不丢失
-- **权限请求排队**：权限/AskUser 请求按 sessionId 入队到 Map atoms（`allPendingPermissionRequestsAtom` / `allPendingAskUserRequestsAtom`），不区分当前/后台会话，SDK Promise 等待用户回来响应
-- **工作区隔离**：每个工作区独立的 MCP Server 配置和 cwd，Agent 会话按工作区过滤
+```text
+Linguist Workbench / Agent Rail
+        ↓ IPC / Session binding
+Electron Linguist Services
+        ↓
+@linguist/cat-tools / @linguist/cat-store
+        ↓
+@linguist/cat-core
+```
 
-### SDK 版本升级注意事项
+`@linguist/cat-core` 生产代码不得依赖 React、Electron、`@proma/ui`、SQLite 或 Node 文件系统。
 
-**`@anthropic-ai/Codex-agent-sdk` 0.2.113+ `options.env` 语义为"替换"**
+CAT 写入规则：
 
-- SDK 将 `options.env` **替换** 传递给子进程（0.2.111/0.2.112 短暂改为叠加，0.2.113 恢复替换）
-- 如果传 `env` 时只给 `ANTHROPIC_*` 相关变量，子进程会丢失 `PATH` / `HOME` / `SHELL` 等关键变量，导致 SDK 调用 `npx` / `git` 等命令失败
-- **正确做法**：`agent-orchestrator.ts` 的 `buildSdkEnv()` 末尾显式 `{ ...cleanEnv, ...customEnv }` 合并 `process.env`，再剥离不希望泄漏的 `ANTHROPIC_*` 变量
-- **修改 `buildSdkEnv()` 时的检查清单**：
-  1. ✅ 基于 `process.env` 合并，保证 PATH / HOME / SHELL 等继承到子进程
-  2. ✅ 过滤掉不希望泄漏的 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_CUSTOM_HEADERS`、`ANTHROPIC_MODEL` 等
-  3. ✅ 新增的 SDK 识别的环境变量必须显式加入 `sdkEnv`
-- 若未来升级到后续大版本导致语义再次变化，需重新评估本加固逻辑
+- 模型只能创建 pending Proposal；
+- 读取工具不得写入；
+- QA、Critic 和 consistency repair 不能直接提交 Segment；
+- CAT 编辑器的 `Cmd/Ctrl+Enter` 表示确认当前阶段并前进，即使译文未改也必须可用；`Cmd/Ctrl+S` 仍只保存实际修改；
+- Segment 写入必须经过人工操作、revision CAS、locked 与 hard-rule 检查；
+- 导出必须从受管 source blob 生成，先过 QA / 阶段预检并重新导入验证；
+- 输出给模型和 renderer 的 DTO 不暴露绝对本机路径。
 
-**关键 Breaking Changes（升级参考）**：
-- `0.2.91`: `sandbox.failIfUnavailable` 默认从 `false` 变为 `true`（目前项目未使用 sandbox 选项）
-- `0.2.111`: `options.env` 从"替换"变为"叠加"
-- `0.2.113`:
-  - `options.env` 回退为"替换"
-  - **SDK 包结构重构**：删除 `cli.js`，改为平台 native binary（通过 `@anthropic-ai/Codex-agent-sdk-{platform}-{arch}` optionalDependency 分发），ripgrep 编译进 binary
-  - 详见上方"打包配置注意事项"段落
-- `0.2.120`: `query()` 省略 `settingSources` 时默认加载所有来源（Proma 已显式传 `['user', 'project']`，不受影响）
+`LinguistProjectService` 是兼容门面，内部拆分为：
 
-### 共享类型（`@proma/shared`）
+- `project-service.ts`：生命周期、句柄、健康、备份与配置；
+- `project-resources.ts`：TM/TB、语言资产、Context；
+- `project-quality.ts`：Workbench 查询、编辑、阶段与 QA；
+- `project-delivery.ts`：导入、交付预检与导出；
+- `project-service-types.ts`：稳定调用合同。
 
-- `AgentEvent`：Agent 事件（text / tool_start / tool_result / done / error）
-- `AgentSessionMeta`：会话元数据（id / title / channelId / workspaceId）
-- `AgentMessage`：持久化消息（role + content blocks）
-- `AgentSendInput`：发送请求输入
-- `AGENT_IPC_CHANNELS`：Agent 相关 IPC 通道常量
-- `WorkspaceCapabilities`：工作区能力（MCP Server 列表 + Skills 列表）
+CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；17 个工具按 `project-tools`、`reference-tools`、`qa-tools`、`proposal-tools`、`intake-tools` 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。Intake 当前只接受会话明确附加的单文件，不包含目录扫描或 Durable Import Job。
 
-## 创作参考
+## 数据目录
 
-遵循 [craft-agents-oss](https://github.com/craftship/craft-agents-oss) 的模式：
+正式版：
 
-- **会话管理**：收件箱/归档工作流
-- **权限模式**：safe / ask / allow-all
-- **Agent SDK**：@anthropic-ai/Codex-agent-sdk（[v1 文档](https://platform.Codex.com/docs/en/agent-sdk/typescript)、[v2 文档](https://platform.Codex.com/docs/en/agent-sdk/typescript-v2-preview)）
-- **MCP 集成**：Model Context Protocol 用于外部数据源
-- **凭证存储**：AES-256-GCM 加密
-- **配置位置**：`~/.proma/`（类似 `~/.craft-agent/`）
+```text
+~/.linguist-agent/
+├── channels.json
+├── conversations.json
+├── conversations/*.jsonl
+├── agent-sessions.json
+├── agent-sessions/*.jsonl
+├── agent-workspaces/
+├── attachments/
+├── settings.json
+├── sdk-config/
+├── planning.json
+└── linguist/
+    ├── projects.json
+    ├── projects/<project-id>/
+    │   ├── project.json
+    │   ├── cat.db
+    │   ├── source/
+    │   ├── blobs/
+    │   ├── exports/
+    │   └── backups/
+    └── trash/
+```
 
-## 核心特性
+Planning 使用通用配置根中的原子 `planning.json`；SQLite 仍只用于 CAT 的每项目 `cat.db`。开发版使用 `~/.linguist-agent-dev/`。旧 `~/.proma(-dev)/channels.json` 只允许在用户从「设置 → 模型配置」明确选择 Provider-only 导入时读取，不得静默共用或迁移其他数据。
 
-### 已实现功能
+不要在测试、smoke 或打包验证中读写真实用户根；必须使用精确临时 `--user-data-dir` 与任务专用临时目录。
 
-- ✅ **多 Provider 支持**：Anthropic、OpenAI、DeepSeek、Kimi、智谱、MiniMax、豆包、通义千问、Google、自定义端点
-- ✅ **Agent SDK 集成**：基于 Codex Agent SDK 的完整 Agent 模式
-- ✅ **飞书集成**：消息同步、任务通知、OAuth 认证（68KB 核心服务）
-- ✅ **工作区管理**：多工作区隔离、MCP Server 配置、Skills 管理
-- ✅ **权限系统**：工具权限检查、用户确认流程
-- ✅ **自动更新**：Electron Updater 集成
-- ✅ **代理支持**：系统代理检测与配置
-- ✅ **文档解析**：PDF、Office、文本文件提取
-- ✅ **多模态支持**：图片、文档附件
-- ✅ **Chat 工具**：内置工具系统 + 动态加载
+## Agent Runtime 与打包
 
-### 架构亮点
+主进程构建 external：
 
-- **并发守卫**：同一会话防止并行请求冲突
-- **全局监听**：Agent IPC 监听器永不销毁，确保后台会话不丢失
-- **权限排队**：按 sessionId 隔离权限请求，支持多会话并行
-- **文件监听**：项目根目录、会话文件、附加目录、MCP 配置与 Chat 工具实时监控
-- **事件流处理**：SDK 消息流式转换与累积
-- **错误映射**：SDK 错误统一转换为应用错误
+- `electron`
+- `@anthropic-ai/claude-agent-sdk`
+- `@earendil-works/pi-coding-agent`
+- `@earendil-works/pi-agent-core`
+- `@earendil-works/pi-ai`
+
+打包前运行 `apps/electron/scripts/sync-runtime-deps.ts`，把 external runtime 依赖闭包同步到 appDir。`electron-builder.yml` 必须包含运行时 `node_modules`，并对 Anthropic 与 Pi native 内容配置 `asarUnpack`。
+
+Claude SDK 平台包由 `optionalDependencies` 固定为 `0.3.201`；Electron App 使用的 Pi runtime 包固定为 `0.82.1`。每个平台 runner 只构建与宿主架构匹配的产物。不要恢复旧的 `Codex-agent-sdk`、`cli.js` 或 0.2.x 打包说明。
+
+## Provider
+
+Chat 与 Pi 继续支持多 Provider；Claude Runtime 使用 Anthropic 协议或 ChatGPT subscription/Codex OAuth 路径。Provider 配置入口在「设置 → 模型配置」。
+
+API Key 写入 `channels.json` 前必须经 Electron `safeStorage` 加密。Provider 导入失败必须零写入，并通过同目录原子替换提交最终配置。
+
+## 版本规则
+
+提交代码时递增所有受影响 workspace 包的 patch 版本。只修改文档、测试名称或注释时，若同时触及可发布包源码，也按受影响包递增。
+
+修改 `apps/electron/default-skills/<skill>/` 任意内容时，必须同步递增该 Skill `SKILL.md` frontmatter 的 `version` patch；老工作区依赖 semver 比较获得更新。
+
+## 架构触点
+
+Proma 核心文件修改必须遵守：
+
+- [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md)
+- `docs/architecture/proma-touchpoints.json`
+- `bun run check:boundaries`
+- `node --test tests/linguist-fusion-architecture.test.mjs`
+
+新 LA 代码优先放在已白名单的 Linguist 路径。不得为了方便让 CAT Core 反向依赖 Proma，也不得绕开触点登记直接修改 Proma 核心。
+
+## 文档状态纪律
+
+事实优先级：
+
+```text
+代码 / package.json / 测试 / 真实运行输出
+> 机器队列与当前事实文档
+> README / HANDOFF / TODO
+> 历史 Gate 报告
+```
+
+当前入口：
+
+- `docs/DOCS_INDEX.md`
+- `docs/HANDOFF.md`
+- `TODO.md`
+- `docs/roadmap/linguist-fusion-queue.json`
+- `docs/roadmap/LINGUIST_FUSION_CURRENT_REALITY.md`
+
+历史报告不得被当作当前代码说明。G8 盲评、LF-048 的 IME/Native Open、AC-009 产品资格和 AC-011 14 天日用在取得真实证据前必须保持 pending / blocked；Native Save 防覆盖已有单独 packaged 手工证据。

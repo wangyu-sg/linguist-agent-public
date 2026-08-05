@@ -51,9 +51,9 @@ interface DiffChangesListProps {
 
 /** 文件来源 badge 的颜色和文案 */
 const SOURCE_CONFIG: Record<string, { color: string; label: string }> = {
-  session: { color: 'bg-blue-500/10 text-blue-500', label: '会话文件' },
-  workspace: { color: 'bg-purple-500/10 text-purple-500', label: '项目文件' },
-  both: { color: 'bg-cyan-500/10 text-cyan-500', label: '会话+项目文件' },
+  session: { color: 'bg-info/10 text-info', label: '会话文件' },
+  workspace: { color: 'bg-purple-500/10 text-purple-500', label: '工作区' },
+  both: { color: 'bg-cyan-500/10 text-cyan-500', label: '会话+工作区文件' },
   none: { color: 'bg-muted text-muted-foreground', label: '附加目录文件' },
 }
 
@@ -463,7 +463,7 @@ function UntrackedFileRow({
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-[400px] break-all">{fullPath}</TooltipContent>
       </Tooltip>
-      <span className="ml-1.5 rounded px-1 py-0.5 text-[12px] leading-none shrink-0 bg-amber-500/10 text-amber-500">
+      <span className="ml-1.5 rounded px-1 py-0.5 text-[12px] leading-none shrink-0 bg-warning/10 text-warning">
         新文件
       </span>
     </div>

@@ -9,15 +9,27 @@ import { VOICE_DICTATION_IPC_CHANNELS } from '../../types'
 import type {
   VoiceDictationCommitInput,
   VoiceDictationCommitResult,
+  VoiceDictationPromaInputResolution,
   VoiceDictationSettings,
   VoiceDictationTextEvent,
 } from '../../types'
 import { getMainWindow } from '../index'
 import { pasteTextAtCurrentCursor } from './text-insertion-service'
+import { resolveVoiceDictationPromaOutput } from './voice-dictation-output-result'
 
 let targetWasPromaInput = false
 let activePreviewSessionId: string | null = null
 let closedPreviewSessionId: string | null = null
+const PROMA_INPUT_RESOLUTION_TIMEOUT_MS = 1_000
+
+interface PendingPromaInputCommit {
+  webContentsId: number
+  text: string
+  resolve: (result: VoiceDictationCommitResult) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
+const pendingPromaInputCommits = new Map<string, PendingPromaInputCommit>()
 
 /** 在显示语音浮窗前记录目标是否为 Proma 主窗口。 */
 export function captureVoiceDictationTarget(forcePromaInput?: boolean): boolean {
@@ -36,6 +48,57 @@ function sendTextEvent(channel: string, event: VoiceDictationTextEvent): boolean
   if (!mainWindow || mainWindow.isDestroyed()) return false
   mainWindow.webContents.send(channel, event)
   return true
+}
+
+function settlePromaInputCommit(
+  sessionId: string,
+  handled: boolean,
+  senderWebContentsId?: number,
+): VoiceDictationCommitResult | null {
+  const pending = pendingPromaInputCommits.get(sessionId)
+  if (!pending || (senderWebContentsId !== undefined && pending.webContentsId !== senderWebContentsId)) {
+    return null
+  }
+
+  pendingPromaInputCommits.delete(sessionId)
+  clearTimeout(pending.timer)
+  if (activePreviewSessionId === sessionId) activePreviewSessionId = null
+  closedPreviewSessionId = sessionId
+  const result = resolveVoiceDictationPromaOutput(handled, pending.text, (text) => clipboard.writeText(text))
+  pending.resolve(result)
+  return result
+}
+
+function requestPromaInputCommit(input: VoiceDictationTextEvent): Promise<VoiceDictationCommitResult> | null {
+  const mainWindow = getMainWindow()
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return null
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      settlePromaInputCommit(input.sessionId, false)
+    }, PROMA_INPUT_RESOLUTION_TIMEOUT_MS)
+    pendingPromaInputCommits.set(input.sessionId, {
+      webContentsId: mainWindow.webContents.id,
+      text: input.text,
+      resolve,
+      timer,
+    })
+
+    try {
+      mainWindow.webContents.send(VOICE_DICTATION_IPC_CHANNELS.INSERT_TEXT, input)
+    } catch (error) {
+      console.error('[语音输入] 投递最终文本到 Proma 失败，改用剪贴板:', error)
+      settlePromaInputCommit(input.sessionId, false)
+    }
+  })
+}
+
+/** Renderer 必须确认最终文本已被编辑器消费；未消费时主进程统一复制到剪贴板。 */
+export function resolveVoiceDictationPromaInput(
+  input: VoiceDictationPromaInputResolution,
+  senderWebContentsId: number,
+): VoiceDictationCommitResult | null {
+  return settlePromaInputCommit(input.sessionId, input.handled, senderWebContentsId)
 }
 
 /**
@@ -73,13 +136,9 @@ export async function commitVoiceDictationText(
   }
 
   const hasActivePreview = activePreviewSessionId === input.sessionId
-  if ((hasActivePreview || shouldWriteToPromaInput(settings)) && sendTextEvent(VOICE_DICTATION_IPC_CHANNELS.INSERT_TEXT, {
-    sessionId: input.sessionId,
-    text: trimmed,
-  })) {
-    activePreviewSessionId = null
-    closedPreviewSessionId = input.sessionId
-    return { mode: 'proma-input', success: true, message: '已写入 Proma 输入框' }
+  if (hasActivePreview || shouldWriteToPromaInput(settings)) {
+    const result = requestPromaInputCommit({ sessionId: input.sessionId, text: trimmed })
+    if (result) return await result
   }
 
   if (settings.outputMode === 'auto') {

@@ -573,7 +573,7 @@ export function WorkspaceMemoryTab({ workspaceSlug, search }: WorkspaceMemoryTab
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button size="sm" onClick={handleSave} disabled={!selected || saving || loadingFile}>
-                        {saving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Save size={14} className="mr-1.5" />}
+                        {saving ? <Loader2 size={14} className="mr-1.5 animate-spin motion-reduce:hidden" /> : <Save size={14} className="mr-1.5" />}
                         {saving ? '保存中...' : '保存'}
                       </Button>
                     </TooltipTrigger>

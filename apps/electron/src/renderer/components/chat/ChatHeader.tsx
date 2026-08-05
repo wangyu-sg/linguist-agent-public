@@ -75,6 +75,7 @@ export function ChatHeader({ conversation }: ChatHeaderProps): React.ReactElemen
         <div className="flex items-center gap-1.5 flex-1 min-w-0 titlebar-no-drag">
           <input
             ref={inputRef}
+            aria-label="对话标题"
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -84,6 +85,7 @@ export function ChatHeader({ conversation }: ChatHeaderProps): React.ReactElemen
           />
           <button
             type="button"
+            aria-label="保存标题"
             onMouseDown={(e) => e.preventDefault()}
             onClick={saveTitle}
             className="p-1 text-muted-foreground hover:text-foreground transition-colors"
@@ -92,6 +94,7 @@ export function ChatHeader({ conversation }: ChatHeaderProps): React.ReactElemen
           </button>
           <button
             type="button"
+            aria-label="取消编辑标题"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setEditing(false)}
             className="p-1 text-muted-foreground hover:text-foreground transition-colors"
@@ -126,6 +129,8 @@ export function ChatHeader({ conversation }: ChatHeaderProps): React.ReactElemen
               variant="ghost"
               size="icon"
               className={cn('h-7 w-7', conversation.pinned && 'bg-accent text-accent-foreground')}
+              aria-label={conversation.pinned ? '取消置顶' : '置顶对话'}
+              aria-pressed={conversation.pinned}
               onClick={async () => {
                 const updated = await window.electronAPI.togglePinConversation(conversation.id)
                 setConversations((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
@@ -143,6 +148,8 @@ export function ChatHeader({ conversation }: ChatHeaderProps): React.ReactElemen
               variant="ghost"
               size="icon"
               className={cn('h-7 w-7', parallelMode && 'bg-accent text-accent-foreground')}
+              aria-label={parallelMode ? '关闭并排模式' : '开启并排模式'}
+              aria-pressed={parallelMode}
               onClick={() => setParallelMode(!parallelMode)}
             >
               <Columns2 className="size-3.5" />

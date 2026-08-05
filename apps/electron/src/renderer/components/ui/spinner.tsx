@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils'
 
 interface SpinnerProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
-   * 尺寸（通过 font-size 控制）
-   * @default 'default' (1.5em)
+   * 尺寸（通过 font-size 控制；spinner 盒子为 0.75em）
+   * @default 'default' (text-base = 13px)
    */
   size?: 'sm' | 'default' | 'lg'
 }
@@ -25,9 +25,10 @@ export function Spinner({
   ...props
 }: SpinnerProps): React.ReactElement {
   const sizeClasses = {
-    sm: 'text-sm',      // 14px → spinner 约 21px
-    default: 'text-base', // 16px → spinner 约 24px
-    lg: 'text-lg',      // 18px → spinner 约 27px
+    // PB-100 字号阶梯：sm=12px / base=13px / lg=14px；spinner 盒子为 0.75em（见 globals.css .spinner）
+    sm: 'text-sm',      // 12px → spinner 约 9px
+    default: 'text-base', // 13px → spinner 约 9.75px
+    lg: 'text-lg',      // 14px → spinner 约 10.5px
   }
 
   return (

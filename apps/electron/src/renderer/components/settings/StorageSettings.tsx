@@ -252,7 +252,7 @@ export function StorageSettings(): React.ReactElement {
                     {formatBytes(cat.bytes)}
                   </span>
                   {cat.hasOrphans && (
-                    <span className="flex items-center gap-1 text-xs text-amber-500">
+                    <span className="flex items-center gap-1 text-xs text-warning">
                       <AlertTriangle size={12} />
                       孤儿 {formatBytes(cat.orphanBytes)}
                     </span>
@@ -327,7 +327,7 @@ export function StorageSettings(): React.ReactElement {
           >
             <div className="flex items-center gap-3">
               {hasOrphans && (
-                <span className="flex items-center gap-1 text-sm text-amber-500">
+                <span className="flex items-center gap-1 text-sm text-warning">
                   <AlertTriangle size={14} />
                   {formatBytes(totalOrphanBytes)}
                 </span>
@@ -351,7 +351,7 @@ export function StorageSettings(): React.ReactElement {
       {lastResult && (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
           {lastResult.freedBytes > 0 ? (
-            <span className="text-emerald-600 dark:text-emerald-400">
+            <span className="text-success">
               已释放 {formatBytes(lastResult.freedBytes)}，删除 {lastResult.deletedCount} 个文件
             </span>
           ) : (
@@ -396,7 +396,7 @@ export function StorageSettings(): React.ReactElement {
             )}
           </div>
           {pendingOrphanItemsTruncated && (
-            <div className="text-xs text-amber-500">列表较长，仅展示前 80 项；确认后会清理当前分类下全部孤儿数据。</div>
+            <div className="text-xs text-warning">列表较长，仅展示前 80 项；确认后会清理当前分类下全部孤儿数据。</div>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPendingCleanup(null)}>取消</AlertDialogCancel>

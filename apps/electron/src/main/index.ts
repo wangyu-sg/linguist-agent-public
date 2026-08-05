@@ -1,11 +1,19 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme, protocol, screen, shell } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import {
+  resolveElectronUserDataPath,
+  shouldSetDefaultElectronUserDataPath,
+} from './lib/electron-user-data-path'
 
-// Dev 与正式版使用独立的 userData 目录，避免共享 Chromium SingletonLock 导致 dev 启动被静默退出
-// 必须在任何会读取 userData 路径的模块加载之前执行
-if (!app.isPackaged) {
-  app.setPath('userData', join(app.getPath('appData'), '@proma/electron-dev'))
+// Dev / 正式版均显式使用 Linguist Agent 独立的 Chromium userData。
+// 不能依赖 package name 推导，否则 @proma/electron 会与 Proma 混用。
+// packaged smoke / 诊断显式传入 --user-data-dir 时尊重该隔离目录。
+if (shouldSetDefaultElectronUserDataPath(process.argv)) {
+  app.setPath(
+    'userData',
+    resolveElectronUserDataPath(app.getPath('appData'), app.isPackaged),
+  )
 }
 
 // 单实例锁：防止重复启动同一个版本（dev/prod 因 userData 已隔离，互不影响）
@@ -17,8 +25,8 @@ if (!app.isPackaged) {
 // second-instance 事件，由主实例负责显示窗口。
 if (!app.requestSingleInstanceLock()) {
   console.warn(
-    '[启动] 已有 Proma 进程持有单实例锁，本次启动将退出。\n' +
-      '  如果窗口未出现，可能旧进程已卡死。请运行 `killall Proma` 后重试。',
+    '[启动] 已有 Linguist Agent 进程持有单实例锁，本次启动将退出。\n' +
+      '  如果窗口未出现，可能旧进程已卡死。请运行 `killall "Linguist Agent"` 后重试。',
   )
   app.quit()
 } else {
@@ -81,7 +89,7 @@ for (const key of Object.keys(process.env)) {
 }
 
 import { createApplicationMenu } from './menu'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, stopAllLinguistIntegrityScrubs } from './ipc'
 import { createTray, destroyTray, getTray } from './tray'
 import { initializeRuntime } from './lib/runtime-init'
 import { seedDefaultSkills } from './lib/config-paths'
@@ -102,6 +110,7 @@ import {
   stopBridgeSelfHealing,
 } from './lib/bridge-registry'
 import { startScheduler, stopScheduler } from './lib/automation-scheduler'
+import { closeAllLinguistProjectHandles, initLinguistProjectService } from './lib/linguist/project-service'
 import { startPlanningReminderScheduler, stopPlanningReminderScheduler } from './lib/planning-reminder-scheduler'
 import { feishuBridgeManager } from './lib/feishu-bridge-manager'
 import { getFeishuMultiBotConfig } from './lib/feishu-config'
@@ -395,6 +404,8 @@ function createWindow(): void {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
     },
     ...titleBarOptions,
   })
@@ -527,7 +538,7 @@ async function bootstrap(): Promise<void> {
   // 必须在其他初始化之前执行，确保环境变量正确加载
   await safeAwait('initializeRuntime', () => initializeRuntime())
 
-  // 同步默认 Skills 模板到 ~/.proma/default-skills/
+  // 同步默认 Skills 模板到 ~/.linguist-agent/default-skills/
   safeRun('seedDefaultSkills', seedDefaultSkills)
 
   // 升级所有工作区中版本过旧的默认 Skills
@@ -539,6 +550,10 @@ async function bootstrap(): Promise<void> {
 
   // Register IPC handlers
   registerIpcHandlers()
+
+  // 初始化 Linguist CAT 项目服务（PB-030：仅实例化 + sqlite 探针；
+  // IPC handler 注册属 PB-031；sqlite 不可用时服务自报降级，不阻断启动）
+  safeRun('initLinguistProjectService', () => initLinguistProjectService())
 
   // 收敛上次退出时遗留的运行中委派子会话（内存态丢失，无法续跑）
   safeRun('markRunningDelegationsAsInterrupted', markRunningDelegationsAsInterrupted)
@@ -675,13 +690,13 @@ function handleBootstrapFailure(err: unknown): void {
   try {
     const message = err instanceof Error ? (err.stack ?? err.message) : String(err)
     dialog.showErrorBox(
-      'Proma 启动遇到错误',
+      'Linguist Agent 启动遇到错误',
       `部分功能可能不可用：\n\n${message}\n\n` +
         `日志位置：${app.getPath('logs')}\n\n` +
         `常见原因与排查：\n` +
-        `1. 旧版 Proma 进程未退出（终端运行 killall Proma 后重试）\n` +
-        `2. ~/.proma/ 配置损坏（重命名 ~/.proma 后重启）\n` +
-        `3. 系统 Keychain 无法解密保存的凭证（删除 ~/.proma/feishu.json 等后重新登录）\n\n` +
+        `1. 旧版进程未退出（终端运行 killall "Linguist Agent" 后重试）\n` +
+        `2. ~/.linguist-agent/ 配置损坏（重命名 ~/.linguist-agent 后重启）\n` +
+        `3. 系统 Keychain 无法解密保存的凭证（删除 ~/.linguist-agent/feishu.json 等后重新登录）\n\n` +
         `如需协助请到 GitHub Issues 反馈。`,
     )
   } catch {
@@ -725,6 +740,9 @@ app.on('before-quit', () => {
   stopAllBridges()
   // 停止定时任务调度器
   stopScheduler()
+  // 关闭 Linguist CAT 项目 DB 句柄（WAL 正常 checkpoint；未初始化时为空操作）
+  stopAllLinguistIntegrityScrubs()
+  closeAllLinguistProjectHandles()
   stopPlanningReminderScheduler()
   // 释放飞书同步防休眠
   stopFeishuSyncSleepBlocker()

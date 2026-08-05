@@ -112,6 +112,7 @@ export function ConversationScrollButton({
       onClick={handleScrollToBottom}
       type="button"
       variant="ghost"
+      aria-label="滚动到底部"
       {...props}
     >
       <ArrowDownIcon className="size-4" />

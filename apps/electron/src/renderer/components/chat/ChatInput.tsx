@@ -332,6 +332,8 @@ export function ChatInput({ conversationId, streaming, pendingAttachments, onSet
                 inputToolbarButtonClass,
                 thinkingEnabled && inputToolbarActiveButtonClass
               )}
+              aria-label={thinkingEnabled ? '关闭思考模式' : '开启思考模式'}
+              aria-pressed={thinkingEnabled}
               onClick={() => setThinkingEnabled(!thinkingEnabled)}
             >
               <Brain className="size-5" />
@@ -353,6 +355,7 @@ export function ChatInput({ conversationId, streaming, pendingAttachments, onSet
               variant="ghost"
               size="icon"
               className={inputToolbarButtonClass}
+              aria-label="添加附件"
               onClick={handleOpenFileDialog}
             >
               <Paperclip className="size-5" />
@@ -378,6 +381,7 @@ export function ChatInput({ conversationId, streaming, pendingAttachments, onSet
           variant="ghost"
           size="icon"
           className={inputToolbarDangerButtonClass}
+          aria-label="停止生成"
           onClick={onStop}
         >
           <Square className="size-[16px]" fill="currentColor" strokeWidth={0} />
@@ -395,6 +399,7 @@ export function ChatInput({ conversationId, streaming, pendingAttachments, onSet
       className={cn(
         canSend ? inputToolbarSendButtonClass : inputToolbarDisabledButtonClass
       )}
+      aria-label="发送消息"
       onClick={handleSend}
       disabled={!canSend}
     >

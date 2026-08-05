@@ -1,97 +1,96 @@
 /**
- * ModeSwitcher - Chat/Agent 模式切换（带滑动指示器）
+ * ModeSwitcher - Agent/Chat/Linguist 主模式切换（带滑动指示器）
  *
  * 切换模式时自动恢复上一次在该模式下查看的对话/会话：
  * 1. 优先恢复上次选中的对话 ID
  * 2. 其次查找已打开的同类型 Tab
  * 3. 兜底打开最近的对话/会话（列表首项）
- * 4. 都没有则仅切换模式
+ * 4. 都没有则创建该模式的草稿会话
  */
 
 import * as React from 'react'
-import { useAtom, useAtomValue } from 'jotai'
+import { useAtomValue } from 'jotai'
 import { appModeAtom, type AppMode } from '@/atoms/app-mode'
-import { conversationsAtom, currentConversationIdAtom } from '@/atoms/chat-atoms'
-import { agentSessionsAtom, currentAgentSessionIdAtom } from '@/atoms/agent-atoms'
-import { tabsAtom } from '@/atoms/tab-atoms'
-import { useOpenSession } from '@/hooks/useOpenSession'
-import { Bot, MessageSquare } from 'lucide-react'
+import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
+import { Bot, Languages, MessageSquare } from 'lucide-react'
+import { extensionRegistry } from '@/host/extensions'
 import { cn } from '@/lib/utils'
+import {
+  MODE_SWITCHER_MODES,
+  getModeSliderTranslateX,
+  getNextMode,
+} from './mode-switcher-utils'
 
-const modes: { value: AppMode; label: string; icon: React.ReactNode }[] = [
-  { value: 'agent', label: 'Agent', icon: <Bot size={15} /> },
-  { value: 'chat', label: 'Chat', icon: <MessageSquare size={15} /> },
-]
+const modeIcons: Record<AppMode, React.ReactNode> = {
+  agent: <Bot size={15} />,
+  chat: <MessageSquare size={15} />,
+  linguist: <Languages size={15} />,
+}
 
-export function ModeSwitcher(): React.ReactElement {
-  const [mode, setMode] = useAtom(appModeAtom)
-  const openSession = useOpenSession()
-  const conversations = useAtomValue(conversationsAtom)
-  const agentSessions = useAtomValue(agentSessionsAtom)
-  const currentConversationId = useAtomValue(currentConversationIdAtom)
-  const currentAgentSessionId = useAtomValue(currentAgentSessionIdAtom)
-  const tabs = useAtomValue(tabsAtom)
+const modes: { value: AppMode; label: string; icon: React.ReactNode }[] = MODE_SWITCHER_MODES.map((mode) => {
+  const contribution = extensionRegistry.appModesFor(mode.value)[0]
+  return {
+    ...mode,
+    label: contribution?.label ?? mode.label,
+    icon: contribution?.icon ?? modeIcons[mode.value],
+  }
+})
 
-  /** 尝试恢复目标模式下的上一个对话/会话，按优先级 fallback */
-  const restoreSession = React.useCallback((targetMode: AppMode) => {
-    const isChatMode = targetMode === 'chat'
-    const sessions = isChatMode ? conversations : agentSessions
-    const lastId = isChatMode ? currentConversationId : currentAgentSessionId
+const navigationKeys = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
 
-    // 1. 上次选中的对话仍存在 → 恢复
-    if (lastId) {
-      const match = sessions.find((s) => s.id === lastId)
-      if (match) {
-        openSession(targetMode, match.id, match.title)
-        return
-      }
-    }
-    // 2. 已打开的同类型 Tab → 聚焦
-    const tab = tabs.find((t) => t.type === targetMode)
-    if (tab) {
-      openSession(targetMode, tab.sessionId, tab.title)
-      return
-    }
-    // 3. 最近的未归档对话/会话 → 打开
-    const recent = sessions.find((s) => !s.archived)
-    if (recent) {
-      openSession(targetMode, recent.id, recent.title)
-      return
-    }
-    // 4. 无任何对话，仅切换模式
-    setMode(targetMode)
-  }, [openSession, conversations, agentSessions, currentConversationId, currentAgentSessionId, tabs, setMode])
+export function ModeSwitcher({ ariaLabel = '主工作模式' }: { ariaLabel?: string } = {}): React.ReactElement {
+  const mode = useAtomValue(appModeAtom)
+  const switchMode = useSwitchAppMode()
+  const modeButtonRefs = React.useRef(new Map<AppMode, HTMLButtonElement>())
 
   const handleModeSwitch = React.useCallback((targetMode: AppMode) => {
-    if (targetMode === mode) return
-    restoreSession(targetMode)
-  }, [mode, restoreSession])
+    switchMode(targetMode)
+  }, [switchMode])
+
+  const handleModeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!navigationKeys.has(event.key)) return
+
+    event.preventDefault()
+    const targetMode = getNextMode(mode, event.key as 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End')
+    handleModeSwitch(targetMode)
+    requestAnimationFrame(() => modeButtonRefs.current.get(targetMode)?.focus())
+  }, [handleModeSwitch, mode])
 
   return (
     <div className="pt-2 titlebar-drag-region select-none">
       <div
+        role="tablist"
+        aria-label={ariaLabel}
         className="relative flex rounded-xl p-1 titlebar-drag-region mode-switcher-track sidebar-control-surface"
       >
         {/* 滑动背景指示器 */}
         <div
           className={cn(
-            'mode-slider pointer-events-none absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-in-out',
-            mode === 'agent' ? 'translate-x-0' : 'translate-x-full'
+            'mode-slider pointer-events-none absolute top-1 bottom-1 w-[calc((100%-8px)/3)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-in-out',
           )}
+          style={{ transform: `translateX(${getModeSliderTranslateX(mode)}%)` }}
         />
         {modes.map(({ value, label, icon }) => (
           <button
             key={value}
             type="button"
             onClick={() => handleModeSwitch(value)}
+            onKeyDown={handleModeKeyDown}
+            role="tab"
+            aria-selected={mode === value}
+            tabIndex={mode === value ? 0 : -1}
+            ref={(element) => {
+              if (element) modeButtonRefs.current.set(value, element)
+              else modeButtonRefs.current.delete(value)
+            }}
             className={cn(
               'mode-btn titlebar-no-drag relative z-[1] h-8 flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-0 text-sm font-medium transition-colors duration-200 select-none',
               mode === value
                 ? 'mode-btn-selected text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-foreground/60 hover:text-foreground'
             )}
           >
-            {icon}
+            <span className="mode-switcher-icon flex-shrink-0">{icon}</span>
             {label}
           </button>
         ))}

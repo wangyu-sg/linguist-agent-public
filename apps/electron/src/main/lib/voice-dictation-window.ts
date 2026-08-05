@@ -140,6 +140,8 @@ function getOrCreateVoiceIndicatorWindow(): BrowserWindow {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
       partition: 'voice-dictation-indicator',
     },
   }

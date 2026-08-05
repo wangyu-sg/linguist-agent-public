@@ -1,0 +1,312 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { StoreNotFoundError, StoreReadOnlyError } from './errors'
+import { TermEntriesRepository } from './repositories/term-entries'
+import { TmUnitsRepository } from './repositories/tm-units'
+import { CatStore } from './store'
+import { makeClock, makeEntropy, makeTempDir } from './testkit'
+
+const PROJECT_INPUT = {
+  name: 'P',
+  sourceLocale: 'en',
+  targetLocale: 'zh-CN',
+  promaWorkspaceId: 'ws',
+}
+
+function setup() {
+  const now = makeClock()
+  const store = new CatStore({ rootDir: makeTempDir(), entropy: makeEntropy(), now })
+  const project = store.createProject(PROJECT_INPUT)
+  return { store, project, now }
+}
+
+test('TM importMany: stable ids, same source with different targets, and repeat import is unchanged', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  const rows = [
+    {
+      source: 'Save',
+      target: '保存',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      origin: 'client_tm',
+    },
+    {
+      source: 'Save',
+      target: '存储',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      origin: 'client_tm',
+    },
+  ]
+  try {
+    assert.deepEqual(db.tmUnits.importMany(rows), { imported: 2, unchanged: 0 })
+    const ids = db.tmUnits.list({ limit: 1 }).map((item) => item.id)
+    assert.equal(ids.length, 1)
+    assert.match(ids[0]!, /^tmu_v2_[0-9a-f]{64}$/)
+    assert.deepEqual(db.tmUnits.importMany(rows), { imported: 0, unchanged: 2 })
+    assert.deepEqual(db.tmUnits.list().map((item) => item.target), ['保存', '存储'])
+  } finally {
+    db.close()
+  }
+})
+
+test('TM findMatches: normalizes text, scores exact/contains/fuzzy, and sorts deterministically', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    db.tmUnits.importMany([
+      { source: 'Ａ   cat', target: '甲', sourceLocale: 'en', targetLocale: 'zh-CN' },
+      { source: 'A cat today', target: '乙', sourceLocale: 'en', targetLocale: 'zh-CN' },
+      { source: 'A cot', target: '丙', sourceLocale: 'en', targetLocale: 'zh-CN' },
+      { source: 'A cat', target: '错误 locale', sourceLocale: 'fr', targetLocale: 'zh-CN' },
+    ])
+
+    const matches = db.tmUnits.findMatches({
+      source: 'a cat',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      threshold: 0.4,
+      limit: 3,
+    })
+    assert.deepEqual(matches.map((item) => item.matchType), ['exact', 'contains', 'fuzzy'])
+    assert.deepEqual(matches.map((item) => item.target), ['甲', '乙', '丙'])
+    assert.equal(matches[0]?.score, 1)
+    assert.equal(
+      db.tmUnits.findMatches({
+        source: 'a cat',
+        sourceLocale: 'en',
+        targetLocale: 'zh-CN',
+        threshold: 0.7,
+        limit: 3,
+      })[1]?.matchType,
+      'contains',
+    )
+  } finally {
+    db.close()
+  }
+})
+
+test('TM/Term findMatchesMany 复用一次批量读取并保持逐文本匹配语义', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    db.tmUnits.importMany([
+      { source: 'Save game', target: '保存游戏', sourceLocale: 'en', targetLocale: 'zh-CN' },
+      { source: 'Load game', target: '加载游戏', sourceLocale: 'en', targetLocale: 'zh-CN' },
+    ])
+    db.termEntries.importMany([
+      { term: 'Save', translation: '保存', status: 'preferred', caseSensitive: false },
+      { term: 'game', translation: '游戏', status: 'allowed', caseSensitive: false },
+    ])
+
+    const tm = db.tmUnits.findMatchesMany({
+      sources: ['Save game', 'Load game'],
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      threshold: 0.6,
+      limit: 3,
+    })
+    assert.equal(tm.get('Save game')?.[0]?.target, '保存游戏')
+    assert.equal(tm.get('Load game')?.[0]?.target, '加载游戏')
+
+    const terms = db.termEntries.findMatchesMany({
+      texts: ['Save game', 'Load game'],
+      limit: 5,
+    })
+    assert.deepEqual(terms.get('Save game')?.map((item) => item.term), ['Save', 'game'])
+    assert.deepEqual(terms.get('Load game')?.map((item) => item.term), ['game'])
+  } finally {
+    db.close()
+  }
+})
+
+test('TM repositories isolate projects and reject content-id collisions', () => {
+  const { store, project, now } = setup()
+  const db = store.openProject(project.id)
+  const row = { source: 'Open', target: '打开', sourceLocale: 'en', targetLocale: 'zh-CN' }
+  try {
+    db.tmUnits.importMany([row])
+    const own = db.tmUnits.list()[0]!
+    const otherProject = new TmUnitsRepository(db.catDb, 'prj-other', now)
+    assert.equal(otherProject.get(own.id), undefined)
+    assert.throws(() => otherProject.delete(own.id), StoreNotFoundError)
+    assert.equal(otherProject.importMany([row]).imported, 1)
+    assert.notEqual(otherProject.list()[0]?.id, own.id)
+
+    db.catDb.db.prepare('UPDATE tm_units SET source = ? WHERE id = ?').run('corrupt', own.id)
+    assert.throws(() => db.tmUnits.importMany([row]), /content id collision/)
+  } finally {
+    db.close()
+  }
+})
+
+test('TM writes are rejected by a read-only project handle', () => {
+  const { store, project } = setup()
+  store.openProject(project.id).close()
+  const db = store.openProject(project.id, { readOnly: true })
+  try {
+    assert.throws(
+      () => db.tmUnits.importMany([
+        { source: 'Open', target: '打开', sourceLocale: 'en', targetLocale: 'zh-CN' },
+      ]),
+      StoreReadOnlyError,
+    )
+    assert.throws(() => db.tmUnits.delete('tmu-0000000000000000'), StoreReadOnlyError)
+  } finally {
+    db.close()
+  }
+})
+
+test('term importMany/list: required fields persist and repeat import is unchanged', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  const rows = [
+    {
+      term: 'Color',
+      translation: '颜色',
+      status: 'preferred' as const,
+      caseSensitive: false,
+      note: 'UI',
+    },
+    {
+      term: 'Color',
+      translation: '色彩',
+      status: 'preferred' as const,
+      caseSensitive: false,
+    },
+  ]
+  try {
+    assert.deepEqual(db.termEntries.importMany(rows), { imported: 2, unchanged: 0 })
+    assert.deepEqual(db.termEntries.importMany(rows), { imported: 0, unchanged: 2 })
+    const page = db.termEntries.list({ status: 'preferred', limit: 1 })
+    assert.equal(page.length, 1)
+    assert.match(page[0]!.id, /^ter_v2_[0-9a-f]{64}$/)
+    assert.equal(page[0]!.status, 'preferred')
+    assert.equal(page[0]!.caseSensitive, false)
+    assert.equal(db.termEntries.count({ status: 'preferred' }), 2)
+  } finally {
+    db.close()
+  }
+})
+
+test('term upsert/delete are project-scoped', () => {
+  const { store, project, now } = setup()
+  const db = store.openProject(project.id)
+  try {
+    const created = db.termEntries.upsert({
+      term: 'API',
+      translation: '接口',
+      status: 'allowed',
+      caseSensitive: true,
+    })
+    const updated = db.termEntries.upsert({
+      id: created.id,
+      term: 'API',
+      translation: '应用接口',
+      status: 'deprecated',
+      caseSensitive: true,
+      note: 'legacy',
+    })
+    assert.equal(updated.id, created.id)
+    assert.equal(updated.status, 'deprecated')
+    assert.equal(updated.note, 'legacy')
+
+    const otherProject = new TermEntriesRepository(db.catDb, 'prj-other', now)
+    assert.equal(otherProject.get(created.id), undefined)
+    assert.throws(
+      () => otherProject.upsert({ ...updated, id: created.id }),
+      StoreNotFoundError,
+    )
+    assert.throws(() => otherProject.delete(created.id), StoreNotFoundError)
+    db.termEntries.delete(created.id)
+    assert.equal(db.termEntries.get(created.id), undefined)
+  } finally {
+    db.close()
+  }
+})
+
+test('term findMatches honors case sensitivity, status filters, contains, and conflict sorting', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    db.termEntries.importMany([
+      { term: 'API', translation: '接口', status: 'allowed', caseSensitive: true },
+      { term: 'api', translation: '应用接口', status: 'forbidden', caseSensitive: false },
+      { term: 'Color', translation: '颜色', status: 'preferred', caseSensitive: false },
+      { term: 'Color', translation: '色彩', status: 'preferred', caseSensitive: false },
+    ])
+
+    const apiMatches = db.termEntries.findMatches({ text: 'api', limit: 10 })
+    assert.deepEqual(apiMatches.map((item) => item.translation), ['应用接口'])
+    assert.equal(apiMatches[0]?.matchType, 'exact')
+
+    const colorMatches = db.termEntries.findMatches({ text: 'Choose COLOR settings', limit: 10 })
+    assert.deepEqual(colorMatches.map((item) => item.translation), ['色彩', '颜色'])
+    assert.ok(colorMatches.every((item) => item.matchType === 'contains' && item.conflict))
+    assert.deepEqual(
+      db.termEntries.findMatches({ text: 'Use api and color', limit: 10 }).map((item) => item.status),
+      ['preferred', 'preferred', 'forbidden'],
+    )
+
+    assert.deepEqual(
+      db.termEntries.findMatches({
+        text: 'Use api and color',
+        statuses: ['forbidden'],
+        limit: 10,
+      }).map((item) => item.status),
+      ['forbidden'],
+    )
+  } finally {
+    db.close()
+  }
+})
+
+test('term findMatches uses whole-word matching for Latin terms and contiguous matching for CJK', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    db.termEntries.importMany([
+      { term: 'art', translation: '艺术', status: 'preferred', caseSensitive: false },
+      { term: '药水', translation: 'potion', status: 'preferred', caseSensitive: false },
+    ])
+    assert.equal(db.termEntries.findMatches({ text: 'start here' }).length, 0)
+    assert.equal(db.termEntries.findMatches({ text: 'the art is ready' }).length, 1)
+    assert.equal(db.termEntries.findMatches({ text: '超级药水' }).length, 1)
+  } finally {
+    db.close()
+  }
+})
+
+test('term batch rollback, collision detection, and read-only rejection', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  const original = { term: 'Save', translation: '保存', status: 'allowed' as const, caseSensitive: false }
+  try {
+    db.termEntries.importMany([original])
+    const id = db.termEntries.list()[0]!.id
+    db.catDb.db.prepare('UPDATE term_entries SET term = ? WHERE id = ?').run('corrupt', id)
+    assert.throws(
+      () => db.termEntries.importMany([
+        { term: 'Fresh', translation: '新', status: 'allowed', caseSensitive: false },
+        original,
+      ]),
+      /content id collision/,
+    )
+    assert.equal(db.termEntries.count({ query: 'Fresh' }), 0)
+  } finally {
+    db.close()
+  }
+
+  const readOnly = store.openProject(project.id, { readOnly: true })
+  try {
+    assert.throws(() => readOnly.termEntries.importMany([original]), StoreReadOnlyError)
+    assert.throws(
+      () => readOnly.termEntries.upsert(original),
+      StoreReadOnlyError,
+    )
+    assert.throws(() => readOnly.termEntries.delete('ter-0000000000000000'), StoreReadOnlyError)
+  } finally {
+    readOnly.close()
+  }
+})

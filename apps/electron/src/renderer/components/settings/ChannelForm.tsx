@@ -1013,7 +1013,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
                   </div>
                 )}
                 {hasRequiredSecret ? (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+                  <div className="flex items-center gap-1.5 text-xs text-success">
                     <CheckCircle2 size={12} className="shrink-0" />
                     <span>已登录 ChatGPT 订阅{codexCredentials?.accountId ? `（账号 ${codexCredentials.accountId.slice(0, 8)}…）` : ''}</span>
                   </div>
@@ -1047,7 +1047,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
                   </div>
                 )}
                 {hasRequiredSecret ? (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+                  <div className="flex items-center gap-1.5 text-xs text-success">
                     <CheckCircle2 size={12} className="shrink-0" />
                     <span>已登录 xAI（Grok）订阅</span>
                   </div>
@@ -1122,7 +1122,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
             {testResult && (
               <div className={cn(
                 'flex items-start gap-1.5 text-xs',
-                testResult.success ? 'text-emerald-600' : 'text-destructive'
+                testResult.success ? 'text-success' : 'text-destructive'
               )}>
                 {testResult.success
                   ? <CheckCircle2 size={12} className="mt-0.5 shrink-0" />
@@ -1157,7 +1157,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
                   key={model.id}
                   className="flex items-center gap-2 px-4 py-2.5 group"
                 >
-                  <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
+                  <CheckCircle2 size={14} className="text-success flex-shrink-0" />
                   <span className="text-sm text-foreground flex-1">
                     {model.name}
                     {model.name !== model.id && (
@@ -1204,7 +1204,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
         {fetchResult && (
           <div className={cn(
             'flex items-center gap-1.5 text-xs px-1',
-            fetchResult.success ? 'text-emerald-600' : 'text-destructive'
+            fetchResult.success ? 'text-success' : 'text-destructive'
           )}>
             {fetchResult.success ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
             <span>{fetchResult.message}</span>
@@ -1334,18 +1334,6 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
                 <p>该地址并非当前供应商的官方默认 Base URL。中转站可能存在篡改对话内容和模型响应，存在中间人攻击、凭据泄露与隐私风险。</p>
                 <p>其协议适配也可能导致上下文窗口、工具调用、多模态或流式内容显示异常。请仅使用你信赖的服务，并先用非敏感内容测试。</p>
                 <p>Proma 仅作为本地 Agent 执行环境：配置、会话等本地数据均存储在你的设备上，Proma 本身不会额外构成数据风险。</p>
-                <p>
-                  如你正在寻求更好的选择，欢迎使用{' '}
-                  <a
-                    href="https://proma.cool/download"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
-                  >
-                    Proma 商业版
-                  </a>
-                  ：提供安全、稳定、优惠的内置模型选择，保证更好的体验，同时保留你自由配置第三方渠道的权利。
-                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

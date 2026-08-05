@@ -9,13 +9,14 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { existsSync, realpathSync, rmSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, isPromaPermissionMode, normalizePathForCompare } from '@proma/shared'
+import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, PLANNING_CONFLICT_ERROR, LINGUIST_PROJECT_IPC_CHANNELS, LINGUIST_INTEGRITY_IPC_CHANNELS, LINGUIST_SESSION_IPC_CHANNELS, LINGUIST_PROPOSAL_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, LINGUIST_EXPORT_IPC_CHANNELS, LINGUIST_DIAGNOSTICS_IPC_CHANNELS, LINGUIST_REFERENCE_IPC_CHANNELS, LINGUIST_ASSETS_IPC_CHANNELS, LINGUIST_MIGRATION_IPC_CHANNELS, LINGUIST_ASSET_PREVIEW_IPC_CHANNELS, isPromaPermissionMode, normalizePathForCompare } from '@proma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, QUICK_TASK_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   QuickTaskSubmitInput,
   VoiceDictationAudioChunkInput,
   VoiceDictationCommitInput,
   VoiceDictationCommitResult,
+  VoiceDictationPromaInputResolution,
   VoiceDictationPreviewInput,
   VoiceDictationResizeInput,
   VoiceDictationSettings,
@@ -35,6 +36,7 @@ import type {
   ChannelDirectTestInput,
   FetchModelsInput,
   FetchModelsResult,
+  PromaProviderImportResult,
   ConversationMeta,
   ChatMessage,
   ChatSendInput,
@@ -116,6 +118,7 @@ import type {
   Automation,
   CreateAutomationInput,
   UpdateAutomationInput,
+  LinguistProjectMutationEvent,
   Todo,
   TodoListQuery,
   CalendarEvent,
@@ -147,6 +150,7 @@ import {
   updateChannel,
   deleteChannel,
   decryptApiKey,
+  importPromaProviderConfigs,
   testChannel,
   testChannelDirect,
   fetchModels,
@@ -224,6 +228,7 @@ import {
   snoozePlanningReminder,
 } from './lib/planning-manager'
 import { broadcastPlanningChanged } from './lib/planning-events'
+import { startTodoAgentWithRollback } from './lib/todo-agent-start'
 import {
   listAgentSessions,
   createAgentSession,
@@ -243,7 +248,7 @@ import { runAgent, stopAgent, generateAgentTitle, saveFilesToAgentSession, saveF
 import { permissionService } from './lib/agent-permission-service'
 import { askUserService } from './lib/agent-ask-user-service'
 import { exitPlanService } from './lib/agent-exit-plan-service'
-import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceSkillsDir, getScratchPadPath } from './lib/config-paths'
+import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceSkillsDir, getWorkspaceFilesDir, getScratchPadPath, getConfigDir } from './lib/config-paths'
 import { getCachedDefaultAppInfo, saveCachedDefaultAppInfo } from './lib/default-app-cache'
 import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from './lib/storage-service'
 import type { CleanupOptions } from './lib/storage-service'
@@ -326,6 +331,20 @@ import { getDingTalkConfig, saveDingTalkConfig, getDecryptedClientSecret, getDin
 import { dingtalkBridgeManager } from './lib/dingtalk-bridge-manager'
 import { getWeChatConfig } from './lib/wechat-config'
 import { wechatBridge } from './lib/wechat-bridge'
+import { getLinguistProjectService } from './lib/linguist/project-service'
+import { createLinguistProjectIpc } from './lib/linguist/project-ipc'
+import { createIntegrityScrubIpc } from './lib/linguist/integrity-scrub-ipc'
+import { IntegrityScrubService } from './lib/linguist/integrity-scrub-service'
+import { createLinguistSessionIpc } from './lib/linguist/session-ipc'
+import { checkLinguistSessionSendBlock } from './lib/linguist/session-binding'
+import { createLinguistProposalIpc } from './lib/linguist/proposal-ipc'
+import { createLinguistCatWorkspaceIpc } from './lib/linguist/cat-workspace-ipc'
+import { createLinguistReferenceIpc } from './lib/linguist/reference-ipc'
+import { createLinguistAssetsIpc } from './lib/linguist/assets-ipc'
+import { createLinguistExportIpc } from './lib/linguist/export-ipc'
+import { createLinguistDiagnosticsIpc } from './lib/linguist/diagnostics-ipc'
+import { createLinguistMigrationIpc } from './lib/linguist/migration-ipc'
+import { getLinguistMigrationService } from './lib/linguist/migration-service'
 
 /** 文件浏览器中需要隐藏的系统文件 */
 const HIDDEN_FS_ENTRIES = new Set(['.DS_Store', 'Thumbs.db'])
@@ -882,15 +901,22 @@ function isAgentRuntime(value: unknown): value is AgentRuntime {
   return value === 'claude' || value === 'pi'
 }
 
+let linguistIntegrityScrubService: IntegrityScrubService | undefined
+
+export function stopAllLinguistIntegrityScrubs(): void {
+  linguistIntegrityScrubService?.dispose()
+  linguistIntegrityScrubService = undefined
+}
+
 /**
  * 解析应用图标变体的文件路径
+ *
+ * PB-113 兜底：Proma 变体隐藏期间，即使用户 settings 里仍存有历史选择的
+ * Proma 变体（appIconVariant），也一律按 default 解析——只影响解析结果，
+ * 不改写用户存储值。
  */
-export function resolveAppIconPath(variantId: string): string | null {
-  const resourcesDir = getBundledResourcesDir()
-  if (!variantId || variantId === 'default') {
-    return join(resourcesDir, 'icon.png')
-  }
-  return join(resourcesDir, 'proma-logos', `proma-${variantId}.png`)
+export function resolveAppIconPath(_variantId: string): string | null {
+  return join(getBundledResourcesDir(), 'icon.png')
 }
 
 function releaseDirectoryWatcherIfUnreferenced(dirPath: string): void {
@@ -1223,6 +1249,14 @@ export function registerIpcHandlers(): void {
     CHANNEL_IPC_CHANNELS.DECRYPT_KEY,
     async (_, channelId: string): Promise<string> => {
       return decryptApiKey(channelId)
+    }
+  )
+
+  // 显式导入旧 Proma Provider 配置（不读取其他 Proma 数据）
+  ipcMain.handle(
+    CHANNEL_IPC_CHANNELS.IMPORT_PROMA_PROVIDERS,
+    async (): Promise<PromaProviderImportResult> => {
+      return importPromaProviderConfigs()
     }
   )
 
@@ -2119,6 +2153,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.FORK_SESSION,
     async (_, input: ForkSessionInput): Promise<AgentSessionMeta> => {
+      const source = getAgentSessionMeta(input.sessionId)
+      const linguistBlock = checkLinguistSessionSendBlock(source, getLinguistProjectService)
+      if (linguistBlock) {
+        throw new Error(`${linguistBlock.title}: ${linguistBlock.message}`)
+      }
       const session = await forkAgentSession(input)
       // Fork 直接在 session manager 内创建元数据，绕过 CREATE_SESSION 的镜像生命周期。
       // 将它作为新的桌面会话处理，确保 Pi fork 也会立即获得可双向续聊的飞书群。
@@ -2376,7 +2415,7 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // 获取默认 Skills 的 slug 列表（来自 ~/.proma/default-skills/）
+  // 获取默认 Skills 的 slug 列表（来自 ~/.linguist-agent/default-skills/）
   ipcMain.handle(
     AGENT_IPC_CHANNELS.GET_DEFAULT_SKILL_SLUGS,
     async () => {
@@ -4547,6 +4586,15 @@ export function registerIpcHandlers(): void {
   )
 
   ipcMain.handle(
+    VOICE_DICTATION_IPC_CHANNELS.RESOLVE_PROMA_INPUT,
+    async (event, input: VoiceDictationPromaInputResolution): Promise<VoiceDictationCommitResult | null> => {
+      if (!input || typeof input.sessionId !== 'string' || typeof input.handled !== 'boolean') return null
+      const { resolveVoiceDictationPromaInput } = await import('./lib/text-output-service')
+      return resolveVoiceDictationPromaInput(input, event.sender.id)
+    }
+  )
+
+  ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.HIDE,
     async (): Promise<void> => {
       const { hideVoiceDictationWindow } = await import('./lib/voice-dictation-window')
@@ -4720,6 +4768,8 @@ export function registerIpcHandlers(): void {
   })
   // Todo 项目归属更新与 Agent 会话创建必须在一次主进程同步处理内完成，
   // 避免多个 Planning 窗口之间在校验、更新和创建会话的间隙发生 TOCTOU。
+  // 两者存储介质不同，顺序由 startTodoAgentWithRollback 保证可恢复：
+  // 会话创建失败不改 Todo；Todo CAS 失败则删除刚建会话及其工作目录。
   ipcMain.handle(PLANNING_IPC_CHANNELS.START_TODO_AGENT, (event, input: StartTodoAgentInput): StartTodoAgentResult => {
     if (!input || typeof input.todoId !== 'string' || !input.todoId.trim()) throw new Error('Todo id 必填')
     if (typeof input.workspaceId !== 'string' || !input.workspaceId.trim()) throw new Error('项目 id 必填')
@@ -4732,23 +4782,18 @@ export function registerIpcHandlers(): void {
     if (!existing) throw new Error('Todo 不存在')
     if (existing.updatedAt !== input.expectedUpdatedAt) throw new Error(PLANNING_CONFLICT_ERROR)
 
-    const todo = existing.workspaceId === input.workspaceId
-      ? existing
-      : updateTodo({
-        id: existing.id,
-        workspaceId: input.workspaceId,
-        expectedUpdatedAt: existing.updatedAt,
-      })
-    if (!todo) throw new Error('Todo 不存在')
+    const { todo, session } = startTodoAgentWithRollback(existing, input, {
+      createSession: () => createAgentSession(
+        `处理：${existing.title}`,
+        input.channelId,
+        input.workspaceId,
+        input.modelId,
+        getSettings().agentRuntime ?? 'pi',
+      ),
+      updateTodo,
+      deleteSession: deleteAgentSession,
+    })
     if (todo !== existing) broadcastPlanningChanged(['todos', 'reminders'])
-
-    const session = createAgentSession(
-      `处理：${todo.title}`,
-      input.channelId,
-      input.workspaceId,
-      input.modelId,
-      getSettings().agentRuntime ?? 'pi',
-    )
     // 对齐普通 Agent 会话创建入口；镜像初始化异步执行，不打断上面的原子状态转换。
     feishuBridgeManager.ensureSessionMirror(session).catch((error) => {
       console.error('[飞书 Session 镜像] Todo 启动会话建群失败:', error)
@@ -4856,8 +4901,8 @@ export function registerIpcHandlers(): void {
 
   // ===== 定时任务（Automation）=====
 
-  // 渲染进程可能被注入内容污染（XSS via markdown / MCP tool output），主进程必须自己校验入参,
-  // 否则 NaN / -Infinity / 越界值会污染 ~/.proma/automations.json，无法回滚。
+  // 渲染进程可能被注入内容污染（XSS via markdown / MCP tool output），主进程必须自己校验入参，
+  // 否则 NaN / -Infinity / 越界值会污染 ~/.linguist-agent/automations.json，无法回滚。
   const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.length > 0
   const isNonBlankString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
   const isFiniteInt = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v)
@@ -5031,5 +5076,384 @@ export function registerIpcHandlers(): void {
       if (!isNonEmptyString(id)) throw new Error('id 必填')
       await runAutomationNow(id)
     }
+  )
+
+  // ===== Linguist CAT 项目（PB-031；计划 §7.2）=====
+
+  // 契约见 packages/shared/src/types/linguist.ts。与 house「直返 + throw」惯例
+  // 不同，本域全部通道返回 LinguistIpcResult<T> 信封：Electron invoke 会包装
+  // handler 抛出的错误并丢弃自定义 code 属性，而稳定机器可读错误码是
+  // 计划 §7.4 的硬规则。处理器逻辑（校验 / 信封 / 导入选择器流程）在
+  // lib/linguist/project-ipc.ts（不依赖 electron，node --test 直接驱动），
+  // 此处只做薄适配：通道注册 + 注入真实 dialog picker。
+  // 服务惰性解析（getLinguistProjectService）：注册先于 bootstrap 的服务 init，
+  // init 失败时通道以 INTERNAL 信封降级而非崩溃。
+  const linguistProjectIpc = createLinguistProjectIpc({
+    getService: getLinguistProjectService,
+    // PB-089：预览转换栈惰性注入（file-preview-service 体积大，沿用本文件
+    // 既有的 await import 延迟加载纪律）；registerPromaFilePath 静态已导入。
+    assetPreview: {
+      readText: async (filePath) =>
+        (await import('./lib/file-preview-service')).resolveAndReadFile(filePath),
+      convertDocxToHtml: async (filePath) =>
+        (await import('./lib/file-preview-service')).convertDocxToHtml(filePath),
+      convertOfficeToHtml: async (filePath) =>
+        (await import('./lib/file-preview-service')).convertOfficeToHtml(filePath),
+      registerPreviewUrl: registerPromaFilePath,
+    },
+  })
+  linguistIntegrityScrubService ??= new IntegrityScrubService({
+    getService: getLinguistProjectService,
+    workerScript: join(__dirname, 'linguist-integrity-scrub-worker.cjs'),
+    emit: (event) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send(LINGUIST_INTEGRITY_IPC_CHANNELS.PROGRESS, event)
+      }
+    },
+  })
+  const linguistIntegrityIpc = createIntegrityScrubIpc({
+    getProjectService: getLinguistProjectService,
+    scrub: linguistIntegrityScrubService,
+  })
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.LIST,
+    async (_, input: unknown) => linguistProjectIpc.list(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.CREATE,
+    async (_, input: unknown) => linguistProjectIpc.create(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.OPEN,
+    async (_, input: unknown) => linguistProjectIpc.open(input)
+  )
+
+  // 导入：主进程原生文件选择器。renderer 永不提交路径/字节（计划 §7.4）；
+  // 取消是正常分支（{cancelled: true}），非错误。
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.IMPORT,
+    async (event, input: unknown) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      return linguistProjectIpc.import(input, (options) =>
+        win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options)
+      )
+    }
+  )
+
+  // 摘要：PB-033 起响应扩展为含资产元数据列表（assets），通道与校验不变。
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.GET_SUMMARY,
+    async (_, input: unknown) => linguistProjectIpc.getSummary(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.RENAME,
+    async (_, input: unknown) => linguistProjectIpc.rename(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.REORDER_ACTIVE,
+    async (_, input: unknown) => linguistProjectIpc.reorderActive(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.ARCHIVE,
+    async (_, input: unknown) => linguistProjectIpc.archive(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.DELETE,
+    async (_, input: unknown) => linguistProjectIpc.delete(input)
+  )
+
+  // PB-082：质量策略档设置（三档字面量校验在处理器内；归档/不存在映射既有错误码）。
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.SET_QUALITY_PROFILE,
+    async (_, input: unknown) => linguistProjectIpc.setQualityProfile(input)
+  )
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.SET_WORKFLOW_CONFIG,
+    async (_, input: unknown) => linguistProjectIpc.setWorkflowConfig(input)
+  )
+
+  // PB-111：备份 / 恢复（计划 §24）。renderer 只提交 projectId + backupName
+  // （白名单形状，防目录穿越）；响应绝无绝对路径。归档项目可备份/预览/列表，
+  // 恢复由服务层以 PROJECT_ARCHIVED 拒绝。
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.BACKUP,
+    async (_, input: unknown) => linguistProjectIpc.backup(input)
+  )
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.LIST_BACKUPS,
+    async (_, input: unknown) => linguistProjectIpc.listBackups(input)
+  )
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.PREVIEW_RESTORE,
+    async (_, input: unknown) => linguistProjectIpc.previewRestore(input)
+  )
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.RESTORE,
+    async (_, input: unknown) => linguistProjectIpc.restore(input)
+  )
+
+  // LF-088：Full Integrity Scrub 始终由独立 node:worker_threads 执行；
+  // renderer 只收进度/脱敏结果，也不能提交保存路径。
+  ipcMain.handle(
+    LINGUIST_INTEGRITY_IPC_CHANNELS.START,
+    async (_, input: unknown) => linguistIntegrityIpc.start(input)
+  )
+  ipcMain.handle(
+    LINGUIST_INTEGRITY_IPC_CHANNELS.CANCEL,
+    async (_, input: unknown) => linguistIntegrityIpc.cancel(input)
+  )
+  ipcMain.handle(
+    LINGUIST_INTEGRITY_IPC_CHANNELS.EXPORT_REPORT,
+    async (event, input: unknown) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      return linguistIntegrityIpc.exportReport(input, (options) =>
+        win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options)
+      )
+    }
+  )
+
+  // PB-089：CAT 资产源文件预览（纯读，归档项目允许；三态分派在处理器内）。
+  // 处理器在 project-ipc.ts（项目通道组共享受托服务），通道名独立成组
+  // （linguist.project.* 单数），不影响 PB-031 契约守卫的 11 通道断言。
+  ipcMain.handle(
+    LINGUIST_ASSET_PREVIEW_IPC_CHANNELS.PREVIEW_SOURCE,
+    async (_, input: unknown) => linguistProjectIpc.previewAssetSource(input)
+  )
+
+  // 导出：主进程先生成并验证 staging，再由系统 Save 对话框选择目标。
+  const linguistExportIpc = createLinguistExportIpc({ getService: getLinguistProjectService })
+  ipcMain.handle(
+    LINGUIST_EXPORT_IPC_CHANNELS.PREPARE_ASSET,
+    async (_, input: unknown) => linguistExportIpc.prepareAsset(input)
+  )
+  // PB-102：只读列出项目 exports/ 目录（无选择器，纯信封通道）。
+  ipcMain.handle(
+    LINGUIST_EXPORT_IPC_CHANNELS.LIST,
+    async (_, input: unknown) => linguistExportIpc.list(input)
+  )
+  ipcMain.handle(
+    LINGUIST_EXPORT_IPC_CHANNELS.SAVE_ASSET,
+    async (event, input: unknown) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      return linguistExportIpc.saveAsset(input, (options) =>
+        win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options)
+      )
+    }
+  )
+
+  const linguistDiagnosticsIpc = createLinguistDiagnosticsIpc({
+    getService: getLinguistProjectService,
+    getSession: getAgentSessionMeta,
+    getConfigDir,
+    isDevelopment: !app.isPackaged,
+  })
+  ipcMain.handle(
+    LINGUIST_DIAGNOSTICS_IPC_CHANNELS.GET_STATUS,
+    async (_, input: unknown) => linguistDiagnosticsIpc.getStatus(input)
+  )
+  ipcMain.handle(
+    LINGUIST_DIAGNOSTICS_IPC_CHANNELS.PREVIEW_BUNDLE,
+    async (_, input: unknown) => linguistDiagnosticsIpc.previewBundle(input)
+  )
+  ipcMain.handle(
+    LINGUIST_DIAGNOSTICS_IPC_CHANNELS.EXPORT_BUNDLE,
+    async (event, input: unknown) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      return linguistDiagnosticsIpc.exportBundle(input, (options) =>
+        win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options)
+      )
+    }
+  )
+
+  // ===== Linguist Legacy 迁移向导（PB-094；计划 §22）=====
+  //
+  // 目录选择器在主进程（计划 §7.4：renderer 永不提交路径）；旧根路径由服务在
+  // pickAndScan 时留存为会话状态。进度事件经 webContents.send 推送
+  // （PROGRESS 为 main→renderer 单向通道，不注册 handle）。
+  const linguistMigrationIpc = createLinguistMigrationIpc({ getService: getLinguistMigrationService })
+  ipcMain.handle(
+    LINGUIST_MIGRATION_IPC_CHANNELS.PICK_AND_SCAN,
+    async (event, input: unknown) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      return linguistMigrationIpc.pickAndScan(input, (options) =>
+        win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options)
+      )
+    }
+  )
+  ipcMain.handle(
+    LINGUIST_MIGRATION_IPC_CHANNELS.IMPORT,
+    async (event, input: unknown) =>
+      linguistMigrationIpc.import(input, (progress) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(LINGUIST_MIGRATION_IPC_CHANNELS.PROGRESS, progress)
+        }
+      })
+  )
+
+  const broadcastLinguistProjectMutation = (
+    mutation: LinguistProjectMutationEvent,
+  ): void => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+        try {
+          win.webContents.send(LINGUIST_CAT_IPC_CHANNELS.PROJECT_MUTATION, mutation)
+        } catch (error) {
+          console.error('[Linguist] 向 renderer 广播项目 mutation 失败:', error)
+        }
+      }
+    }
+  }
+
+  // ===== Linguist CAT Workspace（PB-060/071；分页、编辑与人工 QA 审核）=====
+  const linguistCatWorkspaceIpc = createLinguistCatWorkspaceIpc({
+    getService: getLinguistProjectService,
+    getSession: getAgentSessionMeta,
+    onProjectMutation: broadcastLinguistProjectMutation,
+  })
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.LIST_PROJECT_EVENTS, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.listProjectEvents(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.ACK_PROJECT_EVENTS, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.ackProjectEvents(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.GET_LATEST_RUN_SUMMARY, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.getLatestRunSummary(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.UNDO_LATEST_RUN, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.undoLatestRun(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.QUERY, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.query(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.EDIT_SEGMENT, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.edit(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.CONFIRM_STAGE, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.confirmStage(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.UNCONFIRM_STAGE, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.unconfirmStage(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.CONFIRM_STAGE_BULK, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.confirmStageBulk(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.GET_CONTEXT, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.getContext(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.RUN_QA, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.runQa(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.LIST_QA_FINDINGS, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.listQaFindings(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.RESOLVE_QA_FINDING, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.resolveQaFinding(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.WAIVE_QA_FINDING, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.waiveQaFinding(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.WAIVE_QA_FINDINGS_BULK, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.waiveQaFindingsBulk(input))
+
+  // ===== Linguist TM / 术语库（PB-080；原生导入与项目隔离管理）=====
+  const linguistReferenceIpc = createLinguistReferenceIpc({
+    getService: getLinguistProjectService,
+  })
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.QUERY_TM, async (_, input: unknown) =>
+    linguistReferenceIpc.queryTm(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.QUERY_TERMS, async (_, input: unknown) =>
+    linguistReferenceIpc.queryTerms(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.IMPORT, async (event, input: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return linguistReferenceIpc.import(input, (options) =>
+      win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options))
+  })
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.UPSERT_TERM, async (_, input: unknown) =>
+    linguistReferenceIpc.upsertTerm(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.DELETE, async (_, input: unknown) =>
+    linguistReferenceIpc.delete(input))
+
+  // ===== Linguist 项目资产（PB-095；六类资产 CRUD 与原生导入）=====
+  const linguistAssetsIpc = createLinguistAssetsIpc({
+    getService: getLinguistProjectService,
+    registerPreviewUrl: registerPromaFilePath,
+    onProjectMutation: broadcastLinguistProjectMutation,
+  })
+  ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.QUERY, async (_, input: unknown) =>
+    linguistAssetsIpc.query(input))
+  ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.UPSERT, async (_, input: unknown) =>
+    linguistAssetsIpc.upsert(input))
+  ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.DELETE, async (_, input: unknown) =>
+    linguistAssetsIpc.delete(input))
+  ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.IMPORT_CONTEXT_DOC, async (event, input: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return linguistAssetsIpc.importContextDoc(input, (options) =>
+      win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options))
+  })
+  ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.IMPORT_SENTENCE_PATTERNS, async (event, input: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return linguistAssetsIpc.importSentencePatterns(input, (options) =>
+      win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options))
+  })
+
+  // ===== Linguist Proposal 人工审核（PB-053）=====
+  // 只暴露给 renderer，不注册为 Agent tool；写操作全部带 CAS + idempotency key。
+  const linguistProposalIpc = createLinguistProposalIpc({
+    getService: getLinguistProjectService,
+    onProjectMutation: broadcastLinguistProjectMutation,
+  })
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.LIST, async (_, input: unknown) =>
+    linguistProposalIpc.list(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.LIST_PENDING, async (_, input: unknown) =>
+    linguistProposalIpc.listPending(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.GET_DIFF, async (_, input: unknown) =>
+    linguistProposalIpc.getDiff(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.ACCEPT, async (_, input: unknown) =>
+    linguistProposalIpc.accept(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.REJECT, async (_, input: unknown) =>
+    linguistProposalIpc.reject(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.EDIT_AND_ACCEPT, async (_, input: unknown) =>
+    linguistProposalIpc.editAndAccept(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.ACCEPT_SELECTED, async (_, input: unknown) =>
+    linguistProposalIpc.acceptSelected(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.REJECT_SELECTED, async (_, input: unknown) =>
+    linguistProposalIpc.rejectSelected(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.REISSUE, async (_, input: unknown) =>
+    linguistProposalIpc.reissue(input))
+
+  // ===== Linguist 会话绑定（PB-034；计划 §7.2「Project → Session 绑定」）=====
+  // 「项目对话」= 携带冻结 linguistProjectId 绑定的 Pi Agent 会话。同一信封
+  // 约定（LinguistIpcResult，绝不抛出）；处理器逻辑在 lib/linguist/
+  // session-ipc.ts + session-binding.ts（不依赖 electron，node --test 驱动）。
+  const linguistSessionIpc = createLinguistSessionIpc({
+    getService: getLinguistProjectService,
+    isSessionActive: isAgentSessionActive,
+  })
+
+  // 项目内创建对话：绑定在创建时写入并冻结；归档项目拒绝创建（PROJECT_ARCHIVED）。
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.CREATE_FOR_PROJECT,
+    async (_, input: unknown) => linguistSessionIpc.createForProject(input)
+  )
+
+  // 项目对话列表（轻量元数据，updatedAt 降序；项目缺失/归档均可列出）。
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.LIST_FOR_PROJECT,
+    async (_, input: unknown) => linguistSessionIpc.listForProject(input)
+  )
+
+  // 会话 → 绑定 + 实时状态；普通会话 binding=null。
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.GET_BINDING,
+    async (_, input: unknown) => linguistSessionIpc.getBinding(input)
+  )
+
+  // 用户显式永久解绑；解绑后沿用原会话作为普通 Agent。
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.DETACH_BINDING,
+    async (_, input: unknown) => linguistSessionIpc.detachBinding(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.GET_COPY_ELIGIBILITY,
+    async (_, input: unknown) => linguistSessionIpc.getCopyEligibility(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.COPY_TO_PROJECT,
+    async (_, input: unknown) => linguistSessionIpc.copyToProject(input)
   )
 }

@@ -74,30 +74,16 @@ export function GeneralSettings(): React.ReactElement {
   const [nameInput, setNameInput] = React.useState(userProfile.userName)
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false)
   const [archiveAfterDays, setArchiveAfterDays] = React.useState<number>(7)
-  /** Git/PR 推广标识：默认开启 */
-  const [gitAttributionEnabled, setGitAttributionEnabled] = React.useState(true)
   const [agentIslandEnabled, setAgentIslandEnabled] = React.useState(true)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
-  // 加载归档天数与 Git/PR 标识设置
+  // 加载归档天数与 Agent Island 设置
   React.useEffect(() => {
     window.electronAPI.getSettings().then((settings) => {
       setArchiveAfterDays(settings.archiveAfterDays ?? 7)
-      setGitAttributionEnabled(settings.gitAttributionEnabled ?? true)
       setAgentIslandEnabled(settings.agentIsland?.enabled ?? true)
     }).catch(console.error)
   }, [])
-
-  /** 更新 Git/PR 推广标识开关 */
-  const handleGitAttributionChange = async (checked: boolean): Promise<void> => {
-    setGitAttributionEnabled(checked)
-    try {
-      await window.electronAPI.updateSettings({ gitAttributionEnabled: checked })
-    } catch (error) {
-      console.error('[通用设置] 更新 Git/PR 标识失败:', error)
-      setGitAttributionEnabled(!checked)
-    }
-  }
 
   /** 更新灵动岛开关 */
   const handleAgentIslandChange = async (checked: boolean): Promise<void> => {
@@ -398,14 +384,6 @@ export function GeneralSettings(): React.ReactElement {
             checked={agentIslandEnabled}
             onCheckedChange={(checked) => {
               void handleAgentIslandChange(checked)
-            }}
-          />
-          <SettingsToggle
-            label="Git/PR 标识"
-            description="Agent 代你提交 commit 或创建 PR 时，附加 Made-with: Proma 与官网链接，便于推广；可随时关闭"
-            checked={gitAttributionEnabled}
-            onCheckedChange={(checked) => {
-              void handleGitAttributionChange(checked)
             }}
           />
         </SettingsCard>

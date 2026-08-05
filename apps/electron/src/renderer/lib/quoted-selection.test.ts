@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { createStore } from 'jotai'
+import { quotedSelectionMapAtom } from '@/atoms/preview-atoms'
 import { buildQuotedSelectionBlock, parseQuotedSelectionRefs } from './quoted-selection'
 
 describe('quoted selection XML', () => {
@@ -51,5 +53,32 @@ describe('quoted selection XML', () => {
       },
     ])
     expect(parsed.text).toBe('继续提问')
+  })
+
+  test('Given 两个 Linguist 会话和一个普通 Agent When 写入引用 Then 引用按 sessionId 隔离', () => {
+    const store = createStore()
+    const makeQuote = (text: string) => ({
+      text,
+      filePath: 'Agent 历史 · Agent 回复',
+      sourceType: 'agent-history' as const,
+      capturedAt: 1,
+    })
+
+    store.set(quotedSelectionMapAtom, (previous) => new Map(previous)
+      .set('linguist-a', makeQuote('LA A'))
+      .set('linguist-b', makeQuote('LA B'))
+      .set('agent-a', makeQuote('Agent')))
+
+    expect(store.get(quotedSelectionMapAtom).get('linguist-a')?.text).toBe('LA A')
+    expect(store.get(quotedSelectionMapAtom).get('linguist-b')?.text).toBe('LA B')
+    expect(store.get(quotedSelectionMapAtom).get('agent-a')?.text).toBe('Agent')
+
+    store.set(quotedSelectionMapAtom, (previous) => {
+      const next = new Map(previous)
+      next.delete('linguist-a')
+      return next
+    })
+    expect(store.get(quotedSelectionMapAtom).has('linguist-b')).toBe(true)
+    expect(store.get(quotedSelectionMapAtom).has('agent-a')).toBe(true)
   })
 })

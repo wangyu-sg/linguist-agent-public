@@ -1,9 +1,10 @@
 # electron-builder 配置
 # 文档: https://www.electron.build/configuration/configuration
 
-appId: com.proma.app
-productName: Proma
-copyright: Copyright © 2024-2026 Erlich Liu
+# PB-010：开发期 bundle id。最终签名身份（证书 / Team ID / 正式 appId）在 PB-114 确定。
+appId: com.linguistagent.app
+productName: Linguist Agent
+copyright: Copyright © 2026 Linguist Agent contributors; portions Copyright © 2024-2026 Erlich Liu
 
 # Electron 版本（CI 环境 bun workspace 下无法自动检测，需显式指定）
 electronVersion: 43.2.0
@@ -64,9 +65,15 @@ extraResources:
     to: bin
     filter:
       - "**/*"
-  # 默认 Skills 模板（首次启动时同步到 ~/.proma/default-skills/）
+  # 默认 Skills 模板（首次启动时同步到 ~/.linguist-agent/default-skills/）
   - from: default-skills
     to: default-skills
+    filter:
+      - "**/*"
+  # Linguist 常驻项目 Skill（PB-040）：只进 Resources，不同步到 ~/.linguist-agent；
+  # 主进程仅对项目绑定会话经 additionalSkillPaths 注入，普通会话不注入。
+  - from: ../../resources/linguist-skills
+    to: linguist-skills
     filter:
       - "**/*"
   # 教程文件（教程查看器 + 欢迎对话使用）
@@ -80,6 +87,19 @@ extraResources:
   # 默认 Dock 图标（macOS app.dock.setIcon 使用）
   - from: resources/icon.png
     to: icon.png
+  # 发行物内的许可、归属与机器可读 SBOM；packaged verifier 会逐项校验 hash。
+  - from: ../../LICENSE
+    to: legal/LICENSE
+  - from: ../../NOTICE.md
+    to: legal/NOTICE.md
+  - from: ../../ATTRIBUTION.md
+    to: legal/ATTRIBUTION.md
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: legal/THIRD_PARTY_NOTICES.md
+  - from: ../../docs/release/SBOM.md
+    to: legal/SBOM.md
+  - from: ../../docs/release/sbom-full.json
+    to: legal/sbom-full.json
 
 # ============================================
 # macOS 配置
@@ -98,13 +118,13 @@ mac:
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
   extendInfo:
-    NSMicrophoneUsageDescription: "Proma 需要访问麦克风，用于将你的语音实时转写为文本。"
+    NSMicrophoneUsageDescription: "Linguist Agent 需要访问麦克风，用于将你的语音实时转写为文本。"
   fileAssociations:
     - ext: proma-backup
-      name: Proma Personal Backup
+      name: Linguist Agent Personal Backup
       role: Editor
     - ext: proma-share
-      name: Proma Share Package
+      name: Linguist Agent Share Package
       role: Editor
   # 架构由 CLI 参数控制（CI 矩阵分别传 --arm64 / --x64），
   # 每个 runner 只构建其宿主架构对应的产物，与 bun 按 os/cpu 装好的
@@ -133,10 +153,10 @@ win:
   icon: resources/icon.ico
   fileAssociations:
     - ext: proma-backup
-      name: Proma Personal Backup
+      name: Linguist Agent Personal Backup
       icon: resources/icon.ico
     - ext: proma-share
-      name: Proma Share Package
+      name: Linguist Agent Share Package
       icon: resources/icon.ico
   target:
     - target: nsis
@@ -157,5 +177,5 @@ nsis:
 # ============================================
 publish:
   provider: github
-  owner: ErlichLiu
-  repo: Proma
+  owner: wangyu-sg
+  repo: linguist-agent-public

@@ -1,122 +1,123 @@
 import { expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 const managerModulePath = join(import.meta.dir, 'planning-manager.ts')
 const repoRoot = dirname(dirname(dirname(dirname(dirname(import.meta.dir)))))
-const electronBinary = createRequire(import.meta.url)('electron') as string
 
-/**
- * planning-manager 的数据库连接是模块级单例，而 node:sqlite 仅由 Electron 的 Node 22 提供。
- * 因此用 Bun 打包 TypeScript 验证脚本，再用独立 Electron Node 进程执行真实 SQLite 回归。
- */
-test('Given a fresh planning database When planning data changes Then isolation, transactions, reminders and optimistic versions stay correct', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'proma-planning-'))
+function runVerifier(sourcePath: string, home: string, mode: 'seed' | 'reload' | 'invalid'): void {
+  const result = spawnSync(process.execPath, [sourcePath, mode], {
+    cwd: repoRoot,
+    env: { ...process.env, HOME: home, PROMA_DEV: '1' },
+    encoding: 'utf8',
+  })
+  expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+}
+
+test('Given Planning JSON storage When data changes Then reload, rollback, CAS, cascades, and reminder claims remain correct', () => {
+  const home = mkdtempSync(join(tmpdir(), 'linguist-planning-'))
   const sourcePath = join(home, 'verify-planning-manager.ts')
-  const outputPath = join(home, 'verify-planning-manager.mjs')
+  const statePath = join(home, '.linguist-agent-dev', 'planning.json')
   const source = `
     import assert from 'node:assert/strict'
-    import { mkdirSync } from 'node:fs'
+    import { existsSync, readFileSync } from 'node:fs'
     import { join } from 'node:path'
-    import { DatabaseSync } from 'node:sqlite'
     import * as manager from ${JSON.stringify(managerModulePath)}
 
-    const configDir = join(process.env.HOME, '.proma-dev')
-    mkdirSync(configDir, { recursive: true })
+    const mode = process.argv[2]
+    const configDir = join(process.env.HOME, '.linguist-agent-dev')
+    const statePath = join(configDir, 'planning.json')
     const now = Date.now()
 
-    // Given a fresh database, groups remain independent even when names match.
-    const todoGroup = manager.createPlanningGroup({ scope: 'todo', name: '工作' })
-    const calendarGroup = manager.createPlanningGroup({ scope: 'calendar', name: '工作' })
-    assert.notEqual(todoGroup.id, calendarGroup.id)
-    assert.equal(manager.listPlanningGroups('todo').length, 1)
-    assert.equal(manager.listPlanningGroups('calendar').length, 1)
-    assert.throws(() => manager.createTodo({ title: '错误 Todo', groupId: calendarGroup.id }), /Todo 分组不存在/)
-    assert.throws(() => manager.createCalendarEvent({ title: '错误日程', startAt: now, groupId: todoGroup.id }), /日程分组不存在/)
+    if (mode === 'seed') {
+      const todoGroup = manager.createPlanningGroup({ scope: 'todo', name: '工作' })
+      const calendarGroup = manager.createPlanningGroup({ scope: 'calendar', name: '工作' })
+      const tag = manager.createPlanningTag({ name: '重要' })
+      const dueAt = now + 2 * 60 * 60 * 1000
 
-    const tagged = manager.createPlanningTag({ name: '重要' })
-    assert.throws(() => manager.createTodo({ title: '不应部分创建', tagIds: [tagged.id, 'missing-tag'] }), /标签不存在/)
-    assert.equal(manager.listTodos().some((todo) => todo.title === '不应部分创建'), false)
-    assert.throws(() => manager.createCalendarEvent({ title: '不应部分创建的日程', startAt: now, reminders: [{ triggerAt: Number.NaN }] }), /triggerAt/)
-    assert.equal(manager.listCalendarEvents().some((event) => event.title === '不应部分创建的日程'), false)
+      assert.ok(existsSync(statePath))
+      const stableTodo = manager.createTodo({ title: '持久 Todo', dueAt, groupId: todoGroup.id, tagIds: [tag.id] })
+      assert.ok(manager.getTodo(stableTodo.id).reminders.some((item) => item.origin === 'todo_due_at'))
 
-    // Given a persisted Todo, an invalid tag update leaves every prior field intact.
-    const todo = manager.createTodo({ title: '稳定 Todo', groupId: todoGroup.id, tagIds: [tagged.id] })
-    assert.throws(() => manager.updateTodo({ id: todo.id, title: '不应写入', tagIds: ['missing-tag'], expectedUpdatedAt: todo.updatedAt }), /标签不存在/)
-    const unchangedTodo = manager.getTodo(todo.id)
-    assert.equal(unchangedTodo.title, '稳定 Todo')
-    assert.deepEqual(unchangedTodo.tags.map((tag) => tag.id), [tagged.id])
+      const beforeFailure = readFileSync(statePath, 'utf8')
+      assert.throws(() => manager.createTodo({ title: '不应部分创建', tagIds: [tag.id, 'missing-tag'] }), /标签不存在/)
+      assert.equal(readFileSync(statePath, 'utf8'), beforeFailure)
 
-    // Snoozing or manually moving a default reminder makes it user-owned.
-    const dueAt = now + 2 * 60 * 60 * 1000
-    const snoozedTodo = manager.createTodo({ title: '推迟提醒', dueAt })
-    const defaultReminder = manager.getTodo(snoozedTodo.id).reminders.find((item) => item.origin === 'todo_due_at')
-    assert.ok(defaultReminder)
-    const snoozed = manager.snoozePlanningReminder(defaultReminder.id, 10)
-    assert.equal(snoozed.origin, 'manual')
-    manager.updateTodo({ id: snoozedTodo.id, dueAt: null, expectedUpdatedAt: snoozedTodo.updatedAt })
-    assert.ok(manager.getTodo(snoozedTodo.id).reminders.some((item) => item.id === defaultReminder.id))
+      const newerTodo = manager.updateTodo({ id: stableTodo.id, title: 'Todo 新版本', expectedUpdatedAt: stableTodo.updatedAt })
+      assert.equal(newerTodo.title, 'Todo 新版本')
+      assert.throws(() => manager.updateTodo({ id: stableTodo.id, title: 'Todo 旧版本', expectedUpdatedAt: stableTodo.updatedAt }), /其他窗口修改/)
 
-    const movedTodo = manager.createTodo({ title: '手动改期提醒', dueAt: dueAt + 60_000 })
-    const movedDefault = manager.getTodo(movedTodo.id).reminders.find((item) => item.origin === 'todo_due_at')
-    assert.ok(movedDefault)
-    const manuallyMoved = manager.updatePlanningReminder(movedDefault.id, dueAt + 90 * 60_000)
-    assert.equal(manuallyMoved.origin, 'manual')
-    manager.updateTodo({ id: movedTodo.id, dueAt: dueAt + 3 * 60 * 60 * 1000, expectedUpdatedAt: movedTodo.updatedAt })
-    assert.equal(manager.getTodo(movedTodo.id).reminders.find((item) => item.id === movedDefault.id).triggerAt, dueAt + 90 * 60_000)
+      const event = manager.createCalendarEvent({ title: '稳定日程', startAt: now, groupId: calendarGroup.id, tagIds: [tag.id] })
+      const newerEvent = manager.updateCalendarEvent({ id: event.id, title: '日程新版本', expectedUpdatedAt: event.updatedAt })
+      assert.equal(newerEvent.title, '日程新版本')
+      assert.throws(() => manager.updateCalendarEvent({ id: event.id, title: '日程旧版本', expectedUpdatedAt: event.updatedAt }), /其他窗口修改/)
 
-    // An older window cannot overwrite a newer Todo or calendar event snapshot.
-    const firstTodoUpdate = manager.updateTodo({ id: todo.id, title: 'Todo 新版本', expectedUpdatedAt: todo.updatedAt })
-    assert.equal(firstTodoUpdate.title, 'Todo 新版本')
-    assert.throws(() => manager.updateTodo({ id: todo.id, title: 'Todo 旧版本', expectedUpdatedAt: todo.updatedAt }), /其他窗口修改/)
+      const cascadeTag = manager.createPlanningTag({ name: '待级联标签' })
+      const taggedTodo = manager.createTodo({ title: '待级联标签 Todo', tagIds: [cascadeTag.id] })
+      const taggedEvent = manager.createCalendarEvent({ title: '待级联标签日程', startAt: now, tagIds: [cascadeTag.id] })
+      assert.equal(manager.deletePlanningTag(cascadeTag.id), true)
+      assert.deepEqual(manager.getTodo(taggedTodo.id).tags, [])
+      assert.deepEqual(manager.getCalendarEvent(taggedEvent.id).tags, [])
 
-    const calendarEvent = manager.createCalendarEvent({ title: '稳定日程', startAt: now, groupId: calendarGroup.id, tagIds: [tagged.id] })
-    const firstEventUpdate = manager.updateCalendarEvent({ id: calendarEvent.id, title: '日程新版本', expectedUpdatedAt: calendarEvent.updatedAt })
-    assert.equal(firstEventUpdate.title, '日程新版本')
-    assert.throws(() => manager.updateCalendarEvent({ id: calendarEvent.id, title: '日程旧版本', expectedUpdatedAt: calendarEvent.updatedAt }), /其他窗口修改/)
+      const snoozedTodo = manager.createTodo({ title: '推迟提醒', dueAt: dueAt + 60_000 })
+      const defaultReminder = manager.getTodo(snoozedTodo.id).reminders.find((item) => item.origin === 'todo_due_at')
+      assert.ok(defaultReminder)
+      assert.equal(manager.snoozePlanningReminder(defaultReminder.id, 10).origin, 'manual')
+      manager.updateTodo({ id: snoozedTodo.id, dueAt: null, expectedUpdatedAt: snoozedTodo.updatedAt })
+      assert.ok(manager.getTodo(snoozedTodo.id).reminders.some((item) => item.id === defaultReminder.id))
 
-    // Group deletes only detach their own scope and keep foreign keys consistent.
-    assert.equal(manager.deletePlanningGroup('todo', todoGroup.id), true)
-    assert.equal(manager.getTodo(todo.id).groupId, undefined)
-    assert.equal(manager.getCalendarEvent(calendarEvent.id).groupId, calendarGroup.id)
-    assert.equal(manager.deletePlanningGroup('calendar', calendarGroup.id), true)
-    assert.equal(manager.getCalendarEvent(calendarEvent.id).groupId, undefined)
+      const dueTodo = manager.createTodo({ title: '已到期提醒', dueAt: now - 1 })
+      assert.ok(manager.claimDuePlanningReminders(now).some((item) => item.targetId === dueTodo.id))
+      assert.equal(manager.claimDuePlanningReminders(now).some((item) => item.targetId === dueTodo.id), false)
 
-    // Deleting a Todo detaches linked events through the foreign key cascade.
-    const linkedEvent = manager.createCalendarEvent({ title: '关联 Todo 的日程', startAt: now, todoId: todo.id })
-    assert.equal(manager.deleteTodo(todo.id), true)
-    assert.equal(manager.getCalendarEvent(linkedEvent.id).todoId, undefined)
+      const linkedTodo = manager.createTodo({ title: '待级联 Todo' })
+      const linkedEvent = manager.createCalendarEvent({ title: '关联 Todo 的日程', startAt: now, todoId: linkedTodo.id })
+      assert.equal(manager.deleteTodo(linkedTodo.id), true)
+      assert.equal(manager.getCalendarEvent(linkedEvent.id).todoId, undefined)
+      assert.equal(manager.deletePlanningGroup('todo', todoGroup.id), true)
+      assert.equal(manager.getTodo(stableTodo.id).groupId, undefined)
+      assert.equal(manager.getCalendarEvent(event.id).groupId, calendarGroup.id)
+      process.exit(0)
+    }
 
-    const db = new DatabaseSync(join(configDir, 'planning.db'))
-    const eventColumns = db.prepare('PRAGMA table_info(calendar_events)').all().map((column) => column.name)
-    assert.ok(eventColumns.includes('calendar_group_id'))
-    assert.equal(eventColumns.includes('group_id'), false)
-    assert.equal(eventColumns.includes('scratch_excerpt'), false)
-    assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
+    assert.equal(mode, 'reload')
+    assert.ok(existsSync(statePath))
+    const stableTodo = manager.listTodos().find((item) => item.title === 'Todo 新版本')
+    assert.ok(stableTodo)
+    assert.equal(stableTodo.groupId, undefined)
+    assert.deepEqual(stableTodo.tags.map((tag) => tag.name), ['重要'])
+    assert.ok(stableTodo.reminders.some((item) => item.origin === 'todo_due_at'))
+    const linkedEvent = manager.listCalendarEvents().find((item) => item.title === '关联 Todo 的日程')
+    assert.ok(linkedEvent)
+    assert.equal(linkedEvent.todoId, undefined)
+    assert.equal(manager.claimDuePlanningReminders(now).some((item) => item.targetTitle === '已到期提醒'), false)
   `
+
   writeFileSync(sourcePath, source)
-
   try {
-    const build = await Bun.build({
-      entrypoints: [sourcePath],
-      target: 'node',
-      format: 'esm',
-      external: ['electron', 'node:sqlite'],
-    })
-    expect(build.success, build.logs.map((log) => log.message).join('\n')).toBe(true)
-    const compiledScript = build.outputs[0]
-    if (!compiledScript) throw new Error('未生成 planning manager 验证脚本')
-    await Bun.write(outputPath, compiledScript)
+    // 每次运行使用独立 HOME，确保不读取真实用户配置。
+    runVerifier(sourcePath, home, 'seed')
+    expect(existsSync(statePath)).toBe(true)
+    expect(existsSync(join(home, '.linguist-agent-dev', 'planning.db'))).toBe(false)
+    expect(JSON.parse(readFileSync(statePath, 'utf8'))).toMatchObject({ schemaVersion: 1 })
+    runVerifier(sourcePath, home, 'reload')
 
-    const result = spawnSync(electronBinary, [outputPath], {
-      cwd: repoRoot,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HOME: home, PROMA_DEV: '1' },
-      encoding: 'utf8',
+    const invalid = JSON.parse(readFileSync(statePath, 'utf8'))
+    invalid.reminders.push({
+      id: 'dangling-reminder', targetType: 'todo', targetId: 'missing-todo', triggerAt: Date.now(),
+      status: 'pending', origin: 'manual', createdAt: Date.now(), updatedAt: Date.now(),
     })
-    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    writeFileSync(statePath, JSON.stringify(invalid))
+    const invalidSource = source.replace(
+      "assert.equal(mode, 'reload')",
+      "if (mode === 'invalid') { assert.throws(() => manager.listTodos(), /格式无效/); process.exit(0) }\n    assert.equal(mode, 'reload')",
+    )
+    writeFileSync(sourcePath, invalidSource)
+    const invalidBefore = readFileSync(statePath, 'utf8')
+    runVerifier(sourcePath, home, 'invalid')
+    expect(readFileSync(statePath, 'utf8')).toBe(invalidBefore)
   } finally {
     rmSync(home, { recursive: true, force: true })
   }

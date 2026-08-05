@@ -22,6 +22,7 @@ import { MessageResponse } from '@/components/ai-elements/message'
 import { getToolIcon, extractFilePath } from './tool-utils'
 import { getToolPhrase } from './tool-phrase'
 import { ToolResultRenderer } from './tool-result-renderers'
+import { serializeCatToolResultDetails } from './tool-result-renderers/cat-result'
 import { PreviewOpenButton } from './tool-result-renderers/preview-open-button'
 import { getTaskGetStatusLabel, parseTaskGetResult, type ParsedTaskGetResult } from './tool-result-renderers/task-get-result'
 import { parseTaskListResult, type ParsedTaskListItem } from './tool-result-renderers/task-list-result'
@@ -45,7 +46,11 @@ interface ToolResultData {
 }
 
 /** 在 allMessages 中查找匹配 toolUseId 的工具结果 */
-function useToolResult(toolUseId: string, allMessages: SDKMessage[]): ToolResultData | null {
+function useToolResult(
+  toolUseId: string,
+  toolName: string,
+  allMessages: SDKMessage[],
+): ToolResultData | null {
   return React.useMemo(() => {
     for (const msg of allMessages) {
       if (msg.type !== 'user') continue
@@ -57,14 +62,16 @@ function useToolResult(toolUseId: string, allMessages: SDKMessage[]): ToolResult
         if (block.type === 'tool_result') {
           const resultBlock = block as SDKToolResultBlock
           if (resultBlock.tool_use_id === toolUseId) {
-            let result: string | undefined
-            if (typeof resultBlock.content === 'string') {
-              result = resultBlock.content
-            } else if (Array.isArray(resultBlock.content)) {
-              result = (resultBlock.content as Array<{ type: string; text?: string }>)
-                .filter((c) => c.type === 'text' && typeof c.text === 'string')
-                .map((c) => c.text)
-                .join('\n')
+            let result = serializeCatToolResultDetails(toolName, userMsg.tool_use_result)
+            if (result === undefined) {
+              if (typeof resultBlock.content === 'string') {
+                result = resultBlock.content
+              } else if (Array.isArray(resultBlock.content)) {
+                result = (resultBlock.content as Array<{ type: string; text?: string }>)
+                  .filter((c) => c.type === 'text' && typeof c.text === 'string')
+                  .map((c) => c.text)
+                  .join('\n')
+              }
             }
             return { result, isError: resultBlock.is_error }
           }
@@ -72,7 +79,7 @@ function useToolResult(toolUseId: string, allMessages: SDKMessage[]): ToolResult
       }
     }
     return null
-  }, [toolUseId, allMessages])
+  }, [toolUseId, toolName, allMessages])
 }
 
 // ===== useSubAgentMeta Hook =====
@@ -334,7 +341,7 @@ interface ToolUseBlockProps {
 
 function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed = false, childBlocks, basePath, isStreaming }: ToolUseBlockProps): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
-  const toolResult = useToolResult(block.id, allMessages)
+  const toolResult = useToolResult(block.id, block.name, allMessages)
   const resultText = toolResult?.result
   const isError = toolResult?.isError === true
   const shouldShowResult = !!resultText
@@ -399,9 +406,12 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
             )}
           />
 
-          {/* 状态指示：仅流式中的未完成工具才显示 spinner */}
+          {/* 状态指示：仅流式中的未完成工具才显示 spinner；reduced-motion 下降级为静态文案（全局规则会冻结 animate-spin 首帧） */}
           {!isCompleted && isStreaming ? (
-            <Loader2 className="size-3.5 animate-spin text-primary/50 shrink-0" />
+            <>
+              <Loader2 className="size-3.5 animate-spin text-primary/50 shrink-0 motion-reduce:hidden" />
+              <span className="hidden motion-reduce:inline text-[12px] leading-none text-primary/60 shrink-0">执行中</span>
+            </>
           ) : isError ? (
             <XCircle className="size-3.5 text-destructive/70 shrink-0" />
           ) : null}
@@ -484,7 +494,10 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
         onClick={() => setExpanded(!expanded)}
       >
         {!isCompleted && isStreaming ? (
-          <Loader2 className="size-3.5 animate-spin text-primary/50 shrink-0" />
+          <>
+            <Loader2 className="size-3.5 animate-spin text-primary/50 shrink-0 motion-reduce:hidden" />
+            <span className="hidden motion-reduce:inline text-[12px] leading-none text-primary/60 shrink-0">执行中</span>
+          </>
         ) : isError ? (
           <XCircle className="size-3.5 text-destructive/70 shrink-0" />
         ) : null}
@@ -556,12 +569,14 @@ function ToolUseBlock({ block, allMessages, animate = false, index = 0, dimmed =
 interface ThinkingBlockProps {
   block: SDKThinkingBlock
   dimmed?: boolean
+  /** 是否为「正在生成」的 live 态（流式中且未被弱化）；live 态标签显示 "Thinking…"，完成态显示 "Thought process" */
+  isLive?: boolean
 }
 
 /** 思考块折叠行数阈值 */
 const THINKING_COLLAPSE_LINE_THRESHOLD = 4
 
-function ThinkingBlock({ block, dimmed = false }: ThinkingBlockProps): React.ReactElement {
+function ThinkingBlock({ block, dimmed = false, isLive = false }: ThinkingBlockProps): React.ReactElement {
   const [isExpanded, setIsExpanded] = React.useState(false)
   const [shouldCollapse, setShouldCollapse] = React.useState(false)
   const contentRef = React.useRef<HTMLDivElement>(null)
@@ -583,8 +598,10 @@ function ThinkingBlock({ block, dimmed = false }: ThinkingBlockProps): React.Rea
     <div className="relative mb-3">
       <div className="flex items-center gap-1.5 mb-1.5">
         <Brain className={cn('size-3.5', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')} />
+        {/* live 态用静态圆点作「进行中」指示（不用 animate-spin，reduced-motion 下不会冻结成静止首帧） */}
+        {isLive && <span className="size-1.5 rounded-full bg-primary/60 shrink-0" aria-hidden="true" />}
         <span className={cn('text-[14px] uppercase tracking-wider', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')}>
-          Thinking
+          {isLive ? 'Thinking…' : 'Thought process'}
         </span>
       </div>
       <div
@@ -665,11 +682,11 @@ export function ContentBlock({ block, allMessages, basePath, basePaths, animate 
     )
   }
 
-  // thinking 块
+  // thinking 块（live 态 = 流式中且未被弱化，即当前正在生成的思考段）
   if (block.type === 'thinking') {
     const thinkingBlock = block as SDKThinkingBlock
     if (!thinkingBlock.thinking) return null
-    return <ThinkingBlock block={thinkingBlock} dimmed={dimmed} />
+    return <ThinkingBlock block={thinkingBlock} dimmed={dimmed} isLive={!!isStreaming && !dimmed} />
   }
 
   return null

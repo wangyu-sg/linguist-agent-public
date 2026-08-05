@@ -343,7 +343,7 @@ class FeishuBridge {
     this.groupInfoCache.clear()
     this.userNameCache.clear()
     // 注意：lastInteractedUserOpenId 不在 stop 中清空——它代表"用户曾经与该 Bot 互动过"的事实，
-    // 重启后仍需用来给桌面 Session 镜像建群。完整重置请删除 ~/.proma/feishu-metadata-{botId}.json。
+    // 重启后仍需用来给桌面 Session 镜像建群。完整重置请删除 ~/.linguist-agent/feishu-metadata-{botId}.json。
     this.botOpenId = null
 
     this.updateStatus({ status: 'disconnected', activeBindings: 0 })
@@ -1096,12 +1096,13 @@ class FeishuBridge {
     }
 
     // 创建会话（使用默认标题，首次对话完成后会自动生成标题）
+    // D-002（PB-011）：远程 Bot 入口默认 Pi runtime（settings 缺省值本身已是 pi）
     const session = await createAgentSession(
       title,
       channelId,
       workspaceId,
       undefined,
-      appSettings.agentRuntime ?? 'claude',
+      appSettings.agentRuntime ?? 'pi',
     )
 
     // 绑定

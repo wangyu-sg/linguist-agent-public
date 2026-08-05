@@ -10,8 +10,9 @@
  * Phase 2 再按平台做 canBecomeKey=false 语义优化。
  */
 
-import { app, BrowserWindow, screen } from 'electron'
+import { app, BrowserWindow, screen, shell } from 'electron'
 import { join } from 'node:path'
+import { classifyAgentIslandNavigation } from './agent-island-navigation-policy'
 
 /** Windows fallback 的收起态尺寸，和原生 Swift island 的紧凑状态一致。 */
 export const AGENT_ISLAND_DEFAULT_WIDTH = 420
@@ -71,6 +72,8 @@ export function createAgentIslandWindow(): BrowserWindow | null {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
     },
   })
 
@@ -82,6 +85,19 @@ export function createAgentIslandWindow(): BrowserWindow | null {
   }
 
   const isDev = !app.isPackaged
+  agentIslandWindow.webContents.on('will-navigate', (event, url) => {
+    const disposition = classifyAgentIslandNavigation(url, isDev)
+    if (disposition === 'allow-internal') return
+    event.preventDefault()
+    if (disposition === 'open-external') void shell.openExternal(url)
+  })
+  agentIslandWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (classifyAgentIslandNavigation(url, isDev) === 'open-external') {
+      void shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
   if (isDev) {
     void agentIslandWindow.loadURL(`http://127.0.0.1:5173?window=agent-island&platform=${process.platform}`)
   } else {

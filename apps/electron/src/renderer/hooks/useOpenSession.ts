@@ -36,7 +36,8 @@ interface OpenSessionOptions {
   bypassSettingsGuard?: boolean
 }
 
-type OpenSessionFn = (type: TabType, sessionId: string, title: string, options?: OpenSessionOptions) => void
+type OpenSessionTarget = Exclude<TabType, 'linguist-project'>
+type OpenSessionFn = (type: OpenSessionTarget, sessionId: string, title: string, options?: OpenSessionOptions) => void
 
 export function useOpenSession(): OpenSessionFn {
   const store = useStore()
@@ -56,14 +57,13 @@ export function useOpenSession(): OpenSessionFn {
   const setPendingSessionNavigation = useSetAtom(settingsPendingSessionNavigationAtom)
 
   return React.useCallback(
-    (type: TabType, sessionId: string, title: string, options?: OpenSessionOptions): void => {
+    (type: OpenSessionTarget, sessionId: string, title: string, options?: OpenSessionOptions): void => {
       if (!options?.bypassSettingsGuard && settingsOpen && channelFormDirty) {
         setPendingSessionNavigation({ type, sessionId, title })
         return
       }
 
       setSettingsOpen(false)
-
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
       const restore = type === 'agent'
         ? buildOpenTabRestore(
@@ -102,7 +102,8 @@ export function useOpenSession(): OpenSessionFn {
           }).catch(console.error)
         }
       } else {
-        setAppMode('scratch')
+        // Scratch/教程等辅助 Tab 不再是主模式，维持在 Agent 上下文中。
+        setAppMode('agent')
         setCurrentConversationId(null)
         setCurrentAgentSessionId(null)
       }

@@ -138,6 +138,12 @@ export interface VoiceDictationTextEvent {
   text: string
 }
 
+/** Renderer 对最终文本是否被 Proma 输入框实际消费的确认。 */
+export interface VoiceDictationPromaInputResolution {
+  sessionId: string
+  handled: boolean
+}
+
 /** 调整语音输入浮窗尺寸参数 */
 export interface VoiceDictationResizeInput {
   height: number
@@ -268,6 +274,10 @@ export interface AppSettings {
   notificationSounds?: NotificationSoundSettings
   /** 标签页持久化状态（重启恢复） */
   tabState?: PersistedTabSettings
+  /** Linguist Project 上次选择的原生 Agent Session；只存 ID，不复制项目内容。 */
+  linguistProjectAgentSessionIds?: Record<string, string>
+  /** Linguist Project 上次编辑位置与 Workbench 布局；不复制 CAT 内容。 */
+  linguistProjectWorkbenchLocations?: Record<string, LinguistWorkbenchLocation>
   /** Agent 思考模式 */
   agentThinking?: ThinkingConfig
   /** Agent 推理深度 */
@@ -326,6 +336,16 @@ export interface AppSettings {
   mainWindowState?: MainWindowState
   /** 独立任务/日程窗口状态（大小、位置、是否最大化） */
   planningWindowState?: MainWindowState
+}
+
+/** Linguist Project 的可恢复编辑位置与 Agent Rail 布局。 */
+export interface LinguistWorkbenchLocation {
+  activeAssetId?: string
+  activeSegmentId?: string
+  agentPresentation?: 'closed' | 'rail' | 'full'
+  /** 兼容读取旧 settings；新写入统一使用 agentPresentation。 */
+  agentRailOpen?: boolean
+  agentRailWidth?: number
 }
 
 /** 主窗口大小、位置和最大化状态 */
@@ -418,6 +438,8 @@ export const VOICE_DICTATION_IPC_CHANNELS = {
   PREVIEW: 'voice-dictation:preview',
   /** 输出最终文本 */
   COMMIT: 'voice-dictation:commit',
+  /** Renderer 确认最终文本是否被 Proma 输入框实际消费 */
+  RESOLVE_PROMA_INPUT: 'voice-dictation:resolve-proma-input',
   /** 隐藏语音输入窗口 */
   HIDE: 'voice-dictation:hide',
   /** 调整语音输入窗口高度 */

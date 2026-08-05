@@ -6,13 +6,13 @@
 
 import * as React from 'react'
 import { useAtom, useSetAtom } from 'jotai'
-import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Download, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { PROVIDER_LABELS, isAgentCompatibleProvider } from '@proma/shared'
 import type { Channel } from '@proma/shared'
-import { getChannelLogo, PromaLogo } from '@/lib/model-logo'
+import { getChannelLogo } from '@/lib/model-logo'
 import { getEnabledClaudeAgentChannelIds } from '@/lib/agent-channel-selection'
 import { agentChannelIdAtom, agentModelIdAtom, agentChannelIdsAtom } from '@/atoms/agent-atoms'
 import { channelsAtom } from '@/atoms/chat-atoms'
@@ -42,6 +42,11 @@ export function ChannelSettings(): React.ReactElement {
   const [agentChannelIds, setAgentChannelIds] = useAtom(agentChannelIdsAtom)
   const setGlobalChannels = useSetAtom(channelsAtom)
   const [deleteTarget, setDeleteTarget] = React.useState<Channel | null>(null)
+  const [importingProma, setImportingProma] = React.useState(false)
+  const [importNotice, setImportNotice] = React.useState<{
+    kind: 'success' | 'error'
+    message: string
+  } | null>(null)
   const agentChannelIdsRef = React.useRef(agentChannelIds)
   const agentChannelIdRef = React.useRef(agentChannelId)
 
@@ -67,6 +72,28 @@ export function ChannelSettings(): React.ReactElement {
       setLoading(false)
     }
   }, [])
+
+  const handleImportPromaProviders = async (): Promise<void> => {
+    setImportingProma(true)
+    setImportNotice(null)
+    try {
+      const result = await window.electronAPI.importPromaProviderConfigs()
+      await loadChannels()
+      setImportNotice({
+        kind: 'success',
+        message: result.importedCount > 0
+          ? `已导入 ${result.importedCount} 个 Provider 配置，跳过 ${result.skippedCount} 个冲突。`
+          : `没有新增配置，已跳过 ${result.skippedCount} 个现有配置。`,
+      })
+    } catch (error) {
+      setImportNotice({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Proma Provider 配置导入失败',
+      })
+    } finally {
+      setImportingProma(false)
+    }
+  }
 
   React.useEffect(() => {
     loadChannels()
@@ -202,15 +229,31 @@ export function ChannelSettings(): React.ReactElement {
         title="模型配置"
         description="管理 AI 供应商连接，配置 API Key 和可用模型。每个渠道会标注可用的 Agent Core。"
         action={
-          <Button size="sm" onClick={() => setViewMode('create')}>
-            <Plus size={16} />
-            <span>添加配置</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={importingProma}
+              onClick={() => void handleImportPromaProviders()}
+            >
+              <Download size={16} />
+              <span>{importingProma ? '导入中…' : '从 Proma 导入'}</span>
+            </Button>
+            <Button size="sm" onClick={() => setViewMode('create')}>
+              <Plus size={16} />
+              <span>添加配置</span>
+            </Button>
+          </div>
         }
       >
-        <SettingsCard>
-          <PromaProviderCard />
-        </SettingsCard>
+        {importNotice && (
+          <p
+            role={importNotice.kind === 'error' ? 'alert' : 'status'}
+            className={importNotice.kind === 'error' ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}
+          >
+            {importNotice.message}
+          </p>
+        )}
         {loading ? (
           <div className="text-sm text-muted-foreground py-8 text-center">加载中...</div>
         ) : channels.length === 0 ? (
@@ -254,10 +297,6 @@ export function ChannelSettings(): React.ReactElement {
       </AlertDialog>
     </div>
   )
-}
-
-function openPromaDownload(): void {
-  window.open('https://proma.cool/download', '_blank')
 }
 
 // ===== 渠道行子组件 =====
@@ -339,22 +378,5 @@ function AgentCoreChips({ provider }: Pick<Channel, 'provider'>): React.ReactEle
         Pi
       </Badge>
     </div>
-  )
-}
-
-// ===== Proma 官方供应商推广卡片 =====
-
-function PromaProviderCard(): React.ReactElement {
-  return (
-    <SettingsRow
-      label="Proma"
-      icon={<img src={PromaLogo} alt="Proma" className="w-8 h-8 rounded" />}
-      description="Proma 商业版｜安全、稳定、优惠的内置模型｜适用于 Chat 与 Agent"
-    >
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={openPromaDownload}>
-        <ExternalLink size={13} />
-        <span>下载商业版</span>
-      </Button>
-    </SettingsRow>
   )
 }

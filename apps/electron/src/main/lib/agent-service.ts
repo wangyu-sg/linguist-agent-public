@@ -14,7 +14,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:p
 import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { BrowserWindow } from 'electron'
 import type { WebContents } from 'electron'
-import { AGENT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@proma/shared'
+import { AGENT_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@proma/shared'
 import type {
   AgentSendInput,
   AgentGenerateTitleInput,
@@ -27,18 +27,22 @@ import type {
   PromaPermissionMode,
   AgentExternalRunSource,
   AgentMessage,
+  LinguistProjectMutationEvent,
 } from '@proma/shared'
 import { ClaudeAgentAdapter, scanAndKillOrphanedClaudeSubprocesses } from './adapters/claude-agent-adapter'
 import { PiAgentAdapter, cleanupPiRuntimeResources } from './adapters/pi-agent-adapter'
 import { RuntimeRoutingAgentAdapter } from './adapters/runtime-routing-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
-import { getAgentSessionWorkspacePath } from './config-paths'
 import { getAgentWorkspaceBySlug, getLocalProjectRootStatus, getProjectFilesPath } from './agent-workspace-manager'
 import { getAgentSessionMeta, updateAgentSessionMeta } from './agent-session-manager'
 import { setAgentStopper, setHeadlessAgentRunner } from './agent-headless-runner-registry'
 import { getHeadlessAgentRunTarget } from './agent-headless-run-target'
 import { sendAgentStreamComplete } from './agent-completion-payload'
+import { saveFilesToManagedAgentSession } from './agent-session-file-storage'
+import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
+import { checkLinguistSessionSendBlock } from './linguist/session-binding'
+import { getLinguistProjectService } from './linguist/project-service'
 
 // ===== 实例创建 =====
 
@@ -102,11 +106,21 @@ function isMainRendererWindow(win: BrowserWindow): boolean {
     && !url.includes('window=voice-dictation')
     && !url.includes('window=detached-preview')
     && !url.includes('window=agent-island')
+    && !url.includes('window=planning')
 }
 
 function getMainRendererWebContents(): WebContents | null {
   const win = BrowserWindow.getAllWindows().find(isMainRendererWindow)
   return win && !win.webContents.isDestroyed() ? win.webContents : null
+}
+
+function sendLinguistProjectMutation(
+  webContents: WebContents | null,
+  event: LinguistProjectMutationEvent,
+): void {
+  if (webContents && !webContents.isDestroyed()) {
+    webContents.send(LINGUIST_CAT_IPC_CHANNELS.PROJECT_MUTATION, event)
+  }
 }
 
 // ===== EventBus IPC 转发中间件 =====
@@ -188,6 +202,9 @@ export async function runAgent(
             title,
           })
         }
+      },
+      onLinguistProjectMutation: (event) => {
+        sendLinguistProjectMutation(webContents, event)
       },
     })
   } catch (err) {
@@ -296,6 +313,9 @@ export async function runAgentHeadless(
           },
         })
       },
+      onLinguistProjectMutation: (event) => {
+        sendLinguistProjectMutation(wc, event)
+      },
     })
   } catch (err) {
     console.error('[Agent 服务] runAgentHeadless 未处理异常:', err)
@@ -402,6 +422,7 @@ export async function queueAgentMessage(
     input.mentionedSkills,
     input.mentionedMcpServers,
     input.mentionedSessionIds,
+    input.linguistContext,
     input.mentionedTodoIds,
     input.mentionedCalendarEventIds,
   )
@@ -415,46 +436,16 @@ export async function queueAgentMessage(
  * 将 base64 编码的文件写入当前会话的私有工作目录，供 Agent 通过授权的附加目录读取。
  */
 export function saveFilesToAgentSession(input: AgentSaveFilesInput): AgentSavedFile[] {
-  const sessionDir = getAgentSessionWorkspacePath(input.workspaceSlug, input.sessionId)
-  const results: AgentSavedFile[] = []
-  const usedPaths = new Set<string>()
-
-  for (const file of input.files) {
-    let targetPath = join(sessionDir, file.filename)
-
-    // 防止同名文件覆盖
-    if (usedPaths.has(targetPath) || existsSync(targetPath)) {
-      const dotIdx = file.filename.lastIndexOf('.')
-      const baseName = dotIdx > 0 ? file.filename.slice(0, dotIdx) : file.filename
-      const ext = dotIdx > 0 ? file.filename.slice(dotIdx) : ''
-      let counter = 1
-      let candidate = join(sessionDir, `${baseName}-${counter}${ext}`)
-      while (usedPaths.has(candidate) || existsSync(candidate)) {
-        counter++
-        candidate = join(sessionDir, `${baseName}-${counter}${ext}`)
+  return saveFilesToManagedAgentSession(input, {
+    getSessionMeta: getAgentSessionMeta,
+    resolveExecutionScope: resolveAgentExecutionScope,
+    assertSessionWritable: (session) => {
+      const blocked = checkLinguistSessionSendBlock(session, getLinguistProjectService)
+      if (blocked) {
+        throw new Error(`${blocked.title}: ${blocked.message}`)
       }
-      targetPath = candidate
-    }
-    usedPaths.add(targetPath)
-
-    mkdirSync(dirname(targetPath), { recursive: true })
-
-    // 防御性检查：base64 字符串长度估算是否超 100MB 限制
-    // base64 编码膨胀率约 4/3，data.length * 0.75 ≈ 原始字节数
-    if (file.data.length * 0.75 > MAX_ATTACHMENT_SIZE) {
-      console.warn(`[Agent 服务] 文件超过 100MB 限制，跳过: ${file.filename} (预估 ${(file.data.length * 0.75 / 1024 / 1024).toFixed(1)}MB)`)
-      continue
-    }
-
-    const buffer = Buffer.from(file.data, 'base64')
-    writeFileSync(targetPath, buffer)
-
-    const actualFilename = targetPath.slice(sessionDir.length + 1)
-    results.push({ filename: actualFilename, targetPath })
-    console.log(`[Agent 服务] 文件已保存: ${targetPath} (${buffer.length} bytes)`)
-  }
-
-  return results
+    },
+  })
 }
 
 const LOCAL_PROJECT_ROOT_UNAVAILABLE_CODE = 'local_project_root_unavailable'

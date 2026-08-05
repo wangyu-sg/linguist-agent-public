@@ -1,324 +1,147 @@
-# Proma
+# Linguist Agent
 
-Proma 是一个本地优先的 AI 桌面应用，把多模型 Chat、通用 Agent、工作区、Skills、MCP、远程机器人和记忆能力放在同一个开源客户端里。
+Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
-它不是只面向闲聊的聊天框，而是一个可以长期沉淀个人工作流的 Agent 工作台：简单问题用 Chat，复杂任务交给 Agent，数据和配置尽量留在本地。
+> Proma 的完整通用 Agent / Chat 产品能力 + Linguist Agent 的专业 CAT 内核与工作台。
 
-![Proma 海报](https://img.erlich.fun/personal-blog/uPic/pb.png)
+本项目是 [Proma](https://github.com/proma-ai/Proma) 的 AGPL-3.0 衍生作品。Proma 的版权归原作者所有；来源与固定基线见 [NOTICE.md](./NOTICE.md)、[ATTRIBUTION.md](./ATTRIBUTION.md) 和 [UPSTREAM_BASELINE.md](./docs/architecture/UPSTREAM_BASELINE.md)。
 
-<video width="560" controls>
-  <source src="https://img.erlich.fun/personal-blog/uPic/%E7%AE%80%E5%8D%95%E4%BB%8B%E7%BB%8D%20Proma.mp4" type="video/mp4">
-</video>
+[English README](./README.en.md)
 
-[English README](./README.en.md) | [新手教程](./tutorial/tutorial.md) | [下载开源版](https://github.com/ErlichLiu/Proma/releases) | [下载商业版](https://proma.cool/download)
+## 当前状态
 
-> **最新思考 ｜ 2026 Q2–Q3**：[勇敢地解决真实的问题 — Proactive · 个人注意力 · 团队协作](./proma-thinking/proma-2026-q2-q3-thinking.md) ｜ 往期思考：[2026 Q1](./proma-thinking/proma-2026-q1-thinking.md)
+当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。产品结构已经固定：不删除 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations 或远程集成；Linguist 是其上的一等本地化模式。
 
-## 现在能做什么
+当前 manifest 基线是 Electron App `0.16.15`（Electron `43.2.0`）、`@proma/shared 0.1.82`、Pi Runtime `0.82.1`、CAT Core / Store / Tools `0.0.13 / 0.0.26 / 0.0.20`，仓库固定使用 Bun `1.3.14`。旧 `0.15.140` 的打包或安装验证不能自动外推到这次合并后的基线；新的构建、打包和真机结果必须单独记录。
 
-- **Chat 模式**：多模型对话、附件解析、图片输入、Markdown / Mermaid / KaTeX / 代码高亮、并排对话、系统提示词、上下文管理。
-- **Agent 模式**：内置 Claude Agent SDK 与 Pi Agent SDK 两套运行时；支持工作区隔离、权限模式、文件操作、长任务流式输出、计划确认和用户追问。Claude 是默认内核，Pi 可在实验性设置中开启。
-- **协作与任务**：复杂任务可拆分为可追踪的协作子 Agent / Task，并在消息流中展示调用过程和结果。
-- **Skills、MCP 与项目根目录**：每个 Proma 项目独立配置 Skills 与 MCP Server。项目文件可使用用户选择的本地项目根目录，也可使用 Proma 托管的空白项目目录；本地项目配置不会被自动导入。
-- **远程机器人**：支持飞书 / Lark 机器人桥接，并已提供钉钉、微信桥接入口，用手机或群聊触发本机 Agent 工作流。
-- **记忆与工具**：Chat 和 Agent 可共享记忆能力，并支持联网搜索、内置 Chat 工具、Agent 推荐等辅助能力。
-- **本地优先**：会话、工作区、附件、配置、Skills 等默认存储在 `~/.proma/`，使用 JSON / JSONL 文件组织，不依赖本地数据库。
-- **桌面体验**：自动更新、代理设置、文件预览、全局快捷键、快速任务窗口、语音输入、亮色 / 暗色 / 跟随系统主题。
+应用提供三个并列主模式：
 
-## 快速开始
+- **Agent**：完整通用 Agent 工作区，支持 Claude / Pi Runtime、工具、Thinking、权限、Queue / Steer、Skills、MCP 和工作区文件。
+- **Chat**：多 Provider 对话、附件、工具、上下文控制与并排比较。
+- **Linguist**：项目、资产、虚拟化 Segment Grid、人工编辑、Proposal 审核、TM / TB、Context、确定性 QA、阶段确认、运行摘要/安全撤销、交付预检、导出、完整性扫描、备份与恢复。
 
-### 下载安装
+Linguist 左侧栏固定为“项目 → 绑定会话”：会话行与 Agent 侧栏复用同一组件和树行为（状态、MiniMap、委派、置顶、最近会话与归档），Agent 模式则排除所有项目绑定会话。点击项目进入 Workbench，点击会话进入同一个 Full `AgentView`；跨项目操作是创建独立副本，成功后仍停留在源项目，并可从提示打开副本。
 
-从 [GitHub Releases](https://github.com/ErlichLiu/Proma/releases) 下载开源版本，提供 macOS Apple Silicon、macOS Intel 和 Windows 安装包。
+Linguist 是一等 Agent Profile：它在各 Runtime 的 Proma Base 上叠加版本化的 Profile、Role、Strategy、Project Digest 与冻结的 Turn Context，并在缺层时显式 degraded，不静默退化成普通 Agent。Strategy 是可审计的提示与评估元数据；本文不把 Fast / Balanced / Best 写成已经获得用户侧默认语义或质量资格的档位。它嵌入同一个 `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA/Required/Forbidden 规则直接提交 Segment。
 
-开源版可独立使用，并支持自行配置 AI 供应商渠道。如果你更希望使用 Proma 提供的内置模型渠道和订阅方案，也可以按需了解 [Proma 商业版](https://proma.cool/download)。两个版本面向不同的使用偏好，你可以自由选择适合自己的版本。
+CAT 编辑器中，`Cmd/Ctrl+Enter` 用于确认当前阶段并前进，即使译文没有变化也可执行；项目设置等右侧浮窗的关闭按钮在 Electron 标题栏区域保持可点击。
 
-| 对比项 | 开源版 | 商业版 |
-| --- | --- | --- |
-| 核心桌面能力 | 完整的 Proma 桌面体验，可自由配置工作流 | 保留同样的核心桌面体验 |
-| 模型渠道 | 自行添加和管理 AI 供应商渠道与 API Key | 登录后可使用 Proma 官方内置模型渠道，也仍可自行配置第三方渠道 |
-| 模型价格 | 按所选供应商的规则和价格使用 | 精选模型提供 Proma Cloud 专属优惠，部分模型最高可低至官方参考价 2 折 |
-| Agent 安全与稳定 | 需自行评估供应商的安全、协议兼容与稳定性；使用第三方中转站时也需自行判断额外的信任与数据处理风险 | 使用 Proma Cloud 官方托管链路，提供统一的安全与稳定性保障、Agent 协议兼容和模型健康监控，减少不透明第三方中转带来的不确定性 |
-| 联网与内嵌 AI 能力 | 按需自行配置搜索、生图等服务及对应 API Key | 提供更完整的 Proma Cloud 联网与内嵌能力，包括 WebSearch，以及 GPT Image 2 生图和编辑 |
-| 对外 API 与服务 | 主要使用你自行配置的供应商 API | 可创建独立、可设额度上限的 Proma Cloud API Key，将 LLM、工具和多模态能力接入自己的应用或服务 |
-| 团队额度管理 | 需自行搭建成员、额度分配与用量管理机制 | 团队管理员可向成员分配或回收共享团队额度，支持按月自动分配，并查看成员用量与额度流水 |
-| 订阅与用量 | 自行管理供应商账号、余额与用量 | 在应用内管理订阅与余额，并查看模型、Agent 和工具的用量明细 |
-| 从开源版切换 | — | 直接覆盖安装即可，继续使用已有的本地 Proma 数据 |
+上游 v0.16.8 底座带来 Planning（Todo、日程、提醒与 Agent 引用）、Agent Island、统一项目/会话文件能力、Vision Relay、xAI OAuth 与更新后的 Pi Runtime。这些能力仍属于共享 Agent / Chat 底座，不能引入第二套 Linguist 状态或绕过 CAT authority；其自动、打包和真机资格仍须分别验证。
 
-> 可用模型、价格和权益会随时间调整，以应用内当期展示为准。
+## 架构
 
-### 企业版与商业授权
+```text
+Linguist Agent Desktop App
+├── Agent / Chat / Providers / Skills / MCP / Automations / 远程桥
+├── Planning（Todo、日程、提醒、Agent 引用）
+├── Agent Island（Agent 交互与 Planning 投影）
+└── Linguist Mode
+    ├── Workbench + 原生 Agent Rail
+    ├── Session-bound CAT Tools
+    ├── Electron Linguist Services / IPC
+    └── @linguist/cat-core
+        └── 纯领域模型、Proposal、Evidence、QA、Critic、Consistency
+```
 
-如果你的组织计划面向数百至数千名员工规模部署 Proma，可以采购企业版授权；我们也可围绕实际部署需求提供范围明确的轻量定制服务。欢迎通过微信联系：`geekthings`。
+关键边界：
 
-### 首次配置
+- `@linguist/cat-core` 不依赖 React、Electron、Proma UI 或 SQLite。
+- `@linguist/cat-store` 负责每项目 `cat.db`、原始资产、备份与导出记录。
+- `@linguist/cat-tools` 的项目身份只来自 Session binding，17 个工具按项目、参考资料、QA、Proposal/Critic、Intake 分模块；Intake 目前只接受当前会话明确附加的单文件。
+- `LinguistProjectService` 保持单一对外接口，内部按生命周期、资源、质量与交付拆分。
+- Proposal 内容与每次 Issuance/Provenance 分离持久化；长任务使用 Job/Checkpoint、幂等 mutation、durable outbox 和按运行撤销。
+- 项目打开只做有界 Quick Health；Full Integrity Scrub 在独立 worker thread 中检查全量摘要、SQLite/引用链、导出与 Session workspace。
+- 会话复制由主进程重新验证源 Session binding、目标项目活跃/健康状态与 Claude/Pi 原生分叉条件；Renderer 不能提交 binding、原生 ID 或路径。副本不携带工作区文件、`.context`、附件、委派、自动化或运行状态，失败时回滚半成品。
+- Planning 与 Agent Island 复用通用主进程、preload 与 Jotai 合同；它们不授予 CAT 写入权限。
+- Proma 核心触点受 [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md) 和架构测试约束。
 
-1. 打开 Proma，先完成环境检查。Agent 模式依赖本机基础环境，尤其是 Git、Node.js / Bun 以及可用的 Shell。
-2. 进入 **设置 > 渠道**，添加至少一个 AI 供应商渠道，填写 Base URL、API Key 和模型列表。
-3. Chat 模式可以使用 OpenAI、Anthropic、Google 或 OpenAI 兼容协议的渠道。
-4. 默认的 Claude Agent Runtime 需要 Anthropic 或 Anthropic 兼容协议渠道，例如 Anthropic、DeepSeek、Kimi API、Kimi Coding Plan。
-5. Agent 输入框下方可直接切换 Claude / Pi 内核；Pi 可使用任意已启用的模型渠道。
-6. 进入 **设置 > Agent**，选择默认 Agent 渠道、模型和工作区。
-7. 如需记忆、联网搜索、飞书 / 钉钉 / 微信桥接，在设置页对应 Tab 中继续配置。
+## Agent Runtime 与模型渠道
 
-## 模式选择
+Agent 会话提供两套可切换的运行时：
 
-### Chat 适合
+- **Claude Agent Runtime**：基于 `@anthropic-ai/claude-agent-sdk 0.3.201`，使用 Anthropic Messages API 或兼容端点。
+- **Pi Agent Runtime**：基于 `@earendil-works/pi-coding-agent`、`pi-agent-core` 和 `pi-ai 0.82.1`，把已启用的渠道注册为 Pi provider，并承接工作区 Skills、用户 MCP Server、Automation / Collaboration 等通用能力。
 
-- 日常问答、解释、翻译、润色、轻量代码讨论。
-- 读取附件内容后做总结、改写、比较。
-- 使用联网搜索或记忆工具增强一次性对话。
-- 同时对比多个模型输出，或用不同系统提示词做探索。
+当前渠道层包含 ChatGPT subscription/Codex OAuth 和 xAI（Grok/X 订阅）OAuth 的集成路径。模型、工具调用、推理、上下文长度和订阅可用性取决于用户配置、账号、地区与上游 Provider；这些集成不是对模型权限、价格或服务可用性的承诺。
 
-### Agent 适合
-
-- 修改、创建、整理本地文件。
-- 调研、编写报告、处理多步骤任务。
-- 使用 MCP、Skills、Shell、Git、项目文件等外部上下文。
-- 需要权限确认、计划模式、后台任务或远程机器人持续跟进的工作。
-
-简单说：**只需要回答时用 Chat，需要行动和交付结果时用 Agent。**
-
-## 截图
-
-### Chat 快速分析
-
-用 Chat 处理轻量但真实的分析任务：整理读者关注点、生成对比表，并把首屏文案快速定稿。
-
-![Proma Chat 快速分析](./docs/assets/screenshots/proma-chat-demo.png)
-
-### Agent 工作台
-
-Agent 在项目根目录与会话工作台中读取文件、推进任务、输出表格化结论，并把可复用文件保留在右侧文件面板中。
-
-![Proma Agent 工作台](./docs/assets/screenshots/proma-agent-demo.png)
-
-### Skills
-
-每个工作区都可以沉淀专属 Skills。截图中的 `feedback-synthesis` 用于把用户反馈、访谈记录和 issue 聚合成主题、证据与优先级建议。
-
-![Proma 工作区 Skills](./docs/assets/screenshots/proma-skills-demo.png)
-
-### Skills & MCP
-
-同一个工作区可以管理 stdio / HTTP MCP Server，按需启用或关闭，让 Agent 在不同项目里获得不同的外部上下文。
-
-![Proma MCP 配置](./docs/assets/screenshots/proma-mcp-demo.png)
-
-### 流式语音输入(支持全局输入)
-Proma 支持豆包的流式语音输入功能，并且支持在 Proma 内使用和 Proma 外部使用：
-- Proma 内部使用：Ctrl + ` 触发识别，再次按下结束自动输入到 Proma 内对应的输入框
-- Proma 外部使用：Ctrl + ` 触发识别，再次按下结束自动输入到当前的光标所在处，如无光标则默认写入到剪贴板
-- 
-![Proma 语音输入](./docs/assets/screenshots/proma-typeless-input.png)
-
-## Agent 运行时与模型渠道
-
-Proma 的 Agent 模式提供两套可切换的内核：
-
-- **Claude Agent Runtime（默认）**：基于 `@anthropic-ai/claude-agent-sdk`，使用 Anthropic Messages API 或兼容端点。
-- **Pi Agent Runtime**：基于 `@earendil-works/pi-coding-agent`、`pi-agent-core` 和 `pi-ai`，将 Proma 的已启用渠道动态注册为 Pi provider；支持 OpenAI Chat Completions / Responses、Google Generative AI、Anthropic Messages 及其兼容端点。
-
-| 渠道类型 | Chat | Claude Agent | Pi Agent |
-| --- | --- | --- | --- |
-| Anthropic / Anthropic 兼容 | 支持 | 支持 | 支持 |
-| DeepSeek、Kimi API / Coding Plan、智谱 Coding Plan、MiniMax、小米 MiMo 等 Anthropic 协议渠道 | 支持 | 支持 | 支持 |
-| OpenAI、OpenAI Responses、Google、智谱 AI、豆包、通义千问 | 支持 | 暂不支持 | 支持 |
-| OpenAI 兼容自定义端点 | 支持 | 暂不支持 | 支持 |
-| ChatGPT 订阅（Codex OAuth） | — | 支持 | 支持 |
-| xAI 订阅（Grok OAuth） | — | — | 支持 |
-
-> Pi Runtime 可在每个 Agent 会话的输入框下方直接切换；切换会开启新的底层 SDK 会话，但不会删除 Proma 中已保存的消息。Pi 会桥接工作区 Skills、用户 MCP Server，以及 Proma 内置的 Automation / Collaboration 工具；不同模型供应商对工具调用、推理和上下文长度的支持仍可能不同。
-
-> **Kimi Coding Plan 用户须知**：Proma 已获得 Kimi 官方白名单支持，使用 Proma 连接 Kimi Coding Plan 不会触发第三方客户端封号策略，可放心使用。
+Vision Relay 仅在用户配置后，将当前会话或用户附加的已授权目录中、可安全解码的图片发给单独配置的视觉模型，并以受限 JSON 文本返回给当前 Agent；它不会给文本模型任意路径读取或图片外发权限。
 
 ## 本地数据
 
-Proma 采用本地文件存储，方便备份、迁移和排查问题。
+正式版使用 `~/.linguist-agent/`，开发版使用 `~/.linguist-agent-dev/`：
 
 ```text
-~/.proma/
+~/.linguist-agent/
 ├── channels.json
 ├── conversations.json
-├── conversations/
-│   └── {conversation-id}.jsonl
+├── conversations/*.jsonl
 ├── agent-sessions.json
-├── agent-sessions/
-│   └── {session-id}.jsonl
+├── agent-sessions/*.jsonl
 ├── agent-workspaces/
-│   └── {workspace-slug}/
-│       ├── workspace-files/ # 仅空白项目使用的 Proma 托管项目根
-│       ├── mcp.json
-│       └── skills/
 ├── attachments/
-├── user-profile.json
 ├── settings.json
-└── sdk-config/
+├── sdk-config/
+├── planning.json
+└── linguist/
+    ├── projects.json
+    ├── projects/<project-id>/
+    │   ├── project.json
+    │   ├── cat.db
+    │   ├── source/
+    │   ├── blobs/
+    │   ├── exports/
+    │   └── backups/
+    └── trash/
 ```
 
-API Key 会通过 Electron `safeStorage` 加密后写入 `channels.json`。Proma 不使用本地数据库，核心数据结构以 JSON 配置和 JSONL 追加日志为主。
+通用会话、设置和 Planning 使用 JSON / JSONL（Planning 权威源为原子 `planning.json`）；SQLite 只用于 CAT 项目的独立 `cat.db`。CAT 项目另有受管 source / blobs / exports / backups 目录。API Key 写入 `channels.json` 前经过 Electron `safeStorage` 加密。
 
-## 开发
+旧 `~/.proma(-dev)/channels.json` 只会在用户从「设置 → 模型配置」显式执行 Provider-only 导入时读取；不会迁移 Proma 会话、设置、工作区或 CAT 数据。旧 Linguist 项目与会话的数据迁移入口位于「设置 → 数据迁移」。详见 [USERDATA_LAYOUT.md](./docs/architecture/USERDATA_LAYOUT.md)。
 
-Proma 是 Bun workspace monorepo。
+## 开发与验证
 
-```text
-proma-v2/
-├── packages/
-│   ├── shared/     # 共享类型、IPC 常量、配置、工具函数
-│   ├── core/       # Provider Adapter、SSE、代码高亮
-│   └── ui/         # 共享 React UI 组件
-└── apps/
-    └── electron/   # Electron 桌面应用
-```
-
-当前主要包版本：
-
-| 包 | 版本 | 职责 |
-| --- | --- | --- |
-| `@proma/electron` | `0.15.0` | Electron 桌面应用 |
-| `@proma/shared` | `0.1.42` | 共享类型、IPC 常量、配置和工具 |
-| `@proma/core` | `0.2.15` | Provider Adapter、SSE、Shiki 高亮 |
-| `@proma/ui` | `0.1.9` | 共享 React UI 组件 |
-
-常用命令：
+仓库固定使用 Bun `1.3.14`。
 
 ```bash
-# 安装依赖
-bun install
+bun install --frozen-lockfile
+bun run typecheck
+bun test
+bun run check:boundaries
+node --test tests/linguist-fusion-architecture.test.mjs
+bun run --filter='@proma/electron' test:linguist
+```
 
-# 开发模式：自动启动 Vite + Electron + 热重载
+开发与构建：
+
+```bash
 bun run dev
-
-# 构建 Electron 应用
 bun run electron:build
 
-# 构建并运行
-bun run electron:start
-
-# 类型检查
-bun run typecheck
-
-# 测试
-bun test
-```
-
-Electron 子应用内也提供更细的脚本：
-
-```bash
 cd apps/electron
-
-bun run dev:vite
-bun run dev:electron
-bun run build:main
-bun run build:preload
-bun run build:renderer
-bun run dist:fast
+bun run build
+bun run sync:runtime-deps
+bun run smoke:pack
+bun run smoke:vertical
 ```
 
-## 技术栈
+`build:resources` 是 fail-closed 步骤，关键资源复制失败不能被 `|| true` 掩盖。测试、smoke 和打包验证必须使用精确临时 `--user-data-dir`，不得读写真实用户数据根。
 
-| 层级 | 技术 |
-| --- | --- |
-| 运行时 | Bun |
-| 桌面框架 | Electron 39 |
-| 前端 | React 18 + TypeScript |
-| 状态管理 | Jotai |
-| 样式 | Tailwind CSS + Radix UI |
-| 富文本输入 | TipTap |
-| Markdown / 图表 / 公式 | React Markdown + Beautiful Mermaid + KaTeX |
-| 代码高亮 | Shiki |
-| 构建 | Vite + esbuild |
-| 分发 | electron-builder |
-| Agent Runtime | Claude: `@anthropic-ai/claude-agent-sdk@0.3.201`；Pi: `@earendil-works/pi-* @0.80.3` |
+## 尚未完成的人工 Gate
 
-## 架构概览
+代码实现和自动化验证不等于产品资格。当前仍需在真实使用中完成：
 
-Proma 的核心通信路径是：
+- 原生 IME composition 与 Native Open 手工验证；Native Save 防覆盖已在隔离 packaged app 克隆中通过；
+- VoiceOver、完整键盘路径和拖拽手感；
+- 同模型 Web Chat / 旧 LA / 新 LA 的统一专业质量盲评，以及覆盖率、成本和耗时证据；
+- 真实 Provider/模型链路与真实客户格式样本回归；
+- 14 天连续个人日用与问题回收。
 
-```text
-shared 类型和 IPC 常量
-  -> main/ipc.ts 注册处理器
-  -> preload/index.ts 暴露 window.electronAPI
-  -> renderer Jotai atoms 和 React 组件调用
-```
+签名、公证、公开更新渠道和跨平台发布不属于当前个人 Alpha 目标。完整状态见 [HANDOFF.md](./docs/HANDOFF.md)、[TODO.md](./TODO.md) 和 [LINGUIST_FUSION_QUEUE.md](./docs/roadmap/LINGUIST_FUSION_QUEUE.md)。
 
-主进程服务集中在 `apps/electron/src/main/lib/`：
+## 文档
 
-- `agent-orchestrator.ts`：Agent 编排、运行时路由、环境变量、SDK 调用、事件流、错误处理。
-- `adapters/claude-agent-adapter.ts` / `adapters/pi-agent-adapter.ts`：Claude 与 Pi 运行时适配；`runtime-routing-agent-adapter.ts` 依据会话内核路由。
-- `agent-session-manager.ts`：Agent 会话索引和 JSONL 消息持久化。
-- `agent-workspace-manager.ts`：Proma 工作区、项目根目录、MCP 与 Skills 管理。
-- `chat-service.ts`：Chat 流式调用、Provider Adapter、工具活动。
-- `conversation-manager.ts`：Chat 会话索引和消息存储。
-- `channel-manager.ts`：渠道 CRUD、API Key 加密、连接测试、模型获取。
-- `feishu-bridge.ts` / `dingtalk-bridge.ts` / `wechat-bridge.ts`：远程机器人桥接。
-- `chat-tool-*`、`document-parser.ts`、`workspace-watcher.ts`：工具、文档解析和文件监听。
+文档入口与事实优先级见 [DOCS_INDEX.md](./docs/DOCS_INDEX.md)；维护规则见 [DOCUMENTATION_MAINTENANCE.md](./docs/DOCUMENTATION_MAINTENANCE.md)。
 
-渲染进程以 Jotai 管理状态，关键 atoms 位于 `apps/electron/src/renderer/atoms/`。Agent IPC 监听器在应用顶层全局挂载，避免切换页面时丢失流式事件、权限请求或后台任务状态。
+## 许可
 
-## 打包注意事项
-
-Claude 与 Pi 运行时都在主进程中作为 esbuild external 依赖运行。`apps/electron` 的打包脚本会在 `electron-builder` 前执行 `bun run sync:runtime-deps`，把下列依赖及其运行时闭包复制到应用目录：
-
-- `@anthropic-ai/claude-agent-sdk`（包含按平台分发的 Claude native binary）
-- `@earendil-works/pi-coding-agent`、`pi-agent-core`、`pi-ai`
-- Pi 运行时所需的原生模块和 `pdfjs-dist`
-
-修改打包配置时，请确认：
-
-- `build:main` / `watch:main` 仍将两套 Agent SDK 标记为 external。
-- `scripts/sync-runtime-deps.ts` 的 external runtime 清单与实际依赖一致。
-- `electron-builder.yml` 保留 Claude binary 与 Pi native addon 的 `asarUnpack` 规则。
-- 在目标平台测试 `bun run dist:fast` 后，分别验证 Claude 与 Pi（若已启用）可以启动、调用工具和恢复会话。
-
-更完整的工程约定见 [AGENTS.md](./AGENTS.md)。
-
-## 贡献
-
-欢迎修 Bug、补文档、加测试、完善体验，也欢迎围绕真实场景提交新的 Skills、MCP 配置或 Agent 工作流。
-
-提交 PR 前建议先确认：
-
-- 使用 Bun 运行脚本，不混用 npm / pnpm lockfile。
-- 状态管理使用 Jotai。
-- 尽量保持本地优先，优先使用配置文件和 JSON / JSONL。
-- TypeScript 不使用 `any`，对象结构优先使用 `interface`。
-- 新增 IPC 时同步修改 shared 类型、main handler、preload bridge 和 renderer 调用。
-- 影响包行为时递增对应 package 的 patch 版本。
-- 能用测试覆盖的行为尽量补上测试，尤其是共享逻辑、IPC 契约和持久化格式。
-
-## 作者
-
-- 个人网站：[erlich.fun](https://erlich.fun)
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=proma-ai%2Fproma&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=proma-ai/proma&type=date&theme=dark&legend=top-left&sealed_token=0cHFGjNPPe5hd2uxpF1cy35N2kYGSIEnTvyIbHlGjkrrtH9rnKcBMkqA8wDWltJIlPRKFZoYyPjXItri9HhQXE1TM1rwdIe91fqTqXVcPwK6OMzGEJ9yNw" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=proma-ai/proma&type=date&legend=top-left&sealed_token=0cHFGjNPPe5hd2uxpF1cy35N2kYGSIEnTvyIbHlGjkrrtH9rnKcBMkqA8wDWltJIlPRKFZoYyPjXItri9HhQXE1TM1rwdIe91fqTqXVcPwK6OMzGEJ9yNw" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=proma-ai/proma&type=date&legend=top-left&sealed_token=0cHFGjNPPe5hd2uxpF1cy35N2kYGSIEnTvyIbHlGjkrrtH9rnKcBMkqA8wDWltJIlPRKFZoYyPjXItri9HhQXE1TM1rwdIe91fqTqXVcPwK6OMzGEJ9yNw" />
- </picture>
-</a>
-
-
-## 致谢
-
-- [Shiki](https://shiki.style/)：代码高亮。
-- [Beautiful Mermaid](https://github.com/lukilabs/beautiful-mermaid) 与 [Mermaid](https://mermaid.js.org/)：Mermaid 图表渲染与官方兜底渲染。
-- [Cherry Studio](https://github.com/CherryHQ/cherry-studio)：多供应商桌面 AI 产品启发。
-- [Lobe Icons](https://github.com/lobehub/lobe-icons)：AI / LLM 品牌图标。
-- [Craft Agents OSS](https://github.com/lukilabs/craft-agents-oss)：Agent SDK 集成模式参考。
-
-## 许可证
-
-Proma 社区版采用 [GNU Affero General Public License v3.0（AGPL-3.0）](./LICENSE) 开源，完整条款见根目录 `LICENSE` 文件。
-
-**个人 / 非商业使用**：自由使用、修改、分发，仅需遵守 AGPL-3.0 条款。
-
-**商业使用**：在完全遵守 AGPL-3.0 条款的前提下允许进行商业使用，包括但不限于：以源代码或修改后的形式分发软件、通过网络对外提供服务时必须公开完整修改源码（含网络交互层）、衍生作品须以 AGPL-3.0 继续授权。
-
-**商业授权（豁免 AGPL-3.0 义务）**：如果你希望将 Proma 集成到闭源产品、对外提供 SaaS 服务但不想公开衍生代码，或有其他无法满足 AGPL-3.0 条款的商业场景，请通过邮件联系获取商业许可：[erlichliu@gmail.com](mailto:erlichliu@gmail.com)。
-
-向本项目提交 Pull Request 即视为同意将贡献以 AGPL-3.0 及未来商业许可形式授权给项目维护者。
+[AGPL-3.0](./LICENSE)。保留 Proma 及其他上游组件要求的版权、NOTICE 和第三方归属。

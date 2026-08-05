@@ -183,6 +183,87 @@
     --dashed-border-hover: 0 0% 98% / 0.40;
   }
 
+  /* ===== LA design token additions (PB-100) =====
+   * Tier-3 text, status colors (success/warning/info) with soft/foreground
+   * companions, scrim, derived border strengths, and motion tokens.
+   * Color tokens are stored as HSL channels (`H S% L%`, no alpha) so consumers
+   * compose opacity via `hsl(var(--x) / <alpha>)`. `--border-strong/-light`
+   * are full color values derived from --foreground via color-mix instead
+   * (they follow the active theme automatically). Motion tokens live in
+   * :root only — they do not change between light and dark.
+   * `soft` = tinted surface (high lightness in light mode, low in dark);
+   * `foreground` = readable text on top of `soft`. soft/foreground values
+   * are LA-original derivations within the same hue family.
+   */
+  :root {
+    --foreground-faint: 0 0% 62%;
+    --success: 152 45% 34%;
+    --success-soft: 152 40% 93%;
+    --success-foreground: 152 55% 22%;
+    --warning: 32 90% 35%;
+    --warning-soft: 38 90% 93%;
+    --warning-foreground: 32 85% 24%;
+    --info: 210 70% 42%;
+    --info-soft: 210 70% 94%;
+    --info-foreground: 210 75% 28%;
+    /* review：PB-104 评审语义（建议待审/已审核/评审会话），取 violet-500 色相族 */
+    --review: 258 60% 44%;
+    --review-soft: 258 60% 95%;
+    --review-foreground: 258 60% 32%;
+    --scrim: 30 6% 10%;
+    --border-strong: color-mix(in oklab, hsl(var(--foreground)) 12%, transparent);
+    --border-light: color-mix(in oklab, hsl(var(--foreground)) 5%, transparent);
+    --duration-instant: 0ms;
+    --duration-fast: 120ms;
+    --duration-normal: 200ms;
+    --duration-slow: 300ms;
+    --ease-standard: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+    /* ===== 布局锚点（PB-102）=====
+     * 工具栏三档高度 / 设置行高 / 侧栏响应式宽度 / 宽版 markdown 栏宽。
+     * 主题无关，只存 :root；消费侧经 tailwind spacing/width/maxWidth 扩展
+     * （h-toolbar、w-sidebar、max-w-markdown-wide 等）引用。 */
+    --toolbar-h: 46px;
+    --toolbar-pane-h: 40px;
+    --toolbar-sm-h: 36px;
+    --settings-row-h: 64px;
+    --sidebar-w: clamp(240px, 275px, min(520px, 100vw - 320px));
+    --markdown-wide: 64rem;
+  }
+
+  .dark {
+    --foreground-faint: 0 0% 45%;
+    --success: 152 45% 55%;
+    --success-soft: 152 30% 15%;
+    --success-foreground: 152 50% 72%;
+    --warning: 38 85% 65%;
+    --warning-soft: 35 45% 16%;
+    --warning-foreground: 38 80% 75%;
+    --info: 210 80% 68%;
+    --info-soft: 210 45% 16%;
+    --info-foreground: 210 80% 78%;
+    /* review：PB-104 评审语义（建议待审/已审核/评审会话），取 violet-500 色相族 */
+    --review: 258 75% 70%;
+    --review-soft: 258 35% 17%;
+    --review-foreground: 258 70% 78%;
+    --scrim: 0 0% 0%;
+    /* Same expressions as :root — var(--foreground) resolves per theme. */
+    --border-strong: color-mix(in oklab, hsl(var(--foreground)) 12%, transparent);
+    --border-light: color-mix(in oklab, hsl(var(--foreground)) 5%, transparent);
+  }
+
+  /* Global reduced-motion safety net: collapse every animation/transition
+   * to an instant state change. The terminal theme keeps its own local rules
+   * (glow/flicker/caret removal); this base-layer rule covers everything else. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* ===== 特殊风格主题 ===== */
 
   /* 晴空碧海 (ocean-light) */
@@ -644,6 +725,24 @@
 .theme-slate-light .shell-bg { background: linear-gradient(135deg, hsl(40 6% 84%) 0%, hsl(40 6% 86%) 100%); }
 .theme-slate-dark .shell-bg  { background: linear-gradient(135deg, hsl(270 10% 7%) 0%, hsl(260 8% 9%) 100%); }
 .theme-terminal-dark .shell-bg { background: linear-gradient(135deg, hsl(100 6% 6%) 0%, hsl(100 8% 7%) 100%); }
+
+/* 默认 300px 侧栏里要与搜索、收起按钮共处；窄轨道保留文字并隐藏装饰图标。 */
+.mode-switcher-track {
+  container-type: inline-size;
+}
+
+@container (max-width: 230px) {
+  .mode-switcher-track .mode-switcher-icon {
+    display: none;
+  }
+
+  .mode-switcher-track .mode-btn {
+    min-width: 0;
+    gap: 0;
+    padding-inline: 0.25rem;
+    font-size: 0.75rem;
+  }
+}
 
 /* ===== 特殊主题：模式切换器选中状态 ===== */
 /* 晴空碧海：蓝色背景滑块 + 白色文字 */
@@ -2437,4 +2536,16 @@
 }
 .ProseMirror-focused .ProseMirror-gapcursor {
   display: block;
+}
+
+/* 原生 Composer 的 Linguist 上下文：窄栏只保留一枚摘要 Chip。 */
+.composer-context-chips {
+  container-type: inline-size;
+}
+.composer-context-chip-summary {
+  display: none;
+}
+@container (max-width: 360px) {
+  .composer-context-chip-list { display: none; }
+  .composer-context-chip-summary { display: inline-flex; }
 }

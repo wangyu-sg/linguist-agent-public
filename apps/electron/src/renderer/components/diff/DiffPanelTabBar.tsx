@@ -1,7 +1,7 @@
 /**
  * DiffPanelTabBar — 右侧面板顶部 Tab 栏
  *
- * 切换「文件」和「代码改动」视图。文件内同时展示会话文件与项目文件。
+ * 切换「文件」「代码改动」和可选的「问答」视图；嵌入式 Host 可只显示问答。
  */
 
 import * as React from 'react'
@@ -20,6 +20,7 @@ interface DiffPanelTabBarProps {
   onClose?: () => void
   onCloseChat?: () => void
   showChatTab?: boolean
+  chatOnly?: boolean
   isWindows?: boolean
 }
 
@@ -34,6 +35,7 @@ export function DiffPanelTabBar({
   onClose,
   onCloseChat,
   showChatTab = false,
+  chatOnly = false,
   isWindows = false,
 }: DiffPanelTabBarProps): React.ReactElement {
   const unseenMap = useAtomValue(agentDiffUnseenChangesAtom)
@@ -74,47 +76,49 @@ export function DiffPanelTabBar({
     <div className="flex items-end h-[34px] tabbar-bg relative flex-shrink-0">
       <div className={cn("absolute inset-0 titlebar-drag-region", isWindows && WINDOW_CONTROLS_INSET_RIGHT)} />
       <div className="relative flex items-end flex-1 titlebar-no-drag">
-        <button
-          type="button"
-          onClick={() => onTabChange('files')}
-          className={cn(
-            'flex-1 px-3 h-[34px] text-xs transition-colors select-none cursor-pointer whitespace-nowrap overflow-hidden',
-            isClassic ? 'rounded-t-lg' : 'rounded-none',
-            'border-t border-l border-r',
-            activeTab === 'files'
-              ? isClassic
-                ? 'bg-content-area text-foreground border-border/50'
-                : 'app-tab-active text-foreground border-border/80'
-              : isClassic
-                ? 'text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50'
-                : 'app-tab-inactive text-muted-foreground border-transparent hover:text-foreground',
-          )}
-        >
-          文件
-        </button>
-        <button
-          type="button"
-          onClick={handleChangesClick}
-          className={cn(
-            'flex-1 px-3 h-[34px] text-xs transition-colors select-none cursor-pointer relative whitespace-nowrap overflow-hidden',
-            isClassic ? 'rounded-t-lg' : 'rounded-none',
-            'border-t border-l border-r',
-            activeTab === 'changes'
-              ? isClassic
-                ? 'bg-content-area text-foreground border-border/50'
-                : 'app-tab-active text-foreground border-border/80'
-              : isClassic
-                ? 'text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50'
-                : 'app-tab-inactive text-muted-foreground border-transparent hover:text-foreground',
-          )}
-        >
-          <span className="inline-flex items-center gap-1">
-            {unseenChanges && activeTab !== 'changes' && (
-              <span className="size-2 rounded-full bg-primary ring-1 ring-background shrink-0" />
+        {!chatOnly && <>
+          <button
+            type="button"
+            onClick={() => onTabChange('files')}
+            className={cn(
+              'flex-1 px-3 h-[34px] text-xs transition-colors select-none cursor-pointer whitespace-nowrap overflow-hidden',
+              isClassic ? 'rounded-t-lg' : 'rounded-none',
+              'border-t border-l border-r',
+              activeTab === 'files'
+                ? isClassic
+                  ? 'bg-content-area text-foreground border-border/50'
+                  : 'app-tab-active text-foreground border-border/80'
+                : isClassic
+                  ? 'text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50'
+                  : 'app-tab-inactive text-muted-foreground border-transparent hover:text-foreground',
             )}
-            文件改动
-          </span>
-        </button>
+          >
+            文件
+          </button>
+          <button
+            type="button"
+            onClick={handleChangesClick}
+            className={cn(
+              'flex-1 px-3 h-[34px] text-xs transition-colors select-none cursor-pointer relative whitespace-nowrap overflow-hidden',
+              isClassic ? 'rounded-t-lg' : 'rounded-none',
+              'border-t border-l border-r',
+              activeTab === 'changes'
+                ? isClassic
+                  ? 'bg-content-area text-foreground border-border/50'
+                  : 'app-tab-active text-foreground border-border/80'
+                : isClassic
+                  ? 'text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50'
+                  : 'app-tab-inactive text-muted-foreground border-transparent hover:text-foreground',
+            )}
+          >
+            <span className="inline-flex items-center gap-1">
+              {unseenChanges && activeTab !== 'changes' && (
+                <span className="size-2 rounded-full bg-primary ring-1 ring-background shrink-0" />
+              )}
+              文件改动
+            </span>
+          </button>
+        </>}
         {showChatTab && (
           <div
             className={cn(
@@ -158,12 +162,13 @@ export function DiffPanelTabBar({
               <button
                 type="button"
                 onClick={onClose}
+            aria-label={chatOnly ? '关闭问答面板' : '折叠文件面板'}
                 className="flex items-center justify-center size-[28px] mr-1 mb-[3px] rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
               >
                 <PanelRightClose className="size-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">折叠文件面板 ({navigator.platform.includes('Mac') ? '⌘⇧B' : 'Ctrl+Shift+B'})</TooltipContent>
+          <TooltipContent side="bottom">{chatOnly ? '关闭问答面板' : `折叠文件面板 (${navigator.platform.includes('Mac') ? '⌘⇧B' : 'Ctrl+Shift+B'})`}</TooltipContent>
           </Tooltip>
         )}
       </div>

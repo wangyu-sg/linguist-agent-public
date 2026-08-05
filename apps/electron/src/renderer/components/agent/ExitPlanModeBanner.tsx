@@ -17,6 +17,8 @@ import {
   MessageSquare,
   Send,
   FileText,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { allPendingExitPlanRequestsAtom, agentStreamingStatesAtom, finalizeStreamingActivities } from '@/atoms/agent-atoms'
@@ -67,6 +69,7 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
   const [showFeedback, setShowFeedback] = React.useState(false)
   const [feedbackText, setFeedbackText] = React.useState('')
   const [submitting, setSubmitting] = React.useState(false)
+  const [planCollapsed, setPlanCollapsed] = React.useState(false)
 
   const request = requests[0] ?? null
 
@@ -82,6 +85,7 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
     setFocusedIdx(0)
     setShowFeedback(false)
     setFeedbackText('')
+    setPlanCollapsed(false)
   }, [request?.requestId])
 
   const handleAction = async (action: ExitPlanModeAction): Promise<void> => {
@@ -192,8 +196,13 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
 
   if (!request) return null
 
+  // 仅在 SDK 真正携带计划正文（非空字符串）时展示计划区
+  const planText = typeof request.toolInput.plan === 'string' && request.toolInput.plan.trim().length > 0
+    ? request.toolInput.plan
+    : null
+
   return (
-    <div className="mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+    <div className="rounded-xl border border-border/60 bg-card overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
       {/* 头部 */}
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center gap-2 mb-1">
@@ -212,6 +221,25 @@ export function ExitPlanModeBanner({ sessionId }: ExitPlanModeBannerProps): Reac
           Agent 已完成计划，请选择如何继续
         </p>
       </div>
+
+      {/* 计划正文（仅真实计划数据存在时展示，默认展开可折叠） */}
+      {planText && (
+        <div className="px-4 pb-2">
+          <button
+            type="button"
+            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground/70 transition-colors mb-1"
+            onClick={() => setPlanCollapsed((prev) => !prev)}
+          >
+            {planCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
+            <span>计划内容</span>
+          </button>
+          {!planCollapsed && (
+            <pre className="max-h-[240px] overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/40 px-3 py-2 text-xs leading-5 text-foreground/90">
+              {planText}
+            </pre>
+          )}
+        </div>
+      )}
 
       {/* allowedPrompts 展示 */}
       {request.allowedPrompts.length > 0 && (

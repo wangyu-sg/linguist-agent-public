@@ -62,7 +62,13 @@ export function ContextSettingsPopover(): React.ReactElement {
       <Tooltip open={open ? false : undefined}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button type="button" variant="ghost" size="icon" className={inputToolbarButtonClass}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={inputToolbarButtonClass}
+              aria-label="上下文设置"
+            >
               <Settings2 className="size-4" />
             </Button>
           </PopoverTrigger>

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { ArrowDownIcon, CheckCircle2, CircleAlert, ListTodo, Loader2 } from 'lucide-react'
+import { ArrowDownIcon, CheckCircle2, CircleAlert, ListTodo, Loader2, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -35,6 +35,8 @@ interface TaskProgressOverlayProps {
   streaming: boolean
   /** 与 Agent 任务并列的系统级短时操作；当前用于上下文压缩。 */
   contextCompaction?: ContextCompactionProgress
+  /** 压缩失败后的重试回调（仅 failed 态展示重试按钮） */
+  onRetryCompaction?: () => void
 }
 
 function compactionSignature(progress: ContextCompactionProgress): string {
@@ -57,7 +59,7 @@ export function shouldClearRetainedCompactionForResumedStream(
   return streaming && !contextCompaction && !!retainedCompaction
 }
 
-function CompactionProgressDetails({ progress }: { progress: ContextCompactionProgress }): React.ReactElement {
+function CompactionProgressDetails({ progress, onRetry }: { progress: ContextCompactionProgress; onRetry?: () => void }): React.ReactElement {
   const isRunning = progress.status === 'running'
   const isFailed = progress.status === 'failed'
 
@@ -66,7 +68,7 @@ function CompactionProgressDetails({ progress }: { progress: ContextCompactionPr
       <div className="flex items-start gap-2.5">
         <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center">
           {isRunning && <Loader2 className="size-4 animate-spin text-blue-500" />}
-          {progress.status === 'success' && <CheckCircle2 className="size-4 text-green-500" />}
+          {progress.status === 'success' && <CheckCircle2 className="size-4 text-success" />}
           {progress.status === 'noop' && <CheckCircle2 className="size-4 text-muted-foreground" />}
           {isFailed && <CircleAlert className="size-4 text-destructive" />}
         </span>
@@ -80,6 +82,18 @@ function CompactionProgressDetails({ progress }: { progress: ContextCompactionPr
           {progress.summary}
         </p>
       )}
+      {isFailed && onRetry && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          onClick={onRetry}
+        >
+          <RotateCw className="size-3" />
+          重试压缩
+        </Button>
+      )}
     </div>
   )
 }
@@ -88,7 +102,7 @@ function CompactionProgressDetails({ progress }: { progress: ContextCompactionPr
  * 取代单独的“回到最下方”按钮：任务进行时展示单行进度，点击展开完整任务卡；
  * 无任务时自动退化为原箭头按钮。
  */
-export function TaskProgressOverlay({ activities, streaming, contextCompaction }: TaskProgressOverlayProps): React.ReactElement | null {
+export function TaskProgressOverlay({ activities, streaming, contextCompaction, onRetryCompaction }: TaskProgressOverlayProps): React.ReactElement | null {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext()
   const liveItems = React.useMemo(
     () => aggregateTaskItems(activities, false),
@@ -200,6 +214,7 @@ export function TaskProgressOverlay({ activities, streaming, contextCompaction }
         onClick={() => scrollToBottom()}
         type="button"
         variant="ghost"
+        aria-label="滚动到底部"
       >
         <ArrowDownIcon className="size-4" />
       </Button>
@@ -223,7 +238,7 @@ export function TaskProgressOverlay({ activities, streaming, contextCompaction }
             {displayCompaction ? (
               <>
                 {displayCompaction.status === 'running' && <Loader2 className="size-3.5 shrink-0 animate-spin text-blue-500" />}
-                {displayCompaction.status === 'success' && <CheckCircle2 className="size-3.5 shrink-0 text-green-500" />}
+                {displayCompaction.status === 'success' && <CheckCircle2 className="size-3.5 shrink-0 text-success" />}
                 {displayCompaction.status === 'noop' && <CheckCircle2 className="size-3.5 shrink-0 text-muted-foreground" />}
                 {displayCompaction.status === 'failed' && <CircleAlert className="size-3.5 shrink-0 text-destructive" />}
                 <span className="truncate text-[13px] text-foreground/90">{displayCompaction.label}</span>
@@ -245,7 +260,7 @@ export function TaskProgressOverlay({ activities, streaming, contextCompaction }
         </PopoverTrigger>
         <PopoverContent className="w-[min(420px,calc(100vw-2rem))] rounded-md border-border/60 bg-background/95 p-2 backdrop-blur-sm" side="top" align="center">
           {displayCompaction
-            ? <CompactionProgressDetails progress={displayCompaction} />
+            ? <CompactionProgressDetails progress={displayCompaction} onRetry={onRetryCompaction} />
             : <TaskProgressCard activities={displayActivities} alwaysExpanded />}
         </PopoverContent>
       </Popover>

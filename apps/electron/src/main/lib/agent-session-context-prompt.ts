@@ -188,13 +188,22 @@ export function buildReferencedSessionsPrompt(
   const uniqueIds = [...new Set((mentionedSessionIds ?? []).filter(Boolean))]
   if (uniqueIds.length === 0) return ''
 
+  const currentLinguistProjectId = getAgentSessionMeta(currentSessionId)?.linguistProjectId
+
   const sessionBlocks: string[] = []
 
   for (const referencedSessionId of uniqueIds) {
     if (referencedSessionId === currentSessionId) continue
 
     const meta = getAgentSessionMeta(referencedSessionId)
-    if (!meta || meta.archived) continue
+    // 普通 Agent 不得携带任何 Linguist 私有历史；Linguist 只能读取同项目历史。
+    if (
+      !meta
+      || meta.archived
+      || (currentLinguistProjectId
+        ? meta.linguistProjectId !== currentLinguistProjectId
+        : Boolean(meta.linguistProjectId))
+    ) continue
 
     const title = escapeContextAttr(meta.title)
     const historyPath = getSessionHistoryPath(referencedSessionId)

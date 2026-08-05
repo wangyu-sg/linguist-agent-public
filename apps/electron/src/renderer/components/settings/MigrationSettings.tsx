@@ -20,6 +20,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  HardDriveDownload,
 } from 'lucide-react'
 import { SettingsSection } from './primitives'
 import { useAtomValue, useSetAtom } from 'jotai'
@@ -27,6 +28,8 @@ import { agentWorkspacesAtom } from '@/atoms/agent-atoms'
 import { migrationImportDialogOpenAtom } from '@/atoms/migration-atoms'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
 import { cn } from '@/lib/utils'
+import { MigrationWizard } from '@/features/linguist/migration/MigrationWizard'
+import { refreshLinguistProjectListAtom } from '@/features/linguist/projects/project-list-atoms'
 import type { LocalProjectRootStatus } from '@proma/shared'
 
 type MigrationMode = 'personal' | 'share'
@@ -66,6 +69,8 @@ const COMPONENT_LABELS: Record<MigrationComponent, string> = {
 }
 
 export function MigrationSettings(): React.ReactElement {
+  const [legacyWizardOpen, setLegacyWizardOpen] = React.useState(false)
+  const refreshLinguistProjects = useSetAtom(refreshLinguistProjectListAtom)
   // ── 导出状态 ──────────────────────────────────────
   const [exportMode, setExportMode] = React.useState<MigrationMode>('personal')
   const [shareComponents, setShareComponents] = React.useState<Set<MigrationComponent>>(
@@ -232,8 +237,36 @@ export function MigrationSettings(): React.ReactElement {
     })
   }
 
+  if (legacyWizardOpen) {
+    return (
+      <MigrationWizard
+        onExit={(dirty) => {
+          setLegacyWizardOpen(false)
+          if (dirty) refreshLinguistProjects()
+        }}
+      />
+    )
+  }
+
   return (
     <div className="space-y-8">
+      <SettingsSection
+        title="旧版 Linguist 项目"
+        description="从旧版 Linguist Agent 数据根扫描、预览并选择性迁移项目。"
+      >
+        <button
+          type="button"
+          onClick={() => setLegacyWizardOpen(true)}
+          className={cn(
+            'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
+            'border border-border hover:bg-muted/50',
+          )}
+        >
+          <HardDriveDownload size={16} />
+          打开旧版项目迁移
+        </button>
+      </SettingsSection>
+
       {/* ── 导出区块 ──────────────────────────────── */}
       <SettingsSection
         title="导出备份"
@@ -447,7 +480,7 @@ export function MigrationSettings(): React.ReactElement {
             </button>
 
             {exportResult && (
-              <div className={cn('flex items-center gap-1.5 text-sm', exportResult.success ? 'text-green-600' : 'text-red-500')}>
+              <div className={cn('flex items-center gap-1.5 text-sm', exportResult.success ? 'text-success' : 'text-destructive')}>
                 {exportResult.success ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
                 {exportResult.success
                   ? `已导出至 ${exportResult.filePath?.split('/').pop() ?? ''}`
@@ -457,7 +490,7 @@ export function MigrationSettings(): React.ReactElement {
           </div>
 
           {exportResult?.success && exportResult.warnings && exportResult.warnings.length > 0 && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200/70 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-soft/60 px-3 py-2 text-sm text-warning-foreground">
               <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
               <div className="min-w-0 space-y-1">
                 <p>导出已完成，但有 {exportResult.warnings.length} 个项目无法读取，已跳过。</p>

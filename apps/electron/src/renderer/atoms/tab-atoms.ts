@@ -18,18 +18,22 @@ import {
 } from './agent-atoms'
 import type { SessionIndicatorStatus } from './agent-atoms'
 import type { PreviewFile } from './preview-atoms'
+import { promoteTabMru } from '@/lib/tab-switching'
+import { projectCurrentAgentSessionIdMapAtom } from './project-agent-session-atoms'
+
+export { projectCurrentAgentSessionIdMapAtom } from './project-agent-session-atoms'
 
 // ===== 类型定义 =====
 
 /** 标签页类型（Settings 不作为 Tab，保留独立视图） */
-export type TabType = 'chat' | 'agent' | 'scratch' | 'preview' | 'tutorial'
+export type TabType = 'chat' | 'agent' | 'scratch' | 'preview' | 'tutorial' | 'linguist-project'
 
 /** Scratch Pad 专用的固定 sessionId */
 export const SCRATCH_PAD_ID = '__scratch-pad__'
 
 /** 教程 Tab 固定 ID */
 export const TUTORIAL_TAB_ID = '__tutorial__'
-export const TUTORIAL_TAB_TITLE = 'Proma 使用教程'
+export const TUTORIAL_TAB_TITLE = 'Linguist Agent 使用教程'
 
 /** 会话预览 Tab 的 ID 前缀：运行时临时入口，不参与持久化 */
 const PREVIEW_TAB_PREFIX = '__preview__:'
@@ -37,23 +41,62 @@ const PREVIEW_TAB_PREFIX = '__preview__:'
 /** Scratch Pad 标签默认标题 */
 export const SCRATCH_PAD_TITLE = 'Scratch Pad'
 
-/** 标签页数据 */
-export interface TabItem {
-  /** 唯一标签 ID（直接使用 sessionId） */
+export interface SessionTab {
   id: string
-  /** 标签页类型 */
-  type: TabType
-  /** Chat conversationId 或 Agent sessionId */
+  type: 'chat' | 'agent'
   sessionId: string
-  /** 标签页显示标题 */
   title: string
 }
+
+export interface PreviewTab {
+  id: string
+  type: 'preview'
+  sessionId: string
+  title: string
+}
+
+export interface ScratchTab {
+  id: typeof SCRATCH_PAD_ID
+  type: 'scratch'
+  sessionId: typeof SCRATCH_PAD_ID
+  title: string
+}
+
+export interface TutorialTab {
+  id: typeof TUTORIAL_TAB_ID
+  type: 'tutorial'
+  sessionId: typeof TUTORIAL_TAB_ID
+  title: string
+}
+
+export type LocalizationProjectRepairState = 'missing' | 'archived'
+
+export interface LocalizationProjectTab {
+  id: `linguist-project:${string}`
+  type: 'linguist-project'
+  projectId: string
+  title: string
+  repairState?: LocalizationProjectRepairState
+  /** 项目目录缺失时仍可由唯一 AgentView 打开的绑定会话历史。 */
+  historySessionId?: string
+}
+
+/** 标签页数据；Project Tab 刻意不携带 sessionId。 */
+export type TabItem =
+  | SessionTab
+  | PreviewTab
+  | ScratchTab
+  | TutorialTab
+  | LocalizationProjectTab
 
 /** Tab 持久化数据（保存到 settings.json） */
 export interface PersistedTabState {
   tabs: TabItem[]
   activeTabId: string | null
+  mru?: string[]
 }
+
+type AtomUpdate<Value> = Value | ((previous: Value) => Value)
 
 /** 会话上次停留的视图：会话对话 vs 文件预览 */
 export type SessionView = 'session' | 'preview'
@@ -81,14 +124,44 @@ export interface OpenTabRestore {
 
 // ===== 核心 Atoms =====
 
-/** 顶部入口列表：Scratch Pad + 当前会话 */
-export const tabsAtom = atom<TabItem[]>([])
-
-/** 当前激活的标签 ID */
-export const activeTabIdAtom = atom<string | null>(null)
-
 /** 标签页 MRU（最近使用）顺序，最近使用的 ID 排在前面 */
 export const tabMruAtom = atom<string[]>([])
+
+const tabsStateAtom = atom<TabItem[]>([])
+const activeTabIdStateAtom = atom<string | null>(null)
+
+/** 顶部入口列表：Scratch Pad + 当前会话 */
+export const tabsAtom = atom(
+  (get) => get(tabsStateAtom),
+  (get, set, update: AtomUpdate<TabItem[]>) => {
+    const nextTabs = typeof update === 'function'
+      ? update(get(tabsStateAtom))
+      : update
+    set(tabsStateAtom, nextTabs)
+    const validMruIds = new Set(
+      nextTabs.map(getTabMruId).filter((id): id is string => id !== null),
+    )
+    const previousMru = get(tabMruAtom)
+    const nextMru = previousMru.filter((id) => validMruIds.has(id))
+    if (nextMru.length !== previousMru.length) set(tabMruAtom, nextMru)
+  },
+)
+
+/** 当前激活的标签 ID；激活时统一更新 MRU。 */
+export const activeTabIdAtom = atom(
+  (get) => get(activeTabIdStateAtom),
+  (get, set, update: AtomUpdate<string | null>) => {
+    const nextTabId = typeof update === 'function'
+      ? update(get(activeTabIdStateAtom))
+      : update
+    set(activeTabIdStateAtom, nextTabId)
+    const tab = nextTabId
+      ? get(tabsAtom).find((item) => item.id === nextTabId) ?? null
+      : null
+    const mruId = tab ? getTabMruId(tab) : null
+    if (mruId) set(tabMruAtom, promoteTabMru(get(tabMruAtom), mruId))
+  },
+)
 
 /**
  * 每会话视图状态 Map（仅运行期内存态，不持久化）。
@@ -143,7 +216,9 @@ export const activeTabAtom = atom<TabItem | null>((get) => {
  */
 export const activeSessionIdAtom = atom<string | null>((get) => {
   const activeTab = get(activeTabAtom)
-  return activeTab?.sessionId ?? null
+  return activeTab && (isSessionTab(activeTab) || isPreviewTab(activeTab))
+    ? activeTab.sessionId
+    : null
 })
 
 /** 标签是否在流式输出中（派生，从现有流式 atoms 计算） */
@@ -151,6 +226,7 @@ export const tabStreamingMapAtom = atom<Map<string, boolean>>((get) => {
   const tabs = get(tabsAtom)
   const chatStreaming = get(streamingConversationIdsAtom)
   const agentRunning = get(agentRunningSessionIdsAtom)
+  const projectSessions = get(projectCurrentAgentSessionIdMapAtom)
   const map = new Map<string, boolean>()
   for (const tab of tabs) {
     if (tab.type === 'scratch') continue
@@ -158,6 +234,9 @@ export const tabStreamingMapAtom = atom<Map<string, boolean>>((get) => {
       map.set(tab.id, chatStreaming.has(tab.sessionId))
     } else if (tab.type === 'agent') {
       map.set(tab.id, agentRunning.has(tab.sessionId))
+    } else if (tab.type === 'linguist-project') {
+      const sessionId = projectSessions.get(tab.projectId)
+      map.set(tab.id, sessionId ? agentRunning.has(sessionId) : false)
     }
   }
   return map
@@ -169,6 +248,7 @@ export const tabIndicatorMapAtom = atom<Map<string, SessionIndicatorStatus>>((ge
   const chatStreaming = get(streamingConversationIdsAtom)
   const agentIndicator = get(agentSessionIndicatorMapAtom)
   const unviewedCompletedIds = get(unviewedCompletedSessionIdsAtom)
+  const projectSessions = get(projectCurrentAgentSessionIdMapAtom)
   const map = new Map<string, SessionIndicatorStatus>()
   for (const tab of tabs) {
     if (tab.type === 'scratch') continue
@@ -178,6 +258,13 @@ export const tabIndicatorMapAtom = atom<Map<string, SessionIndicatorStatus>>((ge
       const status = agentIndicator.get(tab.sessionId)
         ?? (unviewedCompletedIds.has(tab.sessionId) ? 'completed' : 'idle')
       map.set(tab.id, status)
+    } else if (tab.type === 'linguist-project') {
+      const sessionId = projectSessions.get(tab.projectId)
+      const status = sessionId
+        ? agentIndicator.get(sessionId)
+          ?? (unviewedCompletedIds.has(sessionId) ? 'completed' : 'idle')
+        : 'idle'
+      map.set(tab.id, status)
     }
   }
   return map
@@ -185,7 +272,7 @@ export const tabIndicatorMapAtom = atom<Map<string, SessionIndicatorStatus>>((ge
 
 // ===== 操作函数 =====
 
-function createScratchPadTab(): TabItem {
+function createScratchPadTab(): ScratchTab {
   return {
     id: SCRATCH_PAD_ID,
     type: 'scratch',
@@ -206,48 +293,220 @@ export function getPreviewTabTitle(filePath: string): string {
   return `预览：${getFileBaseName(filePath)}`
 }
 
-export function isPreviewTab(tab: TabItem): boolean {
-  return tab.type === 'preview' || tab.id.startsWith(PREVIEW_TAB_PREFIX)
+export function isPreviewTab(tab: TabItem): tab is PreviewTab {
+  return tab.type === 'preview'
 }
 
-function isSessionTab(tab: TabItem): boolean {
+export function isSessionTab(tab: TabItem): tab is SessionTab {
   return tab.type === 'chat' || tab.type === 'agent'
+}
+
+/** 预览归属 Agent 会话；Project 用自身 Tab ID；其他入口不参与最近会话。 */
+export function getTabMruId(tab: TabItem): string | null {
+  if (isSessionTab(tab) || isPreviewTab(tab)) return tab.sessionId
+  return tab.type === 'linguist-project' ? tab.id : null
+}
+
+export function createLocalizationProjectTabId(
+  projectId: string,
+): LocalizationProjectTab['id'] {
+  return `linguist-project:${projectId}`
+}
+
+/** 打开项目入口；只管理 Tab，不打开项目服务或创建 Agent 会话。 */
+export function openLocalizationProjectTab(
+  tabs: TabItem[],
+  item: Pick<LocalizationProjectTab, 'projectId' | 'title'>,
+): { tabs: TabItem[]; activeTabId: LocalizationProjectTab['id'] } {
+  const id = createLocalizationProjectTabId(item.projectId)
+  const scratchTab = tabs.find((tab): tab is ScratchTab => tab.type === 'scratch')
+    ?? createScratchPadTab()
+  const existing = tabs.find(
+    (tab): tab is LocalizationProjectTab =>
+      tab.type === 'linguist-project' && tab.projectId === item.projectId,
+  )
+  const projectTab: LocalizationProjectTab = existing
+    ? {
+        ...existing,
+        title: item.title,
+        repairState: undefined,
+        historySessionId: undefined,
+      }
+    : { id, type: 'linguist-project', projectId: item.projectId, title: item.title }
+
+  return {
+    tabs: [
+      scratchTab,
+      ...tabs.filter((tab) => tab.type !== 'scratch' && tab.id !== id),
+      projectTab,
+    ],
+    activeTabId: id,
+  }
 }
 
 function getPersistentTabs(tabs: TabItem[]): TabItem[] {
   return tabs.filter((tab) => tab.id !== SCRATCH_PAD_ID && tab.id !== TUTORIAL_TAB_ID && !isPreviewTab(tab))
 }
 
+export type LocalizationProjectRestoreStatus = 'active' | 'archived'
+
+/**
+ * 校验并恢复磁盘中的 Tab；旧 Session Tab 保持兼容，失效项目保留为可修复入口。
+ */
+export function restorePersistedTabState(
+  value: unknown,
+  validSessionIds: ReadonlySet<string>,
+  projectStatuses: ReadonlyMap<string, LocalizationProjectRestoreStatus>,
+): PersistedTabState {
+  if (!value || typeof value !== 'object') return { tabs: [], activeTabId: null }
+  const state = value as Record<string, unknown>
+  const rawTabs = Array.isArray(state.tabs) ? state.tabs : []
+  const tabs: TabItem[] = []
+
+  for (const rawTab of rawTabs) {
+    if (!rawTab || typeof rawTab !== 'object') continue
+    const tab = rawTab as Record<string, unknown>
+    if (
+      (tab.type === 'chat' || tab.type === 'agent') &&
+      typeof tab.id === 'string' &&
+      typeof tab.sessionId === 'string' &&
+      typeof tab.title === 'string' &&
+      validSessionIds.has(tab.sessionId)
+    ) {
+      tabs.push({
+        id: tab.id,
+        type: tab.type,
+        sessionId: tab.sessionId,
+        title: tab.title,
+      })
+      continue
+    }
+    if (
+      tab.type === 'linguist-project' &&
+      typeof tab.projectId === 'string' &&
+      tab.projectId.length > 0
+    ) {
+      const status = projectStatuses.get(tab.projectId)
+      tabs.push({
+        id: createLocalizationProjectTabId(tab.projectId),
+        type: 'linguist-project',
+        projectId: tab.projectId,
+        title: typeof tab.title === 'string' && tab.title.length > 0
+          ? tab.title
+          : '本地化项目',
+        // 归档项目由主进程强制只读打开；只有索引中不存在的项目进入修复态。
+        repairState: status === undefined ? 'missing' : undefined,
+        ...(status === undefined
+          && typeof tab.historySessionId === 'string'
+          && validSessionIds.has(tab.historySessionId)
+          ? { historySessionId: tab.historySessionId }
+          : {}),
+      })
+    }
+  }
+
+  const validIds = new Set(tabs.map((tab) => tab.id))
+  const activeId = typeof state.activeTabId === 'string' && validIds.has(state.activeTabId)
+    ? state.activeTabId
+    : getLegacyActiveTabId(state, validIds) ?? tabs[0]?.id ?? null
+  return { tabs, activeTabId: activeId }
+}
+
+function getLegacyActiveTabId(
+  state: Record<string, unknown>,
+  validIds: ReadonlySet<string>,
+): string | null {
+  if (!state.splitLayout || typeof state.splitLayout !== 'object') return null
+  const split = state.splitLayout as Record<string, unknown>
+  if (!Array.isArray(split.panels) || split.panels.length === 0) return null
+  const focusedIndex = typeof split.focusedPanelIndex === 'number' ? split.focusedPanelIndex : 0
+  const candidates = [split.panels[focusedIndex], split.panels[0]]
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    const activeTabId = (candidate as Record<string, unknown>).activeTabId
+    if (typeof activeTabId === 'string' && validIds.has(activeTabId)) return activeTabId
+  }
+  return null
+}
+
 export function getPersistableTabState(
   tabs: TabItem[],
   activeTabId: string | null,
+  mru: readonly string[] = [],
 ): PersistedTabState {
   const persistentTabs = getPersistentTabs(tabs)
   const activeTab = activeTabId ? tabs.find((tab) => tab.id === activeTabId) : null
   const persistentActiveTabId = activeTab && isPreviewTab(activeTab)
-    ? persistentTabs.find((tab) => tab.sessionId === activeTab.sessionId && tab.type === 'agent')?.id
+    ? persistentTabs.find(
+      (tab) => tab.type === 'agent' && tab.sessionId === activeTab.sessionId,
+    )?.id
       ?? persistentTabs.at(-1)?.id
       ?? null
     : activeTabId
 
+  const persistentMru = getPersistedTabMru({ mru }, persistentTabs)
   return {
     tabs: persistentTabs,
     activeTabId: persistentActiveTabId,
+    ...(persistentMru.length > 0 ? { mru: persistentMru } : {}),
   }
+}
+
+/** 从磁盘状态恢复可用 MRU；旧状态没有 mru 时保持空列表。 */
+export function getPersistedTabMru(value: unknown, tabs: readonly TabItem[]): string[] {
+  if (!value || typeof value !== 'object') return []
+  const rawMru = (value as Record<string, unknown>).mru
+  if (!Array.isArray(rawMru)) return []
+  const validIds = new Set(
+    getPersistentTabs([...tabs])
+      .map(getTabMruId)
+      .filter((id): id is string => id !== null),
+  )
+  const seen = new Set<string>()
+  const mru: string[] = []
+  for (const id of rawMru) {
+    if (typeof id !== 'string' || !validIds.has(id) || seen.has(id)) continue
+    seen.add(id)
+    mru.push(id)
+  }
+  return mru
+}
+
+/** 以 MRU 优先选择最近的 Project Tab，旧数据退回最后打开的项目。 */
+export function getMostRecentLocalizationProjectTab(
+  tabs: readonly TabItem[],
+  mru: readonly string[],
+): LocalizationProjectTab | null {
+  for (const id of mru) {
+    const tab = tabs.find(
+      (item): item is LocalizationProjectTab => item.type === 'linguist-project' && item.id === id,
+    )
+    if (tab) return tab
+  }
+  return tabs.findLast(
+    (item): item is LocalizationProjectTab => item.type === 'linguist-project',
+  ) ?? null
 }
 
 /** 打开或聚焦会话入口：始终用目标会话替换当前会话，避免顶部累积多个 Tab。
  *  restore 提示存在时，切回带预览的会话会一并重建其预览 Tab 并回到上次视图。 */
 export function openTab(
   tabs: TabItem[],
-  item: { type: TabType; sessionId: string; title: string },
+  item: {
+    type: Exclude<TabType, 'linguist-project'>
+    sessionId: string
+    title: string
+  },
   restore?: OpenTabRestore,
 ): { tabs: TabItem[]; activeTabId: string } {
   const scratchTab = tabs.find((t) => t.id === SCRATCH_PAD_ID) ?? createScratchPadTab()
+  const projectTabs = tabs.filter(
+    (tab): tab is LocalizationProjectTab => tab.type === 'linguist-project',
+  )
 
   if (item.type === 'scratch') {
     return {
-      tabs: [scratchTab],
+      tabs: [scratchTab, ...projectTabs],
       activeTabId: SCRATCH_PAD_ID,
     }
   }
@@ -260,7 +519,7 @@ export function openTab(
       title: TUTORIAL_TAB_TITLE,
     }
     return {
-      tabs: [scratchTab, tutorialTab],
+      tabs: [scratchTab, ...projectTabs, tutorialTab],
       activeTabId: TUTORIAL_TAB_ID,
     }
   }
@@ -280,13 +539,16 @@ export function openTab(
     }
 
     return {
-      tabs: [scratchTab, ownerAgentTab, previewTab],
+      tabs: [scratchTab, ...projectTabs, ownerAgentTab, previewTab],
       activeTabId: previewTab.id,
     }
   }
 
-  const existingTab = tabs.find((t) => t.sessionId === item.sessionId && t.type === item.type)
-  const sessionTab: TabItem = existingTab ?? {
+  const existingTab = tabs.find(
+    (tab): tab is SessionTab =>
+      isSessionTab(tab) && tab.sessionId === item.sessionId && tab.type === item.type,
+  )
+  const sessionTab: SessionTab = existingTab ?? {
     id: item.sessionId,
     type: item.type,
     sessionId: item.sessionId,
@@ -302,13 +564,13 @@ export function openTab(
       title: restore.previewTitle,
     }
     return {
-      tabs: [scratchTab, sessionTab, previewTab],
+      tabs: [scratchTab, ...projectTabs, sessionTab, previewTab],
       activeTabId: restore.lastView === 'preview' ? previewTab.id : sessionTab.id,
     }
   }
 
   return {
-    tabs: [scratchTab, sessionTab],
+    tabs: [scratchTab, ...projectTabs, sessionTab],
     activeTabId: sessionTab.id,
   }
 }
@@ -381,21 +643,28 @@ export function reorderTabs(
 /** 更新标签标题 */
 export function updateTabTitle(
   tabs: TabItem[],
-  sessionId: string,
+  entityId: string,
   title: string,
 ): TabItem[] {
-  return tabs.map((t) =>
-    t.sessionId === sessionId && !isPreviewTab(t) ? { ...t, title } : t
-  )
+  return tabs.map((tab) => {
+    if (tab.type === 'linguist-project') {
+      return tab.projectId === entityId ? { ...tab, title } : tab
+    }
+    return !isPreviewTab(tab) && tab.sessionId === entityId ? { ...tab, title } : tab
+  })
 }
 
-/** 确保 Scratch Pad 标签存在并位于首位，同时只保留一个会话入口 */
+/** 确保 Scratch Pad 位于首位；保留项目入口，同时只保留一个会话入口。 */
 export function ensureScratchPadTab(tabs: TabItem[]): TabItem[] {
-  const scratchTab = tabs.find((t) => t.id === SCRATCH_PAD_ID)
-  const sessionTab = tabs.filter((t) => t.id !== SCRATCH_PAD_ID && !isPreviewTab(t)).at(-1)
-  if (scratchTab) {
-    return sessionTab ? [scratchTab, sessionTab] : [scratchTab]
-  }
-  const newTab = createScratchPadTab()
-  return sessionTab ? [newTab, sessionTab] : [newTab]
+  const scratchTab = tabs.find((tab): tab is ScratchTab => tab.type === 'scratch')
+    ?? createScratchPadTab()
+  const projectTabs = tabs.filter(
+    (tab): tab is LocalizationProjectTab => tab.type === 'linguist-project',
+  )
+  const sessionTab = tabs.filter(
+    (tab) => isSessionTab(tab) || tab.type === 'tutorial',
+  ).at(-1)
+  return sessionTab
+    ? [scratchTab, ...projectTabs, sessionTab]
+    : [scratchTab, ...projectTabs]
 }

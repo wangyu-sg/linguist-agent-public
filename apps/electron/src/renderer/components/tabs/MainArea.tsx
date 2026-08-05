@@ -28,8 +28,10 @@ import { AutomationFormView } from '@/components/automation/AutomationFormView'
 import { PlanningView } from '@/components/planning/PlanningView'
 import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
 import { automationFormAtom } from '@/atoms/automation-atoms'
-import { activeViewAtom } from '@/atoms/active-view'
+import { activeViewAtom, resolveActiveViewForMode } from '@/atoms/active-view'
+import { appModeAtom } from '@/atoms/app-mode'
 import { interfaceVariantAtom } from '@/atoms/theme'
+import { ProjectsView } from '@/features/linguist/projects/ProjectsView'
 import { cn } from '@/lib/utils'
 
 export function MainArea(): React.ReactElement {
@@ -40,8 +42,11 @@ export function MainArea(): React.ReactElement {
   const activeTabId = useAtomValue(activeTabIdAtom)
   const setActiveTabId = useSetAtom(activeTabIdAtom)
   const activeTab = useAtomValue(activeTabAtom)
-  const automationFormOpen = useAtomValue(automationFormAtom).open
-  const activeView = useAtomValue(activeViewAtom)
+  const automationFormOpenRaw = useAtomValue(automationFormAtom).open
+  const activeViewRaw = useAtomValue(activeViewAtom)
+  const appMode = useAtomValue(appModeAtom)
+  const automationFormOpen = automationFormOpenRaw
+  const activeView = resolveActiveViewForMode(activeViewRaw, appMode)
   const interfaceVariant = useAtomValue(interfaceVariantAtom)
   const isClassic = interfaceVariant === 'classic'
   const store = useStore()
@@ -231,6 +236,9 @@ export function MainArea(): React.ReactElement {
             ) : activeView === 'agent-skills' ? (
               // Agent 技能视图：全屏取代 TabBar + TabContent
               <AgentSkillsView />
+            ) : activeView === 'projects' ? (
+              // Linguist 侧栏的次级「管理项目」入口：全屏取代 TabBar + TabContent。
+              <ProjectsView />
             ) : (
               <>
                 <TabBar />

@@ -1,0 +1,423 @@
+import { realpathSync, statSync } from 'node:fs'
+import { extname, resolve, sep } from 'node:path'
+import { sha256Hex } from '@linguist/cat-formats'
+import {
+  assetSourceFileName,
+  removeProjectBlob,
+  saveProjectBlob,
+  StoreNotFoundError,
+  type ContextDoc,
+  type SentencePattern,
+  type SentencePatternUpsertInput,
+  type StyleGuideRule,
+  type StyleGuideRuleUpsertInput,
+  type TechConstraint,
+  type TechConstraintUpsertInput,
+  type TermEntryImportInput,
+  type TermEntryUpsertInput,
+  type TmUnitImportInput,
+  type VoiceProfile,
+  type VoiceProfileUpsertInput,
+} from '@linguist/cat-store'
+import { extractContextDocText } from './context-doc-text-extractor'
+import type { ProjectModuleContext } from './project-module-context'
+import {
+  isContextDocImageExtension,
+  parseSentencePatternReference,
+  parseTermReference,
+  parseTmReference,
+} from './project-resource-parsers'
+import type {
+  ImportContextDocInput,
+  ImportReferenceInput,
+  ImportReferenceResult,
+  LinguistProjectAssetKind,
+  LinguistReferenceKind,
+  ProjectAssetInfo,
+  ProjectAssetsQuery,
+  ReferenceQuery,
+  ReferenceQueryPage,
+  TermReferenceInfo,
+  TmReferenceInfo,
+} from './project-service-types'
+
+/**
+ * 项目参考资料与语言资产模块。
+ *
+ * 只负责 TM/TB、风格/句式/上下文文档等资源行为；项目句柄与归档守卫由
+ * 外层服务提供，确保拆分不产生第二套生命周期。
+ */
+export class ProjectResources {
+  constructor(private readonly context: ProjectModuleContext) {}
+
+  /** TM 管理列表仍保留原有 source/target literal concordance 语义。 */
+  queryTmReferences(
+    projectId: string,
+    query: ReferenceQuery,
+  ): ReferenceQueryPage<TmReferenceInfo> {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const items = db.tmUnits.list(query)
+      const total = db.tmUnits.count(query)
+      return {
+        items,
+        total,
+        limit: query.limit,
+        offset: query.offset,
+        hasMore: query.offset + items.length < total,
+      }
+    }, projectId)
+  }
+
+  queryTermReferences(
+    projectId: string,
+    query: ReferenceQuery,
+  ): ReferenceQueryPage<TermReferenceInfo> {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const items = db.termEntries.list(query)
+      const total = db.termEntries.count(query)
+      return {
+        items,
+        total,
+        limit: query.limit,
+        offset: query.offset,
+        hasMore: query.offset + items.length < total,
+      }
+    }, projectId)
+  }
+
+  /** 全文件解析/验证完成后才开启 repository 事务，避免半批 reference。 */
+  importReference(
+    projectId: string,
+    kind: LinguistReferenceKind,
+    input: ImportReferenceInput,
+  ): ImportReferenceResult {
+    this.context.assertProjectWritable(projectId)
+    const project = this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const parsed = kind === 'tm'
+        ? parseTmReference(input, project.sourceLocale, project.targetLocale)
+        : parseTermReference(input, project.sourceLocale, project.targetLocale)
+      const result = kind === 'tm'
+        ? db.tmUnits.importMany(parsed.entries as TmUnitImportInput[])
+        : db.termEntries.importMany(parsed.entries as TermEntryImportInput[])
+      console.log(
+        `[Linguist] 已导入 ${kind === 'tm' ? 'TM' : '术语库'}: 项目 ${projectId}（${result.imported} 新增，${result.unchanged} 未变）`,
+      )
+      return { ...result, warnings: parsed.warnings }
+    }, projectId)
+  }
+
+  upsertTermReference(
+    projectId: string,
+    input: TermEntryUpsertInput,
+  ): TermReferenceInfo {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => db.termEntries.upsert(input), projectId)
+  }
+
+  deleteReference(
+    projectId: string,
+    kind: LinguistReferenceKind,
+    id: string,
+  ): void {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    this.context.call(() => {
+      if (kind === 'tm') db.tmUnits.delete(id)
+      else db.termEntries.delete(id)
+    }, projectId)
+  }
+
+  /** 按 kind 分页查询（项目隔离在 store 仓储层；归档项目只读仍可查）。 */
+  queryProjectAssets(
+    projectId: string,
+    kind: LinguistProjectAssetKind,
+    query: ProjectAssetsQuery,
+  ): ReferenceQueryPage<ProjectAssetInfo> {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const text = query.query
+      const page = <T>(items: T[], total: number): ReferenceQueryPage<T> => ({
+        items,
+        total,
+        limit: query.limit,
+        offset: query.offset,
+        hasMore: query.offset + items.length < total,
+      })
+      switch (kind) {
+        case 'styleGuideRules': {
+          const filter = { ...(text !== undefined ? { query: text } : {}) }
+          return page(
+            db.styleGuideRules.list({
+              ...filter,
+              limit: query.limit,
+              offset: query.offset,
+            }),
+            db.styleGuideRules.count(filter),
+          )
+        }
+        case 'sentencePatterns': {
+          const filter = {
+            ...(text !== undefined ? { query: text } : {}),
+            ...(query.status !== undefined ? { status: query.status } : {}),
+          }
+          return page(
+            db.sentencePatterns.list({
+              ...filter,
+              limit: query.limit,
+              offset: query.offset,
+            }),
+            db.sentencePatterns.count(filter),
+          )
+        }
+        case 'contextDocs': {
+          const filter = { ...(text !== undefined ? { query: text } : {}) }
+          return page(
+            db.contextDocs.list({
+              ...filter,
+              limit: query.limit,
+              offset: query.offset,
+            }),
+            db.contextDocs.count(filter),
+          )
+        }
+        case 'techConstraints':
+          return page(
+            db.techConstraints.list({
+              limit: query.limit,
+              offset: query.offset,
+            }),
+            db.techConstraints.count(),
+          )
+        case 'voiceProfiles': {
+          const filter = { ...(text !== undefined ? { query: text } : {}) }
+          return page(
+            db.voiceProfiles.list({
+              ...filter,
+              limit: query.limit,
+              offset: query.offset,
+            }),
+            db.voiceProfiles.count(filter),
+          )
+        }
+      }
+    }, projectId)
+  }
+
+  upsertProjectAsset(
+    projectId: string,
+    kind: 'styleGuideRules',
+    item: StyleGuideRuleUpsertInput,
+  ): StyleGuideRule
+  upsertProjectAsset(
+    projectId: string,
+    kind: 'sentencePatterns',
+    item: SentencePatternUpsertInput,
+  ): SentencePattern
+  upsertProjectAsset(
+    projectId: string,
+    kind: 'contextDocs',
+    item: { id: string; note?: string },
+  ): ContextDoc
+  upsertProjectAsset(
+    projectId: string,
+    kind: 'techConstraints',
+    item: TechConstraintUpsertInput,
+  ): TechConstraint
+  upsertProjectAsset(
+    projectId: string,
+    kind: 'voiceProfiles',
+    item: VoiceProfileUpsertInput,
+  ): VoiceProfile
+  upsertProjectAsset(
+    projectId: string,
+    kind: LinguistProjectAssetKind,
+    item:
+      | StyleGuideRuleUpsertInput
+      | SentencePatternUpsertInput
+      | { id: string; note?: string }
+      | TechConstraintUpsertInput
+      | VoiceProfileUpsertInput,
+  ): ProjectAssetInfo
+  upsertProjectAsset(
+    projectId: string,
+    kind: LinguistProjectAssetKind,
+    item:
+      | StyleGuideRuleUpsertInput
+      | SentencePatternUpsertInput
+      | { id: string; note?: string }
+      | TechConstraintUpsertInput
+      | VoiceProfileUpsertInput,
+  ): ProjectAssetInfo {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      switch (kind) {
+        case 'styleGuideRules':
+          return db.styleGuideRules.upsert(item as StyleGuideRuleUpsertInput)
+        case 'sentencePatterns':
+          return db.sentencePatterns.upsert(item as SentencePatternUpsertInput)
+        case 'contextDocs': {
+          const noteUpdate = item as { id: string; note?: string }
+          return db.contextDocs.updateNote(noteUpdate.id, noteUpdate.note)
+        }
+        case 'techConstraints':
+          return db.techConstraints.upsert(item as TechConstraintUpsertInput)
+        case 'voiceProfiles':
+          return db.voiceProfiles.upsert(item as VoiceProfileUpsertInput)
+      }
+    }, projectId)
+  }
+
+  /** 删除（归档先拒绝）；contextDocs 级联清尾 blob 文件（尽力而为）。 */
+  deleteProjectAsset(
+    projectId: string,
+    kind: LinguistProjectAssetKind,
+    id: string,
+  ): void {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    this.context.call(() => {
+      switch (kind) {
+        case 'styleGuideRules':
+          db.styleGuideRules.delete(id)
+          return
+        case 'sentencePatterns':
+          db.sentencePatterns.delete(id)
+          return
+        case 'contextDocs': {
+          const doc = db.contextDocs.get(id)
+          db.contextDocs.delete(id)
+          if (doc !== undefined) {
+            removeProjectBlob(
+              db.blobsDir,
+              doc.blobRelpath.replace(/^blobs\//, ''),
+            )
+          }
+          return
+        }
+        case 'techConstraints':
+          db.techConstraints.delete(id)
+          return
+        case 'voiceProfiles':
+          db.voiceProfiles.delete(id)
+      }
+    }, projectId)
+  }
+
+  /**
+   * Context 文档 blob 的盘上绝对路径，仅供主进程注册预览 URL。
+   * realpath 后必须仍在项目 blobs/ 内，绝不向 renderer 暴露路径。
+   */
+  resolveContextDocBlobPath(
+    projectId: string,
+    blobRelpath: string,
+  ): string | undefined {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      try {
+        const blobsRoot = realpathSync(db.blobsDir)
+        const target = realpathSync(
+          resolve(blobsRoot, blobRelpath.replace(/^blobs\//, '')),
+        )
+        if (target !== blobsRoot && !target.startsWith(blobsRoot + sep)) {
+          return undefined
+        }
+        return statSync(target).isFile() ? target : undefined
+      } catch {
+        return undefined
+      }
+    }, projectId)
+  }
+
+  /** CAT 资产 source blob 的主进程路径；缺失或越界时 fail closed。 */
+  resolveAssetSourcePath(
+    projectId: string,
+    assetId: string,
+  ): { sourcePath: string; originalFilename: string } {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const asset = db.assets.get(assetId)
+      if (asset === undefined) throw new StoreNotFoundError('asset', assetId)
+      const fileName = assetSourceFileName(asset)
+      try {
+        const sourceRoot = realpathSync(db.sourceDir)
+        const target = realpathSync(resolve(sourceRoot, fileName))
+        if (target !== sourceRoot && !target.startsWith(sourceRoot + sep)) {
+          throw new StoreNotFoundError('asset source blob', fileName)
+        }
+        if (!statSync(target).isFile()) {
+          throw new StoreNotFoundError('asset source blob', fileName)
+        }
+        return {
+          sourcePath: target,
+          originalFilename: asset.originalFilename,
+        }
+      } catch (err) {
+        if (err instanceof StoreNotFoundError) throw err
+        throw new StoreNotFoundError('asset source blob', fileName)
+      }
+    }, projectId)
+  }
+
+  /**
+   * 可读 Context 文档先完成文本抽取，再写 blob 与元数据，避免半成品。
+   */
+  async importContextDoc(
+    projectId: string,
+    input: ImportContextDocInput,
+  ): Promise<ContextDoc> {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    const sha256 = sha256Hex(input.bytes)
+    const extension = extname(input.filename).toLowerCase()
+    const kind: ContextDoc['kind'] = isContextDocImageExtension(extension)
+      ? 'image'
+      : 'doc'
+    const textExtract = kind === 'doc'
+      ? await extractContextDocText(input.bytes, input.filename)
+      : undefined
+    return this.context.call(() => {
+      const blobName = `ctx-${sha256.slice(0, 16)}${extension}`
+      saveProjectBlob(db.blobsDir, blobName, input.bytes)
+      const doc = db.contextDocs.insert({
+        kind,
+        originalFilename: input.filename,
+        blobRelpath: `blobs/${blobName}`,
+        sha256,
+        ...(input.note !== undefined ? { note: input.note } : {}),
+        ...(textExtract !== undefined ? { textExtract } : {}),
+      })
+      console.log(
+        `[Linguist] 已导入 context 文档: 项目 ${projectId}（kind=${kind}，${input.bytes.length} 字节）`,
+      )
+      return doc
+    }, projectId)
+  }
+
+  /** 导入句式 CSV；全文件解析后才开启 repository 事务。 */
+  importSentencePatterns(
+    projectId: string,
+    input: ImportReferenceInput,
+  ): ImportReferenceResult {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const parsed = parseSentencePatternReference(input)
+      const result = db.sentencePatterns.importMany(parsed.entries)
+      console.log(
+        `[Linguist] 已导入句式库: 项目 ${projectId}（${result.imported} 新增，${result.unchanged} 未变）`,
+      )
+      return { ...result, warnings: parsed.warnings }
+    }, projectId)
+  }
+}

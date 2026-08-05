@@ -1,0 +1,26 @@
+{
+  "name": "@linguist/cat-tools",
+  "version": "0.0.20",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Session-bound Linguist CAT Pi ToolDefinitions for project reads, Proposal-only translation suggestions, and deterministic QA. Electron-free; the app injects project and session context.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-transform-types --import ./test/register-ts-loader.mjs --test \"src/**/*.nodetest.ts\""
+  },
+  "dependencies": {
+    "@linguist/cat-core": "workspace:*",
+    "@linguist/cat-store": "workspace:*",
+    "typebox": "1.1.38"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.82.1",
+    "typescript": "^5.0.0"
+  }
+}

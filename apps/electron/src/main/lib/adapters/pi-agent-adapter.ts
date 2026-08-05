@@ -80,6 +80,7 @@ import {
   installPiRequestProxyFetch,
   runWithPiRequestProxy,
 } from './pi-request-proxy'
+import { projectCatToolResultsForModel } from '../linguist/cat-tool-result-projection'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
 type BashOperations = import('@earendil-works/pi-coding-agent').BashOperations
@@ -139,6 +140,8 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   runtimeEnv?: AgentRuntimeEnv
   /** 手动压缩请求：走 pi 原生 session.compact()，而非把 /compact 当普通 prompt 发给模型 */
   compactRequest?: boolean
+  /** 当前 Linguist turn 的冻结上下文；压缩续跑时重新注入，避免摘要裁剪掉项目 authority。 */
+  compactionContinuationContext?: string
   /** ChatGPT Codex Fast Mode；仅 openai-codex 的受支持模型实际注入 priority service tier。 */
   codexFastMode?: boolean
   /** Pi 的 OAuth credential store 使用真实 expires 和 refresh，不读取 ~/.pi。 */
@@ -839,6 +842,15 @@ export function planPiCompactionContinuation(options: {
   return { shouldContinue: true, prompt: PI_COMPACTION_CONTINUATION_PROMPT }
 }
 
+/** 将当前 turn 的宿主上下文带入压缩后的下一次 Pi prompt。 */
+export function buildPiCompactionContinuationPrompt(
+  continuationPrompt: string,
+  frozenTurnContext?: string,
+): string {
+  const context = frozenTurnContext?.trim()
+  return context ? `${continuationPrompt}\n\n${context}` : continuationPrompt
+}
+
 export function canRunCurrentSessionCompaction(toolNames: string[]): boolean {
   return toolNames.length === 1 && toolNames[0] === 'CompactContext'
 }
@@ -1519,6 +1531,9 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         customTools,
       })
       session.agent.toolExecution = 'sequential'
+      const convertToLlm = session.agent.convertToLlm.bind(session.agent)
+      session.agent.convertToLlm = (messages) =>
+        convertToLlm(projectCatToolResultsForModel(messages))
       if (piAi && input.codexFastMode && input.provider === 'openai-codex' && isCodexFastModeSupportedModel(input.model)) {
         // Pi 的通用 streamSimple 会丢弃 provider 专属 serviceTier；这里直接走
         // provider stream，确保 request body 与 usage.cost 都使用 priority tier。
@@ -1878,7 +1893,13 @@ export class PiAgentAdapter implements AgentProviderAdapter {
                 })
                 if (continuation.shouldContinue) {
                   automaticCompactionContinuations += 1
-                  pendingCompactionContinuation = appendOutputFormatInstruction(continuation.prompt, input.outputFormat)
+                  pendingCompactionContinuation = appendOutputFormatInstruction(
+                    buildPiCompactionContinuationPrompt(
+                      continuation.prompt,
+                      input.compactionContinuationContext,
+                    ),
+                    input.outputFormat,
+                  )
                   // 当前终态仅表示为执行压缩而结束的内部 loop，不应让上层把原任务视为完成。
                   pendingTerminalResult = undefined
                 } else if (continuation.reason === 'continuation_limit') {

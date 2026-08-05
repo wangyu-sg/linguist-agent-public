@@ -11,6 +11,7 @@
 
 import { useEffect, useCallback } from 'react'
 import { useAtomValue, useSetAtom, useAtom, useStore } from 'jotai'
+import { toast } from 'sonner'
 import { appModeAtom } from '@/atoms/app-mode'
 import { settingsOpenAtom, channelFormDirtyAtom, settingsCloseRequestedAtom } from '@/atoms/settings-tab'
 import { searchDialogOpenAtom } from '@/atoms/search-atoms'
@@ -33,6 +34,7 @@ import {
   currentAgentWorkspaceIdAtom,
   agentWorkspacesAtom,
   agentAttachedFilesMapAtom,
+  agentLinguistExternalSessionOpenerAtom,
 } from '@/atoms/agent-atoms'
 import {
   chatPendingMessageAtom,
@@ -43,6 +45,7 @@ import {
 } from '@/atoms/chat-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { useCreateSession } from '@/hooks/useCreateSession'
+import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
 import { useShortcut } from '@/hooks/useShortcut'
 import { useCloseTab } from '@/hooks/useCloseTab'
 import {
@@ -50,10 +53,12 @@ import {
   updateShortcutOverrides,
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
+import { getNextMode } from '@/components/app-shell/mode-switcher-utils'
 import {
   VOICE_DICTATION_CLEAR_PREVIEW_EVENT,
   VOICE_DICTATION_PREVIEW_EVENT,
 } from '@/lib/voice-input-focus'
+import { routeExternalAgentSession } from '@/lib/external-agent-session-opener'
 
 /**
  * 快捷键初始化 + 全局 Handler 注册
@@ -61,7 +66,7 @@ import {
  * 挂载后从 settings 加载自定义配置，并注册所有应用级快捷键。
  */
 export function GlobalShortcuts(): null {
-  const [appMode, setAppMode] = useAtom(appModeAtom)
+  const appMode = useAtomValue(appModeAtom)
   const [settingsOpen, setSettingsOpen] = useAtom(settingsOpenAtom)
   const channelFormDirty = useAtomValue(channelFormDirtyAtom)
   const setSettingsCloseRequested = useSetAtom(settingsCloseRequestedAtom)
@@ -72,6 +77,7 @@ export function GlobalShortcuts(): null {
   const shortcutOverrides = useAtomValue(shortcutOverridesAtom)
   const setSendWithCmdEnter = useSetAtom(sendWithCmdEnterAtom)
   const { createChat, createAgent } = useCreateSession()
+  const switchMode = useSwitchAppMode()
 
   // Tab 管理（用于关闭标签页）
   const activeTabId = useAtomValue(activeTabIdAtom)
@@ -161,11 +167,8 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'new-session',
     useCallback(() => {
-      if (appMode === 'agent') {
-        createAgent({ draft: true })
-      } else {
-        createChat({ draft: true })
-      }
+      if (appMode === 'agent') void createAgent({ draft: true })
+      if (appMode === 'chat') void createChat({ draft: true })
     }, [appMode, createAgent, createChat]),
   )
 
@@ -182,8 +185,8 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'toggle-mode',
     useCallback(
-      () => { if (appMode !== 'scratch') setAppMode(appMode === 'chat' ? 'agent' : 'chat') },
-      [appMode, setAppMode],
+      () => switchMode(getNextMode(appMode, 'ArrowRight')),
+      [appMode, switchMode],
     ),
   )
 
@@ -373,12 +376,23 @@ export function GlobalShortcuts(): null {
       const trimmed = data.text.trim()
       if (!trimmed) return
 
+      const resolvePromaInput = (handled: boolean): void => {
+        void window.electronAPI.resolveVoiceDictationPromaInput({ sessionId: data.sessionId, handled })
+          .then((result) => {
+            if (!result || result.mode !== 'clipboard') return
+            if (result.success) toast.info(result.message)
+            else toast.error(result.message)
+          })
+          .catch((error) => console.error('[语音输入] 确认输入结果失败:', error))
+      }
+
       const insertedAtCursor = !window.dispatchEvent(new CustomEvent('proma:insert-voice-dictation-text', {
         cancelable: true,
         detail: { ...data, text: trimmed },
       }))
       if (insertedAtCursor) {
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
+        resolvePromaInput(true)
         return
       }
 
@@ -392,7 +406,18 @@ export function GlobalShortcuts(): null {
           : { type: 'chat' as const, sessionId: store.get(currentConversationIdAtom) }
       const target = activeTab ?? fallbackTarget
 
-      if (!target.sessionId) return
+      if (
+        target.type !== 'agent' &&
+        target.type !== 'preview' &&
+        target.type !== 'chat'
+      ) {
+        resolvePromaInput(false)
+        return
+      }
+      if (!target.sessionId) {
+        resolvePromaInput(false)
+        return
+      }
 
       store.set(activeViewAtom, 'conversations')
 
@@ -412,6 +437,7 @@ export function GlobalShortcuts(): null {
           return map
         })
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
+        resolvePromaInput(true)
         return
       }
 
@@ -426,6 +452,7 @@ export function GlobalShortcuts(): null {
           return map
         })
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
+        resolvePromaInput(true)
       }
     })
     return () => {
@@ -445,25 +472,35 @@ export function GlobalShortcuts(): null {
         if (!session) return
 
         store.set(agentSessionsAtom, sessions)
-        store.set(appModeAtom, 'agent')
-        store.set(activeViewAtom, 'conversations')
-        store.set(currentAgentSessionIdAtom, session.id)
+        const opened = await routeExternalAgentSession(
+          session,
+          store.get(agentLinguistExternalSessionOpenerAtom),
+          () => {
+            store.set(appModeAtom, 'agent')
+            store.set(activeViewAtom, 'conversations')
+            store.set(currentAgentSessionIdAtom, session.id)
 
-        if (session.workspaceId) {
-          store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
-          window.electronAPI.updateSettings({
-            agentWorkspaceId: session.workspaceId,
-          }).catch(console.error)
+            if (session.workspaceId) {
+              store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
+              window.electronAPI.updateSettings({
+                agentWorkspaceId: session.workspaceId,
+              }).catch(console.error)
+            }
+
+            const currentTabs = store.get(tabsAtom)
+            const result = openTab(currentTabs, {
+              type: 'agent',
+              sessionId: session.id,
+              title: session.title || data.title,
+            })
+            store.set(tabsAtom, result.tabs)
+            store.set(activeTabIdAtom, result.activeTabId)
+          },
+        )
+        if (opened.kind === 'blocked') {
+          console.error('[菜单栏] 打开 Linguist 项目会话失败:', opened.message)
+          toast.error('无法打开 Linguist 项目会话', { description: opened.message })
         }
-
-        const currentTabs = store.get(tabsAtom)
-        const result = openTab(currentTabs, {
-          type: 'agent',
-          sessionId: session.id,
-          title: session.title || data.title,
-        })
-        store.set(tabsAtom, result.tabs)
-        store.set(activeTabIdAtom, result.activeTabId)
       } catch (error) {
         console.error('[菜单栏] 打开 Agent 会话失败:', error)
       }

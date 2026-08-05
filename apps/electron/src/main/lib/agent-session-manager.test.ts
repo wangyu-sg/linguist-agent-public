@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
+import type { SDKUserMessage } from '@proma/shared'
+import { electronMock, resetElectronMock } from './test/electron-mock'
 
 type AgentSessionManager = typeof import('./agent-session-manager')
 type AgentSessionContextPrompt = typeof import('./agent-session-context-prompt')
@@ -13,26 +15,7 @@ const originalHome = process.env.HOME
 const originalPromaDev = process.env.PROMA_DEV
 const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
 
-mock.module('electron', () => ({
-  app: {
-    isPackaged: true,
-    getPath: () => join(process.env.HOME ?? tempHome, 'Library', 'Application Support'),
-  },
-  BrowserWindow: class {},
-  clipboard: {},
-  dialog: {},
-  nativeImage: { createFromPath: () => ({}) },
-  nativeTheme: {},
-  powerMonitor: {},
-  powerSaveBlocker: {},
-  screen: {},
-  shell: {},
-  safeStorage: {
-    isEncryptionAvailable: () => false,
-    encryptString: (value: string) => Buffer.from(value),
-    decryptString: (value: Buffer) => value.toString('utf-8'),
-  },
-}))
+mock.module('electron', () => electronMock)
 
 mock.module('node:os', () => ({
   ...os,
@@ -44,13 +27,13 @@ function jsonl(rows: string[]): string {
 }
 
 function writeAgentSessionJsonl(sessionId: string, rows: string[]): void {
-  const dir = join(tempHome, '.proma', 'agent-sessions')
+  const dir = join(tempHome, '.linguist-agent', 'agent-sessions')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, `${sessionId}.jsonl`), jsonl(rows), 'utf-8')
 }
 
 function writeSdkSessionJsonl(sdkSessionId: string, rows: string[]): void {
-  const dir = join(tempHome, '.proma', 'sdk-config', 'projects', 'test-project')
+  const dir = join(tempHome, '.linguist-agent', 'sdk-config', 'projects', 'test-project')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, `${sdkSessionId}.jsonl`), jsonl(rows), 'utf-8')
 }
@@ -61,8 +44,9 @@ function writeAgentSessionsIndex(sessions: Array<{
   workspaceId: string
   createdAt: number
   updatedAt: number
+  linguistProjectId?: string
 }>): void {
-  const dir = join(tempHome, '.proma')
+  const dir = join(tempHome, '.linguist-agent')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'agent-sessions.json'), JSON.stringify({ version: 1, sessions }), 'utf-8')
 }
@@ -74,7 +58,7 @@ function writeAgentWorkspacesIndex(workspaces: Array<{
   createdAt: number
   updatedAt: number
 }>): void {
-  const dir = join(tempHome, '.proma')
+  const dir = join(tempHome, '.linguist-agent')
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'agent-workspaces.json'), JSON.stringify({ version: 2, workspaces }), 'utf-8')
 }
@@ -94,6 +78,7 @@ beforeAll(async () => {
   process.env.HOME = tempHome
   process.env.PROMA_DEV = '0'
   delete process.env.CLAUDE_CONFIG_DIR
+  resetElectronMock()
   manager = await import('./agent-session-manager')
   contextPrompt = await import('./agent-session-context-prompt')
 })
@@ -118,6 +103,32 @@ afterAll(() => {
 })
 
 describe('Agent 会话 JSONL 读取', () => {
+  test('Given Linguist Turn 已发送 When 后续 Context 变化并重读历史 Then 原 Turn 保留自己的 snapshot', () => {
+    const message: SDKUserMessage = {
+      type: 'user',
+      message: { content: [{ type: 'text', text: '翻译当前片段' }] },
+      parent_tool_use_id: null,
+      linguistContext: {
+        schemaVersion: 1,
+        projectId: 'prj-0123456789abcdef',
+        selectedSegmentIds: ['seg-0123456789abcdef'],
+        capturedAt: '2026-07-27T08:00:00.000Z',
+        uiRevision: 1,
+      },
+    }
+    manager.appendSDKMessages('session-with-context', [message])
+
+    const stored = manager.getAgentSessionSDKMessages('session-with-context')[0]
+
+    expect(stored).toMatchObject({
+      linguistContext: {
+        projectId: 'prj-0123456789abcdef',
+        selectedSegmentIds: ['seg-0123456789abcdef'],
+        uiRevision: 1,
+      },
+    })
+  })
+
   test('Given 会话 JSONL 混入损坏行 When 读取 SDKMessage Then 跳过坏行并保留其它消息', () => {
     writeAgentSessionJsonl('session-with-bad-line', [
       JSON.stringify({ type: 'user', message: { content: [{ type: 'text', text: '你好' }] }, parent_tool_use_id: null }),
@@ -165,10 +176,43 @@ describe('Agent 会话 JSONL 读取', () => {
   })
 })
 
+describe('Agent 会话分叉历史', () => {
+  test('复制到 assistant 截断点时保留完成该轮的 success result', async () => {
+    writeAgentSessionJsonl('fork-source', [
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: '已完成' }] },
+        parent_tool_use_id: null,
+        uuid: 'assistant-complete',
+      }),
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        session_id: 'sdk-source',
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: '不应复制' },
+        parent_tool_use_id: null,
+      }),
+    ])
+
+    await manager.copyForkStoredSDKMessages({
+      sourceSessionId: 'fork-source',
+      destSessionId: 'fork-dest',
+      upToMessageUuid: 'assistant-complete',
+      includeCompletingResult: true,
+    })
+
+    expect(manager.getAgentSessionSDKMessages('fork-dest').map((message) => message.type))
+      .toEqual(['assistant', 'result'])
+  })
+})
+
 describe('Agent 会话 runtime 元数据', () => {
   test('Given 已保存 OpenAI medium 默认值 When 新建 Pi 或 Claude 会话 Then 默认并持久化 medium', () => {
-    const settingsPath = join(tempHome, '.proma', 'settings.json')
-    mkdirSync(join(tempHome, '.proma'), { recursive: true })
+    const settingsPath = join(tempHome, '.linguist-agent', 'settings.json')
+    mkdirSync(join(tempHome, '.linguist-agent'), { recursive: true })
     writeFileSync(settingsPath, JSON.stringify({
       agentThinking: { type: 'adaptive' },
       agentEffort: 'max',
@@ -193,10 +237,10 @@ describe('Agent 会话 runtime 元数据', () => {
   })
 
   test('Given 新安装用户保存关闭思考 When 连续新建会话 Then 不被旧版迁移改回 high', () => {
-    const settingsPath = join(tempHome, '.proma', 'settings.json')
-    const indexPath = join(tempHome, '.proma', 'agent-sessions.json')
+    const settingsPath = join(tempHome, '.linguist-agent', 'settings.json')
+    const indexPath = join(tempHome, '.linguist-agent', 'agent-sessions.json')
     const indexBackupPath = `${indexPath}.bak`
-    mkdirSync(join(tempHome, '.proma'), { recursive: true })
+    mkdirSync(join(tempHome, '.linguist-agent'), { recursive: true })
     rmSync(indexPath, { force: true })
     rmSync(indexBackupPath, { force: true })
     writeFileSync(settingsPath, JSON.stringify({
@@ -236,6 +280,44 @@ describe('Agent 会话 runtime 元数据', () => {
     expect(updated).toMatchObject({ starred: true, archived: true })
     expect(updated.updatedAt).toBe(archived.updatedAt)
     expect(manager.getAgentSessionMeta(session.id)).toMatchObject({ starred: true, archived: true })
+  })
+
+  test('Given a user-stopped archived session When metadata is reread Then stop state persists without reopening it', () => {
+    const session = manager.createAgentSession('停止状态会话')
+    manager.updateAgentSessionMeta(session.id, { archived: true })
+    manager.updateAgentSessionMeta(session.id, { stoppedByUser: true })
+
+    expect(manager.listAgentSessions().find((item) => item.id === session.id)).toMatchObject({
+      archived: true,
+      stoppedByUser: true,
+    })
+
+    manager.updateAgentSessionMeta(session.id, { stoppedByUser: false })
+    expect(manager.getAgentSessionMeta(session.id)).toMatchObject({
+      archived: true,
+      stoppedByUser: false,
+    })
+  })
+})
+
+describe('Agent 会话创建回滚', () => {
+  test('Given session 工作目录无法创建 When 新建会话 Then 不遗留索引中的半成品会话', () => {
+    const workspaceId = 'workspace-create-rollback'
+    const workspaceSlug = 'blocked-session-workspace'
+    const title = '不应遗留的创建失败会话'
+    const blockedPath = join(tempHome, '.linguist-agent', 'agent-workspaces', workspaceSlug)
+    writeAgentWorkspacesIndex([
+      { id: workspaceId, name: '创建回滚测试', slug: workspaceSlug, createdAt: 1, updatedAt: 1 },
+    ])
+    mkdirSync(join(tempHome, '.linguist-agent', 'agent-workspaces'), { recursive: true })
+    writeFileSync(blockedPath, '阻止创建 session 子目录', 'utf-8')
+
+    try {
+      expect(() => manager.createAgentSession(title, undefined, workspaceId, undefined, 'pi')).toThrow()
+      expect(manager.listAgentSessions().some((item) => item.title === title)).toBe(false)
+    } finally {
+      rmSync(blockedPath, { force: true })
+    }
   })
 })
 
@@ -286,6 +368,65 @@ describe('Agent 会话引用搜索', () => {
       { sessionId: 'workspace-b-session', workspaceName: '客户支持', workspaceSlug: 'customer-support' },
       { sessionId: 'workspace-a-session', workspaceName: '产品研发', workspaceSlug: 'product-dev' },
     ])
+  })
+
+  test('Given 普通与 Linguist 绑定会话同时存在 When 搜索可引用会话 Then 只返回普通 Agent 会话', async () => {
+    writeAgentSessionsIndex([
+      { id: 'ordinary-current', title: '普通当前会话', workspaceId: 'workspace-a', createdAt: 0, updatedAt: 0 },
+      { id: 'ordinary-session', title: '普通会话', workspaceId: 'workspace-a', createdAt: 1, updatedAt: 1 },
+      {
+        id: 'linguist-bound-session',
+        title: 'Linguist 私有会话',
+        workspaceId: 'workspace-a',
+        linguistProjectId: 'prj-0123456789abcdef',
+        createdAt: 2,
+        updatedAt: 2,
+      },
+    ])
+
+    const results = await manager.searchAgentSessionReferences({
+      workspaceId: 'workspace-a',
+      excludeSessionId: 'ordinary-current',
+    })
+
+    expect(results.map((result) => result.sessionId)).toEqual(['ordinary-session'])
+  })
+
+  test('Given Linguist 当前会话引用项目内会话 When 搜索可引用会话 Then 仅返回同一项目而排除普通和跨项目会话', async () => {
+    writeAgentSessionsIndex([
+      {
+        id: 'linguist-current',
+        title: '项目甲当前会话',
+        workspaceId: 'workspace-a',
+        linguistProjectId: 'prj-project-a',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: 'linguist-same-project',
+        title: '项目甲同项目会话',
+        workspaceId: 'workspace-a',
+        linguistProjectId: 'prj-project-a',
+        createdAt: 2,
+        updatedAt: 2,
+      },
+      { id: 'ordinary-session', title: '普通会话', workspaceId: 'workspace-a', createdAt: 3, updatedAt: 3 },
+      {
+        id: 'linguist-other-project',
+        title: '项目乙会话',
+        workspaceId: 'workspace-a',
+        linguistProjectId: 'prj-project-b',
+        createdAt: 4,
+        updatedAt: 4,
+      },
+    ])
+
+    const results = await manager.searchAgentSessionReferences({
+      workspaceId: 'workspace-a',
+      excludeSessionId: 'linguist-current',
+    })
+
+    expect(results.map((result) => result.sessionId)).toEqual(['linguist-same-project'])
   })
 
   test('Given 消息内容命中 When 搜索可引用会话 Then 异步返回匹配片段和工作区来源', async () => {
@@ -377,5 +518,113 @@ describe('Agent 会话引用 prompt', () => {
         writable: true,
       })
     }
+  })
+
+  test('Given 用户显式提及 Linguist 绑定会话 When 构建发送 prompt Then 不注入项目私有历史', () => {
+    writeAgentSessionsIndex([
+      { id: 'current-session', title: '当前会话', workspaceId: 'workspace-a', createdAt: 1, updatedAt: 1 },
+      { id: 'ordinary-session', title: '普通引用', workspaceId: 'workspace-a', createdAt: 2, updatedAt: 2 },
+      {
+        id: 'linguist-bound-session',
+        title: 'Linguist 私有引用',
+        workspaceId: 'workspace-a',
+        linguistProjectId: 'prj-0123456789abcdef',
+        createdAt: 3,
+        updatedAt: 3,
+      },
+    ])
+
+    const processWithResourcesPath = process as NodeJS.Process & { resourcesPath?: string }
+    const originalResourcesPath = processWithResourcesPath.resourcesPath
+    processWithResourcesPath.resourcesPath = tempHome
+    try {
+      const prompt = contextPrompt.buildReferencedSessionsPrompt(
+        'current-session',
+        ['ordinary-session', 'linguist-bound-session'],
+      )
+
+      expect(prompt).toContain('id="ordinary-session"')
+      expect(prompt).not.toContain('linguist-bound-session')
+    } finally {
+      Object.defineProperty(processWithResourcesPath, 'resourcesPath', {
+        value: originalResourcesPath,
+        configurable: true,
+        writable: true,
+      })
+    }
+  })
+
+  test('Given Linguist 当前会话显式提及同项目与跨项目会话 When 构建发送 prompt Then 只注入同项目历史', () => {
+    writeAgentSessionsIndex([
+      {
+        id: 'linguist-current',
+        title: '项目甲当前会话',
+        workspaceId: 'workspace-a',
+        linguistProjectId: 'prj-project-a',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: 'linguist-same-project',
+        title: '项目甲同项目会话',
+        workspaceId: 'workspace-a',
+        linguistProjectId: 'prj-project-a',
+        createdAt: 2,
+        updatedAt: 2,
+      },
+      { id: 'ordinary-session', title: '普通会话', workspaceId: 'workspace-a', createdAt: 3, updatedAt: 3 },
+      {
+        id: 'linguist-other-project',
+        title: '项目乙会话',
+        workspaceId: 'workspace-a',
+        linguistProjectId: 'prj-project-b',
+        createdAt: 4,
+        updatedAt: 4,
+      },
+    ])
+
+    const processWithResourcesPath = process as NodeJS.Process & { resourcesPath?: string }
+    const originalResourcesPath = processWithResourcesPath.resourcesPath
+    processWithResourcesPath.resourcesPath = tempHome
+    try {
+      const prompt = contextPrompt.buildReferencedSessionsPrompt(
+        'linguist-current',
+        ['linguist-same-project', 'ordinary-session', 'linguist-other-project'],
+      )
+
+      expect(prompt).toContain('id="linguist-same-project"')
+      expect(prompt).not.toContain('ordinary-session')
+      expect(prompt).not.toContain('linguist-other-project')
+    } finally {
+      Object.defineProperty(processWithResourcesPath, 'resourcesPath', {
+        value: originalResourcesPath,
+        configurable: true,
+        writable: true,
+      })
+    }
+  })
+})
+
+describe('Agent 会话持久化边界', () => {
+  test('Given 路径型会话 ID When 读取消息 Then 在访问文件系统前拒绝', () => {
+    expect(() => manager.getAgentSessionSDKMessages('../conversations/secret'))
+      .toThrow('无效 Agent 会话 ID')
+  })
+
+  test('Given Linguist 绑定会话 When 迁移到普通项目 Then 在目标解析前拒绝', () => {
+    const session = manager.createAgentSession(
+      '绑定会话',
+      undefined,
+      undefined,
+      undefined,
+      'pi',
+      {
+        linguistProjectId: 'prj-0123456789abcdef',
+        linguistProjectName: '测试项目',
+      },
+    )
+
+    expect(() => manager.moveSessionToWorkspace(session.id, 'ordinary-workspace'))
+      .toThrow('Linguist 项目会话不能迁移')
   })
 })

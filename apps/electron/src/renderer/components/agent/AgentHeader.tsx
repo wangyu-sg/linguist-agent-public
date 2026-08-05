@@ -13,13 +13,21 @@ import { tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { detectIsWindows, WINDOW_CONTROLS_INSET_RIGHT } from '@/lib/platform'
 import { cn } from '@/lib/utils'
+import {
+  LinguistSessionBindingBadge,
+  LinguistSessionBindingNotice,
+} from '@/features/linguist/session-binding/LinguistSessionBindingBadge'
 
 /** AgentHeader 属性接口 */
 interface AgentHeaderProps {
   sessionId: string
+  compact?: boolean
 }
 
-export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement | null {
+export function AgentHeader({
+  sessionId,
+  compact = false,
+}: AgentHeaderProps): React.ReactElement | null {
   const isWindows = React.useMemo(() => detectIsWindows(), [])
   const sessions = useAtomValue(agentSessionsAtom)
   const session = sessions.find((s) => s.id === sessionId) ?? null
@@ -69,53 +77,69 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
   }
 
   return (
-    <div className="relative z-[51] flex items-center gap-2 px-4 h-[48px]">
-      {/* 拖拽层覆盖整行（Windows 避开右上角 WindowControls ~126px），编辑/标题按钮内部已自带 titlebar-no-drag。 */}
-      <div className={cn("absolute inset-0 titlebar-drag-region pointer-events-none", isWindows && WINDOW_CONTROLS_INSET_RIGHT)} />
-      {editing ? (
-        <div className="flex items-center gap-1.5 flex-1 min-w-0 titlebar-no-drag">
-          <input
-            ref={inputRef}
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={saveTitle}
-            className="flex-1 bg-transparent text-sm font-medium border-b border-primary/50 outline-none px-0 py-0.5 min-w-0"
-            maxLength={100}
-          />
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={saveTitle}
-            className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Check className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setEditing(false)}
-            className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span className="truncate text-sm font-medium text-foreground">
-            {session.title}
-          </span>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={startEdit}
-            className="titlebar-no-drag p-1 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="编辑标题"
-          >
-            <Pencil className="size-3.5" />
-          </button>
-        </div>
-      )}
-    </div>
+    <>
+      <div
+        className={cn(
+          'relative z-[51] flex items-center gap-2',
+          compact ? 'h-10 px-3' : 'h-[48px] px-4',
+        )}
+      >
+        {/* Full Header 参与窗口拖拽；嵌入式 Rail 不创建窗口拖拽区。 */}
+        {!compact && (
+          <div className={cn("absolute inset-0 titlebar-drag-region pointer-events-none", isWindows && WINDOW_CONTROLS_INSET_RIGHT)} />
+        )}
+        {editing ? (
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 titlebar-no-drag">
+            <input
+              ref={inputRef}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={saveTitle}
+              aria-label="会话标题"
+              className="flex-1 bg-transparent text-sm font-medium border-b border-primary/50 outline-none px-0 py-0.5 min-w-0"
+              maxLength={100}
+            />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={saveTitle}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="保存标题"
+            >
+              <Check className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setEditing(false)}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="取消编辑标题"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className="truncate text-sm font-medium text-foreground">
+              {session.title}
+            </span>
+            {/* Linguist 项目绑定徽章（PB-034）：仅绑定会话渲染 */}
+            <LinguistSessionBindingBadge session={session} />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={startEdit}
+              className="titlebar-no-drag p-1 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="编辑标题"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+      {/* Linguist 绑定通告（PB-034）：归档只读 / 项目缺失降级；普通会话不渲染 */}
+      <LinguistSessionBindingNotice session={session} />
+    </>
   )
 }

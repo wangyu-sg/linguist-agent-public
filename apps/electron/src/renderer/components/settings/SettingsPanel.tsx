@@ -22,7 +22,6 @@ import {
   ArrowLeft,
   Keyboard,
   Mic,
-  HardDriveDownload,
   HardDrive,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -40,7 +39,7 @@ import { appModeAtom } from "@/atoms/app-mode";
 import { activeViewAtom } from "@/atoms/active-view";
 import { automationFormAtom } from "@/atoms/automation-atoms";
 import { hasUpdateAtom } from "@/atoms/updater";
-import { tabsAtom, activeTabIdAtom, openTab, TUTORIAL_TAB_ID } from "@/atoms/tab-atoms";
+import { tabsAtom, activeTabIdAtom, openTab, TUTORIAL_TAB_ID, TUTORIAL_TAB_TITLE } from "@/atoms/tab-atoms";
 import { hasEnvironmentIssuesAtom } from "@/atoms/environment";
 import {
   AlertDialog,
@@ -63,15 +62,18 @@ import { ToolSettings } from "./ToolSettings";
 import { BotHubSettings } from "./BotHubSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
-import { MigrationSettings } from "./MigrationSettings";
 import { StorageSettings } from "./StorageSettings";
 import { useOpenSession } from '@/hooks/useOpenSession'
+import { extensionRegistry } from '@/host/extensions'
+import { resolveSettingsSections } from '@/host/extension-registry'
+import type { SettingsContribution } from '@/host/contracts'
 
 /** 设置 Tab 定义 */
-interface TabItem {
+interface TabItem extends SettingsContribution {
   id: SettingsTab;
   label: string;
   icon: React.ReactNode;
+  render?: () => React.ReactElement;
 }
 
 /** 基础 Tabs（所有模式都有） */
@@ -95,7 +97,7 @@ const BOTS_TAB: TabItem = {
 };
 const TUTORIAL_TAB: TabItem = {
   id: "tutorial",
-  label: "Proma 教程",
+  label: "使用教程",
   icon: <GraduationCap size={16} />,
 };
 const SHORTCUTS_TAB: TabItem = {
@@ -108,16 +110,22 @@ const VOICE_INPUT_TAB: TabItem = {
   label: "语音输入",
   icon: <Mic size={16} />,
 };
+/**
+ * 当前 SettingsTab 只承认已经拥有持久状态与渲染入口的 migration 贡献。
+ * 未来 section 必须先扩展 settings-tab 合同，避免登记了不可打开的设置页。
+ */
+const REGISTERED_SETTINGS_TABS: readonly TabItem[] = extensionRegistry.settingsSections.filter(
+  (section): section is TabItem => section.id === 'migration',
+)
 /** 尾部 Tabs */
 const TAIL_TABS: TabItem[] = [
-  { id: "migration", label: "数据迁移", icon: <HardDriveDownload size={16} /> },
   { id: "storage", label: "磁盘管理", icon: <HardDrive size={16} /> },
   { id: "appearance", label: "外观设置", icon: <Palette size={16} /> },
   { id: "about", label: "关于/更新", icon: <Info size={16} /> },
 ];
 
 /** 根据标签页 id 渲染对应内容 */
-function renderTabContent(tab: SettingsTab): React.ReactElement {
+function renderBuiltInTabContent(tab: SettingsTab): React.ReactElement {
   switch (tab) {
     case "general":
       return <GeneralSettings />;
@@ -141,8 +149,6 @@ function renderTabContent(tab: SettingsTab): React.ReactElement {
       return <ShortcutSettings />;
     case "voice-input":
       return <VoiceInputSettings />;
-    case "migration":
-      return <MigrationSettings />;
     case "storage":
       return <StorageSettings />;
     default:
@@ -207,7 +213,7 @@ export function SettingsPanel({
   /** 切换标签页时检测是否有未保存内容，tutorial 特殊处理：打开 New Tab 并关闭设置 */
   const handleTabChange = (tabId: SettingsTab): void => {
     if (tabId === 'tutorial') {
-      const result = openTab(mainTabs, { type: 'tutorial', sessionId: TUTORIAL_TAB_ID, title: 'Proma 使用教程' })
+      const result = openTab(mainTabs, { type: 'tutorial', sessionId: TUTORIAL_TAB_ID, title: TUTORIAL_TAB_TITLE })
       setMainTabs(result.tabs)
       setMainActiveTabId(result.activeTabId)
       // Skills/Automations 会全屏覆盖 TabContent；打开教程时先清理表单并回到会话视图。
@@ -263,27 +269,21 @@ export function SettingsPanel({
 
   // 工具 tab 两种模式都显示，Agent Skills / MCP 独立在侧边栏能力中心管理。
   const tabs = React.useMemo(() => {
-    if (appMode === "agent") {
-      return [
-        ...BASE_TABS,
-        TOOLS_TAB,
-        VOICE_INPUT_TAB,
-        BOTS_TAB,
-        TUTORIAL_TAB,
-        SHORTCUTS_TAB,
-        ...TAIL_TABS,
-      ];
-    }
-    return [
-      ...BASE_TABS,
+    const middleTabs = [
       TOOLS_TAB,
       VOICE_INPUT_TAB,
       BOTS_TAB,
       TUTORIAL_TAB,
       SHORTCUTS_TAB,
-      ...TAIL_TABS,
     ];
+    return resolveSettingsSections([
+      ...BASE_TABS,
+      ...middleTabs,
+      ...TAIL_TABS,
+    ], REGISTERED_SETTINGS_TABS, appMode);
   }, [appMode]);
+
+  const activeSection = tabs.find((tab) => tab.id === activeTab)
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-content-area text-foreground">
@@ -311,7 +311,7 @@ export function SettingsPanel({
                 {tab.icon}
                 <span>{tab.label}</span>
                 {tab.id === "about" && (hasUpdate || hasEnvironmentIssues) && (
-                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="w-2 h-2 rounded-full bg-destructive" />
                 )}
               </button>
             ))}
@@ -333,7 +333,7 @@ export function SettingsPanel({
         {/* 右侧内容区域 */}
         <ScrollArea className="min-w-0 flex-1 bg-content-area">
           <div className="mx-auto w-full max-w-[1080px] px-5 py-8 pb-12 sm:px-8">
-            {renderTabContent(activeTab)}
+            {activeSection?.render?.() ?? renderBuiltInTabContent(activeTab)}
           </div>
         </ScrollArea>
       </div>

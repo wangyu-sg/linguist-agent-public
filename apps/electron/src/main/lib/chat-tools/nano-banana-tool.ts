@@ -3,7 +3,7 @@
  *
  * 基于 Gemini Image Generation API 提供 AI 生图能力。
  * 支持文生图、参考图编辑、多轮连续修改。
- * 凭据存储在 ~/.proma/chat-tools.json 的 toolCredentials 中。
+ * 凭据存储在 ~/.linguist-agent/chat-tools.json 的 toolCredentials 中。
  */
 
 import type { ToolCall, ToolResult, ToolDefinition } from '@proma/core'

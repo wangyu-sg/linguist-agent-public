@@ -372,6 +372,64 @@ export function getToolPhrase(toolName: string, input: Record<string, unknown>):
       return phrase('发送消息')
     }
 
+    case 'cat_project_summary':
+      return phrase('检查项目摘要')
+
+    case 'cat_list_assets':
+      return phrase('查看项目文件')
+
+    case 'cat_get_segments': {
+      const limit = input.limit
+      return phrase(
+        typeof limit === 'number' && Number.isInteger(limit) && limit > 0
+          ? `读取 ${Math.min(limit, 100)} 个片段`
+          : '读取项目片段',
+      )
+    }
+
+    case 'cat_search_tm':
+      return phrase('查找翻译记忆')
+
+    case 'cat_search_terms': {
+      const query = input.query
+      return phrase(
+        typeof query === 'string' && query.trim()
+          ? `搜索术语 “${truncate(query.trim(), 60)}”`
+          : '搜索项目术语',
+      )
+    }
+
+    case 'cat_propose_translations': {
+      const proposals = input.segmentProposals
+      return phrase(
+        Array.isArray(proposals)
+          ? `创建 ${proposals.length} 条翻译建议`
+          : '创建翻译建议',
+      )
+    }
+
+    case 'cat_run_qa':
+      return phrase('运行项目质检')
+
+    case 'cat_get_qa_findings':
+      return phrase('查看质检问题')
+
+    case 'cat_submit_critic_review': {
+      const findings = input.findings
+      return phrase(
+        Array.isArray(findings)
+          ? `提交 ${findings.length} 条独立复核意见`
+          : '提交独立复核',
+      )
+    }
+
+    case 'cat_run_batch_consistency':
+      return phrase(
+        input.mode === 'repair'
+          ? '创建批量一致性建议'
+          : '检查批量一致性',
+      )
+
     default: {
       // MCP 工具：mcp__serverName__toolName
       const mcpParts = toolName.split('__')

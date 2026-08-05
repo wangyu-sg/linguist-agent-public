@@ -4,8 +4,8 @@ import { Bot, MessageCircle } from 'lucide-react'
 interface SelectionActionPopoverProps {
   x: number
   y: number
-  onAddToAgent: () => void
-  onOpenChat: () => void | Promise<void>
+  onAddToAgent?: () => void
+  onOpenChat?: () => void | Promise<void>
 }
 
 export function SelectionActionPopover({
@@ -22,24 +22,28 @@ export function SelectionActionPopover({
       onMouseDown={(event) => event.preventDefault()}
     >
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-muted"
-          onClick={onAddToAgent}
-        >
-          <Bot className="size-4" />
-          为 Agent 引用
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-muted"
-          onClick={() => {
-            void onOpenChat()
-          }}
-        >
-          <MessageCircle className="size-4" />
-          打开右侧问答
-        </button>
+        {onAddToAgent && (
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-muted"
+            onClick={onAddToAgent}
+          >
+            <Bot className="size-4" />
+            为 Agent 引用
+          </button>
+        )}
+        {onOpenChat && (
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-muted"
+            onClick={() => {
+              void onOpenChat()
+            }}
+          >
+            <MessageCircle className="size-4" />
+            打开右侧问答
+          </button>
+        )}
       </div>
     </div>
   )

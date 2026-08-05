@@ -313,13 +313,13 @@ function getPreferredPanelHeight({
 
 function getMessageBubbleClass(item: TabMinimapItem): string {
   if (item.role === 'user') return 'bg-primary/[0.06]'
-  if (item.role === 'status') return 'bg-amber-500/[0.08]'
+  if (item.role === 'status') return 'bg-warning/10'
   return ''
 }
 
 function PreviewText({ text }: { text: string }): React.ReactElement {
   if (!text) {
-    return <span className="text-[11px] text-muted-foreground/60">(空消息)</span>
+    return <span className="text-[11px] text-foreground/65">(空消息)</span>
   }
 
   return (
@@ -448,7 +448,7 @@ function SessionMiniMapPopoverContent({
               </span>
             )}
           </div>
-          <span className="w-[44px] shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">
+          <span className="w-[44px] shrink-0 text-right text-[11px] text-foreground/65 tabular-nums">
             {loading ? '加载中' : `${items.length} 条`}
           </span>
         </div>
@@ -456,7 +456,7 @@ function SessionMiniMapPopoverContent({
         <div className="relative flex-1 min-h-0 overflow-hidden bg-popover p-1.5">
           {loading && (
             <div className="absolute inset-1.5 rounded-md bg-muted/30 p-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-foreground/65">
                 <Loader2 size={13} className="animate-spin" />
                 <span>正在读取会话...</span>
               </div>
@@ -475,15 +475,19 @@ function SessionMiniMapPopoverContent({
           )}
 
           {!loading && error && (
-            <div className="h-full rounded-md bg-muted/30 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">{error}</div>
+            <div className="h-full rounded-md bg-muted/30 flex items-center justify-center px-4 text-center text-xs text-foreground/65">{error}</div>
           )}
 
           {!loading && !error && items.length === 0 && (
-            <div className="h-full rounded-md bg-muted/30 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">暂无可预览内容</div>
+            <div className="h-full rounded-md bg-muted/30 flex items-center justify-center px-4 text-center text-xs text-foreground/65">暂无可预览内容</div>
           )}
 
           {!loading && !error && items.length > 0 && (
-            <div className="h-full overflow-y-auto space-y-1 scrollbar-thin session-minimap-content-enter">
+            <div
+              className="h-full overflow-y-auto space-y-1 scrollbar-thin session-minimap-content-enter"
+              tabIndex={0}
+              aria-label="会话消息预览"
+            >
               {renderedItems.map((item, index) => (
                 <div
                   key={`${item.id}-${index}`}

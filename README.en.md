@@ -1,314 +1,147 @@
-# Proma
+# Linguist Agent
 
-Proma is a local-first AI desktop app that brings multi-model Chat, general-purpose Agent workflows, workspaces, Skills, MCP, remote bots, and memory into one open-source client.
+Linguist Agent is a desktop Agent for day-to-day personal localization work:
 
-It is not just another chat box. Proma is meant to become a long-lived Agent workbench for your personal workflows: use Chat for simple answers, use Agent when the task needs to act on files, tools, projects, and longer context.
+> Proma's complete general-purpose Agent and Chat product capabilities, combined with Linguist Agent's professional CAT core and workbench.
 
-![Proma Poster](https://img.erlich.fun/personal-blog/uPic/pb.png)
+This repository is an AGPL-3.0 derivative of [Proma](https://github.com/proma-ai/Proma). Proma remains copyrighted by its original authors. See [NOTICE.md](./NOTICE.md), [ATTRIBUTION.md](./ATTRIBUTION.md), and the pinned [upstream baseline](./docs/architecture/UPSTREAM_BASELINE.md).
 
-[中文 README](./README.md) | [Beginner Tutorial](./tutorial/tutorial.md) | [Open-Source Release](https://github.com/ErlichLiu/Proma/releases) | [Commercial Version](https://proma.cool/download)
+[中文 README](./README.md)
 
-## What Proma Can Do
+## Current status
 
-- **Chat mode**: multi-model conversations, attachments, image input, Markdown / Mermaid / KaTeX / code highlighting, parallel conversations, system prompts, and context controls.
-- **Agent mode**: two built-in runtimes—Claude Agent SDK and Pi Agent SDK—with workspace isolation, permission modes, file operations, streaming output, plan confirmation, and ask-user interactions. Claude is the default; switch runtimes below the Agent input.
-- **Collaboration and tasks**: complex work can be split into traceable collaboration agents and tasks, with calls and results shown in the message stream.
-- **Skills, MCP, and project roots**: each Proma project manages its own Skills and MCP servers. Project files can use a user-selected local project root or a Proma-managed blank-project directory; local project configuration is not imported automatically.
-- **Remote bots**: Lark / Feishu bot bridging is supported, with DingTalk and WeChat bridge entry points also present in the app.
-- **Memory and tools**: Chat and Agent can share memory, with web search, built-in Chat tools, and Agent recommendation helpers.
-- **Local-first data**: conversations, workspaces, attachments, settings, and Skills are stored under `~/.proma/` as JSON / JSONL files, without a local database.
-- **Desktop experience**: auto-update, proxy settings, file preview, global shortcuts, quick task window, voice input, and light / dark / system themes.
+The product is a **personal-use Alpha** for its author's sustained use and improvement, with no public-release plan. Its structure is fixed: it does not remove Proma's Agent, Chat, Providers, Skills, MCP, Automations, or remote integrations; Linguist is a first-class localization mode on top of them.
 
-## Getting Started
+The current manifest baseline is Electron App `0.16.15` (Electron `43.2.0`), `@proma/shared 0.1.82`, Pi Runtime `0.82.1`, CAT Core / Store / Tools `0.0.13 / 0.0.26 / 0.0.20`, with Bun `1.3.14` pinned for the repository. Packaging or installed-app evidence from `0.15.140` cannot be automatically carried forward to the merged baseline; new build, packaging, and real-machine results must be recorded separately.
 
-### Download
+The application has three peer primary modes:
 
-Download the open-source version from [GitHub Releases](https://github.com/ErlichLiu/Proma/releases), with builds for macOS Apple Silicon, macOS Intel, and Windows.
+- **Agent**: the complete general-purpose Agent workspace, with Claude / Pi runtimes, tools, Thinking, permissions, Queue / Steer, Skills, MCP, and workspace files.
+- **Chat**: multi-provider conversations, attachments, tools, context controls, and side-by-side comparison.
+- **Linguist**: projects, assets, a virtualized Segment Grid, human editing, Proposal review, TM / TB, Context, deterministic QA, workflow confirmation, run summaries and safe undo, delivery preflight, export, integrity scrubbing, backup, and restore.
 
-The open-source version can be used independently with self-configured AI provider channels. If you prefer Proma-provided built-in model channels and subscription options, you can optionally explore the [Proma commercial version](https://proma.cool/download). The two versions support different preferences, and you are free to choose the one that best fits your workflow.
+The Linguist sidebar is always “project → bound sessions.” Session rows and tree behavior are shared with Agent, including status, MiniMap, delegation, pinning, recents, and archives; Agent mode excludes every project-bound session. Selecting a project opens its Workbench, while selecting a session opens the same full `AgentView`. Cross-project actions create an independent copy, keep the source project open, and offer an action to open the copy.
 
-| Comparison | Open-source version | Commercial version |
-| --- | --- | --- |
-| Core desktop experience | Full Proma desktop experience with freedom to configure your workflow | The same core desktop experience |
-| Model channels | Add and manage AI provider channels and API keys yourself | Sign in to use Proma-provided model channels, while keeping the option to configure third-party channels |
-| Model pricing | Use each chosen provider under its own pricing and terms | Selected models have Proma Cloud-exclusive offers, with some priced as low as 20% of the official reference price |
-| Agent security and reliability | Evaluate each provider's security, protocol compatibility, and reliability yourself; third-party relays also add trust and data-handling considerations | Use Proma Cloud's managed official route with unified security and reliability safeguards, Agent protocol compatibility, and model health monitoring—reducing uncertainty from opaque third-party relays |
-| Web-connected and built-in AI capabilities | Configure search, image generation, and their API keys as needed | Get a more complete Proma Cloud web-connected and built-in experience, including WebSearch plus GPT Image 2 image generation and editing |
-| Public API and services | Primarily use the provider APIs that you configure yourself | Create dedicated, quota-limited Proma Cloud API keys to bring LLM, tool, and multimodal capabilities into your own apps or services |
-| Team credit management | Build your own member, credit-allocation, and usage-management processes | Team admins can allocate or reclaim shared team credits for members, automate monthly allocation, and review member usage and credit transactions |
-| Subscription and usage | Manage provider accounts, balances, and usage yourself | Manage subscriptions and balance in the app, with detailed model, Agent, and tool usage |
-| Switching from open source | — | Install over the existing app and continue using your local Proma data |
+Linguist is a first-class Agent Profile. It layers versioned Profile, Role, Strategy, Project Digest, and frozen Turn Context on top of each runtime's Proma Base, and explicitly reports degradation rather than silently falling back to an ordinary Agent. Strategy is auditable prompt and evaluation metadata; this README does not describe Fast / Balanced / Best as user-facing defaults that have obtained quality qualification. It embeds the same `AgentView` rather than creating a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. Agent tools may create reviewable Proposals, but cannot bypass human acceptance, CAS revisions, locked segments, tags, QA, or Required/Forbidden term gates.
 
-> Available models, prices, and benefits may change; refer to the current in-app information.
+In the CAT editor, `Cmd/Ctrl+Enter` confirms the current workflow stage and advances even when the target is unchanged. Close buttons on project settings and other right-side sheets remain clickable inside Electron title-bar regions.
 
-### Enterprise licensing
-
-If your organization plans to deploy Proma for hundreds or thousands of employees, enterprise licenses are available. We can also provide scoped, lightweight customization around your deployment needs. Contact us on WeChat: `geekthings`.
-
-### First Setup
-
-1. Open Proma and finish the environment check. Agent mode depends on local tooling, especially Git, Node.js / Bun, and a usable shell.
-2. Go to **Settings > Channels**, add at least one AI provider channel, and fill in Base URL, API Key, and model list.
-3. Chat mode can use OpenAI, Anthropic, Google, or OpenAI-compatible channels.
-4. The default Claude Agent Runtime requires an Anthropic or Anthropic-compatible channel, such as Anthropic, DeepSeek, Kimi API, or Kimi Coding Plan.
-5. Switch Claude / Pi directly below the Agent input. Pi can use any enabled model channel.
-6. Go to **Settings > Agent** and choose the default Agent channel, model, and workspace.
-7. Configure memory, web search, or Feishu / DingTalk / WeChat bridges from their corresponding settings tabs if needed.
-
-## Choosing A Mode
-
-### Use Chat For
-
-- Everyday Q&A, explanation, translation, rewriting, and lightweight code discussion.
-- Reading attachments and summarizing or comparing their content.
-- One-off conversations enhanced by web search or memory tools.
-- Comparing outputs from multiple models or exploring different system prompts.
-
-### Use Agent For
-
-- Creating, editing, or organizing local files.
-- Research, report writing, and multi-step tasks.
-- Work that needs MCP, Skills, Shell, Git, project files, or external context.
-- Tasks that benefit from permissions, plan mode, background execution, or remote bot follow-up.
-
-In short: **use Chat when you need an answer; use Agent when you need work to be done.**
-
-## Screenshots
-
-### Chat Analysis
-
-Use Chat for lightweight but practical analysis: compare audience needs, generate a table, and shape first-screen README copy quickly.
-
-![Proma Chat analysis](./docs/assets/screenshots/proma-chat-demo.png)
-
-### Agent Workbench
-
-Agent works across the project root and session workspace, reads project files, progresses through tasks, outputs structured findings, and keeps reusable files visible in the right-side file panel.
-
-![Proma Agent workbench](./docs/assets/screenshots/proma-agent-demo.png)
-
-### Skills
-
-Each workspace can keep its own reusable Skills. The `feedback-synthesis` Skill shown here turns scattered feedback, interviews, and issues into themes, evidence, and priority suggestions.
-
-![Proma workspace Skills](./docs/assets/screenshots/proma-skills-demo.png)
-
-### Skills & MCP
-
-The same workspace can manage stdio and HTTP MCP servers, enabling or disabling external context per project.
-
-![Proma MCP settings](./docs/assets/screenshots/proma-mcp-demo.png)
-
-### Streaming Voice Input
-
-Proma supports Doubao-powered streaming voice input, both inside Proma and across the desktop:
-
-- Inside Proma: press Ctrl + Backtick to start recognition, then press it again to finish and insert the transcript into the active Proma input box.
-- Outside Proma: press Ctrl + Backtick to start recognition, then press it again to finish and insert the transcript at the current cursor position. If there is no active cursor, Proma writes the transcript to the clipboard.
-
-![Proma voice input](./docs/assets/screenshots/proma-typeless-input.png)
-
-## Agent Runtimes and Providers
-
-Proma provides two switchable Agent runtimes:
-
-- **Claude Agent Runtime (default)**: powered by `@anthropic-ai/claude-agent-sdk` and using the Anthropic Messages API or compatible endpoints.
-- **Pi Agent Runtime**: powered by `@earendil-works/pi-coding-agent`, `pi-agent-core`, and `pi-ai`. It dynamically registers enabled Proma channels as Pi providers and supports OpenAI Chat Completions / Responses, Google Generative AI, Anthropic Messages, and compatible endpoints.
-
-| Channel type | Chat | Claude Agent | Pi Agent |
-| --- | --- | --- | --- |
-| Anthropic / Anthropic-compatible | Supported | Supported | Supported |
-| Anthropic-protocol channels such as DeepSeek, Kimi API / Coding Plan, Zhipu Coding Plan, MiniMax, and Xiaomi MiMo | Supported | Supported | Supported |
-| OpenAI, OpenAI Responses, Google, Zhipu AI, Doubao, and Qwen | Supported | Not yet | Supported |
-| Custom OpenAI-compatible endpoints | Supported | Not yet | Supported |
-| ChatGPT subscription (Codex OAuth) | — | Supported | Supported |
-
-> Pi Runtime can be switched directly below the input of each Agent session. Switching starts a new underlying SDK session but does not delete Proma's saved messages. Pi bridges workspace Skills, user-configured MCP servers, and Proma's built-in Automation / Collaboration tools. Tool calling, reasoning, and context capabilities still vary by model provider.
-
-> **Kimi Coding Plan users**: Proma is officially whitelisted by Kimi. Using Proma with your Kimi Coding Plan subscription will not trigger any third-party client ban policy.
-
-## Local Data
-
-Proma stores data in local files so it is easy to back up, migrate, and inspect.
-
-```text
-~/.proma/
-├── channels.json
-├── conversations.json
-├── conversations/
-│   └── {conversation-id}.jsonl
-├── agent-sessions.json
-├── agent-sessions/
-│   └── {session-id}.jsonl
-├── agent-workspaces/
-│   └── {workspace-slug}/
-│       ├── workspace-files/ # Proma-managed project root for blank projects only
-│       ├── mcp.json
-│       └── skills/
-├── attachments/
-├── user-profile.json
-├── settings.json
-└── sdk-config/
-```
-
-API keys are encrypted through Electron `safeStorage` before being written to `channels.json`. Proma does not use a local database; core data is represented as JSON configuration and append-only JSONL logs.
-
-## Development
-
-Proma is a Bun workspace monorepo.
-
-```text
-proma-v2/
-├── packages/
-│   ├── shared/     # shared types, IPC constants, config, utilities
-│   ├── core/       # Provider Adapters, SSE, code highlighting
-│   └── ui/         # shared React UI components
-└── apps/
-    └── electron/   # Electron desktop app
-```
-
-Current package versions:
-
-| Package | Version | Responsibility |
-| --- | --- | --- |
-| `@proma/electron` | `0.15.0` | Electron desktop app |
-| `@proma/shared` | `0.1.42` | shared types, IPC constants, config, utilities |
-| `@proma/core` | `0.2.15` | Provider Adapters, SSE, Shiki highlighting |
-| `@proma/ui` | `0.1.9` | shared React UI components |
-
-Common commands:
-
-```bash
-# Install dependencies
-bun install
-
-# Development mode: Vite + Electron + hot reload
-bun run dev
-
-# Build Electron app
-bun run electron:build
-
-# Build and run
-bun run electron:start
-
-# Typecheck
-bun run typecheck
-
-# Test
-bun test
-```
-
-More granular scripts are available inside the Electron app:
-
-```bash
-cd apps/electron
-
-bun run dev:vite
-bun run dev:electron
-bun run build:main
-bun run build:preload
-bun run build:renderer
-bun run dist:fast
-```
-
-## Tech Stack
-
-| Layer | Technology |
-| --- | --- |
-| Runtime | Bun |
-| Desktop | Electron 39 |
-| Frontend | React 18 + TypeScript |
-| State | Jotai |
-| Styling | Tailwind CSS + Radix UI |
-| Rich text input | TipTap |
-| Markdown / diagrams / math | React Markdown + Beautiful Mermaid + KaTeX |
-| Code highlighting | Shiki |
-| Build | Vite + esbuild |
-| Distribution | electron-builder |
-| Agent runtimes | Claude: `@anthropic-ai/claude-agent-sdk@0.3.201`; Pi: `@earendil-works/pi-* @0.80.3` |
+The upstream v0.16.8 foundation brings Planning (todos, calendar, reminders, and Agent references), Agent Island, unified project/session files, Vision Relay, xAI OAuth, and the updated Pi Runtime. These remain shared Agent / Chat substrate capabilities: they must not introduce a second Linguist state store or bypass CAT authority. Their automated, packaged, and real-machine qualifications still require separate verification.
 
 ## Architecture
 
-Proma's core communication path is:
-
 ```text
-shared types and IPC constants
-  -> main/ipc.ts handlers
-  -> preload/index.ts window.electronAPI bridge
-  -> renderer Jotai atoms and React components
+Linguist Agent Desktop App
+├── Agent / Chat / Providers / Skills / MCP / Automations / remote bridges
+├── Planning (todos, calendar, reminders, Agent references)
+├── Agent Island (Agent interaction and Planning projection)
+└── Linguist Mode
+    ├── Workbench + native Agent rail
+    ├── session-bound CAT tools
+    ├── Electron Linguist services / IPC
+    └── @linguist/cat-core
+        └── pure domain model, Proposal, Evidence, QA, Critic, Consistency
 ```
 
-Main-process services live in `apps/electron/src/main/lib/`:
+Important boundaries:
 
-- `agent-orchestrator.ts`: Agent orchestration, runtime routing, environment variables, SDK calls, event streams, and error handling.
-- `adapters/claude-agent-adapter.ts` / `adapters/pi-agent-adapter.ts`: runtime adapters for Claude and Pi; `runtime-routing-agent-adapter.ts` routes each session to its selected runtime.
-- `agent-session-manager.ts`: Agent session index and JSONL message persistence.
-- `agent-workspace-manager.ts`: Proma workspaces, project roots, MCP, and Skills.
-- `chat-service.ts`: Chat streaming, Provider Adapters, tool activity.
-- `conversation-manager.ts`: Chat session index and message storage.
-- `channel-manager.ts`: channel CRUD, API key encryption, connection tests, model fetching.
-- `feishu-bridge.ts` / `dingtalk-bridge.ts` / `wechat-bridge.ts`: remote bot bridges.
-- `chat-tool-*`, `document-parser.ts`, `workspace-watcher.ts`: tools, document parsing, and file watching.
+- `@linguist/cat-core` has no React, Electron, Proma UI, or SQLite dependency.
+- `@linguist/cat-store` owns each project's `cat.db`, managed source assets, backups, and export records.
+- `@linguist/cat-tools` derives project identity only from the Session binding. Its 17 tools are split by project, reference, QA, Proposal/Critic, and Intake responsibilities; Intake currently accepts only explicitly attached single files.
+- `LinguistProjectService` remains the single external facade while lifecycle, resources, quality, and delivery live in separate modules.
+- Proposal content is stored separately from each issuance and its provenance. Long-running work uses Jobs/Checkpoints, idempotent mutations, a durable outbox, and run-scoped undo.
+- Project open performs only bounded Quick Health checks. Full Integrity Scrub runs in a worker thread and checks all managed digests, SQLite/reference lineage, exports, and Session workspaces.
+- Session copy is revalidated in the main process against the source binding, an active and healthy target project, and native Claude/Pi fork eligibility. The Renderer cannot provide bindings, native IDs, or paths. Copies omit workspace files, `.context`, attachments, delegation, automation, and run state; partial copies are rolled back.
+- Planning and Agent Island share the general main-process, preload, and Jotai contracts; neither grants CAT write authority.
+- Proma core changes are registered in [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md) and enforced by architecture tests.
 
-Renderer state is managed with Jotai. Key atoms live in `apps/electron/src/renderer/atoms/`. Agent IPC listeners are mounted globally at the app root so streaming events, permission requests, and background tasks survive view changes.
+## Agent runtimes and model channels
 
-## Packaging Notes
+Agent sessions provide two switchable runtimes:
 
-Both Agent runtimes run as esbuild external dependencies in the main process. Before invoking `electron-builder`, the Electron packaging scripts run `bun run sync:runtime-deps` to copy these runtime dependency closures into the app directory:
+- **Claude Agent Runtime**: powered by `@anthropic-ai/claude-agent-sdk 0.3.201` and using the Anthropic Messages API or compatible endpoints.
+- **Pi Agent Runtime**: powered by `@earendil-works/pi-coding-agent`, `pi-agent-core`, and `pi-ai 0.82.1`. It registers enabled channels as Pi providers and carries the general workspace Skills, user MCP servers, and Automation / Collaboration capabilities.
 
-- `@anthropic-ai/claude-agent-sdk` (including the platform-specific Claude native binary)
-- `@earendil-works/pi-coding-agent`, `pi-agent-core`, and `pi-ai`
-- Pi runtime native modules and `pdfjs-dist`
+The current channel layer includes integration paths for ChatGPT subscription/Codex OAuth and xAI (Grok/X subscription) OAuth. Models, tool calling, reasoning, context lengths, and subscription availability depend on user configuration, account, region, and the upstream provider; these integrations do not promise a model entitlement, price, or service availability.
 
-When changing packaging, verify that:
+When configured, Vision Relay sends only safely decodable images from the current session or user-attached authorized directories to a separately configured vision model, then returns constrained JSON text to the current Agent. It does not grant text-only models arbitrary-path access or image-exfiltration permission.
 
-- `build:main` / `watch:main` keep both Agent SDKs external.
-- `scripts/sync-runtime-deps.ts` stays aligned with the external runtime dependency list.
-- `electron-builder.yml` retains the `asarUnpack` rules for the Claude binary and Pi native add-ons.
-- After `bun run dist:fast` on a target platform, both Claude and Pi (when enabled) can start, call tools, and resume sessions.
+## Local data
 
-See [AGENTS.md](./AGENTS.md) for the full engineering conventions.
+Production data lives under `~/.linguist-agent/`; development uses `~/.linguist-agent-dev/`:
 
-## Contributing
+```text
+~/.linguist-agent/
+├── channels.json
+├── conversations.json
+├── conversations/*.jsonl
+├── agent-sessions.json
+├── agent-sessions/*.jsonl
+├── agent-workspaces/
+├── attachments/
+├── settings.json
+├── sdk-config/
+├── planning.json
+└── linguist/
+    ├── projects.json
+    ├── projects/<project-id>/
+    │   ├── project.json
+    │   ├── cat.db
+    │   ├── source/
+    │   ├── blobs/
+    │   ├── exports/
+    │   └── backups/
+    └── trash/
+```
 
-Bug fixes, documentation improvements, tests, UX polish, Skills, MCP configs, and real-world Agent workflows are all welcome.
+General conversations, settings, and Planning use JSON / JSONL (Planning's authoritative source is the atomically replaced `planning.json`). SQLite remains limited to each CAT project's isolated `cat.db`; projects also use managed source / blobs / exports / backups directories. API keys are encrypted with Electron `safeStorage` before they are written to `channels.json`.
 
-Before opening a PR, please check:
+The old `~/.proma(-dev)/channels.json` is read only when the user explicitly chooses a Provider-only import from **Settings → Model configuration**. It does not migrate Proma sessions, settings, workspaces, or CAT data. Legacy Linguist project and session migration lives under **Settings → Data migration**. See [USERDATA_LAYOUT.md](./docs/architecture/USERDATA_LAYOUT.md).
 
-- Use Bun scripts and do not mix npm / pnpm lockfiles.
-- Use Jotai for state management.
-- Keep the app local-first and prefer config files plus JSON / JSONL storage.
-- Do not use TypeScript `any`; prefer `interface` for object shapes.
-- When adding IPC, update shared types, main handler, preload bridge, and renderer calls together.
-- Bump the patch version of affected packages when behavior changes.
-- Add focused tests where possible, especially for shared logic, IPC contracts, and persistence formats.
+## Development and verification
 
-## Star History
+The repository is pinned to Bun `1.3.14`.
 
-<a href="https://www.star-history.com/?repos=proma-ai%2Fproma&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=proma-ai/proma&type=date&theme=dark&legend=top-left&sealed_token=0cHFGjNPPe5hd2uxpF1cy35N2kYGSIEnTvyIbHlGjkrrtH9rnKcBMkqA8wDWltJIlPRKFZoYyPjXItri9HhQXE1TM1rwdIe91fqTqXVcPwK6OMzGEJ9yNw" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=proma-ai/proma&type=date&legend=top-left&sealed_token=0cHFGjNPPe5hd2uxpF1cy35N2kYGSIEnTvyIbHlGjkrrtH9rnKcBMkqA8wDWltJIlPRKFZoYyPjXItri9HhQXE1TM1rwdIe91fqTqXVcPwK6OMzGEJ9yNw" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=proma-ai/proma&type=date&legend=top-left&sealed_token=0cHFGjNPPe5hd2uxpF1cy35N2kYGSIEnTvyIbHlGjkrrtH9rnKcBMkqA8wDWltJIlPRKFZoYyPjXItri9HhQXE1TM1rwdIe91fqTqXVcPwK6OMzGEJ9yNw" />
- </picture>
-</a>
+```bash
+bun install --frozen-lockfile
+bun run typecheck
+bun test
+bun run check:boundaries
+node --test tests/linguist-fusion-architecture.test.mjs
+bun run --filter='@proma/electron' test:linguist
+```
 
-## Credits
+Development and builds:
 
-- [Shiki](https://shiki.style/): code highlighting.
-- [Beautiful Mermaid](https://github.com/lukilabs/beautiful-mermaid): Mermaid diagram rendering.
-- [Cherry Studio](https://github.com/CherryHQ/cherry-studio): inspiration for multi-provider desktop AI products.
-- [Lobe Icons](https://github.com/lobehub/lobe-icons): AI / LLM brand icons.
-- [Craft Agents OSS](https://github.com/lukilabs/craft-agents-oss): Agent SDK integration reference.
+```bash
+bun run dev
+bun run electron:build
+
+cd apps/electron
+bun run build
+bun run sync:runtime-deps
+bun run smoke:pack
+bun run smoke:vertical
+```
+
+`build:resources` is fail closed: no `|| true` may hide a critical resource-copy failure. Tests, smoke checks, and packaging validation must use an exact temporary `--user-data-dir` and must not read or write the real user-data root.
+
+## Remaining human gates
+
+Implemented code and automated verification are not product qualification. The following still require real use:
+
+- native IME composition and Native Open checks; Native Save overwrite prevention has passed in an isolated packaged-app clone;
+- VoiceOver, complete keyboard-only paths, and drag/resize feel;
+- a same-model professional-quality blind evaluation across Web Chat, legacy LA, and the new LA, including coverage, cost, and latency evidence;
+- real Provider/model runs and representative customer-format samples;
+- a 14-day personal-use run with issue capture.
+
+Signing, notarization, public update channels, and cross-platform release qualification are outside the current personal-use Alpha scope. See [HANDOFF.md](./docs/HANDOFF.md), [TODO.md](./TODO.md), and the [execution queue](./docs/roadmap/LINGUIST_FUSION_QUEUE.md).
+
+## Documentation
+
+Start at [DOCS_INDEX.md](./docs/DOCS_INDEX.md); maintenance rules are in [DOCUMENTATION_MAINTENANCE.md](./docs/DOCUMENTATION_MAINTENANCE.md).
 
 ## License
 
-The Proma Community Edition is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE). The full license text is available in the `LICENSE` file at the repository root.
-
-**Personal / non-commercial use**: free to use, modify, and distribute, subject to the terms of AGPL-3.0.
-
-**Commercial use**: permitted as long as you fully comply with AGPL-3.0, including (but not limited to) releasing the complete corresponding source code of any modified version you distribute or make available over a network, and licensing all derivative works under AGPL-3.0.
-
-**Commercial license (exemption from AGPL-3.0 obligations)**: if you want to integrate Proma into a closed-source product, offer it as a SaaS service without releasing your modifications, or use it in any way that cannot meet AGPL-3.0 requirements, please contact us by email to obtain a commercial license: [erlichliu@gmail.com](mailto:erlichliu@gmail.com).
-
-By submitting a Pull Request to this project, you agree to license your contribution under AGPL-3.0 and to grant the maintainer the right to relicense it under future commercial license terms.
+Licensed under [AGPL-3.0](./LICENSE), with all required Proma and third-party attribution preserved.

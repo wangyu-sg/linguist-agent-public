@@ -10,6 +10,7 @@ import { BookOpen, Check, Star, Pencil } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -39,7 +40,7 @@ export function SystemPromptSelector(): React.ReactElement {
   const tooltipText = selectedPrompt ? `提示词: ${selectedPrompt.name}` : '选择提示词'
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -52,11 +53,10 @@ export function SystemPromptSelector(): React.ReactElement {
 
       <DropdownMenuContent align="end" className="w-56 z-[60]">
         {config.prompts.map((prompt) => (
-          <div
+          <DropdownMenuItem
             key={prompt.id}
-            onClick={() => {
+            onSelect={() => {
               setSelectedId(prompt.id)
-              setOpen(false)
             }}
             className="relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
           >
@@ -71,24 +71,23 @@ export function SystemPromptSelector(): React.ReactElement {
 
             {/* 标记 */}
             {prompt.isBuiltin && (
-              <span className="text-xs text-muted-foreground shrink-0">(内置)</span>
+              <span className="text-xs text-foreground/70 shrink-0">(内置)</span>
             )}
             {prompt.id === defaultPromptId && (
-              <Star className="size-3 text-amber-500 fill-amber-500 shrink-0" />
+              <Star className="size-3 text-warning fill-warning shrink-0" />
             )}
-          </div>
+          </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <div
-          onClick={() => {
+        <DropdownMenuItem
+          onSelect={() => {
             setPromptSidebarOpen(true)
-            setOpen(false)
           }}
           className="relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <Pencil className="size-4" />
           <span>编辑提示词</span>
-        </div>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

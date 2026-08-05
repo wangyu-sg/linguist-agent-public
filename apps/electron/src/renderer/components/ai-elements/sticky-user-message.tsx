@@ -2,8 +2,9 @@
  * StickyUserMessage — 用户消息悬浮置顶条
  *
  * 当任意用户消息完全滚出 Conversation 视口顶部时，
- * 在顶部显示该消息的精简版悬浮条，点击可回滚到原始消息位置。
+ * 在消息视口上方显示精简导航条，点击可回滚到原始消息位置。
  * 必须放在 StickToBottom（Conversation）内部使用。
+ * 导航条通过 portal 进入外部 host，以正常布局占位，不能覆盖消息与工具控件。
  *
  * 核心逻辑：遍历所有 [data-message-role="user"] DOM 节点，
  * 找到最后一个 bottom < containerTop 的节点（即视口上方最近的用户消息），
@@ -11,42 +12,49 @@
  */
 
 import * as React from 'react'
-import { FileText, FileImage, ChevronUp } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { ChevronUp } from 'lucide-react'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
 import { useAtomValue } from 'jotai'
-import { UserAvatar } from '@/components/chat/UserAvatar'
-import { userProfileAtom } from '@/atoms/user-profile'
 import { stickyUserMessageEnabledAtom } from '@/atoms/ui-preferences'
-import { MessageResponse, remarkMentions } from './message'
-import type { RemarkPluginFn } from './message'
 import { cn } from '@/lib/utils'
-
-/** 悬浮条专用 remark 插件（仅 mention，不保留换行） */
-const STICKY_REMARK_PLUGINS: RemarkPluginFn[] = [remarkMentions]
 
 /** 去除 fenced code block，替换为 [code] 占位符 */
 function stripCodeBlocks(text: string): string {
   return text.replace(/```[\s\S]*?```/g, ' [code] ')
 }
 
-interface StickyAttachment {
+export interface StickyAttachment {
   filename: string
-  isImage: boolean
 }
 
-interface UserMessageData {
+export interface UserMessageData {
   id: string | null
   text: string
   attachments: StickyAttachment[]
 }
 
-interface StickyUserMessageProps {
-  userMessages: UserMessageData[]
+export function getStickyUserMessagePreview(message: UserMessageData): string {
+  const text = stripCodeBlocks(message.text).replace(/\s+/g, ' ').trim()
+  if (text) return text
+  if (message.attachments.length > 0) {
+    return `${message.attachments.length} 个附件 · ${message.attachments[0]!.filename}`
+  }
+  return '上一条提问'
 }
 
-export function StickyUserMessage({ userMessages }: StickyUserMessageProps): React.ReactElement {
+interface StickyUserMessageProps {
+  userMessages: readonly UserMessageData[]
+  compact?: boolean
+  hostRef: React.RefObject<HTMLDivElement>
+}
+
+export function StickyUserMessage({
+  userMessages,
+  compact = false,
+  hostRef,
+}: StickyUserMessageProps): React.ReactElement {
   const { scrollRef, stopScroll, state: stickyState } = useStickToBottomContext()
-  const userProfile = useAtomValue(userProfileAtom)
   const stickyEnabled = useAtomValue(stickyUserMessageEnabledAtom)
 
   // 当前悬浮展示的消息
@@ -132,67 +140,51 @@ export function StickyUserMessage({ userMessages }: StickyUserMessageProps): Rea
     el.scrollTo({ top: Math.max(0, targetScrollTop - 24), behavior: 'smooth' })
   }, [scrollRef, stopScroll, stickyState, stickyMessage])
 
-  const isSticky = stickyMessage !== null
-  const hasContent = stickyMessage && (stickyMessage.text || stickyMessage.attachments.length > 0)
+  const host = hostRef.current
+  if (!stickyEnabled || stickyMessage === null || host === null) return <></>
+  const preview = getStickyUserMessagePreview(stickyMessage)
 
-  if (!stickyEnabled) return <></>
-  if (!hasContent && !isSticky) return <></>
-
-  return (
+  return createPortal(
     <div
+      data-sticky-user-message="true"
       className={cn(
-        'absolute left-0 right-0 top-0 z-20 transition-all duration-150 ease-out',
-        isSticky
-          ? 'opacity-100 translate-y-0 pointer-events-auto'
-          : 'opacity-0 -translate-y-2 pointer-events-none'
+        'pointer-events-none shrink-0 border-b border-border bg-content-area',
+        compact ? 'px-2 py-1' : 'px-8 py-2',
       )}
     >
-      {/* 复用 ConversationContent(px-8) + Message(px-2.5) 的 padding 链，保证与内容区等宽 */}
-      <div className="mx-8 px-2.5 pt-2">
-        <div
-          className="sticky-user-banner ml-[46px] rounded-xl bg-[hsl(var(--input-surface))] shadow-sm cursor-pointer hover:bg-accent/50 transition-colors"
-          onClick={scrollToOriginal}
-        >
-          <div className="px-3.5 py-2.5">
-            {/* 头部：头像 + 用户名 + 提示 */}
-            <div className="flex items-center gap-2 mb-1">
-              <UserAvatar avatar={userProfile.avatar} size={18} />
-              <span className="text-xs font-medium text-foreground/60">{userProfile.userName}</span>
-              <ChevronUp className="size-3 text-muted-foreground ml-auto" />
-            </div>
-
-            {/* 文本内容：最多两行，支持 Markdown 渲染 */}
-            {stickyMessage?.text && (
-              <div className="text-sm text-foreground/80 line-clamp-2 leading-relaxed">
-                <MessageResponse
-                  className="prose-p:my-0 prose-p:inline prose-headings:my-0 prose-headings:text-sm prose-pre:hidden prose-ul:my-0 prose-ol:my-0 prose-li:my-0"
-                  remarkPlugins={STICKY_REMARK_PLUGINS}
-                >
-                  {stripCodeBlocks(stickyMessage.text)}
-                </MessageResponse>
-              </div>
-            )}
-
-            {/* 附件 badges */}
-            {stickyMessage && stickyMessage.attachments.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {stickyMessage.attachments.map((att) => {
-                  const Icon = att.isImage ? FileImage : FileText
-                  return (
-                    <div
-                      key={att.filename}
-                      className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground"
-                    >
-                      <Icon className="size-3 shrink-0" />
-                      <span className="truncate max-w-[150px]">{att.filename}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+      <button
+        type="button"
+        aria-label={`返回上一条提问：${preview}`}
+        onClick={scrollToOriginal}
+        className={cn(
+          'pointer-events-auto w-full rounded-lg bg-card text-left text-foreground shadow-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40',
+          compact ? 'flex h-8 items-center gap-2 px-2.5' : 'px-3.5 py-2.5',
+        )}
+      >
+        {compact ? (
+          <>
+            <ChevronUp aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="shrink-0 text-xs font-medium">返回上一条提问</span>
+            <span aria-hidden="true" className="text-muted-foreground">·</span>
+            <span
+              className="line-clamp-1 min-w-0 text-xs text-muted-foreground"
+            >
+              {preview}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="mb-1 flex items-center gap-2">
+              <ChevronUp aria-hidden="true" className="size-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium text-foreground/70">返回上一条提问</span>
+            </span>
+            <span className="line-clamp-2 text-sm leading-relaxed text-foreground/85">
+              {preview}
+            </span>
+          </>
+        )}
+      </button>
+    </div>,
+    host,
   )
 }

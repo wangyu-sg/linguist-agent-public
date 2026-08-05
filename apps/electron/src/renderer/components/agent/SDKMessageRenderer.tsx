@@ -133,8 +133,8 @@ function PermissionDeniedNotice({ message }: { message: SDKSystemMessage }): Rea
 
   return (
     <div className="my-3 pl-[46px] pr-1">
-      <div className="flex items-start gap-2.5 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-foreground/80">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+      <div className="flex items-start gap-2.5 rounded-md border border-warning/40 bg-warning-soft/60 px-3 py-2.5 text-xs text-foreground/80">
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-foreground">权限检查已拒绝操作</span>
@@ -994,7 +994,7 @@ function UserInputMessage({ message }: { message: SDKUserMessage }): React.React
           {(meta.createdAt || isScheduledRun) && (
             <span className="flex items-center gap-2 leading-none">
               {meta.createdAt && (
-                <span className="message-time text-[10px] text-foreground/[0.38]">{formatMessageTime(meta.createdAt)}</span>
+                <span className="message-time text-[10px] text-foreground/60">{formatMessageTime(meta.createdAt)}</span>
               )}
               {isScheduledRun && (
                 <ScheduledRunBadge />

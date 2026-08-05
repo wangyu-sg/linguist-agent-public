@@ -1,0 +1,11 @@
+key,source,target,locked,context
+dlg.guard.gate,"Halt! State your business, traveler.",站住！说明你的来意，旅人。,,Gate guard opening line; speaker: Guard
+dlg.guard.bribe,"A bribe? How dare you!",,,Guard reaction to a bribe attempt
+dlg.arya.intro,"I'm Arya, a traveling merchant.
+Nice to meet you.","我是阿雅，一名旅行商人。
+很高兴认识你。",,Speaker: Arya; two-line game bubble
+dlg.arya.shop,"Everything's for sale, friend — even this ""lucky"" charm.",,,Arya shop greeting
+dlg.child.riddle,"Round as a coin, bright as the sun. What am I?",,,Riddle from the child NPC
+sys.save.warning,Progress will be saved. Overwrite existing slot?,进度将被保存。是否覆盖现有栏位？,,System dialog; speaker: System
+legal.eula,© 2026 Fictional Studio. All rights reserved.,© 2026 Fictional Studio. All rights reserved.,yes,Locked legal string; do not translate
+dlg.ghost.whisper,"…you shouldn't be here, 凡人。",,,Ghost whisper; mixed CJK in source

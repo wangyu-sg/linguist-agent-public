@@ -96,13 +96,13 @@ export function TabBarItem({
     }
   }
 
-  const handleCloseClick = (e: React.MouseEvent): void => {
-    e.stopPropagation()
+  const handleCloseClick = (): void => {
     onClose()
   }
 
   const isScratch = type === 'scratch'
-  const showAgentSpinner = type === 'agent' && isStreaming === 'running'
+  const showAgentSpinner =
+    (type === 'agent' || type === 'linguist-project') && isStreaming === 'running'
   const previewItems = minimapCache.get(id) ?? []
   // 当前 active Tab 不显示预览面板
   const showPreview = isHovered && !isActive
@@ -144,15 +144,16 @@ export function TabBarItem({
 
   return (
     <div
-      className="relative min-w-[132px] max-w-[240px] flex-[1_0_132px] titlebar-no-drag"
+      className="group relative min-w-[132px] max-w-[240px] flex-[1_0_132px] titlebar-no-drag"
       onMouseEnter={onHoverEnter}
       onMouseLeave={onHoverLeave}
     >
       <button
         ref={buttonRef}
         type="button"
+        aria-label={`打开标签页：${title}`}
         className={cn(
-          'group relative flex items-center gap-1.5 px-3 h-[34px] w-full',
+          'relative flex items-center gap-1.5 pl-3 pr-8 h-[34px] w-full',
           isClassic ? 'rounded-t-lg' : 'rounded-none',
           'text-xs transition-colors select-none cursor-pointer',
           'border-t border-l border-r border-transparent',
@@ -191,25 +192,21 @@ export function TabBarItem({
           </span>
         )}
 
-        {/* 关闭按钮（scratch 类型不显示） */}
-        {!isScratch && (
-        <span
-          role="button"
-          tabIndex={-1}
-          className={cn(
-            'size-4 rounded-sm flex items-center justify-center shrink-0',
-            'opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/20 transition-opacity',
-            isActive && 'opacity-60',
-          )}
-          onClick={handleCloseClick}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') handleCloseClick(e as unknown as React.MouseEvent)
-          }}
-        >
-          <X className="size-2.5" />
-        </span>
-        )}
+      </button>
 
+      <button
+        type="button"
+        aria-label={`关闭标签页：${title}`}
+        className={cn(
+          'absolute right-3 top-1/2 size-4 -translate-y-1/2 rounded-sm flex items-center justify-center',
+          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted-foreground/20 transition-opacity',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+          isActive && 'opacity-60',
+        )}
+        onClick={handleCloseClick}
+        onMouseDown={handleMouseDown}
+      >
+        <X className="size-2.5" />
       </button>
 
       {/* 悬浮预览面板（Portal 渲染到 body） */}

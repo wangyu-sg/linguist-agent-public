@@ -7,10 +7,11 @@
 
 import { atom } from 'jotai'
 import { atomFamily, atomWithStorage } from 'jotai/utils'
-import type { AgentSessionMeta, AgentEvent, AgentWorkspace, AgentPendingFile, RetryAttempt, PromaPermissionMode, PermissionRequest, AskUserRequest, ExitPlanModeRequest, ThinkingConfig, AgentEffort, SDKMessage, UnstagedChangesResult } from '@proma/shared'
+import type { AgentSessionMeta, AgentEvent, AgentWorkspace, AgentPendingFile, RetryAttempt, PromaPermissionMode, PermissionRequest, AskUserRequest, ExitPlanModeRequest, ThinkingConfig, AgentEffort, SDKMessage, UnstagedChangesResult, LinguistTurnContextParseResult, LinguistTurnContextV1 } from '@proma/shared'
 import { PROMA_DEFAULT_PERMISSION_MODE } from '@proma/shared'
 import { calculateDockBadgeCount, countPendingRequests } from '@/lib/dock-badge-count'
 import type { AgentQueuedMessage } from '@/lib/agent-message-queue'
+import type { ExternalLinguistSessionOpener } from '@/lib/external-agent-session-opener'
 
 /** 活动状态 */
 export type ActivityStatus = 'pending' | 'running' | 'completed' | 'error' | 'backgrounded'
@@ -265,6 +266,8 @@ export interface AgentPendingPrompt {
   sessionId: string
   message: string
   additionalDirectories?: string[]
+  /** 触发动作点击时冻结的项目上下文；普通 Agent pending prompt 不携带。 */
+  linguistContext?: Readonly<LinguistTurnContextV1>
   /** 自动发送时注入的 Todo 引用，确保 Agent 读取最新记录而非仅依赖提示文本。 */
   mentionedTodoIds?: string[]
 }
@@ -272,6 +275,20 @@ export interface AgentPendingPrompt {
 // ===== Atoms =====
 
 export const agentSessionsAtom = atom<AgentSessionMeta[]>([])
+
+/** 由 renderer 组合根注入，供菜单栏 / Island 等通用外部入口打开 Linguist 会话。 */
+export const agentLinguistExternalSessionOpenerAtom = atom<
+  ExternalLinguistSessionOpener | null
+>(null)
+
+/** 组合根注入的同步快照函数；AgentView 不反向依赖 Linguist feature。 */
+export type AgentLinguistTurnContextCapture = (
+  projectId: string,
+) => LinguistTurnContextParseResult
+
+export const agentLinguistTurnContextCaptureAtom = atom<
+  AgentLinguistTurnContextCapture | null
+>(null)
 export const agentWorkspacesAtom = atom<AgentWorkspace[]>([])
 export const currentAgentWorkspaceIdAtom = atom<string | null>(null)
 /** 侧栏「自动任务」合成项目组在项目列表中的位置索引（默认 0 = 最靠前；从 settings.json 加载） */
