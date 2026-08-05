@@ -1,29 +1,25 @@
-import { beforeAll, describe, expect, mock, test } from 'bun:test'
-
-mock.module('./user-profile-service', () => ({
-  getUserProfile: () => ({ userName: '测试用户' }),
-}))
-
-mock.module('./agent-workspace-manager', () => ({
-  getAgentWorkspaceBySlug: () => undefined,
-  getProjectFilesPath: () => '/tmp/sample-project',
-  getWorkspaceMcpConfig: () => ({ servers: {} }),
-}))
-
-mock.module('./agent-git-attribution', () => ({
-  buildGitAttributionPromptSection: () => '',
-  isGitAttributionEnabled: () => false,
-}))
-
-mock.module('./settings-service', () => ({
-  getSettings: () => ({ gitAttributionEnabled: false }),
-}))
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 let buildSystemPrompt: typeof import('./agent-prompt-builder').buildSystemPrompt
 let buildDynamicContext: typeof import('./agent-prompt-builder').buildDynamicContext
+let projectRoot: string
+let tempHome: string
+const originalHome = process.env.HOME
 
 beforeAll(async () => {
-  ({ buildSystemPrompt, buildDynamicContext } = await import('./agent-prompt-builder'))
+  tempHome = mkdtempSync(join(tmpdir(), 'proma-agent-prompt-builder-'))
+  process.env.HOME = tempHome
+  ;({ buildSystemPrompt, buildDynamicContext } = await import('./agent-prompt-builder'))
+  projectRoot = (await import('./agent-workspace-manager')).getProjectFilesPath('sample-project')
+})
+
+afterAll(() => {
+  if (originalHome === undefined) delete process.env.HOME
+  else process.env.HOME = originalHome
+  rmSync(tempHome, { recursive: true, force: true })
 })
 
 function buildPrompt(agentCwd: string): string {
@@ -39,7 +35,7 @@ function buildPrompt(agentCwd: string): string {
 
 describe('项目与会话工作台提示词', () => {
   test('Given 项目根 cwd When 构建提示词 Then 标明会话直接在项目中工作', () => {
-    const prompt = buildPrompt('/tmp/sample-project')
+    const prompt = buildPrompt(projectRoot)
 
     expect(prompt).toContain('## 项目')
     expect(prompt).toContain('项目名称: 示例项目')
@@ -48,7 +44,7 @@ describe('项目与会话工作台提示词', () => {
   })
 
   test('Given 历史会话工作台 cwd When 构建提示词 Then 不将它误称为项目根', () => {
-    const prompt = buildPrompt('/tmp/.linguist-agent/agent-workspaces/sample-project/session-1')
+    const prompt = buildPrompt(join(tempHome, 'historical-session'))
 
     expect(prompt).toContain('当前会话仍使用私有会话工作台，不等同于项目根目录')
     expect(prompt).toContain('项目根与 cwd 不一定相同')
