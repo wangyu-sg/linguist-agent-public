@@ -40,7 +40,7 @@
 
 ## 签名
 
-候选 SHA：见 PUBLIC_MIRROR_MANIFEST.md；账本：execution-ledger.json；tag：pb-g11-release-audit（创建时判定 gate_blocked 的历史标记，升级以本报告与账本为准）。
+候选 SHA：见 PUBLIC_MIRROR_MANIFEST.md；账本为已退役历史产物；tag：pb-g11-release-audit（创建时判定 gate_blocked 的历史标记，升级以本报告为准）。
 
 ## 修订记录
 

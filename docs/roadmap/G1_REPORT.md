@@ -27,7 +27,7 @@ vite `✓ built in 12.82s`，CLI 61MB，`[runtime-deps] 已同步 137 个主进�
 | `apps/electron/scripts/smoke/probe-pi-stream.ts` | **G1 Pi 流式探针**（新增）：临时 HOME + `_electron.launch` 打包应用 + 播种 fake 渠道/工作区 + `createAgentSession`（缺省 `agentRuntime='pi'`）+ `sendAgentMessage`，订阅 `onAgentStreamEvent/onAgentStreamComplete/onAgentStreamError` 断言 Pi 路径流式事件 |
 | `apps/electron/package.json` | 新增脚本 `smoke:g1` = `node scripts/smoke/probe-pi-stream.ts`（该文件是 PB-004 已登记触点，路径未变） |
 | `docs/roadmap/G1_REPORT.md` | 本报告 |
-| `docs/roadmap/EXECUTION_LEDGER.md` / `execution-ledger.json` | G1 门禁记录 |
+| 历史执行账本（已退役） | G1 门禁记录 |
 
 ## 3. 门禁标准逐项结果（计划 §14）
 

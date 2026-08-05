@@ -146,6 +146,58 @@ describe('markdownToHtml rich preview blocks', () => {
   })
 })
 
+describe('Agent mention serialization', () => {
+  test('preserves the existing file, Skill, MCP, and session reference protocols', () => {
+    const markdown = withHtmlDocument(() => htmlToMarkdown([
+      '<p>',
+      '<span data-type="mention" data-id="notes/brief.md" data-mention-suggestion-char="@">brief.md</span> ',
+      '<span data-type="mention" data-id="brainstorming" data-mention-suggestion-char="/">brainstorming</span> ',
+      '<span data-type="mention" data-id="playwright" data-mention-suggestion-char="#">playwright</span> ',
+      '<span data-type="mention" data-id="session-123" data-mention-suggestion-char="&">Current session</span>',
+      '</p>',
+    ].join('')))
+
+    expect(markdown).toBe('@file:notes%2Fbrief.md /skill:brainstorming #mcp:playwright &session:session-123')
+  })
+
+  test('encodes file mention paths containing spaces so @file: regex does not truncate them', () => {
+    const markdown = withHtmlDocument(() => htmlToMarkdown([
+      '<p>',
+      '<span data-type="mention" data-id="/Users/me/My report.pdf" data-mention-suggestion-char="@">My report.pdf</span> ',
+      '</p>',
+    ].join('')))
+
+    expect(markdown).toBe('@file:%2FUsers%2Fme%2FMy%20report.pdf')
+  })
+
+  test('serializes planning selections by reference type rather than the trigger character', () => {
+    const markdown = withHtmlDocument(() => htmlToMarkdown([
+      '<p>',
+      '<span data-type="mention" data-id="todo-123" data-mention-suggestion-char="～" data-mention-reference-type="todo">输入框改造</span> ',
+      '<span data-type="mention" data-id="event-456" data-mention-suggestion-char="~" data-mention-reference-type="calendar_event">产品评审</span>',
+      '</p>',
+    ].join('')))
+
+    expect(markdown).toBe('&todo:todo-123 &calendar_event:event-456')
+  })
+
+  test('persists selected titles for Todo, calendar, and session references', () => {
+    const markdown = withHtmlDocument(() => htmlToMarkdown([
+      '<p>',
+      '<span data-type="mention" data-id="todo-123" data-label="输入框改造" data-mention-reference-type="todo">输入框改造</span> ',
+      '<span data-type="mention" data-id="event-456" data-label="产品评审" data-mention-reference-type="calendar_event">产品评审</span> ',
+      '<span data-type="mention" data-id="session-789" data-label="修复引用显示" data-mention-suggestion-char="&">修复引用显示</span>',
+      '</p>',
+    ].join('')))
+
+    expect(markdown).toBe([
+      `&todo:todo-123::${encodeURIComponent('输入框改造')}`,
+      `&calendar_event:event-456::${encodeURIComponent('产品评审')}`,
+      `&session:session-789::${encodeURIComponent('修复引用显示')}`,
+    ].join(' '))
+  })
+})
+
 describe('Clipboard 纯文本序列化', () => {
   test('不改变 Markdown 持久化使用的段落分隔', () => {
     const markdown = withHtmlDocument(() => htmlToMarkdown('<p>第一段</p><p>第二段</p>'))

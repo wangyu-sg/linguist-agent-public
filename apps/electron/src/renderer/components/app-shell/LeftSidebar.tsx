@@ -11,11 +11,10 @@
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeftClose, PanelLeftOpen, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, Languages, MessageSquare, MoreHorizontal, FolderOpen, Clock, AlarmClock, ChevronRight, Blocks, GitBranch, Download, Loader2, RotateCw } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeftClose, PanelLeftOpen, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, Languages, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, Clock, AlarmClock, ChevronRight, Blocks, GitBranch, Download, Loader2, RotateCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ModeSwitcher } from './ModeSwitcher'
-import { LinguistSidebarContent } from '@/features/linguist/sidebar/LinguistSidebarContent'
 import { ProjectCreateDialog } from '@/features/linguist/projects/ProjectCreateDialog'
 import {
   linguistProjectListStateAtom,
@@ -95,7 +94,9 @@ import { useCreateSession } from '@/hooks/useCreateSession'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
+import { sessionHoverPreviewEnabledAtom } from '@/atoms/ui-preferences'
 import { CollapsedWorkspacePopover } from '@/components/agent/CollapsedWorkspacePopover'
+import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
 import { MoveSessionDialog } from '@/components/agent/MoveSessionDialog'
 import {
   SessionMiniMapPopover,
@@ -124,7 +125,8 @@ import {
 } from '@/components/session-tree/agent-session-tree'
 import { ProjectSessionTreeGroupHeader } from '@/components/session-tree/ProjectSessionTreeGroupHeader'
 import { detectIsMac } from '@/lib/platform'
-import { AUTOMATIONS_VISIBLE } from '@/lib/feature-flags'
+import { extensionRegistry } from '@/host/extensions'
+import { ShortcutKeycaps } from '@/components/shortcuts/ShortcutKeycaps'
 import { getActiveAccelerator, getAcceleratorDisplay } from '@/lib/shortcut-registry'
 import {
   replaceAgentSessionInFreshnessOrder,
@@ -248,7 +250,7 @@ function AutomationSidebarEntry({ count, active, onClick }: AutomationSidebarEnt
   return (
     <button
       type="button"
-      aria-label={`自动任务，${count} 个任务已创建`}
+      aria-label={`任务/日程/Todo，${count} 个定时任务`}
       onClick={onClick}
       className={cn(
         'group w-full flex items-center justify-between px-3 py-2 rounded-md text-[13px] transition-colors duration-100 titlebar-no-drag automation-entry',
@@ -261,14 +263,64 @@ function AutomationSidebarEntry({ count, active, onClick }: AutomationSidebarEnt
         <span className={cn('flex-shrink-0 w-[18px] h-[18px] automation-entry-icon', active ? 'text-accent-foreground' : 'text-foreground/45')}>
           <AlarmClock size={16} className="block" />
         </span>
-        <span className="truncate">自动任务</span>
+        <span className="truncate">任务/日程/Todo</span>
+      </span>
+      <span className="ml-2 flex flex-shrink-0 items-center gap-1.5">
+        <ShortcutKeycaps
+          shortcutId="open-planning"
+          keycapClassName="h-5 min-w-5 px-1 text-[11px]"
+          separatorClassName="text-[10px]"
+        />
+        <span
+          className={cn(
+            'flex h-5 min-w-[22px] items-center justify-center rounded-full px-1.5 text-[11px] font-medium tabular-nums automation-entry-badge',
+            active
+              ? 'bg-accent-foreground/[0.26] text-primary-foreground'
+              : 'bg-foreground/[0.045] text-foreground/[0.42] group-hover:text-foreground/65',
+          )}
+        >
+          {formatAutomationCount(count)}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+interface SkillsSidebarEntryProps {
+  count: number
+  updateCount: number
+  active: boolean
+  onClick: () => void
+}
+
+function SkillsSidebarEntry({ count, updateCount, active, onClick }: SkillsSidebarEntryProps): React.ReactElement {
+  const hasUpdate = updateCount > 0
+  return (
+    <button
+      type="button"
+      aria-label={`Agent 技能，${count} 个能力${hasUpdate ? `，${updateCount} 个可更新` : ''}`}
+      onClick={onClick}
+      className={cn(
+        'group w-full flex items-center justify-between px-3 py-2 rounded-md text-[13px] transition-colors duration-100 titlebar-no-drag',
+        active
+          ? 'bg-accent-foreground/[0.10] text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+          : 'text-foreground/60 hover:bg-accent-foreground/[0.08] hover:text-foreground',
+      )}
+    >
+      <span className="flex items-center gap-3 min-w-0">
+        <span className={cn('flex-shrink-0 w-[18px] h-[18px]', active ? 'text-accent-foreground' : 'text-foreground/45')}>
+          <Blocks size={16} className="block" />
+        </span>
+        <span className="truncate">Agent 技能</span>
       </span>
       <span
         className={cn(
-          'ml-2 flex h-5 min-w-[22px] flex-shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-medium tabular-nums automation-entry-badge',
-          active
-            ? 'bg-accent-foreground/[0.26] text-primary-foreground'
-            : 'bg-foreground/[0.045] text-foreground/[0.42] group-hover:text-foreground/65',
+          'ml-2 flex h-5 min-w-[22px] flex-shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-medium tabular-nums',
+          hasUpdate
+            ? 'bg-info/15 text-info'
+            : active
+              ? 'bg-accent-foreground/[0.26] text-primary-foreground'
+              : 'bg-foreground/[0.045] text-foreground/[0.42] group-hover:text-foreground/65',
         )}
       >
         {formatAutomationCount(count)}
@@ -302,10 +354,6 @@ const noopAsync = async (): Promise<void> => {}
 
 /** 点击"显示更多"时每次额外展开的会话数量 */
 const PROJECT_SESSION_EXPAND_STEP = 10
-/** 置顶区最多占用约 6 条会话的高度，超过后在置顶区内部滚动 */
-const PINNED_SESSION_VISIBLE_LIMIT = 6
-const PINNED_SESSION_ROW_HEIGHT_PX = 32
-const PINNED_SESSION_MAX_HEIGHT = PINNED_SESSION_VISIBLE_LIMIT * PINNED_SESSION_ROW_HEIGHT_PX
 const SESSION_QUICK_SWITCH_HINT_DELAY_MS = 1000
 const SESSION_QUICK_SWITCH_LIMIT = 9
 const SESSION_QUICK_SWITCH_KEYDOWN_EVENT = 'proma:session-quick-switch-keydown'
@@ -542,11 +590,13 @@ function LinguistProjectCreateDialogHost(): React.ReactElement {
 function RailRecentButton({
   item,
   onSelect,
+  miniMapDisabled,
 }: {
   item: RailRecentItem
   onSelect: (item: RailRecentItem) => void
+  miniMapDisabled?: boolean
 }): React.ReactElement {
-  const preview = useSessionMiniMapHover()
+  const preview = useSessionMiniMapHover(600, miniMapDisabled)
   const kindLabel = item.projectId
     ? 'Linguist 会话'
     : item.type === 'agent'
@@ -658,6 +708,9 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   /** 待删除项目 ID，非空时显示项目删除确认弹窗 */
   const [pendingDeleteWorkspaceId, setPendingDeleteWorkspaceId] = React.useState<string | null>(null)
   const [deletingWorkspaceId, setDeletingWorkspaceId] = React.useState<string | null>(null)
+  /** 待在原路径重建根目录的本地项目 ID。 */
+  const [pendingRestoreProjectRootId, setPendingRestoreProjectRootId] = React.useState<string | null>(null)
+  const [restoringProjectRootId, setRestoringProjectRootId] = React.useState<string | null>(null)
   /** 待迁移会话 ID，非空时显示迁移对话框 */
   const [moveTargetId, setMoveTargetId] = React.useState<string | null>(null)
   /** 待迁移会话所属的工作区 ID（用于对话框排除当前分区） */
@@ -689,6 +742,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const hasEnvironmentIssues = useAtomValue(hasEnvironmentIssuesAtom)
   const interfaceVariant = useAtomValue(interfaceVariantAtom)
   const isClassic = interfaceVariant === 'classic'
+  const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
 
   // Agent 模式状态
   const [agentSessions, setAgentSessions] = useAtom(agentSessionsAtom)
@@ -736,14 +790,9 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   }, [setSettingsOpen])
 
   const handleUpdateButtonClick = React.useCallback((): void => {
-    if (updateStatus.status === 'downloaded') {
-      void window.electronAPI.updater?.quitAndInstall()
-      return
-    }
-
     setSettingsTab('about')
     setSettingsOpen(true)
-  }, [setSettingsOpen, setSettingsTab, updateStatus.status])
+  }, [setSettingsOpen, setSettingsTab])
 
   React.useEffect(() => {
     const id = window.setInterval(() => setRelativeTimeNow(Date.now()), 60_000)
@@ -860,6 +909,10 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     () => workspaces.find((workspace) => workspace.id === pendingDeleteWorkspaceId) ?? null,
     [pendingDeleteWorkspaceId, workspaces],
   )
+  const pendingRestoreProjectRootWorkspace = React.useMemo(
+    () => workspaces.find((workspace) => workspace.id === pendingRestoreProjectRootId) ?? null,
+    [pendingRestoreProjectRootId, workspaces],
+  )
 
   /** 待删除 Agent 会话下的委派子会话数量，用于删除确认弹窗提示是否级联删除 */
   const pendingDeleteChildCount = React.useMemo<number>(() => {
@@ -967,7 +1020,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
   /** 打开/关闭自动任务列表 */
   const handleOpenAutomations = React.useCallback((): void => {
-    if (activeView === 'automations') {
+    if (activeView === 'planning') {
       // 编辑页 → 关表单回列表；列表页 → 退出到对话
       if (store.get(automationFormAtom).open) {
         setAutomationForm({ open: false, draft: null })
@@ -977,7 +1030,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       return
     }
     setAutomationForm({ open: false, draft: null })
-    setActiveView('automations')
+    setActiveView('planning')
   }, [activeView, setAutomationForm, setActiveView, store])
 
   /** 打开/关闭 Agent 技能视图 */
@@ -1455,14 +1508,9 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     }
   }, [])
 
-  /**
-   * 合成「自动任务」项目组：聚合所有自动任务会话（跨工作区），
-   * 作为这些会话在侧栏的统一归属地。会话为空时返回 null（不渲染空组）。
-   * D-007（PB-012）：v1 隐藏自动任务产品面（lib/feature-flags.ts），分组随之一并隐藏。
-   */
+  /** 合成「自动任务」项目组：聚合所有自动任务会话（跨工作区）。 */
   const automationGroup = React.useMemo<AgentProjectGroup | null>(
     () => {
-      if (!AUTOMATIONS_VISIBLE) return null
       const sessions = sortAgentSessionsByUpdatedAtDesc(
         agentSessions.filter((session) =>
           isOrdinaryAgentSession(session)
@@ -1570,9 +1618,15 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     }
 
     try {
-      const workspace = await window.electronAPI.createAgentWorkspace(trimmed)
+      const { workspace, session } = await window.electronAPI.createAgentProject(
+        { name: trimmed },
+        agentChannelId || undefined,
+        agentModelId || undefined,
+      )
       setWorkspaces((prev) => [workspace, ...prev])
+      setAgentSessions((prev) => [session, ...prev])
       setCurrentWorkspaceId(workspace.id)
+      openSession('agent', session.id, session.title)
       window.electronAPI.updateSettings({ agentWorkspaceId: workspace.id }).catch(console.error)
       setCreatingProject(false)
       setNewProjectName('')
@@ -1580,7 +1634,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       const msg = error instanceof Error ? error.message : '创建项目失败'
       toast.error(msg)
     }
-  }, [newProjectName, setCurrentWorkspaceId, setWorkspaces])
+  }, [agentChannelId, agentModelId, newProjectName, openSession, setAgentSessions, setCurrentWorkspaceId, setWorkspaces])
 
   const handleCreateProjectKeyDown = React.useCallback((e: React.KeyboardEvent): void => {
     if (e.key === 'Enter') {
@@ -1593,6 +1647,29 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       setNewProjectName('')
     }
   }, [handleCreateProject])
+
+  const handleCreateProjectFromFolder = React.useCallback(async (): Promise<void> => {
+    try {
+      const folder = await window.electronAPI.openFolderDialog()
+      if (!folder) return
+      const { workspace, session } = await window.electronAPI.createAgentProject(
+        {
+          name: folder.name,
+          projectRootPath: folder.path,
+        },
+        agentChannelId || undefined,
+        agentModelId || undefined,
+      )
+      setWorkspaces((prev) => [workspace, ...prev])
+      setAgentSessions((prev) => [session, ...prev])
+      setCurrentWorkspaceId(workspace.id)
+      openSession('agent', session.id, session.title)
+      window.electronAPI.updateSettings({ agentWorkspaceId: workspace.id }).catch(console.error)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '从文件夹创建项目失败'
+      toast.error(msg)
+    }
+  }, [agentChannelId, agentModelId, openSession, setAgentSessions, setCurrentWorkspaceId, setWorkspaces])
 
   /** 选择 Agent 会话（打开或聚焦标签页） */
   const handleSelectAgentSession = React.useCallback((id: string, title: string): void => {
@@ -1815,6 +1892,39 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       toast.error(msg)
     }
   }, [setWorkspaces])
+
+  /** 重新选择已有文件夹作为本地项目根，保留该项目的会话和设置。 */
+  const handleRelinkProjectRoot = React.useCallback(async (workspaceId: string): Promise<void> => {
+    try {
+      const folder = await window.electronAPI.openFolderDialog()
+      if (!folder) return
+      const updated = await window.electronAPI.relinkAgentWorkspaceProjectRoot(workspaceId, folder.path)
+      setWorkspaces((prev) => prev.map((workspace) => (workspace.id === updated.id ? updated : workspace)))
+      toast.success('本地项目根已重新关联', { description: folder.path })
+    } catch (error) {
+      console.error('[侧边栏] 重新关联本地项目根失败:', error)
+      toast.error(error instanceof Error ? error.message : '重新关联项目文件夹失败')
+    }
+  }, [setWorkspaces])
+
+  /** 确认在原路径新建空目录。 */
+  const handleConfirmRestoreProjectRoot = React.useCallback(async (): Promise<void> => {
+    const workspaceId = pendingRestoreProjectRootId
+    if (!workspaceId) return
+
+    try {
+      setRestoringProjectRootId(workspaceId)
+      const updated = await window.electronAPI.restoreAgentWorkspaceProjectRoot(workspaceId)
+      setWorkspaces((prev) => prev.map((workspace) => (workspace.id === updated.id ? updated : workspace)))
+      toast.success('已在原路径新建空项目文件夹', { description: updated.projectRootPath })
+      setPendingRestoreProjectRootId(null)
+    } catch (error) {
+      console.error('[侧边栏] 恢复本地项目根失败:', error)
+      toast.error(error instanceof Error ? error.message : '恢复项目文件夹失败')
+    } finally {
+      setRestoringProjectRootId(null)
+    }
+  }, [pendingRestoreProjectRootId, setWorkspaces])
 
   /** 重命名 Agent 会话标题 */
   const handleAgentRename = React.useCallback(async (id: string, newTitle: string): Promise<void> => {
@@ -2216,6 +2326,13 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     linguistProjectListState,
   ])
 
+  const modeSidebarContributions = extensionRegistry.appModesFor(mode).flatMap((contribution) => {
+    const sidebar = contribution.renderSidebar?.({ SessionRowComponent: AgentSessionItem })
+    return sidebar === null || sidebar === undefined
+      ? []
+      : [<React.Fragment key={contribution.id}>{sidebar}</React.Fragment>]
+  })
+
   // 删除确认弹窗（collapsed/expanded 共享）
   const deleteDialog = (
     <AlertDialog
@@ -2295,7 +2412,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         <AlertDialogHeader>
           <AlertDialogTitle>确认删除项目</AlertDialogTitle>
           <AlertDialogDescription>
-            将删除「{pendingDeleteWorkspace?.name ?? '该项目'}」及其绑定的所有会话、自动任务、MCP、Skills、工作区文件和本地项目目录。附加目录和附加文件只会移除引用，不会删除原始文件。删除后无法恢复。
+            将删除「{pendingDeleteWorkspace?.name ?? '该项目'}」在 Proma 中保存的会话、自动任务、MCP、Skills 与 Proma 工作区配置；空白项目的 Proma 托管项目文件也会被删除。本地项目根目录、附加目录和附加文件只会移除关联，不会删除原始文件。删除后无法恢复。
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -2306,6 +2423,37 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             {deletingWorkspaceId ? '删除中...' : '删除项目'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+
+  const restoreProjectRootDialog = (
+    <AlertDialog
+      open={pendingRestoreProjectRootId !== null}
+      onOpenChange={(open) => {
+        if (!open && !restoringProjectRootId) setPendingRestoreProjectRootId(null)
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>在原路径新建空文件夹？</AlertDialogTitle>
+          <AlertDialogDescription>
+            将为「{pendingRestoreProjectRootWorkspace?.name ?? '该项目'}」在原路径创建一个空文件夹：
+            <span className="mt-2 block break-all font-mono text-xs text-foreground">
+              {pendingRestoreProjectRootWorkspace?.projectRootPath}
+            </span>
+            此操作不会恢复原来的文件，仅用于继续使用该项目关联。
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={!!restoringProjectRootId}>取消</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!!restoringProjectRootId}
+            onClick={() => void handleConfirmRestoreProjectRoot()}
+          >
+            {restoringProjectRootId ? '创建中...' : '新建空文件夹'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -2440,17 +2588,16 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             <TooltipContent side="right">搜索</TooltipContent>
           </Tooltip>
 
-          {/* D-007（PB-012）：v1 隐藏自动任务入口；恢复见 lib/feature-flags.ts */}
-          {AUTOMATIONS_VISIBLE && mode !== 'linguist' && (
+          {mode !== 'linguist' && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label={`自动任务，${automationCount} 个任务已创建`}
+                  aria-label={`任务/日程，${automationCount} 个自动化任务`}
                   onClick={handleOpenAutomations}
                   className={cn(
                     'relative size-10 flex items-center justify-center rounded-[12px] transition-colors titlebar-no-drag border',
-                    activeView === 'automations'
+                    activeView === 'planning'
                       ? 'border-primary/80 bg-primary text-primary-foreground shadow-sm'
                       : 'border-border/45 bg-foreground/[0.025] text-foreground/45 hover:border-border/70 hover:bg-foreground/[0.045] hover:text-primary',
                   )}
@@ -2460,7 +2607,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
                     <span
                       className={cn(
                         'absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-medium tabular-nums',
-                        activeView === 'automations'
+                        activeView === 'planning'
                           ? 'bg-primary-foreground text-primary'
                           : 'bg-primary text-primary-foreground',
                       )}
@@ -2471,10 +2618,14 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
-                自动任务（{automationCount} 个任务已创建）
+                <span className="flex items-center gap-1.5">
+                  <span>{`任务/日程，${automationCount} 个自动化任务`}</span>
+                  <ShortcutKeycaps shortcutId="open-planning" />
+                </span>
               </TooltipContent>
             </Tooltip>
           )}
+
         </div>
 
         <div className="my-3 h-px w-8 bg-border/70" />
@@ -2486,6 +2637,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               <RailRecentButton
                 key={`${item.type}-${item.id}`}
                 item={item}
+                miniMapDisabled={!sessionHoverPreviewEnabled}
                 onSelect={(selected) => {
                   if (selected.type === 'agent') {
                     if (mode === 'linguist') handleSelectLinguistSession(selected.id)
@@ -2554,6 +2706,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
         {deleteDialog}
         {projectDeleteDialog}
+        {restoreProjectRootDialog}
         {moveDialog}
         <SearchDialog />
         {mode === 'linguist' && <LinguistProjectCreateDialogHost />}
@@ -2617,32 +2770,36 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         </Tooltip>
       </div>
 
-      {/* 自动任务入口：作为任务中心入口放在置顶区上方，不参与置顶列表层级。
-          D-007（PB-012）：v1 隐藏；恢复见 lib/feature-flags.ts */}
-      {AUTOMATIONS_VISIBLE && mode !== 'linguist' && (
+      {mode !== 'linguist' && (
         <div className="px-3 pt-2 pb-0.5">
           <AutomationSidebarEntry
             count={automationCount}
-            active={activeView === 'automations'}
+            active={activeView === 'planning'}
             onClick={handleOpenAutomations}
           />
         </div>
       )}
 
-      {/* Linguist 与 Agent 复用同一会话行；项目归属与动作仍由 Linguist 适配层提供。 */}
-      {mode === 'linguist' ? (
-        <LinguistSidebarContent SessionRowComponent={AgentSessionItem} />
-      ) : mode === 'chat' && viewMode === 'active' ? (
-        <div className="flex-1 flex flex-col min-h-0">
+      {mode === 'agent' && (
+        <div className="px-3 pb-0.5">
+          <SkillsSidebarEntry
+            count={capabilities?.skills.length ?? 0}
+            updateCount={capabilities?.skills.filter((skill) => skill.hasUpdate).length ?? 0}
+            active={activeView === 'agent-skills'}
+            onClick={handleOpenSkills}
+          />
+        </div>
+      )}
+
+      {/* Linguist 继续复用唯一的会话行与项目适配层。 */}
+      {modeSidebarContributions.length > 0 ? modeSidebarContributions : mode === 'chat' && viewMode === 'active' ? (
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin titlebar-no-drag">
           {pinnedConversations.length > 0 && (
             <div className="pt-2 pb-1 flex-shrink-0 titlebar-no-drag">
               <div className="pl-[18px] pr-3.5 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">
                 置顶
               </div>
-              <div
-                className="overflow-y-auto scrollbar-thin"
-                style={{ maxHeight: PINNED_SESSION_MAX_HEIGHT }}
-              >
+              <div>
                 <div className="px-2">
                   <div className="ml-4 flex flex-col gap-0.5">
                     {pinnedConversations.map((conv) => (
@@ -2693,7 +2850,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             </Tooltip>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-2 pb-3 scrollbar-thin min-h-0 titlebar-no-drag">
+          <div className="px-2 pb-3">
             {conversationGroups.map((group) => (
               <div key={group.label} className="mb-1">
                 <div className="ml-[4px] px-1.5 pt-2 pb-1 text-[11px] font-medium text-foreground/60 select-none">
@@ -2721,16 +2878,13 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           </div>
         </div>
       ) : mode === 'agent' && viewMode === 'active' ? (
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin titlebar-no-drag">
           {pinnedAgentSessions.length > 0 && (
             <div className="pt-2 pb-1 flex-shrink-0 titlebar-no-drag">
               <div className="pl-[18px] pr-3.5 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">
                 置顶
               </div>
-              <div
-                className="overflow-y-auto scrollbar-thin"
-                style={{ maxHeight: PINNED_SESSION_MAX_HEIGHT }}
-              >
+              <div>
                 <div className="px-2">
                   <div className="ml-4 flex flex-col gap-0.5">
                     {pinnedAgentSessionTrees.map((item) => {
@@ -2748,6 +2902,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
                             active={treeActive}
                             indicatorStatus={rowStatus}
                             showPinIcon={false}
+                            disableMiniMap={!sessionHoverPreviewEnabled}
                             delegationSummary={childCount > 0
                               ? {
                                 total: childCount,
@@ -2801,23 +2956,38 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           {/* 下区标题：项目历史 */}
           <div className="px-2 pt-2 pb-1 flex items-center justify-between flex-shrink-0">
             <span className="ml-[4px] px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">项目</span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleStartCreateProject}
-                  className="size-6 flex items-center justify-center rounded-md text-foreground/40 hover:bg-foreground/[0.06] hover:text-foreground/60 transition-colors titlebar-no-drag"
-                  aria-label="新建项目"
-                >
-                  <Plus size={16} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">新建项目</TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-0.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateProjectFromFolder()}
+                    className="size-6 flex items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.06] hover:text-foreground/60 transition-colors titlebar-no-drag"
+                    aria-label="从本地文件夹创建项目"
+                  >
+                    <FolderInput size={13} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">从本地文件夹创建项目</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleStartCreateProject}
+                    className="size-6 flex items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.06] hover:text-foreground/60 transition-colors titlebar-no-drag"
+                    aria-label="新建空白项目"
+                  >
+                    <Plus size={13} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">新建空白项目</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
 
           {/* 下区：项目分组历史 */}
-          <div className="flex-1 overflow-y-auto px-2 pb-3 scrollbar-thin min-h-0 titlebar-no-drag">
+          <div className="px-2 pb-3">
             {creatingProject && (
               <div className="flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md bg-foreground/[0.04]">
                 <FolderOpen size={14} className="flex-shrink-0 text-foreground/40" />
@@ -2871,6 +3041,8 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
                       handleOpenMcpManagement()
                     }}
                     onRenameWorkspace={isAuto ? noopAsync : handleWorkspaceRename}
+                    onRelinkProjectRoot={isAuto ? noopAsync : handleRelinkProjectRoot}
+                    onRequestRestoreProjectRoot={isAuto ? noopVoid : setPendingRestoreProjectRootId}
                     onRequestDeleteWorkspace={isAuto ? noopVoid : handleRequestDeleteWorkspace}
                     canDeleteWorkspace={isAuto ? false : canDeleteWorkspace(group.workspace)}
                     onSelectSession={handleSelectAgentSession}
@@ -2949,6 +3121,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
                             active={treeActive}
                             indicatorStatus={rowStatus}
                             showPinIcon={!!item.session.pinned}
+                            disableMiniMap={!sessionHoverPreviewEnabled}
                             delegationSummary={childCount > 0
                               ? {
                                 total: childCount,
@@ -3098,6 +3271,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
       {deleteDialog}
       {projectDeleteDialog}
+      {restoreProjectRootDialog}
       {moveDialog}
       <SearchDialog />
       {mode === 'linguist' && <LinguistProjectCreateDialogHost />}
@@ -3366,13 +3540,14 @@ const ConversationItem = React.memo(function ConversationItem({
   onTogglePin,
   onToggleArchive,
 }: ConversationItemProps): React.ReactElement {
+  const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
   const [editing, setEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState('')
   const [menuOpen, setMenuOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const justStartedEditing = React.useRef(false)
   // 菜单打开时关闭迷你地图预览，避免预览面板盖住菜单项导致点不动
-  const preview = useSessionMiniMapHover(600, menuOpen)
+  const preview = useSessionMiniMapHover(600, !sessionHoverPreviewEnabled || menuOpen)
   const interfaceVariant = useAtomValue(interfaceVariantAtom)
   const isClassic = interfaceVariant === 'classic'
 
@@ -3518,18 +3693,20 @@ const ConversationItem = React.memo(function ConversationItem({
       <ContextMenuContent className="w-40 z-[9999] min-w-0 p-0.5">
         {menuItems(ContextMenuItem, ContextMenuSeparator)}
       </ContextMenuContent>
-      <SessionMiniMapPopover
-        target={{
-          type: 'chat',
-          sessionId: conversation.id,
-          title: conversation.title,
-        }}
-        anchorRef={preview.anchorRef}
-        open={preview.isOpen}
-        isLeaving={preview.isLeaving}
-        onMouseEnter={preview.handlePanelMouseEnter}
-        onMouseLeave={preview.handlePanelMouseLeave}
-      />
+      {sessionHoverPreviewEnabled && (
+        <SessionMiniMapPopover
+          target={{
+            type: 'chat',
+            sessionId: conversation.id,
+            title: conversation.title,
+          }}
+          anchorRef={preview.anchorRef}
+          open={preview.isOpen}
+          isLeaving={preview.isLeaving}
+          onMouseEnter={preview.handlePanelMouseEnter}
+          onMouseLeave={preview.handlePanelMouseLeave}
+        />
+      )}
     </ContextMenu>
   )
 })
@@ -3844,6 +4021,7 @@ const DelegatedChildSessionItem = React.memo(function DelegatedChildSessionItem(
   onToggleStar,
   onToggleArchive,
 }: DelegatedChildSessionItemProps): React.ReactElement {
+  const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
   const status = getDelegatedChildStatus(session, agentIndicatorMap)
 
   return (
@@ -3851,6 +4029,7 @@ const DelegatedChildSessionItem = React.memo(function DelegatedChildSessionItem(
       session={session}
       active={session.id === activeSessionId}
       indicatorStatus={status}
+      disableMiniMap={!sessionHoverPreviewEnabled}
       relativeTimeNow={relativeTimeNow}
       workspaceName={workspaceName}
       onSelect={onSelect}
@@ -3895,6 +4074,8 @@ interface AgentProjectGroupItemProps {
   onDragEnd: () => void
   onConfigureProject: (workspaceId: string) => void
   onRenameWorkspace: (workspaceId: string, newName: string) => Promise<void>
+  onRelinkProjectRoot: (workspaceId: string) => Promise<void>
+  onRequestRestoreProjectRoot: (workspaceId: string) => void
   onRequestDeleteWorkspace: (workspaceId: string) => void
   canDeleteWorkspace: boolean
   onSelectSession: (id: string, title: string) => void
@@ -3933,6 +4114,8 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
   onDragEnd,
   onConfigureProject,
   onRenameWorkspace,
+  onRelinkProjectRoot,
+  onRequestRestoreProjectRoot,
   onRequestDeleteWorkspace,
   canDeleteWorkspace,
   onSelectSession,
@@ -3946,6 +4129,12 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
 }: AgentProjectGroupItemProps): React.ReactElement {
   const isCurrent = group.workspace.id === currentWorkspaceId
   const newSessionShortcutLabel = getAcceleratorDisplay(getActiveAccelerator('new-session'))
+  const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
+  const hasUnavailableProjectRoot = Boolean(
+    group.workspace.projectRootPath
+    && group.workspace.projectRootStatus
+    && group.workspace.projectRootStatus !== 'available',
+  )
 
   const [renamingWorkspace, setRenamingWorkspace] = React.useState(false)
   const [projectMenuOpen, setProjectMenuOpen] = React.useState(false)
@@ -4031,15 +4220,25 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
         icon={isAutomationGroup
           ? <Clock size={13} className="flex-shrink-0 text-foreground/40" />
           : undefined}
-        trailing={isAutomationGroup ? (
-          <ChevronRight
-            size={12}
-            className={cn(
-              'flex-shrink-0 text-foreground/30 transition-transform duration-150',
-              collapsed ? '-rotate-90' : 'rotate-90',
+        trailing={(
+          <>
+            {!isAutomationGroup && (
+              <LocalProjectBadge
+                projectRootPath={group.workspace.projectRootPath}
+                projectRootStatus={group.workspace.projectRootStatus}
+              />
             )}
-          />
-        ) : undefined}
+            {isAutomationGroup && (
+              <ChevronRight
+                size={12}
+                className={cn(
+                  'flex-shrink-0 text-foreground/30 transition-transform duration-150',
+                  collapsed ? '-rotate-90' : 'rotate-90',
+                )}
+              />
+            )}
+          </>
+        )}
         draggable
         onDragStart={(event) => onDragStart(event, group.workspace.id)}
         nameButtonClassName={cn('pr-12', isCurrent && 'pr-32')}
@@ -4054,13 +4253,13 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
             maxLength={50}
           />
         ) : undefined}
-        hint={isCurrent && !isAutomationGroup && newSessionShortcutLabel && !projectMenuOpen ? (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-medium text-foreground/60 transition-opacity group-hover/project:opacity-0"
-          >
-            {newSessionShortcutLabel} 新建项目内会话
-          </span>
+        hint={isCurrent && !isAutomationGroup && !projectMenuOpen ? (
+          <ShortcutKeycaps
+            shortcutId="new-session"
+            className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 !flex-nowrap opacity-65 transition-opacity group-hover/project:opacity-0"
+            keycapClassName="h-4 min-w-4 rounded-[3px] border-border/60 px-0.5 text-[9px] shadow-none"
+            separatorClassName="text-[8px]"
+          />
         ) : undefined}
         actions={!isAutomationGroup ? (
           <>
@@ -4114,6 +4313,27 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                   <Settings size={14} />
                   配置 MCP 与 Skills
                 </DropdownMenuItem>
+                {hasUnavailableProjectRoot && (
+                  <>
+                    <DropdownMenuSeparator className="my-0.5" />
+                    <DropdownMenuItem
+                      className="py-1 text-xs [&>svg]:size-3.5"
+                      onSelect={() => void onRelinkProjectRoot(group.workspace.id)}
+                    >
+                      <FolderInput size={14} />
+                      重新选择文件夹
+                    </DropdownMenuItem>
+                    {group.workspace.projectRootStatus === 'missing' && (
+                      <DropdownMenuItem
+                        className="py-1 text-xs [&>svg]:size-3.5"
+                        onSelect={() => onRequestRestoreProjectRoot(group.workspace.id)}
+                      >
+                        <FolderPlus size={14} />
+                        在原路径新建空文件夹
+                      </DropdownMenuItem>
+                    )}
+                  </>
+                )}
                 <DropdownMenuSeparator className="my-0.5" />
                 <DropdownMenuItem
                   disabled={!canDeleteWorkspace}
@@ -4151,6 +4371,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                       active={treeActive}
                       indicatorStatus={rowStatus}
                       showPinIcon={!!item.session.pinned}
+                      disableMiniMap={!sessionHoverPreviewEnabled}
                       delegationSummary={childCount > 0
                         ? {
                           total: childCount,

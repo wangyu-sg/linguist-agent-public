@@ -21,7 +21,7 @@ Batch 10 六张实现票（PB-100 Design Tokens、PB-101 Thread/Composer、PB-10
 | --- | --- |
 | Node / bun | v22.22.2 / 1.3.14 |
 | Electron / 应用版本 | 39.5.1 / 0.15.40 |
-| 探针 | `apps/electron/scripts/smoke/probe-pb105-matrix.ts`（761 行，Node 运行；playwright-core@1.62.0） |
+| 探针 | 历史 PB-105 packaged matrix（已退役；结果保留作历史证据） |
 | 被测物 | `bun run smoke:pack` 产出的打包 .app（electron-builder --dir） |
 | 隔离 | mkdtemp 临时 HOME + `--user-data-dir` + `LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS=1`（不触真实 ~/.proma / Keychain） |
 | 播种 | settings.json 预写（1280×820/light/onboarding）；10k 段 CAT 项目（cat-store CLI 导入 371ms）；1000-turn/2000 条消息 Agent 会话（JSONL + 索引 + 工作区） |

@@ -79,8 +79,8 @@
 
 | 文件 | 处数 |
 |---|---|
-| `docs/roadmap/execution-ledger.json` | 55 |
-| `docs/roadmap/EXECUTION_LEDGER.md` | 3 |
+| 历史执行账本 JSON（已退役） | 55 |
+| 历史执行账本 Markdown（已退役） | 3 |
 | `docs/roadmap/LEGACY_EXTRACTION_SPEC.md` | 2 |
 | `docs/migration/CAT_EXTRACTION_MATRIX.md` | 1 |
 | `docs/architecture/DEV_BASELINE_REPORT.md` | 1 |

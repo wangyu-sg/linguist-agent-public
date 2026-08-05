@@ -337,6 +337,7 @@ test('import: main reads picked file itself and returns service result + basenam
     assert.equal(result.data.cancelled, false)
     if (result.data.cancelled) return
     assert.equal(result.data.filename, CSV_FIXTURE)
+    assert.equal(result.data.status, 'imported')
     assert.match(result.data.assetId, /^ast_v2_[0-9a-f]{64}$/)
     assert.ok(result.data.segmentCount > 0)
     assert.ok(Array.isArray(result.data.warnings))

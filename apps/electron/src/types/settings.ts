@@ -7,7 +7,7 @@
 import type { AgentRuntime, EnvironmentCheckResult, ThinkingConfig, AgentEffort, AgentThinkingLevel, FeishuSessionMirrorSettings, WindowsShellPreference } from '@proma/shared'
 
 /** 通知音场景类型 */
-export type NotificationSoundType = 'taskComplete' | 'permissionRequest' | 'exitPlanMode'
+export type NotificationSoundType = 'taskComplete' | 'permissionRequest' | 'exitPlanMode' | 'planningReminder'
 
 /** 可选通知音 ID */
 export type NotificationSoundId = 'ding' | 'ding-dong' | 'discord' | 'done' | 'down-power' | 'food' | 'lite' | 'quiet' | 'none'
@@ -20,6 +20,8 @@ export interface NotificationSoundSettings {
   permissionRequest?: NotificationSoundId
   /** 计划审批 */
   exitPlanMode?: NotificationSoundId
+  /** Todo / 日程到期提醒 */
+  planningReminder?: NotificationSoundId
 }
 
 /** 语音输入供应商 */
@@ -90,6 +92,15 @@ export interface VoiceDictationStateEvent {
   message?: string
 }
 
+/** 外部应用听写状态条的实时显示数据。 */
+export interface VoiceDictationIndicatorEvent {
+  state: 'recording' | 'stopping'
+  /** 已归一化、平滑处理后的麦克风音量（0~1）。 */
+  volume: number
+  /** 尚未提交给第三方应用的实时转写文本。 */
+  transcript: string
+}
+
 /** 开始语音输入会话参数 */
 export interface VoiceDictationStartInput {
   sessionId: string
@@ -101,14 +112,36 @@ export interface VoiceDictationAudioChunkInput {
   data: ArrayBuffer
 }
 
+/** 将当前识别结果作为 Proma 输入框中的临时组合文本预览。 */
+export interface VoiceDictationPreviewInput {
+  sessionId: string
+  text: string
+}
+
 /** 结束语音输入会话参数 */
 export interface VoiceDictationStopInput {
+  /** 当前 ASR WebSocket 会话 ID */
   sessionId: string
+  /** 跨 ASR 重连保持稳定的听写会话 ID */
+  previewSessionId?: string
 }
 
 /** 输出语音输入文本参数 */
 export interface VoiceDictationCommitInput {
+  sessionId: string
   text: string
+}
+
+/** 主窗口接收的语音组合文本事件。 */
+export interface VoiceDictationTextEvent {
+  sessionId: string
+  text: string
+}
+
+/** Renderer 对最终文本是否被 Proma 输入框实际消费的确认。 */
+export interface VoiceDictationPromaInputResolution {
+  sessionId: string
+  handled: boolean
 }
 
 /** 调整语音输入浮窗尺寸参数 */
@@ -189,6 +222,22 @@ export type MarkdownFontSize = 'small' | 'medium' | 'large'
 /** 默认 Markdown 字号档位 */
 export const DEFAULT_MARKDOWN_FONT_SIZE: MarkdownFontSize = 'medium'
 
+/** Agent 灵动岛偏好。外接/无刘海屏默认不绘制顶部覆盖层。 */
+export interface AgentIslandSettings {
+  /** 是否启用 Agent / 近期 Todo 日程的灵动岛提醒，默认 true。 */
+  enabled?: boolean
+}
+
+/**
+ * 给无视觉输入能力的 Agent 使用的独立视觉模型路由。
+ * 仅保存用户已有渠道和模型的 ID，凭据继续由渠道加密存储管理。
+ */
+export interface VisionRelaySettings {
+  enabled: boolean
+  channelId?: string
+  modelId?: string
+}
+
 /** 应用设置 */
 export interface AppSettings {
   /** 主题模式 */
@@ -249,6 +298,8 @@ export interface AppSettings {
   shortcutOverrides?: ShortcutOverrides
   /** 是否显示用户消息悬浮置顶条（默认 true） */
   stickyUserMessageEnabled?: boolean
+  /** 左侧会话列表悬浮预览迷你地图（默认 false，需手动开启） */
+  sessionHoverPreviewEnabled?: boolean
   /** 粘贴超过阈值的长文本时是否自动转为附件（默认 false） */
   longTextPasteAsAttachmentEnabled?: boolean
   /** 输入框是否渲染 Markdown 富文本格式（默认 false，关闭后为纯文本模式，仍保留 Mention 引用） */
@@ -263,6 +314,8 @@ export interface AppSettings {
   voiceDictation?: VoiceDictationPersistedSettings
   /** 飞书 Session 镜像设置：每个 Proma Session 可创建一个仅包含用户与指定 Bot 的飞书群 */
   feishuSessionMirror?: FeishuSessionMirrorSettings
+  /** 无视觉输入能力 Agent 的视觉助手路由 */
+  visionRelay?: VisionRelaySettings
   /** 用户手动关闭的 Proma 内置 MCP ID 列表（针对默认开启的内置 MCP） */
   builtinMcpDisabledIds?: string[]
   /** 用户手动开启的 Proma 内置 MCP ID 列表（针对默认关闭的内置 MCP，如 nano-banana、mem） */
@@ -277,8 +330,12 @@ export interface AppSettings {
    * 关闭后不注入任何 Proma 归因，并覆盖 Claude SDK 默认 Co-Authored-By。
    */
   gitAttributionEnabled?: boolean
+  /** Agent 灵动岛偏好（macOS 刘海屏优先，其他平台使用 Electron 降级体验）。 */
+  agentIsland?: AgentIslandSettings
   /** 主窗口状态（大小、位置、是否最大化） */
   mainWindowState?: MainWindowState
+  /** 独立任务/日程窗口状态（大小、位置、是否最大化） */
+  planningWindowState?: MainWindowState
 }
 
 /** Linguist Project 的可恢复编辑位置与 Agent Rail 布局。 */
@@ -355,6 +412,8 @@ export const QUICK_TASK_IPC_CHANNELS = {
   FOCUS: 'quick-task:focus',
   /** 重新注册全局快捷键（设置变更后） */
   REREGISTER_GLOBAL_SHORTCUTS: 'quick-task:reregister-global-shortcuts',
+  /** 查询当前已成功注册的全局快捷键 */
+  GET_GLOBAL_SHORTCUT_REGISTRATION_STATUS: 'quick-task:get-global-shortcut-registration-status',
 } as const
 
 /** 语音输入 IPC 通道 */
@@ -375,8 +434,12 @@ export const VOICE_DICTATION_IPC_CHANNELS = {
   STOP: 'voice-dictation:stop',
   /** 取消语音输入会话 */
   CANCEL: 'voice-dictation:cancel',
+  /** 同步 Proma 输入框中的临时识别文本 */
+  PREVIEW: 'voice-dictation:preview',
   /** 输出最终文本 */
   COMMIT: 'voice-dictation:commit',
+  /** Renderer 确认最终文本是否被 Proma 输入框实际消费 */
+  RESOLVE_PROMA_INPUT: 'voice-dictation:resolve-proma-input',
   /** 隐藏语音输入窗口 */
   HIDE: 'voice-dictation:hide',
   /** 调整语音输入窗口高度 */
@@ -389,8 +452,18 @@ export const VOICE_DICTATION_IPC_CHANNELS = {
   TRANSCRIPT: 'voice-dictation:transcript',
   /** 状态事件 */
   STATE: 'voice-dictation:state',
+  /** 外部应用听写状态条事件 */
+  INDICATOR_STATE: 'voice-dictation:indicator-state',
+  /** 主窗口上报麦克风音量，用于外部应用状态条。 */
+  REPORT_VOLUME: 'voice-dictation:report-volume',
+  /** 主窗口上报实时转写，用于外部应用状态条。 */
+  REPORT_TRANSCRIPT: 'voice-dictation:report-transcript',
   /** 主窗口插入文本 */
   INSERT_TEXT: 'voice-dictation:insert-text',
+  /** 主窗口更新临时组合文本 */
+  PREVIEW_TEXT: 'voice-dictation:preview-text',
+  /** 主窗口撤销临时组合文本 */
+  CLEAR_PREVIEW_TEXT: 'voice-dictation:clear-preview-text',
   /** 检查麦克风权限状态 */
   CHECK_MIC_PERMISSION: 'voice-dictation:check-mic-permission',
   /** 请求麦克风权限 */

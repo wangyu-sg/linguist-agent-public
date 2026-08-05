@@ -25,7 +25,7 @@
 
 - `smoke:pack`：全链路实测通过（PB-114，产物 0.15.42 实测；当前 0.15.45 同链路）
 - DMG：`electron-builder --mac dmg` 实测产出 256MB + blockmap
-- G0 冒烟 18/18；probe-import 28/28；probe-cat-tools 21/21；PB-074 垂直 11 PASS/0 FAIL/2 MANUAL（G8 时点）
+- G0 冒烟 18/18；历史 Import 探针 28/28；历史 CAT Tools 探针 21/21；PB-074 垂直 11 PASS/0 FAIL/2 MANUAL（G8 时点）
 
 ## G10 产品化矩阵（2026-07-27）
 

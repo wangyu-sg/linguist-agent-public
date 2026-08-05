@@ -36,8 +36,8 @@ G6 通过。macOS arm64 未签名打包应用使用临时 HOME、独立 Electron
 | `cd packages/linguist-cat-store && bun run test` | **71/71** |
 | `cd packages/linguist-cat-tools && bun run test` | **16/16** |
 | `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` | **PASS**；0.15.24 产物 |
-| `node scripts/smoke/probe-import.ts` | **24/24**；10k、键盘/a11y、p95 |
-| `node scripts/smoke/probe-cat-tools.ts` | **20/20**；Agent Review + 同 HOME 重启 |
+| 历史 Import packaged 探针（已退役） | **24/24**；10k、键盘/a11y、p95 |
+| 历史 CAT Tools packaged 探针（已退役） | **20/20**；Agent Review + 同 HOME 重启 |
 | `node scripts/smoke/run-g0-smoke.ts` | **18/18**；Proma 通用回归 |
 
 ## 4. G6 硬标准实录

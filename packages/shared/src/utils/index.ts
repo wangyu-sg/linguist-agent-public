@@ -23,6 +23,11 @@ export {
 } from './context-window'
 export { calculateContextUsageRatio } from './context-usage'
 export {
+  PI_AUTO_COMPACTION_THRESHOLD_RATIO,
+  calculatePiAutoCompactionReserveTokens,
+  calculatePiAutoCompactionThresholdTokens,
+} from './pi-compaction'
+export {
   inferMcpTransportType,
   normalizeMcpTransportType,
 } from './mcp-transport'
@@ -35,6 +40,14 @@ export {
   normalizeThinkingSignatureError,
 } from './thinking-signature-error'
 export { normalizePathForCompare } from './normalize-path'
+export {
+  AUTOMATION_OCCURRENCE_SAMPLES_PER_DAY,
+  getAutomationOccurrencesByDay,
+} from './automation-schedule'
+export type {
+  AutomationOccurrenceDay,
+  AutomationScheduleFields,
+} from './automation-schedule'
 export {
   getSDKCompactStatus,
   isPersistableSDKSystemMessage,

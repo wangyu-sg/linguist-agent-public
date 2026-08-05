@@ -4,24 +4,25 @@
 
 - 生成命令：`bun run license:scan`（`scripts/license-scan.mjs`，基于
   license-checker-rseidelsohn 5.0.1；生产依赖闭包，含传递依赖）
-- 机器可读全量产物：`docs/release/sbom-full.json`（415 个第三方包，本文件
+- 机器可读全量产物：`docs/release/sbom-full.json`（432 个第三方包，本文件
   不重复列举）
-- 扫描日期：2026-07-27
+- 扫描日期：2026-08-05
 - 扫描口径：root + `packages/*` + `apps/*` 共 12 个 workspace 的
-  `dependencies` / `optionalDependencies` / `peerDependencies` 闭包；
+  `dependencies` / `optionalDependencies` / `peerDependencies` 闭包，并将实际
+  随包交付的 Electron framework 纳入；
   第一方 workspace 包（`@proma/*`、`@linguist/*`，AGPL-3.0 自家）不计入
   第三方统计。
-- **第三方依赖总数：415 个**（含传递依赖、含同包多版本）
+- **第三方依赖总数：432 个**（含传递依赖、含同包多版本）
 
-许可分布 summary（2026-07-27 实测）：
+许可分布 summary（2026-08-05 实测）：
 
 | License | 包数 |
 |---|---|
-| MIT | 271 |
-| Apache-2.0 | 50 |
-| ISC | 46 |
+| MIT | 281 |
+| Apache-2.0 | 54 |
+| ISC | 47 |
 | BSD-3-Clause | 25 |
-| BSD-2-Clause | 6 |
+| BSD-2-Clause | 7 |
 | BlueOak-1.0.0 | 5 |
 | (MIT OR GPL-3.0-or-later) | 1（jszip，按 MIT 采用） |
 | (MIT AND Zlib) | 1 |
@@ -32,6 +33,7 @@
 | Custom（专有） | 2（@anthropic-ai/claude-agent-sdk 及其 darwin-arm64 平台包） |
 | 0BSD | 1 |
 | OFL-1.1 | 1（@fontsource-variable/inter） |
+| LGPL-3.0-or-later | 1（sharp 的未修改动态 libvips 平台包；登记义务见 THIRD_PARTY_NOTICES） |
 
 - 门禁黑名单（GPL-2.0* / GPL-3.0* / LGPL* / SSPL / Commons-Clause / BUSL /
   CC-BY-SA / UNLICENSED / UNKNOWN / Custom）：本次扫描**通过**，无未豁免
@@ -41,7 +43,7 @@
   claude-agent-sdk 平台包、@napi-rs/canvas、@mariozechner/clipboard 平台
   变体）未计入上表，详见扫描输出。
 
-## 直接依赖清单（117 个）
+## 直接依赖清单（121 个）
 
 盘点口径：root `package.json` + `packages/*/package.json` + `apps/*/package.json`
 中 `dependencies` / `devDependencies` / `peerDependencies` /
@@ -52,7 +54,7 @@ License 取自各依赖已安装副本的 `license` 字段；未标注或未能�
   `@proma/ui`、`@proma/cli`、`@proma/electron`、`@linguist/cat-core`、
   `@linguist/cat-formats`、`@linguist/cat-store`、`@linguist/cat-tools`、
   `@linguist/legacy-migration`），随仓整体以 AGPL-3.0 发布。
-- **外部直接依赖合计：117 个**（同一包在多类/多包中出现按一个计）。
+- **外部直接依赖合计：121 个**（同一包在多类/多包中出现按一个计）。
 
 | 包 | 声明版本范围 | 已安装版本 | License（声明） | 依赖类型 |
 |---|---|---|---|---|
@@ -62,11 +64,12 @@ License 取自各依赖已安装副本的 `license` 字段；未标注或未能�
 | @anthropic-ai/claude-agent-sdk-win32-arm64 | 0.3.201 | —（本平台未安装） | 待查 | optional |
 | @anthropic-ai/claude-agent-sdk-win32-x64 | 0.3.201 | —（本平台未安装） | 待查 | optional |
 | @anthropic-ai/sdk | >=0.70.0 , ^0.93.0 | 0.93.0 | MIT | peer/dependencies |
-| @earendil-works/pi-agent-core | 0.80.9 | 0.80.9 | MIT | dependencies |
-| @earendil-works/pi-ai | 0.80.9 | 0.80.9 | MIT | dependencies |
-| @earendil-works/pi-coding-agent | 0.80.9 | 0.80.9 | MIT | dev/dependencies |
+| @earendil-works/pi-agent-core | 0.82.1 | 0.82.1 | MIT | dependencies |
+| @earendil-works/pi-ai | 0.82.1 | 0.82.1 | MIT | dependencies |
+| @earendil-works/pi-coding-agent | 0.82.1 | 0.82.1 | MIT | dev/dependencies |
 | @emoji-mart/data | ^1.2.1 | 1.2.1 | MIT | dev |
 | @emoji-mart/react | ^1.1.1 | 1.1.1 | MIT | dev |
+| @formatjs/icu-messageformat-parser | 3.5.15 | 3.5.15 | MIT | dependencies |
 | @fontsource-variable/inter | 5.2.8 | 5.2.8 | OFL-1.1 | dependencies |
 | @larksuiteoapi/node-sdk | ^1.65.0 | 1.65.0 | MIT | dev |
 | @modelcontextprotocol/sdk | >=1.0.0 , ^1.29.0 | 1.29.0 | MIT | peer/dependencies |
@@ -122,6 +125,7 @@ License 取自各依赖已安装副本的 `license` 字段；未标注或未能�
 | @xmldom/xmldom | ^0.8.11 | 0.8.11 | MIT | dependencies |
 | adm-zip | ^0.5.17 | 0.5.17 | MIT | dependencies |
 | autoprefixer | ^10.4.20 | 10.4.23 | MIT | dev |
+| axe-core | 4.12.1 | 4.12.1 | MPL-2.0 | dev |
 | beautiful-mermaid | 1.1.3 | 1.1.3 | MIT | dependencies |
 | chokidar | ^5.0.0 | 5.0.0 | MIT | dev |
 | class-variance-authority | 0.7.1 | 0.7.1 | Apache-2.0 | dev |
@@ -130,7 +134,7 @@ License 取自各依赖已安装副本的 `license` 字段；未标注或未能�
 | concurrently | ^9.2.1 | 9.2.1 | MIT | dev |
 | dingtalk-stream-sdk-nodejs | ^2.0.4 | 2.0.4 | MIT | dev |
 | dompurify | ^3.4.2 , ^3.4.5 | 3.4.2 | (MPL-2.0 OR Apache-2.0) | dev/dependencies |
-| electron | ^39.5.1 | 39.5.1 | MIT | dev |
+| electron | ^43.2.0 | 43.2.0 | MIT | dev / shipped framework |
 | electron-builder | ^25.1.8 | 25.1.8 | MIT | dev |
 | electron-updater | ^6.7.3 | 6.7.3 | MIT | dev |
 | electronmon | ^2.0.4 | 2.0.4 | ISC | dev |
@@ -140,6 +144,7 @@ License 取自各依赖已安装副本的 `license` 字段；未标注或未能�
 | jotai | ^2.17.1 | 2.17.1 | MIT | dependencies |
 | jszip | ^3.10.1 | 3.10.1 | (MIT OR GPL-3.0-or-later) | dev |
 | katex | ^0.16 | 0.16.33 | MIT | dev |
+| license-checker-rseidelsohn | ^5.0.1 | 5.0.1 | BSD-3-Clause | dev |
 | lowlight | ^3.3.0 | 3.3.0 | MIT | dev |
 | lucide-react | ^0.460.0 | 0.460.0 | ISC | dev |
 | mammoth | ^1.12.0 | 1.12.0 | BSD-2-Clause | dependencies |
@@ -160,6 +165,7 @@ License 取自各依赖已安装副本的 `license` 字段；未标注或未能�
 | remark-gfm | ^4.0.1 | 4.0.1 | MIT | dev |
 | remark-math | ^6 | 6.0.0 | MIT | dev |
 | shiki | ^3.22.0 | 3.22.0 | MIT | dependencies |
+| sharp | ^0.35.3 | 0.35.3 | Apache-2.0 | dependencies |
 | sonner | ^2.0.7 | 2.0.7 | MIT | dev |
 | tailwind-merge | ^2.5.5 | 2.6.0 | MIT | dev |
 | tailwindcss | ^3.4.17 | 3.4.19 | MIT | dev |
@@ -176,7 +182,7 @@ License 取自各依赖已安装副本的 `license` 字段；未标注或未能�
 
 备注：
 
-- 上表为**直接依赖**（117 个）；传递依赖的全量清单见
+- 上表为**直接依赖**（121 个）；传递依赖的全量清单见
   `docs/release/sbom-full.json`（`bun run license:scan` 生成）。
 - `license-checker-rseidelsohn` 为 PB-115 新增的根 devDependency（MIT），
   仅作合规工具，不进入发行物，不计入上表。

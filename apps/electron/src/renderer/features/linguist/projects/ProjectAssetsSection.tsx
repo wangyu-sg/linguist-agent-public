@@ -130,9 +130,10 @@ export function ProjectAssetsSection({
     // 真源刷新：新资产经 getSummary 重拉后出现在列表（导入两次则累积两行）
     await onSummaryRefresh()
     if (!aliveRef.current) return
-    toast.success(`已导入「${data.filename}」`, {
+    toast.success(data.status === 'skipped-duplicate' ? `已跳过重复文件「${data.filename}」` : `已导入「${data.filename}」`, {
       description:
         `${data.segmentCount} 段 · ${data.formatId}` +
+        (data.status === 'skipped-duplicate' ? ' · 项目中已有同源资产' : '') +
         (data.warnings.length > 0 ? ` · ${data.warnings.length} 条警告` : ''),
     })
   }

@@ -18,6 +18,11 @@ import {
 import { quotedSelectionMapAtom } from '@/atoms/preview-atoms'
 import { agentDiffPanelTabAtom, agentSidePanelOpenAtom } from '@/atoms/agent-atoms'
 import { SelectionActionPopover } from '@/components/selection/SelectionActionPopover'
+import {
+  DEFAULT_AGENT_HOST_CAPABILITIES,
+  type AgentHostCapabilities,
+} from '@/host/contracts'
+import { getAgentSurfaceControls } from '@/host/extension-registry'
 import { SELECTION_ACTION_POPOVER_SELECTOR } from '@/lib/quoted-selection'
 
 const MAX_AGENT_HISTORY_QUOTED_CHARS = 2000
@@ -34,6 +39,7 @@ interface AgentHistorySelection {
 interface AgentHistorySelectionLayerProps {
   sessionId: string
   rootRef: React.RefObject<HTMLDivElement>
+  hostCapabilities?: AgentHostCapabilities
 }
 
 function getElementFromNode(node: Node | null): Element | null {
@@ -55,6 +61,7 @@ function getRoleLabel(role?: string): string {
 export function AgentHistorySelectionLayer({
   sessionId,
   rootRef,
+  hostCapabilities = DEFAULT_AGENT_HOST_CAPABILITIES,
 }: AgentHistorySelectionLayerProps): React.ReactElement {
   const setQuotedSelectionMap = useSetAtom(quotedSelectionMapAtom)
   const selectedChatModel = useAtomValue(selectedModelAtom)
@@ -67,6 +74,7 @@ export function AgentHistorySelectionLayer({
   const pointerSelectingRef = React.useRef(false)
   const captureTimerRef = React.useRef<number | null>(null)
   const openChatPendingRef = React.useRef(false)
+  const controls = getAgentSurfaceControls(hostCapabilities)
 
   const clearSelection = React.useCallback((): void => {
     setSelection(null)
@@ -278,12 +286,12 @@ export function AgentHistorySelectionLayer({
 
   return (
     <>
-      {selection && (
+      {selection && (controls.referenceAction || controls.companionChatAction) && (
         <SelectionActionPopover
           x={selection.x}
           y={selection.y}
-          onAddToAgent={handleAddToAgent}
-          onOpenChat={handleOpenChatTab}
+          onAddToAgent={controls.referenceAction ? handleAddToAgent : undefined}
+          onOpenChat={controls.companionChatAction ? handleOpenChatTab : undefined}
         />
       )}
     </>

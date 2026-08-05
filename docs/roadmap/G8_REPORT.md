@@ -36,8 +36,8 @@ G8 的自动化半边全部通过：Batch 8 八票（PB-080~084 + 用户授权�
 | `bun test apps/electron/src/renderer/features/linguist/projects` | **41/41** |
 | `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` | **PASS**；重新生成 0.15.36 未签名产物 |
 | `node scripts/smoke/run-g0-smoke.ts` | **18 PASS / 0 FAIL**（Proma 通用回归） |
-| `node scripts/smoke/probe-import.ts` | **28 PASS / 0 FAIL**（修正一处 PB-080 空态文案过时断言后，见 §5） |
-| `node scripts/smoke/probe-cat-tools.ts` | **21 PASS / 0 FAIL** |
+| 历史 Import packaged 探针（已退役） | **28 PASS / 0 FAIL**（修正一处 PB-080 空态文案过时断言后，见 §5） |
+| 历史 CAT Tools packaged 探针（已退役） | **21 PASS / 0 FAIL** |
 | `node scripts/smoke/probe-pb074-e2e.ts` | **11 PASS / 0 FAIL / 2 MANUAL**（G7 纵向链零回归；2 MANUAL 为原生 Open/Save，同 G7 口径） |
 | PB-085 人工盲评（硬标准） | **BLOCKED**：需真实 API Key 产出三档译文 + 用户人工打分；备料（双批 fixture 各 30 段、协议、指标、判定式）已提交 `c5900116` |
 
@@ -59,7 +59,7 @@ G8 的自动化半边全部通过：Batch 8 八票（PB-080~084 + 用户授权�
 
 - 测试不读取旧仓 `data/**`；未使用客户数据、真实 API Key 或真实 Provider。
 - Batch 8 不改写段路径：PB-083 评审只产 Finding，PB-084 repair 只产 pending Proposal，均经人工审核链。
-- 探针修正一处（`2c355aa5`）：probe-import 的 Context Rail 空态断言仍匹配 PB-063 时代静态占位文案（"当前项目暂无 TM 匹配"），PB-080 将该 Tab 实现为真实匹配渲染并改文案为"当前片段没有 TM 匹配"；属测试追平产品既有行为，非产品回归。首轮 27/1 与修正后 28/28 均如实记录。
+- 历史 Import 探针修正一处（`2c355aa5`）：Context Rail 空态断言仍匹配 PB-063 时代静态占位文案（"当前项目暂无 TM 匹配"），PB-080 将该 Tab 实现为真实匹配渲染并改文案为"当前片段没有 TM 匹配"；属测试追平产品既有行为，非产品回归。首轮 27/1 与修正后 28/28 均如实记录。
 - 本 Gate 只新增报告与账本，另含上述一处探针文案修正，没有产品代码改动。
 
 ## 6. 已知限制

@@ -154,6 +154,7 @@ export interface LinguistProjectMutationEvent {
   segmentIds?: readonly string[]
   proposalIds?: readonly string[]
   qaFindingIds?: readonly string[]
+  resolvedQaFindingIds?: readonly string[]
   jobId?: string
   job?: {
     status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
@@ -729,6 +730,7 @@ export type LinguistProjectImportResult =
       cancelled: false
       /** 被选中文件的 basename（展示用元数据；绝非路径）。 */
       filename: string
+      status: 'imported' | 'skipped-duplicate'
       assetId: string
       formatId: string
       segmentCount: number

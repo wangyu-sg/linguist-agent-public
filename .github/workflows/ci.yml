@@ -56,7 +56,7 @@ jobs:
         run: node --test tests/linguist-fusion-architecture.test.mjs
 
       - name: 依赖许可扫描
-        run: bun run license:scan
+        run: bun run license:check
 
       - name: Electron 构建
         run: bun run electron:build

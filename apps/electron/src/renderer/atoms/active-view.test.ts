@@ -9,13 +9,13 @@ describe('resolveActiveViewForMode', () => {
   })
 
   test('given Agent 专属主区 when 进入 Linguist then 回到普通主区', () => {
-    expect(resolveActiveViewForMode('automations', 'linguist')).toBe('conversations')
+    expect(resolveActiveViewForMode('planning', 'linguist')).toBe('conversations')
     expect(resolveActiveViewForMode('agent-skills', 'linguist')).toBe('conversations')
   })
 
   test('given 非 Linguist 模式 when 切换模式 then 不改写通用路由', () => {
     expect(resolveActiveViewForMode('conversations', 'agent')).toBe('conversations')
-    expect(resolveActiveViewForMode('automations', 'chat')).toBe('automations')
+    expect(resolveActiveViewForMode('planning', 'chat')).toBe('planning')
     expect(resolveActiveViewForMode('agent-skills', 'agent')).toBe('agent-skills')
   })
 })

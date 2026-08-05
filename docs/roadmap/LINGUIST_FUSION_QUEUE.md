@@ -1,95 +1,39 @@
-# Linguist Fusion 执行队列
+# Linguist Agent v2.1 实施队列
 
-> 机器真源：`linguist-fusion-queue.json`。更新时间：2026-07-29。状态冲突时以机器文件、代码和实际验证输出为准。
+更新时间：2026-08-05
 
-## 状态纪律
+> 唯一 active machine queue：[linguist-fusion-queue.json](./linguist-fusion-queue.json)。本文件只提供当前阶段的人读投影；完整 ticket 列表、依赖和 evidence 以 JSON 为准。
 
-- `unit_verified`：精确行为/类型测试完成。
-- `integration_verified`：跨包、构建或完整本地矩阵完成。
-- `packaged_verified`：真实打包 App 自动路径完成。
-- `real_machine_verified`：人工真机证据完成。
-- `gate_blocked`：实现可能完成，但规定的远端、人工或持续使用证据仍缺。
+## 状态规则
 
-不能把 `integration_verified` 或 `packaged_verified` 自动写成产品资格通过。
+只允许 TODO、IN_PROGRESS、BLOCKED、DONE、CANCELLED_WITH_REASON、VERIFIED_ALREADY_DONE。packaged verified、manual/real-machine verified 与 release qualified 是不同状态，不能相互替代。
 
-## 固定约束
+## 当前 Phase 0
 
-- 产品是完整 Proma Agent + Chat + Linguist Vertical Agent Profile / CAT Workbench。
-- Linguist Rail/Full 复用原生 `AgentView`、Session、消息、工具、Thinking、权限和 Store。
-- 模型只能创建待审 Proposal；Segment 写入必须经人工操作、CAS、locked 与 hard rails。
-- 当前是个人 Alpha，没有公众安装包发布计划。
+- LA-MASTER-000 与 LA-SYNC-001 已完成同步前控制面与数据保护。
+- LA-SYNC-002 已正式 merge Proma v0.16.8 为 f3d2b431。
+- LA-SYNC-003、LA-SYNC-004 已完成 Runtime/Session 和原生 surface/sidebar/settings reconciliation。
+- LA-SYNC-005 已完成：smoke:pack PASS；smoke:vertical PASS。
+- LA-SYNC-006 已完成 v0.16.8 baseline、触点与偏离账本的 current verification：boundary 4/4、fusion 9/9、Electron typecheck、JSON parse 与 diff check 均通过。
+- LA-SYNC-007 保持 IN_PROGRESS：Agent 12/12、Chat 18/18、Linguist 21/21 通过，报告 `runStatus=passed`、`coverageStatus=partial`，但 2 个 MANUAL 与 3 个 BLOCKED coverage gaps 仍未解除。
+- LA-HOST-000 与 LA-HOST-004 已完成：静态 Host Contracts/Registry 和 truthful capability manifest 已接入；未建立动态插件系统。
 
-## 既有融合路线
+## v2.1 最小 Alpha 范围
 
-| 阶段 | ID | 内容 | 状态 |
-|---|---|---|---|
-| 控制面 | LF-000~004 | 计划基线、packaged smoke、touchpoint/单一 Agent 架构 | **integration_verified** |
-| 三模式 | LF-010~017 | Linguist mode、一等 Project Tab、MRU/恢复 | **packaged_verified** |
-| Sidebar | LF-020~026 | 项目/会话/位置/管理入口 | **packaged_verified** |
-| 原生 Agent | LF-030~037 | AgentView rail/full 与同 Session | **integration_verified** |
-| CAT Workbench | LF-040~048 | Grid、Editor、CAS、键盘、手工 Gate | **gate_blocked** |
-| Bottom Dock | LF-050~056 | TM/TB/QA/Context/Preview | **packaged_verified** |
-| Agent↔CAT | LF-060~069 | Turn Context、Tool、Proposal、原生结果 UI | **packaged_verified** |
-| Legacy 收口 | LF-070~078 | Settings、旧 UI 退役、单一 Workbench | **gate_blocked** |
+先做 `LA-HOST-001/002/003/005`，再做受权单文件 `Intake → exact duplicate/格式预检 → Agent/UI 共用服务 → Verification`，复用既有 PB-097 Tag Model，收口 Proposal/QA 覆盖、Proposal Critic、Session 默认继承和已确认正确性修复。`LA-ALPHA-000` 是入口 Gate。
 
-LF-048 / LF-078 仍只受真实 IME 与 Native Open/Save 证据阻断；旧 UI 生产消费者已经为零。
+目录扫描、durable Import Job、3E Memory、TEaR、Full-Scope Review、长任务 Worker、性能/可观测性平台和低频格式 Adapter 已在 JSON 中标记 `CANCELLED_WITH_REASON`；Phrase rehydration 保持条件 `BLOCKED`，只有真实 split-MXLIFF 交付触发才重开。
 
-## 最新优化蓝图
-
-| ID | 内容 | 状态 |
+| Ticket | 主题 | 状态 |
 |---|---|---|
-| LF-079 | Proma Base + Linguist Prompt overlay / Runtime 继承契约 | **integration_verified** |
-| LF-080 | Vertical Agent Profile、Role、Execution Scope 与工具继承 | **integration_verified** |
-| LF-081 | Assistant/Reviewer/Auditor、Fast/Balanced/Best、离线评估集 | **integration_verified** |
-| LF-082 | Linguist Shell、Rail/Full、原生 Session actions 与项目 CWD | **integration_verified** |
-| LF-083 | Job/Checkpoint、幂等、State Capsule、outbox、运行摘要与 CAT undo | **integration_verified** |
-| LF-084 | hard rules、ICU/placeholder、Consistency、batch/perf、worker jobs | **integration_verified** |
-| LF-085 | CAT Tool result budget/projection、原生 UI 与定位 | **integration_verified** |
-| LF-086 | 安全导出、trace/metrics 与脱敏诊断 | **integration_verified** |
-| LF-087 | Stable ID v2 + v1 读取兼容 | **integration_verified** |
-| LF-088 | Quick Health、worker-thread Full Scrub、Backup/Restore fault matrix | **integration_verified** |
-| LF-089 | schema v13 Proposal Issuance/Provenance 与 Required/Forbidden gate | **integration_verified** |
-| LF-090 | 数据库 identity 写前验证与 migration fail closed | **integration_verified** |
-| LF-091 | 共享侧栏树、项目归档/搜索与复制到其他项目 | **packaged_verified** |
-| LF-092 | CAT 无改动确认快捷键与共享 Sheet 关闭交互 | **packaged_verified** |
+| LA-SYNC-002 | 正式 merge Proma v0.16.8 | DONE |
+| LA-SYNC-003 | Runtime/Session 以上游为主合并 | DONE |
+| LA-SYNC-004 | Agent Surface/Sidebar/Settings 合并 | DONE |
+| LA-HOST-000 | 建立本地 Host Contracts 与 Extension Registry | DONE |
+| LA-SYNC-005 | 依赖、Electron 43、Lock/SBOM/Build | DONE |
+| LA-SYNC-006 | Baseline/Touchpoints/Deviations 重置 | DONE |
+| LA-SYNC-007 | v0.16.8 完整验证与 packaged smoke | IN_PROGRESS |
+| LA-HOST-004 | Host Capability Manifest | DONE |
+| LA-ALPHA-000 | 最小个人 Alpha 入口 Gate | TODO |
 
-LF-079~090 表示工程实现与 clean 本地矩阵通过；现有 packaged vertical 没有逐项操作其全部新 UI。LF-091/092 具有对应的打包应用交互证据，因此单独标为 `packaged_verified`。
-
-## 个人 Alpha 门禁
-
-| ID | 内容 | 状态 |
-|---|---|---|
-| AC-001 | Push/PR CI、固定 Bun、根测试零失败 | **integration_verified** |
-| AC-002 | Release/build resource fail closed | **integration_verified** |
-| AC-003 | `.linguist-agent` 数据根与 Provider-only 导入 | **unit_verified** |
-| AC-004 | BrowserWindow 显式安全选项 | **integration_verified** |
-| AC-005 | Project Binding fail closed / 永久解绑 | **unit_verified** |
-| AC-006 | Export 防覆盖原稿/受管目录 | **integration_verified** |
-| AC-007 | 1000-turn 首载/补载/跳转 | **packaged_verified** |
-| AC-008 | serious/critical Axe 清零 | **packaged_verified** |
-| AC-009 | G10 Product Qualification | **gate_blocked** |
-| AC-010 | G8 真实游戏文本盲评 | **gate_blocked** |
-| AC-011 | 14 天自由日用 | **gate_blocked** |
-
-AC-001 的最新证据是公开源码快照 `2fe3c472` 的 GitHub Actions Run `30482338219`：validate job 成功，frozen install、typecheck、根/CAT/Electron 测试、boundary、fusion、许可扫描与 Electron build 均通过。
-
-## 最终验证快照
-
-- 实现与安装 HEAD：`730a360e73d68992b6ca1855ab71234c62f86b33`
-- 版本：Electron `0.15.140`，shared `0.1.79`，CAT Core/Store/Tools `0.0.12/0.0.25/0.0.17`
-- clean source：typecheck 11/11；根 1,350；Electron 175；Core 116；Store 217；Tools 39；boundary 4；fusion 9；均 0 fail。
-- 许可：417 个第三方依赖，门禁通过。
-- build/pack：通过；137 个 runtime 依赖同步。
-- packaged vertical：Agent 12/0、Chat 18/0、Linguist 20/0/2 manual；`runStatus=passed`、`coverageStatus=partial`。
-- `app.asar` SHA-256：`95066d73f003502f9792f6afe302df5b560e199ab0680834581818cfb23e5138`。
-- 本机 `/Applications/Linguist Agent.app` 已替换为 clean HEAD 构建的 `0.15.140`；隔离与正常环境启动均确认 1 个主窗口，旧 `0.15.139` 位于废纸篓。
-
-## 下一步
-
-只补远端/人工/持续使用证据：
-
-1. IME、Native Open/Save、VoiceOver、keyboard-only、drag/resize；
-2. 真实 Provider/模型、真实客户格式与三档盲评；
-3. 14 天连续日用。
-
-暂不新增格式、OCR、多 Agent Team、自动模型路由或 Extension 市场。
+其余 ticket 以 JSON v2.1 为准；不得以旧 v1 Gate、历史 packaged 结果或未来设计章节提前标记完成。

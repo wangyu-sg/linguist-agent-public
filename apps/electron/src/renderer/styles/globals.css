@@ -28,16 +28,15 @@
 
 /* ===== 文字选区颜色 =====
  * 吃 --primary token，多数主题下品牌色自动反映到选区高亮。
- * 但部分主题的 --primary 在暗背景上太暗（如 ocean-dark/forest-dark）或在亮背景上太浅（如云朵舞者），
- * 这些主题在下方单独覆写 ::selection 让对比度回到可读区间。
+ * 只覆盖选区背景，让嵌套的终端、代码块和语法高亮内容保留自身前景色。
+ * 部分主题的 --primary 在暗背景上太暗（如 ocean-dark/forest-dark）或在亮背景上太浅（如云朵舞者），
+ * 这些主题在下方单独覆写 ::selection 的背景色让对比度回到可读区间。
  */
 ::selection {
-  background-color: hsl(var(--primary) / 0.25);
-  color: hsl(var(--foreground));
+  background-color: hsl(var(--primary) / 0.20);
 }
 ::-moz-selection {
-  background-color: hsl(var(--primary) / 0.25);
-  color: hsl(var(--foreground));
+  background-color: hsl(var(--primary) / 0.20);
 }
 
 /* 暗色特殊主题：--primary 太暗，改用 --accent-foreground（明亮的强调文字色）
@@ -60,7 +59,7 @@
 /* 云朵舞者（slate-light）：--primary 是淡杏粉，亮背景下需要更高不透明度才看得见 */
 .theme-slate-light ::selection,
 .theme-slate-light ::-moz-selection {
-  background-color: hsl(var(--primary) / 0.6);
+  background-color: hsl(var(--primary) / 0.50);
 }
 
 /* CRT 终端：亮绿选区 + 黑字 */
@@ -1090,6 +1089,11 @@
   z-index: 2;
 }
 
+.file-source-tabbar .app-tab-active::after {
+  left: 12.5%;
+  right: 12.5%;
+}
+
 .main-tabbar .app-tab-inactive:hover {
   background-color: hsl(var(--tab-surface) / 0.42);
 }
@@ -1112,6 +1116,10 @@
   --radius: 0.625rem;
   --radius-xl-extra: 4px;
   --radius-2xl-extra: 8px;
+}
+
+/* 经典界面浅色：侧栏使用纯白对齐 upstream；深色下不覆盖，保持主题的深色侧栏 */
+:root.ui-classic:not(.dark) {
   --sidebar-surface: 0 0% 98%;
 }
 
@@ -1240,9 +1248,7 @@
 /* 设置卡片样式：只有默认深色主题用透明，其他都用卡片背景 */
 .settings-card {
   background: hsl(var(--card));
-  box-shadow:
-    0 1px 2px 0 rgb(0 0 0 / 0.03),
-    0 1px 3px 0 rgb(0 0 0 / 0.06);
+  box-shadow: var(--shadow-sm);
 }
 .dark:not([class*="theme-"]) .settings-card {
   background: transparent;
@@ -1355,7 +1361,7 @@
   padding: 0;
 }
 
-/* 浅色主题代码块是深底，用偏浅的蓝灰选区承托白字，避免 Shiki token 内联色在选中后变黑。 */
+/* 浅色主题代码块是深底，用偏浅的蓝灰选区承托原有文字与 Shiki 语法色。 */
 :root:not(.dark) :is(
   .code-block-wrapper pre.shiki,
   .tiptap pre
@@ -1364,9 +1370,7 @@
   .code-block-wrapper pre.shiki,
   .tiptap pre
 ) ::selection {
-  background-color: hsl(210 80% 62% / 0.32);
-  color: hsl(0 0% 98%) !important;
-  -webkit-text-fill-color: hsl(0 0% 98%);
+  background-color: hsl(210 80% 68% / 0.32);
 }
 
 :root:not(.dark) :is(
@@ -1377,8 +1381,7 @@
   .code-block-wrapper pre.shiki,
   .tiptap pre
 ) ::-moz-selection {
-  background-color: hsl(210 80% 62% / 0.32);
-  color: hsl(0 0% 98%) !important;
+  background-color: hsl(210 80% 68% / 0.32);
 }
 
 /* 代码行：限制重排范围，GPU 合成优化 */
@@ -1655,24 +1658,6 @@
   content: none;
 }
 
-/* ===== FileBrowser 自动定位的高亮脉冲 =====
- * 末关键帧用 transparent 是故意的：Agent 自动 reveal（select=false）一行不进入选中态，
- * 动画结束后行需要恢复无背景色。如果改成 hsl(--accent) 等不透明色，那一行会一直停留
- * 在高亮色直到下次重渲染。
- *
- * 副作用：当 reveal 同时把目标置为选中态（用户搜索点击，select=true）时，
- * animation 在 1.2s 内会盖掉 .bg-accent，造成"先闪→变透明→才出现选中色"的视觉断层。
- * 因此 FileTreeItem 在 select=true 路径下跳过 .file-browser-row-flash class，
- * 直接呈现选中态，避开此冲突。详见 FileBrowser.tsx 中 reveal 分支的注释。
- */
-@keyframes file-browser-flash {
-  0%   { background-color: hsl(var(--primary) / 0.18); }
-  50%  { background-color: hsl(var(--primary) / 0.22); }
-  100% { background-color: transparent; }
-}
-.file-browser-row-flash {
-  animation: file-browser-flash 1.2s ease-out;
-}
 
 /* ===== FileBrowser 层级引导线：默认隐藏，鼠标悬浮文件树时显示（VS Code 风格） ===== */
 .file-tree-guide {

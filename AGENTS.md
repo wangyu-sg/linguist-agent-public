@@ -35,17 +35,17 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.15.140` |
-| Electron | `39.5.1` |
+| Electron App | `@proma/electron 0.16.15` |
+| Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.0.3` |
-| Shared | `@proma/shared 0.1.79` |
+| Shared | `@proma/shared 0.1.82` |
 | Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
-| Pi Runtime | `@earendil-works/pi-* 0.80.9` |
-| CAT Core | `@linguist/cat-core 0.0.12` |
-| CAT Store | `@linguist/cat-store 0.0.25` |
-| CAT Tools | `@linguist/cat-tools 0.0.17` |
+| Pi Runtime（Electron App） | `@earendil-works/pi-* 0.82.1` |
+| CAT Core | `@linguist/cat-core 0.0.13` |
+| CAT Store | `@linguist/cat-store 0.0.26` |
+| CAT Tools | `@linguist/cat-tools 0.0.20` |
 | CAT schema | `13` |
 
 不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。
@@ -116,6 +116,7 @@ bun run smoke:vertical
 - 禁止新增 `LinguistAgentView`、`LinguistComposer`、`LinguistThinkingBlock`、`LinguistToolCard`、`LinguistApprovalCard` 或第二套 Agent Session Store。
 - 禁止新增第二套 Session tree 状态、排序、委派、置顶、最近会话或 MiniMap 行为实现；项目域只提供分组与动作适配。
 - CAT 编辑、Proposal、QA、TM/TB、Context、Preview 和设置位于 `renderer/features/linguist/**`。
+- 上游 v0.16.8 的 Planning（Todo、日程、提醒和 Agent 引用）、Agent Island、统一项目/会话文件能力与 Pi `0.82.1` Runtime 都是同一 Agent/Chat 底座的一部分。通过既有 main service、preload 和 Jotai 合同接入；不得为 Linguist 新建第二套 Planning、Island 或文件 authority 状态。
 
 核心 Renderer 组合仍在：
 
@@ -183,7 +184,7 @@ CAT 写入规则：
 - `project-delivery.ts`：导入、交付预检与导出；
 - `project-service-types.ts`：稳定调用合同。
 
-CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；15 个工具按 `project-tools`、`reference-tools`、`qa-tools`、`proposal-tools` 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。
+CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；17 个工具按 `project-tools`、`reference-tools`、`qa-tools`、`proposal-tools`、`intake-tools` 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。Intake 当前只接受会话明确附加的单文件，不包含目录扫描或 Durable Import Job。
 
 ## 数据目录
 
@@ -200,6 +201,7 @@ CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；15 个�
 ├── attachments/
 ├── settings.json
 ├── sdk-config/
+├── planning.json
 └── linguist/
     ├── projects.json
     ├── projects/<project-id>/
@@ -212,7 +214,7 @@ CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；15 个�
     └── trash/
 ```
 
-开发版使用 `~/.linguist-agent-dev/`。旧 `~/.proma(-dev)/channels.json` 只允许在用户从「设置 → 模型配置」明确选择 Provider-only 导入时读取，不得静默共用或迁移其他数据。
+Planning 使用通用配置根中的原子 `planning.json`；SQLite 仍只用于 CAT 的每项目 `cat.db`。开发版使用 `~/.linguist-agent-dev/`。旧 `~/.proma(-dev)/channels.json` 只允许在用户从「设置 → 模型配置」明确选择 Provider-only 导入时读取，不得静默共用或迁移其他数据。
 
 不要在测试、smoke 或打包验证中读写真实用户根；必须使用精确临时 `--user-data-dir` 与任务专用临时目录。
 
@@ -228,7 +230,7 @@ CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；15 个�
 
 打包前运行 `apps/electron/scripts/sync-runtime-deps.ts`，把 external runtime 依赖闭包同步到 appDir。`electron-builder.yml` 必须包含运行时 `node_modules`，并对 Anthropic 与 Pi native 内容配置 `asarUnpack`。
 
-Claude SDK 平台包由 `optionalDependencies` 固定为 `0.3.201`；每个平台 runner 只构建与宿主架构匹配的产物。不要恢复旧的 `Codex-agent-sdk`、`cli.js` 或 0.2.x 打包说明。
+Claude SDK 平台包由 `optionalDependencies` 固定为 `0.3.201`；Electron App 使用的 Pi runtime 包固定为 `0.82.1`。每个平台 runner 只构建与宿主架构匹配的产物。不要恢复旧的 `Codex-agent-sdk`、`cli.js` 或 0.2.x 打包说明。
 
 ## Provider
 
@@ -272,4 +274,4 @@ Proma 核心文件修改必须遵守：
 - `docs/roadmap/linguist-fusion-queue.json`
 - `docs/roadmap/LINGUIST_FUSION_CURRENT_REALITY.md`
 
-历史报告不得被当作当前代码说明。G8 盲评、LF-048 的 IME/Native Save、AC-009 产品资格和 AC-011 14 天日用在取得真实证据前必须保持 pending / blocked。
+历史报告不得被当作当前代码说明。G8 盲评、LF-048 的 IME/Native Open、AC-009 产品资格和 AC-011 14 天日用在取得真实证据前必须保持 pending / blocked；Native Save 防覆盖已有单独 packaged 手工证据。

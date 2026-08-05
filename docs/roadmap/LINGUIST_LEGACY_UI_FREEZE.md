@@ -62,8 +62,7 @@ LF-074 已删除：
 - 受冻结路径的 P0 修复仍遵守 `PROMA_CORE_TOUCHPOINTS.md`、单一实现、CAS/locked/Tag/QA hard rails 和禁止静默降级规则；
 - 本规则不冻结完整 Proma Agent、Chat、Automations、Bots、Skills、MCP、Preview、Scratch 或 Provider 配置。
 
-## 权威计划文件的版本控制决定
+## 计划来源
 
-`docs/roadmap/LINGUIST_MODE_AND_CAT_WORKBENCH_IMPLEMENTATION_PLAN_CN.md` 在 LF-002 开始前是未跟踪文件，但它已经被 LF-000 事实报告、队列和本冻结规则作为权威来源引用。本票将其原样纳入版本控制：否则新克隆、历史审计和 `LF-078` 删除门都无法取得同一份规则来源。
-
-纳入计划文件只记录用户已提供的规格，不代表对其产品决定作额外改写；若提交前其内容发生变化，应先重新审阅差异，而不是静默一并提交。
+本文件记录旧 LF 阶段的冻结边界；当时的实施计划已退役。当前唯一 active 计划与队列分别为
+`docs/roadmap/LA_UNIFIED_MASTER_PLAN_V2.md` 和 `docs/roadmap/linguist-fusion-queue.json`。

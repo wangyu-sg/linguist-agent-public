@@ -8,7 +8,7 @@
 
 ## 0. 并行纪律（先读）
 
-本仓是**单工作树、单分支 main**。任何两个 session 同时写产品代码，必然在 `bun.lock`、`docs/architecture/proma-touchpoints.json`、`docs/roadmap/EXECUTION_LEDGER.*` 这些每票必碰的全局文件上冲突；已实际发生过一次 PB-042 重复施工。
+本仓是**单工作树、单分支 main**。任何两个 session 同时写产品代码，必然在 `bun.lock`、`docs/architecture/proma-touchpoints.json` 等全局文件上冲突；已实际发生过一次 PB-042 重复施工。
 
 结论：
 
@@ -42,7 +42,7 @@ PB-082 Fast/Balanced/Best ──→ PB-083 Review Skill（Best 的独立 review 
   - electron：`cd apps/electron && bun run test:linguist`
   - 全仓基线：`bun run typecheck`、`bun test`、`bun run check:boundaries`
 - 现有 fixture：`tests/linguist-fixtures/{mini_items.json, terminology.csv, mini_dialogue.csv, sample.mqxliff, placeholder_cases.xliff, mini_game_ui.xliff}`。
-- **缺的 fixture**：`10k_segments.csv`（PB-105 性能矩阵用）、`locked_segments.xliff`（PB-091/092/110 用）——G8 后补造，提前造会进他人工作树，故未提前创建。
+- **当时缺的 fixture**：PB-105 的 10k 性能样本（现已随矩阵退役）、`locked_segments.xliff`（PB-091/092/110 用）——G8 后补造，提前造会进他人工作树，故未提前创建。
 
 ### 旧仓可提取 / 不可提取【已确认；旧仓只读，禁读 `data/**`】
 

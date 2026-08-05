@@ -25,13 +25,12 @@ import { useTrackSessionView } from '@/hooks/useTrackSessionView'
 import { TabBar } from './TabBar'
 import { TabContent } from './TabContent'
 import { AutomationFormView } from '@/components/automation/AutomationFormView'
-import { AutomationsListView } from '@/components/automation/AutomationsListView'
+import { PlanningView } from '@/components/planning/PlanningView'
 import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom, resolveActiveViewForMode } from '@/atoms/active-view'
 import { appModeAtom } from '@/atoms/app-mode'
 import { interfaceVariantAtom } from '@/atoms/theme'
-import { AUTOMATIONS_VISIBLE } from '@/lib/feature-flags'
 import { ProjectsView } from '@/features/linguist/projects/ProjectsView'
 import { cn } from '@/lib/utils'
 
@@ -46,14 +45,8 @@ export function MainArea(): React.ReactElement {
   const automationFormOpenRaw = useAtomValue(automationFormAtom).open
   const activeViewRaw = useAtomValue(activeViewAtom)
   const appMode = useAtomValue(appModeAtom)
-  // D-007（PB-012）：v1 隐藏自动任务产品面；开关关闭时 automations 路由与
-  // 任务表单一律不渲染，回落到普通会话视图（恢复见 lib/feature-flags.ts）。
-  const automationFormOpen = AUTOMATIONS_VISIBLE && automationFormOpenRaw
-  const hiddenViewFallback = activeViewRaw === 'automations' && !AUTOMATIONS_VISIBLE
-  const activeView = resolveActiveViewForMode(
-    hiddenViewFallback ? 'conversations' : activeViewRaw,
-    appMode,
-  )
+  const automationFormOpen = automationFormOpenRaw
+  const activeView = resolveActiveViewForMode(activeViewRaw, appMode)
   const interfaceVariant = useAtomValue(interfaceVariantAtom)
   const isClassic = interfaceVariant === 'classic'
   const store = useStore()
@@ -233,13 +226,12 @@ export function MainArea(): React.ReactElement {
             className={cn('flex flex-col min-w-0 h-full relative', showPreview && 'mr-0.5')}
             style={leftFlexStyle}
           >
-            {activeView === 'automations' ? (
+            {activeView === 'planning' ? (
               automationFormOpen ? (
-                // 定时任务设置页：与列表同层级替换中间区，不经过 TabBar，避免切换时闪出会话 Tab。
+                // 自动化设置页：与任务/日程同层级替换中间区，不经过 TabBar。
                 <AutomationFormView />
               ) : (
-                // Automations 列表视图：全屏取代 TabBar + TabContent
-                <AutomationsListView />
+                <PlanningView />
               )
             ) : activeView === 'agent-skills' ? (
               // Agent 技能视图：全屏取代 TabBar + TabContent

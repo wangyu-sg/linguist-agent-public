@@ -13,6 +13,7 @@ import { useAtomValue } from 'jotai'
 import { appModeAtom, type AppMode } from '@/atoms/app-mode'
 import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
 import { Bot, Languages, MessageSquare } from 'lucide-react'
+import { extensionRegistry } from '@/host/extensions'
 import { cn } from '@/lib/utils'
 import {
   MODE_SWITCHER_MODES,
@@ -26,10 +27,14 @@ const modeIcons: Record<AppMode, React.ReactNode> = {
   linguist: <Languages size={15} />,
 }
 
-const modes: { value: AppMode; label: string; icon: React.ReactNode }[] = MODE_SWITCHER_MODES.map((mode) => ({
-  ...mode,
-  icon: modeIcons[mode.value],
-}))
+const modes: { value: AppMode; label: string; icon: React.ReactNode }[] = MODE_SWITCHER_MODES.map((mode) => {
+  const contribution = extensionRegistry.appModesFor(mode.value)[0]
+  return {
+    ...mode,
+    label: contribution?.label ?? mode.label,
+    icon: contribution?.icon ?? modeIcons[mode.value],
+  }
+})
 
 const navigationKeys = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
 

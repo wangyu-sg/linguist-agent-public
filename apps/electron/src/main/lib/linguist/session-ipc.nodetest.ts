@@ -48,7 +48,7 @@ test('createForProject: happy path returns bound Pi session meta', async () => {
   assert.equal(result.data.linguistProjectId, project.id)
   assert.equal(result.data.linguistProjectName, 'IPC 绑定项目')
   assert.equal(result.data.agentRuntime, 'pi')
-  assert.equal(result.data.title, 'IPC 绑定项目')
+  assert.equal(result.data.title, '新 Agent 会话')
 
   const titled = await ipc.createForProject({ projectId: project.id, title: '自定义标题' })
   assert.ok(titled.ok)

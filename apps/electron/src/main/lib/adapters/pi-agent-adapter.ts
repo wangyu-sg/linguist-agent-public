@@ -14,6 +14,7 @@ import type {
   AgentThinkingLevel,
   AgentProviderAdapter,
   CodexOAuthCredentials,
+  XaiOAuthCredentials,
   AgentQueryInput,
   ErrorCode,
   JsonSchemaOutputFormat,
@@ -25,7 +26,12 @@ import type {
   SDKUserMessageInput,
   TypedError,
 } from '@proma/shared'
-import { isCodexFastModeSupportedModel, isOpenAIReasoningSupportedModel } from '@proma/shared'
+import {
+  calculatePiAutoCompactionReserveTokens,
+  inferReasoningTransport,
+  isCodexFastModeSupportedModel,
+  resolveReasoningProfile,
+} from '@proma/shared'
 import {
   THINKING_SIGNATURE_ERROR_MESSAGE,
   THINKING_SIGNATURE_ERROR_TITLE,
@@ -51,7 +57,8 @@ import {
   type AgentRuntimeGuard,
 } from '../agent-runtime-guards'
 import { createPromaAgentsFilesOverride } from './pi-resource-loader-overrides'
-import { createCodexRequestSettingsExtension, withCodexFastModeServiceTier } from './pi-codex-request-settings'
+import { createCodexFastModeExtension, withCodexFastModeServiceTier } from './pi-codex-request-settings'
+import { createOpenAIReasoningRequestExtension } from './pi-openai-reasoning-request-settings'
 import { mergeRuntimeEnv, type AgentRuntimeEnv } from '../agent-runtime-env'
 import {
   convertPiMessage,
@@ -81,13 +88,19 @@ type BashToolOptions = import('@earendil-works/pi-coding-agent').BashToolOptions
 type SkillLoadResult = ReturnType<ResourceLoader['getSkills']>
 
 const PI_NATIVE_MAX_RETRIES = 8
+const PI_NATIVE_MAX_TOTAL_RETRIES = 8
 const PI_NATIVE_RETRY_BASE_DELAY_MS = 1_000
+const PI_NATIVE_MAX_TOTAL_DELAY_MS = 5 * 60_000
+const PI_NATIVE_RETRY_JITTER_RATIO = 0.2
+const MAX_AUTOMATIC_COMPACTION_CONTINUATIONS = 20
 
 /** Pi SDK 查询选项（扩展通用 AgentQueryInput） */
 export interface PiAgentQueryOptions extends AgentQueryInput {
   apiKey: string
   baseUrl?: string
   provider: ProviderType
+  /** OAuth credential coordination key; equals the selected Proma channel id. */
+  channelId?: string
   channelName?: string
   maxTurns?: number
   permissionMode: PromaPermissionMode
@@ -107,6 +120,8 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   onModelResolved?: (model: string) => void
   onContextWindow?: (contextWindow: number) => void
   onRetry?: (update: import('./pi-retry-control').PiRetryUpdate) => void
+  /** 渲染进程创建的本轮流式开始时间，用于隔离迟到的 native retry 事件。 */
+  retryRunStartedAt?: number
   thinkingLevel?: AgentThinkingLevel
   maxBudgetUsd?: number
   outputFormat?: JsonSchemaOutputFormat
@@ -125,12 +140,18 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   runtimeEnv?: AgentRuntimeEnv
   /** 手动压缩请求：走 pi 原生 session.compact()，而非把 /compact 当普通 prompt 发给模型 */
   compactRequest?: boolean
+  /** 当前 Linguist turn 的冻结上下文；压缩续跑时重新注入，避免摘要裁剪掉项目 authority。 */
+  compactionContinuationContext?: string
   /** ChatGPT Codex Fast Mode；仅 openai-codex 的受支持模型实际注入 priority service tier。 */
   codexFastMode?: boolean
   /** Pi 的 OAuth credential store 使用真实 expires 和 refresh，不读取 ~/.pi。 */
   codexOAuthCredentials?: CodexOAuthCredentials
   /** Pi 运行中刷新 OAuth 后，将新凭据回写到 Proma 渠道存储。 */
   onCodexOAuthCredentialsRefreshed?: (credentials: CodexOAuthCredentials) => void | Promise<void>
+  /** xAI OAuth credential store 使用真实 expires 和 refresh，不读取 ~/.pi。 */
+  xaiOAuthCredentials?: XaiOAuthCredentials
+  /** Pi 运行中刷新 xAI OAuth 后，将新凭据回写到 Proma 渠道存储。 */
+  onXaiOAuthCredentialsRefreshed?: (credentials: XaiOAuthCredentials) => void | Promise<void>
   /** 会话级 OpenAI（Codex OAuth / Responses API）思考深度。 */
   openAIThinkingLevel?: AgentThinkingLevel
 }
@@ -167,6 +188,26 @@ interface PromaTaskItem {
 
 interface AssistantMessageState {
   uuid?: string
+}
+
+/**
+ * 同一 assistant 流在 Pi native retry 前后必须复用 UUID：renderer 才能用恢复后的
+ * partial/final frame 原地替换断流前的 partial，而不是把两段回答并排追加。
+ */
+export function createPiAssistantUuidTracker(createUuid: () => string = randomUUID): {
+  get: () => string
+  reset: () => void
+} {
+  let state: AssistantMessageState = {}
+
+  return {
+    get: () => {
+      if (!state.uuid) state = { uuid: createUuid() }
+      if (!state.uuid) throw new Error('Pi assistant message uuid 初始化失败')
+      return state.uuid
+    },
+    reset: () => { state = {} },
+  }
 }
 
 export interface PiRemoteConnectionSettings {
@@ -778,8 +819,73 @@ function createTerminatingJsonToolResult(payload: unknown): AgentToolResult<unkn
   } as AgentToolResult<unknown>
 }
 
+export const PI_COMPACTION_CONTINUATION_PROMPT = `<proma_compaction_continuation>
+当前会话上下文已经安全压缩。请依据压缩摘要、保留的最近上下文和已持久化的交接状态，继续完成原始用户任务。
+
+- 不要重复已经完成或已提交的操作；先核验当前状态。
+- 若仍有工作，立即执行下一项具体行动。
+- 只有原始需求全部完成时才给出最终答复；若确实受阻，明确说明阻塞原因。
+</proma_compaction_continuation>`
+
+export function planPiCompactionContinuation(options: {
+  continuationCount: number
+  abortRequested: boolean
+  runtimeLimitReached: boolean
+}):
+  | { shouldContinue: true; prompt: string }
+  | { shouldContinue: false; reason: 'aborted' | 'runtime_limit' | 'continuation_limit' } {
+  if (options.abortRequested) return { shouldContinue: false, reason: 'aborted' }
+  if (options.runtimeLimitReached) return { shouldContinue: false, reason: 'runtime_limit' }
+  if (options.continuationCount >= MAX_AUTOMATIC_COMPACTION_CONTINUATIONS) {
+    return { shouldContinue: false, reason: 'continuation_limit' }
+  }
+  return { shouldContinue: true, prompt: PI_COMPACTION_CONTINUATION_PROMPT }
+}
+
+/** 将当前 turn 的宿主上下文带入压缩后的下一次 Pi prompt。 */
+export function buildPiCompactionContinuationPrompt(
+  continuationPrompt: string,
+  frozenTurnContext?: string,
+): string {
+  const context = frozenTurnContext?.trim()
+  return context ? `${continuationPrompt}\n\n${context}` : continuationPrompt
+}
+
 export function canRunCurrentSessionCompaction(toolNames: string[]): boolean {
   return toolNames.length === 1 && toolNames[0] === 'CompactContext'
+}
+
+/**
+ * Pi emits `agent_end` before it decides whether an error needs overflow
+ * compaction. Keep this one error class local until the matching compaction
+ * lifecycle reaches a terminal state, otherwise the outer orchestrator can
+ * dispose the session before Pi calls `agent.continue()`.
+ */
+function isPiContextOverflow(message: AssistantMessage, contextWindow: number | undefined): boolean {
+  if (message.stopReason === 'error' && isPromptTooLongError(message.errorMessage)) return true
+
+  if (contextWindow && message.stopReason === 'length' && message.usage?.output === 0) {
+    const inputTokens = (message.usage.input ?? 0) + (message.usage.cacheRead ?? 0)
+    return inputTokens >= contextWindow * 0.99
+  }
+
+  return false
+}
+
+export function shouldDeferPiOverflowTerminalMessage(
+  message: AssistantMessage,
+  contextWindow: number | undefined,
+): boolean {
+  return message.stopReason !== 'stop' && isPiContextOverflow(message, contextWindow)
+}
+
+export function shouldDeferPiOverflowTerminalError(
+  message: AssistantMessage | undefined,
+  contextWindow: number | undefined,
+  willRetry: boolean,
+  abortRequested: boolean,
+): boolean {
+  return !willRetry && !abortRequested && !!message && shouldDeferPiOverflowTerminalMessage(message, contextWindow)
 }
 
 function installCurrentSessionCompactionHooks(session: AgentSession): void {
@@ -814,14 +920,14 @@ export function buildCurrentSessionCompactionTool(
   const definition = sdk.defineTool({
     name: 'CompactContext',
     label: '压缩当前会话上下文',
-    description: 'Compact only the current Pi Agent session after this turn finishes. Before calling, persist a durable handoff or checkpoint to workspace files. This ends the current Agent turn; continue from the saved handoff in a later turn.',
-    promptSnippet: 'CompactContext: after persisting a durable handoff/checkpoint, end this turn and compact the current session context.',
+    description: 'Compact only the current Pi Agent session after this turn finishes. Before calling, persist a durable handoff or checkpoint to the session workbench or project files as appropriate. Proma will compact the current session, then automatically continue the original task from the compacted context.',
+    promptSnippet: 'CompactContext: after persisting a durable handoff/checkpoint, compact the current session context. Proma will automatically continue the original task after compaction.',
     parameters: Type.Object({}),
     async execute() {
       requestCompaction()
       return createTerminatingJsonToolResult({
         status: 'scheduled',
-        message: '将在当前 Agent 回合安全结束后压缩当前会话上下文。请在下一回合从已持久化的交接状态继续。',
+        message: '将在当前 Agent 回合安全结束后压缩当前会话上下文，并自动从已持久化的交接状态继续原始任务。',
       })
     },
   })
@@ -862,6 +968,16 @@ export async function compactCurrentSessionAfterTurn(
     onNoop(createCompactionNoopMessage(session.sessionId, error))
     return 'noop'
   }
+}
+
+function createCompactionContinuationLimitResult(sessionId: string): SDKMessage {
+  return {
+    type: 'result',
+    subtype: 'error_during_execution',
+    terminal_reason: 'compaction_continuation_limit',
+    errors: [`自动压缩续跑已达上限（${MAX_AUTOMATIC_COMPACTION_CONTINUATIONS} 次），任务未确认完成。请检查当前状态后继续。`],
+    session_id: sessionId,
+  } as unknown as SDKMessage
 }
 
 function stringFromInput(input: Record<string, unknown>, keys: string[], fallback = ''): string {
@@ -1273,6 +1389,8 @@ export class PiAgentAdapter implements AgentProviderAdapter {
     this.activeSessions.set(input.sessionId, active)
     const queue = createAsyncQueue<SDKMessage>()
     const runtimeGuard = createAgentRuntimeGuard(input)
+    // 同一 session 的新请求可能在旧 IPC 事件之后开始；所有 retry 生命周期均携带这一轮标识。
+    const retryRunStartedAt = input.retryRunStartedAt ?? Date.now()
     active.runtimeGuard = runtimeGuard
     let unsubscribe: (() => void) | undefined
     let requestProxyDispatcher: Dispatcher | undefined
@@ -1321,7 +1439,12 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         ? sdk.SessionManager.open(sessionFile, input.piSessionDir, cwd)
         : sdk.SessionManager.create(cwd, input.piSessionDir)
       const { modelRuntime, model } = await buildModel(sdk, input)
+      const autoCompactionReserveTokens = calculatePiAutoCompactionReserveTokens(
+        model.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+      )
       let compactContextRequested = false
+      let pendingCompactionContinuation: string | undefined
+      let automaticCompactionContinuations = 0
       let pendingTerminalResult: SDKMessage | undefined
       const customTools = [
         buildCurrentSessionCompactionTool(
@@ -1342,14 +1465,39 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       const settingsManager = sdk.SettingsManager.inMemory({
         // 使用 Pi SDK 原生压缩策略：
         // - 手动压缩由 session.compact() 触发；
-        // - 自动压缩由 Pi 在上下文接近窗口上限或溢出恢复时触发。
-        compaction: { enabled: true },
+        // - 自动压缩在上下文达到模型窗口的约 80% 时触发；Pi 以 reserveTokens 表示预留空间。
+        compaction: { enabled: true, reserveTokens: autoCompactionReserveTokens },
         // Pi 原生 retry 通过 agent.continue() 在同一 transcript 中恢复，能保留已完成的
         // tool_result；不能用外层重投原始 prompt 替代，否则会重复执行副作用工具。
-        // 8 次指数退避（1+2+...+128 秒）约 255 秒，维持原 5 分钟恢复预算。
-        retry: { enabled: true, maxRetries: PI_NATIVE_MAX_RETRIES, baseDelayMs: PI_NATIVE_RETRY_BASE_DELAY_MS },
+        // 单段和整轮均最多 8 次；累计 backoff 最多 5 分钟。±20% jitter 避免多个
+        // 客户端在固定指数退避边界同时重试。provider retry 保持默认 0，避免嵌套计数。
+        retry: {
+          enabled: true,
+          maxRetries: PI_NATIVE_MAX_RETRIES,
+          maxTotalRetries: PI_NATIVE_MAX_TOTAL_RETRIES,
+          baseDelayMs: PI_NATIVE_RETRY_BASE_DELAY_MS,
+          maxTotalDelayMs: PI_NATIVE_MAX_TOTAL_DELAY_MS,
+          jitterRatio: PI_NATIVE_RETRY_JITTER_RATIO,
+        },
         ...buildPiRemoteConnectionSettings(input),
       })
+      const openAIReasoningProfile = (input.provider === 'openai-codex' || input.provider === 'xai' || input.provider === 'openai-responses')
+        ? resolveReasoningProfile({
+          modelId: input.model,
+          transport: inferReasoningTransport(input.provider),
+        })
+        : undefined
+      const extensionFactories = [
+        ...(openAIReasoningProfile
+          ? [createOpenAIReasoningRequestExtension({
+              profile: openAIReasoningProfile,
+              thinkingLevel: input.openAIThinkingLevel,
+            })]
+          : []),
+        ...(input.provider === 'openai-codex' && input.codexFastMode
+          ? [createCodexFastModeExtension({ fastMode: true })]
+          : []),
+      ]
       const resourceLoader = new sdk.DefaultResourceLoader({
         cwd,
         agentDir: input.piAgentDir,
@@ -1358,14 +1506,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         additionalSkillPaths: input.additionalSkillPaths ?? [],
         skillsOverride: createPromaSkillsOverride(input.additionalSkillPaths),
         agentsFilesOverride: createPromaAgentsFilesOverride(),
-        ...((input.provider === 'openai-codex' || input.provider === 'openai-responses')
-          && model.reasoning
-          && isOpenAIReasoningSupportedModel(input.model) && {
-            extensionFactories: [createCodexRequestSettingsExtension({
-            fastMode: input.codexFastMode,
-            thinkingLevel: input.openAIThinkingLevel,
-          })],
-        }),
+        ...(model.reasoning && extensionFactories.length > 0 && { extensionFactories }),
         systemPromptOverride: () => input.systemPrompt,
       })
       await resourceLoader.reload()
@@ -1396,7 +1537,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       if (piAi && input.codexFastMode && input.provider === 'openai-codex' && isCodexFastModeSupportedModel(input.model)) {
         // Pi 的通用 streamSimple 会丢弃 provider 专属 serviceTier；这里直接走
         // provider stream，确保 request body 与 usage.cost 都使用 priority tier。
-        session.agent.streamFn = async (requestModel, context, options) => {
+        session.agent.streamFunction = async (requestModel, context, options) => {
           const authResult = await modelRuntime.getAuth(requestModel)
           if (!authResult?.auth.apiKey) throw new Error('无法获取 ChatGPT (Codex) OAuth access token')
           const auth = authResult.auth
@@ -1421,8 +1562,8 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       }
       // 代理作用域必须只覆盖模型 provider stream：在整个 session.prompt() 链上设
       // AsyncLocalStorage 会把 MCP/产品工具等同一 Agent loop 中的 fetch 也错误地送进 Codex 代理。
-      const providerStreamFn = session.agent.streamFn
-      session.agent.streamFn = (requestModel, context, options) => runWithPiRequestProxy(
+      const providerStreamFn = session.agent.streamFunction
+      session.agent.streamFunction = (requestModel, context, options) => runWithPiRequestProxy(
         requestProxyDispatcher,
         () => providerStreamFn(requestModel, context, options),
       )
@@ -1447,14 +1588,16 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         model: session.model?.id ?? input.model,
       } as unknown as SDKMessage)
 
-      let activeAssistant: AssistantMessageState = {}
+      const assistantUuidTracker = createPiAssistantUuidTracker()
       let lastPartialAssistant: AssistantMessage | undefined
       // Pi 会在 native retry 前先发出 error assistant，再以 agent_end.willRetry 标记。
       // 延迟向 orchestrator 透传该 error，避免它先触发外层重试而重放整个 prompt。
       const retryTerminalGate = createPiRetryTerminalGate<{
         assistantMessage: AssistantMessage
         sdkMessage: SDKMessage
+        assistantUuid: string
       }>()
+      let pendingNativeOverflowRecovery = false
       // message_end 发生在 Pi 落盘前；保留对象身份，待 prompt 完成后从
       // SessionManager entries 精确取得 Pi entry ID，绝不按文本猜测。
       const finalAssistantUuids = new Map<AssistantMessage, string>()
@@ -1469,13 +1612,21 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         if (Object.keys(bindings).length > 0) input.onPiEntryBindings?.(bindings)
       }
 
-      const assistantUuidFor = (): string => {
-        if (!activeAssistant.uuid) {
-          activeAssistant = { uuid: randomUUID() }
-        }
-        const uuid = activeAssistant.uuid
-        if (!uuid) throw new Error('Pi assistant message uuid 初始化失败')
-        return uuid
+      const assistantUuidFor = (): string => assistantUuidTracker.get()
+      const resetAssistantStream = (): void => {
+        assistantUuidTracker.reset()
+        lastPartialAssistant = undefined
+      }
+
+      const emitTerminalRetryError = (terminalRetryError: {
+        assistantMessage: AssistantMessage
+        sdkMessage: SDKMessage
+        assistantUuid: string
+      }): void => {
+        finalAssistantUuids.set(terminalRetryError.assistantMessage, terminalRetryError.assistantUuid)
+        runtimeGuard.recordMessage(terminalRetryError.assistantMessage)
+        queue.push(terminalRetryError.sdkMessage)
+        resetAssistantStream()
       }
 
       partialAssistantCoalescer = createPartialMessageCoalescer(({ message, uuid }) => {
@@ -1507,46 +1658,68 @@ export class PiAgentAdapter implements AgentProviderAdapter {
                   })
                   if (converted?.type === 'assistant') queue.push(converted)
                 }
-                lastPartialAssistant = undefined
-                activeAssistant = {}
+                resetAssistantStream()
                 break
               }
               const isAssistant = isAssistantPiMessage(event.message)
+              const assistantUuid = isAssistant ? assistantUuidFor() : undefined
               const converted = convertPiMessage(event.message, session.sessionId, input.model, {
                 final: true,
-                ...(isAssistant && { uuid: assistantUuidFor() }),
+                ...(assistantUuid && { uuid: assistantUuid }),
               })
-              const isRetryableAssistantError = isAssistant && (event.message as AssistantMessage).stopReason === 'error'
-              if (isRetryableAssistantError && converted?.type === 'assistant') {
+              const shouldDeferNativeOverflow = isAssistant
+                && shouldDeferPiOverflowTerminalMessage(event.message as AssistantMessage, model.contextWindow)
+              const shouldDeferAssistantTerminal = isAssistant && (
+                (event.message as AssistantMessage).stopReason === 'error' || shouldDeferNativeOverflow
+              )
+              if (shouldDeferAssistantTerminal && converted?.type === 'assistant' && assistantUuid) {
                 // Native retry 会丢弃该失败 assistant；不应消耗 Proma 的 turn/budget 配额。
+                // 关键：此处不能重置 UUID。retry 后的新 partial/final 必须原地替换此前
+                // 已经展示的 partial，避免用户同时看到断流残片和恢复后的完整回答。
                 retryTerminalGate.defer({
                   assistantMessage: event.message as AssistantMessage,
                   sdkMessage: converted,
+                  assistantUuid,
                 })
               } else {
                 runtimeGuard.recordMessage(event.message)
                 if (converted && (converted.type !== 'user' || hasToolResult(converted))) queue.push(converted)
-              }
-              if (isAssistant) finalAssistantUuids.set(event.message as AssistantMessage, assistantUuidFor())
-              if (isAssistant) {
-                activeAssistant = {}
-                lastPartialAssistant = undefined
+                if (isAssistant && assistantUuid) {
+                  finalAssistantUuids.set(event.message as AssistantMessage, assistantUuid)
+                  resetAssistantStream()
+                }
               }
               break
             }
             case 'agent_end':
-              // 无论是否正被 interrupt，都要消费本轮 deferred error，防止它泄漏进下一轮。
-              const terminalRetryError = retryTerminalGate.settle(event.willRetry)
-              if (active.interrupting && active.pendingInterruptPrompts.length > 0) {
+              if (active.abortRequested || (active.interrupting && active.pendingInterruptPrompts.length > 0)) {
+                // 用户停止或插入新 prompt 时，当前 loop 的错误与 result 都不得泄漏到下一轮。
+                retryTerminalGate.settle(true)
+                pendingNativeOverflowRecovery = false
+                pendingTerminalResult = undefined
+                resetAssistantStream()
                 break
               }
+              const deferredRetryError = retryTerminalGate.peek()
+              const waitsForNativeOverflowRecovery = shouldDeferPiOverflowTerminalError(
+                deferredRetryError?.assistantMessage,
+                model.contextWindow,
+                event.willRetry,
+                active.abortRequested,
+              )
+              // Pi 在 agent_end 后才会检测 overflow 并压缩。此时若先将错误交给
+              // orchestrator，会触发外层恢复或清理，打断同 transcript 的 continue。
+              const terminalRetryError = waitsForNativeOverflowRecovery
+                ? undefined
+                : retryTerminalGate.settle(event.willRetry)
+              if (waitsForNativeOverflowRecovery) pendingNativeOverflowRecovery = true
               if (event.willRetry) {
-                // native retry 会在同一 session 中调用 continue()，不要向上游发送终态。
+                // native retry 会在同一 session 中调用 continue()，不要向上游发送终态，
+                // 并保留当前 UUID，供恢复后的输出替换此前 partial。
                 break
               }
               if (terminalRetryError) {
-                runtimeGuard.recordMessage(terminalRetryError.assistantMessage)
-                queue.push(terminalRetryError.sdkMessage)
+                emitTerminalRetryError(terminalRetryError)
               }
               // Pi can start auto-compaction after agent_end but before session.prompt()
               // resolves. Defer the terminal result until then, otherwise the orchestrator's
@@ -1558,8 +1731,9 @@ export class PiAgentAdapter implements AgentProviderAdapter {
               )
               break
             case 'auto_retry_start':
+            case 'auto_retry_attempt_start':
             case 'auto_retry_end':
-              for (const retry of mapPiNativeRetryEvent(event)) input.onRetry?.(retry)
+              for (const retry of mapPiNativeRetryEvent(event, { runStartedAt: retryRunStartedAt })) input.onRetry?.(retry)
               break
             case 'tool_execution_update':
               queue.push({
@@ -1580,6 +1754,14 @@ export class PiAgentAdapter implements AgentProviderAdapter {
               } as unknown as SDKMessage)
               break
             case 'compaction_end':
+              if (pendingNativeOverflowRecovery && event.reason === 'overflow') {
+                pendingNativeOverflowRecovery = false
+                const recovered = !event.aborted && event.result !== undefined && event.willRetry
+                const terminalRetryError = retryTerminalGate.settle(
+                  recovered || active.abortRequested || active.interrupting,
+                )
+                if (terminalRetryError) emitTerminalRetryError(terminalRetryError)
+              }
               // 所有压缩结果都必须有可识别的终态，确保 renderer 能结束底部进度追踪。
               if (!event.aborted && event.result) {
                 queue.push({
@@ -1608,6 +1790,14 @@ export class PiAgentAdapter implements AgentProviderAdapter {
                   compact_result: 'failed',
                   compact_error: event.errorMessage,
                 } as unknown as SDKMessage)
+              }
+              break
+            case 'agent_settled':
+              // 防御上游缺少 compaction_end 的异常事件序列，不能无限吞掉已 deferred 的错误。
+              if (pendingNativeOverflowRecovery) {
+                pendingNativeOverflowRecovery = false
+                const terminalRetryError = retryTerminalGate.settle(active.abortRequested || active.interrupting)
+                if (terminalRetryError) emitTerminalRetryError(terminalRetryError)
               }
               break
           }
@@ -1654,7 +1844,10 @@ export class PiAgentAdapter implements AgentProviderAdapter {
           .finally(cleanupActiveSession)
       } else {
         const runPromptChain = async (): Promise<void> => {
-          let nextPrompt: string | undefined = appendOutputFormatInstruction(input.prompt, input.outputFormat)
+          let nextPrompt: { content: string; skipSkillExpansion: boolean } | undefined = {
+            content: appendOutputFormatInstruction(input.prompt, input.outputFormat),
+            skipSkillExpansion: false,
+          }
           let nextInterrupt: PendingInterruptPrompt | undefined
           while (nextPrompt !== undefined) {
             const currentInterrupt = nextInterrupt
@@ -1664,9 +1857,12 @@ export class PiAgentAdapter implements AgentProviderAdapter {
               rejectPendingInterruptPrompts(active, createAbortError())
               return
             }
+            const promptInput = nextPrompt
             let prompt: string
             try {
-              prompt = await preparePromptWithPromaSkills(resourceLoader, nextPrompt, input.skillMentions)
+              prompt = promptInput.skipSkillExpansion
+                ? promptInput.content
+                : await preparePromptWithPromaSkills(resourceLoader, promptInput.content, input.skillMentions)
             } catch (error) {
               currentInterrupt?.rejectAccepted(error)
               throw error
@@ -1682,10 +1878,41 @@ export class PiAgentAdapter implements AgentProviderAdapter {
               await session.prompt(prompt, { source: 'rpc' })
               persistPiEntryBindings()
               if (compactContextRequested) {
-                await compactCurrentSessionAfterTurn(session, (message) => queue.push(message))
+                try {
+                  await compactCurrentSessionAfterTurn(session, (message) => queue.push(message))
+                } catch (error) {
+                  // 用户在压缩期间停止时，Pi 会取消 summarization；这是正常中止而不是运行错误。
+                  if (active.abortRequested) return
+                  throw error
+                }
                 compactContextRequested = false
+                const continuation = planPiCompactionContinuation({
+                  continuationCount: automaticCompactionContinuations,
+                  abortRequested: active.abortRequested,
+                  runtimeLimitReached: runtimeGuard.shouldStopBeforeNextTurn(),
+                })
+                if (continuation.shouldContinue) {
+                  automaticCompactionContinuations += 1
+                  pendingCompactionContinuation = appendOutputFormatInstruction(
+                    buildPiCompactionContinuationPrompt(
+                      continuation.prompt,
+                      input.compactionContinuationContext,
+                    ),
+                    input.outputFormat,
+                  )
+                  // 当前终态仅表示为执行压缩而结束的内部 loop，不应让上层把原任务视为完成。
+                  pendingTerminalResult = undefined
+                } else if (continuation.reason === 'continuation_limit') {
+                  pendingTerminalResult = createCompactionContinuationLimitResult(session.sessionId)
+                }
               }
-              if (pendingTerminalResult) {
+              if (active.abortRequested || active.interrupting) {
+                // Cancellation can arrive while Pi is compacting, after its first agent_end.
+                // Do not render that stale terminal result before the next interrupt prompt starts.
+                retryTerminalGate.settle(true)
+                pendingNativeOverflowRecovery = false
+                pendingTerminalResult = undefined
+              } else if (pendingTerminalResult) {
                 queue.push(pendingTerminalResult)
                 pendingTerminalResult = undefined
               }
@@ -1705,7 +1932,12 @@ export class PiAgentAdapter implements AgentProviderAdapter {
             }
             const pendingInterrupt = active.pendingInterruptPrompts.shift()
             nextInterrupt = pendingInterrupt
-            nextPrompt = pendingInterrupt?.content
+            if (pendingInterrupt) {
+              nextPrompt = { content: pendingInterrupt.content, skipSkillExpansion: false }
+            } else if (pendingCompactionContinuation) {
+              nextPrompt = { content: pendingCompactionContinuation, skipSkillExpansion: true }
+              pendingCompactionContinuation = undefined
+            }
           }
         }
 
@@ -1736,6 +1968,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
     active.abortRequested = true
     rejectPendingInterruptPrompts(active, createAbortError())
     if (!active.session) rejectActiveReady(active, createAbortError())
+    active.session?.abortCompaction()
     active.session?.abort().catch(() => {})
   }
 

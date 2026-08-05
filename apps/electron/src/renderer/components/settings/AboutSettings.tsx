@@ -23,12 +23,9 @@ import {
 import { EnvironmentCheckCard } from '@/components/environment/EnvironmentCheckCard'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { LINGUIST_BUILD_METADATA } from '@/lib/linguist-build-metadata'
 import { ReleaseNotesViewer } from './ReleaseNotesViewer'
 import { VersionHistory } from './VersionHistory'
-
-/** 从 package.json 构建时由 Vite define 注入 */
-declare const __APP_VERSION__: string
-const APP_VERSION = __APP_VERSION__
 
 const GITHUB_RELEASES_URL = 'https://github.com/proma-ai/Proma/releases'
 
@@ -43,6 +40,7 @@ function UpdateCard(): React.ReactElement | null {
   const available = useAtomValue(updaterAvailableAtom)
   const status = useAtomValue(updateStatusAtom)
   const [checking, setChecking] = React.useState(false)
+  const [idleInstallScheduled, setIdleInstallScheduled] = React.useState(false)
   const [showReleaseNotes, setShowReleaseNotes] = React.useState(false)
   const [release, setRelease] = React.useState<import('@proma/shared').GitHubRelease | null>(null)
 
@@ -64,11 +62,22 @@ function UpdateCard(): React.ReactElement | null {
     window.electronAPI.openExternal(url)
   }
 
-  const handleQuitAndInstall = (): void => {
-    window.electronAPI.updater?.quitAndInstall()
+  const handleInstallWhenIdle = (): void => {
+    void window.electronAPI.updater?.installWhenIdle()
+      .then((scheduled) => setIdleInstallScheduled(scheduled))
+      .catch(() => setIdleInstallScheduled(false))
+  }
+
+  const handleCancelIdleInstall = (): void => {
+    void window.electronAPI.updater?.cancelIdleInstall()
+      .then(() => setIdleInstallScheduled(false))
   }
 
   // 当检测到新版本时，获取完整的 release 信息
+  React.useEffect(() => {
+    if (status.status !== 'downloaded') setIdleInstallScheduled(false)
+  }, [status.status])
+
   React.useEffect(() => {
     if (status.status === 'available' && status.version && !release) {
       window.electronAPI
@@ -97,13 +106,22 @@ function UpdateCard(): React.ReactElement | null {
 
           {/* 操作按钮 */}
           {status.status === 'downloaded' ? (
-            <button
-              onClick={handleQuitAndInstall}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              <RotateCw className="h-3.5 w-3.5" />
-              立即重启
-            </button>
+            idleInstallScheduled ? (
+              <button
+                onClick={handleCancelIdleInstall}
+                className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors"
+              >
+                取消安排
+              </button>
+            ) : (
+              <button
+                onClick={handleInstallWhenIdle}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+                空闲时更新
+              </button>
+            )
           ) : status.status === 'available' ? (
             <button
               onClick={handleGoToDownload}
@@ -407,7 +425,7 @@ function ShellEnvironmentCard(): React.ReactElement | null {
       <div className="p-4 space-y-3">
         <SettingsSelect
           label="Agent Shell"
-          description="默认使用 Git Bash，确保 Windows 工作区与 Agent 工具使用同一套路径；选择 WSL 后，WSL 不可用时会回退到 Git Bash。"
+          description="默认使用 Git Bash，确保 Windows 项目与 Agent 工具使用同一套路径；选择 WSL 后，WSL 不可用时会回退到 Git Bash。"
           value={shellPreference}
           onValueChange={(value) => {
             void handlePreferenceChange(value).catch((error) => console.error('[Shell 环境检测] 保存偏好失败:', error))
@@ -482,8 +500,49 @@ export function AboutSettings(): React.ReactElement {
       description="基于 Proma 构建的桌面本地化 Agent / Built on Proma (AGPL-3.0)"
     >
       <SettingsCard>
-        <SettingsRow label="版本">
-          <span className="text-sm text-muted-foreground font-mono">{APP_VERSION}</span>
+        <SettingsRow label="Linguist Agent">
+          <span className="text-sm text-muted-foreground font-mono">
+            {LINGUIST_BUILD_METADATA.linguistAgentVersion}
+          </span>
+        </SettingsRow>
+        <SettingsRow label="Proma Base">
+          <span className="text-sm text-muted-foreground font-mono">
+            v{LINGUIST_BUILD_METADATA.promaBaseVersion}
+          </span>
+        </SettingsRow>
+        <SettingsRow label="Proma Base Commit">
+          <span
+            className="max-w-48 break-all text-right text-sm text-muted-foreground font-mono"
+            title={LINGUIST_BUILD_METADATA.promaBaseCommit}
+          >
+            {LINGUIST_BUILD_METADATA.promaBaseCommit}
+          </span>
+        </SettingsRow>
+        <SettingsRow label="LA Merge Commit">
+          <span
+            className="max-w-48 break-all text-right text-sm text-muted-foreground font-mono"
+            title={LINGUIST_BUILD_METADATA.formalMergeCommit}
+          >
+            {LINGUIST_BUILD_METADATA.formalMergeCommit}
+          </span>
+        </SettingsRow>
+        <SettingsRow label="CAT Schema">
+          <span className="text-sm text-muted-foreground font-mono">
+            {LINGUIST_BUILD_METADATA.catSchema}
+          </span>
+        </SettingsRow>
+        <SettingsRow label="Prompt Contract">
+          <span className="text-sm text-muted-foreground font-mono">
+            {LINGUIST_BUILD_METADATA.promptContract}
+          </span>
+        </SettingsRow>
+        <SettingsRow
+          label="Host Contract"
+          description={LINGUIST_BUILD_METADATA.hostContractDetail}
+        >
+          <span className="text-sm text-muted-foreground">
+            {LINGUIST_BUILD_METADATA.hostContract}
+          </span>
         </SettingsRow>
         <SettingsRow label="运行时">
           <span className="text-sm text-muted-foreground">Electron + React</span>

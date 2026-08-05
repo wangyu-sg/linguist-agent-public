@@ -33,8 +33,8 @@
 | `apps/electron/src/main/lib/linguist/session-binding.nodetest.ts`（6 条）+ `session-ipc.nodetest.ts`（5 条） | node --test：状态三态/冻结/创建/列表/发送闸门；IPC 信封 happy + 校验负例 + 归档拒建 |
 | `apps/electron/src/main/lib/linguist/test/{electron-stub.mjs,loader-hooks.mjs}` | 测试基建：bare `electron` specifier 打桩 + 目录导入解析（node 无 mock.module） |
 | `apps/electron/src/main/lib/linguist/ipc-contract.test.ts`（+3 条）+ `renderer/.../binding-utils.test.ts`（+5 条） | bun 守卫：三通道名精确匹配/preload 与 ipc.ts 接线形状；绑定纯函数 |
-| `apps/electron/scripts/smoke/probe-project-session.ts`（新增**常驻探针**，17 断言） | 真实 UI 驱动全环：CLI 播种 → Chat tab → 新建项目对话 → 徽章 → IPC 交叉核对 → 普通会话未绑定 → 归档 → 列表只读/新建禁用 → **发送被主进程阻断（fake server 0 请求 + JSONL 落盘 linguist_project_archived + 用户消息持久化）** → 历史可读 → 删项目目录重启 → missing 降级 + 项目视图存活 → tmp HOME 隔离 |
-| `apps/electron/scripts/smoke/probe-projects-view.ts`（更新） | 第 6 断言随 Chat tab 落地更新：`role="tab"` 选中态 + 「尚无项目对话」空状态（旧「即将推出」占位断言移除） |
+| 历史 Project Session packaged 探针（已退役，17 断言） | 真实 UI 驱动全环：CLI 播种 → Chat tab → 新建项目对话 → 徽章 → IPC 交叉核对 → 普通会话未绑定 → 归档 → 列表只读/新建禁用 → **发送被主进程阻断（fake server 0 请求 + JSONL 落盘 linguist_project_archived + 用户消息持久化）** → 历史可读 → 删项目目录重启 → missing 降级 + 项目视图存活 → tmp HOME 隔离 |
+| 历史 Projects View packaged 探针（已退役） | 第 6 断言随 Chat tab 落地更新：`role="tab"` 选中态 + 「尚无项目对话」空状态（旧「即将推出」占位断言移除） |
 | `docs/roadmap/G3_REPORT.md`（本报告）、账本两文件、`docs/architecture/proma-touchpoints.json` + `PROMA_CORE_TOUCHPOINTS.md` | 门禁与登记（触点 43→47：4 新 + 3 追加） |
 
 ## 3. 门禁标准逐项结果
@@ -45,9 +45,9 @@
 
 | 子项 | 证据（探针断言，全 PASS） |
 | --- | --- |
-| **创建 Project** | CLI 播种 `create-project`（probe-project-session：`prj-195e4c7cefb885fd`「PB-034 绑定探针项目」；probe-import：`prj-fb2fa227eba0dedd` + 空项目 `prj-12ecb15a116da705`）；**UI 创建**（probe-projects-view：对话框填写提交 → 卡片出现，主进程 list 交叉核对一致 `prj-35e6123607674971`） |
-| **导入** | CLI 播种导入真实 fixture：mini_dialogue.csv（8 段）+ mini_items.json（8 段）→ 打包应用卡片计数「16 段 · 2 资产」、详情资产区两行渲染（文件名/formatId/段数/截断 sha256），页内 `getSummary` 交叉核对 sha 与播种一致（probe-import 11/11） |
-| **重启** | probe-project-session 第 7 腿：杀掉应用 → 删除项目目录 → 以**同一 tmp HOME** 重新启动打包应用（真实 relaunch，非 reload）；G0 smoke 另含两条重启恢复腿（restart-conversations-persisted / restart-recovery-dom）18/18 |
+| **创建 Project** | 历史 packaged 探针通过 CLI 播种和 UI 创建，主进程 list 交叉核对一致。 |
+| **导入** | CLI 播种导入真实 fixture：mini_dialogue.csv（8 段）+ mini_items.json（8 段）→ 打包应用卡片计数「16 段 · 2 资产」、详情资产区两行渲染（文件名/formatId/段数/截断 sha256），页内 `getSummary` 交叉核对一致（历史 11/11）。 |
+| **重启** | 历史 Project Session 探针第 7 腿：杀掉应用 → 删除项目目录 → 以**同一 tmp HOME** 重新启动打包应用（真实 relaunch，非 reload）；G0 smoke 另含两条重启恢复腿（restart-conversations-persisted / restart-recovery-dom）18/18 |
 | **再次打开，数据完整** | 重启后：绑定会话仍在侧边栏（`relaunch-missing-degraded` 侧栏在场=true）；`listForProject`=1（绑定持久化，`relaunch-binding-persisted-app-alive`）；徽章按实时状态降级为「项目缺失」+ 降级通告；项目视图存活（列表可渲染）；归档腿历史消息完整可读（`archived-history-readable`：用户消息 + 类型化错误均渲染）；agent-sessions.json 落盘含绑定项目 id（`temp-home-isolation`） |
 
 ### 标准 2：归档只读的主进程硬强制（PB-034 硬规则 4）— **PASS**
@@ -72,10 +72,10 @@
 
 | 探针（node 运行） | 结果 |
 | --- | --- |
-| `node scripts/smoke/probe-project-session.ts`（PB-034 新增） | **17 PASS / 0 FAIL**（逐项见 §4） |
+| 历史 Project Session packaged 探针（已退役） | **17 PASS / 0 FAIL**（逐项见 §4） |
 | `node scripts/smoke/run-g0-smoke.ts`（G0 回归） | **18 PASS / 0 FAIL**（含重启恢复两腿；G0 既有面零回归） |
-| `node scripts/smoke/probe-projects-view.ts`（PB-032 探针 + 本票更新断言） | **13 PASS / 0 FAIL**（Chat tab 选中 + 对话空状态新断言通过） |
-| `node scripts/smoke/probe-import.ts`（PB-033 探针回归） | **11 PASS / 0 FAIL** |
+| 历史 Projects View packaged 探针（已退役） | **13 PASS / 0 FAIL**（Chat tab 选中 + 对话空状态新断言通过） |
+| 历史 Import packaged 探针（已退役） | **11 PASS / 0 FAIL** |
 
 ## 4. PB-034 探针 17 断言实录（2026-07-26）
 
@@ -109,8 +109,8 @@
 
 ## 6. 已知限制
 
-1. **macOS Keychain 提示（SecurityAgent，safeStorage）对本机探针不 hermetic**——PB-030/031/032/033 同型记录的延续，与本票代码无关：本轮 G0 与三个探针运行时各出现 1 次，kill 后应用回退明文存储（与基线日志同一语义）流程继续。probe-projects-view 有**两次**失败尝试均由此引起（首次 kill 时机偏晚、「新建项目」对话框未在预算内打开；第二次 `page.reload` 60s 预算被 stall 耗尽），主进程日志无异常；第三次以看门狗即时 kill 后 **13/13 通过**。如实记录，非代码回归。
-2. **原生文件选择器不可被 Playwright 驱动**：probe-import 覆盖「到选择器为止」的接线（按钮在场/可用/归档禁用）+ CLI 播种真实数据下的渲染；完整导入流由 node --test（stub picker）覆盖；原生对话框端到端路径需人工 QA（PB-033 已记录）。
+1. **macOS Keychain 提示（SecurityAgent，safeStorage）对本机探针不 hermetic**——PB-030/031/032/033 同型记录的延续，与本票代码无关：本轮 G0 与三个历史探针运行时各出现 1 次，kill 后应用回退明文存储（与基线日志同一语义）流程继续。Projects View 探针有**两次**失败尝试均由此引起；第三次以看门狗即时 kill 后 **13/13 通过**。如实记录，非代码回归。
+2. **原生文件选择器不可被 Playwright 驱动**：历史 Import 探针覆盖「到选择器为止」的接线（按钮在场/可用/归档禁用）+ CLI 播种真实数据下的渲染；完整导入流由 node --test（stub picker）覆盖；原生对话框端到端路径需人工 QA（PB-033 已记录）。
 3. **绑定创建后无重绑定 API**（刻意）：`updateAgentSessionMeta` 白名单排除 + 运行时强制保持原值；改名只影响新项目（名称快照语义）；项目删除不可撤销 → 绑定会话永久 missing 降级（可读，发送不阻断）。
 4. missing 判定需一次廉价 fs 检查（`existsSync` + 解析 `project.json`）——store `getProject` 只读索引，索引缺条目本身不区分「归档」与「目录缺失」；该检查在每次发送 preflight / getBinding 时执行（路径解析 + 小文件读，实测无感知开销）。
 5. bun 无 node:sqlite → 服务/处理器/绑定测试必须 node 下跑（`test:linguist`；根 `bun test` 不覆盖 `*.nodetest.ts`，与 PB-030 起同一约束）。

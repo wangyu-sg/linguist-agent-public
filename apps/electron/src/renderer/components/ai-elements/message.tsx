@@ -22,10 +22,11 @@ import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { ChevronDown, ChevronUp, Paperclip, FileText, Sparkles, Server, Download, MessageSquareText } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronUp, Paperclip, FileText, ListTodo, Sparkles, Server, Download, MessageSquareText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { shouldInspectMermaidCodeBlock, shouldRenderMermaidCodeBlock } from '@/lib/mermaid-detection'
 import { normalizeLatexDelimiters } from '@/lib/normalize-latex'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
 import { ImageLightbox, type LightboxImage } from '@/components/ui/image-lightbox'
 import {
@@ -254,13 +255,15 @@ function walkMdastText(
 
 // ----- MentionChip 组件 -----
 
-type MentionType = 'file' | 'skill' | 'mcp' | 'session'
+type MentionType = 'file' | 'skill' | 'mcp' | 'session' | 'todo' | 'calendar_event'
 
 const MENTION_STYLES: Record<MentionType, { icon: typeof FileText; className: string }> = {
   file: { icon: FileText, className: 'bg-primary/10 text-primary' },
   skill: { icon: Sparkles, className: 'bg-[hsl(270_60%_60%/0.15)] text-[hsl(270_60%_50%)]' },
   mcp: { icon: Server, className: 'bg-[hsl(160_60%_45%/0.15)] text-[hsl(160_60%_35%)]' },
   session: { icon: MessageSquareText, className: 'bg-[hsl(200_80%_50%/0.14)] text-[hsl(200_80%_40%)]' },
+  todo: { icon: ListTodo, className: 'bg-amber-500/15 text-amber-800 dark:text-amber-200' },
+  calendar_event: { icon: CalendarDays, className: 'bg-cyan-500/15 text-cyan-800 dark:text-cyan-200' },
 }
 
 function safeDecode(raw: string): string {
@@ -271,22 +274,77 @@ function safeDecode(raw: string): string {
   }
 }
 
+/** 仅在普通文本中转换旧引用，避免改写 inline code、fenced code 和缩进代码块。 */
+export function normalizeNamedReferenceDelimiters(markdown: string): string {
+  const normalizeText = (text: string): string => text.replace(
+    /(&(?:session|todo|calendar_event):[A-Za-z0-9-]+)~(\S+)/g,
+    '$1::$2'
+  )
+  const normalizeInlineCodeSafeText = (text: string): string => {
+    let normalized = ''
+    let cursor = 0
+
+    while (cursor < text.length) {
+      const openingIndex = text.indexOf('`', cursor)
+      if (openingIndex === -1) return normalized + normalizeText(text.slice(cursor))
+      const delimiter = text.slice(openingIndex).match(/^`+/)?.[0]
+      if (!delimiter) return normalized + normalizeText(text.slice(cursor))
+      const closingIndex = text.indexOf(delimiter, openingIndex + delimiter.length)
+      if (closingIndex === -1) return normalized + normalizeText(text.slice(cursor))
+
+      normalized += normalizeText(text.slice(cursor, openingIndex))
+      normalized += text.slice(openingIndex, closingIndex + delimiter.length)
+      cursor = closingIndex + delimiter.length
+    }
+
+    return normalized
+  }
+
+  const lines = markdown.split('\n')
+  let inFence: { marker: '`' | '~'; length: number } | null = null
+  return lines.map((line) => {
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})/)
+    const indentedCode = !inFence && /^(?: {4}|\t)/.test(line)
+    const isCode = Boolean(inFence || indentedCode || fenceMatch)
+    const result = isCode ? line : normalizeInlineCodeSafeText(line)
+
+    if (fenceMatch) {
+      const markerText = fenceMatch[1] ?? ''
+      const marker = markerText[0] as '`' | '~'
+      if (!inFence) {
+        inFence = { marker, length: markerText.length }
+      } else if (marker === inFence.marker && markerText.length >= inFence.length) {
+        inFence = null
+      }
+    }
+
+    return result
+  }).join('\n')
+}
+
 function MentionChip({ type, value }: { type: MentionType; value: string }): React.ReactElement {
   const style = MENTION_STYLES[type]
   const Icon = style.icon
   const decoded = safeDecode(value)
+  const isNamedReference = type === 'session' || type === 'todo' || type === 'calendar_event'
+  const [referenceId = '', ...labelParts] = isNamedReference ? decoded.split('::') : [decoded]
+  const label = labelParts.length > 0 ? labelParts.join('::') : undefined
   const display = type === 'file'
     ? (decoded.split('/').pop() || decoded)
     : type === 'session'
-      ? `会话 ${decoded.slice(0, 8)}`
-      : decoded
+      ? (label || `会话 ${referenceId.slice(0, 8)}`)
+      : type === 'todo'
+        ? (label || `Todo ${referenceId.slice(0, 8)}`)
+        : type === 'calendar_event'
+          ? (label || `日程 ${referenceId.slice(0, 8)}`)
+          : decoded
   return (
     <span
       className={cn(
         'inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline',
         style.className
       )}
-      title={type === 'file' || type === 'session' ? decoded : undefined}
+      title={type === 'file' || isNamedReference ? (label || referenceId) : undefined}
     >
       <Icon className="size-3 inline shrink-0" />
       {display}
@@ -294,14 +352,14 @@ function MentionChip({ type, value }: { type: MentionType; value: string }): Rea
   )
 }
 
-// ----- remarkMentions：将 @file: /skill: #mcp: &session: 转为 mention:// link 节点 -----
+// ----- remarkMentions：将 @file: /skill: #mcp: &session: &todo: &calendar_event: 转为 mention:// link 节点 -----
 
 export function remarkMentions() {
   return (tree: MdastParent) => {
     walkMdastText(tree, (node, index, parent) => {
       const text = node.value
       // 每次调用创建独立正则实例，避免 /g 状态在并发 remark pipeline 间互相干扰
-      const mentionPattern = /@file:(\S+)|\/skill:(\S+)|#mcp:(\S+)|&session:(\S+)/g
+      const mentionPattern = /@file:(\S+)|\/skill:(\S+)|#mcp:(\S+)|&session:([A-Za-z0-9-]+)(?:(?:~|::)(\S+))?|&todo:([A-Za-z0-9-]+)(?:(?:~|::)(\S+))?|&calendar_event:([A-Za-z0-9-]+)(?:(?:~|::)(\S+))?/g
       if (!mentionPattern.test(text)) return
       mentionPattern.lastIndex = 0
 
@@ -313,11 +371,23 @@ export function remarkMentions() {
         if (m.index > lastIdx) {
           parts.push({ type: 'text', value: text.slice(lastIdx, m.index) })
         }
-        const mType: MentionType = m[1] ? 'file' : m[2] ? 'skill' : m[3] ? 'mcp' : 'session'
-        const mValue = m[1] ?? m[2] ?? m[3] ?? m[4] ?? ''
-        // 新版 htmlToMarkdown 已 encodeURIComponent，旧消息是原始路径
-        const alreadyEncoded = /%[0-9A-Fa-f]{2}/.test(mValue)
-        const safeValue = alreadyEncoded ? mValue : encodeURIComponent(mValue)
+        const mType: MentionType = m[1]
+          ? 'file'
+          : m[2]
+            ? 'skill'
+            : m[3]
+              ? 'mcp'
+              : m[4]
+                ? 'session'
+                : m[6]
+                  ? 'todo'
+                  : 'calendar_event'
+        const referenceId = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[6] ?? m[8] ?? ''
+        const encodedLabel = m[5] ?? m[7] ?? m[9]
+        const rawValue = encodedLabel ? `${referenceId}::${safeDecode(encodedLabel)}` : referenceId
+        // 文件/Skill/MCP 旧消息可能已经编码；带标题的 named reference 始终重新编码整个值。
+        const alreadyEncoded = !encodedLabel && /%[0-9A-Fa-f]{2}/.test(referenceId)
+        const safeValue = alreadyEncoded ? referenceId : encodeURIComponent(rawValue)
         parts.push({
           type: 'link',
           url: `mention://${mType}/${safeValue}`,
@@ -410,7 +480,7 @@ function mentionUrlTransform(url: string): string {
 // ===== Memo'd Markdown 子组件（稳定引用，避免 react-markdown 每帧重建组件映射） =====
 
 /** mention:// URL 匹配 */
-const MENTION_URL_RE = /^mention:\/\/(file|skill|mcp|session)\/(.+)$/
+const MENTION_URL_RE = /^mention:\/\/(file|skill|mcp|session|todo|calendar_event)\/(.+)$/
 
 /** 外部链接 / mention chip 渲染器 */
 const MarkdownLink = React.memo(function MarkdownLink({
@@ -486,7 +556,7 @@ const MarkdownPre = React.memo(function MarkdownPre({
       // normalize Windows/legacy-Mac line endings before feeding to Mermaid parser
       const mermaidCode = extractText(codeProps.children).replace(/\r\n?/g, '\n').replace(/\n$/, '')
       if (shouldRenderMermaidCodeBlock(className, mermaidCode)) {
-        return <MermaidBlock code={mermaidCode} />
+        return <MermaidBlock code={mermaidCode} onCopy={copyTextToClipboard} />
       }
     }
 
@@ -498,12 +568,12 @@ const MarkdownPre = React.memo(function MarkdownPre({
         const patchedCode = React.cloneElement(codeChild, {
           className: `${className} language-${detected}`.trim(),
         } as Partial<React.HTMLAttributes<HTMLElement>>)
-        return <CodeBlock>{patchedCode}</CodeBlock>
+        return <CodeBlock onCopy={copyTextToClipboard}>{patchedCode}</CodeBlock>
       }
     }
   }
 
-  return <CodeBlock>{preChildren}</CodeBlock>
+  return <CodeBlock onCopy={copyTextToClipboard}>{preChildren}</CodeBlock>
 })
 
 /** 行内代码 / 文件路径渲染器 */
@@ -584,6 +654,11 @@ export const MessageResponse = React.memo(
       ),
     }), [basePath, basePaths])
 
+    const renderedMarkdown = (remarkPlugins?.includes(remarkMentions)
+      ? normalizeNamedReferenceDelimiters(children)
+      : children
+    ).replace(/<!--PROMA_AUTOMATION:[\s\S]*?-->/g, '').trim()
+
     return (
       <div
         className={cn(
@@ -600,7 +675,7 @@ export const MessageResponse = React.memo(
           urlTransform={mentionUrlTransform}
           components={components}
         >
-          {normalizeLatexDelimiters(children.replace(/<!--PROMA_AUTOMATION:[\s\S]*?-->/g, '').trim())}
+          {normalizeLatexDelimiters(renderedMarkdown)}
         </Markdown>
       </div>
     )

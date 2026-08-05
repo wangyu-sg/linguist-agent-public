@@ -1,36 +1,31 @@
 # TODO
 
-更新时间：2026-07-30
+更新时间：2026-08-05
 
-只记录仍未完成的事项。已实现功能和历史工单见 `docs/roadmap/linguist-fusion-queue.json`。
+> 唯一 active 计划与完整 ticket 列表见 [LA_UNIFIED_MASTER_PLAN_V2.md](docs/roadmap/LA_UNIFIED_MASTER_PLAN_V2.md) 与 [linguist-fusion-queue.json](docs/roadmap/linguist-fusion-queue.json)。不要从本文件恢复 v1 队列。
 
-## 14 天个人使用
+## Phase 0
 
-- [ ] 从已安装的 `0.15.140` 重新开始连续 14 天真实本地化项目使用。
-- [ ] 每个问题记录：复现步骤、项目/资产类型、数据安全影响、频率、期望行为。
-- [ ] P0/P1 修复完成后重跑相关 targeted test、全量门禁与 packaged smoke。
+- [x] LA-MASTER-000：当前事实、计划唯一性、旧计划 superseded 标记与文档校验。
+- [x] LA-SYNC-001：backup/恢复验证、同步前 tag、专用同步分支与 clean tracked tree。
+- [x] LA-SYNC-002：正式 merge Proma v0.16.8 为 f3d2b431。
+- [x] LA-SYNC-003：Runtime/Session reconciliation。
+- [x] LA-SYNC-004：Agent Surface/Sidebar/Settings reconciliation。
+- [x] LA-SYNC-005：Electron 43、lock/build 与 packaged smoke gate。
+- [x] LA-SYNC-006：完成 baseline/touchpoints/deviations 的 current boundary 与 fusion verification。
+- [ ] LA-SYNC-007：完成 v0.16.8 验收；当前仍有 2 个 MANUAL 和 3 个 BLOCKED coverage gaps。
+- [x] LA-HOST-000：建立静态本地 Host Contracts、Extension Registry 与 Linguist composition root。
+- [x] LA-HOST-004：建立 Rail/Full Host Capability Manifest，并隐藏未实现入口。
 
-## 人工产品证据
+## 后续真实证据（按 v2 依赖解锁）
 
-- [ ] 真实 macOS IME composition：中日韩输入、候选确认、撤销、保存、确认并前进。
-- [ ] Native Save：原稿、受管 source/blobs/exports/backup 路径的覆盖拒绝与默认文件名。
-- [ ] VoiceOver：三模式、Project Sidebar、Segment Grid、Bottom Dock、Agent Rail。
-- [ ] 完整 keyboard-only 工作流与焦点顺序。
-- [ ] Agent Rail / Bottom Dock 拖拽和窄窗手感。
-
-## 翻译质量
-
-- [ ] 用真实游戏文本生成 Fast / Balanced / Best 三档结果。
-- [ ] 按 `docs/release/PB085_BLIND_EVAL_PREP.md` 盲评准确性、自然度、术语一致性、人工修改量、延迟和成本。
-- [ ] 依据预先写死的判定式决定默认档位，不以主观印象替代数据。
-
-## 外部验证
-
-- [ ] 使用真实 Provider/模型验证 Pi、Claude、Prompt 降级、Thinking、权限与 CAT Tool 链。
-- [ ] 用代表性真实客户文件复跑导入、编辑、QA、导出、重导入与恢复。
+- [ ] LA-HOST-001：完成 Session-scoped Reference。
+- [ ] LA-EVAL-001 / LA-EVAL-002：同模型 Web Chat、旧 LA、新 LA 基准与 Prompt/Model regression harness。
+- [ ] LA-EVAL-003：真实 Provider Tool Loop、真实 CAT 格式 round-trip 与 macOS packaged App。
+- [ ] LA-EVAL-004：真实项目与 14 天日用、IME、Native Open、VoiceOver、键盘和窄窗交互证据；Native Save 防覆盖已单独通过。
 
 ## 当前不做
 
 - 公众发布、签名、公证、公开更新渠道；
-- 新格式、OCR、多 Agent Team、自动模型路由、Extension 市场；
-- 重写 Proma Runtime、Agent/Chat UI 或 CAT Core。
+- 用 packaged smoke 取代手工或真实机器验收；
+- 将私有客户项目、扫描报告或恢复产物提交入仓。

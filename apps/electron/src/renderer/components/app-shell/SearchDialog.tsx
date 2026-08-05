@@ -32,6 +32,7 @@ import {
 import { activeViewAtom } from '@/atoms/active-view'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { useCreateSession } from '@/hooks/useCreateSession'
+import { sessionHoverPreviewEnabledAtom } from '@/atoms/ui-preferences'
 import {
   SessionMiniMapPopover,
   useSessionMiniMapHover,
@@ -154,6 +155,7 @@ interface SearchResultRowProps {
   index: number
   isSelected: boolean
   committedQuery: string
+  miniMapDisabled?: boolean
   getAgentWorkspaceName: (sessionId: string) => string | undefined
   onSelect: (result: SearchResult) => void
   onHover: (index: number) => void
@@ -164,11 +166,12 @@ function SearchResultRow({
   index,
   isSelected,
   committedQuery,
+  miniMapDisabled,
   getAgentWorkspaceName,
   onSelect,
   onHover,
 }: SearchResultRowProps): React.ReactElement {
-  const preview = useSessionMiniMapHover(400)
+  const preview = useSessionMiniMapHover(400, miniMapDisabled)
   const isContent = isContentResult(result)
   const wsName = result.type === 'linguist'
     ? result.projectName
@@ -243,6 +246,7 @@ export function SearchDialog(): React.ReactElement {
   const conversations = useAtomValue(conversationsAtom)
   const agentSessions = useAtomValue(agentSessionsAtom)
   const linguistProjectListState = useAtomValue(linguistProjectListStateAtom)
+  const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
   const agentWorkspaces = useAtomValue(agentWorkspacesAtom)
   const channels = useAtomValue(channelsAtom)
   const currentAgentChannelId = useAtomValue(agentChannelIdAtom)
@@ -632,6 +636,7 @@ export function SearchDialog(): React.ReactElement {
                   index={idx}
                   isSelected={selectedIndex === idx}
                   committedQuery={committedQuery}
+                  miniMapDisabled={!sessionHoverPreviewEnabled}
                   getAgentWorkspaceName={getAgentWorkspaceName}
                   onSelect={navigateToResult}
                   onHover={setSelectedIndex}
@@ -654,6 +659,7 @@ export function SearchDialog(): React.ReactElement {
                   index={titleResults.length + i}
                   isSelected={selectedIndex === titleResults.length + i}
                   committedQuery={committedQuery}
+                  miniMapDisabled={!sessionHoverPreviewEnabled}
                   getAgentWorkspaceName={getAgentWorkspaceName}
                   onSelect={navigateToResult}
                   onHover={setSelectedIndex}

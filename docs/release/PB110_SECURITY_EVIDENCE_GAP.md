@@ -114,7 +114,7 @@
 
 **结论**
 
-- AC-006 已消除“Native Save 可覆盖已有用户文件或受管 source blob”的缺口；packaged native Save 尚未执行，不把单元/集成证据升级为真机证据。
+- AC-006 已消除“Native Save 可覆盖已有用户文件或受管 source blob”的缺口。2026-08-05 的隔离 packaged app 克隆手工分支已确认：选择既有 source 时返回 `INVALID_INPUT`、source SHA 不变，随后保存到新路径并通过重导入校验。该证据只覆盖 Native Save，不替代 Native Open、IME 或完整产品资格。
 
 ## 6. logs 不泄漏客户正文 —— 部分
 

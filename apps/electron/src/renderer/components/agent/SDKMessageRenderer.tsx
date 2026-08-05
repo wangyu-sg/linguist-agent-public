@@ -12,14 +12,13 @@
  */
 
 import * as React from 'react'
-import { Bot, Loader2, AlertTriangle, FileText, FileImage, Download, Split, Undo2, RotateCw, Plus, Minimize2, Wrench, Settings, Cpu, ExternalLink, Quote, Clock } from 'lucide-react'
+import { Bot, Loader2, AlertTriangle, FileText, FileImage, Download, Split, Undo2, RotateCw, Plus, Minimize2, Wrench, Settings, Cpu, ExternalLink, Quote, Clock, FolderInput, FolderPlus, ListTodo } from 'lucide-react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { cn } from '@/lib/utils'
 import { ImageLightbox, type LightboxImage } from '@/components/ui/image-lightbox'
 import { ContentBlock } from './ContentBlock'
 import { TurnFileChangesSummary, buildTurnFileNameMap } from './TurnFileChangesSummary'
 import { ProcessBlockGroup, buildAssistantTurnRenderItems, buildCompletedToolResultIds } from './ProcessBlockGroup'
-import { buildWorkedDividerLabel, countTurnSteps } from './turn-divider-utils'
 import { extractToolResultText, TASK_TOOL_NAMES } from './task-progress'
 import { normalizeThinkTagsInContentBlocks } from './thinking-tag-parser'
 // 会话转录的纯逻辑(Turn 分组 / 快照去重 / 预览)已下沉到 @proma/session-core 作为唯一真源。
@@ -55,18 +54,17 @@ import { formatMessageTime } from '@/components/chat/ChatMessageItem'
 import { getModelLogo, resolveModelDisplayName, resolveModelProvider } from '@/lib/model-logo'
 import { userProfileAtom } from '@/atoms/user-profile'
 import { channelsAtom, modelSelectorOpenAtom } from '@/atoms/chat-atoms'
-import { agentSessionPendingFilesAtom } from '@/atoms/agent-atoms'
-import { agentSessionsAtom } from '@/atoms/agent-atoms'
+import { agentSessionPendingFilesAtom, agentSessionsAtom, agentWorkspacesAtom } from '@/atoms/agent-atoms'
 import { activeSessionIdAtom } from '@/atoms/tab-atoms'
 import { automationsAtom, automationFormAtom, automationToDraft } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
+import { planningTabAtom } from '@/atoms/planning-atoms'
 import { environmentCheckDialogOpenAtom } from '@/atoms/environment'
 import { settingsOpenAtom, settingsTabAtom } from '@/atoms/settings-tab'
 import { useOpenPreview } from '@/components/diff/preview-opener'
 import { getFileParentPath } from '@/lib/file-utils'
 import { parseQuotedSelectionRefs } from '@/lib/quoted-selection'
 import type { ParsedQuotedSelectionRef } from '@/lib/quoted-selection'
-import { AUTOMATIONS_VISIBLE } from '@/lib/feature-flags'
 import type {
   SDKMessage,
   SDKAssistantMessage,
@@ -382,12 +380,16 @@ export interface AssistantTurnRendererProps {
   onFork?: (upToMessageUuid: string) => void
   /** 回退回调（传入 assistant message uuid） */
   onRewind?: (assistantMessageUuid: string) => void
+  /** 将本轮回复标记为 Todo */
+  onCreateTodo?: (text: string) => void
   /** 错误重试回调（传入本轮开始前应删除的错误 UUID） */
   onRetry?: (errorUuid?: string) => void
   /** 在新会话中重试回调（仅当 turn 含错误消息时使用） */
   onRetryInNewSession?: () => void
   /** 压缩上下文回调（仅 prompt_too_long 错误使用） */
   onCompact?: () => void
+  onRelinkProjectRoot?: () => void
+  onRestoreProjectRoot?: () => void
   /** 是否正在流式输出中（隐藏操作栏） */
   isStreaming?: boolean
   /** 是否被用户中断 */
@@ -396,7 +398,7 @@ export interface AssistantTurnRendererProps {
   sessionModelId?: string
 }
 
-export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onRewind, onRetry, onRetryInNewSession, onCompact, isStreaming, stoppedByUser, sessionModelId }: AssistantTurnRendererProps): React.ReactElement | null {
+export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onRewind, onCreateTodo, onRetry, onRetryInNewSession, onCompact, onRelinkProjectRoot, onRestoreProjectRoot, isStreaming, stoppedByUser, sessionModelId }: AssistantTurnRendererProps): React.ReactElement | null {
   const channels = useAtomValue(channelsAtom)
   // 收集所有 assistant 消息的内容块，保留 parent_tool_use_id 关联
   interface EnrichedBlock {
@@ -483,9 +485,6 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
     [turn.turnMessages]
   )
 
-  // Worked divider 文案（纯派生：耗时同 DurationBadge 数据源，steps 为顶层工具调用数）
-  const workedLabel = buildWorkedDividerLabel(durationMs, countTurnSteps(topLevelBlocks))
-
   // 如果只有错误消息
   if (enrichedBlocks.length === 0 && hasError && errorContent) {
     return (
@@ -494,6 +493,8 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
         onRetry={onRetry}
         onRetryInNewSession={onRetryInNewSession}
         onCompact={onCompact}
+        onRelinkProjectRoot={onRelinkProjectRoot}
+        onRestoreProjectRoot={onRestoreProjectRoot}
       />
     )
   }
@@ -568,6 +569,8 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
             onRetry={onRetry}
             onRetryInNewSession={onRetryInNewSession}
             onCompact={onCompact}
+            onRelinkProjectRoot={onRelinkProjectRoot}
+            onRestoreProjectRoot={onRestoreProjectRoot}
           />
         )}
         </TurnFileMapProvider>
@@ -596,6 +599,11 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
           <MessageActions className="pl-[46px] mt-0.5 min-h-[28px] justify-start">
             {hasDuration && <DurationBadge durationMs={durationMs!} usage={usage} />}
             {textContent && <CopyButton content={textContent} />}
+            {textContent && onCreateTodo && (
+              <MessageAction tooltip="标记为 Todo" onClick={() => onCreateTodo(textContent)}>
+                <ListTodo className="size-3.5" />
+              </MessageAction>
+            )}
             {onFork && lastUuid && (
               <MessageAction tooltip="按当前模型从此处分叉" onClick={() => onFork(lastUuid)}>
                 <Split className="size-3.5" />
@@ -614,14 +622,6 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
           </MessageActions>
         )
       })()}
-      {/* Worked divider：turn 完成后显示「Worked for Xs · N steps」（纯派生，PB-101） */}
-      {!isStreaming && workedLabel && (
-        <div className="mt-3 flex select-none items-center gap-2.5 pl-[46px]" aria-hidden="true">
-          <span className="h-px flex-1 bg-border/60" />
-          <span className="text-xs tabular-nums text-foreground-faint">{workedLabel}</span>
-          <span className="h-px flex-1 bg-border/60" />
-        </div>
-      )}
     </Message>
   )
 }
@@ -892,6 +892,7 @@ function ScheduledRunBadge(): React.ReactElement {
   const automations = useAtomValue(automationsAtom)
   const setForm = useSetAtom(automationFormAtom)
   const setActiveView = useSetAtom(activeViewAtom)
+  const setPlanningTab = useSetAtom(planningTabAtom)
 
   const session = sessions.find((s) => s.id === activeSessionId)
   const automation = session?.sourceAutomationId && !session.sourceDelegationId
@@ -900,7 +901,8 @@ function ScheduledRunBadge(): React.ReactElement {
 
   const handleClick = (): void => {
     if (!automation) return
-    setActiveView('automations')
+    setActiveView('planning')
+    setPlanningTab('automations')
     setForm({
       open: true,
       draft: automationToDraft(automation),
@@ -994,8 +996,7 @@ function UserInputMessage({ message }: { message: SDKUserMessage }): React.React
               {meta.createdAt && (
                 <span className="message-time text-[10px] text-foreground/60">{formatMessageTime(meta.createdAt)}</span>
               )}
-              {/* D-007（PB-012）：v1 隐藏定时任务入口徽章；恢复见 lib/feature-flags.ts */}
-              {isScheduledRun && AUTOMATIONS_VISIBLE && (
+              {isScheduledRun && (
                 <ScheduledRunBadge />
               )}
             </span>
@@ -1056,6 +1057,10 @@ function UserInputMessage({ message }: { message: SDKUserMessage }): React.React
 
 // ===== 错误消息渲染 =====
 
+function shouldOfferProjectRootRestore(projectRootStatus: string | undefined): boolean {
+  return projectRootStatus === 'missing'
+}
+
 interface ErrorMessageProps {
   message: SDKAssistantMessage
   /** 重试回调（在当前会话内重试） */
@@ -1064,6 +1069,8 @@ interface ErrorMessageProps {
   onRetryInNewSession?: () => void
   /** 压缩上下文回调（仅 prompt_too_long 错误使用） */
   onCompact?: () => void
+  onRelinkProjectRoot?: () => void
+  onRestoreProjectRoot?: () => void
 }
 
 interface AssistantErrorTailProps {
@@ -1074,6 +1081,8 @@ interface AssistantErrorTailProps {
   onRetryInNewSession?: () => void
   /** 压缩上下文回调（仅 prompt_too_long 错误使用） */
   onCompact?: () => void
+  onRelinkProjectRoot?: () => void
+  onRestoreProjectRoot?: () => void
   /**
    * 以「独立错误消息」形式渲染：正文用红色 MessageResponse 展示（用于 ErrorMessage 主体）。
    *
@@ -1097,6 +1106,8 @@ export function AssistantErrorTail({
   onRetry,
   onRetryInNewSession,
   onCompact,
+  onRelinkProjectRoot,
+  onRestoreProjectRoot,
   standalone = false,
 }: AssistantErrorTailProps): React.ReactElement | null {
   const errorText = message.error?.message ?? '未知错误'
@@ -1111,6 +1122,13 @@ export function AssistantErrorTail({
     ? (msgAny._errorActions as RecoveryAction[])
     : undefined
   const isPromptTooLong = errorCode === 'prompt_too_long'
+  const isLocalProjectRootUnavailable = errorCode === 'local_project_root_unavailable'
+  const activeSessionId = useAtomValue(activeSessionIdAtom)
+  const sessions = useAtomValue(agentSessionsAtom)
+  const workspaces = useAtomValue(agentWorkspacesAtom)
+  const activeWorkspaceId = sessions.find((session) => session.id === activeSessionId)?.workspaceId
+  const projectRootStatus = workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.projectRootStatus
+  const canRestoreProjectRoot = shouldOfferProjectRootRestore(projectRootStatus)
 
   const setEnvDialogOpen = useSetAtom(environmentCheckDialogOpenAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
@@ -1190,7 +1208,10 @@ export function AssistantErrorTail({
 
   const hasStructuredActions = displayedErrorActions.length > 0
   const hasLegacyActions = !!(onRetry || onRetryInNewSession || (isPromptTooLong && onCompact))
-  const hasActions = hasStructuredActions || hasLegacyActions
+  const hasProjectRootActions = isLocalProjectRootUnavailable && !!(
+    onRelinkProjectRoot || (canRestoreProjectRoot && onRestoreProjectRoot)
+  )
+  const hasActions = hasStructuredActions || hasLegacyActions || hasProjectRootActions
 
   // tail 模式：给出上边距 + 顶部细边分隔线，让它视觉上是「正文之后的一段警告」而不是「消息本身」
   const rootClass = standalone
@@ -1236,6 +1257,22 @@ export function AssistantErrorTail({
       )}
       {hasActions && (
         <div className="flex items-center flex-wrap gap-2 mt-3">
+          {hasProjectRootActions && (
+            <>
+              {onRelinkProjectRoot && (
+                <Button size="sm" onClick={onRelinkProjectRoot}>
+                  <FolderInput className="size-3.5 mr-1.5" />
+                  重新选择文件夹
+                </Button>
+              )}
+              {canRestoreProjectRoot && onRestoreProjectRoot && (
+                <Button size="sm" variant="outline" onClick={onRestoreProjectRoot}>
+                  <FolderPlus className="size-3.5 mr-1.5" />
+                  在原路径新建空文件夹
+                </Button>
+              )}
+            </>
+          )}
           {hasStructuredActions &&
             displayedErrorActions.map((a, i) => (
               <Button
@@ -1287,7 +1324,7 @@ export function AssistantErrorTail({
   )
 }
 
-function ErrorMessage({ message, onRetry, onRetryInNewSession, onCompact }: ErrorMessageProps): React.ReactElement {
+function ErrorMessage({ message, onRetry, onRetryInNewSession, onCompact, onRelinkProjectRoot, onRestoreProjectRoot }: ErrorMessageProps): React.ReactElement {
   const meta = extractMeta(message as unknown as SDKMessage)
 
   // Do not copy assistant content carried by an error record.
@@ -1310,6 +1347,8 @@ function ErrorMessage({ message, onRetry, onRetryInNewSession, onCompact }: Erro
           onRetry={onRetry}
           onRetryInNewSession={onRetryInNewSession}
           onCompact={onCompact}
+          onRelinkProjectRoot={onRelinkProjectRoot}
+          onRestoreProjectRoot={onRestoreProjectRoot}
           standalone
         />
       </MessageContent>
@@ -1328,12 +1367,16 @@ export interface MessageGroupRendererProps {
   basePath?: string
   onFork?: (upToMessageUuid: string) => void
   onRewind?: (assistantMessageUuid: string) => void
+  /** 将 assistant 回复标记为 Todo */
+  onCreateTodo?: (text: string) => void
   /** 错误重试回调（传入本轮开始前应删除的错误 UUID） */
   onRetry?: (errorUuid?: string) => void
   /** 在新会话中重试回调（仅当 turn 含错误消息时使用） */
   onRetryInNewSession?: () => void
   /** 压缩上下文回调（仅 prompt_too_long 错误使用） */
   onCompact?: () => void
+  onRelinkProjectRoot?: () => void
+  onRestoreProjectRoot?: () => void
   /** 是否正在流式输出中（隐藏操作栏） */
   isStreaming?: boolean
   /** 是否被用户中断 */
@@ -1388,7 +1431,7 @@ export function getGroupId(group: MessageGroup): string {
 
 // getGroupPreview 已迁移至 @proma/session-core（本文件从该包 import 并 re-export）
 
-export function MessageGroupRenderer({ group, allMessages, basePath, onFork, onRewind, onRetry, onRetryInNewSession, onCompact, isStreaming, stoppedByUser, sessionModelId }: MessageGroupRendererProps): React.ReactElement | null {
+export function MessageGroupRenderer({ group, allMessages, basePath, onFork, onRewind, onCreateTodo, onRetry, onRetryInNewSession, onCompact, onRelinkProjectRoot, onRestoreProjectRoot, isStreaming, stoppedByUser, sessionModelId }: MessageGroupRendererProps): React.ReactElement | null {
   const groupId = getGroupId(group)
 
   if (group.type === 'user') {
@@ -1407,30 +1450,20 @@ export function MessageGroupRenderer({ group, allMessages, basePath, onFork, onR
   }
 
   // assistant-turn
-  //
-  // PB-101：窗口内的离屏 turn 继续用 content-visibility 跳过布局/绘制；
-  // AC-007 已在 AgentMessages 限制首次挂载的历史窗口，避免完整长线程先构建全部
-  // React/Markdown 节点。contain-intrinsic-size 为当前窗口内离屏 turn 提供高度估值。
-  // 兼容性：
-  // - StickToBottom 依赖 scrollHeight 测量：估值偏差只影响滚动条滑块比例，不影响吸底判定；
-  //   流式中的 turn 不启用（isStreaming 时不加 style），避免高度估值与吸底滚动互相干扰。
-  // - ScrollMinimap 通过完整数据导航；目标不在当前 DOM 时会先请求 AgentMessages
-  //   切换历史窗口，再定位 data-message-id。
   return (
-    <div
-      data-message-id={groupId}
-      data-message-role="assistant"
-      style={isStreaming ? undefined : { contentVisibility: 'auto', containIntrinsicSize: 'auto 600px' }}
-    >
+    <div data-message-id={groupId} data-message-role="assistant">
       <AssistantTurnRenderer
         turn={group}
         allMessages={allMessages}
         basePath={basePath}
         onFork={onFork}
         onRewind={onRewind}
+        onCreateTodo={onCreateTodo}
         onRetry={onRetry}
         onRetryInNewSession={onRetryInNewSession}
         onCompact={onCompact}
+        onRelinkProjectRoot={onRelinkProjectRoot}
+        onRestoreProjectRoot={onRestoreProjectRoot}
         isStreaming={isStreaming}
         stoppedByUser={stoppedByUser}
         sessionModelId={sessionModelId}

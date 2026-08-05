@@ -225,50 +225,52 @@ export function createProposalTools(runtime: CatToolRuntime) {
       'Every finding needs citable evidence (segment ids, TM/TB entries, project documents); tool traces and agent events are audit data, not evidence.',
       'Never claim a review fixes anything: repairs are ordinary proposals via cat_propose_translations and need human acceptance.',
     ],
-    parameters: Type.Union([
-      Type.Object({
-        snapshotId: Type.String({ minLength: 1 }),
-        snapshotHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-        verdict: Type.Literal('pass'),
-        summary: Type.Optional(Type.String({ minLength: 1 })),
-        findings: Type.Array(Type.Never(), { maxItems: 0 }),
-      }),
-      Type.Object({
-        snapshotId: Type.String({ minLength: 1 }),
-        snapshotHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-        verdict: Type.Literal('issues'),
-        summary: Type.String({ minLength: 1 }),
-        findings: Type.Array(
-          Type.Object({
-            category: Type.Union([
-              Type.Literal('fidelity'),
-              Type.Literal('naturalness'),
-              Type.Literal('terminology'),
-              Type.Literal('voice'),
-              Type.Literal('consistency'),
-            ]),
-            severity: Type.Union(QA_FINDING_SEVERITIES.map((severity) => Type.Literal(severity))),
-            issueType: Type.Union(QA_ISSUE_TYPES.map((issueType) => Type.Literal(issueType))),
-            evidenceRefs: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-            explanation: Type.String({ minLength: 1 }),
-            suggestedRepair: Type.Optional(Type.String({ minLength: 1 })),
-          }),
-          { minItems: 1, maxItems: 20 },
-        ),
-      }),
-      Type.Object({
-        snapshotId: Type.String({ minLength: 1 }),
-        snapshotHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-        verdict: Type.Literal('abstain'),
-        reason: Type.String({ minLength: 1 }),
-        findings: Type.Array(Type.Never(), { maxItems: 0 }),
-      }),
-    ]),
+    parameters: Type.Object({
+      snapshotId: Type.String({ minLength: 1 }),
+      snapshotHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+      verdict: Type.Union([
+        Type.Literal('pass'),
+        Type.Literal('issues'),
+        Type.Literal('abstain'),
+      ]),
+      summary: Type.Optional(Type.String({ minLength: 1 })),
+      reason: Type.Optional(Type.String({ minLength: 1 })),
+      findings: Type.Optional(Type.Array(
+        Type.Object({
+          category: Type.Union([
+            Type.Literal('fidelity'),
+            Type.Literal('naturalness'),
+            Type.Literal('terminology'),
+            Type.Literal('voice'),
+            Type.Literal('consistency'),
+          ]),
+          severity: Type.Union(QA_FINDING_SEVERITIES.map((severity) => Type.Literal(severity))),
+          issueType: Type.Union(QA_ISSUE_TYPES.map((issueType) => Type.Literal(issueType))),
+          evidenceRefs: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
+          explanation: Type.String({ minLength: 1 }),
+          suggestedRepair: Type.Optional(Type.String({ minLength: 1 })),
+        }),
+        { maxItems: 20 },
+      )),
+    }),
     async execute(toolCallId, params) {
-      if (params.verdict === 'issues' && (params.findings.length < 1 || params.findings.length > 20)) {
+      const findings = params.findings ?? []
+      if (params.verdict === 'issues' && (findings.length < 1 || findings.length > 20)) {
         throw new LinguistCatInvalidArgumentError('findings', 'issues requires 1-20 items')
       }
-      if (params.verdict !== 'issues' && params.findings.length > 0) {
+      if (params.verdict === 'issues' && params.summary?.trim() === '') {
+        throw new LinguistCatInvalidArgumentError('summary', 'issues requires a non-empty summary')
+      }
+      if (params.verdict === 'issues' && params.summary === undefined) {
+        throw new LinguistCatInvalidArgumentError('summary', 'issues requires a summary')
+      }
+      if (params.verdict === 'abstain' && params.reason?.trim() === '') {
+        throw new LinguistCatInvalidArgumentError('reason', 'abstain requires a non-empty reason')
+      }
+      if (params.verdict === 'abstain' && params.reason === undefined) {
+        throw new LinguistCatInvalidArgumentError('reason', 'abstain requires a reason')
+      }
+      if (params.verdict !== 'issues' && findings.length > 0) {
         throw new LinguistCatInvalidArgumentError('findings', `${params.verdict} requires an empty array`)
       }
       const { db } = resolveBoundProject('cat_submit_critic_review', toolCallId)
@@ -366,7 +368,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
               ? { summary: params.summary }
               : {}),
             ...('reason' in params ? { reason: params.reason } : {}),
-            findings: params.findings,
+            findings,
           } as Parameters<typeof createCriticReviewArtifact>[0])
           const qaInputs = artifact.findings.map((finding) => ({
             segmentId: snapshot.segmentId as SegmentId,

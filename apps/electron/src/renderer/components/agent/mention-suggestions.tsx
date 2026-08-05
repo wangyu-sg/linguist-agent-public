@@ -8,11 +8,18 @@
 import type React from 'react'
 import { ReactRenderer } from '@tiptap/react'
 import type { SuggestionOptions } from '@tiptap/suggestion'
-import { MessageSquareText, Sparkles, Server } from 'lucide-react'
+import { CalendarDays, ListTodo, MessageSquareText, Sparkles, Server } from 'lucide-react'
 import { MentionList } from './MentionList'
 import type { MentionListRef } from './MentionList'
-import { createMentionPopup, positionPopup, isSuggestionTriggerPresent } from './mention-popup-utils'
+import { createLatestSuggestionRequestGuard, createMentionPopup, positionPopup, isSuggestionTriggerPresent, shouldSuppressEscTrigger, shouldClearEscSuppressionOnExit, type EscSuppressedTrigger } from './mention-popup-utils'
 import type { AgentSessionReferenceSearchResult } from '@proma/shared'
+import {
+  buildPlanningReferenceItems,
+  filterPlanningReferenceItems,
+  getPlanningReferenceRange,
+  type PlanningReferenceMenuItem,
+  type PlanningReferenceType,
+} from './planning-reference-state'
 
 // ===== 泛型工厂 =====
 
@@ -25,12 +32,14 @@ interface MentionSuggestionConfig<T> {
   emptyText: string
   /** 异步获取列表项 */
   fetchItems: (slug: string, query: string) => Promise<T[]>
+  /** 无需工作区上下文的全局引用（会话、规划）可跳过 context 校验。 */
+  requiresContext?: boolean
   /** 提取唯一 key */
   keyExtractor: (item: T) => string
   /** 渲染列表项 */
   renderItem: (item: T) => React.ReactNode
-  /** 选中后传给 command 的 id 和 label */
-  toCommand: (item: T) => { id: string; label: string }
+  /** 选中后传给 command 的 Mention 属性 */
+  toCommand: (item: T) => { id: string; label: string; referenceType?: PlanningReferenceType }
 }
 
 function createMentionSuggestion<T>(
@@ -39,6 +48,14 @@ function createMentionSuggestion<T>(
   mentionActiveRef: React.MutableRefObject<boolean>,
   mentionItemCountRef: React.MutableRefObject<number>,
 ): Omit<SuggestionOptions<T>, 'editor'> {
+  // Esc 抑制：记录被 Esc 关闭的触发片段文本。
+  // TipTap suggestion 按 Esc 后会 dispatchExit 置 inactive，但触发符仍在文档中，
+  // 继续输入会再次 onStart 弹窗；这里在 onStart 时对同一片段跳过建弹窗，
+  // 直到用户重新触发（片段结束或内容变化）才恢复正常。
+  // 用文本而非位置判断：删除触发符前的字符导致位置移动时，片段仍延续，继续抑制。
+  let suppressedTrigger: EscSuppressedTrigger | null = null
+  const requestGuard = createLatestSuggestionRequestGuard<T>()
+
   return {
     char: config.char,
     allowSpaces: false,
@@ -48,12 +65,16 @@ function createMentionSuggestion<T>(
     allowedPrefixes: null,
 
     items: async ({ query }): Promise<T[]> => {
+      const requestId = requestGuard.startRequest()
       const slug = workspaceSlugRef.current
-      if (!slug) return []
+      if (config.requiresContext !== false && !slug) return requestGuard.attachResult(requestId, [])
       try {
-        return await config.fetchItems(slug, (query ?? '').toLowerCase())
+        return requestGuard.attachResult(
+          requestId,
+          await config.fetchItems(slug ?? '', (query ?? '').toLowerCase()),
+        )
       } catch {
-        return []
+        return requestGuard.attachResult(requestId, [])
       }
     },
 
@@ -79,6 +100,9 @@ function createMentionSuggestion<T>(
 
       return {
         onStart(props) {
+          if (!requestGuard.isLatest(props.items)) {
+            return
+          }
           if (popup || renderer) {
             cleanup()
           }
@@ -88,6 +112,13 @@ function createMentionSuggestion<T>(
           if (!isSuggestionTriggerPresent(props.editor, props.range, config.char)) {
             return
           }
+
+          // Esc 抑制：同一触发片段（位置未后移且文本延续）不再弹窗，保持抑制；
+          // 用户重新输入触发符（位置后移）、片段已结束或内容变化时清除抑制并正常弹窗。
+          if (shouldSuppressEscTrigger(suppressedTrigger, { from: props.range.from, text: props.text })) {
+            return
+          }
+          suppressedTrigger = null
 
           mentionActiveRef.current = true
           mentionItemCountRef.current = props.items.length
@@ -101,7 +132,7 @@ function createMentionSuggestion<T>(
               renderItem: config.renderItem,
               onSelect: (item: T) => {
                 const cmd = config.toCommand(item)
-                props.command({ id: cmd.id, label: cmd.label })
+                props.command({ ...cmd, mentionSuggestionChar: config.char })
               },
             },
             editor: props.editor,
@@ -120,22 +151,41 @@ function createMentionSuggestion<T>(
         },
 
         onUpdate(props) {
+          // 仅允许最新异步请求更新弹窗。
+          if (!requestGuard.isLatest(props.items)) {
+            return
+          }
           mentionItemCountRef.current = props.items.length
           renderer?.updateProps({
             items: props.items,
             onSelect: (item: T) => {
               const cmd = config.toCommand(item)
-              props.command({ id: cmd.id, label: cmd.label })
+              props.command({ ...cmd, mentionSuggestionChar: config.char })
             },
           })
           positionPopup(popup, props.clientRect?.())
         },
 
         onKeyDown(props) {
+          // 记录 Esc 关闭时的触发片段文本与位置，onStart/onExit 据此判断同一片段
+          if (props.event.key === 'Escape') {
+            suppressedTrigger = {
+              from: props.range.from,
+              text: props.view.state.doc.textBetween(props.range.from, props.range.to, '', ''),
+            }
+          }
           return renderer?.ref?.onKeyDown({ event: props.event }) ?? false
         },
 
-        onExit() {
+        onExit(props) {
+          // TipTap 会在 await items() 后才调用 onExit；旧请求不能清理新弹窗。
+          if (requestGuard.isStale(props.items)) {
+            return
+          }
+          // 被抑制的触发符已从文档中删除 → 清除抑制，让用户重新输入触发符时恢复正常弹窗
+          if (suppressedTrigger && shouldClearEscSuppressionOnExit(suppressedTrigger, props.editor, props.range, config.char)) {
+            suppressedTrigger = null
+          }
           cleanup()
         },
       }
@@ -234,9 +284,9 @@ export type SessionMentionItem = AgentSessionReferenceSearchResult
 // 空查询只读会话索引，可安全展示更多；搜索会读取 JSONL 消息，保持较小上限避免阻塞主进程。
 const RECENT_SESSION_MENTION_LIMIT = 200
 const SEARCHED_SESSION_MENTION_LIMIT = 20
+const PLANNING_REFERENCE_LIMIT = 100
 
 export function createSessionMentionSuggestion(
-  workspaceIdRef: React.RefObject<string | null>,
   currentSessionIdRef: React.RefObject<string | null>,
   mentionActiveRef: React.MutableRefObject<boolean>,
   mentionItemCountRef: React.MutableRefObject<number>,
@@ -246,11 +296,9 @@ export function createSessionMentionSuggestion(
       char: '&',
       headerLabel: '引用会话',
       emptyText: '无匹配会话',
-      fetchItems: async (_slug, q) => {
-        const workspaceId = workspaceIdRef.current
-        if (!workspaceId) return []
+      requiresContext: false,
+      fetchItems: async (_context, q) => {
         return window.electronAPI.searchAgentSessionReferences({
-          workspaceId,
           excludeSessionId: currentSessionIdRef.current ?? undefined,
           query: q,
           limit: q ? SEARCHED_SESSION_MENTION_LIMIT : RECENT_SESSION_MENTION_LIMIT,
@@ -261,16 +309,74 @@ export function createSessionMentionSuggestion(
         <>
           <MessageSquareText className="size-3.5 text-sky-500 flex-shrink-0" />
           <span className="truncate font-medium flex-1 min-w-0">{item.title}</span>
-          {item.snippet && (
-            <span className="truncate text-[10px] text-muted-foreground/50 max-w-[120px]">{item.snippet}</span>
+          {(item.workspaceName || item.workspaceSlug || item.snippet) && (
+            <span className="truncate text-[10px] text-muted-foreground/50 max-w-[120px]">
+              {formatSessionReferenceDescription(item)}
+            </span>
           )}
         </>
       ),
       toCommand: (item) => ({ id: item.sessionId, label: item.title }),
     },
-    // 会话引用不依赖 slug，但复用通用 mention 工厂时需要一个非空 ref 才会触发 fetchItems。
-    workspaceIdRef,
+    currentSessionIdRef,
     mentionActiveRef,
     mentionItemCountRef,
   )
+}
+
+export function createPlanningMentionSuggestion(
+  trigger: '~' | '～',
+  currentSessionIdRef: React.RefObject<string | null>,
+  mentionActiveRef: React.MutableRefObject<boolean>,
+  mentionItemCountRef: React.MutableRefObject<number>,
+) {
+  return createMentionSuggestion<PlanningReferenceMenuItem>(
+    {
+      char: trigger,
+      headerLabel: '引用待办和日程',
+      emptyText: '无匹配待办或日程',
+      requiresContext: false,
+      fetchItems: async (_context, query) => {
+        const { from, toExclusive } = getPlanningReferenceRange()
+        const [todos, events] = await Promise.all([
+          window.electronAPI.listTodos({ status: 'open', limit: PLANNING_REFERENCE_LIMIT }),
+          window.electronAPI.listCalendarEvents({ from, to: toExclusive, limit: PLANNING_REFERENCE_LIMIT }),
+        ])
+        return filterPlanningReferenceItems(
+          buildPlanningReferenceItems(todos, events),
+          query,
+        )
+      },
+      keyExtractor: (item) => `${item.referenceType}:${item.id}`,
+      renderItem: (item) => (
+        <>
+          {item.referenceType === 'todo'
+            ? <ListTodo className="size-3.5 shrink-0 text-primary" />
+            : <CalendarDays className="size-3.5 shrink-0 text-primary" />}
+          <span className="truncate font-medium flex-1 min-w-0">{item.label}</span>
+          <span className="truncate text-[10px] text-muted-foreground/50 max-w-[120px]">{item.description}</span>
+        </>
+      ),
+      toCommand: (item) => ({
+        id: item.id,
+        label: item.label,
+        referenceType: item.referenceType,
+      }),
+    },
+    currentSessionIdRef,
+    mentionActiveRef,
+    mentionItemCountRef,
+  )
+}
+
+function formatSessionReferenceDescription(input: AgentSessionReferenceSearchResult): string | undefined {
+  const workspace = input.workspaceName
+    ? input.workspaceSlug && input.workspaceSlug !== input.workspaceName
+      ? `${input.workspaceName} (${input.workspaceSlug})`
+      : input.workspaceName
+    : input.workspaceSlug
+  const parts = [workspace ? `项目：${workspace}` : undefined, input.snippet]
+    .filter((part): part is string => Boolean(part))
+
+  return parts.length > 0 ? parts.join(' · ') : undefined
 }

@@ -229,7 +229,11 @@ test('factory: CAT read/proposal/QA tools expose no accept, resolve, waive, or c
       [...LINGUIST_CAT_TOOL_NAMES],
     )
     assert.equal(tools.some((tool) => /accept|resolve|waive|commit/i.test(tool.name)), false)
-    assert.equal(tools.length, 15)
+    assert.equal(tools.length, 17)
+    assert.equal(
+      (toolByName(tools, 'cat_submit_critic_review').parameters as { type?: string }).type,
+      'object',
+    )
     for (const tool of tools) {
       assert.equal(typeof tool.label, 'string')
       assert.ok(tool.label.length > 0)
@@ -239,6 +243,53 @@ test('factory: CAT read/proposal/QA tools expose no accept, resolve, waive, or c
       assert.ok(tool.parameters && typeof tool.parameters === 'object')
       assert.equal(typeof tool.execute, 'function')
     }
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('intake tools use opaque session-source callbacks and never accept paths', async () => {
+  const fixture = setup()
+  try {
+    let importedToken = ''
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      listIntakeSources: () => [{
+        sourceToken: 'attached-file:test-token',
+        filename: 'source.xliff',
+        sizeBytes: 12,
+        status: 'ready',
+      }],
+      importIntakeAsset: async (sourceToken) => {
+        importedToken = sourceToken
+        return {
+          sourceToken,
+          filename: 'source.xliff',
+          status: 'imported',
+          assetId: fixture.assetA.id as string,
+          formatId: 'xliff_1_2',
+          segmentCount: 1,
+          sourceSha256: 'a'.repeat(64),
+          warnings: [],
+        }
+      },
+    })
+    const sources = (await invoke(toolByName(tools, 'cat_list_intake_sources'), {})).details as {
+      sources: Array<{ sourceToken: string; filename: string; sizeBytes: number; status: string }>
+    }
+    assert.deepEqual(sources.sources, [{
+      sourceToken: 'attached-file:test-token',
+      filename: 'source.xliff',
+      sizeBytes: 12,
+      status: 'ready',
+    }])
+    assertNoAbsolutePaths(sources, fixture.rootDir)
+    const imported = (await invoke(toolByName(tools, 'cat_import_asset'), {
+      sourceToken: 'attached-file:test-token',
+    })).details as { sourceToken: string; filename: string; status: string }
+    assert.equal(importedToken, 'attached-file:test-token')
+    assert.equal(imported.status, 'imported')
+    assert.equal(imported.filename, 'source.xliff')
   } finally {
     fixture.db.close()
   }
@@ -311,7 +362,19 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
     const repeated = (await invoke(toolByName(tools, 'cat_run_qa'), {})).details
     assert.deepEqual(repeated, run)
     assert.equal(mutations.length, 1)
-    assert.equal(fixture.db.runs.listEvents().length, 5)
+    const fixedSegment = fixture.segmentsA[1]!
+    const resolvedId = fixture.db.qaFindings.list({ segmentId: fixedSegment.id, status: 'open' })[0]!.id as string
+    fixture.db.segments.applyTargetEdit(fixedSegment.id, '阿尔法源文 1', 0)
+    await invoke(toolByName(tools, 'cat_run_qa'), {}, 'call-2')
+    assert.equal(mutations.length, 2)
+    assert.deepEqual(mutations[1]!.resolvedQaFindingIds, [resolvedId])
+    assert.ok(mutations[1]!.segmentIds?.includes(fixedSegment.id))
+    assert.equal(fixture.db.qaFindings.getById(resolvedId)?.status, 'resolved')
+    assert.equal(fixture.db.runs.listEvents().length, 10)
+    assert.deepEqual(
+      fixture.db.runs.listEvents().filter((event) => event.kind === 'qa-updated').at(-1)?.resolvedQaFindingIds,
+      [resolvedId],
+    )
     const summary = fixture.db.runs.getRunChangeSummary('qa:session-unavailable:call-1')
     assert.equal(summary.mutationCount, 1)
     assert.equal(summary.changes.qaFindingsCreated, 12)
@@ -1194,6 +1257,8 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_project_summary: {},
       cat_list_assets: {},
       cat_get_segments: {},
+      cat_list_intake_sources: {},
+      cat_import_asset: { sourceToken: 'attached-file:missing' },
       cat_get_translation_context: { segmentIds: [fixture.segmentsA[0]!.id] },
       cat_get_proposal_snapshot: { proposalId: 'prp-0000000000000000' },
       cat_search_tm: { query: 'x' },

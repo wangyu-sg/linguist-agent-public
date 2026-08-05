@@ -13,6 +13,7 @@ type SettingsService = typeof import('./settings-service')
 
 let service: SettingsService
 let tempHome: string
+const originalHome = process.env.HOME
 
 mock.module('node:os', () => ({
   ...os,
@@ -30,10 +31,13 @@ function writeSettings(data: Record<string, unknown>): void {
 
 beforeAll(async () => {
   tempHome = mkdtempSync(join(os.tmpdir(), 'la-settings-service-'))
+  process.env.HOME = tempHome
   service = await import('./settings-service')
 })
 
 afterAll(() => {
+  if (originalHome === undefined) delete process.env.HOME
+  else process.env.HOME = originalHome
   rmSync(tempHome, { recursive: true, force: true })
 })
 

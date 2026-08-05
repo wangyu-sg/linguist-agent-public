@@ -5,9 +5,10 @@
  * 所有用户配置存储在 ~/.linguist-agent/ 目录下。
  */
 
-import { join, basename } from 'node:path'
+import { join, basename, dirname, isAbsolute, relative, resolve, sep, win32 } from 'node:path'
 import { mkdirSync, existsSync, cpSync, rmSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { rmSyncWithRetry } from './fs-retry'
 
 /**
  * 获取配置目录名称
@@ -20,6 +21,10 @@ import { homedir } from 'node:os'
  * 3. 兜底 '.linguist-agent'
  */
 let _configDirName: string | undefined
+
+function getHomeDir(): string {
+  return process.env.HOME || homedir()
+}
 
 export function getConfigDirName(): string {
   if (_configDirName === undefined) {
@@ -46,7 +51,7 @@ export function getConfigDirName(): string {
  * 如果目录不存在则自动创建。
  */
 export function getConfigDir(): string {
-  const configDir = join(homedir(), getConfigDirName())
+  const configDir = join(getHomeDir(), getConfigDirName())
 
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true })
@@ -69,8 +74,8 @@ export function getChannelsPath(): string {
 export function getLegacyPromaChannelsPath(): string {
   const preferredDir = getConfigDirName().endsWith('-dev') ? '.proma-dev' : '.proma'
   const fallbackDir = preferredDir === '.proma-dev' ? '.proma' : '.proma-dev'
-  const preferred = join(homedir(), preferredDir, 'channels.json')
-  const fallback = join(homedir(), fallbackDir, 'channels.json')
+  const preferred = join(getHomeDir(), preferredDir, 'channels.json')
+  const fallback = join(getHomeDir(), fallbackDir, 'channels.json')
   return existsSync(preferred) || !existsSync(fallback) ? preferred : fallback
 }
 
@@ -245,7 +250,12 @@ export function getAgentSessionsDir(): string {
  * @returns ~/.linguist-agent/agent-sessions/{id}.jsonl
  */
 export function getAgentSessionMessagesPath(id: string): string {
-  return join(getAgentSessionsDir(), `${id}.jsonl`)
+  const sessionsDir = resolve(getAgentSessionsDir())
+  const filePath = resolve(sessionsDir, `${id}.jsonl`)
+  if (!id || basename(id) !== id || dirname(filePath) !== sessionsDir) {
+    throw new Error('无效 Agent 会话 ID')
+  }
+  return filePath
 }
 
 /**
@@ -276,6 +286,41 @@ export function getAgentWorkspacesDir(): string {
 }
 
 /**
+ * 校验受管目录的单层名称。Agent 会话元数据可来自可编辑的 JSON 索引，
+ * 不能把其中的 slug 或 ID 直接作为路径片段使用。
+ */
+export function assertSafeManagedPathSegment(value: string, label: string): string {
+  if (
+    typeof value !== 'string'
+    || value.length === 0
+    || value === '.'
+    || value === '..'
+    || value !== basename(value)
+    || value !== win32.basename(value)
+    || isAbsolute(value)
+    || win32.isAbsolute(value)
+  ) {
+    throw new Error(`无效受管路径段: ${label}`)
+  }
+  return value
+}
+
+function resolveManagedChildPath(parentDir: string, child: string, label: string): string {
+  const safeChild = assertSafeManagedPathSegment(child, label)
+  const resolvedParent = resolve(parentDir)
+  const targetPath = resolve(resolvedParent, safeChild)
+  const relativePath = relative(resolvedParent, targetPath)
+  const escapesParent = relativePath === '..'
+    || relativePath.startsWith(`..${sep}`)
+    || isAbsolute(relativePath)
+    || win32.isAbsolute(relativePath)
+  if (!relativePath || escapesParent) {
+    throw new Error(`无效受管路径段: ${label}`)
+  }
+  return targetPath
+}
+
+/**
  * 获取指定 Agent 工作区的目录路径
  *
  * 如果目录不存在则自动创建。
@@ -284,7 +329,9 @@ export function getAgentWorkspacesDir(): string {
  * @returns ~/.linguist-agent/agent-workspaces/{slug}/
  */
 export function getAgentWorkspacePath(slug: string): string {
-  const dir = join(getAgentWorkspacesDir(), slug)
+  // 先验证再创建父目录，篡改索引不能借由 mkdir 逃出数据根。
+  const safeSlug = assertSafeManagedPathSegment(slug, 'workspaceSlug')
+  const dir = resolveManagedChildPath(getAgentWorkspacesDir(), safeSlug, 'workspaceSlug')
 
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
@@ -351,7 +398,12 @@ export function getWorkspaceFilesDir(slug: string): string {
  * @returns ~/.linguist-agent/agent-workspaces/{slug}/workspace-files/
  */
 export function resolveWorkspaceFilesDir(slug: string): string {
-  return join(getConfigDir(), 'agent-workspaces', slug, 'workspace-files')
+  const workspaceDir = resolveManagedChildPath(
+    join(getConfigDir(), 'agent-workspaces'),
+    slug,
+    'workspaceSlug',
+  )
+  return resolveManagedChildPath(workspaceDir, 'workspace-files', 'workspace-files')
 }
 
 /**
@@ -365,7 +417,12 @@ export function resolveWorkspaceFilesDir(slug: string): string {
  * @returns ~/.linguist-agent/agent-workspaces/{slug}/{sessionId}/
  */
 export function resolveAgentSessionWorkspacePath(slug: string, sessionId: string): string {
-  return join(getConfigDir(), 'agent-workspaces', slug, sessionId)
+  const workspaceDir = resolveManagedChildPath(
+    join(getConfigDir(), 'agent-workspaces'),
+    slug,
+    'workspaceSlug',
+  )
+  return resolveManagedChildPath(workspaceDir, sessionId, 'sessionId')
 }
 
 /**
@@ -464,6 +521,37 @@ function compareSemver(a: string, b: string): number {
   return 0
 }
 
+/**
+ * 已从 App bundle 移除、但仍需在既有用户目录中清理的默认 Skills。
+ *
+ * 不根据 bundle 中缺失的目录自动删除，避免误删用户自行安装的 Skills；
+ * 后续退役某个内置 Skill 时，显式把它的 slug 加到这里。
+ */
+export const RETIRED_DEFAULT_SKILL_SLUGS: readonly string[] = [
+  'brainstorming',
+]
+
+const RETIRED_DEFAULT_SKILL_SLUG_SET = new Set(RETIRED_DEFAULT_SKILL_SLUGS)
+
+export function isRetiredDefaultSkill(slug: string): boolean {
+  return RETIRED_DEFAULT_SKILL_SLUG_SET.has(slug)
+}
+
+/** 清理 ~/.proma/default-skills/ 中已退役的内置 Skill 缓存。 */
+export function removeRetiredDefaultSkills(dir = getDefaultSkillsDir()): void {
+  for (const slug of RETIRED_DEFAULT_SKILL_SLUGS) {
+    const target = join(dir, slug)
+    if (!existsSync(target)) continue
+
+    try {
+      rmSyncWithRetry(target, { recursive: true, force: true })
+      console.log(`[配置] 已移除退役默认 Skill: ${slug}`)
+    } catch (err) {
+      console.warn(`[配置] 移除退役默认 Skill 失败 (${slug}):`, err)
+    }
+  }
+}
+
 /** 防御性目录基名集合：复制 default skills 时永远跳过这些目录，避免
  *  .git 0444 文件、node_modules 文件爆炸等场景把启动期同步链路炸掉。 */
 const DEFAULT_SKILL_COPY_BLOCKLIST = new Set([
@@ -496,13 +584,14 @@ export function seedDefaultSkills(): void {
   const bundledDir = app.isPackaged
     ? join(process.resourcesPath, 'default-skills')
     : join(__dirname, '../default-skills')
+  const userDir = getDefaultSkillsDir()
+
+  removeRetiredDefaultSkills(userDir)
 
   if (!existsSync(bundledDir)) {
     console.log('[配置] 未找到内置 default-skills 目录，跳过')
     return
   }
-
-  const userDir = getDefaultSkillsDir()
 
   try {
     const entries = readdirSync(bundledDir, { withFileTypes: true })
@@ -636,7 +725,14 @@ export function getFeishuBotMetadataPath(botId: string): string {
  * @returns ~/.linguist-agent/agent-workspaces/{slug}/{sessionId}/
  */
 export function getAgentSessionWorkspacePath(workspaceSlug: string, sessionId: string): string {
-  const dir = join(getAgentWorkspacePath(workspaceSlug), sessionId)
+  // 两个值都可经损坏的会话/工作区索引到达，必须在任何 mkdir 前完成校验。
+  const safeWorkspaceSlug = assertSafeManagedPathSegment(workspaceSlug, 'workspaceSlug')
+  const safeSessionId = assertSafeManagedPathSegment(sessionId, 'sessionId')
+  const dir = resolveManagedChildPath(
+    getAgentWorkspacePath(safeWorkspaceSlug),
+    safeSessionId,
+    'sessionId',
+  )
 
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
@@ -683,4 +779,9 @@ export function getScratchPadPath(): string {
  */
 export function getAutomationsPath(): string {
   return join(getConfigDir(), 'automations.json')
+}
+
+/** 获取任务/日程 JSON 状态路径。 */
+export function getPlanningPath(): string {
+  return join(getConfigDir(), 'planning.json')
 }

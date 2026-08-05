@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, LINGUIST_PROJECT_IPC_CHANNELS, LINGUIST_INTEGRITY_IPC_CHANNELS, LINGUIST_SESSION_IPC_CHANNELS, LINGUIST_PROPOSAL_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, LINGUIST_EXPORT_IPC_CHANNELS, LINGUIST_DIAGNOSTICS_IPC_CHANNELS, LINGUIST_REFERENCE_IPC_CHANNELS, LINGUIST_ASSETS_IPC_CHANNELS, LINGUIST_MIGRATION_IPC_CHANNELS, LINGUIST_ASSET_PREVIEW_IPC_CHANNELS } from '@proma/shared'
+import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, CHAT_IPC_CHANNELS, AGENT_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CHAT_TOOL_IPC_CHANNELS, FEISHU_IPC_CHANNELS, DINGTALK_IPC_CHANNELS, WECHAT_IPC_CHANNELS, AUTOMATION_IPC_CHANNELS, PLANNING_IPC_CHANNELS, AGENT_ISLAND_IPC_CHANNELS, LINGUIST_PROJECT_IPC_CHANNELS, LINGUIST_INTEGRITY_IPC_CHANNELS, LINGUIST_SESSION_IPC_CHANNELS, LINGUIST_PROPOSAL_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, LINGUIST_EXPORT_IPC_CHANNELS, LINGUIST_DIAGNOSTICS_IPC_CHANNELS, LINGUIST_REFERENCE_IPC_CHANNELS, LINGUIST_ASSETS_IPC_CHANNELS, LINGUIST_MIGRATION_IPC_CHANNELS, LINGUIST_ASSET_PREVIEW_IPC_CHANNELS } from '@proma/shared'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SCRATCH_PAD_IPC_CHANNELS, APP_ICON_IPC_CHANNELS, DOCK_BADGE_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
 import type {
   RuntimeStatus,
@@ -21,6 +21,8 @@ import type {
   PromaProviderImportResult,
   ChannelPlanQuotaResult,
   CodexOAuthLoginResult,
+  XaiOAuthLoginResult,
+  XaiOAuthDeviceCode,
   ConversationMeta,
   ChatMessage,
   ChatSendInput,
@@ -33,6 +35,7 @@ import type {
   AttachmentSaveInput,
   AttachmentSaveResult,
   FileDialogResult,
+  FileOrFolderDialogResult,
   RecentMessagesResult,
   MessageSearchResult,
   AgentSessionMeta,
@@ -43,6 +46,8 @@ import type {
   AgentStreamEvent,
   AgentStreamCompletePayload,
   AgentWorkspace,
+  CreateAgentWorkspaceInput,
+  CreateAgentProjectResult,
   AgentGenerateTitleInput,
   AgentSaveFilesInput,
   AgentSaveWorkspaceFilesInput,
@@ -241,6 +246,28 @@ import type {
   LinguistMigrationPickAndScanResult,
   LinguistMigrationProgress,
   LinguistMigrationReport,
+  Todo,
+  TodoListQuery,
+  CalendarEvent,
+  CalendarEventListQuery,
+  PlanningGroup,
+  PlanningGroupScope,
+  PlanningTag,
+  PlanningReminder,
+  ActivePlanningReminder,
+  PlanningAgentOperation,
+  PlanningChange,
+  CreateTodoInput,
+  StartTodoAgentInput,
+  StartTodoAgentResult,
+  TodoAgentSessionActivation,
+  UpdateTodoInput,
+  CreateCalendarEventInput,
+  UpdateCalendarEventInput,
+  CreatePlanningGroupInput,
+  UpdatePlanningGroupInput,
+  SnoozePlanningReminderInput,
+  AgentIslandWindowSnapshot,
 } from '@proma/shared'
 import type {
   UserProfile,
@@ -250,14 +277,18 @@ import type {
   VoiceDictationAudioChunkInput,
   VoiceDictationCommitInput,
   VoiceDictationCommitResult,
+  VoiceDictationPromaInputResolution,
+  VoiceDictationPreviewInput,
   VoiceDictationResizeInput,
   VoiceDictationSettings,
   VoiceDictationSettingsUpdate,
   VoiceDictationStartInput,
+  VoiceDictationIndicatorEvent,
   VoiceDictationStateEvent,
   VoiceDictationStopInput,
   VoiceDictationTestResult,
   VoiceDictationTranscriptEvent,
+  VoiceDictationTextEvent,
   MicPermissionResult,
   TrayCreateSessionData,
   TrayOpenAgentSessionData,
@@ -312,6 +343,8 @@ export interface ElectronAPI {
 
   /** 在系统默认浏览器中打开外部链接 */
   openExternal: (url: string) => Promise<void>
+  /** 在系统剪贴板中写入纯文本 */
+  writeClipboardText: (text: string) => Promise<void>
 
   // ===== 窗口控制（Windows 自定义标题栏）=====
 
@@ -359,10 +392,22 @@ export interface ElectronAPI {
   getChannelPlanQuota: (channelId: string) => Promise<ChannelPlanQuotaResult>
 
   /** 发起 ChatGPT (Codex) OAuth 登录，返回序列化凭据（作为 apiKey 存储） */
-  codexOAuthLogin: () => Promise<CodexOAuthLoginResult>
+  codexOAuthLogin: (method?: import('@proma/shared').CodexOAuthLoginMethod) => Promise<CodexOAuthLoginResult>
 
   /** 取消进行中的 ChatGPT (Codex) OAuth 登录 */
   codexOAuthCancel: () => Promise<void>
+
+  /** 订阅登录期间，接收 Codex device code 与授权链接。返回取消订阅函数。 */
+  onCodexOAuthDeviceCode: (callback: (deviceCode: import('@proma/shared').CodexOAuthDeviceCode) => void) => () => void
+
+  /** 发起 xAI（Grok/X 订阅）OAuth 登录 */
+  xaiOAuthLogin: () => Promise<XaiOAuthLoginResult>
+
+  /** 取消进行中的 xAI OAuth 登录 */
+  xaiOAuthCancel: () => Promise<void>
+
+  /** 订阅登录期间，接收 xAI device code 与授权链接。返回取消订阅函数。 */
+  onXaiOAuthDeviceCode: (callback: (deviceCode: XaiOAuthDeviceCode) => void) => () => void
 
   // ===== 对话管理相关 =====
 
@@ -579,8 +624,11 @@ export interface ElectronAPI {
   /** 切换当前会话的 ChatGPT Codex Fast Mode */
   updateSessionCodexFastMode: (sessionId: string, enabled: boolean) => Promise<AgentSessionMeta>
 
-  /** 更新当前会话的 Codex 思考深度 */
-  updateSessionOpenAIThinkingLevel: (sessionId: string, thinkingLevel: AgentThinkingLevel) => Promise<AgentSessionMeta>
+  /** 查询 Pi catalog 或专属 profile 支持的会话级推理档位 */
+  getPiReasoningCapability: (channelId: string, modelId: string) => Promise<import('@proma/shared').ReasoningCapability | undefined>
+
+  /** 更新当前会话的推理深度 */
+  updateSessionReasoningLevel: (sessionId: string, thinkingLevel: AgentThinkingLevel) => Promise<AgentSessionMeta>
 
   /** 更新 Agent 会话模型选择 */
   updateAgentSessionModel: (id: string, channelId?: string, modelId?: string) => Promise<AgentSessionMeta>
@@ -606,7 +654,7 @@ export interface ElectronAPI {
   /** 搜索 Agent 会话消息内容 */
   searchAgentSessionMessages: (query: string) => Promise<AgentMessageSearchResult[]>
 
-  /** 搜索当前工作区可引用的 Agent 会话 */
+  /** 搜索可引用的 Agent 会话；省略 workspaceId 时跨工作区搜索。 */
   searchAgentSessionReferences: (input: AgentSessionReferenceSearchInput) => Promise<AgentSessionReferenceSearchResult[]>
 
   /** 迁移 Agent 会话到另一个工作区 */
@@ -646,10 +694,19 @@ export interface ElectronAPI {
   listAgentWorkspaces: () => Promise<AgentWorkspace[]>
 
   /** 创建 Agent 工作区 */
-  createAgentWorkspace: (name: string) => Promise<AgentWorkspace>
+  createAgentWorkspace: (input: CreateAgentWorkspaceInput) => Promise<AgentWorkspace>
+
+  /** 创建项目及其首个 Agent 会话 */
+  createAgentProject: (input: CreateAgentWorkspaceInput, channelId?: string, modelId?: string) => Promise<CreateAgentProjectResult>
 
   /** 更新 Agent 工作区 */
   updateAgentWorkspace: (id: string, updates: { name: string }) => Promise<AgentWorkspace>
+
+  /** 将本地项目关联到一个已存在的目录，保留项目和会话。 */
+  relinkAgentWorkspaceProjectRoot: (id: string, projectRootPath: string) => Promise<AgentWorkspace>
+
+  /** 在丢失的本地项目原路径新建空目录。 */
+  restoreAgentWorkspaceProjectRoot: (id: string) => Promise<AgentWorkspace>
 
   /** 删除 Agent 工作区 */
   deleteAgentWorkspace: (id: string) => Promise<void>
@@ -813,6 +870,9 @@ export interface ElectronAPI {
   /** 打开文件夹选择对话框 */
   openFolderDialog: () => Promise<{ path: string; name: string } | null>
 
+  /** 打开支持文件与文件夹混合选择的 Composer 对话框 */
+  openFileOrFolderDialog: () => Promise<FileOrFolderDialogResult>
+
   /** 附加外部目录到 Agent 会话 */
   attachDirectory: (input: AgentAttachDirectoryInput) => Promise<string[]>
 
@@ -855,13 +915,13 @@ export interface ElectronAPI {
   getAgentSessionPath: (workspaceId: string, sessionId: string) => Promise<string | null>
 
   /** 列出目录内容 */
-  listDirectory: (dirPath: string) => Promise<FileEntry[]>
+  listDirectory: (dirPath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<FileEntry[]>
 
   /** 删除文件/目录 */
-  deleteFile: (filePath: string) => Promise<void>
+  deleteFile: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<void>
 
   /** 用系统默认应用打开文件 */
-  openFile: (filePath: string) => Promise<void>
+  openFile: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<void>
 
   /** 将剪贴板文本写入临时预览文件并返回绝对路径 */
   writeClipboardPreview: (filename: string, content: string) => Promise<string>
@@ -876,7 +936,7 @@ export interface ElectronAPI {
   getDefaultAppForFile: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<import('@proma/shared').DefaultAppInfo | null>
 
   /** 在系统文件管理器中显示文件 */
-  showInFolder: (filePath: string) => Promise<void>
+  showInFolder: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<void>
 
   /** 使用系统终端打开文件夹 */
   openFolderInTerminal: (folderPath: string) => Promise<void>
@@ -909,10 +969,10 @@ export interface ElectronAPI {
   screenshotCapture: (input: { html: string; isDark: boolean; width?: number; mode: 'clipboard' | 'file'; css?: string; themeClass?: string }) => Promise<{ success: boolean; message: string; filePath?: string }>
 
   /** 重命名文件/目录 */
-  renameFile: (filePath: string, newName: string) => Promise<void>
+  renameFile: (filePath: string, newName: string, access?: import('@proma/shared').FileAccessOptions) => Promise<void>
 
   /** 移动文件/目录到目标目录 */
-  moveFile: (filePath: string, targetDir: string) => Promise<void>
+  moveFile: (filePath: string, targetDir: string, access?: import('@proma/shared').FileAccessOptions) => Promise<void>
 
   /** 列出附加目录内容 */
   listAttachedDirectory: (dirPath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<FileEntry[]>
@@ -977,7 +1037,10 @@ export interface ElectronAPI {
       progress?: { percent: number; transferred: number; total: number; bytesPerSecond: number }
       error?: string
     }) => void) => () => void
-    quitAndInstall: () => Promise<void>
+    /** 在所有运行中的 Agent 结束后重启并安装更新 */
+    installWhenIdle: () => Promise<boolean>
+    /** 取消尚未执行的空闲安装请求 */
+    cancelIdleInstall: () => Promise<void>
   }
 
   // GitHub Release
@@ -1108,6 +1171,8 @@ export interface ElectronAPI {
   hideQuickTask: () => Promise<void>
   /** 重新注册全局快捷键（设置变更后） */
   reregisterGlobalShortcuts: () => Promise<Record<string, boolean>>
+  /** 获取全局快捷键当前是否已被系统成功注册 */
+  getGlobalShortcutRegistrationStatus: () => Promise<Record<string, boolean>>
   /** 订阅快速任务窗口聚焦事件 */
   onQuickTaskFocus: (callback: () => void) => () => void
   /** 订阅快速任务打开会话事件（主窗口接收，由渲染进程负责创建会话） */
@@ -1127,12 +1192,20 @@ export interface ElectronAPI {
   startVoiceDictation: (input: VoiceDictationStartInput) => Promise<void>
   /** 发送语音音频分片 */
   sendVoiceDictationAudio: (input: VoiceDictationAudioChunkInput) => Promise<void>
+  /** 上报实时麦克风音量，用于外部应用听写状态条。 */
+  reportVoiceDictationVolume: (volume: number) => void
+  /** 上报实时转写，用于外部应用听写状态条。 */
+  reportVoiceDictationTranscript: (text: string) => void
   /** 停止语音输入会话 */
   stopVoiceDictation: (input: VoiceDictationStopInput) => Promise<void>
   /** 取消语音输入会话 */
   cancelVoiceDictation: (input: VoiceDictationStopInput) => Promise<void>
   /** 输出最终语音文本 */
   commitVoiceDictation: (input: VoiceDictationCommitInput) => Promise<VoiceDictationCommitResult>
+  /** 确认最终语音文本是否已被 Proma 输入框实际消费。 */
+  resolveVoiceDictationPromaInput: (input: VoiceDictationPromaInputResolution) => Promise<VoiceDictationCommitResult | null>
+  /** 更新 Proma 输入框中的临时识别文本 */
+  previewVoiceDictation: (input: VoiceDictationPreviewInput) => Promise<void>
   /** 隐藏语音输入窗口 */
   hideVoiceDictation: () => Promise<void>
   /** 调整语音输入窗口高度 */
@@ -1145,8 +1218,14 @@ export interface ElectronAPI {
   onVoiceDictationTranscript: (callback: (event: VoiceDictationTranscriptEvent) => void) => () => void
   /** 订阅语音输入状态事件 */
   onVoiceDictationState: (callback: (event: VoiceDictationStateEvent) => void) => () => void
+  /** 订阅外部应用的听写状态条事件 */
+  onVoiceDictationIndicatorState: (callback: (event: VoiceDictationIndicatorEvent) => void) => () => void
   /** 订阅主窗口插入语音文本事件 */
-  onVoiceDictationInsertText: (callback: (data: { text: string }) => void) => () => void
+  onVoiceDictationInsertText: (callback: (data: VoiceDictationTextEvent) => void) => () => void
+  /** 订阅主窗口临时识别文本更新事件 */
+  onVoiceDictationPreviewText: (callback: (data: VoiceDictationTextEvent) => void) => () => void
+  /** 订阅主窗口撤销临时识别文本事件 */
+  onVoiceDictationClearPreviewText: (callback: (data: Pick<VoiceDictationTextEvent, 'sessionId'>) => void) => () => void
 
   /** 检查麦克风权限状态 */
   checkMicrophonePermission: () => Promise<MicPermissionResult>
@@ -1474,6 +1553,56 @@ export interface ElectronAPI {
   onLinguistMigrationProgress: (
     callback: (progress: LinguistMigrationProgress) => void,
   ) => () => void
+  // ===== 任务 / 日程（Planning）=====
+  /** 打开或聚焦单例独立任务/日程窗口。 */
+  openPlanningWindow: () => Promise<void>
+  listTodos: (query?: TodoListQuery) => Promise<Todo[]>
+  createTodo: (input: CreateTodoInput) => Promise<Todo>
+  /** 在主进程原子地关联项目并创建 Todo 的 Agent 会话。 */
+  startTodoAgent: (input: StartTodoAgentInput) => Promise<StartTodoAgentResult>
+  /** 独立规划窗口启动 Todo 时由主窗口接收并打开对应 Agent 会话。 */
+  onTodoAgentSessionReady: (callback: (activation: TodoAgentSessionActivation) => void) => () => void
+  updateTodo: (input: UpdateTodoInput) => Promise<Todo | undefined>
+  deleteTodo: (id: string) => Promise<boolean>
+  listCalendarEvents: (query?: CalendarEventListQuery) => Promise<CalendarEvent[]>
+  createCalendarEvent: (input: CreateCalendarEventInput) => Promise<CalendarEvent>
+  updateCalendarEvent: (input: UpdateCalendarEventInput) => Promise<CalendarEvent | undefined>
+  deleteCalendarEvent: (id: string) => Promise<boolean>
+  listPlanningGroups: (scope: PlanningGroupScope) => Promise<PlanningGroup[]>
+  createPlanningGroup: (input: CreatePlanningGroupInput) => Promise<PlanningGroup>
+  updatePlanningGroup: (input: UpdatePlanningGroupInput) => Promise<PlanningGroup | undefined>
+  deletePlanningGroup: (scope: PlanningGroupScope, id: string) => Promise<boolean>
+  listPlanningTags: () => Promise<PlanningTag[]>
+  listActivePlanningReminders: () => Promise<ActivePlanningReminder[]>
+  acknowledgePlanningReminder: (id: string) => Promise<PlanningReminder | undefined>
+  snoozePlanningReminder: (input: SnoozePlanningReminderInput) => Promise<PlanningReminder | undefined>
+  onPlanningRemindersDue: (callback: (reminders: ActivePlanningReminder[]) => void) => () => void
+  onPlanningChanged: (callback: (change: PlanningChange) => void) => () => void
+  onPlanningAgentOperation: (callback: (operation: PlanningAgentOperation) => void) => () => void
+
+  /** Agent 灵动岛桥接（主进程状态机 → 灵动岛窗口） */
+  agentIsland: {
+    /** 订阅灵动岛全量状态 */
+    onState: (callback: (snapshot: AgentIslandWindowSnapshot) => void) => () => void
+    /** 外部触发展开/收起切换 */
+    onToggleExpanded: (callback: () => void) => () => void
+    /** 同步展开/收起状态到主进程（避免下一条 Agent 事件覆盖本地状态） */
+    setExpanded: (expanded: boolean) => Promise<void>
+    /** 发送鼠标进入/离开 island surface 的意图；主进程负责展开防抖。 */
+    setHovered: (hovered: boolean) => Promise<void>
+    /** 按内容调整窗口尺寸（pill ↔ 展开卡） */
+    resize: (width: number, height: number) => Promise<void>
+    /** 拖拽移动窗口位置 */
+    move: (x: number, y: number) => Promise<void>
+    /** 打开/聚焦主窗口 */
+    openMainWindow: () => Promise<void>
+    /** 打开独立 Planning 窗口。 */
+    openPlanning: () => Promise<void>
+    /** 打开指定 Agent 会话（聚焦主窗口） */
+    openSession: (sessionId: string) => Promise<void>
+    /** 用户已在主应用中主动查看完成会话，清除灵动岛未读状态 */
+    markSessionViewed: (sessionId: string) => Promise<void>
+  }
 }
 
 interface MigrationExportResult {
@@ -1540,6 +1669,10 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(IPC_CHANNELS.OPEN_EXTERNAL, url)
   },
 
+  writeClipboardText: (text: string) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.WRITE_CLIPBOARD_TEXT, text)
+  },
+
   // 窗口控制
   windowMinimize: () => {
     return ipcRenderer.invoke(IPC_CHANNELS.WINDOW_MINIMIZE)
@@ -1604,12 +1737,32 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.GET_PLAN_QUOTA, channelId)
   },
 
-  codexOAuthLogin: () => {
-    return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_LOGIN)
+  codexOAuthLogin: (method?: import('@proma/shared').CodexOAuthLoginMethod) => {
+    return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_LOGIN, method)
   },
 
   codexOAuthCancel: () => {
     return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_CANCEL)
+  },
+
+  onCodexOAuthDeviceCode: (callback: (deviceCode: import('@proma/shared').CodexOAuthDeviceCode) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, deviceCode: import('@proma/shared').CodexOAuthDeviceCode) => callback(deviceCode)
+    ipcRenderer.on(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_DEVICE_CODE, listener)
+    return () => ipcRenderer.removeListener(CHANNEL_IPC_CHANNELS.CODEX_OAUTH_DEVICE_CODE, listener)
+  },
+
+  xaiOAuthLogin: () => {
+    return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.XAI_OAUTH_LOGIN)
+  },
+
+  xaiOAuthCancel: () => {
+    return ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.XAI_OAUTH_CANCEL)
+  },
+
+  onXaiOAuthDeviceCode: (callback: (deviceCode: XaiOAuthDeviceCode) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, deviceCode: XaiOAuthDeviceCode) => callback(deviceCode)
+    ipcRenderer.on(CHANNEL_IPC_CHANNELS.XAI_OAUTH_DEVICE_CODE, listener)
+    return () => ipcRenderer.removeListener(CHANNEL_IPC_CHANNELS.XAI_OAUTH_DEVICE_CODE, listener)
   },
 
   // 对话管理
@@ -1891,8 +2044,12 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.UPDATE_SESSION_CODEX_FAST_MODE, sessionId, enabled)
   },
 
-  updateSessionOpenAIThinkingLevel: (sessionId: string, thinkingLevel: AgentThinkingLevel) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.UPDATE_SESSION_OPENAI_REASONING, sessionId, thinkingLevel)
+  getPiReasoningCapability: (channelId: string, modelId: string) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_PI_REASONING_CAPABILITY, channelId, modelId)
+  },
+
+  updateSessionReasoningLevel: (sessionId: string, thinkingLevel: AgentThinkingLevel) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.UPDATE_SESSION_REASONING_LEVEL, sessionId, thinkingLevel)
   },
 
   updateAgentSessionModel: (id: string, channelId?: string, modelId?: string) => {
@@ -1974,12 +2131,24 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_WORKSPACES)
   },
 
-  createAgentWorkspace: (name: string) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.CREATE_WORKSPACE, name)
+  createAgentWorkspace: (input: CreateAgentWorkspaceInput) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.CREATE_WORKSPACE, input)
+  },
+
+  createAgentProject: (input: CreateAgentWorkspaceInput, channelId?: string, modelId?: string) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.CREATE_PROJECT, input, channelId, modelId)
   },
 
   updateAgentWorkspace: (id: string, updates: { name: string }) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.UPDATE_WORKSPACE, id, updates)
+  },
+
+  relinkAgentWorkspaceProjectRoot: (id: string, projectRootPath: string) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.RELINK_WORKSPACE_PROJECT_ROOT, id, projectRootPath)
+  },
+
+  restoreAgentWorkspaceProjectRoot: (id: string) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.RESTORE_WORKSPACE_PROJECT_ROOT, id)
   },
 
   deleteAgentWorkspace: (id: string) => {
@@ -2231,6 +2400,10 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.OPEN_FOLDER_DIALOG)
   },
 
+  openFileOrFolderDialog: () => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.OPEN_FILE_OR_FOLDER_DIALOG)
+  },
+
   attachDirectory: (input: AgentAttachDirectoryInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.ATTACH_DIRECTORY, input)
   },
@@ -2288,16 +2461,16 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.GET_SESSION_PATH, workspaceId, sessionId)
   },
 
-  listDirectory: (dirPath: string) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_DIRECTORY, dirPath)
+  listDirectory: (dirPath: string, access?: import('@proma/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_DIRECTORY, dirPath, access)
   },
 
-  deleteFile: (filePath: string) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.DELETE_FILE, filePath)
+  deleteFile: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.DELETE_FILE, filePath, access)
   },
 
-  openFile: (filePath: string) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.OPEN_FILE, filePath)
+  openFile: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.OPEN_FILE, filePath, access)
   },
 
   writeClipboardPreview: (filename: string, content: string) => {
@@ -2316,8 +2489,8 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(IPC_CHANNELS.GET_DEFAULT_APP_FOR_FILE, filePath, access) as Promise<import('@proma/shared').DefaultAppInfo | null>
   },
 
-  showInFolder: (filePath: string) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SHOW_IN_FOLDER, filePath)
+  showInFolder: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.SHOW_IN_FOLDER, filePath, access)
   },
 
   openFolderInTerminal: (folderPath: string) => {
@@ -2361,12 +2534,12 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(IPC_CHANNELS.SCREENSHOT_CAPTURE, input) as Promise<{ success: boolean; message: string; filePath?: string }>
   },
 
-  renameFile: (filePath: string, newName: string) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.RENAME_FILE, filePath, newName)
+  renameFile: (filePath: string, newName: string, access?: import('@proma/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.RENAME_FILE, filePath, newName, access)
   },
 
-  moveFile: (filePath: string, targetDir: string) => {
-    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.MOVE_FILE, filePath, targetDir)
+  moveFile: (filePath: string, targetDir: string, access?: import('@proma/shared').FileAccessOptions) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.MOVE_FILE, filePath, targetDir, access)
   },
 
   listAttachedDirectory: (dirPath: string, access?: import('@proma/shared').FileAccessOptions) => {
@@ -2435,7 +2608,8 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.on('updater:status-changed', listener)
       return () => { ipcRenderer.removeListener('updater:status-changed', listener) }
     },
-    quitAndInstall: () => ipcRenderer.invoke('updater:quit-and-install'),
+    installWhenIdle: () => ipcRenderer.invoke('updater:install-when-idle'),
+    cancelIdleInstall: () => ipcRenderer.invoke('updater:cancel-idle-install'),
   },
 
   // GitHub Release
@@ -2673,6 +2847,10 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(QUICK_TASK_IPC_CHANNELS.REREGISTER_GLOBAL_SHORTCUTS)
   },
 
+  getGlobalShortcutRegistrationStatus: () => {
+    return ipcRenderer.invoke(QUICK_TASK_IPC_CHANNELS.GET_GLOBAL_SHORTCUT_REGISTRATION_STATUS)
+  },
+
   onQuickTaskFocus: (callback: () => void) => {
     const listener = (): void => callback()
     ipcRenderer.on(QUICK_TASK_IPC_CHANNELS.FOCUS, listener)
@@ -2711,6 +2889,14 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.SEND_AUDIO, input)
   },
 
+  reportVoiceDictationVolume: (volume: number) => {
+    ipcRenderer.send(VOICE_DICTATION_IPC_CHANNELS.REPORT_VOLUME, volume)
+  },
+
+  reportVoiceDictationTranscript: (text: string) => {
+    ipcRenderer.send(VOICE_DICTATION_IPC_CHANNELS.REPORT_TRANSCRIPT, text)
+  },
+
   stopVoiceDictation: (input: VoiceDictationStopInput) => {
     return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.STOP, input)
   },
@@ -2721,6 +2907,14 @@ const electronAPI: ElectronAPI = {
 
   commitVoiceDictation: (input: VoiceDictationCommitInput) => {
     return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.COMMIT, input)
+  },
+
+  resolveVoiceDictationPromaInput: (input: VoiceDictationPromaInputResolution) => {
+    return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.RESOLVE_PROMA_INPUT, input)
+  },
+
+  previewVoiceDictation: (input: VoiceDictationPreviewInput) => {
+    return ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.PREVIEW, input)
   },
 
   hideVoiceDictation: () => {
@@ -2755,10 +2949,28 @@ const electronAPI: ElectronAPI = {
     return () => { ipcRenderer.removeListener(VOICE_DICTATION_IPC_CHANNELS.STATE, listener) }
   },
 
-  onVoiceDictationInsertText: (callback: (data: { text: string }) => void) => {
-    const listener = (_: unknown, data: { text: string }): void => callback(data)
+  onVoiceDictationIndicatorState: (callback: (event: VoiceDictationIndicatorEvent) => void) => {
+    const listener = (_: unknown, event: VoiceDictationIndicatorEvent): void => callback(event)
+    ipcRenderer.on(VOICE_DICTATION_IPC_CHANNELS.INDICATOR_STATE, listener)
+    return () => { ipcRenderer.removeListener(VOICE_DICTATION_IPC_CHANNELS.INDICATOR_STATE, listener) }
+  },
+
+  onVoiceDictationInsertText: (callback: (data: VoiceDictationTextEvent) => void) => {
+    const listener = (_: unknown, data: VoiceDictationTextEvent): void => callback(data)
     ipcRenderer.on(VOICE_DICTATION_IPC_CHANNELS.INSERT_TEXT, listener)
     return () => { ipcRenderer.removeListener(VOICE_DICTATION_IPC_CHANNELS.INSERT_TEXT, listener) }
+  },
+
+  onVoiceDictationPreviewText: (callback: (data: VoiceDictationTextEvent) => void) => {
+    const listener = (_: unknown, data: VoiceDictationTextEvent): void => callback(data)
+    ipcRenderer.on(VOICE_DICTATION_IPC_CHANNELS.PREVIEW_TEXT, listener)
+    return () => { ipcRenderer.removeListener(VOICE_DICTATION_IPC_CHANNELS.PREVIEW_TEXT, listener) }
+  },
+
+  onVoiceDictationClearPreviewText: (callback: (data: Pick<VoiceDictationTextEvent, 'sessionId'>) => void) => {
+    const listener = (_: unknown, data: Pick<VoiceDictationTextEvent, 'sessionId'>): void => callback(data)
+    ipcRenderer.on(VOICE_DICTATION_IPC_CHANNELS.CLEAR_PREVIEW_TEXT, listener)
+    return () => { ipcRenderer.removeListener(VOICE_DICTATION_IPC_CHANNELS.CLEAR_PREVIEW_TEXT, listener) }
   },
 
   checkMicrophonePermission: () => {
@@ -3013,6 +3225,75 @@ const electronAPI: ElectronAPI = {
     const listener = (_: unknown, progress: LinguistMigrationProgress): void => callback(progress)
     ipcRenderer.on(LINGUIST_MIGRATION_IPC_CHANNELS.PROGRESS, listener)
     return () => { ipcRenderer.removeListener(LINGUIST_MIGRATION_IPC_CHANNELS.PROGRESS, listener) }
+  },
+  // ===== 任务 / 日程（Planning）=====
+  openPlanningWindow: () => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.OPEN_WINDOW),
+  listTodos: (query?: TodoListQuery) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_TODOS, query),
+  createTodo: (input: CreateTodoInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.CREATE_TODO, input),
+  startTodoAgent: (input: StartTodoAgentInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.START_TODO_AGENT, input),
+  onTodoAgentSessionReady: (callback: (activation: TodoAgentSessionActivation) => void) => {
+    const listener = (_: Electron.IpcRendererEvent, activation: TodoAgentSessionActivation): void => callback(activation)
+    ipcRenderer.on(PLANNING_IPC_CHANNELS.TODO_AGENT_SESSION_READY, listener)
+    return () => { ipcRenderer.removeListener(PLANNING_IPC_CHANNELS.TODO_AGENT_SESSION_READY, listener) }
+  },
+  updateTodo: (input: UpdateTodoInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.UPDATE_TODO, input),
+  deleteTodo: (id: string) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.DELETE_TODO, id),
+  listCalendarEvents: (query?: CalendarEventListQuery) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_CALENDAR_EVENTS, query),
+  createCalendarEvent: (input: CreateCalendarEventInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.CREATE_CALENDAR_EVENT, input),
+  updateCalendarEvent: (input: UpdateCalendarEventInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.UPDATE_CALENDAR_EVENT, input),
+  deleteCalendarEvent: (id: string) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.DELETE_CALENDAR_EVENT, id),
+  listPlanningGroups: (scope: PlanningGroupScope) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_GROUPS, scope),
+  createPlanningGroup: (input: CreatePlanningGroupInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.CREATE_GROUP, input),
+  updatePlanningGroup: (input: UpdatePlanningGroupInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.UPDATE_GROUP, input),
+  deletePlanningGroup: (scope: PlanningGroupScope, id: string) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.DELETE_GROUP, scope, id),
+  listPlanningTags: () => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_TAGS),
+  listActivePlanningReminders: () => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_ACTIVE_REMINDERS),
+  acknowledgePlanningReminder: (id: string) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.ACKNOWLEDGE_REMINDER, id),
+  snoozePlanningReminder: (input: SnoozePlanningReminderInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.SNOOZE_REMINDER, input),
+  onPlanningRemindersDue: (callback: (reminders: ActivePlanningReminder[]) => void) => {
+    const listener = (_: Electron.IpcRendererEvent, reminders: ActivePlanningReminder[]): void => callback(reminders)
+    ipcRenderer.on(PLANNING_IPC_CHANNELS.REMINDER_DUE, listener)
+    return () => { ipcRenderer.removeListener(PLANNING_IPC_CHANNELS.REMINDER_DUE, listener) }
+  },
+  onPlanningChanged: (callback: (change: PlanningChange) => void) => {
+    const listener = (_: Electron.IpcRendererEvent, change: PlanningChange): void => callback(change)
+    ipcRenderer.on(PLANNING_IPC_CHANNELS.CHANGED, listener)
+    return () => { ipcRenderer.removeListener(PLANNING_IPC_CHANNELS.CHANGED, listener) }
+  },
+  onPlanningAgentOperation: (callback: (operation: PlanningAgentOperation) => void) => {
+    const listener = (_: Electron.IpcRendererEvent, operation: PlanningAgentOperation): void => callback(operation)
+    ipcRenderer.on(PLANNING_IPC_CHANNELS.AGENT_OPERATION, listener)
+    return () => { ipcRenderer.removeListener(PLANNING_IPC_CHANNELS.AGENT_OPERATION, listener) }
+  },
+
+  // ===== Agent 灵动岛 =====
+  agentIsland: {
+    onState: (callback: (snapshot: AgentIslandWindowSnapshot) => void) => {
+      const listener = (_: Electron.IpcRendererEvent, snapshot: AgentIslandWindowSnapshot): void => callback(snapshot)
+      ipcRenderer.on(AGENT_ISLAND_IPC_CHANNELS.STATE, listener)
+      return () => { ipcRenderer.removeListener(AGENT_ISLAND_IPC_CHANNELS.STATE, listener) }
+    },
+    onToggleExpanded: (callback: () => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on(AGENT_ISLAND_IPC_CHANNELS.TOGGLE_EXPANDED, listener)
+      return () => { ipcRenderer.removeListener(AGENT_ISLAND_IPC_CHANNELS.TOGGLE_EXPANDED, listener) }
+    },
+    setExpanded: (expanded: boolean) =>
+      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.SET_EXPANDED, expanded),
+    setHovered: (hovered: boolean) =>
+      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.SET_HOVERED, hovered),
+    resize: (width: number, height: number) =>
+      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.RESIZE, { width, height }),
+    move: (x: number, y: number) =>
+      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.MOVE, { x, y }),
+    openMainWindow: () =>
+      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.OPEN_MAIN_WINDOW),
+    openPlanning: () =>
+      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.OPEN_PLANNING),
+    openSession: (sessionId: string) =>
+      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.OPEN_SESSION, sessionId),
+    markSessionViewed: (sessionId: string) =>
+      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.MARK_SESSION_VIEWED, sessionId),
   },
 }
 

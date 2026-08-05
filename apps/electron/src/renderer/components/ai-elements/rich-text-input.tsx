@@ -5,7 +5,7 @@
  *
  * 功能：
  * - StarterKit + Placeholder + Underline + Link + CodeBlockLowlight
- * - 可选 Mention 扩展（@ 引用文件、/ 触发 Skill、# 触发 MCP、& 引用会话）
+ * - 可选 Mention 扩展（@ 引用文件、/ 触发菜单：Skill、MCP、会话、Todo 和日程）
  * - htmlToMarkdown 转换
  * - IME composition 处理
  * - Enter 提交 / Shift+Enter 换行
@@ -13,9 +13,11 @@
  * - 自动扩高
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, useImperativeHandle, forwardRef } from 'react'
 import { useAtomValue } from 'jotai'
 import { useEditor, EditorContent } from '@tiptap/react'
+import { TextSelection } from '@tiptap/pm/state'
+import type { Transaction } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
@@ -27,12 +29,21 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { lowlight } from '@/lib/lowlight'
 import { htmlToMarkdown } from '@/lib/markdown-rich-text'
+import { resolveMentionSuggestionChar } from './mention-utils'
 import { richTextRenderingEnabledAtom } from '@/atoms/ui-preferences'
 import { createFileMentionSuggestion } from '@/components/file-browser/file-mention-suggestion'
-import { createSkillMentionSuggestion, createMcpMentionSuggestion, createSessionMentionSuggestion } from '@/components/agent/mention-suggestions'
+import { getFilePanelDragData, type FilePanelDragItem } from '@/lib/file-panel-drag'
+import {
+  createMcpMentionSuggestion,
+  createPlanningMentionSuggestion,
+  createSessionMentionSuggestion,
+  createSkillMentionSuggestion,
+} from '@/components/agent/mention-suggestions'
 import { shouldConvertClipboardTextToAttachment } from '@/lib/clipboard-text-attachment'
 import {
+  VOICE_DICTATION_CLEAR_PREVIEW_EVENT,
   VOICE_DICTATION_INSERT_EVENT,
+  VOICE_DICTATION_PREVIEW_EVENT,
   getLastFocusedVoiceInputId,
   setLastFocusedVoiceInputId,
 } from '@/lib/voice-input-focus'
@@ -118,15 +129,13 @@ interface RichTextInputProps {
   autoFocusTrigger?: string | null
   /** 是否支持手动折叠（内容较长时显示折叠按钮） */
   collapsible?: boolean
-  /** 是否启用 Mention 功能（@ 文件、/ Skill、# MCP、& 会话） */
+  /** 是否启用文件、Skill、MCP、会话和规划引用 chip。 */
   enableMentions?: boolean
-  /** 工作区根路径（启用 @ 引用文件功能时需要） */
+  /** 工作区根路径（启用 @ 文件引用功能时需要） */
   workspacePath?: string | null
-  /** 工作区 ID（启用 & 引用 Agent 会话功能时需要） */
-  workspaceId?: string | null
   /** 工作区 slug（启用 / Skill 和 # MCP 功能时需要） */
   workspaceSlug?: string | null
-  /** 当前 Agent 会话 ID（启用 & 引用 Agent 会话功能时用于排除自身） */
+  /** 当前 Agent 会话 ID（用于 & 会话引用中排除自身） */
   sessionId?: string | null
   /** 附加目录路径列表（工作区级，@ 引用时标记为工作区文件） */
   attachedDirs?: string[]
@@ -141,13 +150,19 @@ interface RichTextInputProps {
   className?: string
 }
 
+/** RichTextInput 对外暴露的命令接口 */
+export interface RichTextInputHandle {
+  /** 在光标处插入文件引用（右侧文件面板拖入时调用） */
+  insertFileMentions: (items: FilePanelDragItem[]) => void
+}
+
 /**
  * 富文本输入组件
  * - 基于 TipTap 的 WYSIWYG 编辑器
  * - 支持 Markdown 快捷输入
  * - 无工具栏，纯净输入体验
  */
-export function RichTextInput({
+export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>(function RichTextInput({
   value,
   onChange,
   onSubmit,
@@ -162,7 +177,6 @@ export function RichTextInput({
   collapsible = false,
   enableMentions,
   workspacePath,
-  workspaceId,
   workspaceSlug,
   sessionId,
   attachedDirs = [],
@@ -170,9 +184,10 @@ export function RichTextInput({
   htmlValue,
   onHtmlChange,
   sendWithCmdEnter = false,
-}: RichTextInputProps): React.ReactElement {
+}: RichTextInputProps, ref: React.Ref<RichTextInputHandle>): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(false)
   const inputIdRef = useRef(`rich-text-input-${Math.random().toString(36).slice(2)}`)
+  const voicePreviewRef = useRef<{ sessionId: string; from: number; to: number } | null>(null)
   // 手动折叠状态：用户主动折叠输入框
   const [isManuallyCollapsed, setIsManuallyCollapsed] = useState(false)
   // 跟踪 isExpanded 最新值（对比后再 setState，避免每键无谓 setState 触发重渲染）
@@ -200,31 +215,27 @@ export function RichTextInput({
   // 发送模式引用
   const sendWithCmdEnterRef = useRef(sendWithCmdEnter)
   sendWithCmdEnterRef.current = sendWithCmdEnter
-  // Mention 活跃状态（阻止 Enter 发送消息）
-  const mentionActiveRef = useRef(false)
-  // Mention 弹窗中的可选项数量（0 时 Enter 不阻塞发送）
-  const mentionItemCountRef = useRef(0)
-  // 工作区路径引用（给 Suggestion 使用）
+  // 工作区路径引用（给 @ 文件引用使用）
   const workspacePathRef = useRef<string | null>(workspacePath ?? null)
   workspacePathRef.current = workspacePath ?? null
-  // 工作区 ID 引用（给会话引用 Suggestion 使用）
-  const workspaceIdRef = useRef<string | null>(workspaceId ?? null)
-  workspaceIdRef.current = workspaceId ?? null
-  // 当前会话 ID 引用（给会话引用 Suggestion 使用）
+  // 当前会话 ID 引用（给 & 会话和 ~ 规划引用使用）
   const currentSessionIdRef = useRef<string | null>(sessionId ?? null)
   currentSessionIdRef.current = sessionId ?? null
-  // 工作区级附加目录路径引用（给 Suggestion 使用，标记为 workspace）
+  // 工作区级附加目录路径引用（给 @ 文件引用使用，标记为 workspace）
   const attachedDirsRef = useRef<string[]>(attachedDirs)
   attachedDirsRef.current = attachedDirs
-  // 会话级附加目录路径引用（给 Suggestion 使用，标记为 session）
+  // 会话级附加目录路径引用（给 @ 文件引用使用，标记为 session）
   const sessionAttachedDirsRef = useRef<string[]>(sessionAttachedDirs)
   sessionAttachedDirsRef.current = sessionAttachedDirs
-  // 工作区 slug 引用（给 Skill/MCP Suggestion 使用）
+  // 工作区 slug 引用（给 / Skill 和 # MCP suggestion 使用）
   const workspaceSlugRef = useRef<string | null>(workspaceSlug ?? null)
   workspaceSlugRef.current = workspaceSlug ?? null
+  // Mention 活跃状态供各 suggestion 的异步生命周期共享。
+  const mentionActiveRef = useRef(false)
+  const mentionItemCountRef = useRef(0)
 
   // 是否启用 Mention 功能：Agent 首帧可能尚未拿到路径/slug/id，但扩展必须先注册。
-  const hasMentionSupport = enableMentions ?? (workspacePath !== undefined || workspaceSlug !== undefined || workspaceId !== undefined)
+  const hasMentionSupport = enableMentions ?? (workspacePath !== undefined || workspaceSlug !== undefined)
 
   // 输入框 Markdown 渲染开关：关闭后为纯文本模式（禁用格式化扩展 + 粘贴跳过 HTML 解析），Mention 仍保留
   const richTextEnabled = useAtomValue(richTextRenderingEnabledAtom)
@@ -241,27 +252,33 @@ export function RichTextInput({
     ))
   }, [isMac])
 
-  // Mention Suggestion 配置（稳定引用，不随 workspacePath 变化重建）
-  const mentionSuggestion = useMemo(
-    () => createFileMentionSuggestion(workspacePathRef, mentionActiveRef, attachedDirsRef, mentionItemCountRef, sessionAttachedDirsRef),
+  const fileMentionSuggestion = useMemo(
+    () => createFileMentionSuggestion(
+      workspacePathRef,
+      mentionActiveRef,
+      attachedDirsRef,
+      mentionItemCountRef,
+      sessionAttachedDirsRef,
+    ),
     [],
   )
-
-  // Skill Suggestion 配置（/ 触发）
-  const skillSuggestion = useMemo(
+  const skillMentionSuggestion = useMemo(
     () => createSkillMentionSuggestion(workspaceSlugRef, mentionActiveRef, mentionItemCountRef),
     [],
   )
-
-  // MCP Suggestion 配置（# 触发）
-  const mcpSuggestion = useMemo(
+  const mcpMentionSuggestion = useMemo(
     () => createMcpMentionSuggestion(workspaceSlugRef, mentionActiveRef, mentionItemCountRef),
     [],
   )
-
-  // Agent 会话引用 Suggestion（& 触发）
-  const sessionSuggestion = useMemo(
-    () => createSessionMentionSuggestion(workspaceIdRef, currentSessionIdRef, mentionActiveRef, mentionItemCountRef),
+  const sessionMentionSuggestion = useMemo(
+    () => createSessionMentionSuggestion(currentSessionIdRef, mentionActiveRef, mentionItemCountRef),
+    [],
+  )
+  const planningMentionSuggestions = useMemo(
+    () => [
+      createPlanningMentionSuggestion('~', currentSessionIdRef, mentionActiveRef, mentionItemCountRef),
+      createPlanningMentionSuggestion('～', currentSessionIdRef, mentionActiveRef, mentionItemCountRef),
+    ],
     [],
   )
 
@@ -273,6 +290,8 @@ export function RichTextInput({
         // 禁用内置版本，使用下面单独配置的版本
         link: false,
         underline: false,
+        // 禁用拖拽插入位置指示器（拖入文件/文件夹时出现的横线）
+        dropcursor: false,
         // 纯文本模式：禁用所有格式化扩展，仅保留 Document/Paragraph/Text/HardBreak/History
         ...(richTextEnabled ? {} : {
           blockquote: false,
@@ -308,8 +327,8 @@ export function RichTextInput({
         placeholder,
         emptyEditorClass: 'is-editor-empty',
       }),
-      // Mention 扩展：启用时注册，路径/slug 后续通过 ref 异步更新
-      // @ 引用文件、/ 触发 Skill、# 触发 MCP
+      // Mention 扩展：启用时注册，路径/slug 后续通过 ref 异步更新。
+      // 旧统一命令菜单生成的节点仍按自身属性渲染，确保历史草稿兼容。
       // 纯文本模式下仍然保留，确保引用功能可用
       ...(hasMentionSupport ? [
         Mention.extend({
@@ -323,15 +342,54 @@ export function RichTextInput({
                   'data-mention-suggestion-char': attrs.mentionSuggestionChar,
                 }),
               },
+              referenceType: {
+                default: null,
+                parseHTML: (el: HTMLElement) => {
+                  const value = el.getAttribute('data-mention-reference-type')
+                  return value === 'todo' || value === 'calendar_event' ? value : null
+                },
+                renderHTML: (attrs: Record<string, unknown>) => (
+                  attrs.referenceType === 'todo' || attrs.referenceType === 'calendar_event'
+                    ? { 'data-mention-reference-type': attrs.referenceType }
+                    : {}
+                ),
+              },
+              // 文件夹引用（右侧文件面板拖入的目录）：渲染为文件夹样式 chip
+              isDirectory: {
+                default: false,
+                parseHTML: (el: HTMLElement) => el.getAttribute('data-mention-is-directory') === 'true',
+                renderHTML: (attrs: Record<string, unknown>) => attrs.isDirectory
+                  ? { 'data-mention-is-directory': 'true' }
+                  : {},
+              },
+              // 兼容此前统一命令菜单生成的历史 draft；新节点不再写入此属性。
+              commandMenuMention: {
+                default: false,
+                parseHTML: (el: HTMLElement) => el.getAttribute('data-command-menu-mention') === 'true',
+                renderHTML: (attrs: Record<string, unknown>) => attrs.commandMenuMention
+                  ? { 'data-command-menu-mention': 'true' }
+                  : {},
+              },
             }
           },
         }).configure({
           HTMLAttributes: {},
-          renderHTML({ node, suggestion }) {
-            const char = suggestion?.char ?? node.attrs.mentionSuggestionChar ?? '@'
+          renderText({ node, suggestion }) {
+            const char = resolveMentionSuggestionChar(node.attrs.mentionSuggestionChar, suggestion?.char)
             const label = node.attrs.label ?? node.attrs.id
-            let chipClass = 'mention-chip'
-            if (char === '/') chipClass = 'skill-mention-chip'
+            return `${char}${label}`
+          },
+          renderHTML({ node, suggestion }) {
+            // 旧草稿中的节点也会带有原始字符。不能在未匹配到旧 suggestion 时
+            // 回退到唯一注册的 `/` suggestion，否则 @/#/& 会被重写为 /skill。
+            const char = resolveMentionSuggestionChar(node.attrs.mentionSuggestionChar, suggestion?.char)
+            const label = node.attrs.label ?? node.attrs.id
+            const referenceType = node.attrs.referenceType
+            const isDirectory = node.attrs.isDirectory === true
+            let chipClass = isDirectory ? 'directory-mention-chip' : 'mention-chip'
+            if (referenceType === 'todo') chipClass = 'todo-mention-chip'
+            else if (referenceType === 'calendar_event') chipClass = 'calendar-event-mention-chip'
+            else if (char === '/') chipClass = 'skill-mention-chip'
             else if (char === '#') chipClass = 'mcp-mention-chip'
             else if (char === '&') chipClass = 'session-mention-chip'
             return [
@@ -341,16 +399,22 @@ export function RichTextInput({
                 'data-id': node.attrs.id,
                 'data-label': node.attrs.label,
                 'data-mention-suggestion-char': char,
+                ...(referenceType === 'todo' || referenceType === 'calendar_event'
+                  ? { 'data-mention-reference-type': referenceType }
+                  : {}),
+                ...(node.attrs.commandMenuMention ? { 'data-command-menu-mention': 'true' } : {}),
+                ...(isDirectory ? { 'data-mention-is-directory': 'true' } : {}),
                 class: chipClass,
               },
               `${char === '@' ? '@' : ''}${label}`,
             ]
           },
           suggestions: [
-            mentionSuggestion,
-            skillSuggestion,
-            mcpSuggestion,
-            sessionSuggestion,
+            fileMentionSuggestion,
+            skillMentionSuggestion,
+            mcpMentionSuggestion,
+            sessionMentionSuggestion,
+            ...planningMentionSuggestions,
           ],
         }),
       ] : []),
@@ -358,6 +422,15 @@ export function RichTextInput({
     content: value || '',
     editable: !disabled,
     editorProps: {
+      // 右侧文件面板拖拽载荷（自定义 MIME）交给外层容器 onDrop 处理，
+      // 阻止 ProseMirror 把 text/plain 路径文本当作普通文本插入。
+      handleDrop: (_view, event) => {
+        if (event.dataTransfer && getFilePanelDragData(event.dataTransfer)) {
+          event.preventDefault()
+          return true
+        }
+        return false
+      },
       attributes: {
         class: cn(
           'prose dark:prose-invert max-w-none focus:outline-none',
@@ -675,18 +748,112 @@ export function RichTextInput({
     }
   }, [editor, disabled, autoFocusTrigger])
 
+  // 对外暴露命令接口：右侧文件面板拖入时，在光标处插入 @file 引用 mention。
+  // mention 节点沿用 TipTap Mention 扩展的 attrs（id=路径，label=文件名），
+  // 发送时由 htmlToMarkdown 序列化为 @file:{path}，与键盘 @ 引用行为完全一致。
+  useImperativeHandle(ref, () => ({
+    insertFileMentions(items: FilePanelDragItem[]): void {
+      if (!editor || items.length === 0) return
+      let chain = editor.chain().focus()
+      for (const item of items) {
+        chain = chain
+          .insertContent({
+            type: 'mention',
+            attrs: {
+              id: item.path,
+              label: item.name,
+              mentionSuggestionChar: '@',
+              isDirectory: item.isDirectory ?? false,
+            },
+          })
+          .insertContent(' ')
+      }
+      chain.run()
+    },
+  }), [editor])
+
+  // 将预览范围映射到每次用户编辑后的文档位置，避免流式更新覆盖邻近输入。
+  useEffect(() => {
+    if (!editor) return
+
+    const mapPreviewRange = ({ transaction }: { transaction: Transaction }): void => {
+      const current = voicePreviewRef.current
+      if (!current || !transaction.docChanged) return
+      const from = transaction.mapping.mapResult(current.from, 1)
+      const to = transaction.mapping.mapResult(current.to, -1)
+      if (from.deleted && to.deleted) {
+        voicePreviewRef.current = null
+        return
+      }
+      voicePreviewRef.current = {
+        sessionId: current.sessionId,
+        from: from.pos,
+        to: Math.max(from.pos, to.pos),
+      }
+    }
+
+    editor.on('transaction', mapPreviewRange)
+    return () => {
+      editor.off('transaction', mapPreviewRange)
+    }
+  }, [editor])
+
+  // 语音输入在录音期间同步 ASR 的完整结果，停止时再以最终文本替换这段组合文本。
+  useEffect(() => {
+    if (!editor || disabled) return
+
+    const updatePreview = (event: Event): void => {
+      const { sessionId, text } = (event as CustomEvent<{ sessionId?: string; text?: string }>).detail ?? {}
+      const previewText = text?.trim()
+      if (!sessionId || !previewText) return
+
+      const current = voicePreviewRef.current
+      if (current && current.sessionId !== sessionId) return
+      if (!current && getLastFocusedVoiceInputId() !== inputIdRef.current) return
+      const from = current?.from ?? editor.state.selection.from
+      const to = current?.to ?? editor.state.selection.to
+      editor.view.dispatch(editor.state.tr.insertText(previewText, from, to))
+      voicePreviewRef.current = { sessionId, from, to: from + previewText.length }
+      event.preventDefault()
+    }
+
+    const clearPreview = (event: Event): void => {
+      const { sessionId } = (event as CustomEvent<{ sessionId?: string }>).detail ?? {}
+      const current = voicePreviewRef.current
+      if (!current || current.sessionId !== sessionId) return
+      editor.view.dispatch(editor.state.tr.delete(current.from, current.to))
+      voicePreviewRef.current = null
+      event.preventDefault()
+    }
+
+    window.addEventListener(VOICE_DICTATION_PREVIEW_EVENT, updatePreview)
+    window.addEventListener(VOICE_DICTATION_CLEAR_PREVIEW_EVENT, clearPreview)
+    return () => {
+      window.removeEventListener(VOICE_DICTATION_PREVIEW_EVENT, updatePreview)
+      window.removeEventListener(VOICE_DICTATION_CLEAR_PREVIEW_EVENT, clearPreview)
+    }
+  }, [editor, disabled])
+
   // 语音输入回填：优先插入到当前编辑器的光标位置。
   useEffect(() => {
     if (!editor || disabled) return
 
     const handler = (event: Event): void => {
-      if (getLastFocusedVoiceInputId() !== inputIdRef.current) return
-
-      const customEvent = event as CustomEvent<{ text?: string }>
+      const customEvent = event as CustomEvent<{ sessionId?: string; text?: string }>
       const text = customEvent.detail?.text?.trim()
       if (!text) return
 
-      editor.chain().focus().insertContent(text).run()
+      const preview = voicePreviewRef.current
+      if (preview && preview.sessionId === customEvent.detail?.sessionId) {
+        const end = preview.from + text.length
+        const transaction = editor.state.tr.insertText(text, preview.from, preview.to)
+        transaction.setSelection(TextSelection.create(transaction.doc, end))
+        editor.view.dispatch(transaction)
+        voicePreviewRef.current = null
+      } else {
+        if (getLastFocusedVoiceInputId() !== inputIdRef.current) return
+        editor.chain().focus().insertContent(text).run()
+      }
       event.preventDefault()
     }
 
@@ -756,6 +923,9 @@ export function RichTextInput({
           color: hsl(var(--muted-foreground));
           pointer-events: none;
           height: 0;
+          max-width: 100%;
+          white-space: normal;
+          overflow-wrap: anywhere;
           opacity: 0.5;
           font-style: ${suggestionActive ? 'italic' : 'normal'};
         }
@@ -782,6 +952,30 @@ export function RichTextInput({
           height: 12px;
           background-color: currentColor;
           mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E");
+          mask-size: contain;
+          mask-repeat: no-repeat;
+          flex-shrink: 0;
+        }
+        .directory-mention-chip {
+          background-color: hsl(var(--primary) / 0.14);
+          color: hsl(var(--primary));
+          border-radius: 4px;
+          padding: 1px 4px 1px 2px;
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          vertical-align: baseline;
+        }
+        .directory-mention-chip::before {
+          content: '';
+          display: inline-block;
+          width: 12px;
+          height: 12px;
+          background-color: currentColor;
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/%3E%3C/svg%3E");
           mask-size: contain;
           mask-repeat: no-repeat;
           flex-shrink: 0;
@@ -834,6 +1028,43 @@ export function RichTextInput({
           mask-repeat: no-repeat;
           flex-shrink: 0;
         }
+        .todo-mention-chip,
+        .calendar-event-mention-chip {
+          border-radius: 4px;
+          padding: 1px 4px 1px 2px;
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          vertical-align: baseline;
+        }
+        .todo-mention-chip {
+          background-color: hsl(38 90% 50% / 0.16);
+          color: hsl(32 80% 38%);
+        }
+        .calendar-event-mention-chip {
+          background-color: hsl(190 75% 45% / 0.14);
+          color: hsl(190 72% 34%);
+        }
+        .todo-mention-chip::before,
+        .calendar-event-mention-chip::before {
+          content: '';
+          display: inline-block;
+          width: 12px;
+          height: 12px;
+          background-color: currentColor;
+          mask-size: contain;
+          mask-repeat: no-repeat;
+          flex-shrink: 0;
+        }
+        .todo-mention-chip::before {
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='6' height='6' x='3' y='5' rx='1'/%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cpath d='M13 6h8'/%3E%3Cpath d='M13 12h8'/%3E%3Cpath d='M13 18h8'/%3E%3C/svg%3E");
+        }
+        .calendar-event-mention-chip::before {
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E");
+        }
         .session-mention-chip {
           background-color: hsl(200 80% 50% / 0.14);
           color: hsl(200 80% 40%);
@@ -861,4 +1092,4 @@ export function RichTextInput({
       `}</style>
     </div>
   )
-}
+})

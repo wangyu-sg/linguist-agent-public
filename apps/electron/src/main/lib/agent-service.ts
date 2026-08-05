@@ -10,8 +10,8 @@
  * 所有业务逻辑已委托给 AgentOrchestrator。
  */
 
-import { join, dirname } from 'node:path'
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
+import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { BrowserWindow } from 'electron'
 import type { WebContents } from 'electron'
 import { AGENT_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@proma/shared'
@@ -34,10 +34,15 @@ import { PiAgentAdapter, cleanupPiRuntimeResources } from './adapters/pi-agent-a
 import { RuntimeRoutingAgentAdapter } from './adapters/runtime-routing-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
-import { getAgentSessionWorkspacePath, getWorkspaceFilesDir } from './config-paths'
+import { getAgentWorkspaceBySlug, getLocalProjectRootStatus, getProjectFilesPath } from './agent-workspace-manager'
 import { getAgentSessionMeta, updateAgentSessionMeta } from './agent-session-manager'
 import { setAgentStopper, setHeadlessAgentRunner } from './agent-headless-runner-registry'
+import { getHeadlessAgentRunTarget } from './agent-headless-run-target'
 import { sendAgentStreamComplete } from './agent-completion-payload'
+import { saveFilesToManagedAgentSession } from './agent-session-file-storage'
+import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
+import { checkLinguistSessionSendBlock } from './linguist/session-binding'
+import { getLinguistProjectService } from './linguist/project-service'
 
 // ===== 实例创建 =====
 
@@ -100,6 +105,8 @@ function isMainRendererWindow(win: BrowserWindow): boolean {
   return !url.includes('window=quick-task')
     && !url.includes('window=voice-dictation')
     && !url.includes('window=detached-preview')
+    && !url.includes('window=agent-island')
+    && !url.includes('window=planning')
 }
 
 function getMainRendererWebContents(): WebContents | null {
@@ -235,10 +242,15 @@ export async function runAgentHeadless(
     onComplete: (messages?: AgentMessage[]) => void
     onTitleUpdated: (title: string) => void
     source?: AgentExternalRunSource
+    originSessionId?: string
   },
 ): Promise<void> {
-  // 尝试注册主窗口 webContents，让流式事件同步推送到桌面端
-  const wc = getMainRendererWebContents()
+  // 委派子会话优先回到父会话所在 renderer，外部无界面运行才回退任意主窗口。
+  const wc = getHeadlessAgentRunTarget(
+    sessionWebContents,
+    callbacks.originSessionId,
+    getMainRendererWebContents,
+  )
   const runInput: AgentSendInput = input.startedAt != null ? input : { ...input, startedAt: Date.now() }
   const startedAt = runInput.startedAt!
   if (wc) {
@@ -297,6 +309,7 @@ export async function runAgentHeadless(
             workspaceId: runInput.workspaceId ?? session?.workspaceId,
             modelId: runInput.modelId,
             startedAt: persistedStartedAt,
+            ...(session ? { session } : {}),
           },
         })
       },
@@ -358,6 +371,11 @@ export function isAgentSessionActive(sessionId: string): boolean {
   return orchestrator.isActive(sessionId)
 }
 
+/** 是否存在任意运行中 Agent，供更新器等全局生命周期服务安全判断。 */
+export function hasActiveAgentSessions(): boolean {
+  return orchestrator.hasActiveSessions()
+}
+
 /** 中止所有活跃的 Agent 会话（应用退出时调用） */
 export function stopAllAgents(): void {
   orchestrator.stopAll()
@@ -405,6 +423,8 @@ export async function queueAgentMessage(
     input.mentionedMcpServers,
     input.mentionedSessionIds,
     input.linguistContext,
+    input.mentionedTodoIds,
+    input.mentionedCalendarEventIds,
   )
 }
 
@@ -413,74 +433,97 @@ export async function queueAgentMessage(
 /**
  * 保存文件到 Agent session 工作目录
  *
- * 将 base64 编码的文件写入 session 的 cwd，供 Agent 通过 Read 工具读取。
+ * 将 base64 编码的文件写入当前会话的私有工作目录，供 Agent 通过授权的附加目录读取。
  */
 export function saveFilesToAgentSession(input: AgentSaveFilesInput): AgentSavedFile[] {
-  const sessionDir = getAgentSessionWorkspacePath(input.workspaceSlug, input.sessionId)
-  const results: AgentSavedFile[] = []
-  const usedPaths = new Set<string>()
-
-  for (const file of input.files) {
-    let targetPath = join(sessionDir, file.filename)
-
-    // 防止同名文件覆盖
-    if (usedPaths.has(targetPath) || existsSync(targetPath)) {
-      const dotIdx = file.filename.lastIndexOf('.')
-      const baseName = dotIdx > 0 ? file.filename.slice(0, dotIdx) : file.filename
-      const ext = dotIdx > 0 ? file.filename.slice(dotIdx) : ''
-      let counter = 1
-      let candidate = join(sessionDir, `${baseName}-${counter}${ext}`)
-      while (usedPaths.has(candidate) || existsSync(candidate)) {
-        counter++
-        candidate = join(sessionDir, `${baseName}-${counter}${ext}`)
+  return saveFilesToManagedAgentSession(input, {
+    getSessionMeta: getAgentSessionMeta,
+    resolveExecutionScope: resolveAgentExecutionScope,
+    assertSessionWritable: (session) => {
+      const blocked = checkLinguistSessionSendBlock(session, getLinguistProjectService)
+      if (blocked) {
+        throw new Error(`${blocked.title}: ${blocked.message}`)
       }
-      targetPath = candidate
-    }
-    usedPaths.add(targetPath)
+    },
+  })
+}
 
-    mkdirSync(dirname(targetPath), { recursive: true })
+const LOCAL_PROJECT_ROOT_UNAVAILABLE_CODE = 'local_project_root_unavailable'
 
-    // 防御性检查：base64 字符串长度估算是否超 100MB 限制
-    // base64 编码膨胀率约 4/3，data.length * 0.75 ≈ 原始字节数
-    if (file.data.length * 0.75 > MAX_ATTACHMENT_SIZE) {
-      console.warn(`[Agent 服务] 文件超过 100MB 限制，跳过: ${file.filename} (预估 ${(file.data.length * 0.75 / 1024 / 1024).toFixed(1)}MB)`)
-      continue
-    }
+function createLocalProjectRootUnavailableError(projectRootPath: string, status?: string): Error {
+  const error = new Error(
+    `本地项目根目录不可用: 本地项目根目录不存在或无法访问：${projectRootPath}。请在 Proma 中重新选择项目文件夹。`,
+  ) as Error & { code?: string; details?: string[] }
+  error.code = LOCAL_PROJECT_ROOT_UNAVAILABLE_CODE
+  error.details = status ? [`目录状态: ${status}`] : undefined
+  return error
+}
 
-    const buffer = Buffer.from(file.data, 'base64')
-    writeFileSync(targetPath, buffer)
-
-    const actualFilename = targetPath.slice(sessionDir.length + 1)
-    results.push({ filename: actualFilename, targetPath })
-    console.log(`[Agent 服务] 文件已保存: ${targetPath} (${buffer.length} bytes)`)
+function resolveSafeWorkspaceFilePath(workspaceRoot: string, filename: string): string {
+  const hasParentTraversal = filename.split(/[\\/]+/).some((segment) => segment === '..')
+  if (!filename || isAbsolute(filename) || win32.isAbsolute(filename) || hasParentTraversal) {
+    throw new Error(`项目文件名不安全，拒绝保存: ${filename}`)
   }
 
-  return results
+  const resolvedRoot = resolve(workspaceRoot)
+  const targetPath = resolve(resolvedRoot, filename)
+  const pathWithinRoot = relative(resolvedRoot, targetPath)
+  const escapesRoot = pathWithinRoot === '..'
+    || pathWithinRoot.startsWith(`..${sep}`)
+    || isAbsolute(pathWithinRoot)
+
+  if (!pathWithinRoot || escapesRoot) {
+    throw new Error(`项目文件名不安全，拒绝保存: ${filename}`)
+  }
+
+  return targetPath
 }
 
 /**
- * 保存文件到工作区文件目录
+ * 保存文件到项目文件根目录
  *
- * 将 base64 编码的文件写入工作区 workspace-files/ 目录，所有会话均可访问。
+ * 空白项目写入 Proma 托管的 workspace-files/；本地目录项目直接写入用户选择的原始目录。
  */
 export function saveFilesToWorkspaceFiles(input: AgentSaveWorkspaceFilesInput): AgentSavedFile[] {
-  const wsFilesDir = getWorkspaceFilesDir(input.workspaceSlug)
+  const workspace = getAgentWorkspaceBySlug(input.workspaceSlug)
+  if (!workspace) {
+    throw new Error(`指定的 Agent 项目不存在或已删除: ${input.workspaceSlug}`)
+  }
+
+  if (workspace.projectRootPath) {
+    const status = getLocalProjectRootStatus(workspace.projectRootPath)
+    if (status !== 'available') {
+      throw createLocalProjectRootUnavailableError(workspace.projectRootPath, status)
+    }
+    try {
+      accessSync(workspace.projectRootPath, constants.R_OK | constants.W_OK | constants.X_OK)
+    } catch {
+      throw createLocalProjectRootUnavailableError(workspace.projectRootPath, 'unavailable')
+    }
+  }
+
+  const wsFilesDir = workspace.projectRootPath ?? getProjectFilesPath(input.workspaceSlug)
+  const files = input.files.map((file) => ({
+    file,
+    initialTargetPath: resolveSafeWorkspaceFilePath(wsFilesDir, file.filename),
+  }))
   const results: AgentSavedFile[] = []
   const usedPaths = new Set<string>()
 
-  for (const file of input.files) {
-    let targetPath = join(wsFilesDir, file.filename)
+  for (const { file, initialTargetPath } of files) {
+    let targetPath = initialTargetPath
 
     // 防止同名文件覆盖
     if (usedPaths.has(targetPath) || existsSync(targetPath)) {
-      const dotIdx = file.filename.lastIndexOf('.')
-      const baseName = dotIdx > 0 ? file.filename.slice(0, dotIdx) : file.filename
-      const ext = dotIdx > 0 ? file.filename.slice(dotIdx) : ''
+      const relativeFilename = relative(wsFilesDir, targetPath)
+      const dotIdx = relativeFilename.lastIndexOf('.')
+      const baseName = dotIdx > 0 ? relativeFilename.slice(0, dotIdx) : relativeFilename
+      const ext = dotIdx > 0 ? relativeFilename.slice(dotIdx) : ''
       let counter = 1
-      let candidate = join(wsFilesDir, `${baseName}-${counter}${ext}`)
+      let candidate = resolveSafeWorkspaceFilePath(wsFilesDir, `${baseName}-${counter}${ext}`)
       while (usedPaths.has(candidate) || existsSync(candidate)) {
         counter++
-        candidate = join(wsFilesDir, `${baseName}-${counter}${ext}`)
+        candidate = resolveSafeWorkspaceFilePath(wsFilesDir, `${baseName}-${counter}${ext}`)
       }
       targetPath = candidate
     }
@@ -489,14 +532,14 @@ export function saveFilesToWorkspaceFiles(input: AgentSaveWorkspaceFilesInput): 
     mkdirSync(dirname(targetPath), { recursive: true })
 
     if (file.data.length * 0.75 > MAX_ATTACHMENT_SIZE) {
-      console.warn(`[Agent 服务] 工作区文件超过 100MB 限制，跳过: ${file.filename} (预估 ${(file.data.length * 0.75 / 1024 / 1024).toFixed(1)}MB)`)
+      console.warn(`[Agent 服务] 项目文件超过 100MB 限制，跳过: ${file.filename} (预估 ${(file.data.length * 0.75 / 1024 / 1024).toFixed(1)}MB)`)
       continue
     }
 
     const buffer = Buffer.from(file.data, 'base64')
     writeFileSync(targetPath, buffer)
 
-    const actualFilename = targetPath.slice(wsFilesDir.length + 1)
+    const actualFilename = relative(wsFilesDir, targetPath)
     results.push({ filename: actualFilename, targetPath })
     console.log(`[Agent 服务] 工作区文件已保存: ${targetPath} (${buffer.length} bytes)`)
   }

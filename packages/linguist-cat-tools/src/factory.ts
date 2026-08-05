@@ -6,6 +6,7 @@
  */
 
 import { createProjectTools } from './project-tools'
+import { createIntakeTools } from './intake-tools'
 import { createProposalTools } from './proposal-tools'
 import { createQaTools } from './qa-tools'
 import { createReferenceTools } from './reference-tools'
@@ -20,6 +21,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const runtime = createCatToolRuntime(deps)
   const [projectSummaryTool, listAssetsTool, getSegmentsTool] =
     createProjectTools(runtime)
+  const [listIntakeSourcesTool, importAssetTool] = createIntakeTools(runtime)
   const [
     getTranslationContextTool,
     searchTmTool,
@@ -40,6 +42,8 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     projectSummaryTool,
     listAssetsTool,
     getSegmentsTool,
+    listIntakeSourcesTool,
+    importAssetTool,
     getTranslationContextTool,
     getProposalSnapshotTool,
     searchTmTool,

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 const smokeScripts = [
   'run-g0-smoke.ts',
   'probe-pi-stream.ts',
-  'probe-pb105-matrix.ts',
+  'probe-pb074-e2e.ts',
 ] as const
 
 describe('packaged smoke 临时 HOME 清理合同', () => {

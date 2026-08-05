@@ -1,114 +1,664 @@
 {
-  "schemaVersion": 1,
-  "plan": "docs/roadmap/LINGUIST_MODE_AND_CAT_WORKBENCH_IMPLEMENTATION_PLAN_CN.md",
-  "optimizationPlan": "Linguist_Agent_Optimization_Blueprint_CN.md（外部实施输入，未复制进仓库）",
-  "planVersion": "1.1",
-  "scope": "Proma Agent + Chat + Linguist CAT Workbench（个人日用 Alpha）",
+  "schemaVersion": 2,
+  "plan": "docs/roadmap/LA_UNIFIED_MASTER_PLAN_V2.md",
+  "planVersion": "2.1",
+  "scope": "Proma v0.16.8 收敛 + Linguist 最小 Alpha（受权小批 Intake / Proposal CAT）",
+  "activePhase": "Phase 0",
+  "statusVocabulary": [
+    "TODO",
+    "IN_PROGRESS",
+    "BLOCKED",
+    "DONE",
+    "CANCELLED_WITH_REASON",
+    "VERIFIED_ALREADY_DONE"
+  ],
   "baseline": {
-    "publicCandidate": "2fe3c472",
-    "upstream": "702a822",
-    "recordedHead": "730a360e73d68992b6ca1855ab71234c62f86b33",
-    "branch": "main",
-    "upstreamRemote": "upstream",
-    "mergeBaseWithPublicCandidate": "702a8221bdeb6f3db7dc514b8e93e2a5a52f68df",
-    "aheadOfUpstream": 257,
-    "workingTree": "main keeps exactly two user-owned electron-user-data-path changes unstaged; temporary validation/public worktrees are not delivery sources"
+    "asOf": "2026-08-05",
+    "branch": "sync/proma-v0.16.8",
+    "head": "87a5393b",
+    "promaTargetTag": "v0.16.8",
+    "promaTargetCommit": "bde00f00323d6735a939d14dbce3b2f1a5b672bc",
+    "currentFacts": "CURRENT_FACTS.md",
+    "legacyQueue": "docs/archive/linguist-fusion-queue-v1.json",
+    "formalMergeCommit": "f3d2b431996523a4aa75ec2b027dcf0e932ef08f",
+    "localParent": "b84d65ac79ecf681fac21cf740a589da4aedbed4",
+    "upstreamParent": "bde00f00323d6735a939d14dbce3b2f1a5b672bc",
+    "promaBaseline": "docs/architecture/proma-baseline.json",
+    "touchpointLedger": "docs/architecture/proma-touchpoints.json",
+    "deviationsLedger": "docs/architecture/PROMA_DEVIATIONS.json"
   },
   "policy": {
-    "oneTicketOneCommit": true,
-    "noProductionChangesInLF000": true,
-    "oldProjectCatUi": "frozen-except-P0",
-    "alphaPlanRemainsEffective": true,
-    "publicPush": true
+    "singleActiveQueue": true,
+    "legacyQueueArchived": true,
+    "oldFastBalancedBestGate": "superseded by LA-QUALITY-001",
+    "alphaGate": "LA-ALPHA-000",
+    "scopeRule": "Proma Agent/Chat/Provider/Skills/MCP/Automations/Preview/Permission/Thinking/Queue/Steer 等完整能力继续继承；Alpha 只推进最小可验证 CAT 闭环。",
+    "cancelRule": "CANCELLED_WITH_REASON 仅表示当前 Alpha 明确移出范围；真实项目触发后必须以证据创建 successor Ticket，不得直接复活旧票。"
   },
   "items": [
-    {"id":"LF-000","kind":"ticket","title":"注册本计划、盘点当前私有 HEAD、生成代码事实差异","depends":"无","status":"unit_verified","executable":true},
-    {"id":"LF-001","kind":"ticket","title":"建立当前 Agent/Chat/Projects/CAT 的打包截图与 happy-path baseline","depends":"LF-000","status":"packaged_verified","executable":true},
-    {"id":"LF-002","kind":"ticket","title":"冻结旧 Project/CAT 产品面：仅 P0 修复，不再加功能","depends":"LF-000","status":"unit_verified","executable":true},
-    {"id":"LF-003","kind":"ticket","title":"建立每批必跑 Packaged Vertical Smoke","depends":"LF-001","status":"packaged_verified","executable":true,"evidence":"0.15.140 clean worktree 完成真实未签名打包；Agent 12 pass / 0 fail、Chat 18 pass / 0 fail、Linguist 20 pass / 0 fail / 2 manual。总报告 runStatus=passed、coverageStatus=partial；Agent Stop/Retry UI、Chat→Agent roundtrip 与 Native Open/Save 未伪装成自动覆盖。项目菜单绘制检查命中 10,389 个非背景像素；app.asar SHA-256 95066d73f003502f9792f6afe302df5b560e199ab0680834581818cfb23e5138。"},
-    {"id":"LF-004","kind":"ticket","title":"建立 Proma core touchpoint 与禁止重复 Agent 组件的架构测试","depends":"LF-000","status":"unit_verified","executable":true},
-    {"id":"LF-010","kind":"ticket","title":"AppMode 正式加入 `linguist`，Scratch 退出主模式","depends":"LF-000","status":"unit_verified","executable":true},
-    {"id":"LF-011","kind":"ticket","title":"ModeSwitcher 改为 Agent/Chat/Linguist 三段，保留前两项回归","depends":"LF-010","status":"unit_verified","executable":true},
-    {"id":"LF-012","kind":"ticket","title":"折叠侧栏增加 Linguist 模式按钮","depends":"LF-011","status":"unit_verified","executable":true},
-    {"id":"LF-013","kind":"ticket","title":"TabItem 改为判别联合，加入 LocalizationProjectTab","depends":"LF-010","status":"unit_verified","executable":true},
-    {"id":"LF-014","kind":"ticket","title":"实现 `openLocalizationProject` 和最后项目恢复","depends":"LF-013","status":"unit_verified","executable":true},
-    {"id":"LF-015","kind":"ticket","title":"TabContent 渲染 LocalizationProjectWorkbench","depends":"LF-014","status":"unit_verified","executable":true},
-    {"id":"LF-016","kind":"ticket","title":"Tab 状态、关闭、持久化、MRU 和 status indicator 支持 Project Tab","depends":"LF-015","status":"unit_verified","executable":true},
-    {"id":"LF-017","kind":"gate","title":"Agent/Chat/Linguist 模式与 Tab 回归 Gate","depends":"LF-011~016","status":"packaged_verified","executable":false,"evidence":"0.15.102 当前工作区执行 `bun run smoke:vertical`：真实打包成功；Agent 12 pass / 0 fail，Chat 18 pass / 0 fail，Linguist 17 pass / 0 fail / 2 manual。三模式、原 Agent/Chat 主路径、一等 Project Tab、单击项目进入 Editor、切换与重启恢复均通过；manual 仅为 macOS 原生 Open/Save Dialog，不属于 G-F1。app.asar SHA-256 b7c1c245cd2f98c63e0ecdd678b3c2e82d0c78a7a5b0044cc9efd797e130fd25。计划声明依赖 LF-011~016，但“一次点击进入 Editor”实际还依赖已完成的 LF-022。"},
-    {"id":"LF-020","kind":"ticket","title":"抽出共享 Project list loader/cache，避免 SideBar 和 ProjectsView 双取数漂移","depends":"LF-014","status":"unit_verified","executable":true},
-    {"id":"LF-021","kind":"ticket","title":"建立 LinguistSidebarContent","depends":"LF-020","status":"unit_verified","executable":true},
-    {"id":"LF-022","kind":"ticket","title":"项目单击直接进入 Editor","depends":"LF-021","status":"unit_verified","executable":true},
-    {"id":"LF-023","kind":"ticket","title":"项目会话在 Sidebar 中显示和创建","depends":"LF-021","status":"unit_verified","executable":true},
-    {"id":"LF-024","kind":"ticket","title":"最近项目、上次 Project/Asset/Segment 恢复","depends":"LF-022","status":"unit_verified","executable":true},
-    {"id":"LF-025","kind":"ticket","title":"保留 Project 管理首页并从 Sidebar 提供次级入口","depends":"LF-021","status":"unit_verified","executable":true},
-    {"id":"LF-026","kind":"gate","title":"Linguist 导航可发现性与恢复 Gate","depends":"LF-020~025","status":"packaged_verified","executable":false,"evidence":"0.15.101 打包应用运行 `node scripts/smoke/probe-pb074-e2e.ts --lf026-only`：7 pass / 0 fail / 1 manual。Agent/Chat/Linguist 三模式、两个项目的独立可发现性、管理次级入口、Project Tab、Asset/Segment 位置、重启恢复、Sidebar 项目 Session 与 tab/location/session 持久化均通过；默认 PB-074 纵向 smoke 同时为 17 pass / 0 fail / 2 manual，确认 canonical 路径未回归。manual 仅为 macOS 原生 Open/Save Dialog。"},
-    {"id":"LF-030","kind":"ticket","title":"Characterize AgentView full 模式，建立防回归测试","depends":"LF-004","status":"unit_verified","executable":true},
-    {"id":"LF-031","kind":"ticket","title":"给 AgentView 增加 `presentation='full'|'rail'`，不复制行为","depends":"LF-030","status":"unit_verified","executable":true},
-    {"id":"LF-032","kind":"ticket","title":"Project Agent Session 选择、懒创建和恢复","depends":"LF-023,031","status":"unit_verified","executable":true},
-    {"id":"LF-033","kind":"ticket","title":"Workbench 嵌入 Proma 原生 Agent rail","depends":"LF-032","status":"unit_verified","executable":true},
-    {"id":"LF-034","kind":"ticket","title":"Agent Rail 可调整、折叠和项目级持久化","depends":"LF-033","status":"unit_verified","executable":true},
-    {"id":"LF-035","kind":"ticket","title":"“在完整 Agent Tab 中打开”与返回 Linguist","depends":"LF-033","status":"unit_verified","executable":true},
-    {"id":"LF-036","kind":"ticket","title":"Agent/Chat 全模式回归和重复组件扫描","depends":"LF-031~035","status":"unit_verified","executable":true},
-    {"id":"LF-037","kind":"gate","title":"Native Agent Reuse Gate","depends":"LF-030~036","status":"integration_verified","executable":false},
-    {"id":"LF-040","kind":"ticket","title":"Project-scoped Workbench UI state","depends":"LF-015","status":"unit_verified","executable":true},
-    {"id":"LF-041","kind":"ticket","title":"Workbench Shell、Toolbar、Status Bar","depends":"LF-040","status":"unit_verified","executable":true},
-    {"id":"LF-042","kind":"ticket","title":"Asset Navigator","depends":"LF-041","status":"unit_verified","executable":true},
-    {"id":"LF-043","kind":"ticket","title":"新 Segment Grid，迁入虚拟化/分页/CAS/locked/selection","depends":"LF-041","status":"unit_verified","executable":true},
-    {"id":"LF-044","kind":"ticket","title":"TargetEditor 与 IME/Tag/Undo/Replace/Insert","depends":"LF-043","status":"unit_verified","executable":true},
-    {"id":"LF-045","kind":"ticket","title":"保存、取消、确认并前进、Revision Conflict","depends":"LF-044","status":"unit_verified","executable":true},
-    {"id":"LF-046","kind":"ticket","title":"Proposal/QA/Status 行内指示与当前行详情","depends":"LF-043","status":"unit_verified","executable":true},
-    {"id":"LF-047","kind":"ticket","title":"键盘工作流与可访问 Grid 语义","depends":"LF-044,045","status":"unit_verified","executable":true},
-    {"id":"LF-048","kind":"gate","title":"无 Agent 手工 CAT 完整 Gate","depends":"LF-040~047","status":"gate_blocked","executable":false,"evidence":"当前 packaged App 自动矩阵 20 pass / 0 fail / 2 manual；覆盖双资产导入与 metadata、编辑/CAS/locked、TM/TB、QA、归档只读、10k Grid（20 次精确搜索 p95=149ms≤200ms）及重启恢复。真实系统 IME composition 与 Native Save 覆盖拒绝仍需手工验证，Gate 不宣称通过。"},
-    {"id":"LF-050","kind":"ticket","title":"Bottom Dock 壳、拖动高度、项目级持久化","depends":"LF-040","status":"unit_verified","executable":true},
-    {"id":"LF-051","kind":"ticket","title":"TM Match Panel + Replace/Insert","depends":"LF-044,050","status":"unit_verified","executable":true},
-    {"id":"LF-052","kind":"ticket","title":"Term Match Panel + Insert","depends":"LF-044,050","status":"unit_verified","executable":true},
-    {"id":"LF-053","kind":"ticket","title":"Segment QA Panel + 跳转/处理","depends":"LF-046,050","status":"unit_verified","executable":true,"evidence":"LF-053 定向 BDD 7 pass / 0 fail；全仓 tests、typecheck、renderer build 与 boundaries 通过；LF-056 packaged/真机 Gate 未执行。"},
-    {"id":"LF-054","kind":"ticket","title":"Context/Evidence Panel","depends":"LF-050","status":"unit_verified","executable":true},
-    {"id":"LF-055","kind":"ticket","title":"Preview Panel","depends":"LF-050","status":"unit_verified","executable":true},
-    {"id":"LF-056","kind":"gate","title":"Language Resource Dock Gate","depends":"LF-050~055","status":"packaged_verified","executable":false,"evidence":"0.15.103 打包应用运行 `node scripts/smoke/probe-pb074-e2e.ts --lf056-only`：15 pass / 0 fail / 0 manual。五个 Dock Tab、项目级开关/高度/当前 Tab 持久化、键盘与窄窗 overlay、项目隔离、重启恢复、TM/术语 draft-only + Undo、当前段 QA、Context/Evidence 与只读 Preview/source SHA 全部通过；fixture 仅使用 CatStore 公共 repositories。Terms 沿用 LF-052 已确认的 authoritative status enum，不伪造不存在的 priority 字段；app.asar SHA-256 b7c1c245cd2f98c63e0ecdd678b3c2e82d0c78a7a5b0044cc9efd797e130fd25。"},
-    {"id":"LF-060","kind":"ticket","title":"定义 LinguistTurnContextV1 和严格验证","depends":"LF-040,032","status":"unit_verified","executable":true},
-    {"id":"LF-061","kind":"ticket","title":"原生 Composer 显示 Context Chips","depends":"LF-031,060","status":"unit_verified","executable":true},
-    {"id":"LF-062","kind":"ticket","title":"每 Turn 发送不可变 Context Snapshot","depends":"LF-061","status":"unit_verified","executable":true},
-    {"id":"LF-063","kind":"ticket","title":"CAT Tool 产生 Project Mutation Event","depends":"LF-062","status":"unit_verified","executable":true},
-    {"id":"LF-064","kind":"ticket","title":"Workbench 按 mutation 增量刷新","depends":"LF-063","status":"unit_verified","executable":true},
-    {"id":"LF-065","kind":"ticket","title":"CAT Tool Result 使用 Proma 原生 Tool Renderer 扩展展示","depends":"LF-031,063","status":"unit_verified","executable":true},
-    {"id":"LF-066","kind":"ticket","title":"Tool Result 点击定位 Project/Segment","depends":"LF-065","status":"unit_verified","executable":true},
-    {"id":"LF-067","kind":"ticket","title":"Proposal Inline Diff 与 Grid Accept/Reject","depends":"LF-046,064","status":"unit_verified","executable":true,"evidence":"Renderer 定向 BDD 25 pass / 0 fail；Proposal IPC、Session CAT 与 Store nodetest 25 pass / 0 fail；未执行 packaged/真机验证。"},
-    {"id":"LF-068","kind":"ticket","title":"选中 Segment 的 Agent 翻译/审校/QA 工作流","depends":"LF-062,067","status":"unit_verified","executable":true,"evidence":"LF-068 定向 BDD 15 pass / 0 fail；全仓 Bun tests 1175 pass / 0 fail，typecheck、renderer build 与 boundaries 通过；未执行 packaged/真机验证。"},
-    {"id":"LF-069","kind":"gate","title":"Agent-CAT Fusion Gate","depends":"LF-060~068","status":"packaged_verified","executable":false,"evidence":"0.15.101 打包应用运行 `node scripts/smoke/probe-lf069-fusion.ts`：13 pass / 0 fail。3 个 Segment 的 Context Chip、真实 Agent→CAT Tool→Proposal、原生 Tool Card、定位行、2 Accept / 1 Reject、Store/Grid/Timeline 同步，以及 full Agent→Project Rail 往返后的持久状态全部通过；app.asar SHA-256 c6cf68fe3652e40b5366be546122218e59b4824e57b756ee7d03ae71e6094e2f。"},
-    {"id":"LF-070","kind":"ticket","title":"建立 ProjectSettingsSheet","depends":"LF-041","status":"unit_verified","executable":true},
-    {"id":"LF-071","kind":"ticket","title":"移入 Import/Assets/TM/TB/Style/Voice/Context","depends":"LF-070","status":"unit_verified","executable":true},
-    {"id":"LF-072","kind":"ticket","title":"移入 Backup/Health/Archive/Delete","depends":"LF-070","status":"unit_verified","executable":true},
-    {"id":"LF-073","kind":"ticket","title":"ProjectsView 收敛成管理首页","depends":"LF-071,072","status":"unit_verified","executable":true},
-    {"id":"LF-074","kind":"ticket","title":"删除 ProjectDetailPanel 内部 Chat/建议/CAT/QA/Artifact/Files 导航","depends":"LF-069,073","status":"unit_verified","executable":true,"evidence":"确认 ProjectDetailPanel 生产零调用、ProjectChatsSection 仅被其调用后删除两文件；无新增替代实现或行为改写。Electron typecheck、Fusion architecture 3 pass / 0 fail、no-raw-palette 与 upstream boundary 通过，生产源码无残留引用。"},
-    {"id":"LF-075","kind":"ticket","title":"CatContextRail 功能迁入 Bottom Dock 后删除","depends":"LF-056,067","status":"unit_verified","executable":true,"evidence":"删除 CatContextRail.tsx、唯一挂载点、专用 CatContextTab 与重复 context mutation revision；Bottom Dock 保留 TM/Terms/QA/ContextEvidence，Grid 保留 Segment/Proposal inline review。定向 BDD 110 pass / 0 fail、Fusion architecture 5 pass / 0 fail、Electron typecheck 与边界门通过；Electron 0.15.104。"},
-    {"id":"LF-076","kind":"ticket","title":"删除旧 CatWorkspace 产品布局，保留必要纯函数/测试","depends":"LF-048,056,069","status":"unit_verified","executable":true,"evidence":"CatWorkspace 产品布局已退役并收敛为 SegmentEditor；资源管理只保留在 Project Settings，Segment Grid 使用单一虚拟滚动视口。Workbench 83、Linguist 132、CAT Core/Store/Tools 260、architecture/boundaries 9 项通过；LF-048 的真实 IME 与 Native Save 两项手工 Gate 仍未补齐。"},
-    {"id":"LF-077","kind":"ticket","title":"退役 `activeView='projects'` 日常工作路径和 ProjectsSidebarEntry","depends":"LF-026,074","status":"unit_verified","executable":true,"evidence":"删除 LeftSidebar 展开/折叠态 ProjectsSidebarEntry、共享切换回调和 LINGUIST_PROJECTS_VISIBLE 门控；保留 `activeView='projects'` 仅供 Linguist Sidebar 次级“管理项目”入口渲染 ProjectsView，日常项目工作继续走一等 Project Tab。主区与 Agent Rail 按 AppMode 共用归一化，离开 Linguist 后项目管理空态不会泄漏到 Agent/Chat 或错误隐藏 Agent Rail。定向 BDD 21 pass / 0 fail、Fusion architecture 4 pass / 0 fail、Electron typecheck 与消费者扫描通过。"},
-    {"id":"LF-078","kind":"gate","title":"Legacy UI Deletion Gate","depends":"LF-074~077","status":"gate_blocked","executable":false,"evidence":"架构聚合门确认 ProjectDetailPanel、ProjectChatsSection、CatContextRail、CatWorkspace、ProjectsSidebarEntry 在生产 renderer 零消费者；一等 Project Tab、SegmentEditor/Grid、Bottom Dock、Project Settings 与主进程 CAT Core/Store/Tools 真源均保留，Project UI 无第二持久化源。0.15.140 clean packaged vertical 已全绿；LF-048 的真实 IME/Native Save 两项手工证据仍缺失，因此 Gate 继续 blocked。"},
-    {"id":"LF-079","kind":"ticket","title":"Proma Base + Linguist Prompt overlay 与 Runtime 继承契约","depends":"LF-037,069","status":"integration_verified","executable":true,"evidence":"Pi/Claude 各自保留 Proma Base，并复用同一版本化 Linguist overlay；root contract、typecheck、Electron、boundary/fusion 全绿。"},
-    {"id":"LF-080","kind":"ticket","title":"Vertical Agent Profile、Role、Execution Scope 与工具继承","depends":"LF-079","status":"integration_verified","executable":true,"evidence":"Linguist Profile/Role、项目 CWD、CAT overlay、Claude MCP、计划写保护和 tool composition/hash 已合入；普通 Agent/Chat 不受影响。"},
-    {"id":"LF-081","kind":"ticket","title":"Assistant/Reviewer/Auditor、Fast/Balanced/Best 与离线评估集","depends":"LF-079,080","status":"integration_verified","executable":true,"evidence":"Prompt/Skill 分层、版本/hash/预算、内置 fallback 与冻结离线评估集已验证；真实游戏文本盲评仍由 AC-010 阻断。"},
-    {"id":"LF-082","kind":"ticket","title":"Linguist Shell、Rail/Full、原生 Session actions 与项目 CWD","depends":"LF-037,080","status":"integration_verified","executable":true,"evidence":"Rail/Full 复用同 AgentView/Session，实体类型 actions、归档/删除回退、项目 workspace 与可恢复删除均有行为测试。"},
-    {"id":"LF-083","kind":"ticket","title":"Job/Checkpoint、幂等、State Capsule、outbox、运行摘要与 CAT undo","depends":"LF-082","status":"integration_verified","executable":true,"evidence":"schema v12/v13 harness、事件 gap pull/ack、run changes 与 expectedRunId CAS undo 已跨 Store/main/preload/renderer 验证；文件/MCP 边界明确记录。"},
-    {"id":"LF-084","kind":"ticket","title":"Hard rules、ICU/placeholder、Consistency、batch/perf 与 worker jobs","depends":"LF-083","status":"integration_verified","executable":true,"evidence":"Required/Forbidden、locked、完整 ICU、Consistency plan/apply、cursor/byte budget、QA/Consistency worker 与基准测试全绿。"},
-    {"id":"LF-085","kind":"ticket","title":"CAT Tool result budget/projection、原生 UI 与定位","depends":"LF-065,079","status":"integration_verified","executable":true,"evidence":"Tool 输出预算、renderer DTO、原生摘要、可信 Project/Segment 定位与持久化终态回查均已验证。"},
-    {"id":"LF-086","kind":"ticket","title":"安全导出、trace/metrics 与脱敏诊断","depends":"AC-006,083","status":"integration_verified","executable":true,"evidence":"导出 symlink/TOCTOU/写后校验、统一 trace chain、metrics 和默认脱敏诊断包已通过确定性测试。"},
-    {"id":"LF-087","kind":"ticket","title":"Stable ID v2 + v1 读取兼容","depends":"LF-084","status":"integration_verified","executable":true,"evidence":"带 entity/version 与长度前缀 UTF-8 tuple 的 SHA-256 Stable ID v2 已用于新实体，历史 v1 仍可解析/读取。"},
-    {"id":"LF-088","kind":"ticket","title":"Quick Health、worker-thread Full Scrub 与 Backup/Restore fault matrix","depends":"LF-072,086,087","status":"integration_verified","executable":true,"evidence":"Quick Health 有界抽样；Full Scrub 使用真实 worker_threads 并覆盖 v13 引用链；备份 staging/原子发布、symlink 拒绝、恢复 journal/快照/回滚及故障矩阵已验证。"},
-    {"id":"LF-089","kind":"ticket","title":"schema v13 Proposal Issuance/Provenance 与 Required/Forbidden gate","depends":"LF-081,084,087","status":"integration_verified","executable":true,"evidence":"Proposal 内容/Issuance 分离、迁移/backfill/rollback、真实 turn provenance 和 Required term 中央 hard gate 已通过 Core/Store/Tools/Electron 矩阵。"},
-    {"id":"LF-090","kind":"ticket","title":"数据库 identity 写前验证与 migration fail closed","depends":"LF-087,089","status":"integration_verified","executable":true,"evidence":"application_id、user_version、schema_migrations 与 project.json identity 在任何 migration 写入前联合验证；未知数据库字节/mtime 保持不变。"},
-    {"id":"LF-091","kind":"ticket","title":"共享 Linguist 侧栏树、项目归档/搜索与复制到其他项目","depends":"LF-078,082,AC-005","status":"packaged_verified","executable":true,"evidence":"Agent/Linguist 已复用项目/会话树，模式过滤、全局置顶、最近会话、折叠、委派、重命名、排序、归档/缺失只读历史、搜索路由和轻量起始页均落地；Linguist 会话使用主进程复核的独立复制，失败回滚且不复制工作区文件。普通新会话支持三模式，Linguist Full Agent 不显示错误选择器，绑定会话不泄漏到 Agent。0.15.140 clean 验证为根 1,350/0、Electron 175/0、Store 217/0、Tools 39/0、boundary 4/0、fusion 9/0；packaged vertical 通过并以像素检查确认项目菜单可见。"},
-    {"id":"LF-092","kind":"ticket","title":"CAT 无改动确认快捷键与共享 Sheet 关闭交互","depends":"LF-045,070","status":"packaged_verified","executable":true,"evidence":"0.15.140 packaged vertical 在 editing 阶段对未改译文执行 Cmd+Enter：按钮可用、阶段变为 confirmed、target 保持不变、revision 0→0；项目设置右上角 Close 可见，点击后 Sheet 隐藏。共享 Sheet 关闭按钮复用 titlebar-no-drag，所有 Sheet 走同一修复。"},
-    {"id":"AC-001","kind":"ticket","title":"Push/PR CI、固定 Bun/Actions、根测试零失败","depends":"LF-000","status":"integration_verified","executable":true,"evidence":"净化后的 0.15.140 完整交互修复快照 2fe3c472 已 fast-forward 到 origin/main；GitHub Actions Run 30482338219 的 validate job 成功，frozen install、typecheck、根/CAT/Electron 测试、boundary、fusion、许可扫描和 Electron build 全部通过。"},
-    {"id":"AC-002","kind":"ticket","title":"Release Workflow fail-closed、去除 `build:resources || true`","depends":"AC-001","status":"integration_verified","executable":true},
-    {"id":"AC-003","kind":"ticket","title":"数据根迁到 `.linguist-agent`，产品身份与 Provider 导入","depends":"LF-069","status":"unit_verified","executable":true,"evidence":"当前数据根已隔离为 .linguist-agent/.linguist-agent-dev；设置→模型配置提供显式 Proma Provider-only 导入，旧密钥经 safeStorage 解密再加密，任一失败时零写入，最终配置同目录原子替换，Channel ID 冲突确定性跳过。Provider/UI/CLI BDD 13 pass、Linguist 132 pass、全 workspace typecheck 与 boundaries 通过；未执行 packaged 验证。"},
-    {"id":"AC-004","kind":"ticket","title":"所有 BrowserWindow 显式安全选项","depends":"AC-001","status":"integration_verified","executable":true},
-    {"id":"AC-005","kind":"ticket","title":"Project Binding fail-closed 与永久解绑","depends":"LF-032","status":"unit_verified","executable":true},
-    {"id":"AC-006","kind":"ticket","title":"Export 防覆盖原稿/受管目录","depends":"LF-048","status":"integration_verified","executable":true,"evidence":"安全导出已增加原稿/受管目录、symlink/TOCTOU、原子 staging 与写后 digest 复核；clean 全仓、Electron、Store、build/pack 通过。Native Save 对话框仍未人工执行。"},
-    {"id":"AC-007","kind":"ticket","title":"G10 长线程首载/补载/跳转","depends":"AC-001","status":"packaged_verified","executable":true},
-    {"id":"AC-008","kind":"ticket","title":"serious/critical Axe 清零","depends":"LF-069","status":"packaged_verified","executable":true,"evidence":"0.15.101 打包应用 PB-105 矩阵 40 pass / 0 fail；Agent/CAT/Projects serious/critical Axe 均为 0；1000-turn 首开 111ms、补载 94ms、中段跳转 1146ms；10k Grid 193ms。moderate landmark 规则与 VoiceOver/IME/签名真机项留给 AC-009。"},
-    {"id":"AC-009","kind":"gate","title":"G10 Product Qualification Gate","depends":"AC-007,008","status":"gate_blocked","executable":false,"evidence":"长线程专项与 serious/critical Axe 已 packaged_verified；VoiceOver、完整键盘流、IME 与拖拽/resize 人工体验尚无真实证据，因此只可判 automation passed / product qualification blocked。"},
-    {"id":"AC-010","kind":"gate","title":"G8 真实游戏文本 Fast/Balanced/Best 盲评","depends":"LF-069,AC-001","status":"gate_blocked","executable":false,"evidence":"Fake Model 只能证明三档管线可运行；真实游戏文本盲评与用户评分尚未执行。"},
-    {"id":"AC-011","kind":"gate","title":"14 天自由日用","depends":"LF-078,AC-003~010","status":"gate_blocked","executable":false,"evidence":"clean HEAD 构建的 0.15.140 已替换 /Applications/Linguist Agent.app；安装版 app.asar SHA-256 95066d73f003502f9792f6afe302df5b560e199ab0680834581818cfb23e5138 与 packaged vertical 产物一致，隔离与正常用户数据环境均启动并确认 1 个主窗口，旧 0.15.139 在废纸篓可恢复。仍需从该安装版重新开始连续 14 天真实项目使用并登记问题。"}
+    {
+      "id": "LA-MASTER-000",
+      "kind": "ticket",
+      "title": "当前事实、旧蓝图作废、基线冻结",
+      "priority": "P0",
+      "depends": "无",
+      "status": "DONE",
+      "evidence": "6e03458a docs: register unified master plan v2"
+    },
+    {
+      "id": "LA-SYNC-001",
+      "kind": "ticket",
+      "title": "备份、Tag、同步分支",
+      "priority": "P0",
+      "depends": "MASTER-000",
+      "status": "DONE",
+      "evidence": "pre-proma-0.16.8-sync-20260805 -> ab05305f; verified backup/restore manifest in ignored .local/backups/pre-proma-0.16.8-sync-20260805T010835+0800"
+    },
+    {
+      "id": "LA-SYNC-002",
+      "kind": "ticket",
+      "title": "正式 merge Proma v0.16.8",
+      "priority": "P0",
+      "depends": "SYNC-001",
+      "status": "DONE",
+      "evidence": "f3d2b431996523a4aa75ec2b027dcf0e932ef08f merged Proma v0.16.8; parents b84d65ac79ecf681fac21cf740a589da4aedbed4 and bde00f00323d6735a939d14dbce3b2f1a5b672bc."
+    },
+    {
+      "id": "LA-SYNC-003",
+      "kind": "ticket",
+      "title": "Runtime/Session 以上游为主合并",
+      "priority": "P0",
+      "depends": "SYNC-002",
+      "status": "DONE",
+      "evidence": "Runtime/session reconciliation is present in formal merge f3d2b431; subsequent Host Contract expansion remains separately tracked by LA-HOST-000."
+    },
+    {
+      "id": "LA-SYNC-004",
+      "kind": "ticket",
+      "title": "Agent Surface/Sidebar/Settings 合并",
+      "priority": "P0",
+      "depends": "SYNC-002",
+      "status": "DONE",
+      "evidence": "Native Agent surface, sidebar, and settings reconciliation is present in formal merge f3d2b431; it preserves the single Agent/Chat implementation."
+    },
+    {
+      "id": "LA-HOST-000",
+      "kind": "ticket",
+      "title": "建立本地 Host Contracts 与 Extension Registry",
+      "priority": "P0",
+      "depends": "SYNC-003/004",
+      "status": "DONE",
+      "evidence": "Static typed Host Contracts, read-only Extension Registry, and registerExtensions([linguistExtension]) composition root are implemented. Focused registry/surface tests and Electron typecheck pass; no dynamic plugin loader was added."
+    },
+    {
+      "id": "LA-SYNC-005",
+      "kind": "ticket",
+      "title": "依赖、Electron 43、Lock/SBOM/Build",
+      "priority": "P0",
+      "depends": "SYNC-003/004",
+      "status": "DONE",
+      "evidence": "Electron 43 dependency/lock/build work merged. 2026-08-05 smoke:pack PASS; smoke:vertical PASS: Agent 12/12, Chat 18/18, Linguist 21/21."
+    },
+    {
+      "id": "LA-SYNC-006",
+      "kind": "ticket",
+      "title": "Baseline/Touchpoints/Deviations 重置",
+      "priority": "P0",
+      "depends": "SYNC-005",
+      "status": "DONE",
+      "evidence": "Rebased baseline on bde00f00323d6735a939d14dbce3b2f1a5b672bc; post-cleanup ledger is 250 touchpoints (31 permanent product forks, 218 local host seams, 1 temporary). boundary 4/4 PASS; fusion architecture 9/9 PASS; Electron typecheck PASS; JSON parse and git diff --check PASS."
+    },
+    {
+      "id": "LA-SYNC-007",
+      "kind": "ticket",
+      "title": "v0.16.8 完整验证与 packaged smoke",
+      "priority": "P0",
+      "depends": "SYNC-006",
+      "status": "IN_PROGRESS",
+      "evidence": "smoke:pack PASS; smoke:vertical runStatus=passed: Agent 12/12, Chat 18/18, Linguist 21/21. The separate LF-048 manual branch verified Native Save overwrite rejection, unchanged source SHA, safe export, and reimport. Not DONE: coverageStatus=partial with 2 MANUAL and 3 BLOCKED gaps; Native Open is unverified and real IME is blocked because this macOS host only has the ABC input source."
+    },
+    {
+      "id": "LA-HOST-001",
+      "kind": "ticket",
+      "title": "Session-scoped Reference",
+      "priority": "P0",
+      "depends": "HOST-000",
+      "status": "DONE",
+      "evidence": "现有 Proma quotedSelectionMapAtom 以 sessionId 为 key，AgentHistorySelectionLayer、AgentView Composer/Send 共用同一 key；daec672d 新增两个 Linguist session + 一个普通 Agent 的隔离回归，quoted-selection/extension-registry 6/6 PASS。未新增第二套 Composer 或引用 Store。"
+    },
+    {
+      "id": "LA-HOST-002",
+      "kind": "ticket",
+      "title": "Linguist Companion Chat / Side Q&A",
+      "priority": "P0",
+      "depends": "HOST-001",
+      "status": "IN_PROGRESS",
+      "evidence": "d348df66：复用 Proma SidePanel/ChatView，新增 chatOnly tab bar；Linguist Rail/Full 开放 companionChat capability，打开历史选区问答后自动展开 Full 并保持 Linguist mode，文件/改动 Tab 不暴露。extension-registry、quoted-selection、DiffPanelTabBar 7/7 PASS；2026-08-05 smoke:pack 与 smoke:vertical 均 PASS（Agent 12/12、Chat 18/18、Linguist 21/21），仍缺真实机器 Companion Chat roundtrip。"
+    },
+    {
+      "id": "LA-HOST-003",
+      "kind": "ticket",
+      "title": "Agent/Linguist Auto-title",
+      "priority": "P1",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "024f51c0：Linguist 项目会话不再把项目名写入 title；未提供自定义标题时复用 Proma 默认‘新 Agent 会话’，首轮完成即可触发统一 auto-title，显式标题仍保留。session-binding/session-ipc 20/20 targeted nodetests PASS。"
+    },
+    {
+      "id": "LA-HOST-004",
+      "kind": "ticket",
+      "title": "Host Capability Manifest",
+      "priority": "P1",
+      "depends": "HOST-000",
+      "status": "DONE",
+      "evidence": "Linguist rail/full HostCapabilityManifest is registered and consumed by the shared AgentView controls. References, preview, attachments, slash menu, model controls, queue/steer, permissions, full presentation, and Companion Chat are available; File Panel remains explicitly false."
+    },
+    {
+      "id": "LA-HOST-005",
+      "kind": "ticket",
+      "title": "Embedded Host Parity Suite",
+      "priority": "P0",
+      "depends": "HOST-001/002/004",
+      "status": "DONE",
+      "evidence": "复用现有 Agent Full/Chat/Companion 合同测试，并在 extension-registry.test.ts 增加 Host Parity capability-key canary：Linguist Rail/Full 必须登记 DEFAULT_AGENT_HOST_CAPABILITIES 的全部键；20/20 targeted tests PASS。"
+    },
+    {
+      "id": "LA-ALPHA-000",
+      "kind": "gate",
+      "title": "最小个人 Alpha 入口 Gate",
+      "priority": "P0",
+      "depends": "SYNC-007/HOST-005/TRANS-001/REVIEW-001/DATA-001",
+      "status": "TODO",
+      "evidence": "仅当 Proma 基础验证、Host parity、Proposal 覆盖、Proposal Critic 和 QA 变更事件均有真实证据后，才进入个人 Alpha；不要求先实现蓝图中的长尾能力。"
+    },
+    {
+      "id": "LA-INTAKE-001",
+      "kind": "ticket",
+      "title": "Authorized single-file Project Intake Coordinator",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "IN_PROGRESS",
+      "evidence": "Alpha 单文件路径已由 UI 与 Agent 共用 Linguist ProjectDelivery.importAsset；Agent 通过当前会话显式附件的 opaque sourceToken 导入。完整 scan/plan/job coordinator API 不在当前 Alpha，目录扫描与 Durable Job 另待真实批量阻断后拆 successor。"
+    },
+    {
+      "id": "LA-INTAKE-002",
+      "kind": "ticket",
+      "title": "Candidate Scanner / Classifier",
+      "priority": "P0",
+      "depends": "INTAKE-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "当前 Alpha 不做目录级扫描器；只接受用户明确选择的单文件，目录扫描另待真实项目触发 successor Ticket。"
+    },
+    {
+      "id": "LA-INTAKE-003",
+      "kind": "ticket",
+      "title": "Exact duplicate / supported-format preflight",
+      "priority": "P0",
+      "depends": "INTAKE-001",
+      "status": "DONE",
+      "evidence": "be1ed6fd：importAsset 在格式解析前按输入 bytes 的 SHA-256 查项目已有源资产；exact duplicate 返回 skipped-duplicate、复用原资产且不新增行；新文件继续走 CatFormatRegistry.detectBest，unsupported 仍 fail closed。import-pipeline 8/8、project-ipc 15/15、Electron typecheck 全 workspace PASS。"
+    },
+    {
+      "id": "LA-INTAKE-004",
+      "kind": "ticket",
+      "title": "Durable Import Job",
+      "priority": "P0",
+      "depends": "INTAKE-003",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 只导入受控小批文件；持久 Job/目录扫描属于长任务扩展，须在真实批量阻断出现后再拆 successor。"
+    },
+    {
+      "id": "LA-INTAKE-005",
+      "kind": "ticket",
+      "title": "Agent Intake Tools (same service / source token)",
+      "priority": "P0",
+      "depends": "INTAKE-001/003",
+      "status": "DONE",
+      "evidence": "Agent CAT 工具新增 cat_list_intake_sources / cat_import_asset：仅列出会话 attachedFiles 的 basename/大小/状态，导入只接受 opaque sourceToken，宿主重验证附件后调用同一 ProjectDelivery.importAsset；包级 40/40、Electron Linguist 177/177、typecheck PASS。"
+    },
+    {
+      "id": "LA-INTAKE-006",
+      "kind": "ticket",
+      "title": "UI 使用同一 Intake Coordinator",
+      "priority": "P1",
+      "depends": "INTAKE-001/003",
+      "status": "DONE",
+      "evidence": "UI project-ipc 与 Agent source-token bridge 都只调用 LinguistProjectService.importAsset（内部同一个 ProjectDelivery）；因此 format detection、50MB limit、exact duplicate 与 store write 没有第二套实现。既有 project-ipc/import-pipeline 回归加 session intake 回归通过。"
+    },
+    {
+      "id": "LA-INTAKE-007",
+      "kind": "ticket",
+      "title": "Verification / Summary",
+      "priority": "P0",
+      "depends": "INTAKE-005/006",
+      "status": "TODO",
+      "evidence": "已有 source SHA-256、exact duplicate、受管 source blob 与 segment 事务写入的基础校验；尚无独立结构化 Verification Report，也没有检查下游 Proposal/QA/Review/Export 引用后再决定是否允许 Import Undo 的安全接口。"
+    },
+    {
+      "id": "LA-FORMAT-001",
+      "kind": "ticket",
+      "title": "私有 CAT Corpus Scanner",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-FORMAT-002",
+      "kind": "ticket",
+      "title": "真实格式矩阵与优先级报告",
+      "priority": "P0",
+      "depends": "FORMAT-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-FORMAT-003",
+      "kind": "ticket",
+      "title": "高频 TM Adapter（按扫描结果）",
+      "priority": "P1",
+      "depends": "FORMAT-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "未有真实私有 corpus 证明前不实现 SDLTM 等长尾容器；FORMAT-002 只产出矩阵和阻断证据。"
+    },
+    {
+      "id": "LA-FORMAT-004",
+      "kind": "ticket",
+      "title": "高频 TB Adapter（按扫描结果）",
+      "priority": "P1",
+      "depends": "FORMAT-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "未有真实私有 corpus 证明前不实现 SDLTB 等长尾容器；触发后创建带 fixture/许可核验的 successor。"
+    },
+    {
+      "id": "LA-TAG-000",
+      "kind": "ticket",
+      "title": "PB-097 事实核验与统一 Tag Model",
+      "priority": "P0",
+      "depends": "INTAKE-001/SYNC-007",
+      "status": "DONE",
+      "evidence": "现有 PB-097 tagProfile/tag-families 单一模型已接入 hard-rule、QA、Proposal Gate 与 project digest；38 个 core hard-rule/QA/tag tests、218 个 store tests 全部通过，未新增第二套 Tag Model。"
+    },
+    {
+      "id": "LA-TAG-001",
+      "kind": "ticket",
+      "title": "Deterministic + LLM Tag Discovery",
+      "priority": "P1",
+      "depends": "TAG-000",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 先统一既有 PB-097 scanner；未知 Tag discovery 需要真实项目样本后再进入 successor。"
+    },
+    {
+      "id": "LA-TAG-002",
+      "kind": "ticket",
+      "title": "Candidate lifecycle / Validator / UI",
+      "priority": "P1",
+      "depends": "TAG-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "没有真实未知 Tag 候选前不建设持久 Candidate 生命周期和管理 UI。"
+    },
+    {
+      "id": "LA-TAG-003",
+      "kind": "ticket",
+      "title": "编辑器原子 Tag 保护",
+      "priority": "P1",
+      "depends": "TAG-000",
+      "status": "DONE",
+      "evidence": "现有 TargetEditor/SegmentGrid 复用 splitProtectedText 与同一 hard-rule rail；丢失 Tag/Placeholder 时草稿不变、保存禁用，TargetEditor + SegmentGrid 17/17 renderer tests PASS，store proposals tagProfile edit/accept 也在 218/218 回归中通过。"
+    },
+    {
+      "id": "LA-PHRASE-001",
+      "kind": "ticket",
+      "title": "Phrase master-XLIFF pairing / rehydration",
+      "priority": "P0 条件触发",
+      "depends": "TAG-000/FORMAT-002",
+      "status": "BLOCKED",
+      "evidence": "当前没有真实 split-MXLIFF 交付样本；下一次真实 Phrase 交付触发时重开 successor，配对不确定必须 fail closed。"
+    },
+    {
+      "id": "LA-LEGACY-001",
+      "kind": "ticket",
+      "title": "一次性 Legacy CAT Parity Audit",
+      "priority": "P1",
+      "depends": "MASTER-000/TAG-000",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "当前 Alpha 不做旧仓库全面回填；以当前代码、已有架构测试和真实阻断驱动小范围审计。"
+    },
+    {
+      "id": "LA-QUALITY-001",
+      "kind": "ticket",
+      "title": "Execution Policy 取代质量档位",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-QUALITY-002",
+      "kind": "ticket",
+      "title": "零预支质量合同",
+      "priority": "P0",
+      "depends": "QUALITY-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-PROMPT-001",
+      "kind": "ticket",
+      "title": "Canonical Prompt Contract / Renderer",
+      "priority": "P0",
+      "depends": "QUALITY-002",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-PROMPT-002",
+      "kind": "ticket",
+      "title": "全局 Prompt Budget / Evidence / Degraded",
+      "priority": "P0",
+      "depends": "PROMPT-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-MEMORY-001",
+      "kind": "ticket",
+      "title": "3E Project Knowledge Store",
+      "priority": "P1",
+      "depends": "PROMPT-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 复用现有 Project Digest/TM/TB/Context；3E 持久记忆只有在真实项目反复证明缺口后再拆 successor。"
+    },
+    {
+      "id": "LA-MEMORY-002",
+      "kind": "ticket",
+      "title": "动态 Knowledge Retrieval",
+      "priority": "P1",
+      "depends": "MEMORY-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "未先有可验证的 3E 数据源，不建设第二套检索平台。"
+    },
+    {
+      "id": "LA-TRANS-001",
+      "kind": "ticket",
+      "title": "Translation Scope / Coverage Ledger",
+      "priority": "P0",
+      "depends": "QUALITY-002",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-TRANS-002",
+      "kind": "ticket",
+      "title": "Translate–Estimate–Refine Harness",
+      "priority": "P0",
+      "depends": "TRANS-001/PROMPT-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 先保证 Proposal + QA + 覆盖等式；TEaR 作为质量实验扩展，不能阻塞首个可日用闭环。"
+    },
+    {
+      "id": "LA-REVIEW-001",
+      "kind": "ticket",
+      "title": "Reviewer 改名 Proposal Critic",
+      "priority": "P0",
+      "depends": "QUALITY-002",
+      "status": "DONE",
+      "evidence": "现有 `cat_submit_critic_review` 已是独立 Proposal Critic：运行时派生 critic 身份，绑定 candidate snapshot，产出不可直接提交的 advisory artifact 与 QA findings；同会话独立性、stale snapshot、空 findings、跨项目和 profile hash 均有包级回归，未新增第二套 Reviewer 管线。"
+    },
+    {
+      "id": "LA-REVIEW-002",
+      "kind": "ticket",
+      "title": "Full Review Scope / Ledger",
+      "priority": "P0",
+      "depends": "TRANS-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "完整范围审校不是当前 Alpha 入口条件；保留现有 Proposal Critic 语义，真实需求出现后再实现 Full-Scope successor。"
+    },
+    {
+      "id": "LA-REVIEW-003",
+      "kind": "ticket",
+      "title": "Source-first Review Tools",
+      "priority": "P0",
+      "depends": "REVIEW-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "依赖 Full-Scope Review，当前不铺设第二套审校工具链。"
+    },
+    {
+      "id": "LA-REVIEW-004",
+      "kind": "ticket",
+      "title": "Full-Scope Reviewer / Review Proposals",
+      "priority": "P0",
+      "depends": "REVIEW-003/PROMPT-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "当前个人 Alpha 只承诺 Proposal Critic，不宣称全项目审校。"
+    },
+    {
+      "id": "LA-REVIEW-005",
+      "kind": "ticket",
+      "title": "Structured Audit Report",
+      "priority": "P1",
+      "depends": "REVIEW-002",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "完整审校审计报告随 Full-Scope successor 触发；当前使用 Run Summary/QA evidence。"
+    },
+    {
+      "id": "LA-CORRECT-001",
+      "kind": "ticket",
+      "title": "Tool root schema Object contract",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "03066ec0：cat_submit_critic_review 从根级 Union 改为根级 Object + verdict 字段判别；执行层继续校验 findings/summary/reason，避免 Pi/Claude 根 schema 兼容性问题。@linguist/cat-tools typecheck PASS；39/39 Node SQLite tool tests PASS。"
+    },
+    {
+      "id": "LA-CORRECT-002",
+      "kind": "ticket",
+      "title": "Numeric lexical ambiguity",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "47f3c0b3：数字硬门只保留明确数字、日期邻接月份和显式编号单位；May/March/August/First/One 词汇用法不再误阻断。@linguist/cat-core typecheck PASS；包测试 117/117 PASS。"
+    },
+    {
+      "id": "LA-CORRECT-003",
+      "kind": "ticket",
+      "title": "Term status / match policy",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "098caba3：TermEntriesRepository 对拉丁/数字术语采用 Unicode whole-word 边界，对 CJK 保持连续字符串匹配；art 不再命中 start，既有 required/preferred/forbidden 状态和冲突排序不变。@linguist/cat-store typecheck PASS；Node SQLite 测试 218/218 PASS。"
+    },
+    {
+      "id": "LA-CORRECT-004",
+      "kind": "ticket",
+      "title": "ICU / Placeholder profiles",
+      "priority": "P1",
+      "depends": "CORRECT-003",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 不扩建万能 placeholder parser；现有格式 adapters 和 hard rules 先覆盖已支持格式，真实阻断再拆 profile successor。"
+    },
+    {
+      "id": "LA-CONTEXT-001",
+      "kind": "ticket",
+      "title": "Snapshot-bound Cursor / Project Rules",
+      "priority": "P0",
+      "depends": "PROMPT-002",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-CONTEXT-002",
+      "kind": "ticket",
+      "title": "Minimum Context / no empty Source",
+      "priority": "P0",
+      "depends": "CONTEXT-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-CONTEXT-003",
+      "kind": "ticket",
+      "title": "Turn Scope V2 / Scope Snapshot",
+      "priority": "P1",
+      "depends": "CONTEXT-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-DATA-001",
+      "kind": "ticket",
+      "title": "QA complete Change Set / Outbox",
+      "priority": "P0",
+      "depends": "SYNC-007",
+      "status": "DONE",
+      "evidence": "962f21c7：QA 重跑事件同时携带本次完成的 segmentIds 与从 open→resolved 的 resolvedQaFindingIds；Shared / CAT Tool mutation DTO 与 durable project event 已同步，@linguist/cat-tools typecheck PASS、39/39 Node SQLite tool tests PASS。"
+    },
+    {
+      "id": "LA-DATA-002",
+      "kind": "ticket",
+      "title": "Session/Message Codec + Quarantine",
+      "priority": "P1",
+      "depends": "SYNC-007",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Proma Session/JSONL 先沿用上游路径；Alpha 不复制第二套 codec/quarantine，只有真实损坏样本才拆兼容修复。"
+    },
+    {
+      "id": "LA-DATA-003",
+      "kind": "ticket",
+      "title": "Toolset / Prompt / Review Provenance",
+      "priority": "P1",
+      "depends": "PROMPT-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 保留现有 Run Summary/Proposal provenance；不为未启用的 Full-Scope/Memory 建第二套 provenance 平台。"
+    },
+    {
+      "id": "LA-RUNTIME-001",
+      "kind": "ticket",
+      "title": "Linguist Session inherit Proma defaults",
+      "priority": "P0",
+      "depends": "SYNC-007/QUALITY-001",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-JOB-001",
+      "kind": "ticket",
+      "title": "Unified Chunked Job Engine",
+      "priority": "P1",
+      "depends": "INTAKE-004",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 不做 durable directory/import job；现有小批 run harness 继续使用，真实长任务阻断后再拆 successor。"
+    },
+    {
+      "id": "LA-JOB-002",
+      "kind": "ticket",
+      "title": "Chunked QA / Consistency / Integrity",
+      "priority": "P1",
+      "depends": "JOB-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "没有 10k/50k 真实项目证据前不做 Worker 扩展。"
+    },
+    {
+      "id": "LA-JOB-003",
+      "kind": "ticket",
+      "title": "Chunked Translation / Full Review",
+      "priority": "P1",
+      "depends": "JOB-001/TRANS-002/REVIEW-004",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "依赖已移出 Alpha 的 durable job 与 Full-Scope review；触发后按真实长任务拆 successor。"
+    },
+    {
+      "id": "LA-JOB-004",
+      "kind": "ticket",
+      "title": "Compaction State Capsule",
+      "priority": "P1",
+      "depends": "JOB-003",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Proma compaction 续跑继续由上游负责；Alpha 不在没有 durable job 的情况下伪造 LA capsule。"
+    },
+    {
+      "id": "LA-PERF-001",
+      "kind": "ticket",
+      "title": "Batch IPC / N+1 收口",
+      "priority": "P1",
+      "depends": "SYNC-007",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "当前 Alpha 列表规模不需要新批量 IPC；出现可测量 N+1 后再以调用证据拆 successor。"
+    },
+    {
+      "id": "LA-PERF-002",
+      "kind": "ticket",
+      "title": "1k/10k/50k 性能 Fixture",
+      "priority": "P1",
+      "depends": "JOB-002/003",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "没有 durable chunked job 就不生成大规模性能夹具；真实项目达到门槛后再建立最小基准。"
+    },
+    {
+      "id": "LA-OBS-001",
+      "kind": "ticket",
+      "title": "Trace / Metrics / Privacy Diagnostics",
+      "priority": "P2",
+      "depends": "JOB-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 先使用现有脱敏日志与 Run Summary；专项诊断包仅在真实故障无法定位时增加。"
+    },
+    {
+      "id": "LA-RESILIENCE-001",
+      "kind": "ticket",
+      "title": "Backup/Restore/Export 故障注入",
+      "priority": "P1",
+      "depends": "SYNC-007",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "已有 packaged Native Save/Export/Restore 证据；未出现新的数据故障前不扩写故障注入矩阵。"
+    },
+    {
+      "id": "LA-UI-001",
+      "kind": "ticket",
+      "title": "Cache / Undo / Selection / Aggregate Status",
+      "priority": "P2",
+      "depends": "HOST-005",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "Alpha 不增加综合状态层；现有结构化 Proposal/Run Summary 足够，真实 UX 阻断后再拆 successor。"
+    },
+    {
+      "id": "LA-EVAL-001",
+      "kind": "ticket",
+      "title": "Web Chat / 旧 LA / 新 LA 基准",
+      "priority": "P0",
+      "depends": "ALPHA-000",
+      "status": "TODO",
+      "evidence": "仅在个人 Alpha 入口通过后做最小同模型对照；不以尚未启用的 TEaR/Full-Scope 功能作为前置。"
+    },
+    {
+      "id": "LA-EVAL-002",
+      "kind": "ticket",
+      "title": "Prompt/Model Regression Harness",
+      "priority": "P0",
+      "depends": "EVAL-001",
+      "status": "CANCELLED_WITH_REASON",
+      "evidence": "先完成一次真实 Alpha 对照；没有稳定样本前不建设通用回归平台。"
+    },
+    {
+      "id": "LA-EVAL-003",
+      "kind": "ticket",
+      "title": "真实格式 Round-trip / Provider Matrix",
+      "priority": "P1",
+      "depends": "ALPHA-000",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-EVAL-004",
+      "kind": "ticket",
+      "title": "14 天日用与人工 Gate",
+      "priority": "P0",
+      "depends": "EVAL-003",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-UPSYNC-001",
+      "kind": "ticket",
+      "title": "Proma Sync Bot / Impact Report",
+      "priority": "P1",
+      "depends": "SYNC-006/HOST-005",
+      "status": "TODO"
+    },
+    {
+      "id": "LA-DOCS-001",
+      "kind": "ticket",
+      "title": "README/ADR/旧蓝图/产品文案统一",
+      "priority": "P0",
+      "depends": "ALPHA-000",
+      "status": "TODO"
+    }
   ]
 }

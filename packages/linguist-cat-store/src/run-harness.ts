@@ -101,6 +101,7 @@ export interface ProjectEventInput {
   segmentIds?: readonly string[]
   proposalIds?: readonly string[]
   qaFindingIds?: readonly string[]
+  resolvedQaFindingIds?: readonly string[]
   jobId?: string
   job?: {
     status: TranslationJobStatus

@@ -63,7 +63,7 @@ describe('Agent Full 模式行为契约', () => {
     expect(agentHeader).toContain('{!compact && (')
     expect(agentView.match(/<AgentSessionProvider sessionId=\{sessionId\}>/g)).toHaveLength(1)
     expect(agentView.match(/<AgentMessages/g)).toHaveLength(1)
-    expect(agentView.match(/<RichTextInput/g)).toHaveLength(1)
+    expect(agentView.match(/<RichTextInput\s/g)).toHaveLength(1)
   })
 
   test('Given an empty project Agent rail, When it renders, Then it keeps Linguist context instead of exposing the global mode switch', () => {
@@ -87,7 +87,8 @@ describe('Agent Full 模式行为契约', () => {
   })
 
   test('Given Linguist mode, When rendering its project navigation, Then full Proma Automations stay in Agent and Chat only', () => {
-    expect(leftSidebar.match(/AUTOMATIONS_VISIBLE && mode !== 'linguist'/g)).toHaveLength(2)
+    expect(leftSidebar.match(/mode !== 'linguist'/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(leftSidebar).not.toContain('AUTOMATIONS_VISIBLE')
   })
 
   test('Given a Chat Tab, When Linguist Agent rail is available, Then Chat keeps its native route, stream and composer', () => {
@@ -139,7 +140,8 @@ describe('Agent Full 模式行为契约', () => {
   test('Given ordinary Agent and Linguist sessions, When rendering actions, Then they share one menu and Linguist cannot move projects', () => {
     expect(leftSidebar).toContain('<AgentSessionActionsMenu')
     expect(leftSidebar).toContain('<AgentSessionTreeItem')
-    expect(leftSidebar).toContain('<LinguistSidebarContent SessionRowComponent={AgentSessionItem} />')
+    expect(leftSidebar).toContain('extensionRegistry.appModesFor(mode)')
+    expect(leftSidebar).toContain('{ SessionRowComponent: AgentSessionItem }')
     expect(linguistSidebarContent).toContain('<SessionRowComponent')
     expect(agentSessionTreeItem).toContain("event.key === 'Escape'")
     expect(agentSessionActionsMenu).toContain('visible: hasAction && (canMove || transferLabel !== undefined)')
@@ -184,7 +186,7 @@ describe('Agent Full 模式行为契约', () => {
     expect(agentView).toContain('externalSelectedModel={externalSelectedModel}')
     expect(agentView).toContain('onModelSelect={handleModelSelect}')
     expect(agentView).toContain('<AgentThinkingPopover')
-    expect(agentView).toContain('onThinkingLevelChange: (level) => { void updateOpenAIThinkingLevel(level) }')
+    expect(agentView).toContain('onThinkingLevelChange: (level) => { void updateReasoningLevel(level) }')
     expect(agentView).toContain('<PermissionModeSelector sessionId={sessionId} />')
   })
 

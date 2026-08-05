@@ -6,15 +6,14 @@
 
 import * as React from 'react'
 import { useAtom, useSetAtom } from 'jotai'
-import { Download, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Download, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { PROVIDER_LABELS, isAgentCompatibleProvider } from '@proma/shared'
 import type { Channel } from '@proma/shared'
-import { getChannelLogo, PromaLogo } from '@/lib/model-logo'
+import { getChannelLogo } from '@/lib/model-logo'
 import { getEnabledClaudeAgentChannelIds } from '@/lib/agent-channel-selection'
-import { AGENT_RUNTIME_SWITCHER_VISIBLE, PROMA_PROMO_VISIBLE } from '@/lib/feature-flags'
 import { agentChannelIdAtom, agentModelIdAtom, agentChannelIdsAtom } from '@/atoms/agent-atoms'
 import { channelsAtom } from '@/atoms/chat-atoms'
 import { SettingsSection, SettingsCard, SettingsRow } from './primitives'
@@ -255,12 +254,6 @@ export function ChannelSettings(): React.ReactElement {
             {importNotice.message}
           </p>
         )}
-        {/* D-007（PB-012）：v1 隐藏 Proma 商业版推广卡；恢复见 lib/feature-flags.ts */}
-        {PROMA_PROMO_VISIBLE && (
-          <SettingsCard>
-            <PromaProviderCard />
-          </SettingsCard>
-        )}
         {loading ? (
           <div className="text-sm text-muted-foreground py-8 text-center">加载中...</div>
         ) : channels.length === 0 ? (
@@ -304,10 +297,6 @@ export function ChannelSettings(): React.ReactElement {
       </AlertDialog>
     </div>
   )
-}
-
-function openPromaDownload(): void {
-  window.open('https://proma.cool/download', '_blank')
 }
 
 // ===== 渠道行子组件 =====
@@ -372,12 +361,11 @@ function AgentCoreChips({ provider }: Pick<Channel, 'provider'>): React.ReactEle
 
   return (
     <div className="inline-flex items-center gap-1" aria-label="支持的 Agent Core">
-      {/* D-002（PB-011）：首版仅展示 Pi runtime，隐藏 Claude 徽章；恢复见 lib/feature-flags.ts */}
-      {AGENT_RUNTIME_SWITCHER_VISIBLE && supportsClaude && (
+      {supportsClaude && (
         <Badge
           variant="outline"
           className="px-1.5 py-0 text-[10px] font-medium leading-5"
-          title="Claude Agent SDK"
+          title="Claude Agent SDK（新功能不再支持，将于 8 月中旬彻底下线）"
         >
           Claude
         </Badge>
@@ -385,27 +373,10 @@ function AgentCoreChips({ provider }: Pick<Channel, 'provider'>): React.ReactEle
       <Badge
         variant="outline"
         className="px-1.5 py-0 text-[10px] font-medium leading-5"
-        title="Pi Agent SDK"
+        title="Pi Agent SDK（推荐，新功能仅在 Pi 上提供）"
       >
         Pi
       </Badge>
     </div>
-  )
-}
-
-// ===== Proma 官方供应商推广卡片 =====
-
-function PromaProviderCard(): React.ReactElement {
-  return (
-    <SettingsRow
-      label="Proma"
-      icon={<img src={PromaLogo} alt="Proma" className="w-8 h-8 rounded" />}
-      description="Proma 商业版｜安全、稳定、优惠的内置模型｜适用于 Chat 与 Agent"
-    >
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={openPromaDownload}>
-        <ExternalLink size={13} />
-        <span>下载商业版</span>
-      </Button>
-    </SettingsRow>
   )
 }

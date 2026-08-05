@@ -169,6 +169,8 @@ export interface ImportAssetInput {
 }
 
 export interface ImportAssetResult {
+  /** 新导入或按源字节哈希跳过的项目内重复。 */
+  status: 'imported' | 'skipped-duplicate'
   assetId: string
   formatId: string
   segmentCount: number

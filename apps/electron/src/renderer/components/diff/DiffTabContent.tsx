@@ -27,6 +27,7 @@ import {
   selectedModelAtom,
 } from '@/atoms/chat-atoms'
 import { markdownTocOpenAtom } from '@/atoms/markdown-toc'
+import { useFocusAgentSessionInput } from '@/hooks/useFocusAgentSessionInput'
 import { useShortcut } from '@/hooks/useShortcut'
 import { initShortcutRegistry } from '@/lib/shortcut-registry'
 import { DiffView } from './DiffView'
@@ -38,6 +39,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { PIERRE_FILE_CSS } from '@/components/agent/tool-result-renderers/pierre-styles'
 import { SelectionActionPopover } from '@/components/selection/SelectionActionPopover'
 import { SELECTION_ACTION_POPOVER_SELECTOR } from '@/lib/quoted-selection'
+import { copyTextToClipboard } from '@/lib/clipboard'
 
 const MD_EXTS = new Set(['.md', '.markdown'])
 const PLAIN_TEXT_EDIT_EXTS = new Set(['.txt', '.text', '.log'])
@@ -333,6 +335,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   const setSideChatMap = useSetAtom(agentSideChatMapAtom)
   const setSidePanelOpen = useSetAtom(agentSidePanelOpenAtom)
   const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
+  const focusAgentSessionInput = useFocusAgentSessionInput()
   const [previewSelection, setPreviewSelection] = React.useState<PreviewTextSelection | null>(null)
   const filePathRef = React.useRef(filePath)
   filePathRef.current = filePath
@@ -866,7 +869,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   const handleCopy = React.useCallback(async () => {
     try {
       const copyText = markdownEditing ? markdownDraft : (isOfficePreview ? officeText : newContent)
-      await navigator.clipboard.writeText(copyText)
+      await copyTextToClipboard(copyText)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -986,8 +989,8 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
     })
     window.getSelection()?.removeAllRanges()
     clearPreviewSelection()
-    toast.success('已添加到 Agent 引用')
-  }, [clearPreviewSelection, previewSelection, sessionId, setQuotedSelectionMap])
+    focusAgentSessionInput(sessionId)
+  }, [clearPreviewSelection, focusAgentSessionInput, previewSelection, sessionId, setQuotedSelectionMap])
 
   const handleOpenSelectionChat = React.useCallback(async (): Promise<void> => {
     if (!previewSelection) return

@@ -129,6 +129,33 @@ describe('PB-052 确定性硬规则', () => {
     )
   })
 
+  test('英文月份和序数的词汇用法不误触发数字硬门', () => {
+    const codes = (source: string, proposedTarget: string) =>
+      runDeterministicHardRules({
+        segment: { ...segment, source, targetLocale: 'zh-CN' },
+        proposedTarget,
+      }).violations.map((violation) => violation.code)
+
+    const lexicalCases: ReadonlyArray<readonly [string, string]> = [
+      ['May I enter?', '我可以进来吗？'],
+      ['March forward!', '向前进！'],
+      ['August is waiting.', '奥古斯特在等候。'],
+      ['First, open the menu.', '首先打开菜单。'],
+      ['One last chance.', '最后一次机会。'],
+    ]
+    for (const [source, target] of lexicalCases) {
+      expect(codes(source, target)).not.toContain(
+        DETERMINISTIC_HARD_RULE_CODES.NUMBER_SIGNATURE_MISMATCH,
+      )
+    }
+    expect(codes('May 12, 2026', '2026年5月12日')).not.toContain(
+      DETERMINISTIC_HARD_RULE_CODES.NUMBER_SIGNATURE_MISMATCH,
+    )
+    expect(codes('12 May', '5月12日')).not.toContain(
+      DETERMINISTIC_HARD_RULE_CODES.NUMBER_SIGNATURE_MISMATCH,
+    )
+  })
+
   test('嵌套 ICU 分支也进入签名，不能只保留外层 branch key', () => {
     const nested = {
       ...segment,

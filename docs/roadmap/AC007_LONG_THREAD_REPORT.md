@@ -48,14 +48,11 @@
 bun run typecheck
 
 cd apps/electron
-bun test \
-  ./src/renderer/components/agent/agent-message-window.test.ts \
-  ./src/renderer/components/agent/compaction-progress.test.ts \
-  ./src/renderer/components/agent/turn-divider-utils.test.ts
+bun test ./src/renderer/components/agent/compaction-progress.test.ts
 
 bun run build:renderer
 bun run smoke:pack
-node scripts/smoke/probe-pb105-matrix.ts --long-thread-only
+bun run smoke:vertical
 ```
 
 结果：

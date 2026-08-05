@@ -39,8 +39,8 @@ G7 通过。结论由两条互补的 packaged run 共同构成：自动探针覆
 | `cd packages/linguist-cat-tools && bun run test` | **17/17** |
 | `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` | **PASS**；重新生成 0.15.28 未签名产物 |
 | `node scripts/smoke/run-g0-smoke.ts` | **18 PASS / 0 FAIL**；Proma 通用回归 |
-| `node scripts/smoke/probe-import.ts` | **28 PASS / 0 FAIL**；导入、10k Grid、QA、导出入口与临时根隔离 |
-| `node scripts/smoke/probe-cat-tools.ts` | **21 PASS / 0 FAIL**；项目 CAT tools、人工 Proposal Review 与重启恢复 |
+| 历史 Import packaged 探针（已退役） | **28 PASS / 0 FAIL**；导入、10k Grid、QA、导出入口与临时根隔离 |
+| 历史 CAT Tools packaged 探针（已退役） | **21 PASS / 0 FAIL**；项目 CAT tools、人工 Proposal Review 与重启恢复 |
 | `node scripts/smoke/probe-pb074-e2e.ts` | **11 PASS / 0 FAIL / 2 MANUAL** |
 | 原生 Open / Save / 重导入 / 重启 | **PASS**；见下一节 |
 

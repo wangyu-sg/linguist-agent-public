@@ -85,6 +85,24 @@ test('import json end-to-end', async () => {
   }
 })
 
+test('exact source duplicate is skipped before format parsing, including a renamed unsupported extension', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const bytes = readFixture('mini_game_ui.xliff')
+    const first = await service.importAsset(project.id, { bytes, filename: 'source.xliff' })
+    const duplicate = await service.importAsset(project.id, { bytes, filename: 'renamed.bin' })
+
+    assert.equal(duplicate.status, 'skipped-duplicate')
+    assert.equal(duplicate.assetId, first.assetId)
+    assert.equal(duplicate.formatId, first.formatId)
+    assert.equal(duplicate.sourceSha256, first.sourceSha256)
+    assert.equal(service.openProject(project.id).assets.listByProject().length, 1)
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('unsupported format passes FormatUnsupportedError through (FORMAT_UNSUPPORTED)', async () => {
   const service = makeService()
   try {

@@ -16,6 +16,7 @@ import type {
 } from '@proma/shared'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { Button } from '@/components/ui/button'
+import { LINGUIST_BUILD_METADATA } from '@/lib/linguist-build-metadata'
 import { describeLinguistIpcError } from './project-utils'
 
 type DiagnosticsState = {
@@ -191,6 +192,54 @@ function DiagnosticRow({
   )
 }
 
+function BuildMetadataCard(): React.ReactElement {
+  return (
+    <section aria-label="版本与合同" className="rounded-xl bg-muted/50 p-4 shadow-sm">
+      <h3 className="text-sm font-medium text-foreground">版本与合同</h3>
+      <dl className="mt-3 grid gap-2 text-xs">
+        <DiagnosticRow
+          label="Linguist Agent"
+          value={LINGUIST_BUILD_METADATA.linguistAgentVersion}
+          mono
+        />
+        <DiagnosticRow
+          label="Proma Base"
+          value={[
+            'v',
+            LINGUIST_BUILD_METADATA.promaBaseVersion,
+            ' · ',
+            LINGUIST_BUILD_METADATA.promaBaseCommit,
+          ].join('')}
+          mono
+        />
+        <DiagnosticRow
+          label="LA Merge"
+          value={LINGUIST_BUILD_METADATA.formalMergeCommit}
+          mono
+        />
+        <DiagnosticRow
+          label="CAT Schema"
+          value={String(LINGUIST_BUILD_METADATA.catSchema)}
+          mono
+        />
+        <DiagnosticRow
+          label="Prompt Contract"
+          value={LINGUIST_BUILD_METADATA.promptContract}
+          mono
+        />
+        <DiagnosticRow
+          label="Host Contract"
+          value={[
+            LINGUIST_BUILD_METADATA.hostContract,
+            ' · ',
+            LINGUIST_BUILD_METADATA.hostContractDetail,
+          ].join('')}
+        />
+      </dl>
+    </section>
+  )
+}
+
 export function ProjectDiagnosticsSettings({
   projectId,
 }: {
@@ -285,6 +334,7 @@ export function ProjectDiagnosticsSettings({
 
   return (
     <section aria-label="项目诊断" className="space-y-3 py-1">
+      <BuildMetadataCard />
       <PromptStatusCard
         prompt={state.status?.prompt}
         loading={state.loading}

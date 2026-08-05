@@ -50,6 +50,8 @@ export {
   type LinguistCatToolMutation,
   type LinguistCatToolName,
   type LinguistCatToolsDeps,
+  type LinguistIntakeImportResult,
+  type LinguistIntakeSource,
   type LinguistConsistencyWorker,
   type LinguistConsistencyWorkerRequest,
   type LinguistConsistencyWorkerResult,

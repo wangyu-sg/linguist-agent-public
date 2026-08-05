@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "tag": "v0.16.8",
+    "commit": "bde00f00323d6735a939d14dbce3b2f1a5b672bc",
+    "formalMerge": "f3d2b431996523a4aa75ec2b027dcf0e932ef08f"
+  },
+  "recomputedOn": "2026-08-05",
+  "formalMergePatch": {
+    "changedPaths": 766,
+    "allowlistedPaths": 514,
+    "registeredCoreTouchpoints": 252
+  },
+  "currentLedger": {
+    "registeredCoreTouchpoints": 250
+  },
+  "deviations": [
+    {
+      "id": "permanent-product-fork",
+      "classification": "Permanent Product Fork",
+      "ticket": "LA-SYNC-005",
+      "registeredTouchpoints": 31,
+      "scope": [
+        "package identity and dependency lock",
+        "Electron packaging, builder runtime launcher, and branded resources",
+        "independent Linguist Agent data root",
+        "CLI and bundled default skills"
+      ],
+      "rationale": "These define Linguist Agent as a distinct product and cannot be represented solely as an upstream extension seam.",
+      "sunset": {
+        "status": "no-planned-sunset",
+        "condition": "Re-evaluate only if the product stops being a distinct Linguist Agent fork."
+      }
+    },
+    {
+      "id": "local-host-seams",
+      "classification": "Local Host Seam",
+      "ticket": "LA-SYNC-003 / LA-SYNC-004",
+      "registeredTouchpoints": 218,
+      "scope": [
+        "runtime, session, preload, IPC, and shared contracts",
+        "native Agent/Chat shell composition, sidebar, tabs, settings, and renderer state"
+      ],
+      "rationale": "Proma v0.16.8 has no stable project-bound CAT authority and vertical-agent composition contract; these narrow seams retain the native Agent/Chat implementation.",
+      "sunset": {
+        "status": "review-at-upstream-sync",
+        "condition": "Replace a seam only when upstream provides an equivalent stable Host Contract that preserves session authority and fail-closed CAT behavior."
+      }
+    },
+    {
+      "id": "linguist-extension",
+      "classification": "Linguist Extension",
+      "ticket": "LA-SYNC-006",
+      "registeredTouchpoints": 0,
+      "scope": [
+        "apps/electron/src/main/lib/linguist/",
+        "apps/electron/src/renderer/features/linguist/",
+        "packages/linguist-*",
+        "resources/linguist-skills/"
+      ],
+      "rationale": "CAT domain, store, tools, project workbench, and skills stay in product-owned allowlisted roots instead of spreading into Proma Core.",
+      "sunset": {
+        "status": "no-planned-sunset",
+        "condition": "Retain while Linguist Agent offers its CAT vertical."
+      }
+    },
+    {
+      "id": "pi-compaction-continuation-context",
+      "classification": "Temporary Deviation",
+      "ticket": "LA-SYNC-003",
+      "registeredTouchpoints": 1,
+      "paths": [
+        "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts"
+      ],
+      "rationale": "Preserves the project-bound continuation context across Pi compaction until the runtime exposes an equivalent host-owned continuation hook.",
+      "sunset": {
+        "status": "must-review-at-next-upstream-sync",
+        "condition": "Remove when Proma/Pi exposes an equivalent typed host-owned continuation context hook with project binding."
+      }
+    }
+  ]
+}

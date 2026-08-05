@@ -1,6 +1,6 @@
 # Linguist Agent 文档维护规则
 
-更新时间：2026-07-29
+更新时间：2026-08-05
 
 ## 事实优先级
 
@@ -25,9 +25,11 @@
 | `docs/HANDOFF.md` | 下一会话无需聊天历史即可继续的当前交接 |
 | `TODO.md` | 仍未完成且可行动的事项 |
 | `docs/DOCS_INDEX.md` | 文档地图与真源 |
+| `CURRENT_FACTS.md` | v2 接管前的可复核 Git、数据、实现与验证事实 |
 | `LINGUIST_FUSION_CURRENT_REALITY.md` | 可验证的当前代码/工作区事实 |
-| `linguist-fusion-queue.json` | 机器可读工单/Gate 状态 |
-| `LINGUIST_FUSION_QUEUE.md` | 队列的人读投影 |
+| `LA_UNIFIED_MASTER_PLAN_V2.md` | 唯一 active 实施计划 |
+| `linguist-fusion-queue.json` | 唯一 active 机器可读 v2.1 ticket 状态 |
+| `LINGUIST_FUSION_QUEUE.md` | active v2.1 queue 的人读投影 |
 | `docs/roadmap/*_REPORT.md` | 历史或专项证据 |
 
 不要在 README、AGENTS 或 HANDOFF 中复制整份执行账本；应链接真源。
@@ -66,6 +68,7 @@ node --test tests/linguist-fusion-architecture.test.mjs
 
 ## 禁止事项
 
+- 不把标记为 **SUPERSEDED** 的 v1 plan、ledger、queue 或 Fast/Balanced/Best Gate 写回 active 计划；旧资料只作历史证据。
 - 不把 Fake Model 写成翻译质量证据。
 - 不把 packaged smoke 写成 VoiceOver/IME/键盘人工验证。
 - 不把个人 Alpha 写成公开 Release Candidate。

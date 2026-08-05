@@ -34,6 +34,14 @@ const TEXT_EXTENSIONS = new Set([
   '.yml',
 ])
 const REAL_PROJECT_ID = ['prj-', 'a0b09ddb', '2005d761'].join('')
+const PRIVATE_TEXT = [
+  REAL_PROJECT_ID,
+  ['/Users', ['wang', 'yu'].join('')].join('/'),
+  ['/Users', ['guo', 'hao'].join('')].join('/'),
+  ['/Users', ['big', 'mouth'].join('')].join('/'),
+  ['Lingui', 'tronics'].join(''),
+  ['王者', '荣耀番剧'].join(''),
+]
 
 const FORBIDDEN_PATHS = [
   /^(?:data|sessions|tmp\/quarantine|\.data-root-writer-lease)(?:\/|$)/,
@@ -64,19 +72,21 @@ test('公开镜像不得包含旧 LA 私有路径或真实项目标识', () => {
   const forbiddenPaths = files.filter((file) =>
     FORBIDDEN_PATHS.some((pattern) => pattern.test(file)),
   )
-  const leakedProjectIds = files
+  const leakedPrivateText = files
     .filter((file) => TEXT_EXTENSIONS.has(extname(file).toLowerCase()))
     .filter((file) =>
-      readFileSync(resolve(REPO_ROOT, file), 'utf8').includes(REAL_PROJECT_ID),
+      PRIVATE_TEXT.some((text) =>
+        readFileSync(resolve(REPO_ROOT, file), 'utf8').includes(text),
+      ),
     )
 
   assert.deepEqual(
-    { forbiddenPaths, leakedProjectIds },
-    { forbiddenPaths: [], leakedProjectIds: [] },
+    { forbiddenPaths, leakedPrivateText },
+    { forbiddenPaths: [], leakedPrivateText: [] },
     [
       '公开镜像净化检查失败。',
       `禁止路径：\n${forbiddenPaths.join('\n')}`,
-      `真实项目标识：\n${leakedProjectIds.join('\n')}`,
+      `私有文本：\n${leakedPrivateText.join('\n')}`,
     ].join('\n'),
   )
 })

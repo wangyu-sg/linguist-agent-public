@@ -418,6 +418,6 @@ test('default root resolution: packaged layout via process.resourcesPath; bare E
 
   // node --test ESM 上下文：无 __dirname（CJS 分支跳过）、无 resourcesPath → undefined。
   //（开发 CJS 束 dist/main.cjs 的上溯分支与打包分支分别由 bun guard 测试的仓根
-  // 布局断言与 probe-project-skill 的端到端断言覆盖。）
+  // 布局断言与 electron-builder 的 extraResources 配置覆盖。）
   assert.equal(skill.getDefaultLinguistSkillsRoot(), undefined)
 })

@@ -30,8 +30,6 @@ export interface MinimapItem {
 
 interface ScrollMinimapProps {
   items: MinimapItem[]
-  /** 请求挂载尚未进入 DOM 的消息；返回 true 表示已开始挂载。 */
-  onRequestItem?: (id: string) => boolean
 }
 
 /** 最少消息数才显示迷你地图 */
@@ -76,7 +74,7 @@ function escapeRegExp(str: string): string {
 
 // ── 主组件 ──
 
-export function ScrollMinimap({ items, onRequestItem }: ScrollMinimapProps): React.ReactElement | null {
+export function ScrollMinimap({ items }: ScrollMinimapProps): React.ReactElement | null {
   const { scrollRef, stopScroll, state: stickyState } = useStickToBottomContext()
   const [hovered, setHovered] = React.useState(false)
   const [isLeaving, setIsLeaving] = React.useState(false)
@@ -238,36 +236,26 @@ export function ScrollMinimap({ items, onRequestItem }: ScrollMinimapProps): Rea
   const scrollToMessage = React.useCallback((id: string) => {
     const el = scrollRef.current
     if (!el) return
+    const target = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(
+      (node) => node.getAttribute('data-message-id') === id
+    )
+    if (!target) return
 
-    const scrollMountedMessage = (behavior: ScrollBehavior): boolean => {
-      const target = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(
-        (node) => node.getAttribute('data-message-id') === id
-      )
-      if (!target) return false
+    stopScroll()
+    stickyState.animation = undefined
+    stickyState.velocity = 0
+    stickyState.accumulated = 0
 
-      stopScroll()
-      stickyState.animation = undefined
-      stickyState.velocity = 0
-      stickyState.accumulated = 0
-
-      const offsetTop = getOffsetTopRelativeTo(target, el)
-      const targetHeight = target.offsetHeight
-      const viewportHeight = el.clientHeight
-      const scrollTarget = targetHeight < viewportHeight
-        ? offsetTop - (viewportHeight - targetHeight) / 2
-        : offsetTop - 32
-      el.scrollTo({ top: Math.max(0, scrollTarget), behavior })
-      return true
-    }
-
-    if (!scrollMountedMessage('smooth') && onRequestItem?.(id)) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => scrollMountedMessage('auto'))
-      })
-    }
+    const offsetTop = getOffsetTopRelativeTo(target, el)
+    const targetHeight = target.offsetHeight
+    const viewportHeight = el.clientHeight
+    const scrollTarget = targetHeight < viewportHeight
+      ? offsetTop - (viewportHeight - targetHeight) / 2
+      : offsetTop - 32
+    el.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' })
 
     setHovered(false)
-  }, [onRequestItem, scrollRef, stopScroll, stickyState])
+  }, [scrollRef, stopScroll, stickyState])
 
   // ── 搜索过滤 ──
 
@@ -368,7 +356,7 @@ export function ScrollMinimap({ items, onRequestItem }: ScrollMinimapProps): Rea
   const thumbTopPct = scrollRange > 0 ? (scrollTop / scrollRange) * (100 - thumbHeightPct) : 0
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 z-30 flex pointer-events-none">
+    <div className="absolute right-1 top-0 bottom-0 z-30 flex pointer-events-none">
       {/* ── 迷你地图悬停区域（面板 + 横杠） ── */}
       <div className="flex items-start h-full">
         {/* 展开面板 */}

@@ -13,11 +13,17 @@ import type {
 } from '@proma/shared'
 import {
   agentPendingPromptAtom,
+  agentSidePanelOpenAtom,
   agentSessionsAtom,
   type AgentPendingPrompt,
 } from '@/atoms/agent-atoms'
+import { agentSideChatMapAtom } from '@/atoms/chat-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { AgentView } from '@/components/agent/AgentView'
+import { SidePanel } from '@/components/agent/SidePanel'
+import { extensionRegistry } from '@/host/extensions'
+import { UNAVAILABLE_AGENT_HOST_CAPABILITIES } from '@/host/contracts'
+import { getAgentSurfaceControls } from '@/host/extension-registry'
 import type { ComposerContextChip } from '@/features/linguist/composer/ComposerContextChips'
 import { Button } from '@/components/ui/button'
 import {
@@ -205,9 +211,23 @@ export function ProjectAgentRail({
   const store = useStore()
   const sessionId = useAtomValue(projectCurrentAgentSessionIdMapAtom).get(projectId)
   const sessions = useAtomValue(agentSessionsAtom)
+  const sideChatConversationId = useAtomValue(agentSideChatMapAtom).get(sessionId ?? '') ?? null
+  const sidePanelOpen = useAtomValue(agentSidePanelOpenAtom)
   const setPendingPrompt = useSetAtom(agentPendingPromptAtom)
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectId))
-  const presentation = uiState.agentPresentation === 'full' ? 'full' : 'rail'
+  const requestedSurfacePresentation = uiState.agentPresentation === 'full'
+    ? 'linguist-full'
+    : 'linguist-rail'
+  const agentSurface = extensionRegistry.getAgentSurfaceContext({
+    extensionId: 'linguist',
+    sessionId: sessionId ?? `project:${projectId}`,
+    presentation: requestedSurfacePresentation,
+  })
+  const hostCapabilities = agentSurface?.hostCapabilities ?? UNAVAILABLE_AGENT_HOST_CAPABILITIES
+  const surfaceControls = getAgentSurfaceControls(hostCapabilities)
+  const presentation = requestedSurfacePresentation === 'linguist-full' && surfaceControls.canExpandToFull
+    ? 'full'
+    : 'rail'
   const expandButtonRef = React.useRef<HTMLButtonElement>(null)
   const previousPresentation = React.useRef(presentation)
   const [failure, setFailure] = React.useState<ProjectAgentRailFailure | null>(null)
@@ -252,6 +272,17 @@ export function ProjectAgentRail({
       cancelled = true
     }
   }, [projectId, retryToken, sessionId, store])
+
+  React.useEffect(() => {
+    if (uiState.agentPresentation !== 'full' || surfaceControls.canExpandToFull) return
+    setUiState({ agentPresentation: 'rail' })
+  }, [setUiState, surfaceControls.canExpandToFull, uiState.agentPresentation])
+
+  React.useEffect(() => {
+    if (sideChatConversationId && presentation === 'rail' && surfaceControls.canExpandToFull) {
+      setUiState({ agentPresentation: 'full' })
+    }
+  }, [presentation, setUiState, sideChatConversationId, surfaceControls.canExpandToFull])
 
   React.useEffect(() => {
     const wasFull = previousPresentation.current === 'full'
@@ -345,26 +376,41 @@ export function ProjectAgentRail({
               >
                 <PanelRightClose aria-hidden="true" />
               </Button>
-              <Button
-                ref={expandButtonRef}
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="在 Linguist 中展开项目 Agent"
-                title="在 Linguist 中展开项目 Agent"
-                onClick={() => setUiState({ agentPresentation: 'full' })}
-              >
-                <Maximize2 aria-hidden="true" />
-              </Button>
+              {surfaceControls.canExpandToFull && (
+                <Button
+                  ref={expandButtonRef}
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="在 Linguist 中展开项目 Agent"
+                  title="在 Linguist 中展开项目 Agent"
+                  onClick={() => setUiState({ agentPresentation: 'full' })}
+                >
+                  <Maximize2 aria-hidden="true" />
+                </Button>
+              )}
             </div>
           )}
         </div>
-        <div className="min-h-0 flex-1">
-          <AgentView
-            sessionId={sessionId}
-            presentation={presentation}
-            contextSummary={contextSummary}
-          />
+        <div className="flex min-h-0 flex-1">
+          <div className="min-w-0 flex-1">
+            <AgentView
+              sessionId={sessionId}
+              presentation={presentation}
+              contextSummary={contextSummary}
+              hostCapabilities={hostCapabilities}
+            />
+          </div>
+          {sideChatConversationId && sidePanelOpen && (
+            <SidePanel
+              sessionId={sessionId}
+              sessionPath={null}
+              activeTab="chat"
+              onTabChange={() => {}}
+              chatOnly
+              width={320}
+            />
+          )}
         </div>
       </div>
     )

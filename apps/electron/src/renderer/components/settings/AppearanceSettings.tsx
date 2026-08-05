@@ -31,25 +31,9 @@ import {
   updateMarkdownFontSize,
 } from '@/atoms/markdown-font-size'
 import { previewModePreferenceAtom, type PreviewModePreference } from '@/atoms/preview-atoms'
-import { PROMA_PROMO_VISIBLE } from '@/lib/feature-flags'
 import { cn } from '@/lib/utils'
 import { detectIsWindows } from '@/lib/platform'
 import type { InterfaceVariant, ThemeMode, ThemeStyle, MarkdownFontSize } from '../../../types'
-
-// ===== Logo 资源导入（用于图标选择器） =====
-import promaBlackLogo from '@/assets/bots/proma-logos/proma-black.png'
-import promaWhiteLogo from '@/assets/bots/proma-logos/proma-white.png'
-import promaBlueLogo from '@/assets/bots/proma-logos/proma-blue.png'
-import promaPurpleLogo from '@/assets/bots/proma-logos/proma-purple.png'
-import promaGradientLogo from '@/assets/bots/proma-logos/proma-gradient.png'
-import promaCoralLogo from '@/assets/bots/proma-logos/proma-coral.png'
-import promaVeriPeriLogo from '@/assets/bots/proma-logos/proma-veri-peri.png'
-import promaVivaMagentaLogo from '@/assets/bots/proma-logos/proma-viva-magenta.png'
-import promaMochaMousseLogo from '@/assets/bots/proma-logos/proma-mocha-mousse.png'
-import promaEmeraldLogo from '@/assets/bots/proma-logos/proma-emerald.png'
-import proma8bitLogo from '@/assets/bots/proma-logos/proma-8bit.png'
-import promaCyberpunkLogo from '@/assets/bots/proma-logos/proma-cyberpunk.png'
-import promaFuturisticLogo from '@/assets/bots/proma-logos/proma-futuristic.png'
 
 // ===== 主题预览图片导入 =====
 import themeCloudDancer from '@/assets/theme-previews/theme-cloud-dancer.webp'
@@ -163,33 +147,9 @@ interface IconVariant {
   previewBg: string
 }
 
-const ICON_VARIANTS: readonly IconVariant[] = [
+const VISIBLE_ICON_VARIANTS: readonly IconVariant[] = [
   { id: 'default', name: '默认', src: '', previewBg: 'bg-neutral-900' },
-  { id: 'black', name: '经典黑', src: promaBlackLogo, previewBg: 'bg-neutral-900' },
-  { id: 'white', name: '纯白版', src: promaWhiteLogo, previewBg: 'bg-white' },
-  { id: 'blue', name: '品牌蓝', src: promaBlueLogo, previewBg: 'bg-blue-900' },
-  { id: 'purple', name: '紫色版', src: promaPurpleLogo, previewBg: 'bg-purple-900' },
-  { id: 'gradient', name: '渐变版', src: promaGradientLogo, previewBg: 'bg-gradient-to-br from-blue-600 to-purple-600' },
-  { id: 'coral', name: '珊瑚橘', src: promaCoralLogo, previewBg: 'bg-[#FF6F61]' },
-  { id: 'veri-peri', name: '长春花蓝', src: promaVeriPeriLogo, previewBg: 'bg-[#6667AB]' },
-  { id: 'viva-magenta', name: '非凡洋红', src: promaVivaMagentaLogo, previewBg: 'bg-[#BB2649]' },
-  { id: 'mocha-mousse', name: '摩卡慕斯', src: promaMochaMousseLogo, previewBg: 'bg-[#A47764]' },
-  { id: 'emerald', name: '翡翠绿', src: promaEmeraldLogo, previewBg: 'bg-[#009473]' },
-  { id: '8bit', name: '8bit 像素', src: proma8bitLogo, previewBg: 'bg-[#1a1a2e]' },
-  { id: 'cyberpunk', name: '赛博朋克', src: promaCyberpunkLogo, previewBg: 'bg-[#0d0221]' },
-  { id: 'futuristic', name: '未来质感', src: promaFuturisticLogo, previewBg: 'bg-[#4a4a4a]' },
 ] as const
-
-/**
- * 图标选择器实际展示的变体列表（PB-113）。
- *
- * 13 个 Proma 品牌 logo 变体与 Proma 商业推广面同族，由 PROMA_PROMO_VISIBLE
- * 门控：false 时选择器只剩 default（LA 图标）。资产 png 保留不删，
- * 恢复可见只需把 PROMA_PROMO_VISIBLE 改回 true。
- */
-const VISIBLE_ICON_VARIANTS: readonly IconVariant[] = PROMA_PROMO_VISIBLE
-  ? ICON_VARIANTS
-  : ICON_VARIANTS.filter((variant) => variant.id === 'default')
 
 /** 根据平台返回缩放快捷键提示 */
 const isMac = navigator.userAgent.includes('Mac')
@@ -319,9 +279,7 @@ function AppIconPicker(): React.ReactElement {
   React.useEffect(() => {
     window.electronAPI.getSettings().then((settings) => {
       const stored = settings.appIconVariant ?? 'default'
-      // PB-113 兜底：settings 里已存的变体不在当前可见列表内（如 Proma 变体
-      // 被 PROMA_PROMO_VISIBLE 隐藏）时，选择器高亮回落 default；不改写用户
-      // 存储值，主进程解析图标路径时同样兜底（resolveAppIconPath）。
+      // 历史 Proma 变体不再展示时回落到默认图标，不改写用户存储值。
       setActiveIcon(
         VISIBLE_ICON_VARIANTS.some((variant) => variant.id === stored) ? stored : 'default',
       )

@@ -51,20 +51,33 @@ describe('convertPiMessage', () => {
     expect(JSON.stringify(message).length).toBeGreaterThan(content.length)
   })
 
-  test('only persists errors for terminal Pi failures', () => {
-    const providerError = 'stream ended before a terminal response event'
+  test('only exposes terminal Pi errors in final frames', () => {
+    const providerError = 'Connection error. Failed to fetch'
     const partialStop = convertPiMessage({
       role: 'assistant', content: [], stopReason: 'stop', errorMessage: providerError,
     } as unknown as AssistantMessage, 'session-1') as { error?: unknown }
+    const retryPreview = convertPiMessage({
+      role: 'assistant', content: [], stopReason: 'error', errorMessage: providerError,
+    } as unknown as AssistantMessage, 'session-1', undefined, { final: false }) as { error?: unknown }
     const terminalError = convertPiMessage({
       role: 'assistant', content: [], stopReason: 'error', errorMessage: providerError,
     } as unknown as AssistantMessage, 'session-1') as { error?: { message?: string; errorType?: string } }
 
     expect(partialStop.error).toBeUndefined()
+    expect(retryPreview.error).toBeUndefined()
     expect(terminalError.error).toEqual({
       message: providerError,
       errorType: 'network_error',
     })
+  })
+
+  test('classifies a malformed upstream JSON response as service_error', () => {
+    const errorMessage = 'Unexpected non-whitespace character after JSON at position 199 (line 2 column 1)'
+    const terminalError = convertPiMessage({
+      role: 'assistant', content: [], stopReason: 'error', errorMessage,
+    } as unknown as AssistantMessage, 'session-1') as { error?: { message?: string; errorType?: string } }
+
+    expect(terminalError.error).toEqual({ message: errorMessage, errorType: 'service_error' })
   })
 
   test('keeps non-network terminal Pi errors as provider_error', () => {

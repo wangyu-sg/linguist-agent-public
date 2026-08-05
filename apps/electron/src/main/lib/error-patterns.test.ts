@@ -13,10 +13,12 @@ describe('isTransientNetworkError', () => {
     'getaddrinfo EAI_AGAIN api.anthropic.com',
     'connect ECONNREFUSED 127.0.0.1:443',
     'TypeError: fetch failed',
+    'TypeError: Failed to fetch',
     'network error',
     'stream closed prematurely',
     'premature close',
     'OpenAI Responses stream ended before a terminal response event',
+    'Error Code undefined: Upstream Responses stream ended before a terminal event',
     'Anthropic stream ended before message_stop',
     'peer closed connection',
     'incomplete chunked read',
@@ -57,10 +59,12 @@ describe('isMalformedResponseError', () => {
   test('Given JSON 解析失败 Then 判定为响应体解析失败', () => {
     expect(isMalformedResponseError('API Error: JSON Parse error: Unable to parse JSON string')).toBe(true)
     expect(isMalformedResponseError('Unexpected end of JSON input')).toBe(true)
+    expect(isMalformedResponseError('Unexpected non-whitespace character after JSON at position 199 (line 2 column 1)')).toBe(true)
   })
 
   test('Given 普通错误 Then 不判定为响应体解析失败', () => {
     expect(isMalformedResponseError('socket hang up')).toBe(false)
+    expect(isMalformedResponseError('Unexpected non-whitespace character in local config')).toBe(false)
   })
 })
 

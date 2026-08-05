@@ -97,9 +97,22 @@
 - 用途：zip 文件读写（文档处理链路）。
 - **选择记录：本项目按 MIT 采用。**
 
+### sharp 预编译 libvips 平台包
+
+- 当前 macOS arm64 包：`@img/sharp-libvips-darwin-arm64` 1.3.2。
+- 许可：LGPL-3.0-or-later；包内还列明其捆绑库各自的 MPL、MIT、BSD、
+  LGPL、Zlib 等许可。
+- 来源：npm `@img/sharp-libvips-*`，随 `sharp` 0.35.3 按目标平台安装；
+  发行物使用未修改的动态 `libvips` 库。
+- 用途：Vision Relay 的图片处理。
+- 义务：保留包内许可与归属信息，并允许用户按 LGPL 条款替换或修改该动态库。
+  当前个人 Alpha 不公开发行；公开发行前必须复核目标平台产物、签名机制和 LGPL
+  合规材料，不能把 license gate 通过等同于法律审查完成。
+
 ### 其余开源依赖
 
-其余全部第三方依赖（生产闭包 415 个，含传递依赖）均为宽松许可
+除上述已单列组件外，其余第三方依赖（当前生产闭包共 432 个，含传递依赖）
+均为宽松许可
 （MIT / Apache-2.0 / BSD / ISC / BlueOak-1.0.0 / 0BSD / Unlicense /
 CC-BY-4.0 / EPL-2.0 / Zlib 等），逐包清单与许可见
 `docs/release/sbom-full.json`；各包许可全文见其在发行物/仓库

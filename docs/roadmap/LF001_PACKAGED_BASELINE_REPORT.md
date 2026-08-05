@@ -95,10 +95,10 @@ node scripts/smoke/run-g0-smoke.ts
 
 ```bash
 cd apps/electron
-node scripts/smoke/probe-pb105-matrix.ts
+bun run smoke:vertical
 ```
 
-结果：**35 PASS / 1 FAIL / 3 WARN**。
+历史矩阵结果：**35 PASS / 1 FAIL / 3 WARN**；原矩阵探针已退役，当前入口如上。
 
 已确认：
 

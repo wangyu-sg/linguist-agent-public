@@ -1,16 +1,16 @@
 # KNOWN_LIMITATIONS — 当前已知限制
 
-更新日期：2026-07-30
+更新日期：2026-08-05
 
-> 当前目标是作者本人使用的个人 Alpha。自动化、打包 smoke、真机操作、远端 CI 和 Release qualification 是不同证据等级。
+> 当前目标是作者本人使用的个人 Alpha。v2 计划处于 Phase 0，自动化、打包 smoke、真机操作、远端 CI 和 Release qualification 是不同证据等级；旧 0.15.140 clean-worktree 证据不替代当前 v2 Gate。
 
 ## A. 尚缺的外部与人工证据
 
 1. **真实 Provider**：Fake Model packaged smoke 覆盖 Agent/Chat/CAT 流程，不证明真实 Pi/Claude Provider、网络重试、权限和模型质量。
 2. **LF-048**：真实 macOS IME composition 与 Native Open/Save 对话框仍需人工操作。
 3. **AC-009**：VoiceOver、完整 keyboard-only、拖拽/resize 手感仍未验证。
-4. **AC-010**：Fast / Balanced / Best 只有离线评估框架；真实游戏文本盲评尚未执行。
-5. **AC-011**：尚未完成连续 14 天真实项目使用。
+4. **v1 AC-010 已废弃**：Fast / Balanced / Best 不再是 active 质量 Gate；v2 仍要求以统一质量、Execution Policy 和 `LA-EVAL-*` 重新建立真实质量/成本/覆盖证据。
+5. **v2 LA-EVAL-004**：尚未完成按 v2 核心阶段重新开始的连续 14 天真实项目使用。
 
 ## B. 当前功能边界
 
@@ -23,10 +23,11 @@
 
 ## C. 性能、构建与无障碍
 
-1. 当前自动矩阵集中在 macOS arm64；其他硬件、macOS Intel、Windows 和 Linux 未做真机资格验证。
-2. Vite 仍报告大 chunk、重复静态/动态 import 与旧 Browserslist 数据警告；当前 build/pack 不失败，但若启动或更新性能出现测量回退再处理。
-3. CJS bundle 对 `import.meta` 有既有 esbuild warning；packaged smoke 已通过当前 fallback 路径，不能据此推断所有平台一致。
-4. serious/critical Axe 已清零，但 moderate landmark 与真实屏幕阅读器结果不能由 DOM 测试替代。
+1. **打包环境限制**：2026-08-05 `bun run smoke:pack` 已通过；构建时需使用任务专用 `CLANG_MODULE_CACHE_PATH`，并在受限沙箱外运行 Swift/clang 和本地 fake-model server。该环境条件不等于所有机器都已完成 real-machine 资格验证。
+2. 当前自动矩阵集中在 macOS arm64；其他硬件、macOS Intel、Windows 和 Linux 未做真机资格验证。
+3. Vite 仍报告大 chunk、重复静态/动态 import 与旧 Browserslist 数据警告；当前 build 不失败，但 pack 的当前标准 Gate 见上条。
+4. CJS bundle 对 `import.meta` 有既有 esbuild warning；历史 packaged smoke 通过当前 fallback 路径，不能据此推断所有平台一致。
+5. serious/critical Axe 的 v1 结果已存在，但 moderate landmark 与真实屏幕阅读器结果不能由 DOM 测试替代。
 
 ## D. 公众发行（当前不在范围）
 
@@ -42,5 +43,5 @@
 - 数据根已隔离为 `~/.linguist-agent(-dev)`；旧 Proma 根只供显式 Provider-only 导入。
 - Project/Session binding、数据库身份、导出路径和恢复流程均 fail closed。
 - 所有 BrowserWindow 已固定隔离、sandbox、禁用 Node integration 并启用 webSecurity。
-- 根测试不再容忍已知失败；当前 clean source 全仓为 1,350 pass / 0 fail。
+- 根测试不再容忍已知失败；历史 clean source 曾为 1,350 pass / 0 fail，而 2026-08-05 当前根 `bun test` 为 exit 0（不在此猜测 count）。
 - 公开源码完整交互修复快照 `2fe3c472` 的 GitHub Actions Run `30482338219` 已成功，历史许可扫描失败已关闭。

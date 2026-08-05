@@ -367,7 +367,7 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
     /**
      * linguist.projects.import — 原生文件选择器导入流程：
      * 项目存在/未归档前置校验（避免无谓弹窗）→ picker → 主进程读盘
-     * （大小护栏 50MB，先于读盘）→ importAsset(bytes, basename)。
+     * （大小护栏 50MB，先于读盘）→ importAsset(bytes, basename)，同源字节重复则跳过。
      * renderer 永不接触路径/字节；取消返回 {cancelled: true}。
      */
     async import(
@@ -407,7 +407,9 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
 
         const result = await service.importAsset(projectId, { bytes, filename })
         console.log(
-          `[Linguist IPC] 导入完成: 项目 ${projectId} 资产 ${result.assetId}（${result.formatId}，${result.segmentCount} 段）`,
+          result.status === 'skipped-duplicate'
+            ? `[Linguist IPC] 已跳过重复资产: 项目 ${projectId} 资产 ${result.assetId}`
+            : `[Linguist IPC] 导入完成: 项目 ${projectId} 资产 ${result.assetId}（${result.formatId}，${result.segmentCount} 段）`,
         )
         return { cancelled: false, filename, ...result }
       })

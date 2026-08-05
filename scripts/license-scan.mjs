@@ -2,7 +2,7 @@
 /**
  * PB-115 依赖许可扫描与门禁（license:scan）
  *
- * 用法：bun run license:scan
+ * 用法：bun run license:scan / bun run license:check
  *
  * 本仓是 bun workspace + 根目录提升安装，license-checker 的 --production 在
  * monorepo 下不可靠（只认起始目录的 node_modules 与 package.json），因此：
@@ -12,7 +12,7 @@
  *    查找规则解析生产依赖闭包（含传递依赖、嵌套版本）；
  * 2. 用 license-checker-rseidelsohn 对根 node_modules 全量扫描一次，取其
  *    许可元数据（能识别 LICENSE 文件级 "Custom" 专有许可）；
- * 3. 写出机器可读 SBOM：docs/release/sbom-full.json；
+ * 3. 写出或核验机器可读 SBOM：docs/release/sbom-full.json；
  * 4. 打印许可分布 summary；
  * 5. 门禁：命中黑名单许可（强 copyleft / 非开源 / 未知）即 exit 1，
  *    第一方包与 EXCEPTIONS 中的已登记豁免除外。
@@ -28,6 +28,7 @@ const checker = require('license-checker-rseidelsohn')
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT_FILE = path.join(root, 'docs/release/sbom-full.json')
+const CHECK_ONLY = process.argv.includes('--check')
 
 /** 第一方包（本仓 workspace 包，随产品整体以 AGPL-3.0 发布，不参与第三方许可门禁） */
 const FIRST_PARTY = /^(proma|@proma\/|@linguist\/)/
@@ -48,6 +49,13 @@ const EXCEPTIONS = new Map([
   ['@anthropic-ai/claude-agent-sdk-win32-arm64', '同上（Anthropic 专有平台包）'],
   ['@anthropic-ai/claude-agent-sdk-win32-x64', '同上（Anthropic 专有平台包）'],
 ])
+
+function registeredException(name) {
+  return EXCEPTIONS.get(name)
+    ?? (name.startsWith('@img/sharp-libvips-')
+      ? 'sharp 随附的未修改动态 libvips 发行包（LGPL-3.0-or-later），义务与公开发行复核见 THIRD_PARTY_NOTICES.md'
+      : undefined)
+}
 
 /**
  * 门禁黑名单：强 copyleft / 非开源 / 未声明。
@@ -157,6 +165,16 @@ for (const dir of workspaceDirs) {
   await enqueueManifestDeps(manifest, dir)
 }
 
+// Electron 由 electron-builder 作为应用框架交付，虽然声明在 devDependencies，
+// 仍属于发行物 SBOM；其他构建期依赖不进入生产闭包。
+for (const dir of workspaceDirs) {
+  const manifest = await readJson(path.join(dir, 'package.json'))
+  if (manifest?.name === '@proma/electron' && manifest.devDependencies?.electron) {
+    await enqueue('electron', dir, false)
+    break
+  }
+}
+
 // license-checker 全量扫描（根 + 各 workspace 本地 node_modules），取许可元数据
 function scanDir(start) {
   return new Promise((resolve) => {
@@ -197,22 +215,28 @@ for (const info of Object.values(thirdParty)) {
 // 门禁
 const violations = []
 for (const [key, info] of Object.entries(thirdParty)) {
-  if (EXCEPTIONS.has(packageName(key))) continue
+  if (registeredException(packageName(key))) continue
   if (BLACKLIST.some((re) => re.test(info.licenses))) violations.push(`${key} => ${info.licenses}`)
 }
 for (const item of unresolvedRequired) violations.push(`${item} => 无法解析已安装版本`)
 
-// 写 SBOM（key 排序，稳定 diff）
+// 生成 SBOM（key 排序，稳定 diff）
 const sorted = Object.fromEntries(
   Object.entries(thirdParty).sort(([a], [b]) => a.localeCompare(b)),
 )
-await fs.mkdir(path.dirname(OUT_FILE), { recursive: true })
-await fs.writeFile(OUT_FILE, JSON.stringify(sorted, null, 2) + '\n')
+const output = JSON.stringify(sorted, null, 2) + '\n'
+if (CHECK_ONLY) {
+  const existing = await fs.readFile(OUT_FILE, 'utf8').catch(() => '')
+  if (existing !== output) violations.push(`${path.relative(root, OUT_FILE)} => 与当前依赖闭包不一致`)
+} else {
+  await fs.mkdir(path.dirname(OUT_FILE), { recursive: true })
+  await fs.writeFile(OUT_FILE, output)
+}
 
 // 输出
 console.log(`扫描 workspace：${workspaceDirs.length} 个（生产依赖闭包，含传递依赖）`)
 console.log(`第三方依赖：${Object.keys(thirdParty).length} 个`)
-console.log(`SBOM 已写出：${path.relative(root, OUT_FILE)}`)
+console.log(`SBOM ${CHECK_ONLY ? '核验目标' : '已写出'}：${path.relative(root, OUT_FILE)}`)
 console.log('\n许可分布：')
 for (const [lic, count] of Object.entries(summary).sort((a, b) => b[1] - a[1])) {
   console.log(`  ${lic}: ${count}`)
@@ -220,7 +244,8 @@ for (const [lic, count] of Object.entries(summary).sort((a, b) => b[1] - a[1])) 
 console.log('\n已登记豁免：')
 for (const key of Object.keys(thirdParty)) {
   const name = packageName(key)
-  if (EXCEPTIONS.has(name)) console.log(`  ${key} => ${thirdParty[key].licenses}（${EXCEPTIONS.get(name)}）`)
+  const exception = registeredException(name)
+  if (exception) console.log(`  ${key} => ${thirdParty[key].licenses}（${exception}）`)
 }
 if (unresolvedOptional.length > 0) {
   console.log('\n本平台未安装的可选依赖（不计入门禁）：')
@@ -232,4 +257,5 @@ if (violations.length > 0) {
   for (const v of violations) console.error(`  ${v}`)
   process.exit(1)
 }
+if (CHECK_ONLY) console.log('\nSBOM 与当前依赖闭包一致。')
 console.log('\n许可门禁通过（无黑名单许可）。')

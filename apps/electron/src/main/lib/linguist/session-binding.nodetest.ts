@@ -65,8 +65,8 @@ test('binding write: project chat carries frozen binding + name snapshot; normal
   assert.equal(meta.linguistProjectName, '绑定项目')
   assert.equal(meta.linguistStrategy, 'best')
   assert.equal(meta.agentRuntime, 'pi')
-  // 缺省标题 = 项目名
-  assert.equal(meta.title, '绑定项目')
+  // 缺省标题保留 Proma 默认值，首轮消息完成后由统一 title pipeline 命名。
+  assert.equal(meta.title, '新 Agent 会话')
 
   // 显式标题优先
   const titled = binding.createLinguistProjectChatSession(service, { projectId: project.id, title: '  术语讨论  ' })

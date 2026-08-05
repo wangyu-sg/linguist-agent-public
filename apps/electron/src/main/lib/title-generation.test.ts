@@ -13,4 +13,18 @@ describe('标题生成辅助逻辑', () => {
 
     expect(title).toBe('OpenAI OAuth 标题修复')
   })
+
+  test('Given 兼容端点返回文本块 When 清理 Then 提取文本而不是抛错', () => {
+    const title = sanitizeGeneratedTitle([
+      { type: 'text', text: '“Linguist 项目翻译 QA 修复”' },
+    ])
+
+    expect(title).toBe('Linguist 项目翻译 QA 修复')
+    expect(sanitizeGeneratedTitle([{ type: 'tool_use' }])).toBeNull()
+  })
+
+  test('Given an absolute local path When generating or falling back Then never expose it as a title', () => {
+    expect(createFallbackTitle('检查 /Users/alice/客户 A/机密.xlsx 的术语')).toBe('文件任务')
+    expect(sanitizeGeneratedTitle('“修复 C:\\Users\\alice\\客户 A\\机密.xlsx”')).toBe('文件任务')
+  })
 })

@@ -2,7 +2,7 @@
  * PB-042 session-cat-tools nodetest（node --test；真实 LinguistProjectService +
  * 真实会话元数据 + 真实 fixture 导入，无 mock）：
  *
- * - 项目对话（active）→ 15 个工具；经应用 resolver 端到端驱动 execute：
+ * - 项目对话（active）→ 17 个工具；经应用 resolver 端到端驱动 execute：
  *   summary/list_assets/get_segments 对 mkdtemp 项目 + mini_items.json 播种
  *   断言真实 DTO（资产 id、段计数、段 id 跨调用稳定、assetId/status 过滤、
  *   未知 assetId → ASSET_NOT_FOUND、空 TM/TB 干净空 + note）；
@@ -18,6 +18,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeClock, makeEntropy, makeTempDir, readFixture } from './test/service-testkit'
 import { LinguistProjectService } from './project-service'
@@ -284,6 +285,40 @@ test('LF-063: bound CAT writes emit ordered host-owned project mutation events; 
     ],
   )
 
+  service.closeAll()
+})
+
+test('bound session intake imports only explicitly attached files through the shared service', async () => {
+  const service = makeServiceOnLinguistRoot()
+  const project = service.createProject({ ...PROJECT_INPUT, name: 'session intake 项目' })
+  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+  const attachedPath = join(tempHome, 'attached-mini-items.json')
+  writeFileSync(attachedPath, readFixture('mini_items.json'))
+  sessionManager.updateAgentSessionMeta(meta.id, { attachedFiles: [attachedPath] })
+
+  const tools = catTools.resolveLinguistSessionCatTools(meta, () => service)
+  const listed = await invoke(toolByName(tools, 'cat_list_intake_sources'), {})
+  const source = (listed.sources as Array<Record<string, unknown>>)[0]!
+  assert.equal(source.filename, 'attached-mini-items.json')
+  assert.equal(source.status, 'ready')
+  assert.equal(typeof source.sourceToken, 'string')
+  assert.ok(!String(source.sourceToken).includes(attachedPath))
+
+  const imported = await invoke(toolByName(tools, 'cat_import_asset'), {
+    sourceToken: source.sourceToken,
+  })
+  assert.equal(imported.status, 'imported')
+  assert.equal(imported.filename, 'attached-mini-items.json')
+  assert.equal(imported.projectId, project.id)
+
+  const duplicate = await invoke(toolByName(tools, 'cat_import_asset'), {
+    sourceToken: source.sourceToken,
+  })
+  assert.equal(duplicate.status, 'skipped-duplicate')
+  assert.equal(duplicate.assetId, imported.assetId)
+  for (const value of collectStrings(listed)) {
+    assert.ok(!value.includes(attachedPath), `source DTO 泄漏绝对路径: ${value}`)
+  }
   service.closeAll()
 })
 

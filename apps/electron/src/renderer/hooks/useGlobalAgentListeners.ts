@@ -19,11 +19,13 @@ import {
   allPendingAskUserRequestsAtom,
   allPendingExitPlanRequestsAtom,
   agentPromptSuggestionsAtom,
+  agentPendingPromptAtom,
   backgroundTasksAtomFamily,
-  fileBrowserAutoRevealAtom,
   recentlyModifiedPathsAtom,
   RECENTLY_MODIFIED_TTL_MS,
   applyAgentEvent,
+  clearAgentStreamError,
+  isRetryEventForCurrentStream,
   liveMessagesMapAtom,
   agentSessionModelMapAtom,
   agentSessionChannelMapAtom,
@@ -61,13 +63,14 @@ import type { NotificationSoundType } from '@/types/settings'
 import { toast } from 'sonner'
 import type { AgentStreamEvent, AgentStreamCompletePayload, AgentEvent, AgentStreamPayload, SDKAssistantMessage, SDKUserMessage, SDKSystemMessage, SDKContentBlock, SDKUserContentBlock, PromaEvent, AgentSessionMeta, ProviderType } from '@proma/shared'
 import { inferAgentSdkContextWindow, inferContextWindow } from '@proma/shared'
-import { buildExternalAgentRunActivation } from '@/lib/external-agent-run'
+import { buildExternalAgentRunActivation, shouldActivateExternalAgentRun } from '@/lib/external-agent-run'
 import { upsertAgentSession, mergeFetchedAgentSessions } from '@/lib/agent-session-list'
 import {
   getAgentCompletionMarkers,
   notifyAgentCompletion,
 } from '@/lib/agent-completion-presence'
 import { getPlanModeChangeFromToolName, updatePlanModeSessionSet } from '@/lib/agent-plan-mode'
+import { buildTodoAgentPrompt } from '@/lib/todo-agent-prompt'
 
 /** 触发右侧文件浏览器自动定位的写入类工具集合 */
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Update'])
@@ -109,6 +112,16 @@ function uniqueTruthyPaths(paths: Array<string | null | undefined>): string[] {
 // Phase 2 将移除此转换，直接使用 SDKMessage 渲染
 // ============================================================================
 
+function isRunScopedRetryEvent(event: AgentEvent): event is Extract<AgentEvent, {
+  type: 'retrying' | 'retry_attempt' | 'retry_cleared' | 'retry_failed' | 'retry_cancelled'
+}> {
+  return event.type === 'retrying'
+    || event.type === 'retry_attempt'
+    || event.type === 'retry_cleared'
+    || event.type === 'retry_failed'
+    || event.type === 'retry_cancelled'
+}
+
 function payloadToLegacyEvents(payload: AgentStreamPayload): AgentEvent[] {
   if (payload.kind === 'proma_event') {
     const evt = payload.event
@@ -140,17 +153,54 @@ function payloadToLegacyEvents(payload: AgentStreamPayload): AgentEvent[] {
         return [{ type: 'run_resumed' }]
       case 'retry': {
         const events: AgentEvent[] = []
+        const retryScope = {
+          runStartedAt: evt.runStartedAt,
+          totalAttempt: evt.totalAttempt,
+          maxTotalAttempts: evt.maxTotalAttempts,
+        }
         if (evt.status === 'starting' && evt.attempt != null && evt.maxAttempts != null) {
-          events.push({ type: 'retrying', attempt: evt.attempt, maxAttempts: evt.maxAttempts, delaySeconds: evt.delaySeconds ?? 0, reason: evt.reason ?? '' })
+          events.push({
+            type: 'retrying',
+            attempt: evt.attempt,
+            maxAttempts: evt.maxAttempts,
+            delaySeconds: evt.delaySeconds ?? 0,
+            reason: evt.reason ?? '',
+            scheduledAt: evt.scheduledAt,
+            ...retryScope,
+          })
         }
         if (evt.status === 'attempt' && evt.attemptData) {
-          events.push({ type: 'retry_attempt', attemptData: evt.attemptData })
+          events.push({
+            type: 'retry_attempt',
+            attemptData: evt.attemptData,
+            maxAttempts: evt.maxAttempts,
+            ...retryScope,
+          })
         }
         if (evt.status === 'cleared') {
-          events.push({ type: 'retry_cleared' })
+          events.push({
+            type: 'retry_cleared',
+            attempt: evt.attempt,
+            maxAttempts: evt.maxAttempts,
+            ...retryScope,
+          })
         }
         if (evt.status === 'failed' && evt.attemptData) {
-          events.push({ type: 'retry_failed', finalAttempt: evt.attemptData })
+          events.push({
+            type: 'retry_failed',
+            finalAttempt: evt.attemptData,
+            maxAttempts: evt.maxAttempts,
+            ...retryScope,
+          })
+        }
+        if (evt.status === 'cancelled' && evt.attempt != null && evt.maxAttempts != null) {
+          events.push({
+            type: 'retry_cancelled',
+            attempt: evt.attempt,
+            maxAttempts: evt.maxAttempts,
+            reason: evt.reason,
+            ...retryScope,
+          })
         }
         return events
       }
@@ -431,15 +481,22 @@ export function useGlobalAgentListeners(): void {
 
     const activateExternalAgentRun = (event: Extract<PromaEvent, { type: 'external_run_started' }>): void => {
       const applyActivation = (sessions: AgentSessionMeta[]): void => {
+        const currentStreamState = store.get(agentStreamingStatesAtom).get(event.sessionId)
+        if (!shouldActivateExternalAgentRun(currentStreamState, event.startedAt)) {
+          return
+        }
+
+        const eventSession = event.session
+        const activationSessions = eventSession ? [eventSession] : sessions
         const activation = buildExternalAgentRunActivation({
           tabs: store.get(tabsAtom),
-          sessions,
+          sessions: activationSessions,
           sessionId: event.sessionId,
           title: event.title,
           workspaceId: event.workspaceId,
           modelId: event.modelId,
           startedAt: event.startedAt,
-          currentStreamState: store.get(agentStreamingStatesAtom).get(event.sessionId),
+          currentStreamState,
         })
 
         // 外部来源（飞书/钉钉/微信/bridge）唤起的 run 不抢占前台：
@@ -455,7 +512,7 @@ export function useGlobalAgentListeners(): void {
         // turn 的父会话的快照，把父会话冲掉——父会话从列表消失后，其子会话
         // 因找不到父而从树形子节点变成根节点直接显示（用户观察到的现象）。
         // 改为单条 upsert 后，每个回调只负责自己那一个会话，互不干扰。
-        const sessionMeta = sessions.find((item) => item.id === event.sessionId)
+        const sessionMeta = eventSession ?? sessions.find((item) => item.id === event.sessionId)
         const upserted: AgentSessionMeta = sessionMeta ?? {
           id: event.sessionId,
           title: activation.title,
@@ -484,6 +541,11 @@ export function useGlobalAgentListeners(): void {
           map.set(event.sessionId, activation.streamState)
           return map
         })
+      }
+
+      if (event.session) {
+        applyActivation([event.session])
+        return
       }
 
       const knownSessions = store.get(agentSessionsAtom)
@@ -726,6 +788,15 @@ export function useGlobalAgentListeners(): void {
         const legacyEvents = payloadToLegacyEvents(payload)
 
         for (const event of legacyEvents) {
+          // 带 run 标识的 retry 事件必须在所有外围副作用前严格匹配当前流；
+          // 否则旧 IPC 事件会复活已结束的 stream，或错误清掉新 run 的完成提醒。
+          const eventStreamState = store.get(agentStreamingStatesAtom).get(sessionId)
+          if (isRunScopedRetryEvent(event) && event.runStartedAt != null && (
+            !eventStreamState || !isRetryEventForCurrentStream(eventStreamState, event)
+          )) {
+            continue
+          }
+
           // 会话首次进入 running 时，清除旧的完成提醒状态
           if (event.type !== 'prompt_suggestion') {
             const prevState = store.get(agentStreamingStatesAtom).get(sessionId)
@@ -742,13 +813,19 @@ export function useGlobalAgentListeners(): void {
           // 更新流式状态（prompt_suggestion 不影响流式状态，跳过以避免在 session 结束后用默认值 running:true 重新激活）
           if (event.type !== 'prompt_suggestion') {
             store.set(agentStreamingStatesAtom, (prev) => {
-              const current: AgentStreamState = prev.get(sessionId) ?? {
+              const existing = prev.get(sessionId)
+              // 再做一次 scope 校验，防止同一 batch 内其它回调更新流状态后旧事件落入。
+              if (isRunScopedRetryEvent(event) && event.runStartedAt != null && (
+                !existing || !isRetryEventForCurrentStream(existing, event)
+              )) {
+                return prev
+              }
+              const current: AgentStreamState = existing ?? {
                 running: true,
                 content: '',
                 toolActivities: [],
                 model: undefined,
-                // startedAt 留空：让 STREAM_COMPLETE 竞态保护跳过时间戳比较，
-                // 正常流程中 handleSend 已设置了正确的 startedAt，此 fallback 仅在极端情况下触发
+                // 无 run 标识的历史事件才允许 fallback；带标识的 retry 必须已在上方匹配。
                 startedAt: undefined,
               }
               const next = applyAgentEvent(current, event)
@@ -758,9 +835,18 @@ export function useGlobalAgentListeners(): void {
             })
           }
 
+          // Pi 原生重试成功后仍会沿用同一会话；仅在事件属于当前 stream run 时
+          // 清掉过期错误，避免迟到的旧 retry_cleared 掩盖新一轮真实失败。
+          if (event.type === 'retry_cleared') {
+            const current = store.get(agentStreamingStatesAtom).get(sessionId)
+            if (current && isRetryEventForCurrentStream(current, event)) {
+              store.set(agentStreamErrorsAtom, (prev) => clearAgentStreamError(prev, sessionId))
+            }
+          }
+
           // RightSidePanel 由用户完全控制，Agent 行为不影响其开关状态
 
-          // Agent 修改文件时，触发右侧文件浏览器自动定位（展开父目录 + 滚动 + 高亮）
+          // Agent 修改文件时，记入「最近修改」状态，用于 60s 内左侧竖条标记
           if (event.type === 'tool_start' && WRITE_TOOLS.has(event.toolName)) {
             const input = event.input as Record<string, unknown> | undefined
             const targetPath =
@@ -770,8 +856,7 @@ export function useGlobalAgentListeners(): void {
             pendingWriteTools.set(event.toolUseId, { path: targetPath || '', sessionId })
             if (typeof targetPath === 'string' && targetPath.length > 0) {
               const now = Date.now()
-              store.set(fileBrowserAutoRevealAtom, { sessionId, path: targetPath, ts: now })
-              // 同时记入「最近修改」状态，用于 60s 内左侧竖条标记
+              // 记入「最近修改」状态，用于 60s 内左侧竖条标记
               store.set(recentlyModifiedPathsAtom, (prev) => {
                 const map = new Map(prev)
                 const inner = new Map(map.get(sessionId) ?? new Map())
@@ -1064,6 +1149,9 @@ export function useGlobalAgentListeners(): void {
             next.add(data.sessionId)
             return next
           })
+        } else if (!backgroundTasksPending) {
+          // 当前聚焦会话已在主应用可见；同步确认，避免灵动岛把这次完成继续当未读。
+          void window.electronAPI.agentIsland.markSessionViewed(data.sessionId).catch(console.error)
         }
 
         // 标记用户主动打断状态
@@ -1195,7 +1283,28 @@ export function useGlobalAgentListeners(): void {
       }
     )
 
-    // ===== 4. 标题更新 =====
+    // ===== 4. 独立规划窗口 → 主窗口 Todo Agent 接力 =====
+    const cleanupTodoAgentSessionReady = window.electronAPI.onTodoAgentSessionReady(({ todo, session }) => {
+      unstable_batchedUpdates(() => {
+        store.set(agentSessionsAtom, (prev) => upsertAgentSession(prev, session))
+        const result = openTab(store.get(tabsAtom), { type: 'agent', sessionId: session.id, title: session.title })
+        store.set(tabsAtom, result.tabs)
+        store.set(activeTabIdAtom, result.activeTabId)
+        store.set(appModeAtom, 'agent')
+        store.set(currentAgentSessionIdAtom, session.id)
+        if (session.workspaceId) {
+          store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
+          void window.electronAPI.updateSettings({ agentWorkspaceId: session.workspaceId }).catch(console.error)
+        }
+        store.set(agentPendingPromptAtom, {
+          sessionId: session.id,
+          message: buildTodoAgentPrompt(todo.id, session.agentRuntime === 'pi'),
+          mentionedTodoIds: [todo.id],
+        })
+      })
+    })
+
+    // ===== 5. 标题更新 =====
     const cleanupTitleUpdated = window.electronAPI.onAgentTitleUpdated(({ sessionId, title }) => {
       // 先使用事件 payload 立即同步标签页，避免依赖会话列表旧快照比较。
       store.set(tabsAtom, (tabs) => updateTabTitle(tabs, sessionId, title))
@@ -1300,6 +1409,7 @@ export function useGlobalAgentListeners(): void {
       cleanupEvent()
       cleanupComplete()
       cleanupError()
+      cleanupTodoAgentSessionReady()
       cleanupTitleUpdated()
       clearInterval(pruneTimer)
       window.removeEventListener('focus', onWindowFocus)

@@ -113,13 +113,20 @@ export function createQaTools(runtime: CatToolRuntime) {
               after: finding,
             }]
           })
+          const resolvedQaFindingIds = db.qaFindings.list().flatMap((finding) => {
+            const previous = before.get(finding.id as string)
+            return previous?.status === 'open' && finding.status === 'resolved'
+              ? [finding.id as string]
+              : []
+          })
           return {
             result: dto,
             changes,
             event: {
               kind: 'qa-updated' as const,
-              segmentIds: [...new Set(findings.map((finding) => finding.segmentId as string))],
+              segmentIds: completedSegmentIds,
               qaFindingIds: findings.map((finding) => finding.id as string),
+              ...(resolvedQaFindingIds.length === 0 ? {} : { resolvedQaFindingIds }),
             },
           }
         },
@@ -173,6 +180,7 @@ export function createQaTools(runtime: CatToolRuntime) {
           sequence: mutation.event.sequence,
           segmentIds: mutation.event.segmentIds,
           qaFindingIds: mutation.event.qaFindingIds,
+          resolvedQaFindingIds: mutation.event.resolvedQaFindingIds,
         })
       }
       return toolResult(mutation.result, deps.resultProjectId, mutation.event?.segmentIds)

@@ -129,7 +129,7 @@ test('registry is well-formed (no git required)', () => {
     expect(tp.file.length).toBeGreaterThan(0)
     expect(tp.file).not.toStartWith('/')
     expect(tp.file.includes('\\')).toBe(false)
-    expect(/^(PB|LF|AC)-\d{3}/.test(tp.ticket)).toBe(true)
+    expect(/^(?:(?:PB|LF|AC)-\d{3}|LA-(?:SYNC|HOST)-\d{3})$/.test(tp.ticket)).toBe(true)
     expect(tp.reason.trim().length).toBeGreaterThan(0)
     expect(seen.has(tp.file)).toBe(false)
     seen.add(tp.file)

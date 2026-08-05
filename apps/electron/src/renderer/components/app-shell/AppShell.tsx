@@ -7,7 +7,7 @@
  */
 
 import * as React from 'react'
-import { useAtom, useAtomValue } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { LeftSidebar } from './LeftSidebar'
 import { RightSidePanel } from './RightSidePanel'
 import { MainArea } from '@/components/tabs/MainArea'
@@ -19,8 +19,10 @@ import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom, resolveActiveViewForMode } from '@/atoms/active-view'
 import { interfaceVariantAtom } from '@/atoms/theme'
+import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { WindowControls } from '@/components/WindowControls'
 import { shouldShowAgentRail, shouldSuppressAgentRail } from './right-rail-policy'
+import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { detectIsWindows, WINDOW_CONTROLS_INSET_RIGHT } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 
@@ -66,6 +68,8 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
   const isPanelOpen = useAtomValue(currentSessionSidePanelOpenAtom)
   const automationForm = useAtomValue(automationFormAtom)
   const interfaceVariant = useAtomValue(interfaceVariantAtom)
+  const settingsOpen = useAtomValue(settingsOpenAtom)
+  const setSettingsOpen = useSetAtom(settingsOpenAtom)
   const isClassic = interfaceVariant === 'classic'
   // 定时任务表单打开时隐藏右侧文件面板，让中间区域扩展到全宽（表单内含自己的右栏配置）
   const activeView = resolveActiveViewForMode(useAtomValue(activeViewAtom), appMode)
@@ -213,55 +217,62 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
       {/* Windows 自定义窗口控制按钮（最小化/最大化/关闭） */}
       <WindowControls />
 
-      <div className="shell-bg h-screen w-screen flex overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900">
-        {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
-        <div className={cn(isClassic ? 'p-2 pr-0' : '', 'relative z-[60] crt-sidebar')}>
-          <LeftSidebar width={clampedLeftSidebarWidth} noTransition={isDraggingLeftSidebar} />
-          {/* 侧边栏展开时显示拖拽手柄，折叠态隐藏 */}
-          {!sidebarCollapsed && (
-            <div
-              className={cn(
-                'absolute right-0 top-0 bottom-0 w-4 translate-x-1/2 cursor-col-resize hover:bg-primary/5 active:bg-primary/50 transition-colors z-20'
+      <div className="shell-bg relative h-screen w-screen overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900">
+        <div className={cn('flex h-full w-full', settingsOpen && 'hidden')} aria-hidden={settingsOpen}>
+            {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
+            <div className={cn(isClassic ? 'p-2 pr-0' : '', 'relative z-[60] crt-sidebar')}>
+              <LeftSidebar width={clampedLeftSidebarWidth} noTransition={isDraggingLeftSidebar} />
+              {/* 侧边栏展开时显示拖拽手柄，折叠态隐藏 */}
+              {!sidebarCollapsed && (
+                <div
+                  className={cn(
+                    'absolute right-0 top-0 bottom-0 w-4 translate-x-1/2 cursor-col-resize hover:bg-primary/5 active:bg-primary/50 transition-colors z-20'
+                  )}
+                  onMouseDown={handleLeftSidebarMouseDown}
+                />
               )}
-              onMouseDown={handleLeftSidebarMouseDown}
-            />
-          )}
-        </div>
-        {!isClassic && (
-          <div aria-hidden="true" className="relative z-[61] w-px flex-shrink-0 bg-border/80 dark:bg-border/70" />
-        )}
-
-        {/* 中间容器：relative z-[60] 使其在 z-50 拖动区域之上 */}
-        <div className={cn('flex-1 min-w-0 relative z-[60]', isClassic && 'p-2')}>
-          {/* 主内容区域（TabBar + TabContent） */}
-          <MainArea />
-        </div>
-
-        {/* 右侧边栏：Agent 文件面板（窄视口让位，见 rightPanelSuppressed） */}
-        {showRightPanel && !rightPanelSuppressed && (
-          <div
-            className={cn(
-              'relative z-[60] flex items-stretch crt-sidebar',
-              isClassic
-                ? 'transition-[padding] duration-300 ease-in-out'
-                : '',
-              isClassic && (isPanelOpen ? 'p-2 pl-0' : 'p-0')
-            )}
-          >
+            </div>
             {!isClassic && (
-              <div aria-hidden="true" className="pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-px bg-border/80 dark:bg-border/70" />
+              <div aria-hidden="true" className="relative z-[61] w-px flex-shrink-0 bg-border/80 dark:bg-border/70" />
             )}
-            {/* 拖拽手柄 */}
-            {isPanelOpen && (
+
+            {/* 中间容器：relative z-[60] 使其在 z-50 拖动区域之上 */}
+            <div className={cn('flex-1 min-w-0 relative z-[60]', isClassic && 'p-2')}>
+              {/* 主内容区域（TabBar + TabContent） */}
+              <MainArea />
+            </div>
+
+            {/* 右侧边栏：窄视口下主动让位，避免把主区挤到不可用。 */}
+            {showRightPanel && !rightPanelSuppressed && (
               <div
                 className={cn(
-                  'absolute left-0 top-0 bottom-0 w-[8px] -translate-x-1/2 cursor-col-resize active:bg-primary/50 transition-colors',
-                  isClassic ? 'z-10' : 'z-20'
+                  'relative z-[60] flex items-stretch crt-sidebar',
+                  isClassic
+                    ? 'transition-[padding] duration-300 ease-in-out'
+                    : '',
+                  isClassic && (isPanelOpen ? 'p-2 pl-0' : 'p-0')
                 )}
-                onMouseDown={handleMouseDown}
-              />
+              >
+                {!isClassic && (
+                  <div aria-hidden="true" className="pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-px bg-border/80 dark:bg-border/70" />
+                )}
+                {/* 拖拽手柄 */}
+                {isPanelOpen && (
+                  <div
+                    className={cn(
+                      'absolute left-0 top-0 bottom-0 w-[8px] -translate-x-1/2 cursor-col-resize active:bg-primary/50 transition-colors',
+                      isClassic ? 'z-10' : 'z-20'
+                    )}
+                    onMouseDown={handleMouseDown}
+                  />
+                )}
+                <RightSidePanel width={clampedRightPanelWidth} />
+              </div>
             )}
-            <RightSidePanel width={clampedRightPanelWidth} />
+        </div>
+        {settingsOpen && (
+          <div className="absolute inset-0 z-[60]">
+            <SettingsPanel onClose={() => setSettingsOpen(false)} />
           </div>
         )}
       </div>

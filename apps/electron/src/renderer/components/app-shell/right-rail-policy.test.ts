@@ -35,8 +35,8 @@ describe('shouldShowAgentRail（PB-102 Right Rail 上下文编排）', () => {
     expect(shouldShowAgentRail({ ...base, activeView: 'projects' })).toBe(false)
   })
 
-  test('automations / agent-skills 全屏视图不显示', () => {
-    expect(shouldShowAgentRail({ ...base, activeView: 'automations' })).toBe(false)
+  test('planning / agent-skills 全屏视图不显示', () => {
+    expect(shouldShowAgentRail({ ...base, activeView: 'planning' })).toBe(false)
     expect(shouldShowAgentRail({ ...base, activeView: 'agent-skills' })).toBe(false)
   })
 

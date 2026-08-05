@@ -133,6 +133,15 @@ function normalizeText(value: string, foldCase = true): string {
   return foldCase ? normalized.toLowerCase() : normalized
 }
 
+function containsTerm(text: string, term: string): boolean {
+  if (term === '') return false
+  // ponytail: CJK keeps contiguous substring matching; word-boundary tokenization
+  // for every locale comes only when real samples prove the simple split wrong.
+  if (/\p{Script=Han}/u.test(term)) return text.includes(term)
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'u').test(text)
+}
+
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
@@ -354,7 +363,7 @@ export class TermEntriesRepository {
       const foldCase = row.case_sensitive !== 1
       const text = normalizeText(rawText, foldCase)
       const term = normalizeText(row.term, foldCase)
-      const matchType = text === term ? 'exact' : text.includes(term) ? 'contains' : undefined
+      const matchType = text === term ? 'exact' : containsTerm(text, term) ? 'contains' : undefined
       if (matchType === undefined) continue
       matches.push({
         ...termEntryFromRow(row),

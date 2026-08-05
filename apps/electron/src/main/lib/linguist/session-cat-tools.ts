@@ -7,7 +7,7 @@
  *
  * 装配规则（每次发送重建工具数组；绑定状态绝不缓存）：
  * - 普通会话（无 linguistProjectId）→ []（硬规则：普通 Chat 的 Tool 列表无 CAT）；
- * - 项目绑定会话（active / archived / missing 均装配）→ 15 个工具。projectId 永远
+ * - 项目绑定会话（active / archived / missing 均装配）→ 17 个工具。projectId 永远
  *   来自冻结的会话绑定（PB-034），工具入参不含 projectId——计划 §7.2「Tool 每次都
  *   验证 Session projectId 与输入 projectId 一致」由构造满足（根本没有该输入）；
  * - cat_submit_critic_review 的评审身份由工具运行时派生：criticId/executionId
@@ -36,23 +36,115 @@
  */
 
 import type { AgentSessionMeta, LinguistProjectMutationEvent } from '@proma/shared'
+import { LINGUIST_IMPORT_MAX_BYTES } from '@proma/shared'
 import type { LinguistGenerationProvenance } from '@linguist/cat-core'
 import {
   createLinguistCatTools,
+  LinguistCatInvalidArgumentError,
   LinguistCatProjectMissingError,
+  type LinguistIntakeImportResult,
+  type LinguistIntakeSource,
   type ResolveLinguistCatProject,
 } from '@linguist/cat-tools'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import { getAgentSessionMeta } from '../agent-session-manager'
 import { resolveLinguistBindingStatus, type LinguistServiceResolver } from './session-binding'
 import {
   runLinguistConsistencyWorker,
   runLinguistQaWorker,
 } from './cat-job-worker-client'
+import type { LinguistProjectService } from './project-service'
 
 export type LinguistProjectMutationSink = (event: LinguistProjectMutationEvent) => void
 
 const projectMutationRevisions = new Map<string, number>()
+
+function intakeSourceToken(sessionId: string, filePath: string): string {
+  return `attached-file:${createHash('sha256').update(`${sessionId}\0${filePath}`).digest('hex')}`
+}
+
+function attachedFileEntries(sessionId: string): Array<{
+  token: string
+  path: string
+  filename: string
+  sizeBytes: number
+}> {
+  const paths = getAgentSessionMeta(sessionId)?.attachedFiles ?? []
+  const entries: Array<{
+    token: string
+    path: string
+    filename: string
+    sizeBytes: number
+  }> = []
+  for (const filePath of paths) {
+    try {
+      const safePath = realpathSync(filePath)
+      const stats = statSync(safePath)
+      if (!stats.isFile()) continue
+      entries.push({
+        token: intakeSourceToken(sessionId, safePath),
+        path: safePath,
+        filename: basename(safePath),
+        sizeBytes: stats.size,
+      })
+    } catch {
+      // 附件已被移除或不可读：不把失效路径泄漏给模型。
+    }
+  }
+  return entries
+}
+
+function createSessionIntakeBridge(
+  sessionId: string,
+  projectId: string,
+  getService: LinguistServiceResolver,
+): {
+  listIntakeSources: () => readonly LinguistIntakeSource[]
+  importIntakeAsset: (sourceToken: string) => Promise<LinguistIntakeImportResult>
+} {
+  return {
+    listIntakeSources() {
+      return attachedFileEntries(sessionId).map((entry) => ({
+        sourceToken: entry.token,
+        filename: entry.filename,
+        sizeBytes: entry.sizeBytes,
+        status: entry.sizeBytes > LINGUIST_IMPORT_MAX_BYTES ? 'too-large' as const : 'ready' as const,
+      }))
+    },
+    async importIntakeAsset(sourceToken) {
+      const entry = attachedFileEntries(sessionId).find((candidate) => candidate.token === sourceToken)
+      if (entry === undefined) {
+        throw new LinguistCatInvalidArgumentError(
+          'sourceToken',
+          'unknown or no longer attached; call cat_list_intake_sources again',
+        )
+      }
+      if (entry.sizeBytes > LINGUIST_IMPORT_MAX_BYTES) {
+        throw new LinguistCatInvalidArgumentError(
+          'sourceToken',
+          'attached file exceeds the 50MB intake limit',
+        )
+      }
+      const service: LinguistProjectService = getService()
+      const result = await service.importAsset(projectId, {
+        bytes: new Uint8Array(readFileSync(entry.path)),
+        filename: entry.filename,
+      })
+      return {
+        sourceToken,
+        filename: entry.filename,
+        status: result.status,
+        assetId: result.assetId,
+        formatId: result.formatId,
+        segmentCount: result.segmentCount,
+        sourceSha256: result.sourceSha256,
+        warnings: result.warnings.map((warning) => warning.message),
+      }
+    },
+  }
+}
 
 export function getLinguistProjectMutationRevision(projectId: string): number {
   return projectMutationRevisions.get(projectId) ?? 0
@@ -95,7 +187,7 @@ function resolveCriticSkillBytes(): Uint8Array | undefined {
 }
 
 /**
- * 计算会话应装配的 Linguist CAT 工具（0 或 15 个），供 orchestrator 合并进
+ * 计算会话应装配的 Linguist CAT 工具（0 或 17 个），供 orchestrator 合并进
  * Pi queryOptions.customTools。规则见模块头注释；本函数自身不触碰服务
  * （构建工具数组是纯操作），服务只在工具被调用时经 resolver 触达。
  */
@@ -120,6 +212,7 @@ export function resolveLinguistSessionCatTools(
     }
     return { project: service.getProject(projectId), db: service.openProject(projectId) }
   }
+  const intake = createSessionIntakeBridge(session.id, projectId, getService)
   return createLinguistCatTools({
     resolveProject,
     resultProjectId: projectId,
@@ -130,6 +223,8 @@ export function resolveLinguistSessionCatTools(
     criticSkillBytes: resolveCriticSkillBytes,
     consistencyWorker: runLinguistConsistencyWorker,
     qaWorker: runLinguistQaWorker,
+    listIntakeSources: intake.listIntakeSources,
+    importIntakeAsset: intake.importIntakeAsset,
     onMutation: (mutation) => {
       const event = createLinguistProjectMutationEvent(projectId, mutation)
       onProjectMutation?.(event)

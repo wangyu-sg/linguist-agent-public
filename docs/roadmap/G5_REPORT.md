@@ -40,7 +40,7 @@ G5 通过。当前 macOS arm64 未签名打包应用在临时 HOME、临时 Elec
 | `cd packages/linguist-cat-tools && bun run test` | **16/16**；Proposal-only 写入、50 上限、locked/CAS/硬规则、无人工审核工具 |
 | `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` | **PASS**；0.15.18 产物 |
 | `node scripts/smoke/run-g0-smoke.ts` | **18/18**；text/thinking/tool、429、context error、Stop、持久化与重启 |
-| `node scripts/smoke/probe-cat-tools.ts` | **17/17**；含 G5 三项纵向断言 |
+| 历史 CAT Tools packaged 探针（已退役） | **17/17**；含 G5 三项纵向断言 |
 
 ## 4. G5 硬标准实录
 

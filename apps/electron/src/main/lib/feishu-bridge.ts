@@ -34,10 +34,12 @@ import { createAgentSession, listAgentSessions, getAgentSessionMeta } from './ag
 import {
   listAgentWorkspacesByUpdatedAt,
   getAgentWorkspace,
+  getProjectFilesPath,
   getWorkspaceCapabilities,
 } from './agent-workspace-manager'
 import { getFeishuBotBindingsPath, getFeishuBotMetadataPath } from './config-paths'
 import { writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { readJsonFileSafe, writeJsonFileAtomic } from './safe-file'
 import {
   inferImageMediaType as inferImageMediaTypeShared,
   saveImageToSession as saveImageToSessionShared,
@@ -78,7 +80,7 @@ import {
   type RunState,
 } from './feishu/card-run-state'
 import { renderCard as renderRunCard } from './feishu/card-renderer-v2'
-import { buildSessionMirrorGroupName } from './feishu/session-mirror'
+import { buildSessionMirrorGroupName, normalizeSessionMirrorUserOpenId } from './feishu/session-mirror'
 import { resolveGroupMessageAccess } from './feishu/group-message-policy'
 import { ScopedQueue } from './feishu/scoped-queue'
 import { RunCoordinator } from './feishu/run-coordinator'
@@ -415,32 +417,30 @@ class FeishuBridge {
    */
   private loadMetadata(): void {
     const metaPath = getFeishuBotMetadataPath(this.botConfig.id)
-    if (!existsSync(metaPath)) return
-
-    try {
-      const raw = readFileSync(metaPath, 'utf-8')
-      const data = JSON.parse(raw) as { lastInteractedUserOpenId?: string }
-      if (data.lastInteractedUserOpenId && data.lastInteractedUserOpenId !== 'unknown') {
-        this.lastInteractedUserOpenId = data.lastInteractedUserOpenId
-      }
-    } catch (error) {
-      console.error('[飞书 Bridge] 加载元数据失败:', redactSensitiveLogValue(error))
-    }
+    const data = readJsonFileSafe<{ lastInteractedUserOpenId?: string }>(metaPath)
+    const userOpenId = normalizeSessionMirrorUserOpenId(data?.lastInteractedUserOpenId)
+    if (userOpenId) this.lastInteractedUserOpenId = userOpenId
   }
 
   private saveMetadata(): void {
     try {
-      const metaPath = getFeishuBotMetadataPath(this.botConfig.id)
-      const data = { lastInteractedUserOpenId: this.lastInteractedUserOpenId }
-      writeFileSync(metaPath, JSON.stringify(data, null, 2), 'utf-8')
+      writeJsonFileAtomic(getFeishuBotMetadataPath(this.botConfig.id), {
+        lastInteractedUserOpenId: this.lastInteractedUserOpenId,
+      })
     } catch (error) {
       console.error('[飞书 Bridge] 保存元数据失败:', redactSensitiveLogValue(error))
     }
   }
 
+  /** 将扫码创建该 Bot 的当前组织用户设为 Session 镜像目标。 */
+  setSessionMirrorUserOpenId(openId: string): void {
+    this.setLastInteractedUserOpenId(openId)
+  }
+
   private setLastInteractedUserOpenId(openId: string | null): void {
-    if (this.lastInteractedUserOpenId === openId) return
-    this.lastInteractedUserOpenId = openId
+    const normalized = normalizeSessionMirrorUserOpenId(openId)
+    if (!normalized || this.lastInteractedUserOpenId === normalized) return
+    this.lastInteractedUserOpenId = normalized
     this.saveMetadata()
   }
 
@@ -1084,7 +1084,7 @@ class FeishuBridge {
     }
 
     if (!workspaceId) {
-      await this.sendMessage(chatId, '请先在 Proma 设置中创建工作区。')
+      await this.sendMessage(chatId, '请先在 Proma 设置中创建项目。')
       return
     }
 
@@ -1263,7 +1263,7 @@ class FeishuBridge {
       }))
 
     if (orphanSessions.length > 0) {
-      wsItems.push({ id: '', name: '未分配工作区', sessions: orphanSessions })
+      wsItems.push({ id: '', name: '未分配项目', sessions: orphanSessions })
     }
 
     await this.sendCardMessage(chatId, buildSessionListCard(wsItems, currentWorkspaceId))
@@ -1353,7 +1353,7 @@ class FeishuBridge {
 
     if (!match) {
       const available = workspaces.map((w, i) => `${i + 1}. ${w.name}`).join(', ')
-      await this.sendMessage(chatId, `未找到工作区 "${arg}"。可用: ${available}`)
+      await this.sendMessage(chatId, `未找到项目 "${arg}"。可用: ${available}`)
       return
     }
 
@@ -1419,7 +1419,7 @@ class FeishuBridge {
     const workspaceId = binding?.workspaceId
     const workspace = workspaceId ? getAgentWorkspace(workspaceId) : undefined
     if (workspace) {
-      lines.push(`**工作区**: ${workspace.name} (\`${workspace.slug}\`)`)
+      lines.push(`**项目**: ${workspace.name} (\`${workspace.slug}\`)`)
 
       // MCP Servers
       const capabilities = getWorkspaceCapabilities(workspace.slug)
@@ -1446,14 +1446,13 @@ class FeishuBridge {
         lines.push('**Skills**: 无')
       }
 
-      // 工作区文件列表（递归，体现文件夹-文件层级）
-      const { resolveWorkspaceFilesDir: resolveWsFilesDir } = await import('./config-paths')
-      const wsPath = resolveWsFilesDir(workspace.slug)
+      // 项目根目录文件列表（递归，体现文件夹-文件层级）
+      const projectRoot = getProjectFilesPath(workspace.slug)
       try {
-        const treeLines = buildFileTree(wsPath, { dirIcon: '', fileIcon: '' })
+        const treeLines = buildFileTree(projectRoot, { dirIcon: '', fileIcon: '' })
         if (treeLines.length > 0) {
           lines.push('')
-          lines.push('**工作区文件**:')
+          lines.push(`**项目文件**（项目根目录: \`${projectRoot}\`）:`)
           for (const l of treeLines) {
             lines.push(`  ${l}`)
           }
@@ -1481,7 +1480,7 @@ class FeishuBridge {
         }
       }
     } else {
-      lines.push('**工作区**: 未设置')
+      lines.push('**项目**: 未设置')
     }
 
     const card: Record<string, unknown> = {
@@ -2441,7 +2440,7 @@ class FeishuBridge {
     const workspace = binding.workspaceId ? getAgentWorkspace(binding.workspaceId) : undefined
     const session = getAgentSessionMeta(binding.sessionId)
 
-    const wsName = workspace?.name ?? '默认工作区'
+    const wsName = workspace?.name ?? '默认项目'
     const sessName = session?.title ?? binding.sessionId.slice(0, 8)
 
     return `[${wsName}]->[${sessName}]：`
@@ -2455,7 +2454,7 @@ class FeishuBridge {
     const workspace = binding.workspaceId ? getAgentWorkspace(binding.workspaceId) : undefined
     const session = getAgentSessionMeta(binding.sessionId)
 
-    const wsName = workspace?.name ?? '默认工作区'
+    const wsName = workspace?.name ?? '默认项目'
     const sessName = session?.title ?? binding.sessionId.slice(0, 8)
 
     return `${wsName} · ${sessName}`

@@ -407,7 +407,7 @@ async function seedChannel(page: Page, server: FakeModelServer): Promise<string>
 }
 
 async function createProjectViaUi(page: Page): Promise<string> {
-  await page.getByRole('tab', { name: 'Linguist', exact: true }).click()
+  await page.getByRole('tab', { name: '本地化', exact: true }).click()
   await page.getByRole('button', { name: '新建项目' }).filter({ hasText: '新建项目' }).first().click()
   await page.locator('#project-create-name').fill(PROJECT_NAME)
   await page.locator('#project-create-source').fill('en-US')
@@ -436,7 +436,7 @@ async function createProjectViaUi(page: Page): Promise<string> {
 
 async function selectPrimaryMode(
   page: Page,
-  label: 'Agent' | 'Chat' | 'Linguist',
+  label: 'Agent' | 'Chat' | '本地化',
 ): Promise<void> {
   const tab = page.getByRole('tablist', { name: '主工作模式' })
     .getByRole('tab', { name: label, exact: true })
@@ -609,14 +609,14 @@ async function openLinguistWorkbenchAndSelectLocation(
   const modeTabs = page.getByRole('tablist', { name: '主工作模式' })
   const agentMode = modeTabs.getByRole('tab', { name: 'Agent', exact: true })
   const chatMode = modeTabs.getByRole('tab', { name: 'Chat', exact: true })
-  const linguistMode = modeTabs.getByRole('tab', { name: 'Linguist', exact: true })
+  const linguistMode = modeTabs.getByRole('tab', { name: '本地化', exact: true })
   const modesDiscoverable = await agentMode.isVisible()
     && await chatMode.isVisible()
     && await linguistMode.isVisible()
 
   await selectPrimaryMode(page, 'Agent')
   await selectPrimaryMode(page, 'Chat')
-  await selectPrimaryMode(page, 'Linguist')
+  await selectPrimaryMode(page, '本地化')
   const resolvedProjectList = await resolveVisibleLinguistProjectList(page)
   const projectList = resolvedProjectList.list
   const projectRows = projectList.getByRole('button', { name: /^打开项目 /u })
@@ -690,9 +690,9 @@ async function openLinguistWorkbenchAndSelectLocation(
     && await status.getByText('当前资产：mini_game_ui.xliff', { exact: true }).isVisible()
     && await status.getByText(`当前片段：${segmentId}`, { exact: true }).isVisible()
 
-  for (const mode of ['Agent', 'Linguist', 'Chat', 'Linguist'] as const) {
+  for (const mode of ['Agent', '本地化', 'Chat', '本地化'] as const) {
     await selectPrimaryMode(page, mode)
-    if (mode === 'Linguist') await workspace.waitFor({ timeout: 30_000 })
+    if (mode === '本地化') await workspace.waitFor({ timeout: 30_000 })
   }
   const roundtripLocationVisible = await asset.getAttribute('aria-current') === 'page'
     && await status.getByText(`当前片段：${segmentId}`, { exact: true }).isVisible()
@@ -720,7 +720,7 @@ async function readRecoveredLinguistLocation(
   locationVisible: boolean
 }> {
   const mode = page.getByRole('tablist', { name: '主工作模式' })
-    .getByRole('tab', { name: 'Linguist', exact: true })
+    .getByRole('tab', { name: '本地化', exact: true })
   const workspace = page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
   await workspace.waitFor({ timeout: 30_000 })
   const asset = workspace.locator(`[data-asset-id="${assetId}"]`)
@@ -1264,6 +1264,129 @@ async function openProjectAssetsSettings(
   return { sheet, assets }
 }
 
+/** 真实 packaged 主进程：CAT 备份/恢复使用 node:sqlite，完整性扫描使用 worker_threads。 */
+async function verifyPackagedCatInfrastructure(
+  page: Page,
+  projectId: string,
+  segmentId: string,
+): Promise<{
+  backupRestored: boolean
+  workerCompleted: boolean
+  evidence: string
+}> {
+  return page.evaluate(async (input) => {
+    const api = (window as unknown as {
+      electronAPI: {
+        linguistCatQuery: (request: unknown) => Promise<
+          { ok: true; data: { segments: Array<{ id: string; target: string; revision: number }> } }
+          | { ok: false; error: { code: string } }
+        >
+        linguistProjectsBackup: (request: unknown) => Promise<
+          { ok: true; data: { backupName: string; fileCount: number; method: string } }
+          | { ok: false; error: { code: string } }
+        >
+        linguistBackupsPreviewRestore: (request: unknown) => Promise<
+          { ok: true; data: { restorable: boolean; verification?: { ok: boolean } } }
+          | { ok: false; error: { code: string } }
+        >
+        linguistCatEditSegment: (request: unknown) => Promise<
+          { ok: true; data: { target: string; revision: number } }
+          | { ok: false; error: { code: string } }
+        >
+        linguistBackupsRestore: (request: unknown) => Promise<
+          { ok: true; data: { preRestoreName: string } }
+          | { ok: false; error: { code: string } }
+        >
+        linguistIntegrityStart: (request: unknown) => Promise<
+          { ok: true; data: { jobId: string } }
+          | { ok: false; error: { code: string } }
+        >
+        onLinguistIntegrityProgress: (callback: (event: unknown) => void) => () => void
+      }
+    }).electronAPI
+    const query = async () => {
+      const result = await api.linguistCatQuery({
+        projectId: input.projectId,
+        search: 'Welcome back',
+        limit: 10,
+        offset: 0,
+      })
+      return result.ok ? result.data.segments.find((segment) => segment.id === input.segmentId) : undefined
+    }
+    const before = await query()
+    if (before === undefined) {
+      return { backupRestored: false, workerCompleted: false, evidence: '读取恢复前 Segment 失败' }
+    }
+
+    const backup = await api.linguistProjectsBackup({ projectId: input.projectId })
+    if (!backup.ok) {
+      return { backupRestored: false, workerCompleted: false, evidence: `backup=${backup.error.code}` }
+    }
+    const preview = await api.linguistBackupsPreviewRestore({
+      projectId: input.projectId,
+      backupName: backup.data.backupName,
+    })
+    const edited = await api.linguistCatEditSegment({
+      projectId: input.projectId,
+      segmentId: input.segmentId,
+      target: 'packaged backup smoke mutation',
+      expectedRevision: before.revision,
+    })
+    const mutated = await query()
+    const restored = await api.linguistBackupsRestore({
+      projectId: input.projectId,
+      backupName: backup.data.backupName,
+    })
+    const after = await query()
+
+    const events: Array<Record<string, unknown>> = []
+    const unsubscribe = api.onLinguistIntegrityProgress((event) => {
+      if (typeof event === 'object' && event !== null) events.push(event as Record<string, unknown>)
+    })
+    const started = await api.linguistIntegrityStart({ projectId: input.projectId })
+    let terminal: Record<string, unknown> | undefined
+    if (started.ok) {
+      const deadline = Date.now() + 60_000
+      while (Date.now() < deadline) {
+        terminal = events.find((event) => (
+          event.jobId === started.data.jobId
+          && (event.state === 'completed' || event.state === 'failed' || event.state === 'cancelled')
+        ))
+        if (terminal !== undefined) break
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 100))
+      }
+    }
+    unsubscribe()
+
+    const report = terminal?.report as Record<string, unknown> | undefined
+    const backupRestored = preview.ok
+      && preview.data.restorable
+      && preview.data.verification?.ok === true
+      && edited.ok
+      && mutated?.target === 'packaged backup smoke mutation'
+      && restored.ok
+      && restored.data.preRestoreName.startsWith('pre-restore-')
+      && after?.target === before.target
+      && after?.revision === before.revision
+    const workerCompleted = started.ok
+      && terminal?.state === 'completed'
+      && report?.executor === 'worker_thread'
+      && typeof report.workerThreadId === 'number'
+      && report.workerThreadId > 0
+      && report.outcome === 'passed'
+    return {
+      backupRestored,
+      workerCompleted,
+      evidence: `backup=${backup.data.method}/${backup.data.fileCount}` +
+        `，preview=${preview.ok ? preview.data.restorable : preview.error.code}` +
+        `，edit=${edited.ok}` +
+        `，restore=${restored.ok ? restored.data.preRestoreName : restored.error.code}` +
+        `，worker=${terminal?.state ?? (started.ok ? 'timeout' : started.error.code)}` +
+        `/${report?.executor ?? 'none'}/${report?.workerThreadId ?? 'none'}`,
+    }
+  }, { projectId, segmentId })
+}
+
 async function main(): Promise<void> {
   console.log('=== PB-074 packaged vertical E2E ===')
   console.log(` packaged binary: ${PACKAGED_BINARY}`)
@@ -1581,7 +1704,7 @@ async function main(): Promise<void> {
           : sessionErrors.map((event) => event.error).join(' | ')}`,
       )
 
-      await selectPrimaryMode(launched.page, 'Linguist')
+      await selectPrimaryMode(launched.page, '本地化')
       await workspace.waitFor({ timeout: 30_000 })
       await row.getByRole('button', { name: /查看原始行 \d+ 上下文/u }).click()
       const proposalReview = row.locator('section[aria-label="当前行翻译建议"]')
@@ -1697,6 +1820,13 @@ async function main(): Promise<void> {
         'human-waives-qa-with-reason',
         waived.finding?.waiverReason === WAIVER_REASON && waived.openBlocking === 0,
         `REPEATED_PUNCTUATION waiver=${waived.finding?.waiverReason ?? '<missing>'}，open blocking=${waived.openBlocking}`,
+      )
+
+      const infrastructure = await verifyPackagedCatInfrastructure(launched.page, projectId, segmentId)
+      check(
+        'packaged-cat-backup-restore-and-worker',
+        infrastructure.backupRestored && infrastructure.workerCompleted,
+        infrastructure.evidence,
       )
 
       const projectSettings = await openProjectAssetsSettings(launched.page, workspace)

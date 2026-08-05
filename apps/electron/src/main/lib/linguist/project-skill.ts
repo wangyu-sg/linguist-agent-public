@@ -210,7 +210,7 @@ export function resolveLinguistPromptSkillLayers(
  *   （`__dirname` = `dist/`），上溯三级到仓根 `resources/`。
  *   node --test 从源码驱动时为 ESM（无 `__dirname`），该分支跳过——
  *   测试经显式 skillsRoot 参数或临时设置 process.resourcesPath 注入；
- *   打包布局由 probe-project-skill 端到端覆盖。
+ *   资源内容由仓根 Skill 合同测试覆盖，打包复制由 electron-builder 配置负责。
  */
 export function getDefaultLinguistSkillsRoot(): string | undefined {
   const candidates: string[] = []

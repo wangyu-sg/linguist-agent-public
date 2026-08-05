@@ -17,7 +17,6 @@ import {
 } from '@/atoms/tab-atoms'
 import { previewFileMapAtom } from '@/atoms/preview-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
-import type { PrimaryAppMode } from '@/atoms/app-mode'
 import { activeViewAtom } from '@/atoms/active-view'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { currentConversationIdAtom } from '@/atoms/chat-atoms'
@@ -27,9 +26,18 @@ import {
   currentAgentWorkspaceIdAtom,
   unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
+import {
+  channelFormDirtyAtom,
+  settingsOpenAtom,
+  settingsPendingSessionNavigationAtom,
+} from '@/atoms/settings-tab'
 
-type OpenSessionTarget = Exclude<TabType, 'linguist-project'> | PrimaryAppMode
-type OpenSessionFn = (type: OpenSessionTarget, sessionId: string, title: string) => void
+interface OpenSessionOptions {
+  bypassSettingsGuard?: boolean
+}
+
+type OpenSessionTarget = Exclude<TabType, 'linguist-project'>
+type OpenSessionFn = (type: OpenSessionTarget, sessionId: string, title: string, options?: OpenSessionOptions) => void
 
 export function useOpenSession(): OpenSessionFn {
   const store = useStore()
@@ -43,17 +51,19 @@ export function useOpenSession(): OpenSessionFn {
   const agentSessions = useAtomValue(agentSessionsAtom)
   const setCurrentAgentWorkspaceId = useSetAtom(currentAgentWorkspaceIdAtom)
   const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
+  const settingsOpen = useAtomValue(settingsOpenAtom)
+  const channelFormDirty = useAtomValue(channelFormDirtyAtom)
+  const setSettingsOpen = useSetAtom(settingsOpenAtom)
+  const setPendingSessionNavigation = useSetAtom(settingsPendingSessionNavigationAtom)
 
   return React.useCallback(
-    (type: OpenSessionTarget, sessionId: string, title: string): void => {
-      // Project Tab 尚未落地；切换主模式即可，不能伪造 Agent sessionId。
-      if (type === 'linguist') {
-        setAppMode('linguist')
-        setCurrentConversationId(null)
-        setCurrentAgentSessionId(null)
+    (type: OpenSessionTarget, sessionId: string, title: string, options?: OpenSessionOptions): void => {
+      if (!options?.bypassSettingsGuard && settingsOpen && channelFormDirty) {
+        setPendingSessionNavigation({ type, sessionId, title })
         return
       }
 
+      setSettingsOpen(false)
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
       const restore = type === 'agent'
         ? buildOpenTabRestore(
@@ -98,6 +108,6 @@ export function useOpenSession(): OpenSessionFn {
         setCurrentAgentSessionId(null)
       }
     },
-    [tabs, setTabs, setActiveTabId, setAutomationForm, setActiveView, setAppMode, setCurrentConversationId, setCurrentAgentSessionId, agentSessions, setCurrentAgentWorkspaceId, setUnviewedCompleted],
+    [tabs, setTabs, setActiveTabId, setAutomationForm, setActiveView, setAppMode, setCurrentConversationId, setCurrentAgentSessionId, agentSessions, setCurrentAgentWorkspaceId, setUnviewedCompleted, settingsOpen, channelFormDirty, setSettingsOpen, setPendingSessionNavigation],
   )
 }

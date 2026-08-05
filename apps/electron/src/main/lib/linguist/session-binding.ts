@@ -104,7 +104,8 @@ export function createLinguistProjectChatSession(
   if (project.archivedAt !== undefined) {
     throw new LinguistProjectArchivedError(input.projectId)
   }
-  const title = input.title?.trim() || project.name
+  // 不传标题时保留 Proma 默认标题，让上游首轮自动标题管线真正触发；项目名已独立存入快照。
+  const title = input.title?.trim() || undefined
   return createAgentSession(title, undefined, undefined, undefined, 'pi', {
     linguistProjectId: project.id,
     linguistProjectName: project.name,

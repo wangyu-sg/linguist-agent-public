@@ -397,7 +397,7 @@ function canonicalizeChineseNumberContexts(value: string): string {
       `第${canonicalChineseNumber(raw)}`)
     .replace(
       new RegExp(
-        `([${numberChars}]+)(?=号|月份?|日|年|小时|分钟|秒|点(?:钟|整|半)|层|章|集|话|次|岁|公里|米|元|%)`,
+        `([${numberChars}]+)(?=号|月份?|日|年|小时|分钟|秒|点(?:钟|整|半)|层|章|集|话|岁|公里|米|元|%)`,
         'gu',
       ),
       convert,
@@ -422,17 +422,41 @@ function canonicalNumber(value: string): string {
   return normalizedFraction ? `${normalizedInteger}.${normalizedFraction}` : normalizedInteger
 }
 
+function canonicalizeEnglishNumberContexts(value: string): string {
+  const months = Object.keys(ENGLISH_MONTH_NUMBERS).join('|')
+  const ordinals = Object.keys(ENGLISH_ORDINAL_NUMBERS).join('|')
+  const ordinalUnits = 'line|level|chapter|episode|row|column|stage|rank|place|slot|step|floor|page|round'
+  const monthNumber = (match: string): string => ENGLISH_MONTH_NUMBERS[match.toLowerCase()] ?? match
+  const ordinalNumber = (match: string): string => ENGLISH_ORDINAL_NUMBERS[match.toLowerCase()] ?? match
+  return value
+    // A month is hard numeric only beside an explicit day/year. “March forward”
+    // and “May I enter?” remain lexical text and belong to soft QA, not a gate.
+    .replace(
+      new RegExp(`\\b(${months})\\b(?=\\s+(?:\\d{1,2}(?:st|nd|rd|th)?|\\d{4})\\b)`, 'giu'),
+      monthNumber,
+    )
+    .replace(
+      new RegExp(`(?<=\\b\\d{1,2}(?:st|nd|rd|th)?\\s)(${months})\\b`, 'giu'),
+      monthNumber,
+    )
+    .replace(
+      new RegExp(`\\b(${months})\\b`, 'giu'),
+      (match: string, _month: string, offset: number, whole: string) => {
+        const before = whole.slice(Math.max(0, offset - 16), offset)
+        return /\b(?:in|on|by|before|after|during)\s*$/iu.test(before)
+          ? monthNumber(match)
+          : match
+      },
+    )
+    // Ordinals are hard numeric only for an explicit numbered UI/content unit.
+    .replace(new RegExp(`\\b(${ordinals})\\b(?=\\s+(?:${ordinalUnits})\\b)`, 'giu'), ordinalNumber)
+}
+
 function numberSignature(value: string, icuSpans: readonly Span[]): string[] {
-  const normalized = canonicalizeChineseNumberContexts(withoutSpans(value, icuSpans))
+  const normalized = canonicalizeEnglishNumberContexts(
+    canonicalizeChineseNumberContexts(withoutSpans(value, icuSpans)),
+  )
     .replace(/\{\d+\}/g, '')
-    .replace(
-      /\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth)\b/gi,
-      (match) => ENGLISH_ORDINAL_NUMBERS[match.toLowerCase()] ?? match,
-    )
-    .replace(
-      /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/gi,
-      (month) => ENGLISH_MONTH_NUMBERS[month.toLowerCase()] ?? month,
-    )
     .replace(/(\d{1,2})\s*[点時时]\s*00\s*分/g, '$1')
     .replace(/\b(\d{1,2}):00\b/g, '$1')
   return Array.from(normalized.matchAll(/\d+(?:[.,]\d+)*/g), (match) => canonicalNumber(match[0]))

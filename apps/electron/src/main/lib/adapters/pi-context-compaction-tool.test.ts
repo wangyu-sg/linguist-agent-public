@@ -2,8 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import {
   buildCurrentSessionCompactionTool,
+  buildPiCompactionContinuationPrompt,
   canRunCurrentSessionCompaction,
   compactCurrentSessionAfterTurn,
+  PI_COMPACTION_CONTINUATION_PROMPT,
+  planPiCompactionContinuation,
 } from './pi-agent-adapter'
 
 function createToolSdk() {
@@ -74,5 +77,32 @@ describe('Pi current-session context compaction tool', () => {
     } as unknown as Pick<AgentSession, 'compact' | 'sessionId'>
 
     await expect(compactCurrentSessionAfterTurn(session, () => {})).rejects.toThrow('provider unavailable')
+  })
+})
+
+describe('Pi compaction continuation', () => {
+  test('Given a Linguist turn snapshot When compaction continues Then it is included in the next Pi prompt', () => {
+    const continuation = planPiCompactionContinuation({
+      continuationCount: 0,
+      abortRequested: false,
+      runtimeLimitReached: false,
+    })
+    const frozenLinguistContext = [
+      '<linguist_turn_context version="1" schema_version="1" trust="project-data">',
+      '{"projectId":"project-a","selectedSegmentIds":["segment-a"]}',
+      '</linguist_turn_context>',
+    ].join('\n')
+
+    expect(continuation).toMatchObject({ shouldContinue: true, prompt: PI_COMPACTION_CONTINUATION_PROMPT })
+    if (!continuation.shouldContinue) throw new Error('expected a continuation')
+    expect(buildPiCompactionContinuationPrompt(continuation.prompt, frozenLinguistContext)).toBe(
+      `${PI_COMPACTION_CONTINUATION_PROMPT}\n\n${frozenLinguistContext}`,
+    )
+  })
+
+  test('Given a regular Agent turn When compaction continues Then its prompt remains unchanged', () => {
+    expect(buildPiCompactionContinuationPrompt(PI_COMPACTION_CONTINUATION_PROMPT)).toBe(
+      PI_COMPACTION_CONTINUATION_PROMPT,
+    )
   })
 })

@@ -29,10 +29,10 @@ G4 通过。`smoke:pack` 产出的真实 macOS arm64 `.app` 在临时 HOME 下�
 | `cd apps/electron && bun run test:linguist` | **49/49** |
 | `cd packages/linguist-cat-tools && bun run test` | **14/14**；含真实 CatStore、错误矩阵、无绝对路径、10k 分页 |
 | `cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:pack` | **PASS**；PB-044 的 0.15.14 产物 |
-| `node scripts/smoke/probe-project-skill.ts` | **10/10**；项目会话首发/resume 有 Skill，普通会话无 |
-| `node scripts/smoke/probe-project-session.ts` | **17/17**；绑定冻结、归档主进程阻断、重启 missing 降级 |
+| 历史 Project Skill packaged 探针（已退役） | **10/10**；项目会话首发/resume 有 Skill，普通会话无 |
+| 历史 Project Session packaged 探针（已退役） | **17/17**；绑定冻结、归档主进程阻断、重启 missing 降级 |
 | `node scripts/smoke/run-g0-smoke.ts` | **18/18**；text/thinking/tool、429 retry、context error、Stop、持久化与重启 |
-| `node scripts/smoke/probe-cat-tools.ts` | **14/14**；五个 CAT 工具、真实工具结果、活动事件、resume、普通会话隔离及 G4 精确脚本 |
+| 历史 CAT Tools packaged 探针（已退役） | **14/14**；五个 CAT 工具、真实工具结果、活动事件、resume、普通会话隔离及 G4 精确脚本 |
 
 ## 4. G4 硬标准实录
 

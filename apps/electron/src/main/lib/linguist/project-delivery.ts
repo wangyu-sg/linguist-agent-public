@@ -4,7 +4,7 @@ import {
   normalizeWorkflowStage,
   type QaFindingSeverity,
 } from '@linguist/cat-core'
-import { FormatUnsupportedError } from '@linguist/cat-formats'
+import { FormatUnsupportedError, sha256Hex } from '@linguist/cat-formats'
 import {
   stageAssetExport,
   StoreNotFoundError,
@@ -274,6 +274,26 @@ export class ProjectDelivery {
         MAX_IMPORT_BYTES,
       )
     }
+    const sourceSha256 = sha256Hex(input.bytes)
+    const db = this.context.openProject(projectId)
+    // ponytail: O(n) scan is enough for the current single-file Alpha; add an indexed lookup with batch intake.
+    const duplicate = this.context.call(
+      () => db.assets.listByProject().find((asset) => asset.sourceSha256 === sourceSha256),
+      projectId,
+    )
+    if (duplicate !== undefined) {
+      console.log(
+        `[Linguist] 跳过项目内重复资产: 项目 ${projectId} 资产 ${duplicate.id}`,
+      )
+      return {
+        status: 'skipped-duplicate',
+        assetId: duplicate.id,
+        formatId: duplicate.formatId,
+        segmentCount: duplicate.segmentCount,
+        warnings: [],
+        sourceSha256,
+      }
+    }
     const adapter = await this.context.registry.detectBest(
       input.bytes,
       input.filename,
@@ -284,7 +304,6 @@ export class ProjectDelivery {
       sourceLocale: project.sourceLocale,
       targetLocale: project.targetLocale,
     })
-    const db = this.context.openProject(projectId)
     const assetPreview = createAsset({
       projectId: project.id,
       formatId: imported.asset.formatId,
@@ -304,6 +323,7 @@ export class ProjectDelivery {
       `[Linguist] 已导入资产: 项目 ${projectId} 资产 ${asset.id}（${adapter.id}，${imported.segments.length} 段，${imported.warnings.length} 警告）`,
     )
     return {
+      status: 'imported',
       assetId: asset.id,
       formatId: adapter.id,
       segmentCount: imported.segments.length,

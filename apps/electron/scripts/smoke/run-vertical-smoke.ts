@@ -252,7 +252,7 @@ async function main(): Promise<void> {
       title: 'Linguist 当前 packaged vertical',
       executable: process.execPath,
       args: ['scripts/smoke/probe-pb074-e2e.ts'],
-      coverage: 'Linguist Mode、Project Tab、Workbench、Agent-CAT、Proposal、QA、导出验证与重启恢复。',
+      coverage: 'Linguist Mode、Project Tab、Workbench、Agent-CAT、Proposal、QA、CAT backup/restore、node:sqlite、Integrity Worker、导出验证与重启恢复。',
     },
   ]
 

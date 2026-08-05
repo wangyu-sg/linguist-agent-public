@@ -262,6 +262,22 @@ test('term findMatches honors case sensitivity, status filters, contains, and co
   }
 })
 
+test('term findMatches uses whole-word matching for Latin terms and contiguous matching for CJK', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    db.termEntries.importMany([
+      { term: 'art', translation: '艺术', status: 'preferred', caseSensitive: false },
+      { term: '药水', translation: 'potion', status: 'preferred', caseSensitive: false },
+    ])
+    assert.equal(db.termEntries.findMatches({ text: 'start here' }).length, 0)
+    assert.equal(db.termEntries.findMatches({ text: 'the art is ready' }).length, 1)
+    assert.equal(db.termEntries.findMatches({ text: '超级药水' }).length, 1)
+  } finally {
+    db.close()
+  }
+})
+
 test('term batch rollback, collision detection, and read-only rejection', () => {
   const { store, project } = setup()
   const db = store.openProject(project.id)

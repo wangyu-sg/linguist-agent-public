@@ -3,7 +3,7 @@
  *
  * 控制 MainArea 显示的内容：
  * - conversations: 对话视图（Chat/Agent 模式内容）
- * - automations: 定时任务列表视图
+ * - planning: 任务、日程与定时任务统一视图
  * - agent-skills: Agent 技能（Skills/MCP）全屏管理视图
  * - projects: Linguist 侧栏次级入口打开的项目管理首页
  */
@@ -11,7 +11,7 @@
 import { atom } from 'jotai'
 import type { AppMode } from './app-mode'
 
-export type ActiveView = 'conversations' | 'automations' | 'agent-skills' | 'projects'
+export type ActiveView = 'conversations' | 'planning' | 'agent-skills' | 'projects'
 export type AgentSkillsCapabilityTab = 'skills' | 'mcp' | 'memory'
 
 /** Linguist 只承载项目与工作台，不能继承 Agent 专属主区。 */
