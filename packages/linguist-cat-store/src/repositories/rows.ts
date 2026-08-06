@@ -37,6 +37,7 @@ export interface AssetRow {
   original_filename: string
   source_sha256: string
   segment_count: number
+  format_config_json: string | null
   created_at: string
 }
 
@@ -48,11 +49,21 @@ export function assetFromRow(row: AssetRow): Asset {
     originalFilename: row.original_filename,
     sourceSha256: row.source_sha256,
     segmentCount: row.segment_count,
+    ...(typeof row.format_config_json === 'string' ? { formatConfigJson: row.format_config_json } : {}),
   }
 }
 
 export function assetToParams(asset: Asset, createdAt: string): unknown[] {
-  return [asset.id, asset.projectId, asset.formatId, asset.originalFilename, asset.sourceSha256, asset.segmentCount, createdAt]
+  return [
+    asset.id,
+    asset.projectId,
+    asset.formatId,
+    asset.originalFilename,
+    asset.sourceSha256,
+    asset.segmentCount,
+    asset.formatConfigJson ?? null,
+    createdAt,
+  ]
 }
 
 export interface SegmentRow {
@@ -478,6 +489,28 @@ export interface ContextDocRow {
   note: string | null
   text_extract: string | null
   created_at: string
+}
+
+/** TM/TB 原始导入文件的受管来源（schema v14）。 */
+export interface ReferenceImportRow {
+  id: string
+  project_id: string
+  kind: 'tm' | 'terms'
+  original_filename: string
+  source_sha256: string
+  blob_relpath: string
+  created_at: string
+}
+
+export function referenceImportFromRow(row: ReferenceImportRow): import('./reference-imports').ReferenceImport {
+  return {
+    id: row.id,
+    kind: row.kind,
+    originalFilename: row.original_filename,
+    sourceSha256: row.source_sha256,
+    blobRelpath: row.blob_relpath,
+    createdAt: row.created_at,
+  }
 }
 
 export function contextDocFromRow(row: ContextDocRow): ContextDoc {

@@ -38,7 +38,7 @@ export interface SchemaMigration {
 }
 
 /** Current schema version this build understands. */
-export const SCHEMA_VERSION = 13
+export const SCHEMA_VERSION = 15
 
 const MIGRATION_1_SQL = `
 CREATE TABLE assets (
@@ -601,6 +601,26 @@ CREATE INDEX idx_term_entries_project_status
   ON term_entries(project_id, status, created_at, id);
 `
 
+/** 原始 TM/TB 导入文件的单源 provenance；bytes 统一落 blobs/。 */
+const MIGRATION_14_SQL = `
+CREATE TABLE reference_imports (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('tm', 'terms')),
+  original_filename TEXT NOT NULL,
+  source_sha256 TEXT NOT NULL,
+  blob_relpath TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_reference_imports_project_kind
+  ON reference_imports(project_id, kind, created_at, id);
+`
+
+/** Adapter-owned import metadata; the store persists it but never interprets it. */
+const MIGRATION_15_SQL = `
+ALTER TABLE assets ADD COLUMN format_config_json TEXT;
+`
+
 export const MIGRATIONS: readonly SchemaMigration[] = [
   { version: 1, description: 'initial CAT schema (plan 5.4)', sql: MIGRATION_1_SQL },
   { version: 2, description: 'idempotent human proposal mutations (PB-053)', sql: MIGRATION_2_SQL },
@@ -660,5 +680,15 @@ export const MIGRATIONS: readonly SchemaMigration[] = [
         expected: 0,
       },
     ],
+  },
+  {
+    version: 14,
+    description: 'managed TM/TB import source provenance',
+    sql: MIGRATION_14_SQL,
+  },
+  {
+    version: 15,
+    description: 'opaque adapter import configuration for faithful re-export',
+    sql: MIGRATION_15_SQL,
   },
 ]

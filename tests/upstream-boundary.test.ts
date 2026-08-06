@@ -1,22 +1,21 @@
 /**
  * PB-014: 上游修改边界测试（upstream modification boundary test）
  *
- * 对比 `git diff --name-only <baseline>...HEAD`，强制：
+ * 对比基线至 HEAD，并合并当前 tracked / untracked 工作树，强制：
  *   a. 每个相对基线有改动的文件，要么落在 allowedNewPaths 白名单内，
  *      要么已登记在 docs/architecture/proma-touchpoints.json，要么只做
  *      公开镜像规定的本机路径占位符替换；
  *   b. 反向：登记册里每个文件相对基线确实仍有改动（stale 条目失败）。
  *
- * 注意：本测试比较的是 HEAD（已提交内容），未提交/未跟踪文件不在 diff 中，
- * 因此必须在 pre-push / 门禁阶段运行。git 不可用或基线不在本地时，
- * 相关用例打印警告并跳过（不让整个套件失败）。
+ * 因此提交前即可验证将要交付的真实树；CI 的 clean checkout 行为不变。
+ * git 不可用或基线不在本地时，相关用例打印警告并跳过。
  *
  * 规则详见 docs/architecture/PROMA_CORE_TOUCHPOINTS.md。
  */
 
 import { expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const REPO_ROOT = dirname(import.meta.dir)
@@ -94,26 +93,33 @@ function readRevisionFile(revision: string, file: string): string | null {
 
 function isPublicPathScrubOnly(file: string, baseline: string): boolean {
   const baselineContent = readRevisionFile(baseline, file)
-  const headContent = readRevisionFile('HEAD', file)
+  const worktreePath = join(REPO_ROOT, file)
+  const candidateContent = existsSync(worktreePath)
+    ? readFileSync(worktreePath, 'utf8')
+    : null
   return (
     baselineContent !== null &&
-    headContent !== null &&
-    isExactPublicPathScrub(baselineContent, headContent)
+    candidateContent !== null &&
+    isExactPublicPathScrub(baselineContent, candidateContent)
   )
 }
 
-/** 返回相对基线的改动文件列表；git 不可用或基线缺失时返回 null（调用方跳过）。 */
+/** 返回相对基线的 committed + tracked/untracked 工作树改动。 */
 function changedFilesVsBaseline(baseline: string): string[] | null {
   try {
-    const out = execFileSync('git', ['diff', '--name-only', `${baseline}...HEAD`], {
+    const run = (args: string[]): string => execFileSync('git', args, {
       cwd: REPO_ROOT,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe']
     })
-    return out
+    return [...new Set([
+      run(['diff', '--name-only', `${baseline}...HEAD`]),
+      run(['diff', '--name-only', 'HEAD']),
+      run(['ls-files', '--others', '--exclude-standard']),
+    ].join('\n')
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => line.length > 0)
+      .filter((line) => line.length > 0))]
   } catch {
     return null
   }

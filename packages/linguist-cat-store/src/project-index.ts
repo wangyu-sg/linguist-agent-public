@@ -20,15 +20,16 @@ import { join } from 'node:path'
 import {
   archiveProject as coreArchiveProject,
   createProject as coreCreateProject,
+  normalizeExecutionPolicy,
   normalizeGlossaryPolicy,
   normalizeQaProfile,
-  normalizeQualityProfile,
   normalizeTagProfile,
   normalizeWorkflowStage,
+  resolveExecutionPolicy,
   type CreateProjectDeps,
   type CreateProjectInput,
+  type LinguistExecutionPolicy,
   type LinguistProject,
-  type LinguistQualityProfile,
   type ProjectId,
   type QaProfile,
   type WorkflowOutputStatusPolicy,
@@ -221,21 +222,22 @@ export class ProjectIndex {
   }
 
   /**
-   * Set the quality strategy tier (PB-082, plan §21). Dedicated write path
-   * (not part of `update`'s patch whitelist); bumps updatedAt and rewrites
-   * both projects.json and project.json. The value is normalized defensively
-   * even though callers already pass the closed union. Archived rejection
-   * lives in the service layer (LinguistProjectArchivedError) — the store
-   * has no archived concept in its error catalog, same as `update`.
+   * Set the Execution Policy (LA-QUALITY-001，取代 PB-082 质量档位)。
+   * Dedicated write path (not part of `update`'s patch whitelist); bumps
+   * updatedAt and rewrites both projects.json and project.json. The value is
+   * normalized defensively even though callers already pass the closed shape.
+   * legacy qualityProfile 字段只读不回写（旧值原样保留，新写入不再产生）。
+   * Archived rejection lives in the service layer (LinguistProjectArchivedError)
+   * — the store has no archived concept in its error catalog, same as `update`.
    */
-  setQualityProfile(projectId: string, profile: LinguistQualityProfile): LinguistProject {
+  setExecutionPolicy(projectId: string, policy: LinguistExecutionPolicy): LinguistProject {
     const index = this.readIndex()
     const i = index.projects.findIndex((p) => p.id === projectId)
     const current = index.projects[i]
     if (!current) throw new StoreNotFoundError('project', projectId)
     const updated: LinguistProject = {
       ...current,
-      qualityProfile: normalizeQualityProfile(profile),
+      executionPolicy: normalizeExecutionPolicy(policy),
       updatedAt: this.now(),
     }
     index.projects[i] = updated
@@ -402,7 +404,7 @@ export class ProjectIndex {
     const file = parsed as ProjectIndexFile
     for (const project of file.projects) {
       assertValidProject(project, this.indexPath)
-      normalizeProjectQualityProfile(project)
+      normalizeProjectPolicies(project)
     }
     return file
   }
@@ -422,7 +424,7 @@ export function readProjectManifestFile(filePath: string): ProjectManifest {
   }
   assertValidProject(parsed, filePath)
   assertValidDatabaseIdentity(parsed.databaseIdentity, parsed.id, filePath)
-  normalizeProjectQualityProfile(parsed)
+  normalizeProjectPolicies(parsed)
   return parsed
 }
 
@@ -469,17 +471,16 @@ function assertValidDatabaseIdentity(
 }
 
 /**
- * PB-082 forward compatibility: project.json files written before the
- * qualityProfile field existed must read as 'balanced', and unknown/invalid
- * stored values fall back instead of failing validation (the validator above
- * tolerates the field; this normalizes it in memory). Normalization is
- * read-path only — old files are never rewritten proactively.
+ * PB-082 forward compatibility → LA-QUALITY-001：executionPolicy 在读取路径
+ * 规范化（显式值优先 → legacy qualityProfile 映射 → 默认；normalize 永不抛错）。
+ * legacy qualityProfile 字段不再做内存规范化：盘上是什么就保留什么（只读不
+ * 回写），旧文件绝不会被主动补写或改写该键。
  * PB-096：glossaryPolicy 同例（缺省/未知回落 'prefer'，不回写）。
  * PB-097：tagProfile 同例（缺省/非法回落 undefined = 仅内置族，不回写；
  * 非法族条目整条丢弃，见 cat-core tag-profile.ts）。
  */
-function normalizeProjectQualityProfile(project: LinguistProject): void {
-  project.qualityProfile = normalizeQualityProfile(project.qualityProfile)
+function normalizeProjectPolicies(project: LinguistProject): void {
+  project.executionPolicy = resolveExecutionPolicy(project)
   project.glossaryPolicy = normalizeGlossaryPolicy(project.glossaryPolicy)
   // 缺省/非法时移除键而非置 undefined：内存对象形状与无此键的旧项目一致
   // （deepStrictEqual 区分「键存在值为 undefined」与「键不存在」）。

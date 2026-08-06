@@ -14,6 +14,7 @@ import {
   StoreIndexCorruptError,
   StoreNotFoundError,
 } from '@linguist/cat-store'
+import type { ImportUndoReferences } from './project-service-types'
 
 export const LINGUIST_SERVICE_ERROR_CODES = {
   /** 项目 id 不在项目索引中。 */
@@ -38,6 +39,10 @@ export const LINGUIST_SERVICE_ERROR_CODES = {
   PROJECT_ORDER_CONFLICT: 'PROJECT_ORDER_CONFLICT',
   /** 会话当前状态不能安全地复制到另一个 Linguist 项目。 */
   SESSION_COPY_BLOCKED: 'SESSION_COPY_BLOCKED',
+  /** 导入回读验证未通过，整批已回滚（LA-INTAKE-007）。 */
+  IMPORT_VERIFICATION_FAILED: 'IMPORT_VERIFICATION_FAILED',
+  /** 导入批次已有下游引用或人工编辑痕迹，撤销被拒绝（LA-INTAKE-007）。 */
+  IMPORT_UNDO_BLOCKED: 'IMPORT_UNDO_BLOCKED',
 } as const
 
 export type LinguistServiceErrorCode =
@@ -131,6 +136,47 @@ export class LinguistDeliveryNotReadyError extends LinguistServiceError {
       `Delivery of asset ${assetId} in project ${projectId} is not ready (${blockerCount} blocker(s)).`,
     )
     this.name = 'LinguistDeliveryNotReadyError'
+  }
+}
+
+/**
+ * LA-INTAKE-007：导入回读验证未通过（段数/格式/语言对/source hash 任一项）。
+ * failedChecks 只含检查项 id（固定机器 token），导入已整批回滚。
+ */
+export class LinguistImportVerificationFailedError extends LinguistServiceError {
+  readonly code = LINGUIST_SERVICE_ERROR_CODES.IMPORT_VERIFICATION_FAILED
+  constructor(
+    readonly projectId: string,
+    readonly failedChecks: readonly string[],
+  ) {
+    super(
+      `Import verification failed for project ${projectId} (${failedChecks.join(', ')}); the import was rolled back.`,
+    )
+    this.name = 'LinguistImportVerificationFailedError'
+  }
+}
+
+/**
+ * LA-INTAKE-007：撤销导入被拒绝——批次已有下游引用或人工编辑痕迹。
+ * details 只含下游引用计数（IPC 信封原样透传），绝无客户文本。
+ */
+export class LinguistImportUndoBlockedError extends LinguistServiceError {
+  readonly code = LINGUIST_SERVICE_ERROR_CODES.IMPORT_UNDO_BLOCKED
+  /** 下游引用分类计数（proposals/qaFindings/criticArtifacts/exports/editedSegments/jobs）。 */
+  readonly details: Record<string, number>
+  constructor(
+    readonly projectId: string,
+    readonly assetId: string,
+    readonly references: ImportUndoReferences,
+  ) {
+    super(
+      `Undo import of asset ${assetId} in project ${projectId} is blocked by downstream references: ` +
+      `proposals=${references.proposals}, qaFindings=${references.qaFindings}, ` +
+      `criticArtifacts=${references.criticArtifacts}, exports=${references.exports}, ` +
+      `editedSegments=${references.editedSegments}, jobs=${references.jobs}.`,
+    )
+    this.name = 'LinguistImportUndoBlockedError'
+    this.details = { ...references }
   }
 }
 

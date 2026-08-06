@@ -115,17 +115,18 @@ import {
 import { encodeXmlAttr, findFirst, parseAttrs } from './xliff-xml'
 
 export const XLSX_ADAPTER_ID = 'xlsx_ooxml'
+export const XLSX_FORMAT_CONFIG_VERSION = 1
 
 const BOM = '\uFEFF'
-const WORKBOOK_PATH = 'xl/workbook.xml'
-const WORKBOOK_RELS_PATH = 'xl/_rels/workbook.xml.rels'
-const SHARED_STRINGS_PATH = 'xl/sharedStrings.xml'
+export const WORKBOOK_PATH = 'xl/workbook.xml'
+export const WORKBOOK_RELS_PATH = 'xl/_rels/workbook.xml.rels'
+export const SHARED_STRINGS_PATH = 'xl/sharedStrings.xml'
 
-const FORMULA_PATTERN = /<(?:[\w.-]+:)?f[\s/>]/i
-const RPH_BLOCK_PATTERN = /<((?:[\w.-]+:)?rPh)\b[^>]*>[\s\S]*?<\/\1>/gi
+export const FORMULA_PATTERN = /<(?:[\w.-]+:)?f[\s/>]/i
+export const RPH_BLOCK_PATTERN = /<((?:[\w.-]+:)?rPh)\b[^>]*>[\s\S]*?<\/\1>/gi
 const INLINE_T_PATTERN = /<(?:[\w.-]+:)?t\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?t>/gi
-const CELL_REF_PATTERN = /^([A-Za-z]+)([0-9]+)$/
-const ROW_NUMBER_PATTERN = /[0-9]+$/
+export const CELL_REF_PATTERN = /^([A-Za-z]+)([0-9]+)$/
+export const ROW_NUMBER_PATTERN = /[0-9]+$/
 
 const NAMED_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
 const XML_TEXT_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }
@@ -133,8 +134,114 @@ const XML_TEXT_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>
 export interface XlsxAdapterOptions {
   /** Explicit per-column header names (same shape/semantics as the CSV adapter). */
   columns?: CsvColumnMapping
+  /** Exact workbook sheet name. Omitted preserves the legacy first-sheet rule. */
+  sheetName?: string
   /** Injectable hasher; default is the built-in pure-TS SHA-256. */
   hash?: HashFn
+}
+
+/** 用户确认过的非标准工作簿映射；作为 adapter 版本化配置持久化。 */
+export interface XlsxFormatConfig {
+  version: typeof XLSX_FORMAT_CONFIG_VERSION
+  sheetName: string
+  columns: {
+    key?: string
+    source: string
+    target: string
+    locked?: string
+    context?: string
+  }
+}
+
+type XlsxConfigPhase = 'import' | 'export'
+
+function xlsxConfigError(phase: XlsxConfigPhase, filename: string, detail: string): never {
+  if (phase === 'export') throw new FormatExportError(XLSX_ADAPTER_ID, `invalid persisted mapping for ${filename}: ${detail}`)
+  throw new FormatParseError(XLSX_ADAPTER_ID, filename, `invalid persisted mapping: ${detail}`)
+}
+
+function nonBlankString(value: unknown, label: string, phase: XlsxConfigPhase, filename: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    xlsxConfigError(phase, filename, `${label} must be a non-blank string`)
+  }
+  return value
+}
+
+function exactKeys(
+  record: Record<string, unknown>,
+  allowed: readonly string[],
+  label: string,
+  phase: XlsxConfigPhase,
+  filename: string,
+): void {
+  for (const key of Object.keys(record)) {
+    if (!allowed.includes(key)) xlsxConfigError(phase, filename, `${label} contains unknown field ${JSON.stringify(key)}`)
+  }
+}
+
+function assertDistinctColumns(
+  columns: XlsxFormatConfig['columns'],
+  phase: XlsxConfigPhase,
+  filename: string,
+): void {
+  const seen = new Set<string>()
+  for (const [role, header] of Object.entries(columns)) {
+    if (header === undefined) continue
+    const normalized = normalizeDelimitedHeader(header)
+    if (seen.has(normalized)) xlsxConfigError(phase, filename, `${role} reuses another mapped column`)
+    seen.add(normalized)
+  }
+}
+
+/** 严格解析 adapter 自有的 v1 JSON；未知版本或字段一律 fail closed。 */
+export function parseXlsxFormatConfig(
+  formatConfigJson: string,
+  filename: string,
+  phase: XlsxConfigPhase = 'import',
+): XlsxFormatConfig {
+  let value: unknown
+  try {
+    value = JSON.parse(formatConfigJson)
+  } catch {
+    return xlsxConfigError(phase, filename, 'not valid JSON')
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return xlsxConfigError(phase, filename, 'must be an object')
+  }
+  const record = value as Record<string, unknown>
+  exactKeys(record, ['version', 'sheetName', 'columns'], 'mapping', phase, filename)
+  if (record.version !== XLSX_FORMAT_CONFIG_VERSION) {
+    return xlsxConfigError(phase, filename, `unsupported version ${JSON.stringify(record.version)}`)
+  }
+  const sheetName = nonBlankString(record.sheetName, 'sheetName', phase, filename)
+  if (typeof record.columns !== 'object' || record.columns === null || Array.isArray(record.columns)) {
+    return xlsxConfigError(phase, filename, 'columns must be an object')
+  }
+  const rawColumns = record.columns as Record<string, unknown>
+  exactKeys(rawColumns, ['key', 'source', 'target', 'locked', 'context'], 'columns', phase, filename)
+  const columns: XlsxFormatConfig['columns'] = {
+    source: nonBlankString(rawColumns.source, 'columns.source', phase, filename),
+    target: nonBlankString(rawColumns.target, 'columns.target', phase, filename),
+  }
+  for (const key of ['key', 'locked', 'context'] as const) {
+    if (rawColumns[key] !== undefined) columns[key] = nonBlankString(rawColumns[key], `columns.${key}`, phase, filename)
+  }
+  assertDistinctColumns(columns, phase, filename)
+  return { version: XLSX_FORMAT_CONFIG_VERSION, sheetName, columns }
+}
+
+export function serializeXlsxFormatConfig(config: XlsxFormatConfig): string {
+  return JSON.stringify({
+    version: XLSX_FORMAT_CONFIG_VERSION,
+    sheetName: config.sheetName,
+    columns: {
+      ...(config.columns.key === undefined ? {} : { key: config.columns.key }),
+      source: config.columns.source,
+      target: config.columns.target,
+      ...(config.columns.locked === undefined ? {} : { locked: config.columns.locked }),
+      ...(config.columns.context === undefined ? {} : { context: config.columns.context }),
+    },
+  })
 }
 
 interface ResolvedColumns {
@@ -146,7 +253,7 @@ interface ResolvedColumns {
 }
 
 /** Raw span of one XML element in the worksheet text (incl. its markup). */
-interface ElementSpan {
+export interface ElementSpan {
   /** Tag name as written, including any namespace prefix ('c' or 'x:c'). */
   tagName: string
   /** Raw text between the tag name and '>' (may end with '/' when self-closing). */
@@ -215,6 +322,8 @@ function hasZipMagic(bytes: Uint8Array): boolean {
   return (bytes[2] === 0x03 && bytes[3] === 0x04) || (bytes[2] === 0x05 && bytes[3] === 0x06)
 }
 
+export { hasZipMagic }
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -226,7 +335,7 @@ function escapeRegExp(value: string): string {
  * sheetML shape (quoted attrs, self-closing tags, no same-name nesting) and
  * fails loudly on anything else.
  */
-function scanElements(text: string, tag: string, from: number, to: number, fail: (detail: string) => never): ElementSpan[] {
+export function scanElements(text: string, tag: string, from: number, to: number, fail: (detail: string) => never): ElementSpan[] {
   const spans: ElementSpan[] = []
   const openPattern = new RegExp(`<((?:[A-Za-z_][\\w.-]*:)?${tag})(?=[\\s/>])`, 'g')
   openPattern.lastIndex = from
@@ -265,14 +374,14 @@ function scanElements(text: string, tag: string, from: number, to: number, fail:
 }
 
 /** Column letters -> 0-based index ('A' -> 0, 'Z' -> 25, 'AA' -> 26). */
-function columnIndexFromLetters(letters: string): number {
+export function columnIndexFromLetters(letters: string): number {
   let index = 0
   for (const ch of letters.toUpperCase()) index = index * 26 + (ch.charCodeAt(0) - 64)
   return index - 1
 }
 
 /** 0-based index -> column letters (0 -> 'A', 26 -> 'AA'). */
-function columnLettersFromIndex(index: number): string {
+export function columnLettersFromIndex(index: number): string {
   let remaining = index + 1
   let letters = ''
   while (remaining > 0) {
@@ -283,7 +392,7 @@ function columnLettersFromIndex(index: number): string {
 }
 
 /** Prefix-tolerant attribute lookup on a raw attrs record ('r' also matches 'x:r'). */
-function attrValue(attrs: Record<string, string>, name: string): string | undefined {
+export function attrValue(attrs: Record<string, string>, name: string): string | undefined {
   const direct = attrs[name]
   if (direct !== undefined) return direct
   const suffix = `:${name}`
@@ -294,12 +403,24 @@ function attrValue(attrs: Record<string, string>, name: string): string | undefi
 }
 
 /** Prefix-tolerant attribute lookup on an xmldom Element (for r:id on <sheet>). */
-function elementAttrByLocalName(element: Element, name: string): string | undefined {
+export function elementAttrByLocalName(element: Element, name: string): string | undefined {
   for (let i = 0; i < element.attributes.length; i++) {
     const attr = element.attributes.item(i)!
     if ((attr.name.split(':').at(-1) ?? attr.name) === name) return attr.value
   }
   return undefined
+}
+
+/**
+ * OOXML 文本读取计数器（失真遥测）。可选地传入 unescapeOoxmlControls /
+ * decodeXmlText / inlineStringText / readSharedStrings，调用方借此统计
+ * `_xHHHH_` 还原与 <rPh> 排除事件；不传时行为与原实现完全一致。
+ */
+export interface OoxmlTextCounter {
+  /** 还原的 `_xHHHH_` 控制字符转义序列数。 */
+  escapesRestored: number
+  /** 被排除的 <rPh> 拼音注音 run 数。 */
+  rPhRunsExcluded: number
 }
 
 /**
@@ -309,23 +430,31 @@ function elementAttrByLocalName(element: Element, name: string): string | undefi
  * control unescape first, protection restore second, so written output
  * inverts exactly.
  */
-function unescapeOoxmlControls(value: string): string {
+export function unescapeOoxmlControls(value: string, counter?: OoxmlTextCounter): string {
   const unescaped = value.replace(/_x([0-9A-Fa-f]{4})_/g, (match, hex: string) => {
     const code = Number.parseInt(hex, 16)
-    return code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d ? String.fromCharCode(code) : match
+    if (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) {
+      if (counter !== undefined) counter.escapesRestored += 1
+      return String.fromCharCode(code)
+    }
+    return match
   })
   return unescaped.replace(/_x005F_x([0-9A-Fa-f]{4})_/gi, '_x$1_')
 }
 
 /**
- * Decodes the five named entities plus numeric character references
- * (&#65; / &#x41; — xliff-xml's decodeXmlEntities intentionally lacks
- * numeric refs, and the write side here emits &#xD;), then the OOXML
+ * Decodes text content per XML 1.0 rules: literal line endings are normalized
+ * FIRST (#xD#xA and lone #xD in parsed entity text become #xA — what every
+ * conforming parser, Excel included, does), then the five named entities plus
+ * numeric character references (&#65; / &#x41; — xliff-xml's decodeXmlEntities
+ * intentionally lacks numeric refs, and the write side here emits &#xD;, which
+ * is expanded AFTER normalization so an intended CR survives), then the OOXML
  * `_xHHHH_` control escapes. Unknown/invalid entities are left verbatim
  * (lenient read).
  */
-function decodeXmlText(raw: string): string {
-  const decoded = raw.replace(/&(#x[0-9A-Fa-f]+|#[0-9]+|amp|lt|gt|quot|apos);/g, (match, body: string) => {
+export function decodeXmlText(raw: string, counter?: OoxmlTextCounter): string {
+  const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const decoded = normalized.replace(/&(#x[0-9A-Fa-f]+|#[0-9]+|amp|lt|gt|quot|apos);/g, (match, body: string) => {
     let code: number | undefined
     if (body.startsWith('#x')) code = Number.parseInt(body.slice(2), 16)
     else if (body.startsWith('#')) code = Number.parseInt(body.slice(1), 10)
@@ -334,7 +463,7 @@ function decodeXmlText(raw: string): string {
     }
     return NAMED_ENTITIES[body] ?? match
   })
-  return unescapeOoxmlControls(decoded)
+  return unescapeOoxmlControls(decoded, counter)
 }
 
 /**
@@ -352,42 +481,107 @@ function escapeCellText(value: string): string {
 }
 
 /** Concatenated <t> runs inside an <is> block, <rPh> phonetic runs excluded. */
-function inlineStringText(isInner: string): string {
-  const stripped = isInner.replace(RPH_BLOCK_PATTERN, '')
+export function inlineStringText(isInner: string, counter?: OoxmlTextCounter): string {
+  const stripped = isInner.replace(RPH_BLOCK_PATTERN, () => {
+    if (counter !== undefined) counter.rPhRunsExcluded += 1
+    return ''
+  })
   let raw = ''
   for (const match of stripped.matchAll(INLINE_T_PATTERN)) raw += match[1]
-  return decodeXmlText(raw)
+  return decodeXmlText(raw, counter)
 }
 
-function hasAncestorNamed(element: Element, name: string): boolean {
-  let node = element.parentNode
-  while (node !== null && node.nodeType === 1) {
-    if (localName(node as Element) === name) return true
-    node = node.parentNode
-  }
-  return false
+export interface RootTag {
+  /** local name, lowercased, namespace prefix stripped ('worksheet'). */
+  local: string
+  /** Tag name as written, including any prefix ('x:worksheet'). */
+  raw: string
 }
 
-/** sharedStrings.xml -> string table (rich runs concatenated, phonetics excluded). */
-function readSharedStrings(bytes: Uint8Array, adapterId: string, filename: string): string[] {
-  const doc = parseXml(bytes, adapterId, filename)
-  if (localName(doc.documentElement) !== 'sst') {
-    throw new FormatParseError(adapterId, filename, 'xl/sharedStrings.xml root is not <sst>')
-  }
-  const strings: string[] = []
-  for (const si of descendants(doc.documentElement, 'si')) {
-    let text = ''
-    for (const t of descendants(si, 't')) {
-      if (hasAncestorNamed(t, 'rph')) continue
-      text += t.textContent ?? ''
+/**
+ * 不构建 DOM 的根元素识别：跳过 prolog（<?...?> / <!--...--> / <!DOCTYPE...>）
+ * 后返回第一个开始标签；找不到开始标签返回 undefined。大 XML 部件（数百 MB
+ * 工作表/共享字符串）若为看根名而构建整棵 DOM，峰值内存会放大十几倍；这里
+ * 只读文档头部。输入必须先过 UTF-8 fatal 解码与 <!ENTITY 拒绝（调用方责任）。
+ */
+export function rootTagFromProlog(xml: string): RootTag | undefined {
+  let cursor = 0
+  for (;;) {
+    const open = xml.indexOf('<', cursor)
+    if (open < 0) return undefined
+    if (xml.startsWith('<?', open)) {
+      const end = xml.indexOf('?>', open + 2)
+      if (end < 0) return undefined
+      cursor = end + 2
+      continue
     }
-    strings.push(unescapeOoxmlControls(text))
+    if (xml.startsWith('<!--', open)) {
+      const end = xml.indexOf('-->', open + 4)
+      if (end < 0) return undefined
+      cursor = end + 3
+      continue
+    }
+    if (/^<!doctype\b/i.test(xml.slice(open, open + 10))) {
+      const end = xml.indexOf('>', open + 2)
+      if (end < 0) return undefined
+      cursor = end + 1
+      continue
+    }
+    const tagMatch = /^<([\w:.-]+)/.exec(xml.slice(open, open + 128))
+    if (tagMatch === null) return undefined
+    const raw = tagMatch[1]!
+    return { local: (raw.split(':').at(-1) ?? raw).toLowerCase(), raw }
+  }
+}
+
+/**
+ * sharedStrings.xml -> string table (rich runs concatenated, phonetics excluded).
+ *
+ * 读取走与工作表相同的 raw-text 管线（scanElements + inlineStringText），
+ * 不经过 DOM：XML 1.0 只归一化 #xD/#xD#xA，U+2028/U+2029 是合法字符且必须
+ * 原样保留（真实导出文件把游戏文本的软换行写成字面 U+2028；经 xmldom 读
+ * sst 会被悄悄改成 U+000A，译文行分隔语义被改写）。大 sst 也不再构建整棵
+ * DOM，峰值内存大幅下降。
+ *
+ * When `perEntry` is given, one OoxmlTextCounter per <si> (same order as the
+ * returned table) is pushed so callers can attribute <rPh> exclusions and
+ * `_xHHHH_` restorations to the cells referencing each index.
+ */
+export function readSharedStrings(
+  bytes: Uint8Array,
+  adapterId: string,
+  filename: string,
+  perEntry?: OoxmlTextCounter[],
+): string[] {
+  let xml: string
+  try {
+    // Default ignoreBOM:false consumes a BOM when present.
+    xml = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch (cause) {
+    throw new FormatParseError(adapterId, filename, '文件不是有效的 UTF-8 XML', { cause })
+  }
+  // 与 parseXml 一致：拒绝内部实体声明，避免实体扩展攻击。
+  if (/<!ENTITY\b/i.test(xml)) {
+    throw new FormatParseError(adapterId, filename, '不允许 XML 实体声明')
+  }
+  // function declaration (not a const arrow): TS only narrows on
+  // never-returning calls declared this way.
+  function fail(detail: string): never {
+    throw new FormatParseError(adapterId, filename, detail)
+  }
+  // 根元素必须是 <sst>：只做 prolog 头部扫描，不构建 DOM。
+  if (rootTagFromProlog(xml)?.local !== 'sst') fail('xl/sharedStrings.xml root is not <sst>')
+  const strings: string[] = []
+  for (const si of scanElements(xml, 'si', 0, xml.length, fail)) {
+    const counter: OoxmlTextCounter = { escapesRestored: 0, rPhRunsExcluded: 0 }
+    strings.push(si.selfClosing ? '' : inlineStringText(xml.slice(si.innerStart, si.innerEnd), counter))
+    perEntry?.push(counter)
   }
   return strings
 }
 
 /** Resolves a workbook relationship Target to a zip entry path (base dir 'xl'). */
-function resolveZipPath(baseDir: string, target: string): string {
+export function resolveZipPath(baseDir: string, target: string): string {
   const combined = target.startsWith('/') ? target.slice(1) : `${baseDir}/${target}`
   const parts: string[] = []
   for (const segment of combined.split('/')) {
@@ -439,10 +633,12 @@ export class XlsxAdapter implements CatFormatAdapter {
   readonly extensions = ['.xlsx']
 
   private readonly columns: CsvColumnMapping
+  private readonly sheetName: string | undefined
   private readonly hash: HashFn
 
   constructor(options: XlsxAdapterOptions = {}) {
     this.columns = options.columns ?? {}
+    this.sheetName = options.sheetName
     this.hash = options.hash ?? sha256Hex
   }
 
@@ -460,8 +656,9 @@ export class XlsxAdapter implements CatFormatAdapter {
 
   async import(input: CatFormatImportInput): Promise<ImportedCatAsset> {
     const { bytes, filename, sourceLocale, targetLocale } = input
-    const workbook = await this.parseWorkbook(bytes, filename)
-    const sheet = this.parseSheet(workbook.sheetText, workbook.sharedStrings, filename)
+    const config = this.importConfig(input)
+    const workbook = await this.parseWorkbook(bytes, filename, config?.sheetName ?? this.sheetName)
+    const sheet = this.parseSheet(workbook.sheetText, workbook.sharedStrings, filename, config?.columns ?? this.columns)
     const segments: ImportedCatSegment[] = sheet.rows.map((row) => ({
       ordinal: row.ordinal,
       key: row.key,
@@ -481,6 +678,7 @@ export class XlsxAdapter implements CatFormatAdapter {
         originalFilename: filename,
         sourceSha256: await this.hash(bytes),
         segmentCount: segments.length,
+        ...(config === undefined ? {} : { formatConfigJson: serializeXlsxFormatConfig(config) }),
       },
       segments,
       warnings: [...workbook.warnings, ...sheet.warnings],
@@ -491,8 +689,9 @@ export class XlsxAdapter implements CatFormatAdapter {
   async export(input: CatFormatExportInput): Promise<Uint8Array> {
     const { originalBytes, asset, segments } = input
     const filename = asset.originalFilename
-    const workbook = await this.parseWorkbook(originalBytes, filename)
-    const sheet = this.parseSheet(workbook.sheetText, workbook.sharedStrings, filename)
+    const config = this.exportConfig(asset.formatConfigJson, filename)
+    const workbook = await this.parseWorkbook(originalBytes, filename, config?.sheetName ?? this.sheetName)
+    const sheet = this.parseSheet(workbook.sheetText, workbook.sharedStrings, filename, config?.columns ?? this.columns)
 
     const byKey = new Map<string, (typeof segments)[number]>()
     for (const segment of segments) {
@@ -581,11 +780,11 @@ export class XlsxAdapter implements CatFormatAdapter {
   }
 
   /**
-   * Opens the zip package, resolves the FIRST worksheet (workbook.xml order
-   * -> workbook.xml.rels -> part path) and loads sharedStrings. Shared by
-   * import and export so both sides see the identical template.
+   * Opens the zip package, resolves the selected worksheet (legacy default:
+   * first workbook.xml sheet) and loads sharedStrings. Shared by import and
+   * export so both sides see the identical template.
    */
-  private async parseWorkbook(bytes: Uint8Array, filename: string): Promise<ParsedWorkbook> {
+  private async parseWorkbook(bytes: Uint8Array, filename: string, selectedSheetName?: string): Promise<ParsedWorkbook> {
     // function declaration (not a const arrow): TS only narrows on
     // never-returning calls declared this way.
     function fail(detail: string): never {
@@ -607,21 +806,26 @@ export class XlsxAdapter implements CatFormatAdapter {
     const sheets = descendants(workbookDoc, 'sheet')
     if (sheets.length === 0) fail('workbook.xml lists no <sheet> elements')
     const warnings: ImportWarning[] = []
-    const firstSheet = sheets[0]!
-    const sheetName = firstSheet.getAttribute('name') ?? '(unnamed)'
-    if (sheets.length > 1) {
+    const selected = selectedSheetName === undefined
+      ? sheets[0]!
+      : sheets.find((sheet) => sheet.getAttribute('name') === selectedSheetName)
+    if (selected === undefined) {
+      fail(`worksheet ${JSON.stringify(selectedSheetName)} is not listed in ${WORKBOOK_PATH}`)
+    }
+    const sheetName = selected.getAttribute('name') ?? '(unnamed)'
+    if (sheets.length > 1 && selectedSheetName === undefined) {
       warnings.push({
         code: 'xlsx.multi_sheet',
         message: `workbook has ${sheets.length} sheets; only the first (${JSON.stringify(sheetName)}) is imported, the rest are ignored (v1 single-sheet scope)`,
       })
     }
-    const ridAttr = firstSheet.getAttribute('r:id')
+    const ridAttr = selected.getAttribute('r:id')
     const relId =
       (ridAttr !== null && ridAttr !== '' ? ridAttr : undefined) ??
-      elementAttrByLocalName(firstSheet, 'id') ??
-      fail(`first sheet ${JSON.stringify(sheetName)} has no relationship id (r:id)`)
+      elementAttrByLocalName(selected, 'id') ??
+      fail(`sheet ${JSON.stringify(sheetName)} has no relationship id (r:id)`)
     const relsEntry = zip.file(WORKBOOK_RELS_PATH)
-    if (relsEntry === null) fail(`${WORKBOOK_RELS_PATH} missing; cannot resolve the first worksheet part`)
+    if (relsEntry === null) fail(`${WORKBOOK_RELS_PATH} missing; cannot resolve worksheet part`)
     const relsDoc = parseXml(await relsEntry.async('uint8array'), this.id, filename)
     const targets = new Map<string, string>()
     for (const rel of descendants(relsDoc, 'relationship')) {
@@ -633,7 +837,7 @@ export class XlsxAdapter implements CatFormatAdapter {
     }
     const sheetTarget = targets.get(relId)
     if (sheetTarget === undefined) {
-      fail(`relationship ${JSON.stringify(relId)} of the first sheet is not in workbook.xml.rels`)
+      fail(`relationship ${JSON.stringify(relId)} of sheet ${JSON.stringify(sheetName)} is not in workbook.xml.rels`)
     }
     const sheetPath = resolveZipPath('xl', sheetTarget)
     const sheetEntry = zip.file(sheetPath)
@@ -660,7 +864,12 @@ export class XlsxAdapter implements CatFormatAdapter {
    * by import and export so both sides see identical keys/sources/targets;
    * export additionally uses the kept element spans for raw surgery.
    */
-  private parseSheet(sheetText: string, sharedStrings: readonly string[], filename: string): ParsedSheet {
+  private parseSheet(
+    sheetText: string,
+    sharedStrings: readonly string[],
+    filename: string,
+    explicitColumns: CsvColumnMapping,
+  ): ParsedSheet {
     // function declaration (not a const arrow): TS only narrows on
     // never-returning calls declared this way.
     function fail(detail: string): never {
@@ -713,7 +922,7 @@ export class XlsxAdapter implements CatFormatAdapter {
       maxHeaderColumn = Math.max(maxHeaderColumn, cell.colIndex)
     }
     const header = Array.from({ length: maxHeaderColumn + 1 }, (_, index) => headerValues.get(index) ?? '')
-    const columns = this.resolveColumns(header, filename)
+    const columns = this.resolveColumns(header, filename, explicitColumns)
 
     const warnings: ImportWarning[] = []
     if (columns.key < 0) {
@@ -796,23 +1005,35 @@ export class XlsxAdapter implements CatFormatAdapter {
     return { columns, rows, warnings }
   }
 
-  private resolveColumns(header: string[], filename: string): ResolvedColumns {
-    const pick = (aliases: readonly string[], explicit: string | undefined, label: string): number => {
+  private resolveColumns(
+    header: string[],
+    filename: string,
+    explicitColumns: CsvColumnMapping,
+  ): ResolvedColumns {
+    const pick = (
+      aliases: readonly string[],
+      explicit: string | undefined,
+      label: keyof CsvColumnMapping,
+    ): number => {
       if (explicit !== undefined) {
-        const index = header.findIndex((name) => normalizeDelimitedHeader(name) === normalizeDelimitedHeader(explicit))
-        if (index < 0) {
+        const matches = header
+          .map((name, index) => normalizeDelimitedHeader(name) === normalizeDelimitedHeader(explicit) ? index : -1)
+          .filter((index) => index >= 0)
+        if (matches.length !== 1) {
           throw new FormatParseError(
             this.id,
             filename,
-            `explicit ${label} column ${JSON.stringify(explicit)} not found in header (${header.join(', ')})`,
+            matches.length === 0
+              ? `explicit ${label} column ${JSON.stringify(explicit)} not found in header (${header.join(', ')})`
+              : `explicit ${label} column ${JSON.stringify(explicit)} is ambiguous in header`,
           )
         }
-        return index
+        return matches[0]!
       }
       return header.findIndex((name) => aliases.includes(normalizeDelimitedHeader(name)))
     }
-    const key = pick(KEY_ALIASES, this.columns.key, 'key')
-    const source = pick(SOURCE_ALIASES, this.columns.source, 'source')
+    const key = pick(KEY_ALIASES, explicitColumns.key, 'key')
+    const source = pick(SOURCE_ALIASES, explicitColumns.source, 'source')
     if (source < 0) {
       throw new FormatParseError(
         this.id,
@@ -823,9 +1044,34 @@ export class XlsxAdapter implements CatFormatAdapter {
     return {
       key,
       source,
-      target: pick(TARGET_ALIASES, this.columns.target, 'target'),
-      locked: pick(LOCKED_ALIASES, this.columns.locked, 'locked'),
-      context: pick(CONTEXT_ALIASES, this.columns.context, 'context'),
+      target: pick(TARGET_ALIASES, explicitColumns.target, 'target'),
+      locked: pick(LOCKED_ALIASES, explicitColumns.locked, 'locked'),
+      context: pick(CONTEXT_ALIASES, explicitColumns.context, 'context'),
     }
+  }
+
+  private importConfig(input: CatFormatImportInput): XlsxFormatConfig | undefined {
+    if (input.formatConfigJson !== undefined) return parseXlsxFormatConfig(input.formatConfigJson, input.filename)
+    return this.optionConfig(input.filename, 'import')
+  }
+
+  private exportConfig(formatConfigJson: string | undefined, filename: string): XlsxFormatConfig | undefined {
+    if (formatConfigJson !== undefined) return parseXlsxFormatConfig(formatConfigJson, filename, 'export')
+    return this.optionConfig(filename, 'export')
+  }
+
+  /** options 保留旧 adapter 兼容性；只有完整显式映射才会成为持久化配置。 */
+  private optionConfig(filename: string, phase: XlsxConfigPhase): XlsxFormatConfig | undefined {
+    if (this.sheetName === undefined || this.columns.source === undefined || this.columns.target === undefined) return undefined
+    const config = parseXlsxFormatConfig(
+      JSON.stringify({
+        version: XLSX_FORMAT_CONFIG_VERSION,
+        sheetName: this.sheetName,
+        columns: this.columns,
+      }),
+      filename,
+      phase,
+    )
+    return config
   }
 }

@@ -509,7 +509,7 @@ export function ProposalInbox({
               setFilter(event.target.value as ProposalFilter)
               setPage(0)
             }}
-            className="rounded-lg bg-foreground/[0.055] px-2.5 py-1.5 text-[12px] text-foreground outline-none ring-1 ring-border/40 focus:ring-primary/45"
+            className="min-w-0 truncate rounded-lg bg-foreground/[0.055] py-1.5 pl-2.5 pr-7 text-[12px] text-foreground outline-none ring-1 ring-border/40 focus:ring-primary/45"
           >
             <option value="all">全部历史</option>
             {Object.entries(PROPOSAL_STATUS_LABELS).map(([value, label]) => (

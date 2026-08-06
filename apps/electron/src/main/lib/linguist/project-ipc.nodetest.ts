@@ -7,9 +7,11 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LINGUIST_IMPORT_MAX_BYTES, type LinguistIpcResult } from '@proma/shared'
+import { XlsxAdapter } from '@linguist/cat-formats'
+import JSZip from 'jszip'
 import { createLinguistProjectIpc, type LinguistImportFilePicker } from './project-ipc'
 import type { LinguistProjectService } from './project-service'
 import { INPUT, fixturePath, makeService, makeTempDir } from './test/service-testkit'
@@ -29,6 +31,16 @@ function makePicker(filePaths: string[] | null): { picker: LinguistImportFilePic
 }
 
 const CSV_FIXTURE = 'mini_dialogue.csv'
+
+/** Small real OOXML workbook: cover sheet first, nonstandard bilingual batch second. */
+async function nonstandardXlsx(): Promise<Uint8Array> {
+  const zip = new JSZip()
+  zip.file('xl/workbook.xml', `<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="封面" sheetId="1" r:id="rId1"/><sheet name="批次" sheetId="2" r:id="rId2"/></sheets></workbook>`)
+  zip.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>`)
+  zip.file('xl/worksheets/sheet1.xml', `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>说明</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>不是翻译批次</t></is></c></row></sheetData></worksheet>`)
+  zip.file('xl/worksheets/sheet2.xml', `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>文本编号</t></is></c><c r="B1" t="inlineStr"><is><t>中文原文</t></is></c><c r="C1" t="inlineStr"><is><t>英文译文</t></is></c><c r="D1" t="inlineStr"><is><t>备注</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>menu.start</t></is></c><c r="B2" t="inlineStr"><is><t>开始游戏</t></is></c><c r="C2" t="inlineStr"><is><t></t></is></c><c r="D2" t="inlineStr"><is><t>主菜单</t></is></c></row></sheetData></worksheet>`)
+  return zip.generateAsync({ type: 'uint8array' })
+}
 
 test('happy path: create → list → open → getSummary → archive（信封 ok:true）', async () => {
   const service = makeService()
@@ -178,11 +190,11 @@ test('validation negatives: bad id / bad locale / oversized name / wrong types �
       { name: 'bad includeArchived', run: () => ipc.list({ includeArchived: 'yes' }) },
       { name: 'bad workspaceId (empty)', run: () => ipc.create({ ...INPUT, promaWorkspaceId: '' }) },
       { name: 'bad archive id', run: () => ipc.archive({ projectId: project.id.slice(0, -1) }) },
-      { name: 'unknown profile literal', run: () => ipc.setQualityProfile({ projectId: project.id, profile: 'turbo' }) },
-      { name: 'uppercase profile literal', run: () => ipc.setQualityProfile({ projectId: project.id, profile: 'FAST' }) },
-      { name: 'missing profile', run: () => ipc.setQualityProfile({ projectId: project.id }) },
-      { name: 'non-string profile', run: () => ipc.setQualityProfile({ projectId: project.id, profile: 1 }) },
-      { name: 'bad setQualityProfile id', run: () => ipc.setQualityProfile({ projectId: 'nope', profile: 'fast' }) },
+      { name: 'unknown independentReview literal', run: () => ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview: 'turbo' } }) },
+      { name: 'uppercase independentReview literal', run: () => ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview: 'OFF' } }) },
+      { name: 'missing executionPolicy', run: () => ipc.setExecutionPolicy({ projectId: project.id }) },
+      { name: 'non-object executionPolicy', run: () => ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: 1 }) },
+      { name: 'bad setExecutionPolicy id', run: () => ipc.setExecutionPolicy({ projectId: 'nope', executionPolicy: { independentReview: 'off' } }) },
     ]
     for (const c of cases) {
       const result = await c.run()
@@ -205,7 +217,7 @@ test('unknown project id → PROJECT_NOT_FOUND across id-taking channels', async
       () => ipc.open({ projectId: UNKNOWN }),
       () => ipc.getSummary({ projectId: UNKNOWN }),
       () => ipc.archive({ projectId: UNKNOWN }),
-      () => ipc.setQualityProfile({ projectId: UNKNOWN, profile: 'fast' }),
+      () => ipc.setExecutionPolicy({ projectId: UNKNOWN, executionPolicy: { independentReview: 'off' } }),
       () => ipc.import({ projectId: UNKNOWN }, picker),
     ]) {
       const result = await run()
@@ -219,26 +231,26 @@ test('unknown project id → PROJECT_NOT_FOUND across id-taking channels', async
   }
 })
 
-test('setQualityProfile: 三档 round-trip 经信封返回更新后项目；归档 → PROJECT_ARCHIVED', async () => {
+test('setExecutionPolicy: 两档 round-trip 经信封返回更新后项目；归档 → PROJECT_ARCHIVED', async () => {
   const service = makeService()
   try {
     const ipc = makeIpc(service)
     const project = service.createProject(INPUT)
 
-    // 新建项目经 open 通道返回缺省 balanced（读取规范化）
+    // 新建项目经 open 通道返回缺省 off（读取规范化）
     const opened = await ipc.open({ projectId: project.id })
     assert.equal(opened.ok, true)
-    if (opened.ok) assert.equal(opened.data.project.qualityProfile, 'balanced')
+    if (opened.ok) assert.deepEqual(opened.data.project.executionPolicy, { independentReview: 'off' })
 
-    for (const profile of ['fast', 'balanced', 'best'] as const) {
-      const result = await ipc.setQualityProfile({ projectId: project.id, profile })
-      assert.equal(result.ok, true, profile)
-      if (result.ok) assert.equal(result.data.qualityProfile, profile)
-      assert.equal(service.getProject(project.id).qualityProfile, profile)
+    for (const independentReview of ['risk-based', 'off'] as const) {
+      const result = await ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview } })
+      assert.equal(result.ok, true, independentReview)
+      if (result.ok) assert.deepEqual(result.data.executionPolicy, { independentReview })
+      assert.deepEqual(service.getProject(project.id).executionPolicy, { independentReview })
     }
 
     await ipc.archive({ projectId: project.id })
-    const rejected = await ipc.setQualityProfile({ projectId: project.id, profile: 'fast' })
+    const rejected = await ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview: 'risk-based' } })
     assert.equal(rejected.ok, false)
     if (!rejected.ok) assert.equal(rejected.error.code, 'PROJECT_ARCHIVED')
   } finally {
@@ -335,7 +347,7 @@ test('import: main reads picked file itself and returns service result + basenam
     assert.equal(result.ok, true)
     if (!result.ok) return
     assert.equal(result.data.cancelled, false)
-    if (result.data.cancelled) return
+    if (result.data.cancelled || result.data.requiresXlsxMapping) return
     assert.equal(result.data.filename, CSV_FIXTURE)
     assert.equal(result.data.status, 'imported')
     assert.match(result.data.assetId, /^ast_v2_[0-9a-f]{64}$/)
@@ -357,6 +369,164 @@ test('import: main reads picked file itself and returns service result + basenam
   }
 })
 
+test('import: nonstandard XLSX waits for explicit mapping, rejects forged confirmation, and survives reopen/export', async () => {
+  const root = makeTempDir()
+  const service = makeService(root)
+  try {
+    const project = service.createProject(INPUT)
+    const sourcePath = join(makeTempDir(), 'nonstandard.xlsx')
+    writeFileSync(sourcePath, await nonstandardXlsx())
+    const ipc = makeIpc(service)
+
+    const picked = await ipc.import({ projectId: project.id }, makePicker([sourcePath]).picker)
+    assert.equal(picked.ok, true)
+    if (!picked.ok || picked.data.cancelled || !picked.data.requiresXlsxMapping) return
+    assert.equal(service.openProject(project.id).assets.countByProject(), 0)
+    const pending = picked.data
+    const batch = pending.preview.sheets.find((sheet) => sheet.name === '批次')
+    assert.ok(batch !== undefined)
+    assert.deepEqual(batch.headerRowNumbers, [1])
+    assert.equal(batch.sampleRows[0]?.rowNo, 2)
+    assert.equal(batch.columns.find((column) => column.header === '中文原文')?.selectable, true)
+
+    const forged = await ipc.confirmXlsxMapping({
+      projectId: project.id,
+      mappingId: pending.mappingId,
+      sourceSha256: '0'.repeat(64),
+      sheetName: '批次',
+      columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+    })
+    assert.equal(forged.ok, false)
+    if (!forged.ok) assert.equal(forged.error.code, 'INVALID_INPUT')
+    assert.equal(service.openProject(project.id).assets.countByProject(), 0)
+
+    const confirmed = await ipc.confirmXlsxMapping({
+      projectId: project.id,
+      mappingId: pending.mappingId,
+      sourceSha256: pending.sourceSha256,
+      sheetName: '批次',
+      columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+    })
+    assert.equal(confirmed.ok, true)
+    if (!confirmed.ok) return
+    assert.equal(confirmed.data.requiresXlsxMapping, false)
+    assert.equal(confirmed.data.status, 'imported')
+    const stored = service.openProject(project.id).assets.get(confirmed.data.assetId)
+    assert.equal(
+      stored?.formatConfigJson,
+      JSON.stringify({
+        version: 1,
+        sheetName: '批次',
+        columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+      }),
+    )
+
+    // A token is one-shot after the exact source was imported.
+    const replay = await ipc.confirmXlsxMapping({
+      projectId: project.id,
+      mappingId: pending.mappingId,
+      sourceSha256: pending.sourceSha256,
+      sheetName: '批次',
+      columns: { source: '中文原文', target: '英文译文' },
+    })
+    assert.equal(replay.ok, false)
+    if (!replay.ok) assert.equal(replay.error.code, 'INVALID_INPUT')
+
+    service.closeAll()
+    const reopened = makeService(root)
+    try {
+      const reopenedAsset = reopened.openProject(project.id).assets.get(confirmed.data.assetId)
+      assert.equal(reopenedAsset?.formatConfigJson, stored?.formatConfigJson)
+      const segment = reopened.openProject(project.id).segments.query({ assetId: confirmed.data.assetId, limit: 1 })[0]!
+      reopened.openProject(project.id).segments.applyTargetEdit(segment.id, 'Start game', segment.revision)
+      const staged = await reopened.stageExport(project.id, confirmed.data.assetId)
+      const stagedBytes = new Uint8Array(readFileSync(staged.stagingPath))
+      const roundTripped = await new XlsxAdapter().import({
+        bytes: stagedBytes,
+        filename: 'nonstandard.xlsx',
+        sourceLocale: 'en',
+        targetLocale: 'zh-CN',
+        formatConfigJson: reopenedAsset?.formatConfigJson,
+      })
+      assert.deepEqual(roundTripped.segments.map((segment) => [segment.key, segment.target]), [['menu.start', 'Start game']])
+      const stagedZip = await JSZip.loadAsync(stagedBytes)
+      assert.ok((await stagedZip.file('xl/worksheets/sheet1.xml')!.async('text')).includes('不是翻译批次'))
+    } finally {
+      reopened.closeAll()
+    }
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('import: the same XLSX bytes with a different confirmed mapping fail closed until the old batch is undone', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const sourcePath = join(makeTempDir(), 'mapping-conflict.xlsx')
+    writeFileSync(sourcePath, await nonstandardXlsx())
+    const ipc = makeIpc(service)
+
+    const firstPreview = await ipc.import({ projectId: project.id }, makePicker([sourcePath]).picker)
+    assert.equal(firstPreview.ok, true)
+    if (!firstPreview.ok || firstPreview.data.cancelled || !firstPreview.data.requiresXlsxMapping) return
+    const first = await ipc.confirmXlsxMapping({
+      projectId: project.id,
+      mappingId: firstPreview.data.mappingId,
+      sourceSha256: firstPreview.data.sourceSha256,
+      sheetName: '批次',
+      columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+    })
+    assert.equal(first.ok, true)
+    if (!first.ok) return
+
+    const samePreview = await ipc.import({ projectId: project.id }, makePicker([sourcePath]).picker)
+    assert.equal(samePreview.ok, true)
+    if (!samePreview.ok || samePreview.data.cancelled || !samePreview.data.requiresXlsxMapping) return
+    const same = await ipc.confirmXlsxMapping({
+      projectId: project.id,
+      mappingId: samePreview.data.mappingId,
+      sourceSha256: samePreview.data.sourceSha256,
+      sheetName: '批次',
+      columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+    })
+    assert.equal(same.ok, true)
+    if (!same.ok) return
+    assert.equal(same.data.status, 'skipped-duplicate')
+    assert.equal(same.data.assetId, first.data.assetId)
+
+    const remapPreview = await ipc.import({ projectId: project.id }, makePicker([sourcePath]).picker)
+    assert.equal(remapPreview.ok, true)
+    if (!remapPreview.ok || remapPreview.data.cancelled || !remapPreview.data.requiresXlsxMapping) return
+    const remap = await ipc.confirmXlsxMapping({
+      projectId: project.id,
+      mappingId: remapPreview.data.mappingId,
+      sourceSha256: remapPreview.data.sourceSha256,
+      sheetName: '批次',
+      columns: { key: '文本编号', source: '英文译文', target: '中文原文', context: '备注' },
+    })
+    assert.equal(remap.ok, false)
+    if (!remap.ok) {
+      assert.equal(remap.error.code, 'FORMAT_PARSE_ERROR')
+      assert.match(remap.error.message, /undo/i)
+    }
+
+    const assets = service.openProject(project.id).assets.listByProject()
+    assert.equal(assets.length, 1, 'a rejected remap must not change the existing batch')
+    assert.equal(assets[0]?.id, first.data.assetId)
+    assert.equal(
+      assets[0]?.formatConfigJson,
+      JSON.stringify({
+        version: 1,
+        sheetName: '批次',
+        columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+      }),
+    )
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('getSummary: assets list reflects imports in creation order (PB-033 wire shape)', async () => {
   const service = makeService()
   try {
@@ -371,12 +541,12 @@ test('getSummary: assets list reflects imports in creation order (PB-033 wire sh
     const { picker: pickCsv } = makePicker([fixturePath(CSV_FIXTURE)])
     const importedCsv = await ipc.import({ projectId: project.id }, pickCsv)
     assert.equal(importedCsv.ok, true)
-    if (!importedCsv.ok || importedCsv.data.cancelled) return
+    if (!importedCsv.ok || importedCsv.data.cancelled || importedCsv.data.requiresXlsxMapping) return
 
     const { picker: pickJson } = makePicker([fixturePath('mini_items.json')])
     const importedJson = await ipc.import({ projectId: project.id }, pickJson)
     assert.equal(importedJson.ok, true)
-    if (!importedJson.ok || importedJson.data.cancelled) return
+    if (!importedJson.ok || importedJson.data.cancelled || importedJson.data.requiresXlsxMapping) return
 
     // 摘要随即反映两次导入：资产按创建序累积，字段与导入结果一一对应
     const summary = await ipc.getSummary({ projectId: project.id })
@@ -501,5 +671,111 @@ test('untyped errors collapse to INTERNAL without leaking internals', async () =
   if (!result.ok) {
     assert.equal(result.error.code, 'INTERNAL')
     assert.ok(!result.error.message.includes('secret-internal-detail'))
+  }
+})
+
+test('undoImportAsset: clean batch succeeds; summary drops the batch (LA-INTAKE-007)', async () => {
+  const service = makeService()
+  try {
+    const ipc = makeIpc(service)
+    const project = service.createProject(INPUT)
+    const { picker } = makePicker([fixturePath(CSV_FIXTURE)])
+    const imported = await ipc.import({ projectId: project.id }, picker)
+    assert.equal(imported.ok, true)
+    if (!imported.ok || imported.data.cancelled || imported.data.requiresXlsxMapping) return
+    // 导入结果随线上行携带验证报告（全部通过）
+    assert.equal(imported.data.verification.ok, true)
+    assert.equal(imported.data.verification.checks.length, 4)
+
+    const undone = await ipc.undoImportAsset({
+      projectId: project.id,
+      assetId: imported.data.assetId,
+    })
+    assert.equal(undone.ok, true)
+    if (!undone.ok) return
+    assert.equal(undone.data.assetId, imported.data.assetId)
+    assert.equal(undone.data.deletedSegments, imported.data.segmentCount)
+    assert.equal(undone.data.sourceBlobRemoved, true)
+
+    const summary = await ipc.getSummary({ projectId: project.id })
+    assert.equal(summary.ok, true)
+    if (summary.ok) {
+      assert.equal(summary.data.assetCount, 0)
+      assert.deepEqual(summary.data.assets, [])
+    }
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('undoImportAsset: blocked error envelope carries per-category counts only (no client text)', async () => {
+  const service = makeService()
+  try {
+    const ipc = makeIpc(service)
+    const project = service.createProject(INPUT)
+    const { picker } = makePicker([fixturePath(CSV_FIXTURE)])
+    const imported = await ipc.import({ projectId: project.id }, picker)
+    assert.equal(imported.ok, true)
+    if (!imported.ok || imported.data.cancelled || imported.data.requiresXlsxMapping) return
+
+    const db = service.openProject(project.id)
+    const segment = db.segments.query({ assetId: imported.data.assetId, limit: 1 })[0]!
+    db.proposals.insertPending({
+      segmentId: segment.id,
+      baseRevision: 0,
+      proposedTarget: `${segment.target}（改）`,
+    })
+
+    const blocked = await ipc.undoImportAsset({
+      projectId: project.id,
+      assetId: imported.data.assetId,
+    })
+    assert.equal(blocked.ok, false)
+    if (blocked.ok) return
+    assert.equal(blocked.error.code, 'IMPORT_UNDO_BLOCKED')
+    assert.deepEqual(blocked.error.details, {
+      proposals: 1,
+      qaFindings: 0,
+      criticArtifacts: 0,
+      exports: 0,
+      editedSegments: 0,
+      jobs: 0,
+    })
+    // 资产仍在（拒绝是零写入分支）
+    assert.ok(db.assets.get(imported.data.assetId) !== undefined)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('undoImportAsset: invalid ids → INVALID_INPUT; archived project → PROJECT_ARCHIVED', async () => {
+  const service = makeService()
+  try {
+    const ipc = makeIpc(service)
+    const project = service.createProject(INPUT)
+    const { picker } = makePicker([fixturePath(CSV_FIXTURE)])
+    const imported = await ipc.import({ projectId: project.id }, picker)
+    assert.equal(imported.ok, true)
+    if (!imported.ok || imported.data.cancelled || imported.data.requiresXlsxMapping) return
+
+    for (const input of [
+      { projectId: 'bad', assetId: imported.data.assetId },
+      { projectId: project.id, assetId: 'not-an-asset-id' },
+      { projectId: project.id },
+    ]) {
+      const result = await ipc.undoImportAsset(input)
+      assert.equal(result.ok, false)
+      if (!result.ok) assert.equal(result.error.code, 'INVALID_INPUT')
+    }
+
+    await ipc.archive({ projectId: project.id })
+    const archived = await ipc.undoImportAsset({
+      projectId: project.id,
+      assetId: imported.data.assetId,
+    })
+    assert.equal(archived.ok, false)
+    if (!archived.ok) assert.equal(archived.error.code, 'PROJECT_ARCHIVED')
+  } finally {
+    service.closeAll()
   }
 })

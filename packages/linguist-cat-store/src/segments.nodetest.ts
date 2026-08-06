@@ -193,6 +193,30 @@ test('applyTargetEdit: success updates target/status/revision and records histor
   }
 })
 
+test('manual segment edit advances the durable project event sequence only after commit', () => {
+  const { db, segments } = setup(1)
+  try {
+    assert.equal(db.runs.latestEventSequence, 0)
+    db.segments.getById(segments[0]!.id)
+    db.segments.query()
+    assert.equal(db.runs.latestEventSequence, 0, 'reads must not advance the project event sequence')
+
+    assert.throws(
+      () => db.segments.applyTargetEdit(segments[0]!.id, 'stale', 1),
+      RevisionConflictError,
+    )
+    assert.equal(db.runs.latestEventSequence, 0, 'a rejected CAS must not append an event')
+
+    db.segments.applyTargetEdit(segments[0]!.id, '已提交', 0)
+    const [event] = db.runs.listEvents()
+    assert.equal(db.runs.latestEventSequence, 1)
+    assert.equal(event?.kind, 'segment-updated')
+    assert.deepEqual(event?.segmentIds, [segments[0]!.id])
+  } finally {
+    db.close()
+  }
+})
+
 test('applyTargetEdit: stale expectedRevision -> REVISION_CONFLICT, row untouched', () => {
   const { db, segments } = setup(1)
   try {

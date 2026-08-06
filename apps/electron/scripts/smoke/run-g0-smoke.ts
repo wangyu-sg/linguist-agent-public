@@ -8,7 +8,8 @@
  * 3. playwright-core 以临时 HOME + userData 启动打包应用
  * 4. 通过 window.electronAPI 播种渠道/设置/对话，真实 UI 发送消息
  * 5. 断言：preload API、窗口加载、文本流（DOM）、思考 delta、工具调用事件、
- *    唯一最终文本（DOM）、429 重试、上下文超长错误、中途停止、重启恢复
+ *    唯一最终文本（DOM）、429 重试、上下文超长错误、中途停止、重启恢复、
+ *    Chat → Agent → Chat 模式往返后 Chat 状态不丢（ModeSwitcher 真实点击）
  * 6. finally 中关闭应用与 Fake Server，不遗留后台进程
  *
  * 运行前提：已执行 `bun run smoke:pack`（产出 apps/electron/out/mac-arm64/*.app，
@@ -226,8 +227,8 @@ async function ensureChatMode(page: Page): Promise<void> {
     undefined,
     { timeout: 60_000 },
   )
-  // AppShell 挂载标志：ModeSwitcher（Agent/Chat 分段控件）
-  await page.locator('.mode-switcher-track').first().waitFor({ timeout: 60_000 })
+  // AppShell 挂载标志：展开或收起的侧栏二选一。
+  await page.locator('.mode-switcher-track, button[aria-label="展开侧边栏"]').first().waitFor({ timeout: 60_000 })
   // 教程 Banner 非模态但会遮挡，尽力关闭
   try {
     const dismiss = page.getByText('稍后再学', { exact: true }).first()
@@ -239,6 +240,11 @@ async function ensureChatMode(page: Page): Promise<void> {
 
 /** 在侧边栏中打开指定标题的 Chat 对话（rail 按钮优先，标题文本兜底） */
 async function openConversationByTitle(page: Page, title: string): Promise<void> {
+  const expandSidebar = page.getByRole('button', { name: '展开侧边栏' })
+  if (await expandSidebar.isVisible()) {
+    await expandSidebar.click()
+    await page.locator('.mode-switcher-track').first().waitFor({ timeout: 15_000 })
+  }
   const railButton = page.locator(`button[aria-label="打开Chat 对话：${title}"]`)
   try {
     await railButton.first().click({ timeout: 10_000 })
@@ -542,6 +548,43 @@ async function main(): Promise<void> {
     }
     check('restart-recovery-dom', domRecovery,
       `重启后侧边栏打开「${persisted.title ?? '?'}」，DOM 中 ${MARKERS.text} ${domRecovery ? '可见' : '不可见'}`)
+
+    // ===== 场景 8：Chat → Agent → Chat 模式真实 UI 往返，Chat 状态不丢 =====
+    // 走 ModeSwitcher 分段控件（role=tab）真实点击；切回 Chat 时
+    // findSessionToRestore 命中 currentConversationId，恢复刚才的对话。
+    {
+      let switchToAgentOk = false
+      let roundtripDomOk = false
+      let roundtripError = ''
+      try {
+        const switcher = page2.locator('.mode-switcher-track').first()
+        await switcher.getByRole('tab', { name: 'Agent', exact: true }).click()
+        // Agent 模式挂载标志：Agent composer（无 Agent 会话时自动创建草稿会话）
+        await page2.locator('[data-input-mode="agent"] .ProseMirror').first().waitFor({ timeout: 30_000 })
+        switchToAgentOk = true
+
+        await switcher.getByRole('tab', { name: 'Chat', exact: true }).click()
+        await page2.locator('[data-input-mode="chat"] .ProseMirror').first().waitFor({ timeout: 30_000 })
+        // 切回后恢复原对话，最终消息仍在 DOM
+        await page2.getByText(MARKERS.text, { exact: false }).first().waitFor({ timeout: 30_000 })
+        roundtripDomOk = true
+      } catch (error) {
+        roundtripError = error instanceof Error ? error.message.split('\n')[0] ?? '' : String(error)
+      }
+
+      // 数据层：往返后消息仍完整（以 G0文本流 对话为准）
+      let messagesIntact = false
+      if (persisted.found && persisted.id) {
+        messagesIntact = await page2.evaluate(async ([id, marker]) => {
+          const msgs = await (window as unknown as {
+            electronAPI: { getConversationMessages: (id: string) => Promise<Array<{ role: string; content: string }>> }
+          }).electronAPI.getConversationMessages(id)
+          return msgs.some((m) => m.role === 'assistant' && m.content.includes(marker))
+        }, [persisted.id, MARKERS.text] as const)
+      }
+      check('chat-agent-mode-roundtrip', switchToAgentOk && roundtripDomOk && messagesIntact,
+        `ModeSwitcher 切到 Agent=${switchToAgentOk}，切回 Chat 后「${persisted.title ?? '?'}」恢复且 ${MARKERS.text} 可见=${roundtripDomOk}，消息数据完整=${messagesIntact}${roundtripError ? `，异常: ${roundtripError.slice(0, 120)}` : ''}`)
+    }
 
     // Fake server 请求日志摘要（证据）
     const summary = server.logs.map((l) =>

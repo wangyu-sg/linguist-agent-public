@@ -24,6 +24,8 @@
  *                   （客户端 sse-reader.ts 首字节前对 408/425/429/5xx 最多重试 5 次）
  * - `fake-context`  400 context_length_exceeded 错误体
  * - `fake-cancel`   慢速滴灌长流，便于客户端中途 stop
+ * - `fake-stop-retry` 首次慢速长流，第二次同模型请求返回最终文本；用于验证
+ *                     Stop 后同会话重试不会依赖偷偷切换模型
  *
  * 非流式请求（`stream` 缺省/false，标题生成走这里）返回普通 JSON completion，
  * content 固定为 `标题-<model>`，使每个对话的自动标题确定且唯一。
@@ -65,6 +67,7 @@ export const FAKE_MODEL_IDS = [
   'fake-retry',
   'fake-context',
   'fake-cancel',
+  'fake-stop-retry',
   'fake-cat-segments',
   'fake-cat-summary',
   'fake-cat-proposal',
@@ -615,7 +618,22 @@ export async function startFakeModelServer(port = 0, options: FakeModelServerOpt
           return
         }
 
-        case 'cancel': {
+        case 'cancel':
+        case 'stop-retry': {
+          if (scenario === 'stop-retry') {
+            const attempts = (streamAttemptsByModel.get(model) ?? 0) + 1
+            streamAttemptsByModel.set(model, attempts)
+            if (attempts > 1) {
+              writeSseHeaders(res)
+              await drip(
+                res,
+                req,
+                [sseChunk(model, { content: `同模型重试成功。${MARKERS.text}` }, 'stop')],
+                80,
+              )
+              return
+            }
+          }
           writeSseHeaders(res)
           const lines: string[] = [sseChunk(model, { role: 'assistant' })]
           for (let i = 1; i <= 120; i++) {

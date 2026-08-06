@@ -11,7 +11,7 @@ export const LINGUIST_BUILD_METADATA = {
   promaBaseCommit: 'bde00f00323d6735a939d14dbce3b2f1a5b672bc',
   formalMergeCommit: 'f3d2b431996523a4aa75ec2b027dcf0e932ef08f',
   catSchema: 13,
-  promptContract: 'Profile 2.0.0 · Project Digest 1.0.0 · Turn Context 1',
+  promptContract: 'Profile 2.1.0 · Quality Contract 1.0.0 · Project Digest 1.0.0 · Turn Context 1',
   hostContract: '未单独版本化',
   hostContractDetail: '代码未定义独立 runtime version constant',
 } as const

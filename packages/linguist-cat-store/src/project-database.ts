@@ -30,6 +30,7 @@ import { CriticArtifactsRepository } from './repositories/critic-artifacts'
 import { ExportsRepository } from './repositories/exports'
 import { ProposalsRepository } from './repositories/proposals'
 import { QaFindingsRepository } from './repositories/qa-findings'
+import { ReferenceImportsRepository } from './repositories/reference-imports'
 import { SegmentsRepository } from './repositories/segments'
 import { SentencePatternsRepository } from './repositories/sentence-patterns'
 import { StyleGuideRulesRepository } from './repositories/style-guide-rules'
@@ -58,6 +59,7 @@ export class ProjectDatabase {
   readonly exports: ExportsRepository
   readonly tmUnits: TmUnitsRepository
   readonly termEntries: TermEntriesRepository
+  readonly referenceImports: ReferenceImportsRepository
   readonly criticArtifacts: CriticArtifactsRepository
   readonly styleGuideRules: StyleGuideRulesRepository
   readonly sentencePatterns: SentencePatternsRepository
@@ -69,20 +71,21 @@ export class ProjectDatabase {
   private constructor(catDb: CatDatabase, projectId: ProjectId, now: () => string) {
     this.catDb = catDb
     this.projectId = projectId
+    this.runs = new RunHarnessRepository(catDb, projectId, now)
     this.assets = new AssetsRepository(catDb, projectId, now)
-    this.segments = new SegmentsRepository(catDb)
+    this.segments = new SegmentsRepository(catDb, this.runs)
     this.proposals = new ProposalsRepository(catDb)
     this.qaFindings = new QaFindingsRepository(catDb, now)
     this.exports = new ExportsRepository(catDb, projectId, now)
-    this.tmUnits = new TmUnitsRepository(catDb, projectId, now)
-    this.termEntries = new TermEntriesRepository(catDb, projectId, now)
+    this.tmUnits = new TmUnitsRepository(catDb, projectId, now, this.runs)
+    this.termEntries = new TermEntriesRepository(catDb, projectId, now, this.runs)
+    this.referenceImports = new ReferenceImportsRepository(catDb, projectId, now)
     this.criticArtifacts = new CriticArtifactsRepository(catDb, now)
-    this.styleGuideRules = new StyleGuideRulesRepository(catDb, projectId, now)
+    this.styleGuideRules = new StyleGuideRulesRepository(catDb, projectId, now, this.runs)
     this.sentencePatterns = new SentencePatternsRepository(catDb, projectId, now)
     this.contextDocs = new ContextDocsRepository(catDb, projectId, now)
     this.techConstraints = new TechConstraintsRepository(catDb, projectId, now)
     this.voiceProfiles = new VoiceProfilesRepository(catDb, projectId, now)
-    this.runs = new RunHarnessRepository(catDb, projectId, now)
   }
 
   static open(dbPath: string, options: ProjectDatabaseOptions): ProjectDatabase {

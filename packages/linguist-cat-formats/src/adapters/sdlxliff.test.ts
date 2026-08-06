@@ -337,6 +337,30 @@ describe('SdlXliffAdapter round-trip（assertRoundTrip harness）', () => {
     expect(out).toContain('<target xml:space="preserve"><mrk mtype="seg" mid="1">One</mrk><mrk mtype="seg" mid="2">Two</mrk></target>')
   })
 
+  test('自闭合 target mrk 原位展开，保留外层 g 与兄弟段顺序', async () => {
+    const xml = `<?xml version="1.0"?>
+<xliff xmlns:sdl="http://sdl.com/FileTypes/SdlXliff/1.0" version="1.2"><file><body>
+  <trans-unit id="tu1"><source>agg</source>
+    <seg-source><mrk mtype="seg" mid="1">一</mrk><mrk mtype="seg" mid="2">二</mrk></seg-source>
+    <target><g id="10"><mrk mtype="seg" mid="1"/><mrk mtype="seg" mid="2"/></g></target>
+  </trans-unit>
+</body></file></xliff>`
+    const bytes = new TextEncoder().encode(xml)
+    const { adapter, imported } = await importSdl(bytes, 'self-closing-mrk.sdlxliff')
+    const { asset, segments } = await boundSegments('self-closing-mrk.sdlxliff', imported)
+    const edited = segments.map((segment) =>
+      segment.key === '2' ? { ...segment, target: 'Two' } : segment,
+    )
+    const out = new TextDecoder().decode(await adapter.export({ originalBytes: bytes, asset, segments: edited }))
+    expect(out).toContain('<g id="10"><mrk mtype="seg" mid="1"/><mrk mtype="seg" mid="2">Two</mrk></g>')
+    expect((await adapter.import({
+      bytes: new TextEncoder().encode(out),
+      filename: 'self-closing-mrk.sdlxliff',
+      sourceLocale: 'zh-CN',
+      targetLocale: 'en-US',
+    })).segments.map((segment) => segment.target)).toEqual(['', 'Two'])
+  })
+
   test('非分段修改：只写 target（非空补 state="translated"），其余字节不动', async () => {
     const bytes = sdlBytes()
     const { adapter, imported } = await importSdl(bytes)

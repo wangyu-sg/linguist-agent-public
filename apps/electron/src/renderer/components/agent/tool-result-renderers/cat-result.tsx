@@ -264,6 +264,32 @@ function summarizeCatResult(
         ? null
         : { title: '上下文文档', detail: `已读取 ${shown} / ${total} 个字符` }
     }
+    case 'cat_begin_translation_scope': {
+      const requested = count(payload.requested)
+      return requested === null
+        ? null
+        : { title: '翻译范围', detail: `已锁定 ${requested} 个片段` }
+    }
+    case 'cat_finalize_translation_scope': {
+      // 覆盖等式由服务端推导；成功落库时 failed/pending 必为 0，卡片只呈现四类桶。
+      if (!isObject(payload.coverage)) return null
+      const requested = count(payload.coverage.requested)
+      const proposalCreated = count(payload.coverage.proposalCreated)
+      const skipped = count(payload.coverage.skipped)
+      const blocked = count(payload.coverage.blocked)
+      if (
+        requested === null
+        || proposalCreated === null
+        || skipped === null
+        || blocked === null
+      ) return null
+      return {
+        title: '翻译覆盖',
+        detail:
+          `覆盖 ${requested} 段：建议 ${proposalCreated} · 跳过 ${skipped} · 受阻 ${blocked}` +
+          (payload.replayed === true ? '（幂等重放）' : ''),
+      }
+    }
     default:
       return null
   }

@@ -184,6 +184,9 @@ async function boundSegments(name: string, imported: Awaited<ReturnType<XlsxAdap
     originalFilename: name,
     sourceSha256: imported.asset.sourceSha256,
     segmentCount: imported.asset.segmentCount,
+    ...(imported.asset.formatConfigJson === undefined
+      ? {}
+      : { formatConfigJson: imported.asset.formatConfigJson }),
   })
   return { asset, segments: bindImportedSegments(imported.segments, asset.id) }
 }
@@ -274,6 +277,41 @@ describe('XlsxAdapter import（表头映射/单元格类型/锁定/合成 key）
 
     const bad = new XlsxAdapter({ columns: { source: 'does_not_exist' } })
     await expect(importBytes(bytes, 'explicit.xlsx', bad)).rejects.toBeInstanceOf(FormatParseError)
+  })
+
+  test('显式映射可选择非首个工作表，非标准表头不会退回首表', async () => {
+    const sst = newSst()
+    const first = buildSheetXml([
+      [{ s: '说明' }],
+      [{ s: '这个工作表不是翻译批次' }],
+    ], sst)
+    const selected = buildSheetXml([
+      [{ s: '文本编号' }, { s: '中文原文' }, { s: '英文译文' }, { s: '备注' }],
+      [{ s: 'ui.start' }, { s: '开始游戏' }, { s: 'Start' }, { s: '主菜单' }],
+    ], sst)
+    const bytes = await packXlsx({
+      sheets: [{ name: '说明', xml: first }, { name: '本地化', xml: selected }],
+      sharedStringsXml: buildSstXml(sst.values),
+    })
+
+    const adapter = new XlsxAdapter({
+      sheetName: '本地化',
+      columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+    })
+    const imported = await importBytes(bytes, 'non-standard.xlsx', adapter)
+
+    expect(imported.segments).toHaveLength(1)
+    expect(imported.asset.formatConfigJson).toBe(JSON.stringify({
+      version: 1,
+      sheetName: '本地化',
+      columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+    }))
+    expect(imported.segments[0]).toMatchObject({
+      key: 'ui.start',
+      source: '开始游戏',
+      target: 'Start',
+      context: { note: '主菜单' },
+    })
   })
 
   test('单元格类型：inlineStr / 数字 <v> / str / 布尔 / 错误 / 公式缓存值（含 warning）', async () => {
@@ -412,6 +450,40 @@ describe('XlsxAdapter import（表头映射/单元格类型/锁定/合成 key）
 })
 
 describe('XlsxAdapter import 错误路径（typed errors）', () => {
+  test('持久映射的未知版本或字段 fail closed，不会退回默认首表', async () => {
+    const bytes = await simpleXlsx([
+      ['key', 'source', 'target'],
+      ['cfg.one', 'Hello', ''],
+    ])
+    const adapter = new XlsxAdapter()
+    await expect(adapter.import({
+      bytes,
+      filename: 'config.xlsx',
+      sourceLocale: 'en-US',
+      targetLocale: 'zh-CN',
+      formatConfigJson: JSON.stringify({
+        version: 2,
+        sheetName: 'Sheet1',
+        columns: { source: 'source', target: 'target' },
+      }),
+    })).rejects.toBeInstanceOf(FormatParseError)
+
+    const imported = await importBytes(bytes, 'config.xlsx', adapter)
+    const { asset, segments } = await boundSegments('config.xlsx', imported)
+    await expect(adapter.export({
+      originalBytes: bytes,
+      asset: {
+        ...asset,
+        formatConfigJson: JSON.stringify({
+          version: 1,
+          sheetName: 'Sheet1',
+          columns: { source: 'source', target: 'target', guessed: 'key' },
+        }),
+      },
+      segments,
+    })).rejects.toBeInstanceOf(FormatExportError)
+  })
+
   test('空文件/非 zip/无表头/无数据行/无 source 列/重复 key/坏 sst 索引 => FormatParseError', async () => {
     const adapter = new XlsxAdapter()
     const emptySheet = await packXlsx({
@@ -468,6 +540,37 @@ describe('XlsxAdapter import 错误路径（typed errors）', () => {
 })
 
 describe('XlsxAdapter round-trip（assertRoundTrip harness）', () => {
+  test('持久映射让重启后的默认 adapter 仍只写回用户确认的工作表', async () => {
+    const sst = newSst()
+    const cover = buildSheetXml([[{ s: '说明' }], [{ s: '不能作为翻译批次导入' }]], sst)
+    const batch = buildSheetXml([
+      [{ s: '编号' }, { s: '原文' }, { s: '译文' }],
+      [{ s: 'menu.start' }, { s: '开始' }, { s: '' }],
+    ], sst)
+    const bytes = await packXlsx({
+      sheets: [{ name: '封面', xml: cover }, { name: '批次', xml: batch }],
+      sharedStringsXml: buildSstXml(sst.values),
+    })
+    const configured = new XlsxAdapter({
+      sheetName: '批次',
+      columns: { key: '编号', source: '原文', target: '译文' },
+    })
+    const imported = await importBytes(bytes, 'mapped.xlsx', configured)
+    const { asset, segments } = await boundSegments('mapped.xlsx', imported)
+    const edited = segments.map((segment) => ({ ...segment, target: 'Start' }))
+
+    const exported = await new XlsxAdapter().export({ originalBytes: bytes, asset, segments: edited })
+    expect(await entryText(exported, 'xl/worksheets/sheet1.xml')).toBe(await entryText(bytes, 'xl/worksheets/sheet1.xml'))
+    const reimported = await new XlsxAdapter().import({
+      bytes: exported,
+      filename: 'mapped.xlsx',
+      sourceLocale: 'en-US',
+      targetLocale: 'zh-CN',
+      formatConfigJson: asset.formatConfigJson,
+    })
+    expect(reimported.segments).toMatchObject([{ key: 'menu.start', target: 'Start' }])
+  })
+
   test('mini_dialogue 工作簿：字节稳定 + 修改子集写回（锁定段不被 harness 修改）', async () => {
     const report = await assertRoundTrip(new XlsxAdapter(), await miniDialogueXlsx(), {
       filename: 'mini.xlsx',

@@ -7,10 +7,12 @@ import {
   captureLinguistTurnContextSnapshot,
   clearQaFindingsCapability,
   clearLinguistWorkbenchUiStateAtom,
+  createSegmentAgentReference,
   disposeLinguistWorkbenchAtomFamiliesAtom,
   getLinguistWorkbenchAtomFamilyCacheSizes,
   getInvalidLinguistWorkbenchLocationPatch,
   linguistQaFindingsCapabilityAtomFamily,
+  linguistSegmentAgentReferenceAtomFamily,
   linguistTargetEditorCapabilityAtomFamily,
   linguistWorkbenchLocationsAtom,
   parseLinguistWorkbenchLocations,
@@ -159,6 +161,68 @@ describe('项目级 Workbench UI 状态', () => {
     expect(first.context.uiRevision).toBe(1)
     expect(second.context.selectedSegmentIds).toEqual(['seg-fedcba9876543210'])
     expect(second.context.uiRevision).toBe(2)
+  })
+
+  test('given 仅有键盘焦点片段而无显式引用 when 捕获 snapshot then 焦点不进 turn context；显式引用才进', () => {
+    const store = createStore()
+    const projectId = 'prj-0123456789abcdef'
+    const projectState = linguistWorkbenchUiStateAtomFamily(projectId)
+    store.set(projectState, { activeSegmentId: 'seg-0123456789abcdef' })
+
+    // 仅焦点（编辑/滚动/恢复位置）时：默认只有 Project + Batch scope
+    const focusOnly = captureLinguistTurnContextSnapshot(
+      store,
+      projectId,
+      '2026-07-27T08:00:00.000Z',
+    )
+    expect(focusOnly.context.activeSegmentId).toBeUndefined()
+
+    // 显式「为 Agent 引用」后：引用片段进入 turn context
+    store.set(
+      linguistSegmentAgentReferenceAtomFamily(projectId),
+      createSegmentAgentReference('seg-0123456789abcdef', 'ast-0123456789abcdef'),
+    )
+    const withReference = captureLinguistTurnContextSnapshot(
+      store,
+      projectId,
+      '2026-07-27T08:01:00.000Z',
+    )
+    expect(withReference.context.activeSegmentId).toBe('seg-0123456789abcdef')
+
+    // 移除引用后恢复默认 scope，焦点变化不影响 turn context
+    store.set(linguistSegmentAgentReferenceAtomFamily(projectId), undefined)
+    store.set(projectState, { activeSegmentId: 'seg-fedcba9876543210' })
+    const removed = captureLinguistTurnContextSnapshot(
+      store,
+      projectId,
+      '2026-07-27T08:02:00.000Z',
+    )
+    expect(removed.context.activeSegmentId).toBeUndefined()
+  })
+
+  test('given 引用另一批次片段 when 捕获 snapshot then 批次随引用对齐且丢弃旧批次选择', () => {
+    const store = createStore()
+    const projectId = 'prj-0123456789abcdef'
+    store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
+      activeAssetId: 'ast-aaaaaaaaaaaaaaaa',
+      selectedSegmentIds: ['seg-aaaaaaaaaaaaaaaa'],
+    })
+    store.set(
+      linguistSegmentAgentReferenceAtomFamily(projectId),
+      createSegmentAgentReference('seg-bbbbbbbbbbbbbbbb', 'ast-bbbbbbbbbbbbbbbb'),
+    )
+
+    const snapshot = captureLinguistTurnContextSnapshot(
+      store,
+      projectId,
+      '2026-07-27T08:01:00.000Z',
+    )
+
+    expect(snapshot.context).toMatchObject({
+      assetId: 'ast-bbbbbbbbbbbbbbbb',
+      activeSegmentId: 'seg-bbbbbbbbbbbbbbbb',
+      selectedSegmentIds: [],
+    })
   })
 
   test('given 合法的项目偏好 when 解析并再次序列化 then 保留位置与两侧布局且不串项目', () => {
@@ -440,6 +504,7 @@ describe('项目级 Workbench UI 状态', () => {
       const workbenchAtom = linguistWorkbenchUiStateAtomFamily(projectId)
       linguistTargetEditorCapabilityAtomFamily(projectId)
       linguistQaFindingsCapabilityAtomFamily(projectId)
+      linguistSegmentAgentReferenceAtomFamily(projectId)
       store.set(workbenchAtom, { search: `query-${index}` })
       store.set(disposeLinguistWorkbenchAtomFamiliesAtom, projectId)
     }

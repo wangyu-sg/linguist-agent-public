@@ -2,9 +2,11 @@
  * PB-034 会话绑定 nodetest（node --test；真实服务 + 真实会话索引，无 mock）：
  *
  * - 绑定写入：项目内创建对话 → AgentSessionMeta 携带 linguistProjectId +
- *   项目名快照（Pi runtime），落盘 ~/.linguist-agent/agent-sessions.json；普通对话不携带；
+ *   项目名快照 + 冻结 linguistExecutionPolicy，落盘 ~/.linguist-agent/agent-sessions.json；
+ *   普通对话不携带；channel/model/runtime 继承 Proma 全局默认（LA-RUNTIME-001）；
  * - 冻结：updateAgentSessionMeta 无法改写绑定（含 any 断言绕过），
- *   「切换选中项目」（创建/操作其他项目）不影响已存在会话；
+ *   「切换选中项目」（创建/操作其他项目）不影响已存在会话；项目 Execution Policy
+ *   变更也不回写已存在会话；
  * - 绑定异常阻断发送（主进程级）：checkLinguistSessionSendBlock ——
  *   orchestrator preflight 调用的同一函数；archived/missing/unavailable →
  *   TypedError，只有 active/未绑定放行；
@@ -21,7 +23,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentSessionMeta } from '@proma/shared'
 import { makeClock, makeEntropy, makeTempDir } from './test/service-testkit'
@@ -58,12 +60,13 @@ const PROJECT_INPUT = { name: '绑定项目', sourceLocale: 'en', targetLocale: 
 test('binding write: project chat carries frozen binding + name snapshot; normal chat does not', () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT })
-  service.setQualityProfile(project.id, 'best')
+  service.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
 
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
   assert.equal(meta.linguistProjectId, project.id)
   assert.equal(meta.linguistProjectName, '绑定项目')
-  assert.equal(meta.linguistStrategy, 'best')
+  assert.deepEqual(meta.linguistExecutionPolicy, { independentReview: 'risk-based' })
+  // settings.json 不存在时回落 Proma 全局默认 runtime（pi）
   assert.equal(meta.agentRuntime, 'pi')
   // 缺省标题保留 Proma 默认值，首轮消息完成后由统一 title pipeline 命名。
   assert.equal(meta.title, '新 Agent 会话')
@@ -84,10 +87,83 @@ test('binding write: project chat carries frozen binding + name snapshot; normal
   const persisted = onDisk.sessions.find((s) => s.id === meta.id)
   assert.equal(persisted?.linguistProjectId, project.id)
   assert.equal(persisted?.linguistProjectName, '绑定项目')
-  assert.equal(persisted?.linguistStrategy, 'best')
+  assert.deepEqual(persisted?.linguistExecutionPolicy, { independentReview: 'risk-based' })
   const persistedNormal = onDisk.sessions.find((s) => s.id === normal.id)
   assert.equal(persistedNormal && 'linguistProjectId' in persistedNormal, false)
-  assert.equal(persistedNormal?.linguistStrategy, undefined)
+  assert.equal(persistedNormal?.linguistExecutionPolicy, undefined)
+
+  service.closeAll()
+})
+
+test('LA-RUNTIME-001: 项目会话继承 Proma 全局默认 channel/model/runtime 并随绑定冻结', () => {
+  const settingsPath = join(tempHome, '.linguist-agent', 'settings.json')
+  mkdirSync(join(tempHome, '.linguist-agent'), { recursive: true })
+  writeFileSync(settingsPath, JSON.stringify({
+    agentChannelId: 'ch-x',
+    agentModelId: 'm-y',
+    agentRuntime: 'claude',
+  }), 'utf-8')
+  try {
+    const service = makeServiceOnLinguistRoot()
+    const project = service.createProject({ ...PROJECT_INPUT, name: '继承项目' })
+    const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+    assert.equal(meta.channelId, 'ch-x')
+    assert.equal(meta.modelId, 'm-y')
+    assert.equal(meta.agentRuntime, 'claude')
+
+    // 冻结：之后改全局默认不影响已存在会话（会话索引保存创建时快照）
+    writeFileSync(settingsPath, JSON.stringify({
+      agentChannelId: 'ch-z',
+      agentModelId: 'm-w',
+      agentRuntime: 'pi',
+    }), 'utf-8')
+    const current = sessionManager.getAgentSessionMeta(meta.id)
+    assert.equal(current?.channelId, 'ch-x')
+    assert.equal(current?.modelId, 'm-y')
+    assert.equal(current?.agentRuntime, 'claude')
+
+    service.closeAll()
+  } finally {
+    // settings.json 为本用例专用：共享 tempHome 的其他用例必须继续走默认值
+    rmSync(settingsPath, { force: true })
+  }
+})
+
+test('LA-RUNTIME-001: session-binding 不再硬编码 runtime 字面量', () => {
+  const source = readFileSync(new URL('./session-binding.ts', import.meta.url), 'utf-8')
+  assert.equal(source.includes(`'pi'`), false)
+})
+
+test('execution policy freeze: 项目 Execution Policy 变更不回写已存在会话', () => {
+  const service = makeServiceOnLinguistRoot()
+  const project = service.createProject({ ...PROJECT_INPUT, name: '策略冻结项目' })
+  service.setExecutionPolicy(project.id, { independentReview: 'off' })
+
+  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+  assert.deepEqual(meta.linguistExecutionPolicy, { independentReview: 'off' })
+
+  // 改项目默认：已存在会话保持创建时冻结值
+  service.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
+  assert.deepEqual(
+    sessionManager.getAgentSessionMeta(meta.id)?.linguistExecutionPolicy,
+    { independentReview: 'off' },
+  )
+
+  // any 断言绕过类型白名单也无法改写冻结字段
+  const malicious = { linguistExecutionPolicy: { independentReview: 'risk-based' } } as unknown as Parameters<
+    typeof sessionManager.updateAgentSessionMeta
+  >[1]
+  sessionManager.updateAgentSessionMeta(meta.id, malicious)
+  assert.deepEqual(
+    sessionManager.getAgentSessionMeta(meta.id)?.linguistExecutionPolicy,
+    { independentReview: 'off' },
+  )
+
+  // 显式解绑后字段随之清除
+  assert.equal(
+    sessionManager.detachAgentSessionLinguistBinding(meta.id)?.linguistExecutionPolicy,
+    undefined,
+  )
 
   service.closeAll()
 })

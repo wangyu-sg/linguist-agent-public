@@ -15,6 +15,8 @@ export interface Asset {
   /** SHA-256 (hex) of the original source bytes. */
   sourceSha256: string
   segmentCount: number
+  /** Adapter-owned, versioned import configuration. CAT Core intentionally does not parse it. */
+  formatConfigJson?: string
 }
 
 export interface CreateAssetInput {
@@ -23,6 +25,7 @@ export interface CreateAssetInput {
   originalFilename: string
   sourceSha256: string
   segmentCount: number
+  formatConfigJson?: string
 }
 
 export function createAsset(input: CreateAssetInput): Asset {
@@ -33,5 +36,6 @@ export function createAsset(input: CreateAssetInput): Asset {
     originalFilename: input.originalFilename,
     sourceSha256: input.sourceSha256,
     segmentCount: input.segmentCount,
+    ...(input.formatConfigJson === undefined ? {} : { formatConfigJson: input.formatConfigJson }),
   }
 }

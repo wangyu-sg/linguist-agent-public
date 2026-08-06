@@ -34,7 +34,7 @@ const project: LinguistProjectInfo = {
   promaWorkspaceId: 'workspace-1',
   createdAt: '2026-07-01T08:00:00.000Z',
   updatedAt: '2026-07-01T08:00:00.000Z',
-  qualityProfile: 'balanced',
+  executionPolicy: { independentReview: 'off' },
 }
 
 const summary: LinguistProjectSummary = {
@@ -97,7 +97,7 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).toContain('data-workbench-slot="asset-navigator"')
     expect(html).toContain('width:240px')
     expect(html).toContain('max-md:absolute')
-    expect(html).toContain('aria-label="调整资产导航宽度"')
+    expect(html).toContain('aria-label="调整批次导航宽度"')
     expect(html).toContain(`aria-valuemin="${ASSET_NAVIGATOR_MIN_WIDTH}"`)
     expect(html).toContain(`aria-valuemax="${ASSET_NAVIGATOR_MAX_WIDTH}"`)
     expect(html).toContain('aria-valuenow="240"')
@@ -108,10 +108,10 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).not.toContain('原生 Agent')
     expect(html).toContain('data-workbench-slot="bottom-dock"')
     expect(html).toContain('height:240px')
-    expect(html).toContain('aria-label="调整语言资源面板高度"')
+    expect(html).toContain('aria-label="调整语言资产面板高度"')
     expect(html).toContain('aria-label="本地化工作台状态栏"')
     expect(html).toContain('翻译草稿 2')
-    expect(html).toContain('全部资产')
+    expect(html).toContain('全部批次')
     expect(html).toContain('未选择片段')
   })
 
@@ -262,5 +262,32 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).not.toContain('data-workbench-slot="asset-navigator"')
     expect(html).not.toContain('data-workbench-slot="agent-rail"')
     expect(html).not.toContain('data-workbench-slot="bottom-dock"')
+  })
+
+  test('given 全部插槽展开 when 渲染工作台 then 结构分隔统一为 0.45 强度 1px hairline', () => {
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { agentPresentation: 'rail' })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={project}
+          summaryState={{ status: 'ready', summary }}
+          onSummaryRefresh={() => undefined}
+          assetNavigator={<div>资产树</div>}
+          agentRail={<div>原生 Agent</div>}
+          bottomDock={<div>语言资源</div>}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
+    )
+
+    // 结构分隔统一标准：1px hsl(var(--border)/0.45)，不得混用阴影或其他强度
+    expect(html).toContain('shadow-[0_1px_0_hsl(var(--border)/0.45)]')
+    expect(html).toContain('shadow-[0_-1px_0_hsl(var(--border)/0.45)]')
+    expect(html).toContain('shadow-[1px_0_0_hsl(var(--border)/0.45)]')
+    expect(html).toContain('shadow-[-1px_0_0_hsl(var(--border)/0.45)]')
+    expect(html).not.toContain('--border)/0.35')
   })
 })

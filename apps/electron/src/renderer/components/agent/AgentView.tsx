@@ -35,6 +35,7 @@ import { PermissionModeSelector } from './PermissionModeSelector'
 import { AskUserBanner } from './AskUserBanner'
 import { ExitPlanModeBanner } from './ExitPlanModeBanner'
 import { PlanModeDashedBorder } from './PlanModeDashedBorder'
+import { resolveAgentAttachmentSaveGate } from './agent-attachment-gate'
 import { ModelSelector } from '@/components/chat/ModelSelector'
 import { AttachmentPreviewItem } from '@/components/chat/AttachmentPreviewItem'
 import { QuotedSelectionChip } from '@/components/diff/QuotedSelectionChip'
@@ -69,7 +70,7 @@ import { cn } from '@/lib/utils'
 import { getActiveAccelerator, getAcceleratorDisplay } from '@/lib/shortcut-registry'
 import { registerShortcut } from '@/lib/shortcut-registry'
 import { supportsChannelPlanQuota } from '@/lib/channel-plan-quota'
-import { previewPanelOpenMapAtom, quotedSelectionMapAtom, currentQuotedSelectionAtom } from '@/atoms/preview-atoms'
+import { previewPanelOpenMapAtom, quotedSelectionMapAtom, quotedSelectionAtomFamily } from '@/atoms/preview-atoms'
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 import {
   agentStreamingStatesAtom,
@@ -689,7 +690,8 @@ export function AgentView({
     }
     return snapshot.context
   }, [captureLinguistTurnContext, sessionMeta?.linguistProjectId])
-  const currentQuotedSelection = useAtomValue(currentQuotedSelectionAtom)
+  // 按自身 prop sessionId 读取引用：嵌入式 Linguist 项目会话不等于全局 current session。
+  const currentQuotedSelection = useAtomValue(quotedSelectionAtomFamily(sessionId))
   const setQuotedSelectionMap = useSetAtom(quotedSelectionMapAtom)
   const openPreview = useOpenPreview()
 
@@ -1527,8 +1529,14 @@ export function AgentView({
       return { referenceBlock: '', attachments: [], additionalDirectories: [] }
     }
 
+    // Linguist 项目绑定会话没有 Proma workspace：附件仍走同一 session 受管存储 IPC，
+    // 目录授权与 binding 校验在主进程完成，renderer 不伪造 workspace。
     const workspace = workspaces.find((w) => w.id === currentWorkspaceId)
-    if (!workspace) {
+    const gate = resolveAgentAttachmentSaveGate({
+      linguistProjectId: sessionMeta?.linguistProjectId,
+      workspaceSlug: workspace?.slug,
+    })
+    if (!gate.canSave) {
       toast.warning('暂时无法发送附件', {
         description: '当前 Agent 会话没有绑定有效项目。请在顶部选择项目，或新建 Agent 会话后重新上传。',
       })
@@ -1605,7 +1613,7 @@ export function AgentView({
     if (filesToSave.length > 0) {
       try {
         const saved = await window.electronAPI.saveFilesToAgentSession({
-          workspaceSlug: workspace.slug,
+          ...(gate.workspaceSlug ? { workspaceSlug: gate.workspaceSlug } : {}),
           sessionId,
           files: filesToSave.map(({ filename, data }) => ({ filename, data })),
         })
@@ -1648,7 +1656,7 @@ export function AgentView({
       })),
       additionalDirectories: Array.from(queuedAdditionalDirectories),
     }
-  }, [currentWorkspaceId, sessionId, setPendingFiles, workspaces])
+  }, [currentWorkspaceId, sessionId, sessionMeta?.linguistProjectId, setPendingFiles, workspaces])
 
   const restoreQueuedAttachmentsToPending = React.useCallback((attachments?: AgentQueuedAttachment[]): void => {
     if (!attachments || attachments.length === 0) return
@@ -2073,7 +2081,12 @@ export function AgentView({
           }
 
           const workspace = workspaces.find((w) => w.id === currentWorkspaceId)
-          const canSave = Boolean(workspace?.slug)
+          // Linguist 绑定会话没有 Proma workspace：由主进程按 session 授权解析受管目录。
+          const dragGate = resolveAgentAttachmentSaveGate({
+            linguistProjectId: sessionMeta?.linguistProjectId,
+            workspaceSlug: workspace?.slug,
+          })
+          const canSave = dragGate.canSave
           const savedRefs: Array<{ path: string; name: string }> = []
           const fallbackFiles: File[] = []
 
@@ -2085,7 +2098,7 @@ export function AgentView({
             try {
               const data = await fileToBase64(file)
               const saved = await window.electronAPI.saveFilesToAgentSession({
-                workspaceSlug: workspace!.slug,
+                ...(dragGate.workspaceSlug ? { workspaceSlug: dragGate.workspaceSlug } : {}),
                 sessionId,
                 files: [{ filename: file.name, data }],
               })
@@ -2126,7 +2139,7 @@ export function AgentView({
       // 无路径信息：回退，所有项按普通文件处理
       addFilesAsAttachments(droppedFiles)
     }
-  }, [sessionId, addFilesAsAttachments, addPanelDirectory, setAttachedDirsMap, workspaces, currentWorkspaceId])
+  }, [sessionId, sessionMeta?.linguistProjectId, addFilesAsAttachments, addPanelDirectory, setAttachedDirsMap, workspaces, currentWorkspaceId])
 
   /** ModelSelector 选择回调 */
   const handleModelSelect = React.useCallback((option: ModelOption): void => {

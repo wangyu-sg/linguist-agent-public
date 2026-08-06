@@ -132,6 +132,41 @@ test('LF-060: asset, segment and QA finding must exist inside the bound project'
   }
 })
 
+test('LF-060: segment scope must belong to the declared asset inside one project', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const assetA = await service.importAsset(project.id, {
+      bytes: readFixture('mini_items.json'),
+      filename: 'mini_items.json',
+    })
+    const assetB = await service.importAsset(project.id, {
+      bytes: readFixture('mini_dialogue.csv'),
+      filename: 'mini_dialogue.csv',
+    })
+    const segmentB = service.openProject(project.id).segments.query({ assetId: assetB.assetId, limit: 1 })[0]!
+
+    assert.throws(
+      () => validateLinguistTurnContextForSession(
+        {
+          schemaVersion: 1,
+          projectId: project.id,
+          assetId: assetA.assetId,
+          activeSegmentId: segmentB.id,
+          selectedSegmentIds: [],
+          capturedAt: CAPTURED_AT,
+          uiRevision: 2,
+        },
+        { linguistProjectId: project.id },
+        service,
+      ),
+      /segment does not belong to context asset/,
+    )
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('LF-062: bound Agent turn requires context while ordinary Agent rejects forged context', () => {
   const service = makeService()
   try {

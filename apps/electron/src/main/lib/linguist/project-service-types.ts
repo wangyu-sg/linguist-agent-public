@@ -3,7 +3,6 @@ import type {
   CurrentStageState,
   EntropySource,
   LinguistProject,
-  LinguistQualityProfile,
   QaFindingDisposition,
   QaFindingSeverity,
   QaIssueType,
@@ -22,6 +21,7 @@ import type {
 import type {
   ContextDoc,
   ExportRecord,
+  ReferenceImport,
   ExportVerification,
   SentencePattern,
   SentencePatternStatus,
@@ -166,6 +166,19 @@ export interface LinguistRestoreResult {
 export interface ImportAssetInput {
   bytes: Uint8Array
   filename: string
+  /** XLSX is only imported after the main process has verified this explicit user mapping. */
+  xlsxMapping?: XlsxImportMapping
+}
+
+export interface XlsxImportMapping {
+  sheetName: string
+  columns: {
+    key?: string
+    source: string
+    target: string
+    locked?: string
+    context?: string
+  }
 }
 
 export interface ImportAssetResult {
@@ -176,6 +189,44 @@ export interface ImportAssetResult {
   segmentCount: number
   warnings: ImportWarning[]
   sourceSha256: string
+  /** LA-INTAKE-007：插入同事务内回读验证报告（失败即回滚，不会随 ok:false 返回）。 */
+  verification: ImportVerificationReport
+}
+
+/**
+ * LA-INTAKE-007 单项导入验证检查；detail 只含计数 / 哈希 / 格式 id 级
+ * 信息，绝无客户文本。
+ */
+export interface ImportVerificationCheck {
+  id: 'segment-count' | 'format' | 'language-pair' | 'source-hash'
+  passed: boolean
+  detail: string
+}
+
+export interface ImportVerificationReport {
+  ok: boolean
+  checks: ImportVerificationCheck[]
+}
+
+/**
+ * LA-INTAKE-007 撤销导入的下游引用计数：Proposal / QA / 评审件 / 导出 /
+ * 人工编辑痕迹 / durable job，全零才允许撤销；任一非零即 IMPORT_UNDO_BLOCKED。
+ * 只含计数，绝无客户文本。
+ */
+export interface ImportUndoReferences {
+  proposals: number
+  qaFindings: number
+  criticArtifacts: number
+  exports: number
+  editedSegments: number
+  jobs: number
+}
+
+export interface UndoImportAssetResult {
+  assetId: string
+  deletedSegments: number
+  /** false = 行已删但 source blob 清尾失败（留下可幂等覆盖的孤儿 blob）。 */
+  sourceBlobRemoved: boolean
 }
 
 export type LinguistReferenceKind = 'tm' | 'terms'
@@ -189,6 +240,10 @@ export interface ImportReferenceResult {
   imported: number
   unchanged: number
   warnings: string[]
+  /**
+   * 本次 TM/TB 文件导入的受管原件；句式库和手工新增的 TM/TB 不会伪造此来源。
+   */
+  source?: ReferenceImport
 }
 
 export interface TmReferenceInfo extends TmUnit {}
@@ -218,6 +273,12 @@ export interface ReferenceQueryPage<T> {
   limit: number
   offset: number
   hasMore: boolean
+}
+
+/** TM/TB 管理器额外携带一次文件导入 provenance；项目语言资产列表不复用它。 */
+export interface ReferenceImportQueryPage<T> extends ReferenceQueryPage<T> {
+  /** 当前 TM/TB 类别的文件导入来源，供管理器打开 Proma Preview Tab。 */
+  imports: ReferenceImport[]
 }
 
 export type LinguistProjectAssetKind =

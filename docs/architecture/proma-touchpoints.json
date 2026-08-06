@@ -196,7 +196,7 @@
     {
       "file": "apps/electron/src/main/lib/agent-orchestrator.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical. LA-PROMPT-001: the Linguist prompt overlay is built once from the canonical prompt contract and rendered per agentRuntime (pi → markdown, otherwise xml)."
     },
     {
       "file": "apps/electron/src/main/lib/agent-prompt-builder.test.ts",
@@ -504,6 +504,11 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
+      "file": "apps/electron/src/renderer/atoms/preview-atoms.ts",
+      "ticket": "LA-HOST-005",
+      "reason": "Local Host Seam: PreviewFile carries an opaque linguist target so the native Preview Tab can mount Linguist batch/context-doc previews without Proma knowing CAT details."
+    },
+    {
       "file": "apps/electron/src/renderer/atoms/project-agent-session-atoms.test.ts",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
@@ -639,6 +644,16 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
+      "file": "apps/electron/src/renderer/components/agent/agent-attachment-gate.test.ts",
+      "ticket": "LA-HOST-005",
+      "reason": "Local Host Seam: verify the attachment save gate keeps ordinary sessions blocked and lets linguist-bound sessions save without a forged workspace slug."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent/agent-attachment-gate.ts",
+      "ticket": "LA-HOST-005",
+      "reason": "Local Host Seam: shared gate decides whether agent file attachments may be saved for a session; linguist project-bound sessions pass without forging a Proma workspace slug while ordinary sessions without workspace stay blocked."
+    },
+    {
       "file": "apps/electron/src/renderer/components/agent/permission-scope.test.ts",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: expose the concrete permission scope and risk without relying on color alone."
@@ -764,6 +779,11 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
+      "file": "apps/electron/src/renderer/components/app-shell/titlebar-safe-area.ts",
+      "ticket": "LA-HOST-005",
+      "reason": "Local Host Seam: single macOS titlebar safe-area derivation shared by the sidebar expanded/collapsed branches so traffic lights never overlap content; replaces per-branch magic numbers."
+    },
+    {
       "file": "apps/electron/src/renderer/components/chat/ChatHeader.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
@@ -822,6 +842,21 @@
       "file": "apps/electron/src/renderer/components/diff/DiffTabContent.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/PreviewPanel.tsx",
+      "ticket": "LA-HOST-005",
+      "reason": "Local Host Seam: the native split preview panel mounts LinguistPreviewBody for linguist targets and hides the default-app open action that requires a host path."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.linguist.test.tsx",
+      "ticket": "LA-HOST-005",
+      "reason": "Local Host Seam: verify the native Preview Tab mounts Linguist batch/context-doc previews and keeps the DiffTabContent path for plain files."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.tsx",
+      "ticket": "LA-HOST-005",
+      "reason": "Local Host Seam: the native Preview Tab branches previewFile.linguist targets to LinguistPreviewBody instead of the DiffTabContent file-reading chain."
     },
     {
       "file": "apps/electron/src/renderer/components/migration/MigrationImportDialog.tsx",

@@ -40,6 +40,9 @@ export class AssetsRepository {
       originalFilename: imported.asset.originalFilename,
       sourceSha256: imported.asset.sourceSha256,
       segmentCount: imported.asset.segmentCount,
+      ...(imported.asset.formatConfigJson === undefined
+        ? {}
+        : { formatConfigJson: imported.asset.formatConfigJson }),
     })
     const segments = bindImportedSegments(imported.segments, asset.id)
     this.insert(asset, segments)
@@ -52,9 +55,18 @@ export class AssetsRepository {
       this.db
         .db
         .prepare(
-          'INSERT INTO assets (id, project_id, format_id, original_filename, source_sha256, segment_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO assets (id, project_id, format_id, original_filename, source_sha256, segment_count, format_config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .run(asset.id, asset.projectId, asset.formatId, asset.originalFilename, asset.sourceSha256, asset.segmentCount, this.now())
+        .run(
+          asset.id,
+          asset.projectId,
+          asset.formatId,
+          asset.originalFilename,
+          asset.sourceSha256,
+          asset.segmentCount,
+          asset.formatConfigJson ?? null,
+          this.now(),
+        )
       const insertSegment = this.db.db.prepare(
         `INSERT INTO segments (id, asset_id, ordinal, key, source, target, source_locale, target_locale, status, locked, revision, source_hash, context_json, current_stage_state, imported_native_status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -88,5 +100,31 @@ export class AssetsRepository {
       | AssetRow
       | undefined
     return row === undefined ? undefined : assetFromRow(row)
+  }
+
+  /**
+   * LA-INTAKE-007 撤销导入专用级联删除：asset 行 + 全部 segment 行 +
+   * 每段 segment_revisions / segment_stage_events，单事务，失败整体回滚。
+   * proposals/qa_findings 对 segments 有 ON DELETE CASCADE 兜底，但正常
+   * 路径走不到——服务层先查下游引用，有引用即拒绝删除。显式逐表删除
+   * 而不是依赖 FK 级联，保证删除集在代码里可读可审。
+   */
+  deleteWithSegments(assetId: AssetId | string): void {
+    this.db.transaction(`delete asset ${assetId} with segments`, () => {
+      this.db.db
+        .prepare(
+          `DELETE FROM segment_revisions
+           WHERE segment_id IN (SELECT id FROM segments WHERE asset_id = ?)`,
+        )
+        .run(assetId)
+      this.db.db
+        .prepare(
+          `DELETE FROM segment_stage_events
+           WHERE segment_id IN (SELECT id FROM segments WHERE asset_id = ?)`,
+        )
+        .run(assetId)
+      this.db.db.prepare('DELETE FROM segments WHERE asset_id = ?').run(assetId)
+      this.db.db.prepare('DELETE FROM assets WHERE id = ?').run(assetId)
+    })
   }
 }

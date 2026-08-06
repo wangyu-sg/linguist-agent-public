@@ -51,9 +51,9 @@ describe('LF-026 packaged 探针合同', () => {
 
   test('Given QA is in the Bottom Dock, When the canonical flow runs QA, Then it opens Resources and scopes actions to the QA panel', () => {
     expect(probe).toContain('openQaFindings(workspace')
-    expect(probe).toContain("getByRole('button', { name: '资源', exact: true })")
-    expect(probe).toContain('section[aria-label="语言资源面板"]')
-    expect(probe).toContain("getByRole('tablist', { name: '语言资源', exact: true })")
+    expect(probe).toContain("getByRole('button', { name: '语言资产', exact: true })")
+    expect(probe).toContain('section[aria-label="语言资产面板"]')
+    expect(probe).toContain("getByRole('tablist', { name: '语言资产', exact: true })")
     expect(probe).toContain("getByRole('tab', { name: 'QA', exact: true })")
     expect(probe).toContain("qaTab.getAttribute('aria-selected')")
     expect(probe).toContain("findings.getByRole('button', { name: '运行整个项目 QA', exact: true })")
@@ -76,9 +76,9 @@ describe('LF-026 packaged 探针合同', () => {
     expect(probe).toContain("getByRole('button', { name: '项目设置', exact: true })")
     expect(probe).toContain("getByRole('dialog', { name: '项目设置', exact: true })")
     expect(probe).toContain("getByRole('tablist', { name: '项目设置分类', exact: true })")
-    expect(probe).toContain("getByRole('tab', { name: '资源', exact: true })")
+    expect(probe).toContain("getByRole('tab', { name: '语言资产', exact: true })")
     expect(probe).toContain("resourcesTab.getAttribute('aria-selected')")
-    expect(probe).toContain('section[aria-label="资产（文件）"]')
+    expect(probe).toContain('section[aria-label="批次（文件）"]')
     expect(probe).toContain('projectSettings.assets.getByRole(')
     expect(probe).toContain("{ name: '导出 mini_game_ui.xliff', exact: true }")
     expect(probe).toContain("{ name: 'Close', exact: true }")
@@ -119,7 +119,7 @@ describe('LF-056 Language Resource Dock packaged 探针合同', () => {
     expect(probe).toContain('bottomDockOpen?: boolean')
     expect(probe).toContain('bottomDockTab?: string')
     expect(probe).toContain('bottomDockHeight?: number')
-    expect(probe).toContain("'调整语言资源面板高度'")
+    expect(probe).toContain("'调整语言资产面板高度'")
     expect(probe).toContain('separatorBox.y + separatorBox.height / 2')
     expect(probe).toContain('const pointerHeightChanged = await waitFor(')
     expect(probe).toContain("await separator.press('End')")
@@ -134,7 +134,7 @@ describe('LF-056 Language Resource Dock packaged 探针合同', () => {
     expect(probe).toContain('lf056-dock-project-isolation')
     expect(probe).toContain('lf056-dock-restart-restores-layout')
     expect(probe).not.toContain(
-      "check('lf056-dock-entry-ready', true, '资源面板与五个 canonical Tab 在 packaged App 可见')",
+      "check('lf056-dock-entry-ready', true, '语言资产面板与五个 canonical Tab 在 packaged App 可见')",
     )
   })
 

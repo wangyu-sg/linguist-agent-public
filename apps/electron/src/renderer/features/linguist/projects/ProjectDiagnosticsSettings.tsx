@@ -33,8 +33,17 @@ const FALLBACK_LABELS: Record<
   string
 > = {
   role: 'Role',
-  strategy: 'Strategy',
   project_digest: 'Project Digest',
+}
+
+/** LA-PROMPT-002：全局预算裁减原因展示文案。 */
+const TRIM_REASON_LABELS: Record<
+  LinguistPromptStatusInfo['trimmedLayers'][number]['reason'],
+  string
+> = {
+  global_budget: '总预算',
+  min_viable_fallback: '最小占位降级',
+  wire_overflow: '防御性硬裁',
 }
 
 function shortHash(value: string): string {
@@ -76,7 +85,7 @@ export function PromptStatusCard({
           ) : (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="size-3.5" aria-hidden="true" />
-              Profile / Role / Strategy / Project Digest 均使用当前资源
+              Profile / Role / Execution Policy / Project Digest 均使用当前资源
             </p>
           )}
         </div>
@@ -111,6 +120,14 @@ export function PromptStatusCard({
               {prompt.projectDigestStatus} · {shortHash(prompt.projectDigestHash)}
             </dd>
           </div>
+          {prompt.trimmedLayers.map((trim) => (
+            <div key={`${trim.layer}:${trim.reason}`} className="flex justify-between gap-3">
+              <dt>预算裁减 · {FALLBACK_LABELS[trim.layer]}</dt>
+              <dd className="font-mono text-foreground">
+                {trim.originalChars} → {trim.finalChars} 字符 · {TRIM_REASON_LABELS[trim.reason]}
+              </dd>
+            </div>
+          ))}
         </dl>
       )}
     </section>
@@ -126,7 +143,7 @@ function DevDiagnostics({
   if (dev === undefined) return null
   const profile = dev.profile === undefined
     ? '无已选项目会话'
-    : `${dev.profile.role} / ${dev.profile.strategy}`
+    : `${dev.profile.role} / ${dev.profile.executionPolicy.independentReview}`
   const recentJob = dev.recentJob.status === 'not_available'
     ? '尚未观测到 Job'
     : `${dev.recentJob.status} · ${dev.recentJob.cursor}/${dev.recentJob.total} · ${dev.recentJob.jobId}`

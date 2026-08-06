@@ -30,6 +30,8 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   OPEN: 'linguist.projects.open',
   /** 导入资产（主进程原生文件选择器；renderer 不传路径/字节） */
   IMPORT: 'linguist.projects.import',
+  /** XLSX 选择后由用户确认 sheet/列映射；renderer 只回传 opaque mapping token。 */
+  CONFIRM_XLSX_MAPPING: 'linguist.projects.confirmXlsxMapping',
   /** 项目摘要（元数据 + 资产列表 + 按状态分段的段计数） */
   GET_SUMMARY: 'linguist.projects.getSummary',
   /** 重命名项目（沿用项目名校验；归档项目只读） */
@@ -40,8 +42,8 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   ARCHIVE: 'linguist.projects.archive',
   /** 可恢复删除（仅已归档项目 + 精确项目名确认） */
   DELETE: 'linguist.projects.delete',
-  /** 设置质量策略档（PB-082；归档项目拒绝） */
-  SET_QUALITY_PROFILE: 'linguist.projects.setQualityProfile',
+  /** 设置 Execution Policy（LA-QUALITY-001，取代 PB-082 质量档位；归档项目拒绝） */
+  SET_EXECUTION_POLICY: 'linguist.projects.setExecutionPolicy',
   /** 设置当前 T/E/P 任务阶段与格式原生输出策略。 */
   SET_WORKFLOW_CONFIG: 'linguist.projects.setWorkflowConfig',
   /** PB-111：全量备份（backup-<ts>/ 目录 + manifest；归档项目也可备份） */
@@ -52,6 +54,8 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   PREVIEW_RESTORE: 'linguist.projects.previewRestore',
   /** PB-111：恢复（整体替换；当前态先快照 pre-restore-<ts>；归档拒绝） */
   RESTORE: 'linguist.projects.restore',
+  /** LA-INTAKE-007：撤销一次导入（无下游引用才允许；归档 fail closed） */
+  UNDO_IMPORT_ASSET: 'linguist.projects.undoImportAsset',
 } as const
 
 export type LinguistProjectIpcChannel =
@@ -247,7 +251,14 @@ export interface LinguistRunUndoResult {
 export const LINGUIST_REFERENCE_IPC_CHANNELS = {
   QUERY_TM: 'linguist.references.queryTm',
   QUERY_TERMS: 'linguist.references.queryTerms',
+  /** 原生选择器解析为短生命周期候选；不写 TM/TB 权威表。 */
   IMPORT: 'linguist.references.import',
+  /** 人工确认候选后才写入 TM/TB 权威表。 */
+  CONFIRM_IMPORT: 'linguist.references.confirmImport',
+  /** 丢弃未确认候选；只释放主进程内存。 */
+  CANCEL_IMPORT: 'linguist.references.cancelImport',
+  /** 未确认候选的原文件预览（opaque token，零路径/零 bytes 下行）。 */
+  PREVIEW_CANDIDATE: 'linguist.references.previewCandidate',
   UPSERT_TERM: 'linguist.references.upsertTerm',
   DELETE: 'linguist.references.delete',
 } as const
@@ -319,6 +330,8 @@ export const LINGUIST_ASSETS_IPC_CHANNELS = {
   IMPORT_CONTEXT_DOC: 'linguist.assets.importContextDoc',
   /** 原生选择器导入句式 CSV。 */
   IMPORT_SENTENCE_PATTERNS: 'linguist.assets.importSentencePatterns',
+  /** 预览 context 文档 blob（text/html/url 三态分派；纯读，归档项目允许）。 */
+  PREVIEW_CONTEXT_DOC: 'linguist.assets.previewContextDoc',
 } as const
 
 export type LinguistAssetsIpcChannel =
@@ -335,6 +348,8 @@ export type LinguistAssetsIpcChannel =
 export const LINGUIST_ASSET_PREVIEW_IPC_CHANNELS = {
   /** 预览 CAT 资产源文件（text/html/url 三态分派；归档项目允许）。 */
   PREVIEW_SOURCE: 'linguist.project.previewAssetSource',
+  /** 预览 TM/TB 文件导入原件（同一三态分派；归档项目允许）。 */
+  PREVIEW_REFERENCE_IMPORT: 'linguist.project.previewReferenceImport',
 } as const
 
 export type LinguistAssetPreviewIpcChannel =
@@ -361,6 +376,8 @@ export const LINGUIST_IPC_ERROR_CODES = {
   PROJECT_DELETE_CONFIRMATION_MISMATCH: 'PROJECT_DELETE_CONFIRMATION_MISMATCH',
   PROJECT_ORDER_CONFLICT: 'PROJECT_ORDER_CONFLICT',
   SESSION_COPY_BLOCKED: 'SESSION_COPY_BLOCKED',
+  IMPORT_VERIFICATION_FAILED: 'IMPORT_VERIFICATION_FAILED',
+  IMPORT_UNDO_BLOCKED: 'IMPORT_UNDO_BLOCKED',
 
   // ---- cat-store 穿透（packages/linguist-cat-store/src/errors.ts）----
   STORE_SQLITE_UNAVAILABLE: 'STORE_SQLITE_UNAVAILABLE',
@@ -398,6 +415,11 @@ export interface LinguistIpcError {
   code: LinguistIpcErrorCode
   /** 人类可读描述；类型化错误透传其 message，未知错误为通用文案。 */
   message: string
+  /**
+   * LA-INTAKE-007：类型化错误可选携带的机器可读计数（如 IMPORT_UNDO_BLOCKED
+   * 的下游引用计数）。只允许非负整数值；绝无客户文本。
+   */
+  details?: Record<string, number>
 }
 
 export type LinguistIpcResult<T> =
@@ -420,6 +442,12 @@ export const LINGUIST_QA_FINDING_ID_PATTERN = /^qaf(?:-[0-9a-f]{16}|_v2_[0-9a-f]
 
 /** TM / TB 记录 id：内容派生且仅在项目内有意义。 */
 export const LINGUIST_REFERENCE_ID_PATTERN = /^(?:tmu|ter)(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
+
+/** TM/TB 原始导入文件 id：内容派生，只用于受管原件预览。 */
+export const LINGUIST_REFERENCE_IMPORT_ID_PATTERN = /^rfi(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
+
+/** 主进程 picker 候选 token；短生命周期，不是持久化身份。 */
+export const LINGUIST_PENDING_IMPORT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** PB-095 项目资产 id：sgr/spn/ctx/tcn/vpr 五前缀，内容派生且仅在项目内有意义。 */
 export const LINGUIST_PROJECT_ASSET_ID_PATTERN = /^(?:sgr|spn|ctx|tcn|vpr)(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/
@@ -481,8 +509,11 @@ export interface LinguistProjectInfo {
   createdAt: string
   updatedAt: string
   archivedAt?: string
-  /** 质量策略档（PB-082，计划 §21）；主进程读取时已规范化，线上必有值。 */
-  qualityProfile: LinguistQualityProfile
+  /**
+   * Execution Policy（LA-QUALITY-001，取代 PB-082 质量档位）；主进程读取时
+   * 已规范化/映射（legacy qualityProfile 会话与项目均可打开），线上必有值。
+   */
+  executionPolicy: LinguistExecutionPolicy
   /** 旧任务/测试夹具可缺省；主进程正常化后线上响应始终提供。 */
   workflowStage?: LinguistWorkflowStage
   outputStatusPolicy?: LinguistWorkflowOutputStatusPolicy
@@ -491,14 +522,30 @@ export interface LinguistProjectInfo {
 }
 
 /**
- * 质量策略档（PB-082，计划 §21）：cat-core LinguistQualityProfile 的线格式
- * 镜像（@proma/shared 不依赖 linguist 包，按既有镜像模式在此重定义）。
- * 不做多模型 Router——用户仍明确选择模型，档位只决定工作流策略。
+ * Execution Policy（LA-QUALITY-001）：cat-core LinguistExecutionPolicy 的
+ * 线格式镜像（@proma/shared 不依赖 linguist 包，按既有镜像模式在此重定义）。
+ * Alpha 版只有 independentReview 一个字段；不做全量多字段策略。
+ */
+export interface LinguistExecutionPolicy {
+  independentReview: LinguistIndependentReview
+}
+
+export type LinguistIndependentReview = 'off' | 'risk-based'
+
+/** independentReview 合法字面量列表（主进程入校验 / renderer 选项渲染共用的唯一真源）。 */
+export const LINGUIST_INDEPENDENT_REVIEWS = ['off', 'risk-based'] as const
+
+/**
+ * Legacy 质量策略档（PB-082，计划 §21；LA-QUALITY-001 起只读）：旧会话
+ * linguistStrategy 与旧 project.json 可能仍携带，读取时经下方映射打开；
+ * 新写入一律不再产生。
  */
 export type LinguistQualityProfile = 'fast' | 'balanced' | 'best'
 
-/** 三档字面量列表（主进程入校验 / renderer 选项渲染共用的唯一真源）。 */
-export const LINGUIST_QUALITY_PROFILES = ['fast', 'balanced', 'best'] as const
+/** Legacy 质量档位 → Execution Policy（fast/balanced → off；best → risk-based）。 */
+export function linguistExecutionPolicyFromLegacyStrategy(value: unknown): LinguistExecutionPolicy {
+  return { independentReview: value === 'best' ? 'risk-based' : 'off' }
+}
 
 export const LINGUIST_WORKFLOW_STAGES = ['translation', 'editing', 'proofreading'] as const
 export type LinguistWorkflowStage = (typeof LINGUIST_WORKFLOW_STAGES)[number]
@@ -679,6 +726,16 @@ export interface LinguistAssetInfo extends LinguistAssetMetadata {
   openQaCount: number
 }
 
+/**
+ * 领域边界（2026-08）：一次导入的双语文件是「批次」（Batch，一次交付任务，
+ * 拥有独立 Segments / QA / Export），不是「语言资产」。语言资产是
+ * LinguistProjectAssetKind 承载的项目级长期资源（Style Guide / Context 等）。
+ * 底层 schema 13 的 assets 表 / asset_id 是兼容存储细节，对外新代码统一使用
+ * Batch 命名；Asset 命名保留为同一类型的兼容别名，不做全仓重命名或 DB 迁移。
+ */
+export type LinguistBatchMetadata = LinguistAssetMetadata
+export type LinguistBatchInfo = LinguistAssetInfo
+
 // ===== 请求 / 响应契约 =====
 
 export interface LinguistProjectListRequest {
@@ -719,15 +776,99 @@ export interface LinguistProjectImportRequest {
   projectId: string
 }
 
+export interface LinguistXlsxMappingColumnPreview {
+  /** 0-based physical worksheet column. */
+  index: number
+  /** Exact header text; this is what a confirmed mapping sends back. */
+  header: string
+  /** false for blank or normalized-duplicate headers, which are unsafe to persist by name. */
+  selectable: boolean
+}
+
+export interface LinguistXlsxMappingSampleCell {
+  columnIndex: number
+  value: string
+  truncated: boolean
+}
+
+export interface LinguistXlsxMappingSampleRow {
+  /** Physical Excel row number, never a display-only ordinal. */
+  rowNo: number
+  cells: LinguistXlsxMappingSampleCell[]
+}
+
+export interface LinguistXlsxMappingPreviewSheet {
+  name: string
+  state: 'visible' | 'hidden' | 'veryHidden'
+  /** Physical header rows returned by the parser; v1 mapping uses the first row. */
+  headerRowNumbers: number[]
+  columns: LinguistXlsxMappingColumnPreview[]
+  sampleRows: LinguistXlsxMappingSampleRow[]
+  coverage: {
+    physicalRows: number
+    dataRows: number
+    nonEmptyDataRows: number
+    emptyDataRows: number
+    shownSampleRows: number
+    truncated: boolean
+  }
+  distortion: {
+    formulaCells: number
+    formulaCellsWithCachedValue: number
+    formulaCellsWithoutCachedValue: number
+    errorCells: number
+    mergedRanges: number
+    mergedCoveredCells: number
+    phoneticRunsExcluded: number
+    ooxmlEscapesRestored: number
+  }
+}
+
+/** Main-process-derived workbook evidence. No filesystem path or source bytes are exposed. */
+export interface LinguistXlsxMappingPreview {
+  sourceSha256: string
+  sheets: LinguistXlsxMappingPreviewSheet[]
+  skippedSheets: Array<{ name: string; state: 'visible' | 'hidden' | 'veryHidden'; reason: string }>
+}
+
+export interface LinguistProjectConfirmXlsxMappingRequest {
+  projectId: string
+  /** Short-lived main-process token bound to the selected source bytes. */
+  mappingId: string
+  /** Renderer echo of preview.sourceSha256; mismatches are rejected. */
+  sourceSha256: string
+  sheetName: string
+  columns: {
+    key?: string
+    source: string
+    target: string
+    locked?: string
+    context?: string
+  }
+}
+
 /**
  * 导入结果。用户在选择器中取消是正常分支（cancelled: true），不是错误；
  * 成功分支携带服务结果 + 被选中文件的 basename（仅为展示元数据，
  * renderer 永远拿不到、也不需要文件系统路径）。
+ * LA-INTAKE-007 起携带导入回读验证报告（导入与验证同一事务，失败即回滚，
+ * 线上只会出现 ok:true 的报告；ok:false 的批次以 IMPORT_VERIFICATION_FAILED
+ * 错误信封返回）。
  */
 export type LinguistProjectImportResult =
   | { cancelled: true }
   | {
       cancelled: false
+      requiresXlsxMapping: true
+      /** Selected basename only; renderer never receives the source path. */
+      filename: string
+      mappingId: string
+      sourceSha256: string
+      preview: LinguistXlsxMappingPreview
+    }
+  | {
+      cancelled: false
+      requiresXlsxMapping: false
       /** 被选中文件的 basename（展示用元数据；绝非路径）。 */
       filename: string
       status: 'imported' | 'skipped-duplicate'
@@ -736,7 +877,13 @@ export type LinguistProjectImportResult =
       segmentCount: number
       warnings: LinguistImportWarning[]
       sourceSha256: string
+      verification: LinguistImportVerificationReport
     }
+
+export type LinguistProjectConfirmXlsxMappingResult = Exclude<
+  LinguistProjectImportResult,
+  { cancelled: true } | { requiresXlsxMapping: true }
+>
 
 export interface LinguistProjectGetSummaryRequest {
   projectId: string
@@ -1018,6 +1165,17 @@ export interface LinguistReferenceQueryResult<T> {
   limit: number
   offset: number
   hasMore: boolean
+  /** 当前 TM/TB 类别的文件导入来源；仅含安全展示元数据。 */
+  imports?: LinguistReferenceImportInfo[]
+}
+
+/** 文件导入型 TM/TB 的安全 provenance；没有本机路径或 blob 相对路径。 */
+export interface LinguistReferenceImportInfo {
+  id: string
+  kind: 'tm' | 'terms'
+  filename: string
+  sourceSha256: string
+  createdAt: string
 }
 
 export interface LinguistReferenceImportRequest {
@@ -1025,13 +1183,80 @@ export interface LinguistReferenceImportRequest {
   kind: 'tm' | 'terms'
 }
 
-export interface LinguistReferenceImportResult {
-  cancelled: boolean
-  filename?: string
-  imported?: number
-  unchanged?: number
-  warnings?: string[]
+/** 有界 TM 候选样本；长文本在主进程截断，完整原件另走 Preview Tab。 */
+export interface LinguistTmReferenceCandidateSample {
+  kind: 'tm'
+  source: string
+  target: string
 }
+
+/** 有界术语候选样本；不代表已进入术语库。 */
+export interface LinguistTermReferenceCandidateSample {
+  kind: 'terms'
+  term: string
+  translation: string
+  status: LinguistTermStatus
+  caseSensitive: boolean
+  note?: string
+}
+
+export type LinguistReferenceCandidateSample =
+  | LinguistTmReferenceCandidateSample
+  | LinguistTermReferenceCandidateSample
+
+/** 解析候选的有界展示摘要；完整解析产物只保留在主进程短生命周期 token 中。 */
+export interface LinguistReferenceCandidateSummary {
+  entryCount: number
+  warningCount: number
+  warnings: string[]
+  samples: LinguistReferenceCandidateSample[]
+  samplesTruncated: boolean
+  valuesTruncated: boolean
+}
+
+/** 选择器取消、待确认候选、已确认写入三态；绝不把路径或 bytes 下行。 */
+export type LinguistReferenceImportResult =
+  | { cancelled: true }
+  | {
+      cancelled: false
+      requiresConfirmation: true
+      filename: string
+      candidateId: string
+      sourceSha256: string
+      summary: LinguistReferenceCandidateSummary
+    }
+  | {
+      cancelled: false
+      requiresConfirmation: false
+      filename: string
+      imported: number
+      unchanged: number
+      warnings: string[]
+      source: LinguistReferenceImportInfo
+    }
+
+/** 确认请求必须完整回显候选的 project/kind/token/hash 绑定。 */
+export interface LinguistReferenceConfirmImportRequest {
+  projectId: string
+  kind: 'tm' | 'terms'
+  candidateId: string
+  sourceSha256: string
+}
+
+export type LinguistReferenceConfirmImportResult = Extract<
+  LinguistReferenceImportResult,
+  { requiresConfirmation: false }
+>
+
+/** 取消只释放内存候选；无项目写入。 */
+export type LinguistReferenceCancelImportRequest = LinguistReferenceConfirmImportRequest
+
+export interface LinguistReferenceCancelImportResult {
+  candidateId: string
+}
+
+/** 确认前的原文件预览请求；token 与 project/kind/hash 都由主进程复核。 */
+export type LinguistReferenceCandidatePreviewRequest = LinguistReferenceConfirmImportRequest
 
 export interface LinguistTermUpsertRequest {
   projectId: string
@@ -1060,8 +1285,10 @@ export interface LinguistReferenceDeleteResult {
   id: string
 }
 
-// ===== 项目资产线类型与请求 / 响应契约（PB-095）=====
+// ===== 项目语言资产线类型与请求 / 响应契约（PB-095）=====
 //
+// 本节的 LinguistProjectAssetKind 才是领域语言中的「语言资产」（项目级长期
+// 复用资源），与上文表示「批次」的 LinguistAssetInfo 严格区分。
 // 以下类型是 cat-store 项目资产域类型（schema v6）的 JSON 线格式镜像
 // （@proma/shared 不依赖 linguist 包）。contextDocs 查询只回元数据：
 // text_extract 全文不下发（模型经 cat_read_context_doc 按需读），
@@ -1269,10 +1496,27 @@ export interface LinguistAssetPreviewRequest {
   assetId: string
 }
 
+/** TM/TB 文件导入原件预览请求；id 由主进程围栏解析，不传路径或字节。 */
+export interface LinguistReferenceImportPreviewRequest {
+  projectId: string
+  importId: string
+}
+
+/**
+ * Context 文档 blob 预览请求（与 PB-089 同源纪律：opaque id 进，
+ * 主进程围栏解析 blobs/ 内绝对路径，零字节/零路径过 IPC）。
+ */
+export interface LinguistContextDocPreviewRequest {
+  projectId: string
+  /** contextDocs 行 opaque id（项目资产 Stable ID；主进程强制形状校验）。 */
+  docId: string
+}
+
 /**
  * 预览结果三态分派（discriminated union）：
- * - text：xliff/xlf/mqxliff/sdlxliff/mxliff/csv/tsv/json 直接读回，
- *   超过主进程截断护栏时截断并置 truncated；
+ * - text：xliff/xlf/mqxliff/sdlxliff/mxliff/csv/tsv/json（批次源文件）或
+ *   md/markdown/txt 等文本类 context 文档直接读回，超过主进程截断护栏时
+ *   截断并置 truncated；
  * - html：docx / xlsx 经 Proma 预览栈转换的 HTML（xlsx 附提取纯文本）；
  * - url：未知扩展名降级，proma-file:// 不透明 token URL 由 renderer 直渲染。
  * filename 恒为资产原始文件名（展示元数据；绝非路径）。
@@ -1300,13 +1544,13 @@ export interface LinguistProjectDeleteResult {
   recoveryName?: string
 }
 
-/** PB-082：设置质量策略档。profile 只接受三档字面量（否则 INVALID_INPUT）。 */
-export interface LinguistProjectSetQualityProfileRequest {
+/** LA-QUALITY-001：设置 Execution Policy。independentReview 只接受闭集字面量（否则 INVALID_INPUT）。 */
+export interface LinguistProjectSetExecutionPolicyRequest {
   projectId: string
-  profile: LinguistQualityProfile
+  executionPolicy: LinguistExecutionPolicy
 }
 
-export type LinguistProjectSetQualityProfileResult = LinguistProjectInfo
+export type LinguistProjectSetExecutionPolicyResult = LinguistProjectInfo
 
 export interface LinguistProjectSetWorkflowConfigRequest {
   projectId: string
@@ -1526,23 +1770,44 @@ export interface LinguistDiagnosticsRequest {
   retry?: boolean
 }
 
+/** LA-PROMPT-002：全局预算裁减记录（只有 project_digest 层可被裁减，固定层永不截断）。 */
+export interface LinguistPromptTrimmedLayerInfo {
+  layer: 'project_digest'
+  /** 进入全局 allocator 时的层正文字符数。 */
+  originalChars: number
+  /** 裁减后的层正文字符数。 */
+  finalChars: number
+  reason: 'global_budget' | 'min_viable_fallback' | 'wire_overflow'
+}
+
 export interface LinguistPromptStatusInfo {
   profileVersion: string
   profileHash: string
+  /** LA-QUALITY-002：恒定专业质量合同层（全角色共享同一 version/hash）。 */
+  contractVersion: string
+  contractHash: string
   role: 'assistant' | 'reviewer' | 'auditor'
   roleVersion: string
   roleHash: string
-  strategy?: LinguistQualityProfile
-  strategyVersion?: string
-  strategyHash?: string
+  /** LA-QUALITY-001：会话冻结的 Execution Policy（仅 assistant 会话注入该层）。 */
+  executionPolicy?: LinguistExecutionPolicy
+  executionPolicyHash?: string
   projectDigestVersion: string
   projectDigestHash: string
   projectDigestRevision: string
   projectDigestStatus: 'ready' | 'partial' | 'unavailable'
   promptHash: string
   degraded: boolean
-  fallbackLayers: Array<'role' | 'strategy' | 'project_digest'>
+  fallbackLayers: Array<'role' | 'project_digest'>
   retryable: boolean
+  /** LA-PROMPT-001：本次探测使用的 renderer（'xml' = Claude byte 兼容；'markdown' = Pi generic）。 */
+  renderer: 'xml' | 'markdown'
+  /** LA-PROMPT-001：canonical prompt contract 版本。 */
+  promptContractVersion: string
+  /** LA-PROMPT-001：canonical contract 序列化的 sha256，跨 renderer 等价比较值。 */
+  promptContractHash: string
+  /** LA-PROMPT-002：全局 Prompt 预算裁减报告（空数组 = 未发生裁减）。 */
+  trimmedLayers: Array<LinguistPromptTrimmedLayerInfo>
 }
 
 export interface LinguistDiagnosticsQaMetrics {
@@ -1575,7 +1840,7 @@ export interface LinguistDevDiagnostics {
   profile?: {
     kind: 'linguist'
     role: 'assistant' | 'reviewer' | 'auditor'
-    strategy: LinguistQualityProfile
+    executionPolicy: LinguistExecutionPolicy
   }
   agentRuntime?: import('./agent-provider').AgentRuntime
   sessionCwd?: string
@@ -1808,7 +2073,7 @@ export type LinguistSessionCopyToProjectResult = Pick<
   | 'linguistProjectId'
   | 'linguistProjectName'
   | 'linguistSessionRole'
-  | 'linguistStrategy'
+  | 'linguistExecutionPolicy'
   | 'createdAt'
   | 'updatedAt'
 >
@@ -2069,4 +2334,80 @@ export interface LinguistMigrationReport {
   /** disposition -> 项目数（五键齐全，缺省 0）。 */
   counts: Record<LinguistMigrationDisposition, number>
   projects: LinguistMigrationProjectReport[]
+}
+
+// ===== 导入验证报告 + 条件撤销导入（LA-INTAKE-007）=====
+//
+// importAsset 在插入同事务内回读验证（段数/格式/语言对/source hash），
+// 失败即整批回滚并以 IMPORT_VERIFICATION_FAILED 信封返回；验证报告随
+// LinguistProjectImportResult 成功分支下行。撤销导入经
+// linguist.projects.undoImportAsset：下游引用（Proposal/QA/评审件/
+// 导出/人工编辑痕迹/durable job）任一非零即 IMPORT_UNDO_BLOCKED，错误 details 只含
+// 分类计数；全零则 asset + segments + 关联行 + source blob 一并消失。
+
+/** 单项导入验证检查；detail 只含计数 / 哈希 / 格式 id，绝无客户文本。 */
+export interface LinguistImportVerificationCheck {
+  id: 'segment-count' | 'format' | 'language-pair' | 'source-hash'
+  passed: boolean
+  detail: string
+}
+
+export interface LinguistImportVerificationReport {
+  ok: boolean
+  checks: LinguistImportVerificationCheck[]
+}
+
+export interface LinguistProjectUndoImportAssetRequest {
+  projectId: string
+  /** CAT 资产 Stable ID（主进程按 LINGUIST_ASSET_ID_PATTERN 严格校验）。 */
+  assetId: string
+}
+
+export interface LinguistProjectUndoImportAssetResult {
+  assetId: string
+  deletedSegments: number
+  /** false = 行已删但 source blob 清尾失败（留下可幂等覆盖的孤儿 blob）。 */
+  sourceBlobRemoved: boolean
+}
+
+// ===== CAT Translation Scope / Coverage Ledger（LA-TRANS-001）=====
+//
+// cat_begin_translation_scope / cat_finalize_translation_scope 的工具结果
+// DTO 镜像（@linguist/cat-tools 为权威定义）。覆盖等式全部由服务端按
+// cat.db 真值推导（proposalCreated = 该段存在 pending Proposal），模型自报
+// 完成度不参与；finalize 被拒时抛 TRANSLATION_SCOPE_INCOMPLETE 并携带同一
+// 计数形状。渲染层经 tool result details JSON 消费，无独立 IPC。
+
+/** 覆盖等式计数：requested = proposalCreated + blocked + skipped + failed + pending。 */
+export interface LinguistCatTranslationScopeCoverage {
+  requested: number
+  proposalCreated: number
+  skipped: number
+  blocked: number
+  failed: number
+  pending: number
+}
+
+/** cat_begin_translation_scope 结果：范围冻结回执（job 已快照每段 baseRevision）。 */
+export interface LinguistCatBeginTranslationScopeResult {
+  scopeJobId: string
+  runId: string
+  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+  requested: number
+  /** 冻结范围身份哈希：segmentIds + baseRevisions 的 canonical SHA-256（LA-CONTEXT-003）。 */
+  scopeDigest: string
+  /** true = 同 toolCallId 幂等重放。 */
+  replayed: boolean
+}
+
+/** cat_finalize_translation_scope 结果：全部解释后落库 completed；重放重建同一计数。 */
+export interface LinguistCatFinalizeTranslationScopeResult {
+  scopeJobId: string
+  runId: string
+  status: 'completed'
+  /** true = 幂等重放（首次 finalize 已落库，本次未产生新写入）。 */
+  replayed: boolean
+  /** 与 begin 回执一致的冻结范围身份哈希；按持久化 job 行推导（LA-CONTEXT-003）。 */
+  scopeDigest: string
+  coverage: LinguistCatTranslationScopeCoverage
 }

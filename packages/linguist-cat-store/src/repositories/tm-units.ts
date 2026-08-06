@@ -1,6 +1,7 @@
 import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
+import type { RunHarnessRepository } from '../run-harness'
 
 export interface TmUnit {
   id: string
@@ -174,6 +175,7 @@ export class TmUnitsRepository {
     private readonly db: CatDatabase,
     private readonly projectId: string,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly events?: RunHarnessRepository,
   ) {}
 
   importMany(inputs: readonly TmUnitImportInput[]): ReferenceImportResult {
@@ -208,6 +210,7 @@ export class TmUnitsRepository {
         )
         imported++
       }
+      if (imported > 0) this.events?.appendProjectEvent({ kind: 'project-updated' })
       return { imported, unchanged }
     })
   }
@@ -246,6 +249,7 @@ export class TmUnitsRepository {
         .prepare('DELETE FROM tm_units WHERE id = ? AND project_id = ?')
         .run(id, this.projectId)
       if (Number(result.changes) === 0) throw new StoreNotFoundError('TM unit', id)
+      this.events?.appendProjectEvent({ kind: 'project-updated' })
     })
   }
 

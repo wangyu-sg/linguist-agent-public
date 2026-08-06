@@ -54,10 +54,10 @@ apps/electron/out/smoke/vertical/
 
 | 路径 | 当前自动证据 | 尚未覆盖 |
 |---|---|---|
-| Agent | packaged 冷启动、Pi 发送、Streaming、Thinking、final | 原生 Agent Stop/Retry UI |
-| Chat | packaged 创建、Streaming、Thinking、Tool、Retry、Stop、重启恢复 | Chat→Agent 往返状态保持 |
+| Agent | packaged 冷启动、Pi 发送、Streaming、Thinking、final、Stop（流式收敛）与 Retry（同会话重发） | — |
+| Chat | packaged 创建、Streaming、Thinking、Tool、Retry、Stop、重启恢复、Chat→Agent 往返状态保持 | — |
 | Linguist | Linguist Mode、Project Tab、Workbench、Agent-CAT、Proposal、QA、导出验证、重启恢复 | macOS 原生 Open/Save Dialog |
 
 G-F1 已由当前 packaged vertical 覆盖。总报告仍固定为 `coverageStatus=partial`，因为
-Agent Stop/Retry、Chat→Agent 往返和 macOS 原生 Open/Save Dialog 尚未全部自动化；
-这些缺口继续记录为 `blocked`，不能提前改写为完整产品资格通过。
+macOS 原生 Open/Save Dialog 尚未自动化；
+该缺口继续记录为 `blocked`，不能提前改写为完整产品资格通过。

@@ -7,10 +7,11 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { LinguistProjectMutationEvent } from '@proma/shared'
 import { createLinguistAssetsIpc, type LinguistAssetsFilePicker } from './assets-ipc'
+import type { LinguistAssetPreviewDeps } from './project-ipc'
 import { INPUT, makeService, makeTempDir } from './test/service-testkit'
 import { projectPaths } from './paths'
 
@@ -24,6 +25,17 @@ const CONTEXT_DOCX_FIXTURE = join(
 /** nodetest 用 fake：与 registerPromaFilePath 同 scheme，不触碰 Electron。 */
 function fakeRegisterPreviewUrl(absPath: string): string {
   return `proma-file://fake-${absPath.split('/').pop()}`
+}
+
+/** nodetest 用 fake 预览转换栈：不触碰 file-preview-service 的重依赖。 */
+function fakeAssetPreviewDeps(overrides: Partial<LinguistAssetPreviewDeps> = {}): LinguistAssetPreviewDeps {
+  return {
+    readText: async (filePath) => ({ content: readFileSync(filePath, 'utf-8') }),
+    convertDocxToHtml: async () => ({ html: '<div class="office-preview">DOCX_HTML</div>' }),
+    convertOfficeToHtml: async () => ({ html: '<div class="office-preview">XLSX_HTML</div>', text: 'xlsx text' }),
+    registerPreviewUrl: fakeRegisterPreviewUrl,
+    ...overrides,
+  }
 }
 
 function picker(paths: string[] | null): { picker: LinguistAssetsFilePicker; calls: () => number } {
@@ -405,6 +417,142 @@ test('assets IPC: image context doc 查询附带 proma-file previewUrl；doc 无
         previewUrl?: string
       }
       assert.equal(degraded.previewUrl, undefined)
+    }
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('assets IPC: previewContextDoc 三态分派（md → text / docx → html / image → url），路径不离 blobs/', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const temp = makeTempDir()
+    const mdPath = join(temp, '术语备忘.md')
+    const pngPath = join(temp, 'hud.png')
+    writeFileSync(mdPath, '# 世界观\n王国与森林。')
+    writeFileSync(pngPath, new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
+    const seenPaths: string[] = []
+    const deps = fakeAssetPreviewDeps({
+      readText: async (filePath) => {
+        seenPaths.push(filePath)
+        return { content: readFileSync(filePath, 'utf-8') }
+      },
+      convertDocxToHtml: async (filePath) => {
+        seenPaths.push(filePath)
+        return { html: '<div class="office-preview">DOCX_HTML</div>' }
+      },
+    })
+    const ipc = createLinguistAssetsIpc({
+      getService: () => service,
+      registerPreviewUrl: fakeRegisterPreviewUrl,
+      assetPreview: deps,
+    })
+
+    const mdImport = await ipc.importContextDoc({ projectId: project.id }, picker([mdPath]).picker)
+    assert.equal(mdImport.ok, true)
+    if (!mdImport.ok || mdImport.data.cancelled) return
+    const docxImport = await ipc.importContextDoc({ projectId: project.id }, picker([CONTEXT_DOCX_FIXTURE]).picker)
+    assert.equal(docxImport.ok, true)
+    if (!docxImport.ok || docxImport.data.cancelled) return
+    const pngImport = await ipc.importContextDoc({ projectId: project.id }, picker([pngPath]).picker)
+    assert.equal(pngImport.ok, true)
+    if (!pngImport.ok || pngImport.data.cancelled) return
+
+    const rootDir = (service as unknown as { rootDir: string }).rootDir
+    // 与实现同侧：macOS temp 目录 /var → /private/var 符号链接，比较前 realpath。
+    const blobsRoot = realpathSync(join(projectPaths(rootDir, project.id).projectDir, 'blobs'))
+
+    // md → text 态：直读内容，filename 为原始文件名；响应不含路径。
+    const mdPreview = await ipc.previewContextDoc({ projectId: project.id, docId: mdImport.data.doc.id })
+    assert.equal(mdPreview.ok, true)
+    if (mdPreview.ok) {
+      assert.equal(mdPreview.data.kind, 'text')
+      if (mdPreview.data.kind === 'text') {
+        assert.equal(mdPreview.data.text, '# 世界观\n王国与森林。')
+        assert.equal(mdPreview.data.truncated, false)
+      }
+      assert.equal(mdPreview.data.filename, '术语备忘.md')
+      assert.equal(JSON.stringify(mdPreview.data).includes(blobsRoot), false)
+    }
+
+    // docx → html 态：转换栈收到的路径已围栏在 blobs/ 内。
+    const docxPreview = await ipc.previewContextDoc({ projectId: project.id, docId: docxImport.data.doc.id })
+    assert.equal(docxPreview.ok, true)
+    if (docxPreview.ok) {
+      assert.equal(docxPreview.data.kind, 'html')
+      if (docxPreview.data.kind === 'html') {
+        assert.match(docxPreview.data.html, /DOCX_HTML/)
+      }
+    }
+
+    // image → url 态：proma-file:// 不透明 token，绝不带盘上路径。
+    const pngPreview = await ipc.previewContextDoc({ projectId: project.id, docId: pngImport.data.doc.id })
+    assert.equal(pngPreview.ok, true)
+    if (pngPreview.ok) {
+      assert.equal(pngPreview.data.kind, 'url')
+      if (pngPreview.data.kind === 'url') {
+        assert.ok(pngPreview.data.url.startsWith('proma-file://'))
+        assert.equal(pngPreview.data.ext, 'png')
+        assert.equal(pngPreview.data.url.includes(blobsRoot), false)
+      }
+    }
+
+    // 转换栈实际收到的路径全部在 blobs/ 内（realpath 围栏生效）。
+    assert.equal(seenPaths.length, 2)
+    for (const seen of seenPaths) {
+      assert.ok(seen.startsWith(blobsRoot), `path escaped blobs/: ${seen}`)
+    }
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('assets IPC: previewContextDoc 归档项目仍可预览（纯读）；未知 id / 坏形状 / 未注入转换栈', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const temp = makeTempDir()
+    const mdPath = join(temp, 'notes.md')
+    writeFileSync(mdPath, 'hello')
+    const ipc = createLinguistAssetsIpc({
+      getService: () => service,
+      registerPreviewUrl: fakeRegisterPreviewUrl,
+      assetPreview: fakeAssetPreviewDeps(),
+    })
+    const imported = await ipc.importContextDoc({ projectId: project.id }, picker([mdPath]).picker)
+    assert.equal(imported.ok, true)
+    if (!imported.ok || imported.data.cancelled) return
+
+    // 归档：预览是纯读操作，仍可用。
+    service.archiveProject(project.id)
+    const archived = await ipc.previewContextDoc({ projectId: project.id, docId: imported.data.doc.id })
+    assert.equal(archived.ok, true)
+    if (archived.ok) assert.equal(archived.data.kind, 'text')
+
+    // 合法形状但不存在的 doc id → STORE_NOT_FOUND。
+    const missing = await ipc.previewContextDoc({ projectId: project.id, docId: 'ctx-0123456789abcdef' })
+    assert.equal(missing.ok, false)
+    if (!missing.ok) assert.equal(missing.error.code, 'STORE_NOT_FOUND')
+
+    // 坏形状 docId / projectId → INVALID_INPUT。
+    const badDoc = await ipc.previewContextDoc({ projectId: project.id, docId: 'not-a-doc' })
+    assert.equal(badDoc.ok, false)
+    if (!badDoc.ok) assert.equal(badDoc.error.code, 'INVALID_INPUT')
+    const badProject = await ipc.previewContextDoc({ projectId: 'nope', docId: imported.data.doc.id })
+    assert.equal(badProject.ok, false)
+    if (!badProject.ok) assert.equal(badProject.error.code, 'INVALID_INPUT')
+
+    // 未注入转换栈 → INTERNAL 降级（不泄露内部细节）。
+    const unwired = createLinguistAssetsIpc({
+      getService: () => service,
+      registerPreviewUrl: fakeRegisterPreviewUrl,
+    })
+    const degraded = await unwired.previewContextDoc({ projectId: project.id, docId: imported.data.doc.id })
+    assert.equal(degraded.ok, false)
+    if (!degraded.ok) {
+      assert.equal(degraded.error.code, 'INTERNAL')
+      assert.equal(degraded.error.message, 'Unexpected internal error.')
     }
   } finally {
     service.closeAll()

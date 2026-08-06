@@ -48,7 +48,7 @@ export function resolveAgentExecutionScope(
         sessionId,
         projectDisplayName: session.linguistProjectName ?? projectId,
         role: profile.kind === 'linguist' ? profile.role : 'assistant',
-        strategy: profile.kind === 'linguist' ? profile.strategy : 'balanced',
+        executionPolicy: profile.kind === 'linguist' ? profile.executionPolicy : { independentReview: 'off' },
         createdAt: new Date(session.createdAt).toISOString(),
       },
     ),

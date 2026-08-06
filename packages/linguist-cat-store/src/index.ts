@@ -63,6 +63,7 @@ export { ProjectDatabase, type ProjectDatabaseOptions } from './project-database
 
 export {
   RunHarnessRepository,
+  translationJobScopeDigest,
   type CheckpointTranslationJobInput,
   type CreateTranslationJobInput,
   type DurableProjectEvent,
@@ -134,6 +135,12 @@ export {
   type TermMatchOptions,
   type TermMatchType,
 } from './repositories/term-entries'
+export {
+  ReferenceImportsRepository,
+  type ReferenceImport,
+  type ReferenceImportInput,
+  type ReferenceImportKind,
+} from './repositories/reference-imports'
 export {
   StyleGuideRulesRepository,
   type StyleGuideRuleInput,

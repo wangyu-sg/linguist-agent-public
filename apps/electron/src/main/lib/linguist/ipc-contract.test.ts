@@ -25,6 +25,7 @@ import {
   LINGUIST_LOCALE_MAX_LENGTH,
   LINGUIST_LOCALE_PATTERN,
   LINGUIST_ASSET_ID_PATTERN,
+  LINGUIST_ASSET_PREVIEW_IPC_CHANNELS,
   LINGUIST_PROJECT_ID_PATTERN,
   LINGUIST_PROJECT_ASSET_ID_PATTERN,
   LINGUIST_PROJECT_IPC_CHANNELS,
@@ -32,6 +33,7 @@ import {
   LINGUIST_PROPOSAL_ID_PATTERN,
   LINGUIST_PROPOSAL_IPC_CHANNELS,
   LINGUIST_QA_FINDING_ID_PATTERN,
+  LINGUIST_REFERENCE_IPC_CHANNELS,
   LINGUIST_REFERENCE_ID_PATTERN,
   LINGUIST_SEGMENT_ID_PATTERN,
   LINGUIST_SESSION_IPC_CHANNELS,
@@ -68,6 +70,30 @@ describe('linguist native export IPC contract (PB-073)', () => {
       PREPARE_ASSET: 'linguist.exports.prepareAsset',
       SAVE_ASSET: 'linguist.exports.saveAsset',
       LIST: 'linguist.exports.list',
+    })
+  })
+})
+
+describe('linguist managed-source preview IPC contract', () => {
+  test('CAT batch 与 TM/TB 文件导入原件共用受管 Preview 通道组', () => {
+    expect(LINGUIST_ASSET_PREVIEW_IPC_CHANNELS).toEqual({
+      PREVIEW_SOURCE: 'linguist.project.previewAssetSource',
+      PREVIEW_REFERENCE_IMPORT: 'linguist.project.previewReferenceImport',
+    })
+  })
+})
+
+describe('linguist TM/TB candidate IPC contract', () => {
+  test('picker candidate is explicitly confirmed/cancelled and previewed without a renderer path', () => {
+    expect(LINGUIST_REFERENCE_IPC_CHANNELS).toEqual({
+      QUERY_TM: 'linguist.references.queryTm',
+      QUERY_TERMS: 'linguist.references.queryTerms',
+      IMPORT: 'linguist.references.import',
+      CONFIRM_IMPORT: 'linguist.references.confirmImport',
+      CANCEL_IMPORT: 'linguist.references.cancelImport',
+      PREVIEW_CANDIDATE: 'linguist.references.previewCandidate',
+      UPSERT_TERM: 'linguist.references.upsertTerm',
+      DELETE: 'linguist.references.delete',
     })
   })
 })
@@ -118,24 +144,26 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
       CREATE: 'linguist.projects.create',
       OPEN: 'linguist.projects.open',
       IMPORT: 'linguist.projects.import',
+      CONFIRM_XLSX_MAPPING: 'linguist.projects.confirmXlsxMapping',
       GET_SUMMARY: 'linguist.projects.getSummary',
       RENAME: 'linguist.projects.rename',
       REORDER_ACTIVE: 'linguist.projects.reorderActive',
       ARCHIVE: 'linguist.projects.archive',
       DELETE: 'linguist.projects.delete',
-      SET_QUALITY_PROFILE: 'linguist.projects.setQualityProfile',
+      SET_EXECUTION_POLICY: 'linguist.projects.setExecutionPolicy',
       SET_WORKFLOW_CONFIG: 'linguist.projects.setWorkflowConfig',
       BACKUP: 'linguist.projects.backup',
       LIST_BACKUPS: 'linguist.projects.listBackups',
       PREVIEW_RESTORE: 'linguist.projects.previewRestore',
       RESTORE: 'linguist.projects.restore',
+      UNDO_IMPORT_ASSET: 'linguist.projects.undoImportAsset',
     })
   })
 
-  test('stable error-code catalog is complete (33 codes)', () => {
+  test('stable error-code catalog is complete (35 codes)', () => {
     const codes: string[] = Object.values(LINGUIST_IPC_ERROR_CODES)
-    expect(codes.length).toBe(33)
-    expect(new Set(codes).size).toBe(33)
+    expect(codes.length).toBe(35)
+    expect(new Set(codes).size).toBe(35)
     // IPC 层
     expect(codes).toContain('INVALID_INPUT')
     expect(codes).toContain('INTERNAL')
@@ -149,6 +177,8 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
       'CONTEXT_DOC_EXTRACT_FAILED',
       'PROJECT_DELETE_REQUIRES_ARCHIVE',
       'PROJECT_DELETE_CONFIRMATION_MISMATCH',
+      'IMPORT_VERIFICATION_FAILED',
+      'IMPORT_UNDO_BLOCKED',
     ]) {
       expect(codes).toContain(c)
     }
@@ -256,12 +286,14 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     'linguistProjectsCreate',
     'linguistProjectsOpen',
     'linguistProjectsImport',
+    'linguistProjectsConfirmXlsxMapping',
+    'linguistProjectsUndoImportAsset',
     'linguistProjectsGetSummary',
     'linguistProjectsRename',
     'linguistProjectsReorderActive',
     'linguistProjectsArchive',
     'linguistProjectsDelete',
-    'linguistProjectsSetQualityProfile',
+    'linguistProjectsSetExecutionPolicy',
     // ===== PB-111 备份 / 恢复 =====
     'linguistProjectsBackup',
     'linguistBackupsList',
@@ -312,14 +344,14 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
       expect(preloadSource).toContain(`${method}:`)
     }
     expect(preloadSource).toContain('LINGUIST_PROJECT_IPC_CHANNELS')
-    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'SET_QUALITY_PROFILE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
+    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'SET_EXECUTION_POLICY', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
       expect(preloadSource).toContain(`LINGUIST_PROJECT_IPC_CHANNELS.${member}`)
     }
   })
 
   test('ipc.ts registers all project channels with the dialog picker injected for import', () => {
     expect(ipcSource).toContain('createLinguistProjectIpc')
-    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'SET_QUALITY_PROFILE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
+    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'SET_EXECUTION_POLICY', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
       expect(ipcSource).toContain(`LINGUIST_PROJECT_IPC_CHANNELS.${member}`)
     }
     expect(ipcSource).toContain('dialog.showOpenDialog')
@@ -335,6 +367,29 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     expect(ipcSource).toContain('LINGUIST_EXPORT_IPC_CHANNELS.PREPARE_ASSET')
     expect(ipcSource).toContain('LINGUIST_EXPORT_IPC_CHANNELS.SAVE_ASSET')
     expect(ipcSource).toContain('dialog.showSaveDialog')
+  })
+
+  test('managed source preview stays wired through preload and main IPC', () => {
+    for (const [member, method] of [
+      ['PREVIEW_SOURCE', 'linguistProjectsPreviewAssetSource'],
+      ['PREVIEW_REFERENCE_IMPORT', 'linguistProjectsPreviewReferenceImport'],
+    ] as const) {
+      expect(preloadSource).toContain(`${method}:`)
+      expect(preloadSource).toContain(`LINGUIST_ASSET_PREVIEW_IPC_CHANNELS.${member}`)
+      expect(ipcSource).toContain(`LINGUIST_ASSET_PREVIEW_IPC_CHANNELS.${member}`)
+    }
+  })
+
+  test('reference candidate confirm/cancel/preview stay wired through preload and main IPC', () => {
+    for (const [member, method] of [
+      ['CONFIRM_IMPORT', 'linguistReferencesConfirmImport'],
+      ['CANCEL_IMPORT', 'linguistReferencesCancelImport'],
+      ['PREVIEW_CANDIDATE', 'linguistReferencesPreviewCandidate'],
+    ] as const) {
+      expect(preloadSource).toContain(`${method}:`)
+      expect(preloadSource).toContain(`LINGUIST_REFERENCE_IPC_CHANNELS.${member}`)
+      expect(ipcSource).toContain(`LINGUIST_REFERENCE_IPC_CHANNELS.${member}`)
+    }
   })
 
   test('PB-102 read-only exports list channel is wired through preload and ipc.ts', () => {

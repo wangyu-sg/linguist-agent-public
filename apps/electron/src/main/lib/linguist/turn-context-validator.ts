@@ -41,8 +41,12 @@ export function validateLinguistTurnContextForSession(
   const segmentIds = new Set(context.selectedSegmentIds)
   if (context.activeSegmentId !== undefined) segmentIds.add(context.activeSegmentId)
   for (const segmentId of segmentIds) {
-    if (db.segments.getById(segmentId) === undefined) {
+    const segment = db.segments.getById(segmentId)
+    if (segment === undefined) {
       throw new LinguistTurnContextOwnershipError('context segment does not belong to bound project')
+    }
+    if (context.assetId !== undefined && segment.assetId !== context.assetId) {
+      throw new LinguistTurnContextOwnershipError('context segment does not belong to context asset')
     }
   }
 

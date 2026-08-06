@@ -276,7 +276,7 @@ export function LocalizationProjectWorkbench({
         <ProjectAgentRail
           projectId={currentProject.id}
           projectName={currentProject.name}
-          qualityProfile={currentProject.qualityProfile}
+          executionPolicy={currentProject.executionPolicy}
           assets={summaryState.status === 'ready' ? summaryState.summary.assets : []}
         />
       )}

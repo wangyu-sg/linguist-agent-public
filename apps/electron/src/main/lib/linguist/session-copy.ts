@@ -12,7 +12,7 @@ import type {
   LinguistSessionCopyBlockReason,
   SDKMessage,
 } from '@proma/shared'
-import { normalizeQualityProfile } from '@linguist/cat-core'
+import { resolveExecutionPolicy, sameExecutionPolicy } from '@linguist/cat-core'
 import {
   createBlankLinguistSessionCopy,
   deleteAgentSession,
@@ -222,7 +222,8 @@ export async function copyLinguistSessionToProject(
   const linguistBinding: AgentSessionLinguistBinding = {
     linguistProjectId: target.id,
     linguistProjectName: target.name,
-    linguistStrategy: normalizeQualityProfile(target.qualityProfile),
+    // LA-QUALITY-001：副本冻结目标项目当前 Execution Policy（legacy 项目经映射）。
+    linguistExecutionPolicy: resolveExecutionPolicy(target),
     ...(source.linguistSessionRole
       ? { linguistSessionRole: source.linguistSessionRole }
       : {}),
@@ -281,7 +282,8 @@ export async function copyLinguistSessionToProject(
       copied.id === source.id
       || copied.linguistProjectId !== latestTarget.id
       || copied.linguistProjectName !== latestTarget.name
-      || copied.linguistStrategy !== normalizeQualityProfile(latestTarget.qualityProfile)
+      || copied.linguistExecutionPolicy === undefined
+      || !sameExecutionPolicy(copied.linguistExecutionPolicy, resolveExecutionPolicy(latestTarget))
       || copied.workspaceId !== undefined
     ) {
       throw new LinguistSessionCopyTargetError('副本绑定校验失败')

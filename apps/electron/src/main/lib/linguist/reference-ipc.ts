@@ -4,11 +4,19 @@
 
 import { readFileSync, statSync } from 'node:fs'
 import { basename } from 'node:path'
+import { sha256Hex } from '@linguist/cat-core'
 import {
   LINGUIST_IMPORT_MAX_BYTES,
+  LINGUIST_PENDING_IMPORT_ID_PATTERN,
   LINGUIST_REFERENCE_ID_PATTERN,
+  type LinguistAssetPreviewResult,
+  type LinguistReferenceCandidatePreviewRequest,
+  type LinguistReferenceCandidateSummary,
+  type LinguistReferenceCancelImportResult,
+  type LinguistReferenceConfirmImportResult,
   type LinguistIpcResult,
   type LinguistReferenceDeleteResult,
+  type LinguistReferenceImportInfo,
   type LinguistReferenceImportResult,
   type LinguistReferenceQueryResult,
   type LinguistTermInfo,
@@ -18,7 +26,14 @@ import {
 } from '@proma/shared'
 import { LinguistImportTooLargeError } from './errors'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
+import { PendingImportFileStore, type PendingImportFileScope } from './pending-import-files'
 import type { LinguistProjectService } from './project-service'
+import type {
+  ReferenceImport,
+  TermEntryImportInput,
+  TmUnitImportInput,
+} from '@linguist/cat-store'
+import { parseTermReference, parseTmReference } from './project-resource-parsers'
 
 const TERM_STATUSES = new Set<LinguistTermStatus>([
   'allowed',
@@ -32,6 +47,22 @@ const QUERY_MAX_LENGTH = 1_000
 const PAGE_MAX = 200
 const TERM_MAX_LENGTH = 1_000
 const NOTE_MAX_LENGTH = 4_000
+const CANDIDATE_SAMPLE_LIMIT = 20
+const CANDIDATE_WARNING_LIMIT = 20
+const CANDIDATE_VALUE_MAX_CHARS = 400
+const PREVIEW_TEXT_MAX_CHARS = 200_000
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/
+
+/** Store 的 blob 相对路径只留在主进程；IPC 只返回可展示 provenance。 */
+function toReferenceImportInfo(source: ReferenceImport): LinguistReferenceImportInfo {
+  return {
+    id: source.id,
+    kind: source.kind,
+    filename: source.originalFilename,
+    sourceSha256: source.sourceSha256,
+    createdAt: source.createdAt,
+  }
+}
 
 export interface LinguistReferencePickerOptions {
   title: string
@@ -50,6 +81,8 @@ export type LinguistReferenceFilePicker = (
 
 export interface LinguistReferenceIpcDeps {
   getService: () => LinguistProjectService
+  /** 与 XLSX 映射共用的 picker bytes token；生产从 main/ipc.ts 注入同一实例。 */
+  pendingFiles?: PendingImportFileStore
 }
 
 function readKind(record: Record<string, unknown>): 'tm' | 'terms' {
@@ -58,6 +91,93 @@ function readKind(record: Record<string, unknown>): 'tm' | 'terms' {
     invalid('kind must be tm or terms')
   }
   return value as 'tm' | 'terms'
+}
+
+function pendingScopeForKind(kind: 'tm' | 'terms'): PendingImportFileScope {
+  return kind === 'tm' ? 'reference-tm' : 'reference-terms'
+}
+
+function readCandidateBinding(input: unknown): LinguistReferenceCandidatePreviewRequest {
+  const record = assertRecord(input)
+  for (const key of Object.keys(record)) {
+    if (!['projectId', 'kind', 'candidateId', 'sourceSha256'].includes(key)) {
+      invalid(`unknown reference candidate field ${JSON.stringify(key)}`)
+    }
+  }
+  const projectId = readProjectId(record)
+  const kind = readKind(record)
+  const candidateId = record.candidateId
+  if (typeof candidateId !== 'string' || !LINGUIST_PENDING_IMPORT_ID_PATTERN.test(candidateId)) {
+    invalid('candidateId must be an opaque pending import token')
+  }
+  const sourceSha256 = record.sourceSha256
+  if (typeof sourceSha256 !== 'string' || !SHA256_HEX_PATTERN.test(sourceSha256)) {
+    invalid('sourceSha256 must be a lowercase SHA-256 hex digest')
+  }
+  return { projectId, kind, candidateId, sourceSha256 }
+}
+
+function requireCandidate(
+  pendingFiles: PendingImportFileStore,
+  request: LinguistReferenceCandidatePreviewRequest,
+) {
+  const pending = pendingFiles.get(request.candidateId, pendingScopeForKind(request.kind))
+  if (
+    pending === undefined
+    || pending.projectId !== request.projectId
+    || pending.sourceSha256 !== request.sourceSha256
+  ) {
+    invalid('reference import candidate is missing, expired, or bound to different source bytes')
+  }
+  return pending
+}
+
+function truncateCandidateValue(value: string): { value: string; truncated: boolean } {
+  if (value.length <= CANDIDATE_VALUE_MAX_CHARS) return { value, truncated: false }
+  return { value: `${value.slice(0, CANDIDATE_VALUE_MAX_CHARS)}…`, truncated: true }
+}
+
+function candidateSummary(
+  kind: 'tm' | 'terms',
+  entries: readonly (TmUnitImportInput | TermEntryImportInput)[],
+  inputWarnings: readonly string[],
+): LinguistReferenceCandidateSummary {
+  let valuesTruncated = false
+  const samples = entries.slice(0, CANDIDATE_SAMPLE_LIMIT).map((entry) => {
+    if (kind === 'tm') {
+      const tm = entry as TmUnitImportInput
+      const source = truncateCandidateValue(tm.source)
+      const target = truncateCandidateValue(tm.target)
+      valuesTruncated ||= source.truncated || target.truncated
+      return { kind, source: source.value, target: target.value } as const
+    }
+    const termEntry = entry as TermEntryImportInput
+    const term = truncateCandidateValue(termEntry.term)
+    const translation = truncateCandidateValue(termEntry.translation)
+    const note = typeof termEntry.note === 'string' ? truncateCandidateValue(termEntry.note) : undefined
+    valuesTruncated ||= term.truncated || translation.truncated || note?.truncated === true
+    return {
+      kind,
+      term: term.value,
+      translation: translation.value,
+      status: termEntry.status,
+      caseSensitive: termEntry.caseSensitive,
+      ...(note === undefined ? {} : { note: note.value }),
+    } as const
+  })
+  const warnings = inputWarnings.slice(0, CANDIDATE_WARNING_LIMIT).map((item) => {
+    const result = truncateCandidateValue(item)
+    valuesTruncated ||= result.truncated
+    return result.value
+  })
+  return {
+    entryCount: entries.length,
+    warningCount: inputWarnings.length,
+    warnings,
+    samples,
+    samplesTruncated: entries.length > samples.length,
+    valuesTruncated,
+  }
 }
 
 function readPage(record: Record<string, unknown>): { query?: string; limit: number; offset: number } {
@@ -149,19 +269,28 @@ function readTermInput(record: Record<string, unknown>): {
 /** 不依赖 Electron，便于用 fake picker + 真实 service 做 node 测试。 */
 export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
   const { getService } = deps
+  const pendingFiles = deps.pendingFiles ?? new PendingImportFileStore()
 
   return {
     queryTm(input: unknown): Promise<LinguistIpcResult<LinguistReferenceQueryResult<LinguistTmInfo>>> {
       return wrap(() => {
         const record = assertRecord(input)
-        return getService().queryTmReferences(readProjectId(record), readPage(record))
+        const page = getService().queryTmReferences(readProjectId(record), readPage(record))
+        return {
+          ...page,
+          imports: page.imports.map(toReferenceImportInfo),
+        }
       })
     },
 
     queryTerms(input: unknown): Promise<LinguistIpcResult<LinguistReferenceQueryResult<LinguistTermInfo>>> {
       return wrap(() => {
         const record = assertRecord(input)
-        return getService().queryTermReferences(readProjectId(record), readTermPage(record))
+        const page = getService().queryTermReferences(readProjectId(record), readTermPage(record))
+        return {
+          ...page,
+          imports: page.imports.map(toReferenceImportInfo),
+        }
       })
     },
 
@@ -189,11 +318,98 @@ export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
           throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_IMPORT_MAX_BYTES)
         }
         const filename = basename(filePath)
-        const result = service.importReference(projectId, kind, {
-          bytes: new Uint8Array(readFileSync(filePath)),
+        const bytes = new Uint8Array(readFileSync(filePath))
+        const project = service.getProject(projectId)
+        const parsed = kind === 'tm'
+          ? parseTmReference({ bytes, filename }, project.sourceLocale, project.targetLocale)
+          : parseTermReference({ bytes, filename }, project.sourceLocale, project.targetLocale)
+        const sourceSha256 = sha256Hex(bytes)
+        const pending = pendingFiles.issue({
+          scope: pendingScopeForKind(kind),
+          projectId,
           filename,
+          sourceSha256,
+          bytes,
         })
-        return { cancelled: false, filename, ...result }
+        return {
+          cancelled: false,
+          filename,
+          requiresConfirmation: true,
+          candidateId: pending.id,
+          sourceSha256,
+          summary: candidateSummary(kind, parsed.entries, parsed.warnings),
+        }
+      })
+    },
+
+    /** 人工确认候选：主进程复核绑定/hash 后才调用既有同事务 authority 写入。 */
+    confirmImport(
+      input: unknown,
+    ): Promise<LinguistIpcResult<LinguistReferenceConfirmImportResult>> {
+      return wrap(() => {
+        const request = readCandidateBinding(input)
+        const service = getService()
+        service.assertProjectWritable(request.projectId)
+        const pending = requireCandidate(pendingFiles, request)
+        if (sha256Hex(pending.bytes) !== request.sourceSha256) {
+          pendingFiles.remove(pending.id, pending.scope)
+          invalid('reference import candidate bytes no longer match sourceSha256')
+        }
+        const result = service.importReference(request.projectId, request.kind, {
+          bytes: pending.bytes,
+          filename: pending.filename,
+        })
+        // importReference 是文件确认专用路径；没有 provenance 表示事务没有完整落地。
+        if (result.source === undefined) {
+          throw new Error('reference import source provenance was not persisted')
+        }
+        pendingFiles.remove(pending.id, pending.scope)
+        return {
+          cancelled: false,
+          requiresConfirmation: false,
+          filename: pending.filename,
+          imported: result.imported,
+          unchanged: result.unchanged,
+          warnings: result.warnings,
+          source: toReferenceImportInfo(result.source),
+        }
+      })
+    },
+
+    /** 取消只释放内存候选；不触碰项目数据库或 blobs。 */
+    cancelImport(
+      input: unknown,
+    ): Promise<LinguistIpcResult<LinguistReferenceCancelImportResult>> {
+      return wrap(() => {
+        const request = readCandidateBinding(input)
+        requireCandidate(pendingFiles, request)
+        pendingFiles.remove(request.candidateId, pendingScopeForKind(request.kind))
+        return { candidateId: request.candidateId }
+      })
+    },
+
+    /** 确认前原件预览：只解码主进程内存 bytes，复用 Proma Preview Tab 的 text 态。 */
+    previewCandidate(
+      input: unknown,
+    ): Promise<LinguistIpcResult<LinguistAssetPreviewResult>> {
+      return wrap(() => {
+        const request = readCandidateBinding(input)
+        // 项目已删除时不继续暴露内存候选；归档仍允许只读预览。
+        getService().getProject(request.projectId)
+        const pending = requireCandidate(pendingFiles, request)
+        let text: string
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(pending.bytes)
+        } catch {
+          invalid('reference import candidate cannot be decoded as UTF-8')
+        }
+        const truncated = text.length > PREVIEW_TEXT_MAX_CHARS
+        return {
+          kind: 'text',
+          text: truncated ? text.slice(0, PREVIEW_TEXT_MAX_CHARS) : text,
+          truncated,
+          filename: pending.filename,
+        }
       })
     },
 

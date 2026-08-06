@@ -21,7 +21,7 @@ const project: LinguistProjectInfo = {
   promaWorkspaceId: 'workspace-1',
   createdAt: '2026-07-01T08:00:00.000Z',
   updatedAt: '2026-07-01T08:00:00.000Z',
-  qualityProfile: 'balanced',
+  executionPolicy: { independentReview: 'off' },
 }
 
 const summary: LinguistProjectSummary = {
@@ -49,7 +49,7 @@ describe('ProjectSettingsSheet', () => {
     expect(closeTag).toContain('titlebar-no-drag')
   })
 
-  test('given 已打开的项目 when 打开项目设置 then 显示项目元信息和资源分类入口', () => {
+  test('given 已打开的项目 when 打开项目设置 then 显示项目元信息和语言资产分类入口', () => {
     const html = renderToStaticMarkup(
       <ProjectSettingsSheetBody
         project={project}
@@ -61,7 +61,7 @@ describe('ProjectSettingsSheet', () => {
     expect(html).toContain('游戏本地化')
     expect(html).toContain('en → zh-CN')
     expect(html).toContain('项目元信息')
-    expect(html).toContain('资源')
+    expect(html).toContain('语言资产')
     expect(html).toContain('维护')
     expect(html).toContain('诊断')
     const resourceTrigger = html.match(/<button[^>]*trigger-resources[^>]*>/)?.[0]
@@ -79,20 +79,27 @@ describe('ProjectSettingsSheet', () => {
           prompt={{
             profileVersion: '1.0.0',
             profileHash: 'profile-hash',
+            contractVersion: '1.0.0',
+            contractHash: 'contract-hash',
             role: 'assistant',
             roleVersion: '1.0.0',
             roleHash: 'role-hash',
-            strategy: 'balanced',
-            strategyVersion: '1.0.0',
-            strategyHash: 'strategy-hash',
+            executionPolicy: { independentReview: 'off' },
+            executionPolicyHash: 'execution-policy-hash',
             projectDigestVersion: '1',
             projectDigestHash: 'project-digest-hash',
             projectDigestRevision: 'rev-1',
             projectDigestStatus: 'partial',
             promptHash: 'prompt-hash',
             degraded: true,
-            fallbackLayers: ['role', 'strategy'],
+            fallbackLayers: ['role', 'project_digest'],
             retryable: true,
+            renderer: 'xml',
+            promptContractVersion: '1.0.0',
+            promptContractHash: 'prompt-contract-hash',
+            trimmedLayers: [
+              { layer: 'project_digest', originalChars: 9000, finalChars: 7000, reason: 'global_budget' },
+            ],
           }}
           loading={false}
           onRetry={() => undefined}
@@ -103,13 +110,15 @@ describe('ProjectSettingsSheet', () => {
 
     expect(html).toContain('Prompt 状态')
     expect(html).toContain('Prompt 已降级')
-    expect(html).toContain('Role、Strategy')
+    expect(html).toContain('Role、Project Digest')
+    expect(html).toContain('预算裁减 · Project Digest')
+    expect(html).toContain('9000 → 7000 字符 · 总预算')
     expect(html).toContain('重新探测')
     expect(html).toContain('预览脱敏内容')
     expect(html).toContain('导出诊断包')
   })
 
-  test('given 项目资源页 when 渲染 then 复用全部既有资源管理能力', () => {
+  test('given 项目语言资产页 when 渲染 then 复用全部既有批次与语言资产管理能力', () => {
     const html = renderToStaticMarkup(
       <ProjectResourceSettings
         project={project}
@@ -118,7 +127,7 @@ describe('ProjectSettingsSheet', () => {
       />,
     )
 
-    expect(html).toContain('资产（文件）')
+    expect(html).toContain('批次（文件）')
     expect(html).toContain('导入文件')
     expect(html).toContain('TM / 术语库 / 句式管理')
     expect(html).toContain('Style Guide')

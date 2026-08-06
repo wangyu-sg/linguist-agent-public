@@ -180,7 +180,7 @@ export function TabBar(): React.ReactElement {
     document.addEventListener('pointerup', handleUp)
   }, [tabs])
 
-  if (tabs.length === 0) return <div className="h-[34px] titlebar-drag-region" />
+  if (tabs.length === 0) return <div className="h-9 titlebar-drag-region" />
 
   return (
     <>
@@ -230,7 +230,6 @@ function TabBarInner({
   const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout>>()
   const fadeTimerRef = React.useRef<ReturnType<typeof setTimeout>>()
   const isWindows = React.useMemo(() => detectIsWindows(), [])
-
   // 文件面板切换（全局共享）：活动 Tab 是 Agent 且面板关闭时，在 TabBar 右上角展示"打开"按钮。
   // 该按钮的 absolute 定位与 DiffPanelTabBar.PanelRightClose 的 mr-1 mb-[3px] 坐标耦合，
   // 若右侧关闭按钮样式变化，这里需同步调整。
@@ -378,7 +377,7 @@ function TabBarInner({
   }, [])
 
   return (
-    <div ref={barRef} className="main-tabbar flex items-end h-[34px] tabbar-bg relative">
+    <div ref={barRef} className="main-tabbar flex h-9 items-end tabbar-bg relative">
       {/* 顶部 TabBar 的空白区域必须保持可拖拽，尤其是 macOS/Windows 自定义标题栏。
           注意：不要把 titlebar-no-drag 加到下面的整条 flex 容器上，否则标签右侧空白会再次失去拖拽能力。
           Windows 上背景拖拽层避开右上角 WindowControls 区域（126px），防止 hitmask 重叠。

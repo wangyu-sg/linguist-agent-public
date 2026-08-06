@@ -1,5 +1,7 @@
 import * as React from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useSetAtom } from 'jotai'
+import { toast } from 'sonner'
 import { AlertTriangle, Check, Loader2, Lock, Pencil, X } from 'lucide-react'
 import type {
   LinguistProposalInfo,
@@ -8,6 +10,16 @@ import type {
   LinguistWorkflowStage,
 } from '@proma/shared'
 import { cn } from '@/lib/utils'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
+import {
+  createSegmentAgentReference,
+  linguistSegmentAgentReferenceAtomFamily,
+} from './cat-workspace-atoms'
 import { gridRowKeyAction, virtualRowKey } from './cat-virtual-utils'
 import {
   QA_SEVERITY_BADGE_CLASSES,
@@ -40,6 +52,7 @@ export type SegmentTextPart = ProtectedTextPart
 export const splitSegmentText = splitProtectedText
 
 export interface SegmentGridProps {
+  projectId: string
   total: number
   segmentIds: readonly string[]
   rows: ReadonlyMap<number, LinguistSegmentInfo>
@@ -81,6 +94,7 @@ export interface SegmentGridProps {
 }
 
 export function SegmentGrid({
+  projectId,
   total,
   segmentIds,
   rows,
@@ -108,6 +122,17 @@ export function SegmentGrid({
 }: SegmentGridProps): React.ReactElement {
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const instructionsId = React.useId()
+  const setSegmentAgentReference = useSetAtom(linguistSegmentAgentReferenceAtomFamily(projectId))
+  /** 显式「为 Agent 引用」：唯一写入入口，滚动/焦点/恢复位置都不会触碰。 */
+  const handleSegmentAgentReference = React.useCallback(
+    (segmentId: string, assetId: string): void => {
+      setSegmentAgentReference(createSegmentAgentReference(segmentId, assetId))
+      toast.success('已为 Agent 引用该片段', {
+        description: '引用片段 chip 会显示在项目 Agent 输入框上方，可随时移除。',
+      })
+    },
+    [setSegmentAgentReference],
+  )
   const rowVirtualizer = useVirtualizer({
     count: total,
     getScrollElement: () => scrollRef.current,
@@ -190,7 +215,10 @@ export function SegmentGrid({
                 segmentId={segmentId}
                 segment={segment}
                 selected={segmentId !== undefined && selectedIds.has(segmentId)}
-                active={
+                // active 只表示「键盘/编辑焦点」：未明确选中片段时不绘制任何假 active。
+                active={segmentId !== undefined && activeSegmentId === segmentId}
+                // roving tabindex 兜底：无 active 片段时首行仅保留键盘入口（不再伪装 active）。
+                tabbable={
                   segmentId !== undefined
                   && (activeSegmentId === segmentId
                     || (activeSegmentId === undefined && virtualRow.index === 0))
@@ -209,6 +237,7 @@ export function SegmentGrid({
                 onOpenQa={onOpenQa}
                 onFocusIndex={onFocusIndex}
                 onToggleSelected={onToggleSelected}
+                onSegmentAgentReference={handleSegmentAgentReference}
                 onSaveTarget={onSaveTarget}
                 onReloadTarget={onReloadTarget}
                 onConfirmAndAdvance={onConfirmAndAdvance}
@@ -285,6 +314,7 @@ interface SegmentRowProps {
   segment?: LinguistSegmentInfo
   selected: boolean
   active: boolean
+  tabbable: boolean
   archived: boolean
   workflowStage: LinguistWorkflowStage
   proposal?: LinguistProposalInfo
@@ -297,6 +327,7 @@ interface SegmentRowProps {
   onOpenQa: (segmentId: string, assetId: string) => void
   onFocusIndex: (index: number) => void
   onToggleSelected: (segmentId: string) => void
+  onSegmentAgentReference: (segmentId: string, assetId: string) => void
   onSaveTarget: (
     index: number,
     segment: LinguistSegmentInfo,
@@ -327,6 +358,7 @@ function SegmentRow({
   segment,
   selected,
   active,
+  tabbable,
   archived,
   workflowStage,
   proposal,
@@ -339,6 +371,7 @@ function SegmentRow({
   onOpenQa,
   onFocusIndex,
   onToggleSelected,
+  onSegmentAgentReference,
   onSaveTarget,
   onReloadTarget,
   onConfirmAndAdvance,
@@ -346,11 +379,11 @@ function SegmentRow({
   onReviewProposal,
   onTargetEditorCapabilityChange,
 }: SegmentRowProps): React.ReactElement {
-  return (
+  const row = (
     <div
       ref={measureElement}
       role="row"
-      tabIndex={active ? 0 : -1}
+      tabIndex={tabbable ? 0 : -1}
       aria-rowindex={index + 2}
       aria-selected={selected}
       aria-current={active ? 'true' : undefined}
@@ -434,7 +467,7 @@ function SegmentRow({
             index={segment.ordinal}
             segmentId={segmentId}
             selected={selected}
-            active={active}
+            tabbable={tabbable}
             onActivate={() => onActiveSegmentChange(segment.id, segment.assetId)}
             onToggleSelected={onToggleSelected}
           />
@@ -447,7 +480,7 @@ function SegmentRow({
             index={segment.ordinal}
             segment={segment}
             expanded={active}
-            active={active}
+            tabbable={tabbable}
             onActivate={onActiveSegmentChange}
           />
           <TargetCell
@@ -457,6 +490,7 @@ function SegmentRow({
             workflowStage={workflowStage}
             expanded={active}
             active={active}
+            tabbable={tabbable}
             onActivate={() => onActiveSegmentChange(segment.id, segment.assetId)}
             onSave={(target) => onSaveTarget(index, segment, target)}
             onReload={() => onReloadTarget(segment.id, index)}
@@ -468,6 +502,7 @@ function SegmentRow({
             segment={segment}
             proposal={proposal}
             active={active}
+            tabbable={tabbable}
             archived={archived}
             workflowStage={workflowStage}
             onActivate={() => onOpenDetails(segment.id, segment.assetId)}
@@ -478,7 +513,7 @@ function SegmentRow({
             index={segment.ordinal}
             loaded={qaLoaded}
             summary={qaSummary}
-            active={active}
+            tabbable={tabbable}
             onActivate={() => onOpenQa(segment.id, segment.assetId)}
           />
           {active && proposal !== undefined && (
@@ -493,6 +528,21 @@ function SegmentRow({
         </>
       )}
     </div>
+  )
+
+  // 「为 Agent 引用」行菜单：唯一显式 segment scope 入口；加载中的占位行不挂菜单。
+  if (segment === undefined) return row
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem
+          onSelect={() => onSegmentAgentReference(segment.id, segment.assetId)}
+        >
+          为 Agent 引用
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
@@ -597,14 +647,14 @@ function SelectionCell({
   index,
   segmentId,
   selected,
-  active,
+  tabbable,
   onActivate,
   onToggleSelected,
 }: {
   index: number
   segmentId: string
   selected: boolean
-  active: boolean
+  tabbable: boolean
   onActivate: () => void
   onToggleSelected: (segmentId: string) => void
 }): React.ReactElement {
@@ -612,7 +662,7 @@ function SelectionCell({
     <span role="gridcell" className="pt-1">
       <input
         type="checkbox"
-        tabIndex={active ? 0 : -1}
+        tabIndex={tabbable ? 0 : -1}
         checked={selected}
         onChange={() => {
           onActivate()
@@ -648,20 +698,20 @@ function SourceCell({
   index,
   segment,
   expanded,
-  active,
+  tabbable,
   onActivate,
 }: {
   index: number
   segment: LinguistSegmentInfo
   expanded: boolean
-  active: boolean
+  tabbable: boolean
   onActivate: (segmentId: string, assetId: string) => void
 }): React.ReactElement {
   return (
     <span role="gridcell" aria-label={`源文：${segment.source}`}>
       <button
         type="button"
-        tabIndex={active ? 0 : -1}
+        tabIndex={tabbable ? 0 : -1}
         aria-label={`查看原始行 ${index + 1} 上下文`}
         onClick={() => onActivate(segment.id, segment.assetId)}
         className={cn(
@@ -682,6 +732,7 @@ function TargetCell({
   workflowStage,
   expanded,
   active,
+  tabbable,
   onActivate,
   onSave,
   onReload,
@@ -694,6 +745,7 @@ function TargetCell({
   workflowStage: LinguistWorkflowStage
   expanded: boolean
   active: boolean
+  tabbable: boolean
   onActivate: () => void
   onSave: (target: string) => Promise<TargetSaveResult>
   onReload: () => Promise<LinguistSegmentInfo | undefined>
@@ -734,7 +786,7 @@ function TargetCell({
         <button
           ref={editButtonRef}
           type="button"
-          tabIndex={active ? 0 : -1}
+          tabIndex={tabbable ? 0 : -1}
           data-target-edit
           disabled={archived || segment.locked}
           aria-label={
@@ -797,6 +849,7 @@ function StatusCell({
   segment,
   proposal,
   active,
+  tabbable,
   archived,
   workflowStage,
   onActivate,
@@ -807,6 +860,7 @@ function StatusCell({
   segment: LinguistSegmentInfo
   proposal?: LinguistProposalInfo
   active: boolean
+  tabbable: boolean
   archived: boolean
   workflowStage: LinguistWorkflowStage
   onActivate: () => void
@@ -830,7 +884,7 @@ function StatusCell({
     >
       <button
         type="button"
-        tabIndex={active ? 0 : -1}
+        tabIndex={tabbable ? 0 : -1}
         aria-label={`查看原始行 ${segment.ordinal + 1} 当前行详情`}
         title={[
           `本轮状态：${segment.locked ? '已锁定' : stageLabel}`,
@@ -876,13 +930,13 @@ function QaCell({
   index,
   loaded,
   summary,
-  active,
+  tabbable,
   onActivate,
 }: {
   index: number
   loaded: boolean
   summary?: SegmentQaSummary
-  active: boolean
+  tabbable: boolean
   onActivate: () => void
 }): React.ReactElement {
   const summaryLabel = !loaded
@@ -894,7 +948,7 @@ function QaCell({
     <span role="gridcell" className="pt-0.5">
       <button
         type="button"
-        tabIndex={active ? 0 : -1}
+        tabIndex={tabbable ? 0 : -1}
         aria-label={`查看原始行 ${index + 1} QA：${summaryLabel}`}
         onClick={onActivate}
         className="flex min-w-0 flex-col items-start rounded-md px-1.5 py-1 text-left text-foreground/60 hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"

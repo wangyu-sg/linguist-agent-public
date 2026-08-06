@@ -141,18 +141,21 @@ async function verifyReimport(
   originalBytes: Uint8Array,
   bytes: Uint8Array,
   expected: readonly Segment[],
+  formatConfigJson?: string,
 ): Promise<ExportVerification> {
   const original = await adapter.import({
     bytes: originalBytes,
     filename,
     sourceLocale: project.sourceLocale,
     targetLocale: project.targetLocale,
+    ...(formatConfigJson === undefined ? {} : { formatConfigJson }),
   })
   const reimported = await adapter.import({
     bytes,
     filename,
     sourceLocale: project.sourceLocale,
     targetLocale: project.targetLocale,
+    ...(formatConfigJson === undefined ? {} : { formatConfigJson }),
   })
   const byPosition = new Map<string, (typeof reimported.segments)[number]>()
   const originalByPosition = new Map<string, (typeof original.segments)[number]>()
@@ -254,6 +257,7 @@ export async function stageAssetExport(input: StageAssetExportInput): Promise<St
     originalBytes,
     bytes,
     segments,
+    asset.formatConfigJson,
   )
 
   const sha256 = sha256Hex(bytes)

@@ -1,10 +1,12 @@
 /**
  * Linguist 项目 ↔ Agent 会话绑定（PB-034；计划 §7.2「Project → Session 绑定」）。
  *
- * 「项目对话」是携带 `linguistProjectId` 的 Pi Agent 会话（AgentSessionMeta，
+ * 「项目对话」是携带 `linguistProjectId` 的 Agent 会话（AgentSessionMeta，
  * 持久化于 ~/.linguist-agent/agent-sessions.json，重启后绑定仍在）。Chat 模式的
  * Conversation 没有工作区/runtime 概念，Batch 4 的 CAT customTools 只会
- * 装配进 Pi 会话，因此绑定只存在于 Agent 会话栈。
+ * 装配进 Agent 会话栈，因此绑定只存在于 Agent 会话栈。
+ * LA-RUNTIME-001：新建项目会话与 ipc.ts 普通创建路径同一来源——继承并冻结
+ * 创建时的 Proma 默认渠道/模型/runtime（settings.json），代码不含 runtime 字面量。
  *
  * 生命周期硬规则（计划 PB-034）：
  * 1. 普通对话（侧栏新建）绝不携带 linguistProjectId；
@@ -28,7 +30,9 @@ import type {
   LinguistSessionBindingStatus,
   TypedError,
 } from '@proma/shared'
-import { normalizeQualityProfile } from '@linguist/cat-core'
+import { resolveExecutionPolicy } from '@linguist/cat-core'
+import { DEFAULT_AGENT_RUNTIME } from '../../../types'
+import { getSettings } from '../settings-service'
 import { createAgentSession, listAgentSessions } from '../agent-session-manager'
 import { LinguistProjectArchivedError } from './errors'
 import type { LinguistProjectService } from './project-service'
@@ -92,9 +96,13 @@ export function getLinguistSessionBinding(
 
 /**
  * 在项目内创建对话：项目必须存在且未归档（归档项目只读，fail closed），
- * 产物为 Pi Agent 会话，元数据携带 linguistProjectId + 项目名快照。
+ * 产物为 Agent 会话，元数据携带 linguistProjectId + 项目名快照。
  * PB-082：role='reviewer' 时创建独立评审会话（meta 写入冻结的
  * linguistSessionRole:'reviewer' 标记，skill 注入走 project-reviewer）。
+ * LA-QUALITY-001：创建时把项目当前 Execution Policy 冻结进 meta
+ * （legacy qualityProfile 项目经映射打开；之后改项目默认不影响已存在会话）。
+ * LA-RUNTIME-001：渠道/模型/runtime 继承并冻结创建时的 Proma 默认
+ * （与 ipc.ts 普通会话创建路径同一 getSettings() 来源）。
  */
 export function createLinguistProjectChatSession(
   service: LinguistProjectService,
@@ -106,12 +114,20 @@ export function createLinguistProjectChatSession(
   }
   // 不传标题时保留 Proma 默认标题，让上游首轮自动标题管线真正触发；项目名已独立存入快照。
   const title = input.title?.trim() || undefined
-  return createAgentSession(title, undefined, undefined, undefined, 'pi', {
-    linguistProjectId: project.id,
-    linguistProjectName: project.name,
-    linguistStrategy: normalizeQualityProfile(project.qualityProfile),
-    ...(input.role !== undefined ? { linguistSessionRole: input.role } : {}),
-  })
+  const settings = getSettings()
+  return createAgentSession(
+    title,
+    settings.agentChannelId,
+    undefined,
+    settings.agentModelId,
+    settings.agentRuntime ?? DEFAULT_AGENT_RUNTIME,
+    {
+      linguistProjectId: project.id,
+      linguistProjectName: project.name,
+      linguistExecutionPolicy: resolveExecutionPolicy(project),
+      ...(input.role !== undefined ? { linguistSessionRole: input.role } : {}),
+    },
+  )
 }
 
 /** 列出绑定到某项目的会话（按 updatedAt 降序）。项目缺失时仍可列出——绑定存在会话侧。 */

@@ -85,7 +85,7 @@ test('PB-073: stages, opens native Save picker, copies to user destination, and 
     if (!result.ok || result.data.cancelled) return
     assert.equal(calls(), 1)
     assert.deepEqual(lastOptions(), {
-      title: '导出翻译资产',
+      title: '导出翻译批次',
       defaultPath: 'mini_dialogue.translated.zh-CN.csv',
     })
     assert.equal(result.data.filename, 'translated-dialogue.csv')

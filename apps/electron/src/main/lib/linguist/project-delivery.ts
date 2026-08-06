@@ -2,16 +2,31 @@ import {
   createAsset,
   nativeStatusForStage,
   normalizeWorkflowStage,
+  type Asset,
+  type LinguistProject,
   type QaFindingSeverity,
 } from '@linguist/cat-core'
-import { FormatUnsupportedError, sha256Hex } from '@linguist/cat-formats'
 import {
+  FormatParseError,
+  FormatUnsupportedError,
+  parseXlsxFormatConfig,
+  serializeXlsxFormatConfig,
+  sha256Hex,
+  XLSX_ADAPTER_ID,
+} from '@linguist/cat-formats'
+import {
+  assetSourceFileName,
   stageAssetExport,
   StoreNotFoundError,
+  type ProjectDatabase,
 } from '@linguist/cat-store'
+import { rmSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   LinguistExportBlockedByQaError,
   LinguistImportTooLargeError,
+  LinguistImportUndoBlockedError,
+  LinguistImportVerificationFailedError,
   LinguistProjectArchivedError,
   mapStoreError,
 } from './errors'
@@ -22,12 +37,16 @@ import { computeLinguistProjectRevision } from './project-revision'
 import type {
   ImportAssetInput,
   ImportAssetResult,
+  ImportUndoReferences,
+  ImportVerificationCheck,
+  ImportVerificationReport,
   LinguistDeliveryBlocker,
   LinguistDeliveryPreflight,
   LinguistDeliveryQaSummary,
   LinguistDeliveryVerification,
   LinguistPreparedDelivery,
   LinguistStagedExport,
+  UndoImportAssetResult,
 } from './project-service-types'
 
 /** 导入体积上限：50MB。 */
@@ -257,7 +276,9 @@ export class ProjectDelivery {
   }
 
   /**
-   * bytes + filename → 格式探测 → 解析 → source blob → 单事务插入。
+   * bytes + filename → 格式探测 → 解析 → source blob → 单事务插入 +
+   * 同事务回读验证（LA-INTAKE-007：段数/格式/语言对/source hash 任一项
+   * 失败即抛 IMPORT_VERIFICATION_FAILED，整批回滚）。
    * asset id 内容寻址，先落盘只可能留下可幂等覆盖的孤儿 blob。
    */
   async importAsset(
@@ -274,6 +295,29 @@ export class ProjectDelivery {
         MAX_IMPORT_BYTES,
       )
     }
+    const adapter = await this.context.registry.detectBest(
+      input.bytes,
+      input.filename,
+    )
+    // 重复检测之前也先要求映射：否则同字节 XLSX 会绕过显式授权边界。
+    if (adapter.id === XLSX_ADAPTER_ID && input.xlsxMapping === undefined) {
+      throw new FormatParseError(
+        XLSX_ADAPTER_ID,
+        input.filename,
+        'XLSX imports require an explicit sheet and source/target column mapping confirmation',
+      )
+    }
+    if (adapter.id !== XLSX_ADAPTER_ID && input.xlsxMapping !== undefined) {
+      throw new FormatParseError(adapter.id, input.filename, 'an XLSX mapping was supplied for a non-XLSX file')
+    }
+    const formatConfigJson = input.xlsxMapping === undefined
+      ? undefined
+      : serializeXlsxFormatConfig({
+          version: 1,
+          sheetName: input.xlsxMapping.sheetName,
+          columns: input.xlsxMapping.columns,
+        })
+    if (formatConfigJson !== undefined) parseXlsxFormatConfig(formatConfigJson, input.filename)
     const sourceSha256 = sha256Hex(input.bytes)
     const db = this.context.openProject(projectId)
     // ponytail: O(n) scan is enough for the current single-file Alpha; add an indexed lookup with batch intake.
@@ -282,8 +326,21 @@ export class ProjectDelivery {
       projectId,
     )
     if (duplicate !== undefined) {
+      if (adapter.id === XLSX_ADAPTER_ID && duplicate.formatConfigJson !== formatConfigJson) {
+        throw new FormatParseError(
+          XLSX_ADAPTER_ID,
+          input.filename,
+          'source bytes are already imported with a different mapping; undo the existing batch before importing with a new mapping',
+        )
+      }
       console.log(
         `[Linguist] 跳过项目内重复资产: 项目 ${projectId} 资产 ${duplicate.id}`,
+      )
+      // 重复跳过零写入：回读验证仍跑一遍并随结果带回（只读；不抛——
+      // 本调用没有可回滚的写入，既有批次的问题由健康检查/完整性扫描负责）。
+      const verification = this.context.call(
+        () => this.verifyImport(db, project, duplicate, duplicate.segmentCount),
+        projectId,
       )
       return {
         status: 'skipped-duplicate',
@@ -292,17 +349,15 @@ export class ProjectDelivery {
         segmentCount: duplicate.segmentCount,
         warnings: [],
         sourceSha256,
+        verification,
       }
     }
-    const adapter = await this.context.registry.detectBest(
-      input.bytes,
-      input.filename,
-    )
     const imported = await adapter.import({
       bytes: input.bytes,
       filename: input.filename,
       sourceLocale: project.sourceLocale,
       targetLocale: project.targetLocale,
+      ...(formatConfigJson === undefined ? {} : { formatConfigJson }),
     })
     const assetPreview = createAsset({
       projectId: project.id,
@@ -310,13 +365,34 @@ export class ProjectDelivery {
       originalFilename: imported.asset.originalFilename,
       sourceSha256: imported.asset.sourceSha256,
       segmentCount: imported.asset.segmentCount,
+      ...(imported.asset.formatConfigJson === undefined
+        ? {}
+        : { formatConfigJson: imported.asset.formatConfigJson }),
     })
     this.context.call(
       () => db.saveAssetSourceForImport(assetPreview, input.bytes),
       projectId,
     )
-    const { asset } = this.context.call(
-      () => db.assets.insertImported(imported),
+    // 插入 + 回读验证同一事务：验证失败抛 typed error，整批回滚，
+    // 项目内绝不留「半个批次」（崩溃窗口只留可幂等覆盖的孤儿 blob）。
+    const { asset, verification } = this.context.call(
+      () =>
+        db.catDb.transaction(`import + verify asset`, () => {
+          const inserted = db.assets.insertImported(imported)
+          const report = this.verifyImport(
+            db,
+            project,
+            inserted.asset,
+            inserted.segments.length,
+          )
+          if (!report.ok) {
+            throw new LinguistImportVerificationFailedError(
+              projectId,
+              report.checks.filter((check) => !check.passed).map((check) => check.id),
+            )
+          }
+          return { asset: inserted.asset, verification: report }
+        }),
       projectId,
     )
     console.log(
@@ -329,6 +405,104 @@ export class ProjectDelivery {
       segmentCount: imported.segments.length,
       warnings: imported.warnings,
       sourceSha256: imported.asset.sourceSha256,
+      verification,
     }
+  }
+
+  /**
+   * LA-INTAKE-007 导入回读验证（调用方负责放进插入同事务）：
+   * 段数 / 格式 / 语言对 / source hash 逐项 passed/failed。
+   * detail 只含计数、哈希与格式 id，绝无客户文本。
+   */
+  private verifyImport(
+    db: ProjectDatabase,
+    project: LinguistProject,
+    asset: Asset,
+    importedSegmentCount: number,
+  ): ImportVerificationReport {
+    const checks: ImportVerificationCheck[] = []
+    // 段数：回读 COUNT 与插入批次、资产行一致
+    const storedSegments = db.segments.count({ assetId: asset.id })
+    checks.push({
+      id: 'segment-count',
+      passed: storedSegments === importedSegmentCount && asset.segmentCount === importedSegmentCount,
+      detail: `expected=${importedSegmentCount} stored=${storedSegments} declared=${asset.segmentCount}`,
+    })
+    // 格式：资产行 formatId 与探测 adapter 推导一致
+    const storedAsset = db.assets.get(asset.id)
+    checks.push({
+      id: 'format',
+      passed: storedAsset?.formatId === asset.formatId,
+      detail: `expected=${asset.formatId} stored=${storedAsset?.formatId ?? 'missing'}`,
+    })
+    // 语言对：库内不存在与项目语言对不一致的段（聚合 COUNT，不加载段行）
+    const mismatched = db.segments.countMismatchedLocalesByAsset(
+      asset.id,
+      project.sourceLocale,
+      project.targetLocale,
+    )
+    checks.push({
+      id: 'language-pair',
+      passed: mismatched === 0,
+      detail: `mismatched=${mismatched}`,
+    })
+    // source hash：回读 source blob，sha256 与资产行一致
+    let sourceHashPassed = false
+    let sourceHashDetail = 'blob-missing'
+    try {
+      const actual = sha256Hex(db.readAssetSource(asset.id))
+      sourceHashPassed = actual === asset.sourceSha256
+      sourceHashDetail = sourceHashPassed
+        ? 'match'
+        : `expected=${asset.sourceSha256} actual=${actual}`
+    } catch {
+      // blob 缺失或 mismatch（StoreNotFoundError / StoreAssetSourceMismatchError）
+      // 统一记为失败检查项；回滚由调用方抛出 typed error 触发
+    }
+    checks.push({ id: 'source-hash', passed: sourceHashPassed, detail: sourceHashDetail })
+    return { ok: checks.every((check) => check.passed), checks }
+  }
+
+  /**
+   * LA-INTAKE-007 撤销一次导入。先查下游引用（Proposal / QA / 评审件 /
+   * 导出 / 人工编辑痕迹 / durable job），任一非零即抛 IMPORT_UNDO_BLOCKED（detail 只含
+   * 计数）；全零 → 单事务删行 → 再删 source blob（文件删除失败只留可
+   * 幂等覆盖的孤儿 blob，与导入崩溃窗口同语义）。归档项目 fail closed。
+   */
+  undoImportAsset(projectId: string, assetId: string): UndoImportAssetResult {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    const asset = this.context.call(() => db.assets.get(assetId), projectId)
+    if (asset === undefined) throw new StoreNotFoundError('asset', assetId)
+
+    const references: ImportUndoReferences = {
+      proposals: this.context.call(() => db.proposals.countByAsset(assetId), projectId),
+      qaFindings: this.context.call(() => db.qaFindings.count({ assetId }), projectId),
+      criticArtifacts: this.context.call(() => db.criticArtifacts.countByAsset(assetId), projectId),
+      exports: this.context.call(() => db.exports.listByAsset(assetId).length, projectId),
+      editedSegments: this.context.call(() => db.segments.countEditedByAsset(assetId), projectId),
+      jobs: this.context.call(() => db.runs.countReferencingAsset(assetId), projectId),
+    }
+    if (Object.values(references).some((count) => count > 0)) {
+      throw new LinguistImportUndoBlockedError(projectId, assetId, references)
+    }
+
+    const deletedSegments = this.context.call(() => {
+      const count = db.segments.count({ assetId })
+      db.assets.deleteWithSegments(assetId)
+      return count
+    }, projectId)
+
+    // source blob 在行删除之后清尾；失败只留孤儿 blob（健康检查不扫、
+    // 重导入幂等覆盖），绝不阻碍已完成的行级撤销
+    let sourceBlobRemoved = false
+    try {
+      rmSync(join(db.sourceDir, assetSourceFileName(asset)), { force: true })
+      sourceBlobRemoved = true
+    } catch {
+      console.warn(`[Linguist] 撤销导入的 source blob 清尾失败（留孤儿 blob）: 项目 ${projectId} 资产 ${assetId}`)
+    }
+    console.log(`[Linguist] 已撤销导入: 项目 ${projectId} 资产 ${assetId}（${deletedSegments} 段）`)
+    return { assetId, deletedSegments, sourceBlobRemoved }
   }
 }

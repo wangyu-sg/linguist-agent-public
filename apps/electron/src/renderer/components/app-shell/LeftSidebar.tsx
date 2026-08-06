@@ -15,11 +15,9 @@ import { Pin, PinOff, Star, Settings, Plus, Trash2, Pencil, PanelLeftClose, Pane
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ModeSwitcher } from './ModeSwitcher'
+import { MAC_TITLEBAR_SAFE_AREA_HEIGHT } from './titlebar-safe-area'
 import { ProjectCreateDialog } from '@/features/linguist/projects/ProjectCreateDialog'
-import {
-  linguistProjectListStateAtom,
-  refreshLinguistProjectListAtom,
-} from '@/features/linguist/projects/project-list-atoms'
+import { refreshLinguistProjectListAtom } from '@/features/linguist/projects/project-list-atoms'
 import { openLocalizationProject } from '@/features/linguist/projects/open-localization-project'
 import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
 import { describeLinguistIpcError } from '@/features/linguist/projects/project-utils'
@@ -402,16 +400,11 @@ function groupByDate<T extends { updatedAt: number }>(items: T[]): Array<{ label
   return groups
 }
 
-const RAIL_STATUS_CLASS: Record<SessionIndicatorStatus, string> = {
-  idle: 'hidden',
-  running: 'border-blue-500 animate-pulse',
-  blocked: 'border-orange-500',
-  completed: 'border-success',
-}
-
-const SIDEBAR_DRAG_STRIP_HEIGHT = {
-  collapsedMac: 50,
-  expandedMac: 30,
+/**
+ * 非 macOS 平台的顶部拖拽条高度（无红绿灯，只需一条可拖拽细条）。
+ * macOS 统一使用 MAC_TITLEBAR_SAFE_AREA_HEIGHT，收起/展开一致。
+ */
+const SIDEBAR_DRAG_STRIP_HEIGHT_NON_MAC = {
   collapsed: 8,
   expanded: 4,
 } as const
@@ -474,10 +467,6 @@ function SessionQuickSwitchKeycap(): React.ReactElement {
       <span className="session-quick-switch-number" />
     </span>
   )
-}
-
-function getRailInitial(title: string): string {
-  return title.trim().slice(0, 1).toUpperCase() || '·'
 }
 
 /**
@@ -554,20 +543,6 @@ function getArchivedDelegatedChildren(
   ))
 }
 
-interface RailRecentItem {
-  id: string
-  title: string
-  type: SessionMiniMapType
-  initial: string
-  active: boolean
-  status: SessionIndicatorStatus
-  pinned: boolean
-  workspaceName?: string
-  projectId?: string
-  isAutomation?: boolean
-  isDelegation?: boolean
-}
-
 function LinguistProjectCreateDialogHost(): React.ReactElement {
   const store = useStore()
   const refreshProjects = useSetAtom(refreshLinguistProjectListAtom)
@@ -584,76 +559,6 @@ function LinguistProjectCreateDialogHost(): React.ReactElement {
         })
       }}
     />
-  )
-}
-
-function RailRecentButton({
-  item,
-  onSelect,
-  miniMapDisabled,
-}: {
-  item: RailRecentItem
-  onSelect: (item: RailRecentItem) => void
-  miniMapDisabled?: boolean
-}): React.ReactElement {
-  const preview = useSessionMiniMapHover(600, miniMapDisabled)
-  const kindLabel = item.projectId
-    ? 'Linguist 会话'
-    : item.type === 'agent'
-      ? 'Agent 会话'
-      : 'Chat 对话'
-
-  return (
-    <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            ref={preview.setAnchorRef}
-            type="button"
-            aria-label={`打开${kindLabel}：${item.title}${item.workspaceName ? `，项目：${item.workspaceName}` : ''}`}
-            onClick={() => onSelect(item)}
-            onMouseEnter={preview.handleMouseEnter}
-            onMouseLeave={preview.handleMouseLeave}
-            className={cn(
-              'relative size-10 flex items-center justify-center overflow-hidden rounded-[12px] transition-colors titlebar-no-drag',
-              item.active
-                ? 'bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
-                : 'text-foreground/55 hover:bg-foreground/[0.06] hover:text-foreground/80'
-            )}
-          >
-            <span
-              className={cn(
-                'absolute inset-y-0 left-0 w-0 border-l-[3px] rounded-l-[12px] pointer-events-none',
-                RAIL_STATUS_CLASS[item.status]
-              )}
-            />
-            {item.isAutomation
-              ? <Clock size={14} className="text-foreground/40" />
-              : item.isDelegation
-                ? <GitBranch size={14} className="text-foreground/40" />
-                : <span className="text-[13px] font-semibold leading-none">{item.initial}</span>
-            }
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right">
-          {item.projectId ? 'Linguist' : item.type === 'agent' ? 'Agent' : 'Chat'} · {item.title}
-          {item.workspaceName ? ` · ${item.workspaceName}` : ''}
-        </TooltipContent>
-      </Tooltip>
-      <SessionMiniMapPopover
-        target={{
-          type: item.type,
-          sessionId: item.id,
-          title: item.title,
-          workspaceName: item.workspaceName,
-        }}
-        anchorRef={preview.anchorRef}
-        open={preview.isOpen}
-        isLeaving={preview.isLeaving}
-        onMouseEnter={preview.handlePanelMouseEnter}
-        onMouseLeave={preview.handlePanelMouseLeave}
-      />
-    </>
   )
 }
 
@@ -735,7 +640,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const [userProfile, setUserProfile] = useAtom(userProfileAtom)
   const streamingIds = useAtomValue(streamingConversationIdsAtom)
   const mode = useAtomValue(appModeAtom)
-  const linguistProjectListState = useAtomValue(linguistProjectListStateAtom)
   const isMac = React.useMemo(() => detectIsMac(), [])
   const hasUpdate = useAtomValue(hasUpdateAtom)
   const updateStatus = useAtomValue(updateStatusAtom)
@@ -748,7 +652,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const [agentSessions, setAgentSessions] = useAtom(agentSessionsAtom)
   const [currentAgentSessionId, setCurrentAgentSessionId] = useAtom(currentAgentSessionIdAtom)
   const agentIndicatorMap = useAtomValue(agentSessionIndicatorMapAtom)
-  const unviewedCompletedSessionIds = useAtomValue(unviewedCompletedSessionIdsAtom)
   const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
   const agentChannelId = useAtomValue(agentChannelIdAtom)
   const agentModelId = useAtomValue(agentModelIdAtom)
@@ -2203,129 +2106,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     switchMode(targetMode)
   }, [setViewMode, switchMode])
 
-  const railRecentItems = React.useMemo(() => {
-    if (mode === 'linguist') {
-      const activeProjects = linguistProjectListState.status === 'ready'
-        ? linguistProjectListState.projects.filter((project) => project.archivedAt === undefined)
-        : []
-      const activeProjectIds = new Set(activeProjects.map((project) => project.id))
-      const projectNames = new Map(activeProjects.map((project) => [project.id, project.name]))
-      return agentSessions
-        .filter((session) =>
-          !!session.linguistProjectId
-          && activeProjectIds.has(session.linguistProjectId)
-          && !session.archived
-          && !draftSessionIds.has(session.id),
-        )
-        .sort((a, b) => {
-          const statusA = agentIndicatorMap.get(a.id)
-            ?? (unviewedCompletedSessionIds.has(a.id) ? 'completed' : 'idle')
-          const statusB = agentIndicatorMap.get(b.id)
-            ?? (unviewedCompletedSessionIds.has(b.id) ? 'completed' : 'idle')
-          const priority = (session: AgentSessionMeta, status: SessionIndicatorStatus): number => {
-            if (session.id === activeSessionId) return 0
-            if (status === 'blocked') return 1
-            if (status === 'running') return 2
-            if (session.pinned) return 3
-            if (status === 'completed') return 4
-            return 5
-          }
-          return priority(a, statusA) - priority(b, statusB)
-            || b.updatedAt - a.updatedAt
-        })
-        .slice(0, 5)
-        .map((session) => ({
-          id: session.id,
-          title: session.title,
-          type: 'agent' as const,
-          initial: getRailInitial(session.title),
-          active: session.id === activeSessionId,
-          status: agentIndicatorMap.get(session.id)
-            ?? (unviewedCompletedSessionIds.has(session.id) ? 'completed' as const : 'idle' as const),
-          pinned: !!session.pinned,
-          workspaceName: projectNames.get(session.linguistProjectId!)
-            ?? session.linguistProjectName,
-          projectId: session.linguistProjectId,
-          isDelegation: !!session.sourceDelegationId,
-        }))
-    }
-
-    if (mode === 'chat') {
-      return conversations
-        .filter((c) => !c.archived && !draftSessionIds.has(c.id))
-        .sort((a, b) => {
-          const activeDelta = Number(b.id === activeSessionId) - Number(a.id === activeSessionId)
-          if (activeDelta !== 0) return activeDelta
-          const streamingDelta = Number(streamingIds.has(b.id)) - Number(streamingIds.has(a.id))
-          if (streamingDelta !== 0) return streamingDelta
-          const pinnedDelta = Number(!!b.pinned) - Number(!!a.pinned)
-          if (pinnedDelta !== 0) return pinnedDelta
-          return b.updatedAt - a.updatedAt
-        })
-        .slice(0, 5)
-        .map((conversation) => ({
-          id: conversation.id,
-          title: conversation.title,
-          type: 'chat' as const,
-          initial: getRailInitial(conversation.title),
-          active: conversation.id === activeSessionId,
-          status: streamingIds.has(conversation.id) ? 'running' as const : 'idle' as const,
-          pinned: !!conversation.pinned,
-          workspaceName: undefined,
-        }))
-    }
-
-    return agentSessions
-      .filter((session) =>
-        isOrdinaryAgentSession(session)
-        && !session.archived
-        && !draftSessionIds.has(session.id)
-        && (!currentWorkspaceId || session.workspaceId === currentWorkspaceId)
-        // 自动任务会话不出现在收起态 Rail，与展开态列表保持一致
-        && !isHiddenAutomationSession(session)
-      )
-      .sort((a, b) => {
-        const statusA = agentIndicatorMap.get(a.id) ?? (unviewedCompletedSessionIds.has(a.id) ? 'completed' : 'idle')
-        const statusB = agentIndicatorMap.get(b.id) ?? (unviewedCompletedSessionIds.has(b.id) ? 'completed' : 'idle')
-        const priority = (session: AgentSessionMeta, status: SessionIndicatorStatus): number => {
-          if (session.id === activeSessionId) return 0
-          if (status === 'blocked') return 1
-          if (status === 'running') return 2
-          if (session.pinned) return 3
-          if (status === 'completed') return 4
-          return 5
-        }
-        const priorityDelta = priority(a, statusA) - priority(b, statusB)
-        if (priorityDelta !== 0) return priorityDelta
-        return b.updatedAt - a.updatedAt
-      })
-      .slice(0, 5)
-      .map((session) => ({
-        id: session.id,
-        title: session.title,
-        type: 'agent' as const,
-        initial: getRailInitial(session.title),
-        active: session.id === activeSessionId,
-        status: agentIndicatorMap.get(session.id) ?? (unviewedCompletedSessionIds.has(session.id) ? 'completed' as const : 'idle' as const),
-        pinned: !!session.pinned,
-        workspaceName: session.workspaceId ? workspaceNameMap.get(session.workspaceId) : undefined,
-        isAutomation: !!session.sourceAutomationId,
-        isDelegation: !!session.sourceDelegationId,
-      }))
-  }, [
-    mode,
-    conversations,
-    agentSessions,
-    draftSessionIds,
-    currentWorkspaceId,
-    activeSessionId,
-    streamingIds,
-    agentIndicatorMap,
-    unviewedCompletedSessionIds,
-    workspaceNameMap,
-    linguistProjectListState,
-  ])
-
   const modeSidebarContributions = extensionRegistry.appModesFor(mode).flatMap((contribution) => {
     const sidebar = contribution.renderSidebar?.({ SessionRowComponent: AgentSessionItem })
     return sidebar === null || sidebar === undefined
@@ -2488,11 +2268,15 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         style={{ width: 60, flexShrink: 0 }}
       >
         <SidebarWindowDragStrip
-          height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.collapsedMac : SIDEBAR_DRAG_STRIP_HEIGHT.collapsed}
+          height={isMac ? MAC_TITLEBAR_SAFE_AREA_HEIGHT : SIDEBAR_DRAG_STRIP_HEIGHT_NON_MAC.collapsed}
         />
 
-        {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。 */}
-        <div className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-[50px]' : 'h-2')} />
+        {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。
+            留白高度使用统一的 titlebar 安全区（收起/展开一致），由 trafficLightPosition 推导。 */}
+        <div
+          className={cn('w-full flex-shrink-0 titlebar-drag-region', !isMac && 'h-2')}
+          style={isMac ? { height: MAC_TITLEBAR_SAFE_AREA_HEIGHT } : undefined}
+        />
 
         {/* 展开按钮：mini rail 的唯一布局控制入口 */}
         <div className="pt-2">
@@ -2628,28 +2412,8 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
         </div>
 
-        <div className="my-3 h-px w-8 bg-border/70" />
-
-        {/* 最近/关键会话入口 */}
-        <div className="flex-1 min-h-0 w-full overflow-y-auto scrollbar-thin">
-          <div className="flex flex-col items-center gap-1.5 pb-2">
-            {railRecentItems.map((item) => (
-              <RailRecentButton
-                key={`${item.type}-${item.id}`}
-                item={item}
-                miniMapDisabled={!sessionHoverPreviewEnabled}
-                onSelect={(selected) => {
-                  if (selected.type === 'agent') {
-                    if (mode === 'linguist') handleSelectLinguistSession(selected.id)
-                    else handleSelectAgentSession(selected.id, selected.title)
-                  } else {
-                    handleSelectConversation(selected.id, selected.title)
-                  }
-                }}
-              />
-            ))}
-          </div>
-        </div>
+        {/* 弹性占位：把底部更新/设置入口锚定到 rail 底部（最近会话列已移除，避免 60px mini rail 内文字退化） */}
+        <div className="flex-1 min-h-0" />
 
         {/* 更新入口 + 用户头像（点击打开设置） */}
         <div className="flex flex-col items-center gap-1.5 pt-3 pb-3">
@@ -2662,7 +2426,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               readyDotClassName="absolute top-0 right-0 w-2 h-2 rounded-full bg-primary"
             />
           )}
-          {/* Agent 技能入口（PB-102：从顶部导航栈降级到底部小图标区，与设置头像同排） */}
+          {/* Agent 技能入口：收起态的唯一技能入口（展开态对应顶部 SkillsSidebarEntry 行） */}
           {mode === 'agent' && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -2729,11 +2493,15 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       style={{ width: width ?? 'var(--sidebar-w)', minWidth: 200, flexShrink: 0 }}
     >
       <SidebarWindowDragStrip
-        height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.expandedMac : SIDEBAR_DRAG_STRIP_HEIGHT.expanded}
+        height={isMac ? MAC_TITLEBAR_SAFE_AREA_HEIGHT : SIDEBAR_DRAG_STRIP_HEIGHT_NON_MAC.expanded}
       />
 
-      {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。 */}
-      <div className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-[30px]' : 'h-1')} />
+      {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。
+          留白高度使用统一的 titlebar 安全区（收起/展开一致），由 trafficLightPosition 推导。 */}
+      <div
+        className={cn('w-full flex-shrink-0 titlebar-drag-region', !isMac && 'h-1')}
+        style={isMac ? { height: MAC_TITLEBAR_SAFE_AREA_HEIGHT } : undefined}
+      />
 
       {/* 模式切换器 + 搜索 + 折叠按钮 */}
       <div className="titlebar-drag-region flex items-start gap-1.5 px-3">
@@ -3228,30 +2996,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               showText
               hideIcon
             />
-          )}
-          {/* Agent 技能入口（PB-102：从主导航降级到底部小图标区，与设置同排；仅 Agent 模式可见） */}
-          {mode === 'agent' && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Agent 技能"
-                  onClick={handleOpenSkills}
-                  className={cn(
-                    'relative flex size-7 flex-shrink-0 items-center justify-center rounded-[8px] transition-colors titlebar-no-drag',
-                    activeView === 'agent-skills'
-                      ? 'bg-foreground/[0.07] text-foreground/80'
-                      : 'text-foreground/40 hover:bg-foreground/[0.05] hover:text-foreground/70',
-                  )}
-                >
-                  <Blocks size={16} />
-                  {(capabilities?.skills.filter((s) => s.hasUpdate).length ?? 0) > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-info" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Agent 技能</TooltipContent>
-            </Tooltip>
           )}
           <button
             type="button"
@@ -4175,7 +3919,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
   }
   // 折叠时：所有"活跃"会话（运行中 / 阻塞 / 未查看的已完成）必须展示，
   // 不受 5 条预览与 3 天窗口限制；活跃部分内部按
-  // blocked > running > completed 优先级排序（与 railRecentItems 对齐），
+  // blocked > running > completed 优先级排序，
   // 同优先级保留 group.sessions 的 updatedAt 倒序。
   // 当前选中的会话（activeSessionId）也必须出现在折叠列表中，无论 updatedAt 多旧、
   // 状态如何，确保从搜索结果打开旧会话时左侧栏立即可见，不必等待 agent 完成。

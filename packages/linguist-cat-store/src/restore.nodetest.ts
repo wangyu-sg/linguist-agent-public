@@ -100,18 +100,18 @@ test('restore: edits after backup are rolled back; pre-restore snapshot keeps th
     )
     assert.equal(
       (identityDb.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-      13,
+      SCHEMA_VERSION,
     )
     assert.equal(
       (identityDb.prepare(
         'SELECT MAX(version) AS version FROM schema_migrations',
       ).get() as { version: number }).version,
-      13,
+      SCHEMA_VERSION,
     )
   } finally {
     identityDb.close()
   }
-  assert.equal(restoredManifest.databaseIdentity.schemaVersion, 13)
+  assert.equal(restoredManifest.databaseIdentity.schemaVersion, SCHEMA_VERSION)
   assert.equal(
     restoredManifest.databaseIdentity.mainFileSnapshot.sha256,
     sha256Hex(readFileSync(restoredDbPath)),

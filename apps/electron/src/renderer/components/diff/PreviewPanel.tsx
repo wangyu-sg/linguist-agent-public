@@ -13,6 +13,7 @@ import {
   previewPanelOpenMapAtom,
   previewFileMapAtom,
   previewModePreferenceAtom,
+  getLinguistPreviewTargetId,
 } from '@/atoms/preview-atoms'
 import {
   agentSessionPathMapAtom,
@@ -30,6 +31,7 @@ import { cn } from '@/lib/utils'
 import { DiffTabContent } from './DiffTabContent'
 import { DefaultAppOpenButton } from './DefaultAppOpenButton'
 import { getDefaultAppTargetPath, getPreviewFileAccess } from './preview-open-path'
+import { LinguistPreviewBody } from '@/features/linguist/projects/LinguistPreviewBody'
 
 interface PreviewPanelProps {
   sessionId: string
@@ -76,10 +78,10 @@ export function PreviewPanel({ sessionId }: PreviewPanelProps): React.ReactEleme
   const fileName = currentFile ? currentFile.filePath.split(/[\\/]/).pop() || currentFile.filePath : '文件预览'
   const defaultAppTargetPath = currentFile ? getDefaultAppTargetPath(currentFile, sessionPath) : ''
   const defaultAppAccess = currentFile ? getPreviewFileAccess(sessionId, currentFile, sessionPath) : undefined
-
   const renderPreviewActions = (): React.ReactElement => (
     <div className="ml-auto flex items-center gap-0.5 shrink-0">
-      {currentFile && (
+      {/* Linguist 受管目标无本机路径（authority 在主进程围栏），不提供「默认应用打开」 */}
+      {currentFile && currentFile.linguist === undefined && (
         <DefaultAppOpenButton
           filePath={defaultAppTargetPath}
           access={defaultAppAccess}
@@ -177,18 +179,25 @@ export function PreviewPanel({ sessionId }: PreviewPanelProps): React.ReactEleme
       {/* 内容区 */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {currentFile ? (
-          <DiffTabContent
-            key={`${sessionId}:${currentFile.filePath}`}
-            filePath={currentFile.filePath}
-            dirPath={currentFile.dirPath || sessionPath}
-            sessionId={sessionId}
-            gitRoot={currentFile.gitRoot}
-            previewOnly={currentFile.previewOnly}
-            readOnly={currentFile.readOnly}
-            basePaths={currentFile.basePaths}
-            baseRef={currentFile.baseRef}
-            onEmptyDiff={handleClosePanel}
-          />
+          currentFile.linguist !== undefined ? (
+            <LinguistPreviewBody
+              key={`${sessionId}:${currentFile.linguist.kind}:${getLinguistPreviewTargetId(currentFile.linguist)}`}
+              target={currentFile.linguist}
+            />
+          ) : (
+            <DiffTabContent
+              key={`${sessionId}:${currentFile.filePath}`}
+              filePath={currentFile.filePath}
+              dirPath={currentFile.dirPath || sessionPath}
+              sessionId={sessionId}
+              gitRoot={currentFile.gitRoot}
+              previewOnly={currentFile.previewOnly}
+              readOnly={currentFile.readOnly}
+              basePaths={currentFile.basePaths}
+              baseRef={currentFile.baseRef}
+              onEmptyDiff={handleClosePanel}
+            />
+          )
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
             点击文件查看预览

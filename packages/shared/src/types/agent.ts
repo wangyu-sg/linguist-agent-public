@@ -1,5 +1,5 @@
 import type { ProviderType } from './channel'
-import type { LinguistQualityProfile } from './linguist'
+import type { LinguistExecutionPolicy, LinguistQualityProfile } from './linguist'
 import type { LinguistTurnContextV1 } from './linguist-turn-context'
 
 /**
@@ -726,7 +726,12 @@ export interface AgentSessionMeta {
    * 创建时冻结；专用解绑 API 会与项目绑定一并永久清除。
    */
   linguistSessionRole?: 'reviewer' | 'auditor'
-  /** 创建时冻结的 Linguist 质量策略；历史会话缺省按 balanced 解析。 */
+  /** 创建时冻结的 Linguist Execution Policy（LA-QUALITY-001）。 */
+  linguistExecutionPolicy?: LinguistExecutionPolicy
+  /**
+   * Legacy 冻结字段（LA-QUALITY-001 前的质量档位）：新会话不再写入；
+   * 旧会话读取时映射为 executionPolicy（best → risk-based，其余 → off）。
+   */
   linguistStrategy?: LinguistQualityProfile
   /** 来源委派任务 ID（由 collaboration 工具生成，用于父子会话关联） */
   sourceDelegationId?: string
@@ -1275,7 +1280,12 @@ export interface AgentPendingFile {
 
 /** Agent 文件保存到 session 的输入 */
 export interface AgentSaveFilesInput {
-  workspaceSlug: string
+  /**
+   * IPC 协议兼容字段：主进程不参与目录授权，可为空。
+   * 附件目录由主进程按 session 元数据解析（resolveAgentExecutionScope），
+   * Linguist 项目绑定会话没有 Proma workspace，因此不携带该字段。
+   */
+  workspaceSlug?: string
   sessionId: string
   files: Array<{ filename: string; data: string }>
 }

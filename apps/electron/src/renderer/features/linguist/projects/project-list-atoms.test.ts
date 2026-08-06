@@ -18,7 +18,7 @@ function project(id: string): LinguistProjectInfo {
     promaWorkspaceId: 'workspace-1',
     createdAt: '2026-07-01T08:00:00.000Z',
     updatedAt: '2026-07-01T08:00:00.000Z',
-    qualityProfile: 'balanced',
+    executionPolicy: { independentReview: 'off' },
   }
 }
 

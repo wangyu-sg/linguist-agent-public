@@ -51,6 +51,62 @@ test('TM importMany: stable ids, same source with different targets, and repeat 
   }
 })
 
+test('TM/TB imports advance only their project event sequence after a committed change', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  const otherProject = store.createProject({
+    ...PROJECT_INPUT,
+    name: 'Other',
+    promaWorkspaceId: 'ws-other',
+  })
+  const otherDb = store.openProject(otherProject.id)
+  const tm = {
+    source: 'Save',
+    target: '保存',
+    sourceLocale: 'en',
+    targetLocale: 'zh-CN',
+  }
+  const term = {
+    term: 'Cancel',
+    translation: '取消',
+    status: 'preferred' as const,
+    caseSensitive: false,
+  }
+  try {
+    assert.equal(db.runs.latestEventSequence, 0)
+    db.tmUnits.list()
+    db.termEntries.list()
+    assert.equal(db.runs.latestEventSequence, 0, 'reference reads must not append events')
+
+    assert.deepEqual(db.tmUnits.importMany([tm]), { imported: 1, unchanged: 0 })
+    assert.equal(db.runs.latestEventSequence, 1)
+    assert.equal(db.runs.getLatestEvent()?.kind, 'project-updated')
+    assert.deepEqual(db.tmUnits.importMany([tm]), { imported: 0, unchanged: 1 })
+    assert.equal(db.runs.latestEventSequence, 1, 'unchanged imports must not append events')
+
+    assert.throws(() => db.catDb.transaction('forced TM rollback', () => {
+      db.tmUnits.importMany([{
+        ...tm,
+        source: 'Load',
+        target: '加载',
+      }])
+      throw new Error('force rollback')
+    }), /force rollback/)
+    assert.equal(db.runs.latestEventSequence, 1, 'rolled-back imports must not append events')
+    assert.equal(db.tmUnits.count(), 1)
+
+    assert.deepEqual(db.termEntries.importMany([term]), { imported: 1, unchanged: 0 })
+    assert.equal(db.runs.latestEventSequence, 2)
+
+    assert.deepEqual(otherDb.tmUnits.importMany([tm]), { imported: 1, unchanged: 0 })
+    assert.equal(db.runs.latestEventSequence, 2, 'other project events must stay isolated')
+    assert.equal(otherDb.runs.latestEventSequence, 1)
+  } finally {
+    otherDb.close()
+    db.close()
+  }
+})
+
 test('TM findMatches: normalizes text, scores exact/contains/fuzzy, and sorts deterministically', () => {
   const { store, project } = setup()
   const db = store.openProject(project.id)

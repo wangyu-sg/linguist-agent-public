@@ -72,11 +72,13 @@ test('LA-OBS-001: status exposes Prompt degradation and one refresh re-probes th
     assert.equal(degraded.ok, true)
     if (!degraded.ok) return
     assert.equal(degraded.data.prompt.degraded, true)
-    assert.deepEqual(degraded.data.prompt.fallbackLayers, ['role', 'strategy'])
+    assert.deepEqual(degraded.data.prompt.fallbackLayers, ['role'])
     assert.equal(degraded.data.prompt.retryable, true)
     assert.equal(degraded.data.dev?.tools.base, 17)
     assert.equal(degraded.data.dev?.tools.overlay, 8)
     assert.equal(degraded.data.dev?.profile?.kind, 'linguist')
+    // 会话 meta 的 legacy linguistStrategy: 'best' 经映射进入 dev profile
+    assert.deepEqual(degraded.data.dev?.profile?.executionPolicy, { independentReview: 'risk-based' })
     assert.match(degraded.data.dev?.sessionCwd ?? '', /agent-workspaces/)
     assert.equal(
       (degraded.data.dev?.metrics.promptProbeLatencyMs ?? -1) >= 0,

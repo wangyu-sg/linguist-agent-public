@@ -124,7 +124,8 @@ const SDL_NAMESPACE_PATTERN = /xmlns:sdl\s*=\s*["']/i
 const FILE_PATTERN = /<((?:[\w.-]+:)?file)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const TRANS_UNIT_PATTERN = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const SELF_CLOSING_TARGET_PATTERN = /<((?:[\w.-]+:)?target)\b([^>]*)\/>/i
-const MRK_PATTERN = /<((?:[\w.-]+:)?mrk)\b([^>]*)>([\s\S]*?)<\/\1>/gi
+/** 成对或自闭合 mrk；Trados 用 `<mrk .../>` 表示空目标段。 */
+const MRK_PATTERN = /<((?:[\w.-]+:)?mrk)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/gi
 /** `<sdl:seg .../>` / `<sdl:seg ...>...</sdl:seg>` (also tolerates an unprefixed `seg`). */
 const SEG_DEF_PATTERN = /<((?:sdl:)?seg)(?=[\s>/])([^>]*)(?:\/>|>[\s\S]*?<\/\1>)/gi
 

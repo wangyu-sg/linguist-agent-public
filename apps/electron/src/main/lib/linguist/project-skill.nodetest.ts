@@ -1,14 +1,14 @@
 /**
  * PB-040 常驻项目 Skill 解析 nodetest（node --test；真实服务 + 真实会话索引，无 mock）；
- * PB-082 扩展评审角色与质量策略档注入矩阵：
+ * PB-082 扩展评审角色注入矩阵；LA-QUALITY-001 起 strategy 层随质量档位废除：
  *
  * - 普通会话（无 linguistProjectId）→ 不注入（硬规则：普通 Chat 不出现）；
- * - 普通项目会话 → project-assistant + 当前档 strategy-<profile>
- *   （active/archived 均注入；发送已被 PB-034 闸门阻断，保持单一解析规则）；
+ * - 普通项目会话 → 只注入 project-assistant（active/archived 均注入；发送已被
+ *   PB-034 闸门阻断，保持单一解析规则）；项目 Execution Policy 变更不影响注入；
  * - 评审会话（linguistSessionRole === 'reviewer'）→ 只注入 project-reviewer；
+ * - 盲审会话（linguistSessionRole === 'auditor'）→ 只注入 project-auditor；
  * - missing（项目目录缺失/损坏 / 未知 id）→ 不注入（降级）；
- * - 策略档读取失败 / strategy 目录缺 SKILL.md → 只注入 project-assistant（fail closed）；
- * - 服务不可解析 / assistant（评审为 reviewer）目录缺 SKILL.md → 不注入（fail closed）；
+ * - 服务不可解析 / 角色目录缺 SKILL.md → 不注入（fail closed）；
  * - 重启 resume：同一 root 重建服务后重解析结果一致（解析不落会话状态）；
  * - 默认根目录解析：打包布局（process.resourcesPath/linguist-skills）与
  *   ESM 测试上下文（无 __dirname/resourcesPath → undefined）两分支。
@@ -71,18 +71,18 @@ function makeSkillsRootWith(subdirs: string[]): string {
   return root
 }
 
-test('repo-bundled skills sanity: project roles and strategies carry the expected names', () => {
-  for (const sub of ['project-assistant', 'project-reviewer', 'project-auditor', 'strategy-fast', 'strategy-balanced', 'strategy-best']) {
+test('repo-bundled skills sanity: 项目角色 Skill 在场且 strategy 目录已删除', () => {
+  for (const sub of ['project-assistant', 'project-reviewer', 'project-auditor']) {
     assert.ok(existsSync(join(REPO_SKILLS_ROOT, sub, 'SKILL.md')), `内置 Skill 不存在: ${join(REPO_SKILLS_ROOT, sub)}`)
+  }
+  // LA-QUALITY-001：strategy Skill 随质量档位一并废除，目录不得再出现
+  for (const sub of ['strategy-fast', 'strategy-balanced', 'strategy-best']) {
+    assert.equal(existsSync(join(REPO_SKILLS_ROOT, sub)), false, `strategy Skill 目录应已删除: ${sub}`)
   }
   assert.equal(skill.LINGUIST_PROJECT_SKILL_NAME, 'linguist-project-assistant')
   assert.equal(skill.LINGUIST_REVIEWER_SKILL_NAME, 'linguist-project-reviewer')
   assert.equal(skill.LINGUIST_AUDITOR_SKILL_NAME, 'linguist-project-auditor')
-  assert.deepEqual(skill.LINGUIST_STRATEGY_SKILL_NAMES, {
-    fast: 'linguist-strategy-fast',
-    balanced: 'linguist-strategy-balanced',
-    best: 'linguist-strategy-best',
-  })
+  assert.equal(skill.LINGUIST_ROLE_SKILL_VERSION, '1.0.3')
 })
 
 test('LA-PROMPT-002/003/005: bundled Prompt Skills match golden hashes and fallback keeps the same version', () => {
@@ -90,88 +90,64 @@ test('LA-PROMPT-002/003/005: bundled Prompt Skills match golden hashes and fallb
   try {
     const project = service.createProject({ ...PROJECT_INPUT, name: 'Prompt Golden 项目' })
     const assistant = binding.createLinguistProjectChatSession(service, { projectId: project.id })
-    const expectedStrategyHashes = {
-      fast: '60db5be10f64462077306e7c8b27ada78bc63f600cef78fad6d7ccd2d631f3bd',
-      balanced: '5e99c1792b1e3dbb43d1cd2b72ee7b60350cb27fe84290c6872c18caae3281c2',
-      best: 'e2021c6726a65ea0e8bc2740ebaa98bccae9aafab2ef5f8cbce8ee5c5c514595',
-    } as const
 
-    for (const profile of ['fast', 'balanced', 'best'] as const) {
-      service.setQualityProfile(project.id, profile)
-      const resolved = skill.resolveLinguistPromptSkillLayers(
-        assistant,
-        () => service,
-        REPO_SKILLS_ROOT,
-      )
-      assert.equal(resolved.roleLayer.version, '1.0.1')
-      assert.equal(resolved.roleLayer.source, 'bundle')
-      assert.equal(
-        resolved.roleLayer.hash,
-        'f840d82070d0f146ef9df643626b518e7af746886ee8809ed6f81249ffdcc977',
-      )
-      assert.equal(resolved.strategy, profile)
-      assert.equal(resolved.strategyLayer?.version, '1.0.1')
-      assert.equal(resolved.strategyLayer?.source, 'bundle')
-      assert.equal(resolved.strategyLayer?.hash, expectedStrategyHashes[profile])
-      assert.doesNotMatch(resolved.strategyLayer!.content, /逐段(?:查|调用)|每段都用/)
-      for (const roleInvariant of [
-        'Proposal 不等于已接受译文',
-        'QA 结果由确定性工具产生',
-        '不要直接修改源资产',
-      ]) {
-        assert.ok(!resolved.strategyLayer!.content.includes(roleInvariant))
-      }
-      assert.deepEqual(resolved.fallbackLayers, [])
-    }
+    const resolved = skill.resolveLinguistPromptSkillLayers(assistant, REPO_SKILLS_ROOT)
+    assert.equal(resolved.role, 'assistant')
+    assert.equal(resolved.roleLayer.version, '1.0.3')
+    assert.equal(resolved.roleLayer.source, 'bundle')
+    assert.equal(
+      resolved.roleLayer.hash,
+      '09a5ebdc92ae84b4ab432de8e5f0b30e6f426cf34361aa6a92d8f1f5892456c7',
+    )
+    // 中性批次指引并入 assistant role 文案（原 strategy 层内容）
+    assert.match(resolved.roleLayer.content, /中性默认批次/)
+    assert.match(resolved.roleLayer.content, /cat_search_tm/)
+    // LA-QUALITY-002：引用恒定质量合同
+    assert.match(resolved.roleLayer.content, /professional_quality_contract/)
+    assert.deepEqual(resolved.fallbackLayers, [])
+    // Execution Policy 变更不影响 role 层（策略不再随项目实时变化）
+    service.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
+    assert.equal(
+      skill.resolveLinguistPromptSkillLayers(assistant, REPO_SKILLS_ROOT).roleLayer.hash,
+      resolved.roleLayer.hash,
+    )
 
     const reviewerProject = service.createProject({ ...PROJECT_INPUT, name: 'Reviewer Golden 项目' })
     const reviewer = binding.createLinguistProjectChatSession(service, {
       projectId: reviewerProject.id,
       role: 'reviewer',
     })
-    const reviewerLayer = skill.resolveLinguistPromptSkillLayers(
-      reviewer,
-      () => service,
-      REPO_SKILLS_ROOT,
-    )
+    const reviewerLayer = skill.resolveLinguistPromptSkillLayers(reviewer, REPO_SKILLS_ROOT)
     assert.equal(
       reviewerLayer.roleLayer.hash,
-      '61920f7a03e00fa98287c184e670050fe921ec62236b6fef37a1712de91c8fa8',
+      'b8cf13b69b5111394e1b4bf07175809879e1161ba55f39e74bc4c15e4e512f4c',
     )
     assert.match(reviewerLayer.roleLayer.content, /verdict=pass/)
     assert.match(reviewerLayer.roleLayer.content, /verdict=issues/)
     assert.match(reviewerLayer.roleLayer.content, /verdict=abstain/)
-    assert.equal(reviewerLayer.strategyLayer, undefined)
+    // LA-QUALITY-002：无有效 Proposal Snapshot 只能 abstain
+    assert.match(reviewerLayer.roleLayer.content, /professional_quality_contract/)
+    assert.match(reviewerLayer.roleLayer.content, /只能提交 `verdict=abstain`/)
 
     const auditorProject = service.createProject({ ...PROJECT_INPUT, name: 'Auditor Golden 项目' })
     const auditor = binding.createLinguistProjectChatSession(service, {
       projectId: auditorProject.id,
       role: 'auditor',
     })
-    const auditorLayer = skill.resolveLinguistPromptSkillLayers(
-      auditor,
-      () => service,
-      REPO_SKILLS_ROOT,
-    )
+    const auditorLayer = skill.resolveLinguistPromptSkillLayers(auditor, REPO_SKILLS_ROOT)
     assert.equal(
       auditorLayer.roleLayer.hash,
-      '8abb4f23c7b2d42a8515ae936f8fd27ba1f66a1a9704b4e553624685c468cf2f',
+      '9669639de7f68e6207359442314a3e14a4781c5acc1e14d91833683ae055f120',
     )
     assert.match(auditorLayer.roleLayer.content, /Proma 通用工具/)
+    assert.match(auditorLayer.roleLayer.content, /professional_quality_contract/)
     assert.doesNotMatch(auditorLayer.roleLayer.content, /绝对沙箱|无法访问任何信息/)
-    assert.equal(auditorLayer.strategyLayer, undefined)
 
     const missingBundleRoot = makeTempDir()
-    const fallback = skill.resolveLinguistPromptSkillLayers(
-      assistant,
-      () => service,
-      missingBundleRoot,
-    )
-    assert.equal(fallback.roleLayer.version, '1.0.1')
+    const fallback = skill.resolveLinguistPromptSkillLayers(assistant, missingBundleRoot)
+    assert.equal(fallback.roleLayer.version, '1.0.3')
     assert.equal(fallback.roleLayer.source, 'fallback')
-    assert.equal(fallback.strategyLayer?.version, '1.0.1')
-    assert.equal(fallback.strategyLayer?.source, 'fallback')
-    assert.deepEqual(fallback.fallbackLayers, ['role', 'strategy'])
+    assert.deepEqual(fallback.fallbackLayers, ['role'])
   } finally {
     service.closeAll()
   }
@@ -192,7 +168,7 @@ test('auditor session gets only the blind-audit skill', () => {
   service.closeAll()
 })
 
-test('normal chat never gets linguist skills; active project chat gets assistant + default (balanced) strategy', () => {
+test('normal chat never gets linguist skills; active project chat gets only project-assistant', () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT })
 
@@ -202,37 +178,25 @@ test('normal chat never gets linguist skills; active project chat gets assistant
   assert.equal(normal.linguistProjectId, undefined)
   assert.deepEqual(skill.resolveLinguistSessionSkillPaths(normal, () => service, REPO_SKILLS_ROOT), [])
 
-  // 项目对话（active，缺省 balanced 档）：注入常驻 + 策略目录，assistant 在前
+  // 项目对话（active）：只注入常驻 project-assistant
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
   const resolved = skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT)
-  assert.deepEqual(resolved, [ASSISTANT_DIR, join(REPO_SKILLS_ROOT, 'strategy-balanced')])
+  assert.deepEqual(resolved, [ASSISTANT_DIR])
   for (const dir of resolved) assert.ok(existsSync(join(dir, 'SKILL.md')))
 
   service.closeAll()
 })
 
-test('strategy skill follows the project quality profile (fast/best/balanced)', () => {
+test('skill paths 不随项目 Execution Policy 变化（策略层已废除）', () => {
   const service = makeServiceOnLinguistRoot()
-  const project = service.createProject({ ...PROJECT_INPUT, name: '策略档项目' })
+  const project = service.createProject({ ...PROJECT_INPUT, name: '策略无关项目' })
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
 
-  service.setQualityProfile(project.id, 'fast')
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [
-    ASSISTANT_DIR,
-    join(REPO_SKILLS_ROOT, 'strategy-fast'),
-  ])
-
-  service.setQualityProfile(project.id, 'best')
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [
-    ASSISTANT_DIR,
-    join(REPO_SKILLS_ROOT, 'strategy-best'),
-  ])
-
-  service.setQualityProfile(project.id, 'balanced')
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [
-    ASSISTANT_DIR,
-    join(REPO_SKILLS_ROOT, 'strategy-balanced'),
-  ])
+  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
+  service.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
+  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
+  service.setExecutionPolicy(project.id, { independentReview: 'off' })
+  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
 
   service.closeAll()
 })
@@ -243,7 +207,7 @@ test('reviewer session gets only the project-reviewer skill (active and archived
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id, role: 'reviewer' })
   assert.equal(meta.linguistSessionRole, 'reviewer')
 
-  // active：只注入 project-reviewer（不注入 assistant / strategy——角色边界清晰）
+  // active：只注入 project-reviewer（不注入 assistant——角色边界清晰）
   assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [REVIEWER_DIR])
 
   // 归档：仍注入（发送已被 PB-034 闸门阻断，注入与否不影响只读语义）
@@ -267,12 +231,9 @@ test('archived binding still loads skills (documented choice); missing binding d
   // Skill 注入与否不影响只读语义；保持「绑定在场且项目数据完整即注入」单一规则。
   service.archiveProject(project.id)
   assert.equal(binding.getLinguistSessionBinding(meta, service)?.status, 'archived')
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [
-    ASSISTANT_DIR,
-    join(REPO_SKILLS_ROOT, 'strategy-balanced'),
-  ])
+  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
 
-  // 项目目录被外部删除 → missing：不注入（会话降级为普通 Pi 会话）
+  // 项目目录被外部删除 → missing：不注入（会话降级为普通 Agent 会话）
   rmSync(projectPaths(LINGUIST_ROOT, project.id).projectDir, { recursive: true, force: true })
   assert.equal(binding.getLinguistSessionBinding(meta, service)?.status, 'missing')
   assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [])
@@ -287,7 +248,7 @@ test('unknown project id resolves missing → no skill', () => {
   service.closeAll()
 })
 
-test('fail closed: unresolvable service, missing SKILL.md, unreadable profile → degraded, never throws', () => {
+test('fail closed: unresolvable service, missing skills root or SKILL.md → degraded, never throws', () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT, name: '故障项目' })
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
@@ -308,24 +269,11 @@ test('fail closed: unresolvable service, missing SKILL.md, unreadable profile �
   const reviewerOnlyRoot = makeSkillsRootWith(['project-reviewer'])
   assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, reviewerOnlyRoot), [])
 
-  // strategy 目录缺失 → 只注入 project-assistant（fail closed 降级）
+  // 只有 project-assistant 在场 → 注入（LA-QUALITY-001 后 strategy 目录不再是输入）
   const assistantOnlyRoot = makeSkillsRootWith(['project-assistant'])
   assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, assistantOnlyRoot), [
     join(assistantOnlyRoot, 'project-assistant'),
   ])
-
-  // 绑定状态解析为 active 后、策略档读取再失败（竞态）→ 只注入 project-assistant
-  let getProjectCalls = 0
-  const flakyService = {
-    getProject: (...args: Parameters<LinguistProjectService['getProject']>) => {
-      getProjectCalls += 1
-      if (getProjectCalls > 1) throw new Error('project metadata lost mid-flight')
-      return service.getProject(...args)
-    },
-    getProjectPaths: (...args: Parameters<LinguistProjectService['getProjectPaths']>) =>
-      service.getProjectPaths(...args),
-  } as unknown as LinguistProjectService
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => flakyService, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
 
   service.closeAll()
 })
@@ -334,7 +282,7 @@ test('resume after restart: same binding re-resolves to the same skill paths on 
   const service1 = makeServiceOnLinguistRoot()
   const project = service1.createProject({ ...PROJECT_INPUT, name: '重启 Skill 项目' })
   const meta = binding.createLinguistProjectChatSession(service1, { projectId: project.id })
-  const expected = [ASSISTANT_DIR, join(REPO_SKILLS_ROOT, 'strategy-balanced')]
+  const expected = [ASSISTANT_DIR]
   assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service1, REPO_SKILLS_ROOT), expected)
   service1.closeAll()
 
@@ -361,39 +309,21 @@ test('PB-110 日志纪律：Skill 解析失败的 warn 只记 name/code，绝不
     const project = service.createProject({ ...PROJECT_INPUT, name: 'warn 纪律项目' })
     const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
 
-    // 策略档读取失败的 warn 分支（绑定判定成功后 getProject 第二次调用抛错，
-    // message 同时含文件名与客户正文 sentinel）
-    let getProjectCalls = 0
-    const flakyService = {
-      getProject: (...args: Parameters<LinguistProjectService['getProject']>) => {
-        getProjectCalls += 1
-        if (getProjectCalls > 1) {
-          throw new Error(`读取失败：客户正文 ${BODY_SENTINEL}（来源 client-lore.txt）`)
-        }
-        return service.getProject(...args)
-      },
-      getProjectPaths: (...args: Parameters<LinguistProjectService['getProjectPaths']>) =>
-        service.getProjectPaths(...args),
-    } as unknown as LinguistProjectService
-
     const warnings: string[] = []
     const originalWarn = console.warn
     console.warn = (...args: unknown[]) => {
       warnings.push(args.map((arg) => String(arg)).join(' '))
     }
     try {
-      const paths = skill.resolveLinguistSessionSkillPaths(meta, () => flakyService, REPO_SKILLS_ROOT)
-      assert.deepEqual(paths, [ASSISTANT_DIR], '策略档读取失败仍 fail closed 只注入常驻 Skill')
-
-      // 外层 catch（服务解析本身抛错）同一纪律
+      // 服务解析本身抛错（message 含客户正文 sentinel）：warn 只记 name/code
       const throwingResolver = (): LinguistProjectService => {
-        throw new Error(`初始化失败：${BODY_SENTINEL}`)
+        throw new Error(`初始化失败：客户正文 ${BODY_SENTINEL}（来源 client-lore.txt）`)
       }
       assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, throwingResolver, REPO_SKILLS_ROOT), [])
     } finally {
       console.warn = originalWarn
     }
-    assert.equal(warnings.length, 2)
+    assert.equal(warnings.length, 1)
     for (const line of warnings) {
       assert.ok(!line.includes(BODY_SENTINEL), `warn 泄漏客户正文: ${line}`)
       assert.match(line, /name=Error/)

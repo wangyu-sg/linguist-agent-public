@@ -107,8 +107,8 @@ export function toRendererCopyResult(
     ...(session.linguistSessionRole !== undefined
       ? { linguistSessionRole: session.linguistSessionRole }
       : {}),
-    ...(session.linguistStrategy !== undefined
-      ? { linguistStrategy: session.linguistStrategy }
+    ...(session.linguistExecutionPolicy !== undefined
+      ? { linguistExecutionPolicy: session.linguistExecutionPolicy }
       : {}),
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,

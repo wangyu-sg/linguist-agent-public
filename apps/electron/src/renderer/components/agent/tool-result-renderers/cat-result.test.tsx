@@ -122,6 +122,32 @@ describe('CAT Tool Result 原生摘要', () => {
         title: '批量一致性',
         detail: '2 组发现 5 个问题',
       },
+      {
+        toolName: 'cat_begin_translation_scope',
+        payload: {
+          scopeJobId: 'job:translation-scope:sess:call-1',
+          runId: 'translation-scope:sess:call-1',
+          status: 'running',
+          requested: 42,
+          replayed: false,
+          note: PRIVATE_TEXT,
+        },
+        title: '翻译范围',
+        detail: '已锁定 42 个片段',
+      },
+      {
+        toolName: 'cat_finalize_translation_scope',
+        payload: {
+          scopeJobId: 'job:translation-scope:sess:call-1',
+          runId: 'translation-scope:sess:call-1',
+          status: 'completed',
+          replayed: false,
+          coverage: { requested: 42, proposalCreated: 38, skipped: 2, blocked: 2, failed: 0, pending: 0 },
+          note: PRIVATE_TEXT,
+        },
+        title: '翻译覆盖',
+        detail: '覆盖 42 段：建议 38 · 跳过 2 · 受阻 2',
+      },
     ] as const
 
     for (const item of cases) {
@@ -138,6 +164,34 @@ describe('CAT Tool Result 原生摘要', () => {
     expect(renderResult('cat_project_summary', { total: 1 })).toContain('<td')
     expect(renderResult('cat_future_tool', 'unknown fallback marker')).toContain('unknown fallback marker')
     expect(renderResult('cat_run_qa', 'error fallback marker', true)).toContain('error fallback marker')
+  })
+
+  test('given translation scope 覆盖结果 when 原生渲染 then 幂等重放带标记且 details 可持久化', () => {
+    const details = {
+      scopeJobId: 'job:translation-scope:sess:call-1',
+      runId: 'translation-scope:sess:call-1',
+      status: 'completed',
+      replayed: true,
+      coverage: { requested: 3, proposalCreated: 2, skipped: 1, blocked: 0, failed: 0, pending: 0 },
+      source: PRIVATE_TEXT,
+    }
+    const serialized = serializeCatToolResultDetails('cat_finalize_translation_scope', details)
+    expect(serialized).toBe(JSON.stringify(details))
+    const html = renderResult('cat_finalize_translation_scope', serialized!)
+    expect(html).toContain('覆盖 3 段：建议 2 · 跳过 1 · 受阻 0（幂等重放）')
+    expect(html).not.toContain(PRIVATE_TEXT)
+    expect(serializeCatToolResultDetails('cat_begin_translation_scope', {
+      scopeJobId: 'job:translation-scope:sess:call-1',
+      runId: 'translation-scope:sess:call-1',
+      status: 'running',
+      requested: 3,
+      replayed: false,
+    })).toBeDefined()
+    // 缺 coverage 的畸形 finalize payload 不得出卡片
+    expect(serializeCatToolResultDetails('cat_finalize_translation_scope', {
+      scopeJobId: 'job:x',
+      status: 'completed',
+    })).toBeUndefined()
   })
 
   test('given Timeline 同时保存短摘要与 details when 展开 then 只为可安全摘要的 CAT payload 使用 details', () => {

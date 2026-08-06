@@ -24,7 +24,7 @@ const ASSET: LinguistAssetInfo = {
 }
 
 describe('PrepareDeliveryPanel', () => {
-  test('given 已导入资产 when 初次打开 then 明示预检入口与不覆盖原文件承诺', () => {
+  test('given 已导入批次 when 初次打开 then 明示预检入口与不覆盖原文件承诺', () => {
     const html = renderToStaticMarkup(
       <PrepareDeliveryPanel
         projectId="prj-0123456789abcdef"

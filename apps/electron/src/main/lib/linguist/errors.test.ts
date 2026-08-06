@@ -13,6 +13,8 @@ import {
   LinguistDeliveryNotReadyError,
   LinguistExportBlockedByQaError,
   LinguistImportTooLargeError,
+  LinguistImportUndoBlockedError,
+  LinguistImportVerificationFailedError,
   LinguistProjectArchivedError,
   LinguistProjectDeleteConfirmationMismatchError,
   LinguistProjectDeleteRequiresArchiveError,
@@ -36,6 +38,8 @@ describe('stable error codes', () => {
       PROJECT_DELETE_CONFIRMATION_MISMATCH: 'PROJECT_DELETE_CONFIRMATION_MISMATCH',
       PROJECT_ORDER_CONFLICT: 'PROJECT_ORDER_CONFLICT',
       SESSION_COPY_BLOCKED: 'SESSION_COPY_BLOCKED',
+      IMPORT_VERIFICATION_FAILED: 'IMPORT_VERIFICATION_FAILED',
+      IMPORT_UNDO_BLOCKED: 'IMPORT_UNDO_BLOCKED',
     })
   })
 
@@ -80,6 +84,31 @@ describe('stable error codes', () => {
     const emptyText = new LinguistContextDocExtractError('DOCX_EMPTY_TEXT')
     expect(emptyText.message).toContain('普通段落正文')
     expect(emptyText.message).toContain('UTF-8 .txt/.md')
+
+    // LA-INTAKE-007：导入验证失败只携带检查项 id；撤销拒绝只携带分类计数
+    const verifyFailed = new LinguistImportVerificationFailedError('prj-v', ['segment-count', 'source-hash'])
+    expect(verifyFailed.code).toBe('IMPORT_VERIFICATION_FAILED')
+    expect(verifyFailed.failedChecks).toEqual(['segment-count', 'source-hash'])
+    expect(verifyFailed.message).toContain('segment-count')
+
+    const undoBlocked = new LinguistImportUndoBlockedError('prj-u', 'ast-u', {
+      proposals: 2,
+      qaFindings: 1,
+      criticArtifacts: 0,
+      exports: 0,
+      editedSegments: 3,
+      jobs: 0,
+    })
+    expect(undoBlocked.code).toBe('IMPORT_UNDO_BLOCKED')
+    expect(undoBlocked.details).toEqual({
+      proposals: 2,
+      qaFindings: 1,
+      criticArtifacts: 0,
+      exports: 0,
+      editedSegments: 3,
+      jobs: 0,
+    })
+    expect(undoBlocked.message).toContain('proposals=2')
   })
 })
 

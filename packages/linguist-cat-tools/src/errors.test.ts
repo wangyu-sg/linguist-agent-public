@@ -3,6 +3,7 @@ import {
   LINGUIST_CAT_TOOL_ERROR_CODES,
   LinguistCatAssetNotFoundError,
   LinguistCatBindingMissingError,
+  LinguistCatContextDriftError,
   LinguistCatInvalidArgumentError,
   LinguistCatProjectMissingError,
   LinguistCatToolError,
@@ -16,6 +17,8 @@ describe('tool error codes', () => {
       PROJECT_MISSING: 'PROJECT_MISSING',
       ASSET_NOT_FOUND: 'ASSET_NOT_FOUND',
       INVALID_ARGUMENT: 'INVALID_ARGUMENT',
+      CONTEXT_DRIFT: 'CONTEXT_DRIFT',
+      TRANSLATION_SCOPE_INCOMPLETE: 'TRANSLATION_SCOPE_INCOMPLETE',
     })
   })
 
@@ -25,6 +28,7 @@ describe('tool error codes', () => {
       [new LinguistCatProjectMissingError('prj-abc'), 'PROJECT_MISSING'],
       [new LinguistCatAssetNotFoundError('ast-abc'), 'ASSET_NOT_FOUND'],
       [new LinguistCatInvalidArgumentError('limit', 'bad'), 'INVALID_ARGUMENT'],
+      [new LinguistCatContextDriftError(), 'CONTEXT_DRIFT'],
     ]
     for (const [err, code] of cases) {
       expect(err.code).toBe(code)

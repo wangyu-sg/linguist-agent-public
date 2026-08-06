@@ -8,6 +8,7 @@ import {
   StoreReadOnlyError,
 } from './errors'
 import type { ProjectDatabase } from './project-database'
+import { translationJobScopeDigest } from './run-harness'
 import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
 
 function setup(segmentCount = 3) {
@@ -327,6 +328,44 @@ test('compaction capsule: versioned job state stays within budget and excludes c
   }
 })
 
+test('scope digest: canonical hash binds frozen segment ids and base revisions', () => {
+  const { db, segments } = setup()
+  const segmentIds = segments.map((segment) => segment.id as string)
+  const job = db.runs.createJob({
+    jobId: 'job-digest',
+    runId: 'run-digest',
+    sessionId: 'session-digest',
+    strategy: 'balanced',
+    segmentIds,
+    provenance: { schemaVersion: 1, runtime: 'pi' },
+  })
+  try {
+    const digest = translationJobScopeDigest(job.segmentIds, job.baseRevisions)
+    assert.match(digest, /^[a-f0-9]{64}$/)
+    // 纯函数：同一冻结输入逐字节一致
+    assert.equal(translationJobScopeDigest(job.segmentIds, job.baseRevisions), digest)
+    // 与 state capsule 的 scope.digest 同源（同一 helper）
+    const capsule = db.runs.createStateCapsule(
+      'job-digest',
+      { sessionId: 'session-digest' },
+      { maxBytes: 1024 },
+    )
+    assert.equal(capsule.scope.digest, digest)
+    // revision 或范围任一变化都必须改变 digest（traceability 敏感度）
+    const [firstId] = segmentIds
+    assert.notEqual(
+      translationJobScopeDigest(segmentIds, { ...job.baseRevisions, [firstId!]: 1 }),
+      digest,
+    )
+    assert.notEqual(
+      translationJobScopeDigest(segmentIds.slice(1), { ...job.baseRevisions }),
+      digest,
+    )
+  } finally {
+    db.close()
+  }
+})
+
 test('run change summary: aggregates durable job progress and structured mutations without text', () => {
   const { db, segments } = setup()
   const runId = 'run-summary'
@@ -440,6 +479,13 @@ test('latest run change summary follows durable user events and ignores suppress
       provenance: { schemaVersion: 1, runtime: 'node-worker_threads' },
     })
     assert.equal(db.runs.getLatestRunChangeSummary()?.runId, 'run-visible-2')
+
+    db.segments.applyTargetEdit(segmentIds[0]!, '人工编辑不应遮蔽最近 Run', 0)
+    assert.equal(
+      db.runs.getLatestRunChangeSummary()?.runId,
+      'run-visible-2',
+      'manual outbox events are not runnable agent summaries',
+    )
   } finally {
     db.close()
   }
@@ -565,7 +611,7 @@ test('structured undo: later human revision is preserved and reported as a parti
     assert.equal(db.segments.getById(segments[1]!.id)?.target, '人工后续译文')
     assert.equal(db.segments.getById(segments[1]!.id)?.revision, 1)
     assert.equal(db.runs.undoRun(runId, { actorId: 'human-2' }).status, 'refused')
-    assert.equal(db.runs.listEvents().length, 2)
+    assert.equal(db.runs.listEvents().length, 3, 'the later human segment edit is durable too')
   } finally {
     db.close()
   }

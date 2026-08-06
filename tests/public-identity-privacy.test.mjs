@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
@@ -38,6 +38,8 @@ function listVersionedAndPendingFiles() {
     .split('\0')
     .filter(Boolean)
     .filter((file) => DOCUMENT_EXTENSIONS.has(extname(file).toLowerCase()))
+    // 已删除但尚未纳入提交的条目不在当前工作树，跳过扫描
+    .filter((file) => existsSync(resolve(REPO_ROOT, file)))
 }
 
 test('公开文档不得包含作者中文姓名', () => {

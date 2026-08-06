@@ -17,11 +17,12 @@ import {
   getPreviewTabTitle,
   tabsAtom,
 } from '@/atoms/tab-atoms'
-import { previewFileMapAtom } from '@/atoms/preview-atoms'
+import { getLinguistPreviewTargetId, previewFileMapAtom } from '@/atoms/preview-atoms'
 import { tearOffPreviewToSplit } from './preview-opener'
 import { DefaultAppOpenButton } from './DefaultAppOpenButton'
 import { DiffTabContent } from './DiffTabContent'
 import { getDefaultAppTargetPath, getPreviewFileAccess } from './preview-open-path'
+import { LinguistPreviewBody } from '@/features/linguist/projects/LinguistPreviewBody'
 
 /** 切换为侧边分屏的小按钮 — 与拖拽 Tab 出 TabBar 触发的 tear-off 等价 */
 function TearOffButton({ sessionId }: { sessionId: string }): React.ReactElement {
@@ -107,6 +108,24 @@ export function PreviewTabContent({ sessionId }: PreviewTabContentProps): React.
       <TearOffButton sessionId={sessionId} />
     </>
   )
+
+  // Linguist 受管目标：无本机路径（authority 在主进程围栏），
+  // 不走 DiffTabContent 文件读取链；保留原生 tear-off（Tab ↔ 分屏）入口。
+  if (currentFile.linguist !== undefined) {
+    return (
+      <div className="flex h-full flex-col overflow-hidden bg-content-area">
+        <div className="flex h-8 shrink-0 items-center justify-end gap-1 border-b border-border/30 px-2">
+          <TearOffButton sessionId={sessionId} />
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <LinguistPreviewBody
+            key={`${sessionId}:${currentFile.linguist.kind}:${getLinguistPreviewTargetId(currentFile.linguist)}`}
+            target={currentFile.linguist}
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-content-area">

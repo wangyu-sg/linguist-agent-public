@@ -323,11 +323,14 @@ export function ensureClaudeSessionSettings(workspaceId: string, sessionId: stri
  * 并在运行时强制保持原值（防御 any 断言绕过）。
  * PB-082：评审会话在创建时附带 linguistSessionRole:'reviewer' 标记
  * （缺省 = 普通助理会话，不写库），同样冻结。
+ * LA-QUALITY-001：linguistExecutionPolicy 同例冻结；linguistStrategy 为
+ * legacy 只读字段（旧会话可能仍携带，解绑时一并清除）。
  */
 export interface AgentSessionLinguistBinding {
   linguistProjectId: string
   linguistProjectName: string
   linguistSessionRole?: 'reviewer' | 'auditor'
+  linguistExecutionPolicy?: AgentSessionMeta['linguistExecutionPolicy']
   linguistStrategy?: AgentSessionMeta['linguistStrategy']
 }
 
@@ -352,6 +355,9 @@ function frozenLinguistBinding(
     linguistProjectName: session.linguistProjectName ?? session.linguistProjectId,
     ...(session.linguistSessionRole
       ? { linguistSessionRole: session.linguistSessionRole }
+      : {}),
+    ...(session.linguistExecutionPolicy
+      ? { linguistExecutionPolicy: session.linguistExecutionPolicy }
       : {}),
     ...(session.linguistStrategy
       ? { linguistStrategy: session.linguistStrategy }
@@ -666,10 +672,11 @@ export function updateAgentSessionMeta(
     ...updates,
     // Linguist 项目绑定在创建时冻结（PB-034 硬规则）：类型白名单刻意不含
     // 这两个字段，这里再防御 any 断言绕过——永远保持创建时的值。
-    // PB-082 的 role 与 LF-080 的 strategy 同理冻结。
+    // PB-082 的 role 与 LA-QUALITY-001 的 executionPolicy / legacy strategy 同理冻结。
     linguistProjectId: existing.linguistProjectId,
     linguistProjectName: existing.linguistProjectName,
     linguistSessionRole: existing.linguistSessionRole,
+    linguistExecutionPolicy: existing.linguistExecutionPolicy,
     linguistStrategy: existing.linguistStrategy,
     ...(autoUnarchive ? { archived: false } : {}),
     updatedAt: isStarredOnly ? existing.updatedAt : Date.now(),
@@ -698,6 +705,7 @@ export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta 
   delete updated.linguistProjectId
   delete updated.linguistProjectName
   delete updated.linguistSessionRole
+  delete updated.linguistExecutionPolicy
   delete updated.linguistStrategy
   index.sessions[idx] = updated
   writeIndex(index)

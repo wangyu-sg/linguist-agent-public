@@ -54,15 +54,21 @@ async function boundSegments(name: string, imported: Awaited<ReturnType<CsvAdapt
 }
 
 describe('CsvAdapter detect', () => {
-  test('扩展名 + 可 sniff 的表头 => 0.9；仅字节 => 0.5；单列/二进制/非 UTF-8 => 0', async () => {
+  test('扩展名 + 可导入双语表头 => 0.9；低置信内容嗅探和无效输入 => 0', async () => {
     const adapter = new CsvAdapter()
     const csv = fixtureBytes('mini_dialogue.csv')
     expect(await adapter.detect(csv, 'mini_dialogue.csv')).toBe(0.9)
     expect(await adapter.detect(encode('key\tsource\ttarget\na\tb\tc\n'), 'strings.tsv')).toBe(0.9)
-    expect(await adapter.detect(csv, 'renamed.bin')).toBe(0.5)
+    expect(await adapter.detect(csv, 'renamed.bin')).toBe(0)
     expect(await adapter.detect(encode('justonecolumn\nx\ny\n'), 'a.csv')).toBe(0)
     expect(await adapter.detect(new Uint8Array([0, 1, 2, 44]), 'a.csv')).toBe(0)
     expect(await adapter.detect(new Uint8Array([0xff, 0xfe, 0x2c]), 'a.csv')).toBe(0)
+  })
+
+  test('Markdown 管道表和无 source 表头的配置表不因分隔符而误中', async () => {
+    const adapter = new CsvAdapter()
+    expect(await adapter.detect(encode('| key | value |\n| --- | --- |\n| a | b |\n'), 'README.md')).toBe(0)
+    expect(await adapter.detect(encode('name,version\napp,1\n'), 'config.csv')).toBe(0)
   })
 })
 

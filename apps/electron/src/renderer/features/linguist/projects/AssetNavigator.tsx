@@ -30,20 +30,20 @@ export function AssetNavigator({ projectId, summary }: AssetNavigatorProps): Rea
   }
 
   return (
-    <section aria-label="资产导航器" className="flex h-full min-h-0 flex-col gap-3 p-3">
+    <section aria-label="批次导航器" className="flex h-full min-h-0 flex-col gap-3 p-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-foreground">资产</h2>
+        <h2 className="text-sm font-semibold text-foreground">批次</h2>
         {summary !== undefined && (
           <span className="text-xs text-muted-foreground">{summary.assetCount} 个文件</span>
         )}
       </div>
       <label className="relative">
         <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-        <span className="sr-only">搜索资产</span>
+        <span className="sr-only">搜索批次</span>
         <input
           value={uiState.assetNavigatorSearch}
           onChange={(event) => setUiState({ assetNavigatorSearch: event.target.value })}
-          placeholder="搜索资产"
+          placeholder="搜索批次"
           maxLength={200}
           className="h-8 w-full rounded-md bg-background pl-8 pr-2 text-xs outline-none ring-1 ring-border/50 focus:ring-primary/50"
         />
@@ -56,18 +56,18 @@ export function AssetNavigator({ projectId, summary }: AssetNavigatorProps): Rea
           )}
         </p>
       )}
-      <nav aria-label="项目资产" className="min-h-0 space-y-1 overflow-y-auto">
+      <nav aria-label="项目批次" className="min-h-0 space-y-1 overflow-y-auto">
         <AssetButton
           active={uiState.activeAssetId === undefined}
-          label="全部资产"
+          label="全部批次"
           detail={summary === undefined ? '加载中…' : `${summary.totalSegments} 段`}
           onClick={() => selectAsset(undefined)}
         />
         {summary === undefined ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">正在加载资产…</p>
+          <p className="px-2 py-3 text-xs text-muted-foreground">正在加载批次…</p>
         ) : assets.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">
-            {summary.assetCount === 0 ? '尚未导入资产' : '没有匹配的资产'}
+            {summary.assetCount === 0 ? '尚未导入批次' : '没有匹配的批次'}
           </p>
         ) : assets.map((asset) => (
           <AssetButton

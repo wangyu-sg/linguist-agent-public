@@ -573,7 +573,7 @@ test('migration 13: v12 proposal content is backfilled once and Harness tables s
     )
     assert.equal(
       (migrated.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-      13,
+      SCHEMA_VERSION,
     )
   } finally {
     migrated.close()

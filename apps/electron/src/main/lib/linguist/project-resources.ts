@@ -1,5 +1,5 @@
-import { realpathSync, statSync } from 'node:fs'
-import { extname, resolve, sep } from 'node:path'
+import { existsSync, realpathSync, statSync } from 'node:fs'
+import { extname, join, resolve, sep } from 'node:path'
 import { sha256Hex } from '@linguist/cat-formats'
 import {
   assetSourceFileName,
@@ -7,6 +7,7 @@ import {
   saveProjectBlob,
   StoreNotFoundError,
   type ContextDoc,
+  type ReferenceImport,
   type SentencePattern,
   type SentencePatternUpsertInput,
   type StyleGuideRule,
@@ -35,11 +36,26 @@ import type {
   LinguistReferenceKind,
   ProjectAssetInfo,
   ProjectAssetsQuery,
+  ReferenceImportQueryPage,
   ReferenceQuery,
   ReferenceQueryPage,
   TermReferenceInfo,
   TmReferenceInfo,
 } from './project-service-types'
+
+/** 解析项目 blobs/ 下的受管文件；符号链接/路径穿越一律拒绝。 */
+function resolveManagedBlobPath(blobsDir: string, blobRelpath: string): string | undefined {
+  try {
+    const blobsRoot = realpathSync(blobsDir)
+    const target = realpathSync(
+      resolve(blobsRoot, blobRelpath.replace(/^blobs\//, '')),
+    )
+    if (target === blobsRoot || !target.startsWith(blobsRoot + sep)) return undefined
+    return statSync(target).isFile() ? target : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * 项目参考资料与语言资产模块。
@@ -54,7 +70,7 @@ export class ProjectResources {
   queryTmReferences(
     projectId: string,
     query: ReferenceQuery,
-  ): ReferenceQueryPage<TmReferenceInfo> {
+  ): ReferenceImportQueryPage<TmReferenceInfo> {
     this.context.getProject(projectId)
     const db = this.context.openProject(projectId)
     return this.context.call(() => {
@@ -66,6 +82,7 @@ export class ProjectResources {
         limit: query.limit,
         offset: query.offset,
         hasMore: query.offset + items.length < total,
+        imports: db.referenceImports.list('tm'),
       }
     }, projectId)
   }
@@ -73,7 +90,7 @@ export class ProjectResources {
   queryTermReferences(
     projectId: string,
     query: ReferenceQuery,
-  ): ReferenceQueryPage<TermReferenceInfo> {
+  ): ReferenceImportQueryPage<TermReferenceInfo> {
     this.context.getProject(projectId)
     const db = this.context.openProject(projectId)
     return this.context.call(() => {
@@ -85,11 +102,15 @@ export class ProjectResources {
         limit: query.limit,
         offset: query.offset,
         hasMore: query.offset + items.length < total,
+        imports: db.referenceImports.list('terms'),
       }
     }, projectId)
   }
 
-  /** 全文件解析/验证完成后才开启 repository 事务，避免半批 reference。 */
+  /**
+   * 全文件解析/验证完成后才写入。原件只落一份受管 blobs/ 文件，再在同一
+   * SQLite 事务内登记来源和导入所有行；失败时 DB 回滚且新 blob 清尾。
+   */
   importReference(
     projectId: string,
     kind: LinguistReferenceKind,
@@ -102,13 +123,34 @@ export class ProjectResources {
       const parsed = kind === 'tm'
         ? parseTmReference(input, project.sourceLocale, project.targetLocale)
         : parseTermReference(input, project.sourceLocale, project.targetLocale)
-      const result = kind === 'tm'
-        ? db.tmUnits.importMany(parsed.entries as TmUnitImportInput[])
-        : db.termEntries.importMany(parsed.entries as TermEntryImportInput[])
+      const sourceSha256 = sha256Hex(input.bytes)
+      const blobName = `ref-${sourceSha256}`
+      const blobRelpath = `blobs/${blobName}`
+      const blobExisted = existsSync(join(db.blobsDir, blobName))
+      saveProjectBlob(db.blobsDir, blobName, input.bytes)
+      let source: ReferenceImport
+      let result: { imported: number; unchanged: number }
+      try {
+        ({ source, result } = db.catDb.transaction(`import ${kind} reference source`, () => ({
+          source: db.referenceImports.insert({
+            kind,
+            originalFilename: input.filename,
+            sourceSha256,
+            blobRelpath,
+          }),
+          result: kind === 'tm'
+            ? db.tmUnits.importMany(parsed.entries as TmUnitImportInput[])
+            : db.termEntries.importMany(parsed.entries as TermEntryImportInput[]),
+        })))
+      } catch (error) {
+        // 只清理本次新建的 blob；既有同 hash blob 可能仍被另一来源引用。
+        if (!blobExisted) removeProjectBlob(db.blobsDir, blobName)
+        throw error
+      }
       console.log(
         `[Linguist] 已导入 ${kind === 'tm' ? 'TM' : '术语库'}: 项目 ${projectId}（${result.imported} 新增，${result.unchanged} 未变）`,
       )
-      return { ...result, warnings: parsed.warnings }
+      return { ...result, warnings: parsed.warnings, source }
     }, projectId)
   }
 
@@ -323,18 +365,23 @@ export class ProjectResources {
     this.context.getProject(projectId)
     const db = this.context.openProject(projectId)
     return this.context.call(() => {
-      try {
-        const blobsRoot = realpathSync(db.blobsDir)
-        const target = realpathSync(
-          resolve(blobsRoot, blobRelpath.replace(/^blobs\//, '')),
-        )
-        if (target !== blobsRoot && !target.startsWith(blobsRoot + sep)) {
-          return undefined
-        }
-        return statSync(target).isFile() ? target : undefined
-      } catch {
-        return undefined
-      }
+      return resolveManagedBlobPath(db.blobsDir, blobRelpath)
+    }, projectId)
+  }
+
+  /** TM/TB 原始导入文件的围栏路径，仅供主进程 preview conversion stack 使用。 */
+  resolveReferenceImportPreviewPath(
+    projectId: string,
+    importId: string,
+  ): { sourcePath: string; originalFilename: string } {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const source = db.referenceImports.get(importId)
+      if (source === undefined) throw new StoreNotFoundError('reference import', importId)
+      const sourcePath = resolveManagedBlobPath(db.blobsDir, source.blobRelpath)
+      if (sourcePath === undefined) throw new StoreNotFoundError('reference import blob', source.id)
+      return { sourcePath, originalFilename: source.originalFilename }
     }, projectId)
   }
 
@@ -366,6 +413,26 @@ export class ProjectResources {
         if (err instanceof StoreNotFoundError) throw err
         throw new StoreNotFoundError('asset source blob', fileName)
       }
+    }, projectId)
+  }
+
+  /**
+   * 单条 Context 文档 blob 预览的主进程解析：doc 记录 + 围栏后的绝对路径
+   * （realpath 必须仍在项目 blobs/ 内），缺失或越界时 fail closed，
+   * 绝不向 renderer 暴露路径。与 resolveAssetSourcePath 同一纪律。
+   */
+  resolveContextDocPreviewPath(
+    projectId: string,
+    docId: string,
+  ): { sourcePath: string; originalFilename: string } {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const doc = db.contextDocs.get(docId)
+      if (doc === undefined) throw new StoreNotFoundError('context doc', docId)
+      const sourcePath = resolveManagedBlobPath(db.blobsDir, doc.blobRelpath)
+      if (sourcePath === undefined) throw new StoreNotFoundError('context doc blob', doc.blobRelpath)
+      return { sourcePath, originalFilename: doc.originalFilename }
     }, projectId)
   }
 

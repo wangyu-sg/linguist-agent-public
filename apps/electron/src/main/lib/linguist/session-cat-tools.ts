@@ -7,7 +7,7 @@
  *
  * 装配规则（每次发送重建工具数组；绑定状态绝不缓存）：
  * - 普通会话（无 linguistProjectId）→ []（硬规则：普通 Chat 的 Tool 列表无 CAT）；
- * - 项目绑定会话（active / archived / missing 均装配）→ 17 个工具。projectId 永远
+ * - 项目绑定会话（active / archived / missing 均装配）→ 19 个工具。projectId 永远
  *   来自冻结的会话绑定（PB-034），工具入参不含 projectId——计划 §7.2「Tool 每次都
  *   验证 Session projectId 与输入 projectId 一致」由构造满足（根本没有该输入）；
  * - cat_submit_critic_review 的评审身份由工具运行时派生：criticId/executionId
@@ -187,7 +187,7 @@ function resolveCriticSkillBytes(): Uint8Array | undefined {
 }
 
 /**
- * 计算会话应装配的 Linguist CAT 工具（0 或 17 个），供 orchestrator 合并进
+ * 计算会话应装配的 Linguist CAT 工具（0 或 19 个），供 orchestrator 合并进
  * Pi queryOptions.customTools。规则见模块头注释；本函数自身不触碰服务
  * （构建工具数组是纯操作），服务只在工具被调用时经 resolver 触达。
  */

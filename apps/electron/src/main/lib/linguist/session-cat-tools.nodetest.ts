@@ -2,7 +2,7 @@
  * PB-042 session-cat-tools nodetest（node --test；真实 LinguistProjectService +
  * 真实会话元数据 + 真实 fixture 导入，无 mock）：
  *
- * - 项目对话（active）→ 17 个工具；经应用 resolver 端到端驱动 execute：
+ * - 项目对话（active）→ 19 个工具；经应用 resolver 端到端驱动 execute：
  *   summary/list_assets/get_segments 对 mkdtemp 项目 + mini_items.json 播种
  *   断言真实 DTO（资产 id、段计数、段 id 跨调用稳定、assetId/status 过滤、
  *   未知 assetId → ASSET_NOT_FOUND、空 TM/TB 干净空 + note）；

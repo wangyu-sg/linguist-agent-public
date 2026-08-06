@@ -1849,10 +1849,13 @@ export class AgentOrchestrator {
         currentModelId: selectedModelId,
       }) + (automationContext ? `\n\n## 定时任务执行上下文\n\n${automationContext}` : '')
       const agentProfile = resolveAgentProfile(sessionMeta)
+      // LA-PROMPT-001：同一份 canonical prompt contract，wire 表达随 runtime 适配——
+      // Claude 走 'xml'（与历史输出 byte 级一致），Pi 走 generic 'markdown'。
       const linguistPromptBuild = agentProfile.kind === 'linguist'
         ? buildLinguistProjectAssetsPromptWithStatus(
           sessionMeta as typeof sessionMeta & { linguistProjectId: string },
           getLinguistProjectService,
+          { renderer: agentRuntime === 'pi' ? 'markdown' : 'xml' },
         )
         : undefined
       const linguistSystemPrompt = linguistPromptBuild?.prompt ?? ''
@@ -1938,9 +1941,8 @@ export class AgentOrchestrator {
             modelId: resolvedModel,
             runtime: agentRuntime,
             role: linguistPromptBuild!.status.role,
-            ...(linguistPromptBuild!.status.strategy === undefined
-              ? {}
-              : { strategy: linguistPromptBuild!.status.strategy }),
+            // LA-QUALITY-001：质量档位废除；proposal_issuances.strategy 列保留
+            // legacy 读取（旧行仍有值），新行不再写入该字段。
             linguistPromptVersion: linguistPromptBuild!.status.profileVersion,
             promptHash: linguistPromptBuild!.status.promptHash,
             projectDigestHash: linguistPromptBuild!.status.projectDigestHash,

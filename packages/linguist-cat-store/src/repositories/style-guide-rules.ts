@@ -8,6 +8,7 @@
 import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
+import type { RunHarnessRepository } from '../run-harness'
 import {
   styleGuideRuleFromRow,
   type StyleGuideRule,
@@ -67,6 +68,7 @@ export class StyleGuideRulesRepository {
     private readonly db: CatDatabase,
     private readonly projectId: string,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly events?: RunHarnessRepository,
   ) {}
 
   upsert(input: StyleGuideRuleUpsertInput): StyleGuideRule {
@@ -94,6 +96,7 @@ export class StyleGuideRulesRepository {
             input.id,
             this.projectId,
           )
+        this.events?.appendProjectEvent({ kind: 'project-updated' })
         return this.get(input.id) as StyleGuideRule
       }
 
@@ -125,6 +128,7 @@ export class StyleGuideRulesRepository {
           this.now(),
           input.updatedBy ?? null,
         )
+      this.events?.appendProjectEvent({ kind: 'project-updated' })
       return this.get(id) as StyleGuideRule
     })
   }
@@ -158,6 +162,7 @@ export class StyleGuideRulesRepository {
         .prepare('DELETE FROM style_guide_rules WHERE id = ? AND project_id = ?')
         .run(id, this.projectId)
       if (Number(result.changes) === 0) throw new StoreNotFoundError('style guide rule', id)
+      this.events?.appendProjectEvent({ kind: 'project-updated' })
     })
   }
 }

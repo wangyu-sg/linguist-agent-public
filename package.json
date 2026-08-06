@@ -18,6 +18,7 @@
     "typecheck": "bun run --filter='*' typecheck",
     "test": "bun test",
     "check:boundaries": "bun test tests/upstream-boundary.test.ts",
+    "sync:impact": "node scripts/proma-sync-impact.mjs",
     "license:scan": "bun scripts/license-scan.mjs",
     "license:check": "bun scripts/license-scan.mjs --check"
   },

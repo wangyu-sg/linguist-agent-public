@@ -173,7 +173,10 @@ export function checkBlobDigests(
   let rows: Array<{ blob_relpath: string; sha256: string | null }>
   try {
     rows = db.db.prepare(
-      'SELECT blob_relpath, sha256 FROM context_docs ORDER BY id',
+      `SELECT blob_relpath, sha256 FROM context_docs
+       UNION
+       SELECT blob_relpath, source_sha256 AS sha256 FROM reference_imports
+       ORDER BY blob_relpath`,
     ).all() as typeof rows
   } catch {
     return integrityResult(

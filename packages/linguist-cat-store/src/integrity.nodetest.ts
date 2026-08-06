@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { sha256Hex } from '@linguist/cat-formats'
 import { saveProjectBlob } from './blobs'
 import { scanProjectIntegrity } from './integrity'
+import { SCHEMA_VERSION } from './schema'
 import { CatStore } from './store'
 import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
 
@@ -64,6 +65,29 @@ test('Full Integrity Scrub reports unavailable blob evidence instead of claiming
   assert.equal(blobs?.unavailableItems, 1)
   assert.deepEqual(blobs?.problems, [{ code: 'BLOB_DIGEST_UNAVAILABLE', count: 1 }])
   assert.equal(report.outcome, 'incomplete')
+})
+
+test('Full Integrity Scrub validates managed TM/TB import source blobs', () => {
+  const { store, project, projectDir } = setup()
+  const db = store.openProject(project.id)
+  const bytes = Buffer.from('source,target\nHello,你好\n')
+  const sha256 = sha256Hex(bytes)
+  const blobName = `ref-${sha256}`
+  saveProjectBlob(db.blobsDir, blobName, bytes)
+  db.referenceImports.insert({
+    kind: 'tm',
+    originalFilename: 'memory.csv',
+    sourceSha256: sha256,
+    blobRelpath: `blobs/${blobName}`,
+  })
+  db.close()
+
+  writeFileSync(join(projectDir, 'blobs', blobName), 'tampered')
+  const report = scanProjectIntegrity({ projectDir, expectedProjectId: project.id })
+  const blobs = report.checks.find((check) => check.id === 'blob_digests')
+  assert.equal(blobs?.checkedItems, 1)
+  assert.equal(blobs?.status, 'failed')
+  assert.deepEqual(blobs?.problems, [{ code: 'BLOB_DIGEST_MISMATCH', count: 1 }])
 })
 
 test('Full Integrity Scrub checks foreign keys and Proposal/QA/Review lineage', () => {
@@ -144,7 +168,7 @@ test('Full Integrity Scrub validates v13 Proposal Issuance references and proven
   db.close()
 
   const valid = scanProjectIntegrity({ projectDir, expectedProjectId: project.id })
-  assert.equal(valid.schemaVersion, 13)
+  assert.equal(valid.schemaVersion, SCHEMA_VERSION)
   assert.equal(valid.checks.find((check) => check.id === 'schema_version')?.status, 'passed')
   assert.equal(valid.checks.find((check) => check.id === 'proposal_references')?.status, 'passed')
 

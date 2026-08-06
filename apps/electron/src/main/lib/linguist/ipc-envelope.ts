@@ -50,13 +50,32 @@ export function toIpcError(err: unknown): LinguistIpcError {
   const code = errorCodeOf(err)
   if (KNOWN_CODES.has(code)) {
     const message = err instanceof Error ? err.message : String(err)
-    return { code: code as LinguistIpcErrorCode, message }
+    // LA-INTAKE-007：类型化错误可选携带机器可读计数（如 IMPORT_UNDO_BLOCKED
+    // 的下游引用计数）。防御性校验：只透传非负整数键值对，其他形状一律丢弃。
+    const details = readNumericDetails(err)
+    return details === undefined
+      ? { code: code as LinguistIpcErrorCode, message }
+      : { code: code as LinguistIpcErrorCode, message, details }
   }
   // 未知错误：不泄露 message/stack（可能含内部细节）；日志同样只记 name。
   console.error(
     `[Linguist IPC] 未类型化错误（name=${err instanceof Error ? err.name : typeof err}），按 INTERNAL 返回`,
   )
   return { code: LINGUIST_IPC_ERROR_CODES.INTERNAL, message: 'Unexpected internal error.' }
+}
+
+/** 读取错误对象上可选的 details（Record<string, 非负整数>）；不合形状返回 undefined。 */
+function readNumericDetails(err: unknown): Record<string, number> | undefined {
+  const details = (err as { details?: unknown } | null)?.details
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) return undefined
+  const entries = Object.entries(details as Record<string, unknown>)
+  if (entries.length === 0) return undefined
+  const clean: Record<string, number> = {}
+  for (const [key, value] of entries) {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
+    clean[key] = value
+  }
+  return clean
 }
 
 export async function wrap<T>(fn: () => T | Promise<T>): Promise<LinguistIpcResult<T>> {

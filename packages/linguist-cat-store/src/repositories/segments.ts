@@ -26,6 +26,7 @@ import {
   type WorkflowStageMutationResult,
 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
+import type { RunHarnessRepository } from '../run-harness'
 import { segmentFromRow, type SegmentRow, type SegmentRevisionRow, segmentRevisionFromRow } from './rows'
 
 export interface SegmentQuery {
@@ -77,7 +78,10 @@ function buildSegmentWhere(
 }
 
 export class SegmentsRepository {
-  constructor(private readonly db: CatDatabase) {}
+  constructor(
+    private readonly db: CatDatabase,
+    private readonly events?: RunHarnessRepository,
+  ) {}
 
   /** Paged query, deterministic order: asset_id, ordinal, key, id. */
   query(filter: SegmentQuery = {}): Segment[] {
@@ -308,6 +312,45 @@ export class SegmentsRepository {
     return Number(row.n)
   }
 
+  /**
+   * LA-INTAKE-007：人工编辑痕迹计数（revision > 0 或存在阶段确认事件）。
+   * 导入写入的段 revision 恒为 0 且无 stage events；任一非零即说明该批次
+   * 已被人工作业触碰，撤销导入必须拒绝。
+   */
+  countEditedByAsset(assetId: string): number {
+    const row = this.db.db
+      .prepare(
+        `SELECT COUNT(*) AS n
+         FROM segments
+         WHERE asset_id = ?
+           AND (
+             revision > 0
+             OR id IN (SELECT segment_id FROM segment_stage_events)
+           )`,
+      )
+      .get(assetId) as { n: number }
+    return Number(row.n)
+  }
+
+  /**
+   * LA-INTAKE-007：语言对与项目不一致的段计数（导入回读验证用，应为 0；
+   * 单条 COUNT 聚合，不加载段行）。
+   */
+  countMismatchedLocalesByAsset(
+    assetId: string,
+    sourceLocale: string,
+    targetLocale: string,
+  ): number {
+    const row = this.db.db
+      .prepare(
+        `SELECT COUNT(*) AS n
+         FROM segments
+         WHERE asset_id = ? AND (source_locale <> ? OR target_locale <> ?)`,
+      )
+      .get(assetId, sourceLocale, targetLocale) as { n: number }
+    return Number(row.n)
+  }
+
   countUnconfirmedUnlockedByAsset(assetId: string): number {
     const row = this.db.db
       .prepare(
@@ -363,6 +406,10 @@ export class SegmentsRepository {
           segmentId,
         )
       this.insertRevision(segmentId, result.revision)
+      this.events?.appendProjectEvent({
+        kind: 'segment-updated',
+        segmentIds: [result.segment.id as string],
+      })
       return result
     })
   }

@@ -50,6 +50,23 @@ export class CriticArtifactsRepository {
     return rows.map(criticArtifactFromRow)
   }
 
+  /**
+   * LA-INTAKE-007：经 segments join 的资产级评审件计数（撤销导入的下游
+   * 引用判定）。critic_artifacts.segment_id 无 FK 约束，删除资产前必须
+   * 先确认本计数为零，否则会留下孤儿评审件。
+   */
+  countByAsset(assetId: string): number {
+    const row = this.db.db
+      .prepare(
+        `SELECT COUNT(*) AS n
+         FROM critic_artifacts
+         INNER JOIN segments ON segments.id = critic_artifacts.segment_id
+         WHERE segments.asset_id = ?`,
+      )
+      .get(assetId) as { n: number }
+    return Number(row.n)
+  }
+
   linkFindingToQa(
     artifactId: string,
     criticFindingId: string,

@@ -11,10 +11,11 @@
  */
 
 import { readFileSync, statSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, extname } from 'node:path'
 import {
   LINGUIST_IMPORT_MAX_BYTES,
   LINGUIST_PROJECT_ASSET_ID_PATTERN,
+  type LinguistAssetPreviewResult,
   type LinguistAssetsDeleteResult,
   type LinguistAssetsQueryResult,
   type LinguistAssetsUpsertResult,
@@ -26,6 +27,7 @@ import {
 import type { ContextDoc } from '@linguist/cat-store'
 import { LinguistImportTooLargeError } from './errors'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
+import type { LinguistAssetPreviewDeps } from './project-ipc'
 import type {
   LinguistProjectAssetKind,
   ProjectAssetsQuery,
@@ -71,7 +73,19 @@ export interface LinguistAssetsIpcDeps {
    * contextDocs 的 image 条目查询时使用；注册失败降级为无 previewUrl。
    */
   registerPreviewUrl: (absPath: string) => string
+  /**
+   * contextDocs blob 预览的转换栈（与 PB-089 同一组依赖；生产 =
+   * file-preview-service + registerPromaFilePath，ipc.ts 惰性注入；
+   * nodetest 注入 fake）。缺失时 previewContextDoc 以 INTERNAL 降级。
+   */
+  assetPreview?: LinguistAssetPreviewDeps
 }
+
+/** contextDocs 文本类直读扩展名（导入白名单中的文本成员 + 常见文本格式）。 */
+const CONTEXT_DOC_TEXT_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'text', 'log', 'json', 'csv', 'tsv'])
+
+/** text 态截断护栏（与 PB-089 / context doc text_extract 同一 200k 字符纪律）。 */
+const PREVIEW_TEXT_MAX_CHARS = 200_000
 
 function readKind(record: Record<string, unknown>): LinguistProjectAssetKind {
   const value = record.kind
@@ -270,7 +284,7 @@ function toAssetInfo(
 }
 
 export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
-  const { getService, onProjectMutation, registerPreviewUrl } = deps
+  const { getService, onProjectMutation, registerPreviewUrl, assetPreview } = deps
   const emitAssetMutation = (projectId: string): void => {
     if (onProjectMutation === undefined) return
     onProjectMutation(createLinguistProjectMutationEvent(projectId, { kind: 'asset-updated' }))
@@ -416,6 +430,61 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
         })
         emitAssetMutation(projectId)
         return { cancelled: false, filename, ...result }
+      })
+    },
+
+    /**
+     * linguist.assets.previewContextDoc — Context 文档 blob 预览（纯读；
+     * 归档项目允许）。主进程围栏解析 blobs/ 内绝对路径后按扩展名三态分派
+     * （与 PB-089 previewAssetSource 同一纪律）：文本类直读（截断护栏）/
+     * docx·xlsx 转 HTML / 图片·PDF·未知扩展名降级 proma-file:// 不透明
+     * token URL 直渲染。零字节、零路径过 IPC；blob 缺失/越界由服务层抛
+     * StoreNotFoundError → STORE_NOT_FOUND 错误信封，转换失败收敛 INTERNAL。
+     */
+    previewContextDoc(input: unknown): Promise<LinguistIpcResult<LinguistAssetPreviewResult>> {
+      return wrap(async () => {
+        if (assetPreview === undefined) {
+          throw new Error('asset preview conversion stack is not wired')
+        }
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const docId = readAssetId(record.docId, 'docId')
+        const { sourcePath, originalFilename } = getService().resolveContextDocPreviewPath(projectId, docId)
+        const ext = extname(originalFilename).toLowerCase().replace(/^\./, '')
+
+        if (CONTEXT_DOC_TEXT_EXTENSIONS.has(ext)) {
+          const file = await assetPreview.readText(sourcePath)
+          if (file === null) throw new Error('context doc preview: text read failed')
+          const truncated = file.content.length > PREVIEW_TEXT_MAX_CHARS
+          return {
+            kind: 'text',
+            text: truncated ? file.content.slice(0, PREVIEW_TEXT_MAX_CHARS) : file.content,
+            truncated,
+            filename: originalFilename,
+          }
+        }
+        if (ext === 'docx') {
+          const converted = await assetPreview.convertDocxToHtml(sourcePath)
+          if (converted === null) throw new Error('context doc preview: docx conversion failed')
+          return { kind: 'html', html: converted.html, filename: originalFilename }
+        }
+        if (ext === 'xlsx') {
+          const converted = await assetPreview.convertOfficeToHtml(sourcePath)
+          if (converted === null) throw new Error('context doc preview: xlsx conversion failed')
+          return {
+            kind: 'html',
+            html: converted.html,
+            ...(converted.text !== '' ? { text: converted.text } : {}),
+            filename: originalFilename,
+          }
+        }
+        // 图片 / PDF / 未知扩展名：proma-file:// 不透明 token URL 直渲染
+        return {
+          kind: 'url',
+          url: assetPreview.registerPreviewUrl(sourcePath),
+          filename: originalFilename,
+          ext,
+        }
       })
     },
   }

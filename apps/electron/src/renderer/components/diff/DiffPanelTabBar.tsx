@@ -73,7 +73,7 @@ export function DiffPanelTabBar({
   }
 
   return (
-    <div className="flex items-end h-[34px] tabbar-bg relative flex-shrink-0">
+    <div className="flex h-9 items-end tabbar-bg relative flex-shrink-0">
       <div className={cn("absolute inset-0 titlebar-drag-region", isWindows && WINDOW_CONTROLS_INSET_RIGHT)} />
       <div className="relative flex items-end flex-1 titlebar-no-drag">
         {!chatOnly && <>

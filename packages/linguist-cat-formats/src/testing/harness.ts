@@ -141,6 +141,9 @@ export async function assertRoundTrip(
     originalFilename: filename,
     sourceSha256: imported.asset.sourceSha256,
     segmentCount: imported.asset.segmentCount,
+    ...(imported.asset.formatConfigJson === undefined
+      ? {}
+      : { formatConfigJson: imported.asset.formatConfigJson }),
   })
   const initial = bindImportedSegments(imported.segments, asset.id)
 

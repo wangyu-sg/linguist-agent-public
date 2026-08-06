@@ -49,6 +49,8 @@ export interface ImportedAssetInfo {
   /** SHA-256 (hex) of the original bytes — hard rule, plan §6.3. */
   sourceSha256: string
   segmentCount: number
+  /** Adapter-owned, versioned import configuration. The store treats it as opaque. */
+  formatConfigJson?: string
 }
 
 export interface ImportedCatAsset {
@@ -64,6 +66,8 @@ export interface CatFormatImportInput {
   filename: string
   sourceLocale: string
   targetLocale: string
+  /** Persisted adapter configuration used when re-verifying an exported template. */
+  formatConfigJson?: string
 }
 
 export interface CatFormatExportInput {

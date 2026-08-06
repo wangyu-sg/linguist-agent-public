@@ -54,7 +54,15 @@ export {
 
 export { JSON_ADAPTER_ID, JsonAdapter, type JsonAdapterOptions, type JsonArrayMapping } from './adapters/json'
 
-export { XLSX_ADAPTER_ID, XlsxAdapter, type XlsxAdapterOptions } from './adapters/xlsx'
+export {
+  XLSX_ADAPTER_ID,
+  XLSX_FORMAT_CONFIG_VERSION,
+  XlsxAdapter,
+  parseXlsxFormatConfig,
+  serializeXlsxFormatConfig,
+  type XlsxAdapterOptions,
+  type XlsxFormatConfig,
+} from './adapters/xlsx'
 
 export {
   parseTmx,
@@ -68,5 +76,23 @@ export {
   type TbxParseResult,
   type TbxTermStatus,
 } from './tbx'
+
+export {
+  parseXlsxWorkbook,
+  XLSX_WORKBOOK_PARSER_ID,
+  XLSX_WORKBOOK_PARSER_VERSION,
+  type XlsxMergedRange,
+  type XlsxSheetState,
+  type XlsxSkippedSheet,
+  type XlsxWorkbookCell,
+  type XlsxWorkbookCellKind,
+  type XlsxWorkbookDistortion,
+  type XlsxWorkbookParseOptions,
+  type XlsxWorkbookParseResult,
+  type XlsxWorkbookRow,
+  type XlsxWorkbookSheet,
+  type XlsxWorkbookSheetStats,
+  type XlsxWorkbookVerificationReport,
+} from './workbook'
 
 export type { XmlLocalePairOptions } from './xml-parser'

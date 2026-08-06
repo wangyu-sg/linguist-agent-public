@@ -101,6 +101,15 @@ import { sha256Hex, type HashFn } from '../hash'
 export const JSON_ADAPTER_ID = 'json_i18n'
 
 const BOM = '\uFEFF'
+const CONFIG_ROOT_KEYS = new Set([
+  '$schema',
+  'compilerOptions',
+  'dependencies',
+  'devDependencies',
+  'engines',
+  'scripts',
+  'workspaces',
+])
 
 /** Field names for the top-level array shape; each overrides the default for that field. */
 export interface JsonArrayMapping {
@@ -442,6 +451,8 @@ export class JsonAdapter implements CatFormatAdapter {
 
   async detect(input: Uint8Array, filename: string): Promise<number> {
     if (looksBinary(input)) return 0
+    const lower = filename.toLowerCase()
+    if (!this.extensions.some((ext) => lower.endsWith(ext))) return 0
     let text: string
     try {
       text = new TextDecoder('utf-8', { fatal: true }).decode(input)
@@ -458,9 +469,11 @@ export class JsonAdapter implements CatFormatAdapter {
       return 0
     }
     if (!this.looksLikeI18n(template.root)) return 0
-    const lower = filename.toLowerCase()
-    if (this.extensions.some((ext) => lower.endsWith(ext))) return 0.8
-    return 0.4
+    if (
+      template.root.kind === 'object'
+      && template.root.entries.some(({ key }) => CONFIG_ROOT_KEYS.has(key))
+    ) return 0
+    return 0.8
   }
 
   async import(input: CatFormatImportInput): Promise<ImportedCatAsset> {

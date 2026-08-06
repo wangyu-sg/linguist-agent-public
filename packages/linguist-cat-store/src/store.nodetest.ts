@@ -195,11 +195,11 @@ test('facade: v12 → v13 migration advances all identity checkpoints after one 
     )
     assert.equal(
       (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-      13,
+      SCHEMA_VERSION,
     )
     assert.equal(
       (db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get() as { version: number }).version,
-      13,
+      SCHEMA_VERSION,
     )
   } finally {
     db.close()
@@ -208,7 +208,7 @@ test('facade: v12 → v13 migration advances all identity checkpoints after one 
     databaseIdentity: StoredDatabaseIdentity
   }
   const bytes = readFileSync(dbPath)
-  assert.equal(manifest.databaseIdentity.schemaVersion, 13)
+  assert.equal(manifest.databaseIdentity.schemaVersion, SCHEMA_VERSION)
   assert.equal(manifest.databaseIdentity.lastMigratedByVersion, 'v13-test')
   assert.equal(manifest.databaseIdentity.mainFileSnapshot.sizeBytes, bytes.byteLength)
   assert.equal(

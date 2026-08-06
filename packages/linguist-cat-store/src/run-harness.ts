@@ -377,6 +377,17 @@ function fingerprint(value: unknown): string {
   return createHash('sha256').update(canonicalJson(value)).digest('hex')
 }
 
+/**
+ * 冻结范围的身份哈希：segmentIds + baseRevisions 的 canonical SHA-256。
+ * state capsule 与工具结果 DTO 共用同一定义，保证跨表面的 digest 逐字节一致。
+ */
+export function translationJobScopeDigest(
+  segmentIds: readonly string[],
+  baseRevisions: Record<string, number>,
+): string {
+  return fingerprint({ segmentIds, baseRevisions })
+}
+
 function eventFromRow(row: ProjectEventRow): DurableProjectEvent {
   const payload = JSON.parse(row.payload_json) as Omit<
     DurableProjectEvent,
@@ -461,6 +472,22 @@ export class RunHarnessRepository {
       LIMIT 1
     `).get(this.projectId) as TranslationJobRow | undefined
     return row === undefined ? undefined : jobFromRow(row)
+  }
+
+  /** 已冻结的 job scope 引用批次段时，撤销导入必须被服务层拒绝。 */
+  countReferencingAsset(assetId: string): number {
+    const row = this.db.db.prepare(`
+      SELECT COUNT(*) AS n
+      FROM translation_jobs AS job
+      WHERE job.project_id = ?
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(job.segment_ids_json) AS scoped
+          JOIN segments AS segment ON segment.id = scoped.value
+          WHERE segment.asset_id = ?
+        )
+    `).get(this.projectId, assetId) as { n: number }
+    return Number(row.n)
   }
 
   transitionJob(
@@ -614,7 +641,7 @@ export class RunHarnessRepository {
       status: job.status,
       scope: {
         totalSegments: job.segmentIds.length,
-        digest: fingerprint({ segmentIds: job.segmentIds, baseRevisions: job.baseRevisions }),
+        digest: translationJobScopeDigest(job.segmentIds, job.baseRevisions),
       },
       progress: {
         cursor: job.cursor,
@@ -742,8 +769,24 @@ export class RunHarnessRepository {
   }
 
   getLatestRunChangeSummary(): RunChangeSummaryV1 | undefined {
-    const runId = this.getLatestEvent()?.runId
-    return runId === undefined ? undefined : this.getRunChangeSummary(runId)
+    const row = this.db.db.prepare(`
+      SELECT event.run_id
+      FROM project_events AS event
+      WHERE event.project_id = ?
+        AND (
+          EXISTS (
+            SELECT 1 FROM translation_jobs
+            WHERE project_id = ? AND run_id = event.run_id
+          )
+          OR EXISTS (
+            SELECT 1 FROM proposal_mutations
+            WHERE run_id = event.run_id
+          )
+        )
+      ORDER BY event.sequence DESC
+      LIMIT 1
+    `).get(this.projectId, this.projectId) as { run_id: string } | undefined
+    return row === undefined ? undefined : this.getRunChangeSummary(row.run_id)
   }
 
   undoRun(runId: string, options: UndoRunOptions): RunUndoResult {
@@ -940,6 +983,27 @@ export class RunHarnessRepository {
     return row === undefined ? undefined : eventFromRow(row)
   }
 
+  /** 当前 project_events 的最大 sequence（无事件时为 0）；供快照绑定类游标读取。 */
+  get latestEventSequence(): number {
+    const row = this.db.db.prepare(`
+      SELECT COALESCE(MAX(sequence), 0) AS sequence
+      FROM project_events WHERE project_id = ?
+    `).get(this.projectId) as { sequence: number }
+    return Number(row.sequence)
+  }
+
+  /**
+   * 人工 Store 写入与 Agent run 共用同一 durable outbox。调用者已经在其
+   * mutation 事务内时，CatDatabase 会复用该事务，失败即一并回滚。
+   */
+  appendProjectEvent(input: ProjectEventInput): DurableProjectEvent {
+    return this.db.transaction(`append ${input.kind} project event`, () => {
+      const sequence = this.nextEventSequence()
+      const identity = `manual:${input.kind}:${sequence}`
+      return this.appendEvent(identity, identity, identity, input, this.now())
+    })
+  }
+
   getEventAck(consumerId: string): ProjectEventAck | undefined {
     requireNonBlank(consumerId, 'consumerId')
     const row = this.db.db.prepare(`
@@ -957,11 +1021,7 @@ export class RunHarnessRepository {
       throw new RangeError('throughSequence must be a non-negative integer')
     }
     return this.db.transaction(`ack project events for ${consumerId}`, () => {
-      const maximum = this.db.db.prepare(`
-        SELECT COALESCE(MAX(sequence), 0) AS sequence
-        FROM project_events WHERE project_id = ?
-      `).get(this.projectId) as { sequence: number }
-      if (throughSequence > Number(maximum.sequence)) {
+      if (throughSequence > this.latestEventSequence) {
         throw new RangeError('throughSequence is beyond the durable project event sequence')
       }
       const existing = this.getEventAck(consumerId)
@@ -1005,9 +1065,7 @@ export class RunHarnessRepository {
     createdAt: string,
   ): DurableProjectEvent | undefined {
     if (job.provenance.projectEventPolicy === 'suppress') return undefined
-    const next = Number((this.db.db.prepare(`
-      SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM project_events
-    `).get() as { sequence: number }).sequence)
+    const next = this.nextEventSequence()
     return this.appendEvent(
       `job:${job.jobId}:${next}`,
       job.runId,
@@ -1025,6 +1083,13 @@ export class RunHarnessRepository {
       },
       createdAt,
     )
+  }
+
+  private nextEventSequence(): number {
+    const row = this.db.db.prepare(`
+      SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM project_events
+    `).get() as { sequence: number }
+    return Number(row.sequence)
   }
 
   private requireEvent(sequence: number): DurableProjectEvent {

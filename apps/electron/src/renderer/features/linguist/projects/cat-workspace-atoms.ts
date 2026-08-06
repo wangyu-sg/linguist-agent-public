@@ -2,6 +2,7 @@ import { atom } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
 import {
   createLinguistTurnContextV1,
+  type LinguistAssetInfo,
   type LinguistCurrentStageState,
   type LinguistQaFindingInfo,
   type LinguistTurnContextParseResult,
@@ -382,15 +383,41 @@ export function linguistQaFindingsCapabilityAtomFamily(
   return created
 }
 
+// ===== 显式「为 Agent 引用」片段（问题 12：替代隐式 active-segment scope）=====
+
+export interface LinguistSegmentAgentReference {
+  segmentId: string
+  assetId: string
+  capturedAt: number
+}
+
+const segmentAgentReferenceAtoms = new Map<
+  string,
+  ReturnType<typeof atom<LinguistSegmentAgentReference | undefined>>
+>()
+
+/** 显式引用只存在于当前渲染会话，按 Project 隔离且不进入 Workbench settings。 */
+export function linguistSegmentAgentReferenceAtomFamily(
+  projectId: string,
+): ReturnType<typeof atom<LinguistSegmentAgentReference | undefined>> {
+  const existing = segmentAgentReferenceAtoms.get(projectId)
+  if (existing !== undefined) return existing
+  const created = atom<LinguistSegmentAgentReference | undefined>(undefined)
+  segmentAgentReferenceAtoms.set(projectId, created)
+  return created
+}
+
 export function getLinguistWorkbenchAtomFamilyCacheSizes(): {
   workbench: number
   targetEditor: number
   qaFindings: number
+  segmentAgentReference: number
 } {
   return {
     workbench: workbenchUiStateAtoms.size,
     targetEditor: targetEditorCapabilityAtoms.size,
     qaFindings: qaFindingsCapabilityAtoms.size,
+    segmentAgentReference: segmentAgentReferenceAtoms.size,
   }
 }
 
@@ -401,15 +428,45 @@ export const disposeLinguistWorkbenchAtomFamiliesAtom = atom(
     if (capabilityAtom !== undefined) set(capabilityAtom, undefined)
     const qaCapabilityAtom = qaFindingsCapabilityAtoms.get(projectId)
     if (qaCapabilityAtom !== undefined) set(qaCapabilityAtom, undefined)
+    const segmentReferenceAtom = segmentAgentReferenceAtoms.get(projectId)
+    if (segmentReferenceAtom !== undefined) set(segmentReferenceAtom, undefined)
     targetEditorCapabilityAtoms.delete(projectId)
     qaFindingsCapabilityAtoms.delete(projectId)
+    segmentAgentReferenceAtoms.delete(projectId)
     workbenchUiStateAtoms.delete(projectId)
   },
 )
 
 /**
+ * 显式引用给 Agent 的片段（每项目单槽最新值，仅内存态，不持久化）。
+ *
+ * 写入方只有 SegmentGrid 行的「为 Agent 引用」动作；键盘焦点、虚拟列表首行、
+ * 自动恢复编辑位置都不会触碰该 atom，Agent 默认只有 Project + Batch scope。
+ * ProjectAgentRail 与 turn snapshot 都从同一 project-scoped atom 读取。
+ */
+/** 仅当被引用片段属于当前项目批次时才对 Agent 可见；否则视为其他项目的残留引用。 */
+export function resolveVisibleSegmentAgentReference(
+  reference: LinguistSegmentAgentReference | undefined,
+  assets: readonly LinguistAssetInfo[],
+): LinguistSegmentAgentReference | undefined {
+  if (!reference) return undefined
+  return assets.some((asset) => asset.assetId === reference.assetId) ? reference : undefined
+}
+
+/** 「为 Agent 引用」行动作的共享写入入口（SegmentGrid 复用）。 */
+export function createSegmentAgentReference(
+  segmentId: string,
+  assetId: string,
+  capturedAt = Date.now(),
+): LinguistSegmentAgentReference {
+  return { segmentId, assetId, capturedAt }
+}
+
+/**
  * LF-062：发送点击的唯一 Workbench snapshot seam。
  * 同一 Project atom 同时服务 Rail 与 Full Agent；共享构建器负责截断和深冻结。
+ * 问题 12：segment scope 只来自显式「为 Agent 引用」的项目 scoped atom，
+ * 键盘/编辑焦点的 activeSegmentId 不得偷渡进 Agent turn context。
  */
 export function captureLinguistTurnContextSnapshot(
   store: ReturnType<typeof createStore>,
@@ -417,13 +474,19 @@ export function captureLinguistTurnContextSnapshot(
   capturedAt = new Date().toISOString(),
 ): LinguistTurnContextParseResult {
   const state = store.get(linguistWorkbenchUiStateAtomFamily(projectId))
+  const segmentReference = store.get(linguistSegmentAgentReferenceAtomFamily(projectId))
+  const assetId = segmentReference?.assetId ?? state.activeAssetId
+  const selectedSegmentIds = segmentReference !== undefined
+    && segmentReference.assetId !== state.activeAssetId
+    ? []
+    : state.selectedSegmentIds
   return createLinguistTurnContextV1({
     projectId,
-    ...(state.activeAssetId !== undefined ? { assetId: state.activeAssetId } : {}),
-    ...(state.activeSegmentId !== undefined
-      ? { activeSegmentId: state.activeSegmentId }
+    ...(assetId !== undefined ? { assetId } : {}),
+    ...(segmentReference !== undefined
+      ? { activeSegmentId: segmentReference.segmentId }
       : {}),
-    selectedSegmentIds: state.selectedSegmentIds,
+    selectedSegmentIds,
     capturedAt,
     uiRevision: state.uiRevision,
   })

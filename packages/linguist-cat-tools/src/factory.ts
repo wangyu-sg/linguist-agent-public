@@ -10,6 +10,7 @@ import { createIntakeTools } from './intake-tools'
 import { createProposalTools } from './proposal-tools'
 import { createQaTools } from './qa-tools'
 import { createReferenceTools } from './reference-tools'
+import { createTranslationScopeTools } from './translation-scope-tools'
 import { createCatToolRuntime } from './tool-runtime'
 import type { LinguistCatToolsDeps } from './types'
 
@@ -37,6 +38,8 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     createConsistencyProposalsTool,
   ] = createProposalTools(runtime)
   const [runQaTool, getQaFindingsTool] = createQaTools(runtime)
+  const [beginTranslationScopeTool, finalizeTranslationScopeTool] =
+    createTranslationScopeTools(runtime)
 
   const standardTools = [
     projectSummaryTool,
@@ -56,6 +59,8 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     createConsistencyProposalsTool,
     searchSentencePatternsTool,
     readContextDocTool,
+    beginTranslationScopeTool,
+    finalizeTranslationScopeTool,
   ]
   if (deps.sessionMode !== 'independent-audit') return standardTools
   return [

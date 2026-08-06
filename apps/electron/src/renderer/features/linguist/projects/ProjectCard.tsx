@@ -98,7 +98,7 @@ export function ProjectCard({
               <span className="text-foreground/65">计数不可用</span>
             ) : (
               <span>
-                {summaryState.summary.totalSegments} 段 · {summaryState.summary.assetCount} 资产
+                {summaryState.summary.totalSegments} 段 · {summaryState.summary.assetCount} 批次
               </span>
             )}
           </span>

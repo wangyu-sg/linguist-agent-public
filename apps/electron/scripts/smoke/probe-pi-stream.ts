@@ -16,7 +16,13 @@
  *    - 场景 B（fake-thinking，服务端发 reasoning_content）：_partial assistant 事件中出现
  *      thinking 块且含 REASONING_DELTA_MARKER_G0，最终文本含 THINKING_FINAL_MARKER_G0，
  *      STREAM_COMPLETE 恰好 1 次
- *    - fake server 请求日志证明两个场景的请求确实到达（stream=true）
+ *    - 场景 C（fake-stop-retry 流式中真实 Stop）：electronAPI.stopAgent（与 AgentView
+ *      handleStop 同一 preload 调用）后 STREAM_COMPLETE 到达且 stoppedByUser=true，
+ *      _partial 事件不再增长，无 STREAM_ERROR
+ *    - 场景 D（同会话 Retry）：停止后的同一 Pi 会话重发同一条用户消息（与 AgentView
+ *      handleRetry 同一 sendAgentMessage 路径），最终文本含 TEXT_FINAL_MARKER_G0，
+ *      STREAM_COMPLETE 恰好 1 次且非 stoppedByUser
+ *    - fake server 请求日志证明各场景的请求确实到达（stream=true）
  * 8. finally 中关闭应用与 Fake Server，不遗留后台进程
  *
  * 运行前提：已执行 `bun run smoke:pack`（产出 apps/electron/out/mac-arm64/*.app）
@@ -105,7 +111,7 @@ interface CollectedAssistant {
 
 interface ProbeEvents {
   assistants: Array<{ sessionId: string } & CollectedAssistant>
-  complete: Array<{ sessionId: string }>
+  complete: Array<{ sessionId: string; stoppedByUser: boolean }>
   errors: Array<{ sessionId: string; error: string }>
 }
 
@@ -124,7 +130,7 @@ async function installEventCollectors(page: Page): Promise<void> {
             }
           }
         }) => void) => () => void
-        onAgentStreamComplete: (cb: (d: { sessionId: string }) => void) => () => void
+        onAgentStreamComplete: (cb: (d: { sessionId: string; stoppedByUser?: boolean }) => void) => () => void
         onAgentStreamError: (cb: (d: { sessionId: string; error: string }) => void) => () => void
       }
       __piProbeEvents: ProbeEvents
@@ -146,7 +152,7 @@ async function installEventCollectors(page: Page): Promise<void> {
           thinkings: content.filter((b) => b.type === 'thinking').map((b) => b.thinking ?? ''),
         })
       }),
-      api.onAgentStreamComplete((d) => w.__piProbeEvents.complete.push({ sessionId: d.sessionId })),
+      api.onAgentStreamComplete((d) => w.__piProbeEvents.complete.push({ sessionId: d.sessionId, stoppedByUser: d.stoppedByUser === true })),
       api.onAgentStreamError((d) => w.__piProbeEvents.errors.push({ sessionId: d.sessionId, error: d.error })),
     ]
   })
@@ -277,12 +283,13 @@ async function createPiSession(
 async function sendPiMessage(
   page: Page,
   input: { sessionId: string; userMessage: string; channelId: string; modelId: string; workspaceId: string },
+  wait = true,
 ): Promise<void> {
-  await page.evaluate(async (args) => {
+  await page.evaluate(async ({ args, wait }) => {
     const api = (window as unknown as {
       electronAPI: { sendAgentMessage: (input: unknown) => Promise<void> }
     }).electronAPI
-    await api.sendAgentMessage({
+    const sending = api.sendAgentMessage({
       sessionId: args.sessionId,
       userMessage: args.userMessage,
       channelId: args.channelId,
@@ -291,7 +298,9 @@ async function sendPiMessage(
       workspaceId: args.workspaceId,
       startedAt: Date.now(),
     })
-  }, input)
+    if (wait) await sending
+    else void sending.catch((error) => console.error('[G1探针] 后台 sendAgentMessage 失败:', error))
+  }, { args: input, wait })
 }
 
 // ===== 主流程 =====
@@ -437,12 +446,84 @@ async function main(): Promise<void> {
         `最终文本含 ${MARKERS.thinking}=${finalSeen}，STREAM_COMPLETE 次数=${completeCount}，STREAM_ERROR=${errorEvents.length}`)
     }
 
+    // ===== 场景 C/D：同一 Pi 会话流式中真实 Stop，随后同模型同会话重发拿到 final =====
+    // Stop 与 AgentView handleStop 同为 electronAPI.stopAgent；Retry 使用与 handleRetry
+    // 相同的 sendAgentMessage 路径。fake-stop-retry 的第二次请求只在同一模型下成功，
+    // 防止探针通过偷偷切换模型掩盖原会话重试问题。
+    {
+      const stopSession = await createPiSession(page, 'G1-Pi停止重试', seeded.channelId, seeded.workspaceId, 'fake-stop-retry')
+      check('pi-session-created-stop', stopSession.sessionId.length > 0 && stopSession.agentRuntime === 'pi',
+        `sessionId=${stopSession.sessionId}，agentRuntime=${stopSession.agentRuntime}`)
+
+      await installEventCollectors(page)
+      const stopUserMessage = '开始长流输出'
+      await sendPiMessage(page, {
+        sessionId: stopSession.sessionId,
+        userMessage: stopUserMessage,
+        channelId: seeded.channelId,
+        modelId: 'fake-stop-retry',
+        workspaceId: seeded.workspaceId,
+      }, false)
+
+      // 流式中间态：等到至少 2 个 _partial 文本事件（流确实在跑）
+      const streamingSeen = await waitFor(async () => {
+        const ev = await getEvents(page)
+        return ev.assistants.filter((a) => a.sessionId === stopSession.sessionId && a.partial && a.texts.length > 0).length >= 2
+      }, 60_000)
+
+      // 真实 Stop：与 AgentView handleStop 相同的 preload 调用
+      await page.evaluate((id) =>
+        (window as unknown as {
+          electronAPI: { stopAgent: (sessionId: string) => Promise<void> }
+        }).electronAPI.stopAgent(id), stopSession.sessionId)
+
+      // UI 状态收敛：STREAM_COMPLETE 到达且 stoppedByUser=true
+      const stopCompleted = await waitFor(async () =>
+        (await getEvents(page)).complete.some((c) => c.sessionId === stopSession.sessionId && c.stoppedByUser), 30_000)
+
+      const countAtStop = (await getEvents(page)).assistants
+        .filter((a) => a.sessionId === stopSession.sessionId && a.partial).length
+      // fake-stop-retry 首次请求 400ms/chunk；若未停止 1.2s 内会继续增长
+      await sleep(1_200)
+      const evAfterStop = await getEvents(page)
+      const countAfterStop = evAfterStop.assistants
+        .filter((a) => a.sessionId === stopSession.sessionId && a.partial).length
+      const halted = countAfterStop <= countAtStop + 1
+      const stopErrors = evAfterStop.errors.filter((e) => e.sessionId === stopSession.sessionId)
+      check('pi-agent-stop-converges', streamingSeen && stopCompleted && halted && stopErrors.length === 0,
+        `流式中间态=${streamingSeen}，stop 后 STREAM_COMPLETE(stoppedByUser=true)=${stopCompleted}，stop 时 _partial=${countAtStop}，1.2s 后=${countAfterStop}（流${halted ? '已停止' : '仍在继续'}），STREAM_ERROR=${stopErrors.length}`)
+
+      // ----- Retry：同一 Pi 会话、同一模型重发同一条用户消息（handleRetry 的 sendAgentMessage 路径）-----
+      await installEventCollectors(page)
+      await sendPiMessage(page, {
+        sessionId: stopSession.sessionId,
+        userMessage: stopUserMessage,
+        channelId: seeded.channelId,
+        modelId: 'fake-stop-retry',
+        workspaceId: seeded.workspaceId,
+      }, false)
+
+      const retryCompleted = await waitFor(async () =>
+        (await getEvents(page)).complete.some((c) => c.sessionId === stopSession.sessionId), 60_000)
+
+      const evRetry = await getEvents(page)
+      const retryMine = evRetry.assistants.filter((a) => a.sessionId === stopSession.sessionId)
+      const retryAllText = retryMine.map((a) => a.texts.join('')).join('')
+      const retryFinalSeen = retryAllText.includes(MARKERS.text)
+      const retryCompletes = evRetry.complete.filter((c) => c.sessionId === stopSession.sessionId)
+      const retryStopped = retryCompletes.some((c) => c.stoppedByUser)
+      const retryErrors = evRetry.errors.filter((e) => e.sessionId === stopSession.sessionId)
+      check('pi-agent-retry-final', retryCompleted && retryFinalSeen && retryCompletes.length === 1 && !retryStopped && retryErrors.length === 0,
+        `同模型同会话重发后最终文本含 ${MARKERS.text}=${retryFinalSeen}，STREAM_COMPLETE 次数=${retryCompletes.length}（stoppedByUser=${retryStopped}），STREAM_ERROR=${retryErrors.length}`)
+    }
+
     // ===== fake server 侧证据：Pi 路径的请求确实到达（stream=true）=====
     {
       const textReqs = server.logs.filter((l) => l.model === 'fake-text' && l.stream === true)
       const thinkReqs = server.logs.filter((l) => l.model === 'fake-thinking' && l.stream === true)
-      check('pi-requests-hit-fake-server', textReqs.length >= 1 && thinkReqs.length >= 1,
-        `fake-text 流式请求 ${textReqs.length} 次（→ ${textReqs.map((l) => l.respondedStatus).join(',')}），fake-thinking 流式请求 ${thinkReqs.length} 次（→ ${thinkReqs.map((l) => l.respondedStatus).join(',')}）`)
+      const stopRetryReqs = server.logs.filter((l) => l.model === 'fake-stop-retry' && l.stream === true)
+      check('pi-requests-hit-fake-server', textReqs.length >= 1 && thinkReqs.length >= 1 && stopRetryReqs.length >= 2,
+        `fake-text 流式请求 ${textReqs.length} 次（→ ${textReqs.map((l) => l.respondedStatus).join(',')}），fake-thinking 流式请求 ${thinkReqs.length} 次（→ ${thinkReqs.map((l) => l.respondedStatus).join(',')}），fake-stop-retry 同模型流式请求 ${stopRetryReqs.length} 次（→ ${stopRetryReqs.map((l) => l.respondedStatus).join(',')}）`)
     }
 
     // Fake server 请求日志摘要（证据）

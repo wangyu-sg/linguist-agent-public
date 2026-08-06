@@ -289,7 +289,7 @@ export function LinguistWorkbenchShell({
     <section aria-label={`${project.name} 本地化工作台`} className="relative flex h-full min-h-0 flex-col bg-background">
       <header
         aria-label="本地化工作台工具栏"
-        className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 bg-content-area/90 px-4 py-2 shadow-sm max-md:flex-nowrap max-md:overflow-x-auto"
+        className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 bg-content-area/90 px-4 py-2 shadow-[0_1px_0_hsl(var(--border)/0.45)] max-md:flex-nowrap max-md:overflow-x-auto"
       >
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -310,7 +310,7 @@ export function LinguistWorkbenchShell({
               <span aria-hidden="true">·</span>
               <span>{progressLabel}</span>
               <span aria-hidden="true">·</span>
-              <span className="max-w-44 truncate">{activeAsset?.filename ?? '全部资产'}</span>
+              <span className="max-w-44 truncate">{activeAsset?.filename ?? '全部批次'}</span>
             </p>
           </div>
         </div>
@@ -326,7 +326,7 @@ export function LinguistWorkbenchShell({
               className={cn(uiState.assetNavigatorOpen && 'bg-accent/70')}
             >
               <PanelLeft aria-hidden="true" />
-              资产
+              批次
             </Button>
           )}
           {bottomDock !== undefined && (
@@ -339,7 +339,7 @@ export function LinguistWorkbenchShell({
               className={cn(uiState.bottomDockOpen && 'bg-accent/70')}
             >
               <PanelBottom aria-hidden="true" />
-              资源
+              语言资产
             </Button>
           )}
           {agentRail !== undefined && (
@@ -384,14 +384,14 @@ export function LinguistWorkbenchShell({
       <div className="relative flex min-h-0 flex-1">
         {!agentFull && assetNavigator !== undefined && uiState.assetNavigatorOpen && (
           <aside
-            aria-label="资产导航"
+            aria-label="批次导航"
             data-workbench-slot="asset-navigator"
             className="relative min-h-0 shrink-0 overflow-hidden bg-content-area/55 shadow-[1px_0_0_hsl(var(--border)/0.45)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:max-w-[calc(100%-3rem)] max-md:bg-content-area max-md:shadow-xl"
             style={{ width: uiState.assetNavigatorWidth }}
           >
             <div
               role="separator"
-              aria-label="调整资产导航宽度"
+              aria-label="调整批次导航宽度"
               aria-orientation="vertical"
               aria-valuemin={ASSET_NAVIGATOR_MIN_WIDTH}
               aria-valuemax={ASSET_NAVIGATOR_MAX_WIDTH}
@@ -435,14 +435,14 @@ export function LinguistWorkbenchShell({
 
           {!agentFull && bottomDock !== undefined && uiState.bottomDockOpen && (
             <section
-              aria-label="语言资源面板"
+              aria-label="语言资产面板"
               data-workbench-slot="bottom-dock"
               className="relative min-h-0 shrink-0 overflow-hidden bg-content-area/70 shadow-[0_-1px_0_hsl(var(--border)/0.45)] max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20 max-lg:shadow-xl"
               style={{ height: uiState.bottomDockHeight }}
             >
               <div
                 role="separator"
-                aria-label="调整语言资源面板高度"
+                aria-label="调整语言资产面板高度"
                 aria-orientation="horizontal"
                 aria-valuemin={BOTTOM_DOCK_MIN_HEIGHT}
                 aria-valuemax={BOTTOM_DOCK_MAX_HEIGHT}
@@ -523,7 +523,7 @@ export function LinguistWorkbenchShell({
 
       {!agentFull && <footer
         aria-label="本地化工作台状态栏"
-        className="flex min-h-7 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-content-area px-4 py-1 text-[11px] text-muted-foreground shadow-[0_-1px_0_hsl(var(--border)/0.35)]"
+        className="flex min-h-7 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-content-area px-4 py-1 text-[11px] text-muted-foreground shadow-[0_-1px_0_hsl(var(--border)/0.45)]"
       >
         <div className="flex flex-wrap items-center gap-x-3">
           <span>{progressLabel}</span>
@@ -534,7 +534,7 @@ export function LinguistWorkbenchShell({
               {summary.currentStageCounts.draft}
             </span>
           )}
-          <span>当前资产：{activeAsset?.filename ?? '全部资产'}</span>
+          <span>当前批次：{activeAsset?.filename ?? '全部批次'}</span>
           <span>当前片段：{uiState.activeSegmentId ?? '未选择片段'}</span>
           {uiState.selectedSegmentIds.length > 0 && (
             <span>已选择 {uiState.selectedSegmentIds.length}</span>

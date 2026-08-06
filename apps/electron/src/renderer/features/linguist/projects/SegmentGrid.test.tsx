@@ -7,6 +7,7 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
   test('given Grid 位于 Workbench 主区 when 渲染 then 填满可用高度且由唯一视口滚动', () => {
     const html = renderToStaticMarkup(
       <SegmentGrid
+        projectId="prj-0000000000000001"
         total={0}
         segmentIds={[]}
         rows={new Map()}
@@ -65,6 +66,7 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     }
     const html = renderToStaticMarkup(
       <SegmentGrid
+        projectId="prj-0000000000000001"
         total={1}
         segmentIds={[segment.id]}
         rows={new Map([[0, segment]])}
@@ -120,6 +122,7 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     }
     const renderRow = (locked: boolean, archived: boolean): string => renderToStaticMarkup(
       <SegmentGrid
+        projectId="prj-0000000000000001"
         total={1}
         segmentIds={[segment.id]}
         rows={new Map([[0, { ...segment, locked }]])}
@@ -176,6 +179,7 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     }
     const html = renderToStaticMarkup(
       <SegmentGrid
+        projectId="prj-0000000000000001"
         total={1}
         segmentIds={[segment.id]}
         rows={new Map([[0, segment]])}
@@ -250,6 +254,7 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     const renderBlocked = (segment: LinguistSegmentInfo, archived: boolean): string =>
       renderToStaticMarkup(
         <SegmentGrid
+          projectId="prj-0000000000000001"
           total={1}
           segmentIds={[segment.id]}
           rows={new Map([[0, segment]])}
@@ -308,6 +313,7 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     const segments = [createSegment(0), createSegment(1)]
     const html = renderToStaticMarkup(
       <SegmentGrid
+        projectId="prj-0000000000000001"
         total={segments.length}
         segmentIds={segments.map((segment) => segment.id)}
         rows={new Map(segments.map((segment, index) => [index, segment]))}
@@ -370,6 +376,7 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     }
     const html = renderToStaticMarkup(
       <SegmentGrid
+        projectId="prj-0000000000000001"
         total={1}
         segmentIds={[segment.id]}
         rows={new Map([[0, segment]])}
@@ -402,5 +409,103 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     expect(html).toContain('结果 1/1')
     expect(html).toContain('segmentId segment-editing')
     expect(html).not.toContain('片段行 1')
+  })
+
+  test('given 未明确选中片段 when 渲染 then 首行不绘制假 active 但保留键盘入口', () => {
+    const createSegment = (index: number): LinguistSegmentInfo => ({
+      id: `segment-${index}`,
+      assetId: 'asset-1',
+      ordinal: index,
+      source: `Source ${index}`,
+      target: `译文 ${index}`,
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      status: 'translated',
+      locked: false,
+      revision: 1,
+      sourceHash: `hash-${index}`,
+    })
+    const segments = [createSegment(0), createSegment(1)]
+    const html = renderToStaticMarkup(
+      <SegmentGrid
+        projectId="prj-0000000000000001"
+        total={segments.length}
+        segmentIds={segments.map((segment) => segment.id)}
+        rows={new Map(segments.map((segment, index) => [index, segment]))}
+        selectedIds={new Set()}
+        pendingBySegment={new Map()}
+        mutatingProposalIds={new Set()}
+        qaBySegment={new Map()}
+        archived={false}
+        workflowStage="translation"
+        onActiveSegmentChange={() => {}}
+        onOpenDetails={() => {}}
+        onOpenQa={() => {}}
+        onFocusIndex={() => {}}
+        onFocusIndexSettled={() => {}}
+        onToggleSelected={() => {}}
+        onVisibleRangeChange={() => {}}
+        onSaveTarget={async () => 'saved'}
+        onReloadTarget={async () => undefined}
+        onConfirmAndAdvance={async () => {}}
+        onUnconfirmStage={async () => {}}
+        onReviewProposal={async () => {}}
+        onTargetEditorCapabilityChange={() => {}}
+      />,
+    )
+
+    // 问题 12：activeSegmentId 为空时不再把首行伪装成 active。
+    expect(html).not.toContain('aria-current="true"')
+    expect(html).not.toContain('min-h-[104px]')
+    // roving tabindex 兜底仍保留键盘入口：首行行与行内操作进入 Tab 顺序。
+    expect(html.match(/tabindex="0"/g)).toHaveLength(6)
+    expect(html.match(/tabindex="-1"/g)).toHaveLength(6)
+  })
+
+  test('given 片段数据行 when 渲染 then 挂「为 Agent 引用」右键菜单，加载占位行不挂', () => {
+    const segment: LinguistSegmentInfo = {
+      id: 'segment-1',
+      assetId: 'asset-1',
+      ordinal: 0,
+      source: 'Start',
+      target: '开始',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      status: 'translated',
+      locked: false,
+      revision: 1,
+      sourceHash: 'hash',
+    }
+    const html = renderToStaticMarkup(
+      <SegmentGrid
+        projectId="prj-0000000000000001"
+        total={2}
+        segmentIds={[segment.id, 'segment-2']}
+        rows={new Map([[0, segment]])}
+        selectedIds={new Set()}
+        pendingBySegment={new Map()}
+        mutatingProposalIds={new Set()}
+        qaBySegment={new Map()}
+        archived={false}
+        workflowStage="translation"
+        onActiveSegmentChange={() => {}}
+        onOpenDetails={() => {}}
+        onOpenQa={() => {}}
+        onFocusIndex={() => {}}
+        onFocusIndexSettled={() => {}}
+        onToggleSelected={() => {}}
+        onVisibleRangeChange={() => {}}
+        onSaveTarget={async () => 'saved'}
+        onReloadTarget={async () => undefined}
+        onConfirmAndAdvance={async () => {}}
+        onUnconfirmStage={async () => {}}
+        onReviewProposal={async () => {}}
+        onTargetEditorCapabilityChange={() => {}}
+      />,
+    )
+
+    // 数据行挂 ContextMenu trigger（Radix 输出 data-state="closed"）；加载行不挂。
+    expect(html.match(/data-state="closed"/g)).toHaveLength(1)
+    expect(html).toContain('正在加载…')
   })
 })

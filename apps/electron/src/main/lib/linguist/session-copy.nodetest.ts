@@ -81,7 +81,7 @@ test('空白 Linguist 会话复制到健康活跃项目，并继承配置但清�
     sourceLocale: 'en',
     targetLocale: 'ja',
   })
-  service.setQualityProfile(targetProject.id, 'best')
+  service.setExecutionPolicy(targetProject.id, { independentReview: 'risk-based' })
 
   const source = binding.createLinguistProjectChatSession(service, {
     projectId: sourceProject.id,
@@ -117,7 +117,7 @@ test('空白 Linguist 会话复制到健康活跃项目，并继承配置但清�
   assert.equal(copied.linguistProjectId, targetProject.id)
   assert.equal(copied.linguistProjectName, '目标项目')
   assert.equal(copied.linguistSessionRole, 'reviewer')
-  assert.equal(copied.linguistStrategy, 'best')
+  assert.deepEqual(copied.linguistExecutionPolicy, { independentReview: 'risk-based' })
   assert.equal(copied.agentRuntime, 'pi')
   assert.equal(copied.codexFastMode, true)
   assert.equal(copied.openAIThinkingLevel, 'high')
@@ -202,7 +202,7 @@ test('已完成会话只传最新成功主线 assistant 给原生 fork，并使�
     sourceLocale: 'en',
     targetLocale: 'fr',
   })
-  service.setQualityProfile(targetProject.id, 'fast')
+  service.setExecutionPolicy(targetProject.id, { independentReview: 'off' })
   const source = sessions.createAgentSession(
     '完整历史',
     'channel-id',
@@ -264,7 +264,8 @@ test('已完成会话只传最新成功主线 assistant 给原生 fork，并使�
   assert.equal(observed?.options.inheritSessionConfig, true)
   assert.equal(observed?.options.requirePortableArtifacts, true)
   assert.equal(observed?.options.linguistBinding.linguistProjectId, targetProject.id)
-  assert.equal(observed?.options.linguistBinding.linguistStrategy, 'fast')
+  // 目标 binding 生效：源会话的 legacy linguistStrategy（'best'）不得泄漏进副本
+  assert.deepEqual(observed?.options.linguistBinding.linguistExecutionPolicy, { independentReview: 'off' })
   assert.equal(result.linguistProjectId, targetProject.id)
   service.closeAll()
 })

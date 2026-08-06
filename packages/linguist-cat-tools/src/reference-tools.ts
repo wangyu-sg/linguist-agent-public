@@ -5,12 +5,13 @@ import {
   type TmUnitMatch,
 } from '@linguist/cat-store'
 import { Type } from 'typebox'
-import { LinguistCatInvalidArgumentError } from './errors'
+import { LinguistCatContextDriftError, LinguistCatInvalidArgumentError } from './errors'
 import { pageHasMore, resolvePage } from './pagination'
 import {
   CAT_TOOL_PAGE_LIMITS,
   type CatEvidenceRef,
   type CatGetTranslationContextResult,
+  type CatProjectRuleItem,
   type CatReadContextDocResult,
   type CatSearchSentencePatternsResult,
   type CatSearchTermsResult,
@@ -40,6 +41,9 @@ const SENTENCE_PATTERN_STATUSES = [
   'rejected',
 ] as const
 
+/** LA-CONTEXT-001：includeProjectRules 首页注入的规则条数硬上限。 */
+const PROJECT_RULES_LIMIT = 20
+
 function translationContextCursorKey(
   segmentIds: readonly string[],
   neighborCount: number,
@@ -56,26 +60,44 @@ function translationContextCursorKey(
   ]))
 }
 
-function translationContextCursor(key: string, offset: number): string {
-  return `ctx-${key}-${offset}`
+/**
+ * LA-CONTEXT-001：v2 cursor 绑定请求形状 + 项目事件快照 + 偏移，
+ * 格式 `ctx2-<requestHash>-<eventSeq>-<offset>`。
+ */
+function translationContextCursor(key: string, eventSequence: number, offset: number): string {
+  return `ctx2-${key}-${eventSequence}-${offset}`
 }
 
+const CONTEXT_CURSOR_V2_PATTERN = /^ctx2-([0-9a-f]{16})-(\d+)-(\d+)$/
+
+/**
+ * 解析 v2 cursor。旧格式或其他请求的 cursor 一律 INVALID_ARGUMENT；
+ * 事件序列已前进（分页期间发生了产生 project event 的 mutation）抛 CONTEXT_DRIFT。
+ */
 function translationContextCursorOffset(
   cursor: string | undefined,
   key: string,
   total: number,
-): number {
-  if (cursor === undefined) return 0
-  const prefix = `ctx-${key}-`
-  const rawOffset = cursor.startsWith(prefix) ? cursor.slice(prefix.length) : ''
-  const offset = Number(rawOffset)
-  if (!/^(0|[1-9]\d*)$/.test(rawOffset) || offset > total) {
+  latestEventSequence: number,
+): { offset: number; eventSequence: number } {
+  if (cursor === undefined) return { offset: 0, eventSequence: latestEventSequence }
+  const match = CONTEXT_CURSOR_V2_PATTERN.exec(cursor)
+  if (match === null || match[1] !== key) {
     throw new LinguistCatInvalidArgumentError(
       'cursor',
       'does not belong to this translation-context request',
     )
   }
-  return offset
+  const eventSequence = Number(match[2])
+  if (eventSequence !== latestEventSequence) throw new LinguistCatContextDriftError()
+  const offset = Number(match[3])
+  if (offset > total) {
+    throw new LinguistCatInvalidArgumentError(
+      'cursor',
+      'does not belong to this translation-context request',
+    )
+  }
+  return { offset, eventSequence }
 }
 
 /** TM、术语、句式库和 Context 文档的只读检索工具。 */
@@ -88,11 +110,13 @@ export function createReferenceTools(runtime: CatToolRuntime) {
     description:
       'Read translation context for 1-50 segment ids from the bound project in input order. ' +
       'Returns revision snapshots, optional neighbors, TM/TB matches, tags, and stable evidence ids. ' +
-      'This tool is read-only; results may be truncated by maxBytes and continued with cursor.',
+      'This tool is read-only; results may be truncated by maxBytes and continued with a cursor that ' +
+      'binds the project snapshot — after a project mutation the next page fails with CONTEXT_DRIFT.',
     promptSnippet: 'Read bounded batch translation context from the bound CAT project',
     promptGuidelines: [
       'Use one batch call for related segments instead of repeating TM/TB searches per segment.',
       'Treat every revision as a snapshot; proposals must still use the returned current revision.',
+      'On CONTEXT_DRIFT discard the cursor and restart from the first page; on an empty page with minimumRequiredBytes retry with a larger maxBytes.',
     ],
     parameters: Type.Object({
       segmentIds: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 50 }),
@@ -125,18 +149,29 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         throw new LinguistCatInvalidArgumentError('maxBytes', 'expected an integer from 1024 to 262144')
       }
       const { project, db } = resolveBoundProject('cat_get_translation_context', toolCallId)
+      const includeProjectRules = params.includeProjectRules ?? false
       const cursorKey = translationContextCursorKey(
         params.segmentIds,
         neighborCount,
         tmLimit,
         termLimit,
-        params.includeProjectRules ?? false,
+        includeProjectRules,
       )
-      const cursorOffset = translationContextCursorOffset(
+      const { offset: cursorOffset, eventSequence } = translationContextCursorOffset(
         params.cursor,
         cursorKey,
         params.segmentIds.length,
+        db.runs.latestEventSequence,
       )
+      // 规则快照只注入第一页（offset=0），条数有界；后续页靠 cursor 内事件序列判漂移。
+      const projectRules: CatProjectRuleItem[] = includeProjectRules && cursorOffset === 0
+        ? db.styleGuideRules.list({ limit: PROJECT_RULES_LIMIT, offset: 0 }).map((rule) => ({
+          ruleId: rule.id,
+          ...(rule.groupKey !== undefined ? { groupKey: rule.groupKey } : {}),
+          ruleText: rule.ruleText,
+          ...(rule.screenshotRef !== undefined ? { referenceId: rule.screenshotRef } : {}),
+        }))
+        : []
       const segments = db.segments.getByIds(params.segmentIds)
       if (segments.length !== params.segmentIds.length) {
         const found = new Set(segments.map((segment) => segment.id as string))
@@ -214,6 +249,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           revision: segment.revision,
           source: segment.source,
           currentTarget: segment.target,
+          locked: segment.locked,
           ...(segment.context?.meta?.speaker !== undefined
             ? { speaker: segment.context.meta.speaker }
             : {}),
@@ -252,7 +288,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       }
       const page = (
         items: SegmentTranslationContext[],
-        includeSuggestions = true,
+        minimumRequiredBytes?: number,
       ): CatGetTranslationContextResult => {
         const nextIndex = cursorOffset + items.length
         const truncated = nextIndex < params.segmentIds.length
@@ -261,14 +297,15 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           totalRequested: params.segmentIds.length,
           cursor: params.cursor ?? null,
           truncated,
-          ...(truncated
+          // LA-CONTEXT-002：预算不足的空页不得推进 cursor，也不给续页建议。
+          ...(truncated && items.length > 0
             ? {
-                nextCursor: translationContextCursor(cursorKey, nextIndex),
-                ...(includeSuggestions
-                  ? { suggestedSegmentIds: params.segmentIds.slice(nextIndex) }
-                  : {}),
+                nextCursor: translationContextCursor(cursorKey, eventSequence, nextIndex),
+                suggestedSegmentIds: params.segmentIds.slice(nextIndex),
               }
             : {}),
+          ...(projectRules.length > 0 ? { projectRules } : {}),
+          ...(minimumRequiredBytes !== undefined ? { minimumRequiredBytes } : {}),
           maxBytes,
           usedBytes: 0,
         }
@@ -279,42 +316,50 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         }
         return result
       }
+      // LA-CONTEXT-002 最小核心：identity/revision/完整 source/locked/placeholderSignature。
+      // 预算只裁次级字段，返回页的 source 永不置空、永不截半截。
+      const minimalCore = (context: SegmentTranslationContext): SegmentTranslationContext => ({
+        segmentId: context.segmentId,
+        assetId: context.assetId,
+        revision: context.revision,
+        source: context.source,
+        currentTarget: '',
+        locked: context.locked,
+        previous: [],
+        next: [],
+        tags: [],
+        placeholderSignature: context.placeholderSignature,
+        requiredTerms: [],
+        forbiddenTerms: [],
+        preferredTerms: [],
+        tmMatches: [],
+        warnings: [
+          ...(context.locked ? ['Segment is locked.'] : []),
+          'Context fields were truncated to fit maxBytes.',
+        ],
+        evidence: [],
+      })
+      // 逐段装页：优先全量段；全量放不下先核最小核心；核心也超预算即停止装页。
       let selected: SegmentTranslationContext[] = []
+      let minimumRequiredBytes: number | undefined
       for (const context of contexts) {
         const candidate = [...selected, context]
-        if (measured(page(candidate)) > maxBytes) break
-        selected = candidate
+        if (measured(page(candidate)) <= maxBytes) {
+          selected = candidate
+          continue
+        }
+        const coreCandidate = [...selected, minimalCore(context)]
+        const coreBytes = measured(page(coreCandidate))
+        if (coreBytes > maxBytes) {
+          if (selected.length === 0) minimumRequiredBytes = coreBytes
+          break
+        }
+        selected = coreCandidate
       }
-      if (selected.length === 0 && contexts[0] !== undefined) {
-        const first = contexts[0]
-        selected = [{
-          ...first,
-          source: `${first.source.slice(0, 64)}${first.source.length > 64 ? '…' : ''}`,
-          currentTarget:
-            `${first.currentTarget.slice(0, 64)}${first.currentTarget.length > 64 ? '…' : ''}`,
-          previous: [],
-          next: [],
-          tags: [],
-          placeholderSignature: [],
-          requiredTerms: [],
-          forbiddenTerms: [],
-          preferredTerms: [],
-          tmMatches: [],
-          warnings: [...first.warnings, 'Context fields were truncated to fit maxBytes.'],
-          evidence: first.evidence.filter((item) => item.kind === 'segment-revision'),
-        }]
-      }
-      let dto = page(selected)
-      if (measured(dto) > maxBytes) dto = page(selected, false)
-      if (measured(dto) > maxBytes && selected[0] !== undefined) {
-        selected = [{
-          ...selected[0],
-          source: '',
-          currentTarget: '',
-          warnings: ['Context text was omitted to fit maxBytes.'],
-        }]
-        dto = page(selected, false)
-      }
+      // 第一段最小核心都放不下 → contexts=[] + minimumRequiredBytes，cursor 不推进。
+      const dto = selected.length === 0 && minimumRequiredBytes !== undefined
+        ? page([], minimumRequiredBytes)
+        : page(selected)
       if (measured(dto) > maxBytes) {
         throw new LinguistCatInvalidArgumentError(
           'maxBytes',

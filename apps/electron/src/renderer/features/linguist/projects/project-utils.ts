@@ -15,55 +15,50 @@ import {
   LINGUIST_LOCALE_MAX_LENGTH,
   LINGUIST_LOCALE_PATTERN,
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
-  LINGUIST_QUALITY_PROFILES,
+  type LinguistExecutionPolicy,
+  type LinguistIndependentReview,
   type LinguistIpcError,
   type LinguistIpcErrorCode,
   type LinguistProjectHealthCheckInfo,
   type LinguistProjectHealthReport,
   type LinguistProjectInfo,
-  type LinguistQualityProfile,
 } from '@proma/shared'
 
-// ===== 质量策略档（PB-082，计划 §21）=====
+// ===== Execution Policy（LA-QUALITY-001，取代 PB-082 质量档位）=====
 
 /**
- * renderer 侧质量策略档兜底（主进程线上必有值，此处仅防御旧缓存/异常
- * payload）：未知/缺省一律 'balanced'，与主进程 normalizeQualityProfile 同语义。
+ * renderer 侧 Execution Policy 兜底（主进程线上必有值，此处仅防御旧缓存/异常
+ * payload）：未知/缺省一律 { independentReview: 'off' }，与主进程
+ * normalizeExecutionPolicy 同语义；legacy qualityProfile 由主进程映射后才下发。
  */
-export function normalizeQualityProfileInfo(value: unknown): LinguistQualityProfile {
-  return (LINGUIST_QUALITY_PROFILES as readonly string[]).includes(value as string)
-    ? (value as LinguistQualityProfile)
-    : 'balanced'
+export function normalizeExecutionPolicyInfo(value: unknown): LinguistExecutionPolicy {
+  const review = (value as LinguistExecutionPolicy | undefined)?.independentReview
+  return { independentReview: review === 'risk-based' ? 'risk-based' : 'off' }
 }
 
-/** 三档展示选项（segmented 选择器渲染用；order 与契约一致）。 */
-export const QUALITY_PROFILE_OPTIONS: readonly {
-  profile: LinguistQualityProfile
+/** independentReview 展示选项（segmented 选择器渲染用；order 与契约一致）。 */
+export const INDEPENDENT_REVIEW_OPTIONS: readonly {
+  value: LinguistIndependentReview
   label: string
-  /** 一句中文说明（选择器下方同步展示当前档说明）。 */
+  /** 一句中文说明（选择器下方同步展示当前选项说明）。 */
   description: string
 }[] = [
   {
-    profile: 'fast',
-    label: 'Fast',
-    description: '大批次单轮提案，每段仍先查 TM/术语库（速度来自批次与单轮，不跳查库），完成后跑确定性 QA。',
+    value: 'off',
+    label: '关闭',
+    description: '不强制独立评审：按常规批次提案，每段先查 TM/术语库，完成后跑确定性 QA。',
   },
   {
-    profile: 'balanced',
-    label: 'Balanced',
-    description: '中批次提案，逐段先查 TM/术语库并结合上下文，完成后跑确定性 QA。',
-  },
-  {
-    profile: 'best',
-    label: 'Best',
-    description: '小批次逐段查库精译，提案后请发起独立评审（评审 Finding 以 CRITIC_ 前缀进 QA 面板）。',
+    value: 'risk-based',
+    label: '风险驱动',
+    description: '高风险或关键提案提交后，发起独立评审会话再确认（评审 Finding 以 CRITIC_ 前缀进 QA 面板）。',
   },
 ]
 
-/** 档位 → 一句中文说明（缺省/未知回落 balanced）。 */
-export function describeQualityProfile(profile: LinguistQualityProfile): string {
-  const option = QUALITY_PROFILE_OPTIONS.find((item) => item.profile === profile)
-  return (option ?? QUALITY_PROFILE_OPTIONS[1]!).description
+/** independentReview → 一句中文说明（缺省/未知回落 off 说明）。 */
+export function describeIndependentReview(value: LinguistIndependentReview): string {
+  const option = INDEPENDENT_REVIEW_OPTIONS.find((item) => item.value === value)
+  return (option ?? INDEPENDENT_REVIEW_OPTIONS[0]!).description
 }
 
 // ===== 列表排序与分组 =====
@@ -145,6 +140,8 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
   PROJECT_DELETE_CONFIRMATION_MISMATCH: '项目名称确认不匹配，已取消删除',
   PROJECT_ORDER_CONFLICT: '项目顺序已变化，请刷新后重试',
   SESSION_COPY_BLOCKED: '当前会话状态不能安全复制到其他项目',
+  IMPORT_VERIFICATION_FAILED: '导入未通过回读验证，已整批回滚',
+  IMPORT_UNDO_BLOCKED: '该批次已有下游工作引用，无法撤销导入',
   STORE_SQLITE_UNAVAILABLE: '本机 SQLite 运行时不可用，项目数据库暂无法访问',
   STORE_SCHEMA_TOO_NEW: '项目数据由更新版本的应用创建，请升级应用后再打开',
   STORE_NOT_FOUND: '项目存储不存在',
@@ -152,7 +149,7 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
   STORE_READ_ONLY: '项目存储为只读，无法写入',
   STORE_BUSY: '项目数据正被占用，请稍后重试',
   STORE_PROJECT_EXISTS: '同名项目已存在',
-  STORE_ASSET_SOURCE_MISMATCH: '资产源文件校验不一致',
+  STORE_ASSET_SOURCE_MISMATCH: '批次源文件校验不一致',
   STORE_BACKUP_CORRUPT: '备份未通过完整性校验，已拒绝恢复',
   STORE_BACKUP_LEGACY: '旧格式备份缺少完整性清单与源文件，不支持恢复',
   FORMAT_PARSE_ERROR: '文件解析失败',
@@ -183,6 +180,31 @@ export function describeLinguistIpcError(error: LinguistIpcError): string {
   return `${base}（${error.code}）`
 }
 
+// ===== 撤销导入（LA-INTAKE-007）=====
+
+/** IMPORT_UNDO_BLOCKED details 五类计数 → 中文分类标签。 */
+const IMPORT_UNDO_REFERENCE_LABELS: Record<string, string> = {
+  proposals: '提案',
+  qaFindings: 'QA',
+  criticArtifacts: '评审',
+  exports: '导出',
+  editedSegments: '人工编辑段',
+}
+
+/**
+ * IMPORT_UNDO_BLOCKED 错误 details → 中文分类计数一行（只列非零类；
+ * details 缺失或全零返回 null，调用方回退通用错误文案）。
+ */
+export function describeImportUndoBlockedCounts(
+  details: Record<string, number> | undefined,
+): string | null {
+  if (details === undefined) return null
+  const parts = Object.entries(IMPORT_UNDO_REFERENCE_LABELS)
+    .filter(([key]) => (details[key] ?? 0) > 0)
+    .map(([key, label]) => `${label} ${details[key]} 条`)
+  return parts.length > 0 ? parts.join('、') : null
+}
+
 // ===== Quick Health 报告 =====
 
 /** 健康报告中未通过的检查项。 */
@@ -196,7 +218,7 @@ const HEALTH_CHECK_LABELS: Record<LinguistProjectHealthCheckInfo['id'], string> 
   project_json: '项目元数据',
   cat_db_open: '翻译数据库',
   schema_version: '数据库版本',
-  asset_sources: '资产源有界抽样',
+  asset_sources: '批次源有界抽样',
 }
 
 /** 检查项 id → 中文标签；未知 id 原样返回（契约外 id 不 crash）。 */
@@ -217,7 +239,7 @@ export function summarizeFailedHealthChecks(health: LinguistProjectHealthReport)
     .join('、')
 }
 
-// ===== 资产摘要（PB-033）=====
+// ===== 批次摘要（PB-033）=====
 
 /**
  * SHA-256（64 hex）的截断展示：`前 12…后 4`（如 `7a3b67c1eab3…5030`）。

@@ -126,7 +126,7 @@ export function ProjectCreateDialog({ onCreated }: ProjectCreateDialogProps): Re
         <DialogHeader>
           <DialogTitle>新建项目</DialogTitle>
           <DialogDescription>
-            项目用于组织翻译与本地化工作。创建后可导入 XLIFF / CSV / JSON 等翻译资产。
+            项目用于组织翻译与本地化工作。创建后可导入 XLIFF / CSV / JSON 等批次文件。
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => { void handleSubmit(e) }} className="flex flex-col gap-4">

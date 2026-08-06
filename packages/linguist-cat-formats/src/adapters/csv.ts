@@ -297,17 +297,15 @@ export class CsvAdapter implements CatFormatAdapter {
 
   async detect(input: Uint8Array, filename: string): Promise<number> {
     if (looksBinary(input)) return 0
-    let text: string
+    const lower = filename.toLowerCase()
+    if (!this.extensions.some((ext) => lower.endsWith(ext))) return 0
     try {
-      text = new TextDecoder('utf-8', { fatal: true }).decode(input)
+      const { headers } = parseDelimitedTable(input, filename)
+      this.resolveColumns(headers, filename)
     } catch {
       return 0
     }
-    if (text.startsWith(BOM)) text = text.slice(1)
-    if (sniffDelimiter(text, filename) === undefined) return 0
-    const lower = filename.toLowerCase()
-    if (this.extensions.some((ext) => lower.endsWith(ext))) return 0.9
-    return 0.5
+    return 0.9
   }
 
   async import(input: CatFormatImportInput): Promise<ImportedCatAsset> {

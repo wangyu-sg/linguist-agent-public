@@ -8,7 +8,7 @@
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
@@ -74,6 +74,8 @@ test('公开镜像不得包含旧 LA 私有路径或真实项目标识', () => {
   )
   const leakedPrivateText = files
     .filter((file) => TEXT_EXTENSIONS.has(extname(file).toLowerCase()))
+    // 已删除但尚未纳入提交的条目不在当前工作树，跳过内容扫描
+    .filter((file) => existsSync(resolve(REPO_ROOT, file)))
     .filter((file) =>
       PRIVATE_TEXT.some((text) =>
         readFileSync(resolve(REPO_ROOT, file), 'utf8').includes(text),

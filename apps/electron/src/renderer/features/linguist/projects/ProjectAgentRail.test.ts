@@ -1,15 +1,22 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai/vanilla'
-import type { AgentSessionMeta } from '@proma/shared'
+import type { AgentSessionMeta, LinguistAssetInfo } from '@proma/shared'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
-import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
 import {
   buildProjectAgentQuickActions,
   buildProjectComposerContextChips,
   createProjectAgentQuickActionPendingPrompt,
   loadProjectAgentRailSession,
+  shouldAutoExpandAgentForSideChat,
 } from './ProjectAgentRail'
+import {
+  captureLinguistTurnContextSnapshot,
+  createSegmentAgentReference,
+  linguistSegmentAgentReferenceAtomFamily,
+  linguistWorkbenchUiStateAtomFamily,
+  resolveVisibleSegmentAgentReference,
+} from './cat-workspace-atoms'
 
 function session(id: string, projectId: string): AgentSessionMeta {
   return {
@@ -178,7 +185,7 @@ describe('ProjectAgentRail', () => {
     expect(Object.isFrozen(context)).toBe(true)
   })
 
-  test('given Workbench 当前范围 when 组装 Composer chips and 清除 selection then 保留项目绑定与活动范围', () => {
+  test('given Workbench 当前范围 when 组装 Composer chips and 清除 selection then 保留项目绑定与批次范围', () => {
     const store = createStore()
     const uiStateAtom = linguistWorkbenchUiStateAtomFamily('prj-0000000000000001')
     store.set(uiStateAtom, {
@@ -210,10 +217,10 @@ describe('ProjectAgentRail', () => {
       onClearSelectedSegments: clearSelection,
     })
 
+    // 问题 12：键盘/编辑焦点（activeSegmentId）不再隐式产生 Agent segment scope。
     expect(chips.map(({ id, label }) => ({ id, label }))).toEqual([
       { id: 'project', label: '完美诸神' },
       { id: 'asset', label: '活动公告.json' },
-      { id: 'active-segment', label: '当前片段' },
       { id: 'selection', label: '已选 2 段' },
     ])
     expect(chips.every((chip) => !chip.scope.includes('/Users/'))).toBe(true)
@@ -226,6 +233,103 @@ describe('ProjectAgentRail', () => {
       activeSegmentId: 'seg-0000000000000001',
       selectedSegmentIds: [],
     })
+  })
+
+  test('given 项目 A 已引用片段 when 项目 B 组装 Agent 上下文 then A 的引用不进入 B 的 chip 或 turn snapshot', () => {
+    const store = createStore()
+    const projectAId = 'prj-0000000000000001'
+    const projectBId = 'prj-0000000000000002'
+    const reference = createSegmentAgentReference(
+      'seg-0000000000000001',
+      'ast-0000000000000001',
+    )
+    const assets = [{
+      assetId: 'ast-0000000000000001',
+      filename: '批次.xlf',
+      formatId: 'xliff',
+      segmentCount: 1,
+      sourceSha256: 'a'.repeat(64),
+      segmentCounts: { untranslated: 1, draft: 0, translated: 0, reviewed: 0 },
+      currentStageCounts: { untouched: 1, draft: 0, confirmed: 0 },
+      openQaCount: 0,
+    }]
+
+    store.set(linguistSegmentAgentReferenceAtomFamily(projectAId), reference)
+    expect(captureLinguistTurnContextSnapshot(store, projectAId).context.activeSegmentId)
+      .toBe('seg-0000000000000001')
+
+    const projectBChips = buildProjectComposerContextChips({
+      projectId: projectBId,
+      projectName: '项目 B',
+      assets,
+      uiState: store.get(linguistWorkbenchUiStateAtomFamily(projectBId)),
+      segmentReference: store.get(linguistSegmentAgentReferenceAtomFamily(projectBId)),
+      onClearSelectedSegments: () => {},
+    })
+
+    expect(projectBChips.some((chip) => chip.id === 'segment-reference')).toBe(false)
+    expect(captureLinguistTurnContextSnapshot(store, projectBId).context.activeSegmentId)
+      .toBeUndefined()
+  })
+
+  test('given 显式为 Agent 引用片段 when 组装 Composer chips then 出现可移除 chip 且只认本项目资产', () => {
+    const assets = [{
+      assetId: 'ast-0000000000000001',
+      filename: '活动公告.json',
+      formatId: 'json',
+      segmentCount: 2,
+      sourceSha256: 'a'.repeat(64),
+      segmentCounts: { untranslated: 2, draft: 0, translated: 0, reviewed: 0 },
+      currentStageCounts: { untouched: 2, draft: 0, confirmed: 0 },
+      openQaCount: 0,
+    }]
+    const store = createStore()
+    const reference = createSegmentAgentReference(
+      'seg-0000000000000001',
+      'ast-0000000000000001',
+      1722000000000,
+    )
+    const projectId = 'prj-0000000000000001'
+    store.set(linguistSegmentAgentReferenceAtomFamily(projectId), reference)
+
+    let removed = false
+    const chips = buildProjectComposerContextChips({
+      projectId,
+      projectName: '完美诸神',
+      assets,
+      uiState: store.get(linguistWorkbenchUiStateAtomFamily(projectId)),
+      segmentReference: store.get(linguistSegmentAgentReferenceAtomFamily(projectId)),
+      onRemoveSegmentReference: () => {
+        removed = true
+        store.set(linguistSegmentAgentReferenceAtomFamily(projectId), undefined)
+      },
+      onClearSelectedSegments: () => {},
+    })
+
+    const segmentChip = chips.find((chip) => chip.id === 'segment-reference')
+    expect(segmentChip?.label).toBe('引用片段')
+    expect(segmentChip?.scope).toBe('Agent 引用片段 · seg-0000000000000001')
+    segmentChip?.onRemove?.()
+    expect(removed).toBe(true)
+    expect(store.get(linguistSegmentAgentReferenceAtomFamily(projectId))).toBeUndefined()
+
+    // 其他项目的残留引用不会出现在本项目 Agent session 上。
+    const foreign = buildProjectComposerContextChips({
+      projectId: 'prj-0000000000000002',
+      projectName: '另一项目',
+      assets: [{
+        ...assets[0]!,
+        assetId: 'ast-0000000000000009',
+      }],
+      uiState: store.get(linguistWorkbenchUiStateAtomFamily('prj-0000000000000002')),
+      segmentReference: createSegmentAgentReference(
+        'seg-0000000000000001',
+        'ast-0000000000000001',
+        1722000000000,
+      ),
+      onClearSelectedSegments: () => {},
+    })
+    expect(foreign.some((chip) => chip.id === 'segment-reference')).toBe(false)
   })
 
   test('given 项目已有会话 when 首次展开 rail then 直接复用且不创建新会话', async () => {
@@ -302,5 +406,36 @@ describe('ProjectAgentRail', () => {
       ['alpha', 'alpha-session'],
       ['beta', 'beta-session'],
     ]))
+  })
+
+  test('given Companion Chat 会话变化 when 判定自动展开 then 仅新打开或切换才展开', () => {
+    // 新打开侧问答：rail → 自动展开 full。
+    expect(shouldAutoExpandAgentForSideChat(null, 'conv-1', 'rail', true)).toBe(true)
+    // 切换到另一个问答会话：同样视为新打开。
+    expect(shouldAutoExpandAgentForSideChat('conv-1', 'conv-2', 'rail', true)).toBe(true)
+    // 问题 11 回归：「返回工作台」后 conversationId 不变，不得再次被推回 full。
+    expect(shouldAutoExpandAgentForSideChat('conv-1', 'conv-1', 'rail', true)).toBe(false)
+    // 已在 full / 无展开能力 / 问答已关闭：都不触发。
+    expect(shouldAutoExpandAgentForSideChat('conv-1', 'conv-2', 'full', true)).toBe(false)
+    expect(shouldAutoExpandAgentForSideChat(null, 'conv-1', 'rail', false)).toBe(false)
+    expect(shouldAutoExpandAgentForSideChat('conv-1', null, 'rail', true)).toBe(false)
+  })
+
+  test('given 显式片段引用 when 按项目资产校验可见性 then 只认本项目批次', () => {
+    const reference = createSegmentAgentReference('seg-1', 'ast-1', 1722000000000)
+    expect(reference).toEqual({ segmentId: 'seg-1', assetId: 'ast-1', capturedAt: 1722000000000 })
+
+    const assets = [
+      { assetId: 'ast-1' },
+      { assetId: 'ast-2' },
+    ] as unknown as LinguistAssetInfo[]
+    expect(resolveVisibleSegmentAgentReference(reference, assets)).toBe(reference)
+    expect(
+      resolveVisibleSegmentAgentReference(
+        createSegmentAgentReference('seg-9', 'ast-9'),
+        assets,
+      ),
+    ).toBeUndefined()
+    expect(resolveVisibleSegmentAgentReference(undefined, assets)).toBeUndefined()
   })
 })

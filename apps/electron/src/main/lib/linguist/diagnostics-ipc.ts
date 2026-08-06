@@ -136,6 +136,14 @@ function collectDiagnostics(
     ...(session?.linguistSessionRole === undefined
       ? {}
       : { linguistSessionRole: session.linguistSessionRole }),
+    // LA-QUALITY-001：诊断探针必须与真实发送同一 policy 来源——会话冻结 meta
+    // （含 legacy linguistStrategy 映射），不得回落项目实时值。
+    ...(session?.linguistExecutionPolicy === undefined
+      ? {}
+      : { linguistExecutionPolicy: session.linguistExecutionPolicy }),
+    ...(session?.linguistStrategy === undefined
+      ? {}
+      : { linguistStrategy: session.linguistStrategy }),
   }
   const promptStartedAt = performance.now()
   const prompt = buildLinguistProjectAssetsPromptWithStatus(
@@ -143,6 +151,9 @@ function collectDiagnostics(
     deps.getService,
     {
       skillsRoot: deps.getSkillsRoot?.() ?? getDefaultLinguistSkillsRoot(),
+      // LA-PROMPT-001：探针与真实发送同一 runtime→renderer 推导
+      // （orchestrator 用会话冻结 agentRuntime；无会话时回落 'xml'，同 dev.agentRuntime 的 'claude' 回落）。
+      renderer: session?.agentRuntime === 'pi' ? 'markdown' : 'xml',
     },
   )
   const promptProbeLatencyMs = Math.max(0, performance.now() - promptStartedAt)
@@ -193,6 +204,7 @@ function collectDiagnostics(
       prompt: {
         ...prompt.status,
         fallbackLayers: [...prompt.status.fallbackLayers],
+        trimmedLayers: prompt.status.trimmedLayers.map((trim) => ({ ...trim })),
       },
       dev: {
         ...(profile?.kind === 'linguist'
@@ -200,7 +212,7 @@ function collectDiagnostics(
             profile: {
               kind: 'linguist' as const,
               role: profile.role,
-              strategy: profile.strategy,
+              executionPolicy: profile.executionPolicy,
             },
           }
           : {}),

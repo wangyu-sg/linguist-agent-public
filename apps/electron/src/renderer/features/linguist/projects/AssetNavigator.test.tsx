@@ -14,7 +14,7 @@ const project: LinguistProjectInfo = {
   promaWorkspaceId: 'workspace-1',
   createdAt: '2026-07-01T08:00:00.000Z',
   updatedAt: '2026-07-01T08:00:00.000Z',
-  qualityProfile: 'balanced',
+  executionPolicy: { independentReview: 'off' },
 }
 
 const summary: LinguistProjectSummary = {
@@ -30,7 +30,7 @@ const summary: LinguistProjectSummary = {
 }
 
 describe('AssetNavigator', () => {
-  test('given 真实项目摘要 when 渲染资产导航 then 展示资产段数、项目确认状态和当前选择', () => {
+  test('given 真实项目摘要 when 渲染批次导航 then 展示批次段数、项目确认状态和当前选择', () => {
     const store = createStore()
     store.set(linguistWorkbenchUiStateAtomFamily(project.id), { activeAssetId: 'asset-2' })
 
@@ -38,7 +38,7 @@ describe('AssetNavigator', () => {
       <Provider store={store}><AssetNavigator projectId={project.id} summary={summary} /></Provider>,
     )
 
-    expect(html).toContain('aria-label="资产导航器"')
+    expect(html).toContain('aria-label="批次导航器"')
     expect(html).toContain('项目状态：已确认 11 / 20')
     expect(html).toContain('dialogue.json')
     expect(html).toContain('已确认 7 / 12 · QA 2')
@@ -47,7 +47,7 @@ describe('AssetNavigator', () => {
     expect(html).toContain('text-foreground/65')
   })
 
-  test('given 资产曾选中过片段 when 切换离开再选回 then 恢复该资产最后活动段', () => {
+  test('given 批次曾选中过片段 when 切换离开再选回 then 恢复该批次最后活动段', () => {
     const store = createStore()
     const uiState = linguistWorkbenchUiStateAtomFamily(project.id)
     store.set(uiState, { activeAssetId: 'asset-1', activeSegmentId: 'segment-1', assetActiveSegmentIds: { 'asset-1': 'segment-1' } })

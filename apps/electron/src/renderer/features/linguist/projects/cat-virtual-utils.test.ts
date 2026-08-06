@@ -85,7 +85,7 @@ describe('PB-061 virtual Segment window', () => {
     expect(nextSegmentId([], 'seg-a')).toBeUndefined()
   })
 
-  test('given 当前资产含锁定和未加载行 when 确认并前进 then 只在资产边界内找下一可编辑行', () => {
+  test('given 当前批次含锁定和未加载行 when 确认并前进 then 只在批次边界内找下一可编辑行', () => {
     const rows = new Map([
       [0, { assetId: 'asset-a', locked: false }],
       [1, { assetId: 'asset-a', locked: true }],

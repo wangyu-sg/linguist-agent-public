@@ -32,8 +32,8 @@ import {
   normalizeWorkflowStage,
   type CurrentStageState,
   type EntropySource,
+  type LinguistExecutionPolicy,
   type LinguistProject,
-  type LinguistQualityProfile,
   type QaProfile,
   type QaFindingDisposition,
   type QaFindingSeverity,
@@ -119,12 +119,14 @@ import type {
   LinguistStagedExport,
   ProjectAssetInfo,
   ProjectAssetsQuery,
+  ReferenceImportQueryPage,
   ReferenceQuery,
   ReferenceQueryPage,
   StageMutationBatchResult,
   StageMutationItem,
   TermReferenceInfo,
   TmReferenceInfo,
+  UndoImportAssetResult,
 } from './project-service-types'
 import {
   projectPaths,
@@ -714,14 +716,15 @@ export class LinguistProjectService {
   }
 
   /**
-   * PB-082：设置质量策略档（计划 §21）。归档先拒绝（与 editSegment/runQa
-   * 同一模式）；写入走 store 的专用路径（projects.json + project.json 同步，
-   * updatedAt 刷新）。
+   * LA-QUALITY-001：设置 Execution Policy（取代 PB-082 质量档位）。归档先
+   * 拒绝（与 editSegment/runQa 同一模式）；写入走 store 的专用路径
+   * （projects.json + project.json 同步，updatedAt 刷新）。已存在会话
+   * 不受影响——policy 在会话创建时冻结进 meta。
    */
-  setQualityProfile(projectId: string, profile: LinguistQualityProfile): LinguistProject {
+  setExecutionPolicy(projectId: string, policy: LinguistExecutionPolicy): LinguistProject {
     this.assertProjectWritable(projectId)
-    const updated = this.call(() => this.store.index.setQualityProfile(projectId, profile), projectId)
-    console.log(`[Linguist] 已设置质量策略档: 项目 ${projectId} → ${profile}`)
+    const updated = this.call(() => this.store.index.setExecutionPolicy(projectId, policy), projectId)
+    console.log(`[Linguist] 已设置 Execution Policy: 项目 ${projectId} → independentReview=${policy.independentReview}`)
     return updated
   }
 
@@ -758,14 +761,14 @@ export class LinguistProjectService {
   queryTmReferences(
     projectId: string,
     query: ReferenceQuery,
-  ): ReferenceQueryPage<TmReferenceInfo> {
+  ): ReferenceImportQueryPage<TmReferenceInfo> {
     return this.resources.queryTmReferences(projectId, query)
   }
 
   queryTermReferences(
     projectId: string,
     query: ReferenceQuery,
-  ): ReferenceQueryPage<TermReferenceInfo> {
+  ): ReferenceImportQueryPage<TermReferenceInfo> {
     return this.resources.queryTermReferences(projectId, query)
   }
 
@@ -861,6 +864,20 @@ export class LinguistProjectService {
     assetId: string,
   ): { sourcePath: string; originalFilename: string } {
     return this.resources.resolveAssetSourcePath(projectId, assetId)
+  }
+
+  resolveReferenceImportPreviewPath(
+    projectId: string,
+    importId: string,
+  ): { sourcePath: string; originalFilename: string } {
+    return this.resources.resolveReferenceImportPreviewPath(projectId, importId)
+  }
+
+  resolveContextDocPreviewPath(
+    projectId: string,
+    docId: string,
+  ): { sourcePath: string; originalFilename: string } {
+    return this.resources.resolveContextDocPreviewPath(projectId, docId)
   }
 
   importContextDoc(
@@ -1009,6 +1026,11 @@ export class LinguistProjectService {
     input: ImportAssetInput,
   ): Promise<ImportAssetResult> {
     return this.delivery.importAsset(projectId, input)
+  }
+
+  /** LA-INTAKE-007：撤销一次导入（无下游引用才允许；归档 fail closed）。 */
+  undoImportAsset(projectId: string, assetId: string): UndoImportAssetResult {
+    return this.delivery.undoImportAsset(projectId, assetId)
   }
 
   /** 同步 store 调用的错误映射包装。 */

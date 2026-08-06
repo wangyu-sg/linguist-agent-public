@@ -690,7 +690,7 @@ export function SegmentEditor({
         }
         candidateRows = mergeIndexedPage(candidateRows, page.offset, page.segments)
         if (!candidateRows.has(next.index)) {
-          toast.info('当前资产和筛选范围内没有下一个可编辑片段')
+          toast.info('当前批次和筛选范围内没有下一个可编辑片段')
           return
         }
         next = findNextEditableRow(candidateRows, index, assetId, data.total)
@@ -703,7 +703,7 @@ export function SegmentEditor({
       focusRow(next.index)
       return
     }
-    toast.info('当前资产和筛选范围内没有下一个可编辑片段')
+    toast.info('当前批次和筛选范围内没有下一个可编辑片段')
   }, [archived, data, focusRow, loadPageAt])
 
   const confirmAndAdvance = React.useCallback(async (
@@ -999,13 +999,13 @@ export function SegmentEditor({
           />
         </label>
         <label>
-          <span className="sr-only">资产筛选</span>
+          <span className="sr-only">批次筛选</span>
           <select
             value={filters.assetId ?? ''}
             onChange={(event) => updateFilters({ assetId: event.target.value || undefined })}
-            className="h-9 w-full rounded-lg bg-background/70 px-3 text-[13px] outline-none ring-1 ring-border/50 focus:ring-primary/50"
+            className="h-9 w-full min-w-0 truncate rounded-lg bg-background/70 pl-3 pr-8 text-[13px] outline-none ring-1 ring-border/50 focus:ring-primary/50"
           >
-            <option value="">全部资产</option>
+            <option value="">全部批次</option>
             {data?.assets.map((asset) => (
               <option key={asset.assetId} value={asset.assetId}>{asset.filename}</option>
             ))}
@@ -1022,7 +1022,7 @@ export function SegmentEditor({
                   | undefined,
               })
             }
-            className="h-9 w-full rounded-lg bg-background/70 px-3 text-[13px] outline-none ring-1 ring-border/50 focus:ring-primary/50"
+            className="h-9 w-full min-w-0 truncate rounded-lg bg-background/70 pl-3 pr-8 text-[13px] outline-none ring-1 ring-border/50 focus:ring-primary/50"
           >
             <option value="">全部本轮状态</option>
             {stageFilterOptions(workflowStage).map((option) => (
@@ -1079,6 +1079,7 @@ export function SegmentEditor({
       ) : (
         <SegmentGrid
           key={state.data.signature}
+          projectId={projectId}
           total={state.data.total}
           segmentIds={state.data.segmentIds}
           rows={state.data.rows}

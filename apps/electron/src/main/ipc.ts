@@ -333,6 +333,7 @@ import { getWeChatConfig } from './lib/wechat-config'
 import { wechatBridge } from './lib/wechat-bridge'
 import { getLinguistProjectService } from './lib/linguist/project-service'
 import { createLinguistProjectIpc } from './lib/linguist/project-ipc'
+import { PendingImportFileStore } from './lib/linguist/pending-import-files'
 import { createIntegrityScrubIpc } from './lib/linguist/integrity-scrub-ipc'
 import { IntegrityScrubService } from './lib/linguist/integrity-scrub-service'
 import { createLinguistSessionIpc } from './lib/linguist/session-ipc'
@@ -5088,8 +5089,10 @@ export function registerIpcHandlers(): void {
   // 此处只做薄适配：通道注册 + 注入真实 dialog picker。
   // 服务惰性解析（getLinguistProjectService）：注册先于 bootstrap 的服务 init，
   // init 失败时通道以 INTERNAL 信封降级而非崩溃。
+  const pendingLinguistImportFiles = new PendingImportFileStore()
   const linguistProjectIpc = createLinguistProjectIpc({
     getService: getLinguistProjectService,
+    pendingFiles: pendingLinguistImportFiles,
     // PB-089：预览转换栈惰性注入（file-preview-service 体积大，沿用本文件
     // 既有的 await import 延迟加载纪律）；registerPromaFilePath 静态已导入。
     assetPreview: {
@@ -5143,6 +5146,11 @@ export function registerIpcHandlers(): void {
     }
   )
 
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.CONFIRM_XLSX_MAPPING,
+    async (_, input: unknown) => linguistProjectIpc.confirmXlsxMapping(input)
+  )
+
   // 摘要：PB-033 起响应扩展为含资产元数据列表（assets），通道与校验不变。
   ipcMain.handle(
     LINGUIST_PROJECT_IPC_CHANNELS.GET_SUMMARY,
@@ -5169,10 +5177,10 @@ export function registerIpcHandlers(): void {
     async (_, input: unknown) => linguistProjectIpc.delete(input)
   )
 
-  // PB-082：质量策略档设置（三档字面量校验在处理器内；归档/不存在映射既有错误码）。
+  // LA-QUALITY-001：Execution Policy 设置（闭集校验在处理器内；归档/不存在映射既有错误码）。
   ipcMain.handle(
-    LINGUIST_PROJECT_IPC_CHANNELS.SET_QUALITY_PROFILE,
-    async (_, input: unknown) => linguistProjectIpc.setQualityProfile(input)
+    LINGUIST_PROJECT_IPC_CHANNELS.SET_EXECUTION_POLICY,
+    async (_, input: unknown) => linguistProjectIpc.setExecutionPolicy(input)
   )
   ipcMain.handle(
     LINGUIST_PROJECT_IPC_CHANNELS.SET_WORKFLOW_CONFIG,
@@ -5197,6 +5205,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     LINGUIST_PROJECT_IPC_CHANNELS.RESTORE,
     async (_, input: unknown) => linguistProjectIpc.restore(input)
+  )
+  // LA-INTAKE-007：条件撤销导入（主进程重新校验项目与资产 id；
+  // 下游引用判定与级联删除全在服务层，renderer 只提交两个 id）。
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.UNDO_IMPORT_ASSET,
+    async (_, input: unknown) => linguistProjectIpc.undoImportAsset(input)
   )
 
   // LF-088：Full Integrity Scrub 始终由独立 node:worker_threads 执行；
@@ -5225,6 +5239,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     LINGUIST_ASSET_PREVIEW_IPC_CHANNELS.PREVIEW_SOURCE,
     async (_, input: unknown) => linguistProjectIpc.previewAssetSource(input)
+  )
+  ipcMain.handle(
+    LINGUIST_ASSET_PREVIEW_IPC_CHANNELS.PREVIEW_REFERENCE_IMPORT,
+    async (_, input: unknown) => linguistProjectIpc.previewReferenceImport(input)
   )
 
   // 导出：主进程先生成并验证 staging，再由系统 Save 对话框选择目标。
@@ -5351,6 +5369,7 @@ export function registerIpcHandlers(): void {
   // ===== Linguist TM / 术语库（PB-080；原生导入与项目隔离管理）=====
   const linguistReferenceIpc = createLinguistReferenceIpc({
     getService: getLinguistProjectService,
+    pendingFiles: pendingLinguistImportFiles,
   })
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.QUERY_TM, async (_, input: unknown) =>
     linguistReferenceIpc.queryTm(input))
@@ -5361,6 +5380,12 @@ export function registerIpcHandlers(): void {
     return linguistReferenceIpc.import(input, (options) =>
       win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options))
   })
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.CONFIRM_IMPORT, async (_, input: unknown) =>
+    linguistReferenceIpc.confirmImport(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.CANCEL_IMPORT, async (_, input: unknown) =>
+    linguistReferenceIpc.cancelImport(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.PREVIEW_CANDIDATE, async (_, input: unknown) =>
+    linguistReferenceIpc.previewCandidate(input))
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.UPSERT_TERM, async (_, input: unknown) =>
     linguistReferenceIpc.upsertTerm(input))
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.DELETE, async (_, input: unknown) =>
@@ -5371,6 +5396,16 @@ export function registerIpcHandlers(): void {
     getService: getLinguistProjectService,
     registerPreviewUrl: registerPromaFilePath,
     onProjectMutation: broadcastLinguistProjectMutation,
+    // Context 文档 blob 预览转换栈（与 PB-089 同一惰性加载纪律）。
+    assetPreview: {
+      readText: async (filePath) =>
+        (await import('./lib/file-preview-service')).resolveAndReadFile(filePath),
+      convertDocxToHtml: async (filePath) =>
+        (await import('./lib/file-preview-service')).convertDocxToHtml(filePath),
+      convertOfficeToHtml: async (filePath) =>
+        (await import('./lib/file-preview-service')).convertOfficeToHtml(filePath),
+      registerPreviewUrl: registerPromaFilePath,
+    },
   })
   ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.QUERY, async (_, input: unknown) =>
     linguistAssetsIpc.query(input))
@@ -5378,6 +5413,9 @@ export function registerIpcHandlers(): void {
     linguistAssetsIpc.upsert(input))
   ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.DELETE, async (_, input: unknown) =>
     linguistAssetsIpc.delete(input))
+  // Context 文档 blob 预览（纯读，归档项目允许；三态分派在处理器内）。
+  ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.PREVIEW_CONTEXT_DOC, async (_, input: unknown) =>
+    linguistAssetsIpc.previewContextDoc(input))
   ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.IMPORT_CONTEXT_DOC, async (event, input: unknown) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     return linguistAssetsIpc.importContextDoc(input, (options) =>

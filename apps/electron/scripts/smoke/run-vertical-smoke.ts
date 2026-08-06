@@ -79,18 +79,6 @@ const REPORT_PATH = join(REPORT_DIR, 'vertical-smoke-report.json')
 
 const COVERAGE_GAPS: CoverageGap[] = [
   {
-    id: 'agent-stop-retry-ui',
-    status: 'blocked',
-    reason: 'G1 已覆盖 Agent 流式与 Thinking，但尚无原生 Agent Stop/Retry 的 packaged UI 断言。',
-    unlock: '扩展 G1，复用同一 Pi 会话和 Fake Model 场景。',
-  },
-  {
-    id: 'chat-agent-roundtrip',
-    status: 'blocked',
-    reason: 'G0 覆盖 Chat 流式、Stop、Retry 与恢复，但尚未断言切回 Agent 后状态不丢。',
-    unlock: '主模式与 Tab 融合稳定后扩展 G0。',
-  },
-  {
     id: 'native-open-save-dialogs',
     status: 'blocked',
     reason: 'G7 的原生 Open/Save 对话框仍是 MANUAL，不能折算成自动通过。',
@@ -238,14 +226,14 @@ async function main(): Promise<void> {
       title: 'Agent packaged vertical',
       executable: process.execPath,
       args: ['scripts/smoke/probe-pi-stream.ts'],
-      coverage: 'Pi Agent 冷启动、发送、Streaming、Thinking 与 final。',
+      coverage: 'Pi Agent 冷启动、发送、Streaming、Thinking、final、流式中 Stop（stoppedByUser 收敛）与同会话 Retry 后 final。',
     },
     {
       id: 'chat',
       title: 'Chat packaged vertical',
       executable: process.execPath,
       args: ['scripts/smoke/run-g0-smoke.ts'],
-      coverage: 'Chat 创建、Streaming、Thinking、Tool、Retry、Stop 与重启恢复。',
+      coverage: 'Chat 创建、Streaming、Thinking、Tool、Retry、Stop、重启恢复与 Chat→Agent→Chat 模式往返状态保持。',
     },
     {
       id: 'linguist-current',

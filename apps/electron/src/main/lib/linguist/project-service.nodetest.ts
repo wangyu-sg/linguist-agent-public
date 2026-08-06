@@ -66,25 +66,25 @@ test('default workspace allocator follows agent-workspace id convention (randomU
   }
 })
 
-test('setQualityProfile: 新建项目缺省 balanced；设置后 round-trip；归档拒绝；不存在 PROJECT_NOT_FOUND', () => {
+test('setExecutionPolicy: 新建项目缺省 off；设置后 round-trip；归档拒绝；不存在 PROJECT_NOT_FOUND', () => {
   const service = makeService()
   try {
     const project = service.createProject(INPUT)
-    // 新建项目不写该字段（读取规范化兜底为 balanced）
-    assert.equal(service.getProject(project.id).qualityProfile, 'balanced')
+    // 新建项目不写该字段（读取规范化兜底为 off）
+    assert.deepEqual(service.getProject(project.id).executionPolicy, { independentReview: 'off' })
 
-    const updated = service.setQualityProfile(project.id, 'best')
-    assert.equal(updated.qualityProfile, 'best')
+    const updated = service.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
+    assert.deepEqual(updated.executionPolicy, { independentReview: 'risk-based' })
     assert.notEqual(updated.updatedAt, project.updatedAt)
-    assert.equal(service.getProject(project.id).qualityProfile, 'best')
+    assert.deepEqual(service.getProject(project.id).executionPolicy, { independentReview: 'risk-based' })
     // project.json 落盘携带新值
     const rawMeta = JSON.parse(
       readFileSync(service.getProjectPaths(project.id).projectJsonPath, 'utf8'),
     ) as Record<string, unknown>
-    assert.equal(rawMeta.qualityProfile, 'best')
+    assert.deepEqual(rawMeta.executionPolicy, { independentReview: 'risk-based' })
 
     assert.throws(
-      () => service.setQualityProfile('prj-0000000000000000', 'fast'),
+      () => service.setExecutionPolicy('prj-0000000000000000', { independentReview: 'off' }),
       (err: unknown) => {
         assert.ok(err instanceof LinguistProjectNotFoundError)
         assert.equal(err.code, 'PROJECT_NOT_FOUND')
@@ -94,7 +94,7 @@ test('setQualityProfile: 新建项目缺省 balanced；设置后 round-trip；�
 
     service.archiveProject(project.id)
     assert.throws(
-      () => service.setQualityProfile(project.id, 'fast'),
+      () => service.setExecutionPolicy(project.id, { independentReview: 'off' }),
       (err: unknown) => {
         assert.ok(err instanceof LinguistProjectArchivedError)
         assert.equal(err.code, 'PROJECT_ARCHIVED')
@@ -102,7 +102,7 @@ test('setQualityProfile: 新建项目缺省 balanced；设置后 round-trip；�
       },
     )
     // 拒绝后原值不变
-    assert.equal(service.getProject(project.id).qualityProfile, 'best')
+    assert.deepEqual(service.getProject(project.id).executionPolicy, { independentReview: 'risk-based' })
   } finally {
     service.closeAll()
   }

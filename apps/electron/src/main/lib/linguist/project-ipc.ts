@@ -1,8 +1,8 @@
 /**
  * Linguist 项目 typed IPC 处理器（PB-031；计划 §4.1/§7.2/§7.4）。
  *
- * 本模块实现项目域通道的全部逻辑（校验 → 服务调用 → 结果信封；PB-082 起
- * 含 setQualityProfile 共 7 个），
+ * 本模块实现项目域通道的全部逻辑（校验 → 服务调用 → 结果信封；LA-QUALITY-001 起
+ * 含 setExecutionPolicy 共 7 个），
  * 刻意不 import electron：ipc.ts 以薄适配器注册（注入 picker），
  * node --test 直接驱动本模块（stub picker + 真实服务 + fixture 文件）。
  *
@@ -29,29 +29,39 @@ import { readFileSync, statSync } from 'node:fs'
 import { basename, extname } from 'node:path'
 import {
   normalizeQaProfile,
-  normalizeQualityProfile,
   normalizeWorkflowStage,
+  resolveExecutionPolicy,
   type LinguistProject,
 } from '@linguist/cat-core'
+import {
+  normalizeDelimitedHeader,
+  parseXlsxWorkbook,
+  XlsxAdapter,
+  type XlsxWorkbookParseResult,
+} from '@linguist/cat-formats'
 import {
   LINGUIST_ASSET_ID_PATTERN,
   LINGUIST_BACKUP_DIR_NAME_PATTERN,
   LINGUIST_IMPORT_FILE_EXTENSIONS,
   LINGUIST_IMPORT_MAX_BYTES,
+  LINGUIST_INDEPENDENT_REVIEWS,
   LINGUIST_LEGACY_BACKUP_NAME_PATTERN,
   LINGUIST_LOCALE_MAX_LENGTH,
   LINGUIST_LOCALE_PATTERN,
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
   LINGUIST_QA_PROFILES,
-  LINGUIST_QUALITY_PROFILES,
+  LINGUIST_REFERENCE_IMPORT_ID_PATTERN,
   LINGUIST_WORKSPACE_ID_MAX_LENGTH,
   LINGUIST_WORKFLOW_STAGES,
   type LinguistAssetPreviewResult,
   type LinguistBackupListResult,
+  type LinguistExecutionPolicy,
+  type LinguistIndependentReview,
   type LinguistIpcResult,
   type LinguistProjectArchiveResult,
   type LinguistProjectBackupResult,
   type LinguistProjectCreateResult,
+  type LinguistProjectConfirmXlsxMappingResult,
   type LinguistProjectDeleteResult,
   type LinguistProjectImportResult,
   type LinguistProjectInfo,
@@ -60,18 +70,21 @@ import {
   type LinguistProjectRenameResult,
   type LinguistProjectReorderResult,
   type LinguistProjectRestoreResult,
-  type LinguistProjectSetQualityProfileResult,
+  type LinguistProjectSetExecutionPolicyResult,
   type LinguistProjectSetWorkflowConfigResult,
   type LinguistQaProfile,
   type LinguistProjectSummary,
-  type LinguistQualityProfile,
+  type LinguistProjectUndoImportAssetResult,
+  type LinguistXlsxMappingPreview,
   type LinguistWorkflowOutputStatusPolicy,
   type LinguistWorkflowStage,
   type LinguistRestorePreviewResult,
 } from '@proma/shared'
 import { LinguistImportTooLargeError, LinguistProjectArchivedError } from './errors'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
+import { PendingImportFileStore } from './pending-import-files'
 import type { LinguistProjectService } from './project-service'
+import type { XlsxImportMapping } from './project-service-types'
 
 // ===== picker 抽象（electron dialog 的最小镜像；ipc.ts 注入真实实现）=====
 
@@ -94,6 +107,8 @@ export type LinguistImportFilePicker = (
 /** 惰性解析服务单例：注册 IPC 时服务可能尚未 init（index.ts bootstrap 顺序）。 */
 export interface LinguistProjectIpcDeps {
   getService: () => LinguistProjectService
+  /** 与 TM/TB 候选共用的短生命周期 picker 文件 token（生产由 ipc.ts 注入）。 */
+  pendingFiles?: PendingImportFileStore
   /**
    * PB-089 资产源文件预览的转换栈（生产 = file-preview-service 的三个函数
    * + registerPromaFilePath，ipc.ts 惰性注入；nodetest 注入 fake）。可选
@@ -122,6 +137,8 @@ const PREVIEW_TEXT_EXTENSIONS = new Set(['xliff', 'xlf', 'mqxliff', 'sdlxliff', 
 
 /** PB-089：text 态截断护栏（对齐 context doc text_extract 的 200k 字符纪律）。 */
 const PREVIEW_TEXT_MAX_CHARS = 200_000
+const XLSX_MAPPING_SAMPLE_VALUE_MAX_CHARS = 400
+const XLSX_DETECTOR = new XlsxAdapter()
 
 // ===== 输入校验（计划 §7.4：renderer 不可信，主进程自行校验一切入参）=====
 // 信封/通用校验件（invalid / assertRecord / readProjectId / wrap / toIpcError）
@@ -168,13 +185,20 @@ function readOptionalWorkspaceId(record: Record<string, unknown>): string | unde
   return value
 }
 
-/** PB-082：质量策略档严格校验（只接受三档字面量；不做兜底规范化——那是 store 读取路径的职责）。 */
-function readQualityProfile(record: Record<string, unknown>): LinguistQualityProfile {
-  const value = record.profile
-  if (typeof value !== 'string' || !(LINGUIST_QUALITY_PROFILES as readonly string[]).includes(value)) {
-    invalid(`profile must be one of: ${LINGUIST_QUALITY_PROFILES.join(', ')}`)
+/** LA-QUALITY-001：Execution Policy 严格校验（闭集字面量；不做兜底规范化——那是 store 读取路径的职责）。 */
+function readExecutionPolicy(record: Record<string, unknown>): LinguistExecutionPolicy {
+  const value = record.executionPolicy
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    invalid('executionPolicy must be an object')
   }
-  return value as LinguistQualityProfile
+  const review = (value as Record<string, unknown>).independentReview
+  if (
+    typeof review !== 'string'
+    || !(LINGUIST_INDEPENDENT_REVIEWS as readonly string[]).includes(review)
+  ) {
+    invalid(`executionPolicy.independentReview must be one of: ${LINGUIST_INDEPENDENT_REVIEWS.join(', ')}`)
+  }
+  return { independentReview: review as LinguistIndependentReview }
 }
 
 function readWorkflowStage(
@@ -266,15 +290,190 @@ function readCatAssetId(record: Record<string, unknown>): string {
   return value
 }
 
+/** TM/TB 文件导入原件的 opaque stable id。 */
+function readReferenceImportId(record: Record<string, unknown>): string {
+  const value = record.importId
+  if (typeof value !== 'string' || !LINGUIST_REFERENCE_IMPORT_ID_PATTERN.test(value)) {
+    invalid('importId must be a valid reference import Stable ID')
+  }
+  return value
+}
+
+function readXlsxMappingString(
+  record: Record<string, unknown>,
+  field: string,
+  required: boolean,
+): string | undefined {
+  const value = record[field]
+  if (value === undefined && !required) return undefined
+  if (typeof value !== 'string' || value.trim() === '' || value.length > 512) {
+    invalid(`${field} must be a non-blank string of at most 512 characters`)
+  }
+  return value
+}
+
+function readXlsxMappingConfirmation(input: unknown): {
+  projectId: string
+  mappingId: string
+  sourceSha256: string
+  mapping: XlsxImportMapping
+} {
+  const record = assertRecord(input)
+  for (const key of Object.keys(record)) {
+    if (!['projectId', 'mappingId', 'sourceSha256', 'sheetName', 'columns'].includes(key)) {
+      invalid(`unknown XLSX mapping field ${JSON.stringify(key)}`)
+    }
+  }
+  const projectId = readProjectId(record)
+  const mappingId = readXlsxMappingString(record, 'mappingId', true)!
+  const sourceSha256 = readXlsxMappingString(record, 'sourceSha256', true)!
+  if (!/^[0-9a-f]{64}$/.test(sourceSha256)) invalid('sourceSha256 must be a lowercase SHA-256 hex digest')
+  const sheetName = readXlsxMappingString(record, 'sheetName', true)!
+  if (typeof record.columns !== 'object' || record.columns === null || Array.isArray(record.columns)) {
+    invalid('columns must be an object')
+  }
+  const columnsRecord = record.columns as Record<string, unknown>
+  for (const key of Object.keys(columnsRecord)) {
+    if (!['key', 'source', 'target', 'locked', 'context'].includes(key)) {
+      invalid(`unknown XLSX mapping column ${JSON.stringify(key)}`)
+    }
+  }
+  const columns: XlsxImportMapping['columns'] = {
+    source: readXlsxMappingString(columnsRecord, 'source', true)!,
+    target: readXlsxMappingString(columnsRecord, 'target', true)!,
+  }
+  for (const key of ['key', 'locked', 'context'] as const) {
+    const value = readXlsxMappingString(columnsRecord, key, false)
+    if (value !== undefined) columns[key] = value
+  }
+  return { projectId, mappingId, sourceSha256, mapping: { sheetName, columns } }
+}
+
+function toXlsxMappingPreview(parsed: XlsxWorkbookParseResult): LinguistXlsxMappingPreview {
+  const truncated = new Set(parsed.report.sampling.truncatedSheets.map((entry) => entry.sheet))
+  return {
+    sourceSha256: parsed.report.sourceSha256,
+    sheets: parsed.sheets.map((sheet) => {
+      const header = sheet.headers[0]
+      const normalizedCounts = new Map<string, number>()
+      for (const cell of header?.cells ?? []) {
+        const normalized = normalizeDelimitedHeader(cell.value)
+        if (normalized !== '') normalizedCounts.set(normalized, (normalizedCounts.get(normalized) ?? 0) + 1)
+      }
+      return {
+        name: sheet.name,
+        state: sheet.state,
+        headerRowNumbers: sheet.headerRowNumbers,
+        columns: (header?.cells ?? []).map((cell) => {
+          const normalized = normalizeDelimitedHeader(cell.value)
+          return {
+            index: cell.col,
+            header: cell.value,
+            selectable: normalized !== '' && normalizedCounts.get(normalized) === 1,
+          }
+        }),
+        sampleRows: sheet.rows.map((row) => ({
+          rowNo: row.rowNo,
+          cells: row.cells.map((cell) => ({
+            columnIndex: cell.col,
+            value: cell.value.slice(0, XLSX_MAPPING_SAMPLE_VALUE_MAX_CHARS),
+            truncated: cell.value.length > XLSX_MAPPING_SAMPLE_VALUE_MAX_CHARS,
+          })),
+        })),
+        coverage: {
+          physicalRows: sheet.stats.totalRows,
+          dataRows: sheet.stats.dataRows,
+          nonEmptyDataRows: sheet.stats.nonEmptyDataRows,
+          emptyDataRows: sheet.stats.emptyDataRows,
+          shownSampleRows: sheet.rows.length,
+          truncated: truncated.has(sheet.name),
+        },
+        distortion: sheet.distortion,
+      }
+    }),
+    skippedSheets: parsed.skippedSheets,
+  }
+}
+
+function validateXlsxMapping(
+  parsed: XlsxWorkbookParseResult,
+  mapping: XlsxImportMapping,
+): XlsxImportMapping {
+  const matches = parsed.sheets.filter((sheet) => sheet.name === mapping.sheetName)
+  if (matches.length !== 1) invalid('selected XLSX sheet no longer exists or is ambiguous')
+  const header = matches[0]!.headers[0]
+  if (header === undefined) invalid('selected XLSX sheet has no mapping header row')
+  const seen = new Set<string>()
+  const columns: XlsxImportMapping['columns'] = {
+    source: '',
+    target: '',
+  }
+  for (const role of ['key', 'source', 'target', 'locked', 'context'] as const) {
+    const selected = mapping.columns[role]
+    if (selected === undefined) continue
+    const normalized = normalizeDelimitedHeader(selected)
+    const occurrences = header.cells.filter((cell) => normalizeDelimitedHeader(cell.value) === normalized)
+    if (normalized === '' || occurrences.length !== 1 || seen.has(normalized)) {
+      invalid(`selected XLSX ${role} column is missing, ambiguous, or reused`)
+    }
+    seen.add(normalized)
+    columns[role] = selected
+  }
+  if (columns.source === '' || columns.target === '') invalid('XLSX source and target columns are required')
+  return { sheetName: mapping.sheetName, columns }
+}
+
+/** 所有受管原件共用一套三态 Preview 转换，避免批次/TM/TB 分叉。 */
+async function previewManagedSource(
+  assetPreview: LinguistAssetPreviewDeps,
+  sourcePath: string,
+  originalFilename: string,
+): Promise<LinguistAssetPreviewResult> {
+  const ext = extname(originalFilename).toLowerCase().replace(/^\./, '')
+  if (PREVIEW_TEXT_EXTENSIONS.has(ext)) {
+    const file = await assetPreview.readText(sourcePath)
+    if (file === null) throw new Error('managed source preview: text read failed')
+    const truncated = file.content.length > PREVIEW_TEXT_MAX_CHARS
+    return {
+      kind: 'text',
+      text: truncated ? file.content.slice(0, PREVIEW_TEXT_MAX_CHARS) : file.content,
+      truncated,
+      filename: originalFilename,
+    }
+  }
+  if (ext === 'docx') {
+    const converted = await assetPreview.convertDocxToHtml(sourcePath)
+    if (converted === null) throw new Error('managed source preview: docx conversion failed')
+    return { kind: 'html', html: converted.html, filename: originalFilename }
+  }
+  if (ext === 'xlsx') {
+    const converted = await assetPreview.convertOfficeToHtml(sourcePath)
+    if (converted === null) throw new Error('managed source preview: xlsx conversion failed')
+    return {
+      kind: 'html',
+      html: converted.html,
+      ...(converted.text !== '' ? { text: converted.text } : {}),
+      filename: originalFilename,
+    }
+  }
+  return {
+    kind: 'url',
+    url: assetPreview.registerPreviewUrl(sourcePath),
+    filename: originalFilename,
+    ext,
+  }
+}
+
 /**
- * 领域项目 → 线格式镜像（PB-082）：wire 契约要求 qualityProfile 必有值，
- * 领域类型该字段可选（旧 project.json 前向兼容）——在 IPC 边界做最后一道
- * 规范化（store 读取路径已先行规范化，此处双保险，保证类型与线上一致）。
+ * 领域项目 → 线格式镜像（LA-QUALITY-001）：wire 契约要求 executionPolicy
+ * 必有值，领域类型该字段可选（旧 project.json 前向兼容）——在 IPC 边界做
+ * 最后一道解析（store 读取路径已先行规范化，此处双保险；legacy
+ * qualityProfile 项目经映射打开，不回写旧字段）。
  */
 function toProjectInfo(project: LinguistProject): LinguistProjectInfo {
   return {
     ...project,
-    qualityProfile: normalizeQualityProfile(project.qualityProfile),
+    executionPolicy: resolveExecutionPolicy(project),
     workflowStage: normalizeWorkflowStage(project.workflowStage),
     qaProfile: normalizeQaProfile(project.qaProfile),
   }
@@ -284,6 +483,7 @@ function toProjectInfo(project: LinguistProject): LinguistProjectInfo {
 
 export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
   const { getService, assetPreview } = deps
+  const pendingFiles = deps.pendingFiles ?? new PendingImportFileStore()
 
   return {
     /** linguist.projects.list — 列出项目（可选含已归档）。 */
@@ -383,11 +583,11 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         }
 
         const picked = await pickFile({
-          title: '导入翻译资产',
+          title: '导入翻译批次',
           properties: ['openFile'],
           filters: [
             {
-              name: '翻译资产 (XLIFF / SDLXLIFF / MXLIFF / DOCX / CSV / TSV / JSON / XLSX)',
+              name: '翻译批次文件 (XLIFF / SDLXLIFF / MXLIFF / DOCX / CSV / TSV / JSON / XLSX)',
               extensions: [...LINGUIST_IMPORT_FILE_EXTENSIONS],
             },
           ],
@@ -405,13 +605,91 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         const bytes = new Uint8Array(readFileSync(filePath))
         const filename = basename(filePath)
 
+        // XLSX 不会落入别名猜测：先展示主进程解析证据，再等待用户点名工作表/源文/译文列。
+        if (await XLSX_DETECTOR.detect(bytes, filename) > 0) {
+          const parsed = await parseXlsxWorkbook(bytes, { filename, maxRowsPerSheet: 5 })
+          const sourceSha256 = parsed.report.sourceSha256
+          const pending = pendingFiles.issue({
+            scope: 'xlsx-mapping',
+            projectId,
+            filename,
+            sourceSha256,
+            bytes,
+          })
+          return {
+            cancelled: false,
+            requiresXlsxMapping: true,
+            filename,
+            mappingId: pending.id,
+            sourceSha256,
+            preview: toXlsxMappingPreview(parsed),
+          }
+        }
+
         const result = await service.importAsset(projectId, { bytes, filename })
         console.log(
           result.status === 'skipped-duplicate'
             ? `[Linguist IPC] 已跳过重复资产: 项目 ${projectId} 资产 ${result.assetId}`
             : `[Linguist IPC] 导入完成: 项目 ${projectId} 资产 ${result.assetId}（${result.formatId}，${result.segmentCount} 段）`,
         )
-        return { cancelled: false, filename, ...result }
+        return { cancelled: false, requiresXlsxMapping: false, filename, ...result }
+      })
+    },
+
+    /** XLSX 映射确认：主进程再次校验 token、项目和精确 source hash。 */
+    async confirmXlsxMapping(
+      input: unknown,
+    ): Promise<LinguistIpcResult<LinguistProjectConfirmXlsxMappingResult>> {
+      return wrap(async () => {
+        const confirmation = readXlsxMappingConfirmation(input)
+        const service = getService()
+        const project = service.getProject(confirmation.projectId)
+        if (project.archivedAt !== undefined) throw new LinguistProjectArchivedError(confirmation.projectId)
+        const pending = pendingFiles.get(confirmation.mappingId, 'xlsx-mapping')
+        if (
+          pending === undefined
+          || pending.projectId !== confirmation.projectId
+          || pending.sourceSha256 !== confirmation.sourceSha256
+        ) {
+          invalid('XLSX mapping preview is missing, expired, or bound to different source bytes')
+        }
+        const parsed = await parseXlsxWorkbook(pending.bytes, {
+          filename: pending.filename,
+          maxRowsPerSheet: 5,
+        })
+        if (parsed.report.sourceSha256 !== pending.sourceSha256) {
+          invalid('XLSX source bytes changed after mapping preview')
+        }
+        const mapping = validateXlsxMapping(parsed, confirmation.mapping)
+        const result = await service.importAsset(confirmation.projectId, {
+          bytes: pending.bytes,
+          filename: pending.filename,
+          xlsxMapping: mapping,
+        })
+        pendingFiles.remove(pending.id, 'xlsx-mapping')
+        console.log(
+          result.status === 'skipped-duplicate'
+            ? `[Linguist IPC] 已跳过已确认 XLSX 映射的重复资产: 项目 ${confirmation.projectId} 资产 ${result.assetId}`
+            : `[Linguist IPC] 已导入已确认 XLSX 映射: 项目 ${confirmation.projectId} 资产 ${result.assetId}（${result.segmentCount} 段）`,
+        )
+        return { cancelled: false, requiresXlsxMapping: false, filename: pending.filename, ...result }
+      })
+    },
+
+    /**
+     * linguist.projects.undoImportAsset — LA-INTAKE-007 撤销一次导入：
+     * 下游引用（Proposal/QA/评审件/导出/人工编辑痕迹/durable job）任一非零即
+     * IMPORT_UNDO_BLOCKED（details 只含分类计数）；全零则 asset +
+     * segments + 关联行 + source blob 一并删除。归档项目 PROJECT_ARCHIVED。
+     */
+    undoImportAsset(
+      input: unknown,
+    ): Promise<LinguistIpcResult<LinguistProjectUndoImportAssetResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const assetId = readCatAssetId(record)
+        return getService().undoImportAsset(projectId, assetId)
       })
     },
 
@@ -447,16 +725,16 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
     },
 
     /**
-     * linguist.projects.setQualityProfile — 设置质量策略档（PB-082，计划 §21）。
-     * profile 只接受三档字面量（INVALID_INPUT）；归档/不存在由服务层映射
-     * PROJECT_ARCHIVED / PROJECT_NOT_FOUND（无新错误码）。
+     * linguist.projects.setExecutionPolicy — 设置 Execution Policy（LA-QUALITY-001，
+     * 取代 PB-082 质量档位）。independentReview 只接受闭集字面量（INVALID_INPUT）；
+     * 归档/不存在由服务层映射 PROJECT_ARCHIVED / PROJECT_NOT_FOUND（无新错误码）。
      */
-    setQualityProfile(input: unknown): Promise<LinguistIpcResult<LinguistProjectSetQualityProfileResult>> {
+    setExecutionPolicy(input: unknown): Promise<LinguistIpcResult<LinguistProjectSetExecutionPolicyResult>> {
       return wrap(() => {
         const record = assertRecord(input)
         const projectId = readProjectId(record)
-        const profile = readQualityProfile(record)
-        return toProjectInfo(getService().setQualityProfile(projectId, profile))
+        const executionPolicy = readExecutionPolicy(record)
+        return toProjectInfo(getService().setExecutionPolicy(projectId, executionPolicy))
       })
     },
 
@@ -530,41 +808,21 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         const projectId = readProjectId(record)
         const assetId = readCatAssetId(record)
         const { sourcePath, originalFilename } = getService().resolveAssetSourcePath(projectId, assetId)
-        const ext = extname(originalFilename).toLowerCase().replace(/^\./, '')
+        return previewManagedSource(assetPreview, sourcePath, originalFilename)
+      })
+    },
 
-        if (PREVIEW_TEXT_EXTENSIONS.has(ext)) {
-          const file = await assetPreview.readText(sourcePath)
-          if (file === null) throw new Error('asset source preview: text read failed')
-          const truncated = file.content.length > PREVIEW_TEXT_MAX_CHARS
-          return {
-            kind: 'text',
-            text: truncated ? file.content.slice(0, PREVIEW_TEXT_MAX_CHARS) : file.content,
-            truncated,
-            filename: originalFilename,
-          }
+    /** TM/TB 原始导入文件预览；与 CAT 批次复用同一主进程围栏和转换栈。 */
+    previewReferenceImport(input: unknown): Promise<LinguistIpcResult<LinguistAssetPreviewResult>> {
+      return wrap(async () => {
+        if (assetPreview === undefined) {
+          throw new Error('asset preview conversion stack is not wired')
         }
-        if (ext === 'docx') {
-          const converted = await assetPreview.convertDocxToHtml(sourcePath)
-          if (converted === null) throw new Error('asset source preview: docx conversion failed')
-          return { kind: 'html', html: converted.html, filename: originalFilename }
-        }
-        if (ext === 'xlsx') {
-          const converted = await assetPreview.convertOfficeToHtml(sourcePath)
-          if (converted === null) throw new Error('asset source preview: xlsx conversion failed')
-          return {
-            kind: 'html',
-            html: converted.html,
-            ...(converted.text !== '' ? { text: converted.text } : {}),
-            filename: originalFilename,
-          }
-        }
-        // 未知扩展名（白名单外，如旧仓迁移资产）：降级 url 态直渲染
-        return {
-          kind: 'url',
-          url: assetPreview.registerPreviewUrl(sourcePath),
-          filename: originalFilename,
-          ext,
-        }
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const importId = readReferenceImportId(record)
+        const { sourcePath, originalFilename } = getService().resolveReferenceImportPreviewPath(projectId, importId)
+        return previewManagedSource(assetPreview, sourcePath, originalFilename)
       })
     },
   }

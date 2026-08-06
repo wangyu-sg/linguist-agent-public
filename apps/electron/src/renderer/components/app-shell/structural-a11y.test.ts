@@ -70,6 +70,22 @@ describe('结构性无障碍契约', () => {
     expect(source).toContain('aria-label="对话标题"')
   })
 
+  test('given 收起态 mini rail when 读取源码 then 不再堆叠最近会话列且保留搜索与模式入口', () => {
+    const source = readFileSync(TARGETS[0]!, 'utf8')
+    // 60px mini rail 内堆叠最近会话会退化成单字列，已整列移除
+    expect(source).not.toContain('railRecentItems')
+    expect(source).not.toContain('RailRecentButton')
+    expect(source).toContain('aria-label="搜索"')
+    expect(source).toContain('aria-label="展开侧边栏"')
+  })
+
+  test('given 展开与收起两种形态 when 读取源码 then Agent 技能入口各自唯一', () => {
+    const source = readFileSync(TARGETS[0]!, 'utf8')
+    // 展开态只有顶部 SkillsSidebarEntry 行；收起态只有一个图标按钮
+    expect(source.match(/<SkillsSidebarEntry/g)).toHaveLength(1)
+    expect(source.match(/aria-label="Agent 技能"/g)).toHaveLength(1)
+  })
+
   test('given 模型选择器打开 when 使用辅助技术搜索 then 搜索框有可访问名称', () => {
     const source = readFileSync(resolve(import.meta.dir, '../chat/ModelSelector.tsx'), 'utf8')
     expect(source).toContain('aria-label="搜索模型"')

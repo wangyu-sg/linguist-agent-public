@@ -16,7 +16,7 @@ export function buildDeliveryReport(
     '# Linguist Agent 审校交付报告',
     '',
     `- 项目：${project.name}`,
-    `- 资产：${preflight.filename}`,
+    `- 批次：${preflight.filename}`,
     `- 工作阶段：${preflight.workflowStage}`,
     `- 预检结论：${state}`,
     `- 句段：${preflight.segmentCount}`,

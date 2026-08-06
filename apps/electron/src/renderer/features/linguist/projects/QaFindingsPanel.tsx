@@ -372,7 +372,7 @@ export function QaFindingsPanel({
             aria-label="QA 状态筛选"
             value={statusFilter}
             onChange={(event) => { setStatusFilter(event.target.value as LinguistQaFindingStatus); setOffset(0) }}
-            className="mt-1 h-7 w-full rounded-md bg-background px-1.5 text-[11px] ring-1 ring-border/45"
+            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] ring-1 ring-border/45"
           >
             <option value="open">待处理</option>
             <option value="resolved">已解决</option>
@@ -385,7 +385,7 @@ export function QaFindingsPanel({
             aria-label="QA 严重度筛选"
             value={severityFilter}
             onChange={(event) => { setSeverityFilter(event.target.value as LinguistQaFindingSeverity | ''); setOffset(0) }}
-            className="mt-1 h-7 w-full rounded-md bg-background px-1.5 text-[11px] ring-1 ring-border/45"
+            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] ring-1 ring-border/45"
           >
             <option value="">全部</option>
             {QA_SEVERITIES.map((severity) => (
@@ -399,7 +399,7 @@ export function QaFindingsPanel({
             aria-label="QA 处置筛选"
             value={dispositionFilter}
             onChange={(event) => { setDispositionFilter(event.target.value as LinguistQaFindingDisposition | ''); setOffset(0) }}
-            className="mt-1 h-7 w-full rounded-md bg-background px-1.5 text-[11px] ring-1 ring-border/45"
+            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] ring-1 ring-border/45"
           >
             <option value="">全部</option>
             {QA_DISPOSITIONS.map((disposition) => (

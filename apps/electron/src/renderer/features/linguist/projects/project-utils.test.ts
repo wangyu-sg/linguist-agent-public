@@ -3,7 +3,7 @@
  *
  * bun 安全：不触 React / DOM / IPC，只驱动纯函数。
  * 覆盖：「最近」排序、归档分组、表单预校验（镜像 IPC 规则）、
- * 29 个稳定错误码中文映射完备性、健康报告摘要、时间格式化、
+ * 35 个稳定错误码中文映射完备性、健康报告摘要、时间格式化、
  * SHA-256 截断展示。
  */
 
@@ -16,14 +16,15 @@ import {
 } from '@proma/shared'
 import {
   describeHealthCheckId,
+  describeImportUndoBlockedCounts,
+  describeIndependentReview,
   describeLinguistIpcError,
-  describeQualityProfile,
   failedHealthChecks,
   formatProjectTime,
+  INDEPENDENT_REVIEW_OPTIONS,
   LINGUIST_IPC_ERROR_MESSAGES,
-  normalizeQualityProfileInfo,
+  normalizeExecutionPolicyInfo,
   partitionProjectsByArchived,
-  QUALITY_PROFILE_OPTIONS,
   sortProjectsByRecentDesc,
   summarizeFailedHealthChecks,
   truncateSha256,
@@ -42,7 +43,7 @@ function project(overrides: Partial<LinguistProjectInfo>): LinguistProjectInfo {
     promaWorkspaceId: 'ws',
     createdAt: '2026-07-01T08:00:00.000Z',
     updatedAt: '2026-07-01T08:00:00.000Z',
-    qualityProfile: 'balanced',
+    executionPolicy: { independentReview: 'off' },
     ...overrides,
   }
 }
@@ -146,11 +147,11 @@ describe('validateLocaleInput（镜像 IPC readLocale：BCP-47 形状 + ≤35）
 })
 
 describe('LINGUIST_IPC_ERROR_MESSAGES（稳定码中文化）', () => {
-  test('映射表与契约错误码目录一一对应（33 个，无多无缺）', () => {
+  test('映射表与契约错误码目录一一对应（35 个，无多无缺）', () => {
     const contractCodes = Object.values(LINGUIST_IPC_ERROR_CODES).sort()
     const mappedCodes = Object.keys(LINGUIST_IPC_ERROR_MESSAGES).sort()
     expect(mappedCodes).toEqual(contractCodes)
-    expect(mappedCodes.length).toBe(33)
+    expect(mappedCodes.length).toBe(35)
   })
 
   test('describeLinguistIpcError：文案 + 稳定码后缀', () => {
@@ -186,6 +187,37 @@ describe('LINGUIST_IPC_ERROR_MESSAGES（稳定码中文化）', () => {
   })
 })
 
+describe('describeImportUndoBlockedCounts（LA-INTAKE-007 撤销拒绝计数）', () => {
+  test('只列非零类，按固定类目顺序输出中文计数', () => {
+    expect(
+      describeImportUndoBlockedCounts({
+        proposals: 2,
+        qaFindings: 0,
+        criticArtifacts: 1,
+        exports: 0,
+        editedSegments: 3,
+      }),
+    ).toBe('提案 2 条、评审 1 条、人工编辑段 3 条')
+  })
+
+  test('details 缺失或全零返回 null（调用方回退通用错误文案）', () => {
+    expect(describeImportUndoBlockedCounts(undefined)).toBeNull()
+    expect(
+      describeImportUndoBlockedCounts({
+        proposals: 0,
+        qaFindings: 0,
+        criticArtifacts: 0,
+        exports: 0,
+        editedSegments: 0,
+      }),
+    ).toBeNull()
+  })
+
+  test('未知类目键被忽略（契约外字段不进文案）', () => {
+    expect(describeImportUndoBlockedCounts({ proposals: 1, mystery: 9 })).toBe('提案 1 条')
+  })
+})
+
 describe('健康报告助手', () => {
   test('failedHealthChecks 只留未通过项', () => {
     const report = healthReport([
@@ -211,7 +243,7 @@ describe('健康报告助手', () => {
     ])
     const text = summarizeFailedHealthChecks(report)
     expect(text).toContain('翻译数据库（STORE_BUSY）')
-    expect(text).toContain('资产源有界抽样')
+    expect(text).toContain('批次源有界抽样')
   })
 
   test('全通过时 healthy=true 且无失败项', () => {
@@ -278,30 +310,31 @@ describe('truncateSha256（PB-033 资产摘要展示）', () => {
   })
 })
 
-// ===== PB-082：质量策略档展示逻辑 =====
+// ===== PB-082 / LA-QUALITY-001：Execution Policy（独立评审）展示逻辑 =====
 
-describe('质量策略档（PB-082，计划 §21）', () => {
-  test('normalizeQualityProfileInfo：三档原样通过，缺省/未知回落 balanced', () => {
-    expect(normalizeQualityProfileInfo('fast')).toBe('fast')
-    expect(normalizeQualityProfileInfo('balanced')).toBe('balanced')
-    expect(normalizeQualityProfileInfo('best')).toBe('best')
-    for (const value of [undefined, null, '', 'turbo', 'FAST', 42, {}]) {
-      expect(normalizeQualityProfileInfo(value)).toBe('balanced')
+describe('Execution Policy（PB-082 / LA-QUALITY-001）', () => {
+  test('normalizeExecutionPolicyInfo：合法值原样通过，缺省/未知回落 off', () => {
+    expect(normalizeExecutionPolicyInfo({ independentReview: 'off' }))
+      .toEqual({ independentReview: 'off' })
+    expect(normalizeExecutionPolicyInfo({ independentReview: 'risk-based' }))
+      .toEqual({ independentReview: 'risk-based' })
+    for (const value of [undefined, null, '', 'turbo', 42, {}, { independentReview: 'turbo' }]) {
+      expect(normalizeExecutionPolicyInfo(value)).toEqual({ independentReview: 'off' })
     }
   })
 
-  test('QUALITY_PROFILE_OPTIONS：三档顺序与契约一致，均带中文说明', () => {
-    expect(QUALITY_PROFILE_OPTIONS.map((option) => option.profile)).toEqual(['fast', 'balanced', 'best'])
-    for (const option of QUALITY_PROFILE_OPTIONS) {
+  test('INDEPENDENT_REVIEW_OPTIONS：两档顺序与契约一致，均带中文说明', () => {
+    expect(INDEPENDENT_REVIEW_OPTIONS.map((option) => option.value)).toEqual(['off', 'risk-based'])
+    for (const option of INDEPENDENT_REVIEW_OPTIONS) {
       expect(option.label.length).toBeGreaterThan(0)
       expect(option.description.length).toBeGreaterThan(0)
     }
   })
 
-  test('describeQualityProfile：每档返回对应说明，未知值回落 balanced 说明', () => {
-    for (const option of QUALITY_PROFILE_OPTIONS) {
-      expect(describeQualityProfile(option.profile)).toBe(option.description)
+  test('describeIndependentReview：每档返回对应说明，未知值回落 off 说明', () => {
+    for (const option of INDEPENDENT_REVIEW_OPTIONS) {
+      expect(describeIndependentReview(option.value)).toBe(option.description)
     }
-    expect(describeQualityProfile('turbo' as never)).toBe(QUALITY_PROFILE_OPTIONS[1]!.description)
+    expect(describeIndependentReview('turbo' as never)).toBe(INDEPENDENT_REVIEW_OPTIONS[0]!.description)
   })
 })

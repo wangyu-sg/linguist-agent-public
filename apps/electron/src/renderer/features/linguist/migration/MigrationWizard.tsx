@@ -710,7 +710,7 @@ const VERIFY_CHECK_LABELS: Record<string, string> = {
   'transcript-rerender': '转录重渲染比对',
   'transcript-bytes': '转录字节完整性',
   'store-reopen': '数据库只读重开',
-  'store-assets': '资产 / 段计数',
+  'store-assets': '批次 / 段计数',
   'store-references': 'TM / 术语计数',
   'store-qa': 'QA 计数',
 }
@@ -719,7 +719,7 @@ function ReportRowDetail({ project }: { project: LinguistMigrationProjectReport 
   return (
     <div className="px-4 pb-3 pt-1 border-t border-border/40 flex flex-col gap-2.5 text-[12px] text-foreground/60">
       <div>
-        新项目 <span className="font-mono text-foreground/45">{project.newProjectId}</span> · 资产 {project.totals.assets} ·
+        新项目 <span className="font-mono text-foreground/45">{project.newProjectId}</span> · 批次 {project.totals.assets} ·
         段 {project.totals.segments} · TM {project.totals.tmImported} · 术语 {project.totals.termsImported} · QA（开{' '}
         {project.totals.qaOpen} / 豁免 {project.totals.qaWaived}）· 归档件 {project.archivesWritten}
       </div>

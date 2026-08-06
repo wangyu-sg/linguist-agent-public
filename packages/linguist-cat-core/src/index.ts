@@ -80,6 +80,17 @@ export {
 } from './workflow'
 
 export {
+  DEFAULT_EXECUTION_POLICY,
+  executionPolicyFromLegacyQualityProfile,
+  normalizeExecutionPolicy,
+  resolveExecutionPolicy,
+  sameExecutionPolicy,
+  type LinguistExecutionPolicy,
+  type LinguistIndependentReview,
+} from './execution-policy'
+
+// LA-QUALITY-001：质量档位已被 Execution Policy 取代；以下导出仅供 legacy 读取映射。
+export {
   DEFAULT_QUALITY_PROFILE,
   QUALITY_PROFILE_POLICIES,
   normalizeQualityProfile,

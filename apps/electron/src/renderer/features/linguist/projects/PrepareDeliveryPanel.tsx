@@ -110,7 +110,7 @@ export function PrepareDeliveryPanel({
     <section aria-label="准备交付" className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <label className="min-w-64 flex-1 text-[11px] text-foreground/55">
-          交付资产
+          交付批次
           <select
             value={assetId}
             disabled={archived || assets.length === 0}
@@ -118,9 +118,9 @@ export function PrepareDeliveryPanel({
               setAssetId(event.target.value)
               setState({ status: 'idle' })
             }}
-            className="mt-1 h-8 w-full rounded-md bg-background px-2 text-xs text-foreground ring-1 ring-border/50"
+            className="mt-1 h-8 w-full min-w-0 truncate rounded-md bg-background pl-2 pr-7 text-xs text-foreground ring-1 ring-border/50"
           >
-            {assets.length === 0 && <option value="">尚未导入资产</option>}
+            {assets.length === 0 && <option value="">尚未导入批次</option>}
             {assets.map((asset) => (
               <option key={asset.assetId} value={asset.assetId}>{asset.filename}</option>
             ))}

@@ -445,7 +445,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chat
   return (
     <div
       className={cn(
-        'relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area',
+        'relative z-0 h-full max-w-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area',
         isClassic && 'rounded-2xl shadow-xl dark:shadow-md',
         shouldAnimate && 'transition-[width] duration-300 ease-in-out',
         isOpen ? '' : '!w-0',

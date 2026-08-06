@@ -111,7 +111,7 @@ export function createLinguistExportIpc(deps: {
         }
         const staged = prepared.staged
         const picked = await pickDestination({
-          title: '导出翻译资产',
+          title: '导出翻译批次',
           defaultPath: staged.suggestedFilename,
         })
         if (picked.canceled || picked.filePath === undefined) {

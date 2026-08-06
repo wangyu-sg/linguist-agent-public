@@ -8,12 +8,13 @@ import type {
   LinguistAssetInfo,
   LinguistIpcError,
   LinguistIpcResult,
-  LinguistQualityProfile,
+  LinguistExecutionPolicy,
   LinguistSessionCreateForProjectRequest,
 } from '@proma/shared'
 import {
   agentPendingPromptAtom,
   agentSidePanelOpenAtom,
+  agentSidePanelWidthAtom,
   agentSessionsAtom,
   type AgentPendingPrompt,
 } from '@/atoms/agent-atoms'
@@ -28,11 +29,38 @@ import type { ComposerContextChip } from '@/features/linguist/composer/ComposerC
 import { Button } from '@/components/ui/button'
 import {
   captureLinguistTurnContextSnapshot,
+  createSegmentAgentReference,
+  linguistSegmentAgentReferenceAtomFamily,
   linguistWorkbenchUiStateAtomFamily,
+  resolveVisibleSegmentAgentReference,
+  type LinguistSegmentAgentReference,
   type LinguistWorkbenchUiState,
 } from './cat-workspace-atoms'
 import { describeLinguistIpcError } from './project-utils'
 import { ensureProjectAgentSession } from './project-agent-session'
+
+// ===== 显式「为 Agent 引用」片段（问题 12）=====
+// atom、类型与 helper 统一住在 cat-workspace-atoms.ts（snapshot seam 共用），
+// 此处仅消费，不另存第二份实现。
+
+/**
+ * Companion Chat 自动展开的共享判定（纯函数，问题 11）。
+ * 仅在侧问答会话「新打开或切换」时允许自动展开为 full；
+ * 用户点「返回工作台」回到 rail 时 conversationId 不变，不得再次被推回 full。
+ */
+export function shouldAutoExpandAgentForSideChat(
+  previousConversationId: string | null,
+  nextConversationId: string | null,
+  presentation: 'rail' | 'full',
+  canExpandToFull: boolean,
+): boolean {
+  return Boolean(
+    nextConversationId
+    && nextConversationId !== previousConversationId
+    && presentation === 'rail'
+    && canExpandToFull,
+  )
+}
 
 type JotaiStore = ReturnType<typeof createStore>
 type CreateProjectSession = (
@@ -71,6 +99,9 @@ interface BuildProjectComposerContextChipsInput {
   projectName: string
   assets: readonly LinguistAssetInfo[]
   uiState: LinguistWorkbenchUiState
+  /** 显式「为 Agent 引用」的片段（内部经 resolveVisibleSegmentAgentReference 按项目资产校验） */
+  segmentReference?: LinguistSegmentAgentReference
+  onRemoveSegmentReference?: () => void
   onClearSelectedSegments: () => void
 }
 
@@ -79,6 +110,8 @@ export function buildProjectComposerContextChips({
   projectName,
   assets,
   uiState,
+  segmentReference,
+  onRemoveSegmentReference,
   onClearSelectedSegments,
 }: BuildProjectComposerContextChipsInput): readonly ComposerContextChip[] {
   const activeAsset = assets.find((asset) => asset.assetId === uiState.activeAssetId)
@@ -90,15 +123,18 @@ export function buildProjectComposerContextChips({
   if (uiState.activeAssetId) {
     chips.push({
       id: 'asset',
-      label: activeAsset?.filename ?? '当前资产',
-      scope: `资产范围 · ${uiState.activeAssetId}`,
+      label: activeAsset?.filename ?? '当前批次',
+      scope: `批次范围 · ${uiState.activeAssetId}`,
     })
   }
-  if (uiState.activeSegmentId) {
+  // 片段 chip 只由显式「为 Agent 引用」驱动；键盘/编辑焦点不再隐式产生 Agent scope。
+  const visibleSegmentReference = resolveVisibleSegmentAgentReference(segmentReference, assets)
+  if (visibleSegmentReference) {
     chips.push({
-      id: 'active-segment',
-      label: '当前片段',
-      scope: `活动片段 · ${uiState.activeSegmentId}`,
+      id: 'segment-reference',
+      label: '引用片段',
+      scope: `Agent 引用片段 · ${visibleSegmentReference.segmentId}`,
+      onRemove: onRemoveSegmentReference,
     })
   }
   if (uiState.selectedSegmentIds.length > 0) {
@@ -198,14 +234,14 @@ export function createProjectAgentQuickActionPendingPrompt(
 interface ProjectAgentRailProps {
   projectId: string
   projectName: string
-  qualityProfile: LinguistQualityProfile
+  executionPolicy: LinguistExecutionPolicy
   assets?: readonly LinguistAssetInfo[]
 }
 
 export function ProjectAgentRail({
   projectId,
   projectName,
-  qualityProfile,
+  executionPolicy,
   assets = [],
 }: ProjectAgentRailProps): React.ReactElement {
   const store = useStore()
@@ -235,15 +271,30 @@ export function ProjectAgentRail({
   const clearSelectedSegments = React.useCallback((): void => {
     setUiState({ selectedSegmentIds: [] })
   }, [setUiState])
+  const segmentReference = useAtomValue(linguistSegmentAgentReferenceAtomFamily(projectId))
+  const setSegmentReference = useSetAtom(linguistSegmentAgentReferenceAtomFamily(projectId))
+  const removeSegmentReference = React.useCallback((): void => {
+    setSegmentReference(undefined)
+  }, [setSegmentReference])
   const contextSummary = React.useMemo(
     () => buildProjectComposerContextChips({
       projectId,
       projectName,
       assets,
       uiState,
+      segmentReference,
+      onRemoveSegmentReference: removeSegmentReference,
       onClearSelectedSegments: clearSelectedSegments,
     }),
-    [assets, clearSelectedSegments, projectId, projectName, uiState],
+    [
+      assets,
+      clearSelectedSegments,
+      projectId,
+      projectName,
+      removeSegmentReference,
+      segmentReference,
+      uiState,
+    ],
   )
   const quickActions = React.useMemo(
     () => buildProjectAgentQuickActions(uiState),
@@ -278,8 +329,21 @@ export function ProjectAgentRail({
     setUiState({ agentPresentation: 'rail' })
   }, [setUiState, surfaceControls.canExpandToFull, uiState.agentPresentation])
 
+  // 问题 10：只消费 Proma 已有的统一侧面板宽度；不再为 Companion 新增存储或拖拽系统。
+  const sharedSidePanelWidth = useAtomValue(agentSidePanelWidthAtom)
+
+  // 问题 11：仅在 Companion Chat 新打开/切换会话时自动展开 full；
+  // 「返回工作台」把 presentation 切回 rail 时 conversationId 不变，共享判定不再推回。
+  const previousSideChatIdRef = React.useRef(sideChatConversationId)
   React.useEffect(() => {
-    if (sideChatConversationId && presentation === 'rail' && surfaceControls.canExpandToFull) {
+    const previousSideChatId = previousSideChatIdRef.current
+    previousSideChatIdRef.current = sideChatConversationId
+    if (shouldAutoExpandAgentForSideChat(
+      previousSideChatId,
+      sideChatConversationId,
+      presentation,
+      surfaceControls.canExpandToFull,
+    )) {
       setUiState({ agentPresentation: 'full' })
     }
   }, [presentation, setUiState, sideChatConversationId, surfaceControls.canExpandToFull])
@@ -306,11 +370,9 @@ export function ProjectAgentRail({
       : session?.linguistSessionRole === 'auditor'
         ? 'Auditor'
         : 'Assistant'
-    const strategy = qualityProfile === 'fast'
-      ? 'Fast'
-      : qualityProfile === 'best'
-        ? 'Best'
-        : 'Balanced'
+    const reviewLabel = executionPolicy.independentReview === 'risk-based'
+      ? '独立评审·风险驱动'
+      : '独立评审·关'
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-1 bg-content-area/70 px-2 py-1.5 shadow-sm">
@@ -329,12 +391,12 @@ export function ProjectAgentRail({
           )}
           {presentation === 'full' && (
             <div
-              aria-label={`项目 ${projectName}，角色 ${role}，策略 ${strategy}`}
+              aria-label={`项目 ${projectName}，角色 ${role}，${reviewLabel}`}
               className="min-w-0 flex-1 px-2"
             >
               <p className="truncate text-xs font-medium text-foreground">{projectName}</p>
               <p className="truncate text-[11px] text-muted-foreground">
-                {[role, strategy, ...contextSummary.slice(1).map((chip) => chip.label)].join(' · ')}
+                {[role, reviewLabel, ...contextSummary.slice(1).map((chip) => chip.label)].join(' · ')}
               </p>
             </div>
           )}
@@ -401,15 +463,22 @@ export function ProjectAgentRail({
               hostCapabilities={hostCapabilities}
             />
           </div>
-          {sideChatConversationId && sidePanelOpen && (
-            <SidePanel
-              sessionId={sessionId}
-              sessionPath={null}
-              activeTab="chat"
-              onTabChange={() => {}}
-              chatOnly
-              width={320}
-            />
+          {presentation === 'full' && sideChatConversationId && sidePanelOpen && (
+            <aside
+              data-testid="linguist-companion-chat"
+              aria-label="项目 Agent 问答"
+              className="min-h-0 shrink-0 overflow-hidden"
+              style={{ width: `min(${sharedSidePanelWidth}px, calc(100% - 20rem))` }}
+            >
+              <SidePanel
+                sessionId={sessionId}
+                sessionPath={null}
+                activeTab="chat"
+                onTabChange={() => {}}
+                chatOnly
+                width={sharedSidePanelWidth}
+              />
+            </aside>
           )}
         </div>
       </div>

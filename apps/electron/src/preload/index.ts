@@ -127,6 +127,8 @@ import type {
   LinguistProjectDeleteRequest,
   LinguistProjectDeleteResult,
   LinguistProjectGetSummaryRequest,
+  LinguistProjectConfirmXlsxMappingRequest,
+  LinguistProjectConfirmXlsxMappingResult,
   LinguistProjectImportRequest,
   LinguistProjectImportResult,
   LinguistProjectInfo,
@@ -146,11 +148,13 @@ import type {
   LinguistIntegrityStartResult,
   LinguistProjectRestoreRequest,
   LinguistProjectRestoreResult,
-  LinguistProjectSetQualityProfileRequest,
-  LinguistProjectSetQualityProfileResult,
+  LinguistProjectSetExecutionPolicyRequest,
+  LinguistProjectSetExecutionPolicyResult,
   LinguistProjectSetWorkflowConfigRequest,
   LinguistProjectSetWorkflowConfigResult,
   LinguistProjectSummary,
+  LinguistProjectUndoImportAssetRequest,
+  LinguistProjectUndoImportAssetResult,
   LinguistRestorePreviewRequest,
   LinguistRestorePreviewResult,
   LinguistSessionCreateForProjectRequest,
@@ -221,6 +225,11 @@ import type {
   LinguistDiagnosticBundleExportResult,
   LinguistReferenceDeleteRequest,
   LinguistReferenceDeleteResult,
+  LinguistReferenceCandidatePreviewRequest,
+  LinguistReferenceCancelImportRequest,
+  LinguistReferenceCancelImportResult,
+  LinguistReferenceConfirmImportRequest,
+  LinguistReferenceConfirmImportResult,
   LinguistReferenceImportRequest,
   LinguistReferenceImportResult,
   LinguistReferenceQueryRequest,
@@ -232,6 +241,7 @@ import type {
   LinguistTmMatchInfo,
   LinguistAssetPreviewRequest,
   LinguistAssetPreviewResult,
+  LinguistReferenceImportPreviewRequest,
   LinguistAssetsDeleteRequest,
   LinguistAssetsDeleteResult,
   LinguistAssetsQueryRequest,
@@ -240,6 +250,7 @@ import type {
   LinguistAssetsUpsertResult,
   LinguistContextDocImportRequest,
   LinguistContextDocImportResult,
+  LinguistContextDocPreviewRequest,
   LinguistSentencePatternImportRequest,
   LinguistSentencePatternImportResult,
   LinguistMigrationImportRequest,
@@ -1308,6 +1319,14 @@ export interface ElectronAPI {
   linguistProjectsImport: (
     input: LinguistProjectImportRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectImportResult>>
+  /** XLSX 文件经主进程预览后，显式确认 sheet 与列映射。 */
+  linguistProjectsConfirmXlsxMapping: (
+    input: LinguistProjectConfirmXlsxMappingRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectConfirmXlsxMappingResult>>
+  /** LA-INTAKE-007：撤销一次导入（IMPORT_UNDO_BLOCKED 时 details 含分类计数） */
+  linguistProjectsUndoImportAsset: (
+    input: LinguistProjectUndoImportAssetRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectUndoImportAssetResult>>
   /** 项目摘要（元数据 + 资产列表（PB-033）+ 按状态段计数） */
   linguistProjectsGetSummary: (
     input: LinguistProjectGetSummaryRequest,
@@ -1328,10 +1347,10 @@ export interface ElectronAPI {
   linguistProjectsDelete: (
     input: LinguistProjectDeleteRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectDeleteResult>>
-  /** 设置质量策略档（PB-082；归档项目拒绝，三档字面量严格校验） */
-  linguistProjectsSetQualityProfile: (
-    input: LinguistProjectSetQualityProfileRequest,
-  ) => Promise<LinguistIpcResult<LinguistProjectSetQualityProfileResult>>
+  /** 设置 Execution Policy（LA-QUALITY-001；归档项目拒绝，闭集字面量严格校验） */
+  linguistProjectsSetExecutionPolicy: (
+    input: LinguistProjectSetExecutionPolicyRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectSetExecutionPolicyResult>>
   /** 设置当前 T/E/P 任务阶段与格式原生输出策略。 */
   linguistProjectsSetWorkflowConfig: (
     input: LinguistProjectSetWorkflowConfigRequest,
@@ -1367,6 +1386,10 @@ export interface ElectronAPI {
   /** PB-089：CAT 资产源文件预览（纯读，归档项目可用；text/html/url 三态分派） */
   linguistProjectsPreviewAssetSource: (
     input: LinguistAssetPreviewRequest,
+  ) => Promise<LinguistIpcResult<LinguistAssetPreviewResult>>
+  /** TM/TB 文件导入原件预览（只读，opaque id 进）。 */
+  linguistProjectsPreviewReferenceImport: (
+    input: LinguistReferenceImportPreviewRequest,
   ) => Promise<LinguistIpcResult<LinguistAssetPreviewResult>>
   /** staging 后经原生 Save 对话框交付；renderer 不提交路径。 */
   linguistExportsPrepareAsset: (
@@ -1460,6 +1483,15 @@ export interface ElectronAPI {
   linguistReferencesImport: (
     input: LinguistReferenceImportRequest,
   ) => Promise<LinguistIpcResult<LinguistReferenceImportResult>>
+  linguistReferencesConfirmImport: (
+    input: LinguistReferenceConfirmImportRequest,
+  ) => Promise<LinguistIpcResult<LinguistReferenceConfirmImportResult>>
+  linguistReferencesCancelImport: (
+    input: LinguistReferenceCancelImportRequest,
+  ) => Promise<LinguistIpcResult<LinguistReferenceCancelImportResult>>
+  linguistReferencesPreviewCandidate: (
+    input: LinguistReferenceCandidatePreviewRequest,
+  ) => Promise<LinguistIpcResult<LinguistAssetPreviewResult>>
   linguistReferencesUpsertTerm: (
     input: LinguistTermUpsertRequest,
   ) => Promise<LinguistIpcResult<LinguistTermUpsertResult>>
@@ -1479,6 +1511,10 @@ export interface ElectronAPI {
   linguistAssetsImportContextDoc: (
     input: LinguistContextDocImportRequest,
   ) => Promise<LinguistIpcResult<LinguistContextDocImportResult>>
+  /** Context 文档 blob 预览（纯读，归档项目可用；text/html/url 三态分派）。 */
+  linguistAssetsPreviewContextDoc: (
+    input: LinguistContextDocPreviewRequest,
+  ) => Promise<LinguistIpcResult<LinguistAssetPreviewResult>>
   linguistAssetsImportSentencePatterns: (
     input: LinguistSentencePatternImportRequest,
   ) => Promise<LinguistIpcResult<LinguistSentencePatternImportResult>>
@@ -3076,6 +3112,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.OPEN, input),
   linguistProjectsImport: (input: LinguistProjectImportRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.IMPORT, input),
+  linguistProjectsConfirmXlsxMapping: (input: LinguistProjectConfirmXlsxMappingRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.CONFIRM_XLSX_MAPPING, input),
+  linguistProjectsUndoImportAsset: (input: LinguistProjectUndoImportAssetRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.UNDO_IMPORT_ASSET, input),
   linguistProjectsGetSummary: (input: LinguistProjectGetSummaryRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.GET_SUMMARY, input),
   linguistProjectsRename: (input: LinguistProjectRenameRequest) =>
@@ -3086,8 +3126,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.ARCHIVE, input),
   linguistProjectsDelete: (input: LinguistProjectDeleteRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.DELETE, input),
-  linguistProjectsSetQualityProfile: (input: LinguistProjectSetQualityProfileRequest) =>
-    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.SET_QUALITY_PROFILE, input),
+  linguistProjectsSetExecutionPolicy: (input: LinguistProjectSetExecutionPolicyRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.SET_EXECUTION_POLICY, input),
   linguistProjectsSetWorkflowConfig: (input: LinguistProjectSetWorkflowConfigRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.SET_WORKFLOW_CONFIG, input),
   // ===== Linguist 备份 / 恢复（PB-111，计划 §24）=====
@@ -3113,6 +3153,8 @@ const electronAPI: ElectronAPI = {
   // ===== Linguist 资产源文件预览（PB-089）=====
   linguistProjectsPreviewAssetSource: (input: LinguistAssetPreviewRequest) =>
     ipcRenderer.invoke(LINGUIST_ASSET_PREVIEW_IPC_CHANNELS.PREVIEW_SOURCE, input),
+  linguistProjectsPreviewReferenceImport: (input: LinguistReferenceImportPreviewRequest) =>
+    ipcRenderer.invoke(LINGUIST_ASSET_PREVIEW_IPC_CHANNELS.PREVIEW_REFERENCE_IMPORT, input),
   linguistExportsPrepareAsset: (input: LinguistPrepareDeliveryRequest) =>
     ipcRenderer.invoke(LINGUIST_EXPORT_IPC_CHANNELS.PREPARE_ASSET, input),
   linguistExportsSaveAsset: (input: LinguistExportSaveAssetRequest) =>
@@ -3166,6 +3208,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.QUERY_TERMS, input),
   linguistReferencesImport: (input: LinguistReferenceImportRequest) =>
     ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.IMPORT, input),
+  linguistReferencesConfirmImport: (input: LinguistReferenceConfirmImportRequest) =>
+    ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.CONFIRM_IMPORT, input),
+  linguistReferencesCancelImport: (input: LinguistReferenceCancelImportRequest) =>
+    ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.CANCEL_IMPORT, input),
+  linguistReferencesPreviewCandidate: (input: LinguistReferenceCandidatePreviewRequest) =>
+    ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.PREVIEW_CANDIDATE, input),
   linguistReferencesUpsertTerm: (input: LinguistTermUpsertRequest) =>
     ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.UPSERT_TERM, input),
   linguistReferencesDelete: (input: LinguistReferenceDeleteRequest) =>
@@ -3179,6 +3227,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_ASSETS_IPC_CHANNELS.DELETE, input),
   linguistAssetsImportContextDoc: (input: LinguistContextDocImportRequest) =>
     ipcRenderer.invoke(LINGUIST_ASSETS_IPC_CHANNELS.IMPORT_CONTEXT_DOC, input),
+  linguistAssetsPreviewContextDoc: (input: LinguistContextDocPreviewRequest) =>
+    ipcRenderer.invoke(LINGUIST_ASSETS_IPC_CHANNELS.PREVIEW_CONTEXT_DOC, input),
   linguistAssetsImportSentencePatterns: (input: LinguistSentencePatternImportRequest) =>
     ipcRenderer.invoke(LINGUIST_ASSETS_IPC_CHANNELS.IMPORT_SENTENCE_PATTERNS, input),
 

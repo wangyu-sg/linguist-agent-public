@@ -43,6 +43,9 @@ export function getStickyUserMessagePreview(message: UserMessageData): string {
   return '上一条提问'
 }
 
+/** 悬浮条容器的结构分隔：上/下统一 0.45 强度，与 Workbench 结构分隔同一标准（hsl(var(--border)/0.45)），避免大窗口下显得悬空 */
+export const STICKY_USER_MESSAGE_SEPARATOR_CLASS = 'border-y border-border/45'
+
 interface StickyUserMessageProps {
   userMessages: readonly UserMessageData[]
   compact?: boolean
@@ -148,7 +151,8 @@ export function StickyUserMessage({
     <div
       data-sticky-user-message="true"
       className={cn(
-        'pointer-events-none shrink-0 border-b border-border bg-content-area',
+        'pointer-events-none shrink-0 bg-content-area',
+        STICKY_USER_MESSAGE_SEPARATOR_CLASS,
         compact ? 'px-2 py-1' : 'px-8 py-2',
       )}
     >

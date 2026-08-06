@@ -38,6 +38,7 @@ import type {
   TermEntryMatch,
   TmUnit,
   TmUnitMatch,
+  TranslationJobStatus,
 } from '@linguist/cat-store'
 import type { LinguistCatToolError } from './errors'
 
@@ -60,6 +61,8 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_create_consistency_proposals',
   'cat_search_sentence_patterns',
   'cat_read_context_doc',
+  'cat_begin_translation_scope',
+  'cat_finalize_translation_scope',
 ] as const
 
 export type LinguistCatToolName = (typeof LINGUIST_CAT_TOOL_NAMES)[number]
@@ -285,8 +288,10 @@ export interface SegmentTranslationContext {
   segmentId: string
   assetId: string
   revision: number
+  /** LA-CONTEXT-002：返回页永不空、永不截半截；预算只裁次级字段。 */
   source: string
   currentTarget: string
+  locked: boolean
   speaker?: string
   notes?: string
   previous: CatSegmentBrief[]
@@ -302,6 +307,15 @@ export interface SegmentTranslationContext {
   evidence: CatEvidenceRef[]
 }
 
+/** LA-CONTEXT-001：includeProjectRules=true 时第一页注入的项目规则快照条目。 */
+export interface CatProjectRuleItem {
+  ruleId: string
+  groupKey?: string
+  ruleText: string
+  /** 规则关联的受管引用（StyleGuideRule.screenshotRef）；无引用时缺省。 */
+  referenceId?: string
+}
+
 export interface CatGetTranslationContextResult {
   contexts: SegmentTranslationContext[]
   totalRequested: number
@@ -310,6 +324,13 @@ export interface CatGetTranslationContextResult {
   truncated: boolean
   nextCursor?: string
   suggestedSegmentIds?: string[]
+  /** 仅第一页（offset=0）且 includeProjectRules=true 时注入；条数有界。 */
+  projectRules?: CatProjectRuleItem[]
+  /**
+   * LA-CONTEXT-002：预算连下一段最小核心都放不下时返回（contexts 为空、
+   * cursor 不推进），取值是重试该页所需的最低 maxBytes。
+   */
+  minimumRequiredBytes?: number
   maxBytes: number
   usedBytes: number
 }
@@ -500,4 +521,43 @@ export interface CatCreateConsistencyProposalsResult {
   planId: string
   runId: string
   proposalIds: string[]
+}
+
+/**
+ * LA-TRANS-001 覆盖等式计数：requested = proposalCreated + blocked +
+ * skipped + failed + pending。全部由服务端按 DB 真值推导（proposalCreated
+ * = 该段存在 pending Proposal；failed = 未解释的锁定/过期/缺失段），
+ * 模型自报完成度不参与。
+ */
+export interface CatTranslationScopeCoverage {
+  requested: number
+  proposalCreated: number
+  skipped: number
+  blocked: number
+  failed: number
+  pending: number
+}
+
+/** cat_begin_translation_scope：范围冻结回执（job 已快照每段 baseRevision）。 */
+export interface CatBeginTranslationScopeResult {
+  scopeJobId: string
+  runId: string
+  status: TranslationJobStatus
+  requested: number
+  /** 冻结范围身份哈希：segmentIds + baseRevisions 的 canonical SHA-256（与 state capsule scope.digest 同源）。 */
+  scopeDigest: string
+  /** true = 同 toolCallId 幂等重放（身份与冻结范围一致）。 */
+  replayed: boolean
+}
+
+/** cat_finalize_translation_scope：全部解释后落库 completed；重放按 job 行重建同一计数。 */
+export interface CatFinalizeTranslationScopeResult {
+  scopeJobId: string
+  runId: string
+  status: 'completed'
+  /** true = 幂等重放（首次 finalize 已落库，本次未产生新写入）。 */
+  replayed: boolean
+  /** 与 begin 回执一致的冻结范围身份哈希；按持久化 job 行推导，重放逐字节一致。 */
+  scopeDigest: string
+  coverage: CatTranslationScopeCoverage
 }

@@ -438,6 +438,19 @@ export class ProposalsRepository {
     return Number(row.n)
   }
 
+  /** LA-INTAKE-007：全状态提案计数（撤销导入的下游引用判定）。 */
+  countByAsset(assetId: string): number {
+    const row = this.db.db
+      .prepare(
+        `SELECT COUNT(*) AS n
+         FROM proposals
+         INNER JOIN segments ON segments.id = proposals.segment_id
+         WHERE segments.asset_id = ?`,
+      )
+      .get(assetId) as { n: number }
+    return Number(row.n)
+  }
+
   /** Mark pending proposals expired when their segment revision has moved on. */
   expireStale(): TranslationProposal[] {
     return this.db.transaction('expire stale proposals', () => {

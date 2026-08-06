@@ -1,6 +1,7 @@
 import { deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
+import type { RunHarnessRepository } from '../run-harness'
 import type { ReferenceImportResult } from './tm-units'
 
 export type TermEntryStatus = 'allowed' | 'preferred' | 'required' | 'forbidden' | 'deprecated'
@@ -151,6 +152,7 @@ export class TermEntriesRepository {
     private readonly db: CatDatabase,
     private readonly projectId: string,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly events?: RunHarnessRepository,
   ) {}
 
   importMany(inputs: readonly TermEntryImportInput[]): ReferenceImportResult {
@@ -188,6 +190,7 @@ export class TermEntriesRepository {
         )
         imported++
       }
+      if (imported > 0) this.events?.appendProjectEvent({ kind: 'project-updated' })
       return { imported, unchanged }
     })
   }
@@ -225,6 +228,7 @@ export class TermEntriesRepository {
             input.id,
             this.projectId,
           )
+        this.events?.appendProjectEvent({ kind: 'project-updated' })
         return { ...input, id: input.id }
       }
 
@@ -257,6 +261,7 @@ export class TermEntriesRepository {
           input.imageRef ?? null,
           this.now(),
         )
+      this.events?.appendProjectEvent({ kind: 'project-updated' })
       return { ...input, id }
     })
   }
@@ -288,6 +293,7 @@ export class TermEntriesRepository {
         .prepare('DELETE FROM term_entries WHERE id = ? AND project_id = ?')
         .run(id, this.projectId)
       if (Number(result.changes) === 0) throw new StoreNotFoundError('term entry', id)
+      this.events?.appendProjectEvent({ kind: 'project-updated' })
     })
   }
 

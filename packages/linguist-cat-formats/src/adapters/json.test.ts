@@ -54,12 +54,12 @@ async function boundSegments(name: string, imported: Awaited<ReturnType<JsonAdap
 }
 
 describe('JsonAdapter detect', () => {
-  test('.json + i18n 内容 => 0.8；仅字节 => 0.4；非 i18n JSON / 非 JSON / 二进制 => 0', async () => {
+  test('.json + i18n 内容 => 0.8；低置信内容嗅探 / 非 i18n JSON / 非 JSON / 二进制 => 0', async () => {
     const adapter = new JsonAdapter()
     const json = fixtureBytes('mini_items.json')
     expect(await adapter.detect(json, 'mini_items.json')).toBe(0.8)
-    expect(await adapter.detect(json, 'renamed.bin')).toBe(0.4)
-    expect(await adapter.detect(encode('[{"source": "Hello"}]'), 'entries.txt')).toBe(0.4)
+    expect(await adapter.detect(json, 'renamed.bin')).toBe(0)
+    expect(await adapter.detect(encode('[{"source": "Hello"}]'), 'entries.txt')).toBe(0)
     // 无字符串叶的对象 / 无 source 字段的数组 / 顶层原始值：不是 i18n 内容
     expect(await adapter.detect(encode('{"a": 1, "b": true}'), 'data.json')).toBe(0)
     expect(await adapter.detect(encode('[{"foo": "bar"}]'), 'data.json')).toBe(0)
@@ -70,8 +70,22 @@ describe('JsonAdapter detect', () => {
     expect(await adapter.detect(new Uint8Array([0, 1, 2, 123]), 'data.json')).toBe(0)
     // 自定义映射影响 detect 的数组形状判定
     const custom = new JsonAdapter({ arrayMapping: { source: 'en' } })
-    expect(await custom.detect(encode('[{"en": "Hello"}]'), 'data.txt')).toBe(0.4)
+    expect(await custom.detect(encode('[{"en": "Hello"}]'), 'data.txt')).toBe(0)
     expect(await custom.detect(encode('[{"source": "Hello"}]'), 'data.json')).toBe(0)
+  })
+
+  test('常见工程配置 JSON 不冒充 i18n 资源', async () => {
+    const adapter = new JsonAdapter()
+    expect(await adapter.detect(encode(JSON.stringify({
+      name: 'demo',
+      version: '1.0.0',
+      scripts: { test: 'bun test' },
+      dependencies: { react: '18.3.1' },
+    })), 'package.json')).toBe(0)
+    expect(await adapter.detect(encode(JSON.stringify({
+      compilerOptions: { module: 'ESNext', target: 'ES2022' },
+      include: ['src'],
+    })), 'tsconfig.json')).toBe(0)
   })
 })
 

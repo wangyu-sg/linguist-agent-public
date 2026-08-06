@@ -229,7 +229,7 @@ test('factory: CAT read/proposal/QA tools expose no accept, resolve, waive, or c
       [...LINGUIST_CAT_TOOL_NAMES],
     )
     assert.equal(tools.some((tool) => /accept|resolve|waive|commit/i.test(tool.name)), false)
-    assert.equal(tools.length, 17)
+    assert.equal(tools.length, LINGUIST_CAT_TOOL_NAMES.length)
     assert.equal(
       (toolByName(tools, 'cat_submit_critic_review').parameters as { type?: string }).type,
       'object',
@@ -370,7 +370,7 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
     assert.deepEqual(mutations[1]!.resolvedQaFindingIds, [resolvedId])
     assert.ok(mutations[1]!.segmentIds?.includes(fixedSegment.id))
     assert.equal(fixture.db.qaFindings.getById(resolvedId)?.status, 'resolved')
-    assert.equal(fixture.db.runs.listEvents().length, 10)
+    assert.equal(fixture.db.runs.listEvents().length, 11, 'human segment edit now uses the durable outbox')
     assert.deepEqual(
       fixture.db.runs.listEvents().filter((event) => event.kind === 'qa-updated').at(-1)?.resolvedQaFindingIds,
       [resolvedId],
@@ -1175,7 +1175,7 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
       maxBytes: 1_800,
     })
     const firstPage = first.details as {
-      contexts: Array<{ segmentId: string }>
+      contexts: Array<{ segmentId: string; source: string }>
       cursor: string | null
       truncated: boolean
       nextCursor?: string
@@ -1186,11 +1186,16 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
     assert.equal(firstPage.cursor, null)
     assert.equal(firstPage.truncated, true)
     assert.ok(firstPage.contexts.length > 0 && firstPage.contexts.length < segmentIds.length)
-    assert.match(firstPage.nextCursor ?? '', /^ctx-[0-9a-f]{16}-\d+$/)
+    // LA-CONTEXT-001：v2 cursor 绑定请求形状 + 事件快照（无事件时为 0）+ 偏移
+    assert.match(firstPage.nextCursor ?? '', /^ctx2-[0-9a-f]{16}-0-\d+$/)
     assert.deepEqual(
       firstPage.suggestedSegmentIds,
       segmentIds.slice(firstPage.contexts.length),
     )
+    // LA-CONTEXT-002：返回页每段 source 永不空、永不半截
+    for (const context of firstPage.contexts) {
+      assert.ok(context.source.length > 0, 'returned page sources must never be empty')
+    }
     assert.ok(firstPage.usedBytes <= firstPage.maxBytes)
     assert.ok(Buffer.byteLength(JSON.stringify(firstPage), 'utf8') <= firstPage.maxBytes)
     assert.ok(resultText(first).length < 500)
@@ -1203,12 +1208,15 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
       termLimitPerSegment: 0,
       maxBytes: 32_000,
       cursor: firstPage.nextCursor,
-    })).details as { contexts: Array<{ segmentId: string }>; truncated: boolean }
+    })).details as { contexts: Array<{ segmentId: string; source: string }>; truncated: boolean }
     assert.deepEqual(
       second.contexts.map((context) => context.segmentId),
       segmentIds.slice(firstPage.contexts.length),
     )
     assert.equal(second.truncated, false)
+    for (const context of second.contexts) {
+      assert.ok(context.source.length > 0, 'returned page sources must never be empty')
+    }
     await assertThrowsCode(invoke(tool, {
       segmentIds: [...segmentIds].reverse(),
       includeNeighbors: false,
@@ -1230,21 +1238,238 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
       resolveProject: makeOkResolver(fixture),
       resultProjectId: fixture.project.id as string,
     }), 'cat_get_translation_context')
+    // LA-CONTEXT-002：预算放不下第一段最小核心 → 空页 + minimumRequiredBytes，cursor 不推进
+    const { segments: longSegments } = seedAsset(fixture.db, fixture.project, {
+      filename: 'long.tsv',
+      sha: 'c'.repeat(64),
+      count: 1,
+      sourcePrefix: '长'.repeat(400),
+    })
     const minimumResult = await invoke(boundedTool, {
-      segmentIds,
+      segmentIds: [longSegments[0]!.id],
       includeNeighbors: false,
       tmLimitPerSegment: 0,
       termLimitPerSegment: 0,
       maxBytes: 1_024,
     })
     const minimumBudget = minimumResult.details as {
+      contexts: unknown[]
+      cursor: string | null
+      truncated: boolean
+      nextCursor?: string
+      minimumRequiredBytes?: number
       usedBytes: number
       maxBytes: number
-      nextCursor?: string
     }
+    assert.deepEqual(minimumBudget.contexts, [])
+    assert.equal(minimumBudget.cursor, null)
+    assert.equal(minimumBudget.truncated, true)
+    assert.equal(minimumBudget.nextCursor, undefined, '预算不足的空页不得推进 cursor')
+    assert.ok(
+      minimumBudget.minimumRequiredBytes !== undefined
+        && minimumBudget.minimumRequiredBytes > minimumBudget.maxBytes,
+      'minimumRequiredBytes 必须超过当前预算',
+    )
     assert.ok(minimumBudget.usedBytes <= minimumBudget.maxBytes)
     assert.ok(Buffer.byteLength(JSON.stringify(minimumResult.details), 'utf8') <= 1_024)
-    assert.ok(minimumBudget.nextCursor !== undefined)
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('cat_get_translation_context: cursor binds the project event snapshot (LA-CONTEXT-001)', async () => {
+  const fixture = setup()
+  try {
+    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
+    const contextTool = toolByName(tools, 'cat_get_translation_context')
+    const segmentIds = fixture.segmentsA.map((segment) => segment.id as string)
+    const pageParams = {
+      segmentIds,
+      includeNeighbors: false,
+      tmLimitPerSegment: 0,
+      termLimitPerSegment: 0,
+      maxBytes: 1_800,
+    }
+    assert.equal(fixture.db.runs.latestEventSequence, 0)
+    const first = (await invoke(contextTool, pageParams)).details as {
+      contexts: Array<{ segmentId: string }>
+      nextCursor?: string
+    }
+    assert.ok(first.nextCursor !== undefined)
+    // 快照未变：第二页正常返回
+    const second = (await invoke(contextTool, {
+      ...pageParams,
+      maxBytes: 32_000,
+      cursor: first.nextCursor,
+    })).details as { contexts: unknown[] }
+    assert.ok(second.contexts.length > 0)
+    // 旧格式 cursor 一律 INVALID_ARGUMENT
+    const [, hash, , offset] = first.nextCursor.split('-')
+    await assertThrowsCode(
+      invoke(contextTool, { ...pageParams, cursor: `ctx-${hash}-${offset}` }),
+      'INVALID_ARGUMENT',
+    )
+    // 产生 project event 的 mutation（proposal-created）后，旧 cursor 报 CONTEXT_DRIFT
+    // 译文须保留 source 的数字签名（hard rules）
+    await invoke(toolByName(tools, 'cat_propose_translations'), {
+      segmentProposals: [{
+        segmentId: fixture.segmentsA[0]!.id,
+        baseRevision: 0,
+        proposedTarget: '漂移译文 0',
+      }],
+    })
+    assert.equal(fixture.db.runs.latestEventSequence, 1)
+    await assertThrowsCode(
+      invoke(contextTool, { ...pageParams, maxBytes: 32_000, cursor: first.nextCursor }),
+      'CONTEXT_DRIFT',
+    )
+    // 从第一页重拉：新 cursor 绑定新事件快照，可继续翻页
+    const restarted = (await invoke(contextTool, pageParams)).details as {
+      nextCursor?: string
+    }
+    assert.match(restarted.nextCursor ?? '', /^ctx2-[0-9a-f]{16}-1-\d+$/)
+    const resumed = (await invoke(contextTool, {
+      ...pageParams,
+      maxBytes: 32_000,
+      cursor: restarted.nextCursor,
+    })).details as { contexts: unknown[] }
+    assert.ok(resumed.contexts.length > 0)
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('cat_get_translation_context: public human and TM/TB commits invalidate a paged cursor (LA-CONTEXT-001)', async () => {
+  const fixture = setup()
+  try {
+    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
+    const contextTool = toolByName(tools, 'cat_get_translation_context')
+    const pageParams = {
+      segmentIds: fixture.segmentsA.map((segment) => segment.id as string),
+      includeNeighbors: false,
+      tmLimitPerSegment: 0,
+      termLimitPerSegment: 0,
+      maxBytes: 1_800,
+    }
+    const firstCursor = async (): Promise<string> => {
+      const page = (await invoke(contextTool, pageParams)).details as { nextCursor?: string }
+      assert.ok(page.nextCursor !== undefined)
+      return page.nextCursor
+    }
+    const assertDriftAfter = async (mutate: () => void): Promise<void> => {
+      const cursor = await firstCursor()
+      const before = fixture.db.runs.latestEventSequence
+      mutate()
+      assert.equal(fixture.db.runs.latestEventSequence, before + 1)
+      await assertThrowsCode(
+        invoke(contextTool, { ...pageParams, maxBytes: 32_000, cursor }),
+        'CONTEXT_DRIFT',
+      )
+    }
+
+    await assertDriftAfter(() => fixture.db.segments.applyTargetEdit(
+      fixture.segmentsA[0]!.id,
+      '人工提交译文',
+      0,
+    ))
+    await assertDriftAfter(() => {
+      fixture.db.tmUnits.importMany([{
+        source: 'Alpha source 1',
+        target: '阿尔法源文 1',
+        sourceLocale: 'en',
+        targetLocale: 'zh-CN',
+      }])
+    })
+    await assertDriftAfter(() => {
+      fixture.db.termEntries.importMany([{
+        term: 'Alpha',
+        translation: '阿尔法',
+        status: 'preferred',
+        caseSensitive: false,
+      }])
+    })
+
+    const tm = fixture.db.tmUnits.list({ limit: 1 })[0]!
+    await assertDriftAfter(() => fixture.db.tmUnits.delete(tm.id))
+
+    const term = fixture.db.termEntries.upsert({
+      term: 'Beta',
+      translation: '贝塔',
+      status: 'allowed',
+      caseSensitive: false,
+    })
+    await assertDriftAfter(() => fixture.db.termEntries.upsert({
+      ...term,
+      translation: '贝塔修订',
+    }))
+    await assertDriftAfter(() => fixture.db.termEntries.delete(term.id))
+
+    const rule = fixture.db.styleGuideRules.upsert({ ruleText: '使用全角标点' })
+    await assertDriftAfter(() => fixture.db.styleGuideRules.upsert({
+      id: rule.id,
+      ruleText: '使用全角标点，句末加句号',
+    }))
+    await assertDriftAfter(() => fixture.db.styleGuideRules.delete(rule.id))
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('cat_get_translation_context: includeProjectRules injects bounded rules on the first page only (LA-CONTEXT-001)', async () => {
+  const fixture = setup()
+  try {
+    for (let index = 0; index < 25; index += 1) {
+      fixture.db.styleGuideRules.upsert({
+        groupKey: index % 2 === 0 ? '标点' : '用词',
+        ruleText: `规则 ${index}：示例文本`,
+      })
+    }
+    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
+    const tool = toolByName(tools, 'cat_get_translation_context')
+    const segmentIds = fixture.segmentsA.map((segment) => segment.id as string)
+    const params = {
+      segmentIds,
+      includeProjectRules: true,
+      includeNeighbors: false,
+      tmLimitPerSegment: 0,
+      termLimitPerSegment: 0,
+    }
+    const first = (await invoke(tool, { ...params, maxBytes: 6_000 })).details as {
+      contexts: Array<{ segmentId: string; source: string }>
+      truncated: boolean
+      nextCursor?: string
+      projectRules?: Array<{ ruleId: string; groupKey?: string; ruleText: string }>
+    }
+    // 有界注入：25 条规则只返回上限 20 条，且为结构化条目
+    assert.equal(first.projectRules?.length, 20)
+    for (const rule of first.projectRules ?? []) {
+      assert.ok(rule.ruleId.startsWith('sgr_v2_'))
+      assert.ok(rule.ruleText.length > 0)
+    }
+    assert.ok(first.projectRules!.some((rule) => rule.groupKey === '标点'))
+    assert.equal(first.truncated, true)
+    assert.ok(first.nextCursor !== undefined)
+    assert.ok(first.contexts.length > 0)
+    for (const context of first.contexts) {
+      assert.ok(context.source.length > 0, 'returned page sources must never be empty')
+    }
+    // 第二页不再携带规则
+    const second = (await invoke(tool, {
+      ...params,
+      maxBytes: 32_000,
+      cursor: first.nextCursor,
+    })).details as { contexts: unknown[]; projectRules?: unknown[] }
+    assert.equal(second.projectRules, undefined)
+    assert.ok(second.contexts.length > 0)
+    // 未显式开启则不注入
+    const withoutRules = (await invoke(tool, {
+      segmentIds: segmentIds.slice(0, 1),
+      includeNeighbors: false,
+      tmLimitPerSegment: 0,
+      termLimitPerSegment: 0,
+      maxBytes: 32_000,
+    })).details as { projectRules?: unknown[] }
+    assert.equal(withoutRules.projectRules, undefined)
   } finally {
     fixture.db.close()
   }
@@ -1292,6 +1517,8 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       },
       cat_search_sentence_patterns: {},
       cat_read_context_doc: { docId: 'ctx-0000000000000000' },
+      cat_begin_translation_scope: { segmentIds: [fixture.segmentsA[0]!.id] },
+      cat_finalize_translation_scope: { scopeJobId: 'job-0000000000000000' },
     }
 
     // unbound session: every tool throws BINDING_MISSING before touching the store

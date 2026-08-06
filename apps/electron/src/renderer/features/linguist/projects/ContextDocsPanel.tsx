@@ -1,10 +1,11 @@
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
-import { Download, Trash2 } from 'lucide-react'
+import { Download, Eye, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { LinguistContextDocInfo } from '@proma/shared'
 import { describeLinguistIpcError } from './project-utils'
 import { createContextDocsRefreshGate } from './context-docs-refresh'
+import { useOpenLinguistPreview } from './linguist-preview-open'
 import {
   getProjectMutationRefreshPlan,
   linguistProjectMutationStateAtomFamily,
@@ -21,6 +22,8 @@ export function ContextDocsPanel({ projectId, archived }: { projectId: string; a
   const projectMutationState = useAtomValue(
     linguistProjectMutationStateAtomFamily(projectId),
   )
+  /** Context 文档预览统一进 Proma Preview Tab（纯读，归档项目也可用）。 */
+  const openLinguistPreview = useOpenLinguistPreview()
   const [docs, setDocs] = React.useState<LinguistContextDocInfo[]>([])
   const [busy, setBusy] = React.useState(false)
   const refreshGateRef = React.useRef(createContextDocsRefreshGate())
@@ -111,6 +114,16 @@ export function ContextDocsPanel({ projectId, archived }: { projectId: string; a
     await refresh()
   }
 
+  const previewDoc = (doc: LinguistContextDocInfo): void => {
+    const opened = openLinguistPreview({
+      kind: 'contextDoc',
+      projectId,
+      docId: doc.id,
+      filename: doc.originalFilename,
+    })
+    if (!opened) toast('项目会话尚未就绪，请稍后重试')
+  }
+
   return (
     <details className="rounded-xl bg-content-area shadow-sm ring-1 ring-border/35">
       <summary className="cursor-pointer list-none px-3 py-2.5 text-[12px] font-medium text-foreground/70">Context Docs（{docs.length}）</summary>
@@ -144,6 +157,15 @@ export function ContextDocsPanel({ projectId, archived }: { projectId: string; a
                       <span className="block text-foreground/50">{doc.note}</span>
                     )}
                   </span>
+                  <button
+                    type="button"
+                    aria-label={`预览 ${doc.originalFilename}`}
+                    title="在预览标签页中打开"
+                    onClick={() => previewDoc(doc)}
+                    className="mt-0.5 rounded-md bg-foreground/[0.06] px-1.5 py-0.5 inline-flex items-center gap-1"
+                  >
+                    <Eye size={11} />预览
+                  </button>
                   <button
                     type="button"
                     disabled={archived}

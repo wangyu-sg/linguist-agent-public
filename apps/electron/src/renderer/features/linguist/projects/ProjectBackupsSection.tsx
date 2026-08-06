@@ -335,7 +335,7 @@ function RestorePreviewDialog({
               <span className="text-foreground/45" />
               <span className="text-foreground/45 text-right">备份</span>
               <span className="text-foreground/45 text-right">当前</span>
-              <SummaryRow label="资产" backup={preview.backupSummary?.assetCount} current={preview.currentSummary?.assetCount} />
+              <SummaryRow label="批次" backup={preview.backupSummary?.assetCount} current={preview.currentSummary?.assetCount} />
               <SummaryRow label="总段数" backup={preview.backupSummary?.totalSegments} current={preview.currentSummary?.totalSegments} />
               <SummaryRow label="未翻译" backup={preview.backupSummary?.segmentCounts.untranslated} current={preview.currentSummary?.segmentCounts.untranslated} />
               <SummaryRow label="草稿" backup={preview.backupSummary?.segmentCounts.draft} current={preview.currentSummary?.segmentCounts.draft} />

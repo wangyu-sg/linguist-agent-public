@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai'
-import { quotedSelectionMapAtom } from '@/atoms/preview-atoms'
+import { currentAgentSessionIdAtom } from '@/atoms/agent-atoms'
+import {
+  currentQuotedSelectionAtom,
+  quotedSelectionAtomFamily,
+  quotedSelectionMapAtom,
+} from '@/atoms/preview-atoms'
 import { buildQuotedSelectionBlock, parseQuotedSelectionRefs } from './quoted-selection'
 
 describe('quoted selection XML', () => {
@@ -80,5 +85,27 @@ describe('quoted selection XML', () => {
     })
     expect(store.get(quotedSelectionMapAtom).has('linguist-b')).toBe(true)
     expect(store.get(quotedSelectionMapAtom).has('agent-a')).toBe(true)
+  })
+
+  test('Given 嵌入 LA 会话不等于全局 current When 写入引用 Then chip 按 AgentView 自身 sessionId 仍可读', () => {
+    const store = createStore()
+    // 进入 Linguist 模式会把全局 current 置空（linguist-navigation），
+    // 或停留在其他 Agent 会话；嵌入 LA 会话两种情况下都必须读到自己的引用。
+    for (const globalCurrent of [null, 'agent-other']) {
+      store.set(currentAgentSessionIdAtom, globalCurrent)
+      store.set(quotedSelectionMapAtom, new Map([['linguist-session', {
+        text: 'LA 引用内容',
+        filePath: 'Agent 历史 · Agent 回复',
+        sourceType: 'agent-history' as const,
+        capturedAt: 1,
+      }]]))
+
+      // 回归保护：旧的全局派生入口在该场景下读不到（这正是 chip 消失的根因）。
+      expect(store.get(currentQuotedSelectionAtom)).toBeNull()
+      // 新共享入口：按 AgentView 自身 sessionId 派生，chip 仍然显示。
+      expect(store.get(quotedSelectionAtomFamily('linguist-session'))?.text).toBe('LA 引用内容')
+      // 其他会话不受污染。
+      expect(store.get(quotedSelectionAtomFamily('agent-other'))).toBeNull()
+    }
   })
 })

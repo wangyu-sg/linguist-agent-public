@@ -2,6 +2,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -84,14 +85,16 @@ test('LA-PROMPT-005: 普通会话不注入；未知项目绑定保留专业 fall
     )
     assert.match(prompt, /<linguist_profile/)
     assert.match(prompt, /degraded="true"/)
-    assert.match(prompt, /fallback_layers="strategy,project_digest"/)
+    assert.match(prompt, /fallback_layers="project_digest"/)
+    // 未知项目绑定仍注入计算型 execution_policy 层（缺省 off）
+    assert.match(prompt, /<execution_policy [^>]*independent_review="off"/)
     assert.doesNotMatch(prompt, /General Agent/)
   } finally {
     service.closeAll()
   }
 })
 
-test('LA-PROMPT-001: 项目会话按 Profile → Role → Strategy → Project Digest 分层注入', () => {
+test('LA-PROMPT-001: 项目会话按 Profile → Quality Contract → Role → Execution Policy → Project Digest 分层注入', () => {
   const seeded = setupSeeded()
   try {
     const prompt = assets.buildLinguistProjectAssetsPrompt(
@@ -100,20 +103,26 @@ test('LA-PROMPT-001: 项目会话按 Profile → Role → Strategy → Project D
       { skillsRoot: REPO_SKILLS_ROOT },
     )
     const profileAt = prompt.indexOf('<linguist_profile')
+    const contractAt = prompt.indexOf('<professional_quality_contract')
     const roleAt = prompt.indexOf('<role_prompt')
-    const strategyAt = prompt.indexOf('<strategy_prompt')
+    const policyAt = prompt.indexOf('<execution_policy')
     const digestAt = prompt.indexOf('<project_digest')
     assert.ok(profileAt >= 0)
-    assert.ok(profileAt < roleAt)
-    assert.ok(roleAt < strategyAt)
-    assert.ok(strategyAt < digestAt)
-    assert.match(prompt, /<linguist_prompt_manifest [^>]*profile_version="2\.0\.0"/)
+    assert.ok(profileAt < contractAt)
+    assert.ok(contractAt < roleAt)
+    assert.ok(roleAt < policyAt)
+    assert.ok(policyAt < digestAt)
+    assert.match(prompt, /<linguist_prompt_manifest [^>]*profile_version="2\.1\.0"/)
     assert.match(
       prompt,
       /profile_hash="b6aa770bac1b7dc31a56b7474bb5c6a928cb069939712a0f7f1c0812f700b728"/,
     )
-    assert.match(prompt, /role="assistant"[^>]*role_version="1\.0\.1"/)
-    assert.match(prompt, /strategy="balanced"[^>]*strategy_version="1\.0\.1"/)
+    // LA-QUALITY-002：合同层 version/hash 进 manifest
+    assert.match(prompt, /contract_version="1\.0\.0"[^>]*contract_hash="[0-9a-f]{64}"/)
+    assert.match(prompt, /role="assistant"[^>]*role_version="1\.0\.3"/)
+    // 计算型 execution_policy 层：无 bundle/version 概念，hash 随正文
+    assert.match(prompt, /independent_review="off"[^>]*execution_policy_hash="[0-9a-f]{64}"/)
+    assert.match(prompt, /<execution_policy [^>]*independent_review="off"[^>]*hash="[0-9a-f]{64}"/)
     assert.match(prompt, /<project_digest [^>]*trust="project-data"/)
     assert.match(prompt, /degraded="false"/)
     assert.doesNotMatch(prompt, /逐段(?:查|调用)|每段都用/)
@@ -121,8 +130,9 @@ test('LA-PROMPT-001: 项目会话按 Profile → Role → Strategy → Project D
     assert.match(prompt, /readWith=cat_read_context_doc/)
     const layerBudgets = [
       ['linguist_profile', assets.LINGUIST_PROMPT_BUDGETS.profileMaxChars],
+      ['professional_quality_contract', assets.LINGUIST_PROMPT_BUDGETS.qualityContractMaxChars],
       ['role_prompt', assets.LINGUIST_PROMPT_BUDGETS.roleMaxChars],
-      ['strategy_prompt', assets.LINGUIST_PROMPT_BUDGETS.strategyMaxChars],
+      ['execution_policy', assets.LINGUIST_PROMPT_BUDGETS.executionPolicyMaxChars],
       ['project_digest', assets.LINGUIST_PROMPT_BUDGETS.projectDigestMaxChars],
     ] as const
     for (const [tag, maxChars] of layerBudgets) {
@@ -132,7 +142,17 @@ test('LA-PROMPT-001: 项目会话按 Profile → Role → Strategy → Project D
     }
     assert.ok(prompt.length <= assets.LINGUIST_PROMPT_BUDGETS.totalMaxChars)
 
-    // 空项目仍保留专业 Profile/Role/Strategy 与空 Digest，不退化成 General Agent。
+    // legacy 会话（只有 linguistStrategy，无冻结 linguistExecutionPolicy）读取时映射：
+    // best → risk-based，层正文随策略切换
+    const legacyPrompt = assets.buildLinguistProjectAssetsPrompt(
+      { linguistProjectId: seeded.project.id, linguistStrategy: 'best' },
+      () => seeded.service,
+      { skillsRoot: REPO_SKILLS_ROOT },
+    )
+    assert.match(legacyPrompt, /<execution_policy [^>]*independent_review="risk-based"/)
+    assert.ok(legacyPrompt.includes('请用户发起独立评审'))
+
+    // 空项目仍保留专业 Profile/Role/Execution Policy 与空 Digest，不退化成 General Agent。
     const service2 = makeServiceOnLinguistRoot()
     const empty = service2.createProject({ ...PROJECT_INPUT, name: '空资产项目' })
     const emptyMeta = binding.createLinguistProjectChatSession(service2, { projectId: empty.id })
@@ -142,8 +162,67 @@ test('LA-PROMPT-001: 项目会话按 Profile → Role → Strategy → Project D
       { skillsRoot: REPO_SKILLS_ROOT },
     )
     assert.match(emptyPrompt, /<linguist_profile/)
+    assert.match(emptyPrompt, /<execution_policy /)
     assert.match(emptyPrompt, /<project_digest /)
     service2.closeAll()
+  } finally {
+    seeded.service.closeAll()
+  }
+})
+
+/** LA-QUALITY-002：预支降级禁词清单（合同与全部 prompt 文本共用扫描真源）。 */
+const FORBIDDEN_ADVANCE_WORDING = ['初稿', '草稿', '后续会审', '合理检查即可'] as const
+
+function contractHashOf(prompt: string): string {
+  const hash = prompt.match(/contract_hash="([0-9a-f]{64})"/)?.[1]
+  assert.ok(hash)
+  return hash
+}
+
+function assertNoAdvanceWording(prompt: string, label: string): void {
+  for (const wording of FORBIDDEN_ADVANCE_WORDING) {
+    assert.ok(!prompt.includes(wording), `${label} 含预支降级措辞: ${wording}`)
+  }
+}
+
+test('LA-QUALITY-002: 三角色注入同一恒定质量合同层，全部 prompt 文本无预支降级措辞', () => {
+  const seeded = setupSeeded()
+  try {
+    const expectedHash = createHash('sha256')
+      .update(assets.LINGUIST_QUALITY_CONTRACT_PROMPT)
+      .digest('hex')
+    const reviewer = binding.createLinguistProjectChatSession(seeded.service, {
+      projectId: seeded.project.id,
+      role: 'reviewer',
+    })
+    const auditor = binding.createLinguistProjectChatSession(seeded.service, {
+      projectId: seeded.project.id,
+      role: 'auditor',
+    })
+
+    // bundle 与内置 fallback 两条 Role 来源都过同一合同与禁词扫描
+    for (const skillsRoot of [REPO_SKILLS_ROOT, undefined] as const) {
+      const sourceLabel = skillsRoot === undefined ? 'fallback' : 'bundle'
+      const prompts = [seeded.meta, reviewer, auditor].map((meta) =>
+        assets.buildLinguistProjectAssetsPrompt(meta, () => seeded.service, { skillsRoot }),
+      )
+      const [assistantPrompt, reviewerPrompt, auditorPrompt] = prompts as [string, string, string]
+      for (const [label, prompt] of [
+        ['assistant', assistantPrompt],
+        ['reviewer', reviewerPrompt],
+        ['auditor', auditorPrompt],
+      ] as const) {
+        // 同一合同层：恒定 version/hash 与恒定正文
+        assert.match(prompt, /<professional_quality_contract version="1\.0\.0" hash="[0-9a-f]{64}">/)
+        assert.equal(contractHashOf(prompt), expectedHash, `${sourceLabel}/${label} 合同 hash 不一致`)
+        assert.ok(prompt.includes(assets.LINGUIST_QUALITY_CONTRACT_PROMPT))
+        // 禁词扫描覆盖整份 prompt 文本
+        assertNoAdvanceWording(prompt, `${sourceLabel}/${label}`)
+      }
+      // reviewer 明确：无有效 Proposal Snapshot 只能 abstain
+      assert.match(reviewerPrompt, /没有有效 Proposal Snapshot（缺失或已 stale）时只能提交/)
+      assert.match(reviewerPrompt, /abstain/)
+    }
   } finally {
     seeded.service.closeAll()
   }
@@ -254,8 +333,8 @@ test('服务解析抛错 → 同版本内置 fallback + warn，绝不退化为 G
         { skillsRoot: REPO_SKILLS_ROOT },
       )
       assert.match(prompt, /degraded="true"/)
-      assert.match(prompt, /fallback_layers="strategy,project_digest"/)
-      assert.match(prompt, /role_version="1\.0\.1"/)
+      assert.match(prompt, /fallback_layers="project_digest"/)
+      assert.match(prompt, /role_version="1\.0\.3"/)
       assert.doesNotMatch(prompt, /General Agent/)
     } finally {
       console.warn = originalWarn
@@ -331,7 +410,7 @@ test('PB-110 日志纪律：段读取失败的 warn 只记 name/code，绝不透
       { skillsRoot: REPO_SKILLS_ROOT },
     )
     assert.match(prompt, /degraded="true"/)
-    assert.match(prompt, /fallback_layers="strategy,project_digest"/)
+    assert.match(prompt, /fallback_layers="project_digest"/)
   } finally {
     console.warn = originalWarn
   }
