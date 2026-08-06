@@ -14,6 +14,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { basename, extname } from 'node:path'
 import {
   LINGUIST_IMPORT_MAX_BYTES,
+  LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
   LINGUIST_PROJECT_ASSET_ID_PATTERN,
   type LinguistAssetPreviewResult,
   type LinguistAssetsDeleteResult,
@@ -390,12 +391,12 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
         if (picked.canceled || picked.filePaths.length === 0) return { cancelled: true }
         const filePath = picked.filePaths[0] as string
         const sizeBytes = statSync(filePath).size
-        if (sizeBytes > LINGUIST_IMPORT_MAX_BYTES) {
-          throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_IMPORT_MAX_BYTES)
+        if (sizeBytes > LINGUIST_RESOURCE_IMPORT_MAX_BYTES) {
+          throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_RESOURCE_IMPORT_MAX_BYTES)
         }
         const filename = basename(filePath)
         const doc = await service.importContextDoc(projectId, {
-          bytes: new Uint8Array(readFileSync(filePath)),
+          bytes: readFileSync(filePath),
           filename,
           ...(note !== undefined ? { note } : {}),
         })

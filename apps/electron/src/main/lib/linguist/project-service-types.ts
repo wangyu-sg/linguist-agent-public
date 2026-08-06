@@ -234,6 +234,7 @@ export type LinguistReferenceKind = 'tm' | 'terms'
 export interface ImportReferenceInput {
   bytes: Uint8Array
   filename: string
+  xlsxMapping?: XlsxImportMapping
 }
 
 export interface ImportReferenceResult {

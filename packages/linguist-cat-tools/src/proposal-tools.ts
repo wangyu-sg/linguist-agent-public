@@ -90,7 +90,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
       'baseRevision must still be current, and locked or unknown segments are rejected atomically.',
     promptSnippet: 'Propose translations for review without changing segments',
     promptGuidelines: [
-      'Never claim proposals are committed: only a human can accept them.',
+      'Never claim proposals are committed until cat_accept_proposals succeeds.',
       'Use the exact segment id and revision returned by cat_get_segments; submit at most 50 proposals.',
     ],
     parameters: Type.Object({
@@ -212,6 +212,45 @@ export function createProposalTools(runtime: CatToolRuntime) {
     },
   })
 
+  const acceptProposalsTool = defineTool({
+    name: 'cat_accept_proposals',
+    label: 'CAT accept proposals',
+    description:
+      'Atomically apply 1-50 pending proposals to their bound project segments. This is a project-local CAT write, ' +
+      'not file export or delivery. Current revisions, locks, terminology, and tag hard rules are revalidated.',
+    promptSnippet: 'Apply validated pending proposals to CAT segments',
+    parameters: Type.Object({
+      proposals: Type.Array(Type.Object({
+        proposalId: Type.String({ minLength: 1 }),
+        expectedRevision: Type.Integer({ minimum: 0 }),
+      }), { minItems: 1, maxItems: 50 }),
+    }),
+    async execute(toolCallId, params) {
+      const { project, db } = resolveBoundProject('cat_accept_proposals', toolCallId)
+      const mutation = db.proposals.acceptSelected(
+        params.proposals,
+        `cat_accept_proposals:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`,
+        project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile },
+      )
+      if (!mutation.ok) {
+        throw new LinguistCatInvalidArgumentError('proposals', 'revision conflict; refresh segments and proposals')
+      }
+      const accepted = mutation.result.map(({ proposal, segment }) => ({
+        proposalId: proposal.id as string,
+        segmentId: segment.id as string,
+        revision: segment.revision,
+        status: segment.status,
+      }))
+      if (!mutation.replayed) {
+        notifyMutation({
+          kind: 'project-updated',
+          segmentIds: accepted.map((item) => item.segmentId),
+          proposalIds: accepted.map((item) => item.proposalId),
+        })
+      }
+      return toolResult({ accepted, replayed: mutation.replayed }, deps.resultProjectId, accepted.map((item) => item.segmentId))
+    },
+  })
 
   const submitCriticReviewTool = defineTool({
     name: 'cat_submit_critic_review',
@@ -223,7 +262,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
     promptSnippet: 'Record an advisory independent review of a candidate proposal',
     promptGuidelines: [
       'Every finding needs citable evidence (segment ids, TM/TB entries, project documents); tool traces and agent events are audit data, not evidence.',
-      'Never claim a review fixes anything: repairs are ordinary proposals via cat_propose_translations and need human acceptance.',
+      'Never claim a review fixes anything: repairs are ordinary proposals and require a successful cat_accept_proposals call.',
     ],
     parameters: Type.Object({
       snapshotId: Type.String({ minLength: 1 }),
@@ -617,7 +656,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
     promptSnippet: 'Create explicitly selected consistency proposals',
     promptGuidelines: [
       'Choose every proposed target explicitly; never infer that the most frequent candidate is correct.',
-      'This creates pending proposals only and never commits segment changes.',
+      'This creates pending proposals; apply them with cat_accept_proposals only after checking the selection.',
     ],
     parameters: Type.Object({
       planId: Type.String({ minLength: 1 }),
@@ -754,6 +793,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
 return [
     getProposalSnapshotTool,
     proposeTranslationsTool,
+    acceptProposalsTool,
     submitCriticReviewTool,
     planConsistencyRepairsTool,
     createConsistencyProposalsTool,

@@ -178,8 +178,8 @@
       "title": "Authorized single-file Project Intake Coordinator",
       "priority": "P0",
       "depends": "SYNC-007",
-      "status": "IN_PROGRESS",
-      "evidence": "Alpha 单文件路径已由 UI 与 Agent 共用 Linguist ProjectDelivery.importAsset；Agent 通过当前会话显式附件的 opaque sourceToken 导入。完整 scan/plan/job coordinator API 不在当前 Alpha，目录扫描与 Durable Job 另待真实批量阻断后拆 successor。"
+      "status": "DONE",
+      "evidence": "UI 与项目 Agent 共用现有导入服务；Agent 可选择会话工作区或明确附加文件/目录中的单文件，主进程重新校验 Session binding 与路径根。批次、TM、TB 和 Context 都走同一 cat_import_asset 入口；目录扫描与 Durable Job 不在当前范围。"
     },
     {
       "id": "LA-INTAKE-002",
@@ -211,11 +211,11 @@
     {
       "id": "LA-INTAKE-005",
       "kind": "ticket",
-      "title": "Agent Intake Tools (same service / source token)",
+      "title": "Agent Intake Tool (same project services)",
       "priority": "P0",
       "depends": "INTAKE-001/003",
       "status": "DONE",
-      "evidence": "Agent CAT 工具新增 cat_list_intake_sources / cat_import_asset：仅列出会话 attachedFiles 的 basename/大小/状态，导入只接受 opaque sourceToken，宿主重验证附件后调用同一 ProjectDelivery.importAsset；包级 40/40、Electron Linguist 177/177、typecheck PASS。"
+      "evidence": "cat_import_asset 接受授权路径与 batch/tm/terms/context 类型；宿主按会话工作区、附件和附加目录重验证后调用既有项目服务。路径不进结果 DTO，模型不能提交 projectId；聚焦 Node 回归 10/10、cat-tools 53/53（含新权限回归）。"
     },
     {
       "id": "LA-INTAKE-006",

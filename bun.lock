@@ -37,7 +37,7 @@
     },
     "apps/electron": {
       "name": "@proma/electron",
-      "version": "0.16.17",
+      "version": "0.16.18",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "0.3.201",
         "@anthropic-ai/sdk": "^0.93.0",
@@ -219,7 +219,7 @@
     },
     "packages/linguist-cat-tools": {
       "name": "@linguist/cat-tools",
-      "version": "0.0.21",
+      "version": "0.0.22",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-store": "workspace:*",
@@ -254,7 +254,7 @@
     },
     "packages/shared": {
       "name": "@proma/shared",
-      "version": "0.1.84",
+      "version": "0.1.85",
       "devDependencies": {
         "typescript": "^5.0.0",
       },

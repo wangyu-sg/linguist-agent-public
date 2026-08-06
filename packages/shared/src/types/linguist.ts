@@ -486,6 +486,7 @@ export const LINGUIST_IMPORT_FILE_EXTENSIONS = [
 
 /** 导入体积上限（与 PB-030 服务层 MAX_IMPORT_BYTES 一致）。 */
 export const LINGUIST_IMPORT_MAX_BYTES = 50 * 1024 * 1024
+export const LINGUIST_RESOURCE_IMPORT_MAX_BYTES = 512 * 1024 * 1024
 
 /** CAT Workspace 单页上限；虚拟化 Grid 仍按页取数，不把 10k 行一次搬进 renderer。 */
 export const LINGUIST_CAT_PAGE_MAX = 200

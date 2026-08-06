@@ -22,7 +22,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const runtime = createCatToolRuntime(deps)
   const [projectSummaryTool, listAssetsTool, getSegmentsTool] =
     createProjectTools(runtime)
-  const [listIntakeSourcesTool, importAssetTool] = createIntakeTools(runtime)
+  const [importAssetTool] = createIntakeTools(runtime)
   const [
     getTranslationContextTool,
     searchTmTool,
@@ -33,6 +33,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const [
     getProposalSnapshotTool,
     proposeTranslationsTool,
+    acceptProposalsTool,
     submitCriticReviewTool,
     planConsistencyRepairsTool,
     createConsistencyProposalsTool,
@@ -45,13 +46,13 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     projectSummaryTool,
     listAssetsTool,
     getSegmentsTool,
-    listIntakeSourcesTool,
     importAssetTool,
     getTranslationContextTool,
     getProposalSnapshotTool,
     searchTmTool,
     searchTermsTool,
     proposeTranslationsTool,
+    acceptProposalsTool,
     runQaTool,
     getQaFindingsTool,
     submitCriticReviewTool,

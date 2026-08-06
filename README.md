@@ -12,7 +12,7 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
 当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。产品结构已经固定：不删除 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations 或远程集成；Linguist 是其上的一等本地化模式。
 
-当前 manifest 基线是 Electron App `0.16.17`（Electron `43.2.0`）、`@proma/shared 0.1.84`、Pi Runtime `0.82.1`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`，CAT schema `15`，仓库固定使用 Bun `1.3.14`。
+当前 manifest 基线是 Electron App `0.16.18`（Electron `43.2.0`）、`@proma/shared 0.1.85`、Pi Runtime `0.82.1`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.22`，CAT schema `15`，仓库固定使用 Bun `1.3.14`。
 
 应用提供三个并列主模式：
 
@@ -22,7 +22,7 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
 Linguist 左侧栏固定为“项目 → 绑定会话”：会话行与 Agent 侧栏复用同一组件和树行为（状态、MiniMap、委派、置顶、最近会话与归档），Agent 模式则排除所有项目绑定会话。点击项目进入 Workbench，点击会话进入同一个 Full `AgentView`；跨项目操作是创建独立副本，成功后仍停留在源项目，并可从提示打开副本。
 
-Linguist 是一等 Agent Profile：它在各 Runtime 的 Proma Base 上叠加版本化的 Profile、Role、专业质量合同、Execution Policy、Project Digest 与冻结的 Turn Context，并在缺层时显式 degraded，不静默退化成普通 Agent。Execution Policy 只控制是否按风险触发独立评审，不预支 Fast / Balanced / Best 的质量承诺。它嵌入同一个 `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA/Required/Forbidden 规则直接提交 Segment。
+Linguist 是一等 Agent Profile：它在各 Runtime 的 Proma Base 上叠加版本化的 Profile、Role、专业质量合同、Execution Policy、Project Digest 与冻结的 Turn Context，并在缺层时显式 degraded，不静默退化成普通 Agent。Execution Policy 只控制是否按风险触发独立评审，不预支 Fast / Balanced / Best 的质量承诺。它嵌入同一个 `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。项目 Agent 可创建并接受 Proposal，Segment 写入仍强制 CAS、锁定项、Tag 与 Required/Forbidden 规则；Agent 不得直接导出或交付最终文件。
 
 CAT 编辑器中，`Cmd/Ctrl+Enter` 用于确认当前阶段并前进，即使译文没有变化也可执行；项目设置等右侧浮窗的关闭按钮在 Electron 标题栏区域保持可点击。
 
@@ -47,9 +47,9 @@ Linguist Agent Desktop App
 
 - `@linguist/cat-core` 不依赖 React、Electron、Proma UI 或 SQLite。
 - `@linguist/cat-store` 负责每项目 `cat.db`、原始资产、备份与导出记录。
-- `@linguist/cat-tools` 的项目身份只来自 Session binding，19 个工具按项目、参考资料、QA、Proposal/Critic、Intake 与 Translation Scope 分模块；纸夹或明确 `@file` 复制进当前 Linguist 会话的单文件会登记为 Intake 来源，模型仍只能使用 opaque token，不能提交路径。
-- 批次源文件与可保留原件的语言资产统一复用 Proma Preview Tab；TM/TB 导入先生成候选，只有人工确认后才进入权威层。
-- XLSX 任务表导入必须人工确认 Sheet 与列映射；映射随批次持久化并用于导出。SDLXLIFF 复杂 `mrk` 与 CSV/JSON 低置信误识别均按现有 adapter fail closed。
+- `@linguist/cat-tools` 的项目身份只来自 Session binding，19 个工具按项目、参考资料、QA、Proposal/Critic、Intake 与 Translation Scope 分模块；Agent 可导入会话工作区或明确附加的文件/目录中的单文件，主进程重新校验路径根，模型不能提交 `projectId`。
+- 批次源文件与可保留原件的语言资产统一复用 Proma Preview Tab；UI 导入保留候选确认，项目 Agent 可将授权的 TM/TB/Context 直接登记进项目并获得可审计的内部 ID。
+- XLSX 批次与 TM/TB 导入都必须明确 Sheet 与列映射；XLSX Context 保留 Sheet、物理行号和单元格坐标。原生 SDLTM/SDLTB 可导入；SDLXLIFF 复杂 `mrk` 与 CSV/JSON 低置信误识别继续 fail closed。
 - `LinguistProjectService` 保持单一对外接口，内部按生命周期、资源、质量与交付拆分。
 - Proposal 内容与每次 Issuance/Provenance 分离持久化；长任务使用 Job/Checkpoint、幂等 mutation、durable outbox 和按运行撤销。
 - 项目打开只做有界 Quick Health；Full Integrity Scrub 在独立 worker thread 中检查全量摘要、SQLite/引用链、导出与 Session workspace。

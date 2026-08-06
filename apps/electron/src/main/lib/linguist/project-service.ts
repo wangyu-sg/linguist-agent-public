@@ -797,7 +797,7 @@ export class LinguistProjectService {
     projectId: string,
     kind: LinguistReferenceKind,
     input: ImportReferenceInput,
-  ): ImportReferenceResult {
+  ): Promise<ImportReferenceResult> {
     return this.resources.importReference(projectId, kind, input)
   }
 

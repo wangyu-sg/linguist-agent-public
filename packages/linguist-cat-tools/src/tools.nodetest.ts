@@ -220,7 +220,7 @@ async function assertThrowsCode(promise: Promise<unknown>, code: string): Promis
 
 // ===== tests =====
 
-test('factory: CAT read/proposal/QA tools expose no accept, resolve, waive, or commit mutation', () => {
+test('factory: CAT tools expose project-local accept but no resolve, waive, or delivery mutation', () => {
   const fixture = setup()
   try {
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
@@ -228,7 +228,8 @@ test('factory: CAT read/proposal/QA tools expose no accept, resolve, waive, or c
       tools.map((tool) => tool.name),
       [...LINGUIST_CAT_TOOL_NAMES],
     )
-    assert.equal(tools.some((tool) => /accept|resolve|waive|commit/i.test(tool.name)), false)
+    assert.equal(tools.some((tool) => /resolve|waive|deliver|export/i.test(tool.name)), false)
+    assert.ok(toolByName(tools, 'cat_accept_proposals'))
     assert.equal(tools.length, LINGUIST_CAT_TOOL_NAMES.length)
     assert.equal(
       (toolByName(tools, 'cat_submit_critic_review').parameters as { type?: string }).type,
@@ -248,46 +249,67 @@ test('factory: CAT read/proposal/QA tools expose no accept, resolve, waive, or c
   }
 })
 
-test('intake tools use opaque session-source callbacks and never accept paths', async () => {
+test('cat_accept_proposals atomically applies pending proposals without exporting files', async () => {
   const fixture = setup()
   try {
-    let importedToken = ''
+    const mutations: LinguistCatToolMutation[] = []
     const tools = createLinguistCatTools({
       resolveProject: makeOkResolver(fixture),
-      listIntakeSources: () => [{
-        sourceToken: 'attached-file:test-token',
-        filename: 'source.xliff',
-        sizeBytes: 12,
-        status: 'ready',
+      sessionId: 'session-accept',
+      onMutation: (mutation) => mutations.push(mutation),
+    })
+    const proposed = await invoke(toolByName(tools, 'cat_propose_translations'), {
+      segmentProposals: [{
+        segmentId: fixture.segmentsA[0]!.id,
+        baseRevision: 0,
+        proposedTarget: '已由 Agent 写入 0',
       }],
-      importIntakeAsset: async (sourceToken) => {
-        importedToken = sourceToken
+    })
+    const proposalId = (proposed.details as { proposalIds: string[] }).proposalIds[0]!
+    const accepted = await invoke(toolByName(tools, 'cat_accept_proposals'), {
+      proposals: [{ proposalId, expectedRevision: 0 }],
+    })
+    assert.deepEqual(accepted.details, {
+      accepted: [{
+        proposalId,
+        segmentId: fixture.segmentsA[0]!.id,
+        revision: 1,
+        status: 'translated',
+      }],
+      replayed: false,
+    })
+    assert.equal(fixture.db.segments.getById(fixture.segmentsA[0]!.id)?.target, '已由 Agent 写入 0')
+    assert.equal(mutations.at(-1)?.kind, 'project-updated')
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('intake tool delegates authorized file import kind to the host', async () => {
+  const fixture = setup()
+  try {
+    let importedInput: { filePath: string; resourceKind: string } | undefined
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      importIntakeAsset: async (filePath, resourceKind) => {
+        importedInput = { filePath, resourceKind }
         return {
-          sourceToken,
+          resourceKind,
           filename: 'source.xliff',
           status: 'imported',
-          assetId: fixture.assetA.id as string,
-          formatId: 'xliff_1_2',
-          segmentCount: 1,
+          resourceId: fixture.assetA.id as string,
+          importedCount: 1,
+          unchangedCount: 0,
           sourceSha256: 'a'.repeat(64),
           warnings: [],
         }
       },
     })
-    const sources = (await invoke(toolByName(tools, 'cat_list_intake_sources'), {})).details as {
-      sources: Array<{ sourceToken: string; filename: string; sizeBytes: number; status: string }>
-    }
-    assert.deepEqual(sources.sources, [{
-      sourceToken: 'attached-file:test-token',
-      filename: 'source.xliff',
-      sizeBytes: 12,
-      status: 'ready',
-    }])
-    assertNoAbsolutePaths(sources, fixture.rootDir)
     const imported = (await invoke(toolByName(tools, 'cat_import_asset'), {
-      sourceToken: 'attached-file:test-token',
-    })).details as { sourceToken: string; filename: string; status: string }
-    assert.equal(importedToken, 'attached-file:test-token')
+      filePath: '/authorized/source.xliff',
+      resourceKind: 'batch',
+    })).details as { filename: string; status: string }
+    assert.deepEqual(importedInput, { filePath: '/authorized/source.xliff', resourceKind: 'batch' })
     assert.equal(imported.status, 'imported')
     assert.equal(imported.filename, 'source.xliff')
   } finally {
@@ -1482,14 +1504,16 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_project_summary: {},
       cat_list_assets: {},
       cat_get_segments: {},
-      cat_list_intake_sources: {},
-      cat_import_asset: { sourceToken: 'attached-file:missing' },
+      cat_import_asset: { filePath: '/missing', resourceKind: 'batch' },
       cat_get_translation_context: { segmentIds: [fixture.segmentsA[0]!.id] },
       cat_get_proposal_snapshot: { proposalId: 'prp-0000000000000000' },
       cat_search_tm: { query: 'x' },
       cat_search_terms: { query: 'x' },
       cat_propose_translations: {
         segmentProposals: [{ segmentId: fixture.segmentsA[0]!.id, baseRevision: 0, proposedTarget: 'x' }],
+      },
+      cat_accept_proposals: {
+        proposals: [{ proposalId: 'prp-0000000000000000', expectedRevision: 0 }],
       },
       cat_run_qa: {},
       cat_get_qa_findings: {},

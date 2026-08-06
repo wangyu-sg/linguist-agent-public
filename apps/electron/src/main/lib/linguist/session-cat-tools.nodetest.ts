@@ -18,7 +18,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeClock, makeEntropy, makeTempDir, readFixture } from './test/service-testkit'
 import { LinguistProjectService } from './project-service'
@@ -119,11 +119,8 @@ test('bound active session: CAT tools execute end-to-end against a real seeded p
     }),
   )
   assert.deepEqual(tools.map((t) => t.name), [...LINGUIST_CAT_TOOL_NAMES])
-  assert.equal(
-    tools.some((tool) => /accept|reject/i.test(tool.name)),
-    false,
-    'LF-067: Agent Tool 永远不暴露 Proposal accept/reject 权限',
-  )
+  assert.ok(toolByName(tools, 'cat_accept_proposals'))
+  assert.equal(tools.some((tool) => /reject|deliver|export/i.test(tool.name)), false)
 
   // summary：真实项目聚合
   const summary = await invoke(toolByName(tools, 'cat_project_summary'), {})
@@ -182,7 +179,7 @@ test('bound active session: CAT tools execute end-to-end against a real seeded p
   }>
   assert.equal(qaFindings.total, 7)
   assert.ok(qaFindings.items.every((finding) => finding.code === 'EMPTY_TARGET' && finding.status === 'open'))
-  assert.equal(tools.some((tool) => /resolve|waive|accept|commit/i.test(tool.name)), false)
+  assert.equal(tools.some((tool) => /resolve|waive|commit|deliver|export/i.test(tool.name)), false)
 
   // 空 TM/TB：干净空 + note（非错误）
   const tm = await invoke(toolByName(tools, 'cat_search_tm'), { query: 'Health' })
@@ -288,44 +285,68 @@ test('LF-063: bound CAT writes emit ordered host-owned project mutation events; 
   service.closeAll()
 })
 
-test('bound session intake imports only explicitly attached files through the shared service', async () => {
+test('bound session imports authorized files into batch, TM/TB, or Context authority', async () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT, name: 'session intake 项目' })
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
   const attachedPath = join(tempHome, 'attached-mini-items.json')
   writeFileSync(attachedPath, readFixture('mini_items.json'))
-  sessionManager.updateAgentSessionMeta(meta.id, { attachedFiles: [attachedPath] })
+  const authorizedDir = join(tempHome, 'authorized-assets')
+  mkdirSync(authorizedDir)
+  const tmPath = join(authorizedDir, 'memory.tmx')
+  writeFileSync(tmPath, `<?xml version="1.0"?><tmx version="1.4"><header srclang="en"/><body><tu><tuv xml:lang="en"><seg>Hello</seg></tuv><tuv xml:lang="zh-CN"><seg>你好</seg></tuv></tu></body></tmx>`)
+  const contextPath = join(authorizedDir, 'constraints.md')
+  writeFileSync(contextPath, '# Constraints\nUse title case.')
+  sessionManager.updateAgentSessionMeta(meta.id, {
+    attachedFiles: [attachedPath],
+    attachedDirectories: [authorizedDir],
+  })
 
   const tools = catTools.resolveLinguistSessionCatTools(meta, () => service)
-  const listed = await invoke(toolByName(tools, 'cat_list_intake_sources'), {})
-  const source = (listed.sources as Array<Record<string, unknown>>)[0]!
-  assert.equal(source.filename, 'attached-mini-items.json')
-  assert.equal(source.status, 'ready')
-  assert.equal(typeof source.sourceToken, 'string')
-  assert.ok(!String(source.sourceToken).includes(attachedPath))
-
   const imported = await invoke(toolByName(tools, 'cat_import_asset'), {
-    sourceToken: source.sourceToken,
+    filePath: attachedPath,
+    resourceKind: 'batch',
   })
   assert.equal(imported.status, 'imported')
   assert.equal(imported.filename, 'attached-mini-items.json')
   assert.equal(imported.projectId, project.id)
 
   const duplicate = await invoke(toolByName(tools, 'cat_import_asset'), {
-    sourceToken: source.sourceToken,
+    filePath: attachedPath,
+    resourceKind: 'batch',
   })
   assert.equal(duplicate.status, 'skipped-duplicate')
-  assert.equal(duplicate.assetId, imported.assetId)
-  for (const value of collectStrings(listed)) {
-    assert.ok(!value.includes(attachedPath), `source DTO 泄漏绝对路径: ${value}`)
-  }
+  assert.equal(duplicate.resourceId, imported.resourceId)
 
-  // 会话解除项目绑定后，旧轮次里的 token 也不得继续引用该文件或写入项目。
-  sessionManager.detachAgentSessionLinguistBinding(meta.id)
-  const afterDetach = await invoke(toolByName(tools, 'cat_list_intake_sources'), {})
-  assert.deepEqual(afterDetach.sources, [])
+  const importedTm = await invoke(toolByName(tools, 'cat_import_asset'), {
+    filePath: tmPath,
+    resourceKind: 'tm',
+  })
+  assert.equal(importedTm.status, 'imported')
+  assert.equal(service.queryTmReferences(project.id, { limit: 10, offset: 0 }).items[0]?.id !== undefined, true)
+
+  const importedContext = await invoke(toolByName(tools, 'cat_import_asset'), {
+    filePath: contextPath,
+    resourceKind: 'context',
+  })
+  assert.equal(importedContext.status, 'imported')
+  assert.equal(
+    service.queryProjectAssets(project.id, 'contextDocs', { limit: 10, offset: 0 }).items[0]?.id,
+    importedContext.resourceId,
+  )
+
   await assert.rejects(
-    invoke(toolByName(tools, 'cat_import_asset'), { sourceToken: source.sourceToken }),
+    invoke(toolByName(tools, 'cat_import_asset'), {
+      filePath: join(tempHome, 'not-authorized.txt'),
+      resourceKind: 'context',
+    }),
+    (error: unknown) => error instanceof Error && (error as { code?: string }).code === 'INVALID_ARGUMENT',
+  )
+
+  // 会话解除项目绑定后，旧工具实例也不得继续引用该文件或写入项目。
+  sessionManager.detachAgentSessionLinguistBinding(meta.id)
+  await assert.rejects(
+    invoke(toolByName(tools, 'cat_import_asset'), { filePath: attachedPath, resourceKind: 'batch' }),
     (error: unknown) => error instanceof Error && (error as { code?: string }).code === 'INVALID_ARGUMENT',
   )
   service.closeAll()

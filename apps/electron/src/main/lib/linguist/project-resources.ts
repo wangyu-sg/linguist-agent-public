@@ -111,18 +111,18 @@ export class ProjectResources {
    * 全文件解析/验证完成后才写入。原件只落一份受管 blobs/ 文件，再在同一
    * SQLite 事务内登记来源和导入所有行；失败时 DB 回滚且新 blob 清尾。
    */
-  importReference(
+  async importReference(
     projectId: string,
     kind: LinguistReferenceKind,
     input: ImportReferenceInput,
-  ): ImportReferenceResult {
+  ): Promise<ImportReferenceResult> {
     this.context.assertProjectWritable(projectId)
     const project = this.context.getProject(projectId)
     const db = this.context.openProject(projectId)
+    const parsed = kind === 'tm'
+      ? await parseTmReference(input, project.sourceLocale, project.targetLocale)
+      : await parseTermReference(input, project.sourceLocale, project.targetLocale)
     return this.context.call(() => {
-      const parsed = kind === 'tm'
-        ? parseTmReference(input, project.sourceLocale, project.targetLocale)
-        : parseTermReference(input, project.sourceLocale, project.targetLocale)
       const sourceSha256 = sha256Hex(input.bytes)
       const blobName = `ref-${sourceSha256}`
       const blobRelpath = `blobs/${blobName}`

@@ -20,8 +20,8 @@
 ## 本轮实现事实
 
 - 批次是同一项目内持续到达的任务文件；语言资产是 TM/TB/Style Guide/Context。两者不再混成“全部资产”。
-- 空项目可修改语言方向，已有批次/TM/TB 后 fail closed；当前会话明确附加或 `@file` 复制的单文件可兑换为 CAT Intake opaque token。
-- XLSX 显式确认 Sheet/列映射，映射随批次持久化并用于导出；SDLXLIFF `mrk` 与 CSV/JSON detect 修复留在既有 adapter。
+- 空项目可修改语言方向，已有批次/TM/TB 后 fail closed；项目 Agent 可直接导入会话工作区或明确附加文件/目录中的单文件，主进程校验路径根。
+- XLSX 批次和 TM/TB 显式确认 Sheet/列映射，XLSX Context 保留结构化行/单元格坐标；原生 SDLTM/SDLTB 可导入；SDLXLIFF `mrk` 与 CSV/JSON detect 修复留在既有 adapter。
 - TM/TB 使用候选 → 人工确认 → 权威层；原件进入受管 blob，批次和语言资产均复用 Proma Preview Tab。
 - Import Verification 与引用感知 Undo 已实现；下游 Proposal/QA/Critic/Export/人工编辑/Job 任一引用都会阻止撤销。
 - Context cursor 绑定项目事件序列；Segment、TM/TB、Style Guide mutation 均推动事件，旧 cursor 抛 `CONTEXT_DRIFT`。

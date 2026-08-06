@@ -6,7 +6,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { basename } from 'node:path'
 import { sha256Hex } from '@linguist/cat-core'
 import {
-  LINGUIST_IMPORT_MAX_BYTES,
+  LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
   LINGUIST_PENDING_IMPORT_ID_PATTERN,
   LINGUIST_REFERENCE_ID_PATTERN,
   type LinguistAssetPreviewResult,
@@ -308,21 +308,21 @@ export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
           title: kind === 'tm' ? '导入翻译记忆' : '导入术语库',
           properties: ['openFile'],
           filters: kind === 'tm'
-            ? [{ name: '翻译记忆 (TMX / CSV)', extensions: ['tmx', 'csv'] }]
-            : [{ name: '术语库 (TBX / CSV)', extensions: ['tbx', 'csv'] }],
+            ? [{ name: '翻译记忆 (SDLTM / TMX / CSV)', extensions: ['sdltm', 'tmx', 'csv'] }]
+            : [{ name: '术语库 (SDLTB / TBX / CSV)', extensions: ['sdltb', 'tbx', 'csv'] }],
         })
         if (picked.canceled || picked.filePaths.length === 0) return { cancelled: true }
         const filePath = picked.filePaths[0] as string
         const sizeBytes = statSync(filePath).size
-        if (sizeBytes > LINGUIST_IMPORT_MAX_BYTES) {
-          throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_IMPORT_MAX_BYTES)
+        if (sizeBytes > LINGUIST_RESOURCE_IMPORT_MAX_BYTES) {
+          throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_RESOURCE_IMPORT_MAX_BYTES)
         }
         const filename = basename(filePath)
-        const bytes = new Uint8Array(readFileSync(filePath))
+        const bytes = readFileSync(filePath)
         const project = service.getProject(projectId)
         const parsed = kind === 'tm'
-          ? parseTmReference({ bytes, filename }, project.sourceLocale, project.targetLocale)
-          : parseTermReference({ bytes, filename }, project.sourceLocale, project.targetLocale)
+          ? await parseTmReference({ bytes, filename }, project.sourceLocale, project.targetLocale)
+          : await parseTermReference({ bytes, filename }, project.sourceLocale, project.targetLocale)
         const sourceSha256 = sha256Hex(bytes)
         const pending = pendingFiles.issue({
           scope: pendingScopeForKind(kind),
@@ -346,7 +346,7 @@ export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
     confirmImport(
       input: unknown,
     ): Promise<LinguistIpcResult<LinguistReferenceConfirmImportResult>> {
-      return wrap(() => {
+      return wrap(async () => {
         const request = readCandidateBinding(input)
         const service = getService()
         service.assertProjectWritable(request.projectId)
@@ -355,7 +355,7 @@ export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
           pendingFiles.remove(pending.id, pending.scope)
           invalid('reference import candidate bytes no longer match sourceSha256')
         }
-        const result = service.importReference(request.projectId, request.kind, {
+        const result = await service.importReference(request.projectId, request.kind, {
           bytes: pending.bytes,
           filename: pending.filename,
         })

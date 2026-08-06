@@ -3,6 +3,7 @@ import {
   FormatUnsupportedError,
   normalizeDelimitedHeader,
   parseDelimitedTable,
+  parseXlsxWorkbook,
   parseTbx,
   parseTmx,
 } from '@linguist/cat-formats'
@@ -16,6 +17,7 @@ import type {
 import type {
   ImportReferenceInput,
 } from './project-service-types'
+import { parseSdltbReference, parseSdltmReference } from './trados-reference-parsers'
 
 const CONTEXT_DOC_IMAGE_EXTENSIONS = new Set([
   '.png',
@@ -92,16 +94,20 @@ export function parseTmReference(
   input: ImportReferenceInput,
   sourceLocale: string,
   targetLocale: string,
-): { entries: TmUnitImportInput[]; warnings: string[] } {
+): Promise<{ entries: TmUnitImportInput[]; warnings: string[] }> {
   const lower = input.filename.toLowerCase()
   if (lower.endsWith('.tmx')) {
     const parsed = parseTmx(input.bytes, { sourceLocale, targetLocale, filename: input.filename })
-    return {
+    return Promise.resolve({
       entries: parsed.entries.map((entry) => ({ ...entry, origin: 'imported' })),
       warnings: parsed.warnings.map((item) => item.message),
-    }
+    })
   }
-  if (!lower.endsWith('.csv')) throw new FormatUnsupportedError(input.filename, ['tmx', 'csv'])
+  if (lower.endsWith('.sdltm')) {
+    return Promise.resolve(parseSdltmReference(input.bytes, input.filename, sourceLocale, targetLocale))
+  }
+  if (lower.endsWith('.xlsx')) return parseXlsxTmReference(input, sourceLocale, targetLocale)
+  if (!lower.endsWith('.csv')) throw new FormatUnsupportedError(input.filename, ['tmx', 'sdltm', 'xlsx', 'csv'])
   const table = parseDelimitedTable(input.bytes, input.filename)
   const sourceColumn = requiredReferenceColumn(
     table.headers,
@@ -123,20 +129,24 @@ export function parseTmReference(
     }
     return { source, target, sourceLocale, targetLocale, origin: 'imported' }
   })
-  return { entries, warnings: [] }
+  return Promise.resolve({ entries, warnings: [] })
 }
 
 export function parseTermReference(
   input: ImportReferenceInput,
   sourceLocale: string,
   targetLocale: string,
-): { entries: TermEntryImportInput[]; warnings: string[] } {
+): Promise<{ entries: TermEntryImportInput[]; warnings: string[] }> {
   const lower = input.filename.toLowerCase()
   if (lower.endsWith('.tbx')) {
     const parsed = parseTbx(input.bytes, { sourceLocale, targetLocale, filename: input.filename })
-    return { entries: parsed.entries, warnings: parsed.warnings.map((item) => item.message) }
+    return Promise.resolve({ entries: parsed.entries, warnings: parsed.warnings.map((item) => item.message) })
   }
-  if (!lower.endsWith('.csv')) throw new FormatUnsupportedError(input.filename, ['tbx', 'csv'])
+  if (lower.endsWith('.sdltb')) {
+    return Promise.resolve(parseSdltbReference(input.bytes, input.filename, sourceLocale, targetLocale))
+  }
+  if (lower.endsWith('.xlsx')) return parseXlsxTermReference(input)
+  if (!lower.endsWith('.csv')) throw new FormatUnsupportedError(input.filename, ['tbx', 'sdltb', 'xlsx', 'csv'])
   const table = parseDelimitedTable(input.bytes, input.filename)
   const termColumn = requiredReferenceColumn(
     table.headers,
@@ -175,7 +185,77 @@ export function parseTermReference(
       ...(note === undefined || note === '' ? {} : { note }),
     }
   })
-  return { entries, warnings: [] }
+  return Promise.resolve({ entries, warnings: [] })
+}
+
+async function mappedXlsxRows(input: ImportReferenceInput): Promise<{
+  rows: Array<{ source: string; target: string; rowNo: number }>
+  warnings: string[]
+}> {
+  const mapping = input.xlsxMapping
+  if (mapping === undefined) {
+    throw new FormatParseError('xlsx_reference', input.filename, 'XLSX TM/TB 导入需要明确 Sheet 和源/目标列映射')
+  }
+  const workbook = await parseXlsxWorkbook(input.bytes, { filename: input.filename })
+  const sheet = workbook.sheets.find((candidate) => candidate.name === mapping.sheetName)
+  if (sheet === undefined) {
+    throw new FormatParseError('xlsx_reference', input.filename, `找不到 Sheet ${JSON.stringify(mapping.sheetName)}`)
+  }
+  const header = sheet.headers.at(-1)
+  if (header === undefined) throw new FormatParseError('xlsx_reference', input.filename, 'Sheet 没有表头')
+  const findColumn = (name: string): number => {
+    const normalized = normalizeDelimitedHeader(name)
+    const matches = header.cells.filter((cell) => normalizeDelimitedHeader(cell.value) === normalized)
+    if (matches.length !== 1) {
+      throw new FormatParseError('xlsx_reference', input.filename, `列 ${JSON.stringify(name)} 不存在或不唯一`)
+    }
+    return matches[0]!.col
+  }
+  const sourceColumn = findColumn(mapping.columns.source)
+  const targetColumn = findColumn(mapping.columns.target)
+  const rows = sheet.rows.flatMap((row) => {
+    const source = row.cells.find((cell) => cell.col === sourceColumn)?.value.trim() ?? ''
+    const target = row.cells.find((cell) => cell.col === targetColumn)?.value.trim() ?? ''
+    return source === '' || target === '' ? [] : [{ source, target, rowNo: row.rowNo }]
+  })
+  if (rows.length === 0) {
+    throw new FormatParseError('xlsx_reference', input.filename, '映射列中没有完整 source/target 数据行')
+  }
+  return { rows, warnings: workbook.warnings.map((warning) => warning.message) }
+}
+
+async function parseXlsxTmReference(
+  input: ImportReferenceInput,
+  sourceLocale: string,
+  targetLocale: string,
+): Promise<{ entries: TmUnitImportInput[]; warnings: string[] }> {
+  const parsed = await mappedXlsxRows(input)
+  return {
+    entries: parsed.rows.map((row) => ({
+      source: row.source,
+      target: row.target,
+      sourceLocale,
+      targetLocale,
+      origin: 'imported',
+    })),
+    warnings: parsed.warnings,
+  }
+}
+
+async function parseXlsxTermReference(
+  input: ImportReferenceInput,
+): Promise<{ entries: TermEntryImportInput[]; warnings: string[] }> {
+  const parsed = await mappedXlsxRows(input)
+  return {
+    entries: parsed.rows.map((row) => ({
+      term: row.source,
+      translation: row.target,
+      status: 'allowed',
+      caseSensitive: false,
+      note: `XLSX row ${row.rowNo}`,
+    })),
+    warnings: parsed.warnings,
+  }
 }
 
 function parseSentencePatternStatus(

@@ -3,62 +3,62 @@ import { LinguistCatInvalidArgumentError } from './errors'
 import { defineTool, toolResult, type CatToolRuntime } from './tool-runtime'
 import type {
   LinguistIntakeImportResult,
-  LinguistIntakeSource,
+  LinguistIntakeResourceKind,
 } from './types'
 
-/** 会话附件的最小导入桥；路径 authority 留在宿主，CAT tool 只接 opaque token。 */
-export function createIntakeTools(runtime: CatToolRuntime) {
-  const { deps, resolveBoundProject } = runtime
+const RESOURCE_KINDS = new Set<LinguistIntakeResourceKind>(['batch', 'tm', 'terms', 'context'])
 
-  const listIntakeSourcesTool = defineTool({
-    name: 'cat_list_intake_sources',
-    label: 'CAT list intake sources',
-    description:
-      'List files explicitly attached to the bound Linguist session for single-file intake. ' +
-      'Each item has an opaque sourceToken, basename, size, and readiness; no filesystem path ' +
-      'is exposed. Directory scanning is not available in this Alpha.',
-    promptSnippet: 'List attached files available for CAT intake',
-    parameters: Type.Object({}),
-    async execute(toolCallId) {
-      resolveBoundProject('cat_list_intake_sources', toolCallId)
-      const sources = deps.listIntakeSources?.() ?? []
-      return toolResult({
-        sources: sources.map((source): LinguistIntakeSource => ({ ...source })),
-        ...(sources.length === 0
-          ? { note: 'No session-attached files are available for intake.' }
-          : {}),
-      }, deps.resultProjectId)
-    },
-  })
+/** 路径只在宿主按会话授权根校验后使用，永不进入结果 DTO。 */
+export function createIntakeTools(runtime: CatToolRuntime) {
+  const { deps, notifyMutation, resolveBoundProject } = runtime
 
   const importAssetTool = defineTool({
     name: 'cat_import_asset',
     label: 'CAT import asset',
     description:
-      'Import one explicitly attached file into the bound CAT project. Pass only a sourceToken ' +
-      'returned by cat_list_intake_sources; never pass a path or project id. The host revalidates ' +
-      'the attachment and reuses the same ProjectDelivery import pipeline as the UI, including ' +
-      'size, format, and exact-duplicate checks.',
-    promptSnippet: 'Import one attached CAT source file',
+      'Import a batch, translation memory, termbase, or Context document from the current session workspace ' +
+      'or a file/directory explicitly authorized for this bound Linguist session. The host validates the path ' +
+      'against those roots and never accepts a project id. TM/TB imports create searchable internal evidence ids.',
+    promptSnippet: 'Register an authorized file as a batch, TM, termbase, or Context resource',
     parameters: Type.Object({
-      sourceToken: Type.String({ description: 'Opaque token from cat_list_intake_sources.' }),
+      filePath: Type.String({ minLength: 1, description: 'Absolute authorized path, or a path relative to the session workspace.' }),
+      resourceKind: Type.Union([
+        Type.Literal('batch'),
+        Type.Literal('tm'),
+        Type.Literal('terms'),
+        Type.Literal('context'),
+      ]),
+      xlsxMapping: Type.Optional(Type.Object({
+        sheetName: Type.String({ minLength: 1 }),
+        columns: Type.Object({
+          source: Type.String({ minLength: 1 }),
+          target: Type.String({ minLength: 1 }),
+        }),
+      })),
     }),
     async execute(toolCallId, params) {
       resolveBoundProject('cat_import_asset', toolCallId)
       if (deps.importIntakeAsset === undefined) {
         throw new LinguistCatInvalidArgumentError(
-          'sourceToken',
+          'filePath',
           'session intake is unavailable',
         )
       }
-      const sourceToken = params.sourceToken
-      if (typeof sourceToken !== 'string' || sourceToken.trim() === '') {
-        throw new LinguistCatInvalidArgumentError('sourceToken', 'must be a non-blank opaque token')
+      if (typeof params.filePath !== 'string' || params.filePath.trim() === '') {
+        throw new LinguistCatInvalidArgumentError('filePath', 'must be a non-blank path')
       }
-      const result: LinguistIntakeImportResult = await deps.importIntakeAsset(sourceToken)
+      if (!RESOURCE_KINDS.has(params.resourceKind as LinguistIntakeResourceKind)) {
+        throw new LinguistCatInvalidArgumentError('resourceKind', 'must be batch, tm, terms, or context')
+      }
+      const result: LinguistIntakeImportResult = await deps.importIntakeAsset(
+        params.filePath,
+        params.resourceKind as LinguistIntakeResourceKind,
+        params.xlsxMapping,
+      )
+      notifyMutation({ kind: 'project-updated' })
       return toolResult(result, deps.resultProjectId)
     },
   })
 
-  return [listIntakeSourcesTool, importAssetTool] as const
+  return [importAssetTool] as const
 }

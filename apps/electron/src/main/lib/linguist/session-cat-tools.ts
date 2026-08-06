@@ -36,20 +36,21 @@
  */
 
 import type { AgentSessionMeta, LinguistProjectMutationEvent } from '@proma/shared'
-import { LINGUIST_IMPORT_MAX_BYTES } from '@proma/shared'
-import type { LinguistGenerationProvenance } from '@linguist/cat-core'
+import { LINGUIST_IMPORT_MAX_BYTES, LINGUIST_RESOURCE_IMPORT_MAX_BYTES } from '@proma/shared'
+import { sha256Hex, type LinguistGenerationProvenance } from '@linguist/cat-core'
 import {
   createLinguistCatTools,
   LinguistCatInvalidArgumentError,
   LinguistCatProjectMissingError,
   type LinguistIntakeImportResult,
-  type LinguistIntakeSource,
+  type LinguistIntakeResourceKind,
+  type LinguistIntakeXlsxMapping,
   type ResolveLinguistCatProject,
 } from '@linguist/cat-tools'
-import { createHash } from 'node:crypto'
 import { readFileSync, realpathSync, statSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { basename, isAbsolute, join, resolve, sep } from 'node:path'
 import { getAgentSessionMeta } from '../agent-session-manager'
+import { resolveAgentExecutionScope } from './agent-execution-scope'
 import { resolveLinguistBindingStatus, type LinguistServiceResolver } from './session-binding'
 import {
   runLinguistConsistencyWorker,
@@ -61,43 +62,40 @@ export type LinguistProjectMutationSink = (event: LinguistProjectMutationEvent) 
 
 const projectMutationRevisions = new Map<string, number>()
 
-function intakeSourceToken(sessionId: string, filePath: string): string {
-  return `attached-file:${createHash('sha256').update(`${sessionId}\0${filePath}`).digest('hex')}`
+function isInside(root: string, target: string): boolean {
+  return target === root || target.startsWith(root + sep)
 }
 
-function attachedFileEntries(sessionId: string, projectId: string): Array<{
-  token: string
+function resolveAuthorizedIntakeFile(sessionId: string, projectId: string, filePath: string): {
   path: string
   filename: string
   sizeBytes: number
-}> {
-  // 每次列出/导入都从主进程持久化元数据重读，解绑、删除或跨项目状态变化后，
-  // 旧轮次的 token 不能继续把任何文件带进 CAT。
+} {
   const session = getAgentSessionMeta(sessionId)
-  if (session?.linguistProjectId !== projectId) return []
-  const paths = session.attachedFiles ?? []
-  const entries: Array<{
-    token: string
-    path: string
-    filename: string
-    sizeBytes: number
-  }> = []
-  for (const filePath of paths) {
-    try {
-      const safePath = realpathSync(filePath)
-      const stats = statSync(safePath)
-      if (!stats.isFile()) continue
-      entries.push({
-        token: intakeSourceToken(sessionId, safePath),
-        path: safePath,
-        filename: basename(safePath),
-        sizeBytes: stats.size,
-      })
-    } catch {
-      // 附件已被移除或不可读：不把失效路径泄漏给模型。
-    }
+  if (session?.linguistProjectId !== projectId) {
+    throw new LinguistCatInvalidArgumentError('filePath', 'session is no longer bound to this project')
   }
-  return entries
+  try {
+    const workspace = realpathSync(resolveAgentExecutionScope(session).cwd)
+    const target = realpathSync(isAbsolute(filePath) ? filePath : resolve(workspace, filePath))
+    const attachedFiles = (session.attachedFiles ?? []).flatMap((path) => {
+      try { return [realpathSync(path)] } catch { return [] }
+    })
+    const attachedDirectories = (session.attachedDirectories ?? []).flatMap((path) => {
+      try { return [realpathSync(path)] } catch { return [] }
+    })
+    const allowed = isInside(workspace, target)
+      || attachedFiles.includes(target)
+      || attachedDirectories.some((root) => isInside(root, target))
+    const stats = statSync(target)
+    if (!allowed || !stats.isFile()) throw new Error('not an authorized file')
+    return { path: target, filename: basename(target), sizeBytes: stats.size }
+  } catch {
+    throw new LinguistCatInvalidArgumentError(
+      'filePath',
+      'must resolve to a file in the session workspace or an explicitly attached file/directory',
+    )
+  }
 }
 
 function createSessionIntakeBridge(
@@ -105,46 +103,67 @@ function createSessionIntakeBridge(
   projectId: string,
   getService: LinguistServiceResolver,
 ): {
-  listIntakeSources: () => readonly LinguistIntakeSource[]
-  importIntakeAsset: (sourceToken: string) => Promise<LinguistIntakeImportResult>
+  importIntakeAsset: (
+    filePath: string,
+    resourceKind: LinguistIntakeResourceKind,
+    xlsxMapping?: LinguistIntakeXlsxMapping,
+  ) => Promise<LinguistIntakeImportResult>
 } {
   return {
-    listIntakeSources() {
-      return attachedFileEntries(sessionId, projectId).map((entry) => ({
-        sourceToken: entry.token,
-        filename: entry.filename,
-        sizeBytes: entry.sizeBytes,
-        status: entry.sizeBytes > LINGUIST_IMPORT_MAX_BYTES ? 'too-large' as const : 'ready' as const,
-      }))
-    },
-    async importIntakeAsset(sourceToken) {
-      const entry = attachedFileEntries(sessionId, projectId).find((candidate) => candidate.token === sourceToken)
-      if (entry === undefined) {
+    async importIntakeAsset(filePath, resourceKind, xlsxMapping) {
+      const entry = resolveAuthorizedIntakeFile(sessionId, projectId, filePath)
+      const maxBytes = resourceKind === 'batch'
+        ? LINGUIST_IMPORT_MAX_BYTES
+        : LINGUIST_RESOURCE_IMPORT_MAX_BYTES
+      if (entry.sizeBytes > maxBytes) {
         throw new LinguistCatInvalidArgumentError(
-          'sourceToken',
-          'unknown or no longer attached; call cat_list_intake_sources again',
-        )
-      }
-      if (entry.sizeBytes > LINGUIST_IMPORT_MAX_BYTES) {
-        throw new LinguistCatInvalidArgumentError(
-          'sourceToken',
-          'attached file exceeds the 50MB intake limit',
+          'filePath',
+          `file exceeds the ${Math.floor(maxBytes / 1024 / 1024)}MB ${resourceKind} intake limit`,
         )
       }
       const service: LinguistProjectService = getService()
-      const result = await service.importAsset(projectId, {
-        bytes: new Uint8Array(readFileSync(entry.path)),
+      const bytes = readFileSync(entry.path)
+      if (resourceKind === 'batch') {
+        const result = await service.importAsset(projectId, { bytes, filename: entry.filename })
+        return {
+          resourceKind,
+          filename: entry.filename,
+          status: result.status,
+          resourceId: result.assetId,
+          importedCount: result.segmentCount,
+          unchangedCount: result.status === 'skipped-duplicate' ? result.segmentCount : 0,
+          sourceSha256: result.sourceSha256,
+          warnings: result.warnings.map((warning) => warning.message),
+        }
+      }
+      if (resourceKind === 'context') {
+        const doc = await service.importContextDoc(projectId, { bytes, filename: entry.filename })
+        return {
+          resourceKind,
+          filename: entry.filename,
+          status: 'imported',
+          resourceId: doc.id,
+          importedCount: 1,
+          unchangedCount: 0,
+          sourceSha256: doc.sha256 ?? sha256Hex(bytes),
+          warnings: [],
+        }
+      }
+      const result = await service.importReference(projectId, resourceKind, {
+        bytes,
         filename: entry.filename,
+        ...(xlsxMapping === undefined ? {} : { xlsxMapping }),
       })
+      if (result.source === undefined) throw new Error('导入成功但缺少来源登记')
       return {
-        sourceToken,
+        resourceKind,
         filename: entry.filename,
-        status: result.status,
-        assetId: result.assetId,
-        formatId: result.formatId,
-        segmentCount: result.segmentCount,
-        sourceSha256: result.sourceSha256,
-        warnings: result.warnings.map((warning) => warning.message),
+        status: result.imported > 0 ? 'imported' : 'skipped-duplicate',
+        resourceId: result.source.id,
+        importedCount: result.imported,
+        unchangedCount: result.unchanged,
+        sourceSha256: result.source.sourceSha256,
+        warnings: result.warnings,
       }
     },
   }
@@ -227,7 +246,6 @@ export function resolveLinguistSessionCatTools(
     criticSkillBytes: resolveCriticSkillBytes,
     consistencyWorker: runLinguistConsistencyWorker,
     qaWorker: runLinguistQaWorker,
-    listIntakeSources: intake.listIntakeSources,
     importIntakeAsset: intake.importIntakeAsset,
     onMutation: (mutation) => {
       const event = createLinguistProjectMutationEvent(projectId, mutation)

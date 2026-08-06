@@ -447,8 +447,8 @@ export function saveFilesToAgentSession(input: AgentSaveFilesInput): AgentSavedF
     },
   })
 
-  // Linguist 的纸夹附件已由主进程写入当前会话受管目录；同步登记为会话附件，
-  // CAT Intake 才能仅凭 session authority 生成 opaque sourceToken，绝不接收路径入参。
+  // Linguist 纸夹附件同步登记到会话 authority，CAT Intake 只能读取
+  // 当前会话工作区或明确附加的文件/目录，不接受 projectId。
   const session = getAgentSessionMeta(input.sessionId)
   if (session?.linguistProjectId && saved.length > 0) {
     updateAgentSessionMeta(session.id, {

@@ -7,6 +7,7 @@
  */
 
 import { extname } from 'node:path'
+import { parseXlsxWorkbook } from '@linguist/cat-formats'
 import { LinguistContextDocExtractError } from './errors'
 
 export const CONTEXT_DOC_TEXT_EXTRACT_MAX_CHARS = 200_000
@@ -53,6 +54,25 @@ async function extractDocx(bytes: Uint8Array): Promise<string> {
   )
 }
 
+async function extractXlsx(bytes: Uint8Array, filename: string): Promise<string> {
+  const workbook = await parseXlsxWorkbook(bytes, { filename })
+  const lines = [
+    `Workbook: sheets=${workbook.report.scannedSheets}/${workbook.report.totalSheets} sha256=${workbook.report.sourceSha256}`,
+  ]
+  for (const sheet of workbook.sheets) {
+    lines.push('', `Sheet: ${JSON.stringify(sheet.name)} state=${sheet.state}`)
+    const rows = [...sheet.skippedRowsAboveHeader, ...sheet.headers, ...sheet.rows]
+      .sort((left, right) => left.rowNo - right.rowNo)
+    for (const row of rows) {
+      lines.push([
+        `row=${row.rowNo}`,
+        ...row.cells.map((cell) => `${cell.ref}=${JSON.stringify(cell.value)}`),
+      ].join('\t'))
+    }
+  }
+  return lines.join('\n')
+}
+
 /**
  * 提取可供 Agent 阅读的正文。未知文档类型仍作为附件保存，但不会伪称可读。
  */
@@ -65,5 +85,6 @@ export async function extractContextDocText(
     return capped(new TextDecoder('utf-8').decode(bytes))
   }
   if (extension === '.docx') return extractDocx(bytes)
+  if (extension === '.xlsx') return extractXlsx(bytes, filename)
   return undefined
 }

@@ -47,13 +47,13 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_project_summary',
   'cat_list_assets',
   'cat_get_segments',
-  'cat_list_intake_sources',
   'cat_import_asset',
   'cat_get_translation_context',
   'cat_get_proposal_snapshot',
   'cat_search_tm',
   'cat_search_terms',
   'cat_propose_translations',
+  'cat_accept_proposals',
   'cat_run_qa',
   'cat_get_qa_findings',
   'cat_submit_critic_review',
@@ -163,29 +163,31 @@ export interface LinguistCatToolsDeps {
   qaWorker?: LinguistQaWorker
   /** Electron injects the same packaged worker for full-project consistency analysis. */
   consistencyWorker?: LinguistConsistencyWorker
-  /** 当前会话明确附加的单文件来源；不得返回绝对路径。 */
-  listIntakeSources?: () => readonly LinguistIntakeSource[]
-  /** 通过 opaque sourceToken 读取并导入一个已授权的会话附件。 */
+  /** 导入会话工作目录或已授权目录/文件中的项目资源。 */
   importIntakeAsset?: (
-    sourceToken: string,
+    filePath: string,
+    resourceKind: LinguistIntakeResourceKind,
+    xlsxMapping?: LinguistIntakeXlsxMapping,
   ) => Promise<LinguistIntakeImportResult>
 }
 
-/** Agent Intake 只暴露会话附件的非路径元数据。 */
-export interface LinguistIntakeSource {
-  sourceToken: string
-  filename: string
-  sizeBytes: number
-  status: 'ready' | 'too-large'
+export type LinguistIntakeResourceKind = 'batch' | 'tm' | 'terms' | 'context'
+
+export interface LinguistIntakeXlsxMapping {
+  sheetName: string
+  columns: {
+    source: string
+    target: string
+  }
 }
 
 export interface LinguistIntakeImportResult {
-  sourceToken: string
+  resourceKind: LinguistIntakeResourceKind
   filename: string
   status: 'imported' | 'skipped-duplicate'
-  assetId: string
-  formatId: string
-  segmentCount: number
+  resourceId: string
+  importedCount: number
+  unchangedCount: number
   sourceSha256: string
   warnings: string[]
 }
