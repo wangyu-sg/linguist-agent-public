@@ -13,9 +13,10 @@
     "VERIFIED_ALREADY_DONE"
   ],
   "baseline": {
-    "asOf": "2026-08-05",
-    "branch": "sync/proma-v0.16.8",
-    "head": "87a5393b",
+    "asOf": "2026-08-06",
+    "branch": "main",
+    "head": "9a5353d2d9c6aa38acbad29a40e5b7beaf7d589b",
+    "workingTree": "clean after documentation closeout",
     "promaTargetTag": "v0.16.8",
     "promaTargetCommit": "bde00f00323d6735a939d14dbce3b2f1a5b672bc",
     "currentFacts": "CURRENT_FACTS.md",
@@ -115,7 +116,7 @@
       "priority": "P0",
       "depends": "SYNC-006",
       "status": "IN_PROGRESS",
-      "evidence": "smoke:pack PASS; smoke:vertical runStatus=passed: Agent 12/12, Chat 18/18, Linguist 21/21. The separate LF-048 manual branch verified Native Save overwrite rejection, unchanged source SHA, safe export, and reimport. Not DONE: coverageStatus=partial with 2 MANUAL and 3 BLOCKED gaps; Native Open is unverified and real IME is blocked because this macOS host only has the ABC input source."
+      "evidence": "2026-08-06：Agent Stop/Retry 与 Chat→Agent 往返探针已实现；G0 19/19、G1 15/15、PB-074 21 PASS/0 FAIL/2 MANUAL。Native Open/Save 与真实 IME 仍缺人工证据；coverageStatus 保持 partial。"
     },
     {
       "id": "LA-HOST-001",
@@ -231,8 +232,8 @@
       "title": "Verification / Summary",
       "priority": "P0",
       "depends": "INTAKE-005/006",
-      "status": "TODO",
-      "evidence": "已有 source SHA-256、exact duplicate、受管 source blob 与 segment 事务写入的基础校验；尚无独立结构化 Verification Report，也没有检查下游 Proposal/QA/Review/Export 引用后再决定是否允许 Import Undo 的安全接口。"
+      "status": "DONE",
+      "evidence": "2026-08-06：导入验证与资产/Segment 写入同事务，失败整体回滚；linguist.projects.undoImportAsset 在撤销前检查 proposals、qa_findings、critic_artifacts、exports、人工编辑和持久 translation jobs 六类下游引用，任一命中即 fail closed；错误 details 只返回分类计数。unit verified。"
     },
     {
       "id": "LA-FORMAT-001",
@@ -240,7 +241,8 @@
       "title": "私有 CAT Corpus Scanner",
       "priority": "P0",
       "depends": "SYNC-007",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：scripts/corpus-scan.mjs（零新依赖，复用 @linguist/cat-formats detectBest）；扫描用户授权主语料 146,149 文件/9.32GB 与次语料 917 文件；stdout 仅聚合进度，报告不含正文，私有详细报告落仓库外，tests/corpus-scan.test.mjs 10/10（全合成 fixture）。unit verified。"
     },
     {
       "id": "LA-FORMAT-002",
@@ -248,7 +250,8 @@
       "title": "真实格式矩阵与优先级报告",
       "priority": "P0",
       "depends": "FORMAT-001",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：docs/research/linguist-format-matrix-2026-08.md 脱敏矩阵（多重自检无路径/文件名/正文）+ 仓库外私有详细报告。真实 detect/import/export/roundtrip 频率矩阵：xlsx 真实任务文件 6/6 FormatParseError（表头不在 source 别名表，100% 阻断）；sdlxliff 2/3（复杂 mrk 嵌套回写不一致）；csv/json 低置信嗅探误中 A 166+B 77；docx 68、pdf 85 存量量化。"
     },
     {
       "id": "LA-FORMAT-003",
@@ -328,7 +331,8 @@
       "title": "Execution Policy 取代质量档位",
       "priority": "P0",
       "depends": "SYNC-007",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：strategy 层全删（resources/linguist-skills/strategy-* 删除），executionPolicy={independentReview: off|risk-based} 取代质量档位；legacy fast/balanced→off、best→risk-based 映射，旧会话可读；消除 session 冻结值 vs live qualityProfile 双真源漂移。残留 translation_jobs.strategy 列与 AgentSessionMeta.linguistStrategy 为 legacy 只读。全仓 1452 pass、test:linguist 193/193 unit verified。"
     },
     {
       "id": "LA-QUALITY-002",
@@ -336,7 +340,8 @@
       "title": "零预支质量合同",
       "priority": "P0",
       "depends": "QUALITY-001",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：三角色 prompt 共享同一 <professional_quality_contract version=\"1.0.0\" hash> 恒定层（层序 Profile→Contract→Role→ExecutionPolicy→Digest），manifest 携带 contract_version/hash；golden 禁词扫描（初稿/草稿/后续会审/合理检查即可）全干净；reviewer 无有效 Proposal Snapshot 只能 abstain。三 role SKILL 与 LINGUIST_ROLE_SKILL_VERSION 同步 1.0.3。test:linguist 194/194 unit verified。"
     },
     {
       "id": "LA-PROMPT-001",
@@ -344,7 +349,8 @@
       "title": "Canonical Prompt Contract / Renderer",
       "priority": "P0",
       "depends": "QUALITY-002",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：prompt-contract.ts 为 Canonical Prompt Contract 唯一真源（typed layers + canonical 序列化 + promptContractHash）；prompt-renderer.ts 双 renderer（xml 与现状 byte 级一致，9 个旧 golden 零改动；markdown 注释头元数据，6 组合语义等价 golden）；project-assets-prompt.ts 改薄 facade（503→150 行）；orchestrator seam 按 runtime 选 renderer（pi→markdown，其余→xml），diagnostics 同一推导；触点经 LA-SYNC-003 reason 扩展登记。test:linguist 196/196 unit verified。"
     },
     {
       "id": "LA-PROMPT-002",
@@ -352,7 +358,8 @@
       "title": "全局 Prompt Budget / Evidence / Degraded",
       "priority": "P0",
       "depends": "PROMPT-001",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：全局 allocator digestBudget=min(7200, 18000−max(xml,markdown) wire 开销)；固定层（manifest/status/profile/contract/role/policy）永不截断；剩余 <240 字符降级 unavailable+degraded；enforce 防御路径 wire_overflow 只硬裁 digest 并 warn、不抛会话；trimmedLayers DTO 进 status/diagnostics，PromptStatusCard 显示预算裁减行；极端 fixture 4 测试含估计≡真实渲染漂移守卫与截断确定性断言。test:linguist 200/200 unit verified。"
     },
     {
       "id": "LA-MEMORY-001",
@@ -378,7 +385,8 @@
       "title": "Translation Scope / Coverage Ledger",
       "priority": "P0",
       "depends": "QUALITY-002",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：新增 cat_begin/finalize_translation_scope（CAT 工具 17→19）；createJob 同事务逐段快照 baseRevisions；finalize 按 DB 真值推导覆盖等式 requested=proposal-created+blocked+skipped+failed，未解释 pending 拒绝 finalize（TRANSLATION_SCOPE_INCOMPLETE 携带精确六桶计数）；幂等重放零写入零新事件；provenance kind=translation-scope。cat-tools 50/50、test:linguist 193/193 unit verified。"
     },
     {
       "id": "LA-TRANS-002",
@@ -476,7 +484,8 @@
       "title": "Snapshot-bound Cursor / Project Rules",
       "priority": "P0",
       "depends": "PROMPT-002",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：cursor v2 ctx2-<requestHash>-<eventSeq>-<offset>；旧格式 INVALID_ARGUMENT fail closed；includeProjectRules 首页注入项目规则。Segment 人工编辑、TM/TB import/upsert/delete 与 Style Guide create/update/delete 均写 project_events，分页期间发生这些 mutation 时旧 cursor 抛 CONTEXT_DRIFT。unit verified。"
     },
     {
       "id": "LA-CONTEXT-002",
@@ -484,7 +493,8 @@
       "title": "Minimum Context / no empty Source",
       "priority": "P0",
       "depends": "CONTEXT-001",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：删除 source 空串兜底；预算放不下最小核心上下文时 contexts=[]+minimumRequiredBytes 且 cursor 不推进；完整 Source 永不半截标记已读。cat-store 225/225 unit verified。"
     },
     {
       "id": "LA-CONTEXT-003",
@@ -492,7 +502,8 @@
       "title": "Turn Scope V2 / Scope Snapshot",
       "priority": "P1",
       "depends": "CONTEXT-001",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：verify-first 证明运行中切换 Grid 选择不改变已开始 Job（Job=持久化 scope+revision 快照，所有创建路径不读 live selection；新增 turn-1 scope A/turn-2 改选 scope B 隔离回归）。cat-store 新增 translationJobScopeDigest 纯函数，begin/finalize 四出口暴露 scopeDigest（持久化行推导，幂等重放逐字节一致）。cat-store 226/226、cat-tools 51/51、test:linguist 194/194 unit verified。"
     },
     {
       "id": "LA-DATA-001",
@@ -527,7 +538,8 @@
       "title": "Linguist Session inherit Proma defaults",
       "priority": "P0",
       "depends": "SYNC-007/QUALITY-001",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：session-binding 冻结继承 getSettings() 的 channel/model/runtime 默认值，无 pi 硬编码；更改 Proma 默认后新 LA Session 继承、旧 Session 保持冻结。unit verified（session-binding nodetests + 全仓回归）。"
     },
     {
       "id": "LA-JOB-001",
@@ -650,7 +662,8 @@
       "title": "Proma Sync Bot / Impact Report",
       "priority": "P1",
       "depends": "SYNC-006/HOST-005",
-      "status": "TODO"
+      "status": "DONE",
+      "evidence": "2026-08-06：scripts/proma-sync-impact.mjs 本地 dry-run 影响报告（diff-file/to-ref 两种输入，fork>seam>deviation 分组，stale 警告，坏输入 fail closed 非零退出）+ sync:impact npm script；tests/proma-sync-impact.test.mjs 4/4；模拟上游 tag 全流程通过，零 git mutation、不写上游、不发布。"
     },
     {
       "id": "LA-DOCS-001",
@@ -659,6 +672,33 @@
       "priority": "P0",
       "depends": "ALPHA-000",
       "status": "TODO"
+    },
+    {
+      "id": "LA-FORMAT-005",
+      "kind": "ticket",
+      "title": "XLSX 任务表列映射 Intake（真实任务 100% 阻断）",
+      "priority": "P0",
+      "depends": "FORMAT-002",
+      "status": "DONE",
+      "evidence": "2026-08-06：XLSX 导入先解析 workbook preview，再要求人工确认 Sheet 与 source/target/可选列映射；确认 token 绑定 source SHA，映射写入 assets.format_config_json 并在导出复用。同字节不同映射拒绝覆盖，必须先 Undo 原批次；无确认不得导入。unit verified。"
+    },
+    {
+      "id": "LA-FORMAT-006",
+      "kind": "ticket",
+      "title": "SDLXLIFF 复杂 mrk 嵌套回写一致性",
+      "priority": "P1",
+      "depends": "FORMAT-002",
+      "status": "DONE",
+      "evidence": "2026-08-06：在现有 SDLXLIFF adapter 中补齐 paired/self-closing target mrk 的提取与原模板 splice 回写，保持未改内容字节稳定、歧义继续 fail closed；未新增第二套解析器。unit verified。"
+    },
+    {
+      "id": "LA-FORMAT-007",
+      "kind": "ticket",
+      "title": "CSV/JSON detect 置信治理",
+      "priority": "P1",
+      "depends": "FORMAT-002",
+      "status": "DONE",
+      "evidence": "2026-08-06：CSV detect 要求可解析的双语表头，不再把 Markdown 管道表当任务表；JSON detect 排除常见配置根并收紧 i18n shape/扩展名置信，低置信输入不再抢占其他 adapter，歧义 fail closed。unit verified。"
     }
   ]
 }

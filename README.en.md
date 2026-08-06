@@ -12,17 +12,17 @@ This repository is an AGPL-3.0 derivative of [Proma](https://github.com/proma-ai
 
 The product is a **personal-use Alpha** for its author's sustained use and improvement, with no public-release plan. Its structure is fixed: it does not remove Proma's Agent, Chat, Providers, Skills, MCP, Automations, or remote integrations; Linguist is a first-class localization mode on top of them.
 
-The current manifest baseline is Electron App `0.16.15` (Electron `43.2.0`), `@proma/shared 0.1.82`, Pi Runtime `0.82.1`, CAT Core / Store / Tools `0.0.13 / 0.0.26 / 0.0.20`, with Bun `1.3.14` pinned for the repository. Packaging or installed-app evidence from `0.15.140` cannot be automatically carried forward to the merged baseline; new build, packaging, and real-machine results must be recorded separately.
+The current manifest baseline is Electron App `0.16.16` (Electron `43.2.0`), `@proma/shared 0.1.83`, Pi Runtime `0.82.1`, CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`, CAT schema `15`, with Bun `1.3.14` pinned for the repository.
 
 The application has three peer primary modes:
 
 - **Agent**: the complete general-purpose Agent workspace, with Claude / Pi runtimes, tools, Thinking, permissions, Queue / Steer, Skills, MCP, and workspace files.
 - **Chat**: multi-provider conversations, attachments, tools, context controls, and side-by-side comparison.
-- **Linguist**: projects, assets, a virtualized Segment Grid, human editing, Proposal review, TM / TB, Context, deterministic QA, workflow confirmation, run summaries and safe undo, delivery preflight, export, integrity scrubbing, backup, and restore.
+- **Linguist**: projects, batches (recurring task files within one project), language assets (TM / TB / Style Guide / Context), a virtualized Segment Grid, human editing, Proposal review, deterministic QA, verified import and safe undo, delivery preflight, export, integrity scrubbing, backup, and restore.
 
 The Linguist sidebar is always “project → bound sessions.” Session rows and tree behavior are shared with Agent, including status, MiniMap, delegation, pinning, recents, and archives; Agent mode excludes every project-bound session. Selecting a project opens its Workbench, while selecting a session opens the same full `AgentView`. Cross-project actions create an independent copy, keep the source project open, and offer an action to open the copy.
 
-Linguist is a first-class Agent Profile. It layers versioned Profile, Role, Strategy, Project Digest, and frozen Turn Context on top of each runtime's Proma Base, and explicitly reports degradation rather than silently falling back to an ordinary Agent. Strategy is auditable prompt and evaluation metadata; this README does not describe Fast / Balanced / Best as user-facing defaults that have obtained quality qualification. It embeds the same `AgentView` rather than creating a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. Agent tools may create reviewable Proposals, but cannot bypass human acceptance, CAS revisions, locked segments, tags, QA, or Required/Forbidden term gates.
+Linguist is a first-class Agent Profile. It layers a versioned Profile, Role, professional quality contract, Execution Policy, Project Digest, and frozen Turn Context on top of each runtime's Proma Base, and explicitly reports degradation rather than silently falling back to an ordinary Agent. Execution Policy only controls risk-based independent review; it makes no Fast / Balanced / Best quality promise. It embeds the same `AgentView` rather than creating a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. Agent tools may create reviewable Proposals, but cannot bypass human acceptance, CAS revisions, locked segments, tags, QA, or Required/Forbidden term gates.
 
 In the CAT editor, `Cmd/Ctrl+Enter` confirms the current workflow stage and advances even when the target is unchanged. Close buttons on project settings and other right-side sheets remain clickable inside Electron title-bar regions.
 
@@ -47,7 +47,9 @@ Important boundaries:
 
 - `@linguist/cat-core` has no React, Electron, Proma UI, or SQLite dependency.
 - `@linguist/cat-store` owns each project's `cat.db`, managed source assets, backups, and export records.
-- `@linguist/cat-tools` derives project identity only from the Session binding. Its 17 tools are split by project, reference, QA, Proposal/Critic, and Intake responsibilities; Intake currently accepts only explicitly attached single files.
+- `@linguist/cat-tools` derives project identity only from the Session binding. Its 19 tools are split by project, reference, QA, Proposal/Critic, Intake, and Translation Scope responsibilities; Intake currently accepts only explicitly attached single files.
+- Batch source files and language assets whose originals are retained share Proma's native Preview Tab. TM/TB imports remain candidates until explicit human confirmation makes them authoritative.
+- XLSX task sheets require an explicit Sheet/column mapping confirmation; the mapping is stored with the batch and reused for export. Complex SDLXLIFF `mrk` and low-confidence CSV/JSON detection fail closed in their existing adapters.
 - `LinguistProjectService` remains the single external facade while lifecycle, resources, quality, and delivery live in separate modules.
 - Proposal content is stored separately from each issuance and its provenance. Long-running work uses Jobs/Checkpoints, idempotent mutations, a durable outbox, and run-scoped undo.
 - Project open performs only bounded Quick Health checks. Full Integrity Scrub runs in a worker thread and checks all managed digests, SQLite/reference lineage, exports, and Session workspaces.

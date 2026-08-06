@@ -12,17 +12,17 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
 当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。产品结构已经固定：不删除 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations 或远程集成；Linguist 是其上的一等本地化模式。
 
-当前 manifest 基线是 Electron App `0.16.15`（Electron `43.2.0`）、`@proma/shared 0.1.82`、Pi Runtime `0.82.1`、CAT Core / Store / Tools `0.0.13 / 0.0.26 / 0.0.20`，仓库固定使用 Bun `1.3.14`。旧 `0.15.140` 的打包或安装验证不能自动外推到这次合并后的基线；新的构建、打包和真机结果必须单独记录。
+当前 manifest 基线是 Electron App `0.16.16`（Electron `43.2.0`）、`@proma/shared 0.1.83`、Pi Runtime `0.82.1`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`，CAT schema `15`，仓库固定使用 Bun `1.3.14`。
 
 应用提供三个并列主模式：
 
 - **Agent**：完整通用 Agent 工作区，支持 Claude / Pi Runtime、工具、Thinking、权限、Queue / Steer、Skills、MCP 和工作区文件。
 - **Chat**：多 Provider 对话、附件、工具、上下文控制与并排比较。
-- **Linguist**：项目、资产、虚拟化 Segment Grid、人工编辑、Proposal 审核、TM / TB、Context、确定性 QA、阶段确认、运行摘要/安全撤销、交付预检、导出、完整性扫描、备份与恢复。
+- **Linguist**：项目、批次（同一项目内反复到达的任务文件）、语言资产（TM / TB / Style Guide / Context）、虚拟化 Segment Grid、人工编辑、Proposal 审核、确定性 QA、导入验证/安全撤销、交付预检、导出、完整性扫描、备份与恢复。
 
 Linguist 左侧栏固定为“项目 → 绑定会话”：会话行与 Agent 侧栏复用同一组件和树行为（状态、MiniMap、委派、置顶、最近会话与归档），Agent 模式则排除所有项目绑定会话。点击项目进入 Workbench，点击会话进入同一个 Full `AgentView`；跨项目操作是创建独立副本，成功后仍停留在源项目，并可从提示打开副本。
 
-Linguist 是一等 Agent Profile：它在各 Runtime 的 Proma Base 上叠加版本化的 Profile、Role、Strategy、Project Digest 与冻结的 Turn Context，并在缺层时显式 degraded，不静默退化成普通 Agent。Strategy 是可审计的提示与评估元数据；本文不把 Fast / Balanced / Best 写成已经获得用户侧默认语义或质量资格的档位。它嵌入同一个 `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA/Required/Forbidden 规则直接提交 Segment。
+Linguist 是一等 Agent Profile：它在各 Runtime 的 Proma Base 上叠加版本化的 Profile、Role、专业质量合同、Execution Policy、Project Digest 与冻结的 Turn Context，并在缺层时显式 degraded，不静默退化成普通 Agent。Execution Policy 只控制是否按风险触发独立评审，不预支 Fast / Balanced / Best 的质量承诺。它嵌入同一个 `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。Agent 只能创建待人工审核的 Proposal，不能绕过 CAS、锁定项、Tag/QA/Required/Forbidden 规则直接提交 Segment。
 
 CAT 编辑器中，`Cmd/Ctrl+Enter` 用于确认当前阶段并前进，即使译文没有变化也可执行；项目设置等右侧浮窗的关闭按钮在 Electron 标题栏区域保持可点击。
 
@@ -47,7 +47,9 @@ Linguist Agent Desktop App
 
 - `@linguist/cat-core` 不依赖 React、Electron、Proma UI 或 SQLite。
 - `@linguist/cat-store` 负责每项目 `cat.db`、原始资产、备份与导出记录。
-- `@linguist/cat-tools` 的项目身份只来自 Session binding，17 个工具按项目、参考资料、QA、Proposal/Critic、Intake 分模块；Intake 目前只接受当前会话明确附加的单文件。
+- `@linguist/cat-tools` 的项目身份只来自 Session binding，19 个工具按项目、参考资料、QA、Proposal/Critic、Intake 与 Translation Scope 分模块；Intake 目前只接受当前会话明确附加的单文件。
+- 批次源文件与可保留原件的语言资产统一复用 Proma Preview Tab；TM/TB 导入先生成候选，只有人工确认后才进入权威层。
+- XLSX 任务表导入必须人工确认 Sheet 与列映射；映射随批次持久化并用于导出。SDLXLIFF 复杂 `mrk` 与 CSV/JSON 低置信误识别均按现有 adapter fail closed。
 - `LinguistProjectService` 保持单一对外接口，内部按生命周期、资源、质量与交付拆分。
 - Proposal 内容与每次 Issuance/Provenance 分离持久化；长任务使用 Job/Checkpoint、幂等 mutation、durable outbox 和按运行撤销。
 - 项目打开只做有界 Quick Health；Full Integrity Scrub 在独立 worker thread 中检查全量摘要、SQLite/引用链、导出与 Session workspace。

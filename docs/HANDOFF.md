@@ -1,39 +1,42 @@
 # Linguist Agent 当前交接
 
-更新时间：2026-08-05
+更新时间：2026-08-06
 
-## 当前结论
+## 当前状态
 
-Proma v0.16.8 已在 sync/proma-v0.16.8 上正式 merge 为 f3d2b431996523a4aa75ec2b027dcf0e932ef08f。当前收敛、QA 事件闭环、Linguist auto-title 修复、CAT exact-duplicate preflight、Session-scoped Reference 回归、Companion Chat Host、Host Parity canary、最小 Agent Intake bridge 与 Proposal Critic 状态收敛已实现；边界登记和 packaged 验证基线提交到 `d4bc0b5d`，Agent Intake bridge 与状态登记提交到 `d4c642ce` / `d22aa215`，Host parity canary 提交到 `8fede6fd` / `87a5393b`；v2.1 的唯一 active 计划为 [LA_UNIFIED_MASTER_PLAN_V2.md](./roadmap/LA_UNIFIED_MASTER_PLAN_V2.md)，唯一 active machine queue 为 [linguist-fusion-queue.json](./roadmap/linguist-fusion-queue.json)。
+- 仓库：`/Users/<local>/Desktop/linguist-agent-next`
+- 分支：`main`；本轮实现提交为 `9a5353d2`。
+- 上游基线：Proma v0.16.8 / `bde00f00`；正式 merge：`f3d2b431`。
+- 当前版本：Electron App `0.16.16`、Shared `0.1.83`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`、schema `15`。
+- 产品仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Workbench；没有第二套 Agent、Chat 或 Preview。
 
-LA-SYNC-002 至 LA-SYNC-006、LA-HOST-000/001、LA-HOST-003、LA-HOST-004/005、LA-CORRECT-001/002/003、LA-DATA-001、LA-TAG-000/003、LA-INTAKE-003/005/006、LA-REVIEW-001 已完成；收敛提交为 `48fb9923`，PB-074 模式标签修复为 `21554805`，QA 事件闭环为 `962f21c7`，auto-title 修复为 `024f51c0`，exact-duplicate preflight 为 `be1ed6fd`，引用隔离回归为 `daec672d`，Companion Chat Host 实现为 `d348df66`，边界登记为 `d4bc0b5d`，Host parity canary 为 `8fede6fd` / `87a5393b`。LA-HOST-002 仍为 IN_PROGRESS（实现回归与 packaged smoke 已通过，等待真实机器 Companion Chat roundtrip），LA-SYNC-007 保持 IN_PROGRESS，不得因为 packaged smoke 已通过而关闭；LA-INTAKE-001 仍为 IN_PROGRESS，当前只完成共享单文件路径，完整 scan/plan/job coordinator API 有意延后；LA-INTAKE-007 仍未完成，缺少结构化 import verification 与条件撤销。
+## 本轮已实现
 
-## 已确认基线
+- Host/UI：项目级 segment 引用与校验、LA 附件、返回工作台、Companion 宽度复用、批次与语言资产统一走 Proma Preview Tab；移除重复预览弹窗、收起栏最近会话和重复 Skills 入口。
+- 领域边界：同一项目可有多个批次；TM/TB/Style Guide/Context 是项目级语言资产。
+- Intake：导入后同事务 Verification；Undo 检查 Proposal、QA、Critic、Export、人工编辑与持久 Job 引用，命中即 fail closed。
+- 格式：XLSX 显式 Sheet/列映射确认并持久化；SDLXLIFF 复杂 `mrk` 回写修复；CSV/JSON 低置信误识别收紧；私有语料扫描与脱敏格式矩阵完成。
+- 语言资产：TM/TB 原件进入受管 blob；候选只有人工确认后才写权威层，确认前零 DB 写入；原件可用 Preview Tab 查看。
+- Prompt/Runtime：Execution Policy 取代质量档位；恒定专业质量合同；Canonical Prompt Contract、XML/Markdown renderer、18k 全局预算；Pi markdown 动态 fence 隔离项目数据；新 LA Session 继承 Proma 默认 Runtime/Channel/Model。
+- Context/Scope：cursor v2 + `CONTEXT_DRIFT`；人工 Segment 编辑、TM/TB 与 Style Guide mutation 现均写项目事件；19 个 CAT 工具包含 begin/finalize Translation Scope。
+- 同步工具：`scripts/proma-sync-impact.mjs` 提供只读上游影响报告。
 
-| 项目 | 当前事实 |
-|---|---|
-| Proma Base | v0.16.8 / bde00f00323d6735a939d14dbce3b2f1a5b672bc |
-| formal merge | f3d2b431996523a4aa75ec2b027dcf0e932ef08f |
-| local parent | b84d65ac79ecf681fac21cf740a589da4aedbed4 |
-| Electron App / Electron | 0.16.15 / 43.2.0 |
-| Bun / Pi / Claude / CAT schema | 1.3.14 / 0.82.1 / 0.3.201 / 13 |
-| baseline / touchpoints / deviations | docs/architecture/proma-baseline.json / proma-touchpoints.json / PROMA_DEVIATIONS.json |
+机器状态以 [linguist-fusion-queue.json](./roadmap/linguist-fusion-queue.json) 为准。FORMAT-005/006/007、INTAKE-007 与 CONTEXT-001/002/003 已落地；LA-HOST-002、LA-SYNC-007、LA-ALPHA-000 和 EVAL 人工项未关闭。
 
-## 已确认验证
+## 已有自动验证
 
-- smoke:pack：PASS（使用临时 clang module cache）。
-- smoke:vertical：PASS，Agent 12/12、Chat 18/18、Linguist 21/21；`runStatus=passed`、`coverageStatus=partial`。
-- 仍未满足：2 个 MANUAL 和 3 个 BLOCKED coverage gaps。它们阻止 LA-SYNC-007、手工/真实机器资格和 release qualification。
-- LF-048 Native Save 已在隔离 packaged app 克隆中手工通过；覆盖源文件被拒绝、源 SHA 不变、安全导出可重导入。
-- 真实 IME 仍 BLOCKED：当前 macOS 只有 ABC 输入源；Native Open 仍未手工验证。
+- workspace typecheck：11/11。
+- 根测试：1481 pass / 0 fail。
+- CAT Store 229/229；CAT Tools 52/52；CAT Formats 158/158。
+- boundary 4/4；fusion/prompt/sync Node tests 15/15。
+- packaged build 与完整性检查通过；PB-074 21 PASS / 0 FAIL / 2 MANUAL。
+- G0 packaged mode roundtrip：19 PASS / 0 FAIL。
 
-## 下一步
+这些是 unit / packaged evidence，不是真机人工或 release qualification。
 
-1. 继续取得 LA-SYNC-007 剩余手工与受阻覆盖证据；不要把 packaged 通过升级成 release qualified。
-2. 按 v2.1 queue 继续 Proposal/QA 覆盖与正确性收口；Intake 005/006 已完成，Intake 007 的 verification/undo、目录扫描、durable Job、Memory、TEaR、Full-Scope Review、性能平台和低频 Adapter 等取消项不得插队。
+## 仍需完成
 
-## 安全与历史纪律
+1. 真机人工：Native Open/Save、真实 IME、Companion Chat roundtrip、VoiceOver/完整键盘与窄窗交互。
+2. 完成 EVAL-001/003/004、14 天个人日用，再裁决 LA-ALPHA-000。
 
-- 测试、smoke 和打包只能使用精确临时 user-data-dir；不得读写真实用户根。
-- 客户数据、userdata archive、恢复产物和私有扫描结果不得进入 Git。
-- 历史 v1 Gate 与 0.15.140 资料保留在 docs/archive/ 和历史报告中，只能作为历史上下文。
+测试、smoke、打包只能使用临时 user-data-dir；私有语料报告、客户文件与真实用户根不得进入 Git。
