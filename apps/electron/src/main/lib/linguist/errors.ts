@@ -43,6 +43,8 @@ export const LINGUIST_SERVICE_ERROR_CODES = {
   IMPORT_VERIFICATION_FAILED: 'IMPORT_VERIFICATION_FAILED',
   /** 导入批次已有下游引用或人工编辑痕迹，撤销被拒绝（LA-INTAKE-007）。 */
   IMPORT_UNDO_BLOCKED: 'IMPORT_UNDO_BLOCKED',
+  /** 已有批次或语言资产时修改语言对会破坏数据一致性。 */
+  PROJECT_LOCALE_CHANGE_BLOCKED: 'PROJECT_LOCALE_CHANGE_BLOCKED',
 } as const
 
 export type LinguistServiceErrorCode =
@@ -177,6 +179,19 @@ export class LinguistImportUndoBlockedError extends LinguistServiceError {
     )
     this.name = 'LinguistImportUndoBlockedError'
     this.details = { ...references }
+  }
+}
+
+export class LinguistProjectLocaleChangeBlockedError extends LinguistServiceError {
+  readonly code = LINGUIST_SERVICE_ERROR_CODES.PROJECT_LOCALE_CHANGE_BLOCKED
+  readonly details: Record<string, number>
+  constructor(
+    readonly projectId: string,
+    blockers: { batches: number; tmUnits: number; termEntries: number },
+  ) {
+    super(`CAT project ${projectId} already contains locale-bound data; its language pair is frozen.`)
+    this.name = 'LinguistProjectLocaleChangeBlockedError'
+    this.details = blockers
   }
 }
 

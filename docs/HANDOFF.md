@@ -5,16 +5,16 @@
 ## 当前状态
 
 - 仓库：`/Users/<local>/Desktop/linguist-agent-next`
-- 分支：`main`；本轮实现提交为 `9a5353d2`。
+- 分支：`main`；当前实现以 `git HEAD` 为准。
 - 上游基线：Proma v0.16.8 / `bde00f00`；正式 merge：`f3d2b431`。
-- 当前版本：Electron App `0.16.16`、Shared `0.1.83`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`、schema `15`。
+- 当前版本：Electron App `0.16.17`、Shared `0.1.84`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`、schema `15`。
 - 产品仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Workbench；没有第二套 Agent、Chat 或 Preview。
 
 ## 本轮已实现
 
-- Host/UI：项目级 segment 引用与校验、LA 附件、返回工作台、Companion 宽度复用、批次与语言资产统一走 Proma Preview Tab；移除重复预览弹窗、收起栏最近会话和重复 Skills 入口。
+- Host/UI：项目级 segment 引用与校验、LA 附件、返回工作台、Companion 宽度复用、批次与语言资产统一走 Proma Preview Tab；Markdown 与旧版 Word 可读预览；Workbench 结构分隔只保留单一 hairline。
 - 领域边界：同一项目可有多个批次；TM/TB/Style Guide/Context 是项目级语言资产。
-- Intake：导入后同事务 Verification；Undo 检查 Proposal、QA、Critic、Export、人工编辑与持久 Job 引用，命中即 fail closed。
+- Intake：纸夹或明确 `@file` 复制到当前 Linguist 会话的单文件登记为 opaque-token 来源；导入后同事务 Verification；Undo 检查 Proposal、QA、Critic、Export、人工编辑与持久 Job 引用，命中即 fail closed。
 - 格式：XLSX 显式 Sheet/列映射确认并持久化；SDLXLIFF 复杂 `mrk` 回写修复；CSV/JSON 低置信误识别收紧；私有语料扫描与脱敏格式矩阵完成。
 - 语言资产：TM/TB 原件进入受管 blob；候选只有人工确认后才写权威层，确认前零 DB 写入；原件可用 Preview Tab 查看。
 - Prompt/Runtime：Execution Policy 取代质量档位；恒定专业质量合同；Canonical Prompt Contract、XML/Markdown renderer、18k 全局预算；Pi markdown 动态 fence 隔离项目数据；新 LA Session 继承 Proma 默认 Runtime/Channel/Model。

@@ -72,6 +72,28 @@ describe('ProjectSettingsSheet', () => {
     expect(maintenanceTrigger).not.toContain('disabled=')
   })
 
+  test('given 空项目 when 打开项目设置 then 可编辑语言方向；已有批次时明确冻结', () => {
+    const editable = renderToStaticMarkup(
+      <ProjectSettingsSheetBody
+        project={project}
+        summary={summary}
+        onSummaryRefresh={() => undefined}
+      />,
+    )
+    expect(editable).toContain('project-source-locale')
+    expect(editable).toContain('project-target-locale')
+    expect(editable).toContain('保存语言方向')
+
+    const frozen = renderToStaticMarkup(
+      <ProjectSettingsSheetBody
+        project={project}
+        summary={{ ...summary, assetCount: 1 }}
+        onSummaryRefresh={() => undefined}
+      />,
+    )
+    expect(frozen).toContain('已有批次，语言方向已冻结')
+  })
+
   test('given Prompt 降级 when 渲染诊断状态 then 显示降级层和重新探测动作', () => {
     const html = renderToStaticMarkup(
       <>

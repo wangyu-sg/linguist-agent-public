@@ -78,6 +78,7 @@ import {
   LinguistProjectArchivedError,
   LinguistProjectDeleteConfirmationMismatchError,
   LinguistProjectDeleteRequiresArchiveError,
+  LinguistProjectLocaleChangeBlockedError,
   mapStoreError,
 } from './errors'
 import { readLinguistExportManifests } from './export-manifest'
@@ -255,6 +256,26 @@ export class LinguistProjectService {
   renameProject(projectId: string, name: string): LinguistProject {
     this.assertProjectWritable(projectId)
     return this.call(() => this.store.renameProject(projectId, name), projectId)
+  }
+
+  /** 空项目可改语言对；已有批次/TM/TB 的 locale 已写入数据行，必须冻结。 */
+  setProjectLocales(projectId: string, sourceLocale: string, targetLocale: string): LinguistProject {
+    this.assertProjectWritable(projectId)
+    const current = this.getProject(projectId)
+    if (current.sourceLocale === sourceLocale && current.targetLocale === targetLocale) return current
+    const db = this.openProject(projectId)
+    const blockers = this.call(() => ({
+      batches: db.assets.countByProject(),
+      tmUnits: db.tmUnits.count(),
+      termEntries: db.termEntries.count(),
+    }), projectId)
+    if (Object.values(blockers).some((count) => count > 0)) {
+      throw new LinguistProjectLocaleChangeBlockedError(projectId, blockers)
+    }
+    return this.call(
+      () => this.store.updateProject(projectId, { sourceLocale, targetLocale }),
+      projectId,
+    )
   }
 
   reorderActiveProjects(orderedProjectIds: string[]): LinguistProject[] {

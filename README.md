@@ -12,7 +12,7 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
 当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。产品结构已经固定：不删除 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations 或远程集成；Linguist 是其上的一等本地化模式。
 
-当前 manifest 基线是 Electron App `0.16.16`（Electron `43.2.0`）、`@proma/shared 0.1.83`、Pi Runtime `0.82.1`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`，CAT schema `15`，仓库固定使用 Bun `1.3.14`。
+当前 manifest 基线是 Electron App `0.16.17`（Electron `43.2.0`）、`@proma/shared 0.1.84`、Pi Runtime `0.82.1`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`，CAT schema `15`，仓库固定使用 Bun `1.3.14`。
 
 应用提供三个并列主模式：
 
@@ -47,7 +47,7 @@ Linguist Agent Desktop App
 
 - `@linguist/cat-core` 不依赖 React、Electron、Proma UI 或 SQLite。
 - `@linguist/cat-store` 负责每项目 `cat.db`、原始资产、备份与导出记录。
-- `@linguist/cat-tools` 的项目身份只来自 Session binding，19 个工具按项目、参考资料、QA、Proposal/Critic、Intake 与 Translation Scope 分模块；Intake 目前只接受当前会话明确附加的单文件。
+- `@linguist/cat-tools` 的项目身份只来自 Session binding，19 个工具按项目、参考资料、QA、Proposal/Critic、Intake 与 Translation Scope 分模块；纸夹或明确 `@file` 复制进当前 Linguist 会话的单文件会登记为 Intake 来源，模型仍只能使用 opaque token，不能提交路径。
 - 批次源文件与可保留原件的语言资产统一复用 Proma Preview Tab；TM/TB 导入先生成候选，只有人工确认后才进入权威层。
 - XLSX 任务表导入必须人工确认 Sheet 与列映射；映射随批次持久化并用于导出。SDLXLIFF 复杂 `mrk` 与 CSV/JSON 低置信误识别均按现有 adapter fail closed。
 - `LinguistProjectService` 保持单一对外接口，内部按生命周期、资源、质量与交付拆分。

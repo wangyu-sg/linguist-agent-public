@@ -36,6 +36,8 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   GET_SUMMARY: 'linguist.projects.getSummary',
   /** 重命名项目（沿用项目名校验；归档项目只读） */
   RENAME: 'linguist.projects.rename',
+  /** 修改空项目语言对；已有批次或 TM/TB 时 fail closed。 */
+  SET_LOCALES: 'linguist.projects.setLocales',
   /** 原子保存全部活跃项目顺序；归档项目保持原相对顺序 */
   REORDER_ACTIVE: 'linguist.projects.reorderActive',
   /** 归档项目 */
@@ -378,6 +380,7 @@ export const LINGUIST_IPC_ERROR_CODES = {
   SESSION_COPY_BLOCKED: 'SESSION_COPY_BLOCKED',
   IMPORT_VERIFICATION_FAILED: 'IMPORT_VERIFICATION_FAILED',
   IMPORT_UNDO_BLOCKED: 'IMPORT_UNDO_BLOCKED',
+  PROJECT_LOCALE_CHANGE_BLOCKED: 'PROJECT_LOCALE_CHANGE_BLOCKED',
 
   // ---- cat-store 穿透（packages/linguist-cat-store/src/errors.ts）----
   STORE_SQLITE_UNAVAILABLE: 'STORE_SQLITE_UNAVAILABLE',
@@ -895,6 +898,14 @@ export interface LinguistProjectRenameRequest {
 }
 
 export type LinguistProjectRenameResult = LinguistProjectInfo
+
+export interface LinguistProjectSetLocalesRequest {
+  projectId: string
+  sourceLocale: string
+  targetLocale: string
+}
+
+export type LinguistProjectSetLocalesResult = LinguistProjectInfo
 
 export interface LinguistProjectReorderRequest {
   /** 必须恰好包含当前全部活跃项目 id，且不得重复。 */

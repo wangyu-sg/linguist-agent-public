@@ -319,6 +319,15 @@ test('bound session intake imports only explicitly attached files through the sh
   for (const value of collectStrings(listed)) {
     assert.ok(!value.includes(attachedPath), `source DTO 泄漏绝对路径: ${value}`)
   }
+
+  // 会话解除项目绑定后，旧轮次里的 token 也不得继续引用该文件或写入项目。
+  sessionManager.detachAgentSessionLinguistBinding(meta.id)
+  const afterDetach = await invoke(toolByName(tools, 'cat_list_intake_sources'), {})
+  assert.deepEqual(afterDetach.sources, [])
+  await assert.rejects(
+    invoke(toolByName(tools, 'cat_import_asset'), { sourceToken: source.sourceToken }),
+    (error: unknown) => error instanceof Error && (error as { code?: string }).code === 'INVALID_ARGUMENT',
+  )
   service.closeAll()
 })
 

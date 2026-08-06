@@ -5098,6 +5098,8 @@ export function registerIpcHandlers(): void {
     assetPreview: {
       readText: async (filePath) =>
         (await import('./lib/file-preview-service')).resolveAndReadFile(filePath),
+      extractText: async (filePath) =>
+        (await import('./lib/document-parser')).extractTextFromFile(filePath),
       convertDocxToHtml: async (filePath) =>
         (await import('./lib/file-preview-service')).convertDocxToHtml(filePath),
       convertOfficeToHtml: async (filePath) =>
@@ -5160,6 +5162,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     LINGUIST_PROJECT_IPC_CHANNELS.RENAME,
     async (_, input: unknown) => linguistProjectIpc.rename(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.SET_LOCALES,
+    async (_, input: unknown) => linguistProjectIpc.setLocales(input)
   )
 
   ipcMain.handle(
@@ -5400,6 +5407,8 @@ export function registerIpcHandlers(): void {
     assetPreview: {
       readText: async (filePath) =>
         (await import('./lib/file-preview-service')).resolveAndReadFile(filePath),
+      extractText: async (filePath) =>
+        (await import('./lib/document-parser')).extractTextFromFile(filePath),
       convertDocxToHtml: async (filePath) =>
         (await import('./lib/file-preview-service')).convertDocxToHtml(filePath),
       convertOfficeToHtml: async (filePath) =>

@@ -6,11 +6,11 @@
 
 | 项目 | 当前事实 |
 |---|---|
-| 仓库 / 分支 / 实现提交 | `/Users/<local>/Desktop/linguist-agent-next` / `main` / `9a5353d2` |
+| 仓库 / 分支 / 实现提交 | `/Users/<local>/Desktop/linguist-agent-next` / `main` / 以 `git HEAD` 为准 |
 | Proma Base / formal merge | v0.16.8 `bde00f00` / `f3d2b431` |
-| App / Electron | `0.16.16` / `43.2.0` |
+| App / Electron | `0.16.17` / `43.2.0` |
 | Bun / Pi / Claude | `1.3.14` / `0.82.1` / `0.3.201` |
-| Shared | `0.1.83` |
+| Shared | `0.1.84` |
 | CAT Core / Formats / Store / Tools | `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21` |
 | CAT schema / Tool count | `15` / `19` |
 | Proma core touchpoints | `257`，以 `proma-touchpoints.json` 为准 |
@@ -20,6 +20,7 @@
 ## 本轮实现事实
 
 - 批次是同一项目内持续到达的任务文件；语言资产是 TM/TB/Style Guide/Context。两者不再混成“全部资产”。
+- 空项目可修改语言方向，已有批次/TM/TB 后 fail closed；当前会话明确附加或 `@file` 复制的单文件可兑换为 CAT Intake opaque token。
 - XLSX 显式确认 Sheet/列映射，映射随批次持久化并用于导出；SDLXLIFF `mrk` 与 CSV/JSON detect 修复留在既有 adapter。
 - TM/TB 使用候选 → 人工确认 → 权威层；原件进入受管 blob，批次和语言资产均复用 Proma Preview Tab。
 - Import Verification 与引用感知 Undo 已实现；下游 Proposal/QA/Critic/Export/人工编辑/Job 任一引用都会阻止撤销。

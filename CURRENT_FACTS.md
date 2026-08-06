@@ -9,9 +9,9 @@
 | 项目 | 当前事实 |
 |---|---|
 | Proma 基线 / formal merge | v0.16.8 `bde00f00` / `f3d2b431` |
-| Electron App / Electron | `0.16.16` / `43.2.0` |
+| Electron App / Electron | `0.16.17` / `43.2.0` |
 | Bun / Pi / Claude | `1.3.14` / `0.82.1` / `0.3.201` |
-| Shared | `0.1.83` |
+| Shared | `0.1.84` |
 | CAT Core / Formats / Store / Tools | `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21` |
 | CAT schema / Tools | `15` / `19` |
 | Prompt contracts | Profile `2.1.0` / Quality `1.0.0` / Prompt `1.0.0` / Digest `1.0.0` / Turn Context `1` |
@@ -22,6 +22,7 @@
 
 - 完整 Proma Agent/Chat 是宿主；Linguist 是第三个并列模式，不复制 Agent、Chat、Session Store 或 Preview。
 - 项目下可持续导入多个批次；语言资产是 TM/TB/Style Guide/Context。批次和保留原件的语言资产都走 Proma Preview Tab。
+- 空项目可修改语言方向；导入批次、TM 或 TB 后冻结。纸夹或明确 `@file` 复制到当前 Linguist 会话的文件可由 Agent 通过 opaque token 导入。
 - XLSX 必须显式确认映射；TM/TB 必须先候选、后人工确认；Import Undo 遇到任何下游引用 fail closed。
 - 模型只能创建 pending Proposal。人工写 Segment 仍受 CAS、locked、Tag、QA 与术语硬门约束。
 - Prompt/Context/Translation Scope 已有单一合同；项目数据在 Pi markdown renderer 中按数据处理，不得改变指令边界。

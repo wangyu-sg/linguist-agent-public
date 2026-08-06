@@ -42,6 +42,7 @@ import type {
   LinguistReferenceCandidatePreviewTarget,
   LinguistReferenceImportPreviewTarget,
 } from '@/atoms/preview-atoms'
+import { markdownToHtml } from '@/lib/markdown-rich-text'
 import { splitProtectedText } from './TargetEditor'
 import { describeLinguistIpcError } from './project-utils'
 import {
@@ -136,14 +137,20 @@ function ErrorBlock({ message, onRetry }: { message: string; onRetry: () => void
   )
 }
 
+function sanitizePreviewHtml(html: string): string {
+  // SSR 静态断言没有 DOM；Electron renderer 始终经 DOMPurify。
+  return typeof document === 'undefined' ? html : DOMPurify.sanitize(html)
+}
+
 /**
  * 三态 raw / 可读内容渲染（text / html / url）。主进程围栏产物：
  * text 直读（截断护栏诚实提示）；html 为 docx/xlsx 转换产物（源文件是
  * 用户导入内容，按 DiffTabContent 先例 DOMPurify 消毒，样式复用
  * .office-preview-host）；url 为 proma-file:// 不透明 token URL 直渲染。
  */
-function ThreeStatePreviewContent({ result }: { result: LinguistAssetPreviewResult }): React.ReactElement {
+export function LinguistAssetPreviewContent({ result }: { result: LinguistAssetPreviewResult }): React.ReactElement {
   if (result.kind === 'text') {
+    const isMarkdown = /\.md(?:arkdown)?$/i.test(result.filename)
     return (
       <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-content-area shadow-sm">
         {result.truncated && (
@@ -151,9 +158,17 @@ function ThreeStatePreviewContent({ result }: { result: LinguistAssetPreviewResu
             文件过大，仅显示前 200,000 字符
           </div>
         )}
-        <pre className="whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-relaxed text-foreground/80">
-          {result.text}
-        </pre>
+        {isMarkdown ? (
+          <article
+            aria-label="Markdown 预览"
+            className="prose prose-sm dark:prose-invert max-w-none px-4 py-3 text-foreground/80"
+            dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(markdownToHtml(result.text)) }}
+          />
+        ) : (
+          <pre className="whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-relaxed text-foreground/80">
+            {result.text}
+          </pre>
+        )}
       </div>
     )
   }
@@ -163,7 +178,7 @@ function ThreeStatePreviewContent({ result }: { result: LinguistAssetPreviewResu
       <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-content-area shadow-sm">
         <div
           className="office-preview-host"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.html) }}
+          dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(result.html) }}
         />
       </div>
     )
@@ -411,7 +426,7 @@ function BatchRawPreview({ target }: { target: LinguistBatchPreviewTarget }): Re
   )
   if (state.status === 'busy') return <BusyBlock />
   if (state.status === 'error') return <ErrorBlock message={state.message} onRetry={retry} />
-  return <ThreeStatePreviewContent result={state.data} />
+  return <LinguistAssetPreviewContent result={state.data} />
 }
 
 function ReadonlySourcePreview({
@@ -435,7 +450,7 @@ function ReadonlySourcePreview({
       <div aria-label={`${label.split(' · ')[0]}预览`} className="flex min-h-0 flex-1 flex-col">
         {state.status === 'busy' && <BusyBlock />}
         {state.status === 'error' && <ErrorBlock message={state.message} onRetry={retry} />}
-        {state.status === 'ready' && <ThreeStatePreviewContent result={state.data} />}
+        {state.status === 'ready' && <LinguistAssetPreviewContent result={state.data} />}
       </div>
     </div>
   )

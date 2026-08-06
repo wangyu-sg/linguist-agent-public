@@ -1104,10 +1104,10 @@ function ProjectRow({
     setName(project.name)
     setRenameError(null)
     setRenaming(true)
-    requestAnimationFrame(() => {
+    window.setTimeout(() => {
       inputRef.current?.focus()
       inputRef.current?.select()
-    })
+    }, 0)
   }
 
   const commitRename = async (): Promise<void> => {

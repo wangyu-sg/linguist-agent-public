@@ -147,6 +147,7 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
       CONFIRM_XLSX_MAPPING: 'linguist.projects.confirmXlsxMapping',
       GET_SUMMARY: 'linguist.projects.getSummary',
       RENAME: 'linguist.projects.rename',
+      SET_LOCALES: 'linguist.projects.setLocales',
       REORDER_ACTIVE: 'linguist.projects.reorderActive',
       ARCHIVE: 'linguist.projects.archive',
       DELETE: 'linguist.projects.delete',
@@ -160,10 +161,10 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
     })
   })
 
-  test('stable error-code catalog is complete (35 codes)', () => {
+  test('stable error-code catalog is complete (36 codes)', () => {
     const codes: string[] = Object.values(LINGUIST_IPC_ERROR_CODES)
-    expect(codes.length).toBe(35)
-    expect(new Set(codes).size).toBe(35)
+    expect(codes.length).toBe(36)
+    expect(new Set(codes).size).toBe(36)
     // IPC 层
     expect(codes).toContain('INVALID_INPUT')
     expect(codes).toContain('INTERNAL')

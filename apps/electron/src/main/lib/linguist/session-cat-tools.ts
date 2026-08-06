@@ -65,13 +65,17 @@ function intakeSourceToken(sessionId: string, filePath: string): string {
   return `attached-file:${createHash('sha256').update(`${sessionId}\0${filePath}`).digest('hex')}`
 }
 
-function attachedFileEntries(sessionId: string): Array<{
+function attachedFileEntries(sessionId: string, projectId: string): Array<{
   token: string
   path: string
   filename: string
   sizeBytes: number
 }> {
-  const paths = getAgentSessionMeta(sessionId)?.attachedFiles ?? []
+  // 每次列出/导入都从主进程持久化元数据重读，解绑、删除或跨项目状态变化后，
+  // 旧轮次的 token 不能继续把任何文件带进 CAT。
+  const session = getAgentSessionMeta(sessionId)
+  if (session?.linguistProjectId !== projectId) return []
+  const paths = session.attachedFiles ?? []
   const entries: Array<{
     token: string
     path: string
@@ -106,7 +110,7 @@ function createSessionIntakeBridge(
 } {
   return {
     listIntakeSources() {
-      return attachedFileEntries(sessionId).map((entry) => ({
+      return attachedFileEntries(sessionId, projectId).map((entry) => ({
         sourceToken: entry.token,
         filename: entry.filename,
         sizeBytes: entry.sizeBytes,
@@ -114,7 +118,7 @@ function createSessionIntakeBridge(
       }))
     },
     async importIntakeAsset(sourceToken) {
-      const entry = attachedFileEntries(sessionId).find((candidate) => candidate.token === sourceToken)
+      const entry = attachedFileEntries(sessionId, projectId).find((candidate) => candidate.token === sourceToken)
       if (entry === undefined) {
         throw new LinguistCatInvalidArgumentError(
           'sourceToken',

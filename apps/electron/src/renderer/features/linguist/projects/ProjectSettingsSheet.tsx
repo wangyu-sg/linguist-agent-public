@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -28,6 +29,7 @@ import {
   describeIndependentReview,
   describeLinguistIpcError,
   INDEPENDENT_REVIEW_OPTIONS,
+  validateLocaleInput,
 } from './project-utils'
 
 interface ProjectSettingsSheetProps {
@@ -112,6 +114,11 @@ export function ProjectSettingsSheetBody({
             </div>
           </dl>
         </section>
+        <ProjectLocaleSettings
+          project={project}
+          hasBatches={(summary?.assetCount ?? 0) > 0}
+          onUpdated={onSummaryRefresh}
+        />
         <ProjectExecutionPolicySettings project={project} onUpdated={onSummaryRefresh} />
         <ProjectWorkflowSettings project={project} onUpdated={onSummaryRefresh} />
       </TabsContent>
@@ -135,6 +142,96 @@ export function ProjectSettingsSheetBody({
         <ProjectDiagnosticsSettings key={project.id} projectId={project.id} />
       </TabsContent>
     </Tabs>
+  )
+}
+
+export function ProjectLocaleSettings({
+  project,
+  hasBatches,
+  onUpdated,
+}: {
+  project: LinguistProjectInfo
+  hasBatches: boolean
+  onUpdated: () => void
+}): React.ReactElement {
+  const [sourceLocale, setSourceLocale] = React.useState(project.sourceLocale)
+  const [targetLocale, setTargetLocale] = React.useState(project.targetLocale)
+  const [saving, setSaving] = React.useState(false)
+  const sourceError = validateLocaleInput(sourceLocale, '源语言')
+  const targetError = validateLocaleInput(targetLocale, '目标语言')
+  const frozen = project.archivedAt !== undefined || hasBatches
+  const unchanged = sourceLocale.trim() === project.sourceLocale && targetLocale.trim() === project.targetLocale
+
+  React.useEffect(() => {
+    setSourceLocale(project.sourceLocale)
+    setTargetLocale(project.targetLocale)
+  }, [project])
+
+  const save = async (): Promise<void> => {
+    if (saving || frozen || sourceError !== null || targetError !== null || unchanged) return
+    setSaving(true)
+    try {
+      const result = await window.electronAPI.linguistProjectsSetLocales({
+        projectId: project.id,
+        sourceLocale: sourceLocale.trim(),
+        targetLocale: targetLocale.trim(),
+      })
+      if (!result.ok) {
+        toast.error('语言方向保存失败', { description: describeLinguistIpcError(result.error) })
+        return
+      }
+      toast.success(`语言方向已设为 ${result.data.sourceLocale} → ${result.data.targetLocale}`)
+      onUpdated()
+    } catch {
+      toast.error('语言方向保存失败', { description: '与主进程通信异常（INTERNAL）' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section aria-labelledby="project-locale-heading" className="mt-3 rounded-xl bg-muted/50 p-4 shadow-sm">
+      <h3 id="project-locale-heading" className="text-sm font-medium text-foreground">语言方向</h3>
+      <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+        {hasBatches
+          ? '已有批次，语言方向已冻结；如需其他语言对，请新建项目。'
+          : '导入首个批次或 TM/TB 后，语言方向将冻结以避免数据不一致。'}
+      </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="project-source-locale">源语言</Label>
+          <Input
+            id="project-source-locale"
+            value={sourceLocale}
+            disabled={saving || frozen}
+            onChange={(event) => setSourceLocale(event.target.value)}
+            aria-invalid={sourceError !== null}
+          />
+          {sourceError !== null && <p className="text-xs text-destructive">{sourceError}</p>}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="project-target-locale">目标语言</Label>
+          <Input
+            id="project-target-locale"
+            value={targetLocale}
+            disabled={saving || frozen}
+            onChange={(event) => setTargetLocale(event.target.value)}
+            aria-invalid={targetError !== null}
+          />
+          {targetError !== null && <p className="text-xs text-destructive">{targetError}</p>}
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          disabled={saving || frozen || sourceError !== null || targetError !== null || unchanged}
+          onClick={() => { void save() }}
+        >
+          {saving ? '保存中…' : '保存语言方向'}
+        </Button>
+      </div>
+    </section>
   )
 }
 

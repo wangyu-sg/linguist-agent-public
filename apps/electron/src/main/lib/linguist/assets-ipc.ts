@@ -83,6 +83,7 @@ export interface LinguistAssetsIpcDeps {
 
 /** contextDocs 文本类直读扩展名（导入白名单中的文本成员 + 常见文本格式）。 */
 const CONTEXT_DOC_TEXT_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'text', 'log', 'json', 'csv', 'tsv'])
+const CONTEXT_DOC_EXTRACT_EXTENSIONS = new Set(['doc', 'dot', 'wps', 'wpt', 'rtf'])
 
 /** text 态截断护栏（与 PB-089 / context doc text_extract 同一 200k 字符纪律）。 */
 const PREVIEW_TEXT_MAX_CHARS = 200_000
@@ -382,7 +383,7 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
           title: '导入 Context 文档 / 图片',
           properties: ['openFile'],
           filters: [
-            { name: '文档与图片', extensions: ['docx', 'md', 'markdown', 'txt', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'] },
+            { name: '文档、表格与图片', extensions: ['pdf', 'doc', 'docx', 'rtf', 'xlsx', 'pptx', 'md', 'markdown', 'txt', 'csv', 'json', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'] },
             { name: '所有文件', extensions: ['*'] },
           ],
         })
@@ -437,7 +438,7 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
      * linguist.assets.previewContextDoc — Context 文档 blob 预览（纯读；
      * 归档项目允许）。主进程围栏解析 blobs/ 内绝对路径后按扩展名三态分派
      * （与 PB-089 previewAssetSource 同一纪律）：文本类直读（截断护栏）/
-     * docx·xlsx 转 HTML / 图片·PDF·未知扩展名降级 proma-file:// 不透明
+     * docx/xlsx/pptx 转 HTML，旧版 Word/WPS 转可读文本，图片/PDF/未知扩展名降级 proma-file:// 不透明
      * token URL 直渲染。零字节、零路径过 IPC；blob 缺失/越界由服务层抛
      * StoreNotFoundError → STORE_NOT_FOUND 错误信封，转换失败收敛 INTERNAL。
      */
@@ -463,14 +464,24 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
             filename: originalFilename,
           }
         }
+        if (CONTEXT_DOC_EXTRACT_EXTENSIONS.has(ext)) {
+          if (assetPreview.extractText === undefined) throw new Error('context doc preview: text extractor unavailable')
+          const text = await assetPreview.extractText(sourcePath)
+          return {
+            kind: 'text',
+            text: text.slice(0, PREVIEW_TEXT_MAX_CHARS),
+            truncated: text.length > PREVIEW_TEXT_MAX_CHARS,
+            filename: originalFilename,
+          }
+        }
         if (ext === 'docx') {
           const converted = await assetPreview.convertDocxToHtml(sourcePath)
           if (converted === null) throw new Error('context doc preview: docx conversion failed')
           return { kind: 'html', html: converted.html, filename: originalFilename }
         }
-        if (ext === 'xlsx') {
+        if (ext === 'xlsx' || ext === 'pptx') {
           const converted = await assetPreview.convertOfficeToHtml(sourcePath)
-          if (converted === null) throw new Error('context doc preview: xlsx conversion failed')
+          if (converted === null) throw new Error('context doc preview: office conversion failed')
           return {
             kind: 'html',
             html: converted.html,

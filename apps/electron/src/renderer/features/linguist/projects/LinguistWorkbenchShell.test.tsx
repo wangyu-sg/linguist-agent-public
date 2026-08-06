@@ -289,5 +289,7 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).toContain('shadow-[1px_0_0_hsl(var(--border)/0.45)]')
     expect(html).toContain('shadow-[-1px_0_0_hsl(var(--border)/0.45)]')
     expect(html).not.toContain('--border)/0.35')
+    expect(html.match(/data-resize-grip="true"/g)).toHaveLength(3)
+    expect(html.match(/bg-transparent transition-colors group-hover:bg-primary\/70/g)).toHaveLength(3)
   })
 })

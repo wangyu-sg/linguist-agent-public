@@ -415,7 +415,7 @@ export function LinguistWorkbenchShell({
               <span
                 aria-hidden="true"
                 data-resize-grip="true"
-                className="pointer-events-none absolute inset-y-4 left-1/2 w-px -translate-x-1/2 rounded-full bg-border transition-colors group-hover:bg-primary/70 group-focus-visible:bg-primary"
+                className="pointer-events-none absolute inset-y-4 left-1/2 w-px -translate-x-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/70 group-focus-visible:bg-primary"
               />
             </div>
             {assetNavigator}
@@ -466,7 +466,7 @@ export function LinguistWorkbenchShell({
                 <span
                   aria-hidden="true"
                   data-resize-grip="true"
-                  className="pointer-events-none absolute inset-x-6 top-1/2 h-px -translate-y-1/2 rounded-full bg-border transition-colors group-hover:bg-primary/70 group-focus-visible:bg-primary"
+                  className="pointer-events-none absolute inset-x-6 top-1/2 h-px -translate-y-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/70 group-focus-visible:bg-primary"
                 />
               </div>
               {bottomDock}
@@ -513,7 +513,7 @@ export function LinguistWorkbenchShell({
               <span
                 aria-hidden="true"
                 data-resize-grip="true"
-                className="pointer-events-none absolute inset-y-4 left-1/2 w-px -translate-x-1/2 rounded-full bg-border transition-colors group-hover:bg-primary/70 group-focus-visible:bg-primary"
+                className="pointer-events-none absolute inset-y-4 left-1/2 w-px -translate-x-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/70 group-focus-visible:bg-primary"
               />
             </div>}
             {agentRail}

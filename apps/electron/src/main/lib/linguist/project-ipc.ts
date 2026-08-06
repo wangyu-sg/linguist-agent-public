@@ -68,6 +68,7 @@ import {
   type LinguistProjectListResult,
   type LinguistProjectOpenResult,
   type LinguistProjectRenameResult,
+  type LinguistProjectSetLocalesResult,
   type LinguistProjectReorderResult,
   type LinguistProjectRestoreResult,
   type LinguistProjectSetExecutionPolicyResult,
@@ -124,6 +125,8 @@ export interface LinguistProjectIpcDeps {
 export interface LinguistAssetPreviewDeps {
   /** 文本类直读（50MB 上限；null = 读取失败/超限）。 */
   readText: (filePath: string) => Promise<{ content: string } | null>
+  /** 旧版 Word/WPS 等二进制文档 → 纯文本。 */
+  extractText?: (filePath: string) => Promise<string>
   /** docx → HTML（null = 转换失败）。 */
   convertDocxToHtml: (filePath: string) => Promise<{ html: string } | null>
   /** xlsx → HTML + 提取纯文本（null = 转换失败）。 */
@@ -530,6 +533,18 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         return toProjectInfo(getService().renameProject(
           readProjectId(record),
           readProjectName(record),
+        ))
+      })
+    },
+
+    /** linguist.projects.setLocales — 语言对校验后交由服务层判定是否仍为空项目。 */
+    setLocales(input: unknown): Promise<LinguistIpcResult<LinguistProjectSetLocalesResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        return toProjectInfo(getService().setProjectLocales(
+          readProjectId(record),
+          readLocale(record, 'sourceLocale'),
+          readLocale(record, 'targetLocale'),
         ))
       })
     },

@@ -10,7 +10,10 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { LinguistPreviewTarget } from '@/atoms/preview-atoms'
-import { LinguistPreviewBody } from './LinguistPreviewBody'
+import {
+  LinguistAssetPreviewContent,
+  LinguistPreviewBody,
+} from './LinguistPreviewBody'
 
 const BATCH_TARGET: LinguistPreviewTarget = {
   kind: 'batch',
@@ -90,6 +93,41 @@ describe('LinguistPreviewBody Context 文档预览', () => {
     expect(html).toContain('role="status"')
     expect(html).not.toContain('role="dialog"')
     expect(html).not.toContain('保存')
+  })
+})
+
+describe('LinguistAssetPreviewContent Markdown 预览', () => {
+  test('given Markdown Context 文档的 text 结果 when 渲染 then 显示富文本而非源码 pre', () => {
+    const html = renderToStaticMarkup(
+      <LinguistAssetPreviewContent
+        result={{
+          kind: 'text',
+          filename: '世界观.md',
+          text: '# 世界观\n\n王国与森林。',
+          truncated: false,
+        }}
+      />,
+    )
+
+    expect(html).toContain('aria-label="Markdown 预览"')
+    expect(html).toContain('<h1>世界观</h1>')
+    expect(html).not.toContain('<pre')
+  })
+
+  test('given 普通文本结果 when 渲染 then 仍保留等宽原文预览', () => {
+    const html = renderToStaticMarkup(
+      <LinguistAssetPreviewContent
+        result={{
+          kind: 'text',
+          filename: '术语.txt',
+          text: '王国\tKingdom',
+          truncated: false,
+        }}
+      />,
+    )
+
+    expect(html).toContain('<pre')
+    expect(html).not.toContain('aria-label="Markdown 预览"')
   })
 })
 

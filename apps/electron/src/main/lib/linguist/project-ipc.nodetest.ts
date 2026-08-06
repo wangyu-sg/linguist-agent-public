@@ -195,6 +195,7 @@ test('validation negatives: bad id / bad locale / oversized name / wrong types �
       { name: 'missing executionPolicy', run: () => ipc.setExecutionPolicy({ projectId: project.id }) },
       { name: 'non-object executionPolicy', run: () => ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: 1 }) },
       { name: 'bad setExecutionPolicy id', run: () => ipc.setExecutionPolicy({ projectId: 'nope', executionPolicy: { independentReview: 'off' } }) },
+      { name: 'bad setLocales locale', run: () => ipc.setLocales({ projectId: project.id, sourceLocale: 'english', targetLocale: 'zh-CN' }) },
     ]
     for (const c of cases) {
       const result = await c.run()
@@ -218,6 +219,7 @@ test('unknown project id → PROJECT_NOT_FOUND across id-taking channels', async
       () => ipc.getSummary({ projectId: UNKNOWN }),
       () => ipc.archive({ projectId: UNKNOWN }),
       () => ipc.setExecutionPolicy({ projectId: UNKNOWN, executionPolicy: { independentReview: 'off' } }),
+      () => ipc.setLocales({ projectId: UNKNOWN, sourceLocale: 'en', targetLocale: 'ja' }),
       () => ipc.import({ projectId: UNKNOWN }, picker),
     ]) {
       const result = await run()
@@ -253,6 +255,66 @@ test('setExecutionPolicy: 两档 round-trip 经信封返回更新后项目；归
     const rejected = await ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview: 'risk-based' } })
     assert.equal(rejected.ok, false)
     if (!rejected.ok) assert.equal(rejected.error.code, 'PROJECT_ARCHIVED')
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('setLocales: 空项目可改语言对；已有批次或 TM/TB 时 fail closed 且元数据不变', async () => {
+  const service = makeService()
+  try {
+    const ipc = makeIpc(service)
+    const empty = service.createProject(INPUT)
+
+    const changed = await ipc.setLocales({
+      projectId: empty.id,
+      sourceLocale: 'zh-CN',
+      targetLocale: 'en-US',
+    })
+    assert.equal(changed.ok, true)
+    if (changed.ok) {
+      assert.equal(changed.data.sourceLocale, 'zh-CN')
+      assert.equal(changed.data.targetLocale, 'en-US')
+    }
+
+    const withBatch = service.createProject({ ...INPUT, name: '已有批次' })
+    await service.importAsset(withBatch.id, {
+      filename: CSV_FIXTURE,
+      bytes: readFileSync(fixturePath(CSV_FIXTURE)),
+    })
+    const blockedBatch = await ipc.setLocales({
+      projectId: withBatch.id,
+      sourceLocale: 'ja',
+      targetLocale: 'en',
+    })
+    assert.equal(blockedBatch.ok, false)
+    if (!blockedBatch.ok) assert.equal(blockedBatch.error.code, 'PROJECT_LOCALE_CHANGE_BLOCKED')
+    assert.equal(service.getProject(withBatch.id).sourceLocale, INPUT.sourceLocale)
+
+    const withTerms = service.createProject({ ...INPUT, name: '已有术语' })
+    service.upsertTermReference(withTerms.id, {
+      term: 'Start',
+      translation: '开始',
+      status: 'preferred',
+      caseSensitive: false,
+    })
+    const blockedTerms = await ipc.setLocales({
+      projectId: withTerms.id,
+      sourceLocale: 'ja',
+      targetLocale: 'en',
+    })
+    assert.equal(blockedTerms.ok, false)
+    if (!blockedTerms.ok) assert.equal(blockedTerms.error.code, 'PROJECT_LOCALE_CHANGE_BLOCKED')
+
+    const archived = service.createProject({ ...INPUT, name: '已归档' })
+    service.archiveProject(archived.id)
+    const blockedArchived = await ipc.setLocales({
+      projectId: archived.id,
+      sourceLocale: 'ja',
+      targetLocale: 'en',
+    })
+    assert.equal(blockedArchived.ok, false)
+    if (!blockedArchived.ok) assert.equal(blockedArchived.error.code, 'PROJECT_ARCHIVED')
   } finally {
     service.closeAll()
   }

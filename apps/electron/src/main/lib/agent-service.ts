@@ -436,7 +436,7 @@ export async function queueAgentMessage(
  * 将 base64 编码的文件写入当前会话的私有工作目录，供 Agent 通过授权的附加目录读取。
  */
 export function saveFilesToAgentSession(input: AgentSaveFilesInput): AgentSavedFile[] {
-  return saveFilesToManagedAgentSession(input, {
+  const saved = saveFilesToManagedAgentSession(input, {
     getSessionMeta: getAgentSessionMeta,
     resolveExecutionScope: resolveAgentExecutionScope,
     assertSessionWritable: (session) => {
@@ -446,6 +446,16 @@ export function saveFilesToAgentSession(input: AgentSaveFilesInput): AgentSavedF
       }
     },
   })
+
+  // Linguist 的纸夹附件已由主进程写入当前会话受管目录；同步登记为会话附件，
+  // CAT Intake 才能仅凭 session authority 生成 opaque sourceToken，绝不接收路径入参。
+  const session = getAgentSessionMeta(input.sessionId)
+  if (session?.linguistProjectId && saved.length > 0) {
+    updateAgentSessionMeta(session.id, {
+      attachedFiles: [...new Set([...(session.attachedFiles ?? []), ...saved.map((file) => file.targetPath)])],
+    })
+  }
+  return saved
 }
 
 const LOCAL_PROJECT_ROOT_UNAVAILABLE_CODE = 'local_project_root_unavailable'

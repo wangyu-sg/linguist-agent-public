@@ -142,6 +142,7 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
   SESSION_COPY_BLOCKED: '当前会话状态不能安全复制到其他项目',
   IMPORT_VERIFICATION_FAILED: '导入未通过回读验证，已整批回滚',
   IMPORT_UNDO_BLOCKED: '该批次已有下游工作引用，无法撤销导入',
+  PROJECT_LOCALE_CHANGE_BLOCKED: '项目已有批次或 TM/TB，语言方向已冻结；请新建项目',
   STORE_SQLITE_UNAVAILABLE: '本机 SQLite 运行时不可用，项目数据库暂无法访问',
   STORE_SCHEMA_TOO_NEW: '项目数据由更新版本的应用创建，请升级应用后再打开',
   STORE_NOT_FOUND: '项目存储不存在',

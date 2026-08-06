@@ -137,6 +137,8 @@ import type {
   LinguistProjectOpenResult,
   LinguistProjectRenameRequest,
   LinguistProjectRenameResult,
+  LinguistProjectSetLocalesRequest,
+  LinguistProjectSetLocalesResult,
   LinguistProjectReorderRequest,
   LinguistProjectReorderResult,
   LinguistIntegrityCancelRequest,
@@ -1335,6 +1337,10 @@ export interface ElectronAPI {
   linguistProjectsRename: (
     input: LinguistProjectRenameRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectRenameResult>>
+  /** 修改空项目语言对；已有 locale-bound 数据时主进程拒绝。 */
+  linguistProjectsSetLocales: (
+    input: LinguistProjectSetLocalesRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectSetLocalesResult>>
   /** 原子保存完整的活跃项目顺序 */
   linguistProjectsReorderActive: (
     input: LinguistProjectReorderRequest,
@@ -3120,6 +3126,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.GET_SUMMARY, input),
   linguistProjectsRename: (input: LinguistProjectRenameRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.RENAME, input),
+  linguistProjectsSetLocales: (input: LinguistProjectSetLocalesRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.SET_LOCALES, input),
   linguistProjectsReorderActive: (input: LinguistProjectReorderRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.REORDER_ACTIVE, input),
   linguistProjectsArchive: (input: LinguistProjectArchiveRequest) =>

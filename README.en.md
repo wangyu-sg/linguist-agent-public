@@ -12,7 +12,7 @@ This repository is an AGPL-3.0 derivative of [Proma](https://github.com/proma-ai
 
 The product is a **personal-use Alpha** for its author's sustained use and improvement, with no public-release plan. Its structure is fixed: it does not remove Proma's Agent, Chat, Providers, Skills, MCP, Automations, or remote integrations; Linguist is a first-class localization mode on top of them.
 
-The current manifest baseline is Electron App `0.16.16` (Electron `43.2.0`), `@proma/shared 0.1.83`, Pi Runtime `0.82.1`, CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`, CAT schema `15`, with Bun `1.3.14` pinned for the repository.
+The current manifest baseline is Electron App `0.16.17` (Electron `43.2.0`), `@proma/shared 0.1.84`, Pi Runtime `0.82.1`, CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21`, CAT schema `15`, with Bun `1.3.14` pinned for the repository.
 
 The application has three peer primary modes:
 
@@ -47,7 +47,7 @@ Important boundaries:
 
 - `@linguist/cat-core` has no React, Electron, Proma UI, or SQLite dependency.
 - `@linguist/cat-store` owns each project's `cat.db`, managed source assets, backups, and export records.
-- `@linguist/cat-tools` derives project identity only from the Session binding. Its 19 tools are split by project, reference, QA, Proposal/Critic, Intake, and Translation Scope responsibilities; Intake currently accepts only explicitly attached single files.
+- `@linguist/cat-tools` derives project identity only from the Session binding. Its 19 tools are split by project, reference, QA, Proposal/Critic, Intake, and Translation Scope responsibilities. A single file copied into the current Linguist session through the paperclip or an explicit `@file` reference becomes an Intake source; models still receive only opaque tokens, never path authority.
 - Batch source files and language assets whose originals are retained share Proma's native Preview Tab. TM/TB imports remain candidates until explicit human confirmation makes them authoritative.
 - XLSX task sheets require an explicit Sheet/column mapping confirmation; the mapping is stored with the batch and reused for export. Complex SDLXLIFF `mrk` and low-confidence CSV/JSON detection fail closed in their existing adapters.
 - `LinguistProjectService` remains the single external facade while lifecycle, resources, quality, and delivery live in separate modules.

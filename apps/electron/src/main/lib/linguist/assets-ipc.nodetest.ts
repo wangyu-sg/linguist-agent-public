@@ -423,20 +423,26 @@ test('assets IPC: image context doc 查询附带 proma-file previewUrl；doc 无
   }
 })
 
-test('assets IPC: previewContextDoc 三态分派（md → text / docx → html / image → url），路径不离 blobs/', async () => {
+test('assets IPC: previewContextDoc 分派（md/doc → text / docx → html / image → url），路径不离 blobs/', async () => {
   const service = makeService()
   try {
     const project = service.createProject(INPUT)
     const temp = makeTempDir()
     const mdPath = join(temp, '术语备忘.md')
+    const docPath = join(temp, '旧版说明.doc')
     const pngPath = join(temp, 'hud.png')
     writeFileSync(mdPath, '# 世界观\n王国与森林。')
+    writeFileSync(docPath, 'synthetic legacy doc bytes')
     writeFileSync(pngPath, new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
     const seenPaths: string[] = []
     const deps = fakeAssetPreviewDeps({
       readText: async (filePath) => {
         seenPaths.push(filePath)
         return { content: readFileSync(filePath, 'utf-8') }
+      },
+      extractText: async (filePath) => {
+        seenPaths.push(filePath)
+        return '旧版 Word 可读正文'
       },
       convertDocxToHtml: async (filePath) => {
         seenPaths.push(filePath)
@@ -455,6 +461,9 @@ test('assets IPC: previewContextDoc 三态分派（md → text / docx → html /
     const docxImport = await ipc.importContextDoc({ projectId: project.id }, picker([CONTEXT_DOCX_FIXTURE]).picker)
     assert.equal(docxImport.ok, true)
     if (!docxImport.ok || docxImport.data.cancelled) return
+    const docImport = await ipc.importContextDoc({ projectId: project.id }, picker([docPath]).picker)
+    assert.equal(docImport.ok, true)
+    if (!docImport.ok || docImport.data.cancelled) return
     const pngImport = await ipc.importContextDoc({ projectId: project.id }, picker([pngPath]).picker)
     assert.equal(pngImport.ok, true)
     if (!pngImport.ok || pngImport.data.cancelled) return
@@ -486,6 +495,12 @@ test('assets IPC: previewContextDoc 三态分派（md → text / docx → html /
       }
     }
 
+    const docPreview = await ipc.previewContextDoc({ projectId: project.id, docId: docImport.data.doc.id })
+    assert.equal(docPreview.ok, true)
+    if (docPreview.ok && docPreview.data.kind === 'text') {
+      assert.equal(docPreview.data.text, '旧版 Word 可读正文')
+    }
+
     // image → url 态：proma-file:// 不透明 token，绝不带盘上路径。
     const pngPreview = await ipc.previewContextDoc({ projectId: project.id, docId: pngImport.data.doc.id })
     assert.equal(pngPreview.ok, true)
@@ -499,7 +514,7 @@ test('assets IPC: previewContextDoc 三态分派（md → text / docx → html /
     }
 
     // 转换栈实际收到的路径全部在 blobs/ 内（realpath 围栏生效）。
-    assert.equal(seenPaths.length, 2)
+    assert.equal(seenPaths.length, 3)
     for (const seen of seenPaths) {
       assert.ok(seen.startsWith(blobsRoot), `path escaped blobs/: ${seen}`)
     }
