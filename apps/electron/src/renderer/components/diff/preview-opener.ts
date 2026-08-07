@@ -17,6 +17,7 @@ import {
   previewFileMapAtom,
   previewPanelOpenMapAtom,
   previewModePreferenceAtom,
+  type PreviewModePreference,
   type PreviewFile,
 } from '@/atoms/preview-atoms'
 import {
@@ -36,7 +37,7 @@ export function useOpenPreview() {
   const store = useStore()
 
   return React.useCallback(
-    (sessionId: string, file: PreviewFile) => {
+    (sessionId: string, file: PreviewFile, mode?: PreviewModePreference) => {
       // 1. 文件状态两种模式都需要，先写入
       store.set(previewFileMapAtom, (prev) => {
         const m = new Map(prev)
@@ -44,7 +45,7 @@ export function useOpenPreview() {
         return m
       })
 
-      const preferSplit = store.get(previewModePreferenceAtom) === 'split'
+      const preferSplit = (mode ?? store.get(previewModePreferenceAtom)) === 'split'
 
       if (preferSplit) {
         // 分屏：开启预览面板，不创建 Tab

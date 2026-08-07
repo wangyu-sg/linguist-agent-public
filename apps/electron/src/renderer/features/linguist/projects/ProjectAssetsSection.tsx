@@ -120,6 +120,7 @@ export function ProjectAssetsSection({
   const [importState, setImportState] = React.useState<ImportState>({ status: 'idle' })
   const [exportState, setExportState] = React.useState<ExportState>({ status: 'idle' })
   const [undoState, setUndoState] = React.useState<UndoImportState>({ status: 'idle' })
+  const [refreshing, setRefreshing] = React.useState(false)
   const [lastImport, setLastImport] = React.useState<LastImport | null>(null)
   const [xlsxMapping, setXlsxMapping] = React.useState<PendingXlsxMapping | null>(null)
   const [warningsExpanded, setWarningsExpanded] = React.useState(false)
@@ -137,6 +138,16 @@ export function ProjectAssetsSection({
   const importBusy = importState.status === 'busy'
   const exportBusy = exportState.status === 'busy'
   const undoBusy = undoState.status === 'busy'
+
+  const handleRefresh = async (): Promise<void> => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await onSummaryRefresh()
+    } finally {
+      if (aliveRef.current) setRefreshing(false)
+    }
+  }
 
   const completeImport = async (data: CompletedImport): Promise<void> => {
     setLastImport({
@@ -354,6 +365,16 @@ export function ProjectAssetsSection({
           {archived && (
             <span className="text-[12px] text-foreground/40">已归档项目为只读，无法导入</span>
           )}
+          <button
+            type="button"
+            aria-label="刷新批次"
+            title="刷新批次"
+            disabled={refreshing}
+            onClick={() => void handleRefresh()}
+            className="inline-flex size-8 items-center justify-center rounded-md text-foreground/55 hover:bg-foreground/[0.07] disabled:opacity-40"
+          >
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : undefined} />
+          </button>
           <button
             type="button"
             onClick={() => void handleImport()}

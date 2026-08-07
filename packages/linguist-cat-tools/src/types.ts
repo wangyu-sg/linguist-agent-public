@@ -48,6 +48,7 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_list_assets',
   'cat_get_segments',
   'cat_import_asset',
+  'cat_export_asset',
   'cat_get_translation_context',
   'cat_get_proposal_snapshot',
   'cat_search_tm',
@@ -169,6 +170,19 @@ export interface LinguistCatToolsDeps {
     resourceKind: LinguistIntakeResourceKind,
     xlsxMapping?: LinguistIntakeXlsxMapping,
   ) => Promise<LinguistIntakeImportResult>
+  /** 把已绑定项目的批次保存为新的本地文件；宿主校验路径与会话 authority。 */
+  exportAsset?: (
+    assetId: string,
+    destinationPath: string,
+  ) => Promise<LinguistExportAssetResult>
+}
+
+export interface LinguistExportAssetResult {
+  filename: string
+  sha256: string
+  sizeBytes: number
+  verifiedAt: string
+  verifiedSegments: number
 }
 
 export type LinguistIntakeResourceKind = 'batch' | 'tm' | 'terms' | 'context'

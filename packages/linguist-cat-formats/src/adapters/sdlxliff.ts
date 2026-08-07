@@ -145,6 +145,7 @@ interface ParsedSdlSegment {
   locked: boolean
   status: SegmentStatus
   nativeStatus: string | undefined
+  sdlSegDefinitionScope: 'unit' | 'document' | undefined
   note: string | undefined
   origin: string | undefined
 }
@@ -308,6 +309,7 @@ export class SdlXliffAdapter implements CatFormatAdapter {
     }
     const changed = new Map<string, string>()
     const statusChanges = new Map<string, string>()
+    const documentStatusChanges = new Map<string, string>()
     const templateKeys = new Set<string>()
     for (const unit of units) {
       for (const seg of unit.segs) {
@@ -332,7 +334,7 @@ export class SdlXliffAdapter implements CatFormatAdapter {
             workflow.outputStatusPolicy,
           )
           if (nativeStatus !== undefined && nativeStatus !== seg.nativeStatus) {
-            if (!unit.segmented || seg.nativeStatus === undefined) {
+            if (!unit.segmented || seg.sdlSegDefinitionScope === undefined) {
               throw new FormatExportError(
                 this.id,
                 `segment ${JSON.stringify(seg.key)} is confirmed for ${workflow.stage} but has no writable sdl:seg definition`,
@@ -344,7 +346,8 @@ export class SdlXliffAdapter implements CatFormatAdapter {
                 `segment ${JSON.stringify(seg.key)} is locked but its workflow status was changed`,
               )
             }
-            statusChanges.set(seg.key, nativeStatus)
+            ;(seg.sdlSegDefinitionScope === 'unit' ? statusChanges : documentStatusChanges)
+              .set(seg.key, nativeStatus)
           }
         }
         if (segment.target === seg.targetText) continue
@@ -372,8 +375,12 @@ export class SdlXliffAdapter implements CatFormatAdapter {
       const unit = units[cursor]
       if (!unit) break
       cursor += 1
-      if (!unit.segs.some((seg) => changed.has(seg.key))) continue
-      edits.push({ start, end: start + match[0].length, replacement: this.rewriteUnit(unit, changed) })
+      if (!unit.segs.some((seg) => changed.has(seg.key) || statusChanges.has(seg.key))) continue
+      edits.push({
+        start,
+        end: start + match[0].length,
+        replacement: this.rewriteUnit(unit, changed, statusChanges),
+      })
     }
 
     let out = text
@@ -381,11 +388,25 @@ export class SdlXliffAdapter implements CatFormatAdapter {
       const edit = edits[i]!
       out = out.slice(0, edit.start) + edit.replacement + out.slice(edit.end)
     }
-    out = this.rewriteSegmentStatuses(out, statusChanges)
+    out = this.rewriteDocumentSegmentStatuses(out, documentStatusChanges)
     return new TextEncoder().encode(out)
   }
 
-  /** 只替换对应 `<sdl:seg>` 的 conf 属性，保留其余属性、子节点和时间戳。 */
+  /** 文档级 seg-defs 只写 trans-unit 外部，避免同 id 的局部定义被串改。 */
+  private rewriteDocumentSegmentStatuses(text: string, changes: ReadonlyMap<string, string>): string {
+    if (changes.size === 0) return text
+    let out = ''
+    let cursor = 0
+    TRANS_UNIT_PATTERN.lastIndex = 0
+    for (const match of text.matchAll(TRANS_UNIT_PATTERN)) {
+      const start = match.index ?? 0
+      out += this.rewriteSegmentStatuses(text.slice(cursor, start), changes) + match[0]
+      cursor = start + match[0].length
+    }
+    return out + this.rewriteSegmentStatuses(text.slice(cursor), changes)
+  }
+
+  /** 只在当前 trans-unit 内替换对应 `<sdl:seg>` 的 conf，保留其他元数据。 */
   private rewriteSegmentStatuses(text: string, changes: ReadonlyMap<string, string>): string {
     if (changes.size === 0) return text
     SEG_DEF_PATTERN.lastIndex = 0
@@ -401,7 +422,11 @@ export class SdlXliffAdapter implements CatFormatAdapter {
   }
 
   /** Rewrites the changed segments of one trans-unit; everything else stays verbatim. */
-  private rewriteUnit(unit: ParsedSdlUnit, changed: Map<string, string>): string {
+  private rewriteUnit(
+    unit: ParsedSdlUnit,
+    changed: ReadonlyMap<string, string>,
+    statusChanges: ReadonlyMap<string, string>,
+  ): string {
     if (!unit.segmented) {
       const seg = unit.segs.find((candidate) => changed.has(candidate.key))
       if (!seg) return unit.full // defensive; the caller only passes units with changes
@@ -411,7 +436,8 @@ export class SdlXliffAdapter implements CatFormatAdapter {
     const entries = unit.segs
       .filter((seg) => changed.has(seg.key))
       .map((seg) => ({ mid: seg.key, encoded: encodeXmlInline(changed.get(seg.key)!) }))
-    return this.rewriteSegmentedTarget(unit.full, entries)
+    const withTargets = entries.length === 0 ? unit.full : this.rewriteSegmentedTarget(unit.full, entries)
+    return this.rewriteSegmentStatuses(withTargets, statusChanges)
   }
 
   /**
@@ -503,7 +529,8 @@ export class SdlXliffAdapter implements CatFormatAdapter {
       throw new FormatParseError(this.id, filename, `XLIFF ${version} is not supported (XLIFF 1.2 trans-unit documents only)`)
     }
 
-    const segDefs = parseSegDefs(text)
+    TRANS_UNIT_PATTERN.lastIndex = 0
+    const documentSegDefs = parseSegDefs(text.replace(TRANS_UNIT_PATTERN, ''))
     const warnings: ImportWarning[] = []
     const units: ParsedSdlUnit[] = []
     const seenKeys = new Set<string>()
@@ -532,6 +559,7 @@ export class SdlXliffAdapter implements CatFormatAdapter {
         const sourceMrks = extractSegMrks(segSource?.inner)
         if (sourceMrks.length > 0) {
           unit.segmented = true
+          const segDefs = parseSegDefs(inner)
           const target = findFirst(inner, 'target')
           const targetMrks = new Map(extractSegMrks(target?.inner).map((mrk) => [mrk.attrs.mid ?? '', mrk]))
           for (const srcMrk of sourceMrks) {
@@ -543,7 +571,8 @@ export class SdlXliffAdapter implements CatFormatAdapter {
               })
               continue
             }
-            const def = segDefs.get(mid)
+            const localDef = segDefs.get(mid)
+            const def = localDef ?? documentSegDefs.get(mid)
             const targetText = decodeXmlInline(targetMrks.get(mid)?.inner ?? '')
             pushSegment(unit, {
               ordinal: segmentCount,
@@ -553,6 +582,11 @@ export class SdlXliffAdapter implements CatFormatAdapter {
               locked: tuLocked || (def?.locked ?? false),
               status: statusFromSdlConf(targetText, def?.conf),
               nativeStatus: def?.conf,
+              sdlSegDefinitionScope: localDef !== undefined
+                ? 'unit'
+                : def !== undefined
+                  ? 'document'
+                  : undefined,
               note: undefined,
               origin: undefined,
             })
@@ -587,6 +621,7 @@ export class SdlXliffAdapter implements CatFormatAdapter {
             locked: tuLocked,
             status: statusFromXliff(targetText, target?.attrs ?? {}, attrs),
             nativeStatus: target?.attrs.state ?? attrs.state,
+            sdlSegDefinitionScope: undefined,
             note: note ? decodeXmlEntities(note.inner).trim() : undefined,
             origin: resname,
           })

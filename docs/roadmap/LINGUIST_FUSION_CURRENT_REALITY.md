@@ -1,6 +1,6 @@
 # Linguist Fusion 当前事实
 
-> 更新日期：2026-08-06。代码、manifest、测试和真实运行输出优先于本文。
+> 更新日期：2026-08-07。代码、manifest、测试和真实运行输出优先于本文。
 
 ## 基线
 
@@ -8,12 +8,12 @@
 |---|---|
 | 仓库 / 分支 / 实现提交 | `/Users/<local>/Desktop/linguist-agent-next` / `main` / 以 `git HEAD` 为准 |
 | Proma Base / formal merge | v0.16.8 `bde00f00` / `f3d2b431` |
-| App / Electron | `0.16.17` / `43.2.0` |
+| App / Electron | `0.16.19` / `43.2.0` |
 | Bun / Pi / Claude | `1.3.14` / `0.82.1` / `0.3.201` |
-| Shared | `0.1.84` |
-| CAT Core / Formats / Store / Tools | `0.0.14 / 0.0.7 / 0.0.27 / 0.0.21` |
-| CAT schema / Tool count | `15` / `19` |
-| Proma core touchpoints | `257`，以 `proma-touchpoints.json` 为准 |
+| Shared | `0.1.85` |
+| CAT Core / Formats / Store / Tools | `0.0.14 / 0.0.8 / 0.0.27 / 0.0.23` |
+| CAT schema / Tool count | `15` / `20` |
+| Proma core touchpoints | `258`，以 `proma-touchpoints.json` 为准 |
 
 产品结构固定为完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench。Linguist 复用同一个 AgentView、ChatView、Session、Preview Tab 和 Host 状态。
 
@@ -25,7 +25,9 @@
 - TM/TB 使用候选 → 人工确认 → 权威层；原件进入受管 blob，批次和语言资产均复用 Proma Preview Tab。
 - Import Verification 与引用感知 Undo 已实现；下游 Proposal/QA/Critic/Export/人工编辑/Job 任一引用都会阻止撤销。
 - Context cursor 绑定项目事件序列；Segment、TM/TB、Style Guide mutation 均推动事件，旧 cursor 抛 `CONTEXT_DRIFT`。
-- Execution Policy、专业质量合同、Canonical Prompt Contract、双 renderer、全局预算与 Translation Scope 已接入；CAT 工具由 17 增至 19。
+- Execution Policy、专业质量合同、Canonical Prompt Contract、双 renderer、全局预算与 Translation Scope 已接入；CAT 工具现为 20 个。项目 Agent 可把通过预检和重新导入验证的批次保存为新的本地文件，但不能覆盖、上传或发送。
+- SDLXLIFF 导出按 trans-unit 解析和写回局部 `sdl:seg` 状态；缺少旧 `conf` 不再误判为不可写，同 id 的其他局部定义不再被串改。
+- 批次与语言资产预览固定打开 Proma Preview Tab，不受通用 split 偏好影响；两类列表均有显式刷新入口。
 - Proma 上游影响检查是本地只读 dry-run，不做 git mutation 或发布。
 
 ## 状态

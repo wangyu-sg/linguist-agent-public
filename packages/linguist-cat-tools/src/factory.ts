@@ -11,6 +11,7 @@ import { createProposalTools } from './proposal-tools'
 import { createQaTools } from './qa-tools'
 import { createReferenceTools } from './reference-tools'
 import { createTranslationScopeTools } from './translation-scope-tools'
+import { createDeliveryTools } from './delivery-tools'
 import { createCatToolRuntime } from './tool-runtime'
 import type { LinguistCatToolsDeps } from './types'
 
@@ -23,6 +24,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const [projectSummaryTool, listAssetsTool, getSegmentsTool] =
     createProjectTools(runtime)
   const [importAssetTool] = createIntakeTools(runtime)
+  const [exportAssetTool] = createDeliveryTools(runtime)
   const [
     getTranslationContextTool,
     searchTmTool,
@@ -47,6 +49,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     listAssetsTool,
     getSegmentsTool,
     importAssetTool,
+    exportAssetTool,
     getTranslationContextTool,
     getProposalSnapshotTool,
     searchTmTool,

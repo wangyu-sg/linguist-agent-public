@@ -18,7 +18,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeClock, makeEntropy, makeTempDir, readFixture } from './test/service-testkit'
 import { LinguistProjectService } from './project-service'
@@ -120,7 +120,7 @@ test('bound active session: CAT tools execute end-to-end against a real seeded p
   )
   assert.deepEqual(tools.map((t) => t.name), [...LINGUIST_CAT_TOOL_NAMES])
   assert.ok(toolByName(tools, 'cat_accept_proposals'))
-  assert.equal(tools.some((tool) => /reject|deliver|export/i.test(tool.name)), false)
+  assert.ok(toolByName(tools, 'cat_export_asset'))
 
   // summary：真实项目聚合
   const summary = await invoke(toolByName(tools, 'cat_project_summary'), {})
@@ -179,7 +179,7 @@ test('bound active session: CAT tools execute end-to-end against a real seeded p
   }>
   assert.equal(qaFindings.total, 7)
   assert.ok(qaFindings.items.every((finding) => finding.code === 'EMPTY_TARGET' && finding.status === 'open'))
-  assert.equal(tools.some((tool) => /resolve|waive|commit|deliver|export/i.test(tool.name)), false)
+  assert.equal(tools.some((tool) => /resolve|waive|commit|deliver/i.test(tool.name)), false)
 
   // 空 TM/TB：干净空 + note（非错误）
   const tm = await invoke(toolByName(tools, 'cat_search_tm'), { query: 'Health' })
@@ -220,6 +220,44 @@ test('bound active session: CAT tools execute end-to-end against a real seeded p
     }
   }
 
+  service.closeAll()
+})
+
+test('bound active session: Agent exports a verified batch to a new absolute local file', async () => {
+  const service = makeServiceOnLinguistRoot()
+  const project = service.createProject({
+    ...PROJECT_INPUT,
+    sourceLocale: 'zh-CN',
+    targetLocale: 'en-US',
+  })
+  const imported = await service.importAsset(project.id, {
+    bytes: readFixture('minimal_delivery.sdlxliff'),
+    filename: 'minimal_delivery.sdlxliff',
+  })
+  const db = service.openProject(project.id)
+  for (const segment of db.segments.query({ assetId: imported.assetId, limit: 10 })) {
+    db.segments.confirmCurrentStage(segment.id, 'translation', segment.revision)
+  }
+  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+  const tools = catTools.resolveLinguistSessionCatTools(meta, () => service)
+  const desktop = join(tempHome, 'Desktop')
+  mkdirSync(desktop, { recursive: true })
+  const destinationPath = join(desktop, 'minimal_delivery.translated.en-US.sdlxliff')
+
+  const result = await invoke(toolByName(tools, 'cat_export_asset'), {
+    assetId: imported.assetId,
+    destinationPath,
+  })
+
+  assert.equal(existsSync(destinationPath), true)
+  assert.equal(result.filename, 'minimal_delivery.translated.en-US.sdlxliff')
+  assert.equal(result.verifiedSegments, 2)
+  assert.match(String(result.sha256), /^[0-9a-f]{64}$/)
+  assert.equal(collectStrings(result).some((value) => value.includes(tempHome)), false)
+  await assert.rejects(
+    invoke(toolByName(tools, 'cat_export_asset'), { assetId: imported.assetId, destinationPath }),
+    /导出目标已存在/,
+  )
   service.closeAll()
 })
 

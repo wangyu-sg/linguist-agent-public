@@ -52,7 +52,7 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.16.18` |
+| Electron App | `@proma/electron 0.16.19` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
@@ -61,9 +61,9 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
 | Pi Runtime（Electron App） | `@earendil-works/pi-* 0.82.1` |
 | CAT Core | `@linguist/cat-core 0.0.14` |
-| CAT Formats | `@linguist/cat-formats 0.0.7` |
+| CAT Formats | `@linguist/cat-formats 0.0.8` |
 | CAT Store | `@linguist/cat-store 0.0.27` |
-| CAT Tools | `@linguist/cat-tools 0.0.22` |
+| CAT Tools | `@linguist/cat-tools 0.0.23` |
 | CAT schema | `15` |
 
 不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。
@@ -191,7 +191,7 @@ CAT 写入规则：
 - QA、Critic 和 consistency repair 不能直接提交 Segment；
 - CAT 编辑器的 `Cmd/Ctrl+Enter` 表示确认当前阶段并前进，即使译文未改也必须可用；`Cmd/Ctrl+S` 仍只保存实际修改；
 - Segment 写入必须经过 revision CAS、locked 与 hard-rule 检查；
-- Agent 不得直接导出或交付最终文件；
+- 项目 Agent 可在交付预检与重新导入验证通过后，把批次保存为用户指定的新绝对本地路径；不得覆盖已有文件、上传或发送给外部；
 - 导出必须从受管 source blob 生成，先过 QA / 阶段预检并重新导入验证；
 - 输出给模型和 renderer 的 DTO 不暴露绝对本机路径。
 
@@ -203,7 +203,7 @@ CAT 写入规则：
 - `project-delivery.ts`：导入、交付预检与导出；
 - `project-service-types.ts`：稳定调用合同。
 
-CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；19 个工具按 `project-tools`、`reference-tools`、`qa-tools`、`proposal-tools`、`intake-tools`、`translation-scope-tools` 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。项目 Agent 可导入会话工作区或明确附加的文件/目录中的单文件；主进程必须重新校验路径根与 Session binding，模型不得提交 `projectId`。目录不得静默批量导入，Durable Import Job 仍不在当前范围。
+CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；20 个工具按 `project-tools`、`reference-tools`、`qa-tools`、`proposal-tools`、`intake-tools`、`delivery-tools`、`translation-scope-tools` 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。项目 Agent 可导入会话工作区或明确附加的文件/目录中的单文件；也可把已验证批次保存到新的绝对本地路径。主进程必须重新校验路径根、Session binding、交付状态与摘要，模型不得提交 `projectId`。目录不得静默批量导入，Durable Import Job 仍不在当前范围。
 
 同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级参考资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须显式确认 Sheet/列映射；XLSX Context 保留 Sheet、物理行号和单元格坐标。UI TM/TB 导入保留候选确认，项目 Agent 可直接登记授权的 TM/TB/Context。原生 SDLTM/SDLTB 可导入。批次源文件与保留原件的语言资产统一复用 Proma Preview Tab，不新增第二套预览器。
 

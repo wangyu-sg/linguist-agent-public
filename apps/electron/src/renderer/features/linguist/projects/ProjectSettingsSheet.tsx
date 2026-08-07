@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { RefreshCw } from 'lucide-react'
 import type {
   LinguistIndependentReview,
   LinguistProjectInfo,
@@ -246,6 +247,7 @@ export function ProjectResourceSettings({
   onSummaryRefresh: () => void
 }): React.ReactElement {
   const archived = project.archivedAt !== undefined
+  const [resourceRefreshToken, setResourceRefreshToken] = React.useState(0)
 
   return (
     <section aria-label="项目语言资产" className="space-y-3 py-1">
@@ -255,10 +257,24 @@ export function ProjectResourceSettings({
         summary={summary}
         onSummaryRefresh={async () => onSummaryRefresh()}
       />
-      <ReferenceManager projectId={project.id} archived={archived} />
-      <StyleGuidePanel projectId={project.id} archived={archived} />
-      <VoiceProfilePanel projectId={project.id} archived={archived} />
-      <ContextDocsPanel projectId={project.id} archived={archived} />
+      <div className="flex items-center justify-between px-1">
+        <span className="text-[13px] font-medium text-foreground/55">语言资产</span>
+        <button
+          type="button"
+          aria-label="刷新语言资产"
+          title="刷新语言资产"
+          onClick={() => setResourceRefreshToken((current) => current + 1)}
+          className="inline-flex size-8 items-center justify-center rounded-md text-foreground/55 hover:bg-foreground/[0.07]"
+        >
+          <RefreshCw size={13} />
+        </button>
+      </div>
+      <React.Fragment key={resourceRefreshToken}>
+        <ReferenceManager projectId={project.id} archived={archived} />
+        <StyleGuidePanel projectId={project.id} archived={archived} />
+        <VoiceProfilePanel projectId={project.id} archived={archived} />
+        <ContextDocsPanel projectId={project.id} archived={archived} />
+      </React.Fragment>
     </section>
   )
 }

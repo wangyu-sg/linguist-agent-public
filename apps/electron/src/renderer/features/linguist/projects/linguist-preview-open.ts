@@ -19,7 +19,7 @@ import { useOpenPreview } from '@/components/diff/preview-opener'
 /** Jotai store 类型（从 useStore 推导，避免直接 import 内部 Store 类型） */
 type JotaiStore = ReturnType<typeof useStore>
 
-type OpenPreviewFn = (sessionId: string, file: PreviewFile) => void
+type OpenPreviewFn = (sessionId: string, file: PreviewFile, mode?: 'tab' | 'split') => void
 
 /**
  * 打开核心（纯函数形态，便于 bun test 直接驱动 store 断言）。
@@ -39,7 +39,7 @@ export function openLinguistPreview(
     previewOnly: true,
     readOnly: true,
     linguist: target,
-  })
+  }, 'tab')
   return true
 }
 

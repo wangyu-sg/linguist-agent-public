@@ -57,6 +57,7 @@ import {
   runLinguistQaWorker,
 } from './cat-job-worker-client'
 import type { LinguistProjectService } from './project-service'
+import { copyFileVerified } from './secure-export'
 
 export type LinguistProjectMutationSink = (event: LinguistProjectMutationEvent) => void
 
@@ -169,6 +170,34 @@ function createSessionIntakeBridge(
   }
 }
 
+function createSessionExportBridge(
+  sessionId: string,
+  projectId: string,
+  getService: LinguistServiceResolver,
+) {
+  return async (assetId: string, destinationPath: string) => {
+    if (getAgentSessionMeta(sessionId)?.linguistProjectId !== projectId) {
+      throw new LinguistCatInvalidArgumentError('assetId', 'session is no longer bound to this project')
+    }
+    const service: LinguistProjectService = getService()
+    const prepared = await service.prepareDelivery(projectId, assetId)
+    if (prepared.staged === undefined || prepared.verification === undefined) {
+      throw new LinguistCatInvalidArgumentError('assetId', 'batch is not ready for delivery')
+    }
+    const written = copyFileVerified({
+      managedRoot: service.rootDir,
+      sourcePath: prepared.staged.stagingPath,
+      destinationPath,
+      expectedSha256: prepared.staged.artifact.sha256,
+    })
+    return {
+      filename: basename(destinationPath),
+      ...written,
+      verifiedSegments: prepared.staged.verifiedSegments,
+    }
+  }
+}
+
 export function getLinguistProjectMutationRevision(projectId: string): number {
   return projectMutationRevisions.get(projectId) ?? 0
 }
@@ -236,6 +265,7 @@ export function resolveLinguistSessionCatTools(
     return { project: service.getProject(projectId), db: service.openProject(projectId) }
   }
   const intake = createSessionIntakeBridge(session.id, projectId, getService)
+  const exportAsset = createSessionExportBridge(session.id, projectId, getService)
   return createLinguistCatTools({
     resolveProject,
     resultProjectId: projectId,
@@ -247,6 +277,7 @@ export function resolveLinguistSessionCatTools(
     consistencyWorker: runLinguistConsistencyWorker,
     qaWorker: runLinguistQaWorker,
     importIntakeAsset: intake.importIntakeAsset,
+    exportAsset,
     onMutation: (mutation) => {
       const event = createLinguistProjectMutationEvent(projectId, mutation)
       onProjectMutation?.(event)

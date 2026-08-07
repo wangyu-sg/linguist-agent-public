@@ -51,6 +51,7 @@ export {
   type LinguistCatToolName,
   type LinguistCatToolsDeps,
   type LinguistIntakeImportResult,
+  type LinguistExportAssetResult,
   type LinguistIntakeResourceKind,
   type LinguistIntakeXlsxMapping,
   type LinguistConsistencyWorker,

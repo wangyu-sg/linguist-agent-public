@@ -54,6 +54,7 @@ describe('ProjectAssetsSection 预览入口', () => {
     )
 
     expect(html).toContain('aria-label="预览 messages.xliff"')
+    expect(html).toContain('aria-label="刷新批次"')
     // 旧第二套预览（Dialog modal）已移除
     expect(html).not.toContain('role="dialog"')
     expect(html).not.toContain('预览源文件')

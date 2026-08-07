@@ -14,9 +14,9 @@
 | formal merge 相对 Proma v0.16.8 的全部变动 | 766 | git diff --name-only bde00f0...f3d2b431 |
 | 允许路径 | 514 | 机读账本的 allowedNewPaths |
 | formal merge 中必须登记的 Proma 核心触点 | 252 | git diff 与当时账本 |
-| 当前账本 | 257 | formal merge 后新增 13 个必要触点，并退役 8 个非必要通用 UI 触点 |
+| 当前账本 | 258 | formal merge 后新增 14 个必要触点，并退役 8 个非必要通用 UI 触点 |
 
-formal merge 触点按同步票归组：LA-SYNC-003 的 Local Host Seam 为 75 条、Temporary Deviation 为 1 条；LA-SYNC-004 的 Local Host Seam 为 147 条；LA-SYNC-005 的 Permanent Product Fork 为 29 条。其后新增 13 个必要触点；本轮退役长会话窗口、模型分隔器、ScrollMinimap 支线与冗余 Feature Flags 共 8 个通用 UI 触点，当前总数为 257。权限作用域摘要继续保留，用于在授权前显示文字风险等级与实际操作范围。
+formal merge 触点按同步票归组：LA-SYNC-003 的 Local Host Seam 为 75 条、Temporary Deviation 为 1 条；LA-SYNC-004 的 Local Host Seam 为 147 条；LA-SYNC-005 的 Permanent Product Fork 为 29 条。其后新增 14 个必要触点；本轮退役长会话窗口、模型分隔器、ScrollMinimap 支线与冗余 Feature Flags 共 8 个通用 UI 触点，当前总数为 258。权限作用域摘要继续保留，用于在授权前显示文字风险等级与实际操作范围。
 
 ## 规则
 

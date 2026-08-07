@@ -12,7 +12,7 @@ This repository is an AGPL-3.0 derivative of [Proma](https://github.com/proma-ai
 
 The product is a **personal-use Alpha** for its author's sustained use and improvement, with no public-release plan. Its structure is fixed: it does not remove Proma's Agent, Chat, Providers, Skills, MCP, Automations, or remote integrations; Linguist is a first-class localization mode on top of them.
 
-The current manifest baseline is Electron App `0.16.18` (Electron `43.2.0`), `@proma/shared 0.1.85`, Pi Runtime `0.82.1`, CAT Core / Formats / Store / Tools `0.0.14 / 0.0.7 / 0.0.27 / 0.0.22`, CAT schema `15`, with Bun `1.3.14` pinned for the repository.
+The current manifest baseline is Electron App `0.16.19` (Electron `43.2.0`), `@proma/shared 0.1.85`, Pi Runtime `0.82.1`, CAT Core / Formats / Store / Tools `0.0.14 / 0.0.8 / 0.0.27 / 0.0.23`, CAT schema `15`, with Bun `1.3.14` pinned for the repository.
 
 The application has three peer primary modes:
 
@@ -22,7 +22,7 @@ The application has three peer primary modes:
 
 The Linguist sidebar is always “project → bound sessions.” Session rows and tree behavior are shared with Agent, including status, MiniMap, delegation, pinning, recents, and archives; Agent mode excludes every project-bound session. Selecting a project opens its Workbench, while selecting a session opens the same full `AgentView`. Cross-project actions create an independent copy, keep the source project open, and offer an action to open the copy.
 
-Linguist is a first-class Agent Profile. It layers a versioned Profile, Role, professional quality contract, Execution Policy, Project Digest, and frozen Turn Context on top of each runtime's Proma Base, and explicitly reports degradation rather than silently falling back to an ordinary Agent. Execution Policy only controls risk-based independent review; it makes no Fast / Balanced / Best quality promise. It embeds the same `AgentView` rather than creating a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. A project Agent may create and accept Proposals; Segment writes still enforce CAS revisions, locks, tags, and Required/Forbidden term gates. Agents cannot directly export or deliver final files.
+Linguist is a first-class Agent Profile. It layers a versioned Profile, Role, professional quality contract, Execution Policy, Project Digest, and frozen Turn Context on top of each runtime's Proma Base, and explicitly reports degradation rather than silently falling back to an ordinary Agent. Execution Policy only controls risk-based independent review; it makes no Fast / Balanced / Best quality promise. It embeds the same `AgentView` rather than creating a second Composer, message stream, Thinking renderer, Tool Card, approval flow, or Session Store. A project Agent may create and accept Proposals and, after delivery preflight and round-trip verification, save a batch to a new local path selected by the user. It cannot overwrite existing files, upload, or send them externally. Segment writes still enforce CAS revisions, locks, tags, and Required/Forbidden term gates.
 
 In the CAT editor, `Cmd/Ctrl+Enter` confirms the current workflow stage and advances even when the target is unchanged. Close buttons on project settings and other right-side sheets remain clickable inside Electron title-bar regions.
 
@@ -47,7 +47,7 @@ Important boundaries:
 
 - `@linguist/cat-core` has no React, Electron, Proma UI, or SQLite dependency.
 - `@linguist/cat-store` owns each project's `cat.db`, managed source assets, backups, and export records.
-- `@linguist/cat-tools` derives project identity only from the Session binding. Its 19 tools are split by project, reference, QA, Proposal/Critic, Intake, and Translation Scope responsibilities. Agents may import a single file from the session workspace or an explicitly attached file/directory; the main process revalidates the path root, and the model cannot provide a `projectId`.
+- `@linguist/cat-tools` derives project identity only from the Session binding. Its 20 tools are split by project, reference, QA, Proposal/Critic, Intake, Delivery, and Translation Scope responsibilities. Agents may import a single file from the session workspace or an explicitly attached file/directory, and may save a verified batch to a new absolute local path. The main process revalidates the binding, delivery state, destination, and digest; the model cannot provide a `projectId`.
 - Batch source files and retained language-asset originals share Proma's native Preview Tab. UI imports retain candidate confirmation, while a project Agent may register authorized TM/TB/Context files directly and receive auditable internal IDs.
 - XLSX batch and TM/TB imports require an explicit Sheet/column mapping. XLSX Context preserves sheets, physical row numbers, and cell coordinates. Native SDLTM/SDLTB imports are supported; complex SDLXLIFF `mrk` and low-confidence CSV/JSON detection continue to fail closed.
 - `LinguistProjectService` remains the single external facade while lifecycle, resources, quality, and delivery live in separate modules.

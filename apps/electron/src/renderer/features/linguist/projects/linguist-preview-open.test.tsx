@@ -12,7 +12,12 @@ import { Provider, createStore } from 'jotai'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { AgentSessionMeta } from '@proma/shared'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
-import { previewFileMapAtom, type LinguistPreviewTarget } from '@/atoms/preview-atoms'
+import {
+  previewFileMapAtom,
+  previewModePreferenceAtom,
+  previewPanelOpenMapAtom,
+  type LinguistPreviewTarget,
+} from '@/atoms/preview-atoms'
 import {
   activeTabIdAtom,
   createPreviewTabId,
@@ -101,6 +106,19 @@ describe('linguist-preview-open', () => {
       kind: 'batch',
       assetId: 'ast-0000000000000002',
     })
+  })
+
+  test('given 通用文件预览偏好为分屏 when 从 Linguist 资源页打开 then 仍进入可见的 Preview Tab', () => {
+    const store = createStore()
+    store.set(agentSessionsAtom, [session('session-a', 'project-a')])
+    store.set(previewModePreferenceAtom, 'split')
+    const open = captureOpener(store)
+
+    expect(open(BATCH_TARGET)).toBe(true)
+    expect(store.get(activeTabIdAtom)).toBe(createPreviewTabId('session-a'))
+    expect(store.get(tabsAtom).filter(isPreviewTab)).toHaveLength(1)
+    expect(store.get(previewPanelOpenMapAtom).get('session-a')).toBe(false)
+    expect(store.get(previewModePreferenceAtom)).toBe('split')
   })
 
   test('given 打开 Context 文档预览 when 项目有绑定会话 then previewFile 携带 contextDoc 目标', () => {

@@ -259,6 +259,30 @@ describe('SdlXliffAdapter round-trip（assertRoundTrip harness）', () => {
     expect(out).toContain('<sdl:seg id="3" conf="Draft">')
   })
 
+  test('本 trans-unit 的 sdl:seg 无 conf 也可确认，且不串改其他 trans-unit 的同 id 定义', async () => {
+    const xml = `<?xml version="1.0"?>
+<xliff xmlns:sdl="http://sdl.com/FileTypes/SdlXliff/1.0" version="1.2"><file><body>
+  <trans-unit id="shadow"><source>shadow</source><target>shadow</target><sdl:seg-defs><sdl:seg id="1" conf="Draft"/></sdl:seg-defs></trans-unit>
+  <trans-unit id="real"><source>一</source><seg-source><mrk mtype="seg" mid="1">一</mrk></seg-source><target><mrk mtype="seg" mid="1">One</mrk></target><sdl:seg-defs><sdl:seg id="1"/></sdl:seg-defs></trans-unit>
+</body></file></xliff>`
+    const bytes = new TextEncoder().encode(xml)
+    const { adapter, imported } = await importSdl(bytes, 'local-seg-def.sdlxliff')
+    const { asset, segments } = await boundSegments('local-seg-def.sdlxliff', imported)
+    const confirmed = segments.map((segment) =>
+      segment.key === '1' ? { ...segment, currentStageState: 'confirmed' as const } : segment,
+    )
+
+    const out = new TextDecoder().decode(await adapter.export({
+      originalBytes: bytes,
+      asset,
+      segments: confirmed,
+      workflow: { stage: 'translation' },
+    }))
+
+    expect(out).toContain('<trans-unit id="shadow"><source>shadow</source><target>shadow</target><sdl:seg-defs><sdl:seg id="1" conf="Draft"/>')
+    expect(out).toContain('<trans-unit id="real"><source>一</source><seg-source><mrk mtype="seg" mid="1">一</mrk></seg-source><target><mrk mtype="seg" mid="1">One</mrk></target><sdl:seg-defs><sdl:seg id="1" conf="Translated"/>')
+  })
+
   test('T/E/P 阶段确认分别写回 Translated / ApprovedTranslation / ApprovedSignOff', async () => {
     const bytes = sdlBytes()
     const { adapter, imported } = await importSdl(bytes)

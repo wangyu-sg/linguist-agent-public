@@ -220,7 +220,7 @@ async function assertThrowsCode(promise: Promise<unknown>, code: string): Promis
 
 // ===== tests =====
 
-test('factory: CAT tools expose project-local accept but no resolve, waive, or delivery mutation', () => {
+test('factory: CAT tools expose project-local accept and export but no resolve or waive mutation', () => {
   const fixture = setup()
   try {
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
@@ -228,7 +228,8 @@ test('factory: CAT tools expose project-local accept but no resolve, waive, or d
       tools.map((tool) => tool.name),
       [...LINGUIST_CAT_TOOL_NAMES],
     )
-    assert.equal(tools.some((tool) => /resolve|waive|deliver|export/i.test(tool.name)), false)
+    assert.ok(toolByName(tools, 'cat_export_asset'))
+    assert.equal(tools.some((tool) => /resolve|waive|deliver/i.test(tool.name)), false)
     assert.ok(toolByName(tools, 'cat_accept_proposals'))
     assert.equal(tools.length, LINGUIST_CAT_TOOL_NAMES.length)
     assert.equal(
@@ -244,6 +245,44 @@ test('factory: CAT tools expose project-local accept but no resolve, waive, or d
       assert.ok(tool.parameters && typeof tool.parameters === 'object')
       assert.equal(typeof tool.execute, 'function')
     }
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('cat_export_asset delegates the bound asset and absolute destination without leaking its path', async () => {
+  const fixture = setup()
+  try {
+    let exportedInput: { assetId: string; destinationPath: string } | undefined
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      exportAsset: async (assetId, destinationPath) => {
+        exportedInput = { assetId, destinationPath }
+        return {
+          filename: 'alpha.translated.zh-CN.tsv',
+          sha256: 'c'.repeat(64),
+          sizeBytes: 42,
+          verifiedAt: '2026-08-07T00:00:00.000Z',
+          verifiedSegments: fixture.segmentsA.length,
+        }
+      },
+    })
+    const result = await invoke(toolByName(tools, 'cat_export_asset'), {
+      assetId: fixture.assetA.id,
+      destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
+    })
+    assert.deepEqual(exportedInput, {
+      assetId: fixture.assetA.id,
+      destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
+    })
+    assert.deepEqual(result.details, {
+      filename: 'alpha.translated.zh-CN.tsv',
+      sha256: 'c'.repeat(64),
+      sizeBytes: 42,
+      verifiedAt: '2026-08-07T00:00:00.000Z',
+      verifiedSegments: fixture.segmentsA.length,
+    })
+    assert.equal(collectStrings(result.details).some((value) => value.includes('/Users/test')), false)
   } finally {
     fixture.db.close()
   }
@@ -1505,6 +1544,7 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_list_assets: {},
       cat_get_segments: {},
       cat_import_asset: { filePath: '/missing', resourceKind: 'batch' },
+      cat_export_asset: { assetId: fixture.assetA.id, destinationPath: '/missing' },
       cat_get_translation_context: { segmentIds: [fixture.segmentsA[0]!.id] },
       cat_get_proposal_snapshot: { proposalId: 'prp-0000000000000000' },
       cat_search_tm: { query: 'x' },
