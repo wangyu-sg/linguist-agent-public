@@ -31,6 +31,7 @@ export {
 } from './errors'
 
 export {
+  loadDatabaseSync,
   probeSqliteRuntime,
   type DatabaseSyncCtor,
   type SqliteDatabase,

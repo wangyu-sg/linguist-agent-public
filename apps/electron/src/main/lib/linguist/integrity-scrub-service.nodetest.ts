@@ -4,13 +4,19 @@ import type { LinguistIntegrityScrubEvent } from '@proma/shared'
 import { IntegrityScrubService } from './integrity-scrub-service'
 import { INPUT, makeService, readFixture } from './test/service-testkit'
 
+const WORKER_EXEC_ARGV = [
+  '--experimental-transform-types',
+  '--import',
+  new URL('./test/register-ts-loader.mjs', import.meta.url).href,
+]
+
 test('Full Integrity Scrub production runner executes in node:worker_threads', async () => {
   const service = makeService()
   const events: LinguistIntegrityScrubEvent[] = []
   const scrub = new IntegrityScrubService({
     getService: () => service,
     workerScript: new URL('./integrity-scrub-worker.ts', import.meta.url),
-    workerOptions: { execArgv: process.execArgv },
+    workerOptions: { execArgv: WORKER_EXEC_ARGV },
     emit: (event) => events.push(event),
   })
   try {
@@ -58,7 +64,7 @@ test('Full Integrity Scrub cancellation terminates the worker and emits a termin
   const scrub = new IntegrityScrubService({
     getService: () => service,
     workerScript: new URL('./integrity-scrub-worker.ts', import.meta.url),
-    workerOptions: { execArgv: process.execArgv },
+    workerOptions: { execArgv: WORKER_EXEC_ARGV },
     emit: (event) => events.push(event),
   })
   try {

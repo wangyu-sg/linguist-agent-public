@@ -2,13 +2,17 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
 import {
   FormatParseError,
   normalizeDelimitedHeader,
   parseDelimitedTable,
 } from '@linguist/cat-formats'
-import type { TermEntryImportInput, TmUnitImportInput } from '@linguist/cat-store'
+import {
+  loadDatabaseSync,
+  type SqliteDatabase,
+  type TermEntryImportInput,
+  type TmUnitImportInput,
+} from '@linguist/cat-store'
 
 function withTempFile<T>(bytes: Uint8Array, extension: string, read: (path: string) => T): T {
   const dir = mkdtempSync(join(tmpdir(), 'linguist-trados-'))
@@ -54,8 +58,9 @@ export function parseSdltmReference(
   targetLocale: string,
 ): { entries: TmUnitImportInput[]; warnings: string[] } {
   return withTempFile(bytes, '.sdltm', (path) => {
-    let db: DatabaseSync | undefined
+    let db: SqliteDatabase | undefined
     try {
+      const DatabaseSync = loadDatabaseSync()
       db = new DatabaseSync(path, { readOnly: true })
       const rows = db.prepare(`
         SELECT

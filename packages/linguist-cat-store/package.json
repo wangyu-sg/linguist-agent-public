@@ -1,6 +1,6 @@
 {
   "name": "@linguist/cat-store",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Per-project SQLite persistence for Linguist Agent CAT data (PB-024): project index, schema migrations, repositories, backup. Runs on node:sqlite (Electron main process); the store root dir is always injected, never hardcoded.",

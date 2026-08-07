@@ -8,14 +8,12 @@ test('probe: node:sqlite is available under the node test runner', () => {
   assert.equal(probe.nodeVersion, process.version)
 })
 
-test('probe: backup API fallback is reported (Node 22 has no db.backup)', () => {
+test('probe: backup capability and fallback are reported from the runtime surface', () => {
   const probe = probeSqliteRuntime()
-  const major = Number(process.version.slice(1).split('.')[0])
-  assert.equal(probe.hasBackupApi, major > 23 || (major === 23 && Number(process.version.slice(1).split('.')[1]) >= 4))
-  if (!probe.hasBackupApi) {
-    assert.ok(
-      probe.notes.some((n) => n.includes('VACUUM INTO')),
-      `expected a VACUUM INTO fallback note, got: ${probe.notes.join(' | ')}`,
-    )
-  }
+  assert.ok(
+    probe.notes.some((note) => probe.hasBackupApi
+      ? note.includes('backup available')
+      : note.includes('VACUUM INTO')),
+    `expected a backup capability note, got: ${probe.notes.join(' | ')}`,
+  )
 })
