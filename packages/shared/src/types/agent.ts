@@ -1,5 +1,6 @@
 import type { ProviderType } from './channel'
-import type { LinguistExecutionPolicy, LinguistQualityProfile } from './linguist'
+export const LINGUIST_ROLES = ['general', 'translator', 'reviewer', 'proofreader'] as const
+export type LinguistRole = (typeof LINGUIST_ROLES)[number]
 import type { LinguistTurnContextV1 } from './linguist-turn-context'
 
 /**
@@ -720,19 +721,10 @@ export interface AgentSessionMeta {
   linguistProjectId?: string
   /** 绑定时的项目名快照（纯展示用；项目缺失/改名后徽章仍可读） */
   linguistProjectName?: string
-  /**
-   * Linguist 会话角色标记：独立评审写 'reviewer'，盲审项目写 'auditor'；
-   * 缺省 = 普通助理会话（刻意不写 'assistant' 字面量进库）。与绑定同为
-   * 创建时冻结；专用解绑 API 会与项目绑定一并永久清除。
-   */
+  /** 当前 Linguist 岗位；只改变默认 Prompt，不改变工具、权限、模型或 Runtime。 */
+  linguistRole?: LinguistRole
+  /** 旧版 decoder 输入；业务代码不得读取，索引加载时规范化为 linguistRole。 */
   linguistSessionRole?: 'reviewer' | 'auditor'
-  /** 创建时冻结的 Linguist Execution Policy（LA-QUALITY-001）。 */
-  linguistExecutionPolicy?: LinguistExecutionPolicy
-  /**
-   * Legacy 冻结字段（LA-QUALITY-001 前的质量档位）：新会话不再写入；
-   * 旧会话读取时映射为 executionPolicy（best → risk-based，其余 → off）。
-   */
-  linguistStrategy?: LinguistQualityProfile
   /** 来源委派任务 ID（由 collaboration 工具生成，用于父子会话关联） */
   sourceDelegationId?: string
   /** 委派角色，用于 UI 和后续统计 */
@@ -859,6 +851,8 @@ export interface AgentGenerateTitleInput {
   channelId: string
   /** 模型 ID */
   modelId: string
+  /** 仅用于语义消歧的隐藏背景；标题不得照抄背景标签或项目名。 */
+  hiddenContext?: string
 }
 
 // ===== MCP 服务器配置 =====

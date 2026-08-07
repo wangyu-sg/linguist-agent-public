@@ -34,7 +34,6 @@ const project: LinguistProjectInfo = {
   promaWorkspaceId: 'workspace-1',
   createdAt: '2026-07-01T08:00:00.000Z',
   updatedAt: '2026-07-01T08:00:00.000Z',
-  executionPolicy: { independentReview: 'off' },
 }
 
 const summary: LinguistProjectSummary = {

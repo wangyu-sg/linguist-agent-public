@@ -1,7 +1,7 @@
 /**
  * 术语执行策略 glossaryPolicy（PB-096，契约《通用缺陷等级》）。
  *
- * 可选 LinguistProject 字段（同 qualityProfile 先例）：旧 project.json
+ * 可选 LinguistProject 字段：旧 project.json
  * 无此键，读取经 normalizeGlossaryPolicy 缺省回落 'prefer'，绝不主动回写。
  *
  * - strict：必须命中术语表翻译，不命中即 L1 defect（terminology_hard）；

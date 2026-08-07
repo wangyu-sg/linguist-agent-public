@@ -23,6 +23,7 @@ describe('LF-026 packaged 探针合同', () => {
 
   test('Given two projects, When discoverability is checked, Then only the visible Linguist Sidebar list is counted', () => {
     expect(probe).toContain("page.getByRole('list', { name: '本地化项目', exact: true })")
+    expect(probe).toContain("page.getByRole('menuitem', { name: /通用项目 Agent/u }).click()")
     expect(probe).toContain('resolveVisibleLinguistProjectList(page)')
     expect(probe).toContain('await waitFor(async () => {')
     expect(probe).toContain('return visibleCount === 1')

@@ -1,6 +1,6 @@
 # Linguist Agent 文档维护规则
 
-更新时间：2026-08-05
+更新时间：2026-08-08
 
 ## 事实优先级
 
@@ -8,7 +8,7 @@
 
 ```text
 代码 / package.json / 锁文件 / 测试 / 真实运行输出
-> docs/roadmap/linguist-fusion-queue.json
+> CURRENT_FACTS_SIMPLE.md / SIMPLE_IMPLEMENTATION_STATUS.md
 > LINGUIST_FUSION_CURRENT_REALITY.md
 > README / AGENTS / HANDOFF / TODO
 > 历史 Gate、Release 与审计报告
@@ -25,11 +25,9 @@
 | `docs/HANDOFF.md` | 下一会话无需聊天历史即可继续的当前交接 |
 | `TODO.md` | 仍未完成且可行动的事项 |
 | `docs/DOCS_INDEX.md` | 文档地图与真源 |
-| `CURRENT_FACTS.md` | v2 接管前的可复核 Git、数据、实现与验证事实 |
+| `CURRENT_FACTS_SIMPLE.md` | 简化重构启动时的 Git、数据、实现与验证事实 |
 | `LINGUIST_FUSION_CURRENT_REALITY.md` | 可验证的当前代码/工作区事实 |
-| `LA_UNIFIED_MASTER_PLAN_V2.md` | 唯一 active 实施计划 |
-| `linguist-fusion-queue.json` | 唯一 active 机器可读 v2.1 ticket 状态 |
-| `LINGUIST_FUSION_QUEUE.md` | active v2.1 queue 的人读投影 |
+| `SIMPLE_IMPLEMENTATION_STATUS.md` | 当前简化方案 Ticket 状态；不伪造真实使用证据 |
 | `docs/roadmap/*_REPORT.md` | 历史或专项证据 |
 
 不要在 README、AGENTS 或 HANDOFF 中复制整份执行账本；应链接真源。
@@ -49,7 +47,7 @@ README 与 AGENTS 的修改仍需用户允许；一次明确的“同步全部�
 
 ## 同步步骤
 
-1. 先读代码、manifest、队列 JSON 和最新真实命令输出。
+1. 先读代码、manifest、简化状态表和最新真实命令输出。
 2. 搜索旧版本、旧数据根、旧 SDK、过期 Gate 结论、废弃 worktree 和“已完成/待完成”冲突。
 3. 更新最小 canonical 集合。
 4. 区分自动证据与人工证据。
@@ -59,7 +57,6 @@ README 与 AGENTS 的修改仍需用户允许；一次明确的“同步全部�
 
 ```bash
 git diff --check
-jq empty docs/roadmap/linguist-fusion-queue.json
 bun run check:boundaries
 node --test tests/linguist-fusion-architecture.test.mjs
 ```
@@ -68,7 +65,7 @@ node --test tests/linguist-fusion-architecture.test.mjs
 
 ## 禁止事项
 
-- 不把标记为 **SUPERSEDED** 的 v1 plan、ledger、queue 或 Fast/Balanced/Best Gate 写回 active 计划；旧资料只作历史证据。
+- 不把已删除的统一蓝图、旧 queue、Proposal Critic、Auditor 或 Execution Policy 写回 active 产品；Git 历史只作历史证据。
 - 不把 Fake Model 写成翻译质量证据。
 - 不把 packaged smoke 写成 VoiceOver/IME/键盘人工验证。
 - 不把个人 Alpha 写成公开 Release Candidate。

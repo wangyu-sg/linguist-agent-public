@@ -17,13 +17,10 @@ import {
 import {
   describeHealthCheckId,
   describeImportUndoBlockedCounts,
-  describeIndependentReview,
   describeLinguistIpcError,
   failedHealthChecks,
   formatProjectTime,
-  INDEPENDENT_REVIEW_OPTIONS,
   LINGUIST_IPC_ERROR_MESSAGES,
-  normalizeExecutionPolicyInfo,
   partitionProjectsByArchived,
   sortProjectsByRecentDesc,
   summarizeFailedHealthChecks,
@@ -43,7 +40,6 @@ function project(overrides: Partial<LinguistProjectInfo>): LinguistProjectInfo {
     promaWorkspaceId: 'ws',
     createdAt: '2026-07-01T08:00:00.000Z',
     updatedAt: '2026-07-01T08:00:00.000Z',
-    executionPolicy: { independentReview: 'off' },
     ...overrides,
   }
 }
@@ -307,34 +303,5 @@ describe('truncateSha256（PB-033 资产摘要展示）', () => {
     expect(truncateSha256('abc123')).toBe('abc123')
     expect(truncateSha256('x'.repeat(18))).toBe('x'.repeat(18))
     expect(truncateSha256('y'.repeat(19))).toBe(`${'y'.repeat(12)}…yyyy`)
-  })
-})
-
-// ===== PB-082 / LA-QUALITY-001：Execution Policy（独立评审）展示逻辑 =====
-
-describe('Execution Policy（PB-082 / LA-QUALITY-001）', () => {
-  test('normalizeExecutionPolicyInfo：合法值原样通过，缺省/未知回落 off', () => {
-    expect(normalizeExecutionPolicyInfo({ independentReview: 'off' }))
-      .toEqual({ independentReview: 'off' })
-    expect(normalizeExecutionPolicyInfo({ independentReview: 'risk-based' }))
-      .toEqual({ independentReview: 'risk-based' })
-    for (const value of [undefined, null, '', 'turbo', 42, {}, { independentReview: 'turbo' }]) {
-      expect(normalizeExecutionPolicyInfo(value)).toEqual({ independentReview: 'off' })
-    }
-  })
-
-  test('INDEPENDENT_REVIEW_OPTIONS：两档顺序与契约一致，均带中文说明', () => {
-    expect(INDEPENDENT_REVIEW_OPTIONS.map((option) => option.value)).toEqual(['off', 'risk-based'])
-    for (const option of INDEPENDENT_REVIEW_OPTIONS) {
-      expect(option.label.length).toBeGreaterThan(0)
-      expect(option.description.length).toBeGreaterThan(0)
-    }
-  })
-
-  test('describeIndependentReview：每档返回对应说明，未知值回落 off 说明', () => {
-    for (const option of INDEPENDENT_REVIEW_OPTIONS) {
-      expect(describeIndependentReview(option.value)).toBe(option.description)
-    }
-    expect(describeIndependentReview('turbo' as never)).toBe(INDEPENDENT_REVIEW_OPTIONS[0]!.description)
   })
 })

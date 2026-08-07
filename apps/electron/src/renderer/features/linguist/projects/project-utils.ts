@@ -15,51 +15,12 @@ import {
   LINGUIST_LOCALE_MAX_LENGTH,
   LINGUIST_LOCALE_PATTERN,
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
-  type LinguistExecutionPolicy,
-  type LinguistIndependentReview,
   type LinguistIpcError,
   type LinguistIpcErrorCode,
   type LinguistProjectHealthCheckInfo,
   type LinguistProjectHealthReport,
   type LinguistProjectInfo,
 } from '@proma/shared'
-
-// ===== Execution Policy（LA-QUALITY-001，取代 PB-082 质量档位）=====
-
-/**
- * renderer 侧 Execution Policy 兜底（主进程线上必有值，此处仅防御旧缓存/异常
- * payload）：未知/缺省一律 { independentReview: 'off' }，与主进程
- * normalizeExecutionPolicy 同语义；legacy qualityProfile 由主进程映射后才下发。
- */
-export function normalizeExecutionPolicyInfo(value: unknown): LinguistExecutionPolicy {
-  const review = (value as LinguistExecutionPolicy | undefined)?.independentReview
-  return { independentReview: review === 'risk-based' ? 'risk-based' : 'off' }
-}
-
-/** independentReview 展示选项（segmented 选择器渲染用；order 与契约一致）。 */
-export const INDEPENDENT_REVIEW_OPTIONS: readonly {
-  value: LinguistIndependentReview
-  label: string
-  /** 一句中文说明（选择器下方同步展示当前选项说明）。 */
-  description: string
-}[] = [
-  {
-    value: 'off',
-    label: '关闭',
-    description: '不强制独立评审：按常规批次提案，每段先查 TM/术语库，完成后跑确定性 QA。',
-  },
-  {
-    value: 'risk-based',
-    label: '风险驱动',
-    description: '高风险或关键提案提交后，发起独立评审会话再确认（评审 Finding 以 CRITIC_ 前缀进 QA 面板）。',
-  },
-]
-
-/** independentReview → 一句中文说明（缺省/未知回落 off 说明）。 */
-export function describeIndependentReview(value: LinguistIndependentReview): string {
-  const option = INDEPENDENT_REVIEW_OPTIONS.find((item) => item.value === value)
-  return (option ?? INDEPENDENT_REVIEW_OPTIONS[0]!).description
-}
 
 // ===== 列表排序与分组 =====
 

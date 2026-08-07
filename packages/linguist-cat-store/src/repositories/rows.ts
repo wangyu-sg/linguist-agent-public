@@ -241,7 +241,6 @@ export function proposalIssuanceFromRow(row: ProposalIssuanceRow): ProposalIssua
     ...(row.model_provider === null ? {} : { modelProvider: row.model_provider }),
     ...(row.model_id === null ? {} : { modelId: row.model_id }),
     ...(row.runtime === null ? {} : { runtime: row.runtime }),
-    ...(row.role === null ? {} : { role: row.role as NonNullable<ProposalIssuance['role']> }),
     ...(row.strategy === null
       ? {}
       : { strategy: row.strategy as NonNullable<ProposalIssuance['strategy']> }),
@@ -280,7 +279,7 @@ export function proposalIssuanceToParams(issuance: ProposalIssuance): unknown[] 
     issuance.modelProvider ?? null,
     issuance.modelId ?? null,
     issuance.runtime ?? null,
-    issuance.role ?? null,
+    null,
     issuance.strategy ?? null,
     issuance.linguistPromptVersion ?? null,
     issuance.promptHash ?? null,

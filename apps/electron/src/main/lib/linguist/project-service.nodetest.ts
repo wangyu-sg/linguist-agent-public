@@ -66,48 +66,6 @@ test('default workspace allocator follows agent-workspace id convention (randomU
   }
 })
 
-test('setExecutionPolicy: 新建项目缺省 off；设置后 round-trip；归档拒绝；不存在 PROJECT_NOT_FOUND', () => {
-  const service = makeService()
-  try {
-    const project = service.createProject(INPUT)
-    // 新建项目不写该字段（读取规范化兜底为 off）
-    assert.deepEqual(service.getProject(project.id).executionPolicy, { independentReview: 'off' })
-
-    const updated = service.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
-    assert.deepEqual(updated.executionPolicy, { independentReview: 'risk-based' })
-    assert.notEqual(updated.updatedAt, project.updatedAt)
-    assert.deepEqual(service.getProject(project.id).executionPolicy, { independentReview: 'risk-based' })
-    // project.json 落盘携带新值
-    const rawMeta = JSON.parse(
-      readFileSync(service.getProjectPaths(project.id).projectJsonPath, 'utf8'),
-    ) as Record<string, unknown>
-    assert.deepEqual(rawMeta.executionPolicy, { independentReview: 'risk-based' })
-
-    assert.throws(
-      () => service.setExecutionPolicy('prj-0000000000000000', { independentReview: 'off' }),
-      (err: unknown) => {
-        assert.ok(err instanceof LinguistProjectNotFoundError)
-        assert.equal(err.code, 'PROJECT_NOT_FOUND')
-        return true
-      },
-    )
-
-    service.archiveProject(project.id)
-    assert.throws(
-      () => service.setExecutionPolicy(project.id, { independentReview: 'off' }),
-      (err: unknown) => {
-        assert.ok(err instanceof LinguistProjectArchivedError)
-        assert.equal(err.code, 'PROJECT_ARCHIVED')
-        return true
-      },
-    )
-    // 拒绝后原值不变
-    assert.deepEqual(service.getProject(project.id).executionPolicy, { independentReview: 'risk-based' })
-  } finally {
-    service.closeAll()
-  }
-})
-
 test('archived project opens read-only; writes rejected at store and service level', async () => {
   const service = makeService()
   try {
@@ -325,7 +283,7 @@ test('unknown project id maps to PROJECT_NOT_FOUND across operations', async () 
   }
 })
 
-test('PB-072: blocking QA prevents staging; explicit human waivers allow a verified export without touching source', async () => {
+test('PB-072: QA waivers do not bypass final structural rules; draft export stays available', async () => {
   const service = makeService()
   try {
     const project = service.createProject(INPUT)
@@ -356,7 +314,11 @@ test('PB-072: blocking QA prevents staging; explicit human waivers allow a verif
         '测试审校员',
       )
     }
-    const staged = await service.stageExport(project.id, imported.assetId)
+    await assert.rejects(
+      () => service.stageExport(project.id, imported.assetId),
+      (err: unknown) => (err as { code?: string }).code === 'FORMAT_EXPORT_ERROR',
+    )
+    const staged = await service.stageDraftExport(project.id, imported.assetId)
     assert.ok(staged.relativePath.startsWith('exports/'))
     assert.ok(existsSync(staged.stagingPath))
     assert.equal(staged.artifact.assetId, imported.assetId)

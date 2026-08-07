@@ -342,7 +342,6 @@ import { PendingImportFileStore } from './lib/linguist/pending-import-files'
 import { createIntegrityScrubIpc } from './lib/linguist/integrity-scrub-ipc'
 import { IntegrityScrubService } from './lib/linguist/integrity-scrub-service'
 import { createLinguistSessionIpc } from './lib/linguist/session-ipc'
-import { checkLinguistSessionSendBlock } from './lib/linguist/session-binding'
 import { createLinguistProposalIpc } from './lib/linguist/proposal-ipc'
 import { createLinguistCatWorkspaceIpc } from './lib/linguist/cat-workspace-ipc'
 import { createLinguistReferenceIpc } from './lib/linguist/reference-ipc'
@@ -2159,11 +2158,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.FORK_SESSION,
     async (_, input: ForkSessionInput): Promise<AgentSessionMeta> => {
-      const source = getAgentSessionMeta(input.sessionId)
-      const linguistBlock = checkLinguistSessionSendBlock(source, getLinguistProjectService)
-      if (linguistBlock) {
-        throw new Error(`${linguistBlock.title}: ${linguistBlock.message}`)
-      }
       const session = await forkAgentSession(input)
       // Fork 直接在 session manager 内创建元数据，绕过 CREATE_SESSION 的镜像生命周期。
       // 将它作为新的桌面会话处理，确保 Pi fork 也会立即获得可双向续聊的飞书群。
@@ -5207,14 +5201,17 @@ export function registerIpcHandlers(): void {
     async (_, input: unknown) => linguistProjectIpc.delete(input)
   )
 
-  // LA-QUALITY-001：Execution Policy 设置（闭集校验在处理器内；归档/不存在映射既有错误码）。
-  ipcMain.handle(
-    LINGUIST_PROJECT_IPC_CHANNELS.SET_EXECUTION_POLICY,
-    async (_, input: unknown) => linguistProjectIpc.setExecutionPolicy(input)
-  )
   ipcMain.handle(
     LINGUIST_PROJECT_IPC_CHANNELS.SET_WORKFLOW_CONFIG,
     async (_, input: unknown) => linguistProjectIpc.setWorkflowConfig(input)
+  )
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.UPDATE_TAG_PROFILE,
+    async (_, input: unknown) => linguistProjectIpc.updateTagProfile(input)
+  )
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.SCAN_UNKNOWN_TAGS,
+    async (_, input: unknown) => linguistProjectIpc.scanUnknownTags(input)
   )
 
   // PB-111：备份 / 恢复（计划 §24）。renderer 只提交 projectId + backupName
@@ -5497,6 +5494,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     LINGUIST_SESSION_IPC_CHANNELS.CREATE_FOR_PROJECT,
     async (_, input: unknown) => linguistSessionIpc.createForProject(input)
+  )
+
+  ipcMain.handle(
+    LINGUIST_SESSION_IPC_CHANNELS.UPDATE_ROLE,
+    async (_, input: unknown) => linguistSessionIpc.updateRole(input)
   )
 
   // 项目对话列表（轻量元数据，updatedAt 降序；项目缺失/归档均可列出）。

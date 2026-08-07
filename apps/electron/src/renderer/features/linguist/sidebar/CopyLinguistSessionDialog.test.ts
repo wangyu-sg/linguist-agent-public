@@ -19,7 +19,6 @@ function project(
     promaWorkspaceId: `ws-${id}`,
     workflowStage: 'translation',
     qaProfile: 'general',
-    executionPolicy: { independentReview: 'off' },
     schemaVersion: 1,
     createdAt: '2026-07-30T00:00:00.000Z',
     updatedAt: '2026-07-30T00:00:00.000Z',

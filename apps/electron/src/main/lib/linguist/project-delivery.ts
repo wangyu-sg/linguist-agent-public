@@ -1,14 +1,21 @@
 import {
   createAsset,
+  DETERMINISTIC_HARD_RULE_CODES,
   nativeStatusForStage,
   normalizeWorkflowStage,
+  runDeterministicHardRules,
   type Asset,
   type LinguistProject,
   type QaFindingSeverity,
 } from '@linguist/cat-core'
 import {
+  FormatExportError,
   FormatParseError,
   FormatUnsupportedError,
+  PHRASE_MXLIFF_ADAPTER_ID,
+  parsePhraseMxliffFormatConfig,
+  probePhraseMasterPair,
+  serializePhraseMxliffFormatConfig,
   parseXlsxFormatConfig,
   serializeXlsxFormatConfig,
   sha256Hex,
@@ -51,6 +58,18 @@ import type {
 
 /** 导入体积上限：50MB。 */
 export const MAX_IMPORT_BYTES = 50 * 1024 * 1024
+
+const EXPORT_STRUCTURAL_RULES = new Set<string>([
+  DETERMINISTIC_HARD_RULE_CODES.INVALID_TARGET_ENCODING,
+  DETERMINISTIC_HARD_RULE_CODES.PLACEHOLDER_SIGNATURE_MISMATCH,
+  DETERMINISTIC_HARD_RULE_CODES.TAG_PLACEHOLDER_FAMILY_MISMATCH,
+  DETERMINISTIC_HARD_RULE_CODES.TAG_SIGNATURE_MISMATCH,
+  DETERMINISTIC_HARD_RULE_CODES.TAG_FAMILY_MISMATCH,
+  DETERMINISTIC_HARD_RULE_CODES.TAG_PAIRING_MISMATCH,
+  DETERMINISTIC_HARD_RULE_CODES.ICU_SYNTAX_INVALID,
+  DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH,
+  DETERMINISTIC_HARD_RULE_CODES.NEWLINE_SIGNATURE_MISMATCH,
+])
 
 /** 交付预检、确定性导出验证与源资产导入。 */
 export class ProjectDelivery {
@@ -164,6 +183,23 @@ export class ProjectDelivery {
         message: `仍有 ${qa.openErrors} 条开放的阻断/严重 QA`,
       })
     }
+    if (asset.formatId === PHRASE_MXLIFF_ADAPTER_ID) {
+      const config = parsePhraseMxliffFormatConfig(asset.formatConfigJson, asset.originalFilename)
+      const missingMappings = config === undefined
+        ? this.context.call(
+            () => db.segments.query({ assetId, limit: asset.segmentCount })
+              .filter((segment) => /\{\d+\}|\{\d+>\}|<\d+\}/.test(segment.source)).length,
+            projectId,
+          )
+        : config.unmatchedSegments + config.ambiguousSegments
+      if (missingMappings > 0) {
+        blockers.push({
+          code: 'PHRASE_MASTER_MAPPING',
+          count: missingMappings,
+          message: `Phrase master Tag Mapping 缺失或不唯一：${missingMappings} 段`,
+        })
+      }
+    }
     const workflowStage = normalizeWorkflowStage(project.workflowStage)
     const expectedNativeStatus = nativeStatusForStage(
       workflowStage,
@@ -221,6 +257,7 @@ export class ProjectDelivery {
   async stageExport(
     projectId: string,
     assetId: string,
+    options: { allowBlockingQa?: boolean; allowHardRuleViolations?: boolean } = {},
   ): Promise<LinguistStagedExport> {
     const project = this.context.getProject(projectId)
     if (project.archivedAt !== undefined) {
@@ -239,7 +276,7 @@ export class ProjectDelivery {
       }),
       projectId,
     )
-    if (blocking > 0) {
+    if (blocking > 0 && options.allowBlockingQa !== true) {
       throw new LinguistExportBlockedByQaError(
         projectId,
         assetId,
@@ -248,6 +285,20 @@ export class ProjectDelivery {
     }
     const asset = this.context.call(() => db.assets.get(assetId), projectId)
     if (asset === undefined) throw new StoreNotFoundError('asset', assetId)
+    if (options.allowHardRuleViolations !== true) {
+      const segments = this.context.call(
+        () => db.segments.query({ assetId, limit: asset.segmentCount }),
+        projectId,
+      )
+      const invalid = segments.filter((segment) => runDeterministicHardRules({
+        segment,
+        proposedTarget: segment.target,
+        ...(project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile }),
+      }).violations.some((violation) => EXPORT_STRUCTURAL_RULES.has(violation.code)))
+      if (invalid.length > 0) {
+        throw new FormatExportError(asset.formatId, `${invalid.length} segments failed deterministic Tag/placeholder rules`)
+      }
+    }
     const adapter = this.context.registry.get(asset.formatId)
     if (adapter === undefined) {
       throw new FormatUnsupportedError(
@@ -310,7 +361,7 @@ export class ProjectDelivery {
     if (adapter.id !== XLSX_ADAPTER_ID && input.xlsxMapping !== undefined) {
       throw new FormatParseError(adapter.id, input.filename, 'an XLSX mapping was supplied for a non-XLSX file')
     }
-    const formatConfigJson = input.xlsxMapping === undefined
+    let formatConfigJson = input.xlsxMapping === undefined
       ? undefined
       : serializeXlsxFormatConfig({
           version: 1,
@@ -318,6 +369,21 @@ export class ProjectDelivery {
           columns: input.xlsxMapping.columns,
         })
     if (formatConfigJson !== undefined) parseXlsxFormatConfig(formatConfigJson, input.filename)
+    if (input.phraseMaster !== undefined) {
+      if (adapter.id !== PHRASE_MXLIFF_ADAPTER_ID) {
+        throw new FormatParseError(adapter.id, input.filename, 'a Phrase master companion was supplied for a non-Phrase file')
+      }
+      const probe = await probePhraseMasterPair(
+        input.bytes,
+        input.filename,
+        input.phraseMaster.bytes,
+        input.phraseMaster.filename,
+      )
+      if (probe.config.placeholderSegments > 0 && probe.config.matchedSegments === 0) {
+        throw new FormatParseError(adapter.id, input.filename, 'Phrase master companion matched none of the split placeholder segments')
+      }
+      formatConfigJson = serializePhraseMxliffFormatConfig(probe.config)
+    }
     const sourceSha256 = sha256Hex(input.bytes)
     const db = this.context.openProject(projectId)
     // ponytail: O(n) scan is enough for the current single-file Alpha; add an indexed lookup with batch intake.
@@ -326,9 +392,9 @@ export class ProjectDelivery {
       projectId,
     )
     if (duplicate !== undefined) {
-      if (adapter.id === XLSX_ADAPTER_ID && duplicate.formatConfigJson !== formatConfigJson) {
+      if (duplicate.formatConfigJson !== formatConfigJson) {
         throw new FormatParseError(
-          XLSX_ADAPTER_ID,
+          adapter.id,
           input.filename,
           'source bytes are already imported with a different mapping; undo the existing batch before importing with a new mapping',
         )

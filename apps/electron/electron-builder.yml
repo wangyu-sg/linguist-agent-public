@@ -72,8 +72,8 @@ extraResources:
       - "**/*"
   # Linguist 常驻项目 Skill（PB-040）：只进 Resources，不同步到 ~/.linguist-agent；
   # 主进程仅对项目绑定会话经 additionalSkillPaths 注入，普通会话不注入。
-  - from: ../../resources/linguist-skills
-    to: linguist-skills
+  - from: ../../resources/linguist-roles
+    to: linguist-roles
     filter:
       - "**/*"
   # 教程文件（教程查看器 + 欢迎对话使用）

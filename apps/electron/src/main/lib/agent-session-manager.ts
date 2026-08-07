@@ -161,6 +161,35 @@ function migrateLegacyPermissionMode(index: AgentSessionsIndex): boolean {
   return changed
 }
 
+/** 把旧岗位字段收敛到四岗位，并删除已经下线的策略快照。 */
+function migrateLegacyLinguistRoles(index: AgentSessionsIndex): boolean {
+  let changed = false
+  for (const session of index.sessions) {
+    if (!session.linguistProjectId) continue
+    if (!session.linguistRole) {
+      session.linguistRole = session.linguistSessionRole === 'reviewer'
+        || session.linguistSessionRole === 'auditor'
+        ? 'reviewer'
+        : 'general'
+      changed = true
+    }
+    if ('linguistSessionRole' in session) {
+      delete session.linguistSessionRole
+      changed = true
+    }
+    const legacy = session as AgentSessionMeta & Record<string, unknown>
+    if ('linguistExecutionPolicy' in legacy) {
+      delete legacy.linguistExecutionPolicy
+      changed = true
+    }
+    if ('linguistStrategy' in legacy) {
+      delete legacy.linguistStrategy
+      changed = true
+    }
+  }
+  return changed
+}
+
 /**
  * 在此版本前，所有新建 OpenAI Agent 会话都会写入 off，无法与用户主动关闭区分。
  * 因此仅执行一次历史升级；之后用户手动关闭会保留 off。
@@ -186,7 +215,8 @@ function readIndex(): AgentSessionsIndex {
   if (data) {
     const permissionModeMigrated = migrateLegacyPermissionMode(data)
     const thinkingDefaultMigrated = migrateLegacyOpenAIThinkingDefault(data)
-    if (permissionModeMigrated || thinkingDefaultMigrated) {
+    const linguistRolesMigrated = migrateLegacyLinguistRoles(data)
+    if (permissionModeMigrated || thinkingDefaultMigrated || linguistRolesMigrated) {
       writeIndex(data)
       if (permissionModeMigrated) {
         console.log('[Agent 会话] 已迁移历史权限模式 auto → bypassPermissions')
@@ -194,6 +224,7 @@ function readIndex(): AgentSessionsIndex {
       if (thinkingDefaultMigrated) {
         console.log('[Agent 会话] 已将历史 OpenAI 会话的思考深度默认值升级为高')
       }
+      if (linguistRolesMigrated) console.log('[Agent 会话] 已迁移 Linguist 历史角色字段')
     }
     return data
   }
@@ -321,17 +352,12 @@ export function ensureClaudeSessionSettings(workspaceId: string, sessionId: stri
  * Linguist 项目绑定（PB-034）：仅在项目内创建会话时写入，创建后冻结。
  * updateAgentSessionMeta 刻意不接收这两个字段（类型白名单之外），
  * 并在运行时强制保持原值（防御 any 断言绕过）。
- * PB-082：评审会话在创建时附带 linguistSessionRole:'reviewer' 标记
- * （缺省 = 普通助理会话，不写库），同样冻结。
- * LA-QUALITY-001：linguistExecutionPolicy 同例冻结；linguistStrategy 为
- * legacy 只读字段（旧会话可能仍携带，解绑时一并清除）。
+ * 岗位经专用 API 更新，不进入通用 metadata 更新白名单。
  */
 export interface AgentSessionLinguistBinding {
   linguistProjectId: string
   linguistProjectName: string
-  linguistSessionRole?: 'reviewer' | 'auditor'
-  linguistExecutionPolicy?: AgentSessionMeta['linguistExecutionPolicy']
-  linguistStrategy?: AgentSessionMeta['linguistStrategy']
+  linguistRole: NonNullable<AgentSessionMeta['linguistRole']>
 }
 
 /**
@@ -353,15 +379,7 @@ function frozenLinguistBinding(
   return {
     linguistProjectId: session.linguistProjectId,
     linguistProjectName: session.linguistProjectName ?? session.linguistProjectId,
-    ...(session.linguistSessionRole
-      ? { linguistSessionRole: session.linguistSessionRole }
-      : {}),
-    ...(session.linguistExecutionPolicy
-      ? { linguistExecutionPolicy: session.linguistExecutionPolicy }
-      : {}),
-    ...(session.linguistStrategy
-      ? { linguistStrategy: session.linguistStrategy }
-      : {}),
+    linguistRole: session.linguistRole ?? 'general',
   }
 }
 
@@ -672,12 +690,10 @@ export function updateAgentSessionMeta(
     ...updates,
     // Linguist 项目绑定在创建时冻结（PB-034 硬规则）：类型白名单刻意不含
     // 这两个字段，这里再防御 any 断言绕过——永远保持创建时的值。
-    // PB-082 的 role 与 LA-QUALITY-001 的 executionPolicy / legacy strategy 同理冻结。
+    // 岗位只能经专用 API 修改；这里防止 any 绕过。
     linguistProjectId: existing.linguistProjectId,
     linguistProjectName: existing.linguistProjectName,
-    linguistSessionRole: existing.linguistSessionRole,
-    linguistExecutionPolicy: existing.linguistExecutionPolicy,
-    linguistStrategy: existing.linguistStrategy,
+    linguistRole: existing.linguistRole,
     ...(autoUnarchive ? { archived: false } : {}),
     updatedAt: isStarredOnly ? existing.updatedAt : Date.now(),
   }
@@ -691,7 +707,7 @@ export function updateAgentSessionMeta(
 
 /**
  * 永久解除 Linguist 项目绑定。常规元数据更新仍无法改写绑定；只有用户显式
- * 触发的此入口会同时清除项目快照和 reviewer 角色。未知会话返回 null。
+ * 触发的此入口会同时清除项目快照和岗位。未知会话返回 null。
  */
 export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta | null {
   const index = readIndex()
@@ -704,13 +720,27 @@ export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta 
   const updated: AgentSessionMeta = { ...existing, updatedAt: Date.now() }
   delete updated.linguistProjectId
   delete updated.linguistProjectName
+  delete updated.linguistRole
   delete updated.linguistSessionRole
-  delete updated.linguistExecutionPolicy
-  delete updated.linguistStrategy
   index.sessions[idx] = updated
   writeIndex(index)
   console.log(`[Agent 会话] 已永久解除 Linguist 项目绑定: ${updated.id}`)
   return updated
+}
+
+/** 更新项目会话默认岗位；不修改工具、权限、模型、Runtime 或项目绑定。 */
+export function updateAgentSessionLinguistRole(
+  id: string,
+  role: NonNullable<AgentSessionMeta['linguistRole']>,
+): AgentSessionMeta {
+  const index = readIndex()
+  const session = index.sessions.find((item) => item.id === id)
+  if (!session?.linguistProjectId) throw new Error('Linguist 项目会话不存在')
+  session.linguistRole = role
+  delete session.linguistSessionRole
+  session.updatedAt = Date.now()
+  writeIndex(index)
+  return session
 }
 
 function cleanupClaudeSdkSessionArtifacts(sessionIds: readonly string[]): void {

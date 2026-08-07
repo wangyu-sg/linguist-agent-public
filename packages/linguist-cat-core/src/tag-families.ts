@@ -126,10 +126,28 @@ const BUILTIN_FAMILIES: readonly CompiledFamily[] = [
   {
     id: 'bbcode',
     group: 'markup',
-    regex: /\[(?<close>\/)?(?<name>[A-Za-z][A-Za-z0-9]*)(?:=[^[\]]*)?\]/g,
+    // 只把明确的常见 BBCode 视为内置硬标签；[Damage] 类可翻译客户文本
+    // 留给 unknown scanner 和人/当前 Agent 判断，不得未经判断永久锁定。
+    regex: /\[(?<close>\/)?(?<name>b|i|u|s|color|size|font|url|br)(?:=[^[\]]*)?\]/gi,
     skipIcuSpans: false,
     kindOf: (match) => (match.groups?.close ? 'close' : 'open'),
     pairKeyOf: (match) => match.groups?.name?.toLowerCase() ?? null,
+  },
+  {
+    id: 'mustache',
+    group: 'placeholder',
+    regex: /\{\{[^{}]+\}\}/g,
+    skipIcuSpans: false,
+    kindOf: () => 'singleton',
+    pairKeyOf: () => null,
+  },
+  {
+    id: 'dollar-brace',
+    group: 'placeholder',
+    regex: /\$\{[^{}]+\}/g,
+    skipIcuSpans: false,
+    kindOf: () => 'singleton',
+    pairKeyOf: () => null,
   },
   {
     id: 'brace-num',
@@ -185,6 +203,7 @@ function compileProjectFamilies(profile?: LinguistTagProfile): CompiledFamily[] 
   if (profile === undefined) return []
   const families: CompiledFamily[] = []
   for (const family of profile.families) {
+    if (family.enabled === false) continue
     const regex = compileProjectRegex(family.pattern, family.flags)
     if (regex === null) continue
     const pairKey = family.pairWith ?? family.id
@@ -194,8 +213,13 @@ function compileProjectFamilies(profile?: LinguistTagProfile): CompiledFamily[] 
       regex,
       skipIcuSpans: false,
       ...(family.targetLocales !== undefined ? { targetLocales: family.targetLocales } : {}),
-      kindOf: (match) =>
-        family.class === 'paired' ? (match.groups?.close ? 'close' : 'open') : 'singleton',
+      kindOf: (match) => family.kind === 'closing'
+        ? 'close'
+        : family.kind === 'opening'
+          ? 'open'
+          : family.class === 'paired'
+            ? (match.groups?.close ? 'close' : 'open')
+            : 'singleton',
       pairKeyOf: () => (family.class === 'paired' ? pairKey : null),
     })
   }
@@ -260,6 +284,9 @@ export function scanTagTokens(text: string, options: TagScanOptions = {}): TagTo
   }
   return tokens.sort((left, right) => left.start - right.start)
 }
+
+/** PB-097 的单一公开 Scanner 名称；旧名仅作内部别名过渡。 */
+export const scanTags = scanTagTokens
 
 /** 指定归类的签名多重集（排序后逐位比较 = 多重集比较，不比顺序）。 */
 export function tagGroupSignature(tokens: readonly TagToken[], group: TagTokenGroup): string[] {

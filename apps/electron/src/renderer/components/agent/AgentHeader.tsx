@@ -17,6 +17,7 @@ import {
   LinguistSessionBindingBadge,
   LinguistSessionBindingNotice,
 } from '@/features/linguist/session-binding/LinguistSessionBindingBadge'
+import { LinguistRoleMenu } from '@/features/linguist/session-binding/LinguistRoleMenu'
 
 /** AgentHeader 属性接口 */
 interface AgentHeaderProps {
@@ -126,6 +127,7 @@ export function AgentHeader({
             </span>
             {/* Linguist 项目绑定徽章（PB-034）：仅绑定会话渲染 */}
             <LinguistSessionBindingBadge session={session} />
+            <LinguistRoleMenu session={session} compact={compact} />
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}

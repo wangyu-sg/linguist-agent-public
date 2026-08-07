@@ -139,8 +139,8 @@ const EXEMPTIONS: Exemption[] = [
   },
   {
     file: 'apps/electron/src/renderer/components/agent-skills/ImportSkillDialog.tsx',
-    lineIncludes: 'rounded-xl bg-amber-500/12 p-2 text-amber-500 shadow-sm',
-    reason: '导入对话框装饰图标 tile（非状态语义），PB-102 豁免',
+    lineIncludes: '<Sparkles size={16} className="shrink-0 text-amber-500" />',
+    reason: '导入候选的 Sparkles 是技能类型装饰色，不表达状态，沿用上游视觉语义',
   },
   {
     file: 'apps/electron/src/renderer/components/agent-skills/SkillDetailSheet.tsx',

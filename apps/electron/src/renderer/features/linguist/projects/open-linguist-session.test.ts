@@ -30,7 +30,6 @@ function project(overrides: Partial<LinguistProjectInfo> = {}): LinguistProjectI
     name: '项目 A',
     sourceLocale: 'en',
     targetLocale: 'zh-CN',
-    executionPolicy: { independentReview: 'off' },
     promaWorkspaceId: 'workspace-a',
     createdAt: '2026-07-30T00:00:00.000Z',
     updatedAt: '2026-07-30T00:00:00.000Z',

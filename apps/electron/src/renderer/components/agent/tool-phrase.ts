@@ -414,15 +414,6 @@ export function getToolPhrase(toolName: string, input: Record<string, unknown>):
     case 'cat_get_qa_findings':
       return phrase('查看质检问题')
 
-    case 'cat_submit_critic_review': {
-      const findings = input.findings
-      return phrase(
-        Array.isArray(findings)
-          ? `提交 ${findings.length} 条独立复核意见`
-          : '提交独立复核',
-      )
-    }
-
     case 'cat_run_batch_consistency':
       return phrase(
         input.mode === 'repair'

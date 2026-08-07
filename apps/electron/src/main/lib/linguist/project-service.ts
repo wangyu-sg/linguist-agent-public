@@ -29,11 +29,16 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
+  activateTagProfileCandidate,
   normalizeWorkflowStage,
+  saveTagProfileCandidate as saveTagCandidate,
+  scanUnknownTagPatterns,
+  updateTagProfileEntry,
+  validateTagProfileCandidate,
   type CurrentStageState,
   type EntropySource,
-  type LinguistExecutionPolicy,
   type LinguistProject,
+  type SaveTagProfileCandidateInput,
   type QaProfile,
   type QaFindingDisposition,
   type QaFindingSeverity,
@@ -113,6 +118,7 @@ import type {
   LinguistProjectHealthReport,
   LinguistProjectServiceOptions,
   LinguistProjectSummary,
+  LinguistTagProfileMutationResult,
   LinguistReferenceKind,
   LinguistRestorePreview,
   LinguistRestoreResult,
@@ -736,19 +742,6 @@ export class LinguistProjectService {
     if (project.archivedAt !== undefined) throw new LinguistProjectArchivedError(projectId)
   }
 
-  /**
-   * LA-QUALITY-001：设置 Execution Policy（取代 PB-082 质量档位）。归档先
-   * 拒绝（与 editSegment/runQa 同一模式）；写入走 store 的专用路径
-   * （projects.json + project.json 同步，updatedAt 刷新）。已存在会话
-   * 不受影响——policy 在会话创建时冻结进 meta。
-   */
-  setExecutionPolicy(projectId: string, policy: LinguistExecutionPolicy): LinguistProject {
-    this.assertProjectWritable(projectId)
-    const updated = this.call(() => this.store.index.setExecutionPolicy(projectId, policy), projectId)
-    console.log(`[Linguist] 已设置 Execution Policy: 项目 ${projectId} → independentReview=${policy.independentReview}`)
-    return updated
-  }
-
   /** 更新项目当前任务阶段；阶段变化后按审计记录重建每条句段的本轮状态。 */
   setWorkflowConfig(
     projectId: string,
@@ -776,6 +769,105 @@ export class LinguistProjectService {
     }
     console.log(`[Linguist] 已设置项目任务阶段: 项目 ${projectId} → ${workflowStage}`)
     return updated
+  }
+
+  private tagSamples(projectId: string) {
+    const db = this.openProject(projectId)
+    const total = this.call(() => db.segments.count(), projectId)
+    return this.call(
+      () => db.segments.query({ limit: total }).map((segment) => ({
+        id: segment.id as string,
+        source: segment.source,
+        target: segment.target,
+      })),
+      projectId,
+    )
+  }
+
+  scanUnknownTagPatterns(projectId: string, assetIds?: readonly string[], sampleLimit = 3) {
+    const project = this.getProject(projectId)
+    const db = this.openProject(projectId)
+    const assets = assetIds === undefined ? undefined : new Set(assetIds)
+    if (assets !== undefined) {
+      for (const assetId of assets) {
+        if (db.assets.get(assetId) === undefined) throw new StoreNotFoundError('asset', assetId)
+      }
+    }
+    return scanUnknownTagPatterns(
+      this.tagSamples(projectId).filter((sample) => {
+        if (assets === undefined) return true
+        const segment = db.segments.getById(sample.id)
+        return segment !== undefined && assets.has(segment.assetId as string)
+      }),
+      project.tagProfile,
+      sampleLimit,
+    )
+  }
+
+  saveTagProfileCandidate(
+    projectId: string,
+    input: SaveTagProfileCandidateInput,
+    replaceId?: string,
+  ): LinguistTagProfileMutationResult {
+    this.assertProjectWritable(projectId)
+    const project = this.getProject(projectId)
+    const samples = this.tagSamples(projectId)
+    const discoveries = scanUnknownTagPatterns(samples, project.tagProfile, 10)
+    const examples = discoveries.flatMap((item) => item.examples)
+    const wanted = new Set(input.evidenceExampleIds)
+    const evidence = examples.filter((example) => wanted.has(example.id))
+    const negative = examples.filter((example) => !wanted.has(example.id)).map((example) => example.value)
+    const validation = validateTagProfileCandidate(input, evidence, negative, project.tagProfile)
+    if (!validation.valid) throw new Error(validation.errors.join('；'))
+    const baseProfile = replaceId === undefined || project.tagProfile === undefined
+      ? project.tagProfile
+      : {
+          ...project.tagProfile,
+          candidates: project.tagProfile.candidates?.filter((item) => item.id !== replaceId),
+        }
+    const saved = saveTagCandidate(baseProfile, input)
+    const tagProfile = saved.profile
+    const updated = this.call(
+      () => this.store.index.setTagProfile(projectId, tagProfile),
+      projectId,
+    )
+    return { project: updated, tagProfile, candidate: saved.candidate, validation }
+  }
+
+  updateTagProfile(
+    projectId: string,
+    entryId: string,
+    action: 'activate' | 'ignore' | 'enable' | 'disable',
+  ): LinguistTagProfileMutationResult {
+    this.assertProjectWritable(projectId)
+    const project = this.getProject(projectId)
+    const profile = project.tagProfile ?? { families: [] }
+    let tagProfile = action === 'activate'
+      ? activateTagProfileCandidate(profile, entryId)
+      : updateTagProfileEntry(profile, entryId, action)
+    if (action === 'activate') {
+      const candidate = profile.candidates?.find((item) => item.id === entryId)
+      if (!candidate) throw new Error(`Tag Profile candidate not found: ${entryId}`)
+      // 激活前必须在当前项目数据上重跑验证，不信任旧 UI 状态。
+      const samples = this.tagSamples(projectId)
+      const discoveries = scanUnknownTagPatterns(samples, project.tagProfile, 10)
+      const examples = discoveries.flatMap((item) => item.examples)
+      const wanted = new Set(candidate.evidenceExampleIds)
+      const validation = validateTagProfileCandidate({
+        name: candidate.name,
+        regex: candidate.pattern,
+        kind: candidate.kind,
+        ...(candidate.pairKey ? { pairKey: candidate.pairKey } : {}),
+        evidenceExampleIds: candidate.evidenceExampleIds,
+        confidence: candidate.confidence,
+        explanation: candidate.explanation,
+      }, examples.filter((item) => wanted.has(item.id)), examples.filter((item) => !wanted.has(item.id)).map((item) => item.value), project.tagProfile)
+      if (!validation.valid) throw new Error(validation.errors.join('；'))
+      const updated = this.call(() => this.store.index.setTagProfile(projectId, tagProfile), projectId)
+      return { project: updated, tagProfile, validation }
+    }
+    const updated = this.call(() => this.store.index.setTagProfile(projectId, tagProfile), projectId)
+    return { project: updated, tagProfile }
   }
 
   /** TM 管理列表仍保留 source/target literal concordance 语义。 */
@@ -995,6 +1087,16 @@ export class LinguistProjectService {
     assetId: string,
   ): Promise<LinguistStagedExport> {
     return this.delivery.stageExport(projectId, assetId)
+  }
+
+  stageDraftExport(
+    projectId: string,
+    assetId: string,
+  ): Promise<LinguistStagedExport> {
+    return this.delivery.stageExport(projectId, assetId, {
+      allowBlockingQa: true,
+      allowHardRuleViolations: true,
+    })
   }
 
   editSegment(

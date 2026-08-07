@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   closeSync,
   constants,
@@ -8,6 +8,7 @@ import {
   openSync,
   readSync,
   realpathSync,
+  renameSync,
   unlinkSync,
   writeSync,
   type Stats,
@@ -123,7 +124,8 @@ function inspectParent(destination: string): DirectoryIdentity {
 function validateDestination(
   managedRoot: string,
   filePath: string,
-): { destination: string; parent: DirectoryIdentity } {
+  overwrite: boolean,
+): { destination: string; parent: DirectoryIdentity; existingIdentity?: FileIdentity } {
   if (filePath.trim() === '' || !isAbsolute(filePath)) {
     fail('导出目标必须是绝对文件路径')
   }
@@ -134,8 +136,15 @@ function validateDestination(
     fail('不能导出到 Linguist Agent 受管数据目录')
   }
   const existing = lstatSync(destination, { throwIfNoEntry: false })
-  if (existing !== undefined) fail('导出目标已存在，请选择新的文件名')
-  return { destination, parent }
+  if (existing !== undefined) {
+    if (!overwrite) fail('导出目标已存在，请选择新的文件名或明确允许覆盖')
+    if (existing.isSymbolicLink() || !existing.isFile()) fail('只能覆盖已有的普通文件')
+  }
+  return {
+    destination,
+    parent,
+    ...(existing === undefined ? {} : { existingIdentity: identityOf(existing) }),
+  }
 }
 
 function writeAll(fd: number, bytes: Uint8Array): void {
@@ -184,8 +193,48 @@ function writeVerifiedDestination(
   filePath: string,
   write: (fd: number) => void,
   expectedSha256: string,
+  overwrite = false,
 ): VerifiedExportWrite {
-  const { destination, parent } = validateDestination(managedRoot, filePath)
+  const { destination, parent, existingIdentity } = validateDestination(managedRoot, filePath, overwrite)
+  if (existingIdentity !== undefined) {
+    const temporaryPath = join(parent.realPath, `.${basename(destination)}.${randomUUID()}.tmp`)
+    const verified = writeVerifiedDestination(
+      managedRoot,
+      temporaryPath,
+      write,
+      expectedSha256,
+    )
+    const temporaryStat = lstatSync(temporaryPath)
+    const temporaryIdentity = identityOf(temporaryStat)
+    try {
+      const current = lstatSync(destination, { throwIfNoEntry: false })
+      const currentParent = inspectParent(destination)
+      if (
+        current === undefined
+        || current.isSymbolicLink()
+        || !current.isFile()
+        || !sameIdentity(existingIdentity, identityOf(current))
+        || currentParent.realPath !== parent.realPath
+        || !sameIdentity(currentParent, parent)
+      ) {
+        fail('导出目标在覆盖前发生变化')
+      }
+      renameSync(temporaryPath, destination)
+      const replaced = lstatSync(destination, { throwIfNoEntry: false })
+      if (
+        replaced === undefined
+        || replaced.isSymbolicLink()
+        || !replaced.isFile()
+        || !sameIdentity(temporaryIdentity, identityOf(replaced))
+      ) {
+        fail('覆盖后的导出文件身份校验失败')
+      }
+      return verified
+    } catch (error) {
+      safelyRemoveCreatedFile(temporaryPath, temporaryIdentity)
+      throw error
+    }
+  }
   const beforeOpen = inspectParent(destination)
   if (
     beforeOpen.realPath !== parent.realPath
@@ -268,6 +317,7 @@ export function copyFileVerified(input: {
   sourcePath: string
   destinationPath: string
   expectedSha256: string
+  overwrite?: boolean
 }): VerifiedExportWrite {
   const sourcePath = resolve(input.sourcePath)
   const initial = lstatSync(sourcePath, { throwIfNoEntry: false })
@@ -312,6 +362,7 @@ export function copyFileVerified(input: {
         }
       },
       input.expectedSha256,
+      input.overwrite ?? false,
     )
   } catch (error) {
     if (

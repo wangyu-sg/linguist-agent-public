@@ -154,34 +154,6 @@ export function bulkProposalReviewConfirmation(
   return `${summary}${exclusionSummary}\n\n确定继续吗？`
 }
 
-// ===== 独立评审会话（PB-082；提案行「独立评审」按钮）=====
-
-/** 评审会话标题：`评审 <proposalId 前 8 位>`（短 id 原样保留）。 */
-export function buildReviewSessionTitle(proposalId: string): string {
-  return `评审 ${proposalId.slice(0, 8)}`
-}
-
-/**
- * 发往新评审会话的首条消息：指明提案与段，要求用 cat_submit_critic_review
- * 提交 Finding。评审守则（project-reviewer Skill）由主进程按角色注入，
- * 消息本身不再重复纪律条款。
- */
-export function buildReviewRequestMessage(proposalId: string, segmentId: string): string {
-  return (
-    `请独立评审提案 ${proposalId}（段 ${segmentId}）：读取候选与段上下文，`
-    + '用 cat_submit_critic_review 提交 Finding。新会话只清空对话历史，项目证据与历史产物仍保留；'
-    + '本次评审不会更新、替换或接受任何 Proposal，结束时只报告审计 Finding。'
-  )
-}
-
-export function buildIndependentAuditRequestMessage(): string {
-  return (
-    '请执行一次项目独立盲审。系统已隐藏 pending Proposal、既有 QA Finding 与旧审计结论；'
-    + '请只依据当前原文/译文、TM、术语、句式、Style Guide、Voice 和 Context 资料独立判断。'
-    + '逐项引用 segmentId 与 originalOrdinal，最后明确已审范围、未审范围、发现与未发现问题的范围。'
-    + '只报告审计结论，不要声称已更新提案、已修复、已通过 QA 或已交付。'
-  )
-}
 
 export interface ProposalRunGroup {
   runId: string

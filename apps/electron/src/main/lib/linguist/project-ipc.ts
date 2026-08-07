@@ -1,8 +1,7 @@
 /**
  * Linguist 项目 typed IPC 处理器（PB-031；计划 §4.1/§7.2/§7.4）。
  *
- * 本模块实现项目域通道的全部逻辑（校验 → 服务调用 → 结果信封；LA-QUALITY-001 起
- * 含 setExecutionPolicy 共 7 个），
+ * 本模块实现项目域通道的全部逻辑（校验 → 服务调用 → 结果信封），
  * 刻意不 import electron：ipc.ts 以薄适配器注册（注入 picker），
  * node --test 直接驱动本模块（stub picker + 真实服务 + fixture 文件）。
  *
@@ -30,7 +29,6 @@ import { basename, extname } from 'node:path'
 import {
   normalizeQaProfile,
   normalizeWorkflowStage,
-  resolveExecutionPolicy,
   type LinguistProject,
 } from '@linguist/cat-core'
 import {
@@ -44,7 +42,6 @@ import {
   LINGUIST_BACKUP_DIR_NAME_PATTERN,
   LINGUIST_IMPORT_FILE_EXTENSIONS,
   LINGUIST_IMPORT_MAX_BYTES,
-  LINGUIST_INDEPENDENT_REVIEWS,
   LINGUIST_LEGACY_BACKUP_NAME_PATTERN,
   LINGUIST_LOCALE_MAX_LENGTH,
   LINGUIST_LOCALE_PATTERN,
@@ -55,8 +52,6 @@ import {
   LINGUIST_WORKFLOW_STAGES,
   type LinguistAssetPreviewResult,
   type LinguistBackupListResult,
-  type LinguistExecutionPolicy,
-  type LinguistIndependentReview,
   type LinguistIpcResult,
   type LinguistProjectArchiveResult,
   type LinguistProjectBackupResult,
@@ -71,8 +66,9 @@ import {
   type LinguistProjectSetLocalesResult,
   type LinguistProjectReorderResult,
   type LinguistProjectRestoreResult,
-  type LinguistProjectSetExecutionPolicyResult,
   type LinguistProjectSetWorkflowConfigResult,
+  type LinguistProjectUpdateTagProfileResult,
+  type LinguistProjectScanUnknownTagsResult,
   type LinguistQaProfile,
   type LinguistProjectSummary,
   type LinguistProjectUndoImportAssetResult,
@@ -186,22 +182,6 @@ function readOptionalWorkspaceId(record: Record<string, unknown>): string | unde
     invalid(`promaWorkspaceId must be a string of at most ${LINGUIST_WORKSPACE_ID_MAX_LENGTH} characters`)
   }
   return value
-}
-
-/** LA-QUALITY-001：Execution Policy 严格校验（闭集字面量；不做兜底规范化——那是 store 读取路径的职责）。 */
-function readExecutionPolicy(record: Record<string, unknown>): LinguistExecutionPolicy {
-  const value = record.executionPolicy
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    invalid('executionPolicy must be an object')
-  }
-  const review = (value as Record<string, unknown>).independentReview
-  if (
-    typeof review !== 'string'
-    || !(LINGUIST_INDEPENDENT_REVIEWS as readonly string[]).includes(review)
-  ) {
-    invalid(`executionPolicy.independentReview must be one of: ${LINGUIST_INDEPENDENT_REVIEWS.join(', ')}`)
-  }
-  return { independentReview: review as LinguistIndependentReview }
 }
 
 function readWorkflowStage(
@@ -467,16 +447,9 @@ async function previewManagedSource(
   }
 }
 
-/**
- * 领域项目 → 线格式镜像（LA-QUALITY-001）：wire 契约要求 executionPolicy
- * 必有值，领域类型该字段可选（旧 project.json 前向兼容）——在 IPC 边界做
- * 最后一道解析（store 读取路径已先行规范化，此处双保险；legacy
- * qualityProfile 项目经映射打开，不回写旧字段）。
- */
 function toProjectInfo(project: LinguistProject): LinguistProjectInfo {
   return {
     ...project,
-    executionPolicy: resolveExecutionPolicy(project),
     workflowStage: normalizeWorkflowStage(project.workflowStage),
     qaProfile: normalizeQaProfile(project.qaProfile),
   }
@@ -739,20 +712,6 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
       })
     },
 
-    /**
-     * linguist.projects.setExecutionPolicy — 设置 Execution Policy（LA-QUALITY-001，
-     * 取代 PB-082 质量档位）。independentReview 只接受闭集字面量（INVALID_INPUT）；
-     * 归档/不存在由服务层映射 PROJECT_ARCHIVED / PROJECT_NOT_FOUND（无新错误码）。
-     */
-    setExecutionPolicy(input: unknown): Promise<LinguistIpcResult<LinguistProjectSetExecutionPolicyResult>> {
-      return wrap(() => {
-        const record = assertRecord(input)
-        const projectId = readProjectId(record)
-        const executionPolicy = readExecutionPolicy(record)
-        return toProjectInfo(getService().setExecutionPolicy(projectId, executionPolicy))
-      })
-    },
-
     setWorkflowConfig(input: unknown): Promise<LinguistIpcResult<LinguistProjectSetWorkflowConfigResult>> {
       return wrap(() => {
         const record = assertRecord(input)
@@ -766,6 +725,91 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
           outputStatusPolicy,
           qaProfile,
         ))
+      })
+    },
+
+    updateTagProfile(input: unknown): Promise<LinguistIpcResult<LinguistProjectUpdateTagProfileResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const action = record.action
+        if (action === 'save') {
+          const candidate = assertRecord(record.candidate)
+          const readText = (key: string, maxLength: number): string => {
+            const value = candidate[key]
+            if (typeof value !== 'string' || value.trim() === '' || value.length > maxLength) {
+              invalid(`candidate.${key} must be a non-empty string up to ${maxLength} characters`)
+            }
+            return value
+          }
+          const kind = candidate.kind
+          if (kind !== 'standalone' && kind !== 'opening' && kind !== 'closing') {
+            invalid('candidate.kind must be standalone/opening/closing')
+          }
+          const evidenceExampleIds = candidate.evidenceExampleIds
+          if (!Array.isArray(evidenceExampleIds) || evidenceExampleIds.length === 0 || evidenceExampleIds.length > 50
+            || evidenceExampleIds.some((value) => typeof value !== 'string' || value.trim() === '')) {
+            invalid('candidate.evidenceExampleIds must contain 1-50 non-empty strings')
+          }
+          const confidence = candidate.confidence
+          if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+            invalid('candidate.confidence must be between 0 and 1')
+          }
+          const pairKey = candidate.pairKey
+          if (pairKey !== undefined && (typeof pairKey !== 'string' || pairKey.trim() === '' || pairKey.length > 80)) {
+            invalid('candidate.pairKey must be a non-empty string up to 80 characters')
+          }
+          const replaceId = record.replaceId
+          if (replaceId !== undefined && (typeof replaceId !== 'string' || replaceId.trim() === '')) {
+            invalid('replaceId must be a non-empty string')
+          }
+          try {
+            const result = getService().saveTagProfileCandidate(projectId, {
+              name: readText('name', 80),
+              regex: readText('regex', 240),
+              kind,
+              ...(typeof pairKey === 'string' ? { pairKey } : {}),
+              evidenceExampleIds: evidenceExampleIds as string[],
+              confidence,
+              explanation: readText('explanation', 500),
+            }, typeof replaceId === 'string' ? replaceId : undefined)
+            return toProjectInfo(result.project)
+          } catch (error) {
+            invalid(error instanceof Error ? error.message : 'Tag Profile candidate validation failed')
+          }
+        }
+        if (action !== 'activate' && action !== 'ignore' && action !== 'enable' && action !== 'disable') {
+          invalid('action must be save/activate/ignore/enable/disable')
+        }
+        const entryId = record.entryId
+        if (typeof entryId !== 'string' || entryId.trim() === '') invalid('entryId must be a non-empty string')
+        try {
+          return toProjectInfo(getService().updateTagProfile(projectId, entryId, action).project)
+        } catch (error) {
+          invalid(error instanceof Error ? error.message : 'Tag Profile update failed')
+        }
+      })
+    },
+
+    scanUnknownTags(input: unknown): Promise<LinguistIpcResult<LinguistProjectScanUnknownTagsResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const assetIds = record.assetIds
+        if (assetIds !== undefined && (!Array.isArray(assetIds)
+          || assetIds.length > 100
+          || assetIds.some((value) => typeof value !== 'string' || value.trim() === ''))) {
+          invalid('assetIds must contain at most 100 non-empty strings')
+        }
+        const sampleLimit = record.sampleLimit
+        if (sampleLimit !== undefined && (!Number.isInteger(sampleLimit) || Number(sampleLimit) < 1 || Number(sampleLimit) > 10)) {
+          invalid('sampleLimit must be an integer between 1 and 10')
+        }
+        return getService().scanUnknownTagPatterns(
+          projectId,
+          assetIds as string[] | undefined,
+          sampleLimit as number | undefined,
+        )
       })
     },
 

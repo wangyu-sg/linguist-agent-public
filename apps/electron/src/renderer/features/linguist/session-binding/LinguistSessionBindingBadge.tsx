@@ -3,7 +3,7 @@
  *
  * 徽章（AgentHeader 标题行）：项目名 + 实时状态后缀，
  * 让「这个对话属于哪个项目」一眼可见；普通会话不渲染。
- * 通告（AgentHeader 下方横条）：阻断原因 + 用户主动永久解绑出口。
+ * 通告（AgentHeader 下方横条）：CAT 降级原因 + 用户主动永久解绑出口。
  * 数据来自 useLinguistSessionBinding（IPC 当次解析，非客户端镜像）。
  */
 
@@ -62,11 +62,11 @@ export function LinguistSessionBindingBadge({
       data-binding-status={status}
       title={
         status === 'archived'
-          ? `绑定项目「${projectName}」已归档，会话只读`
+          ? `绑定项目「${projectName}」已归档，CAT 写入只读`
           : status === 'missing'
-            ? `绑定项目「${projectName}」目录缺失，发送已阻断`
+            ? `绑定项目「${projectName}」目录缺失，Agent 对话仍可用`
             : status === 'unavailable'
-              ? `绑定项目「${projectName}」暂不可用，发送已阻断`
+              ? `绑定项目「${projectName}」暂不可用，Agent 对话仍可用`
               : `返回 Linguist 项目「${projectName}」`
       }
       className={cn(
@@ -91,7 +91,7 @@ export function LinguistSessionBindingBadge({
   )
 }
 
-/** 会话内通告：异常态保留历史、阻断发送，并提供显式永久解绑。 */
+/** 会话内通告：异常态仅降级 CAT，并提供显式永久解绑。 */
 export function LinguistSessionBindingNotice({
   session,
 }: {

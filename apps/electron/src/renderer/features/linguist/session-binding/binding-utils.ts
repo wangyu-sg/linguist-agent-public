@@ -3,23 +3,10 @@
  *
  * 状态语义（与 main/lib/linguist/session-binding.ts 一致）：
  * - active：徽章中性展示项目名，无通告；
- * - archived：徽章标「已归档」，通告说明会话只读（发送会被主进程拒绝）；
- * - missing / unavailable：历史可读，发送 fail closed，等待修复或显式解绑。
+ * - archived / missing / unavailable：显示降级信息，但 Agent 对话保持可用。
  */
 
-import type {
-  AgentSessionMeta,
-  LinguistSessionBindingInfo,
-  LinguistSessionBindingStatus,
-} from '@proma/shared'
-
-/** 绑定状态未解析时同样只读；主进程发送闸门仍是最终权威。 */
-export function isLinguistSessionReadOnly(
-  session: Pick<AgentSessionMeta, 'linguistProjectId'> | null | undefined,
-  binding: LinguistSessionBindingInfo | undefined,
-): boolean {
-  return Boolean(session?.linguistProjectId && binding?.status !== 'active')
-}
+import type { LinguistSessionBindingStatus } from '@proma/shared'
 
 /** 徽章上项目名后的状态后缀；active 无后缀。 */
 export function bindingStatusLabel(status: LinguistSessionBindingStatus): string | null {
@@ -50,20 +37,20 @@ export function bindingNoticeCopy(
   switch (status) {
     case 'archived':
       return {
-        title: '项目已归档（只读）',
-        body: `会话绑定的项目「${projectName}」已归档。历史消息可正常阅读，但不能发送新消息。`,
+        title: '项目已归档',
+        body: `会话仍可使用全部 Proma 能力；CAT 写入会按项目只读规则拒绝。`,
         tone: 'amber',
       }
     case 'missing':
       return {
         title: '绑定项目缺失',
-        body: `会话绑定的项目「${projectName}」目录已缺失或损坏。历史消息可正常阅读，但新消息不会发送；修复项目或永久解除绑定后才能继续。`,
+        body: `会话绑定的项目「${projectName}」目录已缺失或损坏。Agent 对话仍可继续；CAT 工具会返回 PROJECT_MISSING。`,
         tone: 'red',
       }
     case 'unavailable':
       return {
         title: '项目服务不可用',
-        body: `暂时无法验证会话绑定的项目「${projectName}」，新消息不会按普通 Agent 发送。请重试；若确认不再需要项目上下文，也可永久解除绑定。`,
+        body: `暂时无法验证会话绑定的项目「${projectName}」。Agent 对话仍可继续；CAT 工具会报告服务不可用。`,
         tone: 'red',
       }
     case 'active':

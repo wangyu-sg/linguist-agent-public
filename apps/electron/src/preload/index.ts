@@ -150,9 +150,11 @@ import type {
   LinguistIntegrityStartResult,
   LinguistProjectRestoreRequest,
   LinguistProjectRestoreResult,
-  LinguistProjectSetExecutionPolicyRequest,
-  LinguistProjectSetExecutionPolicyResult,
   LinguistProjectSetWorkflowConfigRequest,
+  LinguistProjectUpdateTagProfileRequest,
+  LinguistProjectUpdateTagProfileResult,
+  LinguistProjectScanUnknownTagsRequest,
+  LinguistProjectScanUnknownTagsResult,
   LinguistProjectSetWorkflowConfigResult,
   LinguistProjectSummary,
   LinguistProjectUndoImportAssetRequest,
@@ -167,6 +169,8 @@ import type {
   LinguistSessionGetBindingResult,
   LinguistSessionListForProjectRequest,
   LinguistSessionListForProjectResult,
+  LinguistSessionUpdateRoleRequest,
+  LinguistSessionUpdateRoleResult,
   LinguistSessionCopyEligibilityRequest,
   LinguistSessionCopyEligibilityResult,
   LinguistSessionCopyToProjectRequest,
@@ -1358,14 +1362,17 @@ export interface ElectronAPI {
   linguistProjectsDelete: (
     input: LinguistProjectDeleteRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectDeleteResult>>
-  /** 设置 Execution Policy（LA-QUALITY-001；归档项目拒绝，闭集字面量严格校验） */
-  linguistProjectsSetExecutionPolicy: (
-    input: LinguistProjectSetExecutionPolicyRequest,
-  ) => Promise<LinguistIpcResult<LinguistProjectSetExecutionPolicyResult>>
   /** 设置当前 T/E/P 任务阶段与格式原生输出策略。 */
   linguistProjectsSetWorkflowConfig: (
     input: LinguistProjectSetWorkflowConfigRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectSetWorkflowConfigResult>>
+  /** 项目 Tag Profile 候选与启用状态管理。 */
+  linguistProjectsUpdateTagProfile: (
+    input: LinguistProjectUpdateTagProfileRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectUpdateTagProfileResult>>
+  linguistProjectsScanUnknownTags: (
+    input: LinguistProjectScanUnknownTagsRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectScanUnknownTagsResult>>
   /** PB-111：全量备份（backup-<ts>/ 目录 + manifest；归档项目也可备份） */
   linguistProjectsBackup: (
     input: LinguistProjectBackupRequest,
@@ -1537,6 +1544,9 @@ export interface ElectronAPI {
   linguistSessionsCreateForProject: (
     input: LinguistSessionCreateForProjectRequest,
   ) => Promise<LinguistIpcResult<LinguistSessionCreateForProjectResult>>
+  linguistSessionsUpdateRole: (
+    input: LinguistSessionUpdateRoleRequest,
+  ) => Promise<LinguistIpcResult<LinguistSessionUpdateRoleResult>>
   /** 列出绑定到某项目的会话（标题 + 更新时间，updatedAt 降序） */
   linguistSessionsListForProject: (
     input: LinguistSessionListForProjectRequest,
@@ -3147,10 +3157,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.ARCHIVE, input),
   linguistProjectsDelete: (input: LinguistProjectDeleteRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.DELETE, input),
-  linguistProjectsSetExecutionPolicy: (input: LinguistProjectSetExecutionPolicyRequest) =>
-    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.SET_EXECUTION_POLICY, input),
   linguistProjectsSetWorkflowConfig: (input: LinguistProjectSetWorkflowConfigRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.SET_WORKFLOW_CONFIG, input),
+  linguistProjectsUpdateTagProfile: (input: LinguistProjectUpdateTagProfileRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.UPDATE_TAG_PROFILE, input),
+  linguistProjectsScanUnknownTags: (input: LinguistProjectScanUnknownTagsRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.SCAN_UNKNOWN_TAGS, input),
   // ===== Linguist 备份 / 恢复（PB-111，计划 §24）=====
   linguistProjectsBackup: (input: LinguistProjectBackupRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.BACKUP, input),
@@ -3256,6 +3268,8 @@ const electronAPI: ElectronAPI = {
   // ===== Linguist 会话绑定（PB-034）=====
   linguistSessionsCreateForProject: (input: LinguistSessionCreateForProjectRequest) =>
     ipcRenderer.invoke(LINGUIST_SESSION_IPC_CHANNELS.CREATE_FOR_PROJECT, input),
+  linguistSessionsUpdateRole: (input: LinguistSessionUpdateRoleRequest) =>
+    ipcRenderer.invoke(LINGUIST_SESSION_IPC_CHANNELS.UPDATE_ROLE, input),
   linguistSessionsListForProject: (input: LinguistSessionListForProjectRequest) =>
     ipcRenderer.invoke(LINGUIST_SESSION_IPC_CHANNELS.LIST_FOR_PROJECT, input),
   linguistSessionsGetBinding: (input: LinguistSessionGetBindingRequest) =>

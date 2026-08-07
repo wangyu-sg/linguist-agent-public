@@ -1,353 +1,48 @@
-/**
- * PB-040 常驻项目 Skill 解析 nodetest（node --test；真实服务 + 真实会话索引，无 mock）；
- * PB-082 扩展评审角色注入矩阵；LA-QUALITY-001 起 strategy 层随质量档位废除：
- *
- * - 普通会话（无 linguistProjectId）→ 不注入（硬规则：普通 Chat 不出现）；
- * - 普通项目会话 → 只注入 project-assistant（active/archived 均注入；发送已被
- *   PB-034 闸门阻断，保持单一解析规则）；项目 Execution Policy 变更不影响注入；
- * - 评审会话（linguistSessionRole === 'reviewer'）→ 只注入 project-reviewer；
- * - 盲审会话（linguistSessionRole === 'auditor'）→ 只注入 project-auditor；
- * - missing（项目目录缺失/损坏 / 未知 id）→ 不注入（降级）；
- * - 服务不可解析 / 角色目录缺 SKILL.md → 不注入（fail closed）；
- * - 重启 resume：同一 root 重建服务后重解析结果一致（解析不落会话状态）；
- * - 默认根目录解析：打包布局（process.resourcesPath/linguist-skills）与
- *   ESM 测试上下文（无 __dirname/resourcesPath → undefined）两分支。
- *
- * 引导纪律同 session-binding.nodetest.ts：先设 HOME 再动态 import。
- */
-
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { makeClock, makeEntropy, makeTempDir } from './test/service-testkit'
-import { LinguistProjectService } from './project-service'
-import { projectPaths } from './paths'
+import type { LinguistRole } from '@proma/shared'
+import {
+  LINGUIST_ROLE_PROMPT_VERSION,
+  resolveLinguistRolePrompt,
+} from './project-skill'
 
-// —— 先建 tmp HOME，再动态 import 触达 config-paths 的模块 ——
-const tempHome = makeTempDir()
-process.env.HOME = tempHome
-
-const binding = await import('./session-binding')
-const skill = await import('./project-skill')
-const sessionManager = await import('../agent-session-manager')
-
-const LINGUIST_ROOT = join(tempHome, '.linguist-agent', 'linguist')
-/** 仓根内置 Skills 根目录（本文件位于 apps/electron/src/main/lib/linguist/，上溯六级到仓根）。 */
-const REPO_SKILLS_ROOT = join(
+const ROLES_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),
   '..', '..', '..', '..', '..', '..',
-  'resources', 'linguist-skills',
+  'resources', 'linguist-roles',
 )
-const ASSISTANT_DIR = join(REPO_SKILLS_ROOT, 'project-assistant')
-const REVIEWER_DIR = join(REPO_SKILLS_ROOT, 'project-reviewer')
-const AUDITOR_DIR = join(REPO_SKILLS_ROOT, 'project-auditor')
+const ROLES: LinguistRole[] = ['general', 'translator', 'reviewer', 'proofreader']
 
-let serviceSeq = 0
-
-function makeServiceOnLinguistRoot(): LinguistProjectService {
-  let workspaceSeq = 0
-  const service = new LinguistProjectService({
-    rootDir: LINGUIST_ROOT,
-    entropy: makeEntropy(`pb-040-${++serviceSeq}`),
-    now: makeClock(),
-    workspaceAllocator: () => `ws-pb040-${serviceSeq}-${++workspaceSeq}`,
-  })
-  service.init()
-  return service
-}
-
-const PROJECT_INPUT = { name: 'Skill 项目', sourceLocale: 'en', targetLocale: 'zh-CN' } as const
-
-/** 造一个只含指定子目录的临时 skills root（SKILL.md 最小 frontmatter）。 */
-function makeSkillsRootWith(subdirs: string[]): string {
-  const root = makeTempDir()
-  for (const sub of subdirs) {
-    const dir = join(root, sub)
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'SKILL.md'), `---\nname: stub-${sub}\ndescription: stub\nversion: "1.0.0"\n---\n`, 'utf8')
-  }
-  return root
-}
-
-test('repo-bundled skills sanity: 项目角色 Skill 在场且 strategy 目录已删除', () => {
-  for (const sub of ['project-assistant', 'project-reviewer', 'project-auditor']) {
-    assert.ok(existsSync(join(REPO_SKILLS_ROOT, sub, 'SKILL.md')), `内置 Skill 不存在: ${join(REPO_SKILLS_ROOT, sub)}`)
-  }
-  // LA-QUALITY-001：strategy Skill 随质量档位一并废除，目录不得再出现
-  for (const sub of ['strategy-fast', 'strategy-balanced', 'strategy-best']) {
-    assert.equal(existsSync(join(REPO_SKILLS_ROOT, sub)), false, `strategy Skill 目录应已删除: ${sub}`)
-  }
-  assert.equal(skill.LINGUIST_PROJECT_SKILL_NAME, 'linguist-project-assistant')
-  assert.equal(skill.LINGUIST_REVIEWER_SKILL_NAME, 'linguist-project-reviewer')
-  assert.equal(skill.LINGUIST_AUDITOR_SKILL_NAME, 'linguist-project-auditor')
-  assert.equal(skill.LINGUIST_ROLE_SKILL_VERSION, '1.0.3')
-})
-
-test('LA-PROMPT-002/003/005: bundled Prompt Skills match golden hashes and fallback keeps the same version', () => {
-  const service = makeServiceOnLinguistRoot()
-  try {
-    const project = service.createProject({ ...PROJECT_INPUT, name: 'Prompt Golden 项目' })
-    const assistant = binding.createLinguistProjectChatSession(service, { projectId: project.id })
-
-    const resolved = skill.resolveLinguistPromptSkillLayers(assistant, REPO_SKILLS_ROOT)
-    assert.equal(resolved.role, 'assistant')
-    assert.equal(resolved.roleLayer.version, '1.0.3')
+test('四种岗位各有且只有一个 Markdown Prompt 真源', () => {
+  assert.equal(LINGUIST_ROLE_PROMPT_VERSION, '1.0.0')
+  for (const role of ROLES) {
+    assert.equal(existsSync(join(ROLES_ROOT, `${role}.md`)), true)
+    const resolved = resolveLinguistRolePrompt({ linguistRole: role }, ROLES_ROOT)
+    assert.equal(resolved.role, role)
     assert.equal(resolved.roleLayer.source, 'bundle')
-    assert.equal(
-      resolved.roleLayer.hash,
-      '09a5ebdc92ae84b4ab432de8e5f0b30e6f426cf34361aa6a92d8f1f5892456c7',
-    )
-    // 中性批次指引并入 assistant role 文案（原 strategy 层内容）
-    assert.match(resolved.roleLayer.content, /中性默认批次/)
-    assert.match(resolved.roleLayer.content, /cat_search_tm/)
-    // LA-QUALITY-002：引用恒定质量合同
-    assert.match(resolved.roleLayer.content, /professional_quality_contract/)
+    assert.ok(resolved.roleLayer.content.length > 20)
     assert.deepEqual(resolved.fallbackLayers, [])
-    // Execution Policy 变更不影响 role 层（策略不再随项目实时变化）
-    service.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
-    assert.equal(
-      skill.resolveLinguistPromptSkillLayers(assistant, REPO_SKILLS_ROOT).roleLayer.hash,
-      resolved.roleLayer.hash,
-    )
-
-    const reviewerProject = service.createProject({ ...PROJECT_INPUT, name: 'Reviewer Golden 项目' })
-    const reviewer = binding.createLinguistProjectChatSession(service, {
-      projectId: reviewerProject.id,
-      role: 'reviewer',
-    })
-    const reviewerLayer = skill.resolveLinguistPromptSkillLayers(reviewer, REPO_SKILLS_ROOT)
-    assert.equal(
-      reviewerLayer.roleLayer.hash,
-      'b8cf13b69b5111394e1b4bf07175809879e1161ba55f39e74bc4c15e4e512f4c',
-    )
-    assert.match(reviewerLayer.roleLayer.content, /verdict=pass/)
-    assert.match(reviewerLayer.roleLayer.content, /verdict=issues/)
-    assert.match(reviewerLayer.roleLayer.content, /verdict=abstain/)
-    // LA-QUALITY-002：无有效 Proposal Snapshot 只能 abstain
-    assert.match(reviewerLayer.roleLayer.content, /professional_quality_contract/)
-    assert.match(reviewerLayer.roleLayer.content, /只能提交 `verdict=abstain`/)
-
-    const auditorProject = service.createProject({ ...PROJECT_INPUT, name: 'Auditor Golden 项目' })
-    const auditor = binding.createLinguistProjectChatSession(service, {
-      projectId: auditorProject.id,
-      role: 'auditor',
-    })
-    const auditorLayer = skill.resolveLinguistPromptSkillLayers(auditor, REPO_SKILLS_ROOT)
-    assert.equal(
-      auditorLayer.roleLayer.hash,
-      '9669639de7f68e6207359442314a3e14a4781c5acc1e14d91833683ae055f120',
-    )
-    assert.match(auditorLayer.roleLayer.content, /Proma 通用工具/)
-    assert.match(auditorLayer.roleLayer.content, /professional_quality_contract/)
-    assert.doesNotMatch(auditorLayer.roleLayer.content, /绝对沙箱|无法访问任何信息/)
-
-    const missingBundleRoot = makeTempDir()
-    const fallback = skill.resolveLinguistPromptSkillLayers(assistant, missingBundleRoot)
-    assert.equal(fallback.roleLayer.version, '1.0.3')
-    assert.equal(fallback.roleLayer.source, 'fallback')
-    assert.deepEqual(fallback.fallbackLayers, ['role'])
-  } finally {
-    service.closeAll()
   }
 })
 
-test('auditor session gets only the blind-audit skill', () => {
-  const service = makeServiceOnLinguistRoot()
-  const project = service.createProject({ ...PROJECT_INPUT, name: '盲审项目' })
-  const meta = binding.createLinguistProjectChatSession(service, {
-    projectId: project.id,
-    role: 'auditor',
-  })
-  assert.equal(meta.linguistSessionRole, 'auditor')
-  assert.deepEqual(
-    skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT),
-    [AUDITOR_DIR],
-  )
-  service.closeAll()
+test('角色资源缺失或默认岗位未指定时使用简短 fallback 并继续', () => {
+  const missing = resolveLinguistRolePrompt({ linguistRole: 'reviewer' }, join(ROLES_ROOT, 'missing'))
+  assert.equal(missing.roleLayer.source, 'fallback')
+  assert.deepEqual(missing.fallbackLayers, ['role'])
+  assert.match(missing.roleLayer.content, /全部 Source 与当前 Target/)
+
+  const defaultRole = resolveLinguistRolePrompt({}, undefined)
+  assert.equal(defaultRole.role, 'general')
+  assert.equal(defaultRole.roleLayer.source, 'fallback')
 })
 
-test('normal chat never gets linguist skills; active project chat gets only project-assistant', () => {
-  const service = makeServiceOnLinguistRoot()
-  const project = service.createProject({ ...PROJECT_INPUT })
-
-  // 普通会话（侧栏新建路径 createAgentSession，绝不携带绑定）：不注入
-  assert.equal(skill.resolveLinguistSessionSkillPaths(undefined, () => service, REPO_SKILLS_ROOT).length, 0)
-  const normal = sessionManager.createAgentSession('普通对话', undefined, undefined, undefined, 'pi')
-  assert.equal(normal.linguistProjectId, undefined)
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(normal, () => service, REPO_SKILLS_ROOT), [])
-
-  // 项目对话（active）：只注入常驻 project-assistant
-  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
-  const resolved = skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT)
-  assert.deepEqual(resolved, [ASSISTANT_DIR])
-  for (const dir of resolved) assert.ok(existsSync(join(dir, 'SKILL.md')))
-
-  service.closeAll()
-})
-
-test('skill paths 不随项目 Execution Policy 变化（策略层已废除）', () => {
-  const service = makeServiceOnLinguistRoot()
-  const project = service.createProject({ ...PROJECT_INPUT, name: '策略无关项目' })
-  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
-
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
-  service.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
-  service.setExecutionPolicy(project.id, { independentReview: 'off' })
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
-
-  service.closeAll()
-})
-
-test('reviewer session gets only the project-reviewer skill (active and archived alike)', () => {
-  const service = makeServiceOnLinguistRoot()
-  const project = service.createProject({ ...PROJECT_INPUT, name: '评审项目' })
-  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id, role: 'reviewer' })
-  assert.equal(meta.linguistSessionRole, 'reviewer')
-
-  // active：只注入 project-reviewer（不注入 assistant——角色边界清晰）
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [REVIEWER_DIR])
-
-  // 归档：仍注入（发送已被 PB-034 闸门阻断，注入与否不影响只读语义）
-  service.archiveProject(project.id)
-  assert.equal(binding.getLinguistSessionBinding(meta, service)?.status, 'archived')
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [REVIEWER_DIR])
-
-  // 评审 Skill 目录缺失 → 不注入（fail closed）
-  const assistantOnlyRoot = makeSkillsRootWith(['project-assistant'])
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, assistantOnlyRoot), [])
-
-  service.closeAll()
-})
-
-test('archived binding still loads skills (documented choice); missing binding does not', () => {
-  const service = makeServiceOnLinguistRoot()
-  const project = service.createProject({ ...PROJECT_INPUT, name: '归档与缺失项目' })
-  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
-
-  // 归档：仍注入——发送已被 PB-034 主进程闸门阻断（会话只读），
-  // Skill 注入与否不影响只读语义；保持「绑定在场且项目数据完整即注入」单一规则。
-  service.archiveProject(project.id)
-  assert.equal(binding.getLinguistSessionBinding(meta, service)?.status, 'archived')
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [ASSISTANT_DIR])
-
-  // 项目目录被外部删除 → missing：不注入（会话降级为普通 Agent 会话）
-  rmSync(projectPaths(LINGUIST_ROOT, project.id).projectDir, { recursive: true, force: true })
-  assert.equal(binding.getLinguistSessionBinding(meta, service)?.status, 'missing')
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, REPO_SKILLS_ROOT), [])
-
-  service.closeAll()
-})
-
-test('unknown project id resolves missing → no skill', () => {
-  const service = makeServiceOnLinguistRoot()
-  const ghost = { linguistProjectId: 'prj-0000000000000000' }
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(ghost, () => service, REPO_SKILLS_ROOT), [])
-  service.closeAll()
-})
-
-test('fail closed: unresolvable service, missing skills root or SKILL.md → degraded, never throws', () => {
-  const service = makeServiceOnLinguistRoot()
-  const project = service.createProject({ ...PROJECT_INPUT, name: '故障项目' })
-  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
-
-  // 服务未 init / 解析抛错 → []（记警告，不掀翻发送链路）
-  const throwingResolver = (): LinguistProjectService => {
-    throw new Error('service not initialized')
-  }
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, throwingResolver, REPO_SKILLS_ROOT), [])
-
-  // skills root 不存在 → []（内置资源缺失时降级）
-  const emptyDir = makeTempDir()
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, emptyDir), [])
-  // skillsRoot 显式 undefined → []（默认解析也找不到时同一语义）
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, undefined), [])
-
-  // project-assistant 目录缺 SKILL.md → []（同 PB-040 语义）
-  const reviewerOnlyRoot = makeSkillsRootWith(['project-reviewer'])
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, reviewerOnlyRoot), [])
-
-  // 只有 project-assistant 在场 → 注入（LA-QUALITY-001 后 strategy 目录不再是输入）
-  const assistantOnlyRoot = makeSkillsRootWith(['project-assistant'])
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service, assistantOnlyRoot), [
-    join(assistantOnlyRoot, 'project-assistant'),
-  ])
-
-  service.closeAll()
-})
-
-test('resume after restart: same binding re-resolves to the same skill paths on a fresh service', () => {
-  const service1 = makeServiceOnLinguistRoot()
-  const project = service1.createProject({ ...PROJECT_INPUT, name: '重启 Skill 项目' })
-  const meta = binding.createLinguistProjectChatSession(service1, { projectId: project.id })
-  const expected = [ASSISTANT_DIR]
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, () => service1, REPO_SKILLS_ROOT), expected)
-  service1.closeAll()
-
-  // 第二「进程」：同一 linguist root + 同一 HOME；解析不依赖任何持久化的 Skill 列表
-  const service2 = makeServiceOnLinguistRoot()
-  const afterRestart = binding.listLinguistProjectChatSessions(project.id)[0]
-  assert.equal(afterRestart?.id, meta.id)
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(afterRestart, () => service2, REPO_SKILLS_ROOT), expected)
-
-  // 重启后归档 → 规则不变仍注入；删除目录 → missing 不注入
-  service2.archiveProject(project.id)
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(afterRestart, () => service2, REPO_SKILLS_ROOT), expected)
-  service2.closeAll()
-  rmSync(projectPaths(LINGUIST_ROOT, project.id).projectDir, { recursive: true, force: true })
-  const service3 = makeServiceOnLinguistRoot()
-  assert.deepEqual(skill.resolveLinguistSessionSkillPaths(afterRestart, () => service3, REPO_SKILLS_ROOT), [])
-  service3.closeAll()
-})
-
-test('PB-110 日志纪律：Skill 解析失败的 warn 只记 name/code，绝不透传 message 里的客户正文', () => {
-  const BODY_SENTINEL = 'SENTINEL_SECRET_7f3a9'
-  const service = makeServiceOnLinguistRoot()
-  try {
-    const project = service.createProject({ ...PROJECT_INPUT, name: 'warn 纪律项目' })
-    const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
-
-    const warnings: string[] = []
-    const originalWarn = console.warn
-    console.warn = (...args: unknown[]) => {
-      warnings.push(args.map((arg) => String(arg)).join(' '))
-    }
-    try {
-      // 服务解析本身抛错（message 含客户正文 sentinel）：warn 只记 name/code
-      const throwingResolver = (): LinguistProjectService => {
-        throw new Error(`初始化失败：客户正文 ${BODY_SENTINEL}（来源 client-lore.txt）`)
-      }
-      assert.deepEqual(skill.resolveLinguistSessionSkillPaths(meta, throwingResolver, REPO_SKILLS_ROOT), [])
-    } finally {
-      console.warn = originalWarn
-    }
-    assert.equal(warnings.length, 1)
-    for (const line of warnings) {
-      assert.ok(!line.includes(BODY_SENTINEL), `warn 泄漏客户正文: ${line}`)
-      assert.match(line, /name=Error/)
-    }
-  } finally {
-    service.closeAll()
-  }
-})
-
-test('default root resolution: packaged layout via process.resourcesPath; bare ESM context → undefined', () => {
-  // 打包布局：extraResources 将仓根 resources/linguist-skills 拷到 <resourcesPath>/linguist-skills。
-  // 这里把 resourcesPath 指到仓根 resources/ —— 目录结构与打包产物完全一致。
-  const fakeResourcesPath = dirname(REPO_SKILLS_ROOT) // .../resources
-  const saved = (process as { resourcesPath?: string }).resourcesPath
-  try {
-    ;(process as { resourcesPath?: string }).resourcesPath = fakeResourcesPath
-    assert.equal(skill.getDefaultLinguistSkillsRoot(), REPO_SKILLS_ROOT)
-  } finally {
-    if (saved === undefined) delete (process as { resourcesPath?: string }).resourcesPath
-    else (process as { resourcesPath?: string }).resourcesPath = saved
-  }
-
-  // node --test ESM 上下文：无 __dirname（CJS 分支跳过）、无 resourcesPath → undefined。
-  //（开发 CJS 束 dist/main.cjs 的上溯分支与打包分支分别由 bun guard 测试的仓根
-  // 布局断言与 electron-builder 的 extraResources 配置覆盖。）
-  assert.equal(skill.getDefaultLinguistSkillsRoot(), undefined)
+test('Reviewer 与 Translator Prompt 不含旧候选门禁或低质量草稿定位', () => {
+  const reviewer = resolveLinguistRolePrompt({ linguistRole: 'reviewer' }, ROLES_ROOT).roleLayer.content
+  const translator = resolveLinguistRolePrompt({ linguistRole: 'translator' }, ROLES_ROOT).roleLayer.content
+  assert.doesNotMatch(reviewer, /Proposal Snapshot|candidateProposalId|abstain/)
+  assert.doesNotMatch(translator, /初稿生成/)
+  assert.match(translator, /不要把结果称为/)
 })

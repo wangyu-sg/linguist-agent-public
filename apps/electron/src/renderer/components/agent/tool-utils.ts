@@ -142,7 +142,6 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   cat_propose_translations: '创建翻译建议',
   cat_run_qa: '运行项目质检',
   cat_get_qa_findings: '查看质检问题',
-  cat_submit_critic_review: '提交独立复核',
   cat_run_batch_consistency: '检查批量一致性',
 }
 

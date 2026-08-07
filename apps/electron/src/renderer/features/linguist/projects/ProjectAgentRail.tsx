@@ -8,7 +8,6 @@ import type {
   LinguistAssetInfo,
   LinguistIpcError,
   LinguistIpcResult,
-  LinguistExecutionPolicy,
   LinguistSessionCreateForProjectRequest,
 } from '@proma/shared'
 import {
@@ -27,6 +26,7 @@ import { UNAVAILABLE_AGENT_HOST_CAPABILITIES } from '@/host/contracts'
 import { getAgentSurfaceControls } from '@/host/extension-registry'
 import type { ComposerContextChip } from '@/features/linguist/composer/ComposerContextChips'
 import { Button } from '@/components/ui/button'
+import { LinguistRoleMenu } from '../session-binding/LinguistRoleMenu'
 import {
   captureLinguistTurnContextSnapshot,
   createSegmentAgentReference,
@@ -182,14 +182,14 @@ export function buildProjectAgentQuickActions(
     {
       id: 'translate',
       label: selectedCount > 0 ? '翻译已选' : '翻译当前',
-      prompt: `请翻译${target}。请使用当前项目上下文和现有 CAT Tools 创建 Proposal，只创建建议，不要直接覆盖或接受译文。`,
+      prompt: `请翻译${target}，完成生产级译文与自检，并按我的意图将结果写回项目。`,
       scope,
       disabled,
     },
     {
       id: 'review',
       label: selectedCount > 0 ? '审校已选' : '审校当前',
-      prompt: `请审校${target}。请使用当前项目上下文和现有 CAT Tools 创建 Proposal，只创建建议，不要直接覆盖或接受译文。`,
+      prompt: `请完整审校${target}的 Source 与当前 Target，保留正确译文，修订所有实质问题，并按我的意图将结果写回项目。`,
       scope,
       disabled,
     },
@@ -234,14 +234,12 @@ export function createProjectAgentQuickActionPendingPrompt(
 interface ProjectAgentRailProps {
   projectId: string
   projectName: string
-  executionPolicy: LinguistExecutionPolicy
   assets?: readonly LinguistAssetInfo[]
 }
 
 export function ProjectAgentRail({
   projectId,
   projectName,
-  executionPolicy,
   assets = [],
 }: ProjectAgentRailProps): React.ReactElement {
   const store = useStore()
@@ -365,14 +363,7 @@ export function ProjectAgentRail({
 
   if (sessionId) {
     const session = sessions.find((item) => item.id === sessionId)
-    const role = session?.linguistSessionRole === 'reviewer'
-      ? 'Reviewer'
-      : session?.linguistSessionRole === 'auditor'
-        ? 'Auditor'
-        : 'Assistant'
-    const reviewLabel = executionPolicy.independentReview === 'risk-based'
-      ? '独立评审·风险驱动'
-      : '独立评审·关'
+    const role = session?.linguistRole ?? 'general'
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-1 bg-content-area/70 px-2 py-1.5 shadow-sm">
@@ -391,12 +382,12 @@ export function ProjectAgentRail({
           )}
           {presentation === 'full' && (
             <div
-              aria-label={`项目 ${projectName}，角色 ${role}，${reviewLabel}`}
+              aria-label={`项目 ${projectName}，角色 ${role}`}
               className="min-w-0 flex-1 px-2"
             >
               <p className="truncate text-xs font-medium text-foreground">{projectName}</p>
               <p className="truncate text-[11px] text-muted-foreground">
-                {[role, reviewLabel, ...contextSummary.slice(1).map((chip) => chip.label)].join(' · ')}
+                {[role, ...contextSummary.slice(1).map((chip) => chip.label)].join(' · ')}
               </p>
             </div>
           )}
@@ -422,6 +413,7 @@ export function ProjectAgentRail({
               ))}
             </div>
           )}
+          {session && <LinguistRoleMenu session={session} compact={presentation === 'rail'} />}
           {presentation === 'rail' && (
             <div
               role="group"

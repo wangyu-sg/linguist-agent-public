@@ -7,27 +7,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   bindingNoticeCopy,
   bindingStatusLabel,
-  isLinguistSessionReadOnly,
 } from './binding-utils'
-
-describe('isLinguistSessionReadOnly', () => {
-  const session = { linguistProjectId: 'project-1' }
-  const binding = {
-    sessionId: 'session-1',
-    projectId: 'project-1',
-    projectName: '项目一',
-    status: 'active' as const,
-  }
-
-  test('普通会话和 active 绑定可发送，未解析或异常绑定只读', () => {
-    expect(isLinguistSessionReadOnly({}, undefined)).toBe(false)
-    expect(isLinguistSessionReadOnly(session, binding)).toBe(false)
-    expect(isLinguistSessionReadOnly(session, undefined)).toBe(true)
-    expect(isLinguistSessionReadOnly(session, { ...binding, status: 'archived' })).toBe(true)
-    expect(isLinguistSessionReadOnly(session, { ...binding, status: 'missing' })).toBe(true)
-    expect(isLinguistSessionReadOnly(session, { ...binding, status: 'unavailable' })).toBe(true)
-  })
-})
 
 describe('bindingStatusLabel', () => {
   test('active has no suffix; blocked states have stable labels', () => {
@@ -43,34 +23,33 @@ describe('bindingNoticeCopy', () => {
     expect(bindingNoticeCopy('active', '任何项目')).toBeNull()
   })
 
-  test('archived notice: read-only semantics, amber tone, project name quoted', () => {
+  test('archived notice: Agent remains available while CAT writes stay read-only', () => {
     const copy = bindingNoticeCopy('archived', '我的项目')
     expect(copy).not.toBeNull()
     expect(copy!.tone).toBe('amber')
-    expect(copy!.title).toBe('项目已归档（只读）')
-    expect(copy!.body).toContain('「我的项目」')
-    expect(copy!.body).toContain('不能发送新消息')
-    expect(copy!.body).toContain('历史消息可正常阅读')
+    expect(copy!.title).toBe('项目已归档')
+    expect(copy!.body).toContain('会话仍可使用全部 Proma 能力')
+    expect(copy!.body).toContain('CAT 写入')
   })
 
-  test('missing notice: history readable, sending blocked until detach', () => {
+  test('missing notice: Agent remains available and CAT reports PROJECT_MISSING', () => {
     const copy = bindingNoticeCopy('missing', '丢失的项目')
     expect(copy).not.toBeNull()
     expect(copy!.tone).toBe('red')
     expect(copy!.title).toBe('绑定项目缺失')
     expect(copy!.body).toContain('「丢失的项目」')
-    expect(copy!.body).toContain('不会发送')
-    expect(copy!.body).toContain('解除绑定')
+    expect(copy!.body).toContain('Agent 对话仍可继续')
+    expect(copy!.body).toContain('PROJECT_MISSING')
   })
 
-  test('unavailable notice: fail-closed semantics and retry guidance', () => {
+  test('unavailable notice does not downgrade the session to an ordinary Agent', () => {
     const copy = bindingNoticeCopy('unavailable', '暂时不可用的项目')
     expect(copy).not.toBeNull()
     expect(copy!.tone).toBe('red')
     expect(copy!.title).toBe('项目服务不可用')
     expect(copy!.body).toContain('「暂时不可用的项目」')
-    expect(copy!.body).toContain('不会按普通 Agent 发送')
-    expect(copy!.body).toContain('重试')
+    expect(copy!.body).toContain('Agent 对话仍可继续')
+    expect(copy!.body).toContain('CAT 工具')
   })
 
   test('all statuses are handled exhaustively', () => {

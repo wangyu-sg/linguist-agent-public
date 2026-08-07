@@ -44,10 +44,12 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   ARCHIVE: 'linguist.projects.archive',
   /** 可恢复删除（仅已归档项目 + 精确项目名确认） */
   DELETE: 'linguist.projects.delete',
-  /** 设置 Execution Policy（LA-QUALITY-001，取代 PB-082 质量档位；归档项目拒绝） */
-  SET_EXECUTION_POLICY: 'linguist.projects.setExecutionPolicy',
   /** 设置当前 T/E/P 任务阶段与格式原生输出策略。 */
   SET_WORKFLOW_CONFIG: 'linguist.projects.setWorkflowConfig',
+  /** 保存/激活/忽略/启停项目 Tag Profile 条目。 */
+  UPDATE_TAG_PROFILE: 'linguist.projects.updateTagProfile',
+  /** 只读扫描未登记 Tag 形状，供 Agent 与设置 UI 共用。 */
+  SCAN_UNKNOWN_TAGS: 'linguist.projects.scanUnknownTags',
   /** PB-111：全量备份（backup-<ts>/ 目录 + manifest；归档项目也可备份） */
   BACKUP: 'linguist.projects.backup',
   /** PB-111：列出项目备份（只读；名称/摘要元数据，绝无路径） */
@@ -83,6 +85,8 @@ export type LinguistIntegrityIpcChannel =
 export const LINGUIST_SESSION_IPC_CHANNELS = {
   /** 在项目内创建对话（Pi Agent 会话，元数据携带 linguistProjectId 绑定） */
   CREATE_FOR_PROJECT: 'linguist.sessions.createForProject',
+  /** 更新项目会话的默认岗位；不改变项目绑定、工具、权限、模型或 Runtime */
+  UPDATE_ROLE: 'linguist.sessions.updateRole',
   /** 列出绑定到某项目的会话（项目缺失时仍可列出——绑定存在会话侧） */
   LIST_FOR_PROJECT: 'linguist.sessions.listForProject',
   /** 查询某会话的项目绑定 + 实时状态（active/archived/missing/unavailable） */
@@ -513,43 +517,90 @@ export interface LinguistProjectInfo {
   createdAt: string
   updatedAt: string
   archivedAt?: string
-  /**
-   * Execution Policy（LA-QUALITY-001，取代 PB-082 质量档位）；主进程读取时
-   * 已规范化/映射（legacy qualityProfile 会话与项目均可打开），线上必有值。
-   */
-  executionPolicy: LinguistExecutionPolicy
   /** 旧任务/测试夹具可缺省；主进程正常化后线上响应始终提供。 */
   workflowStage?: LinguistWorkflowStage
   outputStatusPolicy?: LinguistWorkflowOutputStatusPolicy
   /** 旧任务/测试夹具可缺省；主进程正常化后线上响应始终提供。 */
   qaProfile?: LinguistQaProfile
+  tagProfile?: LinguistTagProfileInfo
 }
 
-/**
- * Execution Policy（LA-QUALITY-001）：cat-core LinguistExecutionPolicy 的
- * 线格式镜像（@proma/shared 不依赖 linguist 包，按既有镜像模式在此重定义）。
- * Alpha 版只有 independentReview 一个字段；不做全量多字段策略。
- */
-export interface LinguistExecutionPolicy {
-  independentReview: LinguistIndependentReview
+export type LinguistTagCandidateKind = 'standalone' | 'opening' | 'closing'
+
+export interface LinguistTagFamilyInfo {
+  id: string
+  pattern: string
+  class: 'paired' | 'singleton'
+  kind?: LinguistTagCandidateKind
+  pairWith?: string
+  note?: string
+  enabled?: boolean
 }
 
-export type LinguistIndependentReview = 'off' | 'risk-based'
-
-/** independentReview 合法字面量列表（主进程入校验 / renderer 选项渲染共用的唯一真源）。 */
-export const LINGUIST_INDEPENDENT_REVIEWS = ['off', 'risk-based'] as const
-
-/**
- * Legacy 质量策略档（PB-082，计划 §21；LA-QUALITY-001 起只读）：旧会话
- * linguistStrategy 与旧 project.json 可能仍携带，读取时经下方映射打开；
- * 新写入一律不再产生。
- */
-export type LinguistQualityProfile = 'fast' | 'balanced' | 'best'
-
-/** Legacy 质量档位 → Execution Policy（fast/balanced → off；best → risk-based）。 */
-export function linguistExecutionPolicyFromLegacyStrategy(value: unknown): LinguistExecutionPolicy {
-  return { independentReview: value === 'best' ? 'risk-based' : 'off' }
+export interface LinguistTagProfileCandidateInfo {
+  id: string
+  name: string
+  pattern: string
+  kind: LinguistTagCandidateKind
+  pairKey?: string
+  evidenceExampleIds: readonly string[]
+  confidence: number
+  explanation: string
+  status: 'candidate' | 'ignored'
 }
+
+export interface LinguistTagProfileInfo {
+  families: readonly LinguistTagFamilyInfo[]
+  candidates?: readonly LinguistTagProfileCandidateInfo[]
+}
+
+export type LinguistProjectUpdateTagProfileRequest =
+  | {
+      projectId: string
+      action: 'save'
+      replaceId?: string
+      candidate: {
+        name: string
+        regex: string
+        kind: LinguistTagCandidateKind
+        pairKey?: string
+        evidenceExampleIds: string[]
+        confidence: number
+        explanation: string
+      }
+    }
+  | {
+      projectId: string
+      action: 'activate' | 'ignore' | 'enable' | 'disable'
+      entryId: string
+    }
+
+export type LinguistProjectUpdateTagProfileResult = LinguistProjectInfo
+
+export interface LinguistUnknownTagExampleInfo {
+  id: string
+  segmentId: string
+  side: 'source' | 'target'
+  value: string
+}
+
+export interface LinguistUnknownTagPatternInfo {
+  patternShape: string
+  examples: LinguistUnknownTagExampleInfo[]
+  frequency: number
+  sourceTargetPreservationRate: number
+  pairingEvidence: { opening: number; closing: number; balanced: boolean }
+  knownProfileConflicts: string[]
+  suggestedVariableParts: string[]
+}
+
+export interface LinguistProjectScanUnknownTagsRequest {
+  projectId: string
+  assetIds?: string[]
+  sampleLimit?: number
+}
+
+export type LinguistProjectScanUnknownTagsResult = LinguistUnknownTagPatternInfo[]
 
 export const LINGUIST_WORKFLOW_STAGES = ['translation', 'editing', 'proofreading'] as const
 export type LinguistWorkflowStage = (typeof LINGUIST_WORKFLOW_STAGES)[number]
@@ -1556,14 +1607,6 @@ export interface LinguistProjectDeleteResult {
   recoveryName?: string
 }
 
-/** LA-QUALITY-001：设置 Execution Policy。independentReview 只接受闭集字面量（否则 INVALID_INPUT）。 */
-export interface LinguistProjectSetExecutionPolicyRequest {
-  projectId: string
-  executionPolicy: LinguistExecutionPolicy
-}
-
-export type LinguistProjectSetExecutionPolicyResult = LinguistProjectInfo
-
 export interface LinguistProjectSetWorkflowConfigRequest {
   projectId: string
   workflowStage: LinguistWorkflowStage
@@ -1667,6 +1710,7 @@ export type LinguistDeliveryBlockerCode =
   | 'PENDING_PROPOSALS'
   | 'UNCONFIRMED_SEGMENTS'
   | 'OPEN_QA_ERRORS'
+  | 'PHRASE_MASTER_MAPPING'
 
 export interface LinguistDeliveryBlockerInfo {
   code: LinguistDeliveryBlockerCode
@@ -1798,12 +1842,9 @@ export interface LinguistPromptStatusInfo {
   /** LA-QUALITY-002：恒定专业质量合同层（全角色共享同一 version/hash）。 */
   contractVersion: string
   contractHash: string
-  role: 'assistant' | 'reviewer' | 'auditor'
+  role: import('./agent').LinguistRole
   roleVersion: string
   roleHash: string
-  /** LA-QUALITY-001：会话冻结的 Execution Policy（仅 assistant 会话注入该层）。 */
-  executionPolicy?: LinguistExecutionPolicy
-  executionPolicyHash?: string
   projectDigestVersion: string
   projectDigestHash: string
   projectDigestRevision: string
@@ -1851,8 +1892,7 @@ export type LinguistDiagnosticsJobStatus =
 export interface LinguistDevDiagnostics {
   profile?: {
     kind: 'linguist'
-    role: 'assistant' | 'reviewer' | 'auditor'
-    executionPolicy: LinguistExecutionPolicy
+    role: import('./agent').LinguistRole
   }
   agentRuntime?: import('./agent-provider').AgentRuntime
   sessionCwd?: string
@@ -1999,23 +2039,26 @@ export interface LinguistProjectChatSessionInfo {
   title: string
   createdAt: number
   updatedAt: number
-  /** 会话角色（PB-082）：普通助理 / 独立评审（评审会话只注入评审 Skill）。 */
-  role: 'assistant' | 'reviewer' | 'auditor'
+  role: import('./agent').LinguistRole
 }
 
 export interface LinguistSessionCreateForProjectRequest {
   projectId: string
   /** 可选标题（≤120 字符）；缺省用项目名。 */
   title?: string
-  /**
-   * 可选角色：'reviewer' 评审指定候选；'auditor' 盲审项目且不暴露
-   * pending Proposal/既有 QA；缺省为普通助理会话。
-   */
-  role?: 'reviewer' | 'auditor'
+  /** 默认岗位；所有岗位共享同一工具和权限。 */
+  role?: import('./agent').LinguistRole
 }
 
 /** 创建结果即完整的 Agent 会话元数据（携带 linguistProjectId/Name 绑定；Pi runtime）。 */
 export type LinguistSessionCreateForProjectResult = import('./agent').AgentSessionMeta
+
+export interface LinguistSessionUpdateRoleRequest {
+  sessionId: string
+  role: import('./agent').LinguistRole
+}
+
+export type LinguistSessionUpdateRoleResult = import('./agent').AgentSessionMeta
 
 export interface LinguistSessionListForProjectRequest {
   projectId: string
@@ -2084,8 +2127,7 @@ export type LinguistSessionCopyToProjectResult = Pick<
   | 'permissionMode'
   | 'linguistProjectId'
   | 'linguistProjectName'
-  | 'linguistSessionRole'
-  | 'linguistExecutionPolicy'
+  | 'linguistRole'
   | 'createdAt'
   | 'updatedAt'
 >
@@ -2126,7 +2168,6 @@ export interface LinguistProposalIssuanceInfo {
   modelProvider?: string
   modelId?: string
   runtime?: string
-  role?: 'assistant' | 'reviewer' | 'auditor'
   strategy?: 'fast' | 'balanced' | 'best'
   linguistPromptVersion?: string
   promptHash?: string
@@ -2380,46 +2421,4 @@ export interface LinguistProjectUndoImportAssetResult {
   deletedSegments: number
   /** false = 行已删但 source blob 清尾失败（留下可幂等覆盖的孤儿 blob）。 */
   sourceBlobRemoved: boolean
-}
-
-// ===== CAT Translation Scope / Coverage Ledger（LA-TRANS-001）=====
-//
-// cat_begin_translation_scope / cat_finalize_translation_scope 的工具结果
-// DTO 镜像（@linguist/cat-tools 为权威定义）。覆盖等式全部由服务端按
-// cat.db 真值推导（proposalCreated = 该段存在 pending Proposal），模型自报
-// 完成度不参与；finalize 被拒时抛 TRANSLATION_SCOPE_INCOMPLETE 并携带同一
-// 计数形状。渲染层经 tool result details JSON 消费，无独立 IPC。
-
-/** 覆盖等式计数：requested = proposalCreated + blocked + skipped + failed + pending。 */
-export interface LinguistCatTranslationScopeCoverage {
-  requested: number
-  proposalCreated: number
-  skipped: number
-  blocked: number
-  failed: number
-  pending: number
-}
-
-/** cat_begin_translation_scope 结果：范围冻结回执（job 已快照每段 baseRevision）。 */
-export interface LinguistCatBeginTranslationScopeResult {
-  scopeJobId: string
-  runId: string
-  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
-  requested: number
-  /** 冻结范围身份哈希：segmentIds + baseRevisions 的 canonical SHA-256（LA-CONTEXT-003）。 */
-  scopeDigest: string
-  /** true = 同 toolCallId 幂等重放。 */
-  replayed: boolean
-}
-
-/** cat_finalize_translation_scope 结果：全部解释后落库 completed；重放重建同一计数。 */
-export interface LinguistCatFinalizeTranslationScopeResult {
-  scopeJobId: string
-  runId: string
-  status: 'completed'
-  /** true = 幂等重放（首次 finalize 已落库，本次未产生新写入）。 */
-  replayed: boolean
-  /** 与 begin 回执一致的冻结范围身份哈希；按持久化 job 行推导（LA-CONTEXT-003）。 */
-  scopeDigest: string
-  coverage: LinguistCatTranslationScopeCoverage
 }

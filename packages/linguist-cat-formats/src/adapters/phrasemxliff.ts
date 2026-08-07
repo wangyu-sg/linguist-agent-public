@@ -35,17 +35,15 @@
  *   else synthesized `#tu-<ordinal>` (import warning); duplicate keys are a
  *   FormatParseError. `m:para-id` is identity metadata only, never a key
  *   fallback (several trans-units can share a paragraph);
- * - inline tags (`<g>`, `<ph>`, `<bpt>/<ept>`, ...) and Phrase `{n}`
- *   placeholders are preserved VERBATIM in segment strings (entities
- *   decoded, CDATA unwrapped). DEVIATION from the legacy implementation,
- *   which rehydrated `{n}` placeholders into real tags against a paired
- *   master XLIFF — master pairing/rehydration is out of scope for this
- *   leg; raw bytes round-trip verbatim instead (same policy as MQXLIFF);
+ * - inline tags (`<g>`, `<ph>`, `<bpt>/<ept>`, ...) stay verbatim. When a
+ *   verified master mapping exists, Phrase `{n}` placeholders are rehydrated
+ *   to their real tags for editing and dehydrated back on export; without a
+ *   mapping the original placeholders remain verbatim;
  * - `<note>` -> context.note; when the trans-unit has no `<note>`, the
  *   enclosing group's `<context context-type="x-key-note">` (found via
  *   `m:para-id`) is used instead (legacy contextNote); `resname` ->
  *   context.origin. The group `x-key` master reference is NOT surfaced
- *   (it only mattered for master rehydration).
+ *   (it is consumed by the separate content-based master pairing probe).
  *
  * Locked mapping (legacy-faithful):
  * - file/trans-unit `translate="no"`                    -> locked
@@ -112,7 +110,7 @@
  *   from a non-canonical original while decoding to identical content.
  */
 
-import { fnv1a64, type SegmentStatus } from '@linguist/cat-core'
+import { fnv1a64, scanTags, type SegmentStatus } from '@linguist/cat-core'
 import type {
   CatFormatAdapter,
   CatFormatExportInput,
@@ -158,6 +156,29 @@ interface ParsedPhraseUnit {
   status: SegmentStatus
   note: string | undefined
   origin: string | undefined
+}
+
+export interface PhraseMxliffTagMapping {
+  masterId: string
+  splitSourceHash: string
+  placeholders: string[]
+  tags: string[]
+}
+
+export interface PhraseMxliffFormatConfig {
+  version: 1
+  masterFilename: string
+  masterSha256: string
+  placeholderSegments: number
+  matchedSegments: number
+  unmatchedSegments: number
+  ambiguousSegments: number
+  mappings: Record<string, PhraseMxliffTagMapping>
+}
+
+export interface PhraseMasterPairProbe {
+  config: PhraseMxliffFormatConfig
+  score: number
 }
 
 function looksBinary(bytes: Uint8Array): boolean {
@@ -218,17 +239,243 @@ function firstContextValue(block: string, contextType: string): string | undefin
 }
 
 /** Legacy parseGroupContexts: group id / m:para-id -> x-key-note, for trans-unit lookup via m:para-id. */
-function parseGroupNotes(text: string): Map<string, string> {
-  const notes = new Map<string, string>()
+interface PhraseGroupContext {
+  masterId?: string
+  note?: string
+}
+
+function parseGroupContexts(text: string): Map<string, PhraseGroupContext> {
+  const contexts = new Map<string, PhraseGroupContext>()
   GROUP_PATTERN.lastIndex = 0
   for (const match of text.matchAll(GROUP_PATTERN)) {
     const attrs = parseAttrs(match[2] ?? '')
     const key = attrs.id ?? attrs['m:para-id']
     if (!key) continue
-    const note = firstContextValue(match[3] ?? '', 'x-key-note')
-    if (note !== undefined) notes.set(key, note)
+    const block = match[3] ?? ''
+    contexts.set(key, {
+      ...(firstContextValue(block, 'x-key') !== undefined
+        ? { masterId: firstContextValue(block, 'x-key') }
+        : {}),
+      ...(firstContextValue(block, 'x-key-note') !== undefined
+        ? { note: firstContextValue(block, 'x-key-note') }
+        : {}),
+    })
   }
-  return notes
+  return contexts
+}
+
+const PHRASE_PLACEHOLDER_PATTERN = /\{\d+\}|\{\d+>\}|<\d+\}/g
+const PHRASE_NATIVE_TAG_PROFILE = {
+  families: [
+    {
+      id: 'phrase-inline-container',
+      pattern: '<(?<phraseContainer>bpt|ept|ph|it|mrk|g|x|bx|ex)\\b[^>]*>[\\s\\S]*?<\\/\\k<phraseContainer>>',
+      class: 'singleton' as const,
+    },
+    { id: 'phrase-change', pattern: '\\{u>|<u\\}', class: 'singleton' as const },
+    { id: 'phrase-variable', pattern: '\\{(?!\\d+\\})[^{}\\r\\n]+\\}', class: 'singleton' as const },
+  ],
+}
+
+function phrasePlaceholders(value: string): string[] {
+  return [...value.matchAll(PHRASE_PLACEHOLDER_PATTERN)].map((match) => match[0])
+}
+
+function structuralTags(value: string): string[] {
+  return scanTags(value, { profile: PHRASE_NATIVE_TAG_PROFILE })
+    .filter((tag) => tag.group !== 'placeholder')
+    .map((tag) => value.slice(tag.start, tag.end))
+}
+
+function stripStructuralTags(value: string): string {
+  const tags = scanTags(value, { profile: PHRASE_NATIVE_TAG_PROFILE })
+    .filter((tag) => tag.group !== 'placeholder' || tag.familyId.startsWith('phrase-'))
+  let out = ''
+  let cursor = 0
+  for (const tag of tags) {
+    out += value.slice(cursor, tag.start)
+    cursor = tag.end
+  }
+  return (out + value.slice(cursor)).replace(/\s+/g, ' ').trim()
+}
+
+function splitPlainSource(value: string): string {
+  return value.replace(/\{u>|<u\}/g, '').replace(PHRASE_PLACEHOLDER_PATTERN, '').replace(/\s+/g, ' ').trim()
+}
+
+function splitPlainForTagCount(value: string, tagCount: number): string {
+  let seen = 0
+  return value.replace(/\{u>|<u\}/g, '').replace(PHRASE_PLACEHOLDER_PATTERN, (placeholder) => {
+    if (seen >= tagCount) return placeholder
+    seen += 1
+    return ''
+  }).replace(/\s+/g, ' ').trim()
+}
+
+function parsePhraseConfig(value: string | undefined, filename: string): PhraseMxliffFormatConfig | undefined {
+  if (value === undefined) return undefined
+  try {
+    const parsed = JSON.parse(value) as PhraseMxliffFormatConfig
+    if (parsed.version !== 1 || typeof parsed.mappings !== 'object' || parsed.mappings === null) throw new Error()
+    return parsed
+  } catch {
+    throw new FormatParseError(PHRASE_MXLIFF_ADAPTER_ID, filename, 'invalid Phrase master tag mapping config')
+  }
+}
+
+export function parsePhraseMxliffFormatConfig(
+  value: string | undefined,
+  filename = 'phrase.mxliff',
+): PhraseMxliffFormatConfig | undefined {
+  return parsePhraseConfig(value, filename)
+}
+
+function rehydratePhraseValue(value: string, mapping?: PhraseMxliffTagMapping): string {
+  if (mapping === undefined) return value
+  const byPlaceholder = new Map(mapping.placeholders.map((placeholder, index) => [placeholder, mapping.tags[index]]))
+  return value.replace(PHRASE_PLACEHOLDER_PATTERN, (placeholder) => byPlaceholder.get(placeholder) ?? placeholder)
+}
+
+function dehydratePhraseValue(value: string, mapping?: PhraseMxliffTagMapping): string {
+  if (mapping === undefined) return value
+  const queues = new Map<string, string[]>()
+  mapping.tags.forEach((tag, index) => queues.set(tag, [...(queues.get(tag) ?? []), mapping.placeholders[index]!]))
+  const spans = scanTags(value, { profile: PHRASE_NATIVE_TAG_PROFILE })
+    .filter((tag) => tag.group !== 'placeholder' || tag.familyId.startsWith('phrase-'))
+  let out = ''
+  let cursor = 0
+  for (const span of spans) {
+    const raw = value.slice(span.start, span.end)
+    out += value.slice(cursor, span.start)
+    out += queues.get(raw)?.shift() ?? raw
+    cursor = span.end
+  }
+  return out + value.slice(cursor)
+}
+
+interface MasterUnitForPairing {
+  id: string
+  resname?: string
+  sourceRich: string
+  sourcePlain: string
+  tags: string[]
+}
+
+function parseMasterUnits(text: string): MasterUnitForPairing[] {
+  const units: MasterUnitForPairing[] = []
+  TRANS_UNIT_PATTERN.lastIndex = 0
+  for (const match of text.matchAll(TRANS_UNIT_PATTERN)) {
+    const attrs = parseAttrs(match[2] ?? '')
+    const source = findFirst(match[3] ?? '', 'seg-source') ?? findFirst(match[3] ?? '', 'source')
+    if (!source) continue
+    const sourceRich = decodeXmlInline(source.inner)
+    units.push({
+      id: attrs.id ?? '',
+      ...(attrs.resname ? { resname: attrs.resname } : {}),
+      sourceRich,
+      sourcePlain: stripStructuralTags(sourceRich),
+      tags: structuralTags(sourceRich),
+    })
+  }
+  return units
+}
+
+/** 内容级 split/master 配对；文件名只用于显示，不参与得分。 */
+export async function probePhraseMasterPair(
+  splitBytes: Uint8Array,
+  splitFilename: string,
+  masterBytes: Uint8Array,
+  masterFilename: string,
+): Promise<PhraseMasterPairProbe> {
+  const splitText = new TextDecoder('utf-8', { fatal: true }).decode(splitBytes)
+  const masterText = new TextDecoder('utf-8', { fatal: true }).decode(masterBytes)
+  if (!MEMSOURCE_NAMESPACE_PATTERN.test(splitText) || !XLIFF_ROOT_PATTERN.test(masterText)) {
+    return {
+      config: {
+        version: 1, masterFilename, masterSha256: await sha256Hex(masterBytes),
+        placeholderSegments: 0, matchedSegments: 0, unmatchedSegments: 0, ambiguousSegments: 0, mappings: {},
+      },
+      score: 0,
+    }
+  }
+  const contexts = parseGroupContexts(splitText)
+  const masters = parseMasterUnits(masterText)
+  const byId = new Map<string, MasterUnitForPairing[]>()
+  const byResname = new Map<string, MasterUnitForPairing[]>()
+  const byPlain = new Map<string, MasterUnitForPairing[]>()
+  const add = (map: Map<string, MasterUnitForPairing[]>, key: string | undefined, unit: MasterUnitForPairing) => {
+    if (!key) return
+    map.set(key, [...(map.get(key) ?? []), unit])
+  }
+  for (const unit of masters) {
+    add(byId, unit.id, unit)
+    add(byResname, unit.resname, unit)
+    add(byPlain, unit.sourcePlain, unit)
+  }
+  const mappings: Record<string, PhraseMxliffTagMapping> = {}
+  let placeholderSegments = 0
+  let matchedSegments = 0
+  let unmatchedSegments = 0
+  let ambiguousSegments = 0
+  TRANS_UNIT_PATTERN.lastIndex = 0
+  for (const match of splitText.matchAll(TRANS_UNIT_PATTERN)) {
+    const attrs = parseAttrs(match[2] ?? '')
+    const key = attrs.id?.trim() || attrs.resname?.trim()
+    const source = findFirst(match[3] ?? '', 'source')
+    if (!key || !source) continue
+    const sourceText = decodeXmlInline(source.inner)
+    const placeholders = phrasePlaceholders(sourceText)
+    if (placeholders.length === 0) continue
+    const context = attrs['m:para-id'] ? contexts.get(attrs['m:para-id']) : undefined
+    const candidateSets = [
+      context?.masterId ? byId.get(context.masterId) : undefined,
+      attrs.resname ? byResname.get(attrs.resname) : undefined,
+      byPlain.get(splitPlainSource(sourceText)),
+    ].filter((items): items is MasterUnitForPairing[] => items !== undefined)
+    const candidates = candidateSets.find((items) => items.length > 0) ?? []
+    const valid = candidates.filter((unit) =>
+      unit.tags.length <= placeholders.length
+      && (
+        unit.sourcePlain === splitPlainForTagCount(sourceText, unit.tags.length)
+        || (context?.masterId !== undefined && unit.id === context.masterId)
+      ))
+    const equivalent = [...new Map(valid.map((unit) => [JSON.stringify(unit.tags), unit])).values()]
+    if (equivalent.length > 1) {
+      placeholderSegments += 1
+      ambiguousSegments += 1
+      continue
+    }
+    const master = equivalent[0]
+    if (!master) {
+      placeholderSegments += 1
+      unmatchedSegments += 1
+      continue
+    }
+    if (master.tags.length === 0) continue
+    placeholderSegments += 1
+    mappings[key] = {
+      masterId: master.id,
+      splitSourceHash: fnv1a64(sourceText),
+      placeholders: placeholders.slice(0, master.tags.length),
+      tags: master.tags,
+    }
+    matchedSegments += 1
+  }
+  const config: PhraseMxliffFormatConfig = {
+    version: 1,
+    masterFilename,
+    masterSha256: await sha256Hex(masterBytes),
+    placeholderSegments,
+    matchedSegments,
+    unmatchedSegments,
+    ambiguousSegments,
+    mappings,
+  }
+  return { config, score: placeholderSegments === 0 ? 0 : matchedSegments / placeholderSegments }
+}
+
+export function serializePhraseMxliffFormatConfig(config: PhraseMxliffFormatConfig): string {
+  return JSON.stringify(config)
 }
 
 export class PhraseMxliffAdapter implements CatFormatAdapter {
@@ -253,20 +500,28 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
   }
 
   async import(input: CatFormatImportInput): Promise<ImportedCatAsset> {
-    const { bytes, filename, sourceLocale, targetLocale } = input
+    const { bytes, filename, sourceLocale, targetLocale, formatConfigJson } = input
     const text = this.decode(bytes, filename)
     const { units, warnings } = this.parseTemplate(text, filename)
-    const segments: ImportedCatSegment[] = units.map((unit) => ({
+    const config = parsePhraseConfig(formatConfigJson, filename)
+    const segments: ImportedCatSegment[] = units.map((unit) => {
+      const mapping = config?.mappings[unit.key]
+      if (mapping !== undefined && mapping.splitSourceHash !== fnv1a64(unit.sourceText)) {
+        throw new FormatParseError(this.id, filename, `Phrase master mapping is stale for segment ${JSON.stringify(unit.key)}`)
+      }
+      const sourceText = rehydratePhraseValue(unit.sourceText, mapping)
+      const targetText = rehydratePhraseValue(unit.targetText, mapping)
+      return {
       ordinal: unit.ordinal,
       key: unit.key,
-      source: unit.sourceText,
-      target: unit.targetText,
+      source: sourceText,
+      target: targetText,
       sourceLocale,
       targetLocale,
       status: unit.status,
       locked: unit.locked,
       revision: 0,
-      sourceHash: fnv1a64(unit.sourceText),
+      sourceHash: fnv1a64(sourceText),
       ...(unit.note !== undefined || unit.origin !== undefined
         ? {
             context: {
@@ -275,13 +530,15 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
             },
           }
         : {}),
-    }))
+      }
+    })
     return {
       asset: {
         formatId: this.id,
         originalFilename: filename,
         sourceSha256: await this.hash(bytes),
         segmentCount: segments.length,
+        ...(formatConfigJson === undefined ? {} : { formatConfigJson }),
       },
       segments,
       warnings,
@@ -294,6 +551,7 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
     const filename = asset.originalFilename
     const text = this.decode(originalBytes, filename)
     const { units } = this.parseTemplate(text, filename)
+    const config = parsePhraseConfig(asset.formatConfigJson, filename)
 
     const byKey = new Map<string, (typeof segments)[number]>()
     for (const segment of segments) {
@@ -326,20 +584,28 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
           `segment ${JSON.stringify(unit.key)} missing from export input; refusing to skip it silently`,
         )
       }
-      if (segment.source !== unit.sourceText) {
+      const mapping = config?.mappings[unit.key]
+      if (mapping !== undefined && mapping.splitSourceHash !== fnv1a64(unit.sourceText)) {
+        throw new FormatExportError(this.id, `Phrase master mapping is stale for segment ${JSON.stringify(unit.key)}`)
+      }
+      if (segment.source !== rehydratePhraseValue(unit.sourceText, mapping)) {
         throw new FormatExportError(
           this.id,
           `segment ${JSON.stringify(unit.key)}: source text differs from the original template; sources are never rewritten on export`,
         )
       }
-      if (segment.target === unit.targetText) continue
+      if (segment.target === rehydratePhraseValue(unit.targetText, mapping)) continue
       if (unit.locked) {
         throw new FormatExportError(
           this.id,
           `segment ${JSON.stringify(unit.key)} is locked (translate="no"/m:locked) but its target was changed; refusing to write or skip it`,
         )
       }
-      edits.push({ start, end: start + match[0].length, replacement: this.rewriteUnit(unit.full, segment.target) })
+      edits.push({
+        start,
+        end: start + match[0].length,
+        replacement: this.rewriteUnit(unit.full, dehydratePhraseValue(segment.target, mapping)),
+      })
     }
 
     let out = text
@@ -394,7 +660,7 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
       throw new FormatParseError(this.id, filename, `XLIFF ${version} is not supported (XLIFF 1.2 trans-unit documents only)`)
     }
 
-    const groupNotes = parseGroupNotes(text)
+    const groupContexts = parseGroupContexts(text)
     const warnings: ImportWarning[] = []
     const units: ParsedPhraseUnit[] = []
     const seenKeys = new Set<string>()
@@ -427,7 +693,7 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
         const target = findFirst(inner, 'target')
         const note = findFirst(inner, 'note')
         const paraId = attrs['m:para-id']
-        const groupNote = paraId ? groupNotes.get(paraId) : undefined
+        const groupNote = paraId ? groupContexts.get(paraId)?.note : undefined
         const sourceText = decodeXmlInline(source.inner)
         const targetText = decodeXmlInline(target?.inner ?? '')
         units.push({

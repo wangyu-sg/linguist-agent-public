@@ -8,11 +8,10 @@ import {
   ChevronRight,
   FolderOpen,
   FolderX,
-  Loader2,
   Plus,
   RefreshCw,
 } from 'lucide-react'
-import type { AgentSessionMeta, LinguistProjectInfo } from '@proma/shared'
+import type { AgentSessionMeta, LinguistProjectInfo, LinguistRole } from '@proma/shared'
 import {
   agentSessionIndicatorMapAtom,
   agentSessionsAtom,
@@ -67,9 +66,11 @@ import {
 import { useProjectArchive } from '../projects/ProjectArchiveAction'
 import { CopyLinguistSessionDialog } from './CopyLinguistSessionDialog'
 import {
+  LinguistCreateSessionMenu,
   LinguistProjectActionItems,
   LinguistProjectActionsMenu,
 } from './LinguistProjectActionsMenu'
+import { getLinguistRoleOption } from '../session-binding/LinguistRoleMenu'
 
 export {
   registerCreatedProjectSession,
@@ -139,7 +140,7 @@ interface LinguistSidebarContentViewProps {
   onShowArchived?: () => void
   onShowActive?: () => void
   onSelectSession?: (projectId: string, sessionId: string) => void
-  onCreateSession?: (projectId: string) => void
+  onCreateSession?: (projectId: string, role: LinguistRole) => void
   onOpenProjectSettings?: (projectId: string) => void
   onRenameProject?: (projectId: string, name: string) => Promise<string | null>
   onArchiveProject?: (project: LinguistProjectInfo) => void
@@ -593,6 +594,7 @@ export function LinguistSidebarContent({
 
   const handleCreateSession = React.useCallback(async (
     projectId: string,
+    role: LinguistRole,
   ): Promise<void> => {
     if (creatingProjectId !== null) return
     setCreatingProjectId(projectId)
@@ -605,7 +607,7 @@ export function LinguistSidebarContent({
           return
         }
       }
-      const result = await window.electronAPI.linguistSessionsCreateForProject({ projectId })
+      const result = await window.electronAPI.linguistSessionsCreateForProject({ projectId, role })
       if (!result.ok) {
         setSessionError({ projectId, message: describeLinguistIpcError(result.error) })
         return
@@ -916,8 +918,8 @@ export function LinguistSidebarContent({
         onSelectSession={(projectId, sessionId) => {
           void handleSelectSession(projectId, sessionId)
         }}
-        onCreateSession={(projectId) => {
-          void handleCreateSession(projectId)
+        onCreateSession={(projectId, role) => {
+          void handleCreateSession(projectId, role)
         }}
         onOpenProjectSettings={(projectId) => {
           void handleOpenProjectSettings(projectId)
@@ -1067,7 +1069,7 @@ function ProjectRow({
   error: string | null
   historyOnlyActions?: boolean
   onSelectSession?: (projectId: string, sessionId: string) => void
-  onCreateSession?: (projectId: string) => void
+  onCreateSession?: (projectId: string, role: LinguistRole) => void
   onOpenSettings?: (projectId: string) => void
   onRenameProject?: (projectId: string, name: string) => Promise<string | null>
   onArchiveProject?: (project: LinguistProjectInfo) => void
@@ -1190,7 +1192,7 @@ function ProjectRow({
           <LinguistProjectActionItems
             project={project}
             onOpen={() => onOpen(project.id)}
-            onCreateSession={() => onCreateSession?.(project.id)}
+            onCreateSession={(role) => onCreateSession?.(project.id, role)}
             onRename={startRename}
             onArchive={() => onArchiveProject?.(project)}
             onOpenSettings={() => onOpenSettings?.(project.id)}
@@ -1205,23 +1207,16 @@ function ProjectRow({
         actions={(
           <>
             {!archived && (
-              <button
-                type="button"
-                aria-label={`在项目 ${project.name} 中新建会话`}
-                aria-busy={creating || undefined}
-                disabled={creating}
-                onClick={() => onCreateSession?.(project.id)}
-                className="absolute right-6 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-foreground/35 opacity-0 hover:bg-foreground/[0.055] hover:text-foreground/65 group-hover/project:opacity-100 disabled:cursor-wait disabled:opacity-50"
-              >
-                {creating
-                  ? <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-                  : <Plus size={13} aria-hidden="true" />}
-              </button>
+              <LinguistCreateSessionMenu
+                project={project}
+                creating={creating}
+                onCreateSession={(role) => onCreateSession?.(project.id, role)}
+              />
             )}
             <LinguistProjectActionsMenu
               project={project}
               onOpen={() => onOpen(project.id)}
-              onCreateSession={() => onCreateSession?.(project.id)}
+              onCreateSession={(role) => onCreateSession?.(project.id, role)}
               onRename={startRename}
               onArchive={() => onArchiveProject?.(project)}
               onOpenSettings={() => onOpenSettings?.(project.id)}
@@ -1364,7 +1359,7 @@ function SessionTreeRows({
                     ? 'green'
                     : undefined}
               relativeTimeNow={relativeTimeNow}
-              workspaceName={showProjectBadge ? projectName : undefined}
+              workspaceName={`${getLinguistRoleOption(tree.session.linguistRole).shortLabel}${showProjectBadge && projectName ? ` · ${projectName}` : ''}`}
               transferLabel="复制到其他项目"
               historyOnlyActions={historyOnlyActions}
               onSelect={() => onSelectSession?.(projectId, tree.session.id)}
@@ -1386,7 +1381,7 @@ function SessionTreeRows({
                     indicatorStatus={indicatorMap.get(child.id) ?? 'idle'}
                     showPinIcon={!!child.pinned}
                     relativeTimeNow={relativeTimeNow}
-                    workspaceName={showProjectBadge ? projectName : undefined}
+                    workspaceName={`${getLinguistRoleOption(child.linguistRole).shortLabel}${showProjectBadge && projectName ? ` · ${projectName}` : ''}`}
                     transferLabel="复制到其他项目"
                     historyOnlyActions={historyOnlyActions}
                     onSelect={() => onSelectSession?.(projectId, child.id)}

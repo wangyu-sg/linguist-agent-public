@@ -1,25 +1,23 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-08-06
+更新时间：2026-08-08
 
 ## 从这里开始
 
 1. [README.md](../README.md) — 产品身份、三模式、架构和开发入口。
 2. [AGENTS.md](../AGENTS.md) — 当前仓库执行与安全约束。
-3. [CURRENT_FACTS.md](../CURRENT_FACTS.md) — 当前已核验事实与验证层级。
+3. [CURRENT_FACTS_SIMPLE.md](../CURRENT_FACTS_SIMPLE.md) — 简化重构启动时的已核验事实。
 4. [HANDOFF.md](./HANDOFF.md) — 当前交付、验证和下一步。
 5. [TODO.md](../TODO.md) — 只列未完成事项。
 
-## 当前计划与队列
+## 当前方案状态
 
-- [LA_UNIFIED_MASTER_PLAN_V2.md](./roadmap/LA_UNIFIED_MASTER_PLAN_V2.md) — 唯一 active 实施计划。
-- [linguist-fusion-queue.json](./roadmap/linguist-fusion-queue.json) — 唯一 active machine queue。
-- [LINGUIST_FUSION_QUEUE.md](./roadmap/LINGUIST_FUSION_QUEUE.md) — 当前阶段的人读投影。
+- [SIMPLE_IMPLEMENTATION_STATUS.md](./roadmap/SIMPLE_IMPLEMENTATION_STATUS.md) — 简化重构 Ticket、验证层级与真实证据阻断项。
 - [LINGUIST_FUSION_CURRENT_REALITY.md](./roadmap/LINGUIST_FUSION_CURRENT_REALITY.md) — 当前产品和同步事实。
 
 ## 架构、基线与边界
 
-- [UPSTREAM_BASELINE.md](./architecture/UPSTREAM_BASELINE.md) — Proma v0.16.8 人读基线。
+- [UPSTREAM_BASELINE.md](./architecture/UPSTREAM_BASELINE.md) — Proma v0.16.9 人读基线。
 - [proma-baseline.json](./architecture/proma-baseline.json) — 基线与 runtime/contract 机读真源。
 - [PROMA_CORE_TOUCHPOINTS.md](./architecture/PROMA_CORE_TOUCHPOINTS.md) — 核心触点规则与重算说明。
 - [proma-touchpoints.json](./architecture/proma-touchpoints.json) — 当前精确 Proma Core touchpoint ledger。
@@ -41,4 +39,4 @@
 - [DOCUMENTATION_MAINTENANCE.md](./DOCUMENTATION_MAINTENANCE.md)
 - Codex Skill：/Users/<local>/.codex/skills/linguist-agent-doc-sync/SKILL.md
 
-不要从历史报告反向覆盖当前状态；先核对代码、manifest、queue JSON 和真实命令输出。
+不要从历史报告反向覆盖当前状态；先核对代码、manifest、简化实现状态表和真实命令输出。

@@ -10,21 +10,21 @@ import { createIntakeTools } from './intake-tools'
 import { createProposalTools } from './proposal-tools'
 import { createQaTools } from './qa-tools'
 import { createReferenceTools } from './reference-tools'
-import { createTranslationScopeTools } from './translation-scope-tools'
 import { createDeliveryTools } from './delivery-tools'
+import { createTagTools } from './tag-tools'
 import { createCatToolRuntime } from './tool-runtime'
 import type { LinguistCatToolsDeps } from './types'
 
 /**
- * 返回值可直接合并到 Pi queryOptions.customTools。
- * independent-audit 只暴露证据读取，不暴露 QA 结论、提案或写工具。
+ * 返回值可直接合并到 Pi queryOptions.customTools；所有 Linguist 岗位共享同一集合。
  */
 export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const runtime = createCatToolRuntime(deps)
   const [projectSummaryTool, listAssetsTool, getSegmentsTool] =
     createProjectTools(runtime)
-  const [importAssetTool] = createIntakeTools(runtime)
+  const [importResourcesTool, importAssetTool] = createIntakeTools(runtime)
   const [exportAssetTool] = createDeliveryTools(runtime)
+  const [scanUnknownTagPatternsTool, saveTagProfileCandidateTool] = createTagTools(runtime)
   const [
     getTranslationContextTool,
     searchTmTool,
@@ -36,19 +36,18 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     getProposalSnapshotTool,
     proposeTranslationsTool,
     acceptProposalsTool,
-    submitCriticReviewTool,
     planConsistencyRepairsTool,
     createConsistencyProposalsTool,
   ] = createProposalTools(runtime)
   const [runQaTool, getQaFindingsTool] = createQaTools(runtime)
-  const [beginTranslationScopeTool, finalizeTranslationScopeTool] =
-    createTranslationScopeTools(runtime)
-
-  const standardTools = [
+  return [
     projectSummaryTool,
     listAssetsTool,
     getSegmentsTool,
+    importResourcesTool,
     importAssetTool,
+    scanUnknownTagPatternsTool,
+    saveTagProfileCandidateTool,
     exportAssetTool,
     getTranslationContextTool,
     getProposalSnapshotTool,
@@ -58,22 +57,8 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     acceptProposalsTool,
     runQaTool,
     getQaFindingsTool,
-    submitCriticReviewTool,
     planConsistencyRepairsTool,
     createConsistencyProposalsTool,
-    searchSentencePatternsTool,
-    readContextDocTool,
-    beginTranslationScopeTool,
-    finalizeTranslationScopeTool,
-  ]
-  if (deps.sessionMode !== 'independent-audit') return standardTools
-  return [
-    projectSummaryTool,
-    listAssetsTool,
-    getSegmentsTool,
-    getTranslationContextTool,
-    searchTmTool,
-    searchTermsTool,
     searchSentencePatternsTool,
     readContextDocTool,
   ]

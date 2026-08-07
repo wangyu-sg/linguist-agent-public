@@ -21,7 +21,6 @@ const SUMMARY: LinguistProjectSummary = {
     promaWorkspaceId: 'ws-a',
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
-    executionPolicy: { independentReview: 'off' },
   },
   assetCount: 1,
   totalSegments: 3,

@@ -1,5 +1,6 @@
 import * as React from 'react'
-import type { LinguistSegmentInfo } from '@proma/shared'
+import type { LinguistSegmentInfo, LinguistTagProfileInfo } from '@proma/shared'
+import { compileTagFamilyRegex, scanTags } from '@linguist/cat-core'
 import { Check, Loader2, Redo2, Undo2, X } from 'lucide-react'
 import {
   canCommitTarget,
@@ -9,11 +10,8 @@ import {
   type TargetSaveResult,
 } from './cat-edit-utils'
 
-const PROTECTED_TOKEN_PATTERN =
-  /(\{\{[^{}]+\}\}|\$\{[^{}]+\}|%(?:\d+\$)?[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?[A-Za-z%]|\{[^{}]+\}|<\/?[A-Za-z][^<>]*\/?>)/g
-
 export interface ProtectedTextPart {
-  kind: 'text' | 'token'
+  kind: 'text' | 'token' | 'suspected'
   value: string
 }
 
@@ -66,18 +64,35 @@ export interface TargetEditorProps {
   onSaved?: (advance: boolean) => void
   onDraftChange?: (draft: string, dirty: boolean) => void
   onHandleChange?: (handle: TargetEditorHandle | undefined) => void
+  tagProfile?: LinguistTagProfileInfo
 }
 
-export function splitProtectedText(text: string): ProtectedTextPart[] {
-  return text
-    .split(PROTECTED_TOKEN_PATTERN)
-    .filter((value) => value.length > 0)
-    .map((value) => ({
-      kind: value.match(new RegExp(`^(?:${PROTECTED_TOKEN_PATTERN.source})$`)) !== null
-        ? 'token'
-        : 'text',
-      value,
-    }))
+export function splitProtectedText(text: string, tagProfile?: LinguistTagProfileInfo): ProtectedTextPart[] {
+  const spans: Array<{ start: number; end: number; kind: 'token' | 'suspected' }> = scanTags(text, { profile: tagProfile })
+    .map((tag) => ({ start: tag.start, end: tag.end, kind: 'token' }))
+  for (const candidate of tagProfile?.candidates ?? []) {
+    if (candidate.status !== 'candidate') continue
+    const regex = compileTagFamilyRegex(candidate.pattern)
+    if (regex === null) continue
+    regex.lastIndex = 0
+    for (const match of text.matchAll(regex)) {
+      const start = match.index ?? 0
+      const end = start + match[0].length
+      if (match[0] && !spans.some((span) => !(end <= span.start || start >= span.end))) {
+        spans.push({ start, end, kind: 'suspected' })
+      }
+    }
+  }
+  spans.sort((left, right) => left.start - right.start)
+  const parts: ProtectedTextPart[] = []
+  let cursor = 0
+  for (const span of spans) {
+    if (span.start > cursor) parts.push({ kind: 'text', value: text.slice(cursor, span.start) })
+    parts.push({ kind: span.kind, value: text.slice(span.start, span.end) })
+    cursor = span.end
+  }
+  if (cursor < text.length) parts.push({ kind: 'text', value: text.slice(cursor) })
+  return parts
 }
 
 export function createTargetDraftState(value: string): TargetDraftState {
@@ -200,11 +215,12 @@ export function insertTargetText(
 export function targetProtectionViolations(
   segment: Pick<LinguistSegmentInfo, 'source'>,
   target: string,
+  tagProfile?: LinguistTagProfileInfo,
 ): string[] {
-  const sourceTokens = splitProtectedText(segment.source)
+  const sourceTokens = splitProtectedText(segment.source, tagProfile)
     .filter((part) => part.kind === 'token')
     .map((part) => part.value)
-  const targetTokens = splitProtectedText(target)
+  const targetTokens = splitProtectedText(target, tagProfile)
     .filter((part) => part.kind === 'token')
     .map((part) => part.value)
   const remainingTarget = [...targetTokens]
@@ -220,12 +236,31 @@ export function targetProtectionViolations(
   ]
 }
 
+export function targetSuspectedTagWarnings(
+  segment: Pick<LinguistSegmentInfo, 'source'>,
+  target: string,
+  tagProfile?: LinguistTagProfileInfo,
+): string[] {
+  const values = (text: string) => splitProtectedText(text, tagProfile)
+    .filter((part) => part.kind === 'suspected')
+    .map((part) => part.value)
+  const remaining = values(target)
+  return values(segment.source).flatMap((value) => {
+    const index = remaining.indexOf(value)
+    if (index < 0) return [`missing-suspected:${value}`]
+    remaining.splice(index, 1)
+    return []
+  })
+}
+
 function ProtectedTokenChips({
   text,
+  tagProfile,
 }: {
   text: string
+  tagProfile?: LinguistTagProfileInfo
 }): React.ReactElement | null {
-  const tokens = splitProtectedText(text).filter((part) => part.kind === 'token')
+  const tokens = splitProtectedText(text, tagProfile).filter((part) => part.kind !== 'text')
   if (tokens.length === 0) return null
   return (
     <span
@@ -236,7 +271,10 @@ function ProtectedTokenChips({
         <span
           key={`${token.value}:${index}`}
           data-target-token
-          className="inline-flex max-w-full rounded bg-primary/10 px-1 py-0.5 font-mono text-[10px] leading-none text-primary"
+          className={token.kind === 'token'
+            ? 'inline-flex max-w-full rounded bg-primary/10 px-1 py-0.5 font-mono text-[10px] leading-none text-primary'
+            : 'inline-flex max-w-full rounded bg-warning/10 px-1 py-0.5 font-mono text-[10px] leading-none text-warning'}
+          title={token.kind === 'token' ? '已启用硬保护' : '疑似 Tag：仅软提示'}
         >
           {token.value}
         </span>
@@ -257,6 +295,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
     onSaved,
     onDraftChange,
     onHandleChange,
+    tagProfile,
   }, ref): React.ReactElement {
     const [state, dispatch] = React.useReducer(
       targetDraftReducer,
@@ -277,8 +316,12 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
     const dirty = state.value !== segment.target
     draftValueRef.current = state.value
     const violations = React.useMemo(
-      () => targetProtectionViolations(segment, state.value),
-      [segment, state.value],
+      () => targetProtectionViolations(segment, state.value, tagProfile),
+      [segment, state.value, tagProfile],
+    )
+    const suspectedWarnings = React.useMemo(
+      () => targetSuspectedTagWarnings(segment, state.value, tagProfile),
+      [segment, state.value, tagProfile],
     )
     const commitAvailability = {
       archived,
@@ -336,8 +379,8 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
       operation: 'manual' | 'protected',
       action: TargetDraftAction = { type: 'commit', value },
     ): boolean => {
-      const nextViolations = targetProtectionViolations(segment, value)
-      const currentIsValid = targetProtectionViolations(segment, state.value).length === 0
+      const nextViolations = targetProtectionViolations(segment, value, tagProfile)
+      const currentIsValid = targetProtectionViolations(segment, state.value, tagProfile).length === 0
       if (
         nextViolations.length > 0
         && (operation === 'protected' || currentIsValid)
@@ -348,7 +391,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
       setBlocked(false)
       dispatch(action)
       return true
-    }, [segment, state.value])
+    }, [segment, state.value, tagProfile])
 
     const undo = React.useCallback((): boolean => {
       if (state.composing || state.past.length === 0) return false
@@ -532,6 +575,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
         <span className="flex min-w-0 flex-wrap items-center justify-between gap-1">
           <ProtectedTokenChips
             text={segment.source}
+            tagProfile={tagProfile}
           />
           {dirty && (
             <span className="text-[10px] font-medium text-warning">未保存</span>
@@ -561,6 +605,11 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
                 保留我的草稿
               </button>
             </span>
+          </span>
+        )}
+        {suspectedWarnings.length > 0 && violations.length === 0 && (
+          <span className="rounded-md bg-warning/10 px-2 py-1 text-[10px] text-warning">
+            译文未保留 {suspectedWarnings.length} 个疑似 Tag；它们尚未启用硬保护，请确认是否可翻译。
           </span>
         )}
         <span className="flex items-center justify-between gap-2 text-[10px] text-foreground/35">

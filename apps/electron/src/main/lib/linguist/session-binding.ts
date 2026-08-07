@@ -13,10 +13,8 @@
  * 2. 项目内创建的对话携带绑定（+ 项目名快照，供徽章在缺失时仍可展示）；
  * 3. 绑定创建时冻结——没有任何重绑定 API；仅用户可通过专用 API 永久
  *    解绑。切换 Projects UI 选中项目不影响任何已存在会话；
- * 4. 项目归档后绑定会话只读：历史可读，发送在主进程被拒
- *    （checkLinguistSessionSendBlock，orchestrator 在 preflight 调用）；
- * 5. 项目目录缺失/损坏或服务不可用时保留历史，但发送 fail closed；只有
- *    项目恢复正常或用户显式解绑后才能继续。
+ * 4. 项目归档、缺失或服务暂不可用时，Agent 对话保持可用；CAT 工具按
+ *    项目状态返回只读或明确错误。
  *
  * 本模块刻意不 import electron：node --test 直接驱动（tmp HOME +
  * 真实 LinguistProjectService + 真实会话索引）。
@@ -28,9 +26,8 @@ import type {
   LinguistProjectInfo,
   LinguistSessionBindingInfo,
   LinguistSessionBindingStatus,
-  TypedError,
+  LinguistRole,
 } from '@proma/shared'
-import { resolveExecutionPolicy } from '@linguist/cat-core'
 import { DEFAULT_AGENT_RUNTIME } from '../../../types'
 import { getSettings } from '../settings-service'
 import { createAgentSession, listAgentSessions } from '../agent-session-manager'
@@ -97,16 +94,13 @@ export function getLinguistSessionBinding(
 /**
  * 在项目内创建对话：项目必须存在且未归档（归档项目只读，fail closed），
  * 产物为 Agent 会话，元数据携带 linguistProjectId + 项目名快照。
- * PB-082：role='reviewer' 时创建独立评审会话（meta 写入冻结的
- * linguistSessionRole:'reviewer' 标记，skill 注入走 project-reviewer）。
- * LA-QUALITY-001：创建时把项目当前 Execution Policy 冻结进 meta
- * （legacy qualityProfile 项目经映射打开；之后改项目默认不影响已存在会话）。
+ * role 只定义默认岗位，不参与工具、权限、模型和 Runtime 装配。
  * LA-RUNTIME-001：渠道/模型/runtime 继承并冻结创建时的 Proma 默认
  * （与 ipc.ts 普通会话创建路径同一 getSettings() 来源）。
  */
 export function createLinguistProjectChatSession(
   service: LinguistProjectService,
-  input: { projectId: string; title?: string; role?: 'reviewer' | 'auditor' },
+  input: { projectId: string; title?: string; role?: LinguistRole },
 ): AgentSessionMeta {
   const project = service.getProject(input.projectId)
   if (project.archivedAt !== undefined) {
@@ -124,8 +118,7 @@ export function createLinguistProjectChatSession(
     {
       linguistProjectId: project.id,
       linguistProjectName: project.name,
-      linguistExecutionPolicy: resolveExecutionPolicy(project),
-      ...(input.role !== undefined ? { linguistSessionRole: input.role } : {}),
+      linguistRole: input.role ?? 'general',
     },
   )
 }
@@ -133,60 +126,4 @@ export function createLinguistProjectChatSession(
 /** 列出绑定到某项目的会话（按 updatedAt 降序）。项目缺失时仍可列出——绑定存在会话侧。 */
 export function listLinguistProjectChatSessions(projectId: string): AgentSessionMeta[] {
   return listAgentSessions().filter((s) => s.linguistProjectId === projectId)
-}
-
-/**
- * 发送闸门（主进程强制，PB-034 规则 4）：绑定会话的项目已归档 →
- * 返回 TypedError（orchestrator 以 preflight error 持久化并终止本轮）；
- * 只有未绑定 / active 返回 null；archived / missing / unavailable 均
- * fail closed，绝不静默退化成普通 Agent。
- */
-export function checkLinguistSessionSendBlock(
-  session:
-    | Pick<AgentSessionMeta, 'id' | 'linguistProjectId' | 'linguistProjectName'>
-    | null
-    | undefined,
-  getService: LinguistServiceResolver,
-): TypedError | null {
-  if (!session?.linguistProjectId) return null
-  let status: LinguistSessionBindingStatus
-  try {
-    status = resolveLinguistBindingStatus(session.linguistProjectId, getService())
-  } catch (error) {
-    console.warn(
-      '[Linguist 绑定] 项目状态解析失败，已阻断发送:',
-      error instanceof Error ? error.name : 'UnknownError',
-    )
-    status = 'unavailable'
-  }
-  if (status === 'active') return null
-  const projectName = session.linguistProjectName ?? session.linguistProjectId
-  if (status === 'missing') {
-    return {
-      code: 'linguist_project_missing',
-      title: '绑定项目缺失',
-      message: `会话绑定的项目「${projectName}」缺失或损坏。本次消息不会发送，也不会静默按普通 Agent 继续。请先修复项目；若确认不再需要项目上下文，请解除项目绑定。`,
-      actions: [],
-      canRetry: false,
-      details: [`projectId: ${session.linguistProjectId}`, 'status: missing'],
-    }
-  }
-  if (status === 'unavailable') {
-    return {
-      code: 'linguist_project_unavailable',
-      title: '项目服务不可用',
-      message: `暂时无法验证会话绑定的项目「${projectName}」。为避免丢失 CAT 上下文，本次消息不会按普通 Agent 发送。请重试；若确认不再需要项目上下文，也可解除项目绑定。`,
-      actions: [{ key: 'r', label: '重试', action: 'retry' }],
-      canRetry: true,
-      details: [`projectId: ${session.linguistProjectId}`, 'status: unavailable'],
-    }
-  }
-  return {
-    code: 'linguist_project_archived',
-    title: '项目已归档（只读）',
-    message: `会话绑定的项目「${projectName}」已归档。归档项目的会话为只读：历史消息可正常阅读，但不能发送新消息。如需继续，请在项目列表中新建项目或另开普通对话。`,
-    actions: [],
-    canRetry: false,
-    details: [`projectId: ${session.linguistProjectId}`, 'status: archived'],
-  }
 }

@@ -39,7 +39,16 @@ export { XLIFF_ADAPTER_ID, XliffAdapter } from './adapters/xliff'
 
 export { SDLXLIFF_ADAPTER_ID, SdlXliffAdapter } from './adapters/sdlxliff'
 
-export { PHRASE_MXLIFF_ADAPTER_ID, PhraseMxliffAdapter } from './adapters/phrasemxliff'
+export {
+  PHRASE_MXLIFF_ADAPTER_ID,
+  PhraseMxliffAdapter,
+  probePhraseMasterPair,
+  parsePhraseMxliffFormatConfig,
+  serializePhraseMxliffFormatConfig,
+  type PhraseMasterPairProbe,
+  type PhraseMxliffFormatConfig,
+  type PhraseMxliffTagMapping,
+} from './adapters/phrasemxliff'
 
 export { PHRASE_DOCX_ADAPTER_ID, PhraseDocxAdapter } from './adapters/phrasedocx'
 

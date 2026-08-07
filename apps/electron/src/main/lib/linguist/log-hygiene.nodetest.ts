@@ -13,9 +13,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { resolveLinguistSessionSkillPaths } from './project-skill'
+import { join } from 'node:path'
 import { INPUT, makeService } from './test/service-testkit'
 
 const SENTINEL = 'SENTINEL_SECRET_7f3a9'
@@ -54,11 +52,6 @@ function serialize(args: unknown[]): string {
 test('LA-OBS-001: Linguist 全流程默认日志不含正文、API key 或绝对路径', async () => {
   const service = makeService()
   const managedRoot = service.rootDir
-  const skillsRoot = join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..', '..', '..', '..', '..', '..',
-    'resources', 'linguist-skills',
-  )
   const captured: string[] = []
   const original = {
     log: console.log,
@@ -75,10 +68,6 @@ test('LA-OBS-001: Linguist 全流程默认日志不含正文、API key 或绝对
   console.error = capture
   try {
     const project = service.createProject(INPUT)
-    assert.equal(resolveLinguistSessionSkillPaths({
-      linguistProjectId: project.id,
-      linguistSessionRole: 'reviewer',
-    }, () => service, skillsRoot).length, 1)
     const imported = await service.importAsset(project.id, {
       bytes: new TextEncoder().encode(SENTINEL_XLIFF),
       filename: 'sentinel.xliff',
@@ -119,6 +108,5 @@ test('LA-OBS-001: Linguist 全流程默认日志不含正文、API key 或绝对
     assert.ok(!line.includes(SENTINEL), `console 输出泄漏客户正文: ${line}`)
     assert.ok(!line.includes(API_KEY_SENTINEL), `console 输出泄漏 API key: ${line}`)
     assert.ok(!line.includes(managedRoot), `console 输出泄漏绝对路径: ${line}`)
-    assert.ok(!line.includes(skillsRoot), `console 输出泄漏 Skill 绝对路径: ${line}`)
   }
 })

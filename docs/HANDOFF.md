@@ -1,42 +1,44 @@
 # Linguist Agent 当前交接
 
-更新时间：2026-08-07
+更新时间：2026-08-08
 
 ## 当前状态
 
 - 仓库：`/Users/<local>/Desktop/linguist-agent-next`
-- 分支：`main`；当前实现以 `git HEAD` 为准。
-- 上游基线：Proma v0.16.8 / `bde00f00`；正式 merge：`f3d2b431`。
-- 当前版本：Electron App `0.16.19`、Shared `0.1.85`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.8 / 0.0.27 / 0.0.23`、schema `15`。
-- 产品仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Workbench；没有第二套 Agent、Chat 或 Preview。
+- 分支：`sync/proma-v0.16.9-simple`；实现以当前 `git HEAD` 和工作树为准。
+- 上游基线：Proma v0.16.9 / `d08179d9`；正式 merge：`50a74398`。
+- 当前版本：Electron App `0.16.21`、Shared `0.1.86`、CAT Core / Formats / Store / Tools `0.0.15 / 0.0.9 / 0.0.29 / 0.0.24`、schema `15`。
+- 产品结构仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Workbench；没有第二套 Agent、Chat、Planning、Preview 或权限系统。
 
-## 本轮已实现
+## 已实现
 
-- Host/UI：项目级 segment 引用与校验、LA 附件、返回工作台、Companion 宽度复用、批次与语言资产统一走 Proma Preview Tab；Markdown 与旧版 Word 可读预览；Workbench 结构分隔只保留单一 hairline。
-- 领域边界：同一项目可有多个批次；TM/TB/Style Guide/Context 是项目级语言资产。
-- Intake：纸夹或明确 `@file` 复制到当前 Linguist 会话的单文件登记为 opaque-token 来源；导入后同事务 Verification；Undo 检查 Proposal、QA、Critic、Export、人工编辑与持久 Job 引用，命中即 fail closed。
-- 格式：XLSX 显式 Sheet/列映射确认并持久化；SDLXLIFF 复杂 `mrk` 回写修复；CSV/JSON 低置信误识别收紧；私有语料扫描与脱敏格式矩阵完成。
-- 语言资产：TM/TB 原件进入受管 blob；候选只有人工确认后才写权威层，确认前零 DB 写入；原件可用 Preview Tab 查看。
-- Prompt/Runtime：Execution Policy 取代质量档位；恒定专业质量合同；Canonical Prompt Contract、XML/Markdown renderer、18k 全局预算；Pi markdown 动态 fence 隔离项目数据；新 LA Session 继承 Proma 默认 Runtime/Channel/Model。
-- Context/Scope：cursor v2 + `CONTEXT_DRIFT`；人工 Segment 编辑、TM/TB 与 Style Guide mutation 现均写项目事件；20 个 CAT 工具包含 begin/finalize Translation Scope 和本地交付导出。
-- Export：修复 SDLXLIFF 缺 `conf` 与局部重复 `sdl:seg id` 的状态回写；项目 Agent 可把通过预检和重新导入验证的批次保存到用户指定的新本地文件，但不能覆盖、上传或发送。
-- Preview/Refresh：批次和保留原件的语言资产固定打开 Proma Preview Tab；批次与语言资产列表新增显式刷新。
-- 同步工具：`scripts/proma-sync-impact.mjs` 提供只读上游影响报告。
+- 岗位统一为 `General / Translator / Reviewer / Proofreader`。四岗位使用同一套 20 个 CAT 工具和 Proma 权限，只由提示词规定默认职责；岗位可在创建时选择，也可在会话 Header 切换。
+- 旧 Reviewer/Auditor 元数据仅在读取时解码；旧 role Skill 双注入、Execution Policy、公开 Critic、Translation Scope 和相关无调用 UI 已移除。
+- 项目归档、缺失或不可用时不再阻断整个 Agent 会话；通用 Agent 能力继续工作，CAT 读取/写入按真实项目状态 fail closed。
+- Common Contract 与四岗位提示词的唯一真源位于 `resources/linguist-roles/`；资源缺失时使用短 fallback，不再叠加旧 Linguist Skill。
+- Reviewer 默认读取完整 Source + Target 并给出可执行审校结果；Proofreader 聚焦目标语。Proposal 只是可见、可接受、可撤销的正式修改载体，不是低质量草稿或审校前置流程。
+- `cat_import_resources` 支持绝对路径、相对会话工作目录路径、文件和目录递归导入；单文件 alias `cat_import_asset` 保留。批次、TM、TB、Context 自动分类，XLSX 等歧义输入返回 `needsInput`。
+- `cat_export_asset` 支持 `final` 和 `draft`。两者默认不覆盖；只有显式 `overwrite=true` 才原子替换普通文件。final 必须通过完整交付与结构硬规则，draft 允许未完成内容但仍保留路径安全和格式验证。
+- Tag Scanner 是 Core、导入、QA、导出和 Renderer 的单一真源。未知 Tag 形状可扫描为 Candidate，经证据、ReDoS、重叠和配对验证后启用；UI 显示 Active/Candidate/Ignored。编辑器保留原生 textarea，并以 chip overlay 展示 token，硬 Tag 被改动时禁止保存。
+- Phrase Master 配对使用内容身份而非文件名；mapping 记录 source hash、placeholder 顺序和原始 XML，导入时 rehydrate，导出时 dehydrate，过期或不完整 mapping 阻断 final。
+- Proma v0.16.9 合并后的 CI 增加 macOS 15 arm64 packaged build 与完整性验证。
 
-机器状态以 [linguist-fusion-queue.json](./roadmap/linguist-fusion-queue.json) 为准。FORMAT-005/006/007、INTAKE-007 与 CONTEXT-001/002/003 已落地；LA-HOST-002、LA-SYNC-007、LA-ALPHA-000 和 EVAL 人工项未关闭。
+## 已取得的证据
 
-## 已有自动验证
+- SIMPLE-001 启动基线：根测试 `1485/1485`、CAT Core `123/123`、CAT Tools `54/54`、Electron Linguist `211/211`、boundary `4/4`、fusion architecture `9/9`。
+- 本轮全量 typecheck：11 个 workspace 全部通过。
+- 本轮测试：根 `1479/1479`、Electron Linguist `181/181`、CAT Tools `36/36`、boundary `4/4`、fusion architecture `9/9`。
+- SBOM/许可证：432 个生产依赖一致；NOTICE 和 packaged resources 已纳入检查。
+- macOS arm64 packaged build 与 artifact integrity 通过。纵向 smoke：Pi `15 PASS / 0 FAIL`、Chat `19 PASS / 0 FAIL`、Linguist `21 PASS / 0 FAIL / 2 MANUAL`；Native Open/Save 仍需真机人工。
+- 私有工作目录只读 Phrase 副本验证：82/82 个 placeholder segment 内容配对，713 segments，byte-stable 与 reimport-stable；文件名、绝对路径和客户正文未进入仓库。
 
-- 本轮受影响包 typecheck：CAT Formats、CAT Tools、Electron 均通过。
-- 本轮聚焦回归：SDLXLIFF `19/19`、CAT Tools `45/45`、真实 Session 导出 `9/9`、Preview/Refresh UI `16/16`。
-- boundary `4/4`；fusion architecture `9/9`。
-- macOS arm64 packaged build 与完整性检查通过；`0.16.19` 已安装到 `/Applications/Linguist Agent.app` 并读取 manifest 复核版本。
+自动回归与 packaged smoke 不等于真实模型质量、真机人工或产品资格。纵向 smoke 的合同覆盖状态仍是 `partial`，不能据此关闭下列真实证据项。
 
-这些是 unit / packaged evidence，不是真机人工或 release qualification。
+## 尚需真实使用取得的证据
 
-## 仍需完成
+1. 同模型、同 reasoning 的 Web Chat / 旧 LA / 新 LA 对照。
+2. 真实 Provider 驱动四岗位完成翻译 → 审校 → 校对 → final 交付。
+3. 从可用构建开始累计 14 个真实日用日。
+4. 真机 VoiceOver、完整键盘、IME、Native Open/Save、窄窗和 Companion round-trip。
 
-1. 真机人工：Native Open/Save、真实 IME、Companion Chat roundtrip、VoiceOver/完整键盘与窄窗交互。
-2. 完成 EVAL-001/003/004、14 天个人日用，再裁决 LA-ALPHA-000。
-
-测试、smoke、打包只能使用临时 user-data-dir；私有语料报告、客户文件与真实用户根不得进入 Git。
+状态真源见 [SIMPLE_IMPLEMENTATION_STATUS.md](./roadmap/SIMPLE_IMPLEMENTATION_STATUS.md)；未完成项只列在 [TODO.md](../TODO.md)。测试、smoke、打包只能使用任务专用临时 user-data-dir，私有语料不得进入 Git。

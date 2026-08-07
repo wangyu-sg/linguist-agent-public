@@ -143,7 +143,7 @@ function DevDiagnostics({
   if (dev === undefined) return null
   const profile = dev.profile === undefined
     ? '无已选项目会话'
-    : `${dev.profile.role} / ${dev.profile.executionPolicy.independentReview}`
+    : dev.profile.role
   const recentJob = dev.recentJob.status === 'not_available'
     ? '尚未观测到 Job'
     : `${dev.recentJob.status} · ${dev.recentJob.cursor}/${dev.recentJob.total} · ${dev.recentJob.jobId}`

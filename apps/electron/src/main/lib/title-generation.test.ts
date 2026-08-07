@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { createFallbackTitle, sanitizeGeneratedTitle } from './title-generation'
+import { buildTitlePrompt, createFallbackTitle, sanitizeGeneratedTitle } from './title-generation'
 
 describe('标题生成辅助逻辑', () => {
+  test('Linguist 背景只作语义消歧且明确禁止抄项目名', () => {
+    const prompt = buildTitlePrompt('全量审校第 10 集', 'Linguist Role: reviewer\nProject: 匿名项目')
+    expect(prompt).toContain('全量审校第 10 集')
+    expect(prompt).toContain('Linguist Role: reviewer')
+    expect(prompt).toContain('不得抄写标签或项目名')
+  })
   test('Given ChatGPT OAuth 无标题适配器 When 本地兜底 Then 使用首个有效行并限制长度', () => {
     const title = createFallbackTitle('\n\n## 帮我修复 OpenAI OAuth 标题生成失败的问题\n更多细节')
 

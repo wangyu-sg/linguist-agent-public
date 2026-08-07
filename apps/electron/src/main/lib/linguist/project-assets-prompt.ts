@@ -7,14 +7,10 @@
  * 路径；'markdown' 面向 Pi 等 generic runtime）。本模块只保留既有导出
  * 签名并委托 contract + renderer，别的 importer 零破坏。
  *
- * 项目会话按 Profile / Professional Quality Contract / Role / Execution Policy /
- * Project Digest 分层；普通会话为空。
- * 项目资料缺失或 Bundle 失效时显式标记降级，并使用同版本内置 fallback，
+ * 项目会话按 Profile / Professional Quality Contract / Role / Project Digest
+ * 分层；普通会话为空。项目资料缺失或 Role Prompt 失效时显式标记降级，并使用内置 fallback，
  * 绝不静默退化为 General。Project Digest 只常驻小摘要和按需 reference。
- * LA-QUALITY-001：strategy 层随质量档位废除；execution_policy 层由会话
- * 冻结的 linguistExecutionPolicy 决定（legacy linguistStrategy 会话读取时映射），
- * 不再读取项目实时 qualityProfile。
- * LA-QUALITY-002：professional_quality_contract 层恒定、短、全角色共享，
+ * professional_quality_contract 层恒定、短、全角色共享，
  * 写入 manifest 的 contract_version / contract_hash，禁止预支降级措辞。
  */
 
@@ -95,7 +91,7 @@ export interface LinguistPromptBuildResult {
 export function buildLinguistProjectAssetsPromptWithStatus(
   session: Pick<
     AgentSessionMeta,
-    'linguistProjectId' | 'linguistSessionRole' | 'linguistExecutionPolicy' | 'linguistStrategy'
+    'linguistProjectId' | 'linguistRole'
   > & {
     linguistProjectId: string
   },
@@ -115,11 +111,11 @@ export function buildLinguistProjectAssetsPromptWithStatus(
   }
 }
 
-/** 组合 Profile/Quality Contract/Role/Execution Policy/Digest；普通会话返回空串。 */
+/** 组合 Profile/Quality Contract/Role/Digest；普通会话返回空串。 */
 export function buildLinguistProjectAssetsPrompt(
   session: Pick<
     AgentSessionMeta,
-    'linguistProjectId' | 'linguistSessionRole' | 'linguistExecutionPolicy' | 'linguistStrategy'
+    'linguistProjectId' | 'linguistRole'
   > | undefined,
   getService: LinguistServiceResolver,
   options: LinguistPromptBuildOptions = {},

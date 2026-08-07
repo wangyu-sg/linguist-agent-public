@@ -7,6 +7,7 @@ import type {
   LinguistProposalInfo,
   LinguistSegmentInfo,
   LinguistSegmentStatus,
+  LinguistTagProfileInfo,
   LinguistWorkflowStage,
 } from '@proma/shared'
 import { cn } from '@/lib/utils'
@@ -64,6 +65,7 @@ export interface SegmentGridProps {
   focusIndex?: number
   archived: boolean
   workflowStage: LinguistWorkflowStage
+  tagProfile?: LinguistTagProfileInfo
   onActiveSegmentChange: (segmentId: string, assetId: string) => void
   onOpenDetails: (segmentId: string, assetId: string) => void
   onOpenQa: (segmentId: string, assetId: string) => void
@@ -106,6 +108,7 @@ export function SegmentGrid({
   focusIndex,
   archived,
   workflowStage,
+  tagProfile,
   onActiveSegmentChange,
   onOpenDetails,
   onOpenQa,
@@ -225,6 +228,7 @@ export function SegmentGrid({
                 }
                 archived={archived}
                 workflowStage={workflowStage}
+                tagProfile={tagProfile}
                 proposal={segment === undefined ? undefined : pendingBySegment.get(segment.id)}
                 proposalMutating={
                   segment !== undefined
@@ -317,6 +321,7 @@ interface SegmentRowProps {
   tabbable: boolean
   archived: boolean
   workflowStage: LinguistWorkflowStage
+  tagProfile?: LinguistTagProfileInfo
   proposal?: LinguistProposalInfo
   proposalMutating: boolean
   qaLoaded: boolean
@@ -361,6 +366,7 @@ function SegmentRow({
   tabbable,
   archived,
   workflowStage,
+  tagProfile,
   proposal,
   proposalMutating,
   qaLoaded,
@@ -482,12 +488,14 @@ function SegmentRow({
             expanded={active}
             tabbable={tabbable}
             onActivate={onActiveSegmentChange}
+            tagProfile={tagProfile}
           />
           <TargetCell
             index={segment.ordinal}
             segment={segment}
             archived={archived}
             workflowStage={workflowStage}
+            tagProfile={tagProfile}
             expanded={active}
             active={active}
             tabbable={tabbable}
@@ -700,12 +708,14 @@ function SourceCell({
   expanded,
   tabbable,
   onActivate,
+  tagProfile,
 }: {
   index: number
   segment: LinguistSegmentInfo
   expanded: boolean
   tabbable: boolean
   onActivate: (segmentId: string, assetId: string) => void
+  tagProfile?: LinguistTagProfileInfo
 }): React.ReactElement {
   return (
     <span role="gridcell" aria-label={`源文：${segment.source}`}>
@@ -719,7 +729,7 @@ function SourceCell({
           !expanded && 'line-clamp-2',
         )}
       >
-        <SegmentText text={segment.source} />
+        <SegmentText text={segment.source} tagProfile={tagProfile} />
       </button>
     </span>
   )
@@ -730,6 +740,7 @@ function TargetCell({
   segment,
   archived,
   workflowStage,
+  tagProfile,
   expanded,
   active,
   tabbable,
@@ -743,6 +754,7 @@ function TargetCell({
   segment: LinguistSegmentInfo
   archived: boolean
   workflowStage: LinguistWorkflowStage
+  tagProfile?: LinguistTagProfileInfo
   expanded: boolean
   active: boolean
   tabbable: boolean
@@ -811,7 +823,7 @@ function TargetCell({
               !expanded && 'line-clamp-2',
             )}
           >
-            {segment.target ? <SegmentText text={segment.target} /> : '—'}
+            {segment.target ? <SegmentText text={segment.target} tagProfile={tagProfile} /> : '—'}
           </span>
           {!archived && !segment.locked && (
             <Pencil
@@ -830,6 +842,7 @@ function TargetCell({
         index={index}
         segment={segment}
         archived={archived}
+        tagProfile={tagProfile}
         confirmLabel={stageActionLabel(workflowStage)}
         onCancel={() => closeEditor(true)}
         onSave={onSave}
@@ -1016,15 +1029,19 @@ function getSegmentRowLabel(
   ].filter(Boolean).join('，')
 }
 
-function SegmentText({ text }: { text: string }): React.ReactElement {
+function SegmentText({ text, tagProfile }: { text: string; tagProfile?: LinguistTagProfileInfo }): React.ReactElement {
   return (
     <>
-      {splitSegmentText(text).map((part, index) => (
-        part.kind === 'token' ? (
+      {splitProtectedText(text, tagProfile).map((part, index) => (
+        part.kind !== 'text' ? (
           <span
             key={`${index}:${part.value}`}
-            data-segment-token
-            className="mx-0.5 inline-flex max-w-full rounded bg-primary/10 px-1 py-0.5 font-mono text-[0.9em] leading-none text-primary"
+            data-segment-token={part.kind === 'token' ? true : undefined}
+            data-segment-suspected-tag={part.kind === 'suspected' ? true : undefined}
+            className={part.kind === 'token'
+              ? 'mx-0.5 inline-flex max-w-full rounded bg-primary/10 px-1 py-0.5 font-mono text-[0.9em] leading-none text-primary'
+              : 'mx-0.5 inline-flex max-w-full rounded bg-warning/10 px-1 py-0.5 font-mono text-[0.9em] leading-none text-warning'}
+            title={part.kind === 'token' ? '已启用硬保护' : '疑似 Tag：仅软提示'}
           >
             {part.value}
           </span>

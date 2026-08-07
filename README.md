@@ -1,72 +1,66 @@
 # Linguist Agent
 
-Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
+Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
-> Proma 的完整通用 Agent / Chat 产品能力 + Linguist Agent 的专业 CAT 内核与工作台。
+> 完整 Proma Agent / Chat + Linguist 项目上下文、CAT 工具与工作台。
 
-本项目是 [Proma](https://github.com/proma-ai/Proma) 的 AGPL-3.0 衍生作品。Proma 的版权归原作者所有；来源与固定基线见 [NOTICE.md](./NOTICE.md)、[ATTRIBUTION.md](./ATTRIBUTION.md) 和 [UPSTREAM_BASELINE.md](./docs/architecture/UPSTREAM_BASELINE.md)。
+本项目是 [Proma](https://github.com/proma-ai/Proma) 的 AGPL-3.0 衍生作品。来源与固定基线见 [NOTICE.md](./NOTICE.md)、[ATTRIBUTION.md](./ATTRIBUTION.md) 和 [UPSTREAM_BASELINE.md](./docs/architecture/UPSTREAM_BASELINE.md)。
 
 [English README](./README.en.md)
 
 ## 当前状态
 
-当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。产品结构已经固定：不删除 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations 或远程集成；Linguist 是其上的一等本地化模式。
+当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.9；Electron App `0.16.21`、Electron `43.2.0`、`@proma/shared 0.1.86`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.15 / 0.0.9 / 0.0.29 / 0.0.24`、CAT schema `15`，仓库使用 Bun `1.3.14`。
 
-当前 manifest 基线是 Electron App `0.16.20`（Electron `43.2.0`）、`@proma/shared 0.1.85`、Pi Runtime `0.82.1`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.8 / 0.0.28 / 0.0.23`，CAT schema `15`，仓库固定使用 Bun `1.3.14`。
+应用有三个并列模式：
 
-应用提供三个并列主模式：
-
-- **Agent**：完整通用 Agent 工作区，支持 Claude / Pi Runtime、工具、Thinking、权限、Queue / Steer、Skills、MCP 和工作区文件。
+- **Agent**：Proma 的完整通用 Agent，包括工具、文件、MCP、Skills、权限、Thinking、Queue / Steer、Planning 和 Automations。
 - **Chat**：多 Provider 对话、附件、工具、上下文控制与并排比较。
-- **Linguist**：项目、批次（同一项目内反复到达的任务文件）、语言资产（TM / TB / Style Guide / Context）、虚拟化 Segment Grid、人工编辑、Proposal 审核、确定性 QA、导入验证/安全撤销、交付预检、导出、完整性扫描、备份与恢复。
+- **Linguist**：项目、批次、TM/TB/Context、Segment 编辑、Proposal、QA、导入导出、Tag Profile、备份与恢复。
 
-Linguist 左侧栏固定为“项目 → 绑定会话”：会话行与 Agent 侧栏复用同一组件和树行为（状态、MiniMap、委派、置顶、最近会话与归档），Agent 模式则排除所有项目绑定会话。点击项目进入 Workbench，点击会话进入同一个 Full `AgentView`；跨项目操作是创建独立副本，成功后仍停留在源项目，并可从提示打开副本。
+Linguist 复用同一个 `AgentView`、Session Store、Provider、模型、权限和 Proma Toolset，不另建受限 Agent 或第二套 Composer。
 
-Linguist 是一等 Agent Profile：它在各 Runtime 的 Proma Base 上叠加版本化的 Profile、Role、专业质量合同、Execution Policy、Project Digest 与冻结的 Turn Context，并在缺层时显式 degraded，不静默退化成普通 Agent。Execution Policy 只控制是否按风险触发独立评审，不预支 Fast / Balanced / Best 的质量承诺。它嵌入同一个 `AgentView`，不会复制第二套 Composer、消息流、Thinking、Tool Card、权限或 Session Store。项目 Agent 可创建并接受 Proposal，也可在交付预检与重新导入验证通过后把批次保存为用户指定的新本地文件；它不能覆盖已有文件、上传或发送给外部。Segment 写入仍强制 CAS、锁定项、Tag 与 Required/Forbidden 规则。
+## 四种岗位
 
-CAT 编辑器中，`Cmd/Ctrl+Enter` 用于确认当前阶段并前进，即使译文没有变化也可执行；项目设置等右侧浮窗的关闭按钮在 Electron 标题栏区域保持可点击。
+项目会话可在创建时选择岗位，也可在同一会话中随时切换：
 
-上游 v0.16.9 底座带来更新后的 Planning、Agent Island、统一项目/会话文件能力、Voice Dictation 文本投递与 Agent 工作区可靠性修复。这些能力仍属于共享 Agent / Chat 底座，不能引入第二套 Linguist 状态或绕过 CAT authority；其自动、打包和真机资格仍须分别验证。
+| 岗位 | 默认职责 |
+|---|---|
+| General | 导入、分析、术语、脚本、QA、导出和开放式项目任务 |
+| Translator | 对声明范围完成生产级翻译与自检 |
+| Reviewer | 全量审查 Source + 当前 Target，修正实质问题并保留正确译文 |
+| Proofreader | 以目标语成品为中心校对和润色，需要时回看 Source |
 
-## 架构
+岗位只改变默认 Prompt，不改变工具、MCP、文件、模型、Runtime 或用户选择的 permission mode。用户明确提出其他任务时，Agent 直接完成，不以岗位不符为由拒绝。
+
+Proposal 是可见、可接受、可撤销的修改载体，承载 Agent 当前认为最好的正式建议；它不是低质量草稿，也不是 Reviewer 的前置条件。旧 Proposal Critic、Auditor、Execution Policy 和 Translation Scope 不再是 active 产品流程。
+
+## CAT 工作流
 
 ```text
-Linguist Agent Desktop App
-├── Agent / Chat / Providers / Skills / MCP / Automations / 远程桥
-├── Planning（Todo、日程、提醒、Agent 引用）
-├── Agent Island（Agent 交互与 Planning 投影）
-└── Linguist Mode
-    ├── Workbench + 原生 Agent Rail
-    ├── Session-bound CAT Tools
-    ├── Electron Linguist Services / IPC
-    └── @linguist/cat-core
-        └── 纯领域模型、Proposal、Evidence、QA、Critic、Consistency
+Proma Agent Runtime
+├── Base Tools / MCP / Files / Permission / Model
+└── Linguist Project Binding
+    ├── 四岗位共享的 20 个 CAT Tools
+    ├── Common Quality Contract + 当前岗位 Prompt
+    ├── Project Digest / Turn Context
+    └── Linguist Domain Services
+        ├── UI / IPC
+        └── Agent Tools
 ```
 
 关键边界：
 
-- `@linguist/cat-core` 不依赖 React、Electron、Proma UI 或 SQLite。
-- `@linguist/cat-store` 负责每项目 `cat.db`、原始资产、备份与导出记录。
-- `@linguist/cat-tools` 的项目身份只来自 Session binding，20 个工具按项目、参考资料、QA、Proposal/Critic、Intake、Delivery 与 Translation Scope 分模块；Agent 可导入会话工作区或明确附加的文件/目录中的单文件，也可把验证后的批次导出到新的绝对本地路径；主进程重新校验 Session binding、交付状态、目标路径与摘要，模型不能提交 `projectId`。
-- 批次源文件与可保留原件的语言资产统一复用 Proma Preview Tab；UI 导入保留候选确认，项目 Agent 可将授权的 TM/TB/Context 直接登记进项目并获得可审计的内部 ID。
-- XLSX 批次与 TM/TB 导入都必须明确 Sheet 与列映射；XLSX Context 保留 Sheet、物理行号和单元格坐标。原生 SDLTM/SDLTB 可导入；SDLXLIFF 复杂 `mrk` 与 CSV/JSON 低置信误识别继续 fail closed。
-- `LinguistProjectService` 保持单一对外接口，内部按生命周期、资源、质量与交付拆分。
-- Proposal 内容与每次 Issuance/Provenance 分离持久化；长任务使用 Job/Checkpoint、幂等 mutation、durable outbox 和按运行撤销。
-- 项目打开只做有界 Quick Health；Full Integrity Scrub 在独立 worker thread 中检查全量摘要、SQLite/引用链、导出与 Session workspace。
-- 会话复制由主进程重新验证源 Session binding、目标项目活跃/健康状态与 Claude/Pi 原生分叉条件；Renderer 不能提交 binding、原生 ID 或路径。副本不携带工作区文件、`.context`、附件、委派、自动化或运行状态，失败时回滚半成品。
-- Planning 与 Agent Island 复用通用主进程、preload 与 Jotai 合同；它们不授予 CAT 写入权限。
-- Proma 核心触点受 [PROMA_CORE_TOUCHPOINTS.md](./docs/architecture/PROMA_CORE_TOUCHPOINTS.md) 和架构测试约束。
+- `@linguist/cat-core` 是纯领域层，不依赖 React、Electron、Proma UI、SQLite 或文件系统。
+- `@linguist/cat-store` 管理每项目 `cat.db`、受管 source / blobs / exports / backups。
+- `@linguist/cat-tools` 的项目身份只来自 Session binding；模型不能提交 `projectId`。
+- UI 与 Agent 调用同一 `LinguistProjectService`；格式解析、事务、CAS、locked Segment、Tag/Placeholder/ICU、QA 和 round-trip 规则不重复实现。
+- `cat_import_resources` 可处理文件或小批目录，绝对路径直接使用，相对路径按 Session cwd 解析；权限体验只服从 Proma Session。
+- `cat_export_asset` 支持 `final` / `draft`。final 检查结构、格式与重新导入；默认不覆盖，用户明确要求时才原子覆盖普通文件。
+- Tag Profile 的扫描、Candidate、编辑器提示、Proposal、QA 与 final export 使用同一 Scanner；普通可翻译 `[Damage]` 不会被内置规则硬锁。
+- Phrase split/master MXLIFF 按内容身份、Source hash、unit/context 与 placeholder 证据配对；final 导出在 mapping 不完整或 stale 时阻断。
 
-## Agent Runtime 与模型渠道
-
-Agent 会话提供两套可切换的运行时：
-
-- **Claude Agent Runtime**：基于 `@anthropic-ai/claude-agent-sdk 0.3.201`，使用 Anthropic Messages API 或兼容端点。
-- **Pi Agent Runtime**：基于 `@earendil-works/pi-coding-agent`、`pi-agent-core` 和 `pi-ai 0.82.1`，把已启用的渠道注册为 Pi provider，并承接工作区 Skills、用户 MCP Server、Automation / Collaboration 等通用能力。
-
-当前渠道层包含 ChatGPT subscription/Codex OAuth 和 xAI（Grok/X 订阅）OAuth 的集成路径。模型、工具调用、推理、上下文长度和订阅可用性取决于用户配置、账号、地区与上游 Provider；这些集成不是对模型权限、价格或服务可用性的承诺。
-
-Vision Relay 仅在用户配置后，将当前会话或用户附加的已授权目录中、可安全解码的图片发给单独配置的视觉模型，并以受限 JSON 文本返回给当前 Agent；它不会给文本模型任意路径读取或图片外发权限。
+项目缺失、归档或暂不可用时，Agent 对话仍可继续；CAT 工具如实返回项目状态，写入由 Store fail closed。用户仍可用 Proma 文件、Shell、OCR、Excel、MCP 等能力诊断或恢复项目。
 
 ## 本地数据
 
@@ -75,10 +69,8 @@ Vision Relay 仅在用户配置后，将当前会话或用户附加的已授权�
 ```text
 ~/.linguist-agent/
 ├── channels.json
-├── conversations.json
-├── conversations/*.jsonl
-├── agent-sessions.json
-├── agent-sessions/*.jsonl
+├── conversations.json / conversations/*.jsonl
+├── agent-sessions.json / agent-sessions/*.jsonl
 ├── agent-workspaces/
 ├── attachments/
 ├── settings.json
@@ -96,13 +88,9 @@ Vision Relay 仅在用户配置后，将当前会话或用户附加的已授权�
     └── trash/
 ```
 
-通用会话、设置和 Planning 使用 JSON / JSONL（Planning 权威源为原子 `planning.json`）；SQLite 只用于 CAT 项目的独立 `cat.db`。CAT 项目另有受管 source / blobs / exports / backups 目录。API Key 写入 `channels.json` 前经过 Electron `safeStorage` 加密。
-
-旧 `~/.proma(-dev)/channels.json` 只会在用户从「设置 → 模型配置」显式执行 Provider-only 导入时读取；不会迁移 Proma 会话、设置、工作区或 CAT 数据。旧 Linguist 项目与会话的数据迁移入口位于「设置 → 数据迁移」。详见 [USERDATA_LAYOUT.md](./docs/architecture/USERDATA_LAYOUT.md)。
+通用配置与会话使用 JSON / JSONL；SQLite 只用于每项目 CAT Store。API Key 写入 `channels.json` 前使用 Electron `safeStorage` 加密。
 
 ## 开发与验证
-
-仓库固定使用 Bun `1.3.14`。
 
 ```bash
 bun install --frozen-lockfile
@@ -111,14 +99,12 @@ bun test
 bun run check:boundaries
 node --test tests/linguist-fusion-architecture.test.mjs
 bun run --filter='@proma/electron' test:linguist
+bun run --filter='@linguist/cat-tools' test
 ```
 
-开发与构建：
+打包验证：
 
 ```bash
-bun run dev
-bun run electron:build
-
 cd apps/electron
 bun run build
 bun run sync:runtime-deps
@@ -126,24 +112,12 @@ bun run smoke:pack
 bun run smoke:vertical
 ```
 
-`build:resources` 是 fail-closed 步骤，关键资源复制失败不能被 `|| true` 掩盖。测试、smoke 和打包验证必须使用精确临时 `--user-data-dir`，不得读写真实用户数据根。
+测试与 smoke 必须使用任务专用临时 user-data-dir，不得读写真实用户根。
 
-## 尚未完成的人工 Gate
+## 尚缺的真实证据
 
-代码实现和自动化验证不等于产品资格。当前仍需在真实使用中完成：
-
-- 原生 IME composition 与 Native Open 手工验证；Native Save 防覆盖已在隔离 packaged app 克隆中通过；
-- VoiceOver、完整键盘路径和拖拽手感；
-- 同模型 Web Chat / 旧 LA / 新 LA 的统一专业质量盲评，以及覆盖率、成本和耗时证据；
-- 真实 Provider/模型链路与真实客户格式样本回归；
-- 14 天连续个人日用与问题回收。
-
-签名、公证、公开更新渠道和跨平台发布不属于当前个人 Alpha 目标。完整状态见 [HANDOFF.md](./docs/HANDOFF.md)、[TODO.md](./TODO.md) 和 [LINGUIST_FUSION_QUEUE.md](./docs/roadmap/LINGUIST_FUSION_QUEUE.md)。
-
-## 文档
-
-文档入口与事实优先级见 [DOCS_INDEX.md](./docs/DOCS_INDEX.md)；维护规则见 [DOCUMENTATION_MAINTENANCE.md](./docs/DOCUMENTATION_MAINTENANCE.md)。
+实现和自动回归不等于真实语言质量或产品资格。仍需完成同模型 Proma/Codex 对照、真实 Provider 四岗位全链、Native Open/IME/VoiceOver/键盘人工检查和从可用构建开始累计的 14 天日用。当前准确状态见 [SIMPLE_IMPLEMENTATION_STATUS.md](./docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md)、[HANDOFF.md](./docs/HANDOFF.md) 和 [TODO.md](./TODO.md)。
 
 ## 许可
 
-[AGPL-3.0](./LICENSE)。保留 Proma 及其他上游组件要求的版权、NOTICE 和第三方归属。
+[AGPL-3.0](./LICENSE)。保留 Proma 与其他上游组件要求的版权、NOTICE 和第三方归属。

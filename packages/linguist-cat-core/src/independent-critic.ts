@@ -271,6 +271,7 @@ function parseGenerationProvenance(value: unknown): LinguistGenerationProvenance
     'modelProvider',
     'modelId',
     'runtime',
+    // 旧 Critic artifact 只读解码；active generation provenance 已不再写 role。
     'role',
     'strategy',
     'linguistPromptVersion',
@@ -298,12 +299,6 @@ function parseGenerationProvenance(value: unknown): LinguistGenerationProvenance
   }
   for (const field of ['promptHash', 'projectDigestHash', 'turnContextHash', 'toolsetHash'] as const) {
     if (value[field] !== undefined) result[field] = sha256(value[field], `reviewer.generation.${field}`)
-  }
-  if (value.role !== undefined) {
-    if (!(['assistant', 'reviewer', 'auditor'] as const).includes(value.role as never)) {
-      throw new Error('reviewer.generation.role is invalid.')
-    }
-    result.role = value.role as NonNullable<LinguistGenerationProvenance['role']>
   }
   if (value.strategy !== undefined) {
     if (!(['fast', 'balanced', 'best'] as const).includes(value.strategy as never)) {

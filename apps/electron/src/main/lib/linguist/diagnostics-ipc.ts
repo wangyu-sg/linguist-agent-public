@@ -16,7 +16,7 @@ import {
   buildLinguistProjectAssetsPromptWithStatus,
   getLinguistPromptCacheSize,
 } from './project-assets-prompt'
-import { getDefaultLinguistSkillsRoot } from './project-skill'
+import { getDefaultLinguistRolesRoot } from './project-skill'
 import { computeLinguistProjectRevision } from './project-revision'
 import {
   getLinguistPromptRetryObservation,
@@ -49,7 +49,7 @@ interface DiagnosticsDependencies {
   getSession: (sessionId: string) => AgentSessionMeta | undefined
   getConfigDir: () => string
   isDevelopment: boolean
-  getSkillsRoot?: () => string | undefined
+  getRolesRoot?: () => string | undefined
 }
 
 interface CollectedDiagnostics {
@@ -133,24 +133,14 @@ function collectDiagnostics(
 
   const promptSession = {
     linguistProjectId: request.projectId,
-    ...(session?.linguistSessionRole === undefined
-      ? {}
-      : { linguistSessionRole: session.linguistSessionRole }),
-    // LA-QUALITY-001：诊断探针必须与真实发送同一 policy 来源——会话冻结 meta
-    // （含 legacy linguistStrategy 映射），不得回落项目实时值。
-    ...(session?.linguistExecutionPolicy === undefined
-      ? {}
-      : { linguistExecutionPolicy: session.linguistExecutionPolicy }),
-    ...(session?.linguistStrategy === undefined
-      ? {}
-      : { linguistStrategy: session.linguistStrategy }),
+    ...(session?.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
   }
   const promptStartedAt = performance.now()
   const prompt = buildLinguistProjectAssetsPromptWithStatus(
     promptSession,
     deps.getService,
     {
-      skillsRoot: deps.getSkillsRoot?.() ?? getDefaultLinguistSkillsRoot(),
+      rolesRoot: deps.getRolesRoot?.() ?? getDefaultLinguistRolesRoot(),
       // LA-PROMPT-001：探针与真实发送同一 runtime→renderer 推导
       // （orchestrator 用会话冻结 agentRuntime；无会话时回落 'xml'，同 dev.agentRuntime 的 'claude' 回落）。
       renderer: session?.agentRuntime === 'pi' ? 'markdown' : 'xml',
@@ -212,7 +202,6 @@ function collectDiagnostics(
             profile: {
               kind: 'linguist' as const,
               role: profile.role,
-              executionPolicy: profile.executionPolicy,
             },
           }
           : {}),

@@ -571,9 +571,9 @@ function GitStatusMarker({
   className?: string
 }): React.ReactElement {
   const config: Record<ChangedFileStatus, { label: string; description: string; color: string }> = {
-    modified: { label: 'M', description: '已修改', color: 'text-amber-500' },
-    deleted: { label: 'D', description: '已删除', color: 'text-red-500' },
-    untracked: { label: 'U', description: '未追踪', color: 'text-emerald-500' },
+    modified: { label: 'M', description: '已修改', color: 'text-warning' },
+    deleted: { label: 'D', description: '已删除', color: 'text-destructive' },
+    untracked: { label: 'U', description: '未追踪', color: 'text-success' },
   }
   const { label, description, color } = config[status]
 

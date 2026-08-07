@@ -23,9 +23,8 @@ export class CriticArtifactsRepository {
   /**
    * Insert an artifact; re-inserting the same artifactId is a no-op (the
    * artifact is content-derived, so a conflicting payload cannot exist).
-   * Single statement: callers compose larger atomic writes (the
-   * cat_submit_critic_review tool wraps artifact + QA findings in one
-   * transaction).
+   * Single statement: callers compose larger atomic writes so historical
+   * artifact + QA finding records stay transactional.
    */
   insert(artifact: PersistedCriticArtifact): void {
     this.db.assertWritable(`insert critic artifact ${artifact.artifactId}`)

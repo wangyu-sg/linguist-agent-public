@@ -1,45 +1,41 @@
 # Linguist Fusion 当前事实
 
-> 更新日期：2026-08-07。代码、manifest、测试和真实运行输出优先于本文。
+> 更新日期：2026-08-08。代码、manifest、测试和真实运行输出优先于本文。
 
 ## 基线
 
 | 项目 | 当前事实 |
 |---|---|
-| 仓库 / 分支 / 实现提交 | `/Users/<local>/Desktop/linguist-agent-next` / `main` / 以 `git HEAD` 为准 |
-| Proma Base / formal merge | v0.16.8 `bde00f00` / `f3d2b431` |
-| App / Electron | `0.16.19` / `43.2.0` |
+| 仓库 / 分支 | `/Users/<local>/Desktop/linguist-agent-next` / `sync/proma-v0.16.9-simple` |
+| Proma Base / formal merge | v0.16.9 `d08179d9` / `50a74398` |
+| App / Electron | `0.16.21` / `43.2.0` |
 | Bun / Pi / Claude | `1.3.14` / `0.82.1` / `0.3.201` |
-| Shared | `0.1.85` |
-| CAT Core / Formats / Store / Tools | `0.0.14 / 0.0.8 / 0.0.27 / 0.0.23` |
+| Shared | `0.1.86` |
+| CAT Core / Formats / Store / Tools | `0.0.15 / 0.0.9 / 0.0.29 / 0.0.24` |
 | CAT schema / Tool count | `15` / `20` |
-| Proma core touchpoints | `258`，以 `proma-touchpoints.json` 为准 |
 
-产品结构固定为完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench。Linguist 复用同一个 AgentView、ChatView、Session、Preview Tab 和 Host 状态。
+产品结构固定为完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench。Linguist 复用同一个 AgentView、Session、Planning、Preview Tab、权限和 Host 状态。
 
-## 本轮实现事实
+## 当前产品事实
 
-- 批次是同一项目内持续到达的任务文件；语言资产是 TM/TB/Style Guide/Context。两者不再混成“全部资产”。
-- 空项目可修改语言方向，已有批次/TM/TB 后 fail closed；项目 Agent 可直接导入会话工作区或明确附加文件/目录中的单文件，主进程校验路径根。
-- XLSX 批次和 TM/TB 显式确认 Sheet/列映射，XLSX Context 保留结构化行/单元格坐标；原生 SDLTM/SDLTB 可导入；SDLXLIFF `mrk` 与 CSV/JSON detect 修复留在既有 adapter。
-- TM/TB 使用候选 → 人工确认 → 权威层；原件进入受管 blob，批次和语言资产均复用 Proma Preview Tab。
-- Import Verification 与引用感知 Undo 已实现；下游 Proposal/QA/Critic/Export/人工编辑/Job 任一引用都会阻止撤销。
-- Context cursor 绑定项目事件序列；Segment、TM/TB、Style Guide mutation 均推动事件，旧 cursor 抛 `CONTEXT_DRIFT`。
-- Execution Policy、专业质量合同、Canonical Prompt Contract、双 renderer、全局预算与 Translation Scope 已接入；CAT 工具现为 20 个。项目 Agent 可把通过预检和重新导入验证的批次保存为新的本地文件，但不能覆盖、上传或发送。
-- SDLXLIFF 导出按 trans-unit 解析和写回局部 `sdl:seg` 状态；缺少旧 `conf` 不再误判为不可写，同 id 的其他局部定义不再被串改。
-- 批次与语言资产预览固定打开 Proma Preview Tab，不受通用 split 偏好影响；两类列表均有显式刷新入口。
-- Proma 上游影响检查是本地只读 dry-run，不做 git mutation 或发布。
+- Linguist 岗位只有 `general / translator / reviewer / proofreader`。四岗位使用同一套 CAT/Proma 能力，差异只存在于短而明确的岗位提示词。
+- 岗位可创建时选择并在 Header 切换；旧 reviewer/auditor 字段只在 Session 读取时转换，转换后不再保留旧字段。
+- 项目异常不封死会话。Agent 的通用读写、思考、MCP 和文件能力继续可用；CAT mutation 仍由 Session binding、项目健康、revision CAS、locked 和结构规则保护。
+- Common Contract 与四份岗位提示词位于 `resources/linguist-roles/`，这是唯一岗位 Prompt 真源；不再注入旧 project role Skill。
+- Reviewer 默认执行完整 Source + Target 审校，Proofreader 默认聚焦目标语；两者都可在用户明确要求时通过 Proposal 写回。
+- 对外 CAT Toolset 固定为 20 个，包含统一资源导入、未知 Tag 扫描、Tag Profile 保存和 final/draft 导出；不再公开 Critic 或 Translation Scope 工具。
+- `cat_import_resources` 接受文件或目录、绝对路径或相对会话工作目录路径，递归上限为 500 个条目，不跟随符号链接目录；XLSX 和其他歧义映射显式返回 `needsInput`。
+- `cat_export_asset` 默认拒绝覆盖。final 经过交付预检、结构硬规则和重导验证；draft 可导出未完成批次，但仍保留路径校验、格式生成和原子写入。
+- Tag Scanner 是 Core 到 UI 的单一真源。内建 family、项目 Active pattern 和 Candidate 共用同一扫描结果；Candidate 在保存前检查证据、正则安全、重叠和 paired pattern。
+- Phrase Master 配对依赖内容身份；mapping 持久化 source hash、placeholder 顺序和原始 XML，过期/不完整 mapping 阻止 final，不阻止 draft。
+- 旧 Critic DB 记录仅为历史兼容读取，不再有公开创建或工作流入口。Execution Policy 和 Translation Scope active 路径已删除。
 
-## 状态
+## 证据边界
 
-| Ticket | 状态 | 当前事实 |
-|---|---|---|
-| LA-INTAKE-007 | DONE | 同事务 Verification + 六类引用感知 Undo。 |
-| LA-FORMAT-005/006/007 | DONE | XLSX 映射、SDLXLIFF `mrk`、CSV/JSON 置信治理已实现。 |
-| LA-CONTEXT-001/002/003 | DONE | cursor v2、最小上下文、冻结 scope 与完整 mutation event 覆盖。 |
-| LA-SYNC-007 | IN_PROGRESS | 自动化 smoke 已实现，G0 19/19 通过；Native dialog 与 IME 仍缺人工证据。 |
-| LA-HOST-002 | IN_PROGRESS | Companion 已实现并有自动回归，缺真实机器 roundtrip。 |
-| LA-ALPHA-000 | TODO | 不以 unit/packaged 结果替代个人 Alpha Gate。 |
-| LA-EVAL-001/003/004 | TODO | 真实模型、格式与 14 天日用证据未取得。 |
+- SIMPLE-001 证明的是干净启动基线；本轮聚焦测试证明的是实现行为。
+- 本轮全量证据为：11 workspace typecheck、根 `1479/1479`、Electron `181/181`、CAT Tools `36/36`、boundary `4/4`、fusion `9/9`、432 依赖 SBOM/许可证核验。
+- 私有 Phrase 工作目录只做只读副本测试；82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable，客户内容不进入仓库。
+- macOS arm64 packaged artifact integrity 通过；纵向 smoke 为 Pi `15/0`、Chat `19/0`、Linguist `21/0/2 MANUAL`，合同覆盖仍是 `partial`。
+- 真实模型质量、四岗位真实全链、14 天日用、VoiceOver、IME 和 Native dialog 仍待真实证据，不能由自动测试替代。
 
-历史 v1、0.15.140 和旧 Gate 报告保留作历史证据，不覆盖本页。
+当前 Ticket 状态见 [SIMPLE_IMPLEMENTATION_STATUS.md](./SIMPLE_IMPLEMENTATION_STATUS.md)。历史 v1 queue 和 Gate 报告只代表当时证据，不覆盖本页。

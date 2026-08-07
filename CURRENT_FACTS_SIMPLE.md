@@ -9,26 +9,26 @@
 - 核验起点 HEAD：`b5a65ef377c9816a24c756f06a8cf76bc4f1b947`（`main`，与 `origin/main` 一致）。
 - 核验起点工作树：clean；SIMPLE-001 修复后改动见当前 `git status --short`。
 - remotes：`origin` 为公开 Linguist Agent 仓库，`upstream` 为 Proma 仓库。
-- 当前 Proma tag：`v0.16.8`；merge-base：`bde00f00323d6735a939d14dbce3b2f1a5b672bc`。
-- 本地尚无 `v0.16.9` tag；SIMPLE-002 需要 fetch 后正式 merge。
+- 当前 Proma tag：`v0.16.9`；commit：`d08179d9b6e84a5ac8e33a7d70fc2e12dfde21cf`。
+- 正式 merge commit：`50a74398bb6f8949444593c2915a87a5f8964237`；承载分支：`sync/proma-v0.16.9-simple`。
 
 ## 固定版本
 
 | 项目 | 核验值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App | `0.16.20`（SIMPLE-001 patch；核验起点 `0.16.19`） |
+| Electron App | `0.16.21`（简化重构；核验起点 `0.16.19`） |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.0.3` |
-| Shared | `0.1.85` |
+| Shared | `0.1.86` |
 | Claude Agent SDK | `0.3.201` |
 | Pi Runtime | `0.82.1` |
-| CAT Core | `0.0.14` |
-| CAT Formats | `0.0.8` |
-| CAT Store | `0.0.28`（SIMPLE-001 patch；核验起点 `0.0.27`） |
-| CAT Tools | `0.0.23` |
+| CAT Core | `0.0.15` |
+| CAT Formats | `0.0.9` |
+| CAT Store | `0.0.29`（简化重构；核验起点 `0.0.27`） |
+| CAT Tools | `0.0.24` |
 | CAT schema | `15` |
 
 版本值来自当前 `package.json`、`bun.lock` 与 `packages/linguist-cat-store/src/schema.ts`，不是旧报告。
@@ -49,17 +49,16 @@
 
 ## 当前角色与工具装配
 
-- `AgentSessionMeta` 当前角色字段仍是 `linguistSessionRole?: 'reviewer' | 'auditor'`；缺省会话等价于旧 Assistant。
-- Session 创建 IPC 当前只接受 `reviewer | auditor`；角色在通用元数据更新中被冻结。
+- `AgentSessionMeta` 当前角色字段为 `linguistRole?: 'general' | 'translator' | 'reviewer' | 'proofreader'`；旧字段只在读取时转换并删除。
+- Session 创建、更新 IPC 与 Header/侧栏菜单支持四岗位；岗位可切换。
 - `composeAgentTools()` 已保持 Proma Base/MCP 在前、Linguist CAT overlay 在后的组合方向。
-- 绑定项目的 Auditor 仍向 CAT 工厂传 `sessionMode: 'independent-audit'`，导致只暴露证据读取白名单。
-- 当前公开 CAT 工具共 20 个：项目摘要、资产/片段读取、单资产导入/导出、上下文、Proposal snapshot/TM/TB、Proposal 创建/接受、QA、Critic、Consistency、句式/Context，以及 Translation Scope begin/finalize。
-- `cat_submit_critic_review`、`cat_begin_translation_scope`、`cat_finalize_translation_scope` 仍默认公开；新简化方案尚未实施。
+- 四岗位获得同一套 20 个 CAT 工具；差异只由岗位提示词表达，不再有 Auditor 工具白名单。
+- 当前工具包含统一资源导入、final/draft 导出、未知 Tag 扫描与 Tag Profile 保存；不再公开 Critic 或 Translation Scope 工具。
 
 ## 当前权限与异常语义
 
 - Proma Session 的 `permissionMode` 已是基础工具和 MCP 的权限来源。
-- Linguist 仍叠加两类额外限制：Intake 路径必须位于 Session workspace/附件授权范围；项目 missing/unavailable/archived 时 `checkLinguistSessionSendBlock()` 阻断整个 Agent send。
+- 资源导入接受绝对路径或相对 Session workspace 路径；目录递归有 500 条目上限且不跟随符号链接目录。项目 missing/unavailable/archived 不再阻断整个 Agent send，CAT 操作按项目状态 fail closed。
 - CAT 写入已有 Store 级 revision CAS、locked、Tag/Placeholder/ICU、事务和只读项目保护；这些属于数据正确性，必须保留。
 
 ## 用户数据与备份/恢复
@@ -68,9 +67,11 @@
 - 本机只读检查确认生产 Session Index 存在，生产 Linguist root 下有 5 个项目目录；未记录名称或内容。开发 Linguist root 不存在。
 - 测试与构建均使用临时根，没有读写真实项目。
 - CAT Store 备份/恢复与 Electron 服务层备份/恢复测试通过，包括 manifest/hash、WAL、回滚、损坏拒绝、pre-restore snapshot 和 schema 15 身份校验。
-- SIMPLE-002 前仍需对真实 `linguist/` 与 Session Index 做一次独立只读源备份；在该备份完成前不执行上游 merge。
+- SIMPLE-002 前已对真实 `linguist/` 与 Session Index 做独立备份，并逐项验证副本一致；仓库中只记录结论，不记录本机路径或客户内容。
 
-## 尚未确认
+## 本轮最终证据与尚未确认
 
-- 真实项目的手工打开、翻译、审校、校对与导出尚未在本轮执行。
-- macOS packaged smoke、真实目录导入、Phrase split/master round-trip 和 14 天日用尚无本轮证据；不得标记为完成。
+- 全量 typecheck、根 `1479/1479`、Electron `181/181`、CAT Tools `36/36`、boundary `4/4`、fusion `9/9` 通过。
+- macOS arm64 packaged artifact integrity 通过；纵向 smoke 为 Pi `15/0`、Chat `19/0`、Linguist `21/0/2 MANUAL`。
+- Phrase 真实私有副本验证为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户数据未进入仓库。
+- 真实 Provider 四岗位全链、同模型对照、14 天日用和 Native Open/Save 等真机人工项尚未确认，不得标记为完成。

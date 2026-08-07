@@ -19,7 +19,7 @@ const session = (
   title: 'CUSTOMER_TITLE_SENTINEL',
   linguistProjectId: projectId,
   linguistProjectName: 'CUSTOMER_NAME_SENTINEL',
-  linguistStrategy: 'best',
+  linguistRole: 'reviewer',
   agentRuntime: 'pi',
   createdAt: 1,
   updatedAt: 2,
@@ -53,7 +53,7 @@ test('LA-OBS-001: status exposes Prompt degradation and one refresh re-probes th
     })
     db.runs.transitionJob(jobId, { sessionId: meta.id }, 'running')
     db.runs.ackEvents('renderer-workbench-v1', 1)
-    let skillsRoot = join(makeTempDir(), 'missing')
+    let rolesRoot = join(makeTempDir(), 'missing')
     recordLinguistRuntimeObservation(meta.id, {
       runtime: 'pi',
       baseToolCount: 17,
@@ -64,7 +64,7 @@ test('LA-OBS-001: status exposes Prompt degradation and one refresh re-probes th
       getService: () => service,
       getSession: (id) => id === meta.id ? meta : undefined,
       getConfigDir: () => join(makeTempDir(), '.linguist-agent-dev'),
-      getSkillsRoot: () => skillsRoot,
+      getRolesRoot: () => rolesRoot,
       isDevelopment: true,
     })
 
@@ -77,8 +77,7 @@ test('LA-OBS-001: status exposes Prompt degradation and one refresh re-probes th
     assert.equal(degraded.data.dev?.tools.base, 17)
     assert.equal(degraded.data.dev?.tools.overlay, 8)
     assert.equal(degraded.data.dev?.profile?.kind, 'linguist')
-    // 会话 meta 的 legacy linguistStrategy: 'best' 经映射进入 dev profile
-    assert.deepEqual(degraded.data.dev?.profile?.executionPolicy, { independentReview: 'risk-based' })
+    assert.equal(degraded.data.dev?.profile?.role, 'reviewer')
     assert.match(degraded.data.dev?.sessionCwd ?? '', /agent-workspaces/)
     assert.equal(
       (degraded.data.dev?.metrics.promptProbeLatencyMs ?? -1) >= 0,
@@ -126,10 +125,10 @@ test('LA-OBS-001: status exposes Prompt degradation and one refresh re-probes th
       status: 'running',
     })
 
-    skillsRoot = join(
+    rolesRoot = join(
       dirname(fileURLToPath(import.meta.url)),
       '..', '..', '..', '..', '..', '..',
-      'resources', 'linguist-skills',
+      'resources', 'linguist-roles',
     )
     const retried = await ipc.getStatus({
       projectId: project.id,

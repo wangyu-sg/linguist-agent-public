@@ -8,7 +8,6 @@ export interface LinguistGenerationProvenance {
   modelProvider?: string
   modelId?: string
   runtime?: string
-  role?: 'assistant' | 'reviewer' | 'auditor'
   strategy?: 'fast' | 'balanced' | 'best'
   linguistPromptVersion?: string
   promptHash?: string

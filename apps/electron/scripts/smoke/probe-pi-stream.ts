@@ -51,6 +51,7 @@ import {
   FAKE_MODEL_IDS,
   type FakeModelServer,
 } from './fake-model-server.ts'
+import { CURRENT_ONBOARDING_VERSION } from '../../src/types/settings.ts'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const APP_DIR = resolve(SCRIPT_DIR, '..', '..')
@@ -338,7 +339,7 @@ async function main(): Promise<void> {
 
     // 3. 播种：fake 渠道 + onboarding 完成 + Agent 工作区
     const seeded = await page.evaluate(
-      async ([baseUrl, modelIds]) => {
+      async ([baseUrl, modelIds, onboardingVersion]) => {
         const api = (window as unknown as {
           electronAPI: {
             createChannel: (input: unknown) => Promise<{ id: string }>
@@ -354,11 +355,11 @@ async function main(): Promise<void> {
           models: (modelIds as string[]).map((id) => ({ id, name: id, enabled: true })),
           enabled: true,
         })
-        await api.updateSettings({ onboardingCompleted: true })
+        await api.updateSettings({ onboardingCompleted: true, onboardingVersion })
         const workspace = await api.createAgentWorkspace('G1探针工作区')
         return { channelId: channel.id, workspaceId: workspace.id }
       },
-      [server.baseUrl, [...FAKE_MODEL_IDS]] as const,
+      [server.baseUrl, [...FAKE_MODEL_IDS], CURRENT_ONBOARDING_VERSION] as const,
     )
     check('seed-channel-workspace', seeded.channelId.length > 0 && seeded.workspaceId.length > 0,
       `channelId=${seeded.channelId}，workspaceId=${seeded.workspaceId}，onboardingCompleted=true`)

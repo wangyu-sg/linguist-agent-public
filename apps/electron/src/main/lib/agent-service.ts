@@ -41,8 +41,6 @@ import { getHeadlessAgentRunTarget } from './agent-headless-run-target'
 import { sendAgentStreamComplete } from './agent-completion-payload'
 import { saveFilesToManagedAgentSession } from './agent-session-file-storage'
 import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
-import { checkLinguistSessionSendBlock } from './linguist/session-binding'
-import { getLinguistProjectService } from './linguist/project-service'
 
 // ===== 实例创建 =====
 
@@ -439,12 +437,7 @@ export function saveFilesToAgentSession(input: AgentSaveFilesInput): AgentSavedF
   const saved = saveFilesToManagedAgentSession(input, {
     getSessionMeta: getAgentSessionMeta,
     resolveExecutionScope: resolveAgentExecutionScope,
-    assertSessionWritable: (session) => {
-      const blocked = checkLinguistSessionSendBlock(session, getLinguistProjectService)
-      if (blocked) {
-        throw new Error(`${blocked.title}: ${blocked.message}`)
-      }
-    },
+    assertSessionWritable: () => undefined,
   })
 
   // Linguist 纸夹附件同步登记到会话 authority，CAT Intake 只能读取

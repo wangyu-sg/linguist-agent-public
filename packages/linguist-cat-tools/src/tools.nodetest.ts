@@ -14,8 +14,6 @@ import {
   createAsset,
   createSeededEntropy,
   deriveSegmentId,
-  independentCriticCandidateHash,
-  independentCriticProfileHash,
   SegmentLockedError,
   StaleProposalError,
   UnknownSegmentError,
@@ -232,10 +230,6 @@ test('factory: CAT tools expose project-local accept and export but no resolve o
     assert.equal(tools.some((tool) => /resolve|waive|deliver/i.test(tool.name)), false)
     assert.ok(toolByName(tools, 'cat_accept_proposals'))
     assert.equal(tools.length, LINGUIST_CAT_TOOL_NAMES.length)
-    assert.equal(
-      (toolByName(tools, 'cat_submit_critic_review').parameters as { type?: string }).type,
-      'object',
-    )
     for (const tool of tools) {
       assert.equal(typeof tool.label, 'string')
       assert.ok(tool.label.length > 0)
@@ -253,27 +247,32 @@ test('factory: CAT tools expose project-local accept and export but no resolve o
 test('cat_export_asset delegates the bound asset and absolute destination without leaking its path', async () => {
   const fixture = setup()
   try {
-    let exportedInput: { assetId: string; destinationPath: string } | undefined
+    let exportedInput: { assetId: string; destinationPath: string; mode: string; overwrite: boolean } | undefined
     const tools = createLinguistCatTools({
       resolveProject: makeOkResolver(fixture),
-      exportAsset: async (assetId, destinationPath) => {
-        exportedInput = { assetId, destinationPath }
+      exportAsset: async (assetId, destinationPath, mode, overwrite) => {
+        exportedInput = { assetId, destinationPath, mode, overwrite }
         return {
           filename: 'alpha.translated.zh-CN.tsv',
           sha256: 'c'.repeat(64),
           sizeBytes: 42,
           verifiedAt: '2026-08-07T00:00:00.000Z',
           verifiedSegments: fixture.segmentsA.length,
+          mode,
         }
       },
     })
     const result = await invoke(toolByName(tools, 'cat_export_asset'), {
       assetId: fixture.assetA.id,
       destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
+      mode: 'draft',
+      overwrite: true,
     })
     assert.deepEqual(exportedInput, {
       assetId: fixture.assetA.id,
       destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
+      mode: 'draft',
+      overwrite: true,
     })
     assert.deepEqual(result.details, {
       filename: 'alpha.translated.zh-CN.tsv',
@@ -281,6 +280,7 @@ test('cat_export_asset delegates the bound asset and absolute destination withou
       sizeBytes: 42,
       verifiedAt: '2026-08-07T00:00:00.000Z',
       verifiedSegments: fixture.segmentsA.length,
+      mode: 'draft',
     })
     assert.equal(collectStrings(result.details).some((value) => value.includes('/Users/test')), false)
   } finally {
@@ -356,29 +356,6 @@ test('intake tool delegates authorized file import kind to the host', async () =
   }
 })
 
-test('independent-audit mode exposes evidence reads only and hides prior conclusions', () => {
-  const fixture = setup()
-  try {
-    const tools = createLinguistCatTools({
-      resolveProject: makeOkResolver(fixture),
-      sessionMode: 'independent-audit',
-    })
-    assert.deepEqual(tools.map((tool) => tool.name), [
-      'cat_project_summary',
-      'cat_list_assets',
-      'cat_get_segments',
-      'cat_get_translation_context',
-      'cat_search_tm',
-      'cat_search_terms',
-      'cat_search_sentence_patterns',
-      'cat_read_context_doc',
-    ])
-    assert.equal(tools.some((tool) =>
-      /proposal|qa|critic|consistency|repair|commit/i.test(tool.name)), false)
-  } finally {
-    fixture.db.close()
-  }
-})
 
 test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page filtered results', async () => {
   const fixture = setup()
@@ -1543,7 +1520,17 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_project_summary: {},
       cat_list_assets: {},
       cat_get_segments: {},
+      cat_import_resources: { paths: ['/missing'] },
       cat_import_asset: { filePath: '/missing', resourceKind: 'batch' },
+      cat_scan_unknown_tag_patterns: {},
+      cat_save_tag_profile_candidate: {
+        name: 'test',
+        regex: '\\[test\\]',
+        kind: 'standalone',
+        evidenceExampleIds: ['example'],
+        confidence: 1,
+        explanation: 'test',
+      },
       cat_export_asset: { assetId: fixture.assetA.id, destinationPath: '/missing' },
       cat_get_translation_context: { segmentIds: [fixture.segmentsA[0]!.id] },
       cat_get_proposal_snapshot: { proposalId: 'prp-0000000000000000' },
@@ -1557,19 +1544,6 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       },
       cat_run_qa: {},
       cat_get_qa_findings: {},
-      cat_submit_critic_review: {
-        snapshotId: 'psn:prp-0000000000000000',
-        snapshotHash: '0'.repeat(64),
-        verdict: 'issues',
-        summary: 'x',
-        findings: [{
-          category: 'fidelity',
-          severity: 'L2',
-          issueType: 'omission',
-          evidenceRefs: ['tm:x'],
-          explanation: 'x',
-        }],
-      },
       cat_plan_consistency_repairs: {},
       cat_create_consistency_proposals: {
         planId: 'csp-0000000000000000',
@@ -1581,8 +1555,6 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       },
       cat_search_sentence_patterns: {},
       cat_read_context_doc: { docId: 'ctx-0000000000000000' },
-      cat_begin_translation_scope: { segmentIds: [fixture.segmentsA[0]!.id] },
-      cat_finalize_translation_scope: { scopeJobId: 'job-0000000000000000' },
     }
 
     // unbound session: every tool throws BINDING_MISSING before touching the store
@@ -1702,565 +1674,8 @@ test('perf: 10k-segment project — paged queries stay capped and fast', async (
   }
 })
 
-// ===== PB-083: cat_submit_critic_review =====
 
-interface CriticReviewDto {
-  reviewId: string
-  artifactId: string
-  verdict: 'pass' | 'issues' | 'abstain'
-  findingIds: string[]
-  qaFindingIds: string[]
-  repairScope?: { authority: string; canCommit: boolean; segmentIds: string[]; findingIds: string[] }
-}
-
-/** 先由「候选会话」提案，再用「评审会话」提交评审（两会话独立，满足独立性闸门）。 */
-async function proposeAsCandidate(
-  fixture: Fixture,
-  segmentId: string,
-  candidateSessionId: string,
-  proposedTarget?: string,
-): Promise<string> {
-  // 默认目标带源文，数字/占位符/标签签名与源文一致，稳过确定性硬门
-  const target = proposedTarget ?? `候选 ${fixture.db.segments.getById(segmentId)!.source}`
-  const candidateTools = createLinguistCatTools({
-    resolveProject: makeOkResolver(fixture),
-    sessionId: candidateSessionId,
-  })
-  const result = await invoke(toolByName(candidateTools, 'cat_propose_translations'), {
-    segmentProposals: [{ segmentId, baseRevision: 0, proposedTarget: target }],
-  })
-  return (result.details as { proposalIds: string[] }).proposalIds[0]!
-}
-
-function makeCriticTools(
-  fixture: Fixture,
-  sessionId: string,
-  criticSkillBytes?: () => string | Uint8Array | undefined,
-  onMutation?: (mutation: LinguistCatToolMutation) => void,
-) {
-  return createLinguistCatTools({
-    resolveProject: makeOkResolver(fixture),
-    sessionId,
-    ...(criticSkillBytes !== undefined ? { criticSkillBytes } : {}),
-    ...(onMutation !== undefined ? { onMutation } : {}),
-  })
-}
-
-async function reviewSnapshotInput(
-  tools: ReturnType<typeof createLinguistCatTools>,
-  proposalId: string,
-) {
-  const snapshot = (await invoke(toolByName(tools, 'cat_get_proposal_snapshot'), {
-    proposalId,
-  })).details as { snapshotId: string; snapshotHash: string }
-  return {
-    snapshotId: snapshot.snapshotId,
-    snapshotHash: snapshot.snapshotHash,
-  }
-}
-
-test('cat_get_proposal_snapshot: fixed candidate/context/provenance hash becomes stale after revision change', async () => {
-  const fixture = setup()
-  try {
-    const segment = fixture.segmentsA[2]!
-    const proposalId = await proposeAsCandidate(
-      fixture,
-      segment.id,
-      'sess-candidate',
-      `候选 ${segment.source}`,
-    )
-    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
-    const before = fixture.db.segments.getById(segment.id)
-    const first = (await invoke(toolByName(tools, 'cat_get_proposal_snapshot'), {
-      proposalId,
-    })).details as {
-      snapshotId: string
-      snapshotHash: string
-      proposalId: string
-      status: string
-      segmentId: string
-      source: string
-      currentTarget: string
-      proposedTarget: string
-      currentRevision: number
-      baseRevision: number
-      context: {
-        previous: Array<{ segmentId: string }>
-        next: Array<{ segmentId: string }>
-      }
-      evidence: Array<{ id: string; kind: string }>
-      issuanceCount: number
-      issuances: Array<{ id: string; sessionId?: string }>
-      producer: { id: string; sessionId?: string; runId?: string; modelId?: string }
-    }
-    assert.match(first.snapshotId, /^psn:/)
-    assert.match(first.snapshotHash, /^[a-f0-9]{64}$/)
-    assert.equal(first.proposalId, proposalId)
-    assert.equal(first.status, 'pending')
-    assert.equal(first.segmentId, segment.id)
-    assert.equal(first.source, segment.source)
-    assert.equal(first.currentTarget, segment.target)
-    assert.equal(first.proposedTarget, `候选 ${segment.source}`)
-    assert.equal(first.currentRevision, 0)
-    assert.equal(first.baseRevision, 0)
-    assert.deepEqual(first.context.previous.map((item) => item.segmentId), [
-      fixture.segmentsA[1]!.id,
-    ])
-    assert.deepEqual(first.context.next.map((item) => item.segmentId), [
-      fixture.segmentsA[3]!.id,
-    ])
-    assert.ok(first.evidence.some((item) => item.kind === 'segment-revision'))
-    assert.equal(first.issuanceCount, 1)
-    assert.match(first.issuances[0]?.id ?? '', /^pis_v2_[a-f0-9]{64}$/)
-    assert.equal(first.producer.sessionId, 'sess-candidate')
-    assert.deepEqual(fixture.db.segments.getById(segment.id), before)
-
-    fixture.db.segments.applyTargetEdit(segment.id, '人工新译文', 0)
-    const stale = (await invoke(toolByName(tools, 'cat_get_proposal_snapshot'), {
-      proposalId,
-    })).details as typeof first
-    assert.equal(stale.snapshotId, first.snapshotId)
-    assert.notEqual(stale.snapshotHash, first.snapshotHash)
-    assert.equal(stale.status, 'stale')
-    assert.equal(stale.currentRevision, 1)
-  } finally {
-    fixture.db.close()
-  }
-})
-
-const REVIEW_FINDINGS = [
-  {
-    category: 'fidelity',
-    severity: 'L2',
-    issueType: 'omission',
-    evidenceRefs: ['tm:unit-1', 'seg source text'],
-    explanation: '译文漏译了源文第二分句。',
-  },
-  {
-    category: 'terminology',
-    severity: 'L1',
-    issueType: 'terminology_soft',
-    evidenceRefs: ['term: 术语库 v3'],
-    explanation: '术语与术语库指定译法不一致。',
-    suggestedRepair: '改用术语库译法。',
-  },
-] as const
-
-test('cat_submit_critic_review: pass persists snapshot-bound reviewer provenance without fake QA findings', async () => {
-  const fixture = setup()
-  try {
-    const segment = fixture.segmentsA[0]!
-    const proposalId = await proposeAsCandidate(fixture, segment.id, 'sess-candidate')
-    const reviewerTools = createLinguistCatTools({
-      resolveProject: makeOkResolver(fixture),
-      sessionId: 'sess-reviewer',
-      modelId: 'review-model',
-      criticSkillBytes: () => 'reviewer-prompt-v2',
-      generationProvenance: (toolCallId) => ({
-        sessionId: 'sess-reviewer',
-        runId: 'review-run',
-        toolCallId,
-        modelProvider: 'anthropic',
-        modelId: 'review-model',
-        runtime: 'claude',
-        role: 'reviewer',
-        linguistPromptVersion: '2.0.0',
-        promptHash: '1'.repeat(64),
-        projectDigestHash: '2'.repeat(64),
-        projectDigestRevision: 'project-r1',
-        turnContextVersion: 1,
-        turnContextSnapshot: '{"activeSegmentId":"seg-1"}',
-        turnContextHash: '3'.repeat(64),
-        toolsetHash: '4'.repeat(64),
-      }),
-    })
-    const snapshot = (await invoke(
-      toolByName(reviewerTools, 'cat_get_proposal_snapshot'),
-      { proposalId },
-    )).details as { snapshotId: string; snapshotHash: string }
-    const result = await invoke(toolByName(reviewerTools, 'cat_submit_critic_review'), {
-      snapshotId: snapshot.snapshotId,
-      snapshotHash: snapshot.snapshotHash,
-      verdict: 'pass',
-      summary: '未发现实质问题。',
-      findings: [],
-    })
-    const dto = result.details as {
-      reviewId: string
-      artifactId: string
-      verdict: string
-      findingIds: string[]
-      qaFindingIds: string[]
-    }
-    assert.equal(dto.reviewId, dto.artifactId)
-    assert.equal(dto.verdict, 'pass')
-    assert.deepEqual(dto.findingIds, [])
-    assert.deepEqual(dto.qaFindingIds, [])
-    const artifact = fixture.db.criticArtifacts.getById(dto.reviewId) as unknown as {
-      schemaVersion: number
-      verdict: string
-      snapshot: { snapshotId: string; snapshotHash: string; proposalId: string }
-      reviewer: {
-        sessionId: string
-        modelId?: string
-        promptVersion: string
-        generation?: { runId?: string; toolsetHash?: string }
-      }
-    }
-    assert.equal(artifact.schemaVersion, 2)
-    assert.equal(artifact.verdict, 'pass')
-    assert.deepEqual(artifact.snapshot, {
-      snapshotId: snapshot.snapshotId,
-      snapshotHash: snapshot.snapshotHash,
-      proposalId,
-    })
-    assert.equal(artifact.reviewer.sessionId, 'sess-reviewer')
-    assert.equal(artifact.reviewer.modelId, 'review-model')
-    assert.match(artifact.reviewer.promptVersion, /^[a-f0-9]{64}$/)
-    assert.equal(artifact.reviewer.generation?.runId, 'review-run')
-    assert.equal(artifact.reviewer.generation?.toolsetHash, '4'.repeat(64))
-    assert.equal(fixture.db.qaFindings.list({ segmentId: segment.id }).length, 0)
-    assert.equal(fixture.db.proposals.getById(proposalId)?.status, 'pending')
-    assert.equal(fixture.db.segments.getById(segment.id)?.revision, segment.revision)
-  } finally {
-    fixture.db.close()
-  }
-})
-
-test('cat_submit_critic_review: abstain persists reason; stale snapshot is rejected without writes', async () => {
-  const fixture = setup()
-  try {
-    const abstainProposalId = await proposeAsCandidate(
-      fixture,
-      fixture.segmentsA[0]!.id,
-      'sess-candidate-abstain',
-    )
-    const reviewerTools = makeCriticTools(fixture, 'sess-reviewer-abstain')
-    const abstainSnapshot = await reviewSnapshotInput(reviewerTools, abstainProposalId)
-    const abstain = (await invoke(toolByName(reviewerTools, 'cat_submit_critic_review'), {
-      ...abstainSnapshot,
-      verdict: 'abstain',
-      reason: '缺少角色语气资料，无法可靠判断。',
-      findings: [],
-    })).details as CriticReviewDto
-    assert.equal(abstain.verdict, 'abstain')
-    assert.deepEqual(abstain.findingIds, [])
-    assert.deepEqual(abstain.qaFindingIds, [])
-    const artifact = fixture.db.criticArtifacts.getById(abstain.reviewId)
-    assert.equal(artifact?.schemaVersion, 2)
-    if (artifact?.schemaVersion !== 2) assert.fail('expected review artifact v2')
-    assert.equal(artifact.reason, '缺少角色语气资料，无法可靠判断。')
-
-    const staleProposalId = await proposeAsCandidate(
-      fixture,
-      fixture.segmentsA[1]!.id,
-      'sess-candidate-stale',
-    )
-    const staleSnapshot = await reviewSnapshotInput(reviewerTools, staleProposalId)
-    fixture.db.segments.applyTargetEdit(fixture.segmentsA[1]!.id, '人工改稿', 0)
-    const before = fixture.db.criticArtifacts.listBySegment(fixture.segmentsA[1]!.id).length
-    await assert.rejects(
-      invoke(toolByName(reviewerTools, 'cat_submit_critic_review'), {
-        ...staleSnapshot,
-        verdict: 'pass',
-        findings: [],
-      }, 'call-stale-review'),
-      (error: unknown) =>
-        (error as { code?: string }).code === 'STALE_PROPOSAL',
-    )
-    assert.equal(
-      fixture.db.criticArtifacts.listBySegment(fixture.segmentsA[1]!.id).length,
-      before,
-    )
-  } finally {
-    fixture.db.close()
-  }
-})
-
-test('cat_submit_critic_review: happy path 双写（artifact + QA findings），身份由运行时派生', async () => {
-  const fixture = setup()
-  try {
-    const seg = fixture.segmentsA[0]!
-    const proposalId = await proposeAsCandidate(fixture, seg.id, 'sess-candidate')
-    const mutations: LinguistCatToolMutation[] = []
-    const tools = makeCriticTools(
-      fixture,
-      'sess-critic',
-      undefined,
-      (mutation) => mutations.push(mutation),
-    )
-    const snapshot = await reviewSnapshotInput(tools, proposalId)
-
-    const result = await invoke(toolByName(tools, 'cat_submit_critic_review'), {
-      ...snapshot,
-      verdict: 'issues',
-      summary: '发现两项需要人工复核的问题。',
-      findings: REVIEW_FINDINGS,
-    })
-    const dto = result.details as CriticReviewDto
-
-    // 返回形状：advisory 范围，canCommit 烧死 false
-    assert.match(dto.artifactId, /^critic_v2_[0-9a-f]{64}$/)
-    assert.equal(dto.findingIds.length, 2)
-    assert.ok(dto.findingIds.every((id) => /^cf_v2_[0-9a-f]{64}$/.test(id)))
-    assert.equal(dto.qaFindingIds.length, 2)
-    assert.ok(dto.qaFindingIds.every((id) => /^qaf_v2_[0-9a-f]{64}$/.test(id)))
-    assert.equal(dto.reviewId, dto.artifactId)
-    assert.equal(dto.verdict, 'issues')
-    assert.equal(dto.repairScope?.authority, 'advisory_finding')
-    assert.equal(dto.repairScope?.canCommit, false)
-    assert.deepEqual(dto.repairScope?.segmentIds, [seg.id])
-    assert.deepEqual(dto.repairScope?.findingIds, [...dto.findingIds].sort())
-
-    // artifact 落库：身份/哈希全部由运行时派生
-    const artifact = fixture.db.criticArtifacts.getById(dto.artifactId)
-    assert.ok(artifact)
-    assert.equal(artifact.schemaVersion, 2)
-    if (artifact.schemaVersion !== 2) assert.fail('expected review artifact v2')
-    assert.equal(artifact.subject.segmentId, seg.id)
-    assert.equal(artifact.subject.risk, 'high')
-    assert.equal(artifact.subject.candidateId, proposalId)
-    assert.equal(
-      artifact.subject.candidateHash,
-      independentCriticCandidateHash({
-        proposalId,
-        segmentId: seg.id,
-        target: `候选 ${seg.source}`,
-        revision: 0,
-      }),
-    )
-    assert.equal(artifact.subject.candidateExecutionId, 'sess-candidate')
-    assert.equal(artifact.subject.candidateProducerId, 'session:sess-candidate')
-    assert.equal(artifact.reviewer.criticId, 'session:sess-critic')
-    assert.equal(artifact.reviewer.executionId, 'sess-critic')
-    // 未注入 skill 字节 → 回退档案哈希
-    assert.equal(artifact.reviewer.profileHash, independentCriticProfileHash('linguist-critic-profile:v1'))
-
-    // QA findings 落库：CRITIC_<CATEGORY> code、severity/issueType 透传、needs_review、message=explanation
-    const qaRows = fixture.db.qaFindings.list({ segmentId: seg.id })
-    assert.equal(qaRows.length, 2)
-    assert.deepEqual(
-      qaRows.map((row) => `${row.code}:${row.severity}:${row.status}`).sort(),
-      ['CRITIC_FIDELITY:L2:open', 'CRITIC_TERMINOLOGY:L1:open'],
-    )
-    assert.deepEqual(
-      qaRows.map((row) => `${row.issueType}:${row.disposition}`).sort(),
-      ['omission:needs_review', 'terminology_soft:needs_review'],
-    )
-    assert.ok(qaRows.every((row) => row.segmentRevision === seg.revision))
-    assert.deepEqual(mutations, [{
-      kind: 'project-updated',
-      sequence: 2,
-      segmentIds: [seg.id as string],
-      proposalIds: [proposalId],
-      qaFindingIds: dto.qaFindingIds,
-    }])
-    assert.deepEqual(
-      qaRows.map((row) => row.id).sort(),
-      [...dto.qaFindingIds].sort(),
-    )
-    assert.equal(qaRows.find((row) => row.code === 'CRITIC_FIDELITY')?.message, '译文漏译了源文第二分句。')
-    assert.ok(qaRows.every((row) =>
-      fixture.db.criticArtifacts.traceByQaFindingId(row.id as string).length === 1))
-    const qaToolResult = (await invoke(toolByName(tools, 'cat_get_qa_findings'), {
-      status: 'open',
-    })).details as {
-      items: Array<{
-        id: string
-        criticReviews?: Array<{
-          reviewId: string
-          criticFindingId: string
-          proposalId: string
-          snapshotId: string
-          reviewerSessionId: string
-        }>
-      }>
-    }
-    const linked = qaToolResult.items.filter((item) => dto.qaFindingIds.includes(item.id))
-    assert.equal(linked.length, 2)
-    assert.ok(linked.every((item) => item.criticReviews?.[0]?.reviewId === dto.reviewId))
-    assert.ok(linked.every((item) => item.criticReviews?.[0]?.proposalId === proposalId))
-    assert.ok(linked.every((item) => item.criticReviews?.[0]?.snapshotId === snapshot.snapshotId))
-    assert.ok(linked.every((item) => item.criticReviews?.[0]?.reviewerSessionId === 'sess-critic'))
-
-    // 段与提案不被触碰
-    const segmentAfter = fixture.db.segments.getById(seg.id)
-    assert.equal(segmentAfter?.target, seg.target)
-    assert.equal(segmentAfter?.revision, seg.revision)
-    assert.equal(fixture.db.proposals.getById(proposalId)?.status, 'pending')
-
-    // 幂等：同一评审重提 → 同 artifactId / qaFindingIds，不产生重复行
-    const again = (
-      await invoke(toolByName(tools, 'cat_submit_critic_review'), {
-        ...snapshot,
-        verdict: 'issues',
-        summary: '发现两项需要人工复核的问题。',
-        findings: REVIEW_FINDINGS,
-      })
-    ).details as CriticReviewDto
-    assert.equal(again.artifactId, dto.artifactId)
-    assert.deepEqual(again.qaFindingIds, dto.qaFindingIds)
-    assert.equal(fixture.db.criticArtifacts.listBySegment(seg.id).length, 1)
-    assert.equal(fixture.db.qaFindings.list({ segmentId: seg.id }).length, 2)
-    assert.equal(mutations.length, 1, '幂等重提没有真实写入，不得生成伪 mutation')
-    const summary = fixture.db.runs.getRunChangeSummary('critic-review:sess-critic:call-1')
-    assert.equal(summary.changes.criticReviewsCreated, 1)
-    assert.equal(summary.changes.qaFindingsCreated, 2)
-    assert.equal(fixture.db.runs.listEvents().length, 2)
-  } finally {
-    fixture.db.close()
-  }
-})
-
-test('cat_submit_critic_review: 同会话评审自己的提案被独立性闸门拒绝', async () => {
-  const fixture = setup()
-  try {
-    const seg = fixture.segmentsA[0]!
-    const proposalId = await proposeAsCandidate(fixture, seg.id, 'sess-1')
-    const tools = makeCriticTools(fixture, 'sess-1')
-    const snapshot = await reviewSnapshotInput(tools, proposalId)
-    await assert.rejects(
-      invoke(toolByName(tools, 'cat_submit_critic_review'), {
-        ...snapshot,
-        verdict: 'issues',
-        summary: '发现问题。',
-        findings: [REVIEW_FINDINGS[0]],
-      }),
-      /Independent Critic must use a different (execution|actor) from the candidate producer\./,
-    )
-    // 拒绝即无落库
-    assert.equal(fixture.db.criticArtifacts.listBySegment(seg.id).length, 0)
-    assert.equal(fixture.db.qaFindings.list({ segmentId: seg.id }).length, 0)
-  } finally {
-    fixture.db.close()
-  }
-})
-
-test('cat_submit_critic_review: 提案不存在 / 跨项目 / snapshot hash 不匹配被拒', async () => {
-  const fixture = setup()
-  const other = setup()
-  try {
-    const seg = fixture.segmentsA[0]!
-    const tools = makeCriticTools(fixture, 'sess-critic')
-
-    // 不存在
-    try {
-      await invoke(toolByName(tools, 'cat_submit_critic_review'), {
-        snapshotId: 'psn:prp-0000000000000000',
-        snapshotHash: '0'.repeat(64),
-        verdict: 'issues',
-        summary: '发现问题。',
-        findings: [REVIEW_FINDINGS[0]],
-      })
-      assert.fail('must throw')
-    } catch (err) {
-      assert.equal((err as { code?: string }).code, 'STORE_NOT_FOUND')
-    }
-
-    // 跨项目：别的项目的提案 id 在本项目库查无此行
-    const foreignProposalId = await proposeAsCandidate(other, other.segmentsA[0]!.id, 'sess-candidate')
-    try {
-      await invoke(toolByName(tools, 'cat_submit_critic_review'), {
-        snapshotId: `psn:${foreignProposalId}`,
-        snapshotHash: '0'.repeat(64),
-        verdict: 'issues',
-        summary: '发现问题。',
-        findings: [REVIEW_FINDINGS[0]],
-      })
-      assert.fail('must throw')
-    } catch (err) {
-      assert.equal((err as { code?: string }).code, 'STORE_NOT_FOUND')
-    }
-
-    // Snapshot hash 不匹配：即使 proposalId 有效也拒绝。
-    const proposalId = await proposeAsCandidate(fixture, seg.id, 'sess-candidate')
-    const snapshot = await reviewSnapshotInput(tools, proposalId)
-    await assertThrowsCode(
-      invoke(toolByName(tools, 'cat_submit_critic_review'), {
-        ...snapshot,
-        snapshotHash: 'f'.repeat(64),
-        verdict: 'issues',
-        summary: '发现问题。',
-        findings: [REVIEW_FINDINGS[0]],
-      }),
-      'INVALID_ARGUMENT',
-    )
-  } finally {
-    fixture.db.close()
-    other.db.close()
-  }
-})
-
-test('cat_submit_critic_review: 审计专用证据与空 findings 被拒', async () => {
-  const fixture = setup()
-  try {
-    const seg = fixture.segmentsA[0]!
-    const proposalId = await proposeAsCandidate(fixture, seg.id, 'sess-candidate')
-    const tools = makeCriticTools(fixture, 'sess-critic')
-    const snapshot = await reviewSnapshotInput(tools, proposalId)
-
-    await assert.rejects(
-      invoke(toolByName(tools, 'cat_submit_critic_review'), {
-        ...snapshot,
-        verdict: 'issues',
-        summary: '发现问题。',
-        findings: [{ ...REVIEW_FINDINGS[0], evidenceRefs: ['tool_trace: call-9'] }],
-      }),
-      /must contain citable evidenceRefs, not audit-only trace\./,
-    )
-    await assertThrowsCode(
-      invoke(toolByName(tools, 'cat_submit_critic_review'), {
-        ...snapshot,
-        verdict: 'issues',
-        summary: '发现问题。',
-        findings: [],
-      }),
-      'INVALID_ARGUMENT',
-    )
-    assert.equal(fixture.db.criticArtifacts.listBySegment(seg.id).length, 0)
-  } finally {
-    fixture.db.close()
-  }
-})
-
-test('cat_submit_critic_review: profileHash 取评审 skill 字节 sha256；无 session 绑定拒写', async () => {
-  const fixture = setup()
-  try {
-    const seg = fixture.segmentsA[0]!
-    const proposalId = await proposeAsCandidate(fixture, seg.id, 'sess-candidate')
-
-    const withSkill = makeCriticTools(fixture, 'sess-critic', () => 'skill-bytes-v1')
-    const snapshot = await reviewSnapshotInput(withSkill, proposalId)
-    const dto = (
-      await invoke(toolByName(withSkill, 'cat_submit_critic_review'), {
-        ...snapshot,
-        verdict: 'issues',
-        summary: '发现问题。',
-        findings: [REVIEW_FINDINGS[0]],
-      })
-    ).details as CriticReviewDto
-    const artifact = fixture.db.criticArtifacts.getById(dto.artifactId)
-    assert.equal(artifact?.schemaVersion, 2)
-    if (artifact?.schemaVersion !== 2) assert.fail('expected review artifact v2')
-    assert.equal(artifact.reviewer.profileHash, independentCriticProfileHash('skill-bytes-v1'))
-
-    // 工厂未注入 sessionId → 评审身份无从派生，拒绝
-    const noSession = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
-    await assertThrowsCode(
-      invoke(toolByName(noSession, 'cat_submit_critic_review'), {
-        ...snapshot,
-        verdict: 'issues',
-        summary: '发现问题。',
-        findings: [REVIEW_FINDINGS[0]],
-      }),
-      'INVALID_ARGUMENT',
-    )
-  } finally {
-    fixture.db.close()
-  }
-})
-
-// ===== Phase L: consistency plan / apply =====
+// ===== Consistency plan / apply =====
 
 interface ConsistencyPlanDto {
   planId: string
@@ -2282,7 +1697,6 @@ interface ConsistencyApplyDto {
   runId: string
   proposalIds: string[]
 }
-
 /** 造一组同 source 不同 target 的段（一致性场景专用）。 */
 function seedConsistencyAsset(
   fixture: Fixture,

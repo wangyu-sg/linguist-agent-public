@@ -14,7 +14,11 @@ import { join } from 'node:path'
 import { createAsset, createProject, createSeededEntropy, type Segment } from '@linguist/cat-core'
 import { bindImportedSegments, CatFormatRegistry, FormatExportError, FormatParseError } from '../index'
 import { assertRoundTrip } from '../testing/index'
-import { PhraseMxliffAdapter } from './phrasemxliff'
+import {
+  PhraseMxliffAdapter,
+  probePhraseMasterPair,
+  serializePhraseMxliffFormatConfig,
+} from './phrasemxliff'
 import { SdlXliffAdapter } from './sdlxliff'
 import { XliffAdapter } from './xliff'
 
@@ -107,6 +111,7 @@ async function boundSegments(filename: string, imported: Awaited<ReturnType<Phra
     originalFilename: filename,
     sourceSha256: imported.asset.sourceSha256,
     segmentCount: imported.asset.segmentCount,
+    ...(imported.asset.formatConfigJson === undefined ? {} : { formatConfigJson: imported.asset.formatConfigJson }),
   })
   return { asset, segments: bindImportedSegments(imported.segments, asset.id) }
 }
@@ -212,6 +217,43 @@ describe('PhraseMxliffAdapter import（扁平 trans-unit / m:locked / m:confirme
 })
 
 describe('PhraseMxliffAdapter round-trip（assertRoundTrip harness）', () => {
+  test('split + master 按 x-key/源文/占位符绑定，编辑显示真实 Tag 且导出恢复 {n}', async () => {
+    const split = phraseBytes()
+    const master = new TextEncoder().encode(`<?xml version="1.0"?>
+<xliff version="1.2"><file><body>
+  <trans-unit id="1001"><source>获得&lt;color=#ffffff&gt;30%攻击速度&lt;/color&gt;。</source></trans-unit>
+</body></file></xliff>`)
+    const probe = await probePhraseMasterPair(split, 'split.mxliff', master, 'master.xliff')
+    expect(probe.config.matchedSegments).toBe(1)
+    expect(probe.config.unmatchedSegments).toBe(0)
+    const formatConfigJson = serializePhraseMxliffFormatConfig(probe.config)
+    const adapter = new PhraseMxliffAdapter()
+    const imported = await adapter.import({
+      bytes: split,
+      filename: 'split.mxliff',
+      sourceLocale: 'zh-CN',
+      targetLocale: 'en-US',
+      formatConfigJson,
+    })
+    expect(imported.segments[0]?.source).toBe('获得<color=#ffffff>30%攻击速度</color>。')
+    const { asset, segments } = await boundSegments('split.mxliff', imported)
+    const unchanged = await adapter.export({ originalBytes: split, asset, segments })
+    expect(Buffer.from(unchanged).equals(Buffer.from(split))).toBe(true)
+    const edited = segments.map((segment, index) => index === 0
+      ? { ...segment, target: 'Gain <color=#ffffff>30% Attack Speed</color>.' }
+      : segment)
+    const exported = await adapter.export({ originalBytes: split, asset, segments: edited })
+    expect(new TextDecoder().decode(exported)).toContain('Gain {1}30% Attack Speed{2}.')
+    const reimported = await adapter.import({
+      bytes: exported,
+      filename: 'split.mxliff',
+      sourceLocale: 'zh-CN',
+      targetLocale: 'en-US',
+      formatConfigJson,
+    })
+    expect(reimported.segments[0]?.target).toBe('Gain <color=#ffffff>30% Attack Speed</color>.')
+  })
+
   test('混合 fixture：字节稳定 + 修改子集写回 + 锁定段不动 + m: 元数据不回写', async () => {
     const report = await assertRoundTrip(new PhraseMxliffAdapter(), phraseBytes(), {
       filename: 'sample.mxliff',

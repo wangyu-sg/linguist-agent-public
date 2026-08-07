@@ -23,7 +23,6 @@ describe('Linguist session workspace', () => {
       sessionId: 'session-1',
       projectDisplayName: 'Project',
       role: 'reviewer',
-      executionPolicy: { independentReview: 'risk-based' },
       createdAt: '2026-07-29T00:00:00.000Z',
     })
 
@@ -35,7 +34,6 @@ describe('Linguist session workspace', () => {
       projectId: 'project-1',
       sessionId: 'session-1',
       role: 'reviewer',
-      executionPolicy: { independentReview: 'risk-based' },
       createdAt: '2026-07-29T00:00:00.000Z',
       projectDisplayName: 'Project',
     })
@@ -48,8 +46,7 @@ describe('Linguist session workspace', () => {
       projectId: 'project-1',
       sessionId: 'session-1',
       projectDisplayName: 'Project',
-      role: 'assistant' as const,
-      executionPolicy: { independentReview: 'off' as const },
+      role: 'general' as const,
       createdAt: '2026-07-29T00:00:00.000Z',
     }
     const cwd = ensureLinguistSessionWorkspace(configDir, input)
@@ -75,8 +72,7 @@ describe('Linguist session workspace', () => {
       projectId: '../outside',
       sessionId: 'session-1',
       projectDisplayName: 'Project',
-      role: 'assistant',
-      executionPolicy: { independentReview: 'off' },
+      role: 'general',
       createdAt: '2026-07-29T00:00:00.000Z',
     })).toThrow('projectId')
   })

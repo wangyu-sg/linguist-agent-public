@@ -9,6 +9,7 @@ import type {
   LinguistProposalInfo,
   LinguistQaFindingInfo,
   LinguistSegmentInfo,
+  LinguistTagProfileInfo,
   LinguistWorkflowStage,
 } from '@proma/shared'
 import {
@@ -75,11 +76,13 @@ export function SegmentEditor({
   projectId,
   archived,
   workflowStage,
+  tagProfile,
   onProjectSummaryInvalidated,
 }: {
   projectId: string
   archived: boolean
   workflowStage: LinguistWorkflowStage
+  tagProfile?: LinguistTagProfileInfo
   onProjectSummaryInvalidated?: () => void
 }): React.ReactElement {
   const [workbenchUiState, setWorkbenchUiState] = useAtom(
@@ -1091,6 +1094,7 @@ export function SegmentEditor({
           focusIndex={pendingFocusIndex}
           archived={archived}
           workflowStage={workflowStage}
+          tagProfile={tagProfile}
           onActiveSegmentChange={setActiveSegmentId}
           onOpenDetails={(segmentId, assetId) =>
             openSegmentDock(segmentId, assetId, 'context')

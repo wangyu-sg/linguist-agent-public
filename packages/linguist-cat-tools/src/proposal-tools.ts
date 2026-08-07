@@ -1,15 +1,9 @@
 import {
   analyzeBatchConsistency,
-  createCriticReviewArtifact,
   createProposal,
   InvalidStateTransitionError,
-  independentCriticCandidateHash,
-  independentCriticProfileHash,
   normalizeQaProfile,
-  QA_FINDING_SEVERITIES,
-  QA_ISSUE_TYPES,
   selectedConsistencyProposalInputs,
-  StaleProposalError,
   type LinguistProject,
   type SegmentId,
 } from '@linguist/cat-core'
@@ -31,7 +25,6 @@ import {
   type CatConsistencyPlanResult,
   type CatCreateConsistencyProposalsResult,
   type CatProposeTranslationsResult,
-  type CatSubmitCriticReviewResult,
   type LinguistConsistencyWorkerResult,
 } from './types'
 import {
@@ -41,14 +34,12 @@ import {
 } from './tool-runtime'
 import {
   buildProposalReviewSnapshot,
-  proposalIdFromSnapshotId,
 } from './proposal-snapshot'
 
-const CRITIC_PROFILE_FALLBACK = 'linguist-critic-profile:v1'
 const EMPTY_CONSISTENCY_NOTE =
   'No open consistency findings: the tracked consistency rules (repeated sources, terminology, punctuation, critic consistency/voice/terminology) found nothing to repair.'
 
-/** 提案、独立 Critic 与批次一致性修复建议。 */
+/** 提案与批次一致性修复建议。 */
 export function createProposalTools(runtime: CatToolRuntime) {
   const {
     deps,
@@ -252,272 +243,6 @@ export function createProposalTools(runtime: CatToolRuntime) {
     },
   })
 
-  const submitCriticReviewTool = defineTool({
-    name: 'cat_submit_critic_review',
-    label: 'CAT submit critic review',
-    description:
-      'Submit pass, issues, or abstain for an exact proposal snapshot in the bound project. The snapshot hash and segment revision are ' +
-      'revalidated before writing. Pass and abstain persist a review without inventing QA findings; issues persist ' +
-      'advisory findings only. This never changes segment text, proposal status, or exports.',
-    promptSnippet: 'Record an advisory independent review of a candidate proposal',
-    promptGuidelines: [
-      'Every finding needs citable evidence (segment ids, TM/TB entries, project documents); tool traces and agent events are audit data, not evidence.',
-      'Never claim a review fixes anything: repairs are ordinary proposals and require a successful cat_accept_proposals call.',
-    ],
-    parameters: Type.Object({
-      snapshotId: Type.String({ minLength: 1 }),
-      snapshotHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-      verdict: Type.Union([
-        Type.Literal('pass'),
-        Type.Literal('issues'),
-        Type.Literal('abstain'),
-      ]),
-      summary: Type.Optional(Type.String({ minLength: 1 })),
-      reason: Type.Optional(Type.String({ minLength: 1 })),
-      findings: Type.Optional(Type.Array(
-        Type.Object({
-          category: Type.Union([
-            Type.Literal('fidelity'),
-            Type.Literal('naturalness'),
-            Type.Literal('terminology'),
-            Type.Literal('voice'),
-            Type.Literal('consistency'),
-          ]),
-          severity: Type.Union(QA_FINDING_SEVERITIES.map((severity) => Type.Literal(severity))),
-          issueType: Type.Union(QA_ISSUE_TYPES.map((issueType) => Type.Literal(issueType))),
-          evidenceRefs: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-          explanation: Type.String({ minLength: 1 }),
-          suggestedRepair: Type.Optional(Type.String({ minLength: 1 })),
-        }),
-        { maxItems: 20 },
-      )),
-    }),
-    async execute(toolCallId, params) {
-      const findings = params.findings ?? []
-      if (params.verdict === 'issues' && (findings.length < 1 || findings.length > 20)) {
-        throw new LinguistCatInvalidArgumentError('findings', 'issues requires 1-20 items')
-      }
-      if (params.verdict === 'issues' && params.summary?.trim() === '') {
-        throw new LinguistCatInvalidArgumentError('summary', 'issues requires a non-empty summary')
-      }
-      if (params.verdict === 'issues' && params.summary === undefined) {
-        throw new LinguistCatInvalidArgumentError('summary', 'issues requires a summary')
-      }
-      if (params.verdict === 'abstain' && params.reason?.trim() === '') {
-        throw new LinguistCatInvalidArgumentError('reason', 'abstain requires a non-empty reason')
-      }
-      if (params.verdict === 'abstain' && params.reason === undefined) {
-        throw new LinguistCatInvalidArgumentError('reason', 'abstain requires a reason')
-      }
-      if (params.verdict !== 'issues' && findings.length > 0) {
-        throw new LinguistCatInvalidArgumentError('findings', `${params.verdict} requires an empty array`)
-      }
-      const { db } = resolveBoundProject('cat_submit_critic_review', toolCallId)
-      if (deps.sessionId === undefined) {
-        throw new LinguistCatInvalidArgumentError(
-          'sessionId',
-          'critic identity is derived from the session binding, which is missing',
-        )
-      }
-      const proposalId = proposalIdFromSnapshotId(params.snapshotId)
-      if (proposalId === undefined) {
-        throw new LinguistCatInvalidArgumentError(
-          'snapshotId',
-          'expected a snapshot id returned by cat_get_proposal_snapshot',
-        )
-      }
-      const baseGeneration = proposalProvenance(toolCallId)
-      const runId = deps.generationProvenance === undefined
-        ? `critic-review:${deps.sessionId}:${toolCallId}`
-        : baseGeneration.runId
-      const generation = { ...baseGeneration, runId }
-      const mutation = db.runs.executeMutation({
-        identity: {
-          runId,
-          toolCallId,
-          idempotencyKey: `cat_submit_critic_review:${deps.sessionId}:${toolCallId}`,
-        },
-        operation: 'cat_submit_critic_review',
-        payload: params,
-        mutate: () => {
-          const proposal = db.proposals.getById(proposalId)
-          if (proposal === undefined) throw new StoreNotFoundError('proposal', proposalId)
-          const snapshot = buildProposalReviewSnapshot(db, proposal)
-          if (snapshot.status === 'stale') {
-            throw new StaleProposalError(
-              proposal.id,
-              proposal.segmentId,
-              proposal.baseRevision,
-              snapshot.currentRevision,
-            )
-          }
-          if (snapshot.status !== 'pending') {
-            throw new LinguistCatInvalidArgumentError(
-              'snapshotId',
-              `proposal is already ${snapshot.status}`,
-            )
-          }
-          if (
-            snapshot.snapshotId !== params.snapshotId ||
-            snapshot.snapshotHash !== params.snapshotHash
-          ) {
-            throw new LinguistCatInvalidArgumentError(
-              'snapshotHash',
-              'snapshot is stale or does not match the current proposal snapshot',
-            )
-          }
-          const profileHash = independentCriticProfileHash(
-            deps.criticSkillBytes?.() ?? CRITIC_PROFILE_FALLBACK,
-          )
-          const artifact = createCriticReviewArtifact({
-            schemaVersion: 2,
-            snapshot: {
-              snapshotId: snapshot.snapshotId,
-              snapshotHash: snapshot.snapshotHash,
-              proposalId,
-            },
-            subject: {
-              segmentId: snapshot.segmentId,
-              risk: 'high',
-              candidateId: proposal.id as string,
-              candidateHash: independentCriticCandidateHash({
-                proposalId: proposal.id as string,
-                segmentId: proposal.segmentId as string,
-                target: proposal.proposedTarget,
-                revision: proposal.baseRevision,
-              }),
-              candidateExecutionId:
-                snapshot.producer.sessionId ?? `proposal:${proposal.id as string}`,
-              candidateProducerId:
-                snapshot.producer.sessionId !== undefined
-                  ? `session:${snapshot.producer.sessionId}`
-                  : `proposal:${proposal.id as string}`,
-            },
-            reviewer: {
-              criticId: `session:${deps.sessionId}`,
-              executionId: deps.sessionId,
-              profileHash,
-              sessionId: deps.sessionId,
-              ...(generation.modelId === undefined ? {} : { modelId: generation.modelId }),
-              promptVersion: profileHash,
-              generation,
-            },
-            verdict: params.verdict,
-            ...('summary' in params && params.summary !== undefined
-              ? { summary: params.summary }
-              : {}),
-            ...('reason' in params ? { reason: params.reason } : {}),
-            findings,
-          } as Parameters<typeof createCriticReviewArtifact>[0])
-          const qaInputs = artifact.findings.map((finding) => ({
-            segmentId: snapshot.segmentId as SegmentId,
-            code: `CRITIC_${finding.category.toUpperCase()}`,
-            severity: finding.severity,
-            // Critic 只产出待复核意见，不改变 Segment 或 Proposal 状态。
-            issueType: finding.issueType,
-            disposition: 'needs_review' as const,
-            message: finding.explanation,
-            ruleVersion: 'critic-review-v2',
-            evidenceHash: finding.findingId,
-          }))
-          const alreadyPersisted = db.criticArtifacts.getById(artifact.artifactId) !== undefined
-          const beforeQa = new Map(
-            db.qaFindings.list().map((finding) => [finding.id as string, finding]),
-          )
-          const qaFindings = alreadyPersisted
-            ? db.criticArtifacts
-                .qaFindingIdsByArtifact(artifact.artifactId)
-                .map((findingId) => db.qaFindings.getById(findingId))
-                .filter((finding) => finding !== undefined)
-            : db.catDb.transaction(`submit critic review ${artifact.artifactId}`, () => {
-                db.criticArtifacts.insert(artifact)
-                const inserted = db.qaFindings.insertOpen(qaInputs, {
-                  runId,
-                  ...(deps.now === undefined ? {} : { observedAt: deps.now() }),
-                })
-                artifact.findings.forEach((finding, index) => {
-                  db.criticArtifacts.linkFindingToQa(
-                    artifact.artifactId,
-                    finding.findingId,
-                    inserted[index]!.id as string,
-                  )
-                })
-                return inserted
-              })
-          const dto: CatSubmitCriticReviewResult = {
-            reviewId: artifact.artifactId,
-            artifactId: artifact.artifactId,
-            verdict: artifact.verdict,
-            findingIds: artifact.findings.map((finding) => finding.findingId),
-            qaFindingIds: qaFindings.map((finding) => finding.id as string).sort(),
-            ...(artifact.findings.length === 0
-              ? {}
-              : {
-                  repairScope: {
-                    authority: 'advisory_finding' as const,
-                    canCommit: false as const,
-                    segmentIds: [snapshot.segmentId],
-                    findingIds: artifact.findings.map((finding) => finding.findingId).sort(),
-                  },
-                }),
-          }
-          const qaChanges = qaFindings.flatMap((finding) => {
-            const previous = beforeQa.get(finding.id as string)
-            if (previous !== undefined && JSON.stringify(previous) === JSON.stringify(finding)) {
-              return []
-            }
-            return [{
-              entityType: 'qa-finding' as const,
-              entityId: finding.id as string,
-              changeKind: previous === undefined ? 'created' as const : 'updated' as const,
-              segmentId: finding.segmentId as string,
-              expectedRevision: finding.segmentRevision,
-              ...(previous === undefined ? {} : { before: previous }),
-              after: finding,
-            }]
-          })
-          return {
-            result: dto,
-            changes: alreadyPersisted
-              ? []
-              : [{
-                  entityType: 'critic-artifact' as const,
-                  entityId: artifact.artifactId,
-                  changeKind: 'created' as const,
-                  segmentId: snapshot.segmentId as string,
-                  expectedRevision: snapshot.baseRevision,
-                  after: artifact,
-                }, ...qaChanges],
-            ...(alreadyPersisted
-              ? {}
-              : {
-                  event: {
-                    kind: 'project-updated' as const,
-                    segmentIds: [snapshot.segmentId as string],
-                    proposalIds: [proposalId],
-                    qaFindingIds: dto.qaFindingIds,
-                  },
-                }),
-          }
-        },
-      })
-      if (!mutation.replayed && mutation.event !== undefined) {
-        notifyMutation({
-          kind: 'project-updated',
-          sequence: mutation.event.sequence,
-          segmentIds: mutation.event.segmentIds,
-          proposalIds: mutation.event.proposalIds,
-          qaFindingIds: mutation.event.qaFindingIds,
-        })
-      }
-      const segmentId = db.criticArtifacts.getById(mutation.result.artifactId)?.subject.segmentId
-      return toolResult(
-        mutation.result,
-        deps.resultProjectId,
-        segmentId === undefined ? undefined : [segmentId as string],
-      )
-    },
-  })
 
   const readConsistencyPlan = async (
     project: LinguistProject,
@@ -794,7 +519,6 @@ return [
     getProposalSnapshotTool,
     proposeTranslationsTool,
     acceptProposalsTool,
-    submitCriticReviewTool,
     planConsistencyRepairsTool,
     createConsistencyProposalsTool,
   ] as const

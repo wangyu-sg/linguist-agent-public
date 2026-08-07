@@ -9,11 +9,9 @@ import {
   Pencil,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAtomValue, useSetAtom } from 'jotai'
 import type {
   LinguistIpcResult,
   LinguistProposalDiff,
@@ -21,14 +19,9 @@ import type {
   LinguistWorkflowStage,
 } from '@proma/shared'
 import { cn } from '@/lib/utils'
-import { agentChannelIdAtom, agentModelIdAtom, agentSessionsAtom } from '@/atoms/agent-atoms'
-import { useOpenSession } from '@/hooks/useOpenSession'
 import { describeLinguistIpcError } from './project-utils'
 import {
   PROPOSAL_STATUS_LABELS,
-  buildIndependentAuditRequestMessage,
-  buildReviewRequestMessage,
-  buildReviewSessionTitle,
   bulkProposalReviewConfirmation,
   groupProposalRuns,
   isProposalConflictCode,
@@ -111,12 +104,6 @@ export function ProposalInbox({
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set())
   const [mutating, setMutating] = React.useState<Record<string, Mutation | undefined>>({})
   const [bulkMutating, setBulkMutating] = React.useState<BulkMutation | undefined>()
-  const [reviewing, setReviewing] = React.useState<Record<string, boolean | undefined>>({})
-  const [auditing, setAuditing] = React.useState(false)
-  const openSession = useOpenSession()
-  const setAgentSessions = useSetAtom(agentSessionsAtom)
-  const agentChannelId = useAtomValue(agentChannelIdAtom)
-  const agentModelId = useAtomValue(agentModelIdAtom)
 
   const load = React.useCallback(async (): Promise<void> => {
     setState({ status: 'loading' })
@@ -210,87 +197,6 @@ export function ProposalInbox({
     [load, onChanged],
   )
 
-  const requestReview = React.useCallback(
-    async (diff: LinguistProposalDiff): Promise<void> => {
-      const proposalId = diff.proposal.id
-      if (reviewing[proposalId]) return
-      if (!agentChannelId) {
-        toast.error('无法发起独立评审', {
-          description: '尚未配置模型渠道，请先在设置 → 模型配置中完成配置。',
-        })
-        return
-      }
-      setReviewing((current) => ({ ...current, [proposalId]: true }))
-      try {
-        const created = await window.electronAPI.linguistSessionsCreateForProject({
-          projectId,
-          role: 'reviewer',
-          title: buildReviewSessionTitle(proposalId),
-        })
-        if (!created.ok) {
-          toast.error('创建评审会话失败', { description: describeLinguistIpcError(created.error) })
-          return
-        }
-        const session = created.data
-        setAgentSessions((previous) => [session, ...previous])
-        window.electronAPI
-          .sendAgentMessage({
-            sessionId: session.id,
-            userMessage: buildReviewRequestMessage(proposalId, diff.proposal.segmentId),
-            channelId: agentChannelId,
-            ...(agentModelId ? { modelId: agentModelId } : {}),
-          })
-          .catch(() => {
-            toast.error('评审请求发送失败', { description: '与主进程通信异常（INTERNAL）' })
-          })
-        openSession('agent', session.id, session.title)
-      } catch {
-        toast.error('创建评审会话失败', { description: '与主进程通信异常（INTERNAL）' })
-      } finally {
-        setReviewing((current) => ({ ...current, [proposalId]: undefined }))
-      }
-    },
-    [agentChannelId, agentModelId, openSession, projectId, reviewing, setAgentSessions],
-  )
-
-  const requestIndependentAudit = React.useCallback(async (): Promise<void> => {
-    if (auditing) return
-    if (!agentChannelId) {
-      toast.error('无法发起独立盲审', {
-        description: '尚未配置模型渠道，请先在设置 → 模型配置中完成配置。',
-      })
-      return
-    }
-    setAuditing(true)
-    try {
-      const created = await window.electronAPI.linguistSessionsCreateForProject({
-        projectId,
-        role: 'auditor',
-        title: `项目独立盲审 ${new Date().toLocaleDateString()}`,
-      })
-      if (!created.ok) {
-        toast.error('创建盲审会话失败', { description: describeLinguistIpcError(created.error) })
-        return
-      }
-      const session = created.data
-      setAgentSessions((previous) => [session, ...previous])
-      window.electronAPI
-        .sendAgentMessage({
-          sessionId: session.id,
-          userMessage: buildIndependentAuditRequestMessage(),
-          channelId: agentChannelId,
-          ...(agentModelId ? { modelId: agentModelId } : {}),
-        })
-        .catch(() => {
-          toast.error('盲审请求发送失败', { description: '与主进程通信异常（INTERNAL）' })
-        })
-      openSession('agent', session.id, session.title)
-    } catch {
-      toast.error('创建盲审会话失败', { description: '与主进程通信异常（INTERNAL）' })
-    } finally {
-      setAuditing(false)
-    }
-  }, [agentChannelId, agentModelId, auditing, openSession, projectId, setAgentSessions])
 
   const runBulkMutation = React.useCallback(async (operation: BulkMutation): Promise<void> => {
     if (bulkMutating !== undefined || selectedDiffs.length === 0) return
@@ -418,7 +324,6 @@ export function ProposalInbox({
                   archived={archived}
                   selected={selectedIds.has(diff.proposal.id)}
                   mutation={mutating[diff.proposal.id]}
-                  reviewInFlight={reviewing[diff.proposal.id] === true}
                   onToggleSelection={(selected) => {
                     setSelectedIds((current) => {
                       const next = new Set(current)
@@ -427,7 +332,6 @@ export function ProposalInbox({
                       return next
                     })
                   }}
-                  onRequestReview={() => void requestReview(diff)}
                   onAccept={() =>
                     void finish(diff.proposal.id, 'accept', () =>
                       window.electronAPI.linguistProposalsAccept({
@@ -493,8 +397,8 @@ export function ProposalInbox({
         </div>
       )}
       <div className="rounded-xl bg-primary/[0.055] px-3 py-2 text-[12px] leading-5 text-foreground/60">
-        新建会话只会获得干净的对话上下文；项目中的 TM、术语、Context、提案与 QA
-        历史仍然保留。独立盲审会由系统隐藏 pending 提案和既有 QA 结论。
+        提案是当前最佳修改的可见载体。新建会话只会获得干净的对话上下文；
+        项目中的 TM、术语、Context、提案与 QA 历史仍然保留。
       </div>
       {coverage !== undefined && <ProposalCoverageBanner coverage={coverage} />}
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -519,12 +423,6 @@ export function ProposalInbox({
           <span className="text-[11px] text-foreground/40">当前页 {pageSummary}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ActionButton
-            icon={auditing ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
-            label="新建独立盲审"
-            disabled={archived || auditing}
-            onClick={() => void requestIndependentAudit()}
-          />
           <button
             type="button"
             aria-label="刷新提案历史"
@@ -584,9 +482,7 @@ function ProposalCard({
   archived,
   selected,
   mutation,
-  reviewInFlight,
   onToggleSelection,
-  onRequestReview,
   onAccept,
   onReject,
   onEditAccept,
@@ -596,9 +492,7 @@ function ProposalCard({
   archived: boolean
   selected: boolean
   mutation?: Mutation
-  reviewInFlight: boolean
   onToggleSelection: (selected: boolean) => void
-  onRequestReview: () => void
   onAccept: () => void
   onReject: () => void
   onEditAccept: (editedTarget: string) => void
@@ -749,13 +643,6 @@ function ProposalCard({
         </div>
       ) : (
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <ActionButton
-            icon={reviewInFlight ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
-            label="独立评审"
-            disabled={archived || reviewInFlight}
-            title="创建只读评审会话；只提交 Finding，不改写提案"
-            onClick={onRequestReview}
-          />
           {pending ? (
             <>
               <ActionButton

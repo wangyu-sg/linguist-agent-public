@@ -276,7 +276,6 @@ export function LocalizationProjectWorkbench({
         <ProjectAgentRail
           projectId={currentProject.id}
           projectName={currentProject.name}
-          executionPolicy={currentProject.executionPolicy}
           assets={summaryState.status === 'ready' ? summaryState.summary.assets : []}
         />
       )}
@@ -308,6 +307,7 @@ export function LocalizationProjectWorkbench({
             projectId={currentProject.id}
             archived={currentProject.archivedAt !== undefined}
             workflowStage={currentProject.workflowStage ?? 'translation'}
+            tagProfile={currentProject.tagProfile}
             onProjectSummaryInvalidated={invalidateSummary}
           />
         </div>

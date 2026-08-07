@@ -29,6 +29,9 @@ import type {
   Segment,
   SegmentStatus,
   TagToken,
+  SaveTagProfileCandidateInput,
+  TagCandidateValidationResult,
+  UnknownTagPatternResult,
 } from '@linguist/cat-core'
 import type {
   ContextDocKind,
@@ -38,7 +41,6 @@ import type {
   TermEntryMatch,
   TmUnit,
   TmUnitMatch,
-  TranslationJobStatus,
 } from '@linguist/cat-store'
 import type { LinguistCatToolError } from './errors'
 
@@ -47,7 +49,10 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_project_summary',
   'cat_list_assets',
   'cat_get_segments',
+  'cat_import_resources',
   'cat_import_asset',
+  'cat_scan_unknown_tag_patterns',
+  'cat_save_tag_profile_candidate',
   'cat_export_asset',
   'cat_get_translation_context',
   'cat_get_proposal_snapshot',
@@ -57,13 +62,10 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_accept_proposals',
   'cat_run_qa',
   'cat_get_qa_findings',
-  'cat_submit_critic_review',
   'cat_plan_consistency_repairs',
   'cat_create_consistency_proposals',
   'cat_search_sentence_patterns',
   'cat_read_context_doc',
-  'cat_begin_translation_scope',
-  'cat_finalize_translation_scope',
 ] as const
 
 export type LinguistCatToolName = (typeof LINGUIST_CAT_TOOL_NAMES)[number]
@@ -148,18 +150,6 @@ export interface LinguistCatToolsDeps {
   sessionId?: string
   /** Current-turn host provenance; resolved locally per tool call. */
   generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance
-  /**
-   * independent-audit exposes evidence reads only. It intentionally omits
-   * existing QA conclusions, Proposal candidates and every write tool.
-   */
-  sessionMode?: 'standard' | 'independent-audit'
-  /**
-   * Reviewer skill bytes for the critic profileHash (PB-083). Called per
-   * cat_submit_critic_review invocation; returning undefined makes the tool
-   * fall back to hashing the fixed profile string
-   * 'linguist-critic-profile:v1' (the model never supplies identity).
-   */
-  criticSkillBytes?: () => string | Uint8Array | undefined
   /** Electron injects the packaged node:worker_threads QA entry. */
   qaWorker?: LinguistQaWorker
   /** Electron injects the same packaged worker for full-project consistency analysis. */
@@ -170,11 +160,29 @@ export interface LinguistCatToolsDeps {
     resourceKind: LinguistIntakeResourceKind,
     xlsxMapping?: LinguistIntakeXlsxMapping,
   ) => Promise<LinguistIntakeImportResult>
+  /** 导入文件或目录中的多个资源；路径权限沿用 Proma Session。 */
+  importResources?: (input: LinguistImportResourcesInput) => Promise<LinguistImportResourcesResult>
   /** 把已绑定项目的批次保存为新的本地文件；宿主校验路径与会话 authority。 */
   exportAsset?: (
     assetId: string,
     destinationPath: string,
+    mode: 'final' | 'draft',
+    overwrite: boolean,
   ) => Promise<LinguistExportAssetResult>
+  /** 当前绑定项目的确定性未知 Tag 形状扫描。 */
+  scanUnknownTagPatterns?: (
+    assetIds?: readonly string[],
+    sampleLimit?: number,
+  ) => UnknownTagPatternResult[]
+  /** 验证并持久化 Tag Profile 候选；明确要求时可紧接激活。 */
+  saveTagProfileCandidate?: (
+    input: SaveTagProfileCandidateInput,
+    activate: boolean,
+  ) => {
+    candidateId: string
+    status: 'candidate' | 'active'
+    validation: TagCandidateValidationResult
+  }
 }
 
 export interface LinguistExportAssetResult {
@@ -183,9 +191,38 @@ export interface LinguistExportAssetResult {
   sizeBytes: number
   verifiedAt: string
   verifiedSegments: number
+  mode: 'final' | 'draft'
 }
 
 export type LinguistIntakeResourceKind = 'batch' | 'tm' | 'terms' | 'context'
+export type LinguistImportResourceKind = 'auto' | 'batch' | 'tm' | 'tb' | 'context'
+
+export interface LinguistImportResourcesInput {
+  paths: string[]
+  recursive: boolean
+  kind: LinguistImportResourceKind
+  dryRun: boolean
+  xlsxMapping?: LinguistIntakeXlsxMapping
+}
+
+export interface LinguistImportResourceItem {
+  filename: string
+  status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'supported'
+  resourceKind?: LinguistIntakeResourceKind
+  resourceId?: string
+  message?: string
+}
+
+export interface LinguistImportResourcesResult {
+  found: number
+  supported: number
+  imported: number
+  skippedDuplicate: number
+  needsInput: number
+  unsupported: number
+  failed: number
+  items: LinguistImportResourceItem[]
+}
 
 export interface LinguistIntakeXlsxMapping {
   sheetName: string
@@ -441,22 +478,6 @@ export interface CatProposeTranslationsResult {
   proposalIds: string[]
 }
 
-/** Result of cat_submit_critic_review (PB-083): advisory artifact + finding ids only. */
-export interface CatSubmitCriticReviewResult {
-  reviewId: string
-  artifactId: string
-  verdict: 'pass' | 'issues' | 'abstain'
-  findingIds: string[]
-  qaFindingIds: string[]
-  /** Advisory scope only — canCommit is burned to false; repairs go through proposals. */
-  repairScope?: {
-    authority: 'advisory_finding'
-    canCommit: false
-    segmentIds: string[]
-    findingIds: string[]
-  }
-}
-
 /** PB-096：cat_run_qa 结果按契约五档 severity 与四值 disposition 计数。 */
 export interface CatRunQaResult {
   total: number
@@ -537,43 +558,4 @@ export interface CatCreateConsistencyProposalsResult {
   planId: string
   runId: string
   proposalIds: string[]
-}
-
-/**
- * LA-TRANS-001 覆盖等式计数：requested = proposalCreated + blocked +
- * skipped + failed + pending。全部由服务端按 DB 真值推导（proposalCreated
- * = 该段存在 pending Proposal；failed = 未解释的锁定/过期/缺失段），
- * 模型自报完成度不参与。
- */
-export interface CatTranslationScopeCoverage {
-  requested: number
-  proposalCreated: number
-  skipped: number
-  blocked: number
-  failed: number
-  pending: number
-}
-
-/** cat_begin_translation_scope：范围冻结回执（job 已快照每段 baseRevision）。 */
-export interface CatBeginTranslationScopeResult {
-  scopeJobId: string
-  runId: string
-  status: TranslationJobStatus
-  requested: number
-  /** 冻结范围身份哈希：segmentIds + baseRevisions 的 canonical SHA-256（与 state capsule scope.digest 同源）。 */
-  scopeDigest: string
-  /** true = 同 toolCallId 幂等重放（身份与冻结范围一致）。 */
-  replayed: boolean
-}
-
-/** cat_finalize_translation_scope：全部解释后落库 completed；重放按 job 行重建同一计数。 */
-export interface CatFinalizeTranslationScopeResult {
-  scopeJobId: string
-  runId: string
-  status: 'completed'
-  /** true = 幂等重放（首次 finalize 已落库，本次未产生新写入）。 */
-  replayed: boolean
-  /** 与 begin 回执一致的冻结范围身份哈希；按持久化 job 行推导，重放逐字节一致。 */
-  scopeDigest: string
-  coverage: CatTranslationScopeCoverage
 }

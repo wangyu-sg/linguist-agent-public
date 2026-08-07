@@ -1,16 +1,13 @@
 # TODO
 
-更新时间：2026-08-06
+更新时间：2026-08-08
 
-> 完整状态以 [linguist-fusion-queue.json](docs/roadmap/linguist-fusion-queue.json) 为准；这里只列未完成工作。
+> 简化方案的代码实现已经完成；这里只列不能由本轮自动化伪造的真实使用与人工证据。
 
-- [ ] LA-SYNC-007：修复并重跑 G0 packaged mode-roundtrip；完成人工 Native Open/Save 与真实 IME，保持 `coverageStatus=partial` 直到证据齐全。
-- [ ] LA-HOST-002：真实机器 Companion Chat roundtrip。
-- [ ] LA-ALPHA-000：在上述 Host/Sync 人工证据完成后裁决个人 Alpha 入口。
-- [ ] LA-EVAL-001：同模型 Web Chat / 旧 LA / 新 LA 对照。
-- [ ] LA-EVAL-003：真实 Provider 与代表性 CAT 格式 round-trip。
-- [ ] LA-EVAL-004：14 天个人日用、VoiceOver、键盘、IME、Native dialog 与窄窗交互。
-- [ ] LA-DOCS-001：Alpha Gate 后收口面向产品的最终文案；本轮只同步当前事实。
-- [ ] LA-PHRASE-001：仅在出现真实 split-MXLIFF 交付样本后重开。
+- [ ] VALID-001：使用同一模型和 reasoning，对同一真实语言任务比较 Web Chat、旧 LA 和当前 LA。
+- [ ] VALID-002：使用真实 Provider 和代表性格式，由四岗位完成翻译 → 全量双语审校 → 目标语校对 → final 交付。
+- [ ] VALID-003：从本轮可用构建开始累计 14 个真实日用日，记录阻断问题和数据完整性结果。
+- [ ] 真机人工：IME composition、Native Open/Save、Companion Chat round-trip、VoiceOver、keyboard-only、窄窗与拖拽/resize。
+- [ ] 取得上述证据后，再裁决个人 Alpha 资格。
 
-不做：公众发布、签名、公证、公开更新渠道；用自动化冒充人工证据；把私有客户语料或扫描明细提交入仓。
+不做：公众发布、签名、公证、公开更新渠道；用 Fake Model 或自动化冒充翻译质量/人工证据；把客户正文、文件名、绝对路径或扫描明细提交入仓。

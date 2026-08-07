@@ -81,7 +81,6 @@ test('空白 Linguist 会话复制到健康活跃项目，并继承配置但清�
     sourceLocale: 'en',
     targetLocale: 'ja',
   })
-  service.setExecutionPolicy(targetProject.id, { independentReview: 'risk-based' })
 
   const source = binding.createLinguistProjectChatSession(service, {
     projectId: sourceProject.id,
@@ -116,8 +115,7 @@ test('空白 Linguist 会话复制到健康活跃项目，并继承配置但清�
   assert.equal(copied.title, '术语讨论（副本）')
   assert.equal(copied.linguistProjectId, targetProject.id)
   assert.equal(copied.linguistProjectName, '目标项目')
-  assert.equal(copied.linguistSessionRole, 'reviewer')
-  assert.deepEqual(copied.linguistExecutionPolicy, { independentReview: 'risk-based' })
+  assert.equal(copied.linguistRole, 'reviewer')
   assert.equal(copied.agentRuntime, 'pi')
   assert.equal(copied.codexFastMode, true)
   assert.equal(copied.openAIThinkingLevel, 'high')
@@ -202,7 +200,6 @@ test('已完成会话只传最新成功主线 assistant 给原生 fork，并使�
     sourceLocale: 'en',
     targetLocale: 'fr',
   })
-  service.setExecutionPolicy(targetProject.id, { independentReview: 'off' })
   const source = sessions.createAgentSession(
     '完整历史',
     'channel-id',
@@ -212,8 +209,7 @@ test('已完成会话只传最新成功主线 assistant 给原生 fork，并使�
     {
       linguistProjectId: sourceProject.id,
       linguistProjectName: sourceProject.name,
-      linguistStrategy: 'best',
-      linguistSessionRole: 'auditor',
+      linguistRole: 'proofreader',
     },
   )
   sessions.updateAgentSessionMeta(source.id, { sdkSessionId: 'sdk-source' })
@@ -264,8 +260,7 @@ test('已完成会话只传最新成功主线 assistant 给原生 fork，并使�
   assert.equal(observed?.options.inheritSessionConfig, true)
   assert.equal(observed?.options.requirePortableArtifacts, true)
   assert.equal(observed?.options.linguistBinding.linguistProjectId, targetProject.id)
-  // 目标 binding 生效：源会话的 legacy linguistStrategy（'best'）不得泄漏进副本
-  assert.deepEqual(observed?.options.linguistBinding.linguistExecutionPolicy, { independentReview: 'off' })
+  assert.equal(observed?.options.linguistBinding.linguistRole, 'proofreader')
   assert.equal(result.linguistProjectId, targetProject.id)
   service.closeAll()
 })
@@ -367,7 +362,7 @@ test('缺失源项目只要历史 artifact 可读仍可复制', async () => {
     {
       linguistProjectId: sourceProject.id,
       linguistProjectName: sourceProject.name,
-      linguistStrategy: 'balanced',
+      linguistRole: 'translator',
     },
   )
   sessions.updateAgentSessionMeta(source.id, { sdkSessionId: 'sdk-missing-source' })
@@ -429,6 +424,7 @@ test('原生分叉失败返回稳定阻断原因且不留下副本', async () =>
     {
       linguistProjectId: sourceProject.id,
       linguistProjectName: sourceProject.name,
+      linguistRole: 'general',
     },
   )
   sessions.updateAgentSessionMeta(source.id, { sdkSessionId: 'sdk-native-failure' })
@@ -485,6 +481,7 @@ test('目标在异步分叉期间归档时回滚已创建副本', async () => {
     {
       linguistProjectId: sourceProject.id,
       linguistProjectName: sourceProject.name,
+      linguistRole: 'general',
     },
   )
   sessions.updateAgentSessionMeta(source.id, { sdkSessionId: 'sdk-target-race' })

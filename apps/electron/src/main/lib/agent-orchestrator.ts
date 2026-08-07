@@ -71,13 +71,11 @@ import { injectBuiltinMcpServers } from './builtin-mcp/registry'
 import { injectChromeDevtoolsMcpServer } from './builtin-mcp/chrome-devtools'
 import { isBuiltinMcpUserEnabled } from './builtin-mcp/settings'
 import { buildPiBuiltinTools } from './adapters/pi-builtin-tools'
-import { checkLinguistSessionSendBlock } from './linguist/session-binding'
 import { getLinguistProjectService } from './linguist/project-service'
 import {
   buildLinguistTurnContextBlock,
   validateLinguistTurnContextForAgentTurn,
 } from './linguist/turn-context-validator'
-import { resolveLinguistSessionSkillPaths } from './linguist/project-skill'
 import { buildLinguistProjectAssetsPromptWithStatus } from './linguist/project-assets-prompt'
 import { resolveLinguistSessionCatTools } from './linguist/session-cat-tools'
 import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
@@ -101,7 +99,7 @@ import { getAgentSdkMaxOutputTokens } from './agent-sdk-output-limits'
 import { resolvePiThinkingLevel } from './agent-thinking-level'
 import { resolvePiReasoningCapability } from './adapters/pi-model-registry'
 import { generateCodexTitle } from './adapters/pi-codex-title-generator'
-import { createFallbackTitle, sanitizeGeneratedTitle, TITLE_PROMPT } from './title-generation'
+import { buildTitlePrompt, createFallbackTitle, sanitizeGeneratedTitle } from './title-generation'
 
 // ===== 类型定义 =====
 
@@ -638,7 +636,8 @@ export class AgentOrchestrator {
    * 使用 Provider 适配器系统，支持所有渠道。任何错误返回 null。
    */
   async generateTitle(input: AgentGenerateTitleInput, signal?: AbortSignal): Promise<string | null> {
-    const { userMessage, channelId, modelId } = input
+    const { userMessage, channelId, modelId, hiddenContext } = input
+    const titlePrompt = buildTitlePrompt(userMessage, hiddenContext)
     if (signal?.aborted) return null
     console.log('[Agent 标题生成] 开始生成标题:', { channelId, modelId, userMessage: userMessage.slice(0, 50) })
 
@@ -672,7 +671,7 @@ export class AgentOrchestrator {
         if (signal?.aborted) return null
         const generatedTitle = await generateCodexTitle({
           modelId,
-          prompt: TITLE_PROMPT + userMessage,
+          prompt: titlePrompt,
           credentials,
           proxyUrl,
           signal,
@@ -699,7 +698,7 @@ export class AgentOrchestrator {
         baseUrl: channel.baseUrl,
         apiKey,
         modelId,
-        prompt: TITLE_PROMPT + userMessage,
+        prompt: titlePrompt,
       })
 
       const proxyUrl = await getEffectiveProxyUrl()
@@ -740,7 +739,22 @@ export class AgentOrchestrator {
       const meta = getAgentSessionMeta(sessionId)
       if (!meta || meta.title !== DEFAULT_SESSION_TITLE) return
 
-      const title = await this.generateTitle({ userMessage, channelId, modelId }, signal)
+      let hiddenContext: string | undefined
+      if (meta.linguistProjectId !== undefined && meta.linguistRole !== undefined) {
+        let projectName = ''
+        try {
+          projectName = getLinguistProjectService().getProject(meta.linguistProjectId).name
+        } catch {
+          // 项目暂时缺失不应阻断 Agent 标题生成。
+        }
+        hiddenContext = `Linguist Role: ${meta.linguistRole}${projectName ? `\nProject: ${projectName}` : ''}`
+      }
+      const title = await this.generateTitle({
+        userMessage,
+        channelId,
+        modelId,
+        ...(hiddenContext === undefined ? {} : { hiddenContext }),
+      }, signal)
       if (!title || signal?.aborted) return
 
       // 标题请求是异步的；请求期间用户可能已手动重命名，不能用旧结果覆盖。
@@ -948,16 +962,6 @@ export class AgentOrchestrator {
 
     if (!sessionMeta) {
       callbacks.onError('Agent 会话不存在')
-      callbacks.onComplete([], { startedAt: streamStartedAt })
-      return
-    }
-
-    const initialLinguistSendBlock = checkLinguistSessionSendBlock(
-      sessionMeta,
-      getLinguistProjectService,
-    )
-    if (initialLinguistSendBlock) {
-      callbacks.onError(`${initialLinguistSendBlock.title}: ${initialLinguistSendBlock.message}`)
       callbacks.onComplete([], { startedAt: streamStartedAt })
       return
     }
@@ -1205,14 +1209,6 @@ export class AgentOrchestrator {
     }
     console.log(`[Agent 编排] Agent runtime: ${agentRuntime}`)
 
-    // 2.05 Linguist 项目绑定会话：归档、缺失或服务不可用均 fail closed。
-    // renderer 另有徽章/通告提示；这里是模型调用前的真实强制点。
-    const linguistSendBlock = checkLinguistSessionSendBlock(sessionMeta, getLinguistProjectService)
-    if (linguistSendBlock) {
-      callbacks.onError(`${linguistSendBlock.title}: ${linguistSendBlock.message}`)
-      callbacks.onComplete([], { startedAt: streamStartedAt })
-      return
-    }
     try {
       validatedLinguistContext = validateLinguistTurnContextForAgentTurn(
         validatedLinguistContext,
@@ -1940,8 +1936,7 @@ export class AgentOrchestrator {
             modelProvider: channel.provider,
             modelId: resolvedModel,
             runtime: agentRuntime,
-            role: linguistPromptBuild!.status.role,
-            // LA-QUALITY-001：质量档位废除；proposal_issuances.strategy 列保留
+            // 质量档位废除；proposal_issuances.strategy 列保留
             // legacy 读取（旧行仍有值），新行不再写入该字段。
             linguistPromptVersion: linguistPromptBuild!.status.profileVersion,
             promptHash: linguistPromptBuild!.status.promptHash,
@@ -2034,15 +2029,9 @@ export class AgentOrchestrator {
         piAgentDir: getSdkConfigDir(),
         piSessionDir: join(getSdkConfigDir(), 'sessions'),
         ...(allAdditionalDirectories.length > 0 && { additionalDirectories: allAdditionalDirectories }),
-        // PB-040：项目绑定会话在既有 additionalSkillPaths 缝上追加常驻 project-assistant
-        // Skill（active/archived 注入；missing/普通会话/服务不可解析不注入，fail closed）。
-        // 每次发送实时重解析，resume 走同一解析自然一致；Skill 列表不持久化进会话状态。
-        ...(workspaceSlug || sessionMeta?.linguistProjectId
+        ...(workspaceSlug
           ? {
-            additionalSkillPaths: [
-              ...(workspaceSlug ? [getWorkspaceSkillsDir(workspaceSlug)] : []),
-              ...resolveLinguistSessionSkillPaths(sessionMeta, getLinguistProjectService),
-            ],
+            additionalSkillPaths: [getWorkspaceSkillsDir(workspaceSlug)],
           }
           : {}),
         ...(mentionedSkills?.length ? { skillMentions: mentionedSkills } : {}),
@@ -2987,11 +2976,6 @@ export class AgentOrchestrator {
       throw new Error('会话没有 SDK session ID，无法回退')
     }
 
-    const linguistBlock = checkLinguistSessionSendBlock(sessionMeta, getLinguistProjectService)
-    if (linguistBlock) {
-      throw new Error(`${linguistBlock.title}: ${linguistBlock.message}`)
-    }
-
     const workspace = sessionMeta.workspaceId
       ? getAgentWorkspace(sessionMeta.workspaceId)
       : undefined
@@ -3120,11 +3104,6 @@ export class AgentOrchestrator {
     // 注入 mention 引用指令（Skill/MCP/会话）— 与 sendMessage 路径保持一致的 prompt 加工
     const meta = getAgentSessionMeta(sessionId)
 
-    // Linguist 项目绑定会话：归档项目只读，流式追加同样拒绝（与 sendMessage 闸门一致，PB-034）
-    const linguistQueueBlock = checkLinguistSessionSendBlock(meta ?? undefined, getLinguistProjectService)
-    if (linguistQueueBlock) {
-      throw new Error(`${linguistQueueBlock.title}: ${linguistQueueBlock.message}`)
-    }
     const validatedLinguistContext = validateLinguistTurnContextForAgentTurn(
       linguistContext,
       meta ?? undefined,

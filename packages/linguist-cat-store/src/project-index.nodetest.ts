@@ -25,16 +25,13 @@ test('create: scaffolds plan §5.2 layout and writes projects.json + project.jso
   assert.ok(existsSync(join(root, 'projects.json')))
   assert.ok(existsSync(join(dir, 'project.json')))
 
-  // metadata round-trips through project.json; LA-QUALITY-001: reads normalize the
-  // absent executionPolicy of freshly created (pre-field) metadata to { independentReview: 'off' }
-  // PB-096: absent glossaryPolicy normalizes to 'prefer' the same way
+  // metadata round-trips through project.json; absent glossaryPolicy normalizes to 'prefer'
   const meta = index.readProjectMeta(project.id)
   assert.deepEqual(meta, {
     ...project,
-    executionPolicy: { independentReview: 'off' },
     glossaryPolicy: 'prefer',
   })
-  // …but the file on disk is NOT rewritten: the keys stay absent (read-path normalization only)
+  // …but the file on disk is NOT rewritten (read-path normalization only)
   const rawMeta = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8')) as Record<string, unknown>
   assert.equal('executionPolicy' in rawMeta, false)
   assert.equal('qualityProfile' in rawMeta, false)
@@ -213,116 +210,6 @@ test('invalid index shape -> STORE_INDEX_CORRUPT', () => {
   writeFileSync(join(root, 'projects.json'), JSON.stringify({ schemaVersion: 1, projects: [{ bogus: true }] }), 'utf8')
   const index = new ProjectIndex(root, { now: makeClock() })
   assert.throws(() => index.list(), StoreIndexCorruptError)
-})
-
-// ===== LA-QUALITY-001：executionPolicy 读写与 legacy qualityProfile 兼容 =====
-
-test('legacy project.json without executionPolicy reads as off (get/list/readProjectMeta)', () => {
-  const root = makeTempDir()
-  const index = new ProjectIndex(root, { now: makeClock() })
-  const project = index.create(INPUT, { entropy: makeEntropy() })
-
-  // create 不写该字段（默认 off）；磁盘文件保持无此键
-  const rawMeta = JSON.parse(readFileSync(join(root, 'projects', project.id, 'project.json'), 'utf8')) as Record<string, unknown>
-  assert.equal('executionPolicy' in rawMeta, false)
-  const rawIndex = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8')) as { projects: Record<string, unknown>[] }
-  assert.equal('executionPolicy' in rawIndex.projects[0]!, false)
-
-  // 读取路径统一兜底为 { independentReview: 'off' }
-  assert.deepEqual(index.get(project.id).executionPolicy, { independentReview: 'off' })
-  assert.deepEqual(index.list()[0]?.executionPolicy, { independentReview: 'off' })
-  assert.deepEqual(index.readProjectMeta(project.id).executionPolicy, { independentReview: 'off' })
-})
-
-test('legacy project.json with qualityProfile maps on read and is never rewritten', () => {
-  const root = makeTempDir()
-  const index = new ProjectIndex(root, { now: makeClock() })
-  const project = index.create(INPUT, { entropy: makeEntropy() })
-
-  // 模拟 LA-QUALITY-001 前的旧文件：只有 legacy qualityProfile 键
-  const metaPath = join(root, 'projects', project.id, 'project.json')
-  const meta = JSON.parse(readFileSync(metaPath, 'utf8')) as Record<string, unknown>
-  meta.qualityProfile = 'best'
-  writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
-
-  // 读取映射 best → risk-based；legacy 键在内存中原样保留（只读）
-  const read = index.readProjectMeta(project.id)
-  assert.deepEqual(read.executionPolicy, { independentReview: 'risk-based' })
-  assert.equal(read.qualityProfile, 'best')
-
-  // fast/balanced → off
-  meta.qualityProfile = 'balanced'
-  writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
-  assert.deepEqual(index.readProjectMeta(project.id).executionPolicy, { independentReview: 'off' })
-
-  // 无关写入（rename）不回写 legacy 键的值、不新增/删除该键
-  index.rename(project.id, 'Renamed')
-  const rawAfter = JSON.parse(readFileSync(metaPath, 'utf8')) as Record<string, unknown>
-  assert.equal(rawAfter.qualityProfile, 'balanced')
-  assert.equal(rawAfter.name, 'Renamed')
-})
-
-test('setExecutionPolicy: round-trip writes both projects.json and project.json, bumps updatedAt', () => {
-  const root = makeTempDir()
-  const index = new ProjectIndex(root, { now: makeClock() })
-  const project = index.create(INPUT, { entropy: makeEntropy() })
-
-  const updated = index.setExecutionPolicy(project.id, { independentReview: 'risk-based' })
-  assert.deepEqual(updated.executionPolicy, { independentReview: 'risk-based' })
-  assert.notEqual(updated.updatedAt, project.updatedAt)
-
-  // 读回一致（三个读路径）
-  assert.deepEqual(index.get(project.id).executionPolicy, { independentReview: 'risk-based' })
-  assert.deepEqual(index.readProjectMeta(project.id).executionPolicy, { independentReview: 'risk-based' })
-  // 两处落盘均携带新值
-  const rawMeta = JSON.parse(readFileSync(join(root, 'projects', project.id, 'project.json'), 'utf8')) as Record<string, unknown>
-  assert.deepEqual(rawMeta.executionPolicy, { independentReview: 'risk-based' })
-  const rawIndex = JSON.parse(readFileSync(join(root, 'projects.json'), 'utf8')) as { projects: Record<string, unknown>[] }
-  assert.deepEqual(rawIndex.projects[0]?.executionPolicy, { independentReview: 'risk-based' })
-
-  // 可再改回 off
-  assert.deepEqual(index.setExecutionPolicy(project.id, { independentReview: 'off' }).executionPolicy, { independentReview: 'off' })
-  assert.deepEqual(index.get(project.id).executionPolicy, { independentReview: 'off' })
-})
-
-test('setExecutionPolicy: unknown project id -> STORE_NOT_FOUND', () => {
-  const index = new ProjectIndex(makeTempDir(), { now: makeClock() })
-  assert.throws(() => index.setExecutionPolicy('prj-0000000000000000', { independentReview: 'off' }), (err: unknown) => {
-    assert.ok(err instanceof StoreNotFoundError)
-    assert.equal(err.code, 'STORE_NOT_FOUND')
-    return true
-  })
-})
-
-test('invalid stored executionPolicy values fall back instead of failing validation', () => {
-  const root = makeTempDir()
-  const index = new ProjectIndex(root, { now: makeClock() })
-  const project = index.create(INPUT, { entropy: makeEntropy() })
-
-  // 直接篡改磁盘文件为非法值（未知字面量与非对象两种）
-  const metaPath = join(root, 'projects', project.id, 'project.json')
-  const meta = JSON.parse(readFileSync(metaPath, 'utf8')) as Record<string, unknown>
-  meta.executionPolicy = { independentReview: 'turbo' }
-  writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
-  assert.deepEqual(index.readProjectMeta(project.id).executionPolicy, { independentReview: 'off' })
-
-  meta.executionPolicy = 42
-  writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
-  assert.deepEqual(index.readProjectMeta(project.id).executionPolicy, { independentReview: 'off' })
-
-  // projects.json 里的非法值同样兜底（不抛 STORE_INDEX_CORRUPT）
-  const indexPath = join(root, 'projects.json')
-  const indexRaw = JSON.parse(readFileSync(indexPath, 'utf8')) as { projects: Record<string, unknown>[] }
-  indexRaw.projects[0]!.executionPolicy = { independentReview: 'ON' }
-  writeFileSync(indexPath, `${JSON.stringify(indexRaw, null, 2)}\n`, 'utf8')
-  assert.deepEqual(index.get(project.id).executionPolicy, { independentReview: 'off' })
-  assert.deepEqual(index.list()[0]?.executionPolicy, { independentReview: 'off' })
-
-  // 非法 legacy qualityProfile 同样映射回落（best 之外一律 off）
-  indexRaw.projects[0]!.qualityProfile = 'FAST'
-  delete indexRaw.projects[0]!.executionPolicy
-  writeFileSync(indexPath, `${JSON.stringify(indexRaw, null, 2)}\n`, 'utf8')
-  assert.deepEqual(index.get(project.id).executionPolicy, { independentReview: 'off' })
 })
 
 test('workflow stage: new projects persist the selected stage and legacy projects read as translation', () => {

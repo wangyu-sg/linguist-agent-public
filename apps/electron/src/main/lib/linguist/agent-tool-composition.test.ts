@@ -11,22 +11,19 @@ describe('composeAgentTools', () => {
       [canary],
       () => [catTool],
     )
-    const linguist = composeAgentTools(
-      {
-        kind: 'linguist',
-        projectId: 'project-1',
-        role: 'assistant',
-        executionPolicy: { independentReview: 'off' },
-      },
+    const roleToolsets = (['general', 'translator', 'reviewer', 'proofreader'] as const).map((role) => composeAgentTools(
+      { kind: 'linguist', projectId: 'project-1', role },
       [canary],
       () => [catTool],
-    )
+    ))
 
     expect(general.mergedTools.map(({ name }) => name)).toEqual(['proma_canary_tool'])
-    expect(linguist.mergedTools.map(({ name }) => name)).toEqual([
-      'proma_canary_tool',
-      'cat_project_summary',
-    ])
+    for (const linguist of roleToolsets) {
+      expect(linguist.mergedTools.map(({ name }) => name)).toEqual([
+        'proma_canary_tool',
+        'cat_project_summary',
+      ])
+    }
   })
 
   test('Given Base 与 Overlay 重名 When 组合 Then 明确失败而非静默覆盖', () => {
@@ -34,8 +31,7 @@ describe('composeAgentTools', () => {
       {
         kind: 'linguist',
         projectId: 'project-1',
-        role: 'assistant',
-        executionPolicy: { independentReview: 'off' },
+        role: 'general',
       },
       [catTool],
       () => [catTool],

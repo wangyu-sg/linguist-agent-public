@@ -3,27 +3,36 @@ import {
   ArrowDown,
   ArrowUp,
   FolderOpen,
+  Loader2,
   MessageSquarePlus,
   MoreHorizontal,
   Pencil,
+  Plus,
   Settings,
   Trash2,
 } from 'lucide-react'
-import type { LinguistProjectInfo } from '@proma/shared'
+import type { LinguistProjectInfo, LinguistRole } from '@proma/shared'
 import {
   ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
 } from '@/components/ui/context-menu'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { LINGUIST_ROLE_OPTIONS } from '../session-binding/LinguistRoleMenu'
 
 export interface LinguistProjectActionsMenuProps {
   project: LinguistProjectInfo
   onOpen: () => void
-  onCreateSession?: () => void
+  onCreateSession?: (role: LinguistRole) => void
   onRename?: () => void
   onArchive?: () => void
   onOpenSettings: () => void
@@ -52,6 +61,37 @@ export function LinguistProjectActionItems({
 }): React.ReactElement {
   const Item = variant === 'context' ? ContextMenuItem : DropdownMenuItem
   const archived = project.archivedAt !== undefined
+  const createSessionMenu = variant === 'context' ? (
+    <ContextMenuSub>
+      <ContextMenuSubTrigger className="py-1 text-xs">
+        <MessageSquarePlus size={14} />
+        新建会话
+      </ContextMenuSubTrigger>
+      <ContextMenuSubContent className="w-64">
+        {LINGUIST_ROLE_OPTIONS.map((option) => (
+          <ContextMenuItem key={option.role} onSelect={() => onCreateSession?.(option.role)}>
+            <option.icon size={14} />
+            <span><span className="block text-xs">{option.label}</span><span className="block text-[10px] text-muted-foreground">{option.description}</span></span>
+          </ContextMenuItem>
+        ))}
+      </ContextMenuSubContent>
+    </ContextMenuSub>
+  ) : (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="py-1 text-xs">
+        <MessageSquarePlus size={14} />
+        新建会话
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-64">
+        {LINGUIST_ROLE_OPTIONS.map((option) => (
+          <DropdownMenuItem key={option.role} onSelect={() => onCreateSession?.(option.role)}>
+            <option.icon size={14} />
+            <span><span className="block text-xs">{option.label}</span><span className="block text-[10px] text-muted-foreground">{option.description}</span></span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
   return (
     <>
       {archived ? (
@@ -61,10 +101,7 @@ export function LinguistProjectActionItems({
         </Item>
       ) : (
         <>
-          <Item className="py-1 text-xs" onSelect={onCreateSession}>
-            <MessageSquarePlus size={14} />
-            新建会话
-          </Item>
+          {createSessionMenu}
           <Item className="py-1 text-xs" onSelect={onRename}>
             <Pencil size={14} />
             重命名
@@ -95,6 +132,42 @@ export function LinguistProjectActionItems({
         </Item>
       )}
     </>
+  )
+}
+
+export function LinguistCreateSessionMenu({
+  project,
+  creating,
+  onCreateSession,
+}: {
+  project: LinguistProjectInfo
+  creating: boolean
+  onCreateSession: (role: LinguistRole) => void
+}): React.ReactElement {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`在项目 ${project.name} 中新建会话`}
+          aria-busy={creating || undefined}
+          disabled={creating}
+          className="absolute right-6 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-foreground/35 opacity-0 hover:bg-foreground/[0.055] hover:text-foreground/65 group-hover/project:opacity-100 disabled:cursor-wait disabled:opacity-50"
+        >
+          {creating
+            ? <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+            : <Plus size={13} aria-hidden="true" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="z-[9999] w-72">
+        {LINGUIST_ROLE_OPTIONS.map((option) => (
+          <DropdownMenuItem key={option.role} onSelect={() => onCreateSession(option.role)} className="items-start">
+            <option.icon className="mt-0.5" aria-hidden="true" />
+            <span><span className="block text-xs font-medium">{option.label}</span><span className="block text-[11px] text-muted-foreground">{option.description}</span></span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

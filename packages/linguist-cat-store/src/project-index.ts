@@ -20,16 +20,14 @@ import { join } from 'node:path'
 import {
   archiveProject as coreArchiveProject,
   createProject as coreCreateProject,
-  normalizeExecutionPolicy,
   normalizeGlossaryPolicy,
   normalizeQaProfile,
   normalizeTagProfile,
   normalizeWorkflowStage,
-  resolveExecutionPolicy,
   type CreateProjectDeps,
   type CreateProjectInput,
-  type LinguistExecutionPolicy,
   type LinguistProject,
+  type LinguistTagProfile,
   type ProjectId,
   type QaProfile,
   type WorkflowOutputStatusPolicy,
@@ -221,31 +219,6 @@ export class ProjectIndex {
     return reordered
   }
 
-  /**
-   * Set the Execution Policy (LA-QUALITY-001，取代 PB-082 质量档位)。
-   * Dedicated write path (not part of `update`'s patch whitelist); bumps
-   * updatedAt and rewrites both projects.json and project.json. The value is
-   * normalized defensively even though callers already pass the closed shape.
-   * legacy qualityProfile 字段只读不回写（旧值原样保留，新写入不再产生）。
-   * Archived rejection lives in the service layer (LinguistProjectArchivedError)
-   * — the store has no archived concept in its error catalog, same as `update`.
-   */
-  setExecutionPolicy(projectId: string, policy: LinguistExecutionPolicy): LinguistProject {
-    const index = this.readIndex()
-    const i = index.projects.findIndex((p) => p.id === projectId)
-    const current = index.projects[i]
-    if (!current) throw new StoreNotFoundError('project', projectId)
-    const updated: LinguistProject = {
-      ...current,
-      executionPolicy: normalizeExecutionPolicy(policy),
-      updatedAt: this.now(),
-    }
-    index.projects[i] = updated
-    this.writeIndex(index)
-    this.writeProjectMeta(updated)
-    return updated
-  }
-
   /** 更新当前任务阶段及可选的格式原生状态覆盖策略。 */
   setWorkflowConfig(projectId: string, input: SetWorkflowConfigInput): LinguistProject {
     const index = this.readIndex()
@@ -264,6 +237,22 @@ export class ProjectIndex {
     else if (input.outputStatusPolicy !== undefined) {
       updated.outputStatusPolicy = input.outputStatusPolicy
     }
+    index.projects[i] = updated
+    this.writeIndex(index)
+    this.writeProjectMeta(updated)
+    return updated
+  }
+
+  /** 原子更新项目 Tag Profile（已启用族 + 候选）。 */
+  setTagProfile(projectId: string, tagProfile: LinguistTagProfile): LinguistProject {
+    const index = this.readIndex()
+    const i = index.projects.findIndex((project) => project.id === projectId)
+    const current = index.projects[i]
+    if (!current) throw new StoreNotFoundError('project', projectId)
+    const normalized = normalizeTagProfile(tagProfile)
+    const updated: LinguistProject = { ...current, updatedAt: this.now() }
+    if (normalized === undefined) delete updated.tagProfile
+    else updated.tagProfile = normalized
     index.projects[i] = updated
     this.writeIndex(index)
     this.writeProjectMeta(updated)
@@ -471,16 +460,15 @@ function assertValidDatabaseIdentity(
 }
 
 /**
- * PB-082 forward compatibility → LA-QUALITY-001：executionPolicy 在读取路径
- * 规范化（显式值优先 → legacy qualityProfile 映射 → 默认；normalize 永不抛错）。
- * legacy qualityProfile 字段不再做内存规范化：盘上是什么就保留什么（只读不
- * 回写），旧文件绝不会被主动补写或改写该键。
  * PB-096：glossaryPolicy 同例（缺省/未知回落 'prefer'，不回写）。
  * PB-097：tagProfile 同例（缺省/非法回落 undefined = 仅内置族，不回写；
  * 非法族条目整条丢弃，见 cat-core tag-profile.ts）。
  */
 function normalizeProjectPolicies(project: LinguistProject): void {
-  project.executionPolicy = resolveExecutionPolicy(project)
+  // 旧版质量/审计策略不再是产品状态，读取时直接丢弃。
+  const legacyProject = project as unknown as Record<string, unknown>
+  delete legacyProject.executionPolicy
+  delete legacyProject.qualityProfile
   project.glossaryPolicy = normalizeGlossaryPolicy(project.glossaryPolicy)
   // 缺省/非法时移除键而非置 undefined：内存对象形状与无此键的旧项目一致
   // （deepStrictEqual 区分「键存在值为 undefined」与「键不存在」）。

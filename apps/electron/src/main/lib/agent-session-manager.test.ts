@@ -621,6 +621,7 @@ describe('Agent 会话持久化边界', () => {
       {
         linguistProjectId: 'prj-0123456789abcdef',
         linguistProjectName: '测试项目',
+        linguistRole: 'general',
       },
     )
 

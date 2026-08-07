@@ -17,7 +17,6 @@ describe('Linguist CAT 工具活动文案', () => {
     }).label).toBe('创建 2 条翻译建议')
     expect(getToolPhrase('cat_run_qa', {}).label).toBe('运行项目质检')
     expect(getToolPhrase('cat_get_qa_findings', {}).label).toBe('查看质检问题')
-    expect(getToolPhrase('cat_submit_critic_review', { findings: [{}, {}] }).label).toBe('提交 2 条独立复核意见')
     expect(getToolPhrase('cat_run_batch_consistency', { mode: 'repair' }).label).toBe('创建批量一致性建议')
 
     for (const name of [
@@ -29,7 +28,6 @@ describe('Linguist CAT 工具活动文案', () => {
       'cat_propose_translations',
       'cat_run_qa',
       'cat_get_qa_findings',
-      'cat_submit_critic_review',
       'cat_run_batch_consistency',
     ]) {
       expect(getToolDisplayName(name)).not.toContain('cat_')
@@ -39,7 +37,6 @@ describe('Linguist CAT 工具活动文案', () => {
   test('缺少可选参数时仍给出自然文案', () => {
     expect(getToolPhrase('cat_get_segments', {}).label).toBe('读取项目片段')
     expect(getToolPhrase('cat_search_terms', {}).label).toBe('搜索项目术语')
-    expect(getToolPhrase('cat_submit_critic_review', {}).label).toBe('提交独立复核')
     expect(getToolPhrase('cat_run_batch_consistency', {}).label).toBe('检查批量一致性')
   })
 })

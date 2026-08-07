@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "baseline": "bde00f00323d6735a939d14dbce3b2f1a5b672bc",
-  "formalMerge": "f3d2b431996523a4aa75ec2b027dcf0e932ef08f",
-  "recomputedOn": "2026-08-05",
-  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.16.8 merge and extended for post-merge product work. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
+  "baseline": "d08179d9b6e84a5ac8e33a7d70fc2e12dfde21cf",
+  "formalMerge": "50a74398bb6f8949444593c2915a87a5f8964237",
+  "recomputedOn": "2026-08-08",
+  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.16.9 merge and extended for post-merge product work. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -13,9 +13,11 @@
     "apps/electron/src/main/lib/linguist/",
     "packages/linguist-*",
     "resources/linguist-skills/",
+    "resources/linguist-roles/",
     ".gitignore",
     "AGENTS.md",
     "CURRENT_FACTS.md",
+    "CURRENT_FACTS_SIMPLE.md",
     "TODO.md",
     "NOTICE.md",
     "ATTRIBUTION.md",
@@ -385,11 +387,6 @@
     },
     {
       "file": "apps/electron/src/main/lib/test/electron-mock.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
-    },
-    {
-      "file": "apps/electron/src/main/lib/text-output-service.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
     },
@@ -865,11 +862,6 @@
     },
     {
       "file": "apps/electron/src/renderer/components/migration/MigrationImportDialog.tsx",
-      "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
-    },
-    {
-      "file": "apps/electron/src/renderer/components/onboarding/OnboardingView.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },

@@ -19,7 +19,9 @@
 
 import {
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
+  LINGUIST_ROLES,
   type AgentSessionMeta,
+  type LinguistRole,
   type LinguistIpcResult,
   type LinguistProjectChatSessionInfo,
   type LinguistSessionCopyEligibilityResult,
@@ -28,6 +30,7 @@ import {
   type LinguistSessionDetachBindingResult,
   type LinguistSessionGetBindingResult,
   type LinguistSessionListForProjectResult,
+  type LinguistSessionUpdateRoleResult,
 } from '@proma/shared'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
 import type { LinguistProjectService } from './project-service'
@@ -39,6 +42,7 @@ import {
 import {
   detachAgentSessionLinguistBinding,
   getAgentSessionMeta,
+  updateAgentSessionLinguistRole,
 } from '../agent-session-manager'
 import {
   copyLinguistSessionToProject,
@@ -74,14 +78,20 @@ function readOptionalTitle(record: Record<string, unknown>): string | undefined 
   return value
 }
 
-/** 项目会话角色由主进程白名单解析；缺省 = 普通助理会话。 */
-function readOptionalRole(record: Record<string, unknown>): 'reviewer' | 'auditor' | undefined {
+/** 项目会话岗位由主进程白名单解析。 */
+function readOptionalRole(record: Record<string, unknown>): LinguistRole | undefined {
   const value = record.role
   if (value === undefined) return undefined
-  if (value !== 'reviewer' && value !== 'auditor') {
-    invalid(`role must be 'reviewer' or 'auditor' when provided`)
+  if (!LINGUIST_ROLES.includes(value as LinguistRole)) {
+    invalid(`role must be one of: ${LINGUIST_ROLES.join(', ')}`)
   }
-  return value
+  return value as LinguistRole
+}
+
+function readRole(record: Record<string, unknown>): LinguistRole {
+  const role = readOptionalRole(record)
+  if (role === undefined) invalid('role is required')
+  return role
 }
 
 export function toRendererCopyResult(
@@ -104,12 +114,7 @@ export function toRendererCopyResult(
     ...(session.linguistProjectName !== undefined
       ? { linguistProjectName: session.linguistProjectName }
       : {}),
-    ...(session.linguistSessionRole !== undefined
-      ? { linguistSessionRole: session.linguistSessionRole }
-      : {}),
-    ...(session.linguistExecutionPolicy !== undefined
-      ? { linguistExecutionPolicy: session.linguistExecutionPolicy }
-      : {}),
+    ...(session.linguistRole !== undefined ? { linguistRole: session.linguistRole } : {}),
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   }
@@ -123,7 +128,7 @@ export function createLinguistSessionIpc(deps: LinguistSessionIpcDeps) {
      * linguist.sessions.createForProject — 项目内创建对话。
      * 绑定（linguistProjectId + 项目名快照）在创建时写入并冻结；
      * 产物为 Pi runtime 的 Agent 会话（PB-011）。
-     * PB-082：可选 role='reviewer' 创建独立评审会话（冻结 linguistSessionRole 标记）。
+     * role 只决定默认岗位 Prompt。
      */
     createForProject(input: unknown): Promise<LinguistIpcResult<LinguistSessionCreateForProjectResult>> {
       return wrap(() => {
@@ -152,9 +157,16 @@ export function createLinguistSessionIpc(deps: LinguistSessionIpcDeps) {
             title: s.title,
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
-            role: s.linguistSessionRole ?? 'assistant',
+            role: s.linguistRole ?? 'general',
           }))
         return sessions
+      })
+    },
+
+    updateRole(input: unknown): Promise<LinguistIpcResult<LinguistSessionUpdateRoleResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        return updateAgentSessionLinguistRole(readSessionId(record), readRole(record))
       })
     },
 

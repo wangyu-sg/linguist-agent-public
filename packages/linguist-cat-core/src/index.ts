@@ -80,25 +80,6 @@ export {
 } from './workflow'
 
 export {
-  DEFAULT_EXECUTION_POLICY,
-  executionPolicyFromLegacyQualityProfile,
-  normalizeExecutionPolicy,
-  resolveExecutionPolicy,
-  sameExecutionPolicy,
-  type LinguistExecutionPolicy,
-  type LinguistIndependentReview,
-} from './execution-policy'
-
-// LA-QUALITY-001：质量档位已被 Execution Policy 取代；以下导出仅供 legacy 读取映射。
-export {
-  DEFAULT_QUALITY_PROFILE,
-  QUALITY_PROFILE_POLICIES,
-  normalizeQualityProfile,
-  type LinguistQualityProfile,
-  type LinguistQualityProfilePolicy,
-} from './quality-profile'
-
-export {
   DEFAULT_GLOSSARY_POLICY,
   normalizeGlossaryPolicy,
   type LinguistGlossaryPolicy,
@@ -106,14 +87,18 @@ export {
 
 export {
   normalizeTagProfile,
+  type LinguistTagCandidateKind,
+  type LinguistTagCandidateStatus,
   type LinguistTagFamily,
   type LinguistTagFamilyClass,
   type LinguistTagProfile,
+  type LinguistTagProfileCandidate,
 } from './tag-profile'
 
 export {
   compileTagFamilyRegex,
   pairingErrors,
+  scanTags,
   scanTagTokens,
   tagGroupSignature,
   type TagScanOptions,
@@ -122,6 +107,19 @@ export {
   type TagTokenGroup,
   type TagTokenKind,
 } from './tag-families'
+
+export {
+  activateTagProfileCandidate,
+  saveTagProfileCandidate,
+  scanUnknownTagPatterns,
+  updateTagProfileEntry,
+  validateTagProfileCandidate,
+  type SaveTagProfileCandidateInput,
+  type TagCandidateValidationResult,
+  type UnknownTagExample,
+  type UnknownTagPatternResult,
+  type UnknownTagSample,
+} from './unknown-tag-patterns'
 
 export {
   FALLBACK_QA_ISSUE_MAPPING,

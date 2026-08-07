@@ -63,7 +63,7 @@ function makeDeliveryReady(
     const edited = segment.target === ''
       ? db.segments.applyTargetEdit(
           segment.id,
-          `测试译文 ${segment.ordinal + 1}`,
+          segment.source,
           segment.revision,
         ).segment
       : segment
@@ -287,6 +287,7 @@ test('PB-102: list reads the project exports/ directory and returns path-free di
   const service = makeService()
   try {
     const { project, imported } = await makeImportedAsset(service)
+    makeDeliveryReady(service, project.id, imported.assetId)
 
     // 未导出过：exports/ 尚未创建，空列表是正常分支
     const empty = await makeIpc(service).list({ projectId: project.id })
@@ -329,6 +330,7 @@ test('LA-EXPORT-001: list ignores symlinked files under exports', async () => {
   const service = makeService()
   try {
     const { project, imported } = await makeImportedAsset(service)
+    makeDeliveryReady(service, project.id, imported.assetId)
     await service.stageExport(project.id, imported.assetId)
     const external = join(makeTempDir(), 'external.csv')
     writeFileSync(external, 'EXTERNAL')

@@ -64,5 +64,5 @@ LF-074 已删除：
 
 ## 计划来源
 
-本文件记录旧 LF 阶段的冻结边界；当时的实施计划已退役。当前唯一 active 计划与队列分别为
-`docs/roadmap/LA_UNIFIED_MASTER_PLAN_V2.md` 和 `docs/roadmap/linguist-fusion-queue.json`。
+本文件只记录旧 LF 阶段的冻结边界；当时的统一蓝图和 queue 已退役并从 active 树删除。当前状态以
+`docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md` 和 `docs/roadmap/LINGUIST_FUSION_CURRENT_REALITY.md` 为准。

@@ -1,6 +1,13 @@
 /** 标题生成 Prompt */
 export const TITLE_PROMPT = '根据用户的第一条消息，生成一个简短的对话标题（10字以内）。只输出标题，不要有任何其他内容、标点符号或引号。如果消息内容过短或无明确主题，直接使用原始消息作为标题。\n\n用户消息：'
 
+export function buildTitlePrompt(userMessage: string, hiddenContext?: string): string {
+  const context = hiddenContext?.trim()
+  return context
+    ? `${TITLE_PROMPT}${userMessage}\n\n隐藏背景（仅用于理解任务，不得抄写标签或项目名）：\n${context}`
+    : TITLE_PROMPT + userMessage
+}
+
 /** 短消息阈值：低于此长度直接使用原文作为标题 */
 export const SHORT_MESSAGE_THRESHOLD = 4
 

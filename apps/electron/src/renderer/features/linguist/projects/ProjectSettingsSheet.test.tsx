@@ -21,7 +21,6 @@ const project: LinguistProjectInfo = {
   promaWorkspaceId: 'workspace-1',
   createdAt: '2026-07-01T08:00:00.000Z',
   updatedAt: '2026-07-01T08:00:00.000Z',
-  executionPolicy: { independentReview: 'off' },
 }
 
 const summary: LinguistProjectSummary = {
@@ -103,11 +102,9 @@ describe('ProjectSettingsSheet', () => {
             profileHash: 'profile-hash',
             contractVersion: '1.0.0',
             contractHash: 'contract-hash',
-            role: 'assistant',
+            role: 'general',
             roleVersion: '1.0.0',
             roleHash: 'role-hash',
-            executionPolicy: { independentReview: 'off' },
-            executionPolicyHash: 'execution-policy-hash',
             projectDigestVersion: '1',
             projectDigestHash: 'project-digest-hash',
             projectDigestRevision: 'rev-1',

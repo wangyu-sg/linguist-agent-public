@@ -2,7 +2,7 @@
  * PB-042 session-cat-tools nodetest（node --test；真实 LinguistProjectService +
  * 真实会话元数据 + 真实 fixture 导入，无 mock）：
  *
- * - 项目对话（active）→ 19 个工具；经应用 resolver 端到端驱动 execute：
+ * - 项目对话（active）→ 20 个工具；经应用 resolver 端到端驱动 execute：
  *   summary/list_assets/get_segments 对 mkdtemp 项目 + mini_items.json 播种
  *   断言真实 DTO（资产 id、段计数、段 id 跨调用稳定、assetId/status 过滤、
  *   未知 assetId → ASSET_NOT_FOUND、空 TM/TB 干净空 + note）；
@@ -323,7 +323,7 @@ test('LF-063: bound CAT writes emit ordered host-owned project mutation events; 
   service.closeAll()
 })
 
-test('bound session imports authorized files into batch, TM/TB, or Context authority', async () => {
+test('bound session imports external files and a mixed resource directory without attachment ceremony', async () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT, name: 'session intake 项目' })
   const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
@@ -335,11 +335,6 @@ test('bound session imports authorized files into batch, TM/TB, or Context autho
   writeFileSync(tmPath, `<?xml version="1.0"?><tmx version="1.4"><header srclang="en"/><body><tu><tuv xml:lang="en"><seg>Hello</seg></tuv><tuv xml:lang="zh-CN"><seg>你好</seg></tuv></tu></body></tmx>`)
   const contextPath = join(authorizedDir, 'constraints.md')
   writeFileSync(contextPath, '# Constraints\nUse title case.')
-  sessionManager.updateAgentSessionMeta(meta.id, {
-    attachedFiles: [attachedPath],
-    attachedDirectories: [authorizedDir],
-  })
-
   const tools = catTools.resolveLinguistSessionCatTools(meta, () => service)
   const imported = await invoke(toolByName(tools, 'cat_import_asset'), {
     filePath: attachedPath,
@@ -373,9 +368,23 @@ test('bound session imports authorized files into batch, TM/TB, or Context autho
     importedContext.resourceId,
   )
 
+  const scanDir = join(tempHome, 'external-project-drop')
+  mkdirSync(scanDir)
+  writeFileSync(join(scanDir, 'batch.json'), '{"hello":"Hello"}')
+  writeFileSync(join(scanDir, 'memory.tmx'), `<?xml version="1.0"?><tmx version="1.4"><header srclang="en"/><body><tu><tuv xml:lang="en"><seg>World</seg></tuv><tuv xml:lang="zh-CN"><seg>世界</seg></tuv></tu></body></tmx>`)
+  writeFileSync(join(scanDir, 'brief.md'), '# Brief\nKeep combat UI concise.')
+  const mixed = await invoke(toolByName(tools, 'cat_import_resources'), {
+    paths: [scanDir],
+    recursive: true,
+  })
+  assert.deepEqual(
+    Object.fromEntries(['found', 'supported', 'imported', 'skippedDuplicate', 'needsInput', 'unsupported', 'failed'].map((key) => [key, mixed[key]])),
+    { found: 3, supported: 3, imported: 3, skippedDuplicate: 0, needsInput: 0, unsupported: 0, failed: 0 },
+  )
+
   await assert.rejects(
     invoke(toolByName(tools, 'cat_import_asset'), {
-      filePath: join(tempHome, 'not-authorized.txt'),
+      filePath: join(tempHome, 'missing.txt'),
       resourceKind: 'context',
     }),
     (error: unknown) => error instanceof Error && (error as { code?: string }).code === 'INVALID_ARGUMENT',
@@ -403,6 +412,7 @@ test('normal chat gets no CAT tools; missing binding attaches throwing tools (do
   const missingMeta = sessionManager.createAgentSession('缺失项目会话', undefined, undefined, undefined, 'pi', {
     linguistProjectId: 'proj-does-not-exist',
     linguistProjectName: '已删除项目',
+    linguistRole: 'general',
   })
   const tools = catTools.resolveLinguistSessionCatTools(missingMeta, () => service)
   assert.deepEqual(tools.map((t) => t.name), [...LINGUIST_CAT_TOOL_NAMES])
@@ -419,26 +429,14 @@ test('normal chat gets no CAT tools; missing binding attaches throwing tools (do
   service.closeAll()
 })
 
-test('auditor binding receives only evidence reads; Proposal/QA conclusions and writes are absent', () => {
+test('四种岗位装配完全相同的 CAT 工具集合', () => {
   const service = makeServiceOnLinguistRoot()
-  const project = service.createProject({ ...PROJECT_INPUT, name: '独立审计项目' })
-  const meta = binding.createLinguistProjectChatSession(service, {
-    projectId: project.id,
-    role: 'auditor',
+  const project = service.createProject({ ...PROJECT_INPUT, name: '统一工具项目' })
+  const toolsets = (['general', 'translator', 'reviewer', 'proofreader'] as const).map((role) => {
+    const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id, role })
+    return catTools.resolveLinguistSessionCatTools(meta, () => service).map((tool) => tool.name)
   })
-  const tools = catTools.resolveLinguistSessionCatTools(meta, () => service)
-  assert.deepEqual(tools.map((tool) => tool.name), [
-    'cat_project_summary',
-    'cat_list_assets',
-    'cat_get_segments',
-    'cat_get_translation_context',
-    'cat_search_tm',
-    'cat_search_terms',
-    'cat_search_sentence_patterns',
-    'cat_read_context_doc',
-  ])
-  assert.equal(tools.some((tool) =>
-    /proposal|qa|critic|consistency/i.test(tool.name)), false)
+  for (const names of toolsets) assert.deepEqual(names, [...LINGUIST_CAT_TOOL_NAMES])
   service.closeAll()
 })
 

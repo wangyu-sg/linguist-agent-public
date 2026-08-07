@@ -44,7 +44,7 @@ describe('PB-096 issue_type 契约（29 枚举 + 静态映射表）', () => {
   })
 })
 
-describe('PB-096 glossaryPolicy（缺省回落，同 qualityProfile 先例）', () => {
+describe('PB-096 glossaryPolicy（缺省回落）', () => {
   test('三档字面量原样通过；缺省/未知一律回落 prefer', () => {
     expect(DEFAULT_GLOSSARY_POLICY).toBe('prefer')
     for (const policy of ['strict', 'prefer', 'off'] as const) {

@@ -164,8 +164,7 @@ test('listForProject: light wire shape, desc order, unknown project lists empty'
     assert.deepEqual(Object.keys(entry).sort(), ['createdAt', 'id', 'role', 'title', 'updatedAt'])
   }
 
-  // PB-082：role 映射——缺省 'assistant'（不落库字面量），评审会话 'reviewer'
-  assert.deepEqual(result.data.map((s) => s.role), ['assistant', 'assistant'])
+  assert.deepEqual(result.data.map((s) => s.role), ['general', 'general'])
 
   // 未知（但形状合法）项目：空列表而非错误——绑定存在会话侧，不触项目库
   const empty = await ipc.listForProject({ projectId: 'prj-0000000000000000' })
@@ -177,7 +176,7 @@ test('listForProject: light wire shape, desc order, unknown project lists empty'
   if (!bad.ok) assert.equal(bad.error.code, LINGUIST_IPC_ERROR_CODES.INVALID_INPUT)
 })
 
-test('createForProject with role=reviewer (PB-082): 写入冻结标记，列表映射 reviewer', async () => {
+test('createForProject 写入岗位，列表映射 reviewer', async () => {
   const project = service.createProject({ ...INPUT, name: 'IPC 评审项目' })
   const created = await ipc.createForProject({
     projectId: project.id,
@@ -186,7 +185,7 @@ test('createForProject with role=reviewer (PB-082): 写入冻结标记，列表�
   })
   assert.ok(created.ok)
   if (!created.ok) return
-  assert.equal(created.data.linguistSessionRole, 'reviewer')
+  assert.equal(created.data.linguistRole, 'reviewer')
   assert.equal(created.data.title, '评审 prp-abcd1234')
 
   const listed = await ipc.listForProject({ projectId: project.id })
@@ -198,20 +197,11 @@ test('createForProject with role=reviewer (PB-082): 写入冻结标记，列表�
   )
 })
 
-test('createForProject with role=auditor: 写入盲审标记，列表可区分角色', async () => {
-  const project = service.createProject({ ...INPUT, name: 'IPC 盲审项目' })
-  const created = await ipc.createForProject({
-    projectId: project.id,
-    title: '项目独立审计',
-    role: 'auditor',
-  })
-  assert.ok(created.ok)
-  if (!created.ok) return
-  assert.equal(created.data.linguistSessionRole, 'auditor')
-
-  const listed = await ipc.listForProject({ projectId: project.id })
-  assert.ok(listed.ok)
-  if (listed.ok) assert.deepEqual(listed.data.map((session) => session.role), ['auditor'])
+test('createForProject 拒绝旧 auditor 岗位', async () => {
+  const project = service.createProject({ ...INPUT, name: 'IPC 角色校验' })
+  const created = await ipc.createForProject({ projectId: project.id, role: 'auditor' })
+  assert.equal(created.ok, false)
+  if (!created.ok) assert.equal(created.error.code, LINGUIST_IPC_ERROR_CODES.INVALID_INPUT)
 })
 
 test('getBinding: null for unbound/unknown sessions; active/archived/missing resolved live', async () => {

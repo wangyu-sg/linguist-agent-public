@@ -2,26 +2,73 @@ import { Type } from 'typebox'
 import { LinguistCatInvalidArgumentError } from './errors'
 import { defineTool, toolResult, type CatToolRuntime } from './tool-runtime'
 import type {
+  LinguistImportResourceKind,
+  LinguistImportResourcesResult,
   LinguistIntakeImportResult,
   LinguistIntakeResourceKind,
 } from './types'
 
 const RESOURCE_KINDS = new Set<LinguistIntakeResourceKind>(['batch', 'tm', 'terms', 'context'])
+const IMPORT_KINDS = new Set<LinguistImportResourceKind>(['auto', 'batch', 'tm', 'tb', 'context'])
 
 /** 路径只在宿主按会话授权根校验后使用，永不进入结果 DTO。 */
 export function createIntakeTools(runtime: CatToolRuntime) {
   const { deps, notifyMutation, resolveBoundProject } = runtime
 
+  const importResourcesTool = defineTool({
+    name: 'cat_import_resources',
+    label: 'CAT import resources',
+    description: 'Import files or directories into the bound project. Paths follow the current Proma session permissions. Auto mode classifies supported batches, TM, TB, and Context; ambiguous mappings are returned as needsInput.',
+    promptSnippet: 'Import one or more project resources from files or directories',
+    parameters: Type.Object({
+      paths: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 100 }),
+      recursive: Type.Optional(Type.Boolean()),
+      kind: Type.Optional(Type.Union([
+        Type.Literal('auto'),
+        Type.Literal('batch'),
+        Type.Literal('tm'),
+        Type.Literal('tb'),
+        Type.Literal('context'),
+      ])),
+      dryRun: Type.Optional(Type.Boolean()),
+      xlsxMapping: Type.Optional(Type.Object({
+        sheetName: Type.String({ minLength: 1 }),
+        columns: Type.Object({
+          source: Type.String({ minLength: 1 }),
+          target: Type.String({ minLength: 1 }),
+        }),
+      })),
+    }),
+    async execute(toolCallId, params) {
+      resolveBoundProject('cat_import_resources', toolCallId)
+      if (deps.importResources === undefined) {
+        throw new LinguistCatInvalidArgumentError('paths', 'resource intake is unavailable')
+      }
+      const kind = (params.kind ?? 'auto') as LinguistImportResourceKind
+      if (!IMPORT_KINDS.has(kind)) {
+        throw new LinguistCatInvalidArgumentError('kind', 'must be auto, batch, tm, tb, or context')
+      }
+      const result: LinguistImportResourcesResult = await deps.importResources({
+        paths: params.paths,
+        recursive: params.recursive ?? false,
+        kind,
+        dryRun: params.dryRun ?? false,
+        xlsxMapping: params.xlsxMapping,
+      })
+      if (result.imported > 0) notifyMutation({ kind: 'project-updated' })
+      return toolResult(result, deps.resultProjectId)
+    },
+  })
+
   const importAssetTool = defineTool({
     name: 'cat_import_asset',
     label: 'CAT import asset',
     description:
-      'Import a batch, translation memory, termbase, or Context document from the current session workspace ' +
-      'or a file/directory explicitly authorized for this bound Linguist session. The host validates the path ' +
-      'against those roots and never accepts a project id. TM/TB imports create searchable internal evidence ids.',
-    promptSnippet: 'Register an authorized file as a batch, TM, termbase, or Context resource',
+      'Compatibility alias for importing one batch, translation memory, termbase, or Context document into the bound project. ' +
+      'Paths follow the current Proma session permissions; the model never supplies a project id.',
+    promptSnippet: 'Register a readable file as a batch, TM, termbase, or Context resource',
     parameters: Type.Object({
-      filePath: Type.String({ minLength: 1, description: 'Absolute authorized path, or a path relative to the session workspace.' }),
+      filePath: Type.String({ minLength: 1, description: 'Absolute path, or a path relative to the current session cwd.' }),
       resourceKind: Type.Union([
         Type.Literal('batch'),
         Type.Literal('tm'),
@@ -60,5 +107,5 @@ export function createIntakeTools(runtime: CatToolRuntime) {
     },
   })
 
-  return [importAssetTool] as const
+  return [importResourcesTool, importAssetTool] as const
 }

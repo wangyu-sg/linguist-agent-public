@@ -44,13 +44,15 @@ export {
   type CatSearchTmResult,
   type CatSegmentListItem,
   type CatSegmentBrief,
-  type CatSubmitCriticReviewResult,
   type CatWorkerJobProgress,
   type LinguistCatToolCallInfo,
   type LinguistCatToolMutation,
   type LinguistCatToolName,
   type LinguistCatToolsDeps,
   type LinguistIntakeImportResult,
+  type LinguistImportResourceItem,
+  type LinguistImportResourcesInput,
+  type LinguistImportResourcesResult,
   type LinguistExportAssetResult,
   type LinguistIntakeResourceKind,
   type LinguistIntakeXlsxMapping,
@@ -78,3 +80,4 @@ export {
 } from './job-runner'
 
 export { createLinguistCatTools } from './factory'
+export { createTagTools } from './tag-tools'

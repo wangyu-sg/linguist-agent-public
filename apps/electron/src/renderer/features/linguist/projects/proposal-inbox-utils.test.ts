@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  buildReviewRequestMessage,
-  buildReviewSessionTitle,
-  buildIndependentAuditRequestMessage,
   bulkProposalReviewConfirmation,
   isProposalConflictCode,
   groupProposalRuns,
@@ -118,29 +115,7 @@ describe('Proposal Inbox 文本差异（PB-054）', () => {
   })
 })
 
-describe('独立评审会话（PB-082）', () => {
-  test('buildReviewSessionTitle：提案 id 前 8 位，短 id 原样保留', () => {
-    expect(buildReviewSessionTitle('prp-0123456789abcdef')).toBe('评审 prp-0123')
-    expect(buildReviewSessionTitle('prp-abc')).toBe('评审 prp-abc')
-    expect(buildReviewSessionTitle('')).toBe('评审 ')
-  })
-
-  test('buildReviewRequestMessage：含提案 id、段 id 与 cat_submit_critic_review 指令', () => {
-    const message = buildReviewRequestMessage('prp-0123456789abcdef', 'seg-abcdef0123456789')
-    expect(message).toContain('prp-0123456789abcdef')
-    expect(message).toContain('seg-abcdef0123456789')
-    expect(message).toContain('cat_submit_critic_review')
-    expect(message.startsWith('请独立评审提案 ')).toBe(true)
-    expect(message).toContain('不会更新、替换或接受任何 Proposal')
-  })
-
-  test('独立盲审提示明确隔离旧结论、保留证据并禁止暗示性完成措辞', () => {
-    const message = buildIndependentAuditRequestMessage()
-    expect(message).toContain('隐藏 pending Proposal、既有 QA Finding')
-    expect(message).toContain('segmentId 与 originalOrdinal')
-    expect(message).toContain('不要声称已更新提案')
-  })
-
+describe('Proposal run 聚合（PB-082）', () => {
   test('项目 Inbox 按 run 聚合 provenance/status，旧数据不伪造批次', () => {
     const baseDiff = {
       originalOrdinal: 1,

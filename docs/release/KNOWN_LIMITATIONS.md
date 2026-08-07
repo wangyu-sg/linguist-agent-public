@@ -1,35 +1,38 @@
 # KNOWN_LIMITATIONS — 当前已知限制
 
-更新日期：2026-08-05
+更新日期：2026-08-08
 
-> 当前目标是作者本人使用的个人 Alpha。v2 计划处于 Phase 0，自动化、打包 smoke、真机操作、远端 CI 和 Release qualification 是不同证据等级；旧 0.15.140 clean-worktree 证据不替代当前 v2 Gate。
+> 当前目标是作者本人使用的个人 Alpha。实现、单元验证、打包验证、真机人工和产品资格是不同证据等级。
 
-## A. 尚缺的外部与人工证据
+## A. 尚缺的真实与人工证据
 
-1. **真实 Provider**：Fake Model packaged smoke 覆盖 Agent/Chat/CAT 流程，不证明真实 Pi/Claude Provider、网络重试、权限和模型质量。
-2. **LF-048**：真实 macOS IME composition 与 Native Open/Save 对话框仍需人工操作。
-3. **AC-009**：VoiceOver、完整 keyboard-only、拖拽/resize 手感仍未验证。
-4. **v1 AC-010 已废弃**：Fast / Balanced / Best 不再是 active 质量 Gate；v2 仍要求以统一质量、Execution Policy 和 `LA-EVAL-*` 重新建立真实质量/成本/覆盖证据。
-5. **v2 LA-EVAL-004**：尚未完成按 v2 核心阶段重新开始的连续 14 天真实项目使用。
+1. **真实 Provider 与模型质量**：Fake Model、Prompt 合同和格式 round-trip 不证明真实 Pi/Claude Provider、网络重试或翻译质量。
+2. **四岗位全链**：尚未用真实 Provider 完成 Translator → Reviewer → Proofreader → final 交付并复核输出。
+3. **对照评估**：尚未用同一模型、同一 reasoning 和同一真实任务比较 Web Chat、旧 LA 与当前 LA。
+4. **14 天日用**：必须从当前可用构建重新累计，不能由开发日或自动测试补记。
+5. **真机人工**：真实 macOS IME composition、Native Open/Save、Companion round-trip、VoiceOver、完整 keyboard-only、窄窗和拖拽/resize 仍待操作。
 
 ## B. 当前功能边界
 
-1. 真实客户格式兼容性仍依赖用户样本；现有 XLIFF/SDLXLIFF/MXLIFF/Phrase DOCX/CSV/JSON/XLSX 主要由仓库 fixtures 覆盖。
-2. 通用文件撤销使用 Proma File Rewind；Run Undo 只结构化撤销仍满足 revision/状态前提的 CAT 变更。外部 MCP/程序副作用仅记录。
-3. Full Integrity Scrub、Backup/Restore 已有生产路径与确定性故障注入；真实磁盘耗尽、只读卷、强制断电和硬件损坏仍不是 real-machine 证据。
-4. 旧数据迁移不读取治理 SQLite 的 proposals/ledger/checklist 投影；超大项目迁移仍可能同步占用主进程。
-5. General Agent/Chat 使用 JSON/JSONL；CAT 使用每项目 SQLite。不要把其中一种持久化策略强行扩散到另一域。
-6. 一些 Proma 继承的品牌/文件格式名仍存在，例如 `.proma-backup`、`.proma-share` 和部分 logo/CLI 文案。
+1. `cat_import_resources` 的目录递归单次最多处理 500 个条目，不跟随符号链接目录；超大目录应拆分导入。
+2. XLSX 批次和 TM/TB 仍需要显式 Sheet/列映射；目录导入遇到这类文件会返回 `needsInput`，不会猜测后静默写入。
+3. Tag 编辑器采用原生 textarea + chip overlay。硬 Tag 改动会阻止保存，但它不是 contenteditable 的原子不可拆 token 控件。
+4. Phrase 内容配对和 mapping 已通过一组真实私有副本验证，但未见过的客户生成器变体仍需逐样本验证；过期或不完整 mapping 会阻止 final。
+5. draft 导出有意允许未完成内容，不代表可交付；final 才执行完整 QA/阶段预检与结构硬规则。
+6. 通用文件撤销使用 Proma File Rewind；Run Undo 只结构化撤销仍满足 revision/状态前提的 CAT 变更。外部 MCP/程序副作用只记录。
+7. 旧数据迁移不读取治理 SQLite 的 proposals/ledger/checklist 投影；超大项目迁移仍可能同步占用主进程。
+8. General Agent/Chat 使用 JSON/JSONL；CAT 使用每项目 SQLite。两种持久化策略不会互相扩散。
 
-## C. 性能、构建与无障碍
+## C. 性能、构建与平台
 
-1. **打包环境限制**：2026-08-05 `bun run smoke:pack` 已通过；构建时需使用任务专用 `CLANG_MODULE_CACHE_PATH`，并在受限沙箱外运行 Swift/clang 和本地 fake-model server。该环境条件不等于所有机器都已完成 real-machine 资格验证。
-2. 当前自动矩阵集中在 macOS arm64；其他硬件、macOS Intel、Windows 和 Linux 未做真机资格验证。
-3. Vite 仍报告大 chunk、重复静态/动态 import 与旧 Browserslist 数据警告；当前 build 不失败，但 pack 的当前标准 Gate 见上条。
-4. CJS bundle 对 `import.meta` 有既有 esbuild warning；历史 packaged smoke 通过当前 fallback 路径，不能据此推断所有平台一致。
-5. serious/critical Axe 的 v1 结果已存在，但 moderate landmark 与真实屏幕阅读器结果不能由 DOM 测试替代。
+1. 当前自动矩阵集中在 macOS arm64；macOS Intel、Windows 和 Linux 尚无真机资格证据。
+2. Vite 仍可能报告大 chunk、重复静态/动态 import 和 Browserslist 数据警告；警告本身不等于 build 失败。
+3. CJS bundle 对 `import.meta` 有既有 esbuild warning；packaged smoke 只能证明当前宿主路径。
+4. serious/critical Axe 自动回归不能替代真实屏幕阅读器和完整键盘操作。
+5. Full Integrity Scrub、Backup/Restore 有自动故障注入；真实磁盘耗尽、只读卷、断电和硬件损坏不是本轮 real-machine 证据。
+6. 当前 macOS arm64 packaged build、artifact integrity 与自动纵向探针通过；Linguist 探针仍明确留下 Native Open/Save 两项人工覆盖，合同覆盖状态为 `partial`。
 
-## D. 公众发行（当前不在范围）
+## D. 公众发行（不在当前范围）
 
 - Developer ID 签名与 Apple Notarization；
 - Gatekeeper/签名 DMG；
@@ -37,11 +40,9 @@
 - 跨平台构建与最终法律/再分发复核；
 - 公众 release notes 与安装包发布。
 
-## E. 已关闭、不得继续误报
+## E. 已确认边界
 
-- G9 已用真实旧数据副本复跑通过，源副本字节不变。
 - 数据根已隔离为 `~/.linguist-agent(-dev)`；旧 Proma 根只供显式 Provider-only 导入。
 - Project/Session binding、数据库身份、导出路径和恢复流程均 fail closed。
-- 所有 BrowserWindow 已固定隔离、sandbox、禁用 Node integration 并启用 webSecurity。
-- 根测试不再容忍已知失败；历史 clean source 曾为 1,350 pass / 0 fail，而 2026-08-05 当前根 `bun test` 为 exit 0（不在此猜测 count）。
-- 公开源码完整交互修复快照 `2fe3c472` 的 GitHub Actions Run `30482338219` 已成功，历史许可扫描失败已关闭。
+- 所有 BrowserWindow 固定 context isolation、sandbox、禁用 Node integration 并启用 webSecurity。
+- 旧 Auditor、Execution Policy、公开 Critic 和 Translation Scope 不再是 active 产品流程；历史源码/DB/报告不能反向恢复它们。

@@ -21,7 +21,6 @@ interface LinguistSessionWorkspaceManifest {
   projectId: string
   sessionId: string
   role: Extract<AgentProfile, { kind: 'linguist' }>['role']
-  executionPolicy: Extract<AgentProfile, { kind: 'linguist' }>['executionPolicy']
   createdAt: string
   projectDisplayName: string
 }

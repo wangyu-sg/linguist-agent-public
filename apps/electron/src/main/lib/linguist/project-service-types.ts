@@ -3,6 +3,8 @@ import type {
   CurrentStageState,
   EntropySource,
   LinguistProject,
+  LinguistTagProfile,
+  LinguistTagProfileCandidate,
   QaFindingDisposition,
   QaFindingSeverity,
   QaIssueType,
@@ -14,6 +16,13 @@ import type {
   WorkflowStage,
   WorkflowStageEvent,
 } from '@linguist/cat-core'
+
+export interface LinguistTagProfileMutationResult {
+  project: LinguistProject
+  tagProfile: LinguistTagProfile
+  candidate?: LinguistTagProfileCandidate
+  validation?: import('@linguist/cat-core').TagCandidateValidationResult
+}
 import type {
   CatFormatRegistry,
   ImportWarning,
@@ -168,6 +177,8 @@ export interface ImportAssetInput {
   filename: string
   /** XLSX is only imported after the main process has verified this explicit user mapping. */
   xlsxMapping?: XlsxImportMapping
+  /** Phrase split 的 master XLIFF 同伴；只在主进程内传字节，不暴露路径。 */
+  phraseMaster?: { bytes: Uint8Array; filename: string }
 }
 
 export interface XlsxImportMapping {
@@ -365,6 +376,7 @@ export type LinguistDeliveryBlockerCode =
   | 'PENDING_PROPOSALS'
   | 'UNCONFIRMED_SEGMENTS'
   | 'OPEN_QA_ERRORS'
+  | 'PHRASE_MASTER_MAPPING'
 
 export interface LinguistDeliveryBlocker {
   code: LinguistDeliveryBlockerCode

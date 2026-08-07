@@ -1,10 +1,6 @@
 import * as React from 'react'
 import { RefreshCw } from 'lucide-react'
-import type {
-  LinguistIndependentReview,
-  LinguistProjectInfo,
-  LinguistProjectSummary,
-} from '@proma/shared'
+import type { LinguistProjectInfo, LinguistProjectSummary } from '@proma/shared'
 import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -25,11 +21,10 @@ import { ProjectWorkflowSettings } from './ProjectWorkflowSettings'
 import { ProjectAssetsSection } from './ProjectAssetsSection'
 import { ReferenceManager } from './ReferenceManager'
 import { StyleGuidePanel } from './StyleGuidePanel'
+import { TagProfilesPanel } from './TagProfilesPanel'
 import { VoiceProfilePanel } from './VoiceProfilePanel'
 import {
-  describeIndependentReview,
   describeLinguistIpcError,
-  INDEPENDENT_REVIEW_OPTIONS,
   validateLocaleInput,
 } from './project-utils'
 
@@ -93,6 +88,7 @@ export function ProjectSettingsSheetBody({
       <TabsList aria-label="项目设置分类">
         <TabsTrigger value="project">项目</TabsTrigger>
         <TabsTrigger value="resources">语言资产</TabsTrigger>
+        <TabsTrigger value="tags">Tag Profiles</TabsTrigger>
         <TabsTrigger value="maintenance">维护</TabsTrigger>
         <TabsTrigger value="diagnostics">诊断</TabsTrigger>
       </TabsList>
@@ -107,12 +103,6 @@ export function ProjectSettingsSheetBody({
               <dt className="text-muted-foreground">语言方向</dt>
               <dd className="mt-1 font-mono text-foreground">{project.sourceLocale} → {project.targetLocale}</dd>
             </div>
-            <div>
-              <dt className="text-muted-foreground">独立评审（Execution Policy）</dt>
-              <dd className="mt-1 text-foreground">
-                {describeIndependentReview(project.executionPolicy.independentReview)}
-              </dd>
-            </div>
           </dl>
         </section>
         <ProjectLocaleSettings
@@ -120,7 +110,6 @@ export function ProjectSettingsSheetBody({
           hasBatches={(summary?.assetCount ?? 0) > 0}
           onUpdated={onSummaryRefresh}
         />
-        <ProjectExecutionPolicySettings project={project} onUpdated={onSummaryRefresh} />
         <ProjectWorkflowSettings project={project} onUpdated={onSummaryRefresh} />
       </TabsContent>
       <TabsContent value="resources">
@@ -129,6 +118,9 @@ export function ProjectSettingsSheetBody({
           summary={summary}
           onSummaryRefresh={onSummaryRefresh}
         />
+      </TabsContent>
+      <TabsContent value="tags">
+        <TagProfilesPanel project={project} onUpdated={onSummaryRefresh} />
       </TabsContent>
       <TabsContent value="maintenance">
         <ProjectMaintenanceSettings
@@ -275,85 +267,6 @@ export function ProjectResourceSettings({
         <VoiceProfilePanel projectId={project.id} archived={archived} />
         <ContextDocsPanel projectId={project.id} archived={archived} />
       </React.Fragment>
-    </section>
-  )
-}
-
-/** LA-QUALITY-001：Execution Policy（独立评审）编辑入口，复用 ProjectWorkflowSettings 模式。 */
-export function ProjectExecutionPolicySettings({
-  project,
-  onUpdated,
-}: {
-  project: LinguistProjectInfo
-  onUpdated: () => void
-}): React.ReactElement {
-  const [independentReview, setIndependentReview] = React.useState<LinguistIndependentReview>(
-    project.executionPolicy.independentReview,
-  )
-  const [saving, setSaving] = React.useState(false)
-
-  React.useEffect(() => {
-    setIndependentReview(project.executionPolicy.independentReview)
-  }, [project])
-
-  const save = async (): Promise<void> => {
-    if (saving || project.archivedAt !== undefined) return
-    setSaving(true)
-    try {
-      const result = await window.electronAPI.linguistProjectsSetExecutionPolicy({
-        projectId: project.id,
-        executionPolicy: { independentReview },
-      })
-      if (!result.ok) {
-        toast.error('独立评审设置保存失败', {
-          description: describeLinguistIpcError(result.error),
-        })
-        return
-      }
-      toast.success(`独立评审已设为 ${describeIndependentReview(result.data.executionPolicy.independentReview)}`)
-      onUpdated()
-    } catch {
-      toast.error('独立评审设置保存失败', { description: '与主进程通信异常（INTERNAL）' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <section aria-labelledby="project-execution-policy-heading" className="mt-3 rounded-xl bg-muted/50 p-4 shadow-sm">
-      <h3 id="project-execution-policy-heading" className="text-sm font-medium text-foreground">
-        独立评审
-      </h3>
-      <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-        {describeIndependentReview(independentReview)}
-      </p>
-      <div className="mt-4 space-y-1.5">
-        <Label htmlFor="project-independent-review">独立评审策略</Label>
-        <Select
-          value={independentReview}
-          onValueChange={(value) => setIndependentReview(value as LinguistIndependentReview)}
-          disabled={saving || project.archivedAt !== undefined}
-        >
-          <SelectTrigger id="project-independent-review">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {INDEPENDENT_REVIEW_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="mt-4 flex justify-end">
-        <Button
-          type="button"
-          size="sm"
-          disabled={saving || project.archivedAt !== undefined}
-          onClick={() => { void save() }}
-        >
-          {saving ? '保存中…' : '保存独立评审'}
-        </Button>
-      </div>
     </section>
   )
 }

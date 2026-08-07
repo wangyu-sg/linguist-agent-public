@@ -44,6 +44,7 @@ import {
   startFakeModelServer,
   type FakeModelServer,
 } from './fake-model-server.ts'
+import { CURRENT_ONBOARDING_VERSION } from '../../src/types/settings.ts'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const APP_DIR = resolve(SCRIPT_DIR, '..', '..')
@@ -286,10 +287,11 @@ async function closeLogStream(stream: WriteStream): Promise<void> {
 }
 
 async function enterMainUI(page: Page): Promise<void> {
-  await page.evaluate(() =>
+  await page.evaluate((onboardingVersion) =>
     (window as unknown as {
       electronAPI: { updateSettings: (updates: unknown) => Promise<unknown> }
-    }).electronAPI.updateSettings({ onboardingCompleted: true }),
+    }).electronAPI.updateSettings({ onboardingCompleted: true, onboardingVersion }),
+    CURRENT_ONBOARDING_VERSION,
   )
   await page.reload()
   await page.waitForFunction(
@@ -568,6 +570,7 @@ async function createAndOpenProjectSessionViaSidebar(
   if (before.length !== 0) throw new Error(`打开项目不应创建 Session，实际已有 ${before.length} 个`)
 
   await page.getByRole('button', { name: `在项目 ${PROJECT_NAME} 中新建会话`, exact: true }).click()
+  await page.getByRole('menuitem', { name: /通用项目 Agent/u }).click()
   let createdSessionIds: string[] = []
   const created = await waitFor(async () => {
     createdSessionIds = await listProjectSessionIds(page, projectId)

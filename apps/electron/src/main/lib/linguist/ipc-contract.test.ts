@@ -128,6 +128,7 @@ describe('linguist session IPC channel contract (PB-034)', () => {
   test('session binding and cross-project copy channel names stay exact', () => {
     expect(LINGUIST_SESSION_IPC_CHANNELS).toEqual({
       CREATE_FOR_PROJECT: 'linguist.sessions.createForProject',
+      UPDATE_ROLE: 'linguist.sessions.updateRole',
       LIST_FOR_PROJECT: 'linguist.sessions.listForProject',
       GET_BINDING: 'linguist.sessions.getBinding',
       DETACH_BINDING: 'linguist.sessions.detachBinding',
@@ -151,8 +152,9 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
       REORDER_ACTIVE: 'linguist.projects.reorderActive',
       ARCHIVE: 'linguist.projects.archive',
       DELETE: 'linguist.projects.delete',
-      SET_EXECUTION_POLICY: 'linguist.projects.setExecutionPolicy',
       SET_WORKFLOW_CONFIG: 'linguist.projects.setWorkflowConfig',
+      UPDATE_TAG_PROFILE: 'linguist.projects.updateTagProfile',
+      SCAN_UNKNOWN_TAGS: 'linguist.projects.scanUnknownTags',
       BACKUP: 'linguist.projects.backup',
       LIST_BACKUPS: 'linguist.projects.listBackups',
       PREVIEW_RESTORE: 'linguist.projects.previewRestore',
@@ -294,7 +296,6 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     'linguistProjectsReorderActive',
     'linguistProjectsArchive',
     'linguistProjectsDelete',
-    'linguistProjectsSetExecutionPolicy',
     // ===== PB-111 备份 / 恢复 =====
     'linguistProjectsBackup',
     'linguistBackupsList',
@@ -345,14 +346,14 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
       expect(preloadSource).toContain(`${method}:`)
     }
     expect(preloadSource).toContain('LINGUIST_PROJECT_IPC_CHANNELS')
-    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'SET_EXECUTION_POLICY', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
+    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
       expect(preloadSource).toContain(`LINGUIST_PROJECT_IPC_CHANNELS.${member}`)
     }
   })
 
   test('ipc.ts registers all project channels with the dialog picker injected for import', () => {
     expect(ipcSource).toContain('createLinguistProjectIpc')
-    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'SET_EXECUTION_POLICY', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
+    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
       expect(ipcSource).toContain(`LINGUIST_PROJECT_IPC_CHANNELS.${member}`)
     }
     expect(ipcSource).toContain('dialog.showOpenDialog')

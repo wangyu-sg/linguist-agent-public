@@ -1,7 +1,7 @@
-# Proma Core Touchpoints — v0.16.8 基线
+# Proma Core Touchpoints — v0.16.9 基线
 
-> 基线：v0.16.8 / bde00f00323d6735a939d14dbce3b2f1a5b672bc
-> 正式 merge：f3d2b431996523a4aa75ec2b027dcf0e932ef08f
+> 基线：v0.16.9 / d08179d9b6e84a5ac8e33a7d70fc2e12dfde21cf
+> 正式 merge：50a74398bb6f8949444593c2915a87a5f8964237
 > 机读真源：[proma-touchpoints.json](./proma-touchpoints.json)
 > 强制测试：tests/upstream-boundary.test.ts（bun run check:boundaries）
 
@@ -11,16 +11,16 @@
 
 | 集合 | 路径数 | 依据 |
 |---|---:|---|
-| formal merge 相对 Proma v0.16.8 的全部变动 | 766 | git diff --name-only bde00f0...f3d2b431 |
-| 允许路径 | 514 | 机读账本的 allowedNewPaths |
-| formal merge 中必须登记的 Proma 核心触点 | 252 | git diff 与当时账本 |
-| 当前账本 | 258 | formal merge 后新增 14 个必要触点，并退役 8 个非必要通用 UI 触点 |
+| formal merge 相对 Proma v0.16.9 的全部变动 | 809 | git diff --name-only d08179d...50a74398 |
+| 允许路径 | 549 | 机读账本的 allowedNewPaths |
+| 仅公开路径占位符替换 | 4 | boundary test 的精确内容规则 |
+| 当前账本 | 256 | 其余 Proma 核心差异逐文件登记 |
 
-formal merge 触点按同步票归组：LA-SYNC-003 的 Local Host Seam 为 75 条、Temporary Deviation 为 1 条；LA-SYNC-004 的 Local Host Seam 为 147 条；LA-SYNC-005 的 Permanent Product Fork 为 29 条。其后新增 14 个必要触点；本轮退役长会话窗口、模型分隔器、ScrollMinimap 支线与冗余 Feature Flags 共 8 个通用 UI 触点，当前总数为 258。权限作用域摘要继续保留，用于在授权前显示文字风险等级与实际操作范围。
+v0.16.9 已吸收 Voice Dictation 文本投递和新 Onboarding 版式，因此对应两个本地触点已退役。其余差异继续按 Permanent Product Fork、Local Host Seam、Linguist Extension 与 Temporary Deviation 分类；精确路径和理由只维护在机读账本中。
 
 ## 规则
 
-1. 新的 Linguist 领域代码优先进入以下允许根：apps/electron/src/renderer/features/linguist/、apps/electron/src/main/lib/linguist/、packages/linguist-*、resources/linguist-skills/、docs/ 和 tests/。apps/electron/src/renderer/host/ 仅用于静态本地 Host Contract 与 composition root。
+1. 新的 Linguist 领域代码优先进入以下允许根：apps/electron/src/renderer/features/linguist/、apps/electron/src/main/lib/linguist/、packages/linguist-*、resources/linguist-skills/、resources/linguist-roles/、docs/ 和 tests/。apps/electron/src/renderer/host/ 仅用于静态本地 Host Contract 与 composition root。
 2. 跨出允许根的 Proma 文件必须在同一变更中写入 proma-touchpoints.json，并给出具体 ticket 与原因。登记了但已不再相对基线变动的条目同样是错误。
 3. apps/electron/src/renderer/lib/linguist-build-metadata.ts 是精确 renderer-lib 例外：它只提供 About 与 Linguist Diagnostics 共用的不可变 build metadata，不承载 Agent 或 CAT 行为。
 4. tests/upstream-boundary.test.ts 同时比较基线至 HEAD、tracked 工作树与 untracked 文件；提交前即可验证将要交付的真实树，提交/推送前仍须重新运行。

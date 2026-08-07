@@ -190,11 +190,6 @@ test('validation negatives: bad id / bad locale / oversized name / wrong types �
       { name: 'bad includeArchived', run: () => ipc.list({ includeArchived: 'yes' }) },
       { name: 'bad workspaceId (empty)', run: () => ipc.create({ ...INPUT, promaWorkspaceId: '' }) },
       { name: 'bad archive id', run: () => ipc.archive({ projectId: project.id.slice(0, -1) }) },
-      { name: 'unknown independentReview literal', run: () => ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview: 'turbo' } }) },
-      { name: 'uppercase independentReview literal', run: () => ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview: 'OFF' } }) },
-      { name: 'missing executionPolicy', run: () => ipc.setExecutionPolicy({ projectId: project.id }) },
-      { name: 'non-object executionPolicy', run: () => ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: 1 }) },
-      { name: 'bad setExecutionPolicy id', run: () => ipc.setExecutionPolicy({ projectId: 'nope', executionPolicy: { independentReview: 'off' } }) },
       { name: 'bad setLocales locale', run: () => ipc.setLocales({ projectId: project.id, sourceLocale: 'english', targetLocale: 'zh-CN' }) },
     ]
     for (const c of cases) {
@@ -218,7 +213,6 @@ test('unknown project id → PROJECT_NOT_FOUND across id-taking channels', async
       () => ipc.open({ projectId: UNKNOWN }),
       () => ipc.getSummary({ projectId: UNKNOWN }),
       () => ipc.archive({ projectId: UNKNOWN }),
-      () => ipc.setExecutionPolicy({ projectId: UNKNOWN, executionPolicy: { independentReview: 'off' } }),
       () => ipc.setLocales({ projectId: UNKNOWN, sourceLocale: 'en', targetLocale: 'ja' }),
       () => ipc.import({ projectId: UNKNOWN }, picker),
     ]) {
@@ -228,33 +222,6 @@ test('unknown project id → PROJECT_NOT_FOUND across id-taking channels', async
     }
     // 项目校验失败时绝不触发 picker（弹窗前失败）
     assert.equal(calls(), 0)
-  } finally {
-    service.closeAll()
-  }
-})
-
-test('setExecutionPolicy: 两档 round-trip 经信封返回更新后项目；归档 → PROJECT_ARCHIVED', async () => {
-  const service = makeService()
-  try {
-    const ipc = makeIpc(service)
-    const project = service.createProject(INPUT)
-
-    // 新建项目经 open 通道返回缺省 off（读取规范化）
-    const opened = await ipc.open({ projectId: project.id })
-    assert.equal(opened.ok, true)
-    if (opened.ok) assert.deepEqual(opened.data.project.executionPolicy, { independentReview: 'off' })
-
-    for (const independentReview of ['risk-based', 'off'] as const) {
-      const result = await ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview } })
-      assert.equal(result.ok, true, independentReview)
-      if (result.ok) assert.deepEqual(result.data.executionPolicy, { independentReview })
-      assert.deepEqual(service.getProject(project.id).executionPolicy, { independentReview })
-    }
-
-    await ipc.archive({ projectId: project.id })
-    const rejected = await ipc.setExecutionPolicy({ projectId: project.id, executionPolicy: { independentReview: 'risk-based' } })
-    assert.equal(rejected.ok, false)
-    if (!rejected.ok) assert.equal(rejected.error.code, 'PROJECT_ARCHIVED')
   } finally {
     service.closeAll()
   }
