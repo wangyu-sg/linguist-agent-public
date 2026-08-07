@@ -12,7 +12,7 @@ Linguist Agent 是一个面向个人日常本地化工作的桌面 Agent：
 
 当前定位是供作者本人连续使用和改良的 **个人 Alpha**，没有面向公众发布计划。产品结构已经固定：不删除 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations 或远程集成；Linguist 是其上的一等本地化模式。
 
-当前 manifest 基线是 Electron App `0.16.19`（Electron `43.2.0`）、`@proma/shared 0.1.85`、Pi Runtime `0.82.1`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.8 / 0.0.27 / 0.0.23`，CAT schema `15`，仓库固定使用 Bun `1.3.14`。
+当前 manifest 基线是 Electron App `0.16.20`（Electron `43.2.0`）、`@proma/shared 0.1.85`、Pi Runtime `0.82.1`、CAT Core / Formats / Store / Tools `0.0.14 / 0.0.8 / 0.0.28 / 0.0.23`，CAT schema `15`，仓库固定使用 Bun `1.3.14`。
 
 应用提供三个并列主模式：
 
@@ -26,7 +26,7 @@ Linguist 是一等 Agent Profile：它在各 Runtime 的 Proma Base 上叠加版
 
 CAT 编辑器中，`Cmd/Ctrl+Enter` 用于确认当前阶段并前进，即使译文没有变化也可执行；项目设置等右侧浮窗的关闭按钮在 Electron 标题栏区域保持可点击。
 
-上游 v0.16.8 底座带来 Planning（Todo、日程、提醒与 Agent 引用）、Agent Island、统一项目/会话文件能力、Vision Relay、xAI OAuth 与更新后的 Pi Runtime。这些能力仍属于共享 Agent / Chat 底座，不能引入第二套 Linguist 状态或绕过 CAT authority；其自动、打包和真机资格仍须分别验证。
+上游 v0.16.9 底座带来更新后的 Planning、Agent Island、统一项目/会话文件能力、Voice Dictation 文本投递与 Agent 工作区可靠性修复。这些能力仍属于共享 Agent / Chat 底座，不能引入第二套 Linguist 状态或绕过 CAT authority；其自动、打包和真机资格仍须分别验证。
 
 ## 架构
 

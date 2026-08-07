@@ -55,6 +55,7 @@ import {
 import { getFileParentPath } from '@/lib/file-utils'
 import { getNextMode } from '@/components/app-shell/mode-switcher-utils'
 import {
+  shouldFallbackVoiceDictationToActiveTab,
   VOICE_DICTATION_CLEAR_PREVIEW_EVENT,
   VOICE_DICTATION_PREVIEW_EVENT,
 } from '@/lib/voice-input-focus'
@@ -373,17 +374,16 @@ export function GlobalShortcuts(): null {
       window.dispatchEvent(new CustomEvent(VOICE_DICTATION_CLEAR_PREVIEW_EVENT, { detail: data }))
     })
     const cleanup = window.electronAPI.onVoiceDictationInsertText((data) => {
+      const acknowledgeDelivery = (delivered: boolean): void => {
+        window.electronAPI.acknowledgeVoiceDictationTextDelivery({
+          sessionId: data.sessionId,
+          delivered,
+        })
+      }
       const trimmed = data.text.trim()
-      if (!trimmed) return
-
-      const resolvePromaInput = (handled: boolean): void => {
-        void window.electronAPI.resolveVoiceDictationPromaInput({ sessionId: data.sessionId, handled })
-          .then((result) => {
-            if (!result || result.mode !== 'clipboard') return
-            if (result.success) toast.info(result.message)
-            else toast.error(result.message)
-          })
-          .catch((error) => console.error('[语音输入] 确认输入结果失败:', error))
+      if (!trimmed) {
+        acknowledgeDelivery(false)
+        return
       }
 
       const insertedAtCursor = !window.dispatchEvent(new CustomEvent('proma:insert-voice-dictation-text', {
@@ -391,8 +391,14 @@ export function GlobalShortcuts(): null {
         detail: { ...data, text: trimmed },
       }))
       if (insertedAtCursor) {
+        acknowledgeDelivery(true)
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
-        resolvePromaInput(true)
+        return
+      }
+
+      if (!shouldFallbackVoiceDictationToActiveTab(data.targetInputId)) {
+        console.warn('[语音输入] 冻结的输入目标已不可用，已丢弃听写结果:', data.targetInputId)
+        acknowledgeDelivery(false)
         return
       }
 
@@ -411,11 +417,11 @@ export function GlobalShortcuts(): null {
         target.type !== 'preview' &&
         target.type !== 'chat'
       ) {
-        resolvePromaInput(false)
+        acknowledgeDelivery(false)
         return
       }
       if (!target.sessionId) {
-        resolvePromaInput(false)
+        acknowledgeDelivery(false)
         return
       }
 
@@ -437,7 +443,7 @@ export function GlobalShortcuts(): null {
           return map
         })
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
-        resolvePromaInput(true)
+        acknowledgeDelivery(true)
         return
       }
 
@@ -452,8 +458,11 @@ export function GlobalShortcuts(): null {
           return map
         })
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
-        resolvePromaInput(true)
+        acknowledgeDelivery(true)
+        return
       }
+
+      acknowledgeDelivery(false)
     })
     return () => {
       cleanupPreview()

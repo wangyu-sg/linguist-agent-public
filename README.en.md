@@ -12,7 +12,7 @@ This repository is an AGPL-3.0 derivative of [Proma](https://github.com/proma-ai
 
 The product is a **personal-use Alpha** for its author's sustained use and improvement, with no public-release plan. Its structure is fixed: it does not remove Proma's Agent, Chat, Providers, Skills, MCP, Automations, or remote integrations; Linguist is a first-class localization mode on top of them.
 
-The current manifest baseline is Electron App `0.16.19` (Electron `43.2.0`), `@proma/shared 0.1.85`, Pi Runtime `0.82.1`, CAT Core / Formats / Store / Tools `0.0.14 / 0.0.8 / 0.0.27 / 0.0.23`, CAT schema `15`, with Bun `1.3.14` pinned for the repository.
+The current manifest baseline is Electron App `0.16.20` (Electron `43.2.0`), `@proma/shared 0.1.85`, Pi Runtime `0.82.1`, CAT Core / Formats / Store / Tools `0.0.14 / 0.0.8 / 0.0.28 / 0.0.23`, CAT schema `15`, with Bun `1.3.14` pinned for the repository.
 
 The application has three peer primary modes:
 
@@ -26,7 +26,7 @@ Linguist is a first-class Agent Profile. It layers a versioned Profile, Role, pr
 
 In the CAT editor, `Cmd/Ctrl+Enter` confirms the current workflow stage and advances even when the target is unchanged. Close buttons on project settings and other right-side sheets remain clickable inside Electron title-bar regions.
 
-The upstream v0.16.8 foundation brings Planning (todos, calendar, reminders, and Agent references), Agent Island, unified project/session files, Vision Relay, xAI OAuth, and the updated Pi Runtime. These remain shared Agent / Chat substrate capabilities: they must not introduce a second Linguist state store or bypass CAT authority. Their automated, packaged, and real-machine qualifications still require separate verification.
+The upstream v0.16.9 foundation brings updated Planning, Agent Island, unified project/session files, Voice Dictation text delivery, and Agent-workspace reliability fixes. These remain shared Agent / Chat substrate capabilities: they must not introduce a second Linguist state store or bypass CAT authority. Their automated, packaged, and real-machine qualifications still require separate verification.
 
 ## Architecture
 

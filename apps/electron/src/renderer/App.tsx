@@ -7,10 +7,12 @@ import { EnvironmentCheckDialog } from './components/environment/EnvironmentChec
 import { MigrationImportDialog } from './components/migration/MigrationImportDialog'
 import { TooltipProvider } from './components/ui/tooltip'
 import { ShortcutGuideDialog } from './components/shortcuts/ShortcutGuideDialog'
+import { FaqDialog } from './components/shortcuts/FaqDialog'
 import { PlanningReminderRail } from './components/planning/PlanningReminderRail'
 import { conversationsAtom } from './atoms/chat-atoms'
 import { environmentCheckDialogOpenAtom } from './atoms/environment'
 import { tabsAtom, activeTabIdAtom, openTab, TUTORIAL_TAB_ID } from './atoms/tab-atoms'
+import { hasCompletedCurrentOnboarding } from '../types'
 import type { AppShellContextType } from './contexts/AppShellContext'
 
 export default function App(): React.ReactElement {
@@ -27,7 +29,7 @@ export default function App(): React.ReactElement {
     const initialize = async () => {
       try {
         const settings = await window.electronAPI.getSettings()
-        if (!settings.onboardingCompleted) {
+        if (!hasCompletedCurrentOnboarding(settings)) {
           setShowOnboarding(true)
         }
       } catch (error) {
@@ -103,6 +105,7 @@ export default function App(): React.ReactElement {
       <AppShell contextValue={contextValue} />
       <PlanningReminderRail />
       <ShortcutGuideDialog />
+      <FaqDialog />
       <TutorialBanner />
       <GlobalEnvironmentCheckDialog />
       <MigrationImportDialog />
