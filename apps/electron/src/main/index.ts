@@ -9,10 +9,14 @@ import {
 // Dev / 正式版均显式使用 Linguist Agent 独立的 Chromium userData。
 // 不能依赖 package name 推导，否则 @proma/electron 会与 Proma 混用。
 // packaged smoke / 诊断显式传入 --user-data-dir 时尊重该隔离目录。
+const developmentInstance = !app.isPackaged
+  ? process.env.PROMA_DEV_INSTANCE?.replace(/[^a-zA-Z0-9_-]/g, '')
+  : undefined
+if (developmentInstance) app.setName(`Linguist Agent-${developmentInstance}`)
 if (shouldSetDefaultElectronUserDataPath(process.argv)) {
   app.setPath(
     'userData',
-    resolveElectronUserDataPath(app.getPath('appData'), app.isPackaged),
+    resolveElectronUserDataPath(app.getPath('appData'), app.isPackaged, developmentInstance),
   )
 }
 
@@ -55,6 +59,10 @@ function registerProtocolsAndHandlers(): void {
 
   // Windows 文件关联：当用户双击文件时，新实例的参数会通过 second-instance 传给已有实例
   app.on('second-instance', (_event, argv) => {
+    if (hasOpenPlanningArgument(argv)) {
+      showPlanningWindow()
+      return
+    }
     showAndFocusMainWindow()
     const fileArg = argv.find((arg) => arg.endsWith('.proma-backup') || arg.endsWith('.proma-share'))
     if (fileArg) {
@@ -102,6 +110,7 @@ import { configureUpdater, initAutoUpdater, cleanupUpdater } from './lib/updater
 import { startWorkspaceWatcher, stopWorkspaceWatcher } from './lib/workspace-watcher'
 import { startChatToolsWatcher, stopChatToolsWatcher } from './lib/chat-tools-watcher'
 import { getIsQuitting, setQuitting } from './lib/app-lifecycle'
+import { getMainWindow as getStoredMainWindow, setMainWindow as setStoredMainWindow } from './lib/main-window-store'
 import {
   registerBridge,
   startAllBridges,
@@ -112,6 +121,7 @@ import {
 import { startScheduler, stopScheduler } from './lib/automation-scheduler'
 import { closeAllLinguistProjectHandles, initLinguistProjectService } from './lib/linguist/project-service'
 import { startPlanningReminderScheduler, stopPlanningReminderScheduler } from './lib/planning-reminder-scheduler'
+import { startPlanningNativeSyncCoordinator, stopPlanningNativeSyncCoordinator } from './lib/planning-native-sync-coordinator'
 import { feishuBridgeManager } from './lib/feishu-bridge-manager'
 import { getFeishuMultiBotConfig } from './lib/feishu-config'
 import { stopFeishuSyncSleepBlocker, syncFeishuSyncSleepBlocker } from './lib/feishu-sleep-blocker'
@@ -122,9 +132,10 @@ import { wechatBridge } from './lib/wechat-bridge'
 import { getWeChatConfig } from './lib/wechat-config'
 import { createQuickTaskWindow, toggleQuickTaskWindow, destroyQuickTaskWindow } from './lib/quick-task-window'
 import { destroyPlanningWindow, showPlanningWindow } from './lib/planning-window'
-import { createAgentIslandWindow, destroyAgentIslandWindow, showAgentIslandWindow } from './lib/agent-island-window'
+import { configurePlanningQuickEntries } from './lib/planning-quick-entry'
+import { hasOpenPlanningArgument } from './lib/planning-quick-entry-model'
 import { handleNativeAgentIslandEvent, initAgentIslandService, disposeAgentIslandService, publishAgentIslandNow } from './lib/agent-island-service'
-import { disposeMacAgentIslandNativeHost, startMacAgentIslandNativeHost } from './lib/mac-agent-island-native-host'
+import { disposeMacAgentIslandNativeHost, startMacAgentIslandNativeHost, isMacAgentIslandNativeHostReady } from './lib/mac-agent-island-native-host'
 import { isAgentIslandSupported } from './lib/macos-version'
 import {
   createVoiceDictationWindow,
@@ -138,22 +149,10 @@ import { TRAY_IPC_CHANNELS } from '../types'
 
 const MIGRATION_IPC_OPEN = 'migration:open-import-file'
 
-let agentIslandElectronFallbackActive = false
-
-/** 非 macOS 或 Swift helper 不可用时的无损降级。 */
-function activateAgentIslandElectronFallback(reason?: string): void {
-  if (agentIslandElectronFallbackActive) return
-  agentIslandElectronFallbackActive = true
-  if (reason) console.warn(`[agent-island] 使用 Electron 降级窗口：${reason}`)
-  createAgentIslandWindow()
-  showAgentIslandWindow()
-  publishAgentIslandNow()
-}
-
-/** macOS 26+ 优先使用真刘海 NSPanel；旧版 macOS 默认不显示灵动岛。 */
+/** macOS 26+ 使用 Swift/AppKit NSPanel；其他平台不创建 Agent Island surface。 */
 function startAgentIslandSurface(): void {
   if (!isAgentIslandSupported()) {
-    console.info('[agent-island] 已在 macOS 26 以下禁用')
+    console.info('[agent-island] 当前平台或 macOS 版本不支持，已禁用')
     return
   }
 
@@ -163,9 +162,13 @@ function startAgentIslandSurface(): void {
       publishAgentIslandNow()
     },
     onEvent: handleNativeAgentIslandEvent,
-    onUnavailable: (reason) => activateAgentIslandElectronFallback(reason),
+    onUnavailable: (reason) => {
+      console.warn(`[agent-island] macOS 原生 helper 不可用，已禁用：${reason}`)
+    },
   })
-  if (!startedNative) activateAgentIslandElectronFallback(process.platform === 'darwin' ? 'native helper unavailable' : 'non-macOS platform')
+  if (!startedNative) {
+    console.warn('[agent-island] macOS 原生 helper 启动失败，已禁用')
+  }
 }
 
 /** 检查文件路径是否为迁移文件，如果是则通知渲染进程打开导入流程 */
@@ -265,10 +268,67 @@ async function recoverEnabledDingTalkBots(): Promise<void> {
 }
 
 let mainWindow: BrowserWindow | null = null
+let startupSplashWindow: BrowserWindow | null = null
+
+/**
+ * 原生启动页不依赖 Renderer bundle 或运行时检测，避免冷启动期间出现空白窗口。
+ * dev 由 build:resources 复制到 dist/resources；打包版由 electron-builder extraResources 提供。
+ */
+function getStartupSplashPath(): string {
+  const resourcesDir = app.isPackaged ? process.resourcesPath : join(__dirname, 'resources')
+  return join(resourcesDir, 'startup-splash', 'index.html')
+}
+
+function dismissStartupSplash(): void {
+  if (startupSplashWindow && !startupSplashWindow.isDestroyed()) {
+    startupSplashWindow.destroy()
+  }
+  startupSplashWindow = null
+}
+
+function createStartupSplashWindow(): void {
+  if (startupSplashWindow && !startupSplashWindow.isDestroyed()) return
+
+  const savedState = getSettings().mainWindowState
+  const initialBounds = savedState
+    ? { width: savedState.width, height: savedState.height, x: savedState.x, y: savedState.y }
+    : { width: 1400, height: 900 }
+
+  startupSplashWindow = new BrowserWindow({
+    ...initialBounds,
+    show: false,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    backgroundColor: '#1b3f2d',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+    },
+  })
+
+  const splash = startupSplashWindow
+  splash.setMenuBarVisibility(false)
+  splash.once('ready-to-show', () => {
+    if (splash.isDestroyed()) return
+    // 与主窗口使用相同的默认策略，首次启动时也不会出现窗口尺寸跳变。
+    if (savedState?.isMaximized ?? true) splash.maximize()
+    splash.show()
+  })
+  splash.once('closed', () => {
+    if (startupSplashWindow === splash) startupSplashWindow = null
+  })
+  splash.loadFile(getStartupSplashPath()).catch((error) => {
+    console.warn('[启动] 原生启动页加载失败，将继续启动主窗口:', error)
+    dismissStartupSplash()
+  })
+}
 
 /** 获取主窗口实例（供其他模块使用） */
 export function getMainWindow(): BrowserWindow | null {
-  return mainWindow
+  return getStoredMainWindow()
 }
 
 function installWindowsZoomInFallback(win: BrowserWindow): void {
@@ -409,6 +469,7 @@ function createWindow(): void {
     },
     ...titleBarOptions,
   })
+  setStoredMainWindow(mainWindow)
   installWindowsZoomInFallback(mainWindow)
 
   // Load the renderer
@@ -420,6 +481,34 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, 'renderer', 'index.html'))
   }
 
+  // 主 Renderer 无法加载或崩溃时，不能让启动页无限停留；切换为轻量错误页告知用户。
+  let hasShownRendererFailure = false
+  const showRendererFailure = (reason: string): void => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+
+    dismissStartupSplash()
+    if (hasShownRendererFailure) {
+      mainWindow.show()
+      return
+    }
+
+    hasShownRendererFailure = true
+    const message = encodeURIComponent(`Proma 无法加载主界面\n\n${reason}\n\n请重试；若问题持续，请检查应用安装文件。`)
+    mainWindow.loadURL(`data:text/plain;charset=utf-8,${message}`).catch((error) => {
+      console.error('[启动] 降级错误页加载失败:', error)
+      mainWindow?.show()
+    })
+  }
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3) return
+    console.error(`[启动] 主 Renderer 加载失败 (${errorCode}): ${errorDescription} (${validatedURL})`)
+    showRendererFailure(errorDescription)
+  })
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[启动] 主 Renderer 进程异常退出: ${details.reason}`)
+    showRendererFailure(`Renderer 进程异常退出：${details.reason}`)
+  })
+
   // 窗口就绪后，按保存的状态决定是否最大化
   mainWindow.once('ready-to-show', () => {
     if (savedState?.isMaximized ?? true) {
@@ -428,6 +517,8 @@ function createWindow(): void {
     if (process.platform === 'darwin' && app.dock) {
       app.dock.show()
     }
+    // 仅在主窗口首帧已完成合成后移除原生启动页，避免冷启动时的空白与闪屏。
+    dismissStartupSplash()
     mainWindow?.show()
   })
 
@@ -497,6 +588,7 @@ function createWindow(): void {
   }
 
   mainWindow.on('closed', () => {
+    setStoredMainWindow(null)
     mainWindow = null
   })
 }
@@ -529,6 +621,9 @@ app.whenReady().then(bootstrap).catch(handleBootstrapFailure)
 async function bootstrap(): Promise<void> {
   // 初始化 Proma 版本号（供 User-Agent 等全局标识使用）
   setPromaVersion(app.getVersion())
+
+  // 先显示不依赖 Renderer 的静态启动页；运行时检测耗时不会再变成用户可见的空白。
+  createStartupSplashWindow()
 
   // 注册自定义协议 proma-file:// 用于内联预览本地文件。
   // 协议只接受主进程签发的 opaque token，不解析 renderer 提供的绝对路径。
@@ -575,9 +670,19 @@ async function bootstrap(): Promise<void> {
   // Create main window (will be shown when ready)
   createWindow()
 
+  // 为 Dock、任务栏右键菜单与首次启动参数提供任务/日程的直接入口。
+  safeRun('configurePlanningQuickEntries', () => {
+    configurePlanningQuickEntries({
+      showMainWindow: showAndFocusMainWindow,
+      showPlanningWindow,
+    })
+  })
+  if (hasOpenPlanningArgument(process.argv)) showPlanningWindow()
+
   // Create system tray icon
   createTray({
     showMainWindow: showAndFocusMainWindow,
+    showPlanningWindow,
     openAgentSession: (sessionId, title) => {
       sendToMainWindow(TRAY_IPC_CHANNELS.OPEN_AGENT_SESSION, { sessionId, title })
     },
@@ -609,20 +714,20 @@ async function bootstrap(): Promise<void> {
     safeRun('createVoiceDictationWindow', createVoiceDictationWindow)
   }
 
-  // Agent 灵动岛：macOS 优先 Swift/AppKit NSPanel（真刘海），其他平台回退 BrowserWindow。
-  safeRun('initAgentIslandService', () => {
-    initAgentIslandService({
-      showAndFocusMainWindow,
-      openAgentSession: (sessionId, title) => {
-        sendToMainWindow(TRAY_IPC_CHANNELS.OPEN_AGENT_SESSION, { sessionId, title })
-      },
-      openPlanning: showPlanningWindow,
-      // The service itself can otherwise create its Electron fallback before
-      // startAgentIslandSurface reaches the platform gate.
-      enabled: () => isAgentIslandSupported() && getSettings().agentIsland?.enabled !== false,
+  // Agent Island 仅在 macOS 26+ 原生 surface 上初始化；Windows/Linux 不注册服务、窗口或事件监听。
+  if (isAgentIslandSupported()) {
+    safeRun('initAgentIslandService', () => {
+      initAgentIslandService({
+        showAndFocusMainWindow,
+        openAgentSession: (sessionId, title) => {
+          sendToMainWindow(TRAY_IPC_CHANNELS.OPEN_AGENT_SESSION, { sessionId, title })
+        },
+        openPlanning: showPlanningWindow,
+        enabled: () => isMacAgentIslandNativeHostReady() && getSettings().agentIsland?.enabled !== false,
+      })
     })
-  })
-  safeRun('startAgentIslandSurface', startAgentIslandSurface)
+    safeRun('startAgentIslandSurface', startAgentIslandSurface)
+  }
 
   // 飞书实时同步开启时，默认阻止系统自动休眠，保证远程群内继续可用。
   safeRun('syncFeishuSyncSleepBlocker', () => syncFeishuSyncSleepBlocker(getSettings()))
@@ -633,6 +738,9 @@ async function bootstrap(): Promise<void> {
   )
   safeRun('registerGlobalShortcut:show-main-window', () =>
     registerGlobalShortcut('show-main-window', showAndFocusMainWindow),
+  )
+  safeRun('registerGlobalShortcut:open-planning', () =>
+    registerGlobalShortcut('open-planning', showPlanningWindow),
   )
   safeRun('registerGlobalShortcut:voice-dictation', () =>
     registerGlobalShortcut('voice-dictation', () => {
@@ -647,6 +755,7 @@ async function bootstrap(): Promise<void> {
   // 启动定时任务调度器（恢复持久化的 active 任务）
   safeRun('startScheduler', startScheduler)
   safeRun('startPlanningReminderScheduler', startPlanningReminderScheduler)
+  safeRun('startPlanningNativeSyncCoordinator', startPlanningNativeSyncCoordinator)
 
   app.on('activate', () => {
     if (shouldSuppressVoiceDictationActivate()) {
@@ -746,6 +855,7 @@ app.on('before-quit', () => {
   stopAllLinguistIntegrityScrubs()
   closeAllLinguistProjectHandles()
   stopPlanningReminderScheduler()
+  stopPlanningNativeSyncCoordinator()
   // 释放飞书同步防休眠
   stopFeishuSyncSleepBlocker()
   // 注销全局快捷键
@@ -754,10 +864,9 @@ app.on('before-quit', () => {
   destroyQuickTaskWindow()
   destroyPlanningWindow()
   destroyVoiceDictationWindow()
-  // 销毁灵动岛服务与窗口（先关闭 NSPanel helper，避免开发热重载遗留原生面板）
+  // 销毁原生 macOS 灵动岛服务（其他平台从未创建 surface）
   disposeMacAgentIslandNativeHost()
   disposeAgentIslandService()
-  destroyAgentIslandWindow()
   // 关闭 Pi MCP 桥接连接（释放 stdio 子进程）
   disposePiMcpConnections().catch(() => {})
   // Clean up system tray before quitting

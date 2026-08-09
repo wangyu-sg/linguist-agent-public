@@ -64,6 +64,7 @@ import { BotHubSettings } from "./BotHubSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
 import { StorageSettings } from "./StorageSettings";
+import { OnboardingSettings } from "./OnboardingSettings";
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { extensionRegistry } from '@/host/extensions'
 import { resolveSettingsSections } from '@/host/extension-registry'
@@ -106,6 +107,11 @@ const SHORTCUTS_TAB: TabItem = {
   label: "快捷键管理",
   icon: <Keyboard size={16} />,
 };
+const ONBOARDING_TAB: TabItem = {
+  id: "onboarding",
+  label: "Proma 新手引导",
+  icon: <GraduationCap size={16} />,
+};
 const VOICE_INPUT_TAB: TabItem = {
   id: "voice-input",
   label: "语音输入",
@@ -122,6 +128,7 @@ const REGISTERED_SETTINGS_TABS: readonly TabItem[] = extensionRegistry.settingsS
 const TAIL_TABS: TabItem[] = [
   { id: "storage", label: "磁盘管理", icon: <HardDrive size={16} /> },
   { id: "appearance", label: "外观设置", icon: <Palette size={16} /> },
+  ONBOARDING_TAB,
   { id: "about", label: "关于/更新", icon: <Info size={16} /> },
 ];
 
@@ -152,6 +159,8 @@ function renderBuiltInTabContent(tab: SettingsTab): React.ReactElement {
       return <VoiceInputSettings />;
     case "storage":
       return <StorageSettings />;
+    case "onboarding":
+      return <OnboardingSettings />;
     default:
       // tutorial 等特殊 tab 由 handleTabChange 拦截打开主区 Tab，不会在此渲染
       return <GeneralSettings />;

@@ -72,6 +72,34 @@ test('Given Planning JSON storage When data changes Then reload, rollback, CAS, 
       assert.ok(manager.claimDuePlanningReminders(now).some((item) => item.targetId === dueTodo.id))
       assert.equal(manager.claimDuePlanningReminders(now).some((item) => item.targetId === dueTodo.id), false)
 
+      const connection = manager.connectPlanningNativeConnection({
+        entity: 'reminder',
+        target: { id: 'system-reminders', title: '系统提醒', sourceTitle: 'iCloud', sourceType: 'caldav', canWrite: true, isCloudBacked: true },
+      })
+      manager.applyPlanningNativeConnectionItems(connection.id, [{
+        calendarItemIdentifier: 'native-1', title: '系统 Todo', completed: false, lastModifiedAt: now,
+      }], { fullSnapshot: true })
+      const nativeTodo = manager.listTodos().find((item) => item.title === '系统 Todo')
+      assert.equal(nativeTodo.nativeOrigin.connectionId, connection.id)
+      manager.updateTodo({ id: nativeTodo.id, title: '本地 Todo' })
+      manager.applyPlanningNativeConnectionItems(connection.id, [{
+        calendarItemIdentifier: 'native-1', title: '系统新版本', completed: false, lastModifiedAt: now + 1,
+      }])
+      const conflict = manager.listPlanningNativeSyncConflicts().find((item) => item.promaEntityId === nativeTodo.id)
+      assert.ok(conflict)
+      assert.equal(manager.resolvePlanningNativeSyncConflict({ id: conflict.id, resolution: 'keep_system' }), true)
+      assert.equal(manager.getTodo(nativeTodo.id).title, '系统新版本')
+
+      const readOnly = manager.connectPlanningNativeConnection({
+        entity: 'calendar',
+        target: { id: 'readonly-calendar', title: '只读日历', sourceTitle: '订阅', sourceType: 'subscribed', canWrite: false, isCloudBacked: true },
+      })
+      manager.applyPlanningNativeConnectionItems(readOnly.id, [{
+        calendarItemIdentifier: 'native-event-1', title: '只读日程', startAt: now, lastModifiedAt: now,
+      }])
+      const nativeEvent = manager.listCalendarEvents().find((item) => item.title === '只读日程')
+      assert.throws(() => manager.updateCalendarEvent({ id: nativeEvent.id, title: '不可修改' }), /只读/)
+
       const linkedTodo = manager.createTodo({ title: '待级联 Todo' })
       const linkedEvent = manager.createCalendarEvent({ title: '关联 Todo 的日程', startAt: now, todoId: linkedTodo.id })
       assert.equal(manager.deleteTodo(linkedTodo.id), true)

@@ -13,11 +13,12 @@ export function shouldSetDefaultElectronUserDataPath(argv: readonly string[]): b
 export function resolveElectronUserDataPath(
   appDataPath: string,
   isPackaged: boolean,
+  developmentInstance?: string,
 ): string {
   return join(
     appDataPath,
     isPackaged
       ? LINGUIST_ELECTRON_USER_DATA_DIR
-      : `${LINGUIST_ELECTRON_USER_DATA_DIR}.dev`,
+      : `${LINGUIST_ELECTRON_USER_DATA_DIR}.dev${developmentInstance ? `-${developmentInstance}` : ''}`,
   )
 }

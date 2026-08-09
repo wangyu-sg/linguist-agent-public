@@ -48,6 +48,7 @@ import {
   updateSessionHoverPreviewEnabled,
 } from '@/atoms/ui-preferences'
 import { cn } from '@/lib/utils'
+import { detectIsMac } from '@/lib/platform'
 import { Button } from '../ui/button'
 import type { NotificationSoundId, NotificationSoundType, NotificationSoundSettings } from '@/types/settings'
 
@@ -74,13 +75,16 @@ export function GeneralSettings(): React.ReactElement {
   const [nameInput, setNameInput] = React.useState(userProfile.userName)
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false)
   const [archiveAfterDays, setArchiveAfterDays] = React.useState<number>(7)
+  const [gitAttributionEnabled, setGitAttributionEnabled] = React.useState(true)
   const [agentIslandEnabled, setAgentIslandEnabled] = React.useState(true)
+  const isMac = React.useMemo(() => detectIsMac(), [])
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
-  // 加载归档天数与 Agent Island 设置
+  // 加载通用 Agent 设置。
   React.useEffect(() => {
     window.electronAPI.getSettings().then((settings) => {
       setArchiveAfterDays(settings.archiveAfterDays ?? 7)
+      setGitAttributionEnabled(settings.gitAttributionEnabled ?? true)
       setAgentIslandEnabled(settings.agentIsland?.enabled ?? true)
     }).catch(console.error)
   }, [])
@@ -93,6 +97,16 @@ export function GeneralSettings(): React.ReactElement {
     } catch (error) {
       console.error('[通用设置] 更新 Agent 灵动岛失败:', error)
       setAgentIslandEnabled(!checked)
+    }
+  }
+
+  const handleGitAttributionChange = async (checked: boolean): Promise<void> => {
+    setGitAttributionEnabled(checked)
+    try {
+      await window.electronAPI.updateSettings({ gitAttributionEnabled: checked })
+    } catch (error) {
+      console.error('[通用设置] 更新 Git/PR 标识失败:', error)
+      setGitAttributionEnabled(!checked)
     }
   }
 
@@ -378,16 +392,27 @@ export function GeneralSettings(): React.ReactElement {
               updateSessionHoverPreviewEnabled(checked)
             }}
           />
+          {isMac && (
+            <SettingsToggle
+              label="Agent 灵动岛"
+              description="在 macOS 刘海屏显示需要接手的 Agent 与 1 小时内的待办/日程；外接无刘海屏默认不覆盖菜单栏"
+              checked={agentIslandEnabled}
+              onCheckedChange={(checked) => {
+                void handleAgentIslandChange(checked)
+              }}
+            />
+          )}
           <SettingsToggle
-            label="Agent 灵动岛"
-            description="在 Mac 刘海屏显示需要接手的 Agent 与 1 小时内的待办/日程；外接无刘海屏默认不覆盖菜单栏"
-            checked={agentIslandEnabled}
+            label="Git/PR 标识"
+            description="Agent 代你提交 commit 或创建 PR 时，附加 Made-with: Linguist Agent 标识；可随时关闭"
+            checked={gitAttributionEnabled}
             onCheckedChange={(checked) => {
-              void handleAgentIslandChange(checked)
+              void handleGitAttributionChange(checked)
             }}
           />
         </SettingsCard>
       </SettingsSection>
+
     </div>
   )
 }

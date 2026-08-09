@@ -43,6 +43,8 @@ type OnboardingStep = 'welcome' | 'guide' | 'files' | 'project' | 'automation' |
 
 interface OnboardingViewProps {
   onComplete: (openTutorial?: boolean) => void
+  /** 从设置重放时可跳过欢迎页。 */
+  initialStep?: OnboardingStep
 }
 
 /** 图片内归一化锚点（0-1） */
@@ -79,6 +81,8 @@ interface GuideFeatureStepProps {
   magnifierScale?: number
   /** 是否在本讲解区显示上一页/下一页导航 */
   showNavigation?: boolean
+  /** 无导航时在正文下方显示的向下滚动提示；点击可滚到示例区 */
+  onScrollHint?: () => void
 }
 
 interface MagnifierProps {
@@ -214,7 +218,7 @@ function GuideNavigation({ nextLabel, onNext, onBack }: { nextLabel: string; onN
 /**
  * 引导科普页：左侧显示界面截图，从锚点画绿色指针指向右侧讲解区。
  */
-function GuideFeatureStep({ anchor, title, highlight, paragraphs, nextLabel, onNext, onBack, imageSrc = guideVisual, arrowMode = 'none', magnifierOffsetX = 0, magnifierImageOffset = {}, imageRightCrop = 0, magnifierScale = 1, showNavigation = true }: GuideFeatureStepProps) {
+function GuideFeatureStep({ anchor, title, highlight, paragraphs, nextLabel, onNext, onBack, imageSrc = guideVisual, arrowMode = 'none', magnifierOffsetX = 0, magnifierImageOffset = {}, imageRightCrop = 0, magnifierScale = 1, showNavigation = true, onScrollHint }: GuideFeatureStepProps) {
   const imgRef = useRef<HTMLImageElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [imgRect, setImgRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
@@ -359,35 +363,62 @@ function GuideFeatureStep({ anchor, title, highlight, paragraphs, nextLabel, onN
             <GuideNavigation nextLabel={nextLabel} onNext={onNext} onBack={onBack} />
           </div>
         )}
+
+        {/* 无导航的首屏：用一行文字承接阅读动线，说明下方还有内容。 */}
+        {!showNavigation && onScrollHint && (
+          <div className="mt-12 w-full max-w-lg border-t border-[#1b3f2d]/20 pt-5">
+            <button
+              type="button"
+              onClick={onScrollHint}
+              className="text-left text-sm leading-6 text-neutral-500 transition-colors hover:text-[#1b3f2d]"
+            >
+              继续向下滚动，查看这一步的真实示例
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-type GuideExamplesIntroProps = Omit<GuideFeatureStepProps, 'nextLabel' | 'onNext' | 'onBack' | 'showNavigation'>
+type GuideExamplesIntroProps = Omit<GuideFeatureStepProps, 'nextLabel' | 'onNext' | 'onBack' | 'showNavigation' | 'onScrollHint'>
 
-function GuideExamplesPage({ intro, nextLabel, onNext, onBack, children }: {
+function GuideExamplesPage({ intro, nextLabel, onNext, onBack, children, showScrollHint = false }: {
   intro: GuideExamplesIntroProps
   nextLabel: string
   onNext: () => void
   onBack: () => void
   children: React.ReactNode
+  /** 首个讲解页在正文下方提示继续向下滚动，避免底部进度地图被误解为横向翻页。 */
+  showScrollHint?: boolean
 }) {
-  return (
-    <div className="h-full w-full overflow-y-auto">
-      <div className="h-[1100px] lg:h-[calc(100vh-4rem)] lg:min-h-[660px]">
-        <GuideFeatureStep
-          {...intro}
-          nextLabel={nextLabel}
-          onNext={onNext}
-          onBack={onBack}
-          showNavigation={false}
-        />
-      </div>
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-      <div className="mx-auto w-full max-w-[calc(58vw+504px)] px-6 pb-28 pt-6 md:px-10">
-        {children}
-        <GuideNavigation nextLabel={nextLabel} onNext={onNext} onBack={onBack} />
+  /** 点击提示推进约一屏，避免与首屏高度、示例区负 margin 耦合。 */
+  const handleScrollHint = () => {
+    const container = scrollRef.current
+    if (!container) return
+    container.scrollBy({ top: container.clientHeight * 0.82, behavior: 'smooth' })
+  }
+
+  return (
+    <div className="relative h-full w-full">
+      <div ref={scrollRef} className="h-full w-full overflow-y-auto">
+        <div className="h-[1100px] lg:h-[calc(100vh-4rem)] lg:min-h-[660px]">
+          <GuideFeatureStep
+            {...intro}
+            nextLabel={nextLabel}
+            onNext={onNext}
+            onBack={onBack}
+            showNavigation={false}
+            onScrollHint={showScrollHint ? handleScrollHint : undefined}
+          />
+        </div>
+
+        <div className="mx-auto w-full max-w-[calc(58vw+504px)] px-6 pb-28 pt-6 md:px-10">
+          {children}
+          <GuideNavigation nextLabel={nextLabel} onNext={onNext} onBack={onBack} />
+        </div>
       </div>
     </div>
   )
@@ -397,6 +428,7 @@ function GuideExamplesPage({ intro, nextLabel, onNext, onBack, children }: {
 function AgentChatGuidePage({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   return (
     <GuideExamplesPage
+      showScrollHint
       intro={{
         anchor: { x: 0.073, y: 0.049 },
         arrowMode: 'magnifier',
@@ -638,8 +670,8 @@ function ProgressMap({ current }: { current: Exclude<OnboardingStep, 'welcome' |
   )
 }
 
-export function OnboardingView({ onComplete }: OnboardingViewProps) {
-  const [step, setStep] = useState<OnboardingStep>('welcome')
+export function OnboardingView({ onComplete, initialStep = 'welcome' }: OnboardingViewProps) {
+  const [step, setStep] = useState<OnboardingStep>(initialStep)
   const [flash, setFlash] = useState(false)
   const [fading, setFading] = useState(false)
   const [faqBackStep, setFaqBackStep] = useState<'subagent' | 'sideanswer'>('sideanswer')
@@ -999,7 +1031,6 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
         )}
       </div>
 
-      {/* ===== 底部进度地图（欢迎页不显示） ===== */}
       {step !== 'welcome' && step !== 'environment' && <ProgressMap current={step} />}
 
       {step === 'subagent' && (

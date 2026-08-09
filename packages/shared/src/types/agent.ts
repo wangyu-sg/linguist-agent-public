@@ -618,7 +618,11 @@ export type PromaEvent =
   | { type: 'permission_mode_changed'; mode: PromaPermissionMode }
   | { type: 'title_updated'; title: string }
   | { type: 'external_run_started'; source: AgentExternalRunSource; sessionId: string; title?: string; workspaceId?: string; modelId?: string; startedAt: number; session?: AgentSessionMeta }
+  /** 普通桌面会话已开始执行；startedAt 用于区分同一会话的连续运行。 */
+  | { type: 'run_started'; startedAt: number }
   | { type: 'run_resumed'; sessionId: string }
+  /** 用户主动停止当前执行；startedAt 防止旧运行的终态覆盖新一轮执行。 */
+  | { type: 'run_stopped'; startedAt?: number }
   // 协作子会话阻塞事件上浮
   | { type: 'delegation_blocked'; delegationId: string; blockedEvent: unknown }
   // 自动任务会话被用户接管（毕业）
@@ -1242,6 +1246,8 @@ export interface AgentStreamCompletePayload {
   resultErrors?: string[]
   /** 本轮主体结束但仍有后台任务/定时任务在飞行：UI 进入"空闲可输入"态，等待任务完成自动唤醒 */
   backgroundTasksPending?: boolean
+  /** 完成时的最新会话元数据，供 renderer 增量更新列表，避免重新传输全量会话索引。 */
+  session?: AgentSessionMeta
 }
 
 // ===== 文件浏览器 =====

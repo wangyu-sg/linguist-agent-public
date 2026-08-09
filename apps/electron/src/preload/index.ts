@@ -284,7 +284,16 @@ import type {
   CreatePlanningGroupInput,
   UpdatePlanningGroupInput,
   SnoozePlanningReminderInput,
-  AgentIslandWindowSnapshot,
+  PlanningNativeSyncEntity,
+  PlanningNativeSyncStatus,
+  PlanningNativeSyncPermissionResult,
+  PlanningNativeSyncTarget,
+  PlanningNativeConnection,
+  PlanningNativeSyncConflict,
+  ConnectPlanningNativeConnectionInput,
+  ResolvePlanningNativeSyncConflictInput,
+  PlanningSyncProfile,
+  SavePlanningSyncProfileInput,
 } from '@proma/shared'
 import type {
   UserProfile,
@@ -1636,28 +1645,22 @@ export interface ElectronAPI {
   onPlanningRemindersDue: (callback: (reminders: ActivePlanningReminder[]) => void) => () => void
   onPlanningChanged: (callback: (change: PlanningChange) => void) => () => void
   onPlanningAgentOperation: (callback: (operation: PlanningAgentOperation) => void) => () => void
+  /** macOS EventKit 同步设置；非 macOS 返回 unsupported 或空集合。 */
+  getPlanningNativeSyncStatus: () => Promise<PlanningNativeSyncStatus>
+  requestPlanningNativeSyncAccess: (entity: PlanningNativeSyncEntity) => Promise<PlanningNativeSyncPermissionResult>
+  openPlanningNativeSyncPrivacySettings: (entity: PlanningNativeSyncEntity) => Promise<void>
+  listPlanningNativeSyncTargets: (entity: PlanningNativeSyncEntity) => Promise<PlanningNativeSyncTarget[]>
+  listPlanningNativeConnectionTargets: (entity: PlanningNativeSyncEntity) => Promise<PlanningNativeSyncTarget[]>
+  listPlanningNativeConnections: (entity?: PlanningNativeSyncEntity) => Promise<PlanningNativeConnection[]>
+  connectPlanningNativeConnection: (input: ConnectPlanningNativeConnectionInput) => Promise<PlanningNativeConnection>
+  disconnectPlanningNativeConnection: (id: string) => Promise<boolean>
+  listPlanningNativeSyncConflicts: () => Promise<PlanningNativeSyncConflict[]>
+  resolvePlanningNativeSyncConflict: (input: ResolvePlanningNativeSyncConflictInput) => Promise<boolean>
+  listPlanningSyncProfiles: () => Promise<PlanningSyncProfile[]>
+  savePlanningSyncProfile: (input: SavePlanningSyncProfileInput) => Promise<PlanningSyncProfile>
 
-  /** Agent 灵动岛桥接（主进程状态机 → 灵动岛窗口） */
+  /** 主应用用于确认完成会话已查看；macOS 原生 Island 消费主进程投影。 */
   agentIsland: {
-    /** 订阅灵动岛全量状态 */
-    onState: (callback: (snapshot: AgentIslandWindowSnapshot) => void) => () => void
-    /** 外部触发展开/收起切换 */
-    onToggleExpanded: (callback: () => void) => () => void
-    /** 同步展开/收起状态到主进程（避免下一条 Agent 事件覆盖本地状态） */
-    setExpanded: (expanded: boolean) => Promise<void>
-    /** 发送鼠标进入/离开 island surface 的意图；主进程负责展开防抖。 */
-    setHovered: (hovered: boolean) => Promise<void>
-    /** 按内容调整窗口尺寸（pill ↔ 展开卡） */
-    resize: (width: number, height: number) => Promise<void>
-    /** 拖拽移动窗口位置 */
-    move: (x: number, y: number) => Promise<void>
-    /** 打开/聚焦主窗口 */
-    openMainWindow: () => Promise<void>
-    /** 打开独立 Planning 窗口。 */
-    openPlanning: () => Promise<void>
-    /** 打开指定 Agent 会话（聚焦主窗口） */
-    openSession: (sessionId: string) => Promise<void>
-    /** 用户已在主应用中主动查看完成会话，清除灵动岛未读状态 */
     markSessionViewed: (sessionId: string) => Promise<void>
   }
 }
@@ -3350,33 +3353,21 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on(PLANNING_IPC_CHANNELS.AGENT_OPERATION, listener)
     return () => { ipcRenderer.removeListener(PLANNING_IPC_CHANNELS.AGENT_OPERATION, listener) }
   },
+  getPlanningNativeSyncStatus: () => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.GET_NATIVE_SYNC_STATUS),
+  requestPlanningNativeSyncAccess: (entity: PlanningNativeSyncEntity) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.REQUEST_NATIVE_SYNC_ACCESS, entity),
+  openPlanningNativeSyncPrivacySettings: (entity: PlanningNativeSyncEntity) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.OPEN_NATIVE_SYNC_PRIVACY_SETTINGS, entity),
+  listPlanningNativeSyncTargets: (entity: PlanningNativeSyncEntity) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_NATIVE_SYNC_TARGETS, entity),
+  listPlanningNativeConnectionTargets: (entity: PlanningNativeSyncEntity) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_NATIVE_CONNECTION_TARGETS, entity),
+  listPlanningNativeConnections: (entity?: PlanningNativeSyncEntity) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_NATIVE_CONNECTIONS, entity),
+  connectPlanningNativeConnection: (input: ConnectPlanningNativeConnectionInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.CONNECT_NATIVE_CONNECTION, input),
+  disconnectPlanningNativeConnection: (id: string) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.DISCONNECT_NATIVE_CONNECTION, id),
+  listPlanningNativeSyncConflicts: () => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_NATIVE_SYNC_CONFLICTS),
+  resolvePlanningNativeSyncConflict: (input: ResolvePlanningNativeSyncConflictInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.RESOLVE_NATIVE_SYNC_CONFLICT, input),
+  listPlanningSyncProfiles: () => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.LIST_SYNC_PROFILES),
+  savePlanningSyncProfile: (input: SavePlanningSyncProfileInput) => ipcRenderer.invoke(PLANNING_IPC_CHANNELS.SAVE_SYNC_PROFILE, input),
 
-  // ===== Agent 灵动岛 =====
+  // ===== Agent 灵动岛（仅 macOS 原生 surface 使用） =====
   agentIsland: {
-    onState: (callback: (snapshot: AgentIslandWindowSnapshot) => void) => {
-      const listener = (_: Electron.IpcRendererEvent, snapshot: AgentIslandWindowSnapshot): void => callback(snapshot)
-      ipcRenderer.on(AGENT_ISLAND_IPC_CHANNELS.STATE, listener)
-      return () => { ipcRenderer.removeListener(AGENT_ISLAND_IPC_CHANNELS.STATE, listener) }
-    },
-    onToggleExpanded: (callback: () => void) => {
-      const listener = (): void => callback()
-      ipcRenderer.on(AGENT_ISLAND_IPC_CHANNELS.TOGGLE_EXPANDED, listener)
-      return () => { ipcRenderer.removeListener(AGENT_ISLAND_IPC_CHANNELS.TOGGLE_EXPANDED, listener) }
-    },
-    setExpanded: (expanded: boolean) =>
-      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.SET_EXPANDED, expanded),
-    setHovered: (hovered: boolean) =>
-      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.SET_HOVERED, hovered),
-    resize: (width: number, height: number) =>
-      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.RESIZE, { width, height }),
-    move: (x: number, y: number) =>
-      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.MOVE, { x, y }),
-    openMainWindow: () =>
-      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.OPEN_MAIN_WINDOW),
-    openPlanning: () =>
-      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.OPEN_PLANNING),
-    openSession: (sessionId: string) =>
-      ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.OPEN_SESSION, sessionId),
     markSessionViewed: (sessionId: string) =>
       ipcRenderer.invoke(AGENT_ISLAND_IPC_CHANNELS.MARK_SESSION_VIEWED, sessionId),
   },

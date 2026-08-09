@@ -17,12 +17,19 @@ import type {
   CreatePlanningReminderRequest,
   CreatePlanningTagInput,
   CreateTodoInput,
+  ConnectPlanningNativeConnectionInput,
   PlanningGroup,
   PlanningGroupScope,
+  PlanningNativeConnection,
+  PlanningNativeSyncConflict,
+  PlanningNativeSyncEntity,
   PlanningReminder,
   PlanningReminderOrigin,
   PlanningReminderTargetType,
+  PlanningSyncProfile,
   PlanningTag,
+  ResolvePlanningNativeSyncConflictInput,
+  SavePlanningSyncProfileInput,
   Todo,
   TodoListQuery,
   TodoSessionLink,
@@ -47,6 +54,7 @@ interface StoredTodo {
   createdAt: number
   updatedAt: number
   completedAt?: number
+  nativeConnectionId?: string
   tagIds: string[]
 }
 
@@ -62,7 +70,136 @@ interface StoredCalendarEvent {
   todoId?: string
   createdAt: number
   updatedAt: number
+  nativeConnectionId?: string
   tagIds: string[]
+}
+
+interface PlanningSyncBinding {
+  profileId: string
+  targetId: string
+  promaEntityId: string
+  calendarItemIdentifier?: string
+  calendarItemExternalIdentifier?: string
+  lastSyncedHash?: string
+  lastSyncedAt?: number
+}
+
+interface PlanningSyncOutboxRecord {
+  id: string
+  profileId: string
+  targetId: string
+  operation: 'upsert' | 'delete'
+  promaEntityId: string
+  nativeStartAt?: number
+  attempts: number
+  nextAttemptAt: number
+  lastError?: string
+  revision: number
+  createdAt: number
+  updatedAt: number
+}
+
+interface PlanningNativeBinding {
+  connectionId: string
+  promaEntityId: string
+  calendarItemIdentifier: string
+  dueDateOnly?: boolean
+  recreatePending?: boolean
+  lastNativeHash?: string
+  lastSyncedAt?: number
+}
+
+interface PlanningNativeOutboxRecord {
+  id: string
+  connectionId: string
+  operation: 'upsert' | 'hide'
+  promaEntityId: string
+  attempts: number
+  nextAttemptAt: number
+  lastError?: string
+  revision: number
+  createdAt: number
+  updatedAt: number
+}
+
+interface PlanningSyncCleanupRecord extends PlanningSyncCleanupItem {
+  nextAttemptAt: number
+  lastError?: string
+  createdAt: number
+  updatedAt: number
+}
+
+interface PlanningStoredConflict {
+  id: string
+  owner: 'connection' | 'profile'
+  ownerId: string
+  entity: PlanningNativeSyncEntity
+  promaEntityId: string
+  kind: 'changed' | 'deleted'
+  nativeItem?: PlanningNativeExternalItem
+  detectedAt: number
+}
+
+interface PlanningNativeSyncState {
+  profiles: PlanningSyncProfile[]
+  profileBindings: PlanningSyncBinding[]
+  profileOutbox: PlanningSyncOutboxRecord[]
+  cleanup: PlanningSyncCleanupRecord[]
+  connections: PlanningNativeConnection[]
+  connectionBindings: PlanningNativeBinding[]
+  connectionOutbox: PlanningNativeOutboxRecord[]
+  conflicts: PlanningStoredConflict[]
+}
+
+export interface PlanningSyncOutboxItem {
+  id: string
+  profile: PlanningSyncProfile
+  operation: 'upsert' | 'delete'
+  promaEntityId: string
+  attempts: number
+  revision: number
+  calendarItemIdentifier?: string
+  nativeStartAt?: number
+}
+
+export interface PlanningNativeExternalItem {
+  calendarItemIdentifier: string
+  calendarItemExternalIdentifier?: string
+  promaIdentity?: string
+  title: string
+  notes?: string
+  startAt?: number
+  endAt?: number
+  allDay?: boolean
+  dueAt?: number
+  priority?: Todo['priority']
+  completed?: boolean
+  completedAt?: number
+  dueDateOnly?: boolean
+  isRecurring?: boolean
+  lastModifiedAt: number
+}
+
+export interface PlanningNativeOutboxItem {
+  id: string
+  connection: PlanningNativeConnection
+  operation: 'upsert' | 'hide'
+  promaEntityId: string
+  calendarItemIdentifier: string
+  dueDateOnly?: boolean
+  recreatePending?: boolean
+  attempts: number
+  revision: number
+}
+
+export interface PlanningSyncCleanupItem {
+  id: string
+  entity: PlanningNativeSyncEntity
+  targetId: string
+  promaEntityId: string
+  calendarItemIdentifier?: string
+  nativeStartAt?: number
+  attempts: number
 }
 
 interface PlanningState {
@@ -73,6 +210,7 @@ interface PlanningState {
   calendarEvents: StoredCalendarEvent[]
   reminders: PlanningReminder[]
   todoSessionLinks: Record<string, TodoSessionLink[]>
+  nativeSync?: PlanningNativeSyncState
 }
 
 let planningState: PlanningState | undefined
@@ -86,7 +224,25 @@ function createEmptyState(): PlanningState {
     calendarEvents: [],
     reminders: [],
     todoSessionLinks: {},
+    nativeSync: createEmptyNativeSyncState(),
   }
+}
+
+function createEmptyNativeSyncState(): PlanningNativeSyncState {
+  return {
+    profiles: [],
+    profileBindings: [],
+    profileOutbox: [],
+    cleanup: [],
+    connections: [],
+    connectionBindings: [],
+    connectionOutbox: [],
+    conflicts: [],
+  }
+}
+
+function nativeSync(state: PlanningState): PlanningNativeSyncState {
+  return state.nativeSync ??= createEmptyNativeSyncState()
 }
 
 function getPlanningStatePath(): string {
@@ -111,6 +267,77 @@ function isOptionalTimestamp(value: unknown): boolean {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function isOptionalBoolean(value: unknown): boolean {
+  return value === undefined || typeof value === 'boolean'
+}
+
+function isNativeEntity(value: unknown): value is PlanningNativeSyncEntity {
+  return value === 'calendar' || value === 'reminder'
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 0
+}
+
+function isPlanningNativeSyncState(value: unknown): value is PlanningNativeSyncState {
+  if (!isRecord(value)) return false
+  const arrays = [
+    value.profiles,
+    value.profileBindings,
+    value.profileOutbox,
+    value.cleanup,
+    value.connections,
+    value.connectionBindings,
+    value.connectionOutbox,
+    value.conflicts,
+  ]
+  if (arrays.some((items) => !Array.isArray(items))) return false
+  return (value.profiles as unknown[]).every((item) => isRecord(item)
+      && isString(item.id) && isNativeEntity(item.entity) && isString(item.targetId)
+      && isString(item.targetTitle) && isString(item.sourceTitle) && typeof item.enabled === 'boolean'
+      && isTimestamp(item.createdAt) && isTimestamp(item.updatedAt))
+    && (value.profileBindings as unknown[]).every((item) => isRecord(item)
+      && isString(item.profileId) && isString(item.targetId) && isString(item.promaEntityId)
+      && isOptionalString(item.calendarItemIdentifier) && isOptionalString(item.calendarItemExternalIdentifier)
+      && isOptionalString(item.lastSyncedHash) && isOptionalTimestamp(item.lastSyncedAt))
+    && (value.profileOutbox as unknown[]).every((item) => isRecord(item)
+      && isString(item.id) && isString(item.profileId) && isString(item.targetId)
+      && (item.operation === 'upsert' || item.operation === 'delete') && isString(item.promaEntityId)
+      && isOptionalTimestamp(item.nativeStartAt) && isNonNegativeInteger(item.attempts)
+      && isTimestamp(item.nextAttemptAt) && isOptionalString(item.lastError)
+      && Number.isInteger(item.revision) && Number(item.revision) >= 1
+      && isTimestamp(item.createdAt) && isTimestamp(item.updatedAt))
+    && (value.cleanup as unknown[]).every((item) => isRecord(item)
+      && isString(item.id) && isNativeEntity(item.entity) && isString(item.targetId)
+      && isString(item.promaEntityId) && isOptionalString(item.calendarItemIdentifier)
+      && isOptionalTimestamp(item.nativeStartAt) && isNonNegativeInteger(item.attempts)
+      && isTimestamp(item.nextAttemptAt) && isOptionalString(item.lastError)
+      && isTimestamp(item.createdAt) && isTimestamp(item.updatedAt))
+    && (value.connections as unknown[]).every((item) => isRecord(item)
+      && isString(item.id) && isNativeEntity(item.entity) && isString(item.targetId)
+      && isString(item.targetTitle) && isString(item.sourceTitle) && isString(item.sourceType)
+      && typeof item.canWrite === 'boolean' && isTimestamp(item.connectedAt) && isTimestamp(item.updatedAt))
+    && (value.connectionBindings as unknown[]).every((item) => isRecord(item)
+      && isString(item.connectionId) && isString(item.promaEntityId) && isString(item.calendarItemIdentifier)
+      && isOptionalBoolean(item.dueDateOnly) && isOptionalBoolean(item.recreatePending)
+      && isOptionalString(item.lastNativeHash) && isOptionalTimestamp(item.lastSyncedAt))
+    && (value.connectionOutbox as unknown[]).every((item) => isRecord(item)
+      && isString(item.id) && isString(item.connectionId)
+      && (item.operation === 'upsert' || item.operation === 'hide') && isString(item.promaEntityId)
+      && isNonNegativeInteger(item.attempts) && isTimestamp(item.nextAttemptAt)
+      && isOptionalString(item.lastError) && Number.isInteger(item.revision) && Number(item.revision) >= 1
+      && isTimestamp(item.createdAt) && isTimestamp(item.updatedAt))
+    && (value.conflicts as unknown[]).every((item) => isRecord(item)
+      && isString(item.id) && (item.owner === 'connection' || item.owner === 'profile')
+      && isString(item.ownerId) && isNativeEntity(item.entity) && isString(item.promaEntityId)
+      && (item.kind === 'changed' || item.kind === 'deleted')
+      && (item.nativeItem === undefined || isRecord(item.nativeItem)) && isTimestamp(item.detectedAt))
 }
 
 function isPlanningGroup(value: unknown): value is PlanningGroup {
@@ -147,6 +374,7 @@ function isStoredTodo(value: unknown): value is StoredTodo {
     && isTimestamp(value.createdAt)
     && isTimestamp(value.updatedAt)
     && isOptionalTimestamp(value.completedAt)
+    && isOptionalString(value.nativeConnectionId)
     && isStringArray(value.tagIds)
 }
 
@@ -163,6 +391,7 @@ function isStoredCalendarEvent(value: unknown): value is StoredCalendarEvent {
     && isOptionalString(value.todoId)
     && isTimestamp(value.createdAt)
     && isTimestamp(value.updatedAt)
+    && isOptionalString(value.nativeConnectionId)
     && isStringArray(value.tagIds)
 }
 
@@ -206,17 +435,30 @@ function assertPlanningRelations(state: PlanningState): void {
   const tagIds = new Set(state.tags.map((item) => item.id))
   const todoIds = new Set(state.todos.map((item) => item.id))
   const eventIds = new Set(state.calendarEvents.map((item) => item.id))
+  const sync = nativeSync(state)
+  const profileIds = new Set(sync.profiles.map((item) => item.id))
+  const connectionById = new Map(sync.connections.map((item) => [item.id, item]))
+  if (!unique(sync.profiles.map((item) => item.id))
+    || !unique(sync.profiles.map((item) => item.entity))
+    || !unique(sync.connections.map((item) => item.id))
+    || !unique(sync.connections.map((item) => `${item.entity}:${item.targetId}`))
+    || !unique(sync.profileOutbox.map((item) => item.id))
+    || !unique(sync.connectionOutbox.map((item) => item.id))
+    || !unique(sync.cleanup.map((item) => item.id))
+    || !unique(sync.conflicts.map((item) => item.id))) invalidPlanningState()
   for (const todo of state.todos) {
     if ((todo.groupId && !groupIds.has(`todo:${todo.groupId}`))
       || !unique(todo.tagIds)
-      || todo.tagIds.some((id) => !tagIds.has(id))) invalidPlanningState()
+      || todo.tagIds.some((id) => !tagIds.has(id))
+      || (todo.nativeConnectionId && connectionById.get(todo.nativeConnectionId)?.entity !== 'reminder')) invalidPlanningState()
   }
   for (const event of state.calendarEvents) {
     if ((event.groupId && !groupIds.has(`calendar:${event.groupId}`))
       || (event.todoId && !todoIds.has(event.todoId))
       || !unique(event.tagIds)
       || event.tagIds.some((id) => !tagIds.has(id))
-      || (event.endAt !== undefined && event.endAt < event.startAt)) invalidPlanningState()
+      || (event.endAt !== undefined && event.endAt < event.startAt)
+      || (event.nativeConnectionId && connectionById.get(event.nativeConnectionId)?.entity !== 'calendar')) invalidPlanningState()
   }
   for (const reminder of state.reminders) {
     if (reminder.targetType === 'todo' ? !todoIds.has(reminder.targetId) : !eventIds.has(reminder.targetId)) invalidPlanningState()
@@ -224,6 +466,10 @@ function assertPlanningRelations(state: PlanningState): void {
   for (const [todoId, links] of Object.entries(state.todoSessionLinks)) {
     if (!todoIds.has(todoId) || !unique(links.map((item) => item.sessionId))) invalidPlanningState()
   }
+  if (sync.profileBindings.some((item) => !profileIds.has(item.profileId))
+    || sync.profileOutbox.some((item) => !profileIds.has(item.profileId))
+    || sync.connectionBindings.some((item) => !connectionById.has(item.connectionId))
+    || sync.connectionOutbox.some((item) => !connectionById.has(item.connectionId))) invalidPlanningState()
 }
 
 function parsePlanningState(value: unknown): PlanningState {
@@ -237,6 +483,7 @@ function parsePlanningState(value: unknown): PlanningState {
   if (!Object.values(value.todoSessionLinks).every((links) => Array.isArray(links) && links.every(isTodoSessionLink))) {
     return invalidPlanningState()
   }
+  if (value.nativeSync !== undefined && !isPlanningNativeSyncState(value.nativeSync)) return invalidPlanningState()
   const state = value as unknown as PlanningState
   assertPlanningRelations(state)
   return state
@@ -412,6 +659,17 @@ function todoSessionLinksForTodo(state: PlanningState, todoId: string): TodoSess
     .map(copyTodoSessionLink)
 }
 
+function nativeOrigin(state: PlanningState, connectionId: string | undefined): Todo['nativeOrigin'] {
+  if (!connectionId) return undefined
+  const connection = nativeSync(state).connections.find((item) => item.id === connectionId)
+  return connection ? {
+    connectionId,
+    targetTitle: connection.targetTitle,
+    sourceTitle: connection.sourceTitle,
+    canWrite: connection.canWrite,
+  } : undefined
+}
+
 function hydrateTodo(state: PlanningState, todo: StoredTodo): Todo {
   const group = todo.groupId ? findGroup(state, todo.groupId, 'todo') : undefined
   return {
@@ -430,6 +688,7 @@ function hydrateTodo(state: PlanningState, todo: StoredTodo): Todo {
     createdAt: todo.createdAt,
     updatedAt: todo.updatedAt,
     completedAt: todo.completedAt,
+    nativeOrigin: nativeOrigin(state, todo.nativeConnectionId),
   }
 }
 
@@ -450,6 +709,7 @@ function hydrateCalendarEvent(state: PlanningState, event: StoredCalendarEvent):
     todoId: event.todoId,
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
+    nativeOrigin: nativeOrigin(state, event.nativeConnectionId),
   }
 }
 
@@ -518,6 +778,695 @@ function addTodoSessionLink(state: PlanningState, todoId: string, sessionId: str
     return
   }
   links.push({ sessionId, firstTouchedAt: now, lastTouchedAt: now })
+}
+
+/** EventKit locator 与修改时间不属于用户内容，不参与双向内容基线。 */
+export function planningNativeCalendarHash(
+  item: Pick<PlanningNativeExternalItem, 'title' | 'notes' | 'startAt' | 'endAt' | 'allDay'>,
+): string {
+  return JSON.stringify({
+    title: item.title,
+    notes: item.notes ?? null,
+    startAt: item.startAt ?? null,
+    endAt: item.endAt ?? null,
+    allDay: Boolean(item.allDay),
+  })
+}
+
+function removeNativeProjection(
+  state: PlanningState,
+  entity: PlanningNativeSyncEntity,
+  promaEntityId: string,
+  connectionId?: string,
+): void {
+  if (entity === 'reminder') {
+    state.todos = state.todos.filter((todo) => todo.id !== promaEntityId
+      || (connectionId !== undefined && todo.nativeConnectionId !== connectionId))
+    state.reminders = state.reminders.filter((reminder) => !(reminder.targetType === 'todo' && reminder.targetId === promaEntityId))
+    delete state.todoSessionLinks[promaEntityId]
+    for (const event of state.calendarEvents) {
+      if (event.todoId === promaEntityId) event.todoId = undefined
+    }
+    return
+  }
+  state.calendarEvents = state.calendarEvents.filter((event) => event.id !== promaEntityId
+    || (connectionId !== undefined && event.nativeConnectionId !== connectionId))
+  state.reminders = state.reminders.filter((reminder) => !(reminder.targetType === 'calendar_event' && reminder.targetId === promaEntityId))
+}
+
+function retryAt(attempts: number, now = Date.now()): number {
+  return now + Math.min(60 * 60 * 1_000, 5_000 * 2 ** Math.min(Math.max(0, attempts - 1), 10))
+}
+
+function syncEntity(targetType: PlanningReminderTargetType): PlanningNativeSyncEntity {
+  return targetType === 'todo' ? 'reminder' : 'calendar'
+}
+
+function putConflict(
+  sync: PlanningNativeSyncState,
+  input: Omit<PlanningStoredConflict, 'id' | 'detectedAt'>,
+  now = Date.now(),
+): void {
+  const old = sync.conflicts.find((item) => item.owner === input.owner
+    && item.ownerId === input.ownerId && item.promaEntityId === input.promaEntityId)
+  if (old) Object.assign(old, input, { detectedAt: now })
+  else sync.conflicts.push({ id: randomUUID(), ...input, detectedAt: now })
+}
+
+function enqueuePlanningSync(
+  state: PlanningState,
+  targetType: PlanningReminderTargetType,
+  promaEntityId: string,
+  operation: 'upsert' | 'delete',
+  now = Date.now(),
+  nativeStartAt?: number,
+): void {
+  const sync = nativeSync(state)
+  const entity = syncEntity(targetType)
+  const nativeBinding = sync.connectionBindings.find((item) => item.promaEntityId === promaEntityId)
+  if (nativeBinding) {
+    const connection = sync.connections.find((item) => item.id === nativeBinding.connectionId && item.entity === entity)
+    if (!connection) throw new Error('系统集合连接已失效')
+    if (!connection.canWrite) throw new Error('该系统集合为只读，不能在 Linguist Agent 中修改或删除')
+    const old = sync.connectionOutbox.find((item) => item.connectionId === connection.id && item.promaEntityId === promaEntityId)
+    if (old) Object.assign(old, {
+      operation: operation === 'delete' ? 'hide' : 'upsert',
+      attempts: 0,
+      nextAttemptAt: now,
+      lastError: undefined,
+      revision: old.revision + 1,
+      updatedAt: now,
+    })
+    else sync.connectionOutbox.push({
+      id: randomUUID(), connectionId: connection.id,
+      operation: operation === 'delete' ? 'hide' : 'upsert', promaEntityId,
+      attempts: 0, nextAttemptAt: now, revision: 1, createdAt: now, updatedAt: now,
+    })
+    return
+  }
+  for (const profile of sync.profiles.filter((item) => item.entity === entity && item.enabled)) {
+    const old = sync.profileOutbox.find((item) => item.profileId === profile.id && item.promaEntityId === promaEntityId)
+    if (old) Object.assign(old, {
+      targetId: profile.targetId, operation, nativeStartAt, attempts: 0,
+      nextAttemptAt: now, lastError: undefined, revision: old.revision + 1, updatedAt: now,
+    })
+    else sync.profileOutbox.push({
+      id: randomUUID(), profileId: profile.id, targetId: profile.targetId, operation,
+      promaEntityId, nativeStartAt, attempts: 0, nextAttemptAt: now,
+      revision: 1, createdAt: now, updatedAt: now,
+    })
+  }
+}
+
+function enqueueCleanup(
+  sync: PlanningNativeSyncState,
+  input: Omit<PlanningSyncCleanupItem, 'id' | 'attempts'>,
+  now: number,
+): void {
+  const old = sync.cleanup.find((item) => item.entity === input.entity
+    && item.targetId === input.targetId && item.promaEntityId === input.promaEntityId)
+  if (old) Object.assign(old, input, { nextAttemptAt: now, lastError: undefined, updatedAt: now })
+  else sync.cleanup.push({
+    id: randomUUID(), ...input, attempts: 0, nextAttemptAt: now, createdAt: now, updatedAt: now,
+  })
+}
+
+function enqueueAllPlanningItems(state: PlanningState, profile: PlanningSyncProfile): void {
+  const now = Date.now()
+  if (profile.entity === 'calendar') {
+    const from = now - 30 * 24 * 60 * 60 * 1_000
+    const to = now + 18 * 30 * 24 * 60 * 60 * 1_000
+    for (const event of state.calendarEvents.filter((item) => (item.endAt ?? item.startAt) >= from && item.startAt <= to)) {
+      enqueuePlanningSync(state, 'calendar_event', event.id, 'upsert', now)
+    }
+  } else {
+    for (const todo of state.todos.filter((item) => item.status === 'open')) {
+      enqueuePlanningSync(state, 'todo', todo.id, 'upsert', now)
+    }
+  }
+}
+
+export function listPlanningSyncProfiles(): PlanningSyncProfile[] {
+  return nativeSync(getPlanningState()).profiles.map((item) => ({ ...item })).sort((a, b) => a.entity.localeCompare(b.entity))
+}
+
+export function listEnabledManagedCalendarProfiles(): PlanningSyncProfile[] {
+  return listPlanningSyncProfiles().filter((item) => item.entity === 'calendar' && item.enabled)
+}
+
+export function listPlanningSyncBindingIdentifiers(profileId: string, targetId: string): string[] {
+  return nativeSync(getPlanningState()).profileBindings
+    .filter((item) => item.profileId === profileId && item.targetId === targetId && item.calendarItemIdentifier)
+    .map((item) => item.calendarItemIdentifier!)
+}
+
+export function listPlanningNativeConnections(entity?: PlanningNativeSyncEntity): PlanningNativeConnection[] {
+  return nativeSync(getPlanningState()).connections
+    .filter((item) => entity === undefined || item.entity === entity)
+    .map((item) => ({ ...item }))
+    .sort((a, b) => a.entity.localeCompare(b.entity)
+      || a.sourceTitle.localeCompare(b.sourceTitle) || a.targetTitle.localeCompare(b.targetTitle))
+}
+
+export function connectPlanningNativeConnection(input: ConnectPlanningNativeConnectionInput): PlanningNativeConnection {
+  const targetId = assertText(input.target.id, '系统集合', 1_000)
+  const targetTitle = assertText(input.target.title, '系统集合名称', 500)
+  const now = Date.now()
+  let result!: PlanningNativeConnection
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    if (sync.profiles.some((item) => item.entity === input.entity && item.targetId === targetId)) {
+      throw new Error('受管目标不能同时作为外部连接')
+    }
+    const old = sync.connections.find((item) => item.entity === input.entity && item.targetId === targetId)
+    result = {
+      id: old?.id ?? randomUUID(), entity: input.entity, targetId, targetTitle,
+      sourceTitle: input.target.sourceTitle.trim().slice(0, 500), sourceType: input.target.sourceType,
+      canWrite: input.target.canWrite, connectedAt: old?.connectedAt ?? now, updatedAt: now,
+    }
+    if (old) Object.assign(old, result)
+    else sync.connections.push(result)
+  })
+  return { ...result }
+}
+
+export function disconnectPlanningNativeConnection(id: string): boolean {
+  if (!nativeSync(getPlanningState()).connections.some((item) => item.id === id)) return false
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    const connection = sync.connections.find((item) => item.id === id)
+    if (!connection) return
+    for (const binding of sync.connectionBindings.filter((item) => item.connectionId === id)) {
+      removeNativeProjection(state, connection.entity, binding.promaEntityId, id)
+    }
+    sync.connections = sync.connections.filter((item) => item.id !== id)
+    sync.connectionBindings = sync.connectionBindings.filter((item) => item.connectionId !== id)
+    sync.connectionOutbox = sync.connectionOutbox.filter((item) => item.connectionId !== id)
+    sync.conflicts = sync.conflicts.filter((item) => !(item.owner === 'connection' && item.ownerId === id))
+  })
+  return true
+}
+
+export function savePlanningSyncProfile(input: SavePlanningSyncProfileInput): PlanningSyncProfile {
+  const targetId = assertText(input.target.id, '同步目标', 1_000)
+  const targetTitle = assertText(input.target.title, '同步目标名称', 500)
+  let result!: PlanningSyncProfile
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    if (sync.connections.some((item) => item.entity === input.entity && item.targetId === targetId)) {
+      throw new Error('外部连接不能同时作为受管目标')
+    }
+    const old = sync.profiles.find((item) => item.entity === input.entity)
+    const now = Math.max(Date.now(), (old?.updatedAt ?? 0) + 1)
+    result = {
+      id: old?.id ?? randomUUID(), entity: input.entity, targetId, targetTitle,
+      sourceTitle: input.target.sourceTitle.trim().slice(0, 500),
+      enabled: input.enabled ?? old?.enabled ?? true, createdAt: old?.createdAt ?? now, updatedAt: now,
+    }
+    const targetChanged = old !== undefined && old.targetId !== targetId
+    if (targetChanged && old) {
+      for (const binding of sync.profileBindings.filter((item) => item.profileId === old.id)) {
+        enqueueCleanup(sync, {
+          entity: old.entity, targetId: binding.targetId, promaEntityId: binding.promaEntityId,
+          calendarItemIdentifier: binding.calendarItemIdentifier,
+        }, now)
+      }
+      for (const pending of sync.profileOutbox.filter((item) => item.profileId === old.id && item.operation === 'upsert')) {
+        enqueueCleanup(sync, {
+          entity: old.entity, targetId: pending.targetId, promaEntityId: pending.promaEntityId,
+          nativeStartAt: pending.nativeStartAt,
+        }, now)
+      }
+      sync.profileBindings = sync.profileBindings.filter((item) => item.profileId !== old.id)
+      sync.profileOutbox = sync.profileOutbox.filter((item) => item.profileId !== old.id)
+      sync.conflicts = sync.conflicts.filter((item) => !(item.owner === 'profile' && item.ownerId === old.id))
+    }
+    if (old) Object.assign(old, result)
+    else sync.profiles.push(result)
+    if (result.enabled && (!old || targetChanged || !old.enabled)) enqueueAllPlanningItems(state, result)
+  })
+  return { ...result }
+}
+
+export function listDuePlanningSyncOutbox(now = Date.now(), limit = 25): PlanningSyncOutboxItem[] {
+  const sync = nativeSync(getPlanningState())
+  return sync.profileOutbox
+    .filter((item) => item.nextAttemptAt <= now
+      && !sync.conflicts.some((conflict) => conflict.owner === 'profile'
+        && conflict.ownerId === item.profileId && conflict.promaEntityId === item.promaEntityId))
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .slice(0, limit)
+    .flatMap((item) => {
+      const profile = sync.profiles.find((candidate) => candidate.id === item.profileId && candidate.enabled)
+      if (!profile) return []
+      const binding = sync.profileBindings.find((candidate) => candidate.profileId === item.profileId
+        && candidate.targetId === item.targetId && candidate.promaEntityId === item.promaEntityId)
+      return [{
+        id: item.id, profile: { ...profile, targetId: item.targetId }, operation: item.operation,
+        promaEntityId: item.promaEntityId, attempts: item.attempts, revision: item.revision,
+        calendarItemIdentifier: binding?.calendarItemIdentifier, nativeStartAt: item.nativeStartAt,
+      }]
+    })
+}
+
+export function completePlanningSyncOutbox(
+  item: PlanningSyncOutboxItem,
+  identifiers?: { calendarItemIdentifier?: string; calendarItemExternalIdentifier?: string },
+  nativeHash?: string,
+): void {
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    const current = sync.profileOutbox.find((candidate) => candidate.id === item.id && candidate.revision === item.revision)
+    if (!current) return
+    const profile = sync.profiles.find((candidate) => candidate.id === item.profile.id)
+    const currentTarget = profile?.targetId === item.profile.targetId
+    if (item.operation === 'delete' && currentTarget) {
+      sync.profileBindings = sync.profileBindings.filter((binding) => !(binding.profileId === item.profile.id
+        && binding.targetId === item.profile.targetId && binding.promaEntityId === item.promaEntityId))
+    } else if (identifiers?.calendarItemIdentifier && currentTarget) {
+      const binding = sync.profileBindings.find((candidate) => candidate.profileId === item.profile.id
+        && candidate.promaEntityId === item.promaEntityId)
+      const next: PlanningSyncBinding = {
+        profileId: item.profile.id, targetId: item.profile.targetId, promaEntityId: item.promaEntityId,
+        calendarItemIdentifier: identifiers.calendarItemIdentifier,
+        calendarItemExternalIdentifier: identifiers.calendarItemExternalIdentifier,
+        lastSyncedHash: nativeHash, lastSyncedAt: Date.now(),
+      }
+      if (binding) Object.assign(binding, next)
+      else sync.profileBindings.push(next)
+    } else if (identifiers?.calendarItemIdentifier) {
+      enqueueCleanup(sync, {
+        entity: item.profile.entity, targetId: item.profile.targetId, promaEntityId: item.promaEntityId,
+        calendarItemIdentifier: identifiers.calendarItemIdentifier, nativeStartAt: item.nativeStartAt,
+      }, Date.now())
+    }
+    sync.profileOutbox = sync.profileOutbox.filter((candidate) => !(candidate.id === item.id && candidate.revision === item.revision))
+  })
+}
+
+export function failPlanningSyncOutbox(item: PlanningSyncOutboxItem, error: string): void {
+  withPlanningTransaction((state) => {
+    const current = nativeSync(state).profileOutbox.find((candidate) => candidate.id === item.id && candidate.revision === item.revision)
+    if (!current) return
+    current.attempts += 1
+    current.nextAttemptAt = retryAt(current.attempts)
+    current.lastError = error.slice(0, 1_000)
+    current.updatedAt = Date.now()
+  })
+}
+
+export function listDuePlanningSyncCleanup(now = Date.now(), limit = 25): PlanningSyncCleanupItem[] {
+  return nativeSync(getPlanningState()).cleanup
+    .filter((item) => item.nextAttemptAt <= now).sort((a, b) => a.createdAt - b.createdAt)
+    .slice(0, limit).map(({ nextAttemptAt: _next, lastError: _error, createdAt: _created, updatedAt: _updated, ...item }) => ({ ...item }))
+}
+
+export function completePlanningSyncCleanup(item: PlanningSyncCleanupItem): void {
+  withPlanningTransaction((state) => {
+    nativeSync(state).cleanup = nativeSync(state).cleanup.filter((candidate) => candidate.id !== item.id)
+  })
+}
+
+export function failPlanningSyncCleanup(item: PlanningSyncCleanupItem, error: string): void {
+  withPlanningTransaction((state) => {
+    const current = nativeSync(state).cleanup.find((candidate) => candidate.id === item.id)
+    if (!current) return
+    current.attempts += 1
+    current.nextAttemptAt = retryAt(current.attempts)
+    current.lastError = error.slice(0, 1_000)
+    current.updatedAt = Date.now()
+  })
+}
+
+export function listDuePlanningNativeOutbox(now = Date.now(), limit = 25): PlanningNativeOutboxItem[] {
+  const sync = nativeSync(getPlanningState())
+  return sync.connectionOutbox
+    .filter((item) => item.nextAttemptAt <= now
+      && !sync.conflicts.some((conflict) => conflict.owner === 'connection'
+        && conflict.ownerId === item.connectionId && conflict.promaEntityId === item.promaEntityId))
+    .sort((a, b) => a.createdAt - b.createdAt).slice(0, limit)
+    .flatMap((item) => {
+      const connection = sync.connections.find((candidate) => candidate.id === item.connectionId)
+      const binding = sync.connectionBindings.find((candidate) => candidate.connectionId === item.connectionId
+        && candidate.promaEntityId === item.promaEntityId)
+      return connection && binding ? [{
+        id: item.id, connection: { ...connection }, operation: item.operation,
+        promaEntityId: item.promaEntityId, calendarItemIdentifier: binding.calendarItemIdentifier,
+        dueDateOnly: binding.dueDateOnly, recreatePending: binding.recreatePending,
+        attempts: item.attempts, revision: item.revision,
+      }] : []
+    })
+}
+
+export function completePlanningNativeOutbox(
+  item: PlanningNativeOutboxItem,
+  identifiers?: { calendarItemIdentifier?: string },
+): void {
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    const current = sync.connectionOutbox.find((candidate) => candidate.id === item.id && candidate.revision === item.revision)
+    if (!current) return
+    const binding = sync.connectionBindings.find((candidate) => candidate.connectionId === item.connection.id
+      && candidate.promaEntityId === item.promaEntityId)
+    if (item.operation === 'hide') {
+      removeNativeProjection(state, item.connection.entity, item.promaEntityId, item.connection.id)
+      sync.connectionBindings = sync.connectionBindings.filter((candidate) => candidate !== binding)
+    } else if (binding && identifiers?.calendarItemIdentifier) {
+      binding.calendarItemIdentifier = identifiers.calendarItemIdentifier
+      binding.recreatePending = false
+      binding.lastNativeHash = undefined
+      binding.lastSyncedAt = Date.now()
+    }
+    sync.connectionOutbox = sync.connectionOutbox.filter((candidate) => !(candidate.id === item.id && candidate.revision === item.revision))
+  })
+}
+
+export function failPlanningNativeOutbox(item: PlanningNativeOutboxItem, error: string): void {
+  withPlanningTransaction((state) => {
+    const current = nativeSync(state).connectionOutbox.find((candidate) => candidate.id === item.id && candidate.revision === item.revision)
+    if (!current) return
+    current.attempts += 1
+    current.nextAttemptAt = retryAt(current.attempts)
+    current.lastError = error.slice(0, 1_000)
+    current.updatedAt = Date.now()
+  })
+}
+
+export function listPlanningNativeBindingIdentifiers(connectionId: string): string[] {
+  return nativeSync(getPlanningState()).connectionBindings
+    .filter((item) => item.connectionId === connectionId).map((item) => item.calendarItemIdentifier)
+}
+
+function hideMissingNativeBindings(
+  state: PlanningState,
+  connection: PlanningNativeConnection,
+  existingIdentifiers: Set<string>,
+): void {
+  const sync = nativeSync(state)
+  for (const binding of [...sync.connectionBindings]) {
+    if (binding.connectionId !== connection.id
+      || existingIdentifiers.has(binding.calendarItemIdentifier)
+      || binding.recreatePending) continue
+    const pending = sync.connectionOutbox.some((item) => item.connectionId === connection.id
+      && item.promaEntityId === binding.promaEntityId)
+    if (pending) {
+      putConflict(sync, {
+        owner: 'connection', ownerId: connection.id, entity: connection.entity,
+        promaEntityId: binding.promaEntityId, kind: 'deleted',
+      })
+      continue
+    }
+    removeNativeProjection(state, connection.entity, binding.promaEntityId, connection.id)
+    sync.connectionBindings = sync.connectionBindings.filter((item) => item !== binding)
+  }
+}
+
+/** 精确 locator 查询确认系统端缺失后，移除对应投影；不会把有界日历查询误当完整快照。 */
+export function hideMissingPlanningNativeConnectionItems(connectionId: string, existingIdentifiers: string[]): void {
+  const connection = nativeSync(getPlanningState()).connections.find((item) => item.id === connectionId)
+  if (!connection) return
+  const existing = new Set(existingIdentifiers)
+  withPlanningTransaction((state) => hideMissingNativeBindings(state, connection, existing))
+}
+
+/** EventKit 回流专用路径；不调用普通 CRUD，避免产生同步回声。 */
+export function applyPlanningNativeConnectionItems(
+  connectionId: string,
+  items: PlanningNativeExternalItem[],
+  options: { fullSnapshot?: boolean } = {},
+): void {
+  const connection = nativeSync(getPlanningState()).connections.find((item) => item.id === connectionId)
+  if (!connection) return
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    const now = Date.now()
+    const seen = new Set<string>()
+    for (const item of items) {
+      if (!item.calendarItemIdentifier || !item.title) continue
+      seen.add(item.calendarItemIdentifier)
+      const binding = sync.connectionBindings.find((candidate) => candidate.connectionId === connectionId
+        && candidate.calendarItemIdentifier === item.calendarItemIdentifier)
+      if (item.isRecurring) {
+        if (binding) {
+          sync.connectionOutbox = sync.connectionOutbox.filter((candidate) => !(candidate.connectionId === connectionId
+            && candidate.promaEntityId === binding.promaEntityId))
+          removeNativeProjection(state, connection.entity, binding.promaEntityId, connectionId)
+          sync.connectionBindings = sync.connectionBindings.filter((candidate) => candidate !== binding)
+        }
+        continue
+      }
+      const hash = JSON.stringify(item)
+      if (binding?.lastNativeHash === hash) continue
+      const localId = binding?.promaEntityId ?? randomUUID()
+      if (binding && sync.connectionOutbox.some((candidate) => candidate.connectionId === connectionId
+        && candidate.promaEntityId === localId)) {
+        putConflict(sync, {
+          owner: 'connection', ownerId: connectionId, entity: connection.entity,
+          promaEntityId: localId, kind: 'changed', nativeItem: structuredClone(item),
+        }, now)
+        continue
+      }
+      const updatedAt = Math.max(now, item.lastModifiedAt || now)
+      if (connection.entity === 'reminder') {
+        const target = findTodo(state, localId)
+        const values: StoredTodo = {
+          id: localId, title: item.title.slice(0, 500), notes: item.notes,
+          status: item.completed ? 'completed' : 'open', priority: item.priority ?? 'medium',
+          dueAt: item.dueAt, nativeConnectionId: connectionId,
+          createdAt: target?.createdAt ?? now, updatedAt,
+          completedAt: item.completed ? (item.completedAt ?? now) : undefined,
+          tagIds: target?.tagIds ?? [], groupId: target?.groupId, workspaceId: target?.workspaceId,
+        }
+        if (target) Object.assign(target, values)
+        else state.todos.push(values)
+      } else {
+        if (!item.startAt) continue
+        const target = findCalendarEvent(state, localId)
+        const values: StoredCalendarEvent = {
+          id: localId, title: item.title.slice(0, 500), notes: item.notes,
+          startAt: item.startAt, endAt: item.endAt, allDay: Boolean(item.allDay),
+          nativeConnectionId: connectionId, createdAt: target?.createdAt ?? now, updatedAt,
+          tagIds: target?.tagIds ?? [], groupId: target?.groupId, workspaceId: target?.workspaceId,
+          todoId: target?.todoId,
+        }
+        if (target) Object.assign(target, values)
+        else state.calendarEvents.push(values)
+      }
+      const nextBinding: PlanningNativeBinding = {
+        connectionId, promaEntityId: localId, calendarItemIdentifier: item.calendarItemIdentifier,
+        dueDateOnly: item.dueDateOnly, recreatePending: false, lastNativeHash: hash, lastSyncedAt: now,
+      }
+      if (binding) Object.assign(binding, nextBinding)
+      else sync.connectionBindings.push(nextBinding)
+    }
+    if (options.fullSnapshot) hideMissingNativeBindings(state, connection, seen)
+  })
+}
+
+/** 受管 Calendar 回流路径；只有稳定 locator 或待完成 outbox marker 能恢复既有绑定。 */
+export function applyManagedCalendarProfileItems(profileId: string, items: PlanningNativeExternalItem[]): void {
+  const profile = nativeSync(getPlanningState()).profiles.find((item) => item.id === profileId
+    && item.entity === 'calendar' && item.enabled)
+  if (!profile) return
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    const now = Date.now()
+    for (const item of items) {
+      if (!item.calendarItemIdentifier || !item.title || !item.startAt) continue
+      let binding = sync.profileBindings.find((candidate) => candidate.profileId === profileId
+        && candidate.targetId === profile.targetId
+        && candidate.calendarItemIdentifier === item.calendarItemIdentifier)
+      if (!binding) {
+        const candidates = sync.profileBindings.filter((candidate) => candidate.profileId === profileId
+          && candidate.targetId === profile.targetId
+          && ((item.calendarItemExternalIdentifier !== undefined
+              && candidate.calendarItemExternalIdentifier === item.calendarItemExternalIdentifier)
+            || (item.promaIdentity !== undefined && candidate.promaEntityId === item.promaIdentity)))
+        const marker = item.promaIdentity
+          ? candidates.find((candidate) => candidate.promaEntityId === item.promaIdentity)
+          : undefined
+        if (candidates.length === 1 && marker && item.calendarItemExternalIdentifier
+          && marker.calendarItemExternalIdentifier === item.calendarItemExternalIdentifier) binding = marker
+        else if (candidates.length > 0) {
+          for (const candidate of candidates) {
+            putConflict(sync, {
+              owner: 'profile', ownerId: profileId, entity: 'calendar',
+              promaEntityId: candidate.promaEntityId, kind: 'changed', nativeItem: structuredClone(item),
+            }, now)
+          }
+          continue
+        }
+      }
+      if (item.isRecurring) {
+        if (binding) {
+          sync.profileOutbox = sync.profileOutbox.filter((candidate) => !(candidate.profileId === profileId
+            && candidate.promaEntityId === binding.promaEntityId))
+          removeNativeProjection(state, 'calendar', binding.promaEntityId)
+          sync.profileBindings = sync.profileBindings.filter((candidate) => candidate !== binding)
+        }
+        continue
+      }
+      if (binding && binding.calendarItemIdentifier !== item.calendarItemIdentifier) {
+        binding.calendarItemIdentifier = item.calendarItemIdentifier
+        binding.calendarItemExternalIdentifier = item.calendarItemExternalIdentifier ?? binding.calendarItemExternalIdentifier
+        binding.lastSyncedAt = now
+      }
+      const hash = planningNativeCalendarHash(item)
+      if (binding?.lastSyncedHash === hash) continue
+      const recoveredPending = !binding && item.promaIdentity
+        ? sync.profileOutbox.some((candidate) => candidate.profileId === profileId
+          && candidate.promaEntityId === item.promaIdentity && candidate.operation === 'upsert')
+        : false
+      const localId = binding?.promaEntityId ?? (recoveredPending ? item.promaIdentity! : randomUUID())
+      const pending = (binding || recoveredPending) && sync.profileOutbox.some((candidate) => candidate.profileId === profileId
+        && candidate.promaEntityId === localId)
+      if (pending && !recoveredPending) {
+        putConflict(sync, {
+          owner: 'profile', ownerId: profileId, entity: 'calendar',
+          promaEntityId: localId, kind: 'changed', nativeItem: structuredClone(item),
+        }, now)
+        continue
+      }
+      const target = findCalendarEvent(state, localId)
+      const values: StoredCalendarEvent = {
+        id: localId, title: item.title.slice(0, 500), notes: item.notes,
+        startAt: item.startAt, endAt: item.endAt, allDay: Boolean(item.allDay),
+        createdAt: target?.createdAt ?? now, updatedAt: Math.max(now, item.lastModifiedAt || now),
+        tagIds: target?.tagIds ?? [], groupId: target?.groupId, workspaceId: target?.workspaceId,
+        todoId: target?.todoId,
+      }
+      if (target) Object.assign(target, values)
+      else state.calendarEvents.push(values)
+      const nextBinding: PlanningSyncBinding = {
+        profileId, targetId: profile.targetId, promaEntityId: localId,
+        calendarItemIdentifier: item.calendarItemIdentifier,
+        calendarItemExternalIdentifier: item.calendarItemExternalIdentifier,
+        lastSyncedHash: hash, lastSyncedAt: now,
+      }
+      if (binding) Object.assign(binding, nextBinding)
+      else sync.profileBindings.push(nextBinding)
+    }
+  })
+}
+
+/** 只有 locator 精确读取确认缺失的受管 Calendar 项才视为系统端删除。 */
+export function hideMissingManagedCalendarProfileItems(
+  profileId: string,
+  targetId: string,
+  existingIdentifiers: string[],
+): void {
+  const profile = nativeSync(getPlanningState()).profiles.find((item) => item.id === profileId
+    && item.entity === 'calendar' && item.enabled && item.targetId === targetId)
+  if (!profile) return
+  const existing = new Set(existingIdentifiers)
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    for (const binding of [...sync.profileBindings]) {
+      if (binding.profileId !== profileId || binding.targetId !== targetId
+        || !binding.calendarItemIdentifier || existing.has(binding.calendarItemIdentifier)) continue
+      const pending = sync.profileOutbox.some((item) => item.profileId === profileId
+        && item.promaEntityId === binding.promaEntityId)
+      const conflicted = sync.conflicts.some((item) => item.owner === 'profile'
+        && item.ownerId === profileId && item.promaEntityId === binding.promaEntityId)
+      if (pending && !conflicted) {
+        putConflict(sync, {
+          owner: 'profile', ownerId: profileId, entity: 'calendar',
+          promaEntityId: binding.promaEntityId, kind: 'deleted',
+        })
+      }
+      if (pending || conflicted) continue
+      removeNativeProjection(state, 'calendar', binding.promaEntityId)
+      sync.profileBindings = sync.profileBindings.filter((item) => item !== binding)
+    }
+  })
+}
+
+export function listPlanningNativeSyncConflicts(): PlanningNativeSyncConflict[] {
+  const state = getPlanningState()
+  const sync = nativeSync(state)
+  return sync.conflicts.map((item) => {
+    const connection = item.owner === 'connection'
+      ? sync.connections.find((candidate) => candidate.id === item.ownerId)
+      : undefined
+    const profile = item.owner === 'profile'
+      ? sync.profiles.find((candidate) => candidate.id === item.ownerId)
+      : undefined
+    const local = item.entity === 'reminder'
+      ? findTodo(state, item.promaEntityId)
+      : findCalendarEvent(state, item.promaEntityId)
+    return {
+      id: item.id,
+      connectionId: item.owner === 'connection' ? item.ownerId : undefined,
+      profileId: item.owner === 'profile' ? item.ownerId : undefined,
+      entity: item.entity,
+      promaEntityId: item.promaEntityId,
+      title: local?.title ?? connection?.targetTitle ?? profile?.targetTitle ?? '系统事项',
+      kind: item.kind,
+      detectedAt: item.detectedAt,
+    }
+  }).sort((a, b) => b.detectedAt - a.detectedAt)
+}
+
+/** 冲突必须显式选择；保留系统才回流，保留本地才继续或重建出站版本。 */
+export function resolvePlanningNativeSyncConflict(input: ResolvePlanningNativeSyncConflictInput): boolean {
+  const current = nativeSync(getPlanningState()).conflicts.find((item) => item.id === input.id)
+  if (!current) return false
+  let applyConnection: { id: string; item: PlanningNativeExternalItem } | undefined
+  let applyProfile: { id: string; item: PlanningNativeExternalItem } | undefined
+  withPlanningTransaction((state) => {
+    const sync = nativeSync(state)
+    const conflict = sync.conflicts.find((item) => item.id === input.id)
+    if (!conflict) return
+    if (conflict.owner === 'connection') {
+      const binding = sync.connectionBindings.find((item) => item.connectionId === conflict.ownerId
+        && item.promaEntityId === conflict.promaEntityId)
+      const connection = sync.connections.find((item) => item.id === conflict.ownerId)
+      if (!binding || !connection) return
+      if (input.resolution === 'keep_proma') {
+        if (!connection.canWrite) throw new Error('该系统集合为只读，不能保留本地版本')
+        if (conflict.kind === 'changed' && conflict.nativeItem) binding.lastNativeHash = JSON.stringify(conflict.nativeItem)
+        if (conflict.kind === 'deleted') binding.recreatePending = true
+        enqueuePlanningSync(state, connection.entity === 'reminder' ? 'todo' : 'calendar_event', conflict.promaEntityId, 'upsert')
+      } else {
+        sync.connectionOutbox = sync.connectionOutbox.filter((item) => !(item.connectionId === conflict.ownerId
+          && item.promaEntityId === conflict.promaEntityId))
+        if (conflict.kind === 'deleted') {
+          removeNativeProjection(state, conflict.entity, conflict.promaEntityId, conflict.ownerId)
+          sync.connectionBindings = sync.connectionBindings.filter((item) => item !== binding)
+        } else if (conflict.nativeItem) applyConnection = { id: conflict.ownerId, item: structuredClone(conflict.nativeItem) }
+      }
+    } else {
+      const binding = sync.profileBindings.find((item) => item.profileId === conflict.ownerId
+        && item.promaEntityId === conflict.promaEntityId)
+      if (!binding) return
+      if (input.resolution === 'keep_proma') {
+        if (conflict.kind === 'changed' && conflict.nativeItem
+          && binding.calendarItemIdentifier === conflict.nativeItem.calendarItemIdentifier) {
+          binding.lastSyncedHash = planningNativeCalendarHash(conflict.nativeItem)
+          binding.lastSyncedAt = Date.now()
+        } else {
+          binding.calendarItemIdentifier = undefined
+          binding.lastSyncedHash = undefined
+        }
+        enqueuePlanningSync(state, 'calendar_event', conflict.promaEntityId, 'upsert')
+      } else {
+        sync.profileOutbox = sync.profileOutbox.filter((item) => !(item.profileId === conflict.ownerId
+          && item.promaEntityId === conflict.promaEntityId))
+        if (conflict.kind === 'deleted') {
+          removeNativeProjection(state, 'calendar', conflict.promaEntityId)
+          sync.profileBindings = sync.profileBindings.filter((item) => item !== binding)
+        } else if (conflict.nativeItem) {
+          binding.calendarItemIdentifier = conflict.nativeItem.calendarItemIdentifier
+          binding.calendarItemExternalIdentifier = conflict.nativeItem.calendarItemExternalIdentifier
+          applyProfile = { id: conflict.ownerId, item: structuredClone(conflict.nativeItem) }
+        }
+      }
+    }
+    sync.conflicts = sync.conflicts.filter((item) => item.id !== input.id)
+  })
+  if (applyConnection) applyPlanningNativeConnectionItems(applyConnection.id, [applyConnection.item])
+  if (applyProfile) applyManagedCalendarProfileItems(applyProfile.id, [applyProfile.item])
+  return true
 }
 
 export function listPlanningGroups(scope: PlanningGroupScope): PlanningGroup[] {
@@ -709,6 +1658,7 @@ export function createTodo(input: CreateTodoInput): Todo {
       addPlanningReminder(draft, { targetType: 'todo', targetId: todo.id, triggerAt: todo.dueAt }, 'todo_due_at', now)
     }
     if (input.sessionId) addTodoSessionLink(draft, todo.id, input.sessionId, now)
+    enqueuePlanningSync(draft, 'todo', todo.id, 'upsert', now)
   })
   return getTodo(todo.id)!
 }
@@ -751,6 +1701,7 @@ export function updateTodo(input: UpdateTodoInput): Todo | undefined {
     if (tagIds !== undefined) target.tagIds = tagIds
     if (input.dueAt !== undefined && old.dueAt !== dueAt) syncTodoDueAtReminder(draft, input.id, dueAt, updatedAt)
     if (status === 'completed' && old.status !== 'completed') setTodoRemindersCompleted(draft, input.id, updatedAt)
+    enqueuePlanningSync(draft, 'todo', input.id, 'upsert', updatedAt)
   })
   return getTodo(input.id)
 }
@@ -758,6 +1709,7 @@ export function updateTodo(input: UpdateTodoInput): Todo | undefined {
 export function deleteTodo(id: string): boolean {
   if (!findTodo(getPlanningState(), id)) return false
   withPlanningTransaction((state) => {
+    enqueuePlanningSync(state, 'todo', id, 'delete')
     state.todos = state.todos.filter((todo) => todo.id !== id)
     state.reminders = state.reminders.filter((reminder) => !(reminder.targetType === 'todo' && reminder.targetId === id))
     delete state.todoSessionLinks[id]
@@ -816,6 +1768,7 @@ export function createCalendarEvent(input: CreateCalendarEventInput): CalendarEv
         addPlanningReminder(draft, { targetType: 'calendar_event', targetId: event.id, triggerAt: reminder.triggerAt }, 'manual', now)
       }
     }
+    enqueuePlanningSync(draft, 'calendar_event', event.id, 'upsert', now)
   })
   return getCalendarEvent(event.id)!
 }
@@ -857,13 +1810,16 @@ export function updateCalendarEvent(input: UpdateCalendarEventInput): CalendarEv
     target.todoId = todoId
     target.updatedAt = updatedAt
     if (tagIds !== undefined) target.tagIds = tagIds
+    enqueuePlanningSync(draft, 'calendar_event', input.id, 'upsert', updatedAt)
   })
   return getCalendarEvent(input.id)
 }
 
 export function deleteCalendarEvent(id: string): boolean {
-  if (!findCalendarEvent(getPlanningState(), id)) return false
+  const old = findCalendarEvent(getPlanningState(), id)
+  if (!old) return false
   withPlanningTransaction((state) => {
+    enqueuePlanningSync(state, 'calendar_event', id, 'delete', Date.now(), old.startAt)
     state.calendarEvents = state.calendarEvents.filter((event) => event.id !== id)
     state.reminders = state.reminders.filter((reminder) => !(reminder.targetType === 'calendar_event' && reminder.targetId === id))
   })
@@ -980,10 +1936,17 @@ export function listActivePlanningReminders(): ActivePlanningReminder[] {
 
 /** 返回新增到期提醒并标记已通知，避免每个 30 秒轮询周期重复播放声音。 */
 export function claimDuePlanningReminders(now = Date.now()): ActivePlanningReminder[] {
-  const due = getPlanningState().reminders.filter((reminder) => (
+  const current = getPlanningState()
+  const managedReminderIds = new Set(nativeSync(current).profileBindings
+    .filter((binding) => nativeSync(current).profiles.some((profile) => profile.id === binding.profileId
+      && profile.entity === 'reminder' && profile.enabled))
+    .map((binding) => binding.promaEntityId))
+  const due = current.reminders.filter((reminder) => (
     reminder.status === 'pending'
     && effectiveReminderTime(reminder) <= now
     && reminder.lastNotifiedAt === undefined
+    && !(reminder.origin === 'todo_due_at' && reminder.targetType === 'todo'
+      && managedReminderIds.has(reminder.targetId))
   ))
   if (due.length === 0) return []
 
@@ -992,7 +1955,9 @@ export function claimDuePlanningReminders(now = Date.now()): ActivePlanningRemin
     for (const reminder of state.reminders
       .filter((candidate) => candidate.status === 'pending'
         && effectiveReminderTime(candidate) <= now
-        && candidate.lastNotifiedAt === undefined)
+        && candidate.lastNotifiedAt === undefined
+        && !(candidate.origin === 'todo_due_at' && candidate.targetType === 'todo'
+          && managedReminderIds.has(candidate.targetId)))
       .sort((left, right) => effectiveReminderTime(left) - effectiveReminderTime(right))) {
       reminder.lastNotifiedAt = now
       reminder.updatedAt = now

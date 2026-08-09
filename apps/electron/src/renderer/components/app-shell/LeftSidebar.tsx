@@ -2364,6 +2364,22 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
         {/* 高频操作 */}
         <div className="flex flex-col items-center gap-1.5">
+          {mode !== 'linguist' && <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={mode === 'agent' ? '新建 Agent 会话' : '新建 Chat 对话'}
+                onClick={() => { void (mode === 'agent' ? createAgentSessionInWorkspace() : createChat()) }}
+                className="size-10 flex items-center justify-center rounded-[12px] text-foreground/70 bg-primary/5 hover:bg-primary/10 transition-colors titlebar-no-drag border border-dashed border-[hsl(var(--dashed-border))] hover:border-[hsl(var(--dashed-border-hover))]"
+              >
+                <Plus size={16} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {mode === 'agent' ? '新会话' : '新对话'}
+            </TooltipContent>
+          </Tooltip>}
+
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -2509,24 +2525,26 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         style={isMac ? { height: MAC_TITLEBAR_SAFE_AREA_HEIGHT } : undefined}
       />
 
-      {/* 模式切换器 + 搜索 + 折叠按钮 */}
+      {/* 模式切换器 + 折叠按钮 */}
       <div className="titlebar-drag-region flex items-start gap-1.5 px-3">
         <div className="flex-1 min-w-0">
           <ModeSwitcher />
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="搜索会话"
-              onClick={() => setSearchDialogOpen(true)}
-              className="mt-2 size-10 flex-shrink-0 flex items-center justify-center rounded-[10px] text-foreground/40 sidebar-control-surface hover:text-foreground/60 transition-[background-color,color] duration-150 titlebar-no-drag"
-            >
-              <Search size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">搜索 ({getAcceleratorDisplay(getActiveAccelerator('global-search'))})</TooltipContent>
-        </Tooltip>
+        {mode === 'linguist' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="搜索会话"
+                onClick={() => setSearchDialogOpen(true)}
+                className="mt-2 size-10 flex-shrink-0 flex items-center justify-center rounded-[10px] text-foreground/40 sidebar-control-surface hover:text-foreground/60 transition-[background-color,color] duration-150 titlebar-no-drag"
+              >
+                <Search size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">搜索 ({getAcceleratorDisplay(getActiveAccelerator('global-search'))})</TooltipContent>
+          </Tooltip>
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -2544,15 +2562,38 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         </Tooltip>
       </div>
 
-      {mode !== 'linguist' && (
-        <div className="px-3 pt-2 pb-0.5">
-          <AutomationSidebarEntry
-            count={automationCount}
-            active={activeView === 'planning'}
-            onClick={handleOpenAutomations}
-          />
-        </div>
-      )}
+      {/* 新对话/新会话按钮 + 搜索按钮 */}
+      {mode !== 'linguist' && <div className="px-3 pt-2 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => { void (mode === 'agent' ? createAgentSessionInWorkspace() : createChat()) }}
+          className="flex-1 flex items-center gap-2 px-3 py-2 rounded-[10px] text-[13px] font-medium text-foreground/70 bg-primary/5 hover:bg-primary/10 transition-colors duration-100 titlebar-no-drag border border-dashed border-[hsl(var(--dashed-border))] hover:border-[hsl(var(--dashed-border-hover))]"
+        >
+          <Plus size={14} />
+          <span>{mode === 'agent' ? '新会话' : '新对话'}</span>
+        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setSearchDialogOpen(true)}
+              className="flex-shrink-0 size-[36px] flex items-center justify-center rounded-[10px] text-foreground/40 bg-primary/5 hover:bg-primary/10 hover:text-foreground/60 transition-colors duration-100 titlebar-no-drag border border-dashed border-[hsl(var(--dashed-border))] hover:border-[hsl(var(--dashed-border-hover))]"
+            >
+              <Search size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">搜索 ({getAcceleratorDisplay(getActiveAccelerator('global-search'))})</TooltipContent>
+        </Tooltip>
+      </div>}
+
+      {/* 任务/日程入口：作为统一规划中心入口。 */}
+      {mode !== 'linguist' && <div className="px-3 pt-2 pb-0.5">
+        <AutomationSidebarEntry
+          count={automationCount}
+          active={activeView === 'planning'}
+          onClick={handleOpenAutomations}
+        />
+      </div>}
 
       {mode === 'agent' && (
         <div className="px-3 pb-0.5">
@@ -2627,7 +2668,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           <div className="px-2 pb-3">
             {conversationGroups.map((group) => (
               <div key={group.label} className="mb-1">
-                <div className="ml-[4px] px-1.5 pt-2 pb-1 text-[11px] font-medium text-foreground/60 select-none">
+                <div className="ml-[4px] px-1.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">
                   {group.label}
                 </div>
                 <div className="flex flex-col gap-0.5">
@@ -2729,7 +2770,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
           {/* 下区标题：项目历史 */}
           <div className="px-2 pt-2 pb-1 flex items-center justify-between flex-shrink-0">
-            <span className="ml-[4px] px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">项目</span>
+            <span className="px-1.5 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">项目</span>
             <div className="flex items-center gap-0.5">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -2850,7 +2891,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               /* Chat 归档：对话按日期分组 */
               conversationGroups.map((group) => (
                 <div key={group.label} className="mb-1">
-                  <div className="px-3 pt-2 pb-1 text-[11px] font-medium text-foreground/40 select-none">
+                  <div className="px-3 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">
                     {group.label}
                   </div>
                   <div className="flex flex-col gap-0.5">
@@ -2876,7 +2917,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
               /* Agent 模式归档：Agent 会话按日期分组，含委派树 */
               archivedAgentSessionTrees.map((group) => (
                 <div key={group.label} className="mb-1">
-                  <div className="px-3 pt-2 pb-1 text-[11px] font-medium text-foreground/40 select-none">
+                  <div className="px-3 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">
                     {group.label}
                   </div>
                   <div className="flex flex-col gap-0.5">

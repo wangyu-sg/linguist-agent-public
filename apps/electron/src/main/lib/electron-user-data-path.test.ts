@@ -17,6 +17,9 @@ describe('Electron userData 隔离', () => {
     expect(development).toBe(join(appData, 'com.linguistagent.app.dev'))
     expect(production).not.toContain('@proma')
     expect(development).not.toBe(production)
+    expect(resolveElectronUserDataPath(appData, false, 'worktree-a')).toBe(
+      join(appData, 'com.linguistagent.app.dev-worktree-a'),
+    )
     expect(LINGUIST_ELECTRON_USER_DATA_DIR).toBe('com.linguistagent.app')
   })
 
