@@ -379,11 +379,11 @@ export function ProjectAssetsSection({
             type="button"
             onClick={() => void handleImport()}
             disabled={archived || importBusy || exportBusy || undoBusy || xlsxMapping !== null}
-            title={archived ? '已归档项目为只读，无法导入' : xlsxMapping !== null ? '请先确认或取消当前 XLSX 映射' : '导入 XLIFF / CSV / TSV / JSON 批次文件'}
+            title={archived ? '已归档项目为只读，无法导入' : xlsxMapping !== null ? '请先确认或取消当前 XLSX 映射' : '导入 XLIFF / CSV / TSV / JSON 批次文件；整个文件夹可以让项目 Agent 直接导入'}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-100 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
           >
             {importBusy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-            <span>{importBusy ? '导入中…' : '导入文件'}</span>
+            <span>{importBusy ? '导入中…' : '导入批次'}</span>
           </button>
         </div>
       </div>
@@ -457,7 +457,7 @@ export function ProjectAssetsSection({
           <FileText size={18} className="text-foreground/30" />
           <p className="text-[13px] text-foreground/50">还没有批次</p>
           <p className="text-[12px] text-foreground/40">
-            点击「导入文件」选择 XLIFF / CSV / TSV / JSON 文件，同一项目可累积多个批次。
+            点击「导入批次」选择 XLIFF / CSV / TSV / JSON 文件，同一项目可累积多个批次；也可以让项目 Agent 直接导入整个文件夹。
           </p>
         </div>
       ) : (
