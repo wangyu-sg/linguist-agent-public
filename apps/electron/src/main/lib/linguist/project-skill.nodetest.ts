@@ -17,7 +17,7 @@ const ROLES_ROOT = join(
 const ROLES: LinguistRole[] = ['general', 'translator', 'reviewer', 'proofreader']
 
 test('四种岗位各有且只有一个 Markdown Prompt 真源', () => {
-  assert.equal(LINGUIST_ROLE_PROMPT_VERSION, '1.0.0')
+  assert.equal(LINGUIST_ROLE_PROMPT_VERSION, '1.1.0')
   for (const role of ROLES) {
     assert.equal(existsSync(join(ROLES_ROOT, `${role}.md`)), true)
     const resolved = resolveLinguistRolePrompt({ linguistRole: role }, ROLES_ROOT)

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentSessionMeta, LinguistRole } from '@proma/shared'
 
-export const LINGUIST_ROLE_PROMPT_VERSION = '1.0.0'
+export const LINGUIST_ROLE_PROMPT_VERSION = '1.1.0'
 const ROLE_PROMPT_MAX_CHARS = 6000
 
 export interface LinguistRolePromptLayer {
