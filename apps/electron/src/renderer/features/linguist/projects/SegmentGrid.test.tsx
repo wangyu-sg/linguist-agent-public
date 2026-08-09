@@ -152,7 +152,7 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     expect(renderRow(false, true)).not.toContain('data-target-double-click')
   })
 
-  test('given 当前行有待审 Proposal 与开放 QA when 渲染 Grid then 状态、数量和最高严重度均可读', () => {
+  test('given 当前行有待查看建议与开放 QA when 渲染 Grid then 状态、数量和最高严重度均可读', () => {
     const segment: LinguistSegmentInfo = {
       id: 'segment-1',
       assetId: 'asset-1',
@@ -217,13 +217,13 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     expect(html).toContain('查看原始行 1 QA：2 个开放 QA，最高 L1 严重')
     expect(html).toContain('L1 严重')
     expect(html).toContain('aria-label="当前行翻译建议"')
-    expect(html).toContain('Current')
-    expect(html).toContain('Proposed')
+    expect(html).toContain('当前译文')
+    expect(html).toContain('建议译文')
     expect(html).toContain('<del')
     expect(html).toContain('<ins')
-    expect(html).toContain('Evidence：tm:exact-1 · term:start')
-    expect(html).toContain('Accept')
-    expect(html).toContain('Reject')
+    expect(html).toContain('证据：tm:exact-1 · term:start')
+    expect(html).toContain('接受')
+    expect(html).toContain('拒绝')
   })
 
   test('given stale、locked 或 archived Proposal when 渲染活动行 then Accept fail closed，Reject 仅归档阻断', () => {

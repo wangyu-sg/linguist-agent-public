@@ -279,12 +279,12 @@ export function ContextEvidenceView({
         />
       </section>
 
-      <section aria-label="Agent proposal evidence" className="min-w-0">
-        <h3 className="text-xs font-semibold text-foreground">Agent Proposal Evidence</h3>
+      <section aria-label="建议的证据来源" className="min-w-0">
+        <h3 className="text-xs font-semibold text-foreground">建议的证据来源</h3>
         {context.pendingProposal === undefined ? (
-          <Empty>当前片段没有待审 Proposal</Empty>
+          <Empty>当前片段没有待查看建议</Empty>
         ) : evidence.length + termRefs.length === 0 ? (
-          <Empty>当前 Proposal 没有证据引用</Empty>
+          <Empty>当前建议没有证据引用</Empty>
         ) : (
           <ul className="mt-2 space-y-1.5">
             {[...evidence, ...termRefs].map((reference, index) => {

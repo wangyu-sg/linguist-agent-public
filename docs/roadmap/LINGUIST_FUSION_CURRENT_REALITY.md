@@ -8,7 +8,7 @@
 |---|---|
 | 仓库 / 分支 | `/Users/<local>/Desktop/linguist-agent-next` / `integration/la-proma-0.16.10` |
 | Proma Base / formal merge | v0.16.10 `72fd1b1a` / `ea26177f` |
-| App / Electron | `0.16.29` / `43.2.0` |
+| App / Electron | `0.16.30` / `43.2.0` |
 | Bun / Pi / Claude | `1.3.14` / `0.82.1` / `0.3.201` |
 | Shared | `0.1.91` |
 | CAT Core / Formats / Store / Tools | `0.0.19 / 0.0.10 / 0.0.34 / 0.0.31` |

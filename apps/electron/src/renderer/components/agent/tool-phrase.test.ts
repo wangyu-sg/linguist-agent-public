@@ -15,9 +15,16 @@ describe('Linguist CAT 工具活动文案', () => {
     expect(getToolPhrase('cat_propose_translations', {
       segmentProposals: [{}, {}],
     }).label).toBe('创建 2 条翻译建议')
+    expect(getToolPhrase('cat_accept_proposals', {
+      proposals: [{}, {}, {}],
+    }).label).toBe('写回 3 段译文')
     expect(getToolPhrase('cat_run_qa', {}).label).toBe('运行项目质检')
     expect(getToolPhrase('cat_get_qa_findings', {}).label).toBe('查看质检问题')
-    expect(getToolPhrase('cat_run_batch_consistency', { mode: 'repair' }).label).toBe('创建批量一致性建议')
+    expect(getToolPhrase('cat_plan_consistency_repairs', {}).label).toBe('检查一致性')
+    expect(getToolPhrase('cat_create_consistency_proposals', {}).label).toBe('创建一致性建议')
+    expect(getToolPhrase('cat_import_resources', { paths: ['a', 'b'] }).label).toBe('导入 2 项资源')
+    expect(getToolPhrase('cat_export_asset', {}).label).toBe('导出批次')
+    expect(getToolPhrase('cat_scan_unknown_tag_patterns', {}).label).toBe('扫描未知 Tag')
 
     for (const name of [
       'cat_get_segments',
@@ -26,9 +33,20 @@ describe('Linguist CAT 工具活动文案', () => {
       'cat_project_summary',
       'cat_list_assets',
       'cat_propose_translations',
+      'cat_accept_proposals',
       'cat_run_qa',
       'cat_get_qa_findings',
-      'cat_run_batch_consistency',
+      'cat_plan_consistency_repairs',
+      'cat_create_consistency_proposals',
+      'cat_import_resources',
+      'cat_import_asset',
+      'cat_export_asset',
+      'cat_scan_unknown_tag_patterns',
+      'cat_save_tag_profile_candidate',
+      'cat_get_translation_context',
+      'cat_get_proposal_snapshot',
+      'cat_search_sentence_patterns',
+      'cat_read_context_doc',
     ]) {
       expect(getToolDisplayName(name)).not.toContain('cat_')
     }
@@ -37,6 +55,7 @@ describe('Linguist CAT 工具活动文案', () => {
   test('缺少可选参数时仍给出自然文案', () => {
     expect(getToolPhrase('cat_get_segments', {}).label).toBe('读取项目片段')
     expect(getToolPhrase('cat_search_terms', {}).label).toBe('搜索项目术语')
-    expect(getToolPhrase('cat_run_batch_consistency', {}).label).toBe('检查批量一致性')
+    expect(getToolPhrase('cat_accept_proposals', {}).label).toBe('写回译文')
+    expect(getToolPhrase('cat_import_resources', {}).label).toBe('导入资源')
   })
 })

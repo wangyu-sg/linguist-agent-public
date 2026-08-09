@@ -77,7 +77,7 @@ describe('Proposal Inbox 文本差异（PB-054）', () => {
     )).toBeUndefined()
   })
 
-  test('given 选择中含无提案、锁定和过期项 when 计划批量审核 then 按原始行列出排除原因', () => {
+  test('given 选择中含无建议、锁定和过期项 when 计划批量审核 then 按原始行列出排除原因', () => {
     const plan = proposalMutationPlan([
       {
         segment: { id: 'seg-ok', ordinal: 46, revision: 3, locked: false },
@@ -109,9 +109,9 @@ describe('Proposal Inbox 文本差异（PB-054）', () => {
       plan.excluded,
     )
     expect(confirmation).toContain('已选择 4 个句段，实际接受 1 条建议')
-    expect(confirmation).toContain('原始行 96（seg-none）：没有 pending 提案')
+    expect(confirmation).toContain('原始行 96（seg-none）：没有待查看建议')
     expect(confirmation).toContain('原始行 97（seg-locked）：片段已锁定')
-    expect(confirmation).toContain('原始行 98（seg-stale）：提案基于旧 revision')
+    expect(confirmation).toContain('原始行 98（seg-stale）：建议基于旧 revision')
   })
 })
 

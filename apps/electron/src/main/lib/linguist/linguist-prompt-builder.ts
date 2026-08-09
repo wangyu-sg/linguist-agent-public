@@ -5,7 +5,7 @@ import type { AgentSessionMeta, LinguistRole } from '@proma/shared'
 import type { ProjectDatabase } from '@linguist/cat-store'
 import type { LinguistServiceResolver } from './session-binding'
 
-export const LINGUIST_PROMPT_VERSION = '3.0.0'
+export const LINGUIST_PROMPT_VERSION = '3.1.0'
 export const LINGUIST_PROMPT_MAX_CHARS = 18_000
 const ROLE_MAX_CHARS = 6_000
 const DIGEST_TRUNCATED = '\n…（Project Digest 已达到 Prompt 总长度上限；其余资料请按需查询）'

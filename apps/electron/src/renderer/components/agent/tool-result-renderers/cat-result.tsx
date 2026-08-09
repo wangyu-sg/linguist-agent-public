@@ -70,7 +70,7 @@ export function readProposalResultIdentity(
 ): ProposalResultIdentity | null {
   if (
     toolName !== 'cat_propose_translations'
-    && toolName !== 'cat_run_batch_consistency'
+    && toolName !== 'cat_create_consistency_proposals'
   ) return null
   if (
     typeof payload.projectId !== 'string'
@@ -94,7 +94,7 @@ export function summarizeProposalReviewStatuses(
   return [
     count('accepted') > 0 ? `已接受 ${count('accepted')}` : '',
     count('rejected') > 0 ? `已拒绝 ${count('rejected')}` : '',
-    count('pending') > 0 ? `待审核 ${count('pending')}` : '',
+    count('pending') > 0 ? `待查看 ${count('pending')}` : '',
     terminal > 0 ? `已失效 ${terminal}` : '',
   ].filter(Boolean).join(' · ')
 }
@@ -200,7 +200,7 @@ function summarizeCatResult(
     }
     case 'cat_get_proposal_snapshot': {
       const labels: Record<string, string> = {
-        pending: '待审核',
+        pending: '待查看',
         accepted: '已接受',
         rejected: '已拒绝',
         stale: '已过期',
@@ -208,13 +208,102 @@ function summarizeCatResult(
       const status = typeof payload.status === 'string' ? labels[payload.status] : undefined
       return status === undefined || typeof payload.snapshotId !== 'string'
         ? null
-        : { title: '提案快照', detail: `状态：${status}` }
+        : { title: '建议快照', detail: `状态：${status}` }
     }
     case 'cat_propose_translations': {
       const proposals = arrayLength(payload.proposalIds, true)
       return proposals === null
         ? null
-        : { title: '翻译建议', detail: `已创建 ${proposals} 条待审核建议` }
+        : { title: '翻译建议', detail: `已创建 ${proposals} 条待查看建议` }
+    }
+    case 'cat_accept_proposals': {
+      const accepted = arrayLength(payload.accepted)
+      if (accepted === null || typeof payload.replayed !== 'boolean') return null
+      return {
+        title: '写回结果',
+        detail: payload.replayed
+          ? '请求已重放，未重复写入'
+          : `已写回 ${accepted} 段`,
+      }
+    }
+    case 'cat_import_resources': {
+      const groups: ReadonlyArray<readonly [string, unknown]> = [
+        ['已导入', payload.imported],
+        ['未变化', payload.skippedDuplicate],
+        ['需要选择', payload.needsInput],
+        ['不支持', payload.unsupported],
+        ['失败', payload.failed],
+      ]
+      const parts = groups.flatMap(([label, value]) => {
+        const item = count(value)
+        return item !== null && item > 0 ? [`${label} ${item}`] : []
+      })
+      return parts.length === 0 ? null : { title: '导入资源', detail: parts.join(' · ') }
+    }
+    case 'cat_import_asset': {
+      const importedCount = count(payload.importedCount)
+      const unchangedCount = count(payload.unchangedCount)
+      const filename = typeof payload.filename === 'string' ? payload.filename : null
+      if (importedCount === null || unchangedCount === null || filename === null) return null
+      const kindTitles: Record<string, string> = {
+        batch: '导入批次',
+        tm: '导入 TM',
+        terms: '导入术语库',
+        context: '导入上下文',
+      }
+      const title = typeof payload.resourceKind === 'string'
+        ? kindTitles[payload.resourceKind] ?? '导入资源'
+        : '导入资源'
+      const warnings = arrayLength(payload.warnings)
+      return {
+        title,
+        detail: `${filename} · 新增 ${importedCount} · 未变化 ${unchangedCount}${warnings !== null && warnings > 0 ? ` · ${warnings} 条警告` : ''}`,
+      }
+    }
+    case 'cat_export_asset': {
+      const verified = count(payload.verifiedSegments)
+      const filename = typeof payload.filename === 'string' ? payload.filename : null
+      if (
+        verified === null
+        || filename === null
+        || (payload.mode !== 'verified' && payload.mode !== 'as-is')
+      ) return null
+      return {
+        title: payload.mode === 'verified' ? '验证并导出' : '按当前状态导出',
+        detail: `${filename} · 已回读验证 ${verified} 段`,
+      }
+    }
+    case 'cat_scan_unknown_tag_patterns': {
+      const patterns = arrayLength(payload.patterns)
+      return patterns === null
+        ? null
+        : {
+            title: '未知 Tag 扫描',
+            detail: patterns === 0 ? '未发现疑似 Tag' : `发现 ${patterns} 类疑似 Tag`,
+          }
+    }
+    case 'cat_save_tag_profile_candidate': {
+      if (
+        typeof payload.candidateId !== 'string'
+        || (payload.status !== 'candidate' && payload.status !== 'active')
+      ) return null
+      return {
+        title: 'Tag 候选',
+        detail: payload.status === 'active' ? '已保存并启用' : '已保存为候选（软提示）',
+      }
+    }
+    case 'cat_plan_consistency_repairs': {
+      const groups = count(payload.groupCount)
+      const findings = count(payload.findingCount)
+      return groups === null || findings === null
+        ? null
+        : { title: '一致性检查', detail: `${groups} 组发现 ${findings} 个问题` }
+    }
+    case 'cat_create_consistency_proposals': {
+      const proposals = arrayLength(payload.proposalIds, true)
+      return proposals === null
+        ? null
+        : { title: '一致性建议', detail: `已创建 ${proposals} 条待查看建议` }
     }
     case 'cat_run_qa': {
       const total = count(payload.total)
@@ -223,27 +312,6 @@ function summarizeCatResult(
     }
     case 'cat_get_qa_findings':
       return pagedSummary(payload, '质检问题', '问题')
-    case 'cat_run_batch_consistency': {
-      const groups = count(payload.groupCount)
-      const findings = count(payload.findingCount)
-      if (
-        groups === null
-        || findings === null
-        || !Array.isArray(payload.groups)
-        || payload.groups.length !== groups
-        || (payload.mode !== 'check-only' && payload.mode !== 'repair')
-      ) return null
-      if (payload.mode === 'check-only') {
-        return { title: '批量一致性', detail: `${groups} 组发现 ${findings} 个问题` }
-      }
-      const proposals = arrayLength(payload.proposalIds, true)
-      return proposals === null
-        ? null
-        : {
-            title: '批量一致性',
-            detail: `${groups} 组发现 ${findings} 个问题，创建 ${proposals} 条待审核建议`,
-          }
-    }
     case 'cat_search_sentence_patterns':
       return pagedSummary(payload, '句式库', '句式')
     case 'cat_read_context_doc': {

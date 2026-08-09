@@ -41,8 +41,8 @@ export function PrepareDeliveryPanel({
     setState({ status: 'idle' })
   }, [assetId, assets, initialAssetId])
 
-  const prepare = React.useCallback(async (): Promise<void> => {
-    if (assetId === '' || archived) return
+  const prepare = React.useCallback(async (): Promise<LinguistPrepareDeliveryResult | null> => {
+    if (assetId === '' || archived) return null
     setState({ status: 'loading' })
     try {
       const result = await window.electronAPI.linguistExportsPrepareAsset({
@@ -51,23 +51,19 @@ export function PrepareDeliveryPanel({
       })
       if (!result.ok) {
         setState({ status: 'error', message: describeLinguistIpcError(result.error) })
-        return
+        return null
       }
       setState({ status: 'ready', result: result.data })
       onChanged?.()
+      return result.data
     } catch {
       setState({ status: 'error', message: '与主进程通信异常（INTERNAL）' })
+      return null
     }
   }, [archived, assetId, onChanged, projectId])
 
   const save = React.useCallback(async (): Promise<void> => {
-    if (
-      assetId === ''
-      || archived
-      || saving
-      || state.status !== 'ready'
-      || !state.result.preflight.ready
-    ) return
+    if (assetId === '' || archived || saving) return
     setSaving(true)
     try {
       const result = await window.electronAPI.linguistExportsSaveAsset({
@@ -94,7 +90,22 @@ export function PrepareDeliveryPanel({
     } finally {
       setSaving(false)
     }
-  }, [archived, assetId, onChanged, prepare, projectId, saving, state])
+  }, [archived, assetId, onChanged, prepare, projectId, saving])
+
+  /**
+   * 主路径「验证并导出」：一次点击先预检；预检未通过则停在报告展示阻断项，
+   * 通过则直接进入系统保存流程。主进程自身仍 fail closed（DELIVERY_NOT_READY）。
+   */
+  const verifyAndExport = React.useCallback(async (): Promise<void> => {
+    if (saving || state.status === 'loading') return
+    const preparation = await prepare()
+    if (
+      preparation === null
+      || !preparation.preflight.ready
+      || preparation.verification === undefined
+    ) return
+    await save()
+  }, [prepare, save, saving, state.status])
 
   const copyReport = React.useCallback(async (): Promise<void> => {
     if (state.status !== 'ready') return
@@ -128,14 +139,22 @@ export function PrepareDeliveryPanel({
         </label>
         <button
           type="button"
-          disabled={archived || assetId === '' || state.status === 'loading'}
-          onClick={() => void prepare()}
+          disabled={archived || assetId === '' || state.status === 'loading' || saving}
+          onClick={() => void verifyAndExport()}
           className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-45"
         >
-          {state.status === 'loading'
+          {state.status === 'loading' || saving
             ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
             : <PackageCheck aria-hidden="true" className="size-3.5" />}
-          运行交付预检
+          {state.status === 'loading' ? '预检中…' : saving ? '导出中…' : '验证并导出'}
+        </button>
+        <button
+          type="button"
+          disabled={archived || assetId === '' || state.status === 'loading' || saving}
+          onClick={() => void prepare()}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-foreground/[0.06] px-3 text-xs text-foreground disabled:opacity-45"
+        >
+          仅运行预检
         </button>
       </div>
 
@@ -157,7 +176,7 @@ export function PrepareDeliveryPanel({
       )}
       {state.status === 'idle' && selectedAsset !== undefined && (
         <p className="rounded-xl bg-foreground/[0.035] px-3 py-4 text-center text-xs text-foreground/50">
-          选择“运行交付预检”，核对提案、QA、本轮状态、格式回写与导出完整性。
+          选择“验证并导出”一步完成预检与保存，或“仅运行预检”先核对建议、QA、本轮状态、格式回写与导出完整性。
         </p>
       )}
       {state.status === 'ready' && (
@@ -207,7 +226,7 @@ function DeliveryResult({
       </div>
 
       <dl className="grid gap-2 text-[11px] sm:grid-cols-3">
-        <Metric label="待处理提案" value={preflight.pendingProposalCount} />
+        <Metric label="待处理建议" value={preflight.pendingProposalCount} />
         <Metric label="开放 QA 错误" value={preflight.qa.openErrors} />
         <Metric label="QA 警告 / 已豁免" value={`${preflight.qa.openWarnings} / ${preflight.qa.waived}`} />
       </dl>
@@ -248,7 +267,7 @@ function DeliveryResult({
           {saving
             ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
             : <Download aria-hidden="true" className="size-3.5" />}
-          保存交付副本
+          导出交付副本
         </button>
         <button
           type="button"

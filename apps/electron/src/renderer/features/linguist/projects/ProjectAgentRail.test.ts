@@ -108,22 +108,105 @@ describe('ProjectAgentRail', () => {
     }
   })
 
-  test('given 无选择且无当前片段 when 展示翻译与审校动作 then 明确要求先定位片段', () => {
+  test('given 无选择且无当前片段 when 展示片段级快捷动作 then 明确要求先定位片段', () => {
     const store = createStore()
     const uiState = store.get(linguistWorkbenchUiStateAtomFamily('prj-0000000000000001'))
 
     const actions = buildProjectAgentQuickActions(uiState)
+    const segmentActions = actions.filter((action) =>
+      !['qa', 'terms', 'import', 'export'].includes(action.id))
 
-    expect(actions.filter((action) => action.id !== 'qa')).toMatchObject([
-      { id: 'translate', disabled: true, scope: '请先选择片段或激活当前片段。' },
-      { id: 'review', disabled: true, scope: '请先选择片段或激活当前片段。' },
+    expect(segmentActions.map((action) => action.id)).toEqual([
+      'translate',
+      'review',
+      'proofread',
+      'translate-suggest',
+      'review-suggest',
+      'proofread-suggest',
     ])
+    for (const action of segmentActions) {
+      expect(action.disabled).toBe(true)
+      expect(action.scope).toBe('请先选择片段或激活当前片段。')
+    }
     expect(createProjectAgentQuickActionPendingPrompt(
       store,
       'prj-0000000000000001',
       'session-1',
       'translate',
     )).toBeNull()
+  })
+
+  test('given 快捷动作清单 when 检查岗位与直达写回措辞 then 主按钮直达写回、先看建议变体保留待查看', () => {
+    const store = createStore()
+    const uiStateAtom = linguistWorkbenchUiStateAtomFamily('prj-0000000000000001')
+    store.set(uiStateAtom, { selectedSegmentIds: ['seg-0000000000000001'] })
+
+    const actions = buildProjectAgentQuickActions(store.get(uiStateAtom))
+    const primary = actions.filter((action) => action.placement === 'primary')
+    expect(primary.map((action) => [action.id, action.role])).toEqual([
+      ['translate', 'translator'],
+      ['review', 'reviewer'],
+      ['proofread', 'proofreader'],
+    ])
+    for (const action of primary) {
+      expect(action.prompt).toContain('直接写回项目')
+      expect(action.prompt).toContain('待查看建议')
+    }
+    const suggest = actions.filter((action) => action.id.endsWith('-suggest'))
+    expect(suggest.map((action) => [action.id, action.role])).toEqual([
+      ['translate-suggest', 'translator'],
+      ['review-suggest', 'reviewer'],
+      ['proofread-suggest', 'proofreader'],
+    ])
+    for (const action of suggest) {
+      expect(action.placement).toBe('overflow')
+      expect(action.prompt).toContain('先把结果保留为待查看建议')
+    }
+    const projectTasks = actions.filter((action) =>
+      ['qa', 'terms', 'import', 'export'].includes(action.id))
+    expect(projectTasks.map((action) => action.role)).toEqual([
+      'general',
+      'general',
+      'general',
+      'general',
+    ])
+    for (const action of projectTasks) {
+      expect(action.placement).toBe('overflow')
+      expect(action.disabled).toBe(false)
+    }
+  })
+
+  test('given 当前批次 when 项目级快捷动作冻结快照 then QA/导入不带批次、术语/导出带批次且都不带选择', () => {
+    const store = createStore()
+    const projectId = 'prj-0000000000000001'
+    const uiStateAtom = linguistWorkbenchUiStateAtomFamily(projectId)
+    store.set(uiStateAtom, {
+      activeAssetId: 'ast-0000000000000001',
+      activeSegmentId: 'seg-0000000000000001',
+      selectedSegmentIds: ['seg-0000000000000001'],
+    })
+
+    const qa = createProjectAgentQuickActionPendingPrompt(
+      store, projectId, 'session-1', 'qa', '2026-07-27T08:00:00.000Z',
+    )!.linguistContext!
+    expect(qa).not.toHaveProperty('assetId')
+    expect(qa.selectedSegmentIds).toEqual([])
+
+    const importContext = createProjectAgentQuickActionPendingPrompt(
+      store, projectId, 'session-1', 'import', '2026-07-27T08:00:00.000Z',
+    )!.linguistContext!
+    expect(importContext).not.toHaveProperty('assetId')
+    expect(importContext.selectedSegmentIds).toEqual([])
+
+    for (const actionId of ['terms', 'export'] as const) {
+      const context = createProjectAgentQuickActionPendingPrompt(
+        store, projectId, 'session-1', actionId, '2026-07-27T08:00:00.000Z',
+      )!.linguistContext!
+      expect(context.assetId).toBe('ast-0000000000000001')
+      expect(context.selectedSegmentIds).toEqual([])
+      expect(context).not.toHaveProperty('activeSegmentId')
+      expect(Object.isFrozen(context)).toBe(true)
+    }
   })
 
   test('given 任意 selection when 运行 QA then prompt 与冻结 Context 都明确是整个项目', () => {

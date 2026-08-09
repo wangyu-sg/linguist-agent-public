@@ -193,7 +193,7 @@ describe('describeImportUndoBlockedCounts（LA-INTAKE-007 撤销拒绝计数）'
         exports: 0,
         editedSegments: 3,
       }),
-    ).toBe('提案 2 条、历史评审件 1 条、人工编辑段 3 条')
+    ).toBe('建议 2 条、历史评审件 1 条、人工编辑段 3 条')
   })
 
   test('details 缺失或全零返回 null（调用方回退通用错误文案）', () => {
@@ -210,7 +210,7 @@ describe('describeImportUndoBlockedCounts（LA-INTAKE-007 撤销拒绝计数）'
   })
 
   test('未知类目键被忽略（契约外字段不进文案）', () => {
-    expect(describeImportUndoBlockedCounts({ proposals: 1, mystery: 9 })).toBe('提案 1 条')
+    expect(describeImportUndoBlockedCounts({ proposals: 1, mystery: 9 })).toBe('建议 1 条')
   })
 })
 

@@ -98,13 +98,13 @@ export function describeRunUndoRefusal(reason: string): string {
     return '片段已有后续修订，不会覆盖'
   }
   if (reason === 'proposal changed after this run') {
-    return 'Proposal 在本次运行后已变化，不会覆盖'
+    return '建议在本次运行后已变化，不会覆盖'
   }
   if (reason === 'proposal is no longer pending') {
-    return 'Proposal 已不再是待审状态，未撤销'
+    return '建议已不再是待查看状态，未撤销'
   }
   if (reason === 'proposal no longer exists') {
-    return 'Proposal 已不存在，未撤销'
+    return '建议已不存在，未撤销'
   }
   if (reason === 'file effects are recorded but not structurally reversible') {
     return '文件变更仅记录；请使用 Proma File Rewind'
@@ -199,7 +199,7 @@ export function ProjectRunSummary({
                       {summary.job.failedSegments > 0 && <span>失败 {summary.job.failedSegments}</span>}
                     </>
                   )}
-                  <span>Proposal {summary.changes.proposalsCreated}</span>
+                  <span>建议 {summary.changes.proposalsCreated}</span>
                   <span>QA {qaCount}</span>
                   <span>文件 {summary.changes.filesTouched}（仅记录）</span>
                 </div>
@@ -217,7 +217,7 @@ export function ProjectRunSummary({
       </div>
 
       <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
-        仅撤销仍未变化的待审 Proposal；通用文件请使用 Proma File Rewind，外部 MCP / 程序副作用仅记录。
+        仅撤销仍未变化的待查看建议；通用文件请使用 Proma File Rewind，外部 MCP / 程序副作用仅记录。
       </p>
 
       {state.error !== undefined && (

@@ -408,18 +408,59 @@ export function getToolPhrase(toolName: string, input: Record<string, unknown>):
       )
     }
 
+    case 'cat_accept_proposals': {
+      const proposals = input.proposals
+      return phrase(
+        Array.isArray(proposals)
+          ? `写回 ${proposals.length} 段译文`
+          : '写回译文',
+      )
+    }
+
+    case 'cat_get_translation_context':
+      return phrase('读取翻译上下文')
+
+    case 'cat_search_sentence_patterns':
+      return phrase('搜索句式库')
+
+    case 'cat_read_context_doc':
+      return phrase('读取上下文文档')
+
+    case 'cat_get_proposal_snapshot':
+      return phrase('查看建议快照')
+
+    case 'cat_import_resources': {
+      const paths = input.paths
+      return phrase(
+        Array.isArray(paths)
+          ? `导入 ${paths.length} 项资源`
+          : '导入资源',
+      )
+    }
+
+    case 'cat_import_asset':
+      return phrase('导入批次')
+
+    case 'cat_export_asset':
+      return phrase('导出批次')
+
+    case 'cat_scan_unknown_tag_patterns':
+      return phrase('扫描未知 Tag')
+
+    case 'cat_save_tag_profile_candidate':
+      return phrase('保存 Tag 候选')
+
     case 'cat_run_qa':
       return phrase('运行项目质检')
 
     case 'cat_get_qa_findings':
       return phrase('查看质检问题')
 
-    case 'cat_run_batch_consistency':
-      return phrase(
-        input.mode === 'repair'
-          ? '创建批量一致性建议'
-          : '检查批量一致性',
-      )
+    case 'cat_plan_consistency_repairs':
+      return phrase('检查一致性')
+
+    case 'cat_create_consistency_proposals':
+      return phrase('创建一致性建议')
 
     default: {
       // MCP 工具：mcp__serverName__toolName

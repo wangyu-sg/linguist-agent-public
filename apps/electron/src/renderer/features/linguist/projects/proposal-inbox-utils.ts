@@ -130,10 +130,10 @@ export function proposalMutationItems(
 }
 
 const EXCLUSION_LABELS: Record<ProposalReviewExclusionReason, string> = {
-  'no-pending-proposal': '没有 pending 提案',
+  'no-pending-proposal': '没有待查看建议',
   archived: '项目已归档',
   locked: '片段已锁定',
-  stale: '提案基于旧 revision',
+  stale: '建议基于旧 revision',
 }
 
 export function bulkProposalReviewConfirmation(
@@ -197,7 +197,7 @@ export function groupProposalRuns(
 }
 
 export const PROPOSAL_STATUS_LABELS: Record<LinguistProposalStatus, string> = {
-  pending: '待审核',
+  pending: '待查看',
   accepted: '已接受',
   rejected: '已拒绝',
   superseded: '已取代',

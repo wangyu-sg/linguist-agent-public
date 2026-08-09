@@ -15,7 +15,7 @@
  *   存在于导入结果中（摘要不含），故仅刚导入的批次行内联展示（警告可展开，
  *   验证报告逐项 ✓/✗）。
  * - 撤销导入（LA-INTAKE-007）：批次行「撤销导入」按钮一键发起；主进程先判
- *   五类下游引用，被拒（IMPORT_UNDO_BLOCKED）时 toast 展示分类计数（提案/
+ *   五类下游引用，被拒（IMPORT_UNDO_BLOCKED）时 toast 展示分类计数（建议/
  *   QA/评审/导出/人工编辑段），成功则重拉摘要真源。归档（只读）项目禁用。
  * - 失败：信封错误 → 行内 role="alert" 错误区（中文文案 + 稳定码）+「重试」
  *   （重试 = 重新打开选择器）；用户取消是正常分支（{cancelled:true}），
@@ -379,11 +379,11 @@ export function ProjectAssetsSection({
             type="button"
             onClick={() => void handleImport()}
             disabled={archived || importBusy || exportBusy || undoBusy || xlsxMapping !== null}
-            title={archived ? '已归档项目为只读，无法导入' : xlsxMapping !== null ? '请先确认或取消当前 XLSX 映射' : '导入 XLIFF / CSV / TSV / JSON 批次文件'}
+            title={archived ? '已归档项目为只读，无法导入' : xlsxMapping !== null ? '请先确认或取消当前 XLSX 映射' : '导入 XLIFF / CSV / TSV / JSON 批次文件；整个文件夹可以让项目 Agent 直接导入'}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-100 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
           >
             {importBusy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-            <span>{importBusy ? '导入中…' : '导入文件'}</span>
+            <span>{importBusy ? '导入中…' : '导入批次'}</span>
           </button>
         </div>
       </div>
@@ -457,7 +457,7 @@ export function ProjectAssetsSection({
           <FileText size={18} className="text-foreground/30" />
           <p className="text-[13px] text-foreground/50">还没有批次</p>
           <p className="text-[12px] text-foreground/40">
-            点击「导入文件」选择 XLIFF / CSV / TSV / JSON 文件，同一项目可累积多个批次。
+            点击「导入批次」选择 XLIFF / CSV / TSV / JSON 文件，同一项目可累积多个批次；也可以让项目 Agent 直接导入整个文件夹。
           </p>
         </div>
       ) : (

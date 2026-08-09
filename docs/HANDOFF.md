@@ -7,7 +7,7 @@
 - 仓库：`/Users/<local>/Desktop/linguist-agent-next`
 - 分支：`integration/la-proma-0.16.10`；实现以当前 `git HEAD` 和工作树为准。
 - 上游基线：Proma v0.16.10 / `72fd1b1a`；正式 merge：`ea26177f`。
-- 当前版本：Electron App `0.16.29`、Shared `0.1.91`、CAT Core / Formats / Store / Tools `0.0.19 / 0.0.10 / 0.0.34 / 0.0.31`、schema `15`。
+- 当前版本：Electron App `0.16.30`、Shared `0.1.91`、CAT Core / Formats / Store / Tools `0.0.19 / 0.0.10 / 0.0.34 / 0.0.31`、schema `15`。
 - 产品结构仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Workbench；没有第二套 Agent、Chat、Planning、Preview 或权限系统。
 
 ## 已实现

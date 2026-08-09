@@ -77,7 +77,7 @@ export function ProposalCoverageBanner({
         {' · '}未覆盖 {uncovered}
       </p>
       <p className="text-[11px] text-foreground/45">
-        覆盖数来自当前阶段的人工确认，包含“检查后无需修改”的句段；没有提案本身不计为已覆盖。
+        覆盖数来自当前阶段的人工确认，包含“检查后无需修改”的句段；没有建议本身不计为已覆盖。
       </p>
     </div>
   )
@@ -184,7 +184,7 @@ export function ProposalInbox({
           accept: '已接受建议',
           reject: '已拒绝建议',
           edit: '已接受编辑',
-          reissue: '已生成新的待审提案',
+          reissue: '已生成新的待查看建议',
         }
         toast.success(successLabel[operation])
         await Promise.all([load(), onChanged()])
@@ -256,7 +256,7 @@ export function ProposalInbox({
       return (
         <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-foreground/45">
           <Loader2 size={15} className="animate-spin" />
-          正在加载提案历史…
+          正在加载建议历史…
         </div>
       )
     }
@@ -281,9 +281,9 @@ export function ProposalInbox({
           <div className="flex size-12 items-center justify-center rounded-2xl bg-foreground/[0.06] text-foreground/55">
             <Inbox size={22} />
           </div>
-          <p className="text-[14px] font-medium text-foreground/70">当前筛选下没有提案</p>
+          <p className="text-[14px] font-medium text-foreground/70">当前筛选下没有建议</p>
           <p className="max-w-lg text-[12px] leading-5 text-foreground/45">
-            没有提案只表示没有可展示的提案历史，不代表项目已经审校、QA 或交付验证通过。
+            没有建议只表示没有可展示的建议历史，不代表项目已经审校、QA 或交付验证通过。
           </p>
         </div>
       )
@@ -293,7 +293,7 @@ export function ProposalInbox({
     return (
       <div className="flex flex-col gap-4">
         {runGroups.map((group) => (
-          <section key={group.runId} aria-label={`提案批次 ${group.runId}`}>
+          <section key={group.runId} aria-label={`建议批次 ${group.runId}`}>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-foreground/[0.035] px-3 py-2">
               <div className="min-w-0">
                 <p className="truncate font-mono text-[11px] font-medium text-foreground/60">
@@ -365,7 +365,7 @@ export function ProposalInbox({
                   }
                   onReissue={() => {
                     if (!window.confirm(
-                      '将保留这条终态历史，并生成一条新的待审核提案。原记录不会被改回 pending。确定继续吗？',
+                      '将保留这条终态历史，并生成一条新的待查看建议。原记录不会被改回 pending。确定继续吗？',
                     )) return
                     void finish(diff.proposal.id, 'reissue', () =>
                       window.electronAPI.linguistProposalsReissue({
@@ -393,12 +393,12 @@ export function ProposalInbox({
     <div className="flex min-h-0 flex-col gap-3">
       {archived && (
         <div className="rounded-xl bg-warning-soft/60 px-3 py-2 text-[12px] text-warning-foreground">
-          项目已归档，提案历史仅可查看。
+          项目已归档，建议历史仅可查看。
         </div>
       )}
       <div className="rounded-xl bg-primary/[0.055] px-3 py-2 text-[12px] leading-5 text-foreground/60">
-        提案是当前最佳修改的可见载体。新建会话只会获得干净的对话上下文；
-        项目中的 TM、术语、Context、提案与 QA 历史仍然保留。
+        建议是当前最佳修改的可见载体。新建会话只会获得干净的对话上下文；
+        项目中的 TM、术语、Context、建议与 QA 历史仍然保留。
       </div>
       {coverage !== undefined && <ProposalCoverageBanner coverage={coverage} />}
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -425,7 +425,7 @@ export function ProposalInbox({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            aria-label="刷新提案历史"
+            aria-label="刷新建议历史"
             onClick={() => void load()}
             className="rounded-md p-1.5 text-foreground/45 hover:bg-foreground/[0.06] hover:text-foreground"
           >
@@ -458,7 +458,7 @@ export function ProposalInbox({
       )}
       <div className="min-h-0">{content}</div>
       {state.status === 'ready' && (state.offset > 0 || state.hasMore) && (
-        <nav aria-label="提案历史分页" className="flex items-center justify-end gap-2">
+        <nav aria-label="建议历史分页" className="flex items-center justify-end gap-2">
           <ActionButton
             icon={<ChevronLeft size={13} />}
             label="上一页"
@@ -512,7 +512,7 @@ function ProposalCard({
           <input
             type="checkbox"
             checked={selected}
-            aria-label={`选择原始行 ${diff.originalOrdinal} 提案 ${diff.proposal.id}`}
+            aria-label={`选择原始行 ${diff.originalOrdinal} 建议 ${diff.proposal.id}`}
             onChange={(event) => onToggleSelection(event.target.checked)}
             className="mt-0.5 size-4 shrink-0 accent-primary"
           />
@@ -569,7 +569,7 @@ function ProposalCard({
           'rounded-full px-2 py-1',
           targetMatches ? 'bg-success/10 text-success' : 'bg-foreground/[0.055]',
         )}>
-          {targetMatches ? '当前译文与此提案一致' : '当前译文与此提案不一致'}
+          {targetMatches ? '当前译文与此建议一致' : '当前译文与此建议不一致'}
         </span>
         {diff.proposal.warnings.map((warning) => (
           <span key={warning} className="rounded-full bg-warning/10 px-2 py-1 text-warning-foreground">
@@ -596,12 +596,12 @@ function ProposalCard({
         {(diff.latestIssuance?.runId ?? diff.proposal.runId) && (
           <span>批次：{diff.latestIssuance?.runId ?? diff.proposal.runId}</span>
         )}
-        {diff.latestIssuance?.runtime && <span>Runtime：{diff.latestIssuance.runtime}</span>}
+        {diff.latestIssuance?.runtime && <span>运行时：{diff.latestIssuance.runtime}</span>}
         {diff.latestIssuance?.modelProvider && (
           <span>Provider：{diff.latestIssuance.modelProvider}</span>
         )}
         {diff.latestIssuance?.toolCallId && (
-          <span>Tool call：{diff.latestIssuance.toolCallId}</span>
+          <span>工具调用：{diff.latestIssuance.toolCallId}</span>
         )}
         {diff.proposal.reissuedFromProposalId && (
           <span>重新提出自：{diff.proposal.reissuedFromProposalId}</span>
@@ -670,7 +670,7 @@ function ProposalCard({
               icon={mutation === 'reissue' ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
               label="重新提出"
               disabled={archived || diff.locked || mutation !== undefined}
-              title="保留当前终态记录，创建带 lineage 的新 pending 提案"
+              title="保留当前终态记录，创建带 lineage 的新待查看建议"
               onClick={onReissue}
             />
           )}

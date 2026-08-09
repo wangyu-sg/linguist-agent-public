@@ -95,7 +95,7 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
   PROJECT_UNHEALTHY: '项目数据未通过健康检查，需要修复',
   IMPORT_TOO_LARGE: '导入文件超过大小限制',
   EXPORT_BLOCKED_BY_QA: '仍有阻断级 QA 问题，请先修复或在审核中填写豁免理由',
-  DELIVERY_NOT_READY: '交付预检尚未通过，请先处理提案、确认句段并解决阻断级 QA',
+  DELIVERY_NOT_READY: '交付预检尚未通过，请先处理待查看建议、确认句段并解决阻断级 QA',
   CONTEXT_DOC_EXTRACT_FAILED: 'DOCX 文本读取失败；文件可能损坏、加密、仅含图片或不是有效 DOCX',
   PROJECT_DELETE_REQUIRES_ARCHIVE: '请先归档项目，再执行删除',
   PROJECT_DELETE_CONFIRMATION_MISMATCH: '项目名称确认不匹配，已取消删除',
@@ -120,7 +120,7 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
   FORMAT_UNSUPPORTED: '不支持的文件格式',
   SEGMENT_LOCKED: '段已锁定',
   REVISION_CONFLICT: '内容已被其他操作修改，请刷新后重试',
-  STALE_PROPOSAL: '提案已过期',
+  STALE_PROPOSAL: '建议已过期',
   UNKNOWN_SEGMENT: '段不存在',
   INVALID_STATE_TRANSITION: '不允许的状态变更',
   INVALID_ID: 'ID 格式不合法',
@@ -146,7 +146,7 @@ export function describeLinguistIpcError(error: LinguistIpcError): string {
 
 /** IMPORT_UNDO_BLOCKED details 分类计数 → 中文分类标签。 */
 const IMPORT_UNDO_REFERENCE_LABELS: Record<string, string> = {
-  proposals: '提案',
+  proposals: '建议',
   qaFindings: 'QA',
   legacyCriticArtifacts: '历史评审件',
   exports: '导出',

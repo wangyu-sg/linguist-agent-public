@@ -17,9 +17,11 @@ import {
   clampAgentRailWidth,
   clampAssetNavigatorWidth,
   clampBottomDockHeight,
+  linguistProjectSettingsTabAtomFamily,
   linguistWorkbenchUiStateAtomFamily,
 } from './cat-workspace-atoms'
 import { ProjectSettingsSheet } from './ProjectSettingsSheet'
+import { UnknownTagNotice } from './UnknownTagNotice'
 import { stageProgressLabel, stageProgressSummary } from './workflow-ui'
 
 const PANEL_KEYBOARD_STEP = 16
@@ -105,6 +107,9 @@ export function LinguistWorkbenchShell({
   children,
 }: LinguistWorkbenchShellProps): React.ReactElement {
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(project.id))
+  const [settingsInitialTab, setSettingsInitialTab] = useAtom(
+    linguistProjectSettingsTabAtomFamily(project.id),
+  )
   const assetNavigatorResizeStart = React.useRef<{
     pointerId: number
     clientX: number
@@ -375,7 +380,12 @@ export function LinguistWorkbenchShell({
         open={uiState.projectSettingsOpen}
         project={project}
         summary={summaryState.status === 'ready' ? summaryState.summary : null}
-        onOpenChange={(open) => setUiState({ projectSettingsOpen: open })}
+        initialTab={settingsInitialTab}
+        onOpenChange={(open) => {
+          setUiState({ projectSettingsOpen: open })
+          // 「直达分类」意图是一次性的；关闭后即消费完毕，下次打开回到默认分类。
+          if (!open) setSettingsInitialTab(undefined)
+        }}
         onSummaryRefresh={onSummaryRefresh}
         onProjectArchived={onProjectArchived}
         onProjectDeleted={onProjectDeleted}
@@ -429,6 +439,11 @@ export function LinguistWorkbenchShell({
             agentFull ? 'hidden' : 'flex',
           )}
         >
+          <UnknownTagNotice
+            projectId={project.id}
+            projectUpdatedAt={project.updatedAt}
+            archived={project.archivedAt !== undefined}
+          />
           <main data-workbench-slot="segment-grid" className="min-h-0 min-w-0 flex-1 overflow-hidden">
             {children}
           </main>
