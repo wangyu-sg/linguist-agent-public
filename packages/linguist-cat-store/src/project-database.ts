@@ -26,7 +26,7 @@ import {
 import { readProjectManifestFile, type ProjectManifest } from './project-index'
 import { AssetsRepository } from './repositories/assets'
 import { ContextDocsRepository } from './repositories/context-docs'
-import { CriticArtifactsRepository } from './repositories/critic-artifacts'
+import { LegacyCriticArtifactsReader } from './legacy-compat/critic-artifacts-reader'
 import { ExportsRepository } from './repositories/exports'
 import { ProposalsRepository } from './repositories/proposals'
 import { QaFindingsRepository } from './repositories/qa-findings'
@@ -60,7 +60,7 @@ export class ProjectDatabase {
   readonly tmUnits: TmUnitsRepository
   readonly termEntries: TermEntriesRepository
   readonly referenceImports: ReferenceImportsRepository
-  readonly criticArtifacts: CriticArtifactsRepository
+  readonly legacyCriticArtifacts: LegacyCriticArtifactsReader
   readonly styleGuideRules: StyleGuideRulesRepository
   readonly sentencePatterns: SentencePatternsRepository
   readonly contextDocs: ContextDocsRepository
@@ -80,7 +80,7 @@ export class ProjectDatabase {
     this.tmUnits = new TmUnitsRepository(catDb, projectId, now, this.runs)
     this.termEntries = new TermEntriesRepository(catDb, projectId, now, this.runs)
     this.referenceImports = new ReferenceImportsRepository(catDb, projectId, now)
-    this.criticArtifacts = new CriticArtifactsRepository(catDb, now)
+    this.legacyCriticArtifacts = new LegacyCriticArtifactsReader(catDb)
     this.styleGuideRules = new StyleGuideRulesRepository(catDb, projectId, now, this.runs)
     this.sentencePatterns = new SentencePatternsRepository(catDb, projectId, now)
     this.contextDocs = new ContextDocsRepository(catDb, projectId, now)

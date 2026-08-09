@@ -1,35 +1,17 @@
-/**
- * Independent Critic artifact contract (PB-083).
- *
- * Extracted from legacy linguist-agent@la-v2-legacy-freeze-2026-07-25
- * `packages/cat-data/src/independent_critic.ts`; validation and error
- * behavior remain compatible. New ids use Stable ID v2 while parsers retain
- * legacy id support. `isCitableEvidenceSource` comes from `./evidence`.
- *
- * Independent Critics produce versioned advisory artifacts only. A separate
- * owner may later decide whether to create a proposal; this module has no
- * writer, proposal, target, or Decision dependency. The contract burns in
- * `authority: 'advisory_finding'` / `canCommit: false` — review output can
- * never be committed directly.
- *
- * Added during extraction (not part of the legacy surface):
- * `independentCriticCandidateHash` / `independentCriticProfileHash` — the
- * hashing helpers the tool runtime needs to derive subject/critic identity
- * without re-implementing this module's canonicalization.
- */
+/** 只读解析历史 critic_artifacts；当前产品不得从此子路径创建新记录。 */
 
-import { isCitableEvidenceSource } from './evidence'
-import { sha256Hex } from './hash'
-import { deriveStableIdV2 } from './ids'
+import { isCitableEvidenceSource } from '../evidence'
+import { sha256Hex } from '../hash'
+import { deriveStableIdV2 } from '../ids'
 import {
   QA_FINDING_SEVERITIES,
   QA_ISSUE_TYPES,
   type QaFindingSeverity,
   type QaIssueType,
-} from './issue-type'
-import type { LinguistGenerationProvenance } from './proposal-issuance'
+} from '../issue-type'
+import type { LinguistGenerationProvenance } from '../proposal-issuance'
 
-export const INDEPENDENT_CRITIC_CATEGORIES = ['fidelity', 'naturalness', 'terminology', 'voice', 'consistency'] as const
+const INDEPENDENT_CRITIC_CATEGORIES = ['fidelity', 'naturalness', 'terminology', 'voice', 'consistency'] as const
 export type IndependentCriticCategory = (typeof INDEPENDENT_CRITIC_CATEGORIES)[number]
 /**
  * PB-096：critic severity 与 QA 契约同构（L0–L4 五档）。category 保留为
@@ -77,13 +59,6 @@ export interface IndependentCriticArtifact {
   artifactHash: string
 }
 
-export interface IndependentCriticRequest {
-  schemaVersion: 1
-  subject: IndependentCriticSubject
-  critic: IndependentCriticIdentity
-  findings: IndependentCriticFindingDraft[]
-}
-
 export type CriticReviewVerdict = 'pass' | 'issues' | 'abstain'
 
 export interface CriticReviewSnapshotRef {
@@ -115,7 +90,7 @@ export interface CriticReviewArtifact {
   artifactHash: string
 }
 
-export type CreateCriticReviewRequest =
+type CreateCriticReviewRequest =
   & {
     schemaVersion: 2
     snapshot: CriticReviewSnapshotRef
@@ -127,17 +102,6 @@ export type CreateCriticReviewRequest =
     | { verdict: 'issues'; summary: string; findings: IndependentCriticFindingDraft[] }
     | { verdict: 'abstain'; reason: string; findings: [] }
   )
-
-export type IndependentCriticPlan =
-  | { kind: 'not_required'; reason: 'Independent Critic is reserved for high-risk segments.' }
-  | { kind: 'required'; requiredRoles: ['fidelity', 'naturalness', 'terminology', 'voice'] }
-
-export interface CriticTargetedRepairScope {
-  authority: 'advisory_finding'
-  canCommit: false
-  segmentIds: string[]
-  findingIds: string[]
-}
 
 const SHA256 = /^[a-f0-9]{64}$/u
 const LEGACY_ARTIFACT_ID = /^critic:[a-f0-9]{24}$/u
@@ -386,21 +350,6 @@ function artifactWithoutHash(
   return { schemaVersion: 1, authority: 'advisory_finding', canCommit: false, artifactId, subject, critic, findings }
 }
 
-export function planIndependentCritic(input: { risk: 'low' | 'medium' | 'high' }): IndependentCriticPlan {
-  if (input.risk === 'high') return { kind: 'required', requiredRoles: ['fidelity', 'naturalness', 'terminology', 'voice'] }
-  return { kind: 'not_required', reason: 'Independent Critic is reserved for high-risk segments.' }
-}
-
-export function createIndependentCriticArtifact(request: IndependentCriticRequest): IndependentCriticArtifact {
-  if (!isRecord(request) || request.schemaVersion !== 1 || !Array.isArray(request.findings)) throw new Error('Unsupported Independent Critic request.')
-  const subject = parseSubject(request.subject)
-  const critic = parseCritic(request.critic)
-  assertIndependent(subject, critic)
-  const findings = createFindings(subject, critic, request.findings, 'v2')
-  const withoutHash = artifactWithoutHash(subject, critic, findings, 'v2')
-  return deepFreeze({ ...withoutHash, artifactHash: hash(withoutHash) })
-}
-
 export function parseIndependentCriticArtifact(value: unknown): IndependentCriticArtifact {
   if (!isRecord(value)) throw new Error('Independent Critic artifact must be an object.')
   knownFields(value, ['schemaVersion', 'authority', 'canCommit', 'artifactId', 'subject', 'critic', 'findings', 'artifactHash'], 'Independent Critic artifact')
@@ -484,13 +433,6 @@ function createCriticReviewFields(
   }
 }
 
-export function createCriticReviewArtifact(request: CreateCriticReviewRequest): CriticReviewArtifact {
-  const fields = createCriticReviewFields(request, 'v2')
-  const artifactId = contentId('critic', fields, 'v2')
-  const withoutHash = { ...fields, artifactId }
-  return deepFreeze({ ...withoutHash, artifactHash: hash(withoutHash) })
-}
-
 export function parseCriticReviewArtifact(value: unknown): CriticReviewArtifact {
   if (!isRecord(value)) throw new Error('Critic Review artifact must be an object.')
   knownFields(
@@ -556,40 +498,4 @@ export function parseCriticReviewArtifact(value: unknown): CriticReviewArtifact 
     throw new Error('Critic Review finding identity changed.')
   }
   return deepFreeze({ ...withoutHash, artifactHash: hash(withoutHash) })
-}
-
-/** Returns only the exact finding/segment scope; it cannot formulate or apply a repair. */
-export function targetedRepairScopeFromCriticArtifact(
-  artifact: IndependentCriticArtifact,
-  options: { findingIds?: string[] } = {},
-): CriticTargetedRepairScope {
-  const available = new Set(artifact.findings.map((finding) => finding.findingId))
-  const findingIds = [...new Set(options.findingIds ?? artifact.findings.map((finding) => finding.findingId))].sort((a, b) => a.localeCompare(b))
-  if (!findingIds.length || findingIds.some((id) => !available.has(id))) throw new Error('Requested Critic finding was not found in this artifact.')
-  return deepFreeze({ authority: 'advisory_finding', canCommit: false, segmentIds: [artifact.subject.segmentId], findingIds })
-}
-
-/**
- * Candidate hash for the tool runtime (PB-083): sha256 over the canonical
- * JSON of {proposalId, segmentId, target, revision} — the same
- * canonicalization the artifact hash uses, so identity derivation stays in
- * one module.
- */
-export function independentCriticCandidateHash(input: {
-  proposalId: string
-  segmentId: string
-  target: string
-  revision: number
-}): string {
-  return hash({
-    proposalId: input.proposalId,
-    segmentId: input.segmentId,
-    target: input.target,
-    revision: input.revision,
-  })
-}
-
-/** Critic profile hash: bare sha256 of the reviewer skill bytes (or fallback profile string). */
-export function independentCriticProfileHash(profileBytes: string | Uint8Array): string {
-  return sha256Hex(typeof profileBytes === 'string' ? textEncoder.encode(profileBytes) : profileBytes)
 }

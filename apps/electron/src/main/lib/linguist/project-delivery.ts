@@ -594,7 +594,7 @@ export class ProjectDelivery {
   }
 
   /**
-   * LA-INTAKE-007 撤销一次导入。先查下游引用（Proposal / QA / 评审件 /
+   * LA-INTAKE-007 撤销一次导入。先查下游引用（Proposal / QA / 历史评审件 /
    * 导出 / 人工编辑痕迹 / durable job），任一非零即抛 IMPORT_UNDO_BLOCKED（detail 只含
    * 计数）；全零 → 单事务删行 → 再删 source blob（文件删除失败只留可
    * 幂等覆盖的孤儿 blob，与导入崩溃窗口同语义）。归档项目 fail closed。
@@ -608,7 +608,7 @@ export class ProjectDelivery {
     const references: ImportUndoReferences = {
       proposals: this.context.call(() => db.proposals.countByAsset(assetId), projectId),
       qaFindings: this.context.call(() => db.qaFindings.count({ assetId }), projectId),
-      criticArtifacts: this.context.call(() => db.criticArtifacts.countByAsset(assetId), projectId),
+      legacyCriticArtifacts: this.context.call(() => db.legacyCriticArtifacts.countByAsset(assetId), projectId),
       exports: this.context.call(() => db.exports.listByAsset(assetId).length, projectId),
       editedSegments: this.context.call(() => db.segments.countEditedByAsset(assetId), projectId),
       jobs: this.context.call(() => db.runs.countReferencingAsset(assetId), projectId),

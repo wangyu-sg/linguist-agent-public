@@ -206,33 +206,6 @@ export {
 } from './evidence'
 
 export {
-  INDEPENDENT_CRITIC_CATEGORIES,
-  createIndependentCriticArtifact,
-  createCriticReviewArtifact,
-  independentCriticCandidateHash,
-  independentCriticProfileHash,
-  parseCriticReviewArtifact,
-  parseIndependentCriticArtifact,
-  planIndependentCritic,
-  targetedRepairScopeFromCriticArtifact,
-  type CriticTargetedRepairScope,
-  type IndependentCriticArtifact,
-  type IndependentCriticCategory,
-  type IndependentCriticFinding,
-  type IndependentCriticFindingDraft,
-  type IndependentCriticIdentity,
-  type IndependentCriticPlan,
-  type IndependentCriticRequest,
-  type IndependentCriticSeverity,
-  type IndependentCriticSubject,
-  type CreateCriticReviewRequest,
-  type CriticReviewArtifact,
-  type CriticReviewerProvenance,
-  type CriticReviewSnapshotRef,
-  type CriticReviewVerdict,
-} from './independent-critic'
-
-export {
   analyzeBatchConsistency,
   BATCH_CONSISTENCY_CODES,
   buildBatchConsistencyPass,

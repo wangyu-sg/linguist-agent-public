@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-08-08
+更新时间：2026-08-10
 
 ## 从这里开始
 
@@ -17,7 +17,7 @@
 
 ## 架构、基线与边界
 
-- [UPSTREAM_BASELINE.md](./architecture/UPSTREAM_BASELINE.md) — Proma v0.16.9 人读基线。
+- [UPSTREAM_BASELINE.md](./architecture/UPSTREAM_BASELINE.md) — Proma v0.16.10 人读基线。
 - [proma-baseline.json](./architecture/proma-baseline.json) — 基线与 runtime/contract 机读真源。
 - [PROMA_CORE_TOUCHPOINTS.md](./architecture/PROMA_CORE_TOUCHPOINTS.md) — 核心触点规则与重算说明。
 - [proma-touchpoints.json](./architecture/proma-touchpoints.json) — 当前精确 Proma Core touchpoint ledger。

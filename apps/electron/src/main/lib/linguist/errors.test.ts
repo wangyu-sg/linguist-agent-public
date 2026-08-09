@@ -95,7 +95,7 @@ describe('stable error codes', () => {
     const undoBlocked = new LinguistImportUndoBlockedError('prj-u', 'ast-u', {
       proposals: 2,
       qaFindings: 1,
-      criticArtifacts: 0,
+      legacyCriticArtifacts: 0,
       exports: 0,
       editedSegments: 3,
       jobs: 0,
@@ -104,7 +104,7 @@ describe('stable error codes', () => {
     expect(undoBlocked.details).toEqual({
       proposals: 2,
       qaFindings: 1,
-      criticArtifacts: 0,
+      legacyCriticArtifacts: 0,
       exports: 0,
       editedSegments: 3,
       jobs: 0,

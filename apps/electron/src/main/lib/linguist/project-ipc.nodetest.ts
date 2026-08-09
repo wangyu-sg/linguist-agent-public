@@ -765,7 +765,7 @@ test('undoImportAsset: blocked error envelope carries per-category counts only (
     assert.deepEqual(blocked.error.details, {
       proposals: 1,
       qaFindings: 0,
-      criticArtifacts: 0,
+      legacyCriticArtifacts: 0,
       exports: 0,
       editedSegments: 0,
       jobs: 0,

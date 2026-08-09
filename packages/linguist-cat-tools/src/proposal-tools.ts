@@ -38,7 +38,7 @@ import {
 } from './proposal-snapshot'
 
 const EMPTY_CONSISTENCY_NOTE =
-  'No open consistency findings: the tracked consistency rules (repeated sources, terminology, punctuation, critic consistency/voice/terminology) found nothing to repair.'
+  'No open consistency findings: the tracked repeated-source, terminology, and punctuation rules found nothing to repair.'
 
 /** 提案与批次一致性修复建议。 */
 export function createProposalTools(runtime: CatToolRuntime) {

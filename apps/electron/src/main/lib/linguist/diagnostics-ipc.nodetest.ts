@@ -47,7 +47,6 @@ test('LA-OBS-001: status exposes Prompt source and one refresh re-probes the sam
       provenance: {
         schemaVersion: 1,
         runtime: 'node-worker_threads',
-        role: 'assistant',
         promptVersion: 'diagnostics-test-v1',
       },
     })

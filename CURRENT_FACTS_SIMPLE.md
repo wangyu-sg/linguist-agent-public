@@ -17,18 +17,18 @@
 | 项目 | 核验值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App | `0.16.22` |
+| Electron App | `0.16.29` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.0.3` |
-| Shared | `0.1.86` |
+| Shared | `0.1.91` |
 | Claude Agent SDK | `0.3.201` |
 | Pi Runtime | `0.82.1` |
-| CAT Core | `0.0.15` |
-| CAT Formats | `0.0.9` |
-| CAT Store | `0.0.29`（简化重构；核验起点 `0.0.27`） |
-| CAT Tools | `0.0.24` |
+| CAT Core | `0.0.19` |
+| CAT Formats | `0.0.10` |
+| CAT Store | `0.0.34` |
+| CAT Tools | `0.0.31` |
 | CAT schema | `15` |
 
 版本值来自当前 `package.json`、`bun.lock` 与 `packages/linguist-cat-store/src/schema.ts`，不是旧报告。
@@ -52,8 +52,8 @@
 - `AgentSessionMeta` 当前角色字段为 `linguistRole?: 'general' | 'translator' | 'reviewer' | 'proofreader'`；旧字段只在读取时转换并删除。
 - Session 创建、更新 IPC 与 Header/侧栏菜单支持四岗位；岗位可切换。
 - `composeAgentTools()` 已保持 Proma Base/MCP 在前、Linguist CAT overlay 在后的组合方向。
-- 四岗位获得同一套 20 个 CAT 工具；差异只由岗位提示词表达，不再有 Auditor 工具白名单。
-- 当前工具包含统一资源导入、final/draft 导出、未知 Tag 扫描与 Tag Profile 保存；不再公开 Critic 或 Translation Scope 工具。
+- 四岗位获得同一套 30 个 CAT 工具；差异只由岗位提示词表达，不再有岗位工具白名单。
+- 当前工具包含直接写入、术语闭环、Workbook Mapping、Voice Context、统一资源导入、`verified/as-is` 导出、未知 Tag 扫描与 Tag Profile 保存；不再公开 Critic 或 Translation Scope 工具。
 
 ## 当前权限与异常语义
 

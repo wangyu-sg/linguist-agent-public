@@ -164,7 +164,7 @@ export class LinguistImportVerificationFailedError extends LinguistServiceError 
  */
 export class LinguistImportUndoBlockedError extends LinguistServiceError {
   readonly code = LINGUIST_SERVICE_ERROR_CODES.IMPORT_UNDO_BLOCKED
-  /** 下游引用分类计数（proposals/qaFindings/criticArtifacts/exports/editedSegments/jobs）。 */
+  /** 下游引用分类计数（proposals/qaFindings/legacyCriticArtifacts/exports/editedSegments/jobs）。 */
   readonly details: Record<string, number>
   constructor(
     readonly projectId: string,
@@ -174,7 +174,7 @@ export class LinguistImportUndoBlockedError extends LinguistServiceError {
     super(
       `Undo import of asset ${assetId} in project ${projectId} is blocked by downstream references: ` +
       `proposals=${references.proposals}, qaFindings=${references.qaFindings}, ` +
-      `criticArtifacts=${references.criticArtifacts}, exports=${references.exports}, ` +
+      `legacyCriticArtifacts=${references.legacyCriticArtifacts}, exports=${references.exports}, ` +
       `editedSegments=${references.editedSegments}, jobs=${references.jobs}.`,
     )
     this.name = 'LinguistImportUndoBlockedError'

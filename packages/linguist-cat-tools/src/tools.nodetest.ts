@@ -1979,10 +1979,6 @@ test('cat_plan_consistency_repairs: 返回候选与快照 planId，绝不写库'
       { key: 'r1', source: 'Save your work', target: '保存你的工作' },
       { key: 'r2', source: 'Save your work', target: '储存你的工作' },
     ])
-    // 预置一条 critic 一致性 finding（模拟 PB-083 评审已落库的行）
-    fixture.db.qaFindings.insertOpen([
-      { segmentId: segs[2]!.id, code: 'CRITIC_CONSISTENCY', severity: 'L2', message: '与项目惯例译法不一致。' },
-    ])
     const qaRowsBefore = fixture.db.qaFindings.count({})
     const mutations: LinguistCatToolMutation[] = []
     const tools = createLinguistCatTools({
@@ -1995,8 +1991,7 @@ test('cat_plan_consistency_repairs: 返回候选与快照 planId，绝不写库'
 
     assert.match(dto.planId, /^csp-[0-9a-f]{16}$/)
     assert.equal(dto.groupCount, 1)
-    // 内存 runQa 对同 source 三段出 INCONSISTENT_REPEATED_SOURCE ×3，加库中 CRITIC_ 行
-    assert.equal(dto.findingCount, 4)
+    assert.equal(dto.findingCount, 3)
     const group = dto.groups[0]!
     assert.match(group.groupId, /^csg-[0-9a-f]{16}$/)
     assert.equal(group.source, 'Save your work')
@@ -2007,7 +2002,6 @@ test('cat_plan_consistency_repairs: 返回候选与快照 planId，绝不写库'
     ])
     const codes = group.findings.map((finding) => finding.code)
     assert.equal(codes.filter((code) => code === 'INCONSISTENT_REPEATED_SOURCE').length, 3)
-    assert.ok(codes.includes('CRITIC_CONSISTENCY'))
     assert.ok(group.findings.every((finding) => !finding.locked))
     // EMPTY_TARGET / TARGET_LENGTH_WARNING 等非一致性 code 不进报告
     assert.ok(codes.every((code) => !['EMPTY_TARGET', 'TARGET_LENGTH_WARNING'].includes(code)))
@@ -2033,9 +2027,9 @@ test('cat_create_consistency_proposals: 仅按显式选择建 Proposal，重复 
       { key: 'r2', source: 'Save your work', target: '储存你的工作' },
       { key: 'r3', source: 'Save your work', target: '存档你的工作', locked: true },
     ])
-    // critic finding 把锁定段拉进组：其 target 参与计票，但自身绝不修复
+    // 持久化的确定性 finding 把锁定段作为候选上下文，但自身绝不修复。
     fixture.db.qaFindings.insertOpen([
-      { segmentId: segs[3]!.id, code: 'CRITIC_CONSISTENCY', severity: 'L2', message: '锁定段译文为审校基准之一。' },
+      { segmentId: segs[3]!.id, code: 'INCONSISTENT_REPEATED_SOURCE', severity: 'L2', message: '锁定段译文为审校基准之一。' },
     ])
     const mutations: LinguistCatToolMutation[] = []
     const tools = createLinguistCatTools({
@@ -2114,7 +2108,7 @@ test('cat_create_consistency_proposals: stale plan、locked 与 hard gate 均 fa
       { key: 'r2', source: 'Hello {name}', target: '哈喽 {name}', locked: true },
     ])
     fixture.db.qaFindings.insertOpen([
-      { segmentId: segs[2]!.id, code: 'CRITIC_CONSISTENCY', severity: 'L2', message: '锁定段仅作上下文。' },
+      { segmentId: segs[2]!.id, code: 'INCONSISTENT_REPEATED_SOURCE', severity: 'L2', message: '锁定段仅作上下文。' },
     ])
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
     const plan = (

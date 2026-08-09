@@ -226,7 +226,6 @@ export interface LinguistRunChangeSummary {
     proposalsCreated: number
     qaFindingsCreated: number
     qaFindingsUpdated: number
-    criticReviewsCreated: number
     filesTouched: number
     total: number
     undone: number
@@ -243,11 +242,11 @@ export interface LinguistRunUndoResult {
   runId: string
   status: 'completed' | 'partial' | 'refused' | 'already-undone'
   reverted: Array<{
-    entityType: 'segment' | 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
+    entityType: 'segment' | 'proposal' | 'qa-finding' | 'file' | 'legacy-record'
     entityId: string
   }>
   refused: Array<{
-    entityType: 'segment' | 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
+    entityType: 'segment' | 'proposal' | 'qa-finding' | 'file' | 'legacy-record'
     entityId: string
     reason: string
   }>

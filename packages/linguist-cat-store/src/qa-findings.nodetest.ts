@@ -185,7 +185,7 @@ test('QA lifecycle matrix: occurrences preserve terminal evidence; revision/rule
         .some((event) => event.reason === 'not observed in QA rerun'),
     )
 
-    const [critic] = db.qaFindings.insertOpen([{
+    const [legacy] = db.qaFindings.insertOpen([{
       segmentId: firstSegment!.id,
       code: 'CRITIC_FIDELITY',
       severity: 'L2',
@@ -200,7 +200,7 @@ test('QA lifecycle matrix: occurrences preserve terminal evidence; revision/rule
       observedAt: '2026-07-29T01:08:00.000Z',
       ruleVersion: 'rules-v2',
     })
-    assert.equal(db.qaFindings.getById(critic!.id)?.status, 'open')
+    assert.equal(db.qaFindings.getById(legacy!.id)?.status, 'open')
   } finally {
     db.close()
   }
@@ -294,7 +294,7 @@ test('insertOpen: advisory inserts keep existing rows, stay idempotent, preserve
 
     // insertOpen does NOT delete the existing open finding (unlike replaceForSegment)
     const inserted = db.qaFindings.insertOpen([
-      { segmentId: seg, code: 'CRITIC_FIDELITY', severity: 'L2', message: '译文漏译。' },
+      { segmentId: seg, code: 'MANUAL_REVIEW', severity: 'L2', message: '译文漏译。' },
     ])
     assert.equal(inserted.length, 1)
     assert.equal(inserted[0]!.status, 'open')
@@ -305,17 +305,17 @@ test('insertOpen: advisory inserts keep existing rows, stay idempotent, preserve
     // idempotent: same content-derived id re-inserted without duplication
     assert.doesNotThrow(() =>
       db.qaFindings.insertOpen([
-        { segmentId: seg, code: 'CRITIC_FIDELITY', severity: 'L2', message: '译文漏译。' },
+        { segmentId: seg, code: 'MANUAL_REVIEW', severity: 'L2', message: '译文漏译。' },
       ]),
     )
     assert.equal(db.qaFindings.list({ segmentId: seg }).length, 2)
 
     // A resolved row with identical identity remains terminal; reopen is explicit.
-    const critic = inserted[0]!
-    db.qaFindings.transition(critic.id, 'resolved')
-    db.qaFindings.insertOpen([{ segmentId: seg, code: 'CRITIC_FIDELITY', severity: 'L2', message: '译文漏译。' }])
-    assert.equal(db.qaFindings.getById(critic.id)?.status, 'resolved')
-    assert.equal(db.qaFindings.transition(critic.id, 'open').status, 'open')
+    const advisory = inserted[0]!
+    db.qaFindings.transition(advisory.id, 'resolved')
+    db.qaFindings.insertOpen([{ segmentId: seg, code: 'MANUAL_REVIEW', severity: 'L2', message: '译文漏译。' }])
+    assert.equal(db.qaFindings.getById(advisory.id)?.status, 'resolved')
+    assert.equal(db.qaFindings.transition(advisory.id, 'open').status, 'open')
 
     // unknown segment fails closed
     assert.throws(

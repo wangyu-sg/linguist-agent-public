@@ -414,7 +414,7 @@ export class SegmentsRepository {
     })
   }
 
-  /** CAS 确认当前项目阶段；目标内容 revision 不变，确认写入独立审计流。 */
+  /** CAS 确认当前项目阶段；目标内容 revision 不变，确认写入阶段事件流。 */
   confirmCurrentStage(
     segmentId: SegmentId | string,
     stage: WorkflowStage,

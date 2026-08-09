@@ -201,7 +201,6 @@ export function ProjectRunSummary({
                   )}
                   <span>Proposal {summary.changes.proposalsCreated}</span>
                   <span>QA {qaCount}</span>
-                  <span>Critic {summary.changes.criticReviewsCreated}</span>
                   <span>文件 {summary.changes.filesTouched}（仅记录）</span>
                 </div>
               )}

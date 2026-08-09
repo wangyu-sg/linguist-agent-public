@@ -40,10 +40,10 @@ test('PB-071 project QA persists revision-bound findings and waiver reasons', ()
   }
 })
 
-test('deterministic project QA rerun preserves open independent critic findings', () => {
+test('deterministic project QA rerun leaves legacy prefixed findings untouched', () => {
   const store = new CatStore({ rootDir: makeTempDir(), entropy: makeEntropy(), now: makeClock() })
   const project = store.createProject({
-    name: 'QA-CRITIC',
+    name: 'QA-LEGACY',
     sourceLocale: 'en',
     targetLocale: 'zh-CN',
     promaWorkspaceId: 'ws',
@@ -51,7 +51,7 @@ test('deterministic project QA rerun preserves open independent critic findings'
   const db = store.openProject(project.id)
   try {
     const { segments } = db.assets.insertImported(makeImportedAsset({ segmentCount: 1, fillEvery: 1 }))
-    const critic = db.qaFindings.insertOpen([{
+    const legacy = db.qaFindings.insertOpen([{
       segmentId: segments[0]!.id,
       code: 'CRITIC_FIDELITY',
       severity: 'L2',
@@ -60,7 +60,7 @@ test('deterministic project QA rerun preserves open independent critic findings'
 
     runProjectQa(db)
 
-    assert.equal(db.qaFindings.getById(critic.id)?.status, 'open')
+    assert.equal(db.qaFindings.getById(legacy.id)?.status, 'open')
   } finally {
     db.close()
   }

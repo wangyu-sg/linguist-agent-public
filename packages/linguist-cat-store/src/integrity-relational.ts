@@ -1,7 +1,7 @@
 import {
   parseCriticReviewArtifact,
   parseIndependentCriticArtifact,
-} from '@linguist/cat-core'
+} from '@linguist/cat-core/legacy-compat'
 import type { CatDatabase } from './database'
 import {
   addProblem,

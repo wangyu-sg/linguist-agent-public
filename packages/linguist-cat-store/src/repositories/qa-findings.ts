@@ -113,7 +113,7 @@ export class QaFindingsRepository {
     )
   }
 
-  /** Deterministic project rerun. CRITIC_* rows are never auto-closed. */
+  /** Deterministic project rerun. Historical CRITIC_* rows are never auto-closed. */
   replaceForProject(
     inputs: readonly QaFindingPersistenceInput[],
     segmentRevisions: ReadonlyMap<string, number>,
@@ -187,7 +187,7 @@ export class QaFindingsRepository {
       const ruleVersion =
         input.ruleVersion ??
         persistence.ruleVersion ??
-        (finding.code.startsWith('CRITIC_') ? 'critic-v2' : 'deterministic-v1')
+        'deterministic-v1'
       const evidenceHash = digest(input.evidenceHash ?? (finding.id as string))
       const legacyFindingId = `qaf-${fnv1a64(
         `${finding.segmentId}${finding.code}${finding.message}`,

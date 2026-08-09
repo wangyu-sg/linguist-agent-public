@@ -144,11 +144,11 @@ export function describeLinguistIpcError(error: LinguistIpcError): string {
 
 // ===== 撤销导入（LA-INTAKE-007）=====
 
-/** IMPORT_UNDO_BLOCKED details 五类计数 → 中文分类标签。 */
+/** IMPORT_UNDO_BLOCKED details 分类计数 → 中文分类标签。 */
 const IMPORT_UNDO_REFERENCE_LABELS: Record<string, string> = {
   proposals: '提案',
   qaFindings: 'QA',
-  criticArtifacts: '评审',
+  legacyCriticArtifacts: '历史评审件',
   exports: '导出',
   editedSegments: '人工编辑段',
 }

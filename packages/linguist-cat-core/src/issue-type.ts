@@ -62,9 +62,6 @@ export interface QaIssueMapping {
  * 占位符/标签/ICU 破坏 = L0 defect；硬术语（禁用/严格必需）= L1 defect；
  * 数字单位 = L1 defect；preferred 偏离由术语校验返回 advisory；
  * 一致性/标点/空白/长度 = L2–L3 defect；术语表冲突不可判定 = query。
- *
- * CRITIC_* 的 severity 由 critic 产出时直接给出，此处只兜底
- * issueType/disposition。
  */
 export const QA_CODE_ISSUE_MAPPING: Readonly<Record<string, QaIssueMapping>> = {
   // —— PB-070 既有 11 码（code 与 message 不变，仅补契约三元组）——
@@ -99,12 +96,6 @@ export const QA_CODE_ISSUE_MAPPING: Readonly<Record<string, QaIssueMapping>> = {
   PLACEHOLDER_FAMILY_MISMATCH: { issueType: 'placeholders_variables', severity: 'L0', disposition: 'defect' },
   TAG_FAMILY_MISMATCH: { issueType: 'format_tags', severity: 'L0', disposition: 'defect' },
   TAG_PAIRING_MISMATCH: { issueType: 'format_tags', severity: 'L0', disposition: 'defect' },
-  // —— CRITIC_* 机制码：severity 由 critic 产出给出，此处仅兜底分类/处置 ——
-  CRITIC_FIDELITY: { issueType: 'mistranslation', severity: 'L2', disposition: 'needs_review' },
-  CRITIC_NATURALNESS: { issueType: 'fluency_readability', severity: 'L2', disposition: 'needs_review' },
-  CRITIC_TERMINOLOGY: { issueType: 'terminology_soft', severity: 'L2', disposition: 'needs_review' },
-  CRITIC_VOICE: { issueType: 'character_voice', severity: 'L2', disposition: 'needs_review' },
-  CRITIC_CONSISTENCY: { issueType: 'consistency', severity: 'L2', disposition: 'needs_review' },
 }
 
 /** 未知码兜底：other / L2 / defect（schema v7 回填与 openQaFinding 共用）。 */

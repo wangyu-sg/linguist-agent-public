@@ -1,18 +1,18 @@
 # Linguist Fusion 当前事实
 
-> 更新日期：2026-08-08。代码、manifest、测试和真实运行输出优先于本文。
+> 更新日期：2026-08-10。代码、manifest、测试和真实运行输出优先于本文。
 
 ## 基线
 
 | 项目 | 当前事实 |
 |---|---|
-| 仓库 / 分支 | `/Users/<local>/Desktop/linguist-agent-next` / `sync/proma-v0.16.9-simple` |
-| Proma Base / formal merge | v0.16.9 `d08179d9` / `50a74398` |
-| App / Electron | `0.16.21` / `43.2.0` |
+| 仓库 / 分支 | `/Users/<local>/Desktop/linguist-agent-next` / `integration/la-proma-0.16.10` |
+| Proma Base / formal merge | v0.16.10 `72fd1b1a` / `ea26177f` |
+| App / Electron | `0.16.29` / `43.2.0` |
 | Bun / Pi / Claude | `1.3.14` / `0.82.1` / `0.3.201` |
-| Shared | `0.1.86` |
-| CAT Core / Formats / Store / Tools | `0.0.15 / 0.0.9 / 0.0.29 / 0.0.24` |
-| CAT schema / Tool count | `15` / `20` |
+| Shared | `0.1.91` |
+| CAT Core / Formats / Store / Tools | `0.0.19 / 0.0.10 / 0.0.34 / 0.0.31` |
+| CAT schema / Tool count | `15` / `30` |
 
 产品结构固定为完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench。Linguist 复用同一个 AgentView、Session、Planning、Preview Tab、权限和 Host 状态。
 
@@ -23,9 +23,9 @@
 - 项目异常不封死会话。Agent 的通用读写、思考、MCP 和文件能力继续可用；CAT mutation 仍由 Session binding、项目健康、revision CAS、locked 和结构规则保护。
 - Common Contract 与四份岗位提示词位于 `resources/linguist-roles/`，这是唯一岗位 Prompt 真源；不再注入旧 project role Skill。
 - Reviewer 默认执行完整 Source + Target 审校，Proofreader 默认聚焦目标语；两者都可在用户明确要求时通过 Proposal 写回。
-- 对外 CAT Toolset 固定为 20 个，包含统一资源导入、未知 Tag 扫描、Tag Profile 保存和 final/draft 导出；不再公开 Critic 或 Translation Scope 工具。
+- 对外 CAT Toolset 固定为 30 个，包含直接写入、术语闭环、Workbook Mapping、Voice Context、统一资源导入、未知 Tag 扫描、Tag Profile 保存和 `verified/as-is` 导出；不再公开 Critic 或 Translation Scope 工具。
 - `cat_import_resources` 接受文件或目录、绝对路径或相对会话工作目录路径，递归上限为 500 个条目，不跟随符号链接目录；XLSX 和其他歧义映射显式返回 `needsInput`。
-- `cat_export_asset` 默认拒绝覆盖。final 经过交付预检、结构硬规则和重导验证；draft 可导出未完成批次，但仍保留路径校验、格式生成和原子写入。
+- `cat_export_asset` 默认拒绝覆盖。`verified` 经过交付预检、结构硬规则和重导验证；`as-is` 可导出未完成批次，但仍保留路径校验、格式生成和原子写入。
 - Tag Scanner 是 Core 到 UI 的单一真源。内建 family、项目 Active pattern 和 Candidate 共用同一扫描结果；Candidate 在保存前检查证据、正则安全、重叠和 paired pattern。
 - Phrase Master 配对依赖内容身份；mapping 持久化 source hash、placeholder 顺序和原始 XML，过期/不完整 mapping 阻止 final，不阻止 draft。
 - 旧 Critic DB 记录仅为历史兼容读取，不再有公开创建或工作流入口。Execution Policy 和 Translation Scope active 路径已删除。

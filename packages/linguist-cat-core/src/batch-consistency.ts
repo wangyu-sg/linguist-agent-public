@@ -10,7 +10,7 @@
  * 类型对接（LEGACY_EXTRACTION_SPEC.md PB-084 小节定夺）：
  * - 新仓 QaFinding 无 evidenceSources 字段 → 首版丢弃该维度；
  * - 新仓 CreateProposalInput 无 changeType → 丢弃（不并入 warnings）；
- * - 一致性 code 集合对齐新仓规则目录 = 确定性 QA 4 码 ∪ critic 3 码（共 7 码）；
+ * - 一致性 code 集合只接受当前确定性 QA 规则；
  * - QA 来源由旧 QualityAuditReport 改为调用方传入的 QaFinding[]
  *   （store qa-findings repository 查询结果与/或内存 runQa 输出）。
  *
@@ -31,18 +31,13 @@ import { openQaFinding, type QaFinding, type QaFindingSeverity } from './qa-find
 import { compareSegments, type Segment } from './segment'
 
 /**
- * 一致性 code 集合：确定性 QA 4 码 ∪ independent critic 3 码。
- * critic 码由 tools 运行时以 `CRITIC_<CATEGORY>` 生成（见 cat-tools 工厂），
- * 本集合取其中 consistency/voice/terminology 三类。
+ * 一致性 code 集合只含当前确定性 QA 规则。
  */
 export const BATCH_CONSISTENCY_CODES = [
   QA_RULE_CODES.INCONSISTENT_REPEATED_SOURCE,
   QA_RULE_CODES.REQUIRED_TERM,
   QA_RULE_CODES.FORBIDDEN_TERM,
   QA_RULE_CODES.REPEATED_PUNCTUATION,
-  'CRITIC_CONSISTENCY',
-  'CRITIC_VOICE',
-  'CRITIC_TERMINOLOGY',
 ] as const
 
 export type BatchConsistencyCode = (typeof BATCH_CONSISTENCY_CODES)[number]

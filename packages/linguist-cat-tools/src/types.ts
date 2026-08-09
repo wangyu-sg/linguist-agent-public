@@ -594,16 +594,6 @@ export interface CatQaFindingItem {
   evidenceHash: string
   firstSeenRunId: string
   waiverReason?: string
-  criticReviews?: Array<{
-    reviewId: string
-    criticFindingId: string
-    proposalId: string
-    snapshotId: string
-    snapshotHash: string
-    reviewerSessionId: string
-    reviewerModelId?: string
-    promptVersion: string
-  }>
 }
 
 /** consistency plan 分组报告里的一条 finding。 */

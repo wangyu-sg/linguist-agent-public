@@ -109,9 +109,7 @@ export {
   type QaFindingStatusEvent,
   type QaRunPersistence,
 } from './repositories/qa-findings'
-export { CriticArtifactsRepository } from './repositories/critic-artifacts'
 export {
-  type PersistedCriticArtifact,
   type PersistedQaFinding,
 } from './repositories/rows'
 export { buildQaTermOptions, runProjectQa } from './qa-runner'

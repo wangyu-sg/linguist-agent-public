@@ -206,7 +206,6 @@ export function runQaWorkerJob<TWorkerResult, TResult>(
     provenance: {
       schemaVersion: 1,
       runtime: 'node-worker_threads',
-      role: 'assistant',
       promptVersion: 'qa-worker-v1',
       ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
     },
@@ -237,7 +236,6 @@ export function runConsistencyPlanWorkerJob<TWorkerResult, TResult>(
     provenance: {
       schemaVersion: 1,
       runtime: 'node-worker_threads',
-      role: 'assistant',
       promptVersion: 'consistency-advisory-worker-v1',
       projectEventPolicy: 'suppress',
       ...(input.modelId === undefined ? {} : { modelId: input.modelId }),

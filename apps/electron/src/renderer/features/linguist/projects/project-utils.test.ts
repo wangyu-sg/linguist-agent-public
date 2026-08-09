@@ -189,11 +189,11 @@ describe('describeImportUndoBlockedCounts（LA-INTAKE-007 撤销拒绝计数）'
       describeImportUndoBlockedCounts({
         proposals: 2,
         qaFindings: 0,
-        criticArtifacts: 1,
+        legacyCriticArtifacts: 1,
         exports: 0,
         editedSegments: 3,
       }),
-    ).toBe('提案 2 条、评审 1 条、人工编辑段 3 条')
+    ).toBe('提案 2 条、历史评审件 1 条、人工编辑段 3 条')
   })
 
   test('details 缺失或全零返回 null（调用方回退通用错误文案）', () => {
@@ -202,7 +202,7 @@ describe('describeImportUndoBlockedCounts（LA-INTAKE-007 撤销拒绝计数）'
       describeImportUndoBlockedCounts({
         proposals: 0,
         qaFindings: 0,
-        criticArtifacts: 0,
+        legacyCriticArtifacts: 0,
         exports: 0,
         editedSegments: 0,
       }),

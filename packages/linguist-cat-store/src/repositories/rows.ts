@@ -4,13 +4,9 @@
  */
 
 import {
-  parseCriticReviewArtifact,
-  parseIndependentCriticArtifact,
   type Asset,
   type AssetId,
-  type CriticReviewArtifact,
   type CurrentStageState,
-  type IndependentCriticArtifact,
   type ProjectId,
   type ProposalId,
   type ProposalIssuance,
@@ -312,27 +308,6 @@ export interface QaFindingRow {
   evidence_hash: string
   first_seen_run_id: string
   created_at: string
-}
-
-export interface CriticArtifactRow {
-  artifact_id: string
-  segment_id: string
-  created_at: string
-  artifact_json: string
-}
-
-/**
- * Parse a persisted critic artifact. Parsing is strict: the artifactId and
- * artifactHash are re-derived and verified on every read, so a tampered row
- * fails loudly instead of silently returning altered review content.
- */
-export type PersistedCriticArtifact = IndependentCriticArtifact | CriticReviewArtifact
-
-export function criticArtifactFromRow(row: CriticArtifactRow): PersistedCriticArtifact {
-  const value = JSON.parse(row.artifact_json) as { schemaVersion?: unknown }
-  return value.schemaVersion === 2
-    ? parseCriticReviewArtifact(value)
-    : parseIndependentCriticArtifact(value)
 }
 
 export interface PersistedQaFinding extends QaFinding {

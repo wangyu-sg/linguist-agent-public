@@ -2,7 +2,7 @@
  * CAT Tool 对外工厂。
  *
  * 项目 authority 统一由 runtime 从 Session binding 解析；各领域模块只
- * 创建自己的 ToolDefinition，工厂负责保持公开顺序与独立审计白名单。
+ * 创建自己的 ToolDefinition，工厂只负责保持公开顺序。
  */
 
 import { createProjectTools } from './project-tools'

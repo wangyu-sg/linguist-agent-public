@@ -2,7 +2,7 @@
  * LA-INTAKE-007 撤销导入的 store 层基元（node --test）：
  * - assets.deleteWithSegments：asset + segments + segment_revisions +
  *   segment_stage_events 单事务级联删除；
- * - proposals.countByAsset / criticArtifacts.countByAsset /
+ * - proposals.countByAsset / legacyCriticArtifacts.countByAsset /
  *   segments.countEditedByAsset / segments.countMismatchedLocalesByAsset：
  *   撤销引用判定与导入回读验证的廉价计数。
  * bun 无 node:sqlite，本文件不被 bun test 拾取（*.nodetest.ts）。
@@ -10,10 +10,6 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  createIndependentCriticArtifact,
-  independentCriticCandidateHash,
-} from '@linguist/cat-core'
 import { CatStore } from './store'
 import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
 
@@ -28,31 +24,11 @@ function setup(segmentCount = 3) {
   return { store, project, db, asset, segments }
 }
 
-function makeArtifact(segmentId: string) {
-  return createIndependentCriticArtifact({
-    schemaVersion: 1,
-    subject: {
-      segmentId,
-      risk: 'high',
-      candidateId: 'prp-demo-1',
-      candidateHash: independentCriticCandidateHash({
-        proposalId: 'prp-demo-1',
-        segmentId,
-        target: '候选译文',
-        revision: 0,
-      }),
-      candidateExecutionId: 'candidate-exec-1',
-      candidateProducerId: 'session:producer-1',
-    },
-    critic: {
-      criticId: 'session:critic-1',
-      executionId: 'critic-exec-1',
-      profileHash: 'a'.repeat(64),
-    },
-    findings: [
-      { category: 'fidelity', severity: 'L2', issueType: 'omission', evidenceRefs: ['tm:demo'], explanation: '译文漏译。' },
-    ],
-  })
+function insertLegacyCriticArtifact(db: ReturnType<CatStore['openProject']>, segmentId: string, suffix: string) {
+  db.catDb.db.prepare(`
+    INSERT INTO critic_artifacts (artifact_id, segment_id, created_at, artifact_json)
+    VALUES (?, ?, ?, ?)
+  `).run(`legacy-${suffix}`, segmentId, '2026-08-10T00:00:00.000Z', '{}')
 }
 
 test('deleteWithSegments: asset + segments + revisions + stage events cascade in one transaction', () => {
@@ -132,18 +108,18 @@ test('proposals.countByAsset: counts every status, scoped to the asset', () => {
   }
 })
 
-test('criticArtifacts.countByAsset: joins through segments, no cross-asset leakage', () => {
+test('legacyCriticArtifacts.countByAsset: joins through segments, no cross-asset leakage', () => {
   const { db, asset, segments } = setup(2)
   try {
-    db.criticArtifacts.insert(makeArtifact(segments[0]!.id))
-    db.criticArtifacts.insert(makeArtifact(segments[1]!.id))
+    insertLegacyCriticArtifact(db, segments[0]!.id, '1')
+    insertLegacyCriticArtifact(db, segments[1]!.id, '2')
     const other = db.assets.insertImported(
       makeImportedAsset({ segmentCount: 1, filename: 'other.tsv', sourceSha256: 'd'.repeat(64) }),
     )
 
-    assert.equal(db.criticArtifacts.countByAsset(asset.id), 2)
-    assert.equal(db.criticArtifacts.countByAsset(other.asset.id), 0)
-    assert.equal(db.criticArtifacts.countByAsset('ast-0000000000000000'), 0)
+    assert.equal(db.legacyCriticArtifacts.countByAsset(asset.id), 2)
+    assert.equal(db.legacyCriticArtifacts.countByAsset(other.asset.id), 0)
+    assert.equal(db.legacyCriticArtifacts.countByAsset('ast-0000000000000000'), 0)
   } finally {
     db.close()
   }

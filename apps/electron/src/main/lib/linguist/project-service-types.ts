@@ -223,14 +223,14 @@ export interface ImportVerificationReport {
 }
 
 /**
- * LA-INTAKE-007 撤销导入的下游引用计数：Proposal / QA / 评审件 / 导出 /
+ * LA-INTAKE-007 撤销导入的下游引用计数：Proposal / QA / 历史评审件 / 导出 /
  * 人工编辑痕迹 / durable job，全零才允许撤销；任一非零即 IMPORT_UNDO_BLOCKED。
  * 只含计数，绝无客户文本。
  */
 export interface ImportUndoReferences {
   proposals: number
   qaFindings: number
-  criticArtifacts: number
+  legacyCriticArtifacts: number
   exports: number
   editedSegments: number
   jobs: number

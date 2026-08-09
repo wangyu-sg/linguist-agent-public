@@ -10,7 +10,7 @@
 |---|---|---|
 | SIMPLE-000 | DONE | `CURRENT_FACTS_SIMPLE.md` 记录启动基线、数据备份和验证。 |
 | SIMPLE-001 | DONE | 基线 CI 红灯根因已修复，继续施工前全套基线通过。 |
-| SIMPLE-002 | DONE | Proma v0.16.9 已正式 merge；lock、SBOM/NOTICE、macOS arm64 packaged build、产物完整性和纵向 smoke 均已核验。 |
+| SIMPLE-002 | DONE | Proma v0.16.10 已正式 merge；lock、SBOM/NOTICE、macOS arm64 packaged build、产物完整性和纵向 smoke 均已核验。 |
 | CAP-001~005 | DONE | 四岗位同 Toolset；权限沿用 Proma；外部路径可读即导入；项目异常不再封死 Agent；岗位可切换。 |
 | ROLE-001~005 | DONE | `general / translator / reviewer / proofreader` 类型、创建菜单、Header 切换、旧角色 decoder 与标题 hidden context 已实现。 |
 | PROMPT-001~007 | DONE | Common Contract + 四岗位 Markdown 唯一真源；短 fallback 可继续运行；旧 Skill 双注入已删除。 |
@@ -19,7 +19,7 @@
 | FLOW-005 | DONE | begin/finalize Translation Scope 不再公开或作为完成前置。 |
 | FLOW-006 | DONE | 复用现有 Tool result / Proposal / QA 结果汇总，不增加新 Artifact 平台。 |
 | IO-001~002 | DONE | `cat_import_resources` 支持文件/目录、auto 分类、去重、needsInput 与简单计数；`cat_import_asset` 为单文件 alias。 |
-| IO-003 | DONE | `cat_export_asset` 支持 final/draft、默认拒绝覆盖与显式原子覆盖。 |
+| IO-003 | DONE | `cat_export_asset` 支持 `verified/as-is`、默认拒绝覆盖与显式原子覆盖。 |
 | IO-004 | DONE | 只读核验真实工作目录；客户正文、文件名和绝对路径未进入仓库。 |
 | TAG-001~004 | DONE | Scanner 单一真源、未知形状扫描、Candidate 保存与 ReDoS/证据/重叠/Pair 验证完成。 |
 | TAG-005~006 | DONE | Tag Profiles 三栏 UI、Candidate soft chip 与 Active/native hard chip 使用同一 Scanner。 |

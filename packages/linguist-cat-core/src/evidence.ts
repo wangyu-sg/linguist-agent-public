@@ -5,8 +5,7 @@
  * `packages/cat-data/src/write_policy.ts` (only the three evidence symbols;
  * the write policy itself hangs on legacy batch_workspace / qa_write_gate
  * and is NOT migrated). Tool traces and agent events are audit data, not
- * citable evidence. Shared by independent-critic and future proposal
- * evidence checks.
+ * citable evidence. Proposal evidence checks share this boundary.
  */
 
 /** Audit-only source prefixes: a match is never citable evidence. */

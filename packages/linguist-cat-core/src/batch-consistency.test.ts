@@ -42,11 +42,8 @@ function majorityFixture(): { segments: Segment[]; findings: QaFinding[] } {
 }
 
 describe('PB-084 batch consistency projection', () => {
-  test('一致性 code 集合 = 确定性 4 码 ∪ critic 3 码（共 7 码）', () => {
+  test('一致性 code 集合只含当前确定性 4 码', () => {
     expect([...BATCH_CONSISTENCY_CODES].sort()).toEqual([
-      'CRITIC_CONSISTENCY',
-      'CRITIC_TERMINOLOGY',
-      'CRITIC_VOICE',
       'FORBIDDEN_TERM',
       'INCONSISTENT_REPEATED_SOURCE',
       'REPEATED_PUNCTUATION',
@@ -60,9 +57,9 @@ describe('PB-084 batch consistency projection', () => {
     const resolved = transitionQaFinding(finding(seg, 'FORBIDDEN_TERM'), 'resolved')
     const waived = transitionQaFinding(finding(seg, 'REPEATED_PUNCTUATION'), 'waived')
     const otherRule = finding(seg, 'PLACEHOLDER_MISMATCH')
-    const otherCritic = finding(seg, 'CRITIC_FIDELITY')
+    const unknownRule = finding(seg, 'UNRELATED_RULE')
     const pass = buildBatchConsistencyPass({
-      findings: [open, resolved, waived, otherRule, otherCritic],
+      findings: [open, resolved, waived, otherRule, unknownRule],
       segments: [seg],
     })
     expect(pass.authority).toBe('advisory_finding')
@@ -72,10 +69,9 @@ describe('PB-084 batch consistency projection', () => {
     expect(pass.findingCount).toBe(1)
     expect(pass.groups).toHaveLength(1)
     expect(pass.groups[0]!.findingIds).toEqual([open.id])
-    // 全部 7 码都被纳入
-    const allSeven = BATCH_CONSISTENCY_CODES.map((code) => finding(seg, code))
-    const passAll = buildBatchConsistencyPass({ findings: allSeven, segments: [seg] })
-    expect(passAll.findingCount).toBe(7)
+    const allCodes = BATCH_CONSISTENCY_CODES.map((code) => finding(seg, code))
+    const passAll = buildBatchConsistencyPass({ findings: allCodes, segments: [seg] })
+    expect(passAll.findingCount).toBe(4)
     expect(passAll.groups[0]!.findings.map((item) => item.code).sort()).toEqual(
       [...BATCH_CONSISTENCY_CODES].sort(),
     )
@@ -87,7 +83,7 @@ describe('PB-084 batch consistency projection', () => {
     const b1 = segment(3, { source: 'Beta', target: '丙', locked: true })
     const pass = buildBatchConsistencyPass({
       findings: [
-        finding(b1, 'CRITIC_VOICE'),
+        finding(b1, 'REQUIRED_TERM'),
         finding(a2, 'INCONSISTENT_REPEATED_SOURCE'),
         finding(a1, 'INCONSISTENT_REPEATED_SOURCE'),
       ],
@@ -154,7 +150,7 @@ describe('PB-084 batch consistency projection', () => {
     const emptyA = segment(4, { source: 'Empty', target: '', status: 'untranslated' })
     const emptyB = segment(5, { source: 'Empty', target: '  ', status: 'untranslated' })
     const emptyPass = buildBatchConsistencyPass({
-      findings: [finding(emptyA, 'CRITIC_CONSISTENCY'), finding(emptyB, 'CRITIC_CONSISTENCY')],
+      findings: [finding(emptyA, 'INCONSISTENT_REPEATED_SOURCE'), finding(emptyB, 'INCONSISTENT_REPEATED_SOURCE')],
       segments: [emptyA, emptyB],
     })
     expect(emptyPass.groups[0]!.candidateTargets).toEqual([])

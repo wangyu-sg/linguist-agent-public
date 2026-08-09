@@ -28,7 +28,6 @@ export interface TranslationJobProvenance {
   runtime: string
   modelProvider?: string
   modelId?: string
-  role?: 'assistant' | 'reviewer' | 'auditor'
   promptVersion?: string
   projectDigestHash?: string
   contextSnapshotId?: string
@@ -85,7 +84,7 @@ export interface RunMutationIdentity {
 }
 
 export interface RunMutationChange {
-  entityType: 'segment' | 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
+  entityType: 'segment' | 'proposal' | 'qa-finding' | 'file'
   entityId: string
   changeKind: 'created' | 'updated' | 'deleted' | 'touched'
   segmentId?: string
@@ -178,7 +177,6 @@ export interface RunChangeSummaryV1 {
     proposalsCreated: number
     qaFindingsCreated: number
     qaFindingsUpdated: number
-    criticReviewsCreated: number
     filesTouched: number
     total: number
     undone: number
@@ -194,11 +192,11 @@ export interface RunUndoResult {
   runId: string
   status: 'completed' | 'partial' | 'refused' | 'already-undone'
   reverted: Array<{
-    entityType: RunMutationChange['entityType']
+    entityType: RunMutationChange['entityType'] | 'legacy-record'
     entityId: string
   }>
   refused: Array<{
-    entityType: RunMutationChange['entityType']
+    entityType: RunMutationChange['entityType'] | 'legacy-record'
     entityId: string
     reason: string
   }>
@@ -274,7 +272,7 @@ interface ProjectEventAckRow {
 
 interface RunChangeRow {
   change_id: number
-  entity_type: RunMutationChange['entityType']
+  entity_type: RunMutationChange['entityType'] | 'critic-artifact'
   entity_id: string
   change_kind: RunMutationChange['changeKind']
   segment_id: string | null
@@ -759,7 +757,6 @@ export class RunHarnessRepository {
         proposalsCreated: count('proposal', 'created'),
         qaFindingsCreated: count('qa-finding', 'created'),
         qaFindingsUpdated: count('qa-finding', 'updated'),
-        criticReviewsCreated: count('critic-artifact', 'created'),
         filesTouched: count('file'),
         total,
         undone,
@@ -820,10 +817,11 @@ export class RunHarnessRepository {
       const proposalIds: string[] = []
       const undoneAt = this.now()
       for (const row of pending) {
+        const entityType = row.entity_type === 'critic-artifact' ? 'legacy-record' : row.entity_type
         const reason = this.undoChange(row)
         if (reason !== undefined) {
           refused.push({
-            entityType: row.entity_type,
+            entityType,
             entityId: row.entity_id,
             reason,
           })
@@ -833,7 +831,7 @@ export class RunHarnessRepository {
           UPDATE run_changes SET undone_at = ?
           WHERE change_id = ? AND undone_at IS NULL
         `).run(undoneAt, row.change_id)
-        reverted.push({ entityType: row.entity_type, entityId: row.entity_id })
+        reverted.push({ entityType, entityId: row.entity_id })
         revertedChangeIds.push(row.change_id)
         if (row.segment_id !== null) segmentIds.add(row.segment_id)
         if (row.entity_type === 'proposal') proposalIds.push(row.entity_id)

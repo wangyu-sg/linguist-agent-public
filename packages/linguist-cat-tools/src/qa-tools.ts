@@ -227,41 +227,21 @@ export function createQaTools(runtime: CatToolRuntime) {
       }
       const findings = db.qaFindings.list({ ...filter, limit: page.limit, offset: page.offset })
       const total = db.qaFindings.count(filter)
-      const items: CatQaFindingItem[] = findings.map((finding) => {
-        const criticReviews = db.criticArtifacts
-          .traceByQaFindingId(finding.id as string)
-          .flatMap(({ artifact, criticFindingId }) =>
-            artifact.schemaVersion === 2
-              ? [{
-                  reviewId: artifact.artifactId,
-                  criticFindingId,
-                  proposalId: artifact.snapshot.proposalId,
-                  snapshotId: artifact.snapshot.snapshotId,
-                  snapshotHash: artifact.snapshot.snapshotHash,
-                  reviewerSessionId: artifact.reviewer.sessionId,
-                  ...(artifact.reviewer.modelId === undefined
-                    ? {}
-                    : { reviewerModelId: artifact.reviewer.modelId }),
-                  promptVersion: artifact.reviewer.promptVersion,
-                }]
-              : [])
-        return {
-          id: finding.id as string,
-          segmentId: finding.segmentId as string,
-          code: finding.code,
-          severity: finding.severity,
-          issueType: finding.issueType,
-          disposition: finding.disposition,
-          message: finding.message,
-          status: finding.status,
-          segmentRevision: finding.segmentRevision,
-          ruleVersion: finding.ruleVersion,
-          evidenceHash: finding.evidenceHash,
-          firstSeenRunId: finding.firstSeenRunId,
-          ...(finding.waiverReason !== undefined ? { waiverReason: finding.waiverReason } : {}),
-          ...(criticReviews.length === 0 ? {} : { criticReviews }),
-        }
-      })
+      const items: CatQaFindingItem[] = findings.map((finding) => ({
+        id: finding.id as string,
+        segmentId: finding.segmentId as string,
+        code: finding.code,
+        severity: finding.severity,
+        issueType: finding.issueType,
+        disposition: finding.disposition,
+        message: finding.message,
+        status: finding.status,
+        segmentRevision: finding.segmentRevision,
+        ruleVersion: finding.ruleVersion,
+        evidenceHash: finding.evidenceHash,
+        firstSeenRunId: finding.firstSeenRunId,
+        ...(finding.waiverReason !== undefined ? { waiverReason: finding.waiverReason } : {}),
+      }))
       const dto: PagedResult<CatQaFindingItem> = {
         items,
         total,

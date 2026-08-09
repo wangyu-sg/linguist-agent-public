@@ -4,10 +4,6 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import {
-  createCriticReviewArtifact,
-  independentCriticCandidateHash,
-} from '@linguist/cat-core'
 import { sha256Hex } from '@linguist/cat-formats'
 import { readBackupManifest } from './backup'
 import {
@@ -547,7 +543,7 @@ test('open fails closed on a restore journal with a traversing snapshot name', (
   assert.throws(() => store.openProject(project.id), /journal is invalid/)
 })
 
-test('restore: Proposal, QA, and Review lineage survives and passes post-install validation', () => {
+test('restore: Proposal and QA lineage survives and passes post-install validation', () => {
   const store = new CatStore({
     rootDir: makeTempDir(),
     entropy: makeEntropy('lineage'),
@@ -584,50 +580,11 @@ test('restore: Proposal, QA, and Review lineage survives and passes post-install
     observedAt: '2026-07-29T00:00:01.000Z',
     ruleVersion: 'rules-v1',
   })
-  const artifact = createCriticReviewArtifact({
-    schemaVersion: 2,
-    snapshot: {
-      snapshotId: `psn:${proposal.id}`,
-      snapshotHash: 'd'.repeat(64),
-      proposalId: proposal.id,
-    },
-    subject: {
-      segmentId: segments[0]!.id,
-      risk: 'high',
-      candidateId: proposal.id,
-      candidateHash: independentCriticCandidateHash({
-        proposalId: proposal.id,
-        segmentId: segments[0]!.id,
-        target: proposal.proposedTarget,
-        revision: proposal.baseRevision,
-      }),
-      candidateExecutionId: 'candidate-exec-lineage',
-      candidateProducerId: 'session:producer-lineage',
-    },
-    reviewer: {
-      criticId: 'session:reviewer-lineage',
-      executionId: 'review-exec-lineage',
-      profileHash: 'a'.repeat(64),
-      sessionId: 'review-exec-lineage',
-      promptVersion: 'b'.repeat(64),
-    },
-    verdict: 'issues',
-    summary: '存在遗漏',
-    findings: [{
-      category: 'fidelity',
-      severity: 'L2',
-      issueType: 'omission',
-      evidenceRefs: ['tm:lineage'],
-      explanation: '遗漏',
-    }],
-  })
-  db.criticArtifacts.insert(artifact)
-  db.criticArtifacts.linkFindingToQa(artifact.artifactId, artifact.findings[0]!.findingId, qa!.id)
   db.close()
   const backup = store.backupProject(project.id)
 
   const changed = store.openProject(project.id)
-  changed.catDb.db.exec('DELETE FROM critic_artifacts; DELETE FROM qa_findings; DELETE FROM proposals')
+  changed.catDb.db.exec('DELETE FROM qa_findings; DELETE FROM proposals')
   changed.close()
   store.restoreProject(project.id, backup.backupName)
 
@@ -636,11 +593,6 @@ test('restore: Proposal, QA, and Review lineage survives and passes post-install
     assert.equal(restored.proposals.getById(proposal.id)?.runId, 'run-lineage')
     assert.equal(restored.proposals.listIssuances(proposal.id).length, 1)
     assert.equal(restored.qaFindings.getById(qa!.id)?.firstSeenRunId, 'qa-lineage')
-    assert.equal(restored.criticArtifacts.getById(artifact.artifactId)?.artifactId, artifact.artifactId)
-    assert.deepEqual(
-      restored.criticArtifacts.traceByQaFindingId(qa!.id).map((item) => item.criticFindingId),
-      [artifact.findings[0]!.findingId],
-    )
   } finally {
     restored.close()
   }
