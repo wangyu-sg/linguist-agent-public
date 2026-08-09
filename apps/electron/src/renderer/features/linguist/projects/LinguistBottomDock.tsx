@@ -9,6 +9,7 @@ import {
   linguistWorkbenchUiStateAtomFamily,
 } from './cat-workspace-atoms'
 import { ContextEvidencePanel } from './ContextEvidencePanel'
+import { describeLinguistFormat } from './format-labels'
 import { useOpenLinguistPreview } from './linguist-preview-open'
 import { QaFindingsPanel } from './QaFindingsPanel'
 import { PrepareDeliveryPanel } from './PrepareDeliveryPanel'
@@ -150,7 +151,9 @@ export function LinguistBottomDock({
             <div className="flex flex-col gap-2">
               <p className="text-[12px] text-foreground/60">
                 <span className="font-medium text-foreground">{previewAsset.filename}</span>
-                <span className="ml-2 text-foreground/45">{previewAsset.formatId} · {previewAsset.segmentCount} 段 · 只读</span>
+                <span className="ml-2 text-foreground/45" title={`格式标识 ${previewAsset.formatId}`}>
+                  {describeLinguistFormat(previewAsset.formatId)} · {previewAsset.segmentCount} 段 · 只读
+                </span>
               </p>
               <div>
                 <button

@@ -20,21 +20,18 @@
     "claudeAgentSdk": "0.3.201"
   },
   "product": {
-    "linguistAgentVersion": "0.16.22",
-    "sharedVersion": "0.1.86",
-    "catCoreVersion": "0.0.15",
-    "catFormatsVersion": "0.0.9",
-    "catStoreVersion": "0.0.29",
-    "catToolsVersion": "0.0.24",
+    "linguistAgentVersion": "0.16.33",
+    "sharedVersion": "0.1.91",
+    "catCoreVersion": "0.0.19",
+    "catFormatsVersion": "0.0.10",
+    "catStoreVersion": "0.0.34",
+    "catToolsVersion": "0.0.31",
     "catSchema": 15
   },
   "contracts": {
     "prompt": {
-      "profileVersion": "2.1.0",
-      "qualityContractVersion": "1.0.0",
-      "promptContractVersion": "1.0.0",
-      "projectDigestVersion": "1.0.0",
-      "turnContextVersion": 1
+      "linguistPromptVersion": "3.1.0",
+      "source": "resources/linguist-roles"
     },
     "host": {
       "version": null,

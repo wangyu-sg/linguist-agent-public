@@ -55,6 +55,11 @@ import type {
 } from '@proma/shared'
 import { useOpenLinguistPreview } from './linguist-preview-open'
 import {
+  GENERIC_XLIFF_FALLBACK_NOTICE,
+  describeLinguistFormat,
+  isGenericXliffFallback,
+} from './format-labels'
+import {
   describeImportUndoBlockedCounts,
   describeLinguistIpcError,
   formatProjectTime,
@@ -165,7 +170,8 @@ export function ProjectAssetsSection({
     if (!aliveRef.current) return
     toast.success(data.status === 'skipped-duplicate' ? `已跳过重复文件「${data.filename}」` : `已导入「${data.filename}」`, {
       description:
-        `${data.segmentCount} 段 · ${data.formatId}` +
+        `${data.segmentCount} 段 · ${describeLinguistFormat(data.formatId)}` +
+        (isGenericXliffFallback(data.filename, data.formatId) ? ` · ${GENERIC_XLIFF_FALLBACK_NOTICE}` : '') +
         (data.status === 'skipped-duplicate' ? ' · 项目中已有同源批次' : '') +
         (data.warnings.length > 0 ? ` · ${data.warnings.length} 条警告` : ''),
     })
@@ -649,8 +655,11 @@ function AssetRow({
       <div className="flex items-center gap-2 min-w-0">
         <FileText size={14} className="flex-shrink-0 text-foreground/40" />
         <span className="text-[13px] font-medium text-foreground truncate">{asset.filename}</span>
-        <span className="flex-shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-mono text-foreground/55">
-          {asset.formatId}
+        <span
+          className="flex-shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-foreground/55"
+          title={`格式标识 ${asset.formatId}`}
+        >
+          {describeLinguistFormat(asset.formatId)}
         </span>
         <span className="ml-auto flex-shrink-0 text-[12px] tabular-nums text-foreground/50">
           {asset.segmentCount} 段
@@ -714,6 +723,15 @@ function AssetRow({
               {warningCount} 条警告
               {warningsExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
             </button>
+          </>
+        )}
+        {isGenericXliffFallback(asset.filename, asset.formatId) && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1 text-warning">
+              <AlertTriangle size={11} />
+              {GENERIC_XLIFF_FALLBACK_NOTICE}
+            </span>
           </>
         )}
       </div>

@@ -550,7 +550,11 @@ export function LinguistWorkbenchShell({
             </span>
           )}
           <span>当前批次：{activeAsset?.filename ?? '全部批次'}</span>
-          <span>当前片段：{uiState.activeSegmentId ?? '未选择片段'}</span>
+          <span title={uiState.activeSegmentId ?? undefined}>
+            当前片段：{uiState.activeSegmentId === null || uiState.activeSegmentId === undefined
+              ? '未选择片段'
+              : `${uiState.activeSegmentId.slice(0, 12)}…`}
+          </span>
           {uiState.selectedSegmentIds.length > 0 && (
             <span>已选择 {uiState.selectedSegmentIds.length}</span>
           )}

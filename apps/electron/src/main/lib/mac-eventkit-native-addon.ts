@@ -4,7 +4,7 @@ import { app } from 'electron'
 
 export type EventKitEntity = 'calendar' | 'reminder'
 type EventKitCommand = 'authorizationStatus' | 'requestAccess' | 'listWritableTargets' | 'listTargets' | 'listItems' | 'upsert' | 'remove'
-type Addon = { command: (command: EventKitCommand, entity: EventKitEntity, payloadJson: string) => Promise<string>; subscribeChanges?: (listener: () => void) => void }
+type Addon = { command: (command: EventKitCommand, entity: EventKitEntity, payloadJson: string) => Promise<string>; subscribeChanges?: (listener: () => void) => void; disposeChanges?: () => void }
 
 // 主进程由 esbuild 输出为 CJS，使用 __filename 保持开发和打包路径一致。
 const require = createRequire(__filename)
@@ -29,6 +29,11 @@ export function subscribeMacEventKitNativeChanges(listener: () => void): boolean
   if (!native.subscribeChanges) return false
   native.subscribeChanges(listener)
   return true
+}
+
+/** before-quit 时在 N-API env 仍有效的阶段释放 EventKit 通知与 TSFN。 */
+export function disposeMacEventKitNativeChanges(): void {
+  addon?.disposeChanges?.()
 }
 
 export async function callMacEventKitNativeAddon<T>(command: EventKitCommand, entity: EventKitEntity, payload: object = {}): Promise<T> {

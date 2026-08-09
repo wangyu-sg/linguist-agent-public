@@ -37,6 +37,8 @@ export function PrepareDeliveryPanel({
 
   React.useEffect(() => {
     if (assets.some((asset) => asset.assetId === assetId)) return
+    // 摘要刷新会短暂下发空数组；不能把 loading 态误当成“批次已删除”。
+    if (assets.length === 0) return
     setAssetId(initialAssetId ?? assets[0]?.assetId ?? '')
     setState({ status: 'idle' })
   }, [assetId, assets, initialAssetId])

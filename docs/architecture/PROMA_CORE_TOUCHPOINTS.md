@@ -14,7 +14,7 @@
 | formal merge 相对 Proma v0.16.10 的全部变动 | 808 | git diff --name-only 72fd1b1a...ea26177f |
 | 允许路径 | 549 | 机读账本的 allowedNewPaths |
 | 仅公开路径占位符替换 | 4 | boundary test 的精确内容规则 |
-| 当前账本 | 255 | 其余 Proma 核心差异逐文件登记 |
+| 当前账本 | 259 | 其余 Proma 核心差异逐文件登记 |
 
 v0.16.10 已删除旧的独立 Agent Island BrowserWindow，本地对应触点随之退役；原生 Island 能力继续复用上游实现。其余差异继续按 Permanent Product Fork、Local Host Seam、Linguist Extension 与 Temporary Deviation 分类；精确路径和理由只维护在机读账本中。
 

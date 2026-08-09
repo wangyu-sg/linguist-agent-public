@@ -1,13 +1,13 @@
 # KNOWN_LIMITATIONS — 当前已知限制
 
-更新日期：2026-08-08
+更新日期：2026-08-10
 
 > 当前目标是作者本人使用的个人 Alpha。实现、单元验证、打包验证、真机人工和产品资格是不同证据等级。
 
 ## A. 尚缺的真实与人工证据
 
 1. **真实 Provider 与模型质量**：Fake Model、Prompt 合同和格式 round-trip 不证明真实 Pi/Claude Provider、网络重试或翻译质量。
-2. **四岗位全链**：尚未用真实 Provider 完成 Translator → Reviewer → Proofreader → final 交付并复核输出。
+2. **四岗位全链**：尚未用真实 Provider 完成 Translator → Reviewer → Proofreader → `verified` 交付并复核输出。
 3. **对照评估**：尚未用同一模型、同一 reasoning 和同一真实任务比较 Web Chat、旧 LA 与当前 LA。
 4. **14 天日用**：必须从当前可用构建重新累计，不能由开发日或自动测试补记。
 5. **真机人工**：真实 macOS IME composition、Native Open/Save、Companion round-trip、VoiceOver、完整 keyboard-only、窄窗和拖拽/resize 仍待操作。
@@ -17,11 +17,12 @@
 1. `cat_import_resources` 的目录递归单次最多处理 500 个条目，不跟随符号链接目录；超大目录应拆分导入。
 2. XLSX 批次和 TM/TB 仍需要显式 Sheet/列映射；目录导入遇到这类文件会返回 `needsInput`，不会猜测后静默写入。
 3. Tag 编辑器采用原生 textarea + chip overlay。硬 Tag 改动会阻止保存，但它不是 contenteditable 的原子不可拆 token 控件。
-4. Phrase 内容配对和 mapping 已通过一组真实私有副本验证，但未见过的客户生成器变体仍需逐样本验证；过期或不完整 mapping 会阻止 final。
-5. draft 导出有意允许未完成内容，不代表可交付；final 才执行完整 QA/阶段预检与结构硬规则。
-6. 通用文件撤销使用 Proma File Rewind；Run Undo 只结构化撤销仍满足 revision/状态前提的 CAT 变更。外部 MCP/程序副作用只记录。
-7. 旧数据迁移不读取治理 SQLite 的 proposals/ledger/checklist 投影；超大项目迁移仍可能同步占用主进程。
-8. General Agent/Chat 使用 JSON/JSONL；CAT 使用每项目 SQLite。两种持久化策略不会互相扩散。
+4. Phrase 内容配对和 mapping 已通过一组真实私有副本验证，但未见过的客户生成器变体仍需逐样本验证；过期或不完整 mapping 会阻止 `verified` 交付。
+5. `as-is` 导出有意允许未完成内容，不代表可交付；`verified` 才执行完整 QA/阶段预检与结构硬规则。
+6. memoQ MQXLIFF 专用 Adapter 已通过合成 fixture round-trip，但尚未用真实客户样本验证生成器变体、确认级别与批注互操作。
+7. 通用文件撤销使用 Proma File Rewind；Run Undo 只结构化撤销仍满足 revision/状态前提的 CAT 变更。外部 MCP/程序副作用只记录。
+8. 旧数据迁移不读取治理 SQLite 的 proposals/ledger/checklist 投影；超大项目迁移仍可能同步占用主进程。
+9. General Agent/Chat 使用 JSON/JSONL；CAT 使用每项目 SQLite。两种持久化策略不会互相扩散。
 
 ## C. 性能、构建与平台
 

@@ -141,9 +141,11 @@ interface LaunchedApp {
 /** 模块级追踪当前活跃 app 实例：launch 中途失败时 finally 仍能清理，不遗留进程 */
 let activeApp: ElectronApplication | undefined
 
-/** 等待主窗口（index.html 且无 ?window= 查询参数；快速任务/听写等辅助窗口排除） */
+/** 等待主窗口（排除启动页与带 ?window= 的辅助窗口）。 */
 async function waitForMainWindow(app: ElectronApplication, timeoutMs: number): Promise<Page> {
-  const isMain = (url: string): boolean => url.includes('index.html') && !url.includes('window=')
+  const isMain = (url: string): boolean => url.includes('index.html')
+    && !url.includes('/startup-splash/')
+    && !url.includes('window=')
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     for (const w of app.windows()) {

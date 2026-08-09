@@ -10,7 +10,7 @@ This AGPL-3.0 project derives from [Proma](https://github.com/proma-ai/Proma). S
 
 ## Current status
 
-This is a **personal-use Alpha** with no public-release plan. The baseline is Proma v0.16.9; Electron App `0.16.21`, Electron `43.2.0`, `@proma/shared 0.1.86`, Pi `0.82.1`, Claude Agent SDK `0.3.201`, CAT Core / Formats / Store / Tools `0.0.15 / 0.0.9 / 0.0.29 / 0.0.24`, CAT schema `15`, and Bun `1.3.14`.
+This is a **personal-use Alpha** with no public-release plan. The baseline is Proma v0.16.10; Electron App `0.16.33`, Electron `43.2.0`, `@proma/shared 0.1.91`, Pi `0.82.1`, Claude Agent SDK `0.3.201`, CAT Core / Formats / Store / Tools `0.0.19 / 0.0.10 / 0.0.34 / 0.0.31`, CAT schema `15`, and Bun `1.3.14`.
 
 The app has three peer modes:
 
@@ -41,7 +41,7 @@ A Proposal is a visible, reviewable, reversible mutation carrying the Agent's cu
 Proma Agent Runtime
 ├── Base Tools / MCP / Files / Permission / Model
 └── Linguist Project Binding
-    ├── one shared set of 20 CAT tools
+    ├── one shared set of 30 CAT tools
     ├── Common Quality Contract + current Role prompt
     ├── Project Digest / Turn Context
     └── Linguist Domain Services
@@ -56,9 +56,10 @@ Key boundaries:
 - `@linguist/cat-tools` derives project identity only from the Session binding; the model cannot provide a `projectId`.
 - UI and Agent tools call the same `LinguistProjectService`; parsing, transactions, CAS, locked Segments, Tag/Placeholder/ICU checks, QA, and round-trip rules are not duplicated.
 - `cat_import_resources` accepts files or small directories. Absolute paths are used directly and relative paths resolve from the Session cwd; Proma Session permissions are the only permission experience.
-- `cat_export_asset` supports `final` and `draft`. Final export checks structure, format, and re-import; overwrite defaults off and is an atomic regular-file replacement only when explicitly requested.
-- Tag discovery, candidates, editor hints, Proposals, QA, and final export use one Scanner. Ordinary translatable text such as `[Damage]` is not hard-locked by default.
-- Phrase split/master MXLIFF pairing uses content identity, Source hash, unit/context, and placeholder evidence. Final export refuses incomplete or stale mappings.
+- `cat_export_asset` supports `verified` and `as-is`. Verified export checks structure, format, and re-import; overwrite defaults off and is an atomic regular-file replacement only when explicitly requested.
+- Tag discovery, candidates, editor hints, Proposals, QA, and verified export use one Scanner. Ordinary translatable text such as `[Damage]` is not hard-locked by default.
+- memoQ MQXLIFF uses a dedicated adapter that preserves inline codes, confirmation status, and review comments; real customer samples still require per-sample validation.
+- Phrase split/master MXLIFF pairing uses content identity, Source hash, unit/context, and placeholder evidence. Verified export refuses incomplete or stale mappings.
 
 Agent conversation remains available when a project is archived, missing, or temporarily unavailable. CAT tools report the real project state and Store writes fail closed, while Proma files, Shell, OCR, Excel, MCP, and other tools remain available for diagnosis or recovery.
 

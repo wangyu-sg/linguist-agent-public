@@ -9,6 +9,7 @@
 3. [CURRENT_FACTS_SIMPLE.md](../CURRENT_FACTS_SIMPLE.md) — 简化重构启动时的已核验事实。
 4. [HANDOFF.md](./HANDOFF.md) — 当前交付、验证和下一步。
 5. [TODO.md](../TODO.md) — 只列未完成事项。
+6. [FINAL_IMPLEMENTATION_REPORT_2026-08-10.md](./implementation/FINAL_IMPLEMENTATION_REPORT_2026-08-10.md) — Proma v0.16.10 核心施工与验证结果。
 
 ## 当前方案状态
 

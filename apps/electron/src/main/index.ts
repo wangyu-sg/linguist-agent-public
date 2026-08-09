@@ -6,6 +6,10 @@ import {
   shouldSetDefaultElectronUserDataPath,
 } from './lib/electron-user-data-path'
 
+// 自动化与系统关机可能通过 SIGTERM 结束进程；统一转入 Electron 正常退出链，
+// 确保 CAT 句柄、原生监听和持久化都执行 before-quit 清理。
+process.once('SIGTERM', () => app.quit())
+
 // Dev / 正式版均显式使用 Linguist Agent 独立的 Chromium userData。
 // 不能依赖 package name 推导，否则 @proma/electron 会与 Proma 混用。
 // packaged smoke / 诊断显式传入 --user-data-dir 时尊重该隔离目录。

@@ -18,7 +18,7 @@
  *   node scripts/smoke/probe-pb074-e2e.ts
  */
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
   createWriteStream,
@@ -32,7 +32,13 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright-core'
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from 'playwright-core'
 import { PNG } from 'pngjs'
 import {
   FAKE_CAT_PROPOSAL_TOOL_NAME,
@@ -74,8 +80,14 @@ interface ProbeEvents {
   errors: Array<{ sessionId: string; error: string }>
 }
 
+interface PackagedApp {
+  browser: Browser
+  context: BrowserContext
+  process: ChildProcess
+}
+
 interface LaunchedApp {
-  app: ElectronApplication
+  app: PackagedApp
   page: Page
 }
 
@@ -127,7 +139,8 @@ function countNonDominantPixels(pngBytes: Buffer): number {
 
 const results: CheckResult[] = []
 let manualCount = 0
-let activeApp: ElectronApplication | undefined
+let activeApp: PackagedApp | undefined
+const closedApps = new WeakSet<PackagedApp>()
 
 function check(name: string, pass: boolean, evidence: string): void {
   results.push({ name, pass, evidence })
@@ -209,37 +222,93 @@ function cliField(output: string, key: string): string {
   return line.slice(key.length + 2).trim()
 }
 
-async function waitForMainWindow(app: ElectronApplication, timeoutMs: number): Promise<Page> {
-  const isMain = (url: string): boolean => url.includes('index.html') && !url.includes('window=')
+async function waitForMainWindow(app: PackagedApp, timeoutMs: number): Promise<Page> {
+  const isMain = (url: string): boolean => url.includes('index.html')
+    && !url.includes('/startup-splash/')
+    && !url.includes('window=')
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    for (const window of app.windows()) {
+    for (const window of app.context.pages()) {
       if (isMain(window.url())) return window
     }
     try {
-      const window = await app.waitForEvent('window', { timeout: 5_000 })
+      const window = await app.context.waitForEvent('page', { timeout: 5_000 })
       if (isMain(window.url())) return window
     } catch (error) {
       if (!(error instanceof Error && error.name === 'TimeoutError')) throw error
     }
   }
-  throw new Error(`未找到主窗口（现有窗口: ${app.windows().map((window) => window.url()).join(', ')}）`)
+  throw new Error(`未找到主窗口（现有窗口: ${app.context.pages().map((window) => window.url()).join(', ')}）`)
 }
 
 async function launchApp(tmpHome: string, logStream: WriteStream): Promise<LaunchedApp> {
-  const app = await electron.launch({
-    executablePath: PACKAGED_BINARY,
-    args: [`--user-data-dir=${join(tmpHome, '.electron-user-data')}`],
+  const userDataDir = join(tmpHome, '.electron-user-data')
+  const activePortPath = join(userDataDir, 'DevToolsActivePort')
+  rmSync(activePortPath, { force: true })
+  const processHandle = spawn(PACKAGED_BINARY, [
+    '--remote-debugging-port=0',
+    `--user-data-dir=${userDataDir}`,
+  ], {
     env: {
       ...process.env,
       HOME: tmpHome,
       LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS: '1',
     } as Record<string, string>,
-    timeout: 120_000,
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+  processHandle.stdout?.pipe(logStream, { end: false })
+  processHandle.stderr?.pipe(logStream, { end: false })
+  let port: number | undefined
+  const endpointReady = await waitFor(async () => {
+    if (processHandle.exitCode !== null || processHandle.signalCode !== null) {
+      throw new Error(`打包应用在 CDP 就绪前退出: code=${processHandle.exitCode ?? 'null'} signal=${processHandle.signalCode ?? 'null'}`)
+    }
+    if (!existsSync(activePortPath)) return false
+    const candidate = Number.parseInt(readFileSync(activePortPath, 'utf8').split('\n')[0] ?? '', 10)
+    if (!Number.isInteger(candidate) || candidate <= 0) return false
+    port = candidate
+    return true
+  }, 120_000)
+  if (!endpointReady || port === undefined) {
+    processHandle.kill('SIGKILL')
+    throw new Error('打包应用 CDP 端点未在 120 秒内就绪')
+  }
+  const cdpEndpoint = `http://127.0.0.1:${port}`
+  const mainTargetReady = await waitFor(async () => {
+    if (processHandle.exitCode !== null || processHandle.signalCode !== null) {
+      throw new Error(`打包应用在主窗口就绪前退出: code=${processHandle.exitCode ?? 'null'} signal=${processHandle.signalCode ?? 'null'}`)
+    }
+    try {
+      const response = await fetch(`${cdpEndpoint}/json/list`)
+      if (!response.ok) return false
+      const targets = await response.json() as Array<{ type?: unknown; url?: unknown }>
+      return targets.some((target) => target.type === 'page'
+        && typeof target.url === 'string'
+        && target.url.includes('index.html')
+        && !target.url.includes('/startup-splash/'))
+    } catch {
+      return false
+    }
+  }, 120_000)
+  if (!mainTargetReady) {
+    processHandle.kill('SIGKILL')
+    throw new Error('打包应用主窗口未在 120 秒内就绪')
+  }
+  let browser: Browser
+  try {
+    browser = await chromium.connectOverCDP(cdpEndpoint, { timeout: 120_000 })
+  } catch (error) {
+    processHandle.kill('SIGKILL')
+    throw error
+  }
+  const context = browser.contexts()[0]
+  if (context === undefined) {
+    await browser.close()
+    processHandle.kill('SIGKILL')
+    throw new Error('打包应用 CDP 未提供默认 BrowserContext')
+  }
+  const app = { browser, context, process: processHandle }
   activeApp = app
-  app.process().stdout?.pipe(logStream, { end: false })
-  app.process().stderr?.pipe(logStream, { end: false })
   const page = await waitForMainWindow(app, 120_000)
   page.setDefaultTimeout(60_000)
   await page.waitForFunction(
@@ -250,22 +319,23 @@ async function launchApp(tmpHome: string, logStream: WriteStream): Promise<Launc
   return { app, page }
 }
 
-async function quitApp(app: ElectronApplication): Promise<void> {
-  const processHandle = app.process()
+async function quitApp(app: PackagedApp): Promise<void> {
+  if (closedApps.has(app)) return
+  const processHandle = app.process
+  closedApps.add(app)
+  let exitStatus: { code: number | null; signal: NodeJS.Signals | null } | undefined
   const exited = new Promise<void>((resolveExit) => {
-    if (processHandle.killed || processHandle.exitCode !== null) resolveExit()
-    else processHandle.once('exit', () => resolveExit())
+    if (processHandle.exitCode !== null || processHandle.signalCode !== null) {
+      exitStatus = { code: processHandle.exitCode, signal: processHandle.signalCode }
+      resolveExit()
+    } else {
+      processHandle.once('exit', (code, signal) => {
+        exitStatus = { code, signal }
+        resolveExit()
+      })
+    }
   })
-  await Promise.race([
-    (async () => {
-      try {
-        await app.close()
-      } catch (error) {
-        console.warn('[PB-074] app.close 失败，改用 kill 兜底:', error)
-      }
-    })(),
-    sleep(45_000),
-  ])
+  processHandle.kill('SIGTERM')
   const closed = await Promise.race([exited.then(() => true), sleep(20_000).then(() => false)])
   if (!closed) {
     try {
@@ -275,7 +345,12 @@ async function quitApp(app: ElectronApplication): Promise<void> {
     }
     await Promise.race([exited, sleep(5_000)])
   }
+  await app.browser.close().catch(() => {})
   if (activeApp === app) activeApp = undefined
+  if (exitStatus !== undefined
+    && (exitStatus.signal !== null || (exitStatus.code !== null && exitStatus.code !== 0))) {
+    throw new Error(`打包应用异常退出: code=${exitStatus?.code ?? 'null'} signal=${exitStatus?.signal ?? 'null'}`)
+  }
 }
 
 async function closeLogStream(stream: WriteStream): Promise<void> {
@@ -691,14 +766,14 @@ async function openLinguistWorkbenchAndSelectLocation(
   const status = workspace.locator('footer[aria-label="本地化工作台状态栏"]')
   const locationVisible = await asset.getAttribute('aria-current') === 'page'
     && await status.getByText('当前批次：mini_game_ui.xliff', { exact: true }).isVisible()
-    && await status.getByText(`当前片段：${segmentId}`, { exact: true }).isVisible()
+    && await isSegmentStatusVisible(status, segmentId)
 
   for (const mode of ['Agent', '本地化', 'Chat', '本地化'] as const) {
     await selectPrimaryMode(page, mode)
     if (mode === '本地化') await workspace.waitFor({ timeout: 30_000 })
   }
   const roundtripLocationVisible = await asset.getAttribute('aria-current') === 'page'
-    && await status.getByText(`当前片段：${segmentId}`, { exact: true }).isVisible()
+    && await isSegmentStatusVisible(status, segmentId)
   return {
     modesDiscoverable,
     legacyManagementRemoved,
@@ -710,6 +785,12 @@ async function openLinguistWorkbenchAndSelectLocation(
     projectTabVisible,
     locationVisible: locationVisible && roundtripLocationVisible,
   }
+}
+
+async function isSegmentStatusVisible(status: Locator, segmentId: string): Promise<boolean> {
+  const label = status.locator(`span[title="${segmentId}"]`)
+  return await label.isVisible()
+    && await label.getByText(`当前片段：${segmentId.slice(0, 12)}…`, { exact: true }).isVisible()
 }
 
 async function readRecoveredLinguistLocation(
@@ -743,7 +824,7 @@ async function readRecoveredLinguistLocation(
       && persisted.tab.sessionId === undefined,
     locationVisible: await asset.getAttribute('aria-current') === 'page'
       && await status.getByText('当前批次：mini_game_ui.xliff', { exact: true }).isVisible()
-      && await status.getByText(`当前片段：${segmentId}`, { exact: true }).isVisible(),
+      && await isSegmentStatusVisible(status, segmentId),
   }
 }
 
@@ -1418,14 +1499,8 @@ async function main(): Promise<void> {
   let sessionId = ''
 
   try {
-    if (!LF026_ONLY && !LF056_ONLY) {
-      server = await startFakeModelServer(0, { captureTools: true })
-    }
     launched = await launchApp(tmpHome, logStream)
     await enterMainUI(launched.page)
-    if (server !== undefined) {
-      channelId = await seedChannel(launched.page, server)
-    }
     projectId = await createProjectViaUi(launched.page)
     check('create-project-ui', projectId.length > 0, `项目 ${projectId}，en-US → zh-CN`)
 
@@ -1502,8 +1577,14 @@ async function main(): Promise<void> {
       `待恢复项目=${projectId}，更新的干扰项目=${distractorProjectId}`,
     )
 
+    if (!LF026_ONLY && !LF056_ONLY) {
+      server = await startFakeModelServer(0, { captureTools: true })
+    }
     launched = await launchApp(tmpHome, logStream)
     await enterMainUI(launched.page)
+    if (server !== undefined) {
+      channelId = await seedChannel(launched.page, server)
+    }
     const navigation = await openLinguistWorkbenchAndSelectLocation(
       launched.page,
       projectId,
@@ -1756,7 +1837,7 @@ async function main(): Promise<void> {
         `EMPTY_TARGET=${blocking.emptyTarget}，export=${blocking.exportCode}（原生 Save 未打开）`,
       )
 
-      await proposalReview.getByRole('button', { name: 'Accept', exact: true }).click()
+      await proposalReview.getByRole('button', { name: '接受', exact: true }).click()
       await proposalReview.waitFor({ state: 'detached', timeout: 30_000 })
       const accepted = await launched.page.evaluate(async (input) => {
         const result = await (window as unknown as {
@@ -2006,7 +2087,7 @@ main().catch((error) => {
   console.error('PB-074 探针执行异常:', error)
   if (activeApp !== undefined) {
     try {
-      activeApp.process().kill('SIGKILL')
+      activeApp.process.kill('SIGKILL')
     } catch (killError) {
       console.warn('[PB-074] 异常收尾时进程已退出:', killError)
     }

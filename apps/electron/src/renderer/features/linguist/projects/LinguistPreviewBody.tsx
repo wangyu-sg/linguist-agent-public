@@ -44,6 +44,7 @@ import type {
 } from '@/atoms/preview-atoms'
 import { markdownToHtml } from '@/lib/markdown-rich-text'
 import { splitProtectedText } from './TargetEditor'
+import { describeLinguistFormat } from './format-labels'
 import { describeLinguistIpcError } from './project-utils'
 import {
   CURRENT_STAGE_STATE_LABELS,
@@ -368,8 +369,11 @@ function BatchPreview({ target }: { target: LinguistBatchPreviewTarget }): React
     <div className="flex h-full min-h-0 flex-col gap-2 p-3">
       <div className="flex shrink-0 items-center gap-2 text-xs">
         <span className="truncate font-medium text-foreground">{target.filename}</span>
-        <span className="flex-shrink-0 rounded-full border border-border/60 px-2 py-0.5 font-mono text-[11px] text-foreground/55">
-          {target.formatId}
+        <span
+          className="flex-shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-foreground/55"
+          title={`格式标识 ${target.formatId}`}
+        >
+          {describeLinguistFormat(target.formatId)}
         </span>
         <span className="flex-shrink-0 tabular-nums text-foreground/50">{target.segmentCount} 段</span>
         {target.sourceLocale !== undefined && target.targetLocale !== undefined && (

@@ -183,7 +183,9 @@ interface LaunchedApp {
 let activeApp: ElectronApplication | undefined
 
 async function waitForMainWindow(app: ElectronApplication, timeoutMs: number): Promise<Page> {
-  const isMain = (url: string): boolean => url.includes('index.html') && !url.includes('window=')
+  const isMain = (url: string): boolean => url.includes('index.html')
+    && !url.includes('/startup-splash/')
+    && !url.includes('window=')
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     for (const w of app.windows()) {

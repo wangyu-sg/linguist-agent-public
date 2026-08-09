@@ -52,18 +52,18 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.16.21` |
+| Electron App | `@proma/electron 0.16.33` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.0.3` |
-| Shared | `@proma/shared 0.1.86` |
+| Shared | `@proma/shared 0.1.91` |
 | Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
 | Pi Runtime（Electron App） | `@earendil-works/pi-* 0.82.1` |
-| CAT Core | `@linguist/cat-core 0.0.15` |
-| CAT Formats | `@linguist/cat-formats 0.0.9` |
-| CAT Store | `@linguist/cat-store 0.0.29` |
-| CAT Tools | `@linguist/cat-tools 0.0.24` |
+| CAT Core | `@linguist/cat-core 0.0.19` |
+| CAT Formats | `@linguist/cat-formats 0.0.10` |
+| CAT Store | `@linguist/cat-store 0.0.34` |
+| CAT Tools | `@linguist/cat-tools 0.0.31` |
 | CAT schema | `15` |
 
 不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。
@@ -134,7 +134,7 @@ bun run smoke:vertical
 - 禁止新增 `LinguistAgentView`、`LinguistComposer`、`LinguistThinkingBlock`、`LinguistToolCard`、`LinguistApprovalCard` 或第二套 Agent Session Store。
 - 禁止新增第二套 Session tree 状态、排序、委派、置顶、最近会话或 MiniMap 行为实现；项目域只提供分组与动作适配。
 - CAT 编辑、Proposal、QA、TM/TB、Context、Preview 和设置位于 `renderer/features/linguist/**`。
-- 上游 v0.16.9 的 Planning（Todo、日程、提醒和 Agent 引用）、Agent Island、统一项目/会话文件能力与 Pi `0.82.1` Runtime 都是同一 Agent/Chat 底座的一部分。通过既有 main service、preload 和 Jotai 合同接入；不得为 Linguist 新建第二套 Planning、Island 或文件 authority 状态。
+- 上游 v0.16.10 的 Planning（Todo、日程、提醒和 Agent 引用）、Agent Island、统一项目/会话文件能力与 Pi `0.82.1` Runtime 都是同一 Agent/Chat 底座的一部分。通过既有 main service、preload 和 Jotai 合同接入；不得为 Linguist 新建第二套 Planning、Island 或文件 authority 状态。
 
 核心 Renderer 组合仍在：
 
@@ -191,7 +191,7 @@ CAT 写入规则：
 - QA 和 consistency repair 不能直接提交 Segment；
 - CAT 编辑器的 `Cmd/Ctrl+Enter` 表示确认当前阶段并前进，即使译文未改也必须可用；`Cmd/Ctrl+S` 仍只保存实际修改；
 - Segment 写入必须经过 revision CAS、locked 与 hard-rule 检查；
-- 项目 Agent 可把批次以 `final` 或 `draft` 保存到用户指定的绝对本地路径；默认不覆盖，只有用户明确要求时才原子覆盖普通文件；
+- 项目 Agent 可把批次以 `verified` 或 `as-is` 保存到用户指定的绝对本地路径；默认不覆盖，只有用户明确要求时才原子覆盖普通文件；
 - 导出必须从受管 source blob 生成，先过 QA / 阶段预检并重新导入验证；
 - 输出给模型和 renderer 的 DTO 不暴露绝对本机路径。
 
@@ -203,7 +203,7 @@ CAT 写入规则：
 - `project-delivery.ts`：导入、交付预检与导出；
 - `project-service-types.ts`：稳定调用合同。
 
-CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；20 个工具按 `project-tools`、`reference-tools`、`qa-tools`、`proposal-tools`、`intake-tools`、`delivery-tools` 与 `tag-tools` 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。四种岗位共享同一完整 Toolset。项目 Agent 可导入绝对路径或 Session cwd 相对路径中的文件/目录，也可把批次保存到绝对本地路径。主进程必须重新校验 Session binding、文件可读性、交付模式与摘要，模型不得提交 `projectId`。小批目录直接同步处理；Durable Import Job 仍不在当前范围。
+CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；30 个工具按项目、参考、QA、Proposal、导入、交付、Tag、术语、Workbook 和 Voice 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。四种岗位共享同一完整 Toolset。项目 Agent 可导入绝对路径或 Session cwd 相对路径中的文件/目录，也可把批次保存到绝对本地路径。主进程必须重新校验 Session binding、文件可读性、交付模式与摘要，模型不得提交 `projectId`。小批目录直接同步处理；Durable Import Job 仍不在当前范围。
 
 同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级参考资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须显式确认 Sheet/列映射；XLSX Context 保留 Sheet、物理行号和单元格坐标。UI TM/TB 导入保留候选确认，项目 Agent 可直接登记授权的 TM/TB/Context。原生 SDLTM/SDLTB 可导入。批次源文件与保留原件的语言资产统一复用 Proma Preview Tab，不新增第二套预览器。
 

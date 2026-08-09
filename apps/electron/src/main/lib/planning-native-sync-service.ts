@@ -4,7 +4,7 @@ import type {
   PlanningNativeSyncStatus,
   PlanningNativeSyncTarget,
 } from '@proma/shared'
-import { callMacEventKitNativeAddon, subscribeMacEventKitNativeChanges } from './mac-eventkit-native-addon'
+import { callMacEventKitNativeAddon, disposeMacEventKitNativeChanges, subscribeMacEventKitNativeChanges } from './mac-eventkit-native-addon'
 
 type NativePermissionResponse = {
   entity: PlanningNativeSyncEntity
@@ -153,6 +153,10 @@ export async function listPlanningNativeConnectionItemsByIdentifier(entity: Plan
 export function subscribePlanningNativeSyncChanges(listener: () => void): boolean {
   if (!eventKitSupported()) return false
   try { return subscribeMacEventKitNativeChanges(listener) } catch { return false }
+}
+
+export function disposePlanningNativeSyncChanges(): void {
+  disposeMacEventKitNativeChanges()
 }
 
 export async function upsertPlanningNativeSyncItem(entity: PlanningNativeSyncEntity, item: PlanningNativeSyncItem): Promise<PlanningNativeSyncIdentifiers> {

@@ -7,6 +7,7 @@ import { formatMarkerList, parseMarkerList, validateSpeakerInput } from './voice
 
 interface VoiceDraft {
   speaker: string
+  textType: string
   register: string
   person: string
   toneMarkers: string
@@ -14,11 +15,11 @@ interface VoiceDraft {
   notes: string
 }
 
-const EMPTY_DRAFT: VoiceDraft = { speaker: '', register: '', person: '', toneMarkers: '', taboos: '', notes: '' }
+const EMPTY_DRAFT: VoiceDraft = { speaker: '', textType: '', register: '', person: '', toneMarkers: '', taboos: '', notes: '' }
 
 /**
- * Voice Profile 面板（PB-095）：speaker 行编辑器（语域/人称/语气标记/
- * 禁忌）。标记用逗号分隔文本编辑，保存时转字符串数组。
+ * Voice Profile 面板（PB-095）：speaker 行编辑器（文本类型/语域/人称/
+ * 语气标记/禁忌）。标记用逗号分隔文本编辑，保存时转字符串数组。
  */
 export function VoiceProfilePanel({ projectId, archived }: { projectId: string; archived: boolean }): React.ReactElement {
   const [profiles, setProfiles] = React.useState<LinguistVoiceProfileInfo[]>([])
@@ -60,6 +61,7 @@ export function VoiceProfilePanel({ projectId, archived }: { projectId: string; 
       item: {
         ...(id !== undefined ? { id } : {}),
         speaker: source.speaker.trim(),
+        ...(source.textType.trim() !== '' ? { textType: source.textType.trim() } : {}),
         ...(source.register.trim() !== '' ? { register: source.register.trim() } : {}),
         ...(source.person.trim() !== '' ? { person: source.person.trim() } : {}),
         ...(toneMarkers.length > 0 ? { toneMarkers } : {}),
@@ -93,6 +95,7 @@ export function VoiceProfilePanel({ projectId, archived }: { projectId: string; 
     setEditingId(profile.id)
     setDraft({
       speaker: profile.speaker,
+      textType: profile.textType ?? '',
       register: profile.register ?? '',
       person: profile.person ?? '',
       toneMarkers: formatMarkerList(profile.toneMarkers),
@@ -116,7 +119,7 @@ export function VoiceProfilePanel({ projectId, archived }: { projectId: string; 
                 <span className="min-w-0 flex-1 break-words">
                   <span className="font-medium">{profile.speaker}</span>
                   <span className="ml-2 text-foreground/50">
-                    {[profile.register, profile.person].filter((item) => item !== undefined).join(' · ')}
+                    {[profile.textType, profile.register, profile.person].filter((item) => item !== undefined).join(' · ')}
                   </span>
                   {profile.toneMarkers !== undefined && profile.toneMarkers.length > 0 && (
                     <span className="block text-foreground/50">语气：{formatMarkerList(profile.toneMarkers)}</span>
@@ -136,6 +139,7 @@ export function VoiceProfilePanel({ projectId, archived }: { projectId: string; 
         <div className="space-y-1.5 border-t border-border/25 pt-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <input value={draft.speaker} onChange={(event) => patchDraft({ speaker: event.target.value })} placeholder="角色名" className="h-7 w-24 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" />
+            <input value={draft.textType} onChange={(event) => patchDraft({ textType: event.target.value })} placeholder="文本类型（可空）" className="h-7 w-28 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" />
             <input value={draft.register} onChange={(event) => patchDraft({ register: event.target.value })} placeholder="语域（可空）" className="h-7 w-24 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" />
             <input value={draft.person} onChange={(event) => patchDraft({ person: event.target.value })} placeholder="人称（可空）" className="h-7 w-24 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" />
             <input value={draft.notes} onChange={(event) => patchDraft({ notes: event.target.value })} placeholder="备注（可空）" className="h-7 min-w-28 flex-1 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" />

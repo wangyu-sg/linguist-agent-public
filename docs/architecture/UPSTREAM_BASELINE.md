@@ -23,13 +23,13 @@
 
     git diff --name-only 72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a...HEAD
 
-对正式 merge commit ea26177f 重算得到 **808** 个变动路径；其中 **549** 个落在产品扩展/文档/测试的允许路径，**255** 个 Proma 核心触点登记在 [proma-touchpoints.json](./proma-touchpoints.json)，另有 **4** 个文件仅做公开镜像本机路径占位符替换。这些数字只描述该正式 merge，不含其后的未提交工作。
+对正式 merge commit ea26177f 重算得到 **808** 个变动路径；其中 **549** 个落在产品扩展/文档/测试的允许路径，**255** 个 Proma 核心触点登记在当时的 [proma-touchpoints.json](./proma-touchpoints.json)，另有 **4** 个文件仅做公开镜像本机路径占位符替换。这些数字只描述该正式 merge；后续实施将当前精确 ledger 更新为 **259** 个触点。
 
 ## 运行时与产品版本
 
 | 项目 | 已确认值 |
 |---|---|
-| Linguist Agent（current manifest） | 0.16.22 |
+| Linguist Agent（current manifest） | 0.16.33 |
 | Proma Electron App（upstream tag manifest） | 0.16.10 |
 | Electron | 43.2.0（manifest: ^43.2.0） |
 | Bun | 1.3.14 |
@@ -37,7 +37,7 @@
 | Claude Agent SDK | 0.3.201 |
 | CAT schema | 15 |
 
-Prompt 合同的已确认版本是 Profile 2.1.0、Quality Contract 1.0.0、Project Digest 1.0.0、Turn Context 1。当前已有静态 renderer Host Contracts 与 Extension Registry，但没有独立的 Host Contract runtime version constant；不得将它臆写成 v1。
+Linguist Prompt 使用单一 `LINGUIST_PROMPT_VERSION = 3.1.0`，岗位 Markdown 与 Common Contract 的唯一真源为 `resources/linguist-roles/`。当前已有静态 renderer Host Contracts 与 Extension Registry，但没有独立的 Host Contract runtime version constant；不得将它臆写成 v1。
 
 ## 验证边界
 

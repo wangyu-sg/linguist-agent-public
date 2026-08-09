@@ -10,7 +10,7 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
 ## 当前状态
 
-当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.9；Electron App `0.16.21`、Electron `43.2.0`、`@proma/shared 0.1.86`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.15 / 0.0.9 / 0.0.29 / 0.0.24`、CAT schema `15`，仓库使用 Bun `1.3.14`。
+当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.10；Electron App `0.16.33`、Electron `43.2.0`、`@proma/shared 0.1.91`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.19 / 0.0.10 / 0.0.34 / 0.0.31`、CAT schema `15`，仓库使用 Bun `1.3.14`。
 
 应用有三个并列模式：
 
@@ -41,7 +41,7 @@ Proposal 是可见、可接受、可撤销的修改载体，承载 Agent 当前�
 Proma Agent Runtime
 ├── Base Tools / MCP / Files / Permission / Model
 └── Linguist Project Binding
-    ├── 四岗位共享的 20 个 CAT Tools
+    ├── 四岗位共享的 30 个 CAT Tools
     ├── Common Quality Contract + 当前岗位 Prompt
     ├── Project Digest / Turn Context
     └── Linguist Domain Services
@@ -56,9 +56,10 @@ Proma Agent Runtime
 - `@linguist/cat-tools` 的项目身份只来自 Session binding；模型不能提交 `projectId`。
 - UI 与 Agent 调用同一 `LinguistProjectService`；格式解析、事务、CAS、locked Segment、Tag/Placeholder/ICU、QA 和 round-trip 规则不重复实现。
 - `cat_import_resources` 可处理文件或小批目录，绝对路径直接使用，相对路径按 Session cwd 解析；权限体验只服从 Proma Session。
-- `cat_export_asset` 支持 `final` / `draft`。final 检查结构、格式与重新导入；默认不覆盖，用户明确要求时才原子覆盖普通文件。
-- Tag Profile 的扫描、Candidate、编辑器提示、Proposal、QA 与 final export 使用同一 Scanner；普通可翻译 `[Damage]` 不会被内置规则硬锁。
-- Phrase split/master MXLIFF 按内容身份、Source hash、unit/context 与 placeholder 证据配对；final 导出在 mapping 不完整或 stale 时阻断。
+- `cat_export_asset` 支持 `verified` / `as-is`。`verified` 检查结构、格式与重新导入；默认不覆盖，用户明确要求时才原子覆盖普通文件。
+- Tag Profile 的扫描、Candidate、编辑器提示、Proposal、QA 与 `verified` export 使用同一 Scanner；普通可翻译 `[Damage]` 不会被内置规则硬锁。
+- Phrase split/master MXLIFF 按内容身份、Source hash、unit/context 与 placeholder 证据配对；`verified` 导出在 mapping 不完整或 stale 时阻断。
+- memoQ MQXLIFF 使用专用 Adapter，保留 inline code、确认状态与审校批注；实机客户样本仍需逐样本验证。
 
 项目缺失、归档或暂不可用时，Agent 对话仍可继续；CAT 工具如实返回项目状态，写入由 Store fail closed。用户仍可用 Proma 文件、Shell、OCR、Excel、MCP 等能力诊断或恢复项目。
 

@@ -81,6 +81,11 @@
       "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
     },
     {
+      "file": "apps/electron/native/eventkit/macos-eventkit-addon.mm",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+    },
+    {
       "file": "apps/electron/package.json",
       "ticket": "LA-SYNC-005",
       "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
@@ -341,6 +346,11 @@
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
     },
     {
+      "file": "apps/electron/src/main/lib/mac-eventkit-native-addon.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+    },
+    {
       "file": "apps/electron/src/main/lib/planning-manager.test.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
@@ -349,6 +359,16 @@
       "file": "apps/electron/src/main/lib/planning-manager.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+    },
+    {
+      "file": "apps/electron/src/main/lib/planning-native-sync-coordinator.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+    },
+    {
+      "file": "apps/electron/src/main/lib/planning-native-sync-service.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
     },
     {
       "file": "apps/electron/src/main/lib/planning-window.ts",

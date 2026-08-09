@@ -147,9 +147,23 @@ static void execute(NSString *command, NSString *entity, NSDictionary *payload, 
   }
 }
 
-static void cleanupChanges() {
+static void removeChangeObserver() {
   if (eventStoreChangeObserver) { [[NSNotificationCenter defaultCenter] removeObserver:eventStoreChangeObserver]; eventStoreChangeObserver = nil; }
+}
+
+// env cleanup 时 Node 已可能开始销毁 TSFN；此处只断开原生通知并丢弃 C++ wrapper，
+// 正常退出由 JS before-quit 先调用 disposeChanges，在 env 有效时显式 Release。
+static void cleanupChanges(void *) {
+  removeChangeObserver();
+  eventStoreChangeListener.reset();
+  store = nil;
+}
+
+static Napi::Value disposeChanges(const Napi::CallbackInfo &info) {
+  removeChangeObserver();
   if (eventStoreChangeListener) { eventStoreChangeListener->Release(); eventStoreChangeListener.reset(); }
+  store = nil;
+  return info.Env().Undefined();
 }
 
 static Napi::Value subscribeChanges(const Napi::CallbackInfo &info) {
@@ -171,5 +185,5 @@ static Napi::Value command(const Napi::CallbackInfo &info) {
   NSError *error = nil; NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[payloadText dataUsingEncoding:NSUTF8StringEncoding] options:0 error:&error]; if (!payload || ![payload isKindOfClass:[NSDictionary class]]) payload = @{};
   auto *ctx = new CommandContext(env); NSLog(@"[PromaEventKit] scheduling %@ for %@ on main queue", name, entity); dispatch_async(dispatch_get_main_queue(), ^{ execute(name, entity, payload, ctx); }); return ctx->deferred->Promise();
 }
-Napi::Object Init(Napi::Env env, Napi::Object exports) { NSLog(@"[PromaEventKit] N-API addon loaded"); env.AddCleanupHook(cleanupChanges); exports.Set("command", Napi::Function::New(env, command)); exports.Set("subscribeChanges", Napi::Function::New(env, subscribeChanges)); return exports; }
+Napi::Object Init(Napi::Env env, Napi::Object exports) { NSLog(@"[PromaEventKit] N-API addon loaded"); if (napi_add_env_cleanup_hook(env, cleanupChanges, nullptr) != napi_ok) throw Napi::Error::New(env, "failed to register EventKit cleanup hook"); exports.Set("command", Napi::Function::New(env, command)); exports.Set("subscribeChanges", Napi::Function::New(env, subscribeChanges)); exports.Set("disposeChanges", Napi::Function::New(env, disposeChanges)); return exports; }
 NODE_API_MODULE(proma_eventkit, Init)

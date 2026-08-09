@@ -11,13 +11,14 @@
 - remotes：`origin` 为公开 Linguist Agent 仓库，`upstream` 为 Proma 仓库。
 - 当前 Proma tag：`v0.16.10`；commit：`72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a`。
 - 正式 merge commit：`ea26177f36d59bd2781d7ff9264451a8430e2249`；承载分支：`integration/la-proma-0.16.10`。
+- Kimi K3 Linguist UX 合并 commit：`0136a1d25e6e2c3c4c43cee6c90d24e0990aacf4`。
 
 ## 固定版本
 
 | 项目 | 核验值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App | `0.16.30` |
+| Electron App | `0.16.33` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
@@ -71,7 +72,9 @@
 
 ## 本轮最终证据与尚未确认
 
-- 全量 typecheck、根 `1479/1479`、Electron `181/181`、CAT Tools `36/36`、boundary `4/4`、fusion `9/9` 通过。
+- 全量 typecheck 的 11 个 workspace 通过。
+- 根 `1514/1514`（`6758` assertions）、Electron Linguist `181/181`、CAT Core `100/100`、CAT Formats `163/163`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9` 通过。
 - macOS arm64 packaged artifact integrity 通过；纵向 smoke 为 Pi `15/0`、Chat `19/0`、Linguist `21/0/2 MANUAL`。
 - Phrase 真实私有副本验证为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户数据未进入仓库。
+- memoQ MQXLIFF 专用 Adapter 的合成 fixture、修改/导出/重导和回归已自动验证；真实 memoQ 客户样本尚未验证。
 - 真实 Provider 四岗位全链、同模型对照、14 天日用和 Native Open/Save 等真机人工项尚未确认，不得标记为完成。

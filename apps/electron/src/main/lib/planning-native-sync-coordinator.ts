@@ -1,6 +1,6 @@
 import { applyManagedCalendarProfileItems, applyPlanningNativeConnectionItems, getCalendarEvent, getTodo, completePlanningNativeOutbox, completePlanningSyncCleanup, completePlanningSyncOutbox, failPlanningNativeOutbox, failPlanningSyncCleanup, failPlanningSyncOutbox, hideMissingManagedCalendarProfileItems, hideMissingPlanningNativeConnectionItems, listDuePlanningNativeOutbox, listDuePlanningSyncCleanup, listDuePlanningSyncOutbox, listEnabledManagedCalendarProfiles, listPlanningNativeBindingIdentifiers, listPlanningNativeConnections, listPlanningSyncBindingIdentifiers, planningNativeCalendarHash, type PlanningNativeOutboxItem, type PlanningSyncCleanupItem, type PlanningSyncOutboxItem } from './planning-manager'
 import { broadcastPlanningChanged, onPlanningChanged } from './planning-events'
-import { getPlanningNativeSyncStatus, listPlanningNativeConnectionItems, listPlanningNativeConnectionItemsByIdentifier, removePlanningNativeSyncItem, subscribePlanningNativeSyncChanges, upsertPlanningNativeSyncItem } from './planning-native-sync-service'
+import { disposePlanningNativeSyncChanges, getPlanningNativeSyncStatus, listPlanningNativeConnectionItems, listPlanningNativeConnectionItemsByIdentifier, removePlanningNativeSyncItem, subscribePlanningNativeSyncChanges, upsertPlanningNativeSyncItem } from './planning-native-sync-service'
 
 const POLL_INTERVAL_MS = 30_000
 let timer: ReturnType<typeof setInterval> | null = null
@@ -209,4 +209,5 @@ export function stopPlanningNativeSyncCoordinator(): void {
   disposePlanningListener = null
   if (nativeChangeDebounce) clearTimeout(nativeChangeDebounce)
   nativeChangeDebounce = null
+  disposePlanningNativeSyncChanges()
 }
