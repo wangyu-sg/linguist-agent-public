@@ -23,6 +23,7 @@ import { ReferenceManager } from './ReferenceManager'
 import { StyleGuidePanel } from './StyleGuidePanel'
 import { TagProfilesPanel } from './TagProfilesPanel'
 import { VoiceProfilePanel } from './VoiceProfilePanel'
+import type { LinguistProjectSettingsTab } from './cat-workspace-atoms'
 import {
   describeLinguistIpcError,
   validateLocaleInput,
@@ -32,6 +33,8 @@ interface ProjectSettingsSheetProps {
   open: boolean
   project: LinguistProjectInfo
   summary: LinguistProjectSummary | null
+  /** 「查看」类入口直达的分类；未指定时打开默认「项目」分类。 */
+  initialTab?: LinguistProjectSettingsTab
   onOpenChange: (open: boolean) => void
   onSummaryRefresh: () => void
   onProjectArchived?: (project: LinguistProjectInfo) => void
@@ -43,6 +46,7 @@ export function ProjectSettingsSheet({
   open,
   project,
   summary,
+  initialTab,
   onOpenChange,
   onSummaryRefresh,
   onProjectArchived,
@@ -58,6 +62,7 @@ export function ProjectSettingsSheet({
         <ProjectSettingsSheetBody
           project={project}
           summary={summary}
+          initialTab={initialTab}
           onSummaryRefresh={onSummaryRefresh}
           onClose={() => onOpenChange(false)}
           onProjectArchived={onProjectArchived}
@@ -71,6 +76,7 @@ export function ProjectSettingsSheet({
 export function ProjectSettingsSheetBody({
   project,
   summary,
+  initialTab,
   onSummaryRefresh,
   onClose = () => undefined,
   onProjectArchived,
@@ -78,13 +84,16 @@ export function ProjectSettingsSheetBody({
 }: {
   project: LinguistProjectInfo
   summary: LinguistProjectSummary | null
+  initialTab?: LinguistProjectSettingsTab
   onSummaryRefresh: () => void
   onClose?: () => void
   onProjectArchived?: (project: LinguistProjectInfo) => void
   onProjectDeleted?: (projectId: string) => void
 }): React.ReactElement {
+  const startTab = initialTab ?? 'project'
   return (
-    <Tabs defaultValue="project" className="mt-6">
+    // key 随直达分类变化重挂载 Tabs，让 defaultValue 生效；打开后用户手动切换不受影响。
+    <Tabs key={startTab} defaultValue={startTab} className="mt-6">
       <TabsList aria-label="项目设置分类">
         <TabsTrigger value="project">项目</TabsTrigger>
         <TabsTrigger value="resources">语言资产</TabsTrigger>

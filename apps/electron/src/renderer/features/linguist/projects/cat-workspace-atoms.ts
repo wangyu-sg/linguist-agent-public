@@ -23,6 +23,14 @@ const BOTTOM_DOCK_TABS = [
 export type LinguistBottomDockTab = (typeof BOTTOM_DOCK_TABS)[number]
 export type LinguistAgentPresentation = 'closed' | 'rail' | 'full'
 
+/** 项目设置 Sheet 的分类 tab；「查看」类入口可直达具体分类。 */
+export type LinguistProjectSettingsTab =
+  | 'project'
+  | 'resources'
+  | 'tags'
+  | 'maintenance'
+  | 'diagnostics'
+
 export const ASSET_NAVIGATOR_MIN_WIDTH = 180
 export const ASSET_NAVIGATOR_DEFAULT_WIDTH = 240
 export const ASSET_NAVIGATOR_MAX_WIDTH = 420
@@ -404,6 +412,25 @@ export function linguistSegmentAgentReferenceAtomFamily(
   if (existing !== undefined) return existing
   const created = atom<LinguistSegmentAgentReference | undefined>(undefined)
   segmentAgentReferenceAtoms.set(projectId, created)
+  return created
+}
+
+const projectSettingsTabAtoms = new Map<
+  string,
+  ReturnType<typeof atom<LinguistProjectSettingsTab | undefined>>
+>()
+
+/**
+ * 项目设置 Sheet 的「直达分类」意图；只存在于当前渲染会话。
+ * Sheet 关闭时由调用方清回 undefined，不进入 Workbench settings 持久化。
+ */
+export function linguistProjectSettingsTabAtomFamily(
+  projectId: string,
+): ReturnType<typeof atom<LinguistProjectSettingsTab | undefined>> {
+  const existing = projectSettingsTabAtoms.get(projectId)
+  if (existing !== undefined) return existing
+  const created = atom<LinguistProjectSettingsTab | undefined>(undefined)
+  projectSettingsTabAtoms.set(projectId, created)
   return created
 }
 
