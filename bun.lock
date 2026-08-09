@@ -209,7 +209,7 @@
     },
     "packages/linguist-cat-store": {
       "name": "@linguist/cat-store",
-      "version": "0.0.32",
+      "version": "0.0.33",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-formats": "workspace:*",
@@ -220,7 +220,7 @@
     },
     "packages/linguist-cat-tools": {
       "name": "@linguist/cat-tools",
-      "version": "0.0.28",
+      "version": "0.0.29",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-store": "workspace:*",

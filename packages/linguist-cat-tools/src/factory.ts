@@ -14,6 +14,7 @@ import { createDeliveryTools } from './delivery-tools'
 import { createTagTools } from './tag-tools'
 import { createTerminologyTools } from './terminology-tools'
 import { createWorkbookTools } from './workbook-tools'
+import { createVoiceTools } from './voice-tools'
 import { createCatToolRuntime } from './tool-runtime'
 import type { LinguistCatToolsDeps } from './types'
 
@@ -26,6 +27,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     createProjectTools(runtime)
   const [importResourcesTool, importAssetTool] = createIntakeTools(runtime)
   const [previewWorkbookMappingTool, saveWorkbookMappingTool] = createWorkbookTools(runtime)
+  const [upsertVoiceProfileTool, addApprovedExemplarTool, getVoiceContextTool] = createVoiceTools(runtime)
   const [exportAssetTool] = createDeliveryTools(runtime)
   const [scanUnknownTagPatternsTool, saveTagProfileCandidateTool] = createTagTools(runtime)
   const [upsertTermsTool, deleteTermsTool, listTermConflictsTool, validateTermsTool] =
@@ -54,6 +56,9 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     importAssetTool,
     previewWorkbookMappingTool,
     saveWorkbookMappingTool,
+    upsertVoiceProfileTool,
+    addApprovedExemplarTool,
+    getVoiceContextTool,
     scanUnknownTagPatternsTool,
     saveTagProfileCandidateTool,
     exportAssetTool,

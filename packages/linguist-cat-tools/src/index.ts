@@ -46,6 +46,7 @@ export {
   type CatSegmentListItem,
   type CatSegmentBrief,
   type CatWorkerJobProgress,
+  type CatVoiceContextResult,
   type LinguistCatToolCallInfo,
   type LinguistCatToolMutation,
   type LinguistCatToolName,

@@ -12,6 +12,30 @@ export interface TmUnit {
   origin?: string
 }
 
+export interface ApprovedExemplar {
+  id: string
+  source: string
+  target: string
+  sourceLocale: string
+  targetLocale: string
+  speaker: string
+  textType: string
+  module?: string
+  assetId: string
+  segmentId: string
+  note?: string
+  approvedAt: string
+}
+
+export interface ApprovedExemplarInput extends Omit<ApprovedExemplar, 'id' | 'approvedAt'> {}
+
+export interface ApprovedExemplarSearch {
+  speaker?: string
+  textType?: string
+  module?: string
+  limit?: number
+}
+
 export interface TmUnitImportInput {
   source: string
   target: string
@@ -64,6 +88,43 @@ interface TmUnitRow {
   created_at: string
 }
 
+const APPROVED_EXEMPLAR_ORIGIN_PREFIX = 'approved-exemplar:'
+
+type ApprovedExemplarMetadata = Omit<
+  ApprovedExemplar,
+  'id' | 'source' | 'target' | 'sourceLocale' | 'targetLocale'
+>
+
+function parseApprovedExemplar(row: TmUnitRow): ApprovedExemplar | undefined {
+  if (!row.origin?.startsWith(APPROVED_EXEMPLAR_ORIGIN_PREFIX)) return undefined
+  try {
+    const meta = JSON.parse(row.origin.slice(APPROVED_EXEMPLAR_ORIGIN_PREFIX.length)) as Partial<ApprovedExemplarMetadata>
+    if (
+      typeof meta.speaker !== 'string'
+      || typeof meta.textType !== 'string'
+      || typeof meta.assetId !== 'string'
+      || typeof meta.segmentId !== 'string'
+      || typeof meta.approvedAt !== 'string'
+    ) return undefined
+    return {
+      id: row.id,
+      source: row.source,
+      target: row.target,
+      sourceLocale: row.source_locale,
+      targetLocale: row.target_locale,
+      speaker: meta.speaker,
+      textType: meta.textType,
+      ...(typeof meta.module === 'string' ? { module: meta.module } : {}),
+      assetId: meta.assetId,
+      segmentId: meta.segmentId,
+      ...(typeof meta.note === 'string' ? { note: meta.note } : {}),
+      approvedAt: meta.approvedAt,
+    }
+  } catch {
+    return undefined
+  }
+}
+
 function stableId(projectId: string, input: TmUnitImportInput): string {
   return deriveStableIdV2('tmu', [
     projectId,
@@ -87,7 +148,9 @@ function tmUnitFromRow(row: TmUnitRow): TmUnit {
     target: row.target,
     sourceLocale: row.source_locale,
     targetLocale: row.target_locale,
-    ...(row.origin !== null ? { origin: row.origin } : {}),
+    ...(row.origin !== null
+      ? { origin: row.origin.startsWith(APPROVED_EXEMPLAR_ORIGIN_PREFIX) ? 'approved-exemplar' : row.origin }
+      : {}),
   }
 }
 
@@ -213,6 +276,59 @@ export class TmUnitsRepository {
       if (imported > 0) this.events?.appendProjectEvent({ kind: 'project-updated' })
       return { imported, unchanged }
     })
+  }
+
+  addApprovedExemplar(input: ApprovedExemplarInput): ApprovedExemplar {
+    if (input.target.trim() === '') throw new Error('Approved exemplar target must not be empty')
+    const existing = this.listApprovedExemplars({
+      speaker: input.speaker,
+      textType: input.textType,
+      limit: Number.MAX_SAFE_INTEGER,
+    }).find((item) => item.segmentId === input.segmentId)
+    if (existing) return existing
+    const approvedAt = this.now()
+    const metadata: ApprovedExemplarMetadata = {
+      speaker: input.speaker,
+      textType: input.textType,
+      ...(input.module === undefined ? {} : { module: input.module }),
+      assetId: input.assetId,
+      segmentId: input.segmentId,
+      ...(input.note === undefined ? {} : { note: input.note }),
+      approvedAt,
+    }
+    const origin = `${APPROVED_EXEMPLAR_ORIGIN_PREFIX}${JSON.stringify(metadata)}`
+    this.importMany([{
+      source: input.source,
+      target: input.target,
+      sourceLocale: input.sourceLocale,
+      targetLocale: input.targetLocale,
+      origin,
+    }])
+    const id = stableId(this.projectId, {
+      source: input.source,
+      target: input.target,
+      sourceLocale: input.sourceLocale,
+      targetLocale: input.targetLocale,
+      origin,
+    })
+    return parseApprovedExemplar(this.db.db
+      .prepare('SELECT * FROM tm_units WHERE id = ? AND project_id = ?')
+      .get(id, this.projectId) as TmUnitRow)!
+  }
+
+  listApprovedExemplars(filter: ApprovedExemplarSearch = {}): ApprovedExemplar[] {
+    // ponytail: personal Alpha 线性扫 approved-exemplar 行；超过 10k 条时再加专用索引列。
+    const rows = this.db.db
+      .prepare(`SELECT * FROM tm_units WHERE project_id = ? AND origin LIKE ? ORDER BY created_at DESC, id DESC`)
+      .all(this.projectId, `${APPROVED_EXEMPLAR_ORIGIN_PREFIX}%`) as TmUnitRow[]
+    const speaker = filter.speaker?.toLocaleLowerCase()
+    return rows
+      .map(parseApprovedExemplar)
+      .filter((item): item is ApprovedExemplar => item !== undefined)
+      .filter((item) => speaker === undefined || item.speaker.toLocaleLowerCase() === speaker)
+      .filter((item) => filter.textType === undefined || item.textType === filter.textType)
+      .filter((item) => filter.module === undefined || item.module === filter.module)
+      .slice(0, filter.limit ?? 5)
   }
 
   get(id: string): TmUnit | undefined {

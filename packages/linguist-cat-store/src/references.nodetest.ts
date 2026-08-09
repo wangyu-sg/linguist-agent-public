@@ -51,6 +51,50 @@ test('TM importMany: stable ids, same source with different targets, and repeat 
   }
 })
 
+test('approved exemplars reuse TM authority and retain bounded voice metadata', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  const input = {
+    source: 'The gate is open.',
+    target: '大门已经打开。',
+    sourceLocale: 'en',
+    targetLocale: 'zh-CN',
+    speaker: 'Narrator',
+    textType: 'dialogue',
+    module: 'chapter-1',
+    assetId: 'ast_v2_test',
+    segmentId: 'seg_v2_test',
+    note: '语气克制',
+  }
+  try {
+    const created = db.tmUnits.addApprovedExemplar(input)
+    assert.deepEqual(created, {
+      id: created.id,
+      ...input,
+      approvedAt: created.approvedAt,
+    })
+    assert.match(created.approvedAt, /^2026-01-01T/)
+    assert.equal(db.tmUnits.get(created.id)?.origin, 'approved-exemplar')
+    assert.equal(db.tmUnits.addApprovedExemplar(input).id, created.id)
+    assert.equal(db.tmUnits.count(), 1)
+
+    db.tmUnits.addApprovedExemplar({
+      ...input,
+      speaker: 'System',
+      textType: 'ui',
+      segmentId: 'seg_v2_system',
+      module: 'menu',
+    })
+    assert.deepEqual(
+      db.tmUnits.listApprovedExemplars({ speaker: 'narrator', textType: 'dialogue', module: 'chapter-1' }),
+      [created],
+    )
+    assert.equal(db.tmUnits.listApprovedExemplars({ speaker: 'Narrator', module: 'menu' }).length, 0)
+  } finally {
+    db.close()
+  }
+})
+
 test('TM/TB imports advance only their project event sequence after a committed change', () => {
   const { store, project } = setup()
   const db = store.openProject(project.id)

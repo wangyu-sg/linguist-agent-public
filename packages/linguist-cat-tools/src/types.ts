@@ -37,12 +37,14 @@ import type {
 } from '@linguist/cat-core'
 import type {
   ContextDocKind,
+  ApprovedExemplar,
   ProjectDatabase,
   SentencePattern,
   TermEntry,
   TermEntryMatch,
   TmUnit,
   TmUnitMatch,
+  VoiceProfile,
 } from '@linguist/cat-store'
 import type { LinguistCatToolError } from './errors'
 
@@ -55,6 +57,9 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_import_asset',
   'cat_preview_workbook_mapping',
   'cat_save_workbook_mapping',
+  'cat_upsert_voice_profile',
+  'cat_add_approved_exemplar',
+  'cat_get_voice_context',
   'cat_scan_unknown_tag_patterns',
   'cat_save_tag_profile_candidate',
   'cat_export_asset',
@@ -298,6 +303,15 @@ export interface LinguistSaveWorkbookMappingInput {
   filenamePattern?: string
   sheetName: string
   columns: WorkbookMappingColumns
+}
+
+export interface CatVoiceContextResult {
+  speaker: string
+  textType?: string
+  module?: string
+  profile?: VoiceProfile
+  exemplars: ApprovedExemplar[]
+  note?: string
 }
 
 /** CAT Tool 已提交的项目内变更；不含 projectId，避免模型输入影响项目 authority。 */

@@ -423,6 +423,67 @@ test('workbook tools preview evidence and save a reusable bound-project profile'
   }
 })
 
+test('voice tools reuse profiles and translated segments as bounded approved context', async () => {
+  const fixture = setup()
+  try {
+    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
+    const profile = (await invoke(toolByName(tools, 'cat_upsert_voice_profile'), {
+      speaker: 'Narrator',
+      textType: 'dialogue',
+      register: 'formal',
+      person: 'third-person',
+      toneMarkers: ['restrained'],
+      taboos: ['internet slang'],
+    })).details as { id: string; speaker: string; register: string }
+    assert.equal(profile.speaker, 'Narrator')
+    assert.equal(profile.register, 'formal')
+
+    const approvedIds: string[] = []
+    for (const index of [0, 2, 4]) {
+      const exemplar = (await invoke(toolByName(tools, 'cat_add_approved_exemplar'), {
+        segmentId: fixture.segmentsA[index]!.id,
+        speaker: 'Narrator',
+        textType: 'dialogue',
+        module: 'menu',
+        note: `approved ${index}`,
+      })).details as { id: string; assetId: string; segmentId: string; approvedAt: string }
+      approvedIds.push(exemplar.id)
+      assert.equal(exemplar.assetId, fixture.assetA.id)
+      assert.equal(exemplar.segmentId, fixture.segmentsA[index]!.id)
+      assert.match(exemplar.approvedAt, /^2026-/)
+    }
+    const duplicate = (await invoke(toolByName(tools, 'cat_add_approved_exemplar'), {
+      segmentId: fixture.segmentsA[0]!.id,
+      speaker: 'Narrator',
+      textType: 'dialogue',
+      module: 'menu',
+    })).details as { id: string }
+    assert.equal(duplicate.id, approvedIds[0])
+
+    const context = (await invoke(toolByName(tools, 'cat_get_voice_context'), {
+      speaker: 'Narrator',
+      textType: 'dialogue',
+      module: 'menu',
+      limit: 3,
+    })).details as {
+      profile: { id: string }
+      exemplars: Array<{ source: string; target: string; segmentId: string }>
+    }
+    assert.equal(context.profile.id, profile.id)
+    assert.equal(context.exemplars.length, 3)
+    assert.ok(context.exemplars.every((item) => item.source !== '' && item.target !== ''))
+    assertNoAbsolutePaths(context, fixture.rootDir)
+
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_add_approved_exemplar'), {
+      segmentId: fixture.segmentsA[1]!.id,
+      speaker: 'Narrator',
+      textType: 'dialogue',
+    }), 'INVALID_ARGUMENT')
+  } finally {
+    fixture.db.close()
+  }
+})
+
 
 test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page filtered results', async () => {
   const fixture = setup()
@@ -1689,6 +1750,13 @@ test('binding errors: unbound session, missing project, resolver that throws typ
         sheetName: 'Sheet1',
         columns: { source: 'Source', target: 'Target' },
       },
+      cat_upsert_voice_profile: { speaker: 'Narrator' },
+      cat_add_approved_exemplar: {
+        segmentId: fixture.segmentsA[0]!.id,
+        speaker: 'Narrator',
+        textType: 'dialogue',
+      },
+      cat_get_voice_context: { speaker: 'Narrator' },
       cat_scan_unknown_tag_patterns: {},
       cat_save_tag_profile_candidate: {
         name: 'test',
