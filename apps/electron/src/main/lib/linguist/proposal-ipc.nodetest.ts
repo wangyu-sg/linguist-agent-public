@@ -6,6 +6,41 @@ import { createLinguistProposalIpc } from './proposal-ipc'
 import { INPUT, makeService, makeTempDir, readFixture } from './test/service-testkit'
 import type { LinguistProjectMutationEvent } from '@proma/shared'
 
+test('C3 Apply IPC 与 Agent Tool 复用同一 Proposal Repository 根路径', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    await service.importAsset(project.id, {
+      bytes: readFixture('mini_dialogue.csv'),
+      filename: 'mini_dialogue.csv',
+    })
+    const segment = service.openProject(project.id).segments.query({ limit: 1 })[0]!
+    const mutations: LinguistProjectMutationEvent[] = []
+    const ipc = createLinguistProposalIpc({
+      getService: () => service,
+      onProjectMutation: (event) => mutations.push(event),
+    })
+
+    const result = await ipc.applyTranslations({
+      projectId: project.id,
+      edits: [{ segmentId: segment.id, baseRevision: 0, target: 'UI 批量写回' }],
+    })
+    assert.equal(result.ok, true)
+    if (result.ok) {
+      assert.equal(result.data.applied, 1)
+      assert.equal(result.data.proposalIds.length, 1)
+    }
+    assert.equal(service.openProject(project.id).segments.getById(segment.id)?.target, 'UI 批量写回')
+    assert.equal(mutations[0]?.kind, 'proposal-reviewed')
+
+    const invalid = await ipc.applyTranslations({ projectId: project.id, edits: [] })
+    assert.equal(invalid.ok, false)
+    if (!invalid.ok) assert.equal(invalid.error.code, 'INVALID_INPUT')
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('PB-053 Proposal IPC 覆盖人工 UI 的读写与批量审核通道', async () => {
   const service = makeService()
   try {
@@ -213,7 +248,7 @@ test('项目级提案历史与终态重发：状态筛选、provenance、lineage
   }
 })
 
-test('PB-110 archived 项目：六个写通道 STORE_READ_ONLY 拒绝且无写入，三个读通道可用', async () => {
+test('PB-110 archived 项目：七个写通道 STORE_READ_ONLY 拒绝且无写入，三个读通道可用', async () => {
   const service = makeService()
   try {
     const project = service.createProject(INPUT)
@@ -245,6 +280,10 @@ test('PB-110 archived 项目：六个写通道 STORE_READ_ONLY 拒绝且无写�
       idempotencyKey: 'archived-write-1',
     }
     for (const attempt of [
+      () => ipc.applyTranslations({
+        projectId: project.id,
+        edits: [{ segmentId: segments[0]!.id, baseRevision: 0, target: '归档后写回' }],
+      }),
       () => ipc.accept(writeInputs),
       () => ipc.reject(writeInputs),
       () => ipc.editAndAccept({ ...writeInputs, editedTarget: '归档后编辑' }),
@@ -268,7 +307,7 @@ test('PB-110 archived 项目：六个写通道 STORE_READ_ONLY 拒绝且无写�
       if (!result.ok) assert.equal(result.error.code, 'STORE_READ_ONLY')
     }
 
-    // 六个写通道均未产生任何写入：pending 计数与段 revision 不变
+    // 七个写通道均未产生任何写入：pending 计数与段 revision 不变
     assert.equal(dbRo.proposals.listPending().length, pendingBefore)
     assert.equal(dbRo.segments.getById(segments[0]!.id)?.revision, 0)
 

@@ -5,6 +5,7 @@
 
 import {
   type LinguistAcceptedProposalResult,
+  type LinguistApplyTranslationsResult,
   type LinguistIpcResult,
   type LinguistProposalAcceptSelectedResult,
   type LinguistProposalEditAndAcceptResult,
@@ -16,6 +17,7 @@ import {
   type LinguistProposalRejectResult,
   type LinguistProposalRejectSelectedResult,
   LINGUIST_PROPOSAL_ID_PATTERN,
+  LINGUIST_SEGMENT_ID_PATTERN,
 } from '@proma/shared'
 import {
   StoreNotFoundError,
@@ -96,6 +98,33 @@ function readItems(record: Record<string, unknown>): ProposalMutationItem[] {
     invalid('items must not contain duplicate proposalId values')
   }
   return items
+}
+
+function readApplyEdits(record: Record<string, unknown>) {
+  if (!Array.isArray(record.edits) || record.edits.length < 1 || record.edits.length > 200) {
+    invalid('edits must contain 1-200 translation edits')
+  }
+  return record.edits.map((value) => {
+    const item = assertRecord(value)
+    if (typeof item.segmentId !== 'string' || !LINGUIST_SEGMENT_ID_PATTERN.test(item.segmentId)) {
+      invalid('segmentId must be a valid Stable ID')
+    }
+    if (!Number.isSafeInteger(item.baseRevision) || (item.baseRevision as number) < 0) {
+      invalid('baseRevision must be a non-negative safe integer')
+    }
+    if (typeof item.target !== 'string' || item.target.trim().length === 0) {
+      invalid('target must be a non-blank string')
+    }
+    if (item.note !== undefined && (typeof item.note !== 'string' || item.note.length > 2_000)) {
+      invalid('note must be a string of at most 2000 characters')
+    }
+    return {
+      segmentId: item.segmentId,
+      baseRevision: item.baseRevision as number,
+      target: item.target,
+      ...(typeof item.note === 'string' ? { note: item.note } : {}),
+    }
+  })
 }
 
 function readListFilter(record: Record<string, unknown>): {
@@ -185,6 +214,29 @@ export function createLinguistProposalIpc(deps: LinguistProposalIpcDeps) {
     deps.getService().openProject(readProjectId(record))
 
   return {
+    applyTranslations(input: unknown): Promise<LinguistIpcResult<LinguistApplyTranslationsResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const mode = record.mode ?? 'apply'
+        if (mode !== 'apply' && mode !== 'proposal') invalid('mode must be apply or proposal')
+        const projectId = readProjectId(record)
+        const project = deps.getService().getProject(projectId)
+        const result = open(record).proposals.applyTranslations(readApplyEdits(record), {
+          mode,
+          ...(project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile }),
+        })
+        const proposals = result.proposalIds.flatMap((id) => {
+          const proposal = open(record).proposals.getById(id)
+          return proposal === undefined ? [] : [proposal]
+        })
+        if (proposals.length > 0) {
+          if (mode === 'proposal') notifyCreated(deps, projectId, proposals)
+          else notifyReviewed(deps, projectId, proposals)
+        }
+        return result
+      })
+    },
+
     list(input: unknown): Promise<LinguistIpcResult<LinguistProposalListResult>> {
       return wrap(() => {
         const record = assertRecord(input)

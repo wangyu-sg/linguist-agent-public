@@ -26,6 +26,7 @@ export {
   CAT_TOOL_PAGE_LIMITS,
   LINGUIST_CAT_TOOL_NAMES,
   type CatAssetListItem,
+  type CatApplyTranslationsResult,
   type CatBatchConsistencyFindingItem,
   type CatBatchConsistencyGroupItem,
   type CatConsistencyPlanResult,

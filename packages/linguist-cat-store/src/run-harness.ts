@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { Segment } from '@linguist/cat-core'
 import type { CatDatabase } from './database'
 import {
   StoreAuthorityError,
@@ -6,7 +7,12 @@ import {
   StoreJobStateError,
   StoreNotFoundError,
 } from './errors'
-import { proposalFromRow, type ProposalRow } from './repositories/rows'
+import {
+  proposalFromRow,
+  segmentFromRow,
+  type ProposalRow,
+  type SegmentRow,
+} from './repositories/rows'
 
 export type TranslationJobStrategy = 'fast' | 'balanced' | 'best'
 export type TranslationJobStatus =
@@ -79,7 +85,7 @@ export interface RunMutationIdentity {
 }
 
 export interface RunMutationChange {
-  entityType: 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
+  entityType: 'segment' | 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
   entityId: string
   changeKind: 'created' | 'updated' | 'deleted' | 'touched'
   segmentId?: string
@@ -762,9 +768,10 @@ export class RunHarnessRepository {
         ? {}
         : { eventSequence: { first: Number(eventRange.first), last: Number(eventRange.last) } }),
       canUndo: rows.some((row) =>
-        row.entity_type === 'proposal'
-        && row.change_kind === 'created'
-        && row.undone_at === null),
+        (
+          (row.entity_type === 'proposal' && row.change_kind === 'created')
+          || (row.entity_type === 'segment' && row.change_kind === 'updated')
+        ) && row.undone_at === null),
     }
   }
 
@@ -1103,6 +1110,29 @@ export class RunHarnessRepository {
 
   private undoChange(row: RunChangeRow): string | undefined {
     if (row.entity_type === 'file') return 'file effects are recorded but not structurally reversible'
+    if (row.entity_type === 'segment' && row.change_kind === 'updated') {
+      if (row.before_json === null || row.after_json === null) return 'segment update is missing its snapshots'
+      const before = JSON.parse(row.before_json) as Segment
+      const after = JSON.parse(row.after_json) as Segment
+      const currentRow = this.db.db.prepare('SELECT * FROM segments WHERE id = ?').get(row.entity_id) as
+        | SegmentRow
+        | undefined
+      if (currentRow === undefined) return 'segment no longer exists'
+      if (canonicalJson(segmentFromRow(currentRow)) !== canonicalJson(after)) {
+        return 'segment changed after this run'
+      }
+      const revision = this.db.db.prepare(`
+        SELECT revision FROM segment_revisions WHERE segment_id = ? AND revision = ?
+      `).get(row.entity_id, after.revision)
+      if (revision === undefined) return 'segment revision entry no longer exists'
+      this.db.db.prepare(`
+        UPDATE segments SET target = ?, status = ?, revision = ? WHERE id = ?
+      `).run(before.target, before.status, before.revision, row.entity_id)
+      this.db.db.prepare(`
+        DELETE FROM segment_revisions WHERE segment_id = ? AND revision = ?
+      `).run(row.entity_id, after.revision)
+      return undefined
+    }
     if (row.entity_type !== 'proposal' || row.change_kind !== 'created') {
       return `unsupported structured change ${row.entity_type}:${row.change_kind}`
     }
@@ -1124,10 +1154,17 @@ export class RunHarnessRepository {
         return `segment revision changed from ${row.expected_revision} to ${segment.revision}`
       }
     }
-    const deleted = this.db.db
-      .prepare("DELETE FROM proposals WHERE id = ? AND status = 'pending'")
-      .run(row.entity_id)
-    return Number(deleted.changes) === 1 ? undefined : 'proposal is no longer pending'
+    const recordedProposal = proposalFromRow(current)
+    if (recordedProposal.status === 'accepted') {
+      const segment = this.db.db.prepare('SELECT revision FROM segments WHERE id = ?').get(recordedProposal.segmentId) as
+        | { revision: number }
+        | undefined
+      if (segment === undefined || Number(segment.revision) !== recordedProposal.baseRevision) {
+        return 'accepted proposal segment was not reverted first'
+      }
+    } else if (recordedProposal.status !== 'pending') return 'proposal is no longer pending'
+    const deleted = this.db.db.prepare('DELETE FROM proposals WHERE id = ?').run(row.entity_id)
+    return Number(deleted.changes) === 1 ? undefined : 'proposal no longer exists'
   }
 
   private getRow(jobId: string): TranslationJobRow | undefined {

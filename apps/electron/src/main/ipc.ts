@@ -5542,6 +5542,8 @@ export function registerIpcHandlers(): void {
     linguistProposalIpc.listPending(input))
   ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.GET_DIFF, async (_, input: unknown) =>
     linguistProposalIpc.getDiff(input))
+  ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.APPLY_TRANSLATIONS, async (_, input: unknown) =>
+    linguistProposalIpc.applyTranslations(input))
   ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.ACCEPT, async (_, input: unknown) =>
     linguistProposalIpc.accept(input))
   ipcMain.handle(LINGUIST_PROPOSAL_IPC_CHANNELS.REJECT, async (_, input: unknown) =>

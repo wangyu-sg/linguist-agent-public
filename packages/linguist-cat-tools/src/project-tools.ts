@@ -42,7 +42,7 @@ export function createProjectTools(runtime: CatToolRuntime) {
       'reported with archived: true (reads still work). Contains no filesystem paths.',
     promptSnippet: 'Summarize the bound CAT project',
     promptGuidelines: [
-      'Read tools never modify project data; translation suggestions are created only through cat_propose_translations.',
+      'Read tools never modify project data; write correct translations with cat_apply_translations.',
     ],
     parameters: Type.Object({}),
     async execute(toolCallId) {

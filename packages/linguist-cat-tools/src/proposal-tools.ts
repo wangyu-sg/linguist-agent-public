@@ -22,6 +22,7 @@ import {
 } from './job-runner'
 import {
   type CatBatchConsistencyGroupItem,
+  type CatApplyTranslationsResult,
   type CatConsistencyPlanResult,
   type CatCreateConsistencyProposalsResult,
   type CatProposeTranslationsResult,
@@ -69,6 +70,110 @@ export function createProposalTools(runtime: CatToolRuntime) {
       if (proposal === undefined) throw new StoreNotFoundError('proposal', params.proposalId)
       const snapshot = buildProposalReviewSnapshot(db, proposal)
       return toolResult(snapshot, deps.resultProjectId, [snapshot.segmentId])
+    },
+  })
+
+  const applyTranslationsTool = defineTool({
+    name: 'cat_apply_translations',
+    label: 'CAT apply translations',
+    description:
+      'Write translations to segments in the bound project. Directly apply by default; use proposal mode when the user asks to review suggestions first. ' +
+      'Each call accepts 1-200 edits and reports stale, locked, or failed segments without discarding unrelated successful edits.',
+    promptSnippet: 'Write the translations currently judged correct; use proposal mode only when review was requested',
+    parameters: Type.Object({
+      edits: Type.Array(Type.Object({
+        segmentId: Type.String({ minLength: 1 }),
+        baseRevision: Type.Integer({ minimum: 0 }),
+        target: Type.String({ minLength: 1 }),
+        note: Type.Optional(Type.String({ maxLength: 2_000 })),
+      }), { minItems: 1, maxItems: 200 }),
+      mode: Type.Optional(Type.Union([Type.Literal('apply'), Type.Literal('proposal')])),
+    }),
+    async execute(toolCallId, params) {
+      if (params.edits.length < 1 || params.edits.length > 200) {
+        throw new LinguistCatInvalidArgumentError('edits', 'expected 1-200 items')
+      }
+      const { project, db } = resolveBoundProject('cat_apply_translations', toolCallId)
+      const provenance = proposalProvenance(toolCallId)
+      const runId = provenance.runId
+      const createdAt = deps.now?.()
+      const mutation = db.runs.executeMutation({
+        identity: {
+          runId,
+          toolCallId,
+          idempotencyKey: `cat_apply_translations:${runId}:${toolCallId}`,
+        },
+        operation: 'cat_apply_translations',
+        payload: params,
+        mutate: () => {
+          const before = new Map(
+            db.segments.getByIds(params.edits.map((edit) => edit.segmentId))
+              .map((segment) => [segment.id as string, segment]),
+          )
+          const dto: CatApplyTranslationsResult = db.proposals.applyTranslations(params.edits, {
+            mode: params.mode ?? 'apply',
+            ...(project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile }),
+            ...(provenance.modelId === undefined ? {} : { modelId: provenance.modelId }),
+            ...(provenance.sessionId === undefined ? {} : { sessionId: provenance.sessionId }),
+            runId,
+            ...(createdAt === undefined ? {} : { now: createdAt }),
+            issuance: {
+              ...provenance,
+              idempotencyKey: `cat_apply_translations:${runId}:${toolCallId}`,
+              ...(createdAt === undefined ? {} : { createdAt }),
+            },
+          })
+          const proposals = dto.proposalIds.flatMap((id) => {
+            const proposal = db.proposals.getById(id)
+            return proposal === undefined ? [] : [proposal]
+          })
+          const changedSegments = proposals.flatMap((proposal) => {
+            if (proposal.status !== 'accepted') return []
+            const previous = before.get(proposal.segmentId as string)
+            const current = db.segments.getById(proposal.segmentId)
+            return previous === undefined || current === undefined ? [] : [{ previous, current }]
+          })
+          const changes = [
+            ...proposals.map((proposal) => ({
+              entityType: 'proposal' as const,
+              entityId: proposal.id as string,
+              changeKind: 'created' as const,
+              segmentId: proposal.segmentId as string,
+              expectedRevision: proposal.baseRevision,
+              after: proposal,
+            })),
+            ...changedSegments.map(({ previous, current }) => ({
+              entityType: 'segment' as const,
+              entityId: current.id as string,
+              changeKind: 'updated' as const,
+              segmentId: current.id as string,
+              expectedRevision: current.revision,
+              before: previous,
+              after: current,
+            })),
+          ]
+          return {
+            result: dto,
+            changes,
+            ...(changes.length === 0 ? {} : {
+              event: {
+                kind: params.mode === 'proposal' ? 'proposal-created' as const : 'project-updated' as const,
+                segmentIds: proposals.map((proposal) => proposal.segmentId as string),
+                proposalIds: dto.proposalIds,
+              },
+            }),
+          }
+        },
+      })
+      if (!mutation.replayed && mutation.event !== undefined) {
+        notifyMutation({
+          kind: params.mode === 'proposal' ? 'proposal-created' : 'project-updated',
+          sequence: mutation.event.sequence,
+          segmentIds: mutation.event.segmentIds,
+          proposalIds: mutation.event.proposalIds,
+        })
+      }
+      return toolResult(mutation.result, deps.resultProjectId, mutation.event?.segmentIds)
     },
   })
 
@@ -515,8 +620,9 @@ export function createProposalTools(runtime: CatToolRuntime) {
     },
   })
 
-return [
+  return [
     getProposalSnapshotTool,
+    applyTranslationsTool,
     proposeTranslationsTool,
     acceptProposalsTool,
     planConsistencyRepairsTool,

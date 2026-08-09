@@ -56,6 +56,7 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_export_asset',
   'cat_get_translation_context',
   'cat_get_proposal_snapshot',
+  'cat_apply_translations',
   'cat_search_tm',
   'cat_search_terms',
   'cat_propose_translations',
@@ -296,6 +297,16 @@ export interface CatProjectSummaryResult {
   segmentCounts: Record<SegmentStatus, number>
   /** Present for archived projects: reads are fine, writes are rejected upstream. */
   note?: string
+}
+
+export interface CatApplyTranslationsResult {
+  requested: number
+  applied: number
+  pending: number
+  stale: string[]
+  locked: string[]
+  failed: Array<{ segmentId: string; code: string }>
+  proposalIds: string[]
 }
 
 export interface CatAssetListItem {

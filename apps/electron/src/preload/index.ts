@@ -181,6 +181,8 @@ import type {
   LinguistProposalListResult,
   LinguistProposalGetDiffRequest,
   LinguistProposalGetDiffResult,
+  LinguistApplyTranslationsRequest,
+  LinguistApplyTranslationsResult,
   LinguistProposalMutationRequest,
   LinguistProposalAcceptResult,
   LinguistProposalRejectResult,
@@ -1587,6 +1589,9 @@ export interface ElectronAPI {
   linguistProposalsGetDiff: (
     input: LinguistProposalGetDiffRequest,
   ) => Promise<LinguistIpcResult<LinguistProposalGetDiffResult>>
+  linguistApplyTranslations: (
+    input: LinguistApplyTranslationsRequest,
+  ) => Promise<LinguistIpcResult<LinguistApplyTranslationsResult>>
   linguistProposalsAccept: (
     input: LinguistProposalMutationRequest,
   ) => Promise<LinguistIpcResult<LinguistProposalAcceptResult>>
@@ -3291,6 +3296,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROPOSAL_IPC_CHANNELS.LIST_PENDING, input),
   linguistProposalsGetDiff: (input: LinguistProposalGetDiffRequest) =>
     ipcRenderer.invoke(LINGUIST_PROPOSAL_IPC_CHANNELS.GET_DIFF, input),
+  linguistApplyTranslations: (input: LinguistApplyTranslationsRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROPOSAL_IPC_CHANNELS.APPLY_TRANSLATIONS, input),
   linguistProposalsAccept: (input: LinguistProposalMutationRequest) =>
     ipcRenderer.invoke(LINGUIST_PROPOSAL_IPC_CHANNELS.ACCEPT, input),
   linguistProposalsReject: (input: LinguistProposalMutationRequest) =>

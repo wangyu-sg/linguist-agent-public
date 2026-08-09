@@ -114,6 +114,7 @@ describe('linguist proposal IPC channel contract (PB-053)', () => {
       LIST: 'linguist.proposals.list',
       LIST_PENDING: 'linguist.proposals.listPending',
       GET_DIFF: 'linguist.proposals.getDiff',
+      APPLY_TRANSLATIONS: 'linguist.proposals.applyTranslations',
       ACCEPT: 'linguist.proposals.accept',
       REJECT: 'linguist.proposals.reject',
       EDIT_AND_ACCEPT: 'linguist.proposals.editAndAccept',

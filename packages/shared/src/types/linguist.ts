@@ -102,12 +102,13 @@ export const LINGUIST_SESSION_IPC_CHANNELS = {
 export type LinguistSessionIpcChannel =
   (typeof LINGUIST_SESSION_IPC_CHANNELS)[keyof typeof LINGUIST_SESSION_IPC_CHANNELS]
 
-// ===== Proposal 人工审核通道（PB-053；永不注册为 Agent tools）=====
+// ===== Proposal 与批量译文写回通道 =====
 
 export const LINGUIST_PROPOSAL_IPC_CHANNELS = {
   LIST: 'linguist.proposals.list',
   LIST_PENDING: 'linguist.proposals.listPending',
   GET_DIFF: 'linguist.proposals.getDiff',
+  APPLY_TRANSLATIONS: 'linguist.proposals.applyTranslations',
   ACCEPT: 'linguist.proposals.accept',
   REJECT: 'linguist.proposals.reject',
   EDIT_AND_ACCEPT: 'linguist.proposals.editAndAccept',
@@ -242,11 +243,11 @@ export interface LinguistRunUndoResult {
   runId: string
   status: 'completed' | 'partial' | 'refused' | 'already-undone'
   reverted: Array<{
-    entityType: 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
+    entityType: 'segment' | 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
     entityId: string
   }>
   refused: Array<{
-    entityType: 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
+    entityType: 'segment' | 'proposal' | 'qa-finding' | 'critic-artifact' | 'file'
     entityId: string
     reason: string
   }>
@@ -2190,6 +2191,28 @@ export interface LinguistProposalGetDiffRequest extends LinguistProposalListPend
 }
 
 export type LinguistProposalGetDiffResult = LinguistProposalDiff
+
+export interface LinguistApplyTranslationEdit {
+  segmentId: string
+  baseRevision: number
+  target: string
+  note?: string
+}
+
+export interface LinguistApplyTranslationsRequest extends LinguistProposalListPendingRequest {
+  edits: LinguistApplyTranslationEdit[]
+  mode?: 'apply' | 'proposal'
+}
+
+export interface LinguistApplyTranslationsResult {
+  requested: number
+  applied: number
+  pending: number
+  stale: string[]
+  locked: string[]
+  failed: Array<{ segmentId: string; code: string }>
+  proposalIds: string[]
+}
 
 export interface LinguistProposalMutationRequest
   extends LinguistProposalListPendingRequest,

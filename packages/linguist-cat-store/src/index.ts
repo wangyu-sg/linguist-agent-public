@@ -90,6 +90,9 @@ export { AssetsRepository, type InsertImportedResult } from './repositories/asse
 export { SegmentsRepository, type SegmentQuery } from './repositories/segments'
 export {
   ProposalsRepository,
+  type ApplyTranslationEdit,
+  type ApplyTranslationsOptions,
+  type ApplyTranslationsResult,
   type EditAndAcceptInput,
   type IdempotentProposalMutation,
   type ProposalAcceptOptions,

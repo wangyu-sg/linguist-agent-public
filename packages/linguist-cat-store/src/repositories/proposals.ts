@@ -14,6 +14,7 @@ import {
   createProposal,
   expireProposal,
   InvalidStateTransitionError,
+  RevisionConflictError,
   runDeterministicHardRules,
   SegmentLockedError,
   StaleProposalError,
@@ -65,6 +66,31 @@ export interface ProposalCreateOptions extends ProposalHardRuleOptions {
   issuance?: ProposalIssuanceInput
 }
 
+export interface ApplyTranslationEdit {
+  segmentId: SegmentId | string
+  baseRevision: number
+  target: string
+  note?: string
+}
+
+export interface ApplyTranslationsOptions extends ProposalCreateOptions {
+  mode?: 'apply' | 'proposal'
+  modelId?: string
+  sessionId?: string
+  runId?: string
+  now?: string
+}
+
+export interface ApplyTranslationsResult {
+  requested: number
+  applied: number
+  pending: number
+  stale: string[]
+  locked: string[]
+  failed: Array<{ segmentId: string; code: string }>
+  proposalIds: string[]
+}
+
 export interface EditAndAcceptInput extends ProposalMutationItem, ProposalHardRuleOptions {
   editedTarget: string
   idempotencyKey: string
@@ -114,6 +140,68 @@ interface ProposalMutationRow {
 
 export class ProposalsRepository {
   constructor(private readonly db: CatDatabase) {}
+
+  /** 一次业务操作创建 Proposal，并按模式直接接受或保留 Pending；每段独立回滚。 */
+  applyTranslations(
+    edits: readonly ApplyTranslationEdit[],
+    options: ApplyTranslationsOptions = {},
+  ): ApplyTranslationsResult {
+    if (edits.length < 1 || edits.length > 200) {
+      throw new RangeError('applyTranslations expects 1-200 edits')
+    }
+    const result: ApplyTranslationsResult = {
+      requested: edits.length,
+      applied: 0,
+      pending: 0,
+      stale: [],
+      locked: [],
+      failed: [],
+      proposalIds: [],
+    }
+    return this.db.transaction(`apply ${edits.length} translations`, () => {
+      const hardRules = this.mergeHardRuleOptions(options)
+      for (const edit of edits) {
+        this.db.db.exec('SAVEPOINT apply_translation_item')
+        try {
+          if (edit.target.trim() === '') throw new TypeError('EMPTY_TARGET')
+          if (edit.note !== undefined && edit.note.length > 2_000) throw new TypeError('NOTE_TOO_LONG')
+          const proposal = this.insertPendingWithinTransaction({
+            segmentId: edit.segmentId as SegmentId,
+            baseRevision: edit.baseRevision,
+            proposedTarget: edit.target,
+            ...(edit.note?.trim() ? { warnings: [`说明：${edit.note.trim()}`] } : {}),
+            ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
+            ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+            ...(options.runId === undefined ? {} : { runId: options.runId }),
+            ...(options.now === undefined ? {} : { now: options.now }),
+          }, hardRules, options.issuance)
+          result.proposalIds.push(proposal.id as string)
+          if ((options.mode ?? 'apply') === 'proposal') result.pending += 1
+          else {
+            this.acceptWithinTransaction(proposal.id, { ...hardRules, ...(options.now === undefined ? {} : { now: options.now }) })
+            result.applied += 1
+          }
+          this.db.db.exec('RELEASE apply_translation_item')
+        } catch (error) {
+          this.db.db.exec('ROLLBACK TO apply_translation_item')
+          this.db.db.exec('RELEASE apply_translation_item')
+          if (error instanceof SegmentLockedError) result.locked.push(edit.segmentId as string)
+          else if (error instanceof RevisionConflictError) result.stale.push(edit.segmentId as string)
+          else {
+            const code = error instanceof InvalidStateTransitionError && error.entity === 'proposal-hard-rules'
+              ? error.from
+              : error instanceof UnknownSegmentError
+                ? error.code
+                : error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message)
+                  ? error.message
+                  : 'FAILED'
+            result.failed.push({ segmentId: edit.segmentId as string, code })
+          }
+        }
+      }
+      return result
+    })
+  }
 
   /** Create + insert a pending proposal (id is content-derived). */
   insertPending(

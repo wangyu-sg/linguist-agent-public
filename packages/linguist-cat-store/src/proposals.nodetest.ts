@@ -456,6 +456,83 @@ test('accept: proposal accepted, segment updated, revision recorded — atomical
   }
 })
 
+test('applyTranslations: apply 与 proposal 共用 Proposal/CAS 写入，且单段失败不丢失无关成功段', () => {
+  const { db, segments } = setup()
+  try {
+    db.segments.setLocked(segments[1]!.id, true)
+    const applied = db.proposals.applyTranslations([
+      { segmentId: segments[0]!.id, baseRevision: 0, target: '直接译文', note: '已核对上下文' },
+      { segmentId: segments[1]!.id, baseRevision: 0, target: '锁定译文' },
+      { segmentId: deriveSegmentId(segments[0]!.assetId, 99), baseRevision: 0, target: '不存在' },
+    ], {
+      mode: 'apply',
+      runId: 'run:apply:test',
+      issuance: { idempotencyKey: 'apply:test', toolCallId: 'call-1' },
+      now: '2026-01-02T00:00:00.000Z',
+    })
+
+    assert.deepEqual(applied, {
+      requested: 3,
+      applied: 1,
+      pending: 0,
+      stale: [],
+      locked: [segments[1]!.id],
+      failed: [{ segmentId: deriveSegmentId(segments[0]!.assetId, 99), code: 'UNKNOWN_SEGMENT' }],
+      proposalIds: [db.proposals.listBySegment(segments[0]!.id, 'accepted')[0]!.id],
+    })
+    assert.equal(db.segments.getById(segments[0]!.id)?.target, '直接译文')
+    assert.deepEqual(
+      db.proposals.listBySegment(segments[0]!.id, 'accepted')[0]?.warnings,
+      ['说明：已核对上下文'],
+    )
+
+    const pending = db.proposals.applyTranslations([
+      { segmentId: segments[1]!.id, baseRevision: 0, target: '待审译文' },
+    ], { mode: 'proposal' })
+    assert.deepEqual(pending.locked, [segments[1]!.id])
+    assert.equal(pending.pending, 0)
+  } finally {
+    db.close()
+  }
+})
+
+test('applyTranslations: stale 独立报告，proposal 模式只创建 Pending', () => {
+  const { db, segments } = setup()
+  try {
+    db.segments.applyTargetEdit(segments[0]!.id, '人工并发编辑', 0)
+    const result = db.proposals.applyTranslations([
+      { segmentId: segments[0]!.id, baseRevision: 0, target: '过期译文' },
+      { segmentId: segments[1]!.id, baseRevision: 0, target: '待审译文' },
+    ], { mode: 'proposal' })
+
+    assert.deepEqual(result.stale, [segments[0]!.id])
+    assert.equal(result.pending, 1)
+    assert.equal(result.applied, 0)
+    assert.equal(db.segments.getById(segments[1]!.id)?.target, '')
+    assert.equal(db.proposals.listBySegment(segments[1]!.id, 'pending').length, 1)
+  } finally {
+    db.close()
+  }
+})
+
+test('applyTranslations: 单批上限为 200', () => {
+  const { db, segments } = setup()
+  try {
+    const edits = Array.from({ length: 200 }, () => ({
+      segmentId: segments[0]!.id,
+      baseRevision: 0,
+      target: '批量译文',
+    }))
+    const result = db.proposals.applyTranslations(edits)
+    assert.equal(result.requested, 200)
+    assert.equal(result.applied, 1)
+    assert.equal(result.stale.length, 199)
+    assert.throws(() => db.proposals.applyTranslations([...edits, edits[0]!]), RangeError)
+  } finally {
+    db.close()
+  }
+})
+
 test('accept: stale baseRevision -> STALE_PROPOSAL, nothing changes (rollback)', () => {
   const { db, segments } = setup()
   try {

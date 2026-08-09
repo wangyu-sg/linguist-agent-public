@@ -34,6 +34,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   ] = createReferenceTools(runtime)
   const [
     getProposalSnapshotTool,
+    applyTranslationsTool,
     proposeTranslationsTool,
     acceptProposalsTool,
     planConsistencyRepairsTool,
@@ -51,6 +52,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     exportAssetTool,
     getTranslationContextTool,
     getProposalSnapshotTool,
+    applyTranslationsTool,
     searchTmTool,
     searchTermsTool,
     proposeTranslationsTool,

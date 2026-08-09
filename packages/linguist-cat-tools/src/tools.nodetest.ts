@@ -599,6 +599,45 @@ test('cat_propose_translations creates proposals atomically without changing seg
   }
 })
 
+test('cat_apply_translations defaults to direct apply and can leave Pending proposals', async () => {
+  const fixture = setup()
+  try {
+    const mutations: LinguistCatToolMutation[] = []
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      now: () => '2026-01-02T00:00:00.000Z',
+      sessionId: 'session-apply',
+      onMutation: (mutation) => mutations.push(mutation),
+    })
+    const first = fixture.segmentsA[0]!
+    const second = fixture.segmentsA[1]!
+    const applied = (await invoke(toolByName(tools, 'cat_apply_translations'), {
+      edits: [{ segmentId: first.id, baseRevision: 0, target: '一次写回 0' }],
+    })).details as { applied: number; pending: number; proposalIds: string[] }
+    assert.deepEqual((applied as { failed?: unknown }).failed, [])
+    assert.equal(applied.applied, 1)
+    assert.equal(applied.pending, 0)
+    assert.equal(fixture.db.segments.getById(first.id)?.target, '一次写回 0')
+    assert.equal(fixture.db.proposals.getById(applied.proposalIds[0]!)?.status, 'accepted')
+    const runId = 'run:session-apply:call-1'
+    assert.equal(fixture.db.runs.getRunChangeSummary(runId).canUndo, true)
+    assert.equal(fixture.db.runs.undoRun(runId, { actorId: 'test' }).status, 'completed')
+    assert.equal(fixture.db.segments.getById(first.id)?.target, '译文 0')
+    assert.equal(fixture.db.proposals.getById(applied.proposalIds[0]!), undefined)
+
+    const pending = (await invoke(toolByName(tools, 'cat_apply_translations'), {
+      edits: [{ segmentId: second.id, baseRevision: 0, target: '先看建议 1' }],
+      mode: 'proposal',
+    }, 'call-2')).details as { applied: number; pending: number }
+    assert.equal(pending.applied, 0)
+    assert.equal(pending.pending, 1)
+    assert.equal(fixture.db.segments.getById(second.id)?.target, '')
+    assert.deepEqual(mutations.map((mutation) => mutation.kind), ['project-updated', 'proposal-created'])
+  } finally {
+    fixture.db.close()
+  }
+})
+
 test('cat_propose_translations enforces batch, target, signature, lock and CAS rules', async () => {
   const fixture = setup()
   try {
@@ -1534,6 +1573,9 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_export_asset: { assetId: fixture.assetA.id, destinationPath: '/missing' },
       cat_get_translation_context: { segmentIds: [fixture.segmentsA[0]!.id] },
       cat_get_proposal_snapshot: { proposalId: 'prp-0000000000000000' },
+      cat_apply_translations: {
+        edits: [{ segmentId: fixture.segmentsA[0]!.id, baseRevision: 0, target: 'x' }],
+      },
       cat_search_tm: { query: 'x' },
       cat_search_terms: { query: 'x' },
       cat_propose_translations: {
