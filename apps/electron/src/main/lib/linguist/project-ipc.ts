@@ -448,8 +448,9 @@ async function previewManagedSource(
 }
 
 function toProjectInfo(project: LinguistProject): LinguistProjectInfo {
+  const { workbookMappings: _workbookMappings, ...publicProject } = project
   return {
-    ...project,
+    ...publicProject,
     workflowStage: normalizeWorkflowStage(project.workflowStage),
     qaProfile: normalizeQaProfile(project.qaProfile),
   }

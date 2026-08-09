@@ -37,6 +37,14 @@ export { CatFormatRegistry, type DetectedAdapter } from './registry'
 
 export { XLIFF_ADAPTER_ID, XliffAdapter } from './adapters/xliff'
 
+export {
+  MQXLIFF_ADAPTER_ID,
+  MqXliffAdapter,
+  writeMqXliffDefects,
+  type MqXliffDefectWrite,
+  type MqXliffDefectWriteResult,
+} from './adapters/mqxliff'
+
 export { SDLXLIFF_ADAPTER_ID, SdlXliffAdapter } from './adapters/sdlxliff'
 
 export {

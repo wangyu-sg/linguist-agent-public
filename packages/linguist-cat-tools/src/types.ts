@@ -32,6 +32,8 @@ import type {
   SaveTagProfileCandidateInput,
   TagCandidateValidationResult,
   UnknownTagPatternResult,
+  WorkbookMappingColumns,
+  LinguistWorkbookMappingProfile,
 } from '@linguist/cat-core'
 import type {
   ContextDocKind,
@@ -51,6 +53,8 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_get_segments',
   'cat_import_resources',
   'cat_import_asset',
+  'cat_preview_workbook_mapping',
+  'cat_save_workbook_mapping',
   'cat_scan_unknown_tag_patterns',
   'cat_save_tag_profile_candidate',
   'cat_export_asset',
@@ -167,6 +171,13 @@ export interface LinguistCatToolsDeps {
   ) => Promise<LinguistIntakeImportResult>
   /** 导入文件或目录中的多个资源；路径权限沿用 Proma Session。 */
   importResources?: (input: LinguistImportResourcesInput) => Promise<LinguistImportResourcesResult>
+  /** 读取 XLSX 证据并给出确定性列映射建议；宿主负责路径授权。 */
+  previewWorkbookMapping?: (filePath: string) => Promise<LinguistWorkbookMappingPreview>
+  /** 重新读取并校验 XLSX 后保存当前绑定项目的轻量 mapping profile。 */
+  saveWorkbookMapping?: (
+    filePath: string,
+    input: LinguistSaveWorkbookMappingInput,
+  ) => Promise<LinguistWorkbookMappingProfile>
   /** 把已绑定项目的批次保存为新的本地文件；宿主校验路径与会话 authority。 */
   exportAsset?: (
     assetId: string,
@@ -233,8 +244,10 @@ export interface LinguistImportResourcesResult {
 export interface LinguistIntakeXlsxMapping {
   sheetName: string
   columns: {
+    key?: string
     source: string
     target: string
+    context?: string
   }
 }
 
@@ -247,6 +260,44 @@ export interface LinguistIntakeImportResult {
   unchangedCount: number
   sourceSha256: string
   warnings: string[]
+}
+
+export interface LinguistWorkbookMappingSuggestion {
+  columns: Partial<WorkbookMappingColumns>
+  confidence: number
+  reasons: string[]
+}
+
+export interface LinguistWorkbookMappingPreview {
+  filename: string
+  workbookFingerprint: string
+  matchedProfileId?: string
+  sheets: Array<{
+    name: string
+    state: 'visible' | 'hidden' | 'veryHidden'
+    headerRowNumbers: number[]
+    headerSignature: string
+    headers: Array<{ ref: string; value: string }>
+    sampleRows: Array<{
+      rowNo: number
+      cells: Array<{
+        ref: string
+        value: string
+        kind: 'text' | 'formula-cached' | 'formula-no-cache' | 'error' | 'empty'
+      }>
+    }>
+    mergedRanges: Array<{ ref: string; anchor: string; coveredCells: number }>
+    truncated: boolean
+    suggestion: LinguistWorkbookMappingSuggestion
+  }>
+  skippedSheets: Array<{ name: string; state: 'visible' | 'hidden' | 'veryHidden'; reason: string }>
+}
+
+export interface LinguistSaveWorkbookMappingInput {
+  name?: string
+  filenamePattern?: string
+  sheetName: string
+  columns: WorkbookMappingColumns
 }
 
 /** CAT Tool 已提交的项目内变更；不含 projectId，避免模型输入影响项目 authority。 */

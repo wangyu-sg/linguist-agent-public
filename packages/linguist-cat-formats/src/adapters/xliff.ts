@@ -1,9 +1,7 @@
 /**
  * XliffAdapter — XLIFF 1.2 (`<xliff><file><body><trans-unit>`) bilingual
- * format adapter, with memoQ MQXLIFF (`.mqxliff`) support (MQXLIFF is XLIFF
- * 1.2 with an `mq:` namespace; the extras handled here are `mq:locked` and
- * `mq:status`). XLIFF 2.0 is NOT supported (typed FORMAT_PARSE_ERROR) — see
- * known limitations at the bottom.
+ * format adapter. memoQ MQXLIFF is handled by the dedicated MqXliffAdapter;
+ * XLIFF 2.0 is NOT supported (typed FORMAT_PARSE_ERROR).
  *
  * Import contract:
  * - source/target extracted with inline tags (`<g>`, `<x/>`, `<ph>`,
@@ -38,9 +36,6 @@
  * Known limitations:
  * - XLIFF 2.0 (`<xliff version="2.x">`, `<unit>/<segment>`) is rejected with
  *   a typed FormatParseError; no 2.0 support in this leg;
- * - MQXLIFF write-back does NOT update mq:status/mq:lastchangedtimestamp or
- *   unwrap `<ph>/<bpt>/<ept>` payloads into val= placeholders the way the
- *   legacy mqxliff.ts did — tags round-trip verbatim instead;
  * - a `<target>` inside `<alt-trans>` could be mistaken for the main target
  *   when the trans-unit has no main `<target>` (same behavior as the legacy
  *   parser); alt-trans content is otherwise preserved byte-identically;
@@ -77,7 +72,7 @@ const FILE_PATTERN = /<((?:[\w.-]+:)?file)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const TRANS_UNIT_PATTERN = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const SELF_CLOSING_TARGET_PATTERN = /<((?:[\w.-]+:)?target)\b([^>]*)\/>/i
 
-interface ParsedUnit {
+export interface XliffParsedUnit {
   ordinal: number
   key: string
   /** Raw trans-unit markup in the template (export splice target). */
@@ -126,7 +121,7 @@ export function statusFromXliff(target: string, targetAttrs: Record<string, stri
 
 export class XliffAdapter implements CatFormatAdapter {
   readonly id: string = XLIFF_ADAPTER_ID
-  readonly extensions = ['.xliff', '.xlf', '.mqxliff']
+  readonly extensions = ['.xliff', '.xlf']
 
   constructor(private readonly hash: HashFn = sha256Hex) {}
 
@@ -156,6 +151,9 @@ export class XliffAdapter implements CatFormatAdapter {
       sourceLocale,
       targetLocale,
       status: statusFromXliff(unit.targetText, unit.target?.attrs ?? {}, unit.attrs),
+      ...(unit.attrs['mq:status'] === undefined
+        ? {}
+        : { importedNativeStatus: unit.attrs['mq:status'] }),
       locked: unit.locked,
       revision: 0,
       sourceHash: fnv1a64(unit.sourceText),
@@ -243,8 +241,8 @@ export class XliffAdapter implements CatFormatAdapter {
   }
 
   /** Rewrites a single trans-unit's `<target>`; everything else stays verbatim. */
-  private rewriteUnit(unit: ParsedUnit, newTarget: string): string {
-    const encoded = encodeXmlInline(newTarget)
+  protected rewriteUnit(unit: XliffParsedUnit, newTarget: string): string {
+    const encoded = this.encodeTarget(newTarget, unit)
     if (unit.target) {
       const attrsRaw = newTarget === '' ? unit.target.attrsRaw : setAttr(unit.target.attrsRaw, 'state', 'translated')
       const nextTarget = `<${unit.target.tagName}${attrsRaw}>${encoded}</${unit.target.tagName}>`
@@ -262,7 +260,15 @@ export class XliffAdapter implements CatFormatAdapter {
     return unit.full.replace(unit.source.full, `${unit.source.full}${inserted}`)
   }
 
-  private decode(bytes: Uint8Array, filename: string): string {
+  protected decodeInline(value: string): string {
+    return decodeXmlInline(value)
+  }
+
+  protected encodeTarget(value: string, _unit: XliffParsedUnit): string {
+    return encodeXmlInline(value)
+  }
+
+  protected decode(bytes: Uint8Array, filename: string): string {
     try {
       return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
     } catch (err) {
@@ -274,7 +280,7 @@ export class XliffAdapter implements CatFormatAdapter {
    * Parses the template into trans-units in document order. Shared by import
    * and export so both sides see identical keys/sources/targets.
    */
-  private parseTemplate(text: string, filename: string): { units: ParsedUnit[]; warnings: ImportWarning[] } {
+  protected parseTemplate(text: string, filename: string): { units: XliffParsedUnit[]; warnings: ImportWarning[] } {
     if (!XLIFF_ROOT_PATTERN.test(text)) {
       throw new FormatParseError(this.id, filename, 'root is not an XLIFF document (no <xliff> element)')
     }
@@ -284,7 +290,7 @@ export class XliffAdapter implements CatFormatAdapter {
     }
 
     const warnings: ImportWarning[] = []
-    const units: ParsedUnit[] = []
+    const units: XliffParsedUnit[] = []
     const seenKeys = new Set<string>()
     FILE_PATTERN.lastIndex = 0
     for (const fileMatch of text.matchAll(FILE_PATTERN)) {
@@ -320,8 +326,8 @@ export class XliffAdapter implements CatFormatAdapter {
           full: tuMatch[0],
           source,
           target,
-          sourceText: decodeXmlInline(source.inner),
-          targetText: decodeXmlInline(target?.inner ?? ''),
+          sourceText: this.decodeInline(source.inner),
+          targetText: this.decodeInline(target?.inner ?? ''),
           locked: fileLocked || translateNo(attrs) || mqLocked(attrs),
           attrs,
           note: note ? decodeXmlEntities(note.inner).trim() : undefined,

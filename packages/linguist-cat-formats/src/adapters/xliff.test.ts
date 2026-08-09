@@ -51,7 +51,7 @@ describe('XliffAdapter detect', () => {
     const bytes = fixtureBytes('mini_game_ui.xliff')
     expect(await adapter.detect(bytes, 'mini_game_ui.xliff')).toBe(0.9)
     expect(await adapter.detect(bytes, 'mini_game_ui.xlf')).toBe(0.9)
-    expect(await adapter.detect(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).toBe(0.9)
+    expect(await adapter.detect(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).toBe(0.5)
     expect(await adapter.detect(bytes, 'renamed.bin')).toBe(0.5)
     expect(await adapter.detect(new TextEncoder().encode('plain text'), 'a.xliff')).toBe(0)
     expect(await adapter.detect(new Uint8Array([0, 1, 2, 60]), 'a.xliff')).toBe(0)

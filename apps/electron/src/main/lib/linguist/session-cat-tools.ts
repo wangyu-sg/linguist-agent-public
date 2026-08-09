@@ -88,6 +88,23 @@ export function resolveLinguistSessionCatTools(
         input,
       )
     },
+    previewWorkbookMapping: (filePath) => {
+      const current = currentBoundSession(session.id, projectId, 'filePath')
+      return getService().previewWorkbookMapping(
+        projectId,
+        resolveAgentExecutionScope(current).cwd,
+        filePath,
+      )
+    },
+    saveWorkbookMapping: (filePath, input) => {
+      const current = currentBoundSession(session.id, projectId, 'filePath')
+      return getService().saveWorkbookMapping(
+        projectId,
+        resolveAgentExecutionScope(current).cwd,
+        filePath,
+        input,
+      )
+    },
     exportAsset: (assetId, destinationPath, mode, overwrite) => {
       currentBoundSession(session.id, projectId, 'assetId')
       return getService().exportAssetToPath(

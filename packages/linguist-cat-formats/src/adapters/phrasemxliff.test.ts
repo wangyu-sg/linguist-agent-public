@@ -21,6 +21,7 @@ import {
 } from './phrasemxliff'
 import { SdlXliffAdapter } from './sdlxliff'
 import { XliffAdapter } from './xliff'
+import { MqXliffAdapter } from './mqxliff'
 
 const FIXTURES = join(import.meta.dir, '../../../../tests/linguist-fixtures')
 
@@ -134,13 +135,14 @@ describe('PhraseMxliffAdapter detect（置信度设计：phrase 走 phrase 路�
 
   test('registry 层不互抢：phrase 归 phrase，.xliff/.mqxliff 归 xliff，.sdlxliff 归 sdl，改名文件按置信度路由', async () => {
     const registry = new CatFormatRegistry()
+      .register(new MqXliffAdapter())
       .register(new XliffAdapter())
       .register(new SdlXliffAdapter())
       .register(new PhraseMxliffAdapter())
     const phrase = phraseBytes()
     expect((await registry.detectBest(phrase, 'sample.mxliff')).id).toBe('phrase_mxliff_1_2')
     expect((await registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'mini_game_ui.xliff')).id).toBe('xliff_1_2')
-    expect((await registry.detectBest(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).id).toBe('xliff_1_2')
+    expect((await registry.detectBest(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).id).toBe('mqxliff_1_2')
     expect((await registry.detectBest(SDL_BYTES, 'sample.sdlxliff')).id).toBe('sdlxliff_1_2')
     // phrase 字节 + 未知扩展名：0.7 > XliffAdapter 的 0.5 => phrase 路径
     expect((await registry.detectBest(phrase, 'renamed.bin')).id).toBe('phrase_mxliff_1_2')

@@ -1,5 +1,5 @@
 /**
- * 主进程默认 CAT 格式注册表（PB-030）：登记产品随附的七个 adapter
+ * 主进程默认 CAT 格式注册表（PB-030）：登记产品随附的八个 adapter
  * （XLIFF / CSV / JSON，PB-022~023；XLSX，PB-081；SDLXLIFF，PB-086；
  * Phrase MXLIFF，PB-087；Phrase bilingual DOCX，PB-088）。registry 从空
  * 开始是 cat-formats 的刻意设计——谁发布谁登记；测试可注入自定义 registry。
@@ -9,6 +9,7 @@ import {
   CatFormatRegistry,
   CsvAdapter,
   JsonAdapter,
+  MqXliffAdapter,
   PhraseDocxAdapter,
   PhraseMxliffAdapter,
   SdlXliffAdapter,
@@ -18,6 +19,7 @@ import {
 
 export function createDefaultCatFormatRegistry(): CatFormatRegistry {
   return new CatFormatRegistry()
+    .register(new MqXliffAdapter())
     .register(new XliffAdapter())
     .register(new SdlXliffAdapter())
     .register(new PhraseMxliffAdapter())

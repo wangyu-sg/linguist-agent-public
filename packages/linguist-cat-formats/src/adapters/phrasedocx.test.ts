@@ -25,6 +25,7 @@ import { PhraseDocxAdapter } from './phrasedocx'
 import { PhraseMxliffAdapter } from './phrasemxliff'
 import { SdlXliffAdapter } from './sdlxliff'
 import { XliffAdapter } from './xliff'
+import { MqXliffAdapter } from './mqxliff'
 import { XlsxAdapter } from './xlsx'
 
 const FIXTURES = join(import.meta.dir, '../../../../tests/linguist-fixtures')
@@ -188,6 +189,7 @@ describe('PhraseDocxAdapter detect（置信度设计：只认 Phrase 内容表�
 
   test('registry 层不互抢：phrase docx 归 phrase docx，xlsx/xliff/mxliff 各归各，普通 docx 无人认领', async () => {
     const registry = new CatFormatRegistry()
+      .register(new MqXliffAdapter())
       .register(new XliffAdapter())
       .register(new SdlXliffAdapter())
       .register(new PhraseMxliffAdapter())
@@ -202,7 +204,7 @@ describe('PhraseDocxAdapter detect（置信度设计：只认 Phrase 内容表�
     expect((await registry.detectBest(xlsxZip, 'mini.xlsx')).id).toBe('xlsx_ooxml')
     // xliff / mxliff 字节路由不变
     expect((await registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'mini_game_ui.xliff')).id).toBe('xliff_1_2')
-    expect((await registry.detectBest(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).id).toBe('xliff_1_2')
+    expect((await registry.detectBest(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).id).toBe('mqxliff_1_2')
     // 普通 DOCX：所有 adapter 0 分 => FormatUnsupportedError（刻意如此）
     const plain = await packDocx({ documentXml: buildPlainDocumentXml() })
     await expect(registry.detectBest(plain, 'plain.docx')).rejects.toBeInstanceOf(FormatUnsupportedError)

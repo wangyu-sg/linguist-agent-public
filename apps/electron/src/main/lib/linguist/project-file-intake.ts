@@ -176,6 +176,19 @@ export async function importProjectFile(
       'Phrase split MXLIFF requires cat_import_resources with its master XLIFF',
     )
   }
+  if (extname(entry.filename).toLowerCase() === '.xlsx' && xlsxMapping === undefined) {
+    xlsxMapping = await service.resolveWorkbookMapping(
+      projectId,
+      await readFile(entry.path),
+      entry.filename,
+    )
+    if (xlsxMapping === undefined) {
+      throw new LinguistCatInvalidArgumentError(
+        'xlsxMapping',
+        'no saved mapping matches this workbook; preview and save a mapping first',
+      )
+    }
+  }
   return importEntry(service, projectId, entry, resourceKind, xlsxMapping)
 }
 
@@ -254,9 +267,14 @@ export async function importProjectResources(
       items.push({ filename, status: 'unsupported' })
       continue
     }
-    if (extension === '.xlsx' && input.xlsxMapping === undefined) {
-      items.push({ filename, status: 'needs-input', resourceKind, message: '需要确认 Sheet 与列映射' })
-      continue
+    let xlsxMapping = input.xlsxMapping
+    if (extension === '.xlsx' && xlsxMapping === undefined) {
+      bytes ??= await readFile(entry.path)
+      xlsxMapping = await service.resolveWorkbookMapping(projectId, bytes, filename)
+      if (xlsxMapping === undefined) {
+        items.push({ filename, status: 'needs-input', resourceKind, message: '需要确认 Sheet 与列映射' })
+        continue
+      }
     }
     if (input.dryRun) {
       items.push({ filename, status: 'ready', resourceKind })
@@ -264,7 +282,7 @@ export async function importProjectResources(
     }
     try {
       const master = phrasePairs.get(entry.path)
-      const imported = await importEntry(service, projectId, entry, resourceKind, input.xlsxMapping, master)
+      const imported = await importEntry(service, projectId, entry, resourceKind, xlsxMapping, master)
       if (master !== undefined) masterResourceIds.set(master.path, imported.resourceId)
       items.push({
         filename,

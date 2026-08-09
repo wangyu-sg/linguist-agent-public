@@ -38,6 +38,7 @@ import {
   type CurrentStageState,
   type EntropySource,
   type LinguistProject,
+  type LinguistWorkbookMappingProfile,
   type SaveTagProfileCandidateInput,
   type QaProfile,
   type QaFindingDisposition,
@@ -84,6 +85,8 @@ import type {
   LinguistIntakeImportResult,
   LinguistIntakeResourceKind,
   LinguistIntakeXlsxMapping,
+  LinguistSaveWorkbookMappingInput,
+  LinguistWorkbookMappingPreview,
 } from '@linguist/cat-tools'
 import {
   errorCodeOf,
@@ -99,6 +102,11 @@ import {
   importProjectFile,
   importProjectResources,
 } from './project-file-intake'
+import {
+  createProjectWorkbookMappingProfile,
+  previewProjectWorkbookMapping,
+  resolveProjectWorkbookMapping,
+} from './project-workbook-mapping'
 import {
   MAX_IMPORT_BYTES,
   ProjectDelivery,
@@ -1196,6 +1204,45 @@ export class LinguistProjectService {
     input: ImportAssetInput,
   ): Promise<ImportAssetResult> {
     return this.delivery.importAsset(projectId, input)
+  }
+
+  previewWorkbookMapping(
+    projectId: string,
+    cwd: string,
+    filePath: string,
+  ): Promise<LinguistWorkbookMappingPreview> {
+    return previewProjectWorkbookMapping(this.getProject(projectId), cwd, filePath)
+  }
+
+  async saveWorkbookMapping(
+    projectId: string,
+    cwd: string,
+    filePath: string,
+    input: LinguistSaveWorkbookMappingInput,
+  ): Promise<LinguistWorkbookMappingProfile> {
+    this.assertProjectWritable(projectId)
+    const project = this.getProject(projectId)
+    const profile = await createProjectWorkbookMappingProfile(
+      project,
+      cwd,
+      filePath,
+      input,
+      this.now(),
+    )
+    const profiles = [
+      ...(project.workbookMappings ?? []).filter((candidate) => candidate.id !== profile.id),
+      profile,
+    ]
+    this.call(() => this.store.setWorkbookMappings(projectId, profiles), projectId)
+    return profile
+  }
+
+  resolveWorkbookMapping(
+    projectId: string,
+    bytes: Uint8Array,
+    filename: string,
+  ): Promise<LinguistIntakeXlsxMapping | undefined> {
+    return resolveProjectWorkbookMapping(this.getProject(projectId), bytes, filename)
   }
 
   importFileResource(

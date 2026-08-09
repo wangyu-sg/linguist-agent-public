@@ -6,6 +6,7 @@ import { generateProjectId, type EntropySource, type ProjectId } from './ids'
 import type { LinguistGlossaryPolicy } from './glossary-policy'
 import { normalizeQaProfile, type QaProfile } from './qa-profile'
 import type { LinguistTagProfile } from './tag-profile'
+import type { LinguistWorkbookMappingProfile } from './workbook-mapping'
 import {
   normalizeWorkflowStage,
   type WorkflowOutputStatusPolicy,
@@ -39,6 +40,8 @@ export interface LinguistProject {
   outputStatusPolicy?: WorkflowOutputStatusPolicy
   /** 确定性 QA 的项目预设；旧项目读取为 general。 */
   qaProfile?: QaProfile
+  /** Agent/用户确认过的轻量 XLSX 映射；不含主机路径或源文件内容。 */
+  workbookMappings?: LinguistWorkbookMappingProfile[]
 }
 
 export interface CreateProjectInput {

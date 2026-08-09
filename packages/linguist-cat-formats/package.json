@@ -1,6 +1,6 @@
 {
   "name": "@linguist/cat-formats",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "CAT bilingual format adapters for Linguist Agent: adapter interface, registry, typed format errors and the generic round-trip test harness. Bytes in, bytes out — no fs, no Proma/Pi/Electron/React.",

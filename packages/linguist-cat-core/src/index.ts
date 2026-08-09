@@ -64,6 +64,13 @@ export {
 } from './project'
 
 export {
+  normalizeWorkbookMappingProfiles,
+  type LinguistWorkbookMappingProfile,
+  type WorkbookMappingColumns,
+  type WorkbookMappingColumnRole,
+} from './workbook-mapping'
+
+export {
   DEFAULT_WORKFLOW_STAGE,
   WORKFLOW_STAGES,
   confirmCurrentStage,

@@ -66,7 +66,7 @@ function asString(value: unknown): string | null {
 
 export const LEGACY_FORMAT_MAP: Readonly<Record<string, string>> = {
   phrase_mxliff: 'phrase_mxliff_1_2',
-  mqxliff: 'xliff_1_2',
+  mqxliff: 'mqxliff_1_2',
   sdlxliff: 'sdlxliff_1_2',
   xliff_1_2: 'xliff_1_2',
   csv_paste: 'csv_rfc4180',

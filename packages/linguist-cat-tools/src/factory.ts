@@ -13,6 +13,7 @@ import { createReferenceTools } from './reference-tools'
 import { createDeliveryTools } from './delivery-tools'
 import { createTagTools } from './tag-tools'
 import { createTerminologyTools } from './terminology-tools'
+import { createWorkbookTools } from './workbook-tools'
 import { createCatToolRuntime } from './tool-runtime'
 import type { LinguistCatToolsDeps } from './types'
 
@@ -24,6 +25,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const [projectSummaryTool, listAssetsTool, getSegmentsTool] =
     createProjectTools(runtime)
   const [importResourcesTool, importAssetTool] = createIntakeTools(runtime)
+  const [previewWorkbookMappingTool, saveWorkbookMappingTool] = createWorkbookTools(runtime)
   const [exportAssetTool] = createDeliveryTools(runtime)
   const [scanUnknownTagPatternsTool, saveTagProfileCandidateTool] = createTagTools(runtime)
   const [upsertTermsTool, deleteTermsTool, listTermConflictsTool, validateTermsTool] =
@@ -50,6 +52,8 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     getSegmentsTool,
     importResourcesTool,
     importAssetTool,
+    previewWorkbookMappingTool,
+    saveWorkbookMappingTool,
     scanUnknownTagPatternsTool,
     saveTagProfileCandidateTool,
     exportAssetTool,

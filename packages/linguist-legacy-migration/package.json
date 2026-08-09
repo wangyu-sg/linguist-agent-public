@@ -1,6 +1,6 @@
 {
   "name": "@linguist/legacy-migration",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Legacy Linguist Agent data-root migration tooling: PB-090 read-only scanner for a COPY of a legacy <root>/data tree (enumerates projects, health signals, source roots, uploads, assets, segments, TM/TB, proposals, chat presence, unsupported fields and digests; never opens the legacy cat-server, never writes to the scanned tree, SQLite always read-only) and the PB-091 importer (extract -> map -> store writes of one legacy project into a NEW Linguist project under --target-root; writes happen only inside the injected target root).",

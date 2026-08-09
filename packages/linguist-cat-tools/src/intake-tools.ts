@@ -34,8 +34,10 @@ export function createIntakeTools(runtime: CatToolRuntime) {
       xlsxMapping: Type.Optional(Type.Object({
         sheetName: Type.String({ minLength: 1 }),
         columns: Type.Object({
+          key: Type.Optional(Type.String({ minLength: 1 })),
           source: Type.String({ minLength: 1 }),
           target: Type.String({ minLength: 1 }),
+          context: Type.Optional(Type.String({ minLength: 1 })),
         }),
       })),
     }),
@@ -78,8 +80,10 @@ export function createIntakeTools(runtime: CatToolRuntime) {
       xlsxMapping: Type.Optional(Type.Object({
         sheetName: Type.String({ minLength: 1 }),
         columns: Type.Object({
+          key: Type.Optional(Type.String({ minLength: 1 })),
           source: Type.String({ minLength: 1 }),
           target: Type.String({ minLength: 1 }),
+          context: Type.Optional(Type.String({ minLength: 1 })),
         }),
       })),
     }),

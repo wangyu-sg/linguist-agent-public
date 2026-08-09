@@ -356,6 +356,73 @@ test('intake tool delegates authorized file import kind to the host', async () =
   }
 })
 
+test('workbook tools preview evidence and save a reusable bound-project profile', async () => {
+  const fixture = setup()
+  try {
+    const mutations: LinguistCatToolMutation[] = []
+    let savedPath: string | undefined
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      onMutation: (mutation) => mutations.push(mutation),
+      previewWorkbookMapping: async () => ({
+        filename: 'strings.xlsx',
+        workbookFingerprint: 'd'.repeat(64),
+        sheets: [{
+          name: 'Strings',
+          state: 'visible',
+          headerRowNumbers: [1],
+          headerSignature: 'e'.repeat(64),
+          headers: [{ ref: 'A1', value: 'ID' }, { ref: 'B1', value: 'Source' }, { ref: 'C1', value: 'Target' }],
+          sampleRows: [{ rowNo: 2, cells: [{ ref: 'B2', value: 'Play', kind: 'text' }] }],
+          mergedRanges: [],
+          truncated: false,
+          suggestion: {
+            columns: { key: 'ID', source: 'Source', target: 'Target' },
+            confidence: 0.95,
+            reasons: ['source 命中列名 "Source"', 'target 命中列名 "Target"'],
+          },
+        }],
+        skippedSheets: [],
+      }),
+      saveWorkbookMapping: async (filePath, input) => {
+        savedPath = filePath
+        return {
+          id: 'wbm_0123456789abcdef01234567',
+          name: input.name,
+          workbookFingerprint: 'd'.repeat(64),
+          filenamePattern: input.filenamePattern ?? 'strings.xlsx',
+          sheetName: input.sheetName,
+          headerSignature: 'e'.repeat(64),
+          columns: input.columns,
+          createdAt: '2026-08-10T00:00:00.000Z',
+          updatedAt: '2026-08-10T00:00:00.000Z',
+        }
+      },
+    })
+    const preview = (await invoke(toolByName(tools, 'cat_preview_workbook_mapping'), {
+      filePath: '/authorized/strings.xlsx',
+    })).details as { filename: string; sheets: Array<{ suggestion: { confidence: number } }> }
+    assert.equal(preview.filename, 'strings.xlsx')
+    assert.equal(preview.sheets[0]?.suggestion.confidence, 0.95)
+    assertNoAbsolutePaths(preview, fixture.rootDir)
+
+    const saved = (await invoke(toolByName(tools, 'cat_save_workbook_mapping'), {
+      filePath: '/authorized/strings.xlsx',
+      name: 'Game strings',
+      filenamePattern: 'strings-*.xlsx',
+      sheetName: 'Strings',
+      columns: { key: 'ID', source: 'Source', target: 'Target' },
+    })).details as { id: string; filenamePattern: string }
+    assert.equal(savedPath, '/authorized/strings.xlsx')
+    assert.equal(saved.id, 'wbm_0123456789abcdef01234567')
+    assert.equal(saved.filenamePattern, 'strings-*.xlsx')
+    assert.equal(mutations.at(-1)?.kind, 'project-updated')
+    assertNoAbsolutePaths(saved, fixture.rootDir)
+  } finally {
+    fixture.db.close()
+  }
+})
+
 
 test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page filtered results', async () => {
   const fixture = setup()
@@ -1616,6 +1683,12 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_get_segments: {},
       cat_import_resources: { paths: ['/missing'] },
       cat_import_asset: { filePath: '/missing', resourceKind: 'batch' },
+      cat_preview_workbook_mapping: { filePath: '/missing.xlsx' },
+      cat_save_workbook_mapping: {
+        filePath: '/missing.xlsx',
+        sheetName: 'Sheet1',
+        columns: { source: 'Source', target: 'Target' },
+      },
       cat_scan_unknown_tag_patterns: {},
       cat_save_tag_profile_candidate: {
         name: 'test',

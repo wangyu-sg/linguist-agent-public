@@ -16,6 +16,7 @@ import { bindImportedSegments, CatFormatRegistry, FormatExportError, FormatParse
 import { assertRoundTrip } from '../testing/index'
 import { SdlXliffAdapter } from './sdlxliff'
 import { XliffAdapter } from './xliff'
+import { MqXliffAdapter } from './mqxliff'
 
 const FIXTURES = join(import.meta.dir, '../../../../tests/linguist-fixtures')
 
@@ -113,11 +114,11 @@ describe('SdlXliffAdapter detect（置信度设计：sdl 走 sdl 路径，plain 
   })
 
   test('registry 层不互抢：sdl 文件归 sdl，.xliff/.mqxliff 归 xliff，改名文件按置信度路由', async () => {
-    const registry = new CatFormatRegistry().register(new XliffAdapter()).register(new SdlXliffAdapter())
+    const registry = new CatFormatRegistry().register(new MqXliffAdapter()).register(new XliffAdapter()).register(new SdlXliffAdapter())
     const sdl = sdlBytes()
     expect((await registry.detectBest(sdl, 'sample.sdlxliff')).id).toBe('sdlxliff_1_2')
     expect((await registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'mini_game_ui.xliff')).id).toBe('xliff_1_2')
-    expect((await registry.detectBest(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).id).toBe('xliff_1_2')
+    expect((await registry.detectBest(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).id).toBe('mqxliff_1_2')
     // sdl 字节 + 未知扩展名：0.7 > XliffAdapter 的 0.5 => sdl 路径
     expect((await registry.detectBest(sdl, 'renamed.bin')).id).toBe('sdlxliff_1_2')
     // sdl 字节 + 显式 .xliff 扩展名：0.7 < XliffAdapter 的 0.9 => 尊重扩展名

@@ -23,11 +23,13 @@ import {
   normalizeGlossaryPolicy,
   normalizeQaProfile,
   normalizeTagProfile,
+  normalizeWorkbookMappingProfiles,
   normalizeWorkflowStage,
   type CreateProjectDeps,
   type CreateProjectInput,
   type LinguistProject,
   type LinguistTagProfile,
+  type LinguistWorkbookMappingProfile,
   type ProjectId,
   type QaProfile,
   type WorkflowOutputStatusPolicy,
@@ -164,7 +166,7 @@ export class ProjectIndex {
   /** Patch mutable metadata fields; bumps updatedAt. */
   update(
     projectId: string,
-    patch: Partial<Pick<LinguistProject, 'name' | 'sourceLocale' | 'targetLocale' | 'promaWorkspaceId'>>,
+    patch: Partial<Pick<LinguistProject, 'name' | 'sourceLocale' | 'targetLocale' | 'promaWorkspaceId' | 'workbookMappings'>>,
   ): LinguistProject {
     const index = this.readIndex()
     const i = index.projects.findIndex((p) => p.id === projectId)
@@ -192,6 +194,16 @@ export class ProjectIndex {
   /** Rename through the existing atomic metadata update path. */
   rename(projectId: string, name: string): LinguistProject {
     return this.update(projectId, { name })
+  }
+
+  /** 原子替换项目确认过的 Workbook Mapping Profiles。 */
+  setWorkbookMappings(
+    projectId: string,
+    profiles: readonly LinguistWorkbookMappingProfile[],
+  ): LinguistProject {
+    return this.update(projectId, {
+      workbookMappings: normalizeWorkbookMappingProfiles(profiles),
+    })
   }
 
   /** Reorder every active project; archived projects remain ordered behind them. */
@@ -477,6 +489,9 @@ function normalizeProjectPolicies(project: LinguistProject): void {
   else project.tagProfile = tagProfile
   project.workflowStage = normalizeWorkflowStage(project.workflowStage)
   project.qaProfile = normalizeQaProfile(project.qaProfile)
+  const workbookMappings = normalizeWorkbookMappingProfiles(project.workbookMappings)
+  if (workbookMappings.length === 0) delete project.workbookMappings
+  else project.workbookMappings = workbookMappings
 }
 
 let tmpCounter = 0

@@ -60,14 +60,14 @@ test('segment status: unknown or missing coerces to draft and is counted', () =>
 test('format mapping: known legacy formats normalize to new adapter ids', () => {
   const { coercions } = counters()
   assert.deepEqual(mapLegacyFormat('phrase_mxliff', coercions), { formatId: 'phrase_mxliff_1_2', exportUnavailable: false })
-  assert.deepEqual(mapLegacyFormat('mqxliff', coercions), { formatId: 'xliff_1_2', exportUnavailable: false })
+  assert.deepEqual(mapLegacyFormat('mqxliff', coercions), { formatId: 'mqxliff_1_2', exportUnavailable: false })
   assert.deepEqual(mapLegacyFormat('sdlxliff', coercions), { formatId: 'sdlxliff_1_2', exportUnavailable: false })
   assert.deepEqual(mapLegacyFormat('xliff_1_2', coercions), { formatId: 'xliff_1_2', exportUnavailable: false })
   assert.deepEqual(mapLegacyFormat('csv_paste', coercions), { formatId: 'csv_rfc4180', exportUnavailable: false })
   assert.deepEqual(mapLegacyFormat('xlsx_paste', coercions), { formatId: 'xlsx_ooxml', exportUnavailable: false })
   assert.deepEqual(counterToRecord(coercions), {
     'format.phrase_mxliff->phrase_mxliff_1_2': 1,
-    'format.mqxliff->xliff_1_2': 1,
+    'format.mqxliff->mqxliff_1_2': 1,
     'format.sdlxliff->sdlxliff_1_2': 1,
     'format.csv_paste->csv_rfc4180': 1,
     'format.xlsx_paste->xlsx_ooxml': 1,

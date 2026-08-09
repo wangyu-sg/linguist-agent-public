@@ -123,3 +123,12 @@ family 与扩展名交叉观察（真实计数）：
 - 逐文件明细、相对文件名与 SHA-256 只写入仓库外的私有报告，不进 Git；本文仅含聚合数字。
 - 本文落盘前经 `corpus-scan.mjs --check-doc` 校验：不含路径分隔符，不含固定禁止词，不含语料身份类文件名 token（合计 13983 个；判定规则：全部含 CJK 的 stem、含分隔符或字母数字混合的 stem、长度 8 及以上的纯拉丁 stem。不视为身份标识的三类：纯数字、在 10 个及以上不同文件中出现的通用词、格式与工程通用概念词如 i18n 与 woff2）。
 - 复现命令（对任意只读目录）：`bun` 加 scripts 目录下 `corpus-scan.mjs`，后接目录与 `--roundtrip-sample 3` 等参数；Node 运行方式见文件头注释。
+
+## 10. 2026-08-10 能力增量（未重扫上述语料）
+
+| capability | 合成 fixture | 真实样本 |
+|---|---|---|
+| memoQ MQXLIFF 专用 Adapter（namespace、mq:rxt/mq:ch、bpt/ept、状态、缺陷批注、round-trip） | 已验证 | 待验证；不得用本地真实数据进入 CI |
+| XLSX Workbook Mapping（50 行预览、启发式建议、确认保存、fingerprint/文件名模式/header signature 复用） | 已验证 | 待对第 6 节记录的阻断样本重新执行；本次不读取原语料 |
+
+本节只记录实现能力，不回写 2026-08-06 的历史扫描计数。生产注册表已新增 MQXLIFF 专用 Adapter；上文“7 个 adapter”仍是当次扫描的事实。

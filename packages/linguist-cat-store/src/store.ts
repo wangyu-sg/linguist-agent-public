@@ -12,6 +12,7 @@ import type {
   CreateProjectInput,
   EntropySource,
   LinguistProject,
+  LinguistWorkbookMappingProfile,
 } from '@linguist/cat-core'
 import {
   createProjectBackup,
@@ -96,6 +97,13 @@ export class CatStore {
 
   renameProject(projectId: string, name: string): LinguistProject {
     return this.index.rename(projectId, name)
+  }
+
+  setWorkbookMappings(
+    projectId: string,
+    profiles: readonly LinguistWorkbookMappingProfile[],
+  ): LinguistProject {
+    return this.index.setWorkbookMappings(projectId, profiles)
   }
 
   reorderActiveProjects(orderedProjectIds: readonly string[]): LinguistProject[] {
