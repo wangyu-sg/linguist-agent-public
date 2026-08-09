@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { Download, FileText, Trash2 } from 'lucide-react'
+import { useStore } from 'jotai'
+import { Download, FileText, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   LinguistReferenceCandidateSummary,
@@ -9,10 +10,45 @@ import type {
   LinguistTmInfo,
 } from '@proma/shared'
 import { describeLinguistIpcError } from './project-utils'
+import { sendProjectAgentTask } from './project-agent-task'
 import { SentencePatternsPanel } from './SentencePatternsPanel'
 import { useOpenLinguistPreview } from './linguist-preview-open'
 
 type Tab = 'tm' | 'terms' | 'patterns'
+
+/** 术语状态的用户语言标签（筛选、行内与表单共用同一份）。 */
+export const TERM_STATUS_LABELS: Record<LinguistTermStatus, string> = {
+  required: '必须',
+  preferred: '推荐',
+  forbidden: '禁用',
+  allowed: '允许',
+  deprecated: '弃用',
+}
+
+/**
+ * 术语冲突：同一源文术语存在两条及以上生效向（必须/推荐）译法时，
+ * Agent 与 QA 无法判断该听哪一条，需要用户收敛。
+ */
+export function findTermConflicts(
+  terms: readonly LinguistTermInfo[],
+): LinguistTermInfo[][] {
+  const byTerm = new Map<string, LinguistTermInfo[]>()
+  for (const item of terms) {
+    const list = byTerm.get(item.term) ?? []
+    list.push(item)
+    byTerm.set(item.term, list)
+  }
+  return [...byTerm.values()].filter(
+    (list) =>
+      list.filter((item) => item.status === 'required' || item.status === 'preferred').length
+        >= 2,
+  )
+}
+
+/** 「让 Agent 整理本批术语」任务措辞：新增/修改前先经用户确认。 */
+const AGENT_ORGANIZE_TERMS_TASK =
+  '请整理当前批次的术语：提取应统一的源文术语，对照项目术语库，列出缺失或不一致的条目；'
+  + '新增或修改术语前先给我确认。'
 
 interface PendingReferenceCandidate {
   kind: 'tm' | 'terms'
@@ -31,6 +67,11 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
   const [candidate, setCandidate] = React.useState<PendingReferenceCandidate | null>(null)
   const [termStatus, setTermStatus] = React.useState<'all' | LinguistTermStatus>('all')
   const [busy, setBusy] = React.useState(false)
+  const [addingTerm, setAddingTerm] = React.useState(false)
+  const [editingTermId, setEditingTermId] = React.useState<string | null>(null)
+  const [termBusy, setTermBusy] = React.useState(false)
+  const [agentTaskSending, setAgentTaskSending] = React.useState(false)
+  const store = useStore()
   const openLinguistPreview = useOpenLinguistPreview()
   const refresh = React.useCallback(async (): Promise<void> => {
     if (tab === 'patterns') return
@@ -149,6 +190,53 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
     }
     await refresh()
   }
+  const upsertTerm = async (draft: TermDraft, existing?: LinguistTermInfo): Promise<void> => {
+    if (termBusy || archived) return
+    setTermBusy(true)
+    try {
+      const result = await window.electronAPI.linguistReferencesUpsertTerm({
+        projectId,
+        ...(existing !== undefined ? { id: existing.id } : {}),
+        term: draft.term.trim(),
+        translation: draft.translation.trim(),
+        status: draft.status,
+        caseSensitive: draft.caseSensitive,
+        ...(draft.note.trim() !== '' ? { note: draft.note.trim() } : {}),
+        // PB-095 标注列只在显式 id 更新路径写入；编辑时回传原值保持不变。
+        ...(existing !== undefined && existing.module !== undefined ? { module: existing.module } : {}),
+        ...(existing !== undefined && existing.category !== undefined ? { category: existing.category } : {}),
+        ...(existing !== undefined && existing.imageRef !== undefined ? { imageRef: existing.imageRef } : {}),
+      })
+      if (!result.ok) {
+        toast.error('保存术语失败', { description: describeLinguistIpcError(result.error) })
+        return
+      }
+      toast.success(existing === undefined ? `已新增术语「${result.data.term}」` : `已更新术语「${result.data.term}」`)
+      setAddingTerm(false)
+      setEditingTermId(null)
+      await refresh()
+    } catch {
+      toast.error('保存术语失败', { description: '与主进程通信异常（INTERNAL）' })
+    } finally {
+      setTermBusy(false)
+    }
+  }
+  const organizeTermsWithAgent = async (): Promise<void> => {
+    if (agentTaskSending || archived) return
+    setAgentTaskSending(true)
+    try {
+      const result = await sendProjectAgentTask(store, projectId, AGENT_ORGANIZE_TERMS_TASK)
+      if (result.status === 'error') {
+        toast.error('发送整理任务失败', { description: result.error.message })
+      } else if (result.status === 'selection-truncated') {
+        toast.error('发送整理任务失败', { description: '当前片段选择过大，请缩小后重试' })
+      } else {
+        toast('已把整理术语任务发给项目 Agent', { description: 'Agent 整理出条目后会先给你确认。' })
+      }
+    } finally {
+      setAgentTaskSending(false)
+    }
+  }
   const openImportSource = (source: LinguistReferenceImportInfo): void => {
     const opened = openLinguistPreview({
       kind: 'referenceImport',
@@ -171,6 +259,10 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
     if (!opened) toast('项目会话尚未就绪，请稍后重试')
   }
   const items = tab === 'tm' ? tm : terms
+  const termConflicts = React.useMemo(
+    () => (tab === 'terms' ? findTermConflicts(terms) : []),
+    [tab, terms],
+  )
   return (
     <details className="rounded-xl bg-content-area shadow-sm ring-1 ring-border/35">
       <summary className="cursor-pointer list-none px-3 py-2.5 text-[12px] font-medium text-foreground/70">
@@ -183,8 +275,35 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
           <button type="button" onClick={() => setTab('patterns')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'patterns' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>句式</button>
           {tab === 'terms' && (
             <select aria-label="术语状态" value={termStatus} onChange={(event) => setTermStatus(event.target.value as 'all' | LinguistTermStatus)} className="h-7 min-w-0 truncate rounded-md bg-background pl-2 pr-6 text-[11px] ring-1 ring-border/50">
-              <option value="all">全部状态</option><option value="required">必需</option><option value="preferred">首选</option><option value="forbidden">禁用</option><option value="allowed">允许</option><option value="deprecated">已弃用</option>
+              <option value="all">全部状态</option>
+              {(Object.keys(TERM_STATUS_LABELS) as LinguistTermStatus[]).map((status) => (
+                <option key={status} value={status}>{TERM_STATUS_LABELS[status]}</option>
+              ))}
             </select>
+          )}
+          {tab === 'terms' && (
+            <>
+              <button
+                type="button"
+                disabled={archived || busy || addingTerm}
+                onClick={() => {
+                  setEditingTermId(null)
+                  setAddingTerm(true)
+                }}
+                className="inline-flex items-center gap-1 rounded-md bg-foreground/[0.06] px-2 py-1 text-[11px] disabled:opacity-40"
+              >
+                <Plus size={11} />新增术语
+              </button>
+              <button
+                type="button"
+                disabled={archived || agentTaskSending}
+                title="让项目 Agent 提取本批次应统一的术语；新增或修改前先给你确认"
+                onClick={() => void organizeTermsWithAgent()}
+                className="inline-flex items-center gap-1 rounded-md bg-foreground/[0.06] px-2 py-1 text-[11px] disabled:opacity-40"
+              >
+                <Sparkles size={11} />{agentTaskSending ? '发送中…' : '让 Agent 整理'}
+              </button>
+            </>
           )}
           {tab !== 'patterns' && (
             <>
@@ -212,18 +331,59 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
           />
         )}
 
+        {tab === 'terms' && termConflicts.length > 0 && (
+          <div role="alert" className="rounded-lg bg-warning/10 px-2.5 py-2 text-[11px] text-warning">
+            <p className="font-medium">
+              {termConflicts.length} 组术语有多条生效译法（必须/推荐），Agent 与 QA 无法判断该听哪一条：
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {termConflicts.map((group) => (
+                <li key={group[0]!.term} className="break-words">
+                  {group[0]!.term}：
+                  {group
+                    .filter((item) => item.status === 'required' || item.status === 'preferred')
+                    .map((item) => `${item.translation}（${TERM_STATUS_LABELS[item.status]}）`)
+                    .join('、')}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {tab === 'terms' && addingTerm && (
+          <TermEditForm
+            busy={termBusy}
+            onSubmit={(draft) => void upsertTerm(draft)}
+            onCancel={() => setAddingTerm(false)}
+          />
+        )}
+
         {tab === 'patterns' ? <SentencePatternsPanel projectId={projectId} archived={archived} /> : busy ? (
           <p className="text-[11px] text-foreground/40">正在读取…</p>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && !(tab === 'terms' && addingTerm) ? (
           <p className="text-[11px] text-foreground/40">暂无已确认记录</p>
         ) : (
           <ul className="max-h-56 space-y-1 overflow-auto text-[11px]">
             {items.map((item) => (
-              <li key={item.id} className="flex items-center gap-2 rounded-md bg-foreground/[0.035] px-2 py-1.5">
-                <span className="min-w-0 flex-1 break-words">
-                  {tab === 'tm' ? <>{(item as LinguistTmInfo).source}<span className="ml-2 text-foreground/45">{(item as LinguistTmInfo).target}</span></> : <>{(item as LinguistTermInfo).term}<span className="ml-2 text-foreground/45">{(item as LinguistTermInfo).translation} · {(item as LinguistTermInfo).status}</span></>}
-                </span>
-                <button type="button" disabled={archived} onClick={() => void remove(item.id)} aria-label="删除参考记录" className="text-destructive disabled:opacity-40"><Trash2 size={12} /></button>
+              <li key={item.id} className="rounded-md bg-foreground/[0.035] px-2 py-1.5">
+                {tab === 'terms' && editingTermId === item.id ? (
+                  <TermEditForm
+                    initial={(item as LinguistTermInfo)}
+                    busy={termBusy}
+                    onSubmit={(draft) => void upsertTerm(draft, item as LinguistTermInfo)}
+                    onCancel={() => setEditingTermId(null)}
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 break-words">
+                      {tab === 'tm' ? <>{(item as LinguistTmInfo).source}<span className="ml-2 text-foreground/45">{(item as LinguistTmInfo).target}</span></> : <>{(item as LinguistTermInfo).term}<span className="ml-2 text-foreground/45">{(item as LinguistTermInfo).translation} · {TERM_STATUS_LABELS[(item as LinguistTermInfo).status]}</span></>}
+                    </span>
+                    {tab === 'terms' && (
+                      <button type="button" disabled={archived || addingTerm} onClick={() => setEditingTermId(item.id)} aria-label="编辑术语" className="text-foreground/55 hover:text-foreground disabled:opacity-40"><Pencil size={12} /></button>
+                    )}
+                    <button type="button" disabled={archived} onClick={() => void remove(item.id)} aria-label="删除参考记录" className="text-destructive disabled:opacity-40"><Trash2 size={12} /></button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -294,5 +454,114 @@ function ReferenceCandidateConfirmPanel({
         <button type="button" disabled={disabled} onClick={onConfirm} className="rounded-md bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-45">确认写入{label}</button>
       </div>
     </section>
+  )
+}
+
+
+/** 术语新增/编辑草稿；提交时 trim，note 为空则不携带。 */
+export interface TermDraft {
+  term: string
+  translation: string
+  status: LinguistTermStatus
+  caseSensitive: boolean
+  note: string
+}
+
+function TermEditForm({
+  initial,
+  busy,
+  onSubmit,
+  onCancel,
+}: {
+  initial?: LinguistTermInfo
+  busy: boolean
+  onSubmit: (draft: TermDraft) => void
+  onCancel: () => void
+}): React.ReactElement {
+  const [draft, setDraft] = React.useState<TermDraft>({
+    term: initial?.term ?? '',
+    translation: initial?.translation ?? '',
+    status: initial?.status ?? 'preferred',
+    caseSensitive: initial?.caseSensitive ?? false,
+    note: initial?.note ?? '',
+  })
+  const invalid = draft.term.trim() === '' || draft.translation.trim() === ''
+  const editing = initial !== undefined
+
+  return (
+    <form
+      aria-label={editing ? `编辑术语 ${initial.term}` : '新增术语'}
+      className="space-y-1.5 rounded-lg border border-primary/25 bg-primary/[0.03] px-2.5 py-2"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!invalid && !busy) onSubmit(draft)
+      }}
+    >
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        <input
+          value={draft.term}
+          disabled={busy}
+          onChange={(event) => setDraft({ ...draft, term: event.target.value })}
+          placeholder="源文术语"
+          aria-label="源文术语"
+          className="h-7 min-w-0 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50"
+        />
+        <input
+          value={draft.translation}
+          disabled={busy}
+          onChange={(event) => setDraft({ ...draft, translation: event.target.value })}
+          placeholder="译法"
+          aria-label="译法"
+          className="h-7 min-w-0 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50"
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label="术语状态"
+          value={draft.status}
+          disabled={busy}
+          onChange={(event) => setDraft({ ...draft, status: event.target.value as LinguistTermStatus })}
+          className="h-7 rounded-md bg-background pl-2 pr-6 text-[11px] ring-1 ring-border/50"
+        >
+          {(Object.keys(TERM_STATUS_LABELS) as LinguistTermStatus[]).map((status) => (
+            <option key={status} value={status}>{TERM_STATUS_LABELS[status]}</option>
+          ))}
+        </select>
+        <label className="inline-flex items-center gap-1 text-[11px] text-foreground/60">
+          <input
+            type="checkbox"
+            checked={draft.caseSensitive}
+            disabled={busy}
+            onChange={(event) => setDraft({ ...draft, caseSensitive: event.target.checked })}
+          />
+          区分大小写
+        </label>
+        <input
+          value={draft.note}
+          disabled={busy}
+          onChange={(event) => setDraft({ ...draft, note: event.target.value })}
+          placeholder="备注（可选）"
+          aria-label="备注（可选）"
+          className="h-7 min-w-0 flex-1 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50"
+        />
+      </div>
+      <div className="flex items-center justify-end gap-1.5">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onCancel}
+          className="rounded-md px-2 py-1 text-foreground/60 hover:bg-foreground/[0.07] disabled:opacity-45"
+        >
+          取消
+        </button>
+        <button
+          type="submit"
+          disabled={busy || invalid}
+          className="rounded-md bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-45"
+        >
+          {busy ? '保存中…' : editing ? '保存修改' : '新增术语'}
+        </button>
+      </div>
+    </form>
   )
 }
