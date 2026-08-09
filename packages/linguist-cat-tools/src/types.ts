@@ -59,6 +59,10 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_apply_translations',
   'cat_search_tm',
   'cat_search_terms',
+  'cat_upsert_terms',
+  'cat_delete_terms',
+  'cat_list_term_conflicts',
+  'cat_validate_terms',
   'cat_propose_translations',
   'cat_accept_proposals',
   'cat_run_qa',
@@ -366,6 +370,7 @@ export interface SegmentTranslationContext {
   requiredTerms: TermEntryMatch[]
   forbiddenTerms: TermEntryMatch[]
   preferredTerms: TermEntryMatch[]
+  conflicts: TermEntryMatch[]
   tmMatches: TmUnitMatch[]
   warnings: string[]
   evidence: CatEvidenceRef[]

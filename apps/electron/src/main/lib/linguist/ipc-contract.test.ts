@@ -93,6 +93,10 @@ describe('linguist TM/TB candidate IPC contract', () => {
       CANCEL_IMPORT: 'linguist.references.cancelImport',
       PREVIEW_CANDIDATE: 'linguist.references.previewCandidate',
       UPSERT_TERM: 'linguist.references.upsertTerm',
+      UPSERT_TERMS: 'linguist.references.upsertTerms',
+      DELETE_TERMS: 'linguist.references.deleteTerms',
+      LIST_TERM_CONFLICTS: 'linguist.references.listTermConflicts',
+      VALIDATE_TERMS: 'linguist.references.validateTerms',
       DELETE: 'linguist.references.delete',
     })
   })

@@ -243,8 +243,16 @@ import type {
   LinguistReferenceQueryRequest,
   LinguistReferenceQueryResult,
   LinguistTermInfo,
+  LinguistTermConflictsRequest,
+  LinguistTermConflictsResult,
+  LinguistTermsDeleteRequest,
+  LinguistTermsDeleteResult,
+  LinguistTermsUpsertRequest,
+  LinguistTermsUpsertResult,
   LinguistTermUpsertRequest,
   LinguistTermUpsertResult,
+  LinguistTermsValidateRequest,
+  LinguistTermsValidateResult,
   LinguistTmInfo,
   LinguistTmMatchInfo,
   LinguistAssetPreviewRequest,
@@ -1524,6 +1532,18 @@ export interface ElectronAPI {
   linguistReferencesUpsertTerm: (
     input: LinguistTermUpsertRequest,
   ) => Promise<LinguistIpcResult<LinguistTermUpsertResult>>
+  linguistReferencesUpsertTerms: (
+    input: LinguistTermsUpsertRequest,
+  ) => Promise<LinguistIpcResult<LinguistTermsUpsertResult>>
+  linguistReferencesDeleteTerms: (
+    input: LinguistTermsDeleteRequest,
+  ) => Promise<LinguistIpcResult<LinguistTermsDeleteResult>>
+  linguistReferencesListTermConflicts: (
+    input: LinguistTermConflictsRequest,
+  ) => Promise<LinguistIpcResult<LinguistTermConflictsResult>>
+  linguistReferencesValidateTerms: (
+    input: LinguistTermsValidateRequest,
+  ) => Promise<LinguistIpcResult<LinguistTermsValidateResult>>
   linguistReferencesDelete: (
     input: LinguistReferenceDeleteRequest,
   ) => Promise<LinguistIpcResult<LinguistReferenceDeleteResult>>
@@ -3257,6 +3277,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.PREVIEW_CANDIDATE, input),
   linguistReferencesUpsertTerm: (input: LinguistTermUpsertRequest) =>
     ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.UPSERT_TERM, input),
+  linguistReferencesUpsertTerms: (input: LinguistTermsUpsertRequest) =>
+    ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.UPSERT_TERMS, input),
+  linguistReferencesDeleteTerms: (input: LinguistTermsDeleteRequest) =>
+    ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.DELETE_TERMS, input),
+  linguistReferencesListTermConflicts: (input: LinguistTermConflictsRequest) =>
+    ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.LIST_TERM_CONFLICTS, input),
+  linguistReferencesValidateTerms: (input: LinguistTermsValidateRequest) =>
+    ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.VALIDATE_TERMS, input),
   linguistReferencesDelete: (input: LinguistReferenceDeleteRequest) =>
     ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.DELETE, input),
   // ===== Linguist 项目资产（PB-095）=====

@@ -46,6 +46,8 @@ export interface TermMatchOptions {
   text: string
   statuses?: readonly TermEntryStatus[]
   limit?: number
+  module?: string
+  category?: string
 }
 
 export interface TermMatchManyOptions extends Omit<TermMatchOptions, 'text'> {
@@ -57,6 +59,29 @@ export type TermMatchType = 'exact' | 'contains'
 export interface TermEntryMatch extends TermEntry {
   matchType: TermMatchType
   conflict: boolean
+  start: number
+  end: number
+  lowDiscrimination: boolean
+}
+
+export interface TermEntryConflict {
+  normalizedTerm: string
+  entries: TermEntry[]
+}
+
+export interface TermValidationSegment {
+  segmentId: string
+  source: string
+  target: string
+  module?: string
+  category?: string
+}
+
+export interface TermValidationResult {
+  missingRequired: Array<{ segmentId: string; termId: string; term: string; expected: string }>
+  forbiddenHits: Array<{ segmentId: string; termId: string; forbidden: string }>
+  preferredNotUsed: Array<{ segmentId: string; termId: string; term: string; preferred: string }>
+  unresolvedConflicts: Array<{ segmentId: string; term: string; termIds: string[] }>
 }
 
 interface TermEntryRow {
@@ -80,8 +105,11 @@ function stableId(projectId: string, input: TermEntryImportInput): string {
     input.translation,
     input.status,
     input.caseSensitive,
-    input.note ?? null,
   ])
+}
+
+function contentKey(input: Pick<TermEntryImportInput, 'term' | 'translation' | 'status' | 'caseSensitive'>): string {
+  return JSON.stringify([input.term, input.translation, input.status, input.caseSensitive])
 }
 
 /** Escape LIKE wildcards so query is a literal substring match. */
@@ -103,7 +131,7 @@ function termEntryFromRow(row: TermEntryRow): TermEntry {
   }
 }
 
-// module/category/imageRef 是标注而非同一性的一部分：刻意不参与
+// note/module/category/imageRef 是标注而非同一性的一部分：刻意不参与
 // stableId 与 sameContent——UI 编辑标注后重导入同一份 CSV 仍计
 // unchanged，不会因标注漂移撞 id（标注只经显式 id 的 upsert 更新）。
 function sameContent(row: TermEntryRow, projectId: string, input: TermEntryImportInput): boolean {
@@ -112,7 +140,6 @@ function sameContent(row: TermEntryRow, projectId: string, input: TermEntryImpor
     && row.translation === input.translation
     && row.status === input.status
     && row.case_sensitive === Number(input.caseSensitive)
-    && row.note === (input.note ?? null)
 }
 
 function buildWhere(projectId: string, filter: TermEntrySearch): { where: string; params: unknown[] } {
@@ -134,20 +161,81 @@ function normalizeText(value: string, foldCase = true): string {
   return foldCase ? normalized.toLowerCase() : normalized
 }
 
-function containsTerm(text: string, term: string): boolean {
-  if (term === '') return false
-  // ponytail: CJK keeps contiguous substring matching; word-boundary tokenization
-  // for every locale comes only when real samples prove the simple split wrong.
-  if (/\p{Script=Han}/u.test(term)) return text.includes(term)
+function termPattern(term: string): RegExp {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'u').test(text)
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'gu')
 }
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
+function cleanInput<T extends TermEntryImportInput>(input: T): T {
+  const term = input.term.trim()
+  const translation = input.translation.trim()
+  if (term === '' || translation === '') throw new TypeError('term and translation must be non-empty')
+  return { ...input, term, translation }
+}
+
+function pureNumber(value: string): boolean {
+  return /^[\p{N}\s.,+\-]+$/u.test(value)
+}
+
+function bucketKey(value: string): string | undefined {
+  const normalized = normalizeText(value)
+  const han = normalized.match(/\p{Script=Han}/u)?.[0]
+  if (han !== undefined) return `h:${han}`
+  const token = normalized.match(/[\p{L}\p{N}_]+/u)?.[0]
+  return token === undefined ? [...normalized][0] === undefined ? undefined : `c:${[...normalized][0]}` : `t:${token}`
+}
+
+function textBucketKeys(value: string): Set<string> {
+  const normalized = normalizeText(value)
+  const keys = new Set<string>()
+  for (const char of normalized.match(/\p{Script=Han}/gu) ?? []) keys.add(`h:${char}`)
+  for (const token of normalized.match(/[\p{L}\p{N}_]+/gu) ?? []) keys.add(`t:${token}`)
+  for (const char of normalized) if (!/\s/u.test(char)) keys.add(`c:${char}`)
+  return keys
+}
+
+function occurrences(text: string, term: string, wholeToken = false): Array<{ start: number; end: number }> {
+  if (term === '') return []
+  if (wholeToken || !/\p{Script=Han}/u.test(term)) {
+    return [...text.matchAll(termPattern(term))].map((match) => ({
+      start: match.index,
+      end: match.index + match[0].length,
+    }))
+  }
+  const result: Array<{ start: number; end: number }> = []
+  for (let start = text.indexOf(term); start >= 0; start = text.indexOf(term, start + Math.max(1, term.length))) {
+    result.push({ start, end: start + term.length })
+  }
+  return result
+}
+
+function translationUsed(target: string, entry: TermEntry): boolean {
+  const text = normalizeText(target, !entry.caseSensitive)
+  const translation = normalizeText(entry.translation, !entry.caseSensitive)
+  return text === translation || occurrences(text, translation).length > 0
+}
+
+interface CompiledTermbase {
+  rows: TermEntryRow[]
+  buckets: Map<string, TermEntryRow[]>
+}
+
+interface PositionedMatch {
+  row: TermEntryRow
+  matchType: TermMatchType
+  start: number
+  end: number
+  lowDiscrimination: boolean
+  contextRank: number
+}
+
 export class TermEntriesRepository {
+  private compiled?: CompiledTermbase
+
   constructor(
     private readonly db: CatDatabase,
     private readonly projectId: string,
@@ -158,6 +246,16 @@ export class TermEntriesRepository {
   importMany(inputs: readonly TermEntryImportInput[]): ReferenceImportResult {
     return this.db.transaction('import term entries', () => {
       const find = this.db.db.prepare('SELECT * FROM term_entries WHERE id = ?')
+      const existingContent = new Set(
+        (this.db.db.prepare('SELECT term, translation, status, case_sensitive FROM term_entries WHERE project_id = ?')
+          .all(this.projectId) as Array<Pick<TermEntryRow, 'term' | 'translation' | 'status' | 'case_sensitive'>>)
+          .map((row) => contentKey({
+            term: row.term,
+            translation: row.translation,
+            status: row.status,
+            caseSensitive: row.case_sensitive === 1,
+          })),
+      )
       const insert = this.db.db.prepare(
         `INSERT INTO term_entries
          (id, project_id, term, translation, status, case_sensitive, note, module, category, image_ref, created_at)
@@ -165,7 +263,14 @@ export class TermEntriesRepository {
       )
       let imported = 0
       let unchanged = 0
-      for (const input of inputs) {
+      for (const rawInput of inputs) {
+        const input = cleanInput(rawInput)
+        if (input.status !== 'required' && pureNumber(input.term)) continue
+        const key = contentKey(input)
+        if (existingContent.has(key)) {
+          unchanged++
+          continue
+        }
         const id = stableId(this.projectId, input)
         const existing = find.get(id) as TermEntryRow | undefined
         if (existing !== undefined) {
@@ -188,9 +293,13 @@ export class TermEntriesRepository {
           input.imageRef ?? null,
           this.now(),
         )
+        existingContent.add(key)
         imported++
       }
-      if (imported > 0) this.events?.appendProjectEvent({ kind: 'project-updated' })
+      if (imported > 0) {
+        this.compiled = undefined
+        this.events?.appendProjectEvent({ kind: 'project-updated' })
+      }
       return { imported, unchanged }
     })
   }
@@ -203,12 +312,16 @@ export class TermEntriesRepository {
   }
 
   upsert(input: TermEntryUpsertInput): TermEntry {
-    return this.db.transaction(`upsert term entry ${input.id ?? input.term}`, () => {
-      if (input.id !== undefined) {
+    const cleaned = cleanInput(input)
+    if (cleaned.status !== 'required' && pureNumber(cleaned.term)) {
+      throw new TypeError('pure numeric terms require status required')
+    }
+    return this.db.transaction(`upsert term entry ${cleaned.id ?? cleaned.term}`, () => {
+      if (cleaned.id !== undefined) {
         const existing = this.db.db
           .prepare('SELECT id FROM term_entries WHERE id = ? AND project_id = ?')
-          .get(input.id, this.projectId)
-        if (existing === undefined) throw new StoreNotFoundError('term entry', input.id)
+          .get(cleaned.id, this.projectId)
+        if (existing === undefined) throw new StoreNotFoundError('term entry', cleaned.id)
         this.db.db
           .prepare(
             `UPDATE term_entries
@@ -217,27 +330,40 @@ export class TermEntriesRepository {
              WHERE id = ? AND project_id = ?`,
           )
           .run(
-            input.term,
-            input.translation,
-            input.status,
-            Number(input.caseSensitive),
-            input.note ?? null,
-            input.module ?? null,
-            input.category ?? null,
-            input.imageRef ?? null,
-            input.id,
+            cleaned.term,
+            cleaned.translation,
+            cleaned.status,
+            Number(cleaned.caseSensitive),
+            cleaned.note ?? null,
+            cleaned.module ?? null,
+            cleaned.category ?? null,
+            cleaned.imageRef ?? null,
+            cleaned.id,
             this.projectId,
           )
+        this.compiled = undefined
         this.events?.appendProjectEvent({ kind: 'project-updated' })
-        return { ...input, id: input.id }
+        return { ...cleaned, id: cleaned.id }
       }
 
-      const id = stableId(this.projectId, input)
+      const same = this.db.db.prepare(
+        `SELECT * FROM term_entries
+         WHERE project_id = ? AND term = ? AND translation = ? AND status = ? AND case_sensitive = ?
+         LIMIT 1`,
+      ).get(
+        this.projectId,
+        cleaned.term,
+        cleaned.translation,
+        cleaned.status,
+        Number(cleaned.caseSensitive),
+      ) as TermEntryRow | undefined
+      if (same !== undefined) return termEntryFromRow(same)
+      const id = stableId(this.projectId, cleaned)
       const existing = this.db.db.prepare('SELECT * FROM term_entries WHERE id = ?').get(id) as
         | TermEntryRow
         | undefined
       if (existing !== undefined) {
-        if (!sameContent(existing, this.projectId, input)) {
+        if (!sameContent(existing, this.projectId, cleaned)) {
           throw new Error(`Term content id collision: ${id}`)
         }
         return termEntryFromRow(existing)
@@ -251,18 +377,19 @@ export class TermEntriesRepository {
         .run(
           id,
           this.projectId,
-          input.term,
-          input.translation,
-          input.status,
-          Number(input.caseSensitive),
-          input.note ?? null,
-          input.module ?? null,
-          input.category ?? null,
-          input.imageRef ?? null,
+          cleaned.term,
+          cleaned.translation,
+          cleaned.status,
+          Number(cleaned.caseSensitive),
+          cleaned.note ?? null,
+          cleaned.module ?? null,
+          cleaned.category ?? null,
+          cleaned.imageRef ?? null,
           this.now(),
         )
+      this.compiled = undefined
       this.events?.appendProjectEvent({ kind: 'project-updated' })
-      return { ...input, id }
+      return { ...cleaned, id }
     })
   }
 
@@ -274,7 +401,7 @@ export class TermEntriesRepository {
     return rows.map(termEntryFromRow)
   }
 
-  /** Backward-compatible alias used by existing read tools. */
+  /** 现有只读工具使用的检索别名。 */
   search(filter: TermEntrySearch = {}): TermEntry[] {
     return this.list(filter)
   }
@@ -293,35 +420,52 @@ export class TermEntriesRepository {
         .prepare('DELETE FROM term_entries WHERE id = ? AND project_id = ?')
         .run(id, this.projectId)
       if (Number(result.changes) === 0) throw new StoreNotFoundError('term entry', id)
+      this.compiled = undefined
       this.events?.appendProjectEvent({ kind: 'project-updated' })
     })
   }
 
-  /**
-   * preferred 一词多译冲突组（PB-096 glossary_conflict 检测）。与
-   * findMatches 的 conflict 标志同一语义：同一归一化 source term 存在
-   * 两个及以上不同 preferred 译法即冲突。每组返回原词（首行原样）与
-   * 去重排序后的译法列表。
-   */
-  listPreferredConflicts(): Array<{ sourceTerm: string; translations: string[] }> {
+  private compile(): CompiledTermbase {
+    if (this.compiled !== undefined) return this.compiled
     const rows = this.db.db
-      .prepare("SELECT * FROM term_entries WHERE project_id = ? AND status = 'preferred'")
+      .prepare('SELECT * FROM term_entries WHERE project_id = ?')
       .all(this.projectId) as TermEntryRow[]
-    const groups = new Map<string, { sourceTerm: string; translations: Set<string> }>()
+    const buckets = new Map<string, TermEntryRow[]>()
     for (const row of rows) {
-      const key = normalizeText(row.term)
-      if (key === '') continue
-      const group = groups.get(key) ?? { sourceTerm: row.term, translations: new Set<string>() }
-      group.translations.add(normalizeText(row.translation))
-      groups.set(key, group)
+      const key = bucketKey(row.term)
+      if (key === undefined) continue
+      const bucket = buckets.get(key) ?? []
+      bucket.push(row)
+      buckets.set(key, bucket)
     }
-    return [...groups.values()]
-      .filter((group) => group.translations.size > 1)
-      .map((group) => ({
-        sourceTerm: group.sourceTerm,
-        translations: [...group.translations].sort(compareText),
+    this.compiled = { rows, buckets }
+    return this.compiled
+  }
+
+  private applicable(
+    row: TermEntryRow,
+    options: Pick<TermMatchOptions, 'module' | 'category'>,
+  ): boolean {
+    return (options.module === undefined || row.module === null || row.module === options.module)
+      && (options.category === undefined || row.category === null || row.category === options.category)
+  }
+
+  listConflicts(
+    options: Pick<TermMatchOptions, 'statuses' | 'module' | 'category'> = {},
+  ): TermEntryConflict[] {
+    const statuses = options.statuses === undefined ? undefined : new Set(options.statuses)
+    const groups = Map.groupBy(
+      this.compile().rows.filter((row) =>
+        (statuses === undefined || statuses.has(row.status)) && this.applicable(row, options)),
+      (row) => normalizeText(row.term),
+    )
+    return [...groups.entries()]
+      .filter(([term, rows]) => term !== '' && new Set(rows.map((row) => normalizeText(row.translation))).size > 1)
+      .map(([normalizedTerm, rows]) => ({
+        normalizedTerm,
+        entries: rows.map(termEntryFromRow).sort((left, right) => compareText(left.id, right.id)),
       }))
-      .sort((left, right) => compareText(normalizeText(left.sourceTerm), normalizeText(right.sourceTerm)))
+      .sort((left, right) => compareText(left.normalizedTerm, right.normalizedTerm))
   }
 
   findMatches(options: TermMatchOptions): TermEntryMatch[] {
@@ -329,71 +473,142 @@ export class TermEntriesRepository {
       texts: [options.text],
       ...(options.statuses !== undefined ? { statuses: options.statuses } : {}),
       ...(options.limit !== undefined ? { limit: options.limit } : {}),
+      ...(options.module !== undefined ? { module: options.module } : {}),
+      ...(options.category !== undefined ? { category: options.category } : {}),
     }).get(options.text) ?? []
   }
 
   findMatchesMany(options: TermMatchManyOptions): ReadonlyMap<string, TermEntryMatch[]> {
-    const params: unknown[] = [this.projectId]
-    let statusClause = ''
-    if (options.statuses !== undefined && options.statuses.length > 0) {
-      statusClause = ` AND status IN (${options.statuses.map(() => '?').join(', ')})`
-      params.push(...options.statuses)
-    }
-    // ponytail: 术语命中按项目做 O(n) 扫描；条目量实测成为瓶颈时再加 FTS/倒排索引。
-    const rows = this.db.db
-      .prepare(`SELECT * FROM term_entries WHERE project_id = ?${statusClause}`)
-      .all(...params) as TermEntryRow[]
-    const preferredTranslations = new Map<string, Set<string>>()
-    for (const row of rows) {
-      if (row.status !== 'preferred') continue
-      const key = normalizeText(row.term)
-      const translations = preferredTranslations.get(key) ?? new Set<string>()
-      translations.add(normalizeText(row.translation))
-      preferredTranslations.set(key, translations)
-    }
-
+    const compiled = this.compile()
     return new Map(options.texts.map((text) => [
       text,
-      this.matchRows(rows, preferredTranslations, text, options.limit ?? 20),
+      this.matchRows(compiled, text, options),
     ]))
   }
 
   private matchRows(
-    rows: readonly TermEntryRow[],
-    preferredTranslations: ReadonlyMap<string, ReadonlySet<string>>,
+    compiled: CompiledTermbase,
     rawText: string,
-    limit: number,
+    options: Omit<TermMatchOptions, 'text'>,
   ): TermEntryMatch[] {
-    const matches: TermEntryMatch[] = []
-    for (const row of rows) {
+    const statuses = options.statuses === undefined ? undefined : new Set(options.statuses)
+    const rows = new Map<string, TermEntryRow>()
+    for (const key of textBucketKeys(rawText)) {
+      for (const row of compiled.buckets.get(key) ?? []) rows.set(row.id, row)
+    }
+    const positioned: PositionedMatch[] = []
+    for (const row of rows.values()) {
+      if ((statuses !== undefined && !statuses.has(row.status)) || !this.applicable(row, options)) continue
       const foldCase = row.case_sensitive !== 1
       const text = normalizeText(rawText, foldCase)
       const term = normalizeText(row.term, foldCase)
-      const matchType = text === term ? 'exact' : containsTerm(text, term) ? 'contains' : undefined
-      if (matchType === undefined) continue
-      matches.push({
-        ...termEntryFromRow(row),
-        matchType,
-        conflict:
-          row.status === 'preferred'
-          && (preferredTranslations.get(normalizeText(row.term))?.size ?? 0) > 1,
+      const lowDiscrimination = [...term].length === 1
+      const contextMatched = (row.module !== null && row.module === options.module)
+        || (row.category !== null && row.category === options.category)
+      const spans = text === term
+        ? [{ start: 0, end: text.length }]
+        : occurrences(text, term, lowDiscrimination && !contextMatched)
+      for (const span of spans) positioned.push({
+        row,
+        matchType: text === term ? 'exact' : 'contains',
+        ...span,
+        lowDiscrimination,
+        contextRank: contextMatched ? 0 : row.module === null && row.category === null ? 1 : 2,
       })
     }
     const statusRank: Record<TermEntryStatus, number> = {
       required: 0,
-      preferred: 1,
-      forbidden: 2,
+      forbidden: 1,
+      preferred: 2,
       allowed: 3,
       deprecated: 4,
     }
-    matches.sort((left, right) =>
+    positioned.sort((left, right) =>
       Number(left.matchType === 'contains') - Number(right.matchType === 'contains')
-      || right.term.length - left.term.length
-      || statusRank[left.status] - statusRank[right.status]
-      || compareText(normalizeText(left.term), normalizeText(right.term))
-      || compareText(normalizeText(left.translation), normalizeText(right.translation))
-      || compareText(left.id, right.id),
+      || left.contextRank - right.contextRank
+      || normalizeText(right.row.term).length - normalizeText(left.row.term).length
+      || statusRank[left.row.status] - statusRank[right.row.status]
+      || left.start - right.start
+      || compareText(normalizeText(left.row.term), normalizeText(right.row.term))
+      || compareText(normalizeText(left.row.translation), normalizeText(right.row.translation))
+      || compareText(left.row.id, right.row.id),
     )
-    return matches.slice(0, limit)
+    const selected: PositionedMatch[] = []
+    for (const candidate of positioned) {
+      const sameTermAndSpan = selected.some((match) =>
+        match.start === candidate.start
+        && match.end === candidate.end
+        && normalizeText(match.row.term) === normalizeText(candidate.row.term))
+      const overlaps = selected.some((match) =>
+        candidate.start < match.end && match.start < candidate.end)
+      if (overlaps && !sameTermAndSpan) continue
+      selected.push(candidate)
+    }
+    const conflictTranslations = new Map<string, Set<string>>()
+    for (const match of selected) {
+      const key = normalizeText(match.row.term)
+      const translations = conflictTranslations.get(key) ?? new Set<string>()
+      translations.add(normalizeText(match.row.translation))
+      conflictTranslations.set(key, translations)
+    }
+    return selected.slice(0, options.limit ?? 20).map((match) => ({
+      ...termEntryFromRow(match.row),
+      matchType: match.matchType,
+      conflict: (conflictTranslations.get(normalizeText(match.row.term))?.size ?? 0) > 1,
+      start: match.start,
+      end: match.end,
+      lowDiscrimination: match.lowDiscrimination,
+    }))
+  }
+
+  validateSegments(segments: readonly TermValidationSegment[]): TermValidationResult {
+    const result: TermValidationResult = {
+      missingRequired: [],
+      forbiddenHits: [],
+      preferredNotUsed: [],
+      unresolvedConflicts: [],
+    }
+    const forbidden = this.compile().rows.filter((row) => row.status === 'forbidden')
+    for (const segment of segments) {
+      const matches = this.findMatches({
+        text: segment.source,
+        statuses: ['required', 'preferred'],
+        limit: Number.MAX_SAFE_INTEGER,
+        ...(segment.module === undefined ? {} : { module: segment.module }),
+        ...(segment.category === undefined ? {} : { category: segment.category }),
+      })
+      const seen = new Set<string>()
+      for (const match of matches) {
+        if (seen.has(match.id)) continue
+        seen.add(match.id)
+        if (translationUsed(segment.target, match)) continue
+        const item = { segmentId: segment.segmentId, termId: match.id, term: match.term }
+        if (match.status === 'required') {
+          result.missingRequired.push({ ...item, expected: match.translation })
+        } else {
+          result.preferredNotUsed.push({ ...item, preferred: match.translation })
+        }
+      }
+      const conflictGroups = Map.groupBy(matches.filter((match) => match.conflict), (match) => normalizeText(match.term))
+      for (const [term, entries] of conflictGroups) {
+        result.unresolvedConflicts.push({
+          segmentId: segment.segmentId,
+          term,
+          termIds: [...new Set(entries.map((entry) => entry.id))].sort(compareText),
+        })
+      }
+      for (const row of forbidden) {
+        if (!this.applicable(row, segment)) continue
+        const entry = termEntryFromRow(row)
+        if (translationUsed(segment.target, entry)) {
+          result.forbiddenHits.push({
+            segmentId: segment.segmentId,
+            termId: entry.id,
+            forbidden: entry.translation,
+          })
+        }
+      }
+    }
+    return result
   }
 }

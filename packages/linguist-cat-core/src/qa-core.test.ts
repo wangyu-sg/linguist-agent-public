@@ -67,11 +67,11 @@ describe('PB-070 deterministic QA Core', () => {
     expect(byCode.get(QA_RULE_CODES.TAG_MISMATCH)?.issueType).toBe('format_tags')
     expect(byCode.get(QA_RULE_CODES.FORBIDDEN_TERM)?.issueType).toBe('terminology_hard')
     expect(byCode.get(QA_RULE_CODES.NUMBER_MISMATCH)?.issueType).toBe('numbers_units_dates')
-    // prefer 默认：REQUIRED_TERM 偏离为 L2 needs_review（terminology_soft）
+    // required 缺失始终是硬错误。
     const required = byCode.get(QA_RULE_CODES.REQUIRED_TERM)
-    expect(required?.severity).toBe('L2')
-    expect(required?.issueType).toBe('terminology_soft')
-    expect(required?.disposition).toBe('needs_review')
+    expect(required?.severity).toBe('L1')
+    expect(required?.issueType).toBe('terminology_hard')
+    expect(required?.disposition).toBe('defect')
   })
 
   test('is deterministic, skips locked rows, and does not flag healthy content', () => {
@@ -117,7 +117,7 @@ describe('PB-070 deterministic QA Core', () => {
   })
 })
 
-describe('PB-096 术语策略 glossaryPolicy 矩阵', () => {
+describe('required / forbidden 术语硬规则矩阵', () => {
   const policySegments = () => [
     segment(1, { source: 'Use Save now', target: '请使用存档' }),
     segment(2, { source: 'Use Save now', target: '请使用禁词存档' }),
@@ -127,7 +127,7 @@ describe('PB-096 术语策略 glossaryPolicy 矩阵', () => {
     forbiddenTerms: ['禁词'],
   }
 
-  test('strict：preferred 不命中即 L1 defect（terminology_hard）', () => {
+  test('required 在 strict 下为 L1 defect', () => {
     const findings = runQa(policySegments(), { ...terms, glossaryPolicy: 'strict' })
     const required = findings.find((finding) => finding.code === QA_RULE_CODES.REQUIRED_TERM)
     expect(required?.severity).toBe('L1')
@@ -135,12 +135,12 @@ describe('PB-096 术语策略 glossaryPolicy 矩阵', () => {
     expect(required?.disposition).toBe('defect')
   })
 
-  test('off：preferred 偏离仅 L4 info；forbidden 永远 L1 defect 阻断', () => {
+  test('off 也不能降级 required / forbidden', () => {
     const findings = runQa(policySegments(), { ...terms, glossaryPolicy: 'off' })
     const required = findings.find((finding) => finding.code === QA_RULE_CODES.REQUIRED_TERM)
-    expect(required?.severity).toBe('L4')
-    expect(required?.issueType).toBe('terminology_soft')
-    expect(required?.disposition).toBe('info')
+    expect(required?.severity).toBe('L1')
+    expect(required?.issueType).toBe('terminology_hard')
+    expect(required?.disposition).toBe('defect')
     const forbidden = findings.find((finding) => finding.code === QA_RULE_CODES.FORBIDDEN_TERM)
     expect(forbidden?.severity).toBe('L1')
     expect(forbidden?.issueType).toBe('terminology_hard')

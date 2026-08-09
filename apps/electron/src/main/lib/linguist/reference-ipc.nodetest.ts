@@ -133,6 +133,62 @@ test('PB-080 reference IPC: archived project rejects before native picker', asyn
   }
 })
 
+test('terminology IPC exposes bounded bulk CRUD, conflicts, and current-segment validation', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const ipc = createLinguistReferenceIpc({ getService: () => service })
+    const upserted = await ipc.upsertTerms({
+      projectId: project.id,
+      terms: [
+        { term: 'Alpha', translation: '阿尔法', status: 'required', caseSensitive: false },
+        { term: 'Alpha', translation: '艾尔法', status: 'preferred', caseSensitive: false },
+        { term: 'Legacy', translation: '禁词', status: 'forbidden', caseSensitive: false },
+      ],
+    })
+    assert.equal(upserted.ok, true)
+    if (!upserted.ok) return
+    assert.equal(upserted.data.count, 3)
+
+    const conflicts = await ipc.listTermConflicts({ projectId: project.id })
+    assert.equal(conflicts.ok, true)
+    if (conflicts.ok) assert.equal(conflicts.data.conflicts[0]?.normalizedTerm, 'alpha')
+
+    const imported = await service.importAsset(project.id, {
+      filename: 'batch.csv',
+      bytes: new TextEncoder().encode('source,target\nAlpha source,错误译文并含禁词\n'),
+    })
+    const segmentId = service.openProject(project.id).segments.query({
+      assetId: imported.assetId,
+      limit: 1,
+    })[0]!.id as string
+    const validation = await ipc.validateTerms({ projectId: project.id, segmentIds: [segmentId] })
+    assert.equal(validation.ok, true)
+    if (validation.ok) {
+      assert.equal(validation.data.missingRequired.length, 1)
+      assert.equal(validation.data.forbiddenHits.length, 1)
+      assert.equal(validation.data.preferredNotUsed.length, 1)
+      assert.equal(validation.data.unresolvedConflicts.length, 1)
+    }
+
+    const removed = await ipc.deleteTerms({
+      projectId: project.id,
+      termIds: [upserted.data.terms[1]!.id],
+    })
+    assert.equal(removed.ok, true)
+    if (removed.ok) assert.equal(removed.data.count, 1)
+
+    const numeric = await ipc.upsertTerms({
+      projectId: project.id,
+      terms: [{ term: '123', translation: '一二三', status: 'preferred', caseSensitive: false }],
+    })
+    assert.equal(numeric.ok, false)
+    if (!numeric.ok) assert.equal(numeric.error.code, 'INVALID_INPUT')
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('reference candidate: forged binding, cancellation, and expiry never write TM/TB authority rows', async () => {
   const service = makeService()
   try {

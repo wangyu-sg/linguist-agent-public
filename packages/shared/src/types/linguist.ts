@@ -267,6 +267,10 @@ export const LINGUIST_REFERENCE_IPC_CHANNELS = {
   /** 未确认候选的原文件预览（opaque token，零路径/零 bytes 下行）。 */
   PREVIEW_CANDIDATE: 'linguist.references.previewCandidate',
   UPSERT_TERM: 'linguist.references.upsertTerm',
+  UPSERT_TERMS: 'linguist.references.upsertTerms',
+  DELETE_TERMS: 'linguist.references.deleteTerms',
+  LIST_TERM_CONFLICTS: 'linguist.references.listTermConflicts',
+  VALIDATE_TERMS: 'linguist.references.validateTerms',
   DELETE: 'linguist.references.delete',
 } as const
 
@@ -1213,6 +1217,9 @@ export interface LinguistTermMatchInfo extends LinguistTermInfo {
   matchType: LinguistTermMatchType
   /** 多个 preferred 项给同一术语不同译文时只标冲突，不擅自选第一条。 */
   conflict: boolean
+  start: number
+  end: number
+  lowDiscrimination: boolean
 }
 
 export interface LinguistReferenceQueryRequest {
@@ -1338,6 +1345,55 @@ export interface LinguistTermUpsertRequest {
 }
 
 export type LinguistTermUpsertResult = LinguistTermInfo
+
+export interface LinguistTermsUpsertRequest {
+  projectId: string
+  terms: Array<Omit<LinguistTermUpsertRequest, 'projectId'>>
+}
+
+export interface LinguistTermsUpsertResult {
+  terms: LinguistTermInfo[]
+  count: number
+}
+
+export interface LinguistTermsDeleteRequest {
+  projectId: string
+  termIds: string[]
+}
+
+export interface LinguistTermsDeleteResult {
+  deletedTermIds: string[]
+  count: number
+}
+
+export interface LinguistTermConflictsRequest {
+  projectId: string
+  statuses?: LinguistTermStatus[]
+  module?: string
+  category?: string
+}
+
+export interface LinguistTermConflictInfo {
+  normalizedTerm: string
+  entries: LinguistTermInfo[]
+}
+
+export interface LinguistTermConflictsResult {
+  conflicts: LinguistTermConflictInfo[]
+  count: number
+}
+
+export interface LinguistTermsValidateRequest {
+  projectId: string
+  segmentIds: string[]
+}
+
+export interface LinguistTermsValidateResult {
+  missingRequired: Array<{ segmentId: string; termId: string; term: string; expected: string }>
+  forbiddenHits: Array<{ segmentId: string; termId: string; forbidden: string }>
+  preferredNotUsed: Array<{ segmentId: string; termId: string; term: string; preferred: string }>
+  unresolvedConflicts: Array<{ segmentId: string; term: string; termIds: string[] }>
+}
 
 export interface LinguistReferenceDeleteRequest {
   projectId: string

@@ -43,7 +43,7 @@ export function createQaTools(runtime: CatToolRuntime) {
     parameters: RUN_QA_PARAMETERS,
     async execute(toolCallId, _params, signal, onUpdate) {
       // PB-096：term_entries、项目 profile 与 tagProfile 一起冻结进 worker snapshot。
-      // 项目 glossaryPolicy 决定 preferred 偏离的定级（forbidden 永远阻断）。
+      // required / forbidden 都是硬规则；preferred advisory 由 cat_validate_terms 返回。
       // PB-097：项目 tagProfile 进同一道确定性 QA（缺省 = 仅内置族）。
       const { project, db } = resolveBoundProject('cat_run_qa', toolCallId)
       const runId = `qa:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`

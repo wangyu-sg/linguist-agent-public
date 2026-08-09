@@ -4,7 +4,7 @@ import {
   type ForbiddenTermRule,
   type RequiredTerminologyRule,
 } from './hard-rules'
-import { normalizeGlossaryPolicy, type LinguistGlossaryPolicy } from './glossary-policy'
+import type { LinguistGlossaryPolicy } from './glossary-policy'
 import { resolveQaIssueMapping, type QaFindingDisposition, type QaFindingSeverity, type QaIssueType } from './issue-type'
 import type { OpenQaFindingInput } from './qa-finding'
 import type { LinguistTagProfile } from './tag-profile'
@@ -264,31 +264,12 @@ function normalizeConsistency(value: string): string {
   return value.normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
 }
 
-/**
- * REQUIRED_TERM 随 glossaryPolicy 升降级（契约《通用缺陷等级》术语策略）：
- * strict=不命中即 L1 defect（terminology_hard）；prefer=偏离 L2 needs_review
- * （静态表默认）；off=仅 L4 info。FORBIDDEN_TERM 不走此函数——永远 L1 defect。
- */
-function requiredTermSpec(policy: LinguistGlossaryPolicy): FindingSpec {
-  if (policy === 'strict') {
-    return {
-      code: QA_RULE_CODES.REQUIRED_TERM,
-      severity: 'L1',
-      issueType: 'terminology_hard',
-      disposition: 'defect',
-      message: '译文缺少必需术语。',
-    }
-  }
-  if (policy === 'off') {
-    return {
-      code: QA_RULE_CODES.REQUIRED_TERM,
-      severity: 'L4',
-      issueType: 'terminology_soft',
-      disposition: 'info',
-      message: '译文缺少必需术语。',
-    }
-  }
-  return { code: QA_RULE_CODES.REQUIRED_TERM, message: '译文缺少必需术语。' }
+const REQUIRED_TERM_SPEC: FindingSpec = {
+  code: QA_RULE_CODES.REQUIRED_TERM,
+  severity: 'L1',
+  issueType: 'terminology_hard',
+  disposition: 'defect',
+  message: '译文缺少必需术语。',
 }
 
 function segmentFindings(segment: Segment, options: QaRunOptions): OpenQaFindingInput[] {
@@ -300,7 +281,6 @@ function segmentFindings(segment: Segment, options: QaRunOptions): OpenQaFinding
     })]
   }
 
-  const policy = normalizeGlossaryPolicy(options.glossaryPolicy)
   const results: OpenQaFindingInput[] = []
   const emitted = new Set<QaRuleCode>()
   const emit = (spec: FindingSpec): void => {
@@ -318,8 +298,7 @@ function segmentFindings(segment: Segment, options: QaRunOptions): OpenQaFinding
   }).violations) {
     const mapped = HARD_RULE_MAPPING[violation.code]
     if (mapped === undefined) continue
-    // REQUIRED_TERM 的三元组随项目术语策略升降级；其余码按静态映射表。
-    emit(mapped.code === QA_RULE_CODES.REQUIRED_TERM ? requiredTermSpec(policy) : mapped)
+    emit(mapped.code === QA_RULE_CODES.REQUIRED_TERM ? REQUIRED_TERM_SPEC : mapped)
   }
 
   if (boundaryWhitespace(segment.source) !== boundaryWhitespace(segment.target)) {
@@ -433,7 +412,7 @@ function segmentFindings(segment: Segment, options: QaRunOptions): OpenQaFinding
     }
   }
 
-  // 术语表内部冲突（preferred 一词多译）：不可一刀切判定，必须 query。
+  // 术语表内部冲突（一词多译）：不可一刀切判定，必须 query。
   const conflicts = (options.glossaryConflicts ?? []).filter((conflict) =>
     conflict.sourceTerm.trim() !== ''
     && segment.source.normalize('NFKC').toLocaleLowerCase()

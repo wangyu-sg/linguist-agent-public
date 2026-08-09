@@ -1126,6 +1126,61 @@ test('cat_search_tm / cat_search_terms: seeded rows are found (search is real, p
   }
 })
 
+test('terminology tools close CRUD, conflict, and current-segment validation in the bound project', async () => {
+  const fixture = setup()
+  try {
+    const mutations: LinguistCatToolMutation[] = []
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      onMutation: (mutation) => mutations.push(mutation),
+    })
+    const created = (await invoke(toolByName(tools, 'cat_upsert_terms'), {
+      terms: [
+        { term: 'Alpha', translation: '阿尔法', status: 'required' },
+        { term: 'Alpha', translation: '艾尔法', status: 'preferred' },
+        { term: 'source', translation: '源', status: 'preferred' },
+        { term: 'Legacy', translation: '禁词', status: 'forbidden' },
+      ],
+    })).details as { terms: Array<{ id: string; term: string }>; count: number }
+    assert.equal(created.count, 4)
+    assert.deepEqual(mutations, [{ kind: 'project-updated' }])
+
+    const conflicts = (await invoke(toolByName(tools, 'cat_list_term_conflicts'), {})).details as {
+      conflicts: Array<{ normalizedTerm: string }>
+      count: number
+    }
+    assert.equal(conflicts.count, 1)
+    assert.equal(conflicts.conflicts[0]?.normalizedTerm, 'alpha')
+
+    fixture.db.catDb.db.prepare('UPDATE segments SET target = ? WHERE id = ?')
+      .run('错误译文并含禁词', fixture.segmentsA[0]!.id)
+    const validation = (await invoke(toolByName(tools, 'cat_validate_terms'), {
+      segmentIds: [fixture.segmentsA[0]!.id],
+    })).details as {
+      missingRequired: unknown[]
+      forbiddenHits: unknown[]
+      preferredNotUsed: unknown[]
+      unresolvedConflicts: unknown[]
+    }
+    assert.equal(validation.missingRequired.length, 1)
+    assert.equal(validation.forbiddenHits.length, 1)
+    assert.equal(validation.preferredNotUsed.length, 2)
+    assert.equal(validation.unresolvedConflicts.length, 1)
+
+    const sourceTerm = created.terms.find((entry) => entry.term === 'source')!
+    const deleted = (await invoke(toolByName(tools, 'cat_delete_terms'), {
+      termIds: [sourceTerm.id],
+    })).details as { count: number; deletedTermIds: string[] }
+    assert.deepEqual(deleted, { count: 1, deletedTermIds: [sourceTerm.id] })
+    assert.equal(fixture.db.termEntries.get(sourceTerm.id), undefined)
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_upsert_terms'), {
+      terms: [{ term: '123', translation: '一二三', status: 'preferred' }],
+    }), 'INVALID_ARGUMENT')
+  } finally {
+    fixture.db.close()
+  }
+})
+
 test('cat_get_translation_context: input order, revision, neighbors, TM/TB evidence, and read-only semantics', async () => {
   const fixture = setup()
   try {
@@ -1578,6 +1633,12 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       },
       cat_search_tm: { query: 'x' },
       cat_search_terms: { query: 'x' },
+      cat_upsert_terms: {
+        terms: [{ term: 'Save', translation: '保存', status: 'preferred' }],
+      },
+      cat_delete_terms: { termIds: ['ter-0000000000000000'] },
+      cat_list_term_conflicts: {},
+      cat_validate_terms: { segmentIds: [fixture.segmentsA[0]!.id] },
       cat_propose_translations: {
         segmentProposals: [{ segmentId: fixture.segmentsA[0]!.id, baseRevision: 0, proposedTarget: 'x' }],
       },

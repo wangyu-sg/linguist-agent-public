@@ -6,18 +6,18 @@ import type { PersistedQaFinding } from './repositories/rows'
 /**
  * PB-096 术语接线：从 term_entries 构建 QA 术语规则。
  * - forbidden 条目 → forbiddenTerms（永远 strict 阻断，L1 defect）；
- * - preferred 条目 → requiredTerminology（按项目 glossaryPolicy 升降级）；
- * - preferred 一词多译冲突组 → glossaryConflicts（glossary_conflict/query）。
+ * - required 条目 → requiredTerminology（缺失始终阻断）；
+ * - required/preferred 一词多译冲突组 → glossaryConflicts（glossary_conflict/query）。
  * 调用方显式传入的同名 option 优先（测试/工具直调场景）。
  */
 export function buildQaTermOptions(db: ProjectDatabase): Pick<
   QaRunOptions,
   'requiredTerminology' | 'forbiddenTerms' | 'glossaryConflicts'
 > {
-  const preferred = db.termEntries.list({ status: 'preferred', limit: Number.MAX_SAFE_INTEGER })
+  const required = db.termEntries.list({ status: 'required', limit: Number.MAX_SAFE_INTEGER })
   const forbidden = db.termEntries.list({ status: 'forbidden', limit: Number.MAX_SAFE_INTEGER })
   return {
-    requiredTerminology: preferred.map((entry) => ({
+    requiredTerminology: required.map((entry) => ({
       sourceTerm: entry.term,
       targetTerm: entry.translation,
       caseSensitive: entry.caseSensitive,
@@ -26,7 +26,10 @@ export function buildQaTermOptions(db: ProjectDatabase): Pick<
       term: entry.translation,
       caseSensitive: entry.caseSensitive,
     })),
-    glossaryConflicts: db.termEntries.listPreferredConflicts(),
+    glossaryConflicts: db.termEntries.listConflicts({ statuses: ['required', 'preferred'] }).map((conflict) => ({
+      sourceTerm: conflict.entries[0]!.term,
+      translations: [...new Set(conflict.entries.map((entry) => entry.translation))].sort(),
+    })),
   }
 }
 

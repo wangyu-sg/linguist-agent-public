@@ -5489,6 +5489,14 @@ export function registerIpcHandlers(): void {
     linguistReferenceIpc.previewCandidate(input))
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.UPSERT_TERM, async (_, input: unknown) =>
     linguistReferenceIpc.upsertTerm(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.UPSERT_TERMS, async (_, input: unknown) =>
+    linguistReferenceIpc.upsertTerms(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.DELETE_TERMS, async (_, input: unknown) =>
+    linguistReferenceIpc.deleteTerms(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.LIST_TERM_CONFLICTS, async (_, input: unknown) =>
+    linguistReferenceIpc.listTermConflicts(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.VALIDATE_TERMS, async (_, input: unknown) =>
+    linguistReferenceIpc.validateTerms(input))
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.DELETE, async (_, input: unknown) =>
     linguistReferenceIpc.delete(input))
 

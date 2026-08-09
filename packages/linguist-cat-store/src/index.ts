@@ -130,6 +130,7 @@ export {
 export {
   TermEntriesRepository,
   type TermEntry,
+  type TermEntryConflict,
   type TermEntryImportInput,
   type TermEntryMatch,
   type TermEntrySearch,
@@ -138,6 +139,8 @@ export {
   type TermMatchManyOptions,
   type TermMatchOptions,
   type TermMatchType,
+  type TermValidationResult,
+  type TermValidationSegment,
 } from './repositories/term-entries'
 export {
   ReferenceImportsRepository,

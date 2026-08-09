@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runProjectQa } from './qa-runner'
+import { buildQaTermOptions, runProjectQa } from './qa-runner'
 import { CatStore } from './store'
 import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
 test('PB-071 project QA persists revision-bound findings and waiver reasons', () => {
@@ -66,7 +66,7 @@ test('deterministic project QA rerun preserves open independent critic findings'
   }
 })
 
-test('PB-096 术语接线：term_entries → QaRunOptions（forbidden 阻断 / preferred 偏离 / 一词多译 query）', () => {
+test('术语接线：required/forbidden 阻断，preferred 仅建议，一词多译进入 query', () => {
   const store = new CatStore({ rootDir: makeTempDir(), entropy: makeEntropy(), now: makeClock() })
   const project = store.createProject({
     name: 'QA-TERM',
@@ -77,27 +77,33 @@ test('PB-096 术语接线：term_entries → QaRunOptions（forbidden 阻断 / p
   const db = store.openProject(project.id)
   try {
     db.termEntries.importMany([
-      { term: 'Potion', translation: '药水', status: 'preferred', caseSensitive: false },
-      // 同一 source term 的第二个 preferred 译法 → 一词多译冲突组
+      { term: 'Potion', translation: '药水', status: 'required', caseSensitive: false },
+      // required 与 preferred 的不同译法仍是冲突组。
       { term: 'Potion', translation: '药剂', status: 'preferred', caseSensitive: false },
+      { term: 'Menu', translation: '菜单', status: 'preferred', caseSensitive: false },
       { term: 'Save', translation: '禁译词', status: 'forbidden', caseSensitive: false },
     ])
     const { segments } = db.assets.insertImported(makeImportedAsset({ segmentCount: 2, fillEvery: 1 }))
     db.segments.applyTargetEdit(segments[0]!.id, '喝了它再说', 0)
     db.segments.applyTargetEdit(segments[1]!.id, '这里有禁译词出现', 0)
     // 源文手动改写为含术语的文本（imported 段源文不含 Potion/Save）
-    db.catDb.db.prepare('UPDATE segments SET source = ? WHERE id = ?').run('Drink the Potion now', segments[0]!.id)
+    db.catDb.db.prepare('UPDATE segments SET source = ? WHERE id = ?').run('Drink the Potion from the Menu now', segments[0]!.id)
     db.catDb.db.prepare('UPDATE segments SET source = ? WHERE id = ?').run('Press Save to continue', segments[1]!.id)
 
     const findings = runProjectQa(db)
     const byCode = new Map(findings.map((finding) => [finding.code, finding]))
 
-    // preferred 偏离：prefer 默认 → L2 needs_review（terminology_soft）
+    assert.deepEqual(
+      buildQaTermOptions(db).requiredTerminology?.map((term) => term.sourceTerm),
+      ['Potion'],
+      'preferred 不得冒充 required',
+    )
+    // required 缺失始终阻断。
     const required = byCode.get('REQUIRED_TERM')
     assert.ok(required !== undefined)
-    assert.equal(required.severity, 'L2')
-    assert.equal(required.issueType, 'terminology_soft')
-    assert.equal(required.disposition, 'needs_review')
+    assert.equal(required.severity, 'L1')
+    assert.equal(required.issueType, 'terminology_hard')
+    assert.equal(required.disposition, 'defect')
 
     // forbidden 永远 strict 阻断：L1 defect（terminology_hard）
     const forbidden = byCode.get('FORBIDDEN_TERM')
@@ -113,12 +119,8 @@ test('PB-096 术语接线：term_entries → QaRunOptions（forbidden 阻断 / p
     assert.equal(conflict.disposition, 'query')
     assert.ok(conflict.message.includes('Potion'))
 
-    // strict 策略覆盖：preferred 不命中升级 L1 defect（terminology_hard）
-    const strict = runProjectQa(db, { glossaryPolicy: 'strict' })
-    const strictRequired = strict.find((finding) => finding.code === 'REQUIRED_TERM')
-    assert.equal(strictRequired?.severity, 'L1')
-    assert.equal(strictRequired?.issueType, 'terminology_hard')
-    assert.equal(strictRequired?.disposition, 'defect')
+    const off = runProjectQa(db, { glossaryPolicy: 'off' })
+    assert.equal(off.find((finding) => finding.code === 'REQUIRED_TERM')?.severity, 'L1')
   } finally {
     db.close()
   }

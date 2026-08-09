@@ -12,6 +12,7 @@ import { createQaTools } from './qa-tools'
 import { createReferenceTools } from './reference-tools'
 import { createDeliveryTools } from './delivery-tools'
 import { createTagTools } from './tag-tools'
+import { createTerminologyTools } from './terminology-tools'
 import { createCatToolRuntime } from './tool-runtime'
 import type { LinguistCatToolsDeps } from './types'
 
@@ -25,6 +26,8 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const [importResourcesTool, importAssetTool] = createIntakeTools(runtime)
   const [exportAssetTool] = createDeliveryTools(runtime)
   const [scanUnknownTagPatternsTool, saveTagProfileCandidateTool] = createTagTools(runtime)
+  const [upsertTermsTool, deleteTermsTool, listTermConflictsTool, validateTermsTool] =
+    createTerminologyTools(runtime)
   const [
     getTranslationContextTool,
     searchTmTool,
@@ -55,6 +58,10 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     applyTranslationsTool,
     searchTmTool,
     searchTermsTool,
+    upsertTermsTool,
+    deleteTermsTool,
+    listTermConflictsTool,
+    validateTermsTool,
     proposeTranslationsTool,
     acceptProposalsTool,
     runQaTool,

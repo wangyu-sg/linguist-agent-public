@@ -43,6 +43,9 @@ const preferredMatch: LinguistTermMatchInfo = {
   note: '游戏内统一使用该译法',
   matchType: 'contains',
   conflict: true,
+  start: 10,
+  end: 16,
+  lowDiscrimination: false,
 }
 
 function createCapabilityHarness({

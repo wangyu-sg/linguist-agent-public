@@ -900,6 +900,25 @@ export class LinguistProjectService {
     return this.resources.upsertTermReference(projectId, input)
   }
 
+  upsertTermReferences(projectId: string, inputs: readonly TermEntryUpsertInput[]) {
+    return this.resources.upsertTermReferences(projectId, inputs)
+  }
+
+  deleteTermReferences(projectId: string, ids: readonly string[]): void {
+    this.resources.deleteTermReferences(projectId, ids)
+  }
+
+  listTermConflicts(
+    projectId: string,
+    options: Parameters<ProjectResources['listTermConflicts']>[1],
+  ) {
+    return this.resources.listTermConflicts(projectId, options)
+  }
+
+  validateTerms(projectId: string, segmentIds: readonly string[]) {
+    return this.resources.validateTerms(projectId, segmentIds)
+  }
+
   deleteReference(
     projectId: string,
     kind: LinguistReferenceKind,

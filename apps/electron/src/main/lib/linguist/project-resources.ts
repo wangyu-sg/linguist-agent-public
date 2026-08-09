@@ -15,7 +15,10 @@ import {
   type TechConstraint,
   type TechConstraintUpsertInput,
   type TermEntryImportInput,
+  type TermEntryConflict,
   type TermEntryUpsertInput,
+  type TermMatchOptions,
+  type TermValidationResult,
   type TmUnitImportInput,
   type VoiceProfile,
   type VoiceProfileUpsertInput,
@@ -161,6 +164,48 @@ export class ProjectResources {
     this.context.assertProjectWritable(projectId)
     const db = this.context.openProject(projectId)
     return this.context.call(() => db.termEntries.upsert(input), projectId)
+  }
+
+  upsertTermReferences(projectId: string, inputs: readonly TermEntryUpsertInput[]): TermReferenceInfo[] {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => db.catDb.transaction('upsert terminology batch', () =>
+      inputs.map((input) => db.termEntries.upsert(input))), projectId)
+  }
+
+  deleteTermReferences(projectId: string, ids: readonly string[]): void {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    this.context.call(() => db.catDb.transaction('delete terminology batch', () => {
+      for (const id of ids) db.termEntries.delete(id)
+    }), projectId)
+  }
+
+  listTermConflicts(
+    projectId: string,
+    options: Pick<TermMatchOptions, 'statuses' | 'module' | 'category'>,
+  ): TermEntryConflict[] {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => db.termEntries.listConflicts(options), projectId)
+  }
+
+  validateTerms(projectId: string, segmentIds: readonly string[]): TermValidationResult {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const segments = db.segments.getByIds(segmentIds)
+      const found = new Set(segments.map((segment) => segment.id as string))
+      const missing = segmentIds.find((id) => !found.has(id))
+      if (missing !== undefined) throw new StoreNotFoundError('segment', missing)
+      return db.termEntries.validateSegments(segments.map((segment) => ({
+        segmentId: segment.id as string,
+        source: segment.source,
+        target: segment.target,
+        ...(segment.context?.meta?.module === undefined ? {} : { module: segment.context.meta.module }),
+        ...(segment.context?.meta?.category === undefined ? {} : { category: segment.context.meta.category }),
+      })))
+    }, projectId)
   }
 
   deleteReference(

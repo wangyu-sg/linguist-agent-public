@@ -235,6 +235,15 @@ test('term importMany/list: required fields persist and repeat import is unchang
   try {
     assert.deepEqual(db.termEntries.importMany(rows), { imported: 2, unchanged: 0 })
     assert.deepEqual(db.termEntries.importMany(rows), { imported: 0, unchanged: 2 })
+    assert.deepEqual(db.termEntries.importMany([{
+      term: 'Color',
+      translation: '颜色',
+      status: 'preferred',
+      caseSensitive: false,
+    }]), {
+      imported: 0,
+      unchanged: 1,
+    })
     const page = db.termEntries.list({ status: 'preferred', limit: 1 })
     assert.equal(page.length, 1)
     assert.match(page[0]!.id, /^ter_v2_[0-9a-f]{64}$/)
@@ -329,6 +338,119 @@ test('term findMatches uses whole-word matching for Latin terms and contiguous m
     assert.equal(db.termEntries.findMatches({ text: 'start here' }).length, 0)
     assert.equal(db.termEntries.findMatches({ text: 'the art is ready' }).length, 1)
     assert.equal(db.termEntries.findMatches({ text: '超级药水' }).length, 1)
+  } finally {
+    db.close()
+  }
+})
+
+test('term matcher keeps the longest overlapping CJK match and independent short spans', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    db.termEntries.importMany([
+      { term: '宇宙', translation: 'cosmos', status: 'preferred', caseSensitive: false },
+      { term: '宇宙飞船', translation: 'spaceship', status: 'required', caseSensitive: false },
+      { term: '宇宙无敌大刀', translation: 'cosmic blade', status: 'allowed', caseSensitive: false },
+    ])
+    const matches = db.termEntries.findMatches({ text: '宇宙飞船飞过宇宙', limit: 10 })
+    assert.deepEqual(matches.map((match) => [match.term, match.start, match.end]), [
+      ['宇宙飞船', 0, 4],
+      ['宇宙', 6, 8],
+    ])
+  } finally {
+    db.close()
+  }
+})
+
+test('term matcher scopes conflicts and protects low-discrimination single characters', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    db.termEntries.importMany([
+      { term: 'Charge', translation: '冲锋', status: 'preferred', caseSensitive: false, module: 'combat' },
+      { term: 'Charge', translation: '收费', status: 'preferred', caseSensitive: false, module: 'billing' },
+      { term: '剑', translation: 'sword', status: 'preferred', caseSensitive: false, module: 'weapon' },
+    ])
+    assert.equal(db.termEntries.listConflicts().length, 1)
+    assert.equal(db.termEntries.listConflicts({ module: 'combat' }).length, 0)
+    assert.equal(db.termEntries.findMatches({ text: '宝剑' }).length, 0)
+    const scoped = db.termEntries.findMatches({ text: '宝剑', module: 'weapon' })
+    assert.equal(scoped[0]?.term, '剑')
+    assert.equal(scoped[0]?.lowDiscrimination, true)
+  } finally {
+    db.close()
+  }
+})
+
+test('term cleaning, compiled-cache invalidation, and post-translation validation share one repository', () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  try {
+    assert.throws(() => db.termEntries.upsert({
+      term: '   ', translation: '空', status: 'preferred', caseSensitive: false,
+    }), /non-empty/)
+    assert.deepEqual(db.termEntries.importMany([
+      { term: '123', translation: '一二三', status: 'preferred', caseSensitive: false },
+    ]), { imported: 0, unchanged: 0 })
+    db.termEntries.importMany([
+      { term: 'Potion', translation: '药水', status: 'required', caseSensitive: false },
+      { term: 'Potion', translation: '药剂', status: 'preferred', caseSensitive: false },
+      { term: 'Menu', translation: '菜单', status: 'preferred', caseSensitive: false },
+      { term: 'Legacy', translation: '禁词', status: 'forbidden', caseSensitive: false },
+    ])
+    assert.equal(db.termEntries.findMatches({ text: 'Use Shield' }).length, 0)
+    db.termEntries.upsert({
+      term: 'Shield', translation: '盾牌', status: 'allowed', caseSensitive: false,
+    })
+    assert.equal(db.termEntries.findMatches({ text: 'Use Shield' })[0]?.translation, '盾牌')
+
+    assert.deepEqual(db.termEntries.validateSegments([{
+      segmentId: 'seg-1',
+      source: 'Open the Potion Menu',
+      target: '打开药剂并显示禁词',
+    }]), {
+      missingRequired: [{
+        segmentId: 'seg-1',
+        termId: db.termEntries.list({ status: 'required' })[0]!.id,
+        term: 'Potion',
+        expected: '药水',
+      }],
+      forbiddenHits: [{
+        segmentId: 'seg-1',
+        termId: db.termEntries.list({ status: 'forbidden' })[0]!.id,
+        forbidden: '禁词',
+      }],
+      preferredNotUsed: [{
+        segmentId: 'seg-1',
+        termId: db.termEntries.list({ status: 'preferred' }).find((entry) => entry.term === 'Menu')!.id,
+        term: 'Menu',
+        preferred: '菜单',
+      }],
+      unresolvedConflicts: [{
+        segmentId: 'seg-1',
+        term: 'potion',
+        termIds: db.termEntries.list({ query: 'Potion' }).map((entry) => entry.id).sort(),
+      }],
+    })
+  } finally {
+    db.close()
+  }
+})
+
+test('term compiled buckets remain usable at 10k and 50k entries', { timeout: 30_000 }, () => {
+  const { store, project } = setup()
+  const db = store.openProject(project.id)
+  const rows = (start: number, count: number) => Array.from({ length: count }, (_, offset) => ({
+    term: `term${String(start + offset).padStart(5, '0')}`,
+    translation: `译${start + offset}`,
+    status: 'allowed' as const,
+    caseSensitive: false,
+  }))
+  try {
+    db.termEntries.importMany(rows(0, 10_000))
+    assert.equal(db.termEntries.findMatches({ text: 'Use term09999 now' })[0]?.translation, '译9999')
+    db.termEntries.importMany(rows(10_000, 40_000))
+    assert.equal(db.termEntries.findMatches({ text: 'Use term49999 now' })[0]?.translation, '译49999')
   } finally {
     db.close()
   }

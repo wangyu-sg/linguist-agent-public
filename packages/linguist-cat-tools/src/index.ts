@@ -82,3 +82,4 @@ export {
 
 export { createLinguistCatTools } from './factory'
 export { createTagTools } from './tag-tools'
+export { createTerminologyTools } from './terminology-tools'

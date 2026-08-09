@@ -270,6 +270,9 @@ export interface TmReferenceMatch extends TmUnit {
 export interface TermReferenceMatch extends TermEntry {
   matchType: 'exact' | 'contains'
   conflict: boolean
+  start: number
+  end: number
+  lowDiscrimination: boolean
 }
 
 export interface ReferenceQuery {

@@ -187,10 +187,19 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       > = neighborCount === 0
         ? new Map()
         : db.segments.neighborsMany(remainingSegments, neighborCount)
-      const sources = remainingSegments.map((segment) => segment.source)
-      const termMatchesBySource: ReadonlyMap<string, TermEntryMatch[]> = termLimit === 0
-        ? new Map()
-        : db.termEntries.findMatchesMany({ texts: sources, limit: termLimit })
+      const termMatchesBySegment = new Map<string, TermEntryMatch[]>()
+      if (termLimit > 0) {
+        for (const segment of remainingSegments) {
+          termMatchesBySegment.set(segment.id as string, db.termEntries.findMatches({
+            text: segment.source,
+            limit: termLimit,
+            ...(segment.context?.meta?.module === undefined
+              ? {} : { module: segment.context.meta.module }),
+            ...(segment.context?.meta?.category === undefined
+              ? {} : { category: segment.context.meta.category }),
+          }))
+        }
+      }
       const tmMatchesBySegment = new Map<string, TmUnitMatch[]>()
       if (tmLimit > 0) {
         const localeGroups = new Map<string, typeof remainingSegments>()
@@ -224,7 +233,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           source: item.source,
           currentTarget: item.target,
         })
-        const termMatches = termMatchesBySource.get(segment.source) ?? []
+        const termMatches = termMatchesBySegment.get(segment.id as string) ?? []
         const tmMatches = tmMatchesBySegment.get(segment.id as string) ?? []
         const tags = scanTagTokens(segment.source, {
           targetLocale: segment.targetLocale,
@@ -264,11 +273,12 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           requiredTerms: termMatches.filter((term) => term.status === 'required'),
           forbiddenTerms: termMatches.filter((term) => term.status === 'forbidden'),
           preferredTerms: termMatches.filter((term) => term.status === 'preferred'),
+          conflicts: termMatches.filter((term) => term.conflict),
           tmMatches,
           warnings: [
             ...(segment.locked ? ['Segment is locked.'] : []),
             ...(termMatches.some((term) => term.conflict)
-              ? ['Conflicting preferred terminology evidence.']
+              ? ['Conflicting terminology evidence.']
               : []),
           ],
           evidence,
@@ -332,6 +342,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         requiredTerms: [],
         forbiddenTerms: [],
         preferredTerms: [],
+        conflicts: [],
         tmMatches: [],
         warnings: [
           ...(context.locked ? ['Segment is locked.'] : []),

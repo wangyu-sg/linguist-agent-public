@@ -9,6 +9,7 @@ import {
   LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
   LINGUIST_PENDING_IMPORT_ID_PATTERN,
   LINGUIST_REFERENCE_ID_PATTERN,
+  LINGUIST_SEGMENT_ID_PATTERN,
   type LinguistAssetPreviewResult,
   type LinguistReferenceCandidatePreviewRequest,
   type LinguistReferenceCandidateSummary,
@@ -20,8 +21,12 @@ import {
   type LinguistReferenceImportResult,
   type LinguistReferenceQueryResult,
   type LinguistTermInfo,
+  type LinguistTermConflictsResult,
   type LinguistTermStatus,
+  type LinguistTermsDeleteResult,
   type LinguistTermUpsertResult,
+  type LinguistTermsUpsertResult,
+  type LinguistTermsValidateResult,
   type LinguistTmInfo,
 } from '@proma/shared'
 import { LinguistImportTooLargeError } from './errors'
@@ -52,6 +57,7 @@ const CANDIDATE_WARNING_LIMIT = 20
 const CANDIDATE_VALUE_MAX_CHARS = 400
 const PREVIEW_TEXT_MAX_CHARS = 200_000
 const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/
+const TERM_BATCH_MAX = 200
 
 /** Store 的 blob 相对路径只留在主进程；IPC 只返回可展示 provenance。 */
 function toReferenceImportInfo(source: ReferenceImport): LinguistReferenceImportInfo {
@@ -243,6 +249,9 @@ function readTermInput(record: Record<string, unknown>): {
   if (typeof status !== 'string' || !TERM_STATUSES.has(status as LinguistTermStatus)) {
     invalid('status must be a known term status')
   }
+  if (status !== 'required' && /^[\p{N}\s.,+\-]+$/u.test(term.trim())) {
+    invalid('pure numeric terms require status=required')
+  }
   if (typeof caseSensitive !== 'boolean') invalid('caseSensitive must be a boolean')
   if (note !== undefined && (typeof note !== 'string' || note.length > NOTE_MAX_LENGTH)) {
     invalid(`note must be a string of at most ${NOTE_MAX_LENGTH} characters`)
@@ -264,6 +273,21 @@ function readTermInput(record: Record<string, unknown>): {
     ...(typeof category === 'string' && category.trim() !== '' ? { category: category.trim() } : {}),
     ...(typeof imageRef === 'string' && imageRef.trim() !== '' ? { imageRef: imageRef.trim() } : {}),
   }
+}
+
+function readBoundedIds(
+  value: unknown,
+  field: string,
+  pattern: RegExp,
+): string[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > TERM_BATCH_MAX) {
+    invalid(`${field} must contain 1-${TERM_BATCH_MAX} ids`)
+  }
+  if (value.some((id) => typeof id !== 'string' || !pattern.test(id))) {
+    invalid(`${field} contains an invalid id`)
+  }
+  if (new Set(value).size !== value.length) invalid(`${field} must not contain duplicates`)
+  return value as string[]
 }
 
 /** 不依赖 Electron，便于用 fake picker + 真实 service 做 node 测试。 */
@@ -417,6 +441,65 @@ export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
       return wrap(() => {
         const record = assertRecord(input)
         return getService().upsertTermReference(readProjectId(record), readTermInput(record))
+      })
+    },
+
+    upsertTerms(input: unknown): Promise<LinguistIpcResult<LinguistTermsUpsertResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const terms = record.terms
+        if (!Array.isArray(terms) || terms.length < 1 || terms.length > TERM_BATCH_MAX) {
+          invalid(`terms must contain 1-${TERM_BATCH_MAX} items`)
+        }
+        const saved = getService().upsertTermReferences(
+          readProjectId(record),
+          terms.map((term) => readTermInput(assertRecord(term))),
+        )
+        return { terms: saved, count: saved.length }
+      })
+    },
+
+    deleteTerms(input: unknown): Promise<LinguistIpcResult<LinguistTermsDeleteResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const termIds = readBoundedIds(record.termIds, 'termIds', /^ter(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/)
+        getService().deleteTermReferences(readProjectId(record), termIds)
+        return { deletedTermIds: termIds, count: termIds.length }
+      })
+    },
+
+    listTermConflicts(input: unknown): Promise<LinguistIpcResult<LinguistTermConflictsResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const statuses = record.statuses
+        if (statuses !== undefined && (!Array.isArray(statuses)
+          || statuses.length < 1
+          || statuses.some((status) => typeof status !== 'string' || !TERM_STATUSES.has(status as LinguistTermStatus)))) {
+          invalid('statuses must contain known term statuses')
+        }
+        const scope = Object.fromEntries(['module', 'category'].flatMap((key) => {
+          const value = record[key]
+          if (value === undefined) return []
+          if (typeof value !== 'string' || value.trim() === '' || value.length > NOTE_MAX_LENGTH) {
+            invalid(`${key} must be a non-blank bounded string`)
+          }
+          return [[key, value.trim()]]
+        }))
+        const conflicts = getService().listTermConflicts(readProjectId(record), {
+          ...(statuses === undefined ? {} : { statuses: statuses as LinguistTermStatus[] }),
+          ...scope,
+        })
+        return { conflicts, count: conflicts.length }
+      })
+    },
+
+    validateTerms(input: unknown): Promise<LinguistIpcResult<LinguistTermsValidateResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        return getService().validateTerms(
+          readProjectId(record),
+          readBoundedIds(record.segmentIds, 'segmentIds', LINGUIST_SEGMENT_ID_PATTERN),
+        )
       })
     },
 

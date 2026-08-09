@@ -6,9 +6,7 @@
  * 创建时确定，与 status 状态机正交）、issue_type 29 枚举全量覆盖。
  *
  * 本模块是纯数据 + 表驱动映射：规则码 -> (issueType, severity, disposition)
- * 的静态默认值。运行时可按项目策略覆盖（如 REQUIRED_TERM 随
- * glossaryPolicy 升降级，见 qa-core.ts），但映射表本身是缺省基线；
- * schema v7 的 SQL 回填与 PB-091 迁移层也以本表为准。
+ * 的静态默认值；schema v7 的 SQL 回填与 PB-091 迁移层也以本表为准。
  */
 
 /** 缺陷严重度五档（L0 绝对阻断 → L4 建议项，L4 不计入缺陷率）。 */
@@ -62,12 +60,11 @@ export interface QaIssueMapping {
 /**
  * 规则码 -> 契约三元组静态映射。定级依据《通用缺陷等级》指引：
  * 占位符/标签/ICU 破坏 = L0 defect；硬术语（禁用/严格必需）= L1 defect；
- * 数字单位 = L1 defect；软术语偏离（prefer 默认）= L2 needs_review；
+ * 数字单位 = L1 defect；preferred 偏离由术语校验返回 advisory；
  * 一致性/标点/空白/长度 = L2–L3 defect；术语表冲突不可判定 = query。
  *
- * REQUIRED_TERM 此处登记 prefer 档默认（L2 needs_review）；strict/off
- * 由 qa-core 按项目 glossaryPolicy 在运行时覆盖。CRITIC_* 的 severity
- * 由 critic 产出时直接给出，此处只兜底 issueType/disposition。
+ * CRITIC_* 的 severity 由 critic 产出时直接给出，此处只兜底
+ * issueType/disposition。
  */
 export const QA_CODE_ISSUE_MAPPING: Readonly<Record<string, QaIssueMapping>> = {
   // —— PB-070 既有 11 码（code 与 message 不变，仅补契约三元组）——
@@ -75,7 +72,7 @@ export const QA_CODE_ISSUE_MAPPING: Readonly<Record<string, QaIssueMapping>> = {
   TAG_MISMATCH: { issueType: 'format_tags', severity: 'L0', disposition: 'defect' },
   EMPTY_TARGET: { issueType: 'omission', severity: 'L1', disposition: 'defect' },
   FORBIDDEN_TERM: { issueType: 'terminology_hard', severity: 'L1', disposition: 'defect' },
-  REQUIRED_TERM: { issueType: 'terminology_soft', severity: 'L2', disposition: 'needs_review' },
+  REQUIRED_TERM: { issueType: 'terminology_hard', severity: 'L1', disposition: 'defect' },
   NUMBER_MISMATCH: { issueType: 'numbers_units_dates', severity: 'L1', disposition: 'defect' },
   WHITESPACE_MISMATCH: { issueType: 'whitespace_linebreaks', severity: 'L3', disposition: 'defect' },
   REPEATED_PUNCTUATION: { issueType: 'punctuation_typography', severity: 'L3', disposition: 'defect' },
