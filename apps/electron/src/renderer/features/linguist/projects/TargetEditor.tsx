@@ -9,6 +9,13 @@ import {
   targetSaveCompletion,
   type TargetSaveResult,
 } from './cat-edit-utils'
+import {
+  extendSelectionOverHardSpans,
+  hardSpanForUnitDeletion,
+  listTargetTagSpans,
+  skipHardSpanForArrow,
+  snapCaretOutOfHardSpan,
+} from './tag-atomic-utils'
 
 export interface ProtectedTextPart {
   kind: 'text' | 'token' | 'suspected'
@@ -306,6 +313,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
     const [blocked, setBlocked] = React.useState(false)
     const [conflict, setConflict] = React.useState(false)
     const [resolvingConflict, setResolvingConflict] = React.useState(false)
+    const [tagHint, setTagHint] = React.useState<string>()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const composingRef = React.useRef(false)
     const pendingCaretRef = React.useRef<number>()
@@ -322,6 +330,11 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
     const suspectedWarnings = React.useMemo(
       () => targetSuspectedTagWarnings(segment, state.value, tagProfile),
       [segment, state.value, tagProfile],
+    )
+    /** K8 行为原子化的统一 span 来源（hard=scanTags；soft=候选正则）。 */
+    const tagSpans = React.useMemo(
+      () => listTargetTagSpans(state.value, tagProfile),
+      [state.value, tagProfile],
     )
     const commitAvailability = {
       archived,
@@ -344,6 +357,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
         dispatch({ type: 'reset', value: segment.target })
         setBlocked(false)
         setConflict(false)
+        setTagHint(undefined)
         return
       }
       if (
@@ -389,6 +403,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
         return false
       }
       setBlocked(false)
+      setTagHint(undefined)
       dispatch(action)
       return true
     }, [segment, state.value, tagProfile])
@@ -553,8 +568,75 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
             )) {
               dispatch({ type: 'composition-end', value: state.value })
             }
+            // IME composition 期间不校正选区；compositionend 后再把光标吸出 hard span。
+            requestAnimationFrame(() => {
+              const el = textareaRef.current
+              if (el === null || composingRef.current) return
+              if (el.selectionStart !== el.selectionEnd) return
+              const snapped = snapCaretOutOfHardSpan(
+                el.selectionStart,
+                listTargetTagSpans(el.value, tagProfile),
+              )
+              if (snapped !== null) el.setSelectionRange(snapped, snapped)
+            })
+          }}
+          onSelect={(event) => {
+            if (readOnly || composingRef.current) return
+            const textarea = event.currentTarget
+            const { selectionStart, selectionEnd } = textarea
+            if (selectionStart === selectionEnd) {
+              const snapped = snapCaretOutOfHardSpan(selectionStart, tagSpans)
+              if (snapped !== null) textarea.setSelectionRange(snapped, snapped)
+              return
+            }
+            const extended = extendSelectionOverHardSpans(selectionStart, selectionEnd, tagSpans)
+            if (extended !== null) textarea.setSelectionRange(extended.start, extended.end)
           }}
           onKeyDown={(event) => {
+            // K8 行为原子化：hard span 的方向键跨越与整单元删除选中。
+            if (
+              !readOnly
+              && !composingRef.current
+              && !event.nativeEvent.isComposing
+              && !event.metaKey
+              && !event.ctrlKey
+              && !event.altKey
+            ) {
+              const textarea = event.currentTarget
+              const collapsed = textarea.selectionStart === textarea.selectionEnd
+              if (
+                collapsed
+                && !event.shiftKey
+                && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+              ) {
+                const target = skipHardSpanForArrow(
+                  textarea.selectionStart,
+                  event.key === 'ArrowLeft' ? 'left' : 'right',
+                  tagSpans,
+                )
+                if (target !== null) {
+                  event.preventDefault()
+                  textarea.setSelectionRange(target, target)
+                  return
+                }
+              }
+              if (event.key === 'Backspace' || event.key === 'Delete') {
+                if (collapsed) {
+                  const span = hardSpanForUnitDeletion(
+                    textarea.selectionStart,
+                    event.key === 'Backspace' ? 'backward' : 'forward',
+                    tagSpans,
+                  )
+                  if (span !== null) {
+                    event.preventDefault()
+                    textarea.setSelectionRange(span.start, span.end)
+                    setTagHint('已选中整个标签；再次按下删除键尝试移除。源文必需的标签无法删除。')
+                    return
+                  }
+                }
+                // 非折叠选区：交给原生删除 + onChange 守恒守卫（required 标签自然不可删）。
+              }
+            }
             const action = editKeyAction({
               key: event.key,
               metaKey: event.metaKey,
@@ -610,6 +692,11 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
         {suspectedWarnings.length > 0 && violations.length === 0 && (
           <span className="rounded-md bg-warning/10 px-2 py-1 text-[10px] text-warning">
             译文未保留 {suspectedWarnings.length} 个疑似 Tag；它们尚未启用硬保护，请确认是否可翻译。
+          </span>
+        )}
+        {tagHint !== undefined && (
+          <span role="status" className="rounded-md bg-primary/10 px-2 py-1 text-[10px] text-primary">
+            {tagHint}
           </span>
         )}
         <span className="flex items-center justify-between gap-2 text-[10px] text-foreground/35">
