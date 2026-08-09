@@ -232,6 +232,7 @@ export interface LinguistImportResourceItem {
   resourceKind?: LinguistIntakeResourceKind
   resourceId?: string
   message?: string
+  unknownTagSummary?: UnknownTagPatternResult[]
 }
 
 export interface LinguistImportResourcesResult {
@@ -265,6 +266,7 @@ export interface LinguistIntakeImportResult {
   unchangedCount: number
   sourceSha256: string
   warnings: string[]
+  unknownTagSummary?: UnknownTagPatternResult[]
 }
 
 export interface LinguistWorkbookMappingSuggestion {

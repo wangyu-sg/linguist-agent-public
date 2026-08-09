@@ -123,6 +123,7 @@ async function importEntry(
       unchangedCount: result.status === 'skipped-duplicate' ? result.segmentCount : 0,
       sourceSha256: result.sourceSha256,
       warnings: result.warnings.map((warning) => warning.message),
+      unknownTagSummary: result.unknownTagSummary,
     }
   }
   if (resourceKind === 'context') {
@@ -289,6 +290,7 @@ export async function importProjectResources(
         status: imported.status,
         resourceKind,
         resourceId: imported.resourceId,
+        ...(imported.unknownTagSummary === undefined ? {} : { unknownTagSummary: imported.unknownTagSummary }),
       })
     } catch (error) {
       items.push({

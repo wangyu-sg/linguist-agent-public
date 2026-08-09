@@ -119,9 +119,8 @@ export function resolveLinguistSessionCatTools(
       getService().scanUnknownTagPatterns(projectId, assetIds, sampleLimit),
     saveTagProfileCandidate: (input, activate) => {
       const service = getService()
-      const saved = service.saveTagProfileCandidate(projectId, input)
+      const saved = service.saveTagProfileCandidate(projectId, input, undefined, activate)
       if (!saved.candidate || !saved.validation) throw new Error('Tag Profile candidate save returned no candidate')
-      if (activate) service.updateTagProfile(projectId, saved.candidate.id, 'activate')
       return {
         candidateId: saved.candidate.id,
         status: activate ? 'active' : 'candidate',

@@ -286,6 +286,22 @@ describe('PB-097 tag 族引擎', () => {
     )
   })
 
+  test('分开登记的 opening/closing 规则按 pairWith 真实配对', () => {
+    const tagProfile = {
+      families: [
+        { id: 'box-open', pattern: '\\[box\\]', class: 'paired' as const, kind: 'opening' as const, pairWith: 'box' },
+        { id: 'box-close', pattern: '\\[/box\\]', class: 'paired' as const, kind: 'closing' as const, pairWith: 'box' },
+      ],
+    }
+    expect(pb097Run('[box]甲[/box]', '[box]乙[/box]', { tagProfile })).toEqual({ ok: true, violations: [] })
+    expect(codesOf('[box]甲[/box]', '甲[/box][box]', { tagProfile })).toContain(
+      DETERMINISTIC_HARD_RULE_CODES.TAG_PAIRING_MISMATCH,
+    )
+    expect(codesOf('<box>[box]甲[/box]</box>', '<box>[box]乙</box>[/box]', { tagProfile })).toContain(
+      DETERMINISTIC_HARD_RULE_CODES.TAG_PAIRING_MISMATCH,
+    )
+  })
+
   test('ICU span 内 {N} 由族管线单独验，不被 withoutSpans 抹掉后漏检', () => {
     expect(codesOf(
       '{count, plural, one {{0} 个} other {{0} 个}}',

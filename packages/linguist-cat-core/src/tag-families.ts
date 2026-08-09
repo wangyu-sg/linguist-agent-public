@@ -39,6 +39,8 @@ export interface TagToken {
   kind: TagTokenKind
   /** paired 族的配对锚（开/闭同名归并）；singleton/self 为 null。 */
   pairKey: string | null
+  /** 内置族按 family、分开登记的项目开闭规则按显式 pairWith 归并。 */
+  pairGroup: string | null
   signature: string
   start: number
   end: number
@@ -101,6 +103,7 @@ interface CompiledFamily {
   regex: RegExp
   skipIcuSpans: boolean
   targetLocales?: readonly string[]
+  pairGroup?: string
   kindOf: (match: RegExpExecArray) => TagTokenKind
   pairKeyOf: (match: RegExpExecArray) => string | null
 }
@@ -213,6 +216,7 @@ function compileProjectFamilies(profile?: LinguistTagProfile): CompiledFamily[] 
       regex,
       skipIcuSpans: false,
       ...(family.targetLocales !== undefined ? { targetLocales: family.targetLocales } : {}),
+      ...(family.pairWith === undefined ? {} : { pairGroup: `project:${family.pairWith}` }),
       kindOf: (match) => family.kind === 'closing'
         ? 'close'
         : family.kind === 'opening'
@@ -274,12 +278,13 @@ export function scanTagTokens(text: string, options: TagScanOptions = {}): TagTo
       claimed.push({ start, end })
       const kind = family.kindOf(match)
       const pairKey = family.pairKeyOf(match)
+      const pairGroup = pairKey === null ? null : (family.pairGroup ?? family.id)
       // paired 归一化开/闭：闭标签不带属性；开标签带属性多重集。
       const signature =
         kind === 'close'
           ? `close:${family.id}:${pairKey ?? ''}`
           : `${kind}:${family.id}:${normalizeLiteral(literal)}`
-      tokens.push({ familyId: family.id, group: family.group, kind, pairKey, signature, start, end })
+      tokens.push({ familyId: family.id, group: family.group, kind, pairKey, pairGroup, signature, start, end })
     }
   }
   return tokens.sort((left, right) => left.start - right.start)
@@ -299,21 +304,21 @@ export function tagGroupSignature(tokens: readonly TagToken[], group: TagTokenGr
  * 空数组 = 配平且嵌套合法。
  */
 export function pairingErrors(tokens: readonly TagToken[]): string[] {
-  const stack: Array<{ pairKey: string; familyId: string }> = []
+  const stack: Array<{ pairKey: string; pairGroup: string; familyId: string }> = []
   const errors: string[] = []
   for (const token of tokens) {
-    if (token.kind === 'open' && token.pairKey !== null) {
-      stack.push({ pairKey: token.pairKey, familyId: token.familyId })
+    if (token.kind === 'open' && token.pairKey !== null && token.pairGroup !== null) {
+      stack.push({ pairKey: token.pairKey, pairGroup: token.pairGroup, familyId: token.familyId })
       continue
     }
-    if (token.kind !== 'close' || token.pairKey === null) continue
+    if (token.kind !== 'close' || token.pairKey === null || token.pairGroup === null) continue
     const top = stack.at(-1)
-    if (top?.pairKey === token.pairKey && top.familyId === token.familyId) {
+    if (top?.pairKey === token.pairKey && top.pairGroup === token.pairGroup) {
       stack.pop()
       continue
     }
     const nested = stack.findIndex(
-      (entry) => entry.pairKey === token.pairKey && entry.familyId === token.familyId,
+      (entry) => entry.pairKey === token.pairKey && entry.pairGroup === token.pairGroup,
     )
     if (nested >= 0) {
       // 交叉嵌套：弹到匹配处，每个被跨过的开标签记一笔。

@@ -593,9 +593,12 @@ export interface LinguistUnknownTagPatternInfo {
   patternShape: string
   examples: LinguistUnknownTagExampleInfo[]
   frequency: number
-  sourceTargetPreservationRate: number
-  pairingEvidence: { opening: number; closing: number; balanced: boolean }
-  knownProfileConflicts: string[]
+  sourceTargetPreservation: {
+    exactValueRate: number
+    shapeRate: number
+    countRate: number
+  }
+  pairingEvidence: { opening: number; closing: number; balanced: boolean; pairKeys: string[] }
   suggestedVariableParts: string[]
 }
 
@@ -938,6 +941,7 @@ export type LinguistProjectImportResult =
       warnings: LinguistImportWarning[]
       sourceSha256: string
       verification: LinguistImportVerificationReport
+      unknownTagSummary: LinguistUnknownTagPatternInfo[]
     }
 
 export type LinguistProjectConfirmXlsxMappingResult = Exclude<

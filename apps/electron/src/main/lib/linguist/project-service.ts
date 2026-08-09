@@ -828,17 +828,20 @@ export class LinguistProjectService {
     projectId: string,
     input: SaveTagProfileCandidateInput,
     replaceId?: string,
+    activate = false,
   ): LinguistTagProfileMutationResult {
     this.assertProjectWritable(projectId)
     const project = this.getProject(projectId)
     const samples = this.tagSamples(projectId)
-    const discoveries = scanUnknownTagPatterns(samples, project.tagProfile, 10)
+    const discoveries = scanUnknownTagPatterns(samples, project.tagProfile, Number.MAX_SAFE_INTEGER)
     const examples = discoveries.flatMap((item) => item.examples)
     const wanted = new Set(input.evidenceExampleIds)
     const evidence = examples.filter((example) => wanted.has(example.id))
-    const negative = examples.filter((example) => !wanted.has(example.id)).map((example) => example.value)
-    const validation = validateTagProfileCandidate(input, evidence, negative, project.tagProfile)
-    if (!validation.valid) throw new Error(validation.errors.join('；'))
+    const validation = validateTagProfileCandidate(input, evidence, samples, project.tagProfile)
+    if (!validation.saveable) throw new Error(validation.errors.join('；'))
+    if (activate && !validation.activationReady) {
+      throw new Error([...validation.errors, ...validation.warnings].join('；'))
+    }
     const baseProfile = replaceId === undefined || project.tagProfile === undefined
       ? project.tagProfile
       : {
@@ -846,7 +849,9 @@ export class LinguistProjectService {
           candidates: project.tagProfile.candidates?.filter((item) => item.id !== replaceId),
         }
     const saved = saveTagCandidate(baseProfile, input)
-    const tagProfile = saved.profile
+    const tagProfile = activate
+      ? activateTagProfileCandidate(saved.profile, saved.candidate.id)
+      : saved.profile
     const updated = this.call(
       () => this.store.index.setTagProfile(projectId, tagProfile),
       projectId,
@@ -862,15 +867,12 @@ export class LinguistProjectService {
     this.assertProjectWritable(projectId)
     const project = this.getProject(projectId)
     const profile = project.tagProfile ?? { families: [] }
-    let tagProfile = action === 'activate'
-      ? activateTagProfileCandidate(profile, entryId)
-      : updateTagProfileEntry(profile, entryId, action)
     if (action === 'activate') {
       const candidate = profile.candidates?.find((item) => item.id === entryId)
       if (!candidate) throw new Error(`Tag Profile candidate not found: ${entryId}`)
       // 激活前必须在当前项目数据上重跑验证，不信任旧 UI 状态。
       const samples = this.tagSamples(projectId)
-      const discoveries = scanUnknownTagPatterns(samples, project.tagProfile, 10)
+      const discoveries = scanUnknownTagPatterns(samples, project.tagProfile, Number.MAX_SAFE_INTEGER)
       const examples = discoveries.flatMap((item) => item.examples)
       const wanted = new Set(candidate.evidenceExampleIds)
       const validation = validateTagProfileCandidate({
@@ -881,11 +883,15 @@ export class LinguistProjectService {
         evidenceExampleIds: candidate.evidenceExampleIds,
         confidence: candidate.confidence,
         explanation: candidate.explanation,
-      }, examples.filter((item) => wanted.has(item.id)), examples.filter((item) => !wanted.has(item.id)).map((item) => item.value), project.tagProfile)
-      if (!validation.valid) throw new Error(validation.errors.join('；'))
+      }, examples.filter((item) => wanted.has(item.id)), samples, project.tagProfile)
+      if (!validation.activationReady) {
+        throw new Error([...validation.errors, ...validation.warnings].join('；'))
+      }
+      const tagProfile = activateTagProfileCandidate(profile, entryId)
       const updated = this.call(() => this.store.index.setTagProfile(projectId, tagProfile), projectId)
       return { project: updated, tagProfile, validation }
     }
+    const tagProfile = updateTagProfileEntry(profile, entryId, action)
     const updated = this.call(() => this.store.index.setTagProfile(projectId, tagProfile), projectId)
     return { project: updated, tagProfile }
   }

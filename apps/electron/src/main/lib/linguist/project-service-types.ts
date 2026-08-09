@@ -12,6 +12,7 @@ import type {
   Segment,
   SegmentStatus,
   TranslationProposal,
+  UnknownTagPatternResult,
   WorkflowOutputStatusPolicy,
   WorkflowStage,
   WorkflowStageEvent,
@@ -202,6 +203,8 @@ export interface ImportAssetResult {
   sourceSha256: string
   /** LA-INTAKE-007：插入同事务内回读验证报告（失败即回滚，不会随 ok:false 返回）。 */
   verification: ImportVerificationReport
+  /** 新资产导入后的确定性轻量扫描；只给证据，绝不自动激活。 */
+  unknownTagSummary: UnknownTagPatternResult[]
 }
 
 /**

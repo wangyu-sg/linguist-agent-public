@@ -4,8 +4,10 @@ import {
   nativeStatusForStage,
   normalizeWorkflowStage,
   runDeterministicHardRules,
+  scanUnknownTagPatterns,
   type Asset,
   type LinguistProject,
+  type UnknownTagPatternResult,
   type QaFindingSeverity,
 } from '@linguist/cat-core'
 import {
@@ -457,6 +459,7 @@ export class ProjectDelivery {
         warnings: [],
         sourceSha256,
         verification,
+        unknownTagSummary: [],
       }
     }
     const imported = await adapter.import({
@@ -505,6 +508,7 @@ export class ProjectDelivery {
     console.log(
       `[Linguist] 已导入资产: 项目 ${projectId} 资产 ${asset.id}（${adapter.id}，${imported.segments.length} 段，${imported.warnings.length} 警告）`,
     )
+    const unknownTagSummary = await this.scanImportedAsset(db, project, asset)
     return {
       status: 'imported',
       assetId: asset.id,
@@ -513,7 +517,26 @@ export class ProjectDelivery {
       warnings: imported.warnings,
       sourceSha256: imported.asset.sourceSha256,
       verification,
+      unknownTagSummary,
     }
+  }
+
+  private async scanImportedAsset(
+    db: ProjectDatabase,
+    project: LinguistProject,
+    asset: Asset,
+  ): Promise<UnknownTagPatternResult[]> {
+    const samples: Array<{ id: string; source: string; target: string }> = []
+    const pageSize = 1_000
+    for (let offset = 0; offset < asset.segmentCount; offset += pageSize) {
+      samples.push(...db.segments.query({ assetId: asset.id, offset, limit: pageSize }).map((segment) => ({
+        id: segment.id as string,
+        source: segment.source,
+        target: segment.target,
+      })))
+      if (offset + pageSize < asset.segmentCount) await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+    return scanUnknownTagPatterns(samples, project.tagProfile)
   }
 
   /**

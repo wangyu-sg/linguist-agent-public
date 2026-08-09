@@ -68,6 +68,48 @@ test('import csv end-to-end', async () => {
   }
 })
 
+test('new asset import returns unknown Tag evidence without activation; holdout gates activation', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const bytes = new TextEncoder().encode([
+      'key,source,target',
+      'a,"Use [Grm:Qty=1] now","使用 [Grm:Qty=1]"',
+      'b,"Use [Grm:Qty=2] now","使用 [Grm:Qty=2]"',
+      'c,"Translate [Damage]","翻译 [Damage]"',
+    ].join('\n'))
+    const imported = await service.importAsset(project.id, { bytes, filename: 'unknown-tags.csv' })
+    const quantity = imported.unknownTagSummary.find((item) => item.patternShape === '[Grm:Qty={number}]')
+    assert.ok(quantity)
+    assert.equal(service.getProject(project.id).tagProfile, undefined, 'import must never activate a profile')
+    const evidenceId = quantity.examples.find((item) => item.side === 'source')?.id
+    assert.ok(evidenceId)
+    const base = {
+      name: 'Grm quantity',
+      kind: 'standalone' as const,
+      evidenceExampleIds: [evidenceId],
+      confidence: 0.95,
+      explanation: '客户数量指令',
+    }
+
+    const broad = service.saveTagProfileCandidate(project.id, { ...base, regex: '\\[[^\\]]+\\]' })
+    assert.equal(broad.validation?.saveable, true)
+    assert.equal(broad.validation?.valid, false)
+    assert.equal(broad.validation?.activationReady, false)
+    await assert.rejects(
+      async () => service.updateTagProfile(project.id, broad.candidate!.id, 'activate'),
+      /误报率|holdout/,
+    )
+
+    const narrow = service.saveTagProfileCandidate(project.id, { ...base, regex: '\\[Grm:Qty=\\d+\\]' })
+    assert.equal(narrow.validation?.activationReady, true)
+    const activated = service.updateTagProfile(project.id, narrow.candidate!.id, 'activate')
+    assert.ok(activated.tagProfile.families.some((family) => family.id === narrow.candidate!.id))
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('import json end-to-end', async () => {
   const service = makeService()
   try {
