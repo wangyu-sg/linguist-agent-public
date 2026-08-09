@@ -70,7 +70,71 @@ describe('CAT Tool Result 原生摘要', () => {
         toolName: 'cat_propose_translations',
         payload: { proposalIds: ['proposal-1', PRIVATE_TEXT] },
         title: '翻译建议',
-        detail: '已创建 2 条待审核建议',
+        detail: '已创建 2 条待查看建议',
+      },
+      {
+        toolName: 'cat_accept_proposals',
+        payload: {
+          accepted: [
+            { proposalId: 'proposal-1', segmentId: 'seg-1', revision: 3, status: 'draft' },
+            { proposalId: 'proposal-2', segmentId: 'seg-2', revision: 1, status: 'draft' },
+          ],
+          replayed: false,
+        },
+        title: '写回结果',
+        detail: '已写回 2 段',
+      },
+      {
+        toolName: 'cat_import_resources',
+        payload: { imported: 5, skippedDuplicate: 2, needsInput: 1, unsupported: 1, failed: 0, items: [] },
+        title: '导入资源',
+        detail: '已导入 5 · 未变化 2 · 需要选择 1 · 不支持 1',
+      },
+      {
+        toolName: 'cat_import_asset',
+        payload: {
+          resourceKind: 'batch',
+          filename: 'game_ui.xliff',
+          status: 'imported',
+          resourceId: 'asset-1',
+          importedCount: 42,
+          unchangedCount: 0,
+          sourceSha256: 'x',
+          warnings: ['w1'],
+        },
+        title: '导入批次',
+        detail: 'game_ui.xliff · 新增 42 · 未变化 0 · 1 条警告',
+      },
+      {
+        toolName: 'cat_export_asset',
+        payload: {
+          filename: 'game_ui.zh-CN.xliff',
+          sha256: 'x',
+          sizeBytes: 1,
+          verifiedAt: 't',
+          verifiedSegments: 42,
+          mode: 'final',
+        },
+        title: '验证并导出',
+        detail: 'game_ui.zh-CN.xliff · 已回读验证 42 段',
+      },
+      {
+        toolName: 'cat_scan_unknown_tag_patterns',
+        payload: { patterns: [{ patternShape: PRIVATE_TEXT }], activated: false },
+        title: '未知 Tag 扫描',
+        detail: '发现 1 类疑似 Tag',
+      },
+      {
+        toolName: 'cat_plan_consistency_repairs',
+        payload: { planId: 'plan-1', findingCount: 5, groupCount: 2, groups: [{ source: PRIVATE_TEXT }] },
+        title: '一致性检查',
+        detail: '2 组发现 5 个问题',
+      },
+      {
+        toolName: 'cat_create_consistency_proposals',
+        payload: { planId: 'plan-1', runId: 'run-1', proposalIds: ['proposal-1'] },
+        title: '一致性建议',
+        detail: '已创建 1 条待查看建议',
       },
       {
         toolName: 'cat_run_qa',
@@ -87,29 +151,6 @@ describe('CAT Tool Result 原生摘要', () => {
         payload: { items: [{ message: PRIVATE_TEXT }], total: 8, limit: 1, offset: 0, hasMore: true },
         title: '质检问题',
         detail: '显示 1 / 8 个问题',
-      },
-      {
-        toolName: 'cat_run_batch_consistency',
-        payload: {
-          mode: 'repair',
-          findingCount: 5,
-          groupCount: 2,
-          groups: [{ source: PRIVATE_TEXT }, { source: PRIVATE_TEXT }],
-          proposalIds: ['proposal-1'],
-        },
-        title: '批量一致性',
-        detail: '2 组发现 5 个问题，创建 1 条待审核建议',
-      },
-      {
-        toolName: 'cat_run_batch_consistency',
-        payload: {
-          mode: 'check-only',
-          findingCount: 5,
-          groupCount: 2,
-          groups: [{ source: PRIVATE_TEXT }, { source: PRIVATE_TEXT }],
-        },
-        title: '批量一致性',
-        detail: '2 组发现 5 个问题',
       },
     ] as const
 
@@ -193,6 +234,10 @@ describe('CAT Tool Result 原生摘要', () => {
       projectId: PROJECT_ID,
       proposalIds: [...proposalIds, PRIVATE_TEXT],
     })).toBeNull()
+    expect(readProposalResultIdentity('cat_create_consistency_proposals', {
+      projectId: PROJECT_ID,
+      proposalIds,
+    })).toEqual({ projectId: PROJECT_ID, proposalIds })
     expect(summarizeProposalReviewStatuses([
       'accepted',
       'accepted',
@@ -200,7 +245,7 @@ describe('CAT Tool Result 原生摘要', () => {
       'pending',
       'superseded',
       'expired',
-    ])).toBe('已接受 2 · 已拒绝 1 · 待审核 1 · 已失效 2')
+    ])).toBe('已接受 2 · 已拒绝 1 · 待查看 1 · 已失效 2')
   })
 
   test('given Timeline 重开或 proposal-reviewed revision when 回查终态 then 逐个使用可信 ID 且任一失败即不伪造状态', async () => {
