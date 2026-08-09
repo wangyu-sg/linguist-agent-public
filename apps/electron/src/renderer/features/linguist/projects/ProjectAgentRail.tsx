@@ -1,13 +1,15 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
-import { ArrowLeft, Maximize2, PanelRightClose } from 'lucide-react'
+import { ArrowLeft, Maximize2, MoreHorizontal, PanelRightClose } from 'lucide-react'
+import { toast } from 'sonner'
 import { createLinguistTurnContextV1 } from '@proma/shared'
 import type {
   AgentSessionMeta,
   LinguistAssetInfo,
   LinguistIpcError,
   LinguistIpcResult,
+  LinguistRole,
   LinguistSessionCreateForProjectRequest,
 } from '@proma/shared'
 import {
@@ -26,7 +28,16 @@ import { UNAVAILABLE_AGENT_HOST_CAPABILITIES } from '@/host/contracts'
 import { getAgentSurfaceControls } from '@/host/extension-registry'
 import type { ComposerContextChip } from '@/features/linguist/composer/ComposerContextChips'
 import { Button } from '@/components/ui/button'
-import { LinguistRoleMenu } from '../session-binding/LinguistRoleMenu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
+import { getLinguistRoleOption } from '../session-binding/LinguistRoleMenu'
 import {
   captureLinguistTurnContextSnapshot,
   createSegmentAgentReference,
@@ -148,10 +159,24 @@ export function buildProjectComposerContextChips({
   return chips
 }
 
-export type ProjectAgentQuickActionId = 'translate' | 'review' | 'qa'
+export type ProjectAgentQuickActionId =
+  | 'translate'
+  | 'review'
+  | 'proofread'
+  | 'translate-suggest'
+  | 'review-suggest'
+  | 'proofread-suggest'
+  | 'qa'
+  | 'terms'
+  | 'import'
+  | 'export'
 
 export interface ProjectAgentQuickAction {
   id: ProjectAgentQuickActionId
+  /** 岗位即任务入口：点击后先把会话岗位切到对应岗位，再发送任务。 */
+  role: LinguistRole
+  /** primary = rail 主按钮；overflow = 「更多项目任务」菜单。 */
+  placement: 'primary' | 'overflow'
   label: string
   prompt: string
   scope: string
@@ -160,14 +185,18 @@ export interface ProjectAgentQuickAction {
 
 const QUICK_ACTION_SEGMENT_LIMIT = 50
 
+/** 片段级动作：冻结点击时的选择快照；项目级动作：只带项目/批次，不带选择。 */
+const BATCH_SCOPED_ACTIONS: ReadonlySet<ProjectAgentQuickActionId> = new Set(['terms', 'export'])
+const PROJECT_SCOPED_ACTIONS: ReadonlySet<ProjectAgentQuickActionId> = new Set(['qa', 'import'])
+
 export function buildProjectAgentQuickActions(
   uiState: LinguistWorkbenchUiState,
 ): readonly ProjectAgentQuickAction[] {
   const selectedCount = uiState.selectedSegmentIds.length
   const hasTarget = selectedCount > 0 || uiState.activeSegmentId !== undefined
   const overLimit = selectedCount > QUICK_ACTION_SEGMENT_LIMIT
-  const disabled = !hasTarget || overLimit
-  const scope = overLimit
+  const segmentDisabled = !hasTarget || overLimit
+  const segmentScope = overLimit
     ? `已选 ${selectedCount} 段，请缩小到 50 段以内。`
     : selectedCount > 0
       ? `将处理已选 ${selectedCount} 个片段。`
@@ -177,27 +206,97 @@ export function buildProjectAgentQuickActions(
   const target = selectedCount > 0
     ? `当前已选 ${selectedCount} 个片段`
     : '当前片段'
+  const selectedSuffix = selectedCount > 0 ? '已选' : '当前'
 
   return [
     {
       id: 'translate',
-      label: selectedCount > 0 ? '翻译已选' : '翻译当前',
-      prompt: `请翻译${target}，完成生产级译文与自检，并按我的意图将结果写回项目。`,
-      scope,
-      disabled,
+      role: 'translator',
+      placement: 'primary',
+      label: `翻译${selectedSuffix}`,
+      prompt: `请翻译${target}，完成正式译文与自检，直接写回项目，不要只保留为待查看建议。`,
+      scope: segmentScope,
+      disabled: segmentDisabled,
     },
     {
       id: 'review',
-      label: selectedCount > 0 ? '审校已选' : '审校当前',
-      prompt: `请完整审校${target}的 Source 与当前 Target，保留正确译文，修订所有实质问题，并按我的意图将结果写回项目。`,
-      scope,
-      disabled,
+      role: 'reviewer',
+      placement: 'primary',
+      label: `审校${selectedSuffix}`,
+      prompt: `请完整审校${target}的 Source 与当前 Target，保留正确译文，修正所有实质问题，直接写回项目，不要只保留为待查看建议。`,
+      scope: segmentScope,
+      disabled: segmentDisabled,
+    },
+    {
+      id: 'proofread',
+      role: 'proofreader',
+      placement: 'primary',
+      label: `校对${selectedSuffix}`,
+      prompt: `请以目标语成品为中心校对${target}，润色表达并统一风格，直接写回项目，不要只保留为待查看建议。`,
+      scope: segmentScope,
+      disabled: segmentDisabled,
+    },
+    {
+      id: 'translate-suggest',
+      role: 'translator',
+      placement: 'overflow',
+      label: '翻译（先看建议）',
+      prompt: `请翻译${target}，完成正式译文与自检；先把结果保留为待查看建议，等我查看后再决定写回。`,
+      scope: segmentScope,
+      disabled: segmentDisabled,
+    },
+    {
+      id: 'review-suggest',
+      role: 'reviewer',
+      placement: 'overflow',
+      label: '审校（先看建议）',
+      prompt: `请完整审校${target}的 Source 与当前 Target，保留正确译文，修正所有实质问题；先把结果保留为待查看建议，等我查看后再决定写回。`,
+      scope: segmentScope,
+      disabled: segmentDisabled,
+    },
+    {
+      id: 'proofread-suggest',
+      role: 'proofreader',
+      placement: 'overflow',
+      label: '校对（先看建议）',
+      prompt: `请以目标语成品为中心校对${target}，润色表达并统一风格；先把结果保留为待查看建议，等我查看后再决定写回。`,
+      scope: segmentScope,
+      disabled: segmentDisabled,
     },
     {
       id: 'qa',
+      role: 'general',
+      placement: 'overflow',
       label: '项目 QA',
       prompt: '请运行整个项目的确定性 QA。检查范围必须是整个项目，当前选择不限制检查范围；请使用现有 CAT Tools 报告发现的问题。',
       scope: 'QA 始终检查整个项目，当前选择不限制范围。',
+      disabled: false,
+    },
+    {
+      id: 'terms',
+      role: 'general',
+      placement: 'overflow',
+      label: '整理术语',
+      prompt: '请整理当前批次的术语：提取应统一的源文术语，对照项目术语库，列出缺失或不一致的条目；新增或修改术语前先给我确认。',
+      scope: '整理当前批次的术语，与片段选择无关。',
+      disabled: false,
+    },
+    {
+      id: 'import',
+      role: 'general',
+      placement: 'overflow',
+      label: '导入资源',
+      prompt: '我想导入语言资产（翻译记忆、术语库、Style Guide 或 Context）。请说明可以接受哪些类型与格式的文件；等我提供文件路径后，帮我登记进项目。',
+      scope: '导入项目级语言资产，与片段选择无关。',
+      disabled: false,
+    },
+    {
+      id: 'export',
+      role: 'general',
+      placement: 'overflow',
+      label: '验证并导出',
+      prompt: '请验证并导出当前批次的交付文件：先运行交付预检，如有阻断项请如实告诉我；预检通过后保存交付副本，并报告验证与保存结果。',
+      scope: '导出当前批次，先预检再保存，与片段选择无关。',
       disabled: false,
     },
   ]
@@ -214,14 +313,22 @@ export function createProjectAgentQuickActionPendingPrompt(
   const action = buildProjectAgentQuickActions(uiState).find(({ id }) => id === actionId)!
   if (action.disabled) return null
 
-  const snapshot = actionId === 'qa'
+  const snapshot = PROJECT_SCOPED_ACTIONS.has(actionId)
     ? createLinguistTurnContextV1({
       projectId,
       selectedSegmentIds: [],
       capturedAt,
       uiRevision: uiState.uiRevision,
     })
-    : captureLinguistTurnContextSnapshot(store, projectId, capturedAt)
+    : BATCH_SCOPED_ACTIONS.has(actionId)
+      ? createLinguistTurnContextV1({
+        projectId,
+        ...(uiState.activeAssetId !== undefined ? { assetId: uiState.activeAssetId } : {}),
+        selectedSegmentIds: [],
+        capturedAt,
+        uiRevision: uiState.uiRevision,
+      })
+      : captureLinguistTurnContextSnapshot(store, projectId, capturedAt)
   if (snapshot.selectionTruncated) return null
 
   return {
@@ -245,6 +352,11 @@ export function ProjectAgentRail({
   const store = useStore()
   const sessionId = useAtomValue(projectCurrentAgentSessionIdMapAtom).get(projectId)
   const sessions = useAtomValue(agentSessionsAtom)
+  const setSessions = useSetAtom(agentSessionsAtom)
+  const currentSession = sessionId === undefined
+    ? undefined
+    : sessions.find((item) => item.id === sessionId)
+  const currentRole: LinguistRole = currentSession?.linguistRole ?? 'general'
   const sideChatConversationId = useAtomValue(agentSideChatMapAtom).get(sessionId ?? '') ?? null
   const sidePanelOpen = useAtomValue(agentSidePanelOpenAtom)
   const setPendingPrompt = useSetAtom(agentPendingPromptAtom)
@@ -298,16 +410,48 @@ export function ProjectAgentRail({
     () => buildProjectAgentQuickActions(uiState),
     [uiState],
   )
+  const primaryQuickActions = React.useMemo(
+    () => quickActions.filter((action) => action.placement === 'primary'),
+    [quickActions],
+  )
+  const overflowQuickActions = React.useMemo(
+    () => quickActions.filter((action) => action.placement === 'overflow'),
+    [quickActions],
+  )
   const runQuickAction = React.useCallback((actionId: ProjectAgentQuickActionId): void => {
     if (!sessionId) return
+    const action = quickActions.find(({ id }) => id === actionId)
+    if (!action || action.disabled) return
+    // 点击时先冻结范围快照，再切换岗位；等待期间的选择变化不影响本次任务。
     const pending = createProjectAgentQuickActionPendingPrompt(
       store,
       projectId,
       sessionId,
       actionId,
     )
-    if (pending) setPendingPrompt(pending)
-  }, [projectId, sessionId, setPendingPrompt, store])
+    if (!pending) return
+    // 岗位即任务入口：切换失败时不发送，避免岗位提示词与任务错配。
+    if (action.role !== currentRole) {
+      void (async () => {
+        try {
+          const result = await window.electronAPI.linguistSessionsUpdateRole({
+            sessionId,
+            role: action.role,
+          })
+          if (!result.ok) {
+            toast.error('切换岗位失败', { description: describeLinguistIpcError(result.error) })
+            return
+          }
+          setSessions((previous) => replaceAgentSessionInFreshnessOrder(previous, result.data))
+          setPendingPrompt(pending)
+        } catch {
+          toast.error('切换岗位失败', { description: '与主进程通信异常（INTERNAL）' })
+        }
+      })()
+      return
+    }
+    setPendingPrompt(pending)
+  }, [currentRole, projectId, quickActions, sessionId, setPendingPrompt, setSessions, store])
 
   React.useEffect(() => {
     if (sessionId) return
@@ -362,8 +506,7 @@ export function ProjectAgentRail({
   }, [presentation, setUiState])
 
   if (sessionId) {
-    const session = sessions.find((item) => item.id === sessionId)
-    const role = session?.linguistRole ?? 'general'
+    const roleOption = getLinguistRoleOption(currentRole)
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center gap-1 bg-content-area/70 px-2 py-1.5 shadow-sm">
@@ -382,12 +525,12 @@ export function ProjectAgentRail({
           )}
           {presentation === 'full' && (
             <div
-              aria-label={`项目 ${projectName}，角色 ${role}`}
+              aria-label={`项目 ${projectName}，岗位 ${roleOption.label}`}
               className="min-w-0 flex-1 px-2"
             >
               <p className="truncate text-xs font-medium text-foreground">{projectName}</p>
               <p className="truncate text-[11px] text-muted-foreground">
-                {[role, ...contextSummary.slice(1).map((chip) => chip.label)].join(' · ')}
+                {[roleOption.shortLabel, ...contextSummary.slice(1).map((chip) => chip.label)].join(' · ')}
               </p>
             </div>
           )}
@@ -395,9 +538,9 @@ export function ProjectAgentRail({
             <div
               role="group"
               aria-label="项目 Agent 快捷动作"
-              className="grid min-w-0 flex-1 grid-cols-3 gap-1"
+              className="grid min-w-0 flex-1 grid-cols-[1fr_1fr_1fr_auto] gap-1"
             >
-              {quickActions.map((action) => (
+              {primaryQuickActions.map((action) => (
                 <Button
                   key={action.id}
                   type="button"
@@ -411,9 +554,59 @@ export function ProjectAgentRail({
                   {action.label}
                 </Button>
               ))}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    aria-label="更多项目任务"
+                    title="更多项目任务"
+                    className="h-7 px-1.5"
+                  >
+                    <MoreHorizontal aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="z-[9999] w-72">
+                  <DropdownMenuLabel className="text-[11px] text-muted-foreground">
+                    先看建议（写回前等你查看）
+                  </DropdownMenuLabel>
+                  {overflowQuickActions
+                    .filter((action) => action.id.endsWith('-suggest'))
+                    .map((action) => (
+                      <DropdownMenuItem
+                        key={action.id}
+                        disabled={action.disabled}
+                        onSelect={() => runQuickAction(action.id)}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs">{action.label}</span>
+                          <span className="block text-[11px] leading-4 text-muted-foreground">{action.scope}</span>
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] text-muted-foreground">
+                    项目任务
+                  </DropdownMenuLabel>
+                  {overflowQuickActions
+                    .filter((action) => !action.id.endsWith('-suggest'))
+                    .map((action) => (
+                      <DropdownMenuItem
+                        key={action.id}
+                        disabled={action.disabled}
+                        onSelect={() => runQuickAction(action.id)}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs">{action.label}</span>
+                          <span className="block text-[11px] leading-4 text-muted-foreground">{action.scope}</span>
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
-          {session && <LinguistRoleMenu session={session} compact={presentation === 'rail'} />}
           {presentation === 'rail' && (
             <div
               role="group"

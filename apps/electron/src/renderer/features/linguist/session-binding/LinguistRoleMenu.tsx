@@ -21,10 +21,10 @@ export const LINGUIST_ROLE_OPTIONS: readonly {
   description: string
   icon: typeof Sparkles
 }[] = [
-  { role: 'general', label: '通用项目 Agent', shortLabel: '通用', description: '导入、分析、QA、导出和开放式项目任务', icon: Sparkles },
-  { role: 'translator', label: 'Translator', shortLabel: '翻译', description: '对选定范围完成生产级翻译和自检', icon: Languages },
-  { role: 'reviewer', label: 'Reviewer', shortLabel: '审校', description: '完整审查 Source 与当前 Target', icon: ScanText },
-  { role: 'proofreader', label: 'Proofreader', shortLabel: '校对', description: '以目标语成品为中心校对和润色', icon: SpellCheck2 },
+  { role: 'general', label: '通用项目 Agent', shortLabel: '通用', description: '导入、分析、术语、QA、交付和开放任务', icon: Sparkles },
+  { role: 'translator', label: '翻译', shortLabel: '翻译', description: '对声明范围完成正式译文并自检', icon: Languages },
+  { role: 'reviewer', label: '双语审校', shortLabel: '审校', description: '检查完整 Source 与当前 Target，修正任何问题', icon: ScanText },
+  { role: 'proofreader', label: '目标语校对', shortLabel: '校对', description: '以目标语成品为中心润色和统一风格', icon: SpellCheck2 },
 ] as const
 
 export function getLinguistRoleOption(role: LinguistRole | undefined) {
@@ -50,13 +50,13 @@ export function LinguistRoleMenu({
     try {
       const result = await window.electronAPI.linguistSessionsUpdateRole({ sessionId: session.id, role })
       if (!result.ok) {
-        toast.error('切换角色失败', { description: describeLinguistIpcError(result.error) })
+        toast.error('切换岗位失败', { description: describeLinguistIpcError(result.error) })
         return
       }
       setSessions((previous) => replaceAgentSessionInFreshnessOrder(previous, result.data))
-      toast.success(`当前角色：${getLinguistRoleOption(role).label}`)
+      toast.success(`已切换为${getLinguistRoleOption(role).label}`)
     } catch {
-      toast.error('切换角色失败', { description: '与主进程通信异常（INTERNAL）' })
+      toast.error('切换岗位失败', { description: '与主进程通信异常（INTERNAL）' })
     } finally {
       setSaving(false)
     }
@@ -68,7 +68,7 @@ export function LinguistRoleMenu({
         <button
           type="button"
           disabled={saving}
-          aria-label={`当前角色：${current.label}`}
+          aria-label={`当前岗位：${current.label}`}
           className={cn(
             'titlebar-no-drag inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 text-foreground/60 hover:bg-accent/70 hover:text-foreground',
             compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-[11px]',
