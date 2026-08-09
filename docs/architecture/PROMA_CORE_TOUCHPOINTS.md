@@ -1,7 +1,7 @@
-# Proma Core Touchpoints — v0.16.9 基线
+# Proma Core Touchpoints — v0.16.10 基线
 
-> 基线：v0.16.9 / d08179d9b6e84a5ac8e33a7d70fc2e12dfde21cf
-> 正式 merge：50a74398bb6f8949444593c2915a87a5f8964237
+> 基线：v0.16.10 / 72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a
+> 正式 merge：ea26177f36d59bd2781d7ff9264451a8430e2249
 > 机读真源：[proma-touchpoints.json](./proma-touchpoints.json)
 > 强制测试：tests/upstream-boundary.test.ts（bun run check:boundaries）
 
@@ -11,12 +11,12 @@
 
 | 集合 | 路径数 | 依据 |
 |---|---:|---|
-| formal merge 相对 Proma v0.16.9 的全部变动 | 809 | git diff --name-only d08179d...50a74398 |
+| formal merge 相对 Proma v0.16.10 的全部变动 | 808 | git diff --name-only 72fd1b1a...ea26177f |
 | 允许路径 | 549 | 机读账本的 allowedNewPaths |
 | 仅公开路径占位符替换 | 4 | boundary test 的精确内容规则 |
-| 当前账本 | 256 | 其余 Proma 核心差异逐文件登记 |
+| 当前账本 | 255 | 其余 Proma 核心差异逐文件登记 |
 
-v0.16.9 已吸收 Voice Dictation 文本投递和新 Onboarding 版式，因此对应两个本地触点已退役。其余差异继续按 Permanent Product Fork、Local Host Seam、Linguist Extension 与 Temporary Deviation 分类；精确路径和理由只维护在机读账本中。
+v0.16.10 已删除旧的独立 Agent Island BrowserWindow，本地对应触点随之退役；原生 Island 能力继续复用上游实现。其余差异继续按 Permanent Product Fork、Local Host Seam、Linguist Extension 与 Temporary Deviation 分类；精确路径和理由只维护在机读账本中。
 
 ## 规则
 

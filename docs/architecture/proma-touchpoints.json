@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "baseline": "d08179d9b6e84a5ac8e33a7d70fc2e12dfde21cf",
-  "formalMerge": "50a74398bb6f8949444593c2915a87a5f8964237",
-  "recomputedOn": "2026-08-08",
-  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.16.9 merge and extended for post-merge product work. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
+  "baseline": "72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a",
+  "formalMerge": "ea26177f36d59bd2781d7ff9264451a8430e2249",
+  "recomputedOn": "2026-08-10",
+  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.16.10 merge and extended for post-merge product work. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -187,11 +187,6 @@
     },
     {
       "file": "apps/electron/src/main/lib/agent-island-navigation-policy.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
-    },
-    {
-      "file": "apps/electron/src/main/lib/agent-island-window.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
     },

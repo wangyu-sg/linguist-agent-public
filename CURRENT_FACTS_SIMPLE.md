@@ -1,6 +1,6 @@
 # Linguist Agent 简化重构事实基线
 
-核验日期：2026-08-08（Asia/Shanghai）
+核验日期：2026-08-10（Asia/Shanghai）
 
 本文件只记录代码、清单、测试和本机只读检查能够确认的事实。客户名称、正文和本机绝对路径不进入仓库。
 
@@ -9,15 +9,15 @@
 - 核验起点 HEAD：`b5a65ef377c9816a24c756f06a8cf76bc4f1b947`（`main`，与 `origin/main` 一致）。
 - 核验起点工作树：clean；SIMPLE-001 修复后改动见当前 `git status --short`。
 - remotes：`origin` 为公开 Linguist Agent 仓库，`upstream` 为 Proma 仓库。
-- 当前 Proma tag：`v0.16.9`；commit：`d08179d9b6e84a5ac8e33a7d70fc2e12dfde21cf`。
-- 正式 merge commit：`50a74398bb6f8949444593c2915a87a5f8964237`；承载分支：`sync/proma-v0.16.9-simple`。
+- 当前 Proma tag：`v0.16.10`；commit：`72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a`。
+- 正式 merge commit：`ea26177f36d59bd2781d7ff9264451a8430e2249`；承载分支：`integration/la-proma-0.16.10`。
 
 ## 固定版本
 
 | 项目 | 核验值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App | `0.16.21`（简化重构；核验起点 `0.16.19`） |
+| Electron App | `0.16.22` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |

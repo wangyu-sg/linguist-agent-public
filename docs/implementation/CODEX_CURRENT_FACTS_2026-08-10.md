@@ -17,7 +17,7 @@
 | 项目 | 当前值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App | `0.16.21` |
+| Electron App | `0.16.22` |
 | Shared | `0.1.86` |
 | CAT Core | `0.0.15` |
 | CAT Formats | `0.0.9` |
@@ -32,6 +32,14 @@
 - `node --test tests/linguist-fusion-architecture.test.mjs`：`9 pass / 0 fail`。
 - `bun run --filter='@proma/electron' test:linguist`：`181 pass / 0 fail`。
 - `bun run --filter='@linguist/cat-tools' test`：`36 pass / 0 fail`。
+
+## Proma v0.16.10 同步结果
+
+- 正式 merge：`ea26177f36d59bd2781d7ff9264451a8430e2249`，上游 parent 为 `72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a`。
+- 承载分支：`integration/la-proma-0.16.10`。
+- Electron App：`0.16.22`。
+- Planning 继续以原子 `planning.json` 为唯一 authority；上游 EventKit 双向同步、冲突和 outbox 能力已移植到该 JSON Store，没有引入通用 SQLite。
+- 上游已删除旧 Agent Island BrowserWindow，本地同步删除该重复窗口并保留原生 Island 路径。
 
 ## 关键文件与调用关系
 
