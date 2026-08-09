@@ -1826,53 +1826,20 @@ export interface LinguistDiagnosticsRequest {
   retry?: boolean
 }
 
-/** LA-PROMPT-002：全局预算裁减记录（只有 project_digest 层可被裁减，固定层永不截断）。 */
-export interface LinguistPromptTrimmedLayerInfo {
-  layer: 'project_digest'
-  /** 进入全局 allocator 时的层正文字符数。 */
-  originalChars: number
-  /** 裁减后的层正文字符数。 */
-  finalChars: number
-  reason: 'global_budget' | 'min_viable_fallback' | 'wire_overflow'
-}
-
 export interface LinguistPromptStatusInfo {
-  profileVersion: string
-  profileHash: string
-  /** LA-QUALITY-002：恒定专业质量合同层（全角色共享同一 version/hash）。 */
-  contractVersion: string
-  contractHash: string
-  role: import('./agent').LinguistRole
-  roleVersion: string
-  roleHash: string
-  projectDigestVersion: string
-  projectDigestHash: string
-  projectDigestRevision: string
-  projectDigestStatus: 'ready' | 'partial' | 'unavailable'
+  promptVersion: string
   promptHash: string
-  degraded: boolean
-  fallbackLayers: Array<'role' | 'project_digest'>
-  retryable: boolean
-  /** LA-PROMPT-001：本次探测使用的 renderer（'xml' = Claude byte 兼容；'markdown' = Pi generic）。 */
+  role: import('./agent').LinguistRole
+  roleSource: 'bundle' | 'fallback'
   renderer: 'xml' | 'markdown'
-  /** LA-PROMPT-001：canonical prompt contract 版本。 */
-  promptContractVersion: string
-  /** LA-PROMPT-001：canonical contract 序列化的 sha256，跨 renderer 等价比较值。 */
-  promptContractHash: string
-  /** LA-PROMPT-002：全局 Prompt 预算裁减报告（空数组 = 未发生裁减）。 */
-  trimmedLayers: Array<LinguistPromptTrimmedLayerInfo>
+  projectDigestIncluded: boolean
+  charCount: number
 }
 
 export interface LinguistDiagnosticsQaMetrics {
   openErrors: number
   openWarnings: number
   pendingProposals: number
-}
-
-export interface LinguistDiagnosticsRetryMetrics {
-  attempts: number
-  lastAttemptAt?: string
-  lastRecovered?: boolean
 }
 
 export interface LinguistDiagnosticsEventGap {
@@ -1918,10 +1885,8 @@ export interface LinguistDevDiagnostics {
     promptProbeLatencyMs: number
     promptProbeResultBytes: number
     qa: LinguistDiagnosticsQaMetrics
-    retry: LinguistDiagnosticsRetryMetrics
     eventGap: LinguistDiagnosticsEventGap
   }
-  promptCacheSize: number
   recentJob:
     | { status: 'not_available' }
     | {
@@ -1985,14 +1950,12 @@ export interface LinguistDiagnosticBundle {
     promptProbeLatencyMs: number
     promptProbeResultBytes: number
     qa: LinguistDiagnosticsQaMetrics
-    retry: LinguistDiagnosticsRetryMetrics
     eventGap: LinguistDiagnosticsEventGap
   }
   runtime: {
     agentRuntime?: import('./agent-provider').AgentRuntime
     baseToolCount: number | null
     overlayToolCount: number
-    promptCacheSize: number
     workerMode: 'node-worker_threads' | 'not_observed'
     workerStatus: LinguistDiagnosticsJobStatus | 'idle' | 'degraded'
     recentJobStatus: LinguistDiagnosticsJobStatus | 'not_available'

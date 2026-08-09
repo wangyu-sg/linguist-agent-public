@@ -13,15 +13,12 @@ import type {
 import { resolveAgentProfile } from '@proma/shared'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
 import {
-  buildLinguistProjectAssetsPromptWithStatus,
-  getLinguistPromptCacheSize,
-} from './project-assets-prompt'
-import { getDefaultLinguistRolesRoot } from './project-skill'
+  buildLinguistPrompt,
+  getDefaultLinguistRolesRoot,
+} from './linguist-prompt-builder'
 import { computeLinguistProjectRevision } from './project-revision'
 import {
-  getLinguistPromptRetryObservation,
   getLinguistRuntimeObservation,
-  recordLinguistPromptRetry,
 } from './runtime-diagnostics'
 import {
   resolveLinguistSessionCatTools,
@@ -136,7 +133,7 @@ function collectDiagnostics(
     ...(session?.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
   }
   const promptStartedAt = performance.now()
-  const prompt = buildLinguistProjectAssetsPromptWithStatus(
+  const prompt = buildLinguistPrompt(
     promptSession,
     deps.getService,
     {
@@ -147,11 +144,6 @@ function collectDiagnostics(
     },
   )
   const promptProbeLatencyMs = Math.max(0, performance.now() - promptStartedAt)
-  const retryScope = `${request.projectId}:${request.sessionId ?? 'project-default'}`
-  if (request.retry === true) {
-    recordLinguistPromptRetry(retryScope, !prompt.status.degraded)
-  }
-  const retry = getLinguistPromptRetryObservation(retryScope)
   const observation = getLinguistRuntimeObservation(session?.id)
   const profile = session === undefined ? undefined : resolveAgentProfile(session)
   const overlay = session === undefined
@@ -191,11 +183,7 @@ function collectDiagnostics(
     ...(session === undefined ? {} : { sessionId: session.id }),
     status: {
       projectRevision,
-      prompt: {
-        ...prompt.status,
-        fallbackLayers: [...prompt.status.fallbackLayers],
-        trimmedLayers: prompt.status.trimmedLayers.map((trim) => ({ ...trim })),
-      },
+      prompt: { ...prompt.status },
       dev: {
         ...(profile?.kind === 'linguist'
           ? {
@@ -234,22 +222,12 @@ function collectDiagnostics(
           promptProbeLatencyMs,
           promptProbeResultBytes: Buffer.byteLength(prompt.prompt, 'utf8'),
           qa: collectQaMetrics(service, request.projectId),
-          retry: {
-            attempts: retry?.attempts ?? 0,
-            ...(retry === undefined
-              ? {}
-              : {
-                lastAttemptAt: retry.lastAttemptAt,
-                lastRecovered: retry.lastRecovered,
-              }),
-          },
           eventGap: {
             latestSequence: eventSequence,
             acknowledgedSequence: eventAck?.sequence ?? 0,
             pending: Math.max(0, eventSequence - (eventAck?.sequence ?? 0)),
           },
         },
-        promptCacheSize: getLinguistPromptCacheSize(),
         recentJob: latestJob === undefined
           ? { status: 'not_available' as const }
           : {
@@ -341,7 +319,6 @@ function buildBundle(collected: CollectedDiagnostics): LinguistDiagnosticBundle 
       agentRuntime: status.dev.agentRuntime,
       baseToolCount: status.dev.tools.base,
       overlayToolCount: status.dev.tools.overlay,
-      promptCacheSize: status.dev.promptCacheSize,
       workerMode: status.dev.worker.mode,
       workerStatus: status.dev.worker.status,
       recentJobStatus: status.dev.recentJob.status,

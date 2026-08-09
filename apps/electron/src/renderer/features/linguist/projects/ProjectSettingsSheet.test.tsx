@@ -93,32 +93,18 @@ describe('ProjectSettingsSheet', () => {
     expect(frozen).toContain('已有批次，语言方向已冻结')
   })
 
-  test('given Prompt 降级 when 渲染诊断状态 then 显示降级层和重新探测动作', () => {
+  test('given Prompt 岗位文件不可用 when 渲染诊断状态 then 显示回退来源和重新探测动作', () => {
     const html = renderToStaticMarkup(
       <>
         <PromptStatusCard
           prompt={{
-            profileVersion: '1.0.0',
-            profileHash: 'profile-hash',
-            contractVersion: '1.0.0',
-            contractHash: 'contract-hash',
-            role: 'general',
-            roleVersion: '1.0.0',
-            roleHash: 'role-hash',
-            projectDigestVersion: '1',
-            projectDigestHash: 'project-digest-hash',
-            projectDigestRevision: 'rev-1',
-            projectDigestStatus: 'partial',
+            promptVersion: '3.0.0',
             promptHash: 'prompt-hash',
-            degraded: true,
-            fallbackLayers: ['role', 'project_digest'],
-            retryable: true,
+            role: 'general',
+            roleSource: 'fallback',
             renderer: 'xml',
-            promptContractVersion: '1.0.0',
-            promptContractHash: 'prompt-contract-hash',
-            trimmedLayers: [
-              { layer: 'project_digest', originalChars: 9000, finalChars: 7000, reason: 'global_budget' },
-            ],
+            projectDigestIncluded: true,
+            charCount: 12000,
           }}
           loading={false}
           onRetry={() => undefined}
@@ -128,10 +114,9 @@ describe('ProjectSettingsSheet', () => {
     )
 
     expect(html).toContain('Prompt 状态')
-    expect(html).toContain('Prompt 已降级')
-    expect(html).toContain('Role、Project Digest')
-    expect(html).toContain('预算裁减 · Project Digest')
-    expect(html).toContain('9000 → 7000 字符 · 总预算')
+    expect(html).toContain('岗位文件不可用，已使用内置岗位说明')
+    expect(html).toContain('general / included')
+    expect(html).toContain('12000 chars')
     expect(html).toContain('重新探测')
     expect(html).toContain('预览脱敏内容')
     expect(html).toContain('导出诊断包')

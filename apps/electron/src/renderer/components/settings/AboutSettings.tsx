@@ -531,9 +531,9 @@ export function AboutSettings(): React.ReactElement {
             {LINGUIST_BUILD_METADATA.catSchema}
           </span>
         </SettingsRow>
-        <SettingsRow label="Prompt Contract">
+        <SettingsRow label="Prompt Version">
           <span className="text-sm text-muted-foreground font-mono">
-            {LINGUIST_BUILD_METADATA.promptContract}
+            {LINGUIST_BUILD_METADATA.promptVersion}
           </span>
         </SettingsRow>
         <SettingsRow

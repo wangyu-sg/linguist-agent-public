@@ -26,7 +26,7 @@ const session = (
   ...overrides,
 })
 
-test('LA-OBS-001: status exposes Prompt degradation and one refresh re-probes the same seam', async () => {
+test('LA-OBS-001: status exposes Prompt source and one refresh re-probes the same seam', async () => {
   const service = makeService()
   try {
     const project = service.createProject({ ...INPUT, name: '诊断项目' })
@@ -71,9 +71,10 @@ test('LA-OBS-001: status exposes Prompt degradation and one refresh re-probes th
     const degraded = await ipc.getStatus({ projectId: project.id, sessionId: meta.id })
     assert.equal(degraded.ok, true)
     if (!degraded.ok) return
-    assert.equal(degraded.data.prompt.degraded, true)
-    assert.deepEqual(degraded.data.prompt.fallbackLayers, ['role'])
-    assert.equal(degraded.data.prompt.retryable, true)
+    assert.equal(degraded.data.prompt.roleSource, 'fallback')
+    assert.equal(degraded.data.prompt.role, 'reviewer')
+    assert.equal(degraded.data.prompt.projectDigestIncluded, true)
+    assert.equal(degraded.data.prompt.charCount > 0, true)
     assert.equal(degraded.data.dev?.tools.base, 17)
     assert.equal(degraded.data.dev?.tools.overlay, 8)
     assert.equal(degraded.data.dev?.profile?.kind, 'linguist')
@@ -137,11 +138,8 @@ test('LA-OBS-001: status exposes Prompt degradation and one refresh re-probes th
     })
     assert.equal(retried.ok, true)
     if (retried.ok) {
-      assert.equal(retried.data.prompt.degraded, false)
-      assert.deepEqual(retried.data.prompt.fallbackLayers, [])
-      assert.equal(retried.data.prompt.retryable, false)
-      assert.equal(retried.data.dev?.metrics.retry.attempts, 1)
-      assert.equal(retried.data.dev?.metrics.retry.lastRecovered, true)
+      assert.equal(retried.data.prompt.roleSource, 'bundle')
+      assert.equal(retried.data.prompt.role, 'reviewer')
     }
   } finally {
     service.closeAll()
@@ -164,7 +162,7 @@ test('LA-OBS-001: production status keeps Prompt health visible but omits Dev Di
 
     assert.equal(result.ok, true)
     if (result.ok) {
-      assert.equal(typeof result.data.prompt.degraded, 'boolean')
+      assert.equal(typeof result.data.prompt.promptHash, 'string')
       assert.equal(result.data.dev, undefined)
       assert.equal(JSON.stringify(result.data).includes('/private/customer/path'), false)
     }

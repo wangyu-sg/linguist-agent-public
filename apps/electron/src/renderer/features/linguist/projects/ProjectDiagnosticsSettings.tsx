@@ -28,24 +28,6 @@ type DiagnosticsState = {
   exporting: boolean
 }
 
-const FALLBACK_LABELS: Record<
-  LinguistPromptStatusInfo['fallbackLayers'][number],
-  string
-> = {
-  role: 'Role',
-  project_digest: 'Project Digest',
-}
-
-/** LA-PROMPT-002：全局预算裁减原因展示文案。 */
-const TRIM_REASON_LABELS: Record<
-  LinguistPromptStatusInfo['trimmedLayers'][number]['reason'],
-  string
-> = {
-  global_budget: '总预算',
-  min_viable_fallback: '最小占位降级',
-  wire_overflow: '防御性硬裁',
-}
-
 function shortHash(value: string): string {
   return `${value.slice(0, 12)}…`
 }
@@ -68,24 +50,17 @@ export function PromptStatusCard({
             <p className="mt-1 text-xs text-muted-foreground">
               {loading ? '正在探测真实 Prompt 构建链…' : '打开诊断页后探测。'}
             </p>
-          ) : prompt.degraded ? (
+          ) : prompt.roleSource === 'fallback' ? (
             <div className="mt-2 space-y-1">
               <p className="flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                 <AlertTriangle className="size-3.5" aria-hidden="true" />
-                Prompt 已降级
-              </p>
-              <p className="text-xs text-muted-foreground">
-                fallback_layers：
-                {prompt.fallbackLayers.map((layer) => FALLBACK_LABELS[layer]).join('、')}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                retryable：{String(prompt.retryable)}
+                岗位文件不可用，已使用内置岗位说明
               </p>
             </div>
           ) : (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="size-3.5" aria-hidden="true" />
-              Profile / Role / Execution Policy / Project Digest 均使用当前资源
+              当前岗位 Prompt 已加载
             </p>
           )}
         </div>
@@ -99,14 +74,14 @@ export function PromptStatusCard({
           {loading
             ? <Loader2 className="mr-1.5 size-3.5 animate-spin motion-reduce:hidden" />
             : <RefreshCw className="mr-1.5 size-3.5" />}
-          重新探测{prompt?.retryable ? ' / 重试' : ''}
+          重新探测
         </Button>
       </div>
       {prompt !== undefined && (
         <dl className="mt-3 grid gap-1 text-xs text-muted-foreground">
           <div className="flex justify-between gap-3">
             <dt>Prompt Version</dt>
-            <dd className="font-mono text-foreground">{prompt.profileVersion}</dd>
+            <dd className="font-mono text-foreground">{prompt.promptVersion}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt>Prompt Digest</dt>
@@ -115,19 +90,15 @@ export function PromptStatusCard({
             </dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt>Project Digest</dt>
-            <dd className="font-mono text-foreground" title={prompt.projectDigestHash}>
-              {prompt.projectDigestStatus} · {shortHash(prompt.projectDigestHash)}
+            <dt>Role / Digest</dt>
+            <dd className="font-mono text-foreground">
+              {prompt.role} / {prompt.projectDigestIncluded ? 'included' : 'skipped'}
             </dd>
           </div>
-          {prompt.trimmedLayers.map((trim) => (
-            <div key={`${trim.layer}:${trim.reason}`} className="flex justify-between gap-3">
-              <dt>预算裁减 · {FALLBACK_LABELS[trim.layer]}</dt>
-              <dd className="font-mono text-foreground">
-                {trim.originalChars} → {trim.finalChars} 字符 · {TRIM_REASON_LABELS[trim.reason]}
-              </dd>
-            </div>
-          ))}
+          <div className="flex justify-between gap-3">
+            <dt>Prompt Size</dt>
+            <dd className="font-mono text-foreground">{prompt.charCount} chars</dd>
+          </div>
         </dl>
       )}
     </section>
@@ -160,7 +131,6 @@ function DevDiagnostics({
         <DiagnosticRow label="Project Revision" value={status.projectRevision} mono />
         <DiagnosticRow label="Event Seq" value={String(dev.trace.eventSequence)} />
         <DiagnosticRow label="Recent Job" value={recentJob} mono />
-        <DiagnosticRow label="Cache Size" value={String(dev.promptCacheSize)} />
         <DiagnosticRow
           label="Worker"
           value={`${dev.worker.mode} / ${dev.worker.status}`}
@@ -176,10 +146,6 @@ function DevDiagnostics({
         <DiagnosticRow
           label="QA Metrics"
           value={`errors ${dev.metrics.qa.openErrors} · warnings ${dev.metrics.qa.openWarnings} · pending proposals ${dev.metrics.qa.pendingProposals}`}
-        />
-        <DiagnosticRow
-          label="Retry"
-          value={`${dev.metrics.retry.attempts} 次${dev.metrics.retry.lastRecovered === undefined ? '' : ` · recovered ${String(dev.metrics.retry.lastRecovered)}`}`}
         />
         <DiagnosticRow
           label="Event Gap"
@@ -240,8 +206,8 @@ function BuildMetadataCard(): React.ReactElement {
           mono
         />
         <DiagnosticRow
-          label="Prompt Contract"
-          value={LINGUIST_BUILD_METADATA.promptContract}
+          label="Prompt Version"
+          value={LINGUIST_BUILD_METADATA.promptVersion}
           mono
         />
         <DiagnosticRow

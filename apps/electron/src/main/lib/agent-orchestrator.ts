@@ -76,7 +76,7 @@ import {
   buildLinguistTurnContextBlock,
   validateLinguistTurnContextForAgentTurn,
 } from './linguist/turn-context-validator'
-import { buildLinguistProjectAssetsPromptWithStatus } from './linguist/project-assets-prompt'
+import { buildLinguistPrompt } from './linguist/linguist-prompt-builder'
 import { resolveLinguistSessionCatTools } from './linguist/session-cat-tools'
 import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
 import {
@@ -1846,10 +1846,9 @@ export class AgentOrchestrator {
         currentModelId: selectedModelId,
       }) + (automationContext ? `\n\n## 定时任务执行上下文\n\n${automationContext}` : '')
       const agentProfile = resolveAgentProfile(sessionMeta)
-      // LA-PROMPT-001：同一份 canonical prompt contract，wire 表达随 runtime 适配——
-      // Claude 走 'xml'（与历史输出 byte 级一致），Pi 走 generic 'markdown'。
+      // 同一份简化 Prompt 内容随 runtime 使用 XML 或 Markdown 外壳。
       const linguistPromptBuild = agentProfile.kind === 'linguist'
-        ? buildLinguistProjectAssetsPromptWithStatus(
+        ? buildLinguistPrompt(
           sessionMeta as typeof sessionMeta & { linguistProjectId: string },
           getLinguistProjectService,
           { renderer: agentRuntime === 'pi' ? 'markdown' : 'xml' },
@@ -1939,10 +1938,8 @@ export class AgentOrchestrator {
             runtime: agentRuntime,
             // 质量档位废除；proposal_issuances.strategy 列保留
             // legacy 读取（旧行仍有值），新行不再写入该字段。
-            linguistPromptVersion: linguistPromptBuild!.status.profileVersion,
+            linguistPromptVersion: linguistPromptBuild!.status.promptVersion,
             promptHash: linguistPromptBuild!.status.promptHash,
-            projectDigestHash: linguistPromptBuild!.status.projectDigestHash,
-            projectDigestRevision: linguistPromptBuild!.status.projectDigestRevision,
             ...(linguistTurnContextSnapshot === undefined
               ? {}
               : {
