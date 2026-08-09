@@ -265,13 +265,13 @@ test('cat_export_asset delegates the bound asset and absolute destination withou
     const result = await invoke(toolByName(tools, 'cat_export_asset'), {
       assetId: fixture.assetA.id,
       destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
-      mode: 'draft',
+      mode: 'as-is',
       overwrite: true,
     })
     assert.deepEqual(exportedInput, {
       assetId: fixture.assetA.id,
       destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
-      mode: 'draft',
+      mode: 'as-is',
       overwrite: true,
     })
     assert.deepEqual(result.details, {
@@ -280,7 +280,7 @@ test('cat_export_asset delegates the bound asset and absolute destination withou
       sizeBytes: 42,
       verifiedAt: '2026-08-07T00:00:00.000Z',
       verifiedSegments: fixture.segmentsA.length,
-      mode: 'draft',
+      mode: 'as-is',
     })
     assert.equal(collectStrings(result.details).some((value) => value.includes('/Users/test')), false)
   } finally {

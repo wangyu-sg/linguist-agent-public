@@ -78,6 +78,13 @@ import {
   LINGUIST_ASSET_ID_PATTERN,
   type LinguistExportFileInfo,
 } from '@proma/shared'
+import type {
+  LinguistImportResourcesInput,
+  LinguistImportResourcesResult,
+  LinguistIntakeImportResult,
+  LinguistIntakeResourceKind,
+  LinguistIntakeXlsxMapping,
+} from '@linguist/cat-tools'
 import {
   errorCodeOf,
   LinguistProjectArchivedError,
@@ -88,6 +95,10 @@ import {
 } from './errors'
 import { readLinguistExportManifests } from './export-manifest'
 import { createDefaultCatFormatRegistry } from './format-registry'
+import {
+  importProjectFile,
+  importProjectResources,
+} from './project-file-intake'
 import {
   MAX_IMPORT_BYTES,
   ProjectDelivery,
@@ -170,6 +181,7 @@ export class LinguistProjectService {
     this.workspaceAllocator = options.workspaceAllocator ?? (() => randomUUID())
     this.registry = options.registry ?? createDefaultCatFormatRegistry()
     const context: ProjectModuleContext = {
+      rootDir: this.rootDir,
       registry: this.registry,
       now: () => this.now(),
       getProject: (projectId) => this.getProject(projectId),
@@ -1101,6 +1113,22 @@ export class LinguistProjectService {
     return this.delivery.prepareDelivery(projectId, assetId)
   }
 
+  exportAssetToPath(
+    projectId: string,
+    assetId: string,
+    destinationPath: string,
+    mode: 'verified' | 'as-is',
+    overwrite: boolean,
+  ) {
+    return this.delivery.exportAssetToPath(
+      projectId,
+      assetId,
+      destinationPath,
+      mode,
+      overwrite,
+    )
+  }
+
   stageExport(
     projectId: string,
     assetId: string,
@@ -1168,6 +1196,24 @@ export class LinguistProjectService {
     input: ImportAssetInput,
   ): Promise<ImportAssetResult> {
     return this.delivery.importAsset(projectId, input)
+  }
+
+  importFileResource(
+    projectId: string,
+    cwd: string,
+    filePath: string,
+    resourceKind: LinguistIntakeResourceKind,
+    xlsxMapping?: LinguistIntakeXlsxMapping,
+  ): Promise<LinguistIntakeImportResult> {
+    return importProjectFile(this, projectId, cwd, filePath, resourceKind, xlsxMapping)
+  }
+
+  importResourcesFromPaths(
+    projectId: string,
+    cwd: string,
+    input: LinguistImportResourcesInput,
+  ): Promise<LinguistImportResourcesResult> {
+    return importProjectResources(this, projectId, cwd, input)
   }
 
   /** LA-INTAKE-007：撤销一次导入（无下游引用才允许；归档 fail closed）。 */

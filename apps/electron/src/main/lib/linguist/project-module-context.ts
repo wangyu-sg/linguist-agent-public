@@ -10,6 +10,7 @@ import type { LinguistProjectPaths } from './paths'
  * LinguistProjectService 统一管理，避免拆分后出现第二套状态。
  */
 export interface ProjectModuleContext {
+  rootDir: string
   registry: CatFormatRegistry
   now: () => string
   getProject: (projectId: string) => LinguistProject

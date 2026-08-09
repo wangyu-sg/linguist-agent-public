@@ -18,7 +18,7 @@ export function createIntakeTools(runtime: CatToolRuntime) {
   const importResourcesTool = defineTool({
     name: 'cat_import_resources',
     label: 'CAT import resources',
-    description: 'Import files or directories into the bound project. Paths follow the current Proma session permissions. Auto mode classifies supported batches, TM, TB, and Context; ambiguous mappings are returned as needsInput.',
+    description: 'Import files or directories into the bound project. Paths follow the current Proma session permissions. Auto mode classifies batches, TM, TB, and Context; ambiguous mappings are returned as needsInput and a 500-file scan returns truncated=true.',
     promptSnippet: 'Import one or more project resources from files or directories',
     parameters: Type.Object({
       paths: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 100 }),

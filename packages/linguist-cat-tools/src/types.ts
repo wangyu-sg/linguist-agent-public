@@ -171,7 +171,7 @@ export interface LinguistCatToolsDeps {
   exportAsset?: (
     assetId: string,
     destinationPath: string,
-    mode: 'final' | 'draft',
+    mode: 'verified' | 'as-is',
     overwrite: boolean,
   ) => Promise<LinguistExportAssetResult>
   /** 当前绑定项目的确定性未知 Tag 形状扫描。 */
@@ -196,7 +196,7 @@ export interface LinguistExportAssetResult {
   sizeBytes: number
   verifiedAt: string
   verifiedSegments: number
-  mode: 'final' | 'draft'
+  mode: 'verified' | 'as-is'
 }
 
 export type LinguistIntakeResourceKind = 'batch' | 'tm' | 'terms' | 'context'
@@ -212,7 +212,7 @@ export interface LinguistImportResourcesInput {
 
 export interface LinguistImportResourceItem {
   filename: string
-  status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'supported'
+  status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'ready'
   resourceKind?: LinguistIntakeResourceKind
   resourceId?: string
   message?: string
@@ -220,12 +220,13 @@ export interface LinguistImportResourceItem {
 
 export interface LinguistImportResourcesResult {
   found: number
-  supported: number
+  ready: number
   imported: number
   skippedDuplicate: number
   needsInput: number
   unsupported: number
   failed: number
+  truncated: boolean
   items: LinguistImportResourceItem[]
 }
 

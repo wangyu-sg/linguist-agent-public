@@ -417,6 +417,15 @@ export interface LinguistDeliveryVerification extends ExportVerification {
   suggestedFilename: string
 }
 
+export interface LinguistLocalExportResult {
+  filename: string
+  sha256: string
+  sizeBytes: number
+  verifiedAt: string
+  verifiedSegments: number
+  mode: 'verified' | 'as-is'
+}
+
 export interface LinguistPreparedDelivery {
   preflight: LinguistDeliveryPreflight
   verification?: LinguistDeliveryVerification

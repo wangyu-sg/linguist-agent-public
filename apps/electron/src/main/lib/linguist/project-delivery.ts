@@ -28,7 +28,7 @@ import {
   type ProjectDatabase,
 } from '@linguist/cat-store'
 import { rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import {
   LinguistExportBlockedByQaError,
   LinguistImportTooLargeError,
@@ -38,6 +38,7 @@ import {
   mapStoreError,
 } from './errors'
 import { recordLinguistExportManifest } from './export-manifest'
+import { copyFileVerified } from './secure-export'
 import { buildDeliveryReport } from './project-delivery-report'
 import type { ProjectModuleContext } from './project-module-context'
 import { computeLinguistProjectRevision } from './project-revision'
@@ -51,6 +52,7 @@ import type {
   LinguistDeliveryPreflight,
   LinguistDeliveryQaSummary,
   LinguistDeliveryVerification,
+  LinguistLocalExportResult,
   LinguistPreparedDelivery,
   LinguistStagedExport,
   UndoImportAssetResult,
@@ -247,6 +249,45 @@ export class ProjectDelivery {
         verification,
       ),
       staged,
+    }
+  }
+
+  async exportAssetToPath(
+    projectId: string,
+    assetId: string,
+    destinationPath: string,
+    mode: 'verified' | 'as-is',
+    overwrite: boolean,
+  ): Promise<LinguistLocalExportResult> {
+    let staged: LinguistStagedExport
+    if (mode === 'as-is') {
+      staged = await this.stageExport(projectId, assetId, {
+        allowBlockingQa: true,
+        allowHardRuleViolations: true,
+      })
+    } else {
+      const prepared = await this.prepareDelivery(projectId, assetId)
+      if (prepared.staged === undefined) {
+        throw new FormatExportError(
+          prepared.preflight.formatId,
+          prepared.preflight.blockers
+            .map((blocker) => `${blocker.code}: ${blocker.message}`)
+            .join('; '),
+        )
+      }
+      staged = prepared.staged
+    }
+    return {
+      filename: basename(destinationPath),
+      ...copyFileVerified({
+        managedRoot: this.context.rootDir,
+        sourcePath: staged.stagingPath,
+        destinationPath,
+        expectedSha256: staged.artifact.sha256,
+        overwrite,
+      }),
+      verifiedSegments: staged.verifiedSegments,
+      mode,
     }
   }
 

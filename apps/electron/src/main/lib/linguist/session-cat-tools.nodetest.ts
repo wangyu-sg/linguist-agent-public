@@ -261,6 +261,34 @@ test('bound active session: Agent exports a verified batch to a new absolute loc
   service.closeAll()
 })
 
+test('Agent export reports concrete verified blockers and permits explicitly requested as-is output', async () => {
+  const service = makeServiceOnLinguistRoot()
+  const project = service.createProject({
+    ...PROJECT_INPUT,
+    sourceLocale: 'zh-CN',
+    targetLocale: 'en-US',
+  })
+  const imported = await service.importAsset(project.id, {
+    bytes: readFixture('minimal_delivery.sdlxliff'),
+    filename: 'minimal_delivery.sdlxliff',
+  })
+  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+  const tools = catTools.resolveLinguistSessionCatTools(meta, () => service)
+  const destinationPath = join(tempHome, 'Desktop', 'minimal_delivery.as-is.sdlxliff')
+  await assert.rejects(
+    invoke(toolByName(tools, 'cat_export_asset'), { assetId: imported.assetId, destinationPath }),
+    /UNCONFIRMED_SEGMENTS/,
+  )
+  const result = await invoke(toolByName(tools, 'cat_export_asset'), {
+    assetId: imported.assetId,
+    destinationPath,
+    mode: 'as-is',
+  })
+  assert.equal(result.mode, 'as-is')
+  assert.equal(existsSync(destinationPath), true)
+  service.closeAll()
+})
+
 test('LF-063: bound CAT writes emit ordered host-owned project mutation events; reads stay silent', async () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT, name: 'mutation event 项目' })
@@ -374,12 +402,79 @@ test('bound session imports external files and a mixed resource directory withou
   writeFileSync(join(scanDir, 'memory.tmx'), `<?xml version="1.0"?><tmx version="1.4"><header srclang="en"/><body><tu><tuv xml:lang="en"><seg>World</seg></tuv><tuv xml:lang="zh-CN"><seg>世界</seg></tuv></tu></body></tmx>`)
   writeFileSync(join(scanDir, 'brief.md'), '# Brief\nKeep combat UI concise.')
   const mixed = await invoke(toolByName(tools, 'cat_import_resources'), {
-    paths: [scanDir],
+    paths: [scanDir, join(scanDir, 'missing-file.json')],
     recursive: true,
   })
   assert.deepEqual(
-    Object.fromEntries(['found', 'supported', 'imported', 'skippedDuplicate', 'needsInput', 'unsupported', 'failed'].map((key) => [key, mixed[key]])),
-    { found: 3, supported: 3, imported: 3, skippedDuplicate: 0, needsInput: 0, unsupported: 0, failed: 0 },
+    Object.fromEntries(['found', 'ready', 'imported', 'skippedDuplicate', 'needsInput', 'unsupported', 'failed', 'truncated'].map((key) => [key, mixed[key]])),
+    { found: 4, ready: 0, imported: 3, skippedDuplicate: 0, needsInput: 0, unsupported: 0, failed: 1, truncated: false },
+  )
+
+  const phraseDir = join(tempHome, 'phrase-without-master')
+  mkdirSync(phraseDir)
+  writeFileSync(
+    join(phraseDir, 'split.mxliff'),
+    '<xliff xmlns:m="http://www.memsource.com/mxlf/2.0" version="1.2"><file><body><trans-unit id="a"><source>Hello {1}</source></trans-unit></body></file></xliff>',
+  )
+  const phrase = await invoke(toolByName(tools, 'cat_import_resources'), { paths: [phraseDir] })
+  assert.equal(phrase.needsInput, 1)
+  assert.equal(phrase.imported, 0)
+  assert.match(String((phrase.items as Array<{ message?: string }>)[0]?.message), /master XLIFF/)
+
+  const pairedSplit = `<?xml version="1.0"?><xliff xmlns:m="http://www.memsource.com/mxlf/2.0" version="1.2"><file><body><group id="1" m:para-id="1"><context-group><context context-type="x-key">1001</context></context-group><trans-unit id="job:1" m:para-id="1"><source>获得{1}30%攻击速度{2}。</source></trans-unit></group></body></file></xliff>`
+  const pairedMaster = `<?xml version="1.0"?><xliff version="1.2"><file><body><trans-unit id="1001"><source>获得&lt;color=#ffffff&gt;30%攻击速度&lt;/color&gt;。</source></trans-unit></body></file></xliff>`
+  const ambiguousPhraseDir = join(tempHome, 'phrase-ambiguous-master')
+  mkdirSync(ambiguousPhraseDir)
+  writeFileSync(join(ambiguousPhraseDir, 'split.mxliff'), pairedSplit)
+  writeFileSync(join(ambiguousPhraseDir, 'master-a.xliff'), pairedMaster)
+  writeFileSync(join(ambiguousPhraseDir, 'master-b.xliff'), pairedMaster)
+  const ambiguousPhrase = await invoke(toolByName(tools, 'cat_import_resources'), {
+    paths: [ambiguousPhraseDir],
+  })
+  assert.match(
+    String((ambiguousPhrase.items as Array<{ filename: string; message?: string }>).find((item) => item.filename === 'split.mxliff')?.message),
+    /多个同分 master/,
+  )
+
+  const incompletePhraseDir = join(tempHome, 'phrase-incomplete-master')
+  mkdirSync(incompletePhraseDir)
+  writeFileSync(
+    join(incompletePhraseDir, 'split.mxliff'),
+    pairedSplit.replace('</body>', '<trans-unit id="job:2"><source>未匹配{1}内容{2}</source></trans-unit></body>'),
+  )
+  writeFileSync(join(incompletePhraseDir, 'master.xliff'), pairedMaster)
+  const incompletePhrase = await invoke(toolByName(tools, 'cat_import_resources'), {
+    paths: [incompletePhraseDir],
+  })
+  assert.match(
+    String((incompletePhrase.items as Array<{ filename: string; message?: string }>).find((item) => item.filename === 'split.mxliff')?.message),
+    /不完整或有歧义/,
+  )
+
+  const completePhraseDir = join(tempHome, 'phrase-complete-master')
+  mkdirSync(completePhraseDir)
+  writeFileSync(join(completePhraseDir, 'split.mxliff'), pairedSplit)
+  writeFileSync(join(completePhraseDir, 'master.xliff'), pairedMaster)
+  const completePhrase = await invoke(toolByName(tools, 'cat_import_resources'), {
+    paths: [completePhraseDir],
+  })
+  assert.deepEqual(
+    { imported: completePhrase.imported, needsInput: completePhrase.needsInput, failed: completePhrase.failed },
+    { imported: 2, needsInput: 0, failed: 0 },
+  )
+
+  const largeDir = join(tempHome, 'large-resource-drop')
+  mkdirSync(largeDir)
+  for (let index = 0; index < 501; index += 1) {
+    writeFileSync(join(largeDir, `brief-${String(index).padStart(3, '0')}.md`), '# Brief')
+  }
+  const large = await invoke(toolByName(tools, 'cat_import_resources'), {
+    paths: [largeDir],
+    dryRun: true,
+  })
+  assert.deepEqual(
+    { found: large.found, ready: large.ready, truncated: large.truncated, itemCount: (large.items as unknown[]).length },
+    { found: 500, ready: 500, truncated: true, itemCount: 500 },
   )
 
   await assert.rejects(
