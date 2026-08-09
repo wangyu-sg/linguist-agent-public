@@ -188,7 +188,7 @@ const INTEGRITY_CHECK_LABELS: Record<string, string> = {
   sqlite_integrity: 'SQLite integrity_check',
   foreign_keys: 'foreign_key_check',
   orphans: '孤儿与项目作用域',
-  proposal_references: 'Proposal 引用',
+  proposal_references: '建议引用',
   qa_references: 'QA 引用与历史',
   review_references: 'Review 引用',
   event_sequence: '项目事件序列',
@@ -263,7 +263,7 @@ function FullIntegrityScrubSection({
             Full Integrity Scrub
           </h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            在独立 Worker 中逐项全量检查 source/blob、SQLite、Proposal/QA/Review、事件与 job/run lineage、导出清单及 Session Workspace；无法可靠验证的项会明确标为 unavailable。
+            在独立 Worker 中逐项全量检查 source/blob、SQLite、建议/QA/Review、事件与 job/run lineage、导出清单及 Session Workspace；无法可靠验证的项会明确标为 unavailable。
           </p>
         </div>
         <div className="flex shrink-0 gap-2">

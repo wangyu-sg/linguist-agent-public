@@ -586,7 +586,7 @@ function ProposalInlineReview({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="rounded-full bg-review/10 px-2 py-0.5 text-[10px] font-medium text-review">
-          Pending Proposal
+          待查看建议
         </span>
         {blockedLabel !== undefined && (
           <span
@@ -601,13 +601,13 @@ function ProposalInlineReview({
       </div>
       <div className="mt-2 grid gap-2 lg:grid-cols-2">
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-wider text-foreground/60">Current</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-foreground/60">当前译文</p>
           <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-foreground/55">
             {segment.target || '（空）'}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-wider text-review">Proposed</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-review">建议译文</p>
           <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-foreground">
             {textDiffParts(segment.target, proposal.proposedTarget).map((part, index) => (
               part.kind === 'remove'
@@ -621,7 +621,7 @@ function ProposalInlineReview({
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[10px] text-foreground/60">
-          {evidence.length > 0 ? `Evidence：${evidence.join(' · ')}` : 'Evidence：未提供'}
+          {evidence.length > 0 ? `证据：${evidence.join(' · ')}` : '证据：未提供'}
           {proposal.warnings.length > 0 ? ` · ${proposal.warnings.join(' · ')}` : ''}
         </p>
         <div className="flex gap-1.5">
@@ -633,7 +633,7 @@ function ProposalInlineReview({
             className="inline-flex items-center gap-1 rounded-md bg-foreground/[0.06] px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-40"
           >
             {mutating ? <Loader2 aria-hidden="true" className="size-3 animate-spin" /> : <X aria-hidden="true" className="size-3" />}
-            Reject
+            拒绝
           </button>
           <button
             type="button"
@@ -643,7 +643,7 @@ function ProposalInlineReview({
             className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             {mutating ? <Loader2 aria-hidden="true" className="size-3 animate-spin" /> : <Check aria-hidden="true" className="size-3" />}
-            Accept
+            接受
           </button>
         </div>
       </div>
@@ -991,7 +991,7 @@ function getProposalLabel(
   proposal?: LinguistProposalInfo,
 ): string | undefined {
   if (proposal === undefined) return undefined
-  return segment.revision === proposal.baseRevision ? 'Proposal 待审' : 'Proposal 已过期'
+  return segment.revision === proposal.baseRevision ? '建议待查看' : '建议已过期'
 }
 
 function getSegmentRowLabel(

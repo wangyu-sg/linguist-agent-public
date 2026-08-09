@@ -32,7 +32,7 @@ describe('LinguistBottomDock', () => {
     expect(html).toContain('QA')
     expect(html).toContain('上下文/证据')
     expect(html).toContain('预览')
-    expect(html).toContain('提案')
+    expect(html).toContain('待查看建议')
     expect(html).toContain('准备交付')
     expect(html).toContain('aria-selected="true"')
     expect(html).toContain('id="linguist-dock-tab-project-a-qa" type="button" role="tab" aria-selected="true" aria-controls="linguist-dock-panel-project-a" tabindex="0"')

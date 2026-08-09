@@ -36,6 +36,6 @@ describe('PrepareDeliveryPanel', () => {
     expect(html).toContain('dialogue.sdlxliff')
     expect(html).toContain('运行交付预检')
     expect(html).toContain('不会被覆盖')
-    expect(html).toContain('提案、QA、本轮状态、格式回写与导出完整性')
+    expect(html).toContain('建议、QA、本轮状态、格式回写与导出完整性')
   })
 })

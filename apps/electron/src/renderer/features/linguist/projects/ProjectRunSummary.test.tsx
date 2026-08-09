@@ -72,7 +72,7 @@ describe('ProjectRunSummary K-004/K-005', () => {
     expect(html).toContain('本次运行')
     expect(html).toContain('撤销本次 CAT 变更')
     expect(html).toContain('完成 3 / 4')
-    expect(html).toContain('Proposal 2')
+    expect(html).toContain('建议 2')
     expect(html).toContain('文件 1（仅记录）')
     expect(html).toContain('部分完成：已撤销 1 项，拒绝 1 项')
     expect(html).toContain('proposal-b')

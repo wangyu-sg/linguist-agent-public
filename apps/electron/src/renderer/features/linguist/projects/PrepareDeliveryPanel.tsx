@@ -157,7 +157,7 @@ export function PrepareDeliveryPanel({
       )}
       {state.status === 'idle' && selectedAsset !== undefined && (
         <p className="rounded-xl bg-foreground/[0.035] px-3 py-4 text-center text-xs text-foreground/50">
-          选择“运行交付预检”，核对提案、QA、本轮状态、格式回写与导出完整性。
+          选择“运行交付预检”，核对建议、QA、本轮状态、格式回写与导出完整性。
         </p>
       )}
       {state.status === 'ready' && (
@@ -207,7 +207,7 @@ function DeliveryResult({
       </div>
 
       <dl className="grid gap-2 text-[11px] sm:grid-cols-3">
-        <Metric label="待处理提案" value={preflight.pendingProposalCount} />
+        <Metric label="待处理建议" value={preflight.pendingProposalCount} />
         <Metric label="开放 QA 错误" value={preflight.qa.openErrors} />
         <Metric label="QA 警告 / 已豁免" value={`${preflight.qa.openWarnings} / ${preflight.qa.waived}`} />
       </dl>

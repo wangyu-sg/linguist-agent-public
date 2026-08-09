@@ -22,7 +22,7 @@ const TABS: ReadonlyArray<{ id: LinguistBottomDockTab; label: string }> = [
   { id: 'qa', label: 'QA' },
   { id: 'context', label: '上下文/证据' },
   { id: 'preview', label: '预览' },
-  { id: 'proposals', label: '提案' },
+  { id: 'proposals', label: '待查看建议' },
   { id: 'delivery', label: '准备交付' },
 ]
 
