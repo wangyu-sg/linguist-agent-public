@@ -44,7 +44,8 @@ test('四岗位使用同一简化 builder，缺文件回退且普通会话不注
       )
       assert.equal(built.status.role, role)
       assert.equal(built.status.roleSource, 'bundle')
-      assert.equal(built.status.projectDigestIncluded, true)
+      assert.equal(built.status.projectDigestStatus, 'complete')
+      assert.equal(built.status.projectDigestTruncated, false)
       assert.match(built.prompt, /cat_apply_translations/)
       assert.doesNotMatch(built.prompt, /linguist_prompt_manifest|fallback_layers|prompt_contract_hash/)
     }
@@ -83,9 +84,45 @@ test('Project Digest 单段读取失败只跳过该段', () => {
       () => service,
       { rolesRoot, renderer: 'markdown' },
     )
-    assert.equal(built.status.projectDigestIncluded, true)
+    assert.equal(built.status.projectDigestStatus, 'partial')
+    assert.equal(built.status.projectDigestTruncated, false)
     assert.match(built.prompt, /Voice Profiles/)
     assert.doesNotMatch(built.prompt, /fixture failure/)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('Project Digest 整体构建失败时保留固定 Prompt 并标记 skipped', () => {
+  const built = buildLinguistPrompt(
+    { linguistProjectId: 'prj-unavailable', linguistRole: 'reviewer' },
+    () => { throw new Error('fixture failure') },
+    { rolesRoot },
+  )
+
+  assert.equal(built.status.projectDigestStatus, 'skipped')
+  assert.equal(built.status.projectDigestTruncated, false)
+  assert.match(built.prompt, /cat_apply_translations/)
+  assert.doesNotMatch(built.prompt, /project_digest/)
+})
+
+test('Project Digest 超过预算时只裁 Digest 并标记 truncated', () => {
+  const { service, project } = setup()
+  try {
+    service.openProject(project.id).styleGuideRules.upsert({
+      groupKey: 'mandatory',
+      ruleText: '规则'.repeat(10_000),
+    })
+    const built = buildLinguistPrompt(
+      { linguistProjectId: project.id, linguistRole: 'translator' },
+      () => service,
+      { rolesRoot, renderer: 'markdown' },
+    )
+
+    assert.equal(built.status.projectDigestStatus, 'complete')
+    assert.equal(built.status.projectDigestTruncated, true)
+    assert.ok(built.prompt.length <= LINGUIST_PROMPT_MAX_CHARS)
+    assert.match(built.prompt, /Project Digest 已达到 Prompt 总长度上限/)
   } finally {
     service.closeAll()
   }

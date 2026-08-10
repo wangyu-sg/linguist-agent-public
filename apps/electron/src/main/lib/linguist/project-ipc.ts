@@ -24,8 +24,7 @@
  * 路径、源文、译文。
  */
 
-import { readFileSync, statSync } from 'node:fs'
-import { basename, extname } from 'node:path'
+import { extname } from 'node:path'
 import {
   normalizeQaProfile,
   normalizeWorkflowStage,
@@ -77,9 +76,10 @@ import {
   type LinguistWorkflowStage,
   type LinguistRestorePreviewResult,
 } from '@proma/shared'
-import { LinguistImportTooLargeError, LinguistProjectArchivedError } from './errors'
+import { LinguistProjectArchivedError } from './errors'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
 import { PendingImportFileStore } from './pending-import-files'
+import { readPickedFileWithinLimit } from './project-file-intake'
 import type { LinguistProjectService } from './project-service'
 import type { XlsxImportMapping } from './project-service-types'
 
@@ -586,13 +586,10 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         }
 
         const filePath = picked.filePaths[0] as string
-        // 大小护栏：先于读盘（服务层对 bytes 还有一道同样的护栏）。
-        const sizeBytes = statSync(filePath).size
-        if (sizeBytes > LINGUIST_IMPORT_MAX_BYTES) {
-          throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_IMPORT_MAX_BYTES)
-        }
-        const bytes = new Uint8Array(readFileSync(filePath))
-        const filename = basename(filePath)
+        const { bytes, filename } = await readPickedFileWithinLimit(
+          filePath,
+          LINGUIST_IMPORT_MAX_BYTES,
+        )
 
         // XLSX 不会落入别名猜测：先展示主进程解析证据，再等待用户点名工作表/源文/译文列。
         if (await XLSX_DETECTOR.detect(bytes, filename) > 0) {

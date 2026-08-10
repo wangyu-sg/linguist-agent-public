@@ -266,10 +266,10 @@ function summarizeCatResult(
       if (
         verified === null
         || filename === null
-        || (payload.mode !== 'verified' && payload.mode !== 'as-is')
+        || (payload.validation !== 'verified' && payload.validation !== 'as-is')
       ) return null
       return {
-        title: payload.mode === 'verified' ? '验证并导出' : '按当前状态导出',
+        title: payload.validation === 'verified' ? '验证并导出' : '按当前状态导出',
         detail: `${filename} · 已回读验证 ${verified} 段`,
       }
     }

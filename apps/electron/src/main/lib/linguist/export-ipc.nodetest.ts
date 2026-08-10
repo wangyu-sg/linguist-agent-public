@@ -20,6 +20,7 @@ import {
   type LinguistExportSavePicker,
 } from './export-ipc'
 import type { LinguistProjectService } from './project-service'
+import { SecureExportError } from './secure-export'
 import { INPUT, makeService, makeTempDir, readFixture } from './test/service-testkit'
 
 function makeIpc(service: LinguistProjectService) {
@@ -118,6 +119,52 @@ test('PB-073: stages, opens native Save picker, copies to user destination, and 
       changed.revision,
     )
     assert.equal(service.listExportFiles(project.id)[0]?.stale, true)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('ProjectDelivery: prepared verified export owns manifest validation and destination copy', async () => {
+  const service = makeService()
+  try {
+    const { project, imported } = await makeImportedAsset(service)
+    makeDeliveryReady(service, project.id, imported.assetId)
+    const prepared = await service.prepareDelivery(project.id, imported.assetId)
+    const destination = join(makeTempDir(), 'service-delivery.csv')
+
+    const delivered = service.savePreparedDeliveryToPath(prepared, destination)
+
+    assert.equal(delivered.filename, 'service-delivery.csv')
+    assert.equal(delivered.mode, 'verified')
+    assert.equal(delivered.artifact.assetId, imported.assetId)
+    assert.equal(delivered.sha256, delivered.artifact.sha256)
+    assert.match(delivered.projectRevision, /^rev-[0-9a-f]{64}$/)
+    assert.deepEqual(readFileSync(destination), readFileSync(prepared.staged!.stagingPath))
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('ProjectDelivery: mismatched export manifest fails closed before destination copy', async () => {
+  const service = makeService()
+  try {
+    const { project, imported } = await makeImportedAsset(service)
+    makeDeliveryReady(service, project.id, imported.assetId)
+    const prepared = await service.prepareDelivery(project.id, imported.assetId)
+    const manifestPath = join(
+      service.getProjectPaths(project.id).exportsDir,
+      '.export-manifests',
+      `${prepared.staged!.artifact.id}.json`,
+    )
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { sizeBytes: number }
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, sizeBytes: manifest.sizeBytes + 1 }))
+    const destination = join(makeTempDir(), 'must-not-exist.csv')
+
+    assert.throws(
+      () => service.savePreparedDeliveryToPath(prepared, destination),
+      SecureExportError,
+    )
+    assert.equal(existsSync(destination), false)
   } finally {
     service.closeAll()
   }

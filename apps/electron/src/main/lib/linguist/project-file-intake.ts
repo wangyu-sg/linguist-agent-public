@@ -1,4 +1,4 @@
-import { readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { open, readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, resolve } from 'node:path'
 import { probePhraseMasterPair } from '@linguist/cat-formats'
 import { sha256Hex } from '@linguist/cat-core'
@@ -15,6 +15,7 @@ import type {
   LinguistIntakeXlsxMapping,
 } from '@linguist/cat-tools'
 import { LinguistCatInvalidArgumentError } from '@linguist/cat-tools'
+import { LinguistImportTooLargeError } from './errors'
 import { createDefaultCatFormatRegistry } from './format-registry'
 import type { LinguistProjectService } from './project-service'
 
@@ -30,6 +31,28 @@ interface IntakeEntry {
   path: string
   filename: string
   sizeBytes: number
+}
+
+/** 原生 picker 选中文件的主进程读取边界；同一 fd 完成大小检查与读盘。 */
+export async function readPickedFileWithinLimit(
+  filePath: string,
+  limitBytes: number,
+): Promise<{ bytes: Uint8Array; filename: string }> {
+  const file = await open(filePath, 'r')
+  try {
+    const info = await file.stat()
+    if (!info.isFile()) throw new Error('picked path is not a regular file')
+    if (info.size > limitBytes) {
+      throw new LinguistImportTooLargeError(info.size, limitBytes)
+    }
+    const bytes = await file.readFile()
+    if (bytes.byteLength > limitBytes) {
+      throw new LinguistImportTooLargeError(bytes.byteLength, limitBytes)
+    }
+    return { bytes, filename: basename(filePath) }
+  } finally {
+    await file.close()
+  }
 }
 
 async function resolveEntry(cwd: string, inputPath: string): Promise<IntakeEntry> {

@@ -1127,6 +1127,18 @@ export class LinguistProjectService {
     return this.delivery.prepareDelivery(projectId, assetId)
   }
 
+  savePreparedDeliveryToPath(
+    prepared: LinguistPreparedDelivery,
+    destinationPath: string,
+    overwrite = false,
+  ) {
+    return this.delivery.savePreparedDeliveryToPath(
+      prepared,
+      destinationPath,
+      overwrite,
+    )
+  }
+
   exportAssetToPath(
     projectId: string,
     assetId: string,
@@ -1150,7 +1162,7 @@ export class LinguistProjectService {
     return this.delivery.stageExport(projectId, assetId)
   }
 
-  stageDraftExport(
+  stageAsIsExport(
     projectId: string,
     assetId: string,
   ): Promise<LinguistStagedExport> {

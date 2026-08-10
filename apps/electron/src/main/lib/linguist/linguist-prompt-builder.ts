@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentSessionMeta, LinguistRole } from '@proma/shared'
+import type {
+  AgentSessionMeta,
+  LinguistPromptStatusInfo,
+  LinguistRole,
+} from '@proma/shared'
 import type { ProjectDatabase } from '@linguist/cat-store'
 import type { LinguistServiceResolver } from './session-binding'
 
@@ -38,15 +42,7 @@ export interface LinguistPromptBuildOptions {
   renderer?: LinguistPromptRenderer
 }
 
-export interface LinguistPromptStatus {
-  promptVersion: string
-  promptHash: string
-  role: LinguistRole
-  roleSource: 'bundle' | 'fallback'
-  renderer: LinguistPromptRenderer
-  projectDigestIncluded: boolean
-  charCount: number
-}
+export type LinguistPromptStatus = LinguistPromptStatusInfo
 
 export interface LinguistPromptBuildResult {
   prompt: string
@@ -57,6 +53,11 @@ interface PromptParts {
   role: LinguistRole
   rolePrompt: string
   digest?: string
+}
+
+interface ProjectDigestBuildResult {
+  digest?: string
+  status: LinguistPromptStatusInfo['projectDigestStatus']
 }
 
 function sha256(value: string): string {
@@ -93,10 +94,15 @@ function boundedLines(title: string, lines: string[], maxItems: number): string 
   return `### ${title}\n${selected.join('\n')}`
 }
 
-function safeSection(label: string, build: () => string | undefined): string | undefined {
+function safeSection(
+  label: string,
+  build: () => string | undefined,
+  onFailure: () => void,
+): string | undefined {
   try {
     return build()
   } catch (error) {
+    onFailure()
     console.warn(`[Linguist Prompt] ${label} 读取失败，已跳过：${error instanceof Error ? error.name : typeof error}`)
     return undefined
   }
@@ -115,7 +121,7 @@ function readableConstraint(valueJson: string): string {
   }
 }
 
-function buildDigestFromDatabase(db: ProjectDatabase): string[] {
+function buildDigestFromDatabase(db: ProjectDatabase, onFailure: () => void): string[] {
   return [
     safeSection('Style Guide', () => {
       const rules = db.styleGuideRules.list({ limit: 200 })
@@ -123,7 +129,7 @@ function buildDigestFromDatabase(db: ProjectDatabase): string[] {
       return boundedLines('Style Guide 关键规则', rules.map((rule) => (
         `- [style-rule:${rule.id}] ${JSON.stringify(rule.ruleText)}`
       )), 12)
-    }),
+    }, onFailure),
     safeSection('Voice Profiles', () => boundedLines(
       'Voice Profiles',
       db.voiceProfiles.list({ limit: 13 }).map((profile) => {
@@ -131,29 +137,31 @@ function buildDigestFromDatabase(db: ProjectDatabase): string[] {
         return `- [voice:${profile.id}] speaker=${JSON.stringify(profile.speaker)}${traits ? `；traits=${JSON.stringify(traits)}` : ''}`
       }),
       12,
-    )),
+    ), onFailure),
     safeSection('技术约束', () => boundedLines(
       '技术约束',
       db.techConstraints.list({ limit: 50 }).map((constraint) => (
         `- [constraint:${constraint.id}] ${constraint.kind}${constraint.scope ? `/${constraint.scope}` : ''}：${readableConstraint(constraint.valueJson)}`
       )),
       20,
-    )),
+    ), onFailure),
     safeSection('Context 目录', () => boundedLines(
       'Context 资料目录',
       db.contextDocs.list({ limit: 41 }).map((doc) => (
         `- [context:${doc.id}] title=${JSON.stringify(doc.originalFilename)}；kind=${doc.kind}`
       )),
       40,
-    )),
+    ), onFailure),
   ].filter((section): section is string => section !== undefined)
 }
 
-export function buildProjectDigest(
+function buildProjectDigest(
   projectId: string,
   getService: LinguistServiceResolver,
-): string | undefined {
+): ProjectDigestBuildResult {
   try {
+    let partial = false
+    const markPartial = (): void => { partial = true }
     const service = getService()
     const project = service.getProject(projectId)
     const db = service.openProject(projectId)
@@ -167,12 +175,17 @@ export function buildProjectDigest(
         )),
       ],
       22,
-    ))
-    const sections = [assets, ...buildDigestFromDatabase(db)].filter((section): section is string => section !== undefined)
-    return sections.length === 0 ? undefined : sections.join('\n\n')
+    ), markPartial)
+    const sections = [assets, ...buildDigestFromDatabase(db, markPartial)]
+      .filter((section): section is string => section !== undefined)
+    if (sections.length === 0) return { status: 'skipped' }
+    return {
+      digest: sections.join('\n\n'),
+      status: partial ? 'partial' : 'complete',
+    }
   } catch (error) {
     console.warn(`[Linguist Prompt] Project Digest 构建失败，已跳过：${error instanceof Error ? error.name : typeof error}`)
-    return undefined
+    return { status: 'skipped' }
   }
 }
 
@@ -215,7 +228,14 @@ export function buildLinguistPrompt(
   const rolePrompt = loadRolePrompt(role, options.rolesRoot)
   const digest = buildProjectDigest(session.linguistProjectId, getService)
   const renderer = options.renderer ?? 'xml'
-  const prompt = enforceTotalCharLimit({ role, rolePrompt: rolePrompt.content, ...(digest ? { digest } : {}) }, renderer)
+  const parts = {
+    role,
+    rolePrompt: rolePrompt.content,
+    ...(digest.digest === undefined ? {} : { digest: digest.digest }),
+  }
+  const projectDigestTruncated = digest.digest !== undefined
+    && render(parts, renderer).length > LINGUIST_PROMPT_MAX_CHARS
+  const prompt = enforceTotalCharLimit(parts, renderer)
   return {
     prompt,
     status: {
@@ -224,7 +244,8 @@ export function buildLinguistPrompt(
       role,
       roleSource: rolePrompt.source,
       renderer,
-      projectDigestIncluded: digest !== undefined,
+      projectDigestStatus: digest.status,
+      projectDigestTruncated,
       charCount: prompt.length,
     },
   }

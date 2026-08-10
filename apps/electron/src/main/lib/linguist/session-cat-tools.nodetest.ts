@@ -253,6 +253,15 @@ test('bound active session: Agent exports a verified batch to a new absolute loc
   assert.equal(result.filename, 'minimal_delivery.translated.en-US.sdlxliff')
   assert.equal(result.verifiedSegments, 2)
   assert.match(String(result.sha256), /^[0-9a-f]{64}$/)
+  assert.deepEqual(Object.keys(result).sort(), [
+    'filename',
+    'projectId',
+    'sha256',
+    'sizeBytes',
+    'validation',
+    'verifiedAt',
+    'verifiedSegments',
+  ])
   assert.equal(collectStrings(result).some((value) => value.includes(tempHome)), false)
   await assert.rejects(
     invoke(toolByName(tools, 'cat_export_asset'), { assetId: imported.assetId, destinationPath }),
@@ -282,9 +291,18 @@ test('Agent export reports concrete verified blockers and permits explicitly req
   const result = await invoke(toolByName(tools, 'cat_export_asset'), {
     assetId: imported.assetId,
     destinationPath,
-    mode: 'as-is',
+    validation: 'as-is',
   })
-  assert.equal(result.mode, 'as-is')
+  assert.equal(result.validation, 'as-is')
+  assert.deepEqual(Object.keys(result).sort(), [
+    'filename',
+    'projectId',
+    'sha256',
+    'sizeBytes',
+    'validation',
+    'verifiedAt',
+    'verifiedSegments',
+  ])
   assert.equal(existsSync(destinationPath), true)
   service.closeAll()
 })

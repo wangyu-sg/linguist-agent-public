@@ -2,8 +2,6 @@
  * PB-080 TM / 术语库 IPC：原生选择器留在主进程，renderer 永不传路径或字节。
  */
 
-import { readFileSync, statSync } from 'node:fs'
-import { basename } from 'node:path'
 import { sha256Hex } from '@linguist/cat-core'
 import {
   LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
@@ -29,9 +27,9 @@ import {
   type LinguistTermsValidateResult,
   type LinguistTmInfo,
 } from '@proma/shared'
-import { LinguistImportTooLargeError } from './errors'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
 import { PendingImportFileStore, type PendingImportFileScope } from './pending-import-files'
+import { readPickedFileWithinLimit } from './project-file-intake'
 import type { LinguistProjectService } from './project-service'
 import type {
   ReferenceImport,
@@ -337,12 +335,10 @@ export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
         })
         if (picked.canceled || picked.filePaths.length === 0) return { cancelled: true }
         const filePath = picked.filePaths[0] as string
-        const sizeBytes = statSync(filePath).size
-        if (sizeBytes > LINGUIST_RESOURCE_IMPORT_MAX_BYTES) {
-          throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_RESOURCE_IMPORT_MAX_BYTES)
-        }
-        const filename = basename(filePath)
-        const bytes = readFileSync(filePath)
+        const { bytes, filename } = await readPickedFileWithinLimit(
+          filePath,
+          LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
+        )
         const project = service.getProject(projectId)
         const parsed = kind === 'tm'
           ? await parseTmReference({ bytes, filename }, project.sourceLocale, project.targetLocale)

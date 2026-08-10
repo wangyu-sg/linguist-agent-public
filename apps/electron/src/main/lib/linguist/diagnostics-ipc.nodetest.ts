@@ -72,7 +72,8 @@ test('LA-OBS-001: status exposes Prompt source and one refresh re-probes the sam
     if (!degraded.ok) return
     assert.equal(degraded.data.prompt.roleSource, 'fallback')
     assert.equal(degraded.data.prompt.role, 'reviewer')
-    assert.equal(degraded.data.prompt.projectDigestIncluded, true)
+    assert.equal(degraded.data.prompt.projectDigestStatus, 'complete')
+    assert.equal(degraded.data.prompt.projectDigestTruncated, false)
     assert.equal(degraded.data.prompt.charCount > 0, true)
     assert.equal(degraded.data.dev?.tools.base, 17)
     assert.equal(degraded.data.dev?.tools.overlay, 8)

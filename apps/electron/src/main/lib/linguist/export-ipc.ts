@@ -3,7 +3,6 @@
  * staging、原生 Save 选择与复制，响应不暴露任何文件系统路径。
  */
 
-import { basename } from 'node:path'
 import {
   LINGUIST_ASSET_ID_PATTERN,
   type LinguistExportListResult,
@@ -16,12 +15,11 @@ import {
   LinguistDeliveryNotReadyError,
   LinguistExportBlockedByQaError,
 } from './errors'
-import { readLinguistExportManifests } from './export-manifest'
 import type {
   LinguistPreparedDelivery,
   LinguistProjectService,
 } from './project-service'
-import { copyFileVerified, SecureExportError } from './secure-export'
+import { SecureExportError } from './secure-export'
 
 export interface LinguistExportSavePickerOptions {
   title: string
@@ -109,44 +107,28 @@ export function createLinguistExportIpc(deps: {
             prepared.preflight.blockers.length,
           )
         }
-        const staged = prepared.staged
         const picked = await pickDestination({
           title: '导出翻译批次',
-          defaultPath: staged.suggestedFilename,
+          defaultPath: prepared.staged.suggestedFilename,
         })
         if (picked.canceled || picked.filePath === undefined) {
           return { cancelled: true }
         }
 
-        const manifest = readLinguistExportManifests(
-          service.getProjectPaths(projectId).exportsDir,
-        ).get(staged.artifact.id)
-        if (
-          manifest === undefined
-          || manifest.sha256 !== staged.artifact.sha256
-          || manifest.assetId !== staged.artifact.assetId
-        ) {
-          invalid('导出审计清单不可用，请重新生成交付物')
-        }
-        let delivery: ReturnType<typeof copyFileVerified>
+        let delivered: ReturnType<typeof service.savePreparedDeliveryToPath>
         try {
-          delivery = copyFileVerified({
-            managedRoot: service.rootDir,
-            sourcePath: staged.stagingPath,
-            destinationPath: picked.filePath,
-            expectedSha256: staged.artifact.sha256,
-          })
+          delivered = service.savePreparedDeliveryToPath(prepared, picked.filePath)
         } catch (error) {
           if (error instanceof SecureExportError) invalid(error.message)
           throw error
         }
-        const { id, assetId: artifactAssetId, sha256, segmentCount, createdAt } = staged.artifact
+        const { id, assetId: artifactAssetId, sha256, segmentCount, createdAt } = delivered.artifact
         console.log(
-          `[Linguist IPC] 导出完成: 项目 ${projectId} 资产 ${assetId}（${staged.verifiedSegments} 段）`,
+          `[Linguist IPC] 导出完成: 项目 ${projectId} 资产 ${assetId}（${delivered.verifiedSegments} 段）`,
         )
         return {
           cancelled: false,
-          filename: basename(picked.filePath),
+          filename: delivered.filename,
           artifact: {
             id,
             assetId: artifactAssetId,
@@ -155,10 +137,12 @@ export function createLinguistExportIpc(deps: {
             createdAt,
           },
           delivery: {
-            ...delivery,
-            projectRevision: manifest.projectRevision,
+            sha256: delivered.sha256,
+            sizeBytes: delivered.sizeBytes,
+            verifiedAt: delivered.verifiedAt,
+            projectRevision: delivered.projectRevision,
           },
-          verifiedSegments: staged.verifiedSegments,
+          verifiedSegments: delivered.verifiedSegments,
           preparation: publicPreparation(prepared),
         }
       })

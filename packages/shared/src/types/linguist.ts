@@ -1892,7 +1892,8 @@ export interface LinguistPromptStatusInfo {
   role: import('./agent').LinguistRole
   roleSource: 'bundle' | 'fallback'
   renderer: 'xml' | 'markdown'
-  projectDigestIncluded: boolean
+  projectDigestStatus: 'complete' | 'partial' | 'skipped'
+  projectDigestTruncated: boolean
   charCount: number
 }
 

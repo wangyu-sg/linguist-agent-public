@@ -113,7 +113,7 @@ describe('CAT Tool Result 原生摘要', () => {
           sizeBytes: 1,
           verifiedAt: 't',
           verifiedSegments: 42,
-          mode: 'verified',
+          validation: 'verified',
         },
         title: '验证并导出',
         detail: 'game_ui.zh-CN.xliff · 已回读验证 42 段',

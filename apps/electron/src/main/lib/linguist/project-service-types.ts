@@ -429,6 +429,11 @@ export interface LinguistLocalExportResult {
   mode: 'verified' | 'as-is'
 }
 
+export interface LinguistPreparedDeliverySaveResult extends LinguistLocalExportResult {
+  artifact: ExportRecord
+  projectRevision: string
+}
+
 export interface LinguistPreparedDelivery {
   preflight: LinguistDeliveryPreflight
   verification?: LinguistDeliveryVerification

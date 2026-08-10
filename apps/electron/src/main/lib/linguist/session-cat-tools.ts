@@ -105,15 +105,16 @@ export function resolveLinguistSessionCatTools(
         input,
       )
     },
-    exportAsset: (assetId, destinationPath, mode, overwrite) => {
+    exportAsset: async (assetId, destinationPath, validation, overwrite) => {
       currentBoundSession(session.id, projectId, 'assetId')
-      return getService().exportAssetToPath(
+      const { mode, ...result } = await getService().exportAssetToPath(
         projectId,
         assetId,
         destinationPath,
-        mode,
+        validation,
         overwrite,
       )
+      return { ...result, validation: mode }
     },
     scanUnknownTagPatterns: (assetIds, sampleLimit) =>
       getService().scanUnknownTagPatterns(projectId, assetIds, sampleLimit),

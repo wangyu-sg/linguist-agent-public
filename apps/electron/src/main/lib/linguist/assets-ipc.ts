@@ -10,8 +10,7 @@
  * （不透明 token，经 registerPreviewUrl 注入，blob 缺失时省略）。
  */
 
-import { readFileSync, statSync } from 'node:fs'
-import { basename, extname } from 'node:path'
+import { extname } from 'node:path'
 import {
   LINGUIST_IMPORT_MAX_BYTES,
   LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
@@ -26,8 +25,8 @@ import {
   type LinguistSentencePatternImportResult,
 } from '@proma/shared'
 import type { ContextDoc } from '@linguist/cat-store'
-import { LinguistImportTooLargeError } from './errors'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
+import { readPickedFileWithinLimit } from './project-file-intake'
 import type { LinguistAssetPreviewDeps } from './project-ipc'
 import type {
   LinguistProjectAssetKind,
@@ -390,13 +389,12 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
         })
         if (picked.canceled || picked.filePaths.length === 0) return { cancelled: true }
         const filePath = picked.filePaths[0] as string
-        const sizeBytes = statSync(filePath).size
-        if (sizeBytes > LINGUIST_RESOURCE_IMPORT_MAX_BYTES) {
-          throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_RESOURCE_IMPORT_MAX_BYTES)
-        }
-        const filename = basename(filePath)
+        const { bytes, filename } = await readPickedFileWithinLimit(
+          filePath,
+          LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
+        )
         const doc = await service.importContextDoc(projectId, {
-          bytes: readFileSync(filePath),
+          bytes,
           filename,
           ...(note !== undefined ? { note } : {}),
         })
@@ -421,13 +419,12 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
         })
         if (picked.canceled || picked.filePaths.length === 0) return { cancelled: true }
         const filePath = picked.filePaths[0] as string
-        const sizeBytes = statSync(filePath).size
-        if (sizeBytes > LINGUIST_IMPORT_MAX_BYTES) {
-          throw new LinguistImportTooLargeError(sizeBytes, LINGUIST_IMPORT_MAX_BYTES)
-        }
-        const filename = basename(filePath)
+        const { bytes, filename } = await readPickedFileWithinLimit(
+          filePath,
+          LINGUIST_IMPORT_MAX_BYTES,
+        )
         const result = service.importSentencePatterns(projectId, {
-          bytes: new Uint8Array(readFileSync(filePath)),
+          bytes,
           filename,
         })
         emitAssetMutation(projectId)

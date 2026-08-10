@@ -283,7 +283,7 @@ test('unknown project id maps to PROJECT_NOT_FOUND across operations', async () 
   }
 })
 
-test('PB-072: QA waivers do not bypass final structural rules; draft export stays available', async () => {
+test('PB-072: QA waivers do not bypass verified export rules; as-is export stays available', async () => {
   const service = makeService()
   try {
     const project = service.createProject(INPUT)
@@ -318,7 +318,7 @@ test('PB-072: QA waivers do not bypass final structural rules; draft export stay
       () => service.stageExport(project.id, imported.assetId),
       (err: unknown) => (err as { code?: string }).code === 'FORMAT_EXPORT_ERROR',
     )
-    const staged = await service.stageDraftExport(project.id, imported.assetId)
+    const staged = await service.stageAsIsExport(project.id, imported.assetId)
     assert.ok(staged.relativePath.startsWith('exports/'))
     assert.ok(existsSync(staged.stagingPath))
     assert.equal(staged.artifact.assetId, imported.assetId)

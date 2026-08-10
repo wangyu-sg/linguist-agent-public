@@ -63,6 +63,20 @@ export function PromptStatusCard({
               当前岗位 Prompt 已加载
             </p>
           )}
+          {prompt !== undefined && prompt.projectDigestStatus !== 'complete' && (
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="size-3.5" aria-hidden="true" />
+              {prompt.projectDigestStatus === 'partial'
+                ? '项目 Digest 部分资料读取失败'
+                : '项目 Digest 构建失败，已跳过'}
+            </p>
+          )}
+          {prompt?.projectDigestTruncated === true && (
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="size-3.5" aria-hidden="true" />
+              项目 Digest 已按 Prompt 预算裁减
+            </p>
+          )}
         </div>
         <Button
           type="button"
@@ -92,7 +106,8 @@ export function PromptStatusCard({
           <div className="flex justify-between gap-3">
             <dt>Role / Digest</dt>
             <dd className="font-mono text-foreground">
-              {prompt.role} / {prompt.projectDigestIncluded ? 'included' : 'skipped'}
+              {prompt.role} / {prompt.projectDigestStatus}
+              {prompt.projectDigestTruncated ? ' / truncated' : ''}
             </dd>
           </div>
           <div className="flex justify-between gap-3">

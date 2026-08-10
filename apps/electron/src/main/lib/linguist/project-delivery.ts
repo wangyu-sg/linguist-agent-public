@@ -29,18 +29,22 @@ import {
   StoreNotFoundError,
   type ProjectDatabase,
 } from '@linguist/cat-store'
-import { rmSync } from 'node:fs'
+import { lstatSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import {
   LinguistExportBlockedByQaError,
   LinguistImportTooLargeError,
   LinguistImportUndoBlockedError,
   LinguistImportVerificationFailedError,
+  LinguistDeliveryNotReadyError,
   LinguistProjectArchivedError,
   mapStoreError,
 } from './errors'
-import { recordLinguistExportManifest } from './export-manifest'
-import { copyFileVerified } from './secure-export'
+import {
+  readLinguistExportManifests,
+  recordLinguistExportManifest,
+} from './export-manifest'
+import { copyFileVerified, SecureExportError } from './secure-export'
 import { buildDeliveryReport } from './project-delivery-report'
 import type { ProjectModuleContext } from './project-module-context'
 import { computeLinguistProjectRevision } from './project-revision'
@@ -56,6 +60,7 @@ import type {
   LinguistDeliveryVerification,
   LinguistLocalExportResult,
   LinguistPreparedDelivery,
+  LinguistPreparedDeliverySaveResult,
   LinguistStagedExport,
   UndoImportAssetResult,
 } from './project-service-types'
@@ -261,26 +266,100 @@ export class ProjectDelivery {
     mode: 'verified' | 'as-is',
     overwrite: boolean,
   ): Promise<LinguistLocalExportResult> {
-    let staged: LinguistStagedExport
     if (mode === 'as-is') {
-      staged = await this.stageExport(projectId, assetId, {
+      const staged = await this.stageExport(projectId, assetId, {
         allowBlockingQa: true,
         allowHardRuleViolations: true,
       })
-    } else {
-      const prepared = await this.prepareDelivery(projectId, assetId)
-      if (prepared.staged === undefined) {
-        throw new FormatExportError(
-          prepared.preflight.formatId,
-          prepared.preflight.blockers
-            .map((blocker) => `${blocker.code}: ${blocker.message}`)
-            .join('; '),
+      const { artifact: _, projectRevision: __, ...result } = this.saveStagedDeliveryToPath(
+        projectId,
+        assetId,
+        staged,
+        destinationPath,
+        mode,
+        overwrite,
+      )
+      return result
+    }
+
+    const prepared = await this.prepareDelivery(projectId, assetId)
+    if (prepared.staged === undefined) {
+      throw new FormatExportError(
+        prepared.preflight.formatId,
+        prepared.preflight.blockers
+          .map((blocker) => `${blocker.code}: ${blocker.message}`)
+          .join('; '),
+      )
+    }
+    const { artifact: _, projectRevision: __, ...result } = this.savePreparedDeliveryToPath(
+      prepared,
+      destinationPath,
+      overwrite,
+    )
+    return result
+  }
+
+  savePreparedDeliveryToPath(
+    prepared: LinguistPreparedDelivery,
+    destinationPath: string,
+    overwrite = false,
+  ): LinguistPreparedDeliverySaveResult {
+    const { preflight, staged, verification } = prepared
+    if (staged === undefined || verification === undefined) {
+      if (preflight.qa.openErrors > 0) {
+        throw new LinguistExportBlockedByQaError(
+          preflight.projectId,
+          preflight.assetId,
+          preflight.qa.openErrors,
         )
       }
-      staged = prepared.staged
+      throw new LinguistDeliveryNotReadyError(
+        preflight.projectId,
+        preflight.assetId,
+        preflight.blockers.length,
+      )
+    }
+    return this.saveStagedDeliveryToPath(
+      preflight.projectId,
+      preflight.assetId,
+      staged,
+      destinationPath,
+      'verified',
+      overwrite,
+    )
+  }
+
+  private saveStagedDeliveryToPath(
+    projectId: string,
+    assetId: string,
+    staged: LinguistStagedExport,
+    destinationPath: string,
+    mode: 'verified' | 'as-is',
+    overwrite: boolean,
+  ): LinguistPreparedDeliverySaveResult {
+    const manifest = readLinguistExportManifests(
+      this.context.getProjectPaths(projectId).exportsDir,
+    ).get(staged.artifact.id)
+    const stagedFile = lstatSync(staged.stagingPath, { throwIfNoEntry: false })
+    if (
+      stagedFile === undefined
+      || stagedFile.isSymbolicLink()
+      || !stagedFile.isFile()
+    ) {
+      throw new SecureExportError('导出源文件不可用或是符号链接')
+    }
+    if (
+      manifest === undefined
+      || manifest.sha256 !== staged.artifact.sha256
+      || manifest.assetId !== staged.artifact.assetId
+      || manifest.sizeBytes !== stagedFile.size
+      || staged.artifact.assetId !== assetId
+    ) {
+      throw new SecureExportError('导出审计清单不可用，请重新生成交付物')
     }
     return {
       filename: basename(destinationPath),
+      artifact: staged.artifact,
       ...copyFileVerified({
         managedRoot: this.context.rootDir,
         sourcePath: staged.stagingPath,
@@ -288,6 +367,7 @@ export class ProjectDelivery {
         expectedSha256: staged.artifact.sha256,
         overwrite,
       }),
+      projectRevision: manifest.projectRevision,
       verifiedSegments: staged.verifiedSegments,
       mode,
     }

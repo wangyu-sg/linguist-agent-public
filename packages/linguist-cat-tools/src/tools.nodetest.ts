@@ -247,31 +247,36 @@ test('factory: CAT tools expose project-local accept and export but no resolve o
 test('cat_export_asset delegates the bound asset and absolute destination without leaking its path', async () => {
   const fixture = setup()
   try {
-    let exportedInput: { assetId: string; destinationPath: string; mode: string; overwrite: boolean } | undefined
+    let exportedInput: { assetId: string; destinationPath: string; validation: string; overwrite: boolean } | undefined
     const tools = createLinguistCatTools({
       resolveProject: makeOkResolver(fixture),
-      exportAsset: async (assetId, destinationPath, mode, overwrite) => {
-        exportedInput = { assetId, destinationPath, mode, overwrite }
+      exportAsset: async (assetId, destinationPath, validation, overwrite) => {
+        exportedInput = { assetId, destinationPath, validation, overwrite }
         return {
           filename: 'alpha.translated.zh-CN.tsv',
           sha256: 'c'.repeat(64),
           sizeBytes: 42,
           verifiedAt: '2026-08-07T00:00:00.000Z',
           verifiedSegments: fixture.segmentsA.length,
-          mode,
+          validation,
         }
       },
     })
+    const properties = (toolByName(tools, 'cat_export_asset').parameters as {
+      properties: Record<string, unknown>
+    }).properties
+    assert.deepEqual(Object.keys(properties), ['assetId', 'destinationPath', 'validation', 'overwrite'])
+    assert.equal('mode' in properties, false)
     const result = await invoke(toolByName(tools, 'cat_export_asset'), {
       assetId: fixture.assetA.id,
       destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
-      mode: 'as-is',
+      validation: 'as-is',
       overwrite: true,
     })
     assert.deepEqual(exportedInput, {
       assetId: fixture.assetA.id,
       destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
-      mode: 'as-is',
+      validation: 'as-is',
       overwrite: true,
     })
     assert.deepEqual(result.details, {
@@ -280,7 +285,7 @@ test('cat_export_asset delegates the bound asset and absolute destination withou
       sizeBytes: 42,
       verifiedAt: '2026-08-07T00:00:00.000Z',
       verifiedSegments: fixture.segmentsA.length,
-      mode: 'as-is',
+      validation: 'as-is',
     })
     assert.equal(collectStrings(result.details).some((value) => value.includes('/Users/test')), false)
   } finally {

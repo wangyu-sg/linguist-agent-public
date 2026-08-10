@@ -187,7 +187,7 @@ export interface LinguistCatToolsDeps {
   exportAsset?: (
     assetId: string,
     destinationPath: string,
-    mode: 'verified' | 'as-is',
+    validation: 'verified' | 'as-is',
     overwrite: boolean,
   ) => Promise<LinguistExportAssetResult>
   /** 当前绑定项目的确定性未知 Tag 形状扫描。 */
@@ -212,7 +212,7 @@ export interface LinguistExportAssetResult {
   sizeBytes: number
   verifiedAt: string
   verifiedSegments: number
-  mode: 'verified' | 'as-is'
+  validation: 'verified' | 'as-is'
 }
 
 export type LinguistIntakeResourceKind = 'batch' | 'tm' | 'terms' | 'context'

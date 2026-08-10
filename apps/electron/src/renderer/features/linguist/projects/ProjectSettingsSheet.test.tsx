@@ -103,7 +103,8 @@ describe('ProjectSettingsSheet', () => {
             role: 'general',
             roleSource: 'fallback',
             renderer: 'xml',
-            projectDigestIncluded: true,
+            projectDigestStatus: 'partial',
+            projectDigestTruncated: true,
             charCount: 12000,
           }}
           loading={false}
@@ -115,7 +116,9 @@ describe('ProjectSettingsSheet', () => {
 
     expect(html).toContain('Prompt 状态')
     expect(html).toContain('岗位文件不可用，已使用内置岗位说明')
-    expect(html).toContain('general / included')
+    expect(html).toContain('项目 Digest 部分资料读取失败')
+    expect(html).toContain('项目 Digest 已按 Prompt 预算裁减')
+    expect(html).toContain('general / partial / truncated')
     expect(html).toContain('12000 chars')
     expect(html).toContain('重新探测')
     expect(html).toContain('预览脱敏内容')
