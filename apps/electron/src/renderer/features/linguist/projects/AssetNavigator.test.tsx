@@ -2,7 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { Provider, createStore } from 'jotai'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { LinguistProjectInfo, LinguistProjectSummary } from '@proma/shared'
-import { AssetNavigator, getAssetNavigatorSelectionPatch } from './AssetNavigator'
+import {
+  AssetNavigator,
+  getAssetNavigatorSelectionPatch,
+  getAssetNavigatorSummarySelectionPatch,
+} from './AssetNavigator'
 import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
 
 const project: LinguistProjectInfo = {
@@ -23,8 +27,8 @@ const summary: LinguistProjectSummary = {
   segmentCounts: { untranslated: 5, draft: 3, translated: 4, reviewed: 8 },
   currentStageCounts: { untouched: 7, draft: 2, confirmed: 11 },
   assets: [
-    { assetId: 'asset-1', filename: 'dialogue.json', formatId: 'json', segmentCount: 12, sourceSha256: 'a'.repeat(64), segmentCounts: { untranslated: 3, draft: 2, translated: 3, reviewed: 4 }, currentStageCounts: { untouched: 4, draft: 1, confirmed: 7 }, openQaCount: 2 },
-    { assetId: 'asset-2', filename: 'menu.json', formatId: 'json', segmentCount: 8, sourceSha256: 'b'.repeat(64), segmentCounts: { untranslated: 2, draft: 1, translated: 1, reviewed: 4 }, currentStageCounts: { untouched: 3, draft: 1, confirmed: 4 }, openQaCount: 1 },
+    { assetId: 'asset-1', filename: 'dialogue.json', formatId: 'json', segmentCount: 12, sourceSha256: 'a'.repeat(64), sourceCharacters: 120, targetCharacters: 80, segmentCounts: { untranslated: 3, draft: 2, translated: 3, reviewed: 4 }, currentStageCounts: { untouched: 4, draft: 1, confirmed: 7 }, openQaCount: 2 },
+    { assetId: 'asset-2', filename: 'menu.json', formatId: 'json', segmentCount: 8, sourceSha256: 'b'.repeat(64), sourceCharacters: 60, targetCharacters: 40, segmentCounts: { untranslated: 2, draft: 1, translated: 1, reviewed: 4 }, currentStageCounts: { untouched: 3, draft: 1, confirmed: 4 }, openQaCount: 1 },
   ],
 }
 
@@ -34,10 +38,14 @@ describe('AssetNavigator', () => {
     store.set(linguistWorkbenchUiStateAtomFamily(project.id), { activeAssetId: 'asset-2' })
 
     const html = renderToStaticMarkup(
-      <Provider store={store}><AssetNavigator projectId={project.id} summary={summary} /></Provider>,
+      <Provider store={store}>
+        <AssetNavigator projectId={project.id} summary={summary} onRefresh={() => {}} />
+      </Provider>,
     )
 
     expect(html).toContain('aria-label="批次导航器"')
+    expect(html).toContain('aria-label="刷新批次"')
+    expect(html).not.toContain('全部批次')
     expect(html).toContain('项目状态：已确认 11 / 20')
     expect(html).toContain('dialogue.json')
     expect(html).toContain('已确认 7 / 12 · QA 2')
@@ -57,4 +65,32 @@ describe('AssetNavigator', () => {
     store.set(uiState, (current) => getAssetNavigatorSelectionPatch(current, 'asset-1'))
     expect(store.get(uiState)).toMatchObject({ activeAssetId: 'asset-1', activeSegmentId: 'segment-1' })
   })
+
+  test('given 项目有批次但当前选择缺失 when 摘要就绪 then 选中首个有效批次', () => {
+    expect(getAssetNavigatorSummarySelectionPatch({
+      ...storeState(),
+      assetActiveSegmentIds: { 'asset-1': 'segment-1' },
+    }, summary.assets)).toEqual({
+      activeAssetId: 'asset-1',
+      activeSegmentId: 'segment-1',
+    })
+
+    expect(getAssetNavigatorSummarySelectionPatch({
+      ...storeState(),
+      activeAssetId: 'asset-2',
+    }, summary.assets)).toBeNull()
+
+    expect(getAssetNavigatorSummarySelectionPatch({
+      ...storeState(),
+      activeAssetId: 'missing-asset',
+      activeSegmentId: 'missing-segment',
+    }, [])).toEqual({
+      activeAssetId: undefined,
+      activeSegmentId: undefined,
+    })
+  })
 })
+
+function storeState() {
+  return createStore().get(linguistWorkbenchUiStateAtomFamily('state-fixture'))
+}

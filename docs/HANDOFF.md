@@ -8,7 +8,7 @@
 - 分支：`main`；实现以当前 `git HEAD` 和工作树为准。
 - 上游基线：Proma v0.16.10 / `72fd1b1a`；正式 merge：`ea26177f`。
 - Kimi K3 Linguist UX 已合并：`0136a1d2`。
-- 当前版本：Electron App `0.16.35`、Shared `0.1.93`、CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.35 / 0.0.33`、schema `15`。
+- 当前版本：Electron App `0.16.36`、Shared `0.1.94`、CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.36 / 0.0.33`、schema `15`。
 - 产品结构仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Workbench；没有第二套 Agent、Chat、Planning、Preview 或权限系统。
 
 ## 已实现
@@ -25,6 +25,7 @@
 - 术语支持批量 CRUD、冲突查询、revision cache 编译 matcher，required/preferred/forbidden/deprecated 译后校验与中英文命中规则。
 - Workbook Mapping 可预览建议、置信度与理由并持久化复用；语义不一致的多候选 fail closed，`locked` 列贯穿导入。Voice Profile 与 approved exemplar 有原生添加、上下文展示和 Agent 总结入口；同一 Segment/角色/文本类型的新译例原子替换旧内容。
 - Full Agent 保留 Proma Files / Changes 面板，Workbench rail 保持对话专用。Linguist 展开态与 mini rail 复用 Proma 的“新会话 + 搜索”宿主结构；普通新会话只绑定当前 CAT 项目并默认 General，项目/会话仍与普通 Agent workspace 隔离。Planning 与 Agent Skills 绑定普通 Agent workspace，故不显示在 Linguist 侧栏；这是域隔离，不是遗漏。术语冲突可并排比较并一键保留；CSV auto 分类只有在列语义明确时直接执行，歧义输入返回 `needsInput`。
+- 批次导航只显示真实批次，支持原位刷新，并在当前选择失效时选择首个有效批次。底部进度、草稿数和源文/译文字符数均按当前批次统计；“已确认 / 已审校 / 已校对”由项目工作流阶段决定，不跟随会话岗位。
 - memoQ MQXLIFF 使用专用 Adapter，保留 inline code、确认状态与审校批注；已有合成 fixture round-trip，真实客户样本仍待验证。
 - Proma v0.16.10 已合并；CI 保留 macOS 15 arm64 packaged build 与完整性验证。
 
@@ -32,10 +33,10 @@
 
 - SIMPLE-001 启动基线：根测试 `1485/1485`、CAT Core `123/123`、CAT Tools `54/54`、Electron Linguist `211/211`、boundary `4/4`、fusion architecture `9/9`。
 - 本轮全量 typecheck：11 个 workspace 全部通过。
-- 本轮测试：根 `1537/1537`（`6890` assertions）、Electron Linguist `207/207`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion architecture `9/9`。
+- 本轮测试：根 `1540/1540`（`6906` assertions）、Electron Linguist `207/207`、CAT Store `229/229`、CAT Tools `40/40`、boundary `4/4`、fusion architecture `9/9`。
 - SBOM/许可证：432 个生产依赖一致；NOTICE 和 packaged resources 已纳入检查。
-- 当前 `0.16.35` 的 macOS arm64 packaged vertical 通过：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist 保留 `2 MANUAL`。LF-003 `runStatus=passed`、coverage `partial`。`app.asar` SHA-256：`35cbb7dc6643736b29a10e579e5ffc658974960cda7bb76eb2400d6206493261`。
-- 已安装 `/Applications/Linguist Agent.app` `0.16.35`，其 hash 与验证产物一致；旧 `0.16.34` 位于废纸篓且可恢复。远端同步状态以最终 Git 回执为准。
+- 当前 `0.16.36` 的 macOS arm64 packaged vertical 通过：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist 保留 `2 MANUAL`。LF-003 `runStatus=passed`、coverage `partial`。`app.asar` SHA-256：`0c97ba3a522e6e92656657d20f58b6847ea49f75a1a23c40e9cde64a25b14fa8`。
+- 已安装 `/Applications/Linguist Agent.app` `0.16.36`，其 hash 与验证产物一致；旧 `0.16.35` 位于废纸篓且可恢复。远端同步状态以最终 Git 回执为准。
 - 忽略的 `artifacts/ui-final/` 有 Dark、Light、Narrow 三张侧栏截图，检查未见全局横向溢出。
 - 私有工作目录只读 Phrase 副本验证：82/82 个 placeholder segment 内容配对，713 segments，byte-stable 与 reimport-stable；文件名、绝对路径和客户正文未进入仓库。
 

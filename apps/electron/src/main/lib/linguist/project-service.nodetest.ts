@@ -333,7 +333,7 @@ test('PB-072: QA waivers do not bypass verified export rules; as-is export stays
   }
 })
 
-test('getProjectSummary includes Store-derived per-asset progress and open QA counts', async () => {
+test('getProjectSummary includes Store-derived per-asset progress, character and open QA counts', async () => {
   const service = makeService()
   try {
     const project = service.createProject(INPUT)
@@ -379,12 +379,16 @@ test('getProjectSummary includes Store-derived per-asset progress and open QA co
       segmentCounts: a1SegmentCounts,
       currentStageCounts: a1CurrentStageCounts,
       openQaCount: a1OpenQaCount,
+      sourceCharacters: a1SourceCharacters,
+      targetCharacters: a1TargetCharacters,
       ...a1Metadata
     } = a1!
     const {
       segmentCounts: a2SegmentCounts,
       currentStageCounts: a2CurrentStageCounts,
       openQaCount: a2OpenQaCount,
+      sourceCharacters: a2SourceCharacters,
+      targetCharacters: a2TargetCharacters,
       ...a2Metadata
     } = a2!
     assert.deepEqual(a1Metadata, {
@@ -413,7 +417,15 @@ test('getProjectSummary includes Store-derived per-asset progress and open QA co
     )
     assert.equal(a1SegmentCounts.reviewed, 1)
     assert.equal(a1OpenQaCount, 1)
+    assert.deepEqual(
+      { sourceCharacters: a1SourceCharacters, targetCharacters: a1TargetCharacters },
+      db.segments.countCharactersByAsset().get(first.assetId),
+    )
     assert.equal(a2OpenQaCount, 0)
+    assert.deepEqual(
+      { sourceCharacters: a2SourceCharacters, targetCharacters: a2TargetCharacters },
+      db.segments.countCharactersByAsset().get(second.assetId),
+    )
     // 线格式形状含每资产 Store 聚合；sha 为 64 位 hex。
     assert.deepEqual(
       Object.keys(a1!).sort(),
@@ -425,7 +437,9 @@ test('getProjectSummary includes Store-derived per-asset progress and open QA co
         'openQaCount',
         'segmentCount',
         'segmentCounts',
+        'sourceCharacters',
         'sourceSha256',
+        'targetCharacters',
       ],
     )
     assert.match(a1!.sourceSha256, /^[0-9a-f]{64}$/)

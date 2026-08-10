@@ -414,3 +414,20 @@ test('countByAssetAndStatus: GROUP BY keeps each asset independent', () => {
     db.close()
   }
 })
+
+test('countCharactersByAsset: SQLite length sums source and target characters per asset', () => {
+  const { db, asset, segments } = setup(3)
+  try {
+    const { asset: secondAsset, segments: secondSegments } = db.assets.insertImported(
+      makeImportedAsset({ segmentCount: 2, filename: 'second.tsv', sourceSha256: 'b'.repeat(64) }),
+    )
+    db.segments.applyTargetEdit(segments[0]!.id, '译文一', 0)
+    db.segments.applyTargetEdit(secondSegments[0]!.id, 'done', 0)
+
+    const counts = db.segments.countCharactersByAsset()
+    assert.deepEqual(counts.get(asset.id), { sourceCharacters: 39, targetCharacters: 3 })
+    assert.deepEqual(counts.get(secondAsset.id), { sourceCharacters: 26, targetCharacters: 4 })
+  } finally {
+    db.close()
+  }
+})

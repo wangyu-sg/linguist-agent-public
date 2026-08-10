@@ -71,6 +71,8 @@ describe('LinguistBottomDock', () => {
             sourceSha256: 'a'.repeat(64),
             segmentCounts: { untranslated: 3, draft: 0, translated: 0, reviewed: 0 },
             currentStageCounts: { untouched: 3, draft: 0, confirmed: 0 },
+            sourceCharacters: 39,
+            targetCharacters: 0,
             openQaCount: 0,
           }]}
         />

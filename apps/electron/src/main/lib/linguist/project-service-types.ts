@@ -461,6 +461,8 @@ export interface LinguistProjectSummaryAsset {
   sourceSha256: string
   segmentCounts: Record<SegmentStatus, number>
   currentStageCounts: Record<CurrentStageState, number>
+  sourceCharacters: number
+  targetCharacters: number
   openQaCount: number
 }
 

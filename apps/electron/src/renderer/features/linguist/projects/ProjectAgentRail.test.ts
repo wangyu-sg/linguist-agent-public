@@ -381,6 +381,8 @@ describe('ProjectAgentRail', () => {
         sourceSha256: 'a'.repeat(64),
         segmentCounts: { untranslated: 2, draft: 0, translated: 0, reviewed: 0 },
         currentStageCounts: { untouched: 2, draft: 0, confirmed: 0 },
+        sourceCharacters: 26,
+        targetCharacters: 0,
         openQaCount: 0,
       }],
       uiState: store.get(uiStateAtom),
@@ -421,6 +423,8 @@ describe('ProjectAgentRail', () => {
       sourceSha256: 'a'.repeat(64),
       segmentCounts: { untranslated: 1, draft: 0, translated: 0, reviewed: 0 },
       currentStageCounts: { untouched: 1, draft: 0, confirmed: 0 },
+      sourceCharacters: 13,
+      targetCharacters: 0,
       openQaCount: 0,
     }]
 
@@ -451,6 +455,8 @@ describe('ProjectAgentRail', () => {
       sourceSha256: 'a'.repeat(64),
       segmentCounts: { untranslated: 2, draft: 0, translated: 0, reviewed: 0 },
       currentStageCounts: { untouched: 2, draft: 0, confirmed: 0 },
+      sourceCharacters: 26,
+      targetCharacters: 0,
       openQaCount: 0,
     }]
     const store = createStore()

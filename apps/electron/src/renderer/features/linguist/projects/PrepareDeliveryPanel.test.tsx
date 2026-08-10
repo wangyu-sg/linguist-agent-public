@@ -20,6 +20,8 @@ const ASSET: LinguistAssetInfo = {
     draft: 0,
     confirmed: 2,
   },
+  sourceCharacters: 26,
+  targetCharacters: 20,
   openQaCount: 0,
 }
 

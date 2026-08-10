@@ -4,7 +4,7 @@
 
 ## 结论
 
-实施计划中的代码、自动回归、macOS arm64 打包与 packaged vertical smoke 已完成。当前 `0.16.35` 状态是 **implemented + unit verified + packaged verified**；已安装的本机 App 与验证产物 hash 一致，但仍不是 **real-machine verified** 或 **release qualified**。远端同步状态以最终 Git 回执为准。
+实施计划中的代码、自动回归、macOS arm64 打包与 packaged vertical smoke 已完成。当前 `0.16.36` 状态是 **implemented + unit verified + packaged verified**；已安装的本机 App 与验证产物 hash 一致，但仍不是 **real-machine verified** 或 **release qualified**。远端同步状态以最终 Git 回执为准。
 
 当前 Proma baseline 为 v0.16.10 / `72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a`，正式合并 commit 为 `ea26177f36d59bd2781d7ff9264451a8430e2249`。
 
@@ -21,6 +21,7 @@
 - 导入后自动扫描未知 Tag；Candidate 激活前执行证据、ReDoS、overlap、pair 与 holdout 校验。普通导入默认不自动激活。
 - Phrase split/master 的内容身份配对、rehydration、source hash 和 placeholder 顺序保护未回归。
 - Full Agent 保留 Proma Files / Changes，Workbench rail 保持对话专用；Linguist 展开态与 mini rail 复用 Proma 的“新会话 + 搜索”宿主结构，普通新会话只绑定当前 CAT 项目并默认 General。Reviewer / Proofreader 默认作用于当前完整资产。术语冲突支持并排比较和一键保留，CSV auto 分类在歧义时返回 `needsInput`。
+- 批次导航移除虚拟“全部批次”，增加原位刷新，并在选择失效时回到首个有效批次。底部进度、草稿数和源文/译文字符数只统计当前批次；阶段标签由项目工作流决定为“已确认 / 已审校 / 已校对”。
 - Kimi K3 Linguist UX 核心提交在当前 API 基线上整合至 `7785d24d`；merge commit 为 `0136a1d25e6e2c3c4c43cee6c90d24e0990aacf4`。Kimi 后续的可读格式/Voice `textType` 与交付预检状态修复也已按当前 MQXLIFF 专用 Adapter 合同合入；未导入过时的 generic-only handoff 说明。
 - 修正 EventKit native addon 在当前 node-addon-api 锁定版本下的编译与环境清理时序；Linguist packaged smoke 改为直启产物并仅连接 Renderer CDP，规避 Electron 43 的 Playwright Node Inspector 崩溃，同时把异常进程退出视为失败。
 
@@ -48,17 +49,17 @@
 | 层级 | 结果 |
 |---|---|
 | TypeScript | 11 个 workspace typecheck 全部通过 |
-| 根测试 | `1537 pass / 0 fail`（`6890` assertions） |
+| 根测试 | `1540 pass / 0 fail`（`6906` assertions） |
 | Electron Linguist Node | `207/207` |
-| CAT Store | `228/228` |
+| CAT Store | `229/229` |
 | CAT Tools | `40/40` |
 | 边界 / Fusion | `4/4` / `9/9` |
 | 依赖与许可 | SBOM 与 432 个生产依赖一致 |
-| 当前 `0.16.35` 构建 / 打包 | macOS arm64 packaged artifact integrity 通过 |
-| 当前 `0.16.35` Packaged vertical | Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist `2 MANUAL`；LF-003 `runStatus=passed`、coverage `partial` |
-| 当前 `0.16.35` 本机安装 | `/Applications/Linguist Agent.app` `0.16.35`；`app.asar` SHA-256 `35cbb7dc6643736b29a10e579e5ffc658974960cda7bb76eb2400d6206493261` 与验证产物一致 |
+| 当前 `0.16.36` 构建 / 打包 | macOS arm64 packaged artifact integrity 通过 |
+| 当前 `0.16.36` Packaged vertical | Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist `2 MANUAL`；LF-003 `runStatus=passed`、coverage `partial` |
+| 当前 `0.16.36` 本机安装 | `/Applications/Linguist Agent.app` `0.16.36`；`app.asar` SHA-256 `0c97ba3a522e6e92656657d20f58b6847ea49f75a1a23c40e9cde64a25b14fa8` 与验证产物一致 |
 
-旧 `0.16.34` 位于废纸篓，可恢复。现有 Phrase 私有副本证据仍为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户内容未进入仓库，该证据也不等于真实 Phrase 平台互操作。
+旧 `0.16.35` 位于废纸篓，可恢复。现有 Phrase 私有副本证据仍为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户内容未进入仓库，该证据也不等于真实 Phrase 平台互操作。
 
 ## 仍需真实证据
 

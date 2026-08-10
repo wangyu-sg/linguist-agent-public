@@ -130,10 +130,12 @@ export function LinguistWorkbenchShell({
   const agentOpen = uiState.agentPresentation !== 'closed'
   const agentFull = uiState.agentPresentation === 'full'
   const progressLabel = summaryState.status === 'ready'
-    ? stageProgressSummary(
-        project.workflowStage ?? 'translation',
-        summaryState.summary.currentStageCounts,
-      )
+    ? activeAsset !== undefined || summaryState.summary.assets.length === 0
+      ? stageProgressSummary(
+          project.workflowStage ?? 'translation',
+          activeAsset?.currentStageCounts ?? summaryState.summary.currentStageCounts,
+        )
+      : '请选择批次'
     : summaryState.status === 'loading'
       ? '统计加载中…'
       : '统计不可用'
@@ -315,7 +317,9 @@ export function LinguistWorkbenchShell({
               <span aria-hidden="true">·</span>
               <span>{progressLabel}</span>
               <span aria-hidden="true">·</span>
-              <span className="max-w-44 truncate">{activeAsset?.filename ?? '全部批次'}</span>
+              <span className="max-w-44 truncate">
+                {activeAsset?.filename ?? (summary?.assets.length === 0 ? '尚无批次' : '未选择批次')}
+              </span>
             </p>
           </div>
         </div>
@@ -542,14 +546,20 @@ export function LinguistWorkbenchShell({
       >
         <div className="flex flex-wrap items-center gap-x-3">
           <span>{progressLabel}</span>
-          {summary !== undefined && (
+          {activeAsset !== undefined && (
             <span>
               {stageProgressLabel(project.workflowStage ?? 'translation', 'draft', true)}
               {' '}
-              {summary.currentStageCounts.draft}
+              {activeAsset.currentStageCounts.draft}
             </span>
           )}
-          <span>当前批次：{activeAsset?.filename ?? '全部批次'}</span>
+          <span>
+            当前批次：{activeAsset?.filename ?? (summary?.assets.length === 0 ? '尚无批次' : '未选择批次')}
+          </span>
+          {activeAsset !== undefined && <>
+            <span>源文 {activeAsset.sourceCharacters} 字符</span>
+            <span>译文 {activeAsset.targetCharacters} 字符</span>
+          </>}
           <span title={uiState.activeSegmentId ?? undefined}>
             当前片段：{uiState.activeSegmentId === null || uiState.activeSegmentId === undefined
               ? '未选择片段'

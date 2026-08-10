@@ -305,6 +305,33 @@ export class SegmentsRepository {
     return countsByAsset
   }
 
+  /** 每资产源文/译文字符数；SQLite length 按 Unicode code point 聚合，不加载段行。 */
+  countCharactersByAsset(): ReadonlyMap<
+    string,
+    { sourceCharacters: number; targetCharacters: number }
+  > {
+    const rows = this.db.db
+      .prepare(
+        `SELECT asset_id,
+                SUM(length(source)) AS source_characters,
+                SUM(length(target)) AS target_characters
+         FROM segments
+         GROUP BY asset_id`,
+      )
+      .all() as Array<{
+        asset_id: string
+        source_characters: number
+        target_characters: number
+      }>
+    return new Map(rows.map((row) => [
+      row.asset_id,
+      {
+        sourceCharacters: Number(row.source_characters),
+        targetCharacters: Number(row.target_characters),
+      },
+    ]))
+  }
+
   countLockedByAsset(assetId: string): number {
     const row = this.db.db
       .prepare('SELECT COUNT(*) AS n FROM segments WHERE asset_id = ? AND locked = 1')

@@ -53,6 +53,6 @@
 ## 最终自动化证据
 
 - typecheck：全部 11 个 workspace 通过。
-- 测试：根 `1537/1537`（`6890` assertions）、Electron Linguist `207/207`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion architecture `9/9`。
+- 测试：根 `1540/1540`（`6906` assertions）、Electron Linguist `207/207`、CAT Store `229/229`、CAT Tools `40/40`、boundary `4/4`、fusion architecture `9/9`。
 - 依赖：SBOM/许可证核验 432 个生产依赖。
-- `0.16.35` macOS arm64 packaged artifact integrity 与 vertical smoke 已通过：Agent `15/15`、Chat `19/19`、Linguist `21/21`（另有 `2 MANUAL`）；LF-003 `runStatus=passed`、coverage `partial`。已安装 `/Applications/Linguist Agent.app` `0.16.35`，`app.asar` SHA-256 `35cbb7dc6643736b29a10e579e5ffc658974960cda7bb76eb2400d6206493261` 与产物一致；旧 `0.16.34` 位于废纸篓可恢复。Native Open/Save、VoiceOver 与 IME 继续保留为真机人工项。
+- `0.16.36` macOS arm64 packaged artifact integrity 与 vertical smoke 已通过：Agent `15/15`、Chat `19/19`、Linguist `21/21`（另有 `2 MANUAL`）；LF-003 `runStatus=passed`、coverage `partial`。已安装 `/Applications/Linguist Agent.app` `0.16.36`，`app.asar` SHA-256 `0c97ba3a522e6e92656657d20f58b6847ea49f75a1a23c40e9cde64a25b14fa8` 与产物一致；旧 `0.16.35` 位于废纸篓可恢复。Native Open/Save、VoiceOver 与 IME 继续保留为真机人工项。

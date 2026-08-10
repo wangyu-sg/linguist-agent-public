@@ -45,6 +45,16 @@ describe('LocalizationProjectWorkbench', () => {
     expect(source).toContain('refreshSequence={mutationState.lastSequence}')
     expect(source).toContain('sessionId={currentAgentSessionId}')
     expect(source).toContain('linguistProjectRunSummaryAtomFamily.remove(projectId)')
+    expect(source).toContain('onRefresh={invalidateSummary}')
+    expect(source).toContain('getAssetNavigatorSummarySelectionPatch')
+  })
+
+  test('given 工作台已由批次导航 when 渲染 Segment 筛选 then 不再暴露全部批次选项', () => {
+    const source = readFileSync(
+      new URL('./SegmentEditor.tsx', import.meta.url),
+      'utf8',
+    )
+    expect(source).not.toContain('全部批次')
   })
 
   test('given 冷启动恢复的正常 Project Tab when 工作台挂载 then 先打开项目再进入 CAT 工作区', async () => {

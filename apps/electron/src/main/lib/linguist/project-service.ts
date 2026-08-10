@@ -733,6 +733,10 @@ export class LinguistProjectService {
       () => db.segments.countByAssetAndCurrentStageState(),
       db.projectId,
     )
+    const characterCountsByAsset = this.call(
+      () => db.segments.countCharactersByAsset(),
+      db.projectId,
+    )
     const openQaCountsByAsset = this.call(() => db.qaFindings.countOpenByAsset(), db.projectId)
     const totalSegments =
       segmentCounts.untranslated + segmentCounts.draft + segmentCounts.translated + segmentCounts.reviewed
@@ -755,6 +759,10 @@ export class LinguistProjectService {
           draft: 0,
           confirmed: 0,
         },
+        ...(characterCountsByAsset.get(assetId) ?? {
+          sourceCharacters: 0,
+          targetCharacters: 0,
+        }),
         openQaCount: openQaCountsByAsset.get(assetId) ?? 0,
       }
     })

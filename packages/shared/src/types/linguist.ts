@@ -780,12 +780,16 @@ export interface LinguistAssetMetadata {
 }
 
 /**
- * getSummary 的资产信息：静态元数据加 Store GROUP BY 的真实进度和开放 QA 数。
+ * getSummary 的资产信息：静态元数据加 Store GROUP BY 的真实进度、字符数和开放 QA 数。
  * 刻意不含时间戳：领域 Asset 本身不携带导入时间（assets.created_at 不进领域类型）。
  */
 export interface LinguistAssetInfo extends LinguistAssetMetadata {
   segmentCounts: LinguistSegmentStatusCounts
   currentStageCounts: LinguistCurrentStageStateCounts
+  /** 源文 Unicode 字符数（SQLite length / code point）。 */
+  sourceCharacters: number
+  /** 当前译文 Unicode 字符数（SQLite length / code point）。 */
+  targetCharacters: number
   openQaCount: number
 }
 

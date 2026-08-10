@@ -699,7 +699,7 @@ test('import: the same XLSX bytes with a different confirmed mapping fail closed
   }
 })
 
-test('getSummary: assets list reflects imports in creation order (PB-033 wire shape)', async () => {
+test('getSummary: assets include per-batch character counts in creation order (PB-033 wire shape)', async () => {
   const service = makeService()
   try {
     const ipc = makeIpc(service)
@@ -731,12 +731,16 @@ test('getSummary: assets list reflects imports in creation order (PB-033 wire sh
       segmentCounts: a1SegmentCounts,
       currentStageCounts: a1CurrentStageCounts,
       openQaCount: a1OpenQaCount,
+      sourceCharacters: a1SourceCharacters,
+      targetCharacters: a1TargetCharacters,
       ...a1Metadata
     } = a1!
     const {
       segmentCounts: a2SegmentCounts,
       currentStageCounts: a2CurrentStageCounts,
       openQaCount: a2OpenQaCount,
+      sourceCharacters: a2SourceCharacters,
+      targetCharacters: a2TargetCharacters,
       ...a2Metadata
     } = a2!
     assert.deepEqual(a1Metadata, {
@@ -759,6 +763,10 @@ test('getSummary: assets list reflects imports in creation order (PB-033 wire sh
     assert.equal(Object.values(a2CurrentStageCounts).reduce((total, count) => total + count, 0), a2!.segmentCount)
     assert.equal(a1OpenQaCount, 0)
     assert.equal(a2OpenQaCount, 0)
+    assert.ok(a1SourceCharacters > 0)
+    assert.ok(a1TargetCharacters >= 0)
+    assert.ok(a2SourceCharacters > 0)
+    assert.ok(a2TargetCharacters >= 0)
   } finally {
     service.closeAll()
   }

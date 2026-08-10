@@ -8,10 +8,10 @@
 |---|---|
 | 仓库 / 分支 | `/Users/<local>/Desktop/linguist-agent-next` / `main` |
 | Proma Base / formal merge | v0.16.10 `72fd1b1a` / `ea26177f` |
-| App / Electron | `0.16.35` / `43.2.0` |
+| App / Electron | `0.16.36` / `43.2.0` |
 | Bun / Pi / Claude | `1.3.14` / `0.82.1` / `0.3.201` |
-| Shared | `0.1.93` |
-| CAT Core / Formats / Store / Tools | `0.0.20 / 0.0.10 / 0.0.35 / 0.0.33` |
+| Shared | `0.1.94` |
+| CAT Core / Formats / Store / Tools | `0.0.20 / 0.0.10 / 0.0.36 / 0.0.33` |
 | CAT schema / Tool count | `15` / `30` |
 
 产品结构固定为完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench。Linguist 复用同一个 AgentView、Session、Planning、Preview Tab、权限和 Host 状态。
@@ -32,6 +32,7 @@
 - 术语库已具备批量 CRUD、冲突查询、revision cache matcher 和 required/preferred/forbidden/deprecated 译后校验；翻译上下文只返回实际命中项。
 - Workbook Mapping 支持建议/置信度/理由、保存与项目内安全复用；不一致多候选 fail closed，`locked` 列贯穿导入。Voice/Exemplar 支持原生添加、上下文展示、Agent 总结与 stale 内容原子替换。
 - Full Agent 保留 Proma Files / Changes，Workbench rail 保持对话专用。Linguist 展开态与 mini rail 复用 Proma 的“新会话 + 搜索”宿主结构；普通新会话只绑定当前 CAT 项目并默认 General。Planning 与 Agent Skills 绑定普通 Agent workspace，故不显示在 Linguist 侧栏；这是域隔离，不是遗漏。术语冲突可并排比较和一键保留；CSV auto 分类只在列语义明确时执行，歧义表返回 `needsInput`。
+- 批次导航只列真实批次并支持刷新；选择失效时收敛到首个有效批次。底部进度、草稿数和源/译字符数仅统计当前批次，阶段标签由项目工作流映射为“已确认 / 已审校 / 已校对”。
 - memoQ MQXLIFF 已有专用 Adapter 和合成 fixture round-trip，保留 inline code、确认状态与审校批注；真实客户样本仍待验证。
 - Kimi K3 Linguist UX 已通过 merge commit `0136a1d2` 合入。
 - 旧 Critic DB 记录仅为历史兼容读取，不再有公开创建或工作流入口。Execution Policy 和 Translation Scope active 路径已删除。
@@ -39,9 +40,9 @@
 ## 证据边界
 
 - SIMPLE-001 证明的是干净启动基线；本轮聚焦测试证明的是实现行为。
-- 本轮全量证据为：11 workspace typecheck、根 `1537/1537`（`6890` assertions）、Electron `207/207`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9`、432 依赖 SBOM/许可证核验。
+- 本轮全量证据为：11 workspace typecheck、根 `1540/1540`（`6906` assertions）、Electron `207/207`、CAT Store `229/229`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9`、432 依赖 SBOM/许可证核验。
 - 私有 Phrase 工作目录只做只读副本测试；82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable，客户内容不进入仓库。
-- 当前 `0.16.35` 的 macOS arm64 packaged vertical 通过：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist 另有 `2 MANUAL`，LF-003 `runStatus=passed`、coverage `partial`。`app.asar` SHA-256 为 `35cbb7dc6643736b29a10e579e5ffc658974960cda7bb76eb2400d6206493261`；已安装 `/Applications/Linguist Agent.app` `0.16.35`，hash 一致。旧 `0.16.34` 位于废纸篓可恢复。
+- 当前 `0.16.36` 的 macOS arm64 packaged vertical 通过：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist 另有 `2 MANUAL`，LF-003 `runStatus=passed`、coverage `partial`。`app.asar` SHA-256 为 `0c97ba3a522e6e92656657d20f58b6847ea49f75a1a23c40e9cde64a25b14fa8`；已安装 `/Applications/Linguist Agent.app` `0.16.36`，hash 一致。旧 `0.16.35` 位于废纸篓可恢复。
 - 远端同步状态以最终 Git 回执为准，不作为产品资格证据。
 - 真实模型质量、四岗位真实全链、Phrase/memoQ 互操作、14 天日用、VoiceOver、IME 和 Native Open/Save 仍待真实证据，不能由自动测试替代。
 

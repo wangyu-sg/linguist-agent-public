@@ -10,7 +10,7 @@ This AGPL-3.0 project derives from [Proma](https://github.com/proma-ai/Proma). S
 
 ## Current status
 
-This is a **personal-use Alpha** with no public-release plan. The baseline is Proma v0.16.10; Electron App `0.16.35`, Electron `43.2.0`, `@proma/shared 0.1.93`, Pi `0.82.1`, Claude Agent SDK `0.3.201`, CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.35 / 0.0.33`, CAT schema `15`, and Bun `1.3.14`.
+This is a **personal-use Alpha** with no public-release plan. The baseline is Proma v0.16.10; Electron App `0.16.36`, Electron `43.2.0`, `@proma/shared 0.1.94`, Pi `0.82.1`, Claude Agent SDK `0.3.201`, CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.36 / 0.0.33`, CAT schema `15`, and Bun `1.3.14`.
 
 The app has three peer modes:
 
@@ -62,6 +62,7 @@ Key boundaries:
 - memoQ MQXLIFF uses a dedicated adapter that preserves inline codes, confirmation status, and review comments; real customer samples still require per-sample validation.
 - Phrase split/master MXLIFF pairing uses content identity, Source hash, unit/context, and placeholder evidence. Verified export refuses incomplete or stale mappings.
 - Linguist reuses Proma's expanded and collapsed sidebar chrome for the primary new-session and search actions. A normal new session is created as General only inside the active CAT project; project grouping and Agent workspace grouping remain isolated. Planning and Agent Skills are bound to the general Agent workspace, so their absence from the Linguist sidebar is intentional domain isolation rather than a missing feature.
+- Batch navigation lists only real batches, refreshes in place, and selects the first valid batch when the current selection disappears. Footer progress, draft and source/target character counts are scoped to that batch; its stage label comes from the project workflow (`confirmed / reviewed / proofread`), not the Agent session role.
 
 Agent conversation remains available when a project is archived, missing, or temporarily unavailable. CAT tools report the real project state and Store writes fail closed, while Proma files, Shell, OCR, Excel, MCP, and other tools remain available for diagnosis or recovery.
 

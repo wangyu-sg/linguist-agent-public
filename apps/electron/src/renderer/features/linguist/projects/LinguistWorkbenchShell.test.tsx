@@ -56,6 +56,8 @@ const summary: LinguistProjectSummary = {
       sourceSha256: 'a'.repeat(64),
       segmentCounts: { untranslated: 3, draft: 2, translated: 3, reviewed: 4 },
       currentStageCounts: { untouched: 4, draft: 1, confirmed: 7 },
+      sourceCharacters: 120,
+      targetCharacters: 88,
       openQaCount: 2,
     },
     {
@@ -66,6 +68,8 @@ const summary: LinguistProjectSummary = {
       sourceSha256: 'b'.repeat(64),
       segmentCounts: { untranslated: 2, draft: 1, translated: 1, reviewed: 4 },
       currentStageCounts: { untouched: 3, draft: 1, confirmed: 4 },
+      sourceCharacters: 80,
+      targetCharacters: 55,
       openQaCount: 1,
     },
   ],
@@ -73,17 +77,22 @@ const summary: LinguistProjectSummary = {
 
 describe('LinguistWorkbenchShell', () => {
   test('given 项目摘要和布局插槽 when Agent 尚未展开 then 不挂载 Agent rail', () => {
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { activeAssetId: 'asset-2' })
+
     const html = renderToStaticMarkup(
-      <LinguistWorkbenchShell
-        project={project}
-        summaryState={{ status: 'ready', summary }}
-        onSummaryRefresh={() => undefined}
-        assetNavigator={<div>资产树</div>}
-        agentRail={<div>原生 Agent</div>}
-        bottomDock={<div>语言资源</div>}
-      >
-        <div>Segment Grid</div>
-      </LinguistWorkbenchShell>,
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={project}
+          summaryState={{ status: 'ready', summary }}
+          onSummaryRefresh={() => undefined}
+          assetNavigator={<div>资产树</div>}
+          agentRail={<div>原生 Agent</div>}
+          bottomDock={<div>语言资源</div>}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
     )
 
     expect(html).toContain('aria-label="本地化工作台工具栏"')
@@ -92,7 +101,8 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).toContain('游戏本地化')
     expect(html).toContain('en')
     expect(html).toContain('zh-CN')
-    expect(html).toContain('已确认 11 / 20')
+    expect(html).toContain('已确认 4 / 8')
+    expect(html).not.toContain('已确认 11 / 20')
     expect(html).toContain('data-workbench-slot="asset-navigator"')
     expect(html).toContain('width:240px')
     expect(html).toContain('max-md:absolute')
@@ -109,8 +119,10 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).toContain('height:240px')
     expect(html).toContain('aria-label="调整语言资产面板高度"')
     expect(html).toContain('aria-label="本地化工作台状态栏"')
-    expect(html).toContain('翻译草稿 2')
-    expect(html).toContain('全部批次')
+    expect(html).toContain('翻译草稿 1')
+    expect(html).toContain('当前批次：menu.json')
+    expect(html).toContain('源文 80 字符')
+    expect(html).toContain('译文 55 字符')
     expect(html).toContain('未选择片段')
   })
 
@@ -144,6 +156,30 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).toContain('xl:max-w-[var(--agent-rail-inline-max)]')
     expect(html).toContain('--agent-rail-inline-max:calc(100% - 512px)')
     expect(html).toContain('原生 Agent')
+  })
+
+  test('given 项目处于审校阶段 when 渲染当前批次状态栏 then 使用阶段文案而非硬编码翻译文案', () => {
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { activeAssetId: 'asset-1' })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={{ ...project, workflowStage: 'editing' }}
+          summaryState={{
+            status: 'ready',
+            summary: { ...summary, project: { ...project, workflowStage: 'editing' } },
+          }}
+          onSummaryRefresh={() => undefined}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
+    )
+
+    expect(html).toContain('已审校 7 / 12')
+    expect(html).toContain('审校草稿 1')
+    expect(html).not.toContain('已确认 7 / 12')
   })
 
   test('given 项目 Agent 已展开 when 切换 Full then 留在同一 Linguist 布局并复用唯一 Agent host', () => {

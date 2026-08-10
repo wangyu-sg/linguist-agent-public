@@ -29,7 +29,7 @@
 
 | 项目 | 已确认值 |
 |---|---|
-| Linguist Agent（current manifest） | 0.16.35 |
+| Linguist Agent（current manifest） | 0.16.36 |
 | Proma Electron App（upstream tag manifest） | 0.16.10 |
 | Electron | 43.2.0（manifest: ^43.2.0） |
 | Bun | 1.3.14 |

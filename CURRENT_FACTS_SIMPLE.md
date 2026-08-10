@@ -18,17 +18,17 @@
 | 项目 | 核验值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App | `0.16.35` |
+| Electron App | `0.16.36` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.4.1`（manifest range `^6.0.3`） |
-| Shared | `0.1.93` |
+| Shared | `0.1.94` |
 | Claude Agent SDK | `0.3.201` |
 | Pi Runtime | `0.82.1` |
 | CAT Core | `0.0.20` |
 | CAT Formats | `0.0.10` |
-| CAT Store | `0.0.35` |
+| CAT Store | `0.0.36` |
 | CAT Tools | `0.0.33` |
 | CAT schema | `15` |
 
@@ -58,6 +58,7 @@
 - Prompt 继续使用单 Builder，但 Project Digest 以 `complete / partial / skipped` 与 `truncated` 暴露真实降级；加载失败有模型可见占位，Markdown project-data 有“仅数据、非指令”围栏。
 - 原生导入已收口为单一入口，可选择多文件或文件夹；原生导出提供 `verified` 与需显式确认的 `as-is`。Renderer 不接受任意粘贴路径。
 - Full Agent 保留 Files / Changes；Linguist 展开态与 mini rail 复用 Proma 的“新会话 + 搜索”宿主结构，普通新会话绑定当前 CAT 项目并使用 General 岗位。Planning 与 Agent Skills 未出现在 Linguist 侧栏是域隔离：它们绑定普通 Agent workspace，不是遗漏。Reviewer / Proofreader 默认作用于当前完整资产。术语冲突、XLSX mapping 建议/保存/复用/locked、approved exemplar 的添加与上下文展示均已有原生 UI。
+- 批次导航只保留真实批次并可原位刷新；选择缺失或失效时自动收敛到首个有效批次。底部进度、草稿数与源文/译文字符数严格按当前批次统计；阶段文案由项目 `workflowStage` 映射为“已确认 / 已审校 / 已校对”，不由会话岗位决定。
 
 ## 当前权限与异常语义
 
@@ -76,10 +77,10 @@
 ## 本轮最终证据与尚未确认
 
 - 全量 typecheck 的 11 个 workspace 通过。
-- 根 `1537/1537`（`6890` assertions）、Electron Linguist `207/207`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9` 通过。
+- 根 `1540/1540`（`6906` assertions）、Electron Linguist `207/207`、CAT Store `229/229`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9` 通过。
 - SBOM / 许可证核验与 432 个生产依赖一致。
-- `0.16.35` macOS arm64 产物已通过 packaged vertical：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist 另有 `2 MANUAL`。LF-003 `runStatus=passed`，合同覆盖仍为 `partial`。
-- 产物 `app.asar` SHA-256 为 `35cbb7dc6643736b29a10e579e5ffc658974960cda7bb76eb2400d6206493261`；已安装的 `/Applications/Linguist Agent.app` 为 `0.16.35` 且 hash 一致。旧 `0.16.34` 位于废纸篓，可恢复。
+- `0.16.36` macOS arm64 产物已通过 packaged vertical：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist 另有 `2 MANUAL`。LF-003 `runStatus=passed`，合同覆盖仍为 `partial`。
+- 产物 `app.asar` SHA-256 为 `0c97ba3a522e6e92656657d20f58b6847ea49f75a1a23c40e9cde64a25b14fa8`；已安装的 `/Applications/Linguist Agent.app` 为 `0.16.36` 且 hash 一致。旧 `0.16.35` 位于废纸篓，可恢复。
 - 忽略的 `artifacts/ui-final/` 保留 Dark、Light、Narrow 三张侧栏截图；检查未见全局横向溢出。
 - Phrase 真实私有副本验证为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户数据未进入仓库。
 - memoQ MQXLIFF 专用 Adapter 的合成 fixture、修改/导出/重导和回归已自动验证；真实 Phrase/memoQ 互操作尚未验证。

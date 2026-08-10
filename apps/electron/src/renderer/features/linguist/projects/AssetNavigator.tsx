@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useAtom } from 'jotai'
-import { FileText, Search } from 'lucide-react'
+import { FileText, RefreshCw, Search } from 'lucide-react'
 import type { LinguistAssetInfo, LinguistProjectSummary } from '@proma/shared'
 import { cn } from '@/lib/utils'
 import { linguistWorkbenchUiStateAtomFamily, type LinguistWorkbenchUiState } from './cat-workspace-atoms'
@@ -16,16 +16,38 @@ export function getAssetNavigatorSelectionPatch(
   }
 }
 
+export function getAssetNavigatorSummarySelectionPatch(
+  state: LinguistWorkbenchUiState,
+  assets: readonly LinguistAssetInfo[],
+): Pick<LinguistWorkbenchUiState, 'activeAssetId' | 'activeSegmentId'> | null {
+  if (
+    state.activeAssetId !== undefined
+    && assets.some((asset) => asset.assetId === state.activeAssetId)
+  ) return null
+  const nextAssetId = assets[0]?.assetId
+  if (
+    nextAssetId === undefined
+    && state.activeAssetId === undefined
+    && state.activeSegmentId === undefined
+  ) return null
+  return getAssetNavigatorSelectionPatch(state, nextAssetId)
+}
+
 interface AssetNavigatorProps {
   projectId: string
   summary: LinguistProjectSummary | undefined
+  onRefresh: () => void
 }
 
-export function AssetNavigator({ projectId, summary }: AssetNavigatorProps): React.ReactElement {
+export function AssetNavigator({
+  projectId,
+  summary,
+  onRefresh,
+}: AssetNavigatorProps): React.ReactElement {
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectId))
   const query = uiState.assetNavigatorSearch.trim().toLocaleLowerCase()
   const assets = summary?.assets.filter((asset) => asset.filename.toLocaleLowerCase().includes(query)) ?? []
-  const selectAsset = (assetId: string | undefined): void => {
+  const selectAsset = (assetId: string): void => {
     setUiState((current) => getAssetNavigatorSelectionPatch(current, assetId))
   }
 
@@ -33,9 +55,20 @@ export function AssetNavigator({ projectId, summary }: AssetNavigatorProps): Rea
     <section aria-label="批次导航器" className="flex h-full min-h-0 flex-col gap-3 p-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-foreground">批次</h2>
-        {summary !== undefined && (
-          <span className="text-xs text-muted-foreground">{summary.assetCount} 个文件</span>
-        )}
+        <div className="flex items-center gap-1">
+          {summary !== undefined && (
+            <span className="text-xs text-muted-foreground">{summary.assetCount} 个文件</span>
+          )}
+          <button
+            type="button"
+            aria-label="刷新批次"
+            title="刷新批次"
+            onClick={onRefresh}
+            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            <RefreshCw aria-hidden="true" size={13} />
+          </button>
+        </div>
       </div>
       <label className="relative">
         <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
@@ -57,12 +90,6 @@ export function AssetNavigator({ projectId, summary }: AssetNavigatorProps): Rea
         </p>
       )}
       <nav aria-label="项目批次" className="min-h-0 space-y-1 overflow-y-auto">
-        <AssetButton
-          active={uiState.activeAssetId === undefined}
-          label="全部批次"
-          detail={summary === undefined ? '加载中…' : `${summary.totalSegments} 段`}
-          onClick={() => selectAsset(undefined)}
-        />
         {summary === undefined ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">正在加载批次…</p>
         ) : assets.length === 0 ? (

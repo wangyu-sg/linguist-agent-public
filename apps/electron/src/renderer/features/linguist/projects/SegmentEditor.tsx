@@ -114,6 +114,7 @@ export function SegmentEditor({
   const activeSegmentId = workbenchUiState.activeSegmentId
   const setActiveSegmentId = React.useCallback((segmentId: string | undefined, assetId?: string): void => {
     setWorkbenchUiState((current) => ({
+      activeAssetId: current.activeAssetId ?? assetId,
       activeSegmentId: segmentId,
       assetActiveSegmentIds: segmentId === undefined || assetId === undefined
         ? current.assetActiveSegmentIds
@@ -1005,10 +1006,10 @@ export function SegmentEditor({
           <span className="sr-only">批次筛选</span>
           <select
             value={filters.assetId ?? ''}
-            onChange={(event) => updateFilters({ assetId: event.target.value || undefined })}
+            disabled={data === undefined || data.assets.length === 0}
+            onChange={(event) => updateFilters({ assetId: event.target.value })}
             className="h-9 w-full min-w-0 truncate rounded-lg bg-background/70 pl-3 pr-8 text-[13px] outline-none ring-1 ring-border/50 focus:ring-primary/50"
           >
-            <option value="">全部批次</option>
             {data?.assets.map((asset) => (
               <option key={asset.assetId} value={asset.assetId}>{asset.filename}</option>
             ))}

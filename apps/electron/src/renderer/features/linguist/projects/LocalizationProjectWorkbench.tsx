@@ -17,7 +17,10 @@ import {
   tabsAtom,
 } from '@/atoms/tab-atoms'
 import { SegmentEditor } from './SegmentEditor'
-import { AssetNavigator } from './AssetNavigator'
+import {
+  AssetNavigator,
+  getAssetNavigatorSummarySelectionPatch,
+} from './AssetNavigator'
 import { LinguistBottomDock } from './LinguistBottomDock'
 import { ProjectAgentRail } from './ProjectAgentRail'
 import {
@@ -29,6 +32,7 @@ import { refreshLinguistProjectListAtom } from './project-list-atoms'
 import {
   clearLinguistWorkbenchUiStateAtom,
   disposeLinguistWorkbenchAtomFamiliesAtom,
+  linguistWorkbenchUiStateAtomFamily,
 } from './cat-workspace-atoms'
 import {
   getProjectMutationRefreshPlan,
@@ -207,12 +211,21 @@ export function LocalizationProjectWorkbench({
     let cancelled = false
     setSummaryState({ status: 'loading' })
     void loadLocalizationProjectSummary(projectId).then((nextSummaryState) => {
-      if (!cancelled) setSummaryState(nextSummaryState)
+      if (cancelled) return
+      if (nextSummaryState.status === 'ready') {
+        const workbenchUiStateAtom = linguistWorkbenchUiStateAtomFamily(projectId)
+        const patch = getAssetNavigatorSummarySelectionPatch(
+          store.get(workbenchUiStateAtom),
+          nextSummaryState.summary.assets,
+        )
+        if (patch !== null) store.set(workbenchUiStateAtom, patch)
+      }
+      setSummaryState(nextSummaryState)
     })
     return () => {
       cancelled = true
     }
-  }, [projectId, state.status, summaryRefreshToken])
+  }, [projectId, state.status, store, summaryRefreshToken])
 
   if (state.status === 'loading') {
     return (
@@ -270,6 +283,7 @@ export function LocalizationProjectWorkbench({
         <AssetNavigator
           projectId={state.project.id}
           summary={summaryState.status === 'ready' ? summaryState.summary : undefined}
+          onRefresh={invalidateSummary}
         />
       )}
       agentRail={(

@@ -10,7 +10,7 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
 ## 当前状态
 
-当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.10；Electron App `0.16.35`、Electron `43.2.0`、`@proma/shared 0.1.93`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.35 / 0.0.33`、CAT schema `15`，仓库使用 Bun `1.3.14`。
+当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.10；Electron App `0.16.36`、Electron `43.2.0`、`@proma/shared 0.1.94`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.36 / 0.0.33`、CAT schema `15`，仓库使用 Bun `1.3.14`。
 
 应用有三个并列模式：
 
@@ -63,6 +63,8 @@ Proma Agent Runtime
 - memoQ MQXLIFF 使用专用 Adapter，保留 inline code、确认状态与审校批注；实机客户样本仍需逐样本验证。
 
 Full `AgentView` 保留 Proma 的 Files / Changes 面板；Workbench 内的 rail 维持对话专用。Linguist 的展开与收起侧栏复用 Proma 同一套“新会话 + 搜索”宿主结构，普通新会话只在当前 CAT 项目创建 General 会话；CAT 项目分组与 Agent workspace 继续隔离。Planning 与 Agent Skills 绑定普通 Agent workspace，因而不显示在 Linguist 侧栏，这不是功能遗漏。Reviewer 与 Proofreader 的默认动作面向当前完整资产。术语冲突支持并排比较和一键保留；XLSX mapping 会建议列、显示置信度、保存并安全复用，歧义候选 fail closed，`locked` 列贯穿导入。已确认当前阶段的 Segment 可设为 approved exemplar，角色上下文会展示并复用这些译例。
+
+批次导航只显示真实批次，支持原位刷新，并在当前选择失效时收敛到首个有效批次。底部进度、草稿数和源文/译文字符数严格属于当前批次；阶段文案由项目工作流驱动，依次为“已确认 / 已审校 / 已校对”，不随 Agent 会话岗位变化。
 
 项目缺失、归档或暂不可用时，Agent 对话仍可继续；CAT 工具如实返回项目状态，写入由 Store fail closed。用户仍可用 Proma 文件、Shell、OCR、Excel、MCP 等能力诊断或恢复项目。
 
