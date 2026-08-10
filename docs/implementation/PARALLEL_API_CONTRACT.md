@@ -1,8 +1,7 @@
 # Linguist 并行 API 合同
 
-冻结日期：2026-08-10。此合同供 `integration/la-proma-0.16.10` 与
-`feature/kimi-k3-linguist-ux` 对齐；项目身份始终来自 Session binding，模型输入不含
-`projectId`。
+冻结日期：2026-08-10。此合同记录当前 `main` 对外语义；项目身份始终来自 Session
+binding，模型输入不含 `projectId`。
 
 ## CAT Tools
 
@@ -57,13 +56,16 @@ Pending。单次最多 200 段。旧的 propose / accept tools 继续用于高�
 - `cat_add_approved_exemplar`
 - `cat_get_voice_context`
 
-Approved Exemplar 复用 confirmed Sentence Pattern，不新增独立存储平台。
+Approved Exemplar 复用 TM Unit，以 `approved-exemplar` origin 及结构化 metadata 保存
+speaker、text type、module、asset/segment reference、note 与 approvedAt；不新增独立存储
+平台。
 
 ## 导入与导出
 
-`cat_import_resources` 结果计数固定为：`imported`、`unchanged`、`needsInput`、
-`unsupported`、`failed`；逐项结果位于 `items`。可选 `unknownTagSummary` 只提示，
-不自动激活规则。旧的含糊 `supported` 计数不再公开。
+`cat_import_resources` 结果固定为：`found`、`ready`、`imported`、
+`skippedDuplicate`、`needsInput`、`unsupported`、`failed`、`truncated` 与 `items`。
+批次逐项可带 `unknownTagSummary`，只提示而不自动激活规则。旧的含糊 `supported`
+计数不再公开。
 
 `cat_export_asset` 使用 `validation: 'verified' | 'as-is'`。`verified` 执行交付检查和
 重新导入验证；`as-is` 导出当前结构化状态。默认不覆盖，明确 `overwrite: true` 时

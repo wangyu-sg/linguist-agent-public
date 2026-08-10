@@ -18,18 +18,18 @@
 | 项目 | 核验值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App | `0.16.33` |
+| Electron App | `0.16.34` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.0.3` |
-| Shared | `0.1.91` |
+| Shared | `0.1.92` |
 | Claude Agent SDK | `0.3.201` |
 | Pi Runtime | `0.82.1` |
 | CAT Core | `0.0.19` |
 | CAT Formats | `0.0.10` |
 | CAT Store | `0.0.34` |
-| CAT Tools | `0.0.31` |
+| CAT Tools | `0.0.32` |
 | CAT schema | `15` |
 
 版本值来自当前 `package.json`、`bun.lock` 与 `packages/linguist-cat-store/src/schema.ts`，不是旧报告。
@@ -73,7 +73,7 @@
 ## 本轮最终证据与尚未确认
 
 - 全量 typecheck 的 11 个 workspace 通过。
-- 根 `1514/1514`（`6758` assertions）、Electron Linguist `181/181`、CAT Core `100/100`、CAT Formats `163/163`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9` 通过。
+- 根 `1514/1514`（`6760` assertions）、Electron Linguist `185/185`、CAT Core `100/100`、CAT Formats `163/163`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9` 通过。
 - macOS arm64 packaged artifact integrity 通过；纵向 smoke 为 Pi `15/0`、Chat `19/0`、Linguist `21/0/2 MANUAL`。
 - Phrase 真实私有副本验证为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户数据未进入仓库。
 - memoQ MQXLIFF 专用 Adapter 的合成 fixture、修改/导出/重导和回归已自动验证；真实 memoQ 客户样本尚未验证。

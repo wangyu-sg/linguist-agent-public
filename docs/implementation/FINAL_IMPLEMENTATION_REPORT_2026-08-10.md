@@ -12,10 +12,11 @@
 
 - 四岗位统一为 General / Translator / Reviewer / Proofreader，共享完整 Proma 能力和 30 个 CAT Tools，没有角色工具白名单。
 - 增加直接写回通路：`apply` 一次调用提交 Segment，`proposal` 仅生成 Pending Proposal；两者都服从 Session binding、revision CAS、locked 和 Tag/Placeholder/ICU 硬规则。
-- Prompt Builder 收敛为单一 `3.1.0` 合同；四岗位 Markdown 与 Common Contract 来自 `resources/linguist-roles/`，旧 Skill 双注入、Critic、Execution Policy 和 Translation Scope glue 已删除。
-- UI 与 Agent 复用同一项目资源/导入/导出服务；目录导入、部分失败、`needsInput`、XLSX mapping、TM/TB/Context 分类与 `verified/as-is` 导出语义已统一。
+- Prompt Builder 收敛为单一 `3.1.0` 合同；Common Quality Contract 内置于 Builder，四岗位 Markdown 来自 `resources/linguist-roles/`。诊断保留岗位 fallback、Digest 完整/部分/跳过与长度裁减；旧 Skill 双注入、Critic、Execution Policy 和 Translation Scope glue 已删除。
+- UI 与 Agent 复用同一项目资源/导入/导出服务。Agent 资源导入支持目录、部分失败、`needsInput`、XLSX mapping 与 TM/TB/Context 分类；原生 UI 按计划保持单文件 picker 与 `verified` 导出。Picker 读盘使用同一文件句柄异步限额读取，manifest 校验和安全复制下沉到 ProjectDelivery。
+- `cat_export_asset` 对外输入/结果统一为 `validation: verified/as-is`；旧 `mode` 不再是公开合同。`cat_import_resources` 使用 `skippedDuplicate` 和逐项 `unknownTagSummary`。
 - 术语闭环包含批量 upsert/delete、冲突查询、项目 revision cache、中文长词重叠和英文 whole-word 命中，以及 required/preferred/forbidden/deprecated 译后分级校验。
-- Workbook Mapping 可生成建议、保存并在后续导入中复用；Voice Profile 与 approved exemplar 可结构化写入与按需检索。
+- Workbook Mapping 可生成建议、保存并在后续导入中复用；Voice Profile 与复用 TM Unit 的 approved exemplar 可结构化写入与按需检索。
 - 增加 memoQ MQXLIFF 专用 Adapter，优先于 generic XLIFF 检测，保留 inline code、memoQ 确认状态和审校批注，并有 detect / import / modify / export / reimport 合成 fixture。
 - 导入后自动扫描未知 Tag；Candidate 激活前执行证据、ReDoS、overlap、pair 与 holdout 校验。普通导入默认不自动激活。
 - Phrase split/master 的内容身份配对、rehydration、source hash 和 placeholder 顺序保护未回归。
@@ -24,7 +25,7 @@
 
 ## 关键取舍
 
-- 术语 matcher 采用编译后分桶与 revision cache；10k/50k 基准没有证明需要 Aho–Corasick，因此未引入新算法和依赖。
+- 术语 matcher 采用编译后分桶与 revision cache；10k/50k 规模回归未显示需要 Aho–Corasick，因此未引入新算法和依赖。该回归不是独立性能基准。
 - Tag 编辑保留原生 textarea + chip overlay，由保存时结构规则 fail closed；文档不再将它称为不可分割的“原子编辑器”。
 - memoQ 特有 XML 语义放在专用 Adapter，其他 XLIFF 仍走通用 Adapter，不把厂商逻辑扩散到 Store 或 UI。
 - Proposal 保留为可见、可接受、可撤销的变更载体，但不再是普通翻译的必经流程。
@@ -46,8 +47,8 @@
 | 层级 | 结果 |
 |---|---|
 | TypeScript | 11 个 workspace typecheck 全部通过 |
-| 根测试 | `1514 pass / 0 fail`（`6758` assertions） |
-| Electron Linguist Node | `181/181` |
+| 根测试 | `1514 pass / 0 fail`（`6760` assertions） |
+| Electron Linguist Node | `185/185` |
 | CAT Core | `100/100` |
 | CAT Formats | `163/163` |
 | CAT Store | `228/228` |

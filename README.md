@@ -10,7 +10,7 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
 ## 当前状态
 
-当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.10；Electron App `0.16.33`、Electron `43.2.0`、`@proma/shared 0.1.91`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.19 / 0.0.10 / 0.0.34 / 0.0.31`、CAT schema `15`，仓库使用 Bun `1.3.14`。
+当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.10；Electron App `0.16.34`、Electron `43.2.0`、`@proma/shared 0.1.92`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.19 / 0.0.10 / 0.0.34 / 0.0.32`、CAT schema `15`，仓库使用 Bun `1.3.14`。
 
 应用有三个并列模式：
 
@@ -42,7 +42,7 @@ Proma Agent Runtime
 ├── Base Tools / MCP / Files / Permission / Model
 └── Linguist Project Binding
     ├── 四岗位共享的 30 个 CAT Tools
-    ├── Common Quality Contract + 当前岗位 Prompt
+    ├── 内置 Common Quality Contract + 当前岗位 Markdown
     ├── Project Digest / Turn Context
     └── Linguist Domain Services
         ├── UI / IPC
@@ -55,6 +55,7 @@ Proma Agent Runtime
 - `@linguist/cat-store` 管理每项目 `cat.db`、受管 source / blobs / exports / backups。
 - `@linguist/cat-tools` 的项目身份只来自 Session binding；模型不能提交 `projectId`。
 - UI 与 Agent 调用同一 `LinguistProjectService`；格式解析、事务、CAS、locked Segment、Tag/Placeholder/ICU、QA 和 round-trip 规则不重复实现。
+- Prompt Builder 保留单一版本与最终 Hash；诊断会显示岗位 fallback、Project Digest 完整/部分/跳过以及长度裁减。
 - `cat_import_resources` 可处理文件或小批目录，绝对路径直接使用，相对路径按 Session cwd 解析；权限体验只服从 Proma Session。
 - `cat_export_asset` 支持 `verified` / `as-is`。`verified` 检查结构、格式与重新导入；默认不覆盖，用户明确要求时才原子覆盖普通文件。
 - Tag Profile 的扫描、Candidate、编辑器提示、Proposal、QA 与 `verified` export 使用同一 Scanner；普通可翻译 `[Damage]` 不会被内置规则硬锁。

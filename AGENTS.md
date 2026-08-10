@@ -52,18 +52,18 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.16.33` |
+| Electron App | `@proma/electron 0.16.34` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.0.3` |
-| Shared | `@proma/shared 0.1.91` |
+| Shared | `@proma/shared 0.1.92` |
 | Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
 | Pi Runtime（Electron App） | `@earendil-works/pi-* 0.82.1` |
 | CAT Core | `@linguist/cat-core 0.0.19` |
 | CAT Formats | `@linguist/cat-formats 0.0.10` |
 | CAT Store | `@linguist/cat-store 0.0.34` |
-| CAT Tools | `@linguist/cat-tools 0.0.31` |
+| CAT Tools | `@linguist/cat-tools 0.0.32` |
 | CAT schema | `15` |
 
 不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。

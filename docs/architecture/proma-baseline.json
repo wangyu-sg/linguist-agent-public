@@ -20,18 +20,18 @@
     "claudeAgentSdk": "0.3.201"
   },
   "product": {
-    "linguistAgentVersion": "0.16.33",
-    "sharedVersion": "0.1.91",
+    "linguistAgentVersion": "0.16.34",
+    "sharedVersion": "0.1.92",
     "catCoreVersion": "0.0.19",
     "catFormatsVersion": "0.0.10",
     "catStoreVersion": "0.0.34",
-    "catToolsVersion": "0.0.31",
+    "catToolsVersion": "0.0.32",
     "catSchema": 15
   },
   "contracts": {
     "prompt": {
       "linguistPromptVersion": "3.1.0",
-      "source": "resources/linguist-roles"
+      "source": "linguist-prompt-builder.ts + resources/linguist-roles"
     },
     "host": {
       "version": null,
