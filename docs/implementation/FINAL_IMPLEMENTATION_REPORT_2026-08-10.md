@@ -58,6 +58,7 @@
 | 构建 / runtime deps | Electron build、native helpers、143 个 runtime dependencies 同步通过 |
 | macOS arm64 产物 | packaged artifact integrity 通过 |
 | Packaged vertical | Pi `15 PASS / 0 FAIL`；Chat `19 PASS / 0 FAIL`；Linguist `21 PASS / 0 FAIL / 2 MANUAL` |
+| 本机安装 | `/Applications/Linguist Agent.app` `0.16.34`；`app.asar` SHA-256 与验证产物一致 |
 
 `smoke:vertical` 运行状态为 `passed`，合同覆盖仍为 `partial`。两个 MANUAL 项与 Native Open/Save 等系统交互边界有关，没有被折算成自动通过。现有 Phrase 私有副本证据仍为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户内容未进入仓库。
 

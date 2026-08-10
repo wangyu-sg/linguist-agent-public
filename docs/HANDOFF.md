@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 仓库：`/Users/<local>/Desktop/linguist-agent-next`
-- 分支：`integration/la-proma-0.16.10`；实现以当前 `git HEAD` 和工作树为准。
+- 分支：`main`；实现以当前 `git HEAD` 和工作树为准。
 - 上游基线：Proma v0.16.10 / `72fd1b1a`；正式 merge：`ea26177f`。
 - Kimi K3 Linguist UX 已合并：`0136a1d2`。
 - 当前版本：Electron App `0.16.34`、Shared `0.1.92`、CAT Core / Formats / Store / Tools `0.0.19 / 0.0.10 / 0.0.34 / 0.0.32`、schema `15`。
@@ -34,6 +34,7 @@
 - 本轮测试：根 `1514/1514`（`6760` assertions）、Electron Linguist `185/185`、CAT Core `100/100`、CAT Formats `163/163`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion architecture `9/9`。
 - SBOM/许可证：432 个生产依赖一致；NOTICE 和 packaged resources 已纳入检查。
 - macOS arm64 packaged build 与 artifact integrity 通过。纵向 smoke：Pi `15 PASS / 0 FAIL`、Chat `19 PASS / 0 FAIL`、Linguist `21 PASS / 0 FAIL / 2 MANUAL`；Native Open/Save 仍需真机人工。
+- 已将同一验证产物安装到 `/Applications/Linguist Agent.app`，版本 `0.16.34`；安装后 `app.asar` SHA-256 与 packaged artifact 一致。原 `0.16.21` 已移入废纸篓，可恢复。
 - 私有工作目录只读 Phrase 副本验证：82/82 个 placeholder segment 内容配对，713 segments，byte-stable 与 reimport-stable；文件名、绝对路径和客户正文未进入仓库。
 
 自动回归与 packaged smoke 不等于真实模型质量、真机人工或产品资格。纵向 smoke 的合同覆盖状态仍是 `partial`，不能据此关闭下列真实证据项。

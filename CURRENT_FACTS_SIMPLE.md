@@ -22,7 +22,7 @@
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
-| Vite | `6.0.3` |
+| Vite | `6.4.1`（manifest range `^6.0.3`） |
 | Shared | `0.1.92` |
 | Claude Agent SDK | `0.3.201` |
 | Pi Runtime | `0.82.1` |
@@ -75,6 +75,7 @@
 - 全量 typecheck 的 11 个 workspace 通过。
 - 根 `1514/1514`（`6760` assertions）、Electron Linguist `185/185`、CAT Core `100/100`、CAT Formats `163/163`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9` 通过。
 - macOS arm64 packaged artifact integrity 通过；纵向 smoke 为 Pi `15/0`、Chat `19/0`、Linguist `21/0/2 MANUAL`。
+- 同一 packaged artifact 已安装为 `/Applications/Linguist Agent.app` `0.16.34`；安装后 `app.asar` SHA-256 与验证产物一致。旧 `0.16.21` 已移入废纸篓，可恢复。
 - Phrase 真实私有副本验证为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户数据未进入仓库。
 - memoQ MQXLIFF 专用 Adapter 的合成 fixture、修改/导出/重导和回归已自动验证；真实 memoQ 客户样本尚未验证。
 - 真实 Provider 四岗位全链、同模型对照、14 天日用和 Native Open/Save 等真机人工项尚未确认，不得标记为完成。

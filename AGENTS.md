@@ -56,7 +56,7 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
-| Vite | `6.0.3` |
+| Vite | `6.4.1`（manifest range `^6.0.3`） |
 | Shared | `@proma/shared 0.1.92` |
 | Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
 | Pi Runtime（Electron App） | `@earendil-works/pi-* 0.82.1` |

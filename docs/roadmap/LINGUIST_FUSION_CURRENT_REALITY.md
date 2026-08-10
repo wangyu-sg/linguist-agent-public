@@ -6,7 +6,7 @@
 
 | 项目 | 当前事实 |
 |---|---|
-| 仓库 / 分支 | `/Users/<local>/Desktop/linguist-agent-next` / `integration/la-proma-0.16.10` |
+| 仓库 / 分支 | `/Users/<local>/Desktop/linguist-agent-next` / `main` |
 | Proma Base / formal merge | v0.16.10 `72fd1b1a` / `ea26177f` |
 | App / Electron | `0.16.34` / `43.2.0` |
 | Bun / Pi / Claude | `1.3.14` / `0.82.1` / `0.3.201` |
@@ -41,6 +41,7 @@
 - 本轮全量证据为：11 workspace typecheck、根 `1514/1514`（`6760` assertions）、Electron `185/185`、CAT Core `100/100`、CAT Formats `163/163`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9`、432 依赖 SBOM/许可证核验。
 - 私有 Phrase 工作目录只做只读副本测试；82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable，客户内容不进入仓库。
 - macOS arm64 packaged artifact integrity 通过；纵向 smoke 为 Pi `15/0`、Chat `19/0`、Linguist `21/0/2 MANUAL`，合同覆盖仍是 `partial`。
+- 同一验证产物已安装到 `/Applications/Linguist Agent.app`，版本 `0.16.34`，安装后 `app.asar` SHA-256 与产物一致；旧 `0.16.21` 已移入废纸篓作为可恢复备份。
 - 真实模型质量、四岗位真实全链、memoQ 客户样本、14 天日用、VoiceOver、IME 和 Native dialog 仍待真实证据，不能由自动测试替代。
 
 当前 Ticket 状态见 [SIMPLE_IMPLEMENTATION_STATUS.md](./SIMPLE_IMPLEMENTATION_STATUS.md)。历史 v1 queue 和 Gate 报告只代表当时证据，不覆盖本页。
