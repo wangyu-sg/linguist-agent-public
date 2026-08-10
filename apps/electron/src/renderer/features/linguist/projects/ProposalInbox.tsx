@@ -586,29 +586,6 @@ function ProposalCard({
 
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-foreground/35">
         <span>创建：{formatTimestamp(diff.proposal.createdAt)}</span>
-        <span>生成记录：{diff.issuanceCount ?? 1} 次</span>
-        {(diff.latestIssuance?.modelId ?? diff.proposal.modelId) && (
-          <span>模型：{diff.latestIssuance?.modelId ?? diff.proposal.modelId}</span>
-        )}
-        {(diff.latestIssuance?.sessionId ?? diff.proposal.sessionId) && (
-          <span>会话：{diff.latestIssuance?.sessionId ?? diff.proposal.sessionId}</span>
-        )}
-        {(diff.latestIssuance?.runId ?? diff.proposal.runId) && (
-          <span>批次：{diff.latestIssuance?.runId ?? diff.proposal.runId}</span>
-        )}
-        {diff.latestIssuance?.runtime && <span>运行时：{diff.latestIssuance.runtime}</span>}
-        {diff.latestIssuance?.modelProvider && (
-          <span>Provider：{diff.latestIssuance.modelProvider}</span>
-        )}
-        {diff.latestIssuance?.toolCallId && (
-          <span>工具调用：{diff.latestIssuance.toolCallId}</span>
-        )}
-        {diff.proposal.reissuedFromProposalId && (
-          <span>重新提出自：{diff.proposal.reissuedFromProposalId}</span>
-        )}
-        {diff.proposal.supersedesProposalId && (
-          <span>取代：{diff.proposal.supersedesProposalId}</span>
-        )}
       </div>
 
       {editing && pending ? (

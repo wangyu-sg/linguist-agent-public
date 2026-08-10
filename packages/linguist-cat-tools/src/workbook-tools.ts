@@ -6,6 +6,7 @@ const mappingColumns = Type.Object({
   key: Type.Optional(Type.String({ minLength: 1 })),
   source: Type.String({ minLength: 1 }),
   target: Type.String({ minLength: 1 }),
+  locked: Type.Optional(Type.String({ minLength: 1 })),
   context: Type.Optional(Type.String({ minLength: 1 })),
   speaker: Type.Optional(Type.String({ minLength: 1 })),
   status: Type.Optional(Type.String({ minLength: 1 })),

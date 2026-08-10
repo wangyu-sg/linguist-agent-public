@@ -1,6 +1,10 @@
 import { open, readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, resolve } from 'node:path'
-import { probePhraseMasterPair } from '@linguist/cat-formats'
+import {
+  normalizeDelimitedHeader,
+  parseDelimitedTable,
+  probePhraseMasterPair,
+} from '@linguist/cat-formats'
 import { sha256Hex } from '@linguist/cat-core'
 import {
   LINGUIST_IMPORT_MAX_BYTES,
@@ -15,7 +19,7 @@ import type {
   LinguistIntakeXlsxMapping,
 } from '@linguist/cat-tools'
 import { LinguistCatInvalidArgumentError } from '@linguist/cat-tools'
-import { LinguistImportTooLargeError } from './errors'
+import { errorCodeOf, LinguistImportTooLargeError } from './errors'
 import { createDefaultCatFormatRegistry } from './format-registry'
 import type { LinguistProjectService } from './project-service'
 
@@ -26,11 +30,49 @@ const CONTEXT_EXTENSIONS = new Set([
 const TM_EXTENSIONS = new Set(['.tmx', '.sdltm'])
 const TB_EXTENSIONS = new Set(['.tbx', '.sdltb'])
 const FILE_LIMIT = 500
+const SAFE_FAILURE_CODE = /^[A-Z][A-Z0-9_]{0,63}$/
+const AUTO_CSV_TERM_HEADERS = new Set(['term', '术语', '源术语'].map(normalizeDelimitedHeader))
+const AUTO_CSV_SOURCE_HEADERS = new Set(['source', 'src', 'sourcetext', 'source text', '源文', '原文'].map(normalizeDelimitedHeader))
+const AUTO_CSV_TARGET_HEADERS = new Set(['target', 'tgt', 'translation', 'targettext', 'target text', '译文', '翻译'].map(normalizeDelimitedHeader))
+const AUTO_CSV_BATCH_HEADERS = new Set([
+  'key', 'id', 'segmentid', 'uniquekey', '唯一键',
+  'locked', 'lock', '锁定',
+  'context', 'note', 'notes', 'comment', '备注',
+].map(normalizeDelimitedHeader))
 
 interface IntakeEntry {
   path: string
   filename: string
   sizeBytes: number
+}
+
+function safeImportFailureMessage(error: unknown): string {
+  const code = errorCodeOf(error)
+  const publicCode = code !== 'UNKNOWN' && SAFE_FAILURE_CODE.test(code) ? code : 'INTERNAL'
+  return `导入失败（${publicCode}）`
+}
+
+function autoCsvKind(
+  bytes: Uint8Array,
+  filename: string,
+): 'terms' | 'batch' | 'batch-or-tm' | undefined {
+  let headers: Set<string>
+  try {
+    headers = new Set(
+      parseDelimitedTable(bytes, filename).headers.map(normalizeDelimitedHeader),
+    )
+  } catch {
+    return undefined
+  }
+  const has = (aliases: ReadonlySet<string>): boolean =>
+    [...aliases].some((alias) => headers.has(alias))
+  const hasTarget = has(AUTO_CSV_TARGET_HEADERS)
+  const batchOrTm = has(AUTO_CSV_SOURCE_HEADERS) && hasTarget
+  if (!batchOrTm && has(AUTO_CSV_TERM_HEADERS) && hasTarget) {
+    return 'terms'
+  }
+  if (!batchOrTm) return undefined
+  return has(AUTO_CSV_BATCH_HEADERS) ? 'batch' : 'batch-or-tm'
 }
 
 /** 原生 picker 选中文件的主进程读取边界；同一 fd 完成大小检查与读盘。 */
@@ -92,8 +134,12 @@ async function scanEntries(
     for (const child of children) {
       if (truncated) break
       const childPath = resolve(path, child.name)
-      if (child.isFile()) await addFile(childPath)
-      else if (recursive && child.isDirectory()) await visit(childPath)
+      try {
+        if (child.isFile()) await addFile(childPath)
+        else if (recursive && child.isDirectory()) await visit(childPath)
+      } catch {
+        failures.push({ filename: child.name, status: 'failed', message: '路径不可读' })
+      }
     }
   }
   for (const inputPath of inputPaths) {
@@ -118,13 +164,8 @@ async function importEntry(
   const maxBytes = resourceKind === 'batch'
     ? LINGUIST_IMPORT_MAX_BYTES
     : LINGUIST_RESOURCE_IMPORT_MAX_BYTES
-  if (entry.sizeBytes > maxBytes) {
-    throw new LinguistCatInvalidArgumentError(
-      'paths',
-      `file exceeds the ${Math.floor(maxBytes / 1024 / 1024)}MB ${resourceKind} intake limit`,
-    )
-  }
-  const bytes = await readFile(entry.path)
+  assertEntryWithinLimit(entry, resourceKind, maxBytes)
+  const { bytes } = await readPickedFileWithinLimit(entry.path, maxBytes)
   if (resourceKind === 'batch') {
     if (phraseMaster !== undefined && phraseMaster.sizeBytes > LINGUIST_IMPORT_MAX_BYTES) {
       throw new LinguistCatInvalidArgumentError('paths', 'Phrase master companion exceeds the batch intake limit')
@@ -134,7 +175,10 @@ async function importEntry(
       filename: entry.filename,
       xlsxMapping,
       ...(phraseMaster === undefined ? {} : {
-        phraseMaster: { bytes: await readFile(phraseMaster.path), filename: phraseMaster.filename },
+        phraseMaster: {
+          bytes: (await readPickedFileWithinLimit(phraseMaster.path, LINGUIST_IMPORT_MAX_BYTES)).bytes,
+          filename: phraseMaster.filename,
+        },
       }),
     })
     return {
@@ -180,6 +224,20 @@ async function importEntry(
   }
 }
 
+function assertEntryWithinLimit(
+  entry: IntakeEntry,
+  resourceKind: LinguistIntakeResourceKind,
+  maxBytes = resourceKind === 'batch'
+    ? LINGUIST_IMPORT_MAX_BYTES
+    : LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
+): void {
+  if (entry.sizeBytes <= maxBytes) return
+  throw new LinguistCatInvalidArgumentError(
+    'paths',
+    `file exceeds the ${Math.floor(maxBytes / 1024 / 1024)}MB ${resourceKind} intake limit`,
+  )
+}
+
 export async function importProjectFile(
   service: LinguistProjectService,
   projectId: string,
@@ -222,23 +280,35 @@ export async function importProjectResources(
   cwd: string,
   input: LinguistImportResourcesInput,
 ): Promise<LinguistImportResourcesResult> {
+  // 项目级失败不能伪装成某一个文件的 partial failure；也不要先读用户文件再
+  // 发现项目已归档或 cat.db 不健康。
+  service.assertProjectWritable(projectId)
+  service.openProject(projectId)
   const { entries, failures, truncated } = await scanEntries(cwd, input.paths, input.recursive)
   const registry = createDefaultCatFormatRegistry()
   const items: LinguistImportResourceItem[] = [...failures]
   const phraseSplits = entries.filter((entry) => extname(entry.filename).toLowerCase() === '.mxliff')
   const phraseMasters = entries.filter((entry) => ['.xlf', '.xliff'].includes(extname(entry.filename).toLowerCase()))
   const phrasePairs = new Map<string, IntakeEntry>()
+  const phrasePairMessages = new Map<string, string>()
   const phraseIssues = new Map<string, string>()
+  const phraseCandidateMasters = new Set<string>()
   const usedMasters = new Set<string>()
   for (const split of phraseSplits) {
-    const splitBytes = await readFile(split.path)
+    let splitBytes: Uint8Array
+    try {
+      splitBytes = (await readPickedFileWithinLimit(split.path, LINGUIST_IMPORT_MAX_BYTES)).bytes
+    } catch {
+      phraseIssues.set(split.path, 'Phrase split 文件不可读')
+      continue
+    }
     const ranked = []
     for (const master of phraseMasters) {
       try {
         const probe = await probePhraseMasterPair(
           splitBytes,
           split.filename,
-          await readFile(master.path),
+          (await readPickedFileWithinLimit(master.path, LINGUIST_IMPORT_MAX_BYTES)).bytes,
           master.filename,
         )
         if (probe.score > 0) ranked.push({ master, probe })
@@ -251,18 +321,32 @@ export async function importProjectResources(
     if (best === undefined) {
       phraseIssues.set(split.path, 'Phrase split 缺少可匹配的 master XLIFF')
     } else if (best.probe.score === ranked[1]?.probe.score) {
-      phraseIssues.set(split.path, 'Phrase split 存在多个同分 master 候选')
+      const tied = ranked.filter((item) => item.probe.score === best.probe.score)
+      for (const item of tied) phraseCandidateMasters.add(item.master.path)
+      phraseIssues.set(
+        split.path,
+        `Phrase split 存在多个同分 master 候选：${tied.map((item) => item.master.filename).join('、')}`,
+      )
     } else if (best.probe.config.unmatchedSegments > 0 || best.probe.config.ambiguousSegments > 0) {
-      phraseIssues.set(split.path, 'Phrase master Tag Mapping 不完整或有歧义')
+      phraseCandidateMasters.add(best.master.path)
+      phraseIssues.set(
+        split.path,
+        `Phrase master ${best.master.filename} 的 Tag Mapping 不完整或有歧义：匹配 ${best.probe.config.matchedSegments}/${best.probe.config.placeholderSegments}，未匹配 ${best.probe.config.unmatchedSegments}，歧义 ${best.probe.config.ambiguousSegments}`,
+      )
     } else {
+      phraseCandidateMasters.add(best.master.path)
       phrasePairs.set(split.path, best.master)
+      phrasePairMessages.set(
+        split.path,
+        `已与 master ${best.master.filename} 唯一配对；Tag Mapping ${best.probe.config.matchedSegments}/${best.probe.config.placeholderSegments}`,
+      )
       usedMasters.add(best.master.path)
     }
   }
 
   const masterResourceIds = new Map<string, string>()
   for (const entry of entries) {
-    if (phraseSplits.length > 0 && phraseMasters.some((master) => master.path === entry.path)) continue
+    if (phraseCandidateMasters.has(entry.path)) continue
     const filename = entry.filename
     const extension = extname(filename).toLowerCase()
     const phraseIssue = phraseIssues.get(entry.path)
@@ -270,41 +354,59 @@ export async function importProjectResources(
       items.push({ filename, status: 'needs-input', resourceKind: 'batch', message: phraseIssue })
       continue
     }
-    let resourceKind: LinguistIntakeResourceKind | undefined = input.kind === 'auto'
-      ? TM_EXTENSIONS.has(extension)
-        ? 'tm'
-        : TB_EXTENSIONS.has(extension)
-          ? 'terms'
-          : undefined
-      : input.kind === 'tb' ? 'terms' : input.kind
-    let bytes: Uint8Array | undefined
-    if (resourceKind === undefined) {
-      try {
-        bytes = await readFile(entry.path)
-        await registry.detectBest(bytes, filename)
-        resourceKind = 'batch'
-      } catch {
-        if (CONTEXT_EXTENSIONS.has(extension)) resourceKind = 'context'
+    let resourceKind: LinguistIntakeResourceKind | undefined
+    try {
+      let bytes: Uint8Array | undefined
+      if (input.kind === 'auto' && extension === '.csv') {
+        bytes = (await readPickedFileWithinLimit(entry.path, LINGUIST_RESOURCE_IMPORT_MAX_BYTES)).bytes
+        const csvKind = autoCsvKind(bytes, filename)
+        if (csvKind === 'terms') {
+          resourceKind = 'terms'
+        } else if (csvKind === 'batch') {
+          resourceKind = 'batch'
+        } else if (csvKind === 'batch-or-tm') {
+          items.push({
+            filename,
+            status: 'needs-input',
+            message: 'CSV 只有 Source/Target，无法判断是批次还是翻译记忆；若是 TM，请在“TM / 术语库 / 句式管理”导入；若是批次，请补充 ID/Key 列，或让项目 Agent 明确按批次导入',
+          })
+          continue
+        }
       }
-    }
-    if (resourceKind === undefined) {
-      items.push({ filename, status: 'unsupported' })
-      continue
-    }
-    let xlsxMapping = input.xlsxMapping
-    if (extension === '.xlsx' && xlsxMapping === undefined) {
-      bytes ??= await readFile(entry.path)
-      xlsxMapping = await service.resolveWorkbookMapping(projectId, bytes, filename)
-      if (xlsxMapping === undefined) {
-        items.push({ filename, status: 'needs-input', resourceKind, message: '需要确认 Sheet 与列映射' })
+      resourceKind = input.kind === 'auto'
+        ? resourceKind ?? (TM_EXTENSIONS.has(extension)
+          ? 'tm'
+          : TB_EXTENSIONS.has(extension)
+            ? 'terms'
+            : undefined)
+        : input.kind === 'tb' ? 'terms' : input.kind
+      if (resourceKind === undefined) {
+        bytes = (await readPickedFileWithinLimit(entry.path, LINGUIST_RESOURCE_IMPORT_MAX_BYTES)).bytes
+        try {
+          await registry.detectBest(bytes, filename)
+          resourceKind = 'batch'
+        } catch {
+          if (CONTEXT_EXTENSIONS.has(extension)) resourceKind = 'context'
+        }
+      }
+      if (resourceKind === undefined) {
+        items.push({ filename, status: 'unsupported' })
         continue
       }
-    }
-    if (input.dryRun) {
-      items.push({ filename, status: 'ready', resourceKind })
-      continue
-    }
-    try {
+      let xlsxMapping = input.xlsxMapping
+      if (extension === '.xlsx' && xlsxMapping === undefined) {
+        bytes ??= (await readPickedFileWithinLimit(entry.path, LINGUIST_IMPORT_MAX_BYTES)).bytes
+        xlsxMapping = await service.resolveWorkbookMapping(projectId, bytes, filename)
+        if (xlsxMapping === undefined) {
+          items.push({ filename, status: 'needs-input', resourceKind, message: '需要确认 Sheet 与列映射' })
+          continue
+        }
+      }
+      assertEntryWithinLimit(entry, resourceKind)
+      if (input.dryRun) {
+        items.push({ filename, status: 'ready', resourceKind })
+        continue
+      }
       const master = phrasePairs.get(entry.path)
       const imported = await importEntry(service, projectId, entry, resourceKind, xlsxMapping, master)
       if (master !== undefined) masterResourceIds.set(master.path, imported.resourceId)
@@ -313,6 +415,7 @@ export async function importProjectResources(
         status: imported.status,
         resourceKind,
         resourceId: imported.resourceId,
+        ...(phrasePairMessages.get(entry.path) === undefined ? {} : { message: phrasePairMessages.get(entry.path) }),
         ...(imported.unknownTagSummary === undefined ? {} : { unknownTagSummary: imported.unknownTagSummary }),
       })
     } catch (error) {
@@ -320,12 +423,12 @@ export async function importProjectResources(
         filename,
         status: 'failed',
         resourceKind,
-        message: error instanceof Error ? error.message.replaceAll(entry.path, filename) : '导入失败',
+        message: safeImportFailureMessage(error),
       })
     }
   }
   if (phraseSplits.length > 0) {
-    for (const master of phraseMasters) {
+    for (const master of phraseMasters.filter((entry) => phraseCandidateMasters.has(entry.path))) {
       const resourceId = masterResourceIds.get(master.path)
       const paired = usedMasters.has(master.path)
       items.push({

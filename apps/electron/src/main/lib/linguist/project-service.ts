@@ -61,6 +61,7 @@ import {
   StoreNotFoundError,
   StoreSqliteUnavailableError,
   verifyBackup,
+  type ApprovedExemplar,
   type ContextDoc,
   type ProjectDatabase,
   type SentencePattern,
@@ -104,8 +105,11 @@ import {
 } from './project-file-intake'
 import {
   createProjectWorkbookMappingProfile,
+  createProjectWorkbookMappingProfileFromBytes,
+  matchProjectWorkbookMapping,
   previewProjectWorkbookMapping,
   resolveProjectWorkbookMapping,
+  type ProjectWorkbookMappingMatch,
 } from './project-workbook-mapping'
 import {
   MAX_IMPORT_BYTES,
@@ -120,6 +124,7 @@ import type {
   CatSegmentContext,
   CatWorkspacePage,
   CatWorkspaceQuery,
+  ApproveSegmentExemplarInput,
   CreateLinguistProjectInput,
   DeleteLinguistProjectResult,
   ImportAssetInput,
@@ -1066,6 +1071,13 @@ export class LinguistProjectService {
     return this.quality.getSegmentContext(projectId, segmentId)
   }
 
+  addApprovedExemplar(
+    projectId: string,
+    input: ApproveSegmentExemplarInput,
+  ): ApprovedExemplar {
+    return this.quality.addApprovedExemplar(projectId, input)
+  }
+
   runQa(projectId: string): CatQaFinding[] {
     return this.quality.runQa(projectId)
   }
@@ -1123,8 +1135,9 @@ export class LinguistProjectService {
   prepareDelivery(
     projectId: string,
     assetId: string,
+    validation: 'verified' | 'as-is' = 'verified',
   ): Promise<LinguistPreparedDelivery> {
-    return this.delivery.prepareDelivery(projectId, assetId)
+    return this.delivery.prepareDelivery(projectId, assetId, validation)
   }
 
   savePreparedDeliveryToPath(
@@ -1160,16 +1173,6 @@ export class LinguistProjectService {
     assetId: string,
   ): Promise<LinguistStagedExport> {
     return this.delivery.stageExport(projectId, assetId)
-  }
-
-  stageAsIsExport(
-    projectId: string,
-    assetId: string,
-  ): Promise<LinguistStagedExport> {
-    return this.delivery.stageExport(projectId, assetId, {
-      allowBlockingQa: true,
-      allowHardRuleViolations: true,
-    })
   }
 
   editSegment(
@@ -1253,6 +1256,37 @@ export class LinguistProjectService {
     ]
     this.call(() => this.store.setWorkbookMappings(projectId, profiles), projectId)
     return profile
+  }
+
+  async saveWorkbookMappingFromBytes(
+    projectId: string,
+    bytes: Uint8Array,
+    filename: string,
+    input: LinguistSaveWorkbookMappingInput,
+  ): Promise<LinguistWorkbookMappingProfile> {
+    this.assertProjectWritable(projectId)
+    const project = this.getProject(projectId)
+    const profile = await createProjectWorkbookMappingProfileFromBytes(
+      project,
+      bytes,
+      filename,
+      input,
+      this.now(),
+    )
+    const profiles = [
+      ...(project.workbookMappings ?? []).filter((candidate) => candidate.id !== profile.id),
+      profile,
+    ]
+    this.call(() => this.store.setWorkbookMappings(projectId, profiles), projectId)
+    return profile
+  }
+
+  matchWorkbookMapping(
+    projectId: string,
+    bytes: Uint8Array,
+    filename: string,
+  ): Promise<ProjectWorkbookMappingMatch | undefined> {
+    return matchProjectWorkbookMapping(this.getProject(projectId), bytes, filename)
   }
 
   resolveWorkbookMapping(

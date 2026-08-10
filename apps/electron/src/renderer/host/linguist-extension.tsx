@@ -27,10 +27,9 @@ function renderLinguistSidebar(context: unknown): React.ReactNode {
 }
 
 /**
- * 此值只列出当前真实可用的 Agent surface 能力。
- * RightSidePanel 仍只在 Agent 主模式挂载；Linguist 由 ProjectAgentRail 挂载 chat-only Companion Host，文件面板仍关闭。
+ * Rail 保持窄面板职责，不挂载文件面板；Full 复用原生 Files / Changes / Chat 侧面板。
  */
-export const LINGUIST_AGENT_HOST_CAPABILITIES: AgentHostCapabilities = {
+export const LINGUIST_AGENT_RAIL_HOST_CAPABILITIES: AgentHostCapabilities = {
   references: true,
   companionChat: true,
   filePanel: false,
@@ -41,6 +40,11 @@ export const LINGUIST_AGENT_HOST_CAPABILITIES: AgentHostCapabilities = {
   queueAndSteer: true,
   permissions: true,
   fullPresentation: true,
+}
+
+export const LINGUIST_AGENT_FULL_HOST_CAPABILITIES: AgentHostCapabilities = {
+  ...LINGUIST_AGENT_RAIL_HOST_CAPABILITIES,
+  filePanel: true,
 }
 
 /**
@@ -74,12 +78,12 @@ export const linguistExtension: PromaExtension = {
     {
       id: 'linguist-rail',
       presentation: 'linguist-rail',
-      capabilities: LINGUIST_AGENT_HOST_CAPABILITIES,
+      capabilities: LINGUIST_AGENT_RAIL_HOST_CAPABILITIES,
     },
     {
       id: 'linguist-full',
       presentation: 'linguist-full',
-      capabilities: LINGUIST_AGENT_HOST_CAPABILITIES,
+      capabilities: LINGUIST_AGENT_FULL_HOST_CAPABILITIES,
     },
   ],
 }

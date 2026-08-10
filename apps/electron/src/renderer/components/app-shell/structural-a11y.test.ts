@@ -86,6 +86,34 @@ describe('结构性无障碍契约', () => {
     expect(source.match(/aria-label="Agent 技能"/g)).toHaveLength(1)
   })
 
+  test('given Linguist 模式 when 渲染 Proma 侧边栏宿主 then 复用共享的新建与搜索形态', () => {
+    const source = readFileSync(TARGETS[0]!, 'utf8')
+    const collapsedPrimary = source.slice(
+      source.indexOf('{/* 高频操作 */}'),
+      source.indexOf('aria-label="搜索"'),
+    )
+    const modeAndCollapse = source.slice(
+      source.indexOf('{/* 模式切换器 + 折叠按钮 */}'),
+      source.indexOf('{/* 新对话/新会话按钮 + 搜索按钮 */}'),
+    )
+    const expandedPrimary = source.slice(
+      source.indexOf('{/* 新对话/新会话按钮 + 搜索按钮 */}'),
+      source.indexOf('{/* 任务/日程入口：作为统一规划中心入口。 */}'),
+    )
+
+    expect(collapsedPrimary).not.toContain("mode !== 'linguist'")
+    expect(modeAndCollapse).not.toContain("mode === 'linguist'")
+    expect(expandedPrimary).not.toContain("mode !== 'linguist'")
+    expect(source).toContain('void handleCreatePrimaryItem()')
+
+    const linguistSource = readFileSync(
+      resolve(import.meta.dir, '../../features/linguist/sidebar/LinguistSidebarContent.tsx'),
+      'utf8',
+    )
+    expect(linguistSource).toContain('<ProjectSessionTreeGroupHeader')
+    expect(linguistSource).toContain('SessionRowComponent={SessionRowComponent}')
+  })
+
   test('given 模型选择器打开 when 使用辅助技术搜索 then 搜索框有可访问名称', () => {
     const source = readFileSync(resolve(import.meta.dir, '../chat/ModelSelector.tsx'), 'utf8')
     expect(source).toContain('aria-label="搜索模型"')

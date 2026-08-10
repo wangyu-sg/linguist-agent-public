@@ -6,7 +6,6 @@ import type {
   LinguistSegmentInfo,
   LinguistTermMatchInfo,
   LinguistTermMatchType,
-  LinguistTermStatus,
 } from '@proma/shared'
 import {
   linguistTargetEditorCapabilityAtomFamily,
@@ -17,6 +16,7 @@ import {
   linguistProjectMutationStateAtomFamily,
 } from './project-mutation-atoms'
 import { describeLinguistIpcError } from './project-utils'
+import { TERM_STATUS_LABELS } from './ReferenceManager'
 import {
   getTmActionDisabledReason,
   tmStateMatchesActiveSegment,
@@ -37,14 +37,6 @@ type TermMatchState =
       segment: LinguistSegmentInfo
       matches: LinguistTermMatchInfo[]
     } & TermMatchIdentity)
-
-const TERM_STATUS_LABELS: Record<LinguistTermStatus, string> = {
-  preferred: '首选',
-  required: '必需',
-  allowed: '允许',
-  forbidden: '禁用',
-  deprecated: '已弃用',
-}
 
 const TERM_MATCH_LABELS: Record<LinguistTermMatchType, string> = {
   exact: 'Exact',

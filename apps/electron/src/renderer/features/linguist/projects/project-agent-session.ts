@@ -2,11 +2,14 @@ import type { createStore } from 'jotai/vanilla'
 import type {
   AgentSessionMeta,
   LinguistIpcResult,
+  LinguistRole,
   LinguistSessionCreateForProjectRequest,
 } from '@proma/shared'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
+import { activeTabAtom, type TabItem } from '@/atoms/tab-atoms'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
+import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
 
 type JotaiStore = ReturnType<typeof createStore>
 type CreateProjectSession = (
@@ -92,6 +95,59 @@ export function registerCreatedProjectSession(
     replaceAgentSessionInFreshnessOrder(previous, session),
   )
   return selectProjectAgentSession(store, projectId, session.id)
+}
+
+export function resolveActiveLinguistProjectId(
+  activeTab: TabItem | null,
+  sessions: readonly AgentSessionMeta[],
+): string | null {
+  if (activeTab?.type === 'linguist-project') return activeTab.projectId
+  if (activeTab?.type !== 'agent' && activeTab?.type !== 'preview') return null
+  return sessions.find((session) => session.id === activeTab.sessionId)?.linguistProjectId ?? null
+}
+
+/** 用户显式新建：不复用当前会话，但仍统一校验项目绑定并登记原生 Session。 */
+export async function createProjectAgentSession(
+  store: JotaiStore,
+  projectId: string,
+  role: LinguistRole,
+  createSession: CreateProjectSession = (input) =>
+    window.electronAPI.linguistSessionsCreateForProject(input),
+): Promise<LinguistIpcResult<AgentSessionMeta>> {
+  const result = await createSession({ projectId, role })
+  if (!result.ok) return result
+  if (!registerCreatedProjectSession(store, projectId, result.data)) {
+    return {
+      ok: false,
+      error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
+    }
+  }
+  return result
+}
+
+/** 顶部按钮只在当前 CAT 项目中新建默认 General 会话。 */
+export async function createActiveLinguistProjectSession(
+  store: JotaiStore,
+  createSession: CreateProjectSession = (input) =>
+    window.electronAPI.linguistSessionsCreateForProject(input),
+): Promise<LinguistIpcResult<AgentSessionMeta>> {
+  const projectId = resolveActiveLinguistProjectId(
+    store.get(activeTabAtom),
+    store.get(agentSessionsAtom),
+  )
+  if (!projectId) {
+    return {
+      ok: false,
+      error: { code: 'INVALID_INPUT', message: '请先打开一个本地化项目' },
+    }
+  }
+  const result = await createProjectAgentSession(store, projectId, 'general', createSession)
+  if (result.ok) {
+    store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
+      agentPresentation: 'full',
+    })
+  }
+  return result
 }
 
 /**

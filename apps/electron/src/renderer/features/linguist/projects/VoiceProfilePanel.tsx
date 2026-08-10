@@ -1,9 +1,11 @@
 import * as React from 'react'
-import { Trash2 } from 'lucide-react'
+import { useStore } from 'jotai'
+import { Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { LinguistVoiceProfileInfo } from '@proma/shared'
 import { describeLinguistIpcError } from './project-utils'
 import { formatMarkerList, parseMarkerList, validateSpeakerInput } from './voice-profile-utils'
+import { sendProjectAgentTask } from './project-agent-task'
 
 interface VoiceDraft {
   speaker: string
@@ -17,6 +19,10 @@ interface VoiceDraft {
 
 const EMPTY_DRAFT: VoiceDraft = { speaker: '', textType: '', register: '', person: '', toneMarkers: '', taboos: '', notes: '' }
 
+export const AGENT_SUMMARIZE_VOICE_TASK =
+  '请分析当前项目中已确认的角色台词：按 speaker 和 textType 归纳角色声音、语域、人称、语气标记与禁忌，'
+  + '明确列出引用的 Segment 作为依据；缺少 speaker 元数据时不要猜角色。更新 Voice Profile 前先给我确认。'
+
 /**
  * Voice Profile 面板（PB-095）：speaker 行编辑器（文本类型/语域/人称/
  * 语气标记/禁忌）。标记用逗号分隔文本编辑，保存时转字符串数组。
@@ -24,7 +30,9 @@ const EMPTY_DRAFT: VoiceDraft = { speaker: '', textType: '', register: '', perso
 export function VoiceProfilePanel({ projectId, archived }: { projectId: string; archived: boolean }): React.ReactElement {
   const [profiles, setProfiles] = React.useState<LinguistVoiceProfileInfo[]>([])
   const [busy, setBusy] = React.useState(false)
+  const [agentTaskSending, setAgentTaskSending] = React.useState(false)
   const [draft, setDraft] = React.useState<VoiceDraft>(EMPTY_DRAFT)
+  const store = useStore()
   /** 非空表示表单正在编辑既有行（保存走 id 更新路径）。 */
   const [editingId, setEditingId] = React.useState<string | undefined>(undefined)
 
@@ -104,10 +112,38 @@ export function VoiceProfilePanel({ projectId, archived }: { projectId: string; 
     })
   }
 
+  const summarizeWithAgent = async (): Promise<void> => {
+    if (archived || agentTaskSending) return
+    setAgentTaskSending(true)
+    try {
+      const result = await sendProjectAgentTask(store, projectId, AGENT_SUMMARIZE_VOICE_TASK)
+      if (result.status === 'error') {
+        toast.error('发送角色声音总结任务失败', { description: result.error.message })
+      } else if (result.status === 'selection-truncated') {
+        toast.error('发送角色声音总结任务失败', { description: '当前片段选择过大，请缩小后重试' })
+      } else {
+        toast('已把角色声音总结任务发给项目 Agent', {
+          description: 'Agent 会读取已确认台词，修改 Voice Profile 前先请你确认。',
+        })
+      }
+    } finally {
+      setAgentTaskSending(false)
+    }
+  }
+
   return (
     <details className="rounded-xl bg-content-area shadow-sm ring-1 ring-border/35">
       <summary className="cursor-pointer list-none px-3 py-2.5 text-[12px] font-medium text-foreground/70">Voice Profiles（{profiles.length}）</summary>
       <div className="space-y-2 border-t border-border/35 p-3">
+        <button
+          type="button"
+          disabled={archived || agentTaskSending}
+          onClick={() => void summarizeWithAgent()}
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/15 disabled:opacity-40"
+        >
+          <Sparkles aria-hidden="true" size={12} />
+          {agentTaskSending ? '正在发送…' : '让 Agent 从已确认台词总结角色声音'}
+        </button>
         {busy && profiles.length === 0 ? (
           <p className="text-[11px] text-foreground/40">正在读取…</p>
         ) : profiles.length === 0 ? (

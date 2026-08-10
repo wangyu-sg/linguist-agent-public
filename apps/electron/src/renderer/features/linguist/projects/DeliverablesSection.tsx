@@ -89,6 +89,7 @@ export function DeliverablesSection({ sessionId }: { sessionId: string }): React
       const result = await window.electronAPI.linguistExportsSaveAsset({
         projectId,
         assetId: file.assetId,
+        validation: 'verified',
       })
       if (!aliveRef.current) return
       if (!result.ok) {

@@ -48,6 +48,7 @@ test('query, human-only CAS edit, context, and QA channels', () => {
       UNCONFIRM_STAGE: 'linguist.cat.unconfirmStage',
       CONFIRM_STAGE_BULK: 'linguist.cat.confirmStageBulk',
       GET_CONTEXT: 'linguist.cat.getContext',
+      ADD_APPROVED_EXEMPLAR: 'linguist.cat.addApprovedExemplar',
       RUN_QA: 'linguist.cat.runQa',
       LIST_QA_FINDINGS: 'linguist.cat.listQaFindings',
       RESOLVE_QA_FINDING: 'linguist.cat.resolveQaFinding',
@@ -311,6 +312,7 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
   test('preload exposes the PB-060 CAT query without a renderer database path', () => {
     expect(preloadSource).toContain('linguistCatQuery:')
     expect(preloadSource).toContain('linguistCatEditSegment:')
+    expect(preloadSource).toContain('linguistCatAddApprovedExemplar:')
     expect(preloadSource).toContain('linguistCatRunQa:')
     expect(preloadSource).toContain('linguistCatListQaFindings:')
     expect(preloadSource).toContain('linguistCatResolveQaFinding:')
@@ -318,6 +320,7 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     expect(preloadSource).toContain('onLinguistProjectMutation:')
     expect(preloadSource).toContain('LINGUIST_CAT_IPC_CHANNELS.QUERY')
     expect(preloadSource).toContain('LINGUIST_CAT_IPC_CHANNELS.EDIT_SEGMENT')
+    expect(preloadSource).toContain('LINGUIST_CAT_IPC_CHANNELS.ADD_APPROVED_EXEMPLAR')
     expect(preloadSource).toContain('LINGUIST_CAT_IPC_CHANNELS.PROJECT_MUTATION')
     for (const member of ['RUN_QA', 'LIST_QA_FINDINGS', 'RESOLVE_QA_FINDING', 'WAIVE_QA_FINDING']) {
       expect(preloadSource).toContain(`LINGUIST_CAT_IPC_CHANNELS.${member}`)
@@ -326,6 +329,7 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     expect(ipcSource).toContain('createLinguistCatWorkspaceIpc')
     expect(ipcSource).toContain('LINGUIST_CAT_IPC_CHANNELS.QUERY')
     expect(ipcSource).toContain('LINGUIST_CAT_IPC_CHANNELS.EDIT_SEGMENT')
+    expect(ipcSource).toContain('LINGUIST_CAT_IPC_CHANNELS.ADD_APPROVED_EXEMPLAR')
   })
 
   test('LA-EVENT-001 durable gap pull and explicit ack cross preload and main IPC', () => {

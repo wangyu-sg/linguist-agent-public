@@ -82,14 +82,14 @@ import { PendingImportFileStore } from './pending-import-files'
 import { readPickedFileWithinLimit } from './project-file-intake'
 import type { LinguistProjectService } from './project-service'
 import type { XlsxImportMapping } from './project-service-types'
+import { suggestProjectWorkbookMapping } from './project-workbook-mapping'
 
 // ===== picker 抽象（electron dialog 的最小镜像；ipc.ts 注入真实实现）=====
 
 export interface LinguistImportPickerOptions {
   title: string
-  /** 显式 openFile（Electron 默认亦是；写明防回归）。 */
-  properties?: Array<'openFile'>
-  filters: { name: string; extensions: string[] }[]
+  properties: Array<'openFile' | 'openDirectory' | 'multiSelections'>
+  filters?: { name: string; extensions: string[] }[]
 }
 
 export interface LinguistImportPickerResult {
@@ -100,6 +100,14 @@ export interface LinguistImportPickerResult {
 export type LinguistImportFilePicker = (
   options: LinguistImportPickerOptions,
 ) => Promise<LinguistImportPickerResult>
+
+function readImportSelection(record: Record<string, unknown>): 'files' | 'directory' {
+  const selection = record.selection
+  if (selection !== 'files' && selection !== 'directory') {
+    invalid('selection must be files or directory')
+  }
+  return selection
+}
 
 /** 惰性解析服务单例：注册 IPC 时服务可能尚未 init（index.ts bootstrap 顺序）。 */
 export interface LinguistProjectIpcDeps {
@@ -137,7 +145,17 @@ const PREVIEW_TEXT_EXTENSIONS = new Set(['xliff', 'xlf', 'mqxliff', 'sdlxliff', 
 /** PB-089：text 态截断护栏（对齐 context doc text_extract 的 200k 字符纪律）。 */
 const PREVIEW_TEXT_MAX_CHARS = 200_000
 const XLSX_MAPPING_SAMPLE_VALUE_MAX_CHARS = 400
+const XLSX_MAPPING_SAMPLE_ROWS = 50
 const XLSX_DETECTOR = new XlsxAdapter()
+const SINGLE_RESOURCE_EXTENSIONS = new Set([
+  '.csv', '.tmx', '.tbx', '.sdltm', '.sdltb',
+  '.pdf', '.doc', '.docx', '.rtf', '.pptx', '.md', '.markdown', '.txt',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp',
+])
+const NATIVE_IMPORT_EXTENSIONS = [...new Set([
+  ...LINGUIST_IMPORT_FILE_EXTENSIONS,
+  ...[...SINGLE_RESOURCE_EXTENSIONS].map((extension) => extension.slice(1)),
+])]
 
 // ===== 输入校验（计划 §7.4：renderer 不可信，主进程自行校验一切入参）=====
 // 信封/通用校验件（invalid / assertRecord / readProjectId / wrap / toIpcError）
@@ -300,10 +318,11 @@ function readXlsxMappingConfirmation(input: unknown): {
   mappingId: string
   sourceSha256: string
   mapping: XlsxImportMapping
+  rememberMapping: boolean
 } {
   const record = assertRecord(input)
   for (const key of Object.keys(record)) {
-    if (!['projectId', 'mappingId', 'sourceSha256', 'sheetName', 'columns'].includes(key)) {
+    if (!['projectId', 'mappingId', 'sourceSha256', 'sheetName', 'columns', 'rememberMapping'].includes(key)) {
       invalid(`unknown XLSX mapping field ${JSON.stringify(key)}`)
     }
   }
@@ -329,10 +348,15 @@ function readXlsxMappingConfirmation(input: unknown): {
     const value = readXlsxMappingString(columnsRecord, key, false)
     if (value !== undefined) columns[key] = value
   }
-  return { projectId, mappingId, sourceSha256, mapping: { sheetName, columns } }
+  const rememberMapping = record.rememberMapping ?? false
+  if (typeof rememberMapping !== 'boolean') invalid('rememberMapping must be a boolean')
+  return { projectId, mappingId, sourceSha256, mapping: { sheetName, columns }, rememberMapping }
 }
 
-function toXlsxMappingPreview(parsed: XlsxWorkbookParseResult): LinguistXlsxMappingPreview {
+function toXlsxMappingPreview(
+  parsed: XlsxWorkbookParseResult,
+  project: LinguistProject,
+): LinguistXlsxMappingPreview {
   const truncated = new Set(parsed.report.sampling.truncatedSheets.map((entry) => entry.sheet))
   return {
     sourceSha256: parsed.report.sourceSha256,
@@ -363,6 +387,7 @@ function toXlsxMappingPreview(parsed: XlsxWorkbookParseResult): LinguistXlsxMapp
             truncated: cell.value.length > XLSX_MAPPING_SAMPLE_VALUE_MAX_CHARS,
           })),
         })),
+        suggestion: suggestProjectWorkbookMapping(sheet, project.sourceLocale, project.targetLocale),
         coverage: {
           physicalRows: sheet.stats.totalRows,
           dataRows: sheet.stats.dataRows,
@@ -554,9 +579,9 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
     },
 
     /**
-     * linguist.projects.import — 原生文件选择器导入流程：
+     * linguist.projects.import — 原生文件 / 目录选择器导入流程：
      * 项目存在/未归档前置校验（避免无谓弹窗）→ picker → 主进程读盘
-     * （大小护栏 50MB，先于读盘）→ importAsset(bytes, basename)，同源字节重复则跳过。
+     * （逐文件大小护栏）→ 单文件保留 XLSX 映射流程，多文件/目录走共享资源导入。
      * renderer 永不接触路径/字节；取消返回 {cancelled: true}。
      */
     async import(
@@ -564,28 +589,60 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
       pickFile: LinguistImportFilePicker,
     ): Promise<LinguistIpcResult<LinguistProjectImportResult>> {
       return wrap(async () => {
-        const projectId = readProjectId(assertRecord(input))
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const selection = readImportSelection(record)
         const service = getService()
         const project = service.getProject(projectId)
         if (project.archivedAt !== undefined) {
           throw new LinguistProjectArchivedError(projectId)
         }
 
-        const picked = await pickFile({
-          title: '导入翻译批次',
-          properties: ['openFile'],
-          filters: [
-            {
-              name: '翻译批次文件 (XLIFF / SDLXLIFF / MXLIFF / DOCX / CSV / TSV / JSON / XLSX)',
-              extensions: [...LINGUIST_IMPORT_FILE_EXTENSIONS],
-            },
-          ],
-        })
+        const picked = await pickFile(selection === 'files'
+          ? {
+              title: '导入项目文件',
+              properties: ['openFile', 'multiSelections'],
+              filters: [
+                {
+                  name: 'Linguist 项目文件',
+                  extensions: NATIVE_IMPORT_EXTENSIONS,
+                },
+              ],
+            }
+          : {
+              title: '导入项目文件夹',
+              properties: ['openDirectory', 'multiSelections'],
+            })
         if (picked.canceled || picked.filePaths.length === 0) {
           return { cancelled: true }
         }
 
+        if (selection === 'directory' || picked.filePaths.length > 1) {
+          const result = await service.importResourcesFromPaths(projectId, service.rootDir, {
+            paths: picked.filePaths,
+            recursive: selection === 'directory',
+            kind: 'auto',
+            dryRun: false,
+          })
+          console.log(
+            `[Linguist IPC] 批量导入完成: 项目 ${projectId}（导入 ${result.imported}，重复 ${result.skippedDuplicate}，待确认 ${result.needsInput}，失败 ${result.failed}）`,
+          )
+          return { cancelled: false, bulk: true, ...result }
+        }
+
         const filePath = picked.filePaths[0] as string
+        if (SINGLE_RESOURCE_EXTENSIONS.has(extname(filePath).toLowerCase())) {
+          const result = await service.importResourcesFromPaths(projectId, service.rootDir, {
+            paths: [filePath],
+            recursive: false,
+            kind: 'auto',
+            dryRun: false,
+          })
+          console.log(
+            `[Linguist IPC] 单项语言资产导入完成: 项目 ${projectId}（导入 ${result.imported}，重复 ${result.skippedDuplicate}，待确认 ${result.needsInput}，失败 ${result.failed}）`,
+          )
+          return { cancelled: false, bulk: true, ...result }
+        }
         const { bytes, filename } = await readPickedFileWithinLimit(
           filePath,
           LINGUIST_IMPORT_MAX_BYTES,
@@ -593,7 +650,24 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
 
         // XLSX 不会落入别名猜测：先展示主进程解析证据，再等待用户点名工作表/源文/译文列。
         if (await XLSX_DETECTOR.detect(bytes, filename) > 0) {
-          const parsed = await parseXlsxWorkbook(bytes, { filename, maxRowsPerSheet: 5 })
+          const parsed = await parseXlsxWorkbook(bytes, { filename, maxRowsPerSheet: XLSX_MAPPING_SAMPLE_ROWS })
+          const matched = await service.matchWorkbookMapping(projectId, bytes, filename)
+          if (matched !== undefined) {
+            const mapping = validateXlsxMapping(parsed, matched.mapping)
+            const result = await service.importAsset(projectId, { bytes, filename, xlsxMapping: mapping })
+            return {
+              cancelled: false,
+              bulk: false,
+              requiresXlsxMapping: false,
+              filename,
+              ...result,
+              mappingUsed: {
+                profileId: matched.profileId,
+                sheetName: mapping.sheetName,
+                columns: matched.mapping.columns,
+              },
+            }
+          }
           const sourceSha256 = parsed.report.sourceSha256
           const pending = pendingFiles.issue({
             scope: 'xlsx-mapping',
@@ -604,11 +678,12 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
           })
           return {
             cancelled: false,
+            bulk: false,
             requiresXlsxMapping: true,
             filename,
             mappingId: pending.id,
             sourceSha256,
-            preview: toXlsxMappingPreview(parsed),
+            preview: toXlsxMappingPreview(parsed, project),
           }
         }
 
@@ -618,7 +693,7 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
             ? `[Linguist IPC] 已跳过重复资产: 项目 ${projectId} 资产 ${result.assetId}`
             : `[Linguist IPC] 导入完成: 项目 ${projectId} 资产 ${result.assetId}（${result.formatId}，${result.segmentCount} 段）`,
         )
-        return { cancelled: false, requiresXlsxMapping: false, filename, ...result }
+        return { cancelled: false, bulk: false, requiresXlsxMapping: false, filename, ...result }
       })
     },
 
@@ -641,12 +716,29 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         }
         const parsed = await parseXlsxWorkbook(pending.bytes, {
           filename: pending.filename,
-          maxRowsPerSheet: 5,
+          maxRowsPerSheet: XLSX_MAPPING_SAMPLE_ROWS,
         })
         if (parsed.report.sourceSha256 !== pending.sourceSha256) {
           invalid('XLSX source bytes changed after mapping preview')
         }
         const mapping = validateXlsxMapping(parsed, confirmation.mapping)
+        const profile = confirmation.rememberMapping
+          ? await service.saveWorkbookMappingFromBytes(
+              confirmation.projectId,
+              pending.bytes,
+              pending.filename,
+              {
+                sheetName: mapping.sheetName,
+                columns: {
+                  ...(mapping.columns.key === undefined ? {} : { key: mapping.columns.key }),
+                  source: mapping.columns.source,
+                  target: mapping.columns.target,
+                  ...(mapping.columns.locked === undefined ? {} : { locked: mapping.columns.locked }),
+                  ...(mapping.columns.context === undefined ? {} : { context: mapping.columns.context }),
+                },
+              },
+            )
+          : undefined
         const result = await service.importAsset(confirmation.projectId, {
           bytes: pending.bytes,
           filename: pending.filename,
@@ -658,7 +750,22 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
             ? `[Linguist IPC] 已跳过已确认 XLSX 映射的重复资产: 项目 ${confirmation.projectId} 资产 ${result.assetId}`
             : `[Linguist IPC] 已导入已确认 XLSX 映射: 项目 ${confirmation.projectId} 资产 ${result.assetId}（${result.segmentCount} 段）`,
         )
-        return { cancelled: false, requiresXlsxMapping: false, filename: pending.filename, ...result }
+        return {
+          cancelled: false,
+          bulk: false,
+          requiresXlsxMapping: false,
+          filename: pending.filename,
+          ...result,
+          ...(profile === undefined
+            ? {}
+            : {
+                mappingUsed: {
+                  profileId: profile.id,
+                  sheetName: profile.sheetName,
+                  columns: profile.columns,
+                },
+              }),
+        }
       })
     },
 

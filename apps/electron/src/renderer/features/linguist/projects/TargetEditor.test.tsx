@@ -122,10 +122,25 @@ describe('LF-044/LF-047 TargetEditor', () => {
         onSave={async () => 'saved'}
         onReload={async () => segment}
         onSaved={() => {}}
+        tagProfile={{
+          families: [],
+          candidates: [{
+            id: 'candidate-press',
+            name: '疑似按钮动词',
+            pattern: 'Press',
+            kind: 'standalone',
+            evidenceExampleIds: [],
+            confidence: 0.8,
+            explanation: '测试软提示的可访问名称',
+            status: 'candidate',
+          }],
+        }}
       />,
     )
 
-    expect(html).toContain('aria-label="源文必须保留的标签与占位符"')
+    expect(html).toContain('aria-label="源文标签与占位符保护状态"')
+    expect(html).toContain('aria-label="硬保护标签')
+    expect(html).toContain('aria-label="软提示疑似 Tag')
     expect(html).toContain('aria-label="正在编辑原始行 1 译文"')
     expect(html).toContain('aria-label="编辑原始行 1 译文"')
     expect(html).toContain('data-target-token="true"')

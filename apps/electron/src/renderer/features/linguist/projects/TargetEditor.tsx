@@ -271,7 +271,7 @@ function ProtectedTokenChips({
   if (tokens.length === 0) return null
   return (
     <span
-      aria-label="源文必须保留的标签与占位符"
+      aria-label="源文标签与占位符保护状态"
       className="flex min-w-0 flex-wrap items-center gap-1"
     >
       {tokens.map((token, index) => (
@@ -282,6 +282,7 @@ function ProtectedTokenChips({
             ? 'inline-flex max-w-full rounded bg-primary/10 px-1 py-0.5 font-mono text-[10px] leading-none text-primary'
             : 'inline-flex max-w-full rounded bg-warning/10 px-1 py-0.5 font-mono text-[10px] leading-none text-warning'}
           title={token.kind === 'token' ? '已启用硬保护' : '疑似 Tag：仅软提示'}
+          aria-label={`${token.kind === 'token' ? '硬保护标签' : '软提示疑似 Tag'} ${token.value}`}
         >
           {token.value}
         </span>

@@ -219,6 +219,84 @@ test('PB-063 Context Rail reads one Segment and its pending Proposal by opaque i
   }
 })
 
+test('Voice exemplar: only a confirmed Segment can be approved and the same Context reads it back', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    await service.importAsset(project.id, {
+      bytes: readFileSync(fixturePath('mini_items.json')),
+      filename: 'mini_items.json',
+    })
+    const db = service.openProject(project.id)
+    const [segment, sibling] = db.segments.query({ limit: 2 })
+    assert.ok(segment)
+    assert.ok(sibling)
+    db.catDb.db.prepare('UPDATE segments SET context_json = ? WHERE id IN (?, ?)').run(
+      JSON.stringify({ meta: { speaker: 'Narrator' } }),
+      segment.id,
+      sibling.id,
+    )
+    const edited = db.segments.applyTargetEdit(segment.id, '生命药水', segment.revision).segment
+    const mutations: Array<{ kind: string; segmentIds?: readonly string[] }> = []
+    const ipc = createLinguistCatWorkspaceIpc({
+      getService: () => service,
+      onProjectMutation: (event) => mutations.push({
+        kind: event.kind,
+        segmentIds: event.segmentIds,
+      }),
+    })
+
+    const unconfirmed = await ipc.addApprovedExemplar({
+      projectId: project.id,
+      segmentId: segment.id,
+      speaker: '  Narrator  ',
+      textType: ' dialogue ',
+      note: ' 教程口吻 ',
+    })
+    assert.equal(unconfirmed.ok, false)
+    if (!unconfirmed.ok) assert.equal(unconfirmed.error.code, 'INVALID_STATE_TRANSITION')
+
+    db.segments.confirmCurrentStage(
+      segment.id,
+      project.workflowStage ?? 'translation',
+      edited.revision,
+      { actor: 'local-user', now: new Date().toISOString() },
+    )
+    const approved = await ipc.addApprovedExemplar({
+      projectId: project.id,
+      segmentId: segment.id,
+      speaker: '  Narrator  ',
+      textType: ' dialogue ',
+      note: ' 教程口吻 ',
+    })
+    assert.equal(approved.ok, true)
+    if (!approved.ok) return
+    assert.equal(approved.data.segmentId, segment.id)
+    assert.equal(approved.data.assetId, segment.assetId)
+    assert.equal(approved.data.source, segment.source)
+    assert.equal(approved.data.target, '生命药水')
+    assert.equal(approved.data.speaker, 'Narrator')
+    assert.equal(approved.data.textType, 'dialogue')
+    assert.equal(approved.data.note, '教程口吻')
+    assert.deepEqual(mutations, [{ kind: 'project-updated', segmentIds: [segment.id] }])
+
+    const context = await ipc.getContext({ projectId: project.id, segmentId: segment.id })
+    assert.equal(context.ok, true)
+    if (context.ok) {
+      assert.equal(context.data.approvedExemplars.length, 1)
+      assert.equal(context.data.approvedExemplars[0]?.id, approved.data.id)
+      assert.equal(context.data.approvedExemplars[0]?.note, '教程口吻')
+    }
+    const relatedContext = await ipc.getContext({ projectId: project.id, segmentId: sibling.id })
+    assert.equal(relatedContext.ok, true)
+    if (relatedContext.ok) {
+      assert.equal(relatedContext.data.approvedExemplars[0]?.id, approved.data.id)
+    }
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('CAT stage workflow: E 阶段单句确认/撤销可追溯，批量确认逐条报告失败', async () => {
   const service = makeService()
   try {

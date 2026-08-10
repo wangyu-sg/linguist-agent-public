@@ -36,6 +36,7 @@ import {
 import type { TargetSaveResult } from './cat-edit-utils'
 import { proposalReviewBlock, textDiffParts } from './proposal-inbox-utils'
 import { stageActionLabel, stageProgressLabel } from './workflow-ui'
+import { ApprovedExemplarDialog } from './ApprovedExemplarDialog'
 
 const ESTIMATED_ROW_HEIGHT = 72
 // ponytail: 以默认可视 8 行翻页；动态页步实测影响键盘效率时再从 viewport 计算。
@@ -125,6 +126,7 @@ export function SegmentGrid({
 }: SegmentGridProps): React.ReactElement {
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const instructionsId = React.useId()
+  const [exemplarSegment, setExemplarSegment] = React.useState<LinguistSegmentInfo>()
   const setSegmentAgentReference = useSetAtom(linguistSegmentAgentReferenceAtomFamily(projectId))
   /** 显式「为 Agent 引用」：唯一写入入口，滚动/焦点/恢复位置都不会触碰。 */
   const handleSegmentAgentReference = React.useCallback(
@@ -242,6 +244,7 @@ export function SegmentGrid({
                 onFocusIndex={onFocusIndex}
                 onToggleSelected={onToggleSelected}
                 onSegmentAgentReference={handleSegmentAgentReference}
+                onAddApprovedExemplar={setExemplarSegment}
                 onSaveTarget={onSaveTarget}
                 onReloadTarget={onReloadTarget}
                 onConfirmAndAdvance={onConfirmAndAdvance}
@@ -264,6 +267,13 @@ export function SegmentGrid({
         上下方向键切换片段，Home 和 End 跳到首尾，Page Up 和 Page Down 翻页，
         Enter 或 F2 编辑译文，空格选择当前片段。
       </p>
+      <ApprovedExemplarDialog
+        projectId={projectId}
+        segment={archived ? undefined : exemplarSegment}
+        onOpenChange={(open) => {
+          if (!open) setExemplarSegment(undefined)
+        }}
+      />
     </div>
   )
 }
@@ -333,6 +343,7 @@ interface SegmentRowProps {
   onFocusIndex: (index: number) => void
   onToggleSelected: (segmentId: string) => void
   onSegmentAgentReference: (segmentId: string, assetId: string) => void
+  onAddApprovedExemplar: (segment: LinguistSegmentInfo) => void
   onSaveTarget: (
     index: number,
     segment: LinguistSegmentInfo,
@@ -378,6 +389,7 @@ function SegmentRow({
   onFocusIndex,
   onToggleSelected,
   onSegmentAgentReference,
+  onAddApprovedExemplar,
   onSaveTarget,
   onReloadTarget,
   onConfirmAndAdvance,
@@ -516,6 +528,7 @@ function SegmentRow({
             onActivate={() => onOpenDetails(segment.id, segment.assetId)}
             onConfirm={() => onConfirmAndAdvance(index, segment)}
             onUnconfirm={() => onUnconfirmStage(index, segment)}
+            onAddApprovedExemplar={() => onAddApprovedExemplar(segment)}
           />
           <QaCell
             index={segment.ordinal}
@@ -868,6 +881,7 @@ function StatusCell({
   onActivate,
   onConfirm,
   onUnconfirm,
+  onAddApprovedExemplar,
 }: {
   index: number
   segment: LinguistSegmentInfo
@@ -879,6 +893,7 @@ function StatusCell({
   onActivate: () => void
   onConfirm: () => Promise<void>
   onUnconfirm: () => Promise<void>
+  onAddApprovedExemplar: () => void
 }): React.ReactElement {
   const proposalLabel = getProposalLabel(segment, proposal)
   const stageState = segment.currentStageState ?? 'untouched'
@@ -925,15 +940,26 @@ function StatusCell({
         )}
       </button>
       {active && !archived && !segment.locked && segment.target !== '' && (
-        <button
-          type="button"
-          className="mt-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-          onClick={() => {
-            void (stageState === 'confirmed' ? onUnconfirm() : onConfirm())
-          }}
-        >
-          {stageState === 'confirmed' ? '撤销本轮确认' : stageActionLabel(workflowStage)}
-        </button>
+        <span className="mt-1 flex flex-col items-start gap-1">
+          <button
+            type="button"
+            className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            onClick={() => {
+              void (stageState === 'confirmed' ? onUnconfirm() : onConfirm())
+            }}
+          >
+            {stageState === 'confirmed' ? '撤销本轮确认' : stageActionLabel(workflowStage)}
+          </button>
+          {stageState === 'confirmed' && (
+            <button
+              type="button"
+              onClick={onAddApprovedExemplar}
+              className="rounded-md bg-review/10 px-1.5 py-0.5 text-[10px] font-medium text-review hover:bg-review/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              设为角色译例
+            </button>
+          )}
+        </span>
       )}
     </span>
   )

@@ -11,7 +11,7 @@ import { atom, useAtom, useSetAtom, useStore } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
 import { ScanSearch, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { LinguistUnknownTagPatternInfo } from '@proma/shared'
+import type { LinguistAssetInfo, LinguistUnknownTagPatternInfo } from '@proma/shared'
 import {
   linguistProjectSettingsTabAtomFamily,
   linguistWorkbenchUiStateAtomFamily,
@@ -31,6 +31,18 @@ export function unknownTagFingerprint(
     .map((pattern) => `${pattern.patternShape}:${pattern.frequency}`)
     .sort()
     .join('|')
+}
+
+/** 项目元数据时间不变时，批次导入/撤销仍必须触发一次新的未知 Tag 扫描。 */
+export function unknownTagScanRevision(
+  projectUpdatedAt: string,
+  assets: readonly Pick<LinguistAssetInfo, 'assetId' | 'sourceSha256'>[],
+): string {
+  const assetFingerprint = assets
+    .map((asset) => `${asset.assetId}:${asset.sourceSha256}`)
+    .sort()
+    .join('|')
+  return `${projectUpdatedAt}|${assetFingerprint}`
 }
 
 export function shouldShowUnknownTagNotice(input: {
@@ -67,11 +79,11 @@ function unknownTagNoticeDismissedAtomFamily(
 
 export function UnknownTagNotice({
   projectId,
-  projectUpdatedAt,
+  scanRevision,
   archived,
 }: {
   projectId: string
-  projectUpdatedAt: string
+  scanRevision: string
   archived: boolean
 }): React.ReactElement | null {
   const store: JotaiStore = useStore()
@@ -98,7 +110,7 @@ export function UnknownTagNotice({
     return () => {
       cancelled = true
     }
-  }, [archived, projectId, projectUpdatedAt])
+  }, [archived, projectId, scanRevision])
 
   if (!shouldShowUnknownTagNotice({ archived, patterns, dismissedFingerprint })) {
     return null

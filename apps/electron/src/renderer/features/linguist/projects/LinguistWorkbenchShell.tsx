@@ -21,7 +21,7 @@ import {
   linguistWorkbenchUiStateAtomFamily,
 } from './cat-workspace-atoms'
 import { ProjectSettingsSheet } from './ProjectSettingsSheet'
-import { UnknownTagNotice } from './UnknownTagNotice'
+import { UnknownTagNotice, unknownTagScanRevision } from './UnknownTagNotice'
 import { stageProgressLabel, stageProgressSummary } from './workflow-ui'
 
 const PANEL_KEYBOARD_STEP = 16
@@ -441,7 +441,7 @@ export function LinguistWorkbenchShell({
         >
           <UnknownTagNotice
             projectId={project.id}
-            projectUpdatedAt={project.updatedAt}
+            scanRevision={unknownTagScanRevision(project.updatedAt, summary?.assets ?? [])}
             archived={project.archivedAt !== undefined}
           />
           <main data-workbench-slot="segment-grid" className="min-h-0 min-w-0 flex-1 overflow-hidden">

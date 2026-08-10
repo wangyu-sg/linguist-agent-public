@@ -29,7 +29,7 @@
 
 | 项目 | 已确认值 |
 |---|---|
-| Linguist Agent（current manifest） | 0.16.34 |
+| Linguist Agent（current manifest） | 0.16.35 |
 | Proma Electron App（upstream tag manifest） | 0.16.10 |
 | Electron | 43.2.0（manifest: ^43.2.0） |
 | Bun | 1.3.14 |
@@ -37,7 +37,7 @@
 | Claude Agent SDK | 0.3.201 |
 | CAT schema | 15 |
 
-Linguist Prompt 使用单一 `LINGUIST_PROMPT_VERSION = 3.1.0`：Common Quality Contract 内置于 Prompt Builder，岗位 Markdown 的唯一真源为 `resources/linguist-roles/`。当前已有静态 renderer Host Contracts 与 Extension Registry，但没有独立的 Host Contract runtime version constant；不得将它臆写成 v1。
+Linguist Prompt 使用单一 `LINGUIST_PROMPT_VERSION = 3.1.0`：Common Quality Contract 内置于 Prompt Builder，岗位 Markdown 的唯一真源为 `resources/linguist-roles/`；Project Digest 以 `complete / partial / skipped` 和 `truncated` 暴露降级，Markdown project-data 用围栏标记为数据。当前已有静态 renderer Host Contracts 与 Extension Registry，但没有独立的 Host Contract runtime version constant；不得将它臆写成 v1。
 
 ## 验证边界
 

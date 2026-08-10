@@ -257,6 +257,7 @@ export function ProjectResourceSettings({
         archived={archived}
         summary={summary}
         onSummaryRefresh={async () => onSummaryRefresh()}
+        onResourcesChanged={() => setResourceRefreshToken((current) => current + 1)}
       />
       <div className="flex items-center justify-between px-1">
         <span className="text-[13px] font-medium text-foreground/55">语言资产</span>

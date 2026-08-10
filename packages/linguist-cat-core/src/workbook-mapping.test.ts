@@ -9,7 +9,7 @@ describe('normalizeWorkbookMappingProfiles', () => {
       filenamePattern: 'game-*.xlsx',
       sheetName: 'Strings',
       headerSignature: 'b'.repeat(64),
-      columns: { source: 'English', target: 'Chinese' },
+      columns: { source: 'English', target: 'Chinese', locked: 'Lock' },
       createdAt: '2026-08-10T00:00:00.000Z',
       updatedAt: '2026-08-10T00:00:00.000Z',
     }

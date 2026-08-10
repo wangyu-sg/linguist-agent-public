@@ -1,13 +1,24 @@
+import * as React from 'react'
 import { describe, expect, test } from 'bun:test'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { Provider } from 'jotai/react'
 import { createStore } from 'jotai/vanilla'
 import type { AgentSessionMeta, LinguistAssetInfo } from '@proma/shared'
-import { agentSessionsAtom } from '@/atoms/agent-atoms'
+import {
+  agentDiffPanelTabAtom,
+  agentSessionPathMapAtom,
+  agentSessionsAtom,
+  agentSidePanelOpenAtom,
+} from '@/atoms/agent-atoms'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import {
   buildProjectAgentQuickActions,
   buildProjectComposerContextChips,
   createProjectAgentQuickActionPendingPrompt,
+  ProjectAgentFullPanelOpenButton,
   loadProjectAgentRailSession,
+  ProjectAgentFullSidePanel,
   shouldAutoExpandAgentForSideChat,
 } from './ProjectAgentRail'
 import {
@@ -38,6 +49,51 @@ function segmentIds(count: number): string[] {
 }
 
 describe('ProjectAgentRail', () => {
+  test('given Full 且文件面板已打开 when 尚无 Companion Chat then 仍显示原生文件与改动入口', () => {
+    const store = createStore()
+    const projectId = 'prj-0000000000000001'
+    const currentSession = session('session-full-files', projectId)
+    store.set(agentSessionsAtom, [currentSession])
+    store.set(agentSessionPathMapAtom, new Map([[currentSession.id, '/tmp/session-full-files']]))
+    store.set(agentDiffPanelTabAtom, new Map([[currentSession.id, 'files']]))
+    store.set(agentSidePanelOpenAtom, true)
+
+    const html = renderToStaticMarkup(
+      React.createElement(
+        Provider,
+        { store },
+        React.createElement(
+          TooltipProvider,
+          null,
+          React.createElement(ProjectAgentFullSidePanel, {
+            sessionId: currentSession.id,
+            width: 280,
+          }),
+        ),
+      ),
+    )
+
+    expect(html).toContain('aria-label="项目 Agent 文件、改动与问答"')
+    expect(html).toContain('>文件</button>')
+    expect(html).toContain('文件改动')
+  })
+
+  test('given Full 文件面板已关闭 when 渲染 header 控制 then 提供可访问的重新打开入口', () => {
+    const store = createStore()
+    store.set(agentSidePanelOpenAtom, false)
+
+    const html = renderToStaticMarkup(
+      React.createElement(
+        Provider,
+        { store },
+        React.createElement(ProjectAgentFullPanelOpenButton),
+      ),
+    )
+
+    expect(html).toContain('aria-label="打开文件与改动面板"')
+    expect(html).toContain('title="打开文件与改动面板"')
+  })
+
   test.each([
     {
       name: '无选择但有当前片段',
@@ -74,7 +130,7 @@ describe('ProjectAgentRail', () => {
       disabled: true,
       scope: '请缩小到 50 段以内',
     },
-  ])('given $name when 展示翻译与审校快捷动作 then 范围不会静默截断', ({
+  ])('given $name when 展示片段翻译快捷动作 then 范围不会静默截断', ({
     selectedSegmentIds,
     activeSegmentId,
     disabled,
@@ -86,12 +142,9 @@ describe('ProjectAgentRail', () => {
 
     const actions = buildProjectAgentQuickActions(store.get(uiStateAtom))
     const translate = actions.find((action) => action.id === 'translate')!
-    const review = actions.find((action) => action.id === 'review')!
 
     expect(translate.disabled).toBe(disabled)
-    expect(review.disabled).toBe(disabled)
     expect(translate.scope).toContain(scope)
-    expect(review.scope).toContain(scope)
 
     const pending = createProjectAgentQuickActionPendingPrompt(
       store,
@@ -108,18 +161,44 @@ describe('ProjectAgentRail', () => {
     }
   })
 
-  test('given 无选择且无当前片段 when 展示片段级快捷动作 then 明确要求先定位片段', () => {
+  test('given 当前批次及任意 selection when 展示审校与校对主动作 then 默认处理完整批次且不携带 selection', () => {
+    const store = createStore()
+    const projectId = 'prj-0000000000000001'
+    const uiStateAtom = linguistWorkbenchUiStateAtomFamily(projectId)
+    store.set(uiStateAtom, {
+      activeAssetId: 'ast-0000000000000001',
+      activeSegmentId: 'seg-0000000000000001',
+      selectedSegmentIds: ['seg-0000000000000001'],
+    })
+
+    const actions = buildProjectAgentQuickActions(store.get(uiStateAtom))
+    for (const actionId of ['review', 'proofread'] as const) {
+      const action = actions.find((candidate) => candidate.id === actionId)!
+      expect(action.disabled).toBe(false)
+      expect(action.scope).toBe('将处理当前批次的全部片段。')
+      expect(action.prompt).toContain('当前批次的全部片段')
+      const context = createProjectAgentQuickActionPendingPrompt(
+        store,
+        projectId,
+        'session-1',
+        actionId,
+      )!.linguistContext!
+      expect(context.assetId).toBe('ast-0000000000000001')
+      expect(context.selectedSegmentIds).toEqual([])
+      expect(context).not.toHaveProperty('activeSegmentId')
+    }
+  })
+
+  test('given 无选择、无当前片段且未打开批次 when 展示快捷动作 then 分别说明片段与批次前置条件', () => {
     const store = createStore()
     const uiState = store.get(linguistWorkbenchUiStateAtomFamily('prj-0000000000000001'))
 
     const actions = buildProjectAgentQuickActions(uiState)
     const segmentActions = actions.filter((action) =>
-      !['qa', 'terms', 'import', 'export'].includes(action.id))
+      ['translate', 'translate-suggest', 'review-suggest', 'proofread-suggest'].includes(action.id))
 
     expect(segmentActions.map((action) => action.id)).toEqual([
       'translate',
-      'review',
-      'proofread',
       'translate-suggest',
       'review-suggest',
       'proofread-suggest',
@@ -127,6 +206,11 @@ describe('ProjectAgentRail', () => {
     for (const action of segmentActions) {
       expect(action.disabled).toBe(true)
       expect(action.scope).toBe('请先选择片段或激活当前片段。')
+    }
+    for (const actionId of ['review', 'proofread'] as const) {
+      const action = actions.find((candidate) => candidate.id === actionId)!
+      expect(action.disabled).toBe(true)
+      expect(action.scope).toBe('请先打开一个批次。')
     }
     expect(createProjectAgentQuickActionPendingPrompt(
       store,
@@ -139,7 +223,10 @@ describe('ProjectAgentRail', () => {
   test('given 快捷动作清单 when 检查岗位与直达写回措辞 then 主按钮直达写回、先看建议变体保留待查看', () => {
     const store = createStore()
     const uiStateAtom = linguistWorkbenchUiStateAtomFamily('prj-0000000000000001')
-    store.set(uiStateAtom, { selectedSegmentIds: ['seg-0000000000000001'] })
+    store.set(uiStateAtom, {
+      activeAssetId: 'ast-0000000000000001',
+      selectedSegmentIds: ['seg-0000000000000001'],
+    })
 
     const actions = buildProjectAgentQuickActions(store.get(uiStateAtom))
     const primary = actions.filter((action) => action.placement === 'primary')

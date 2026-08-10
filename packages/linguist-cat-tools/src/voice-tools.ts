@@ -42,8 +42,8 @@ export function createVoiceTools(runtime: CatToolRuntime) {
   const addExemplarTool = defineTool({
     name: 'cat_add_approved_exemplar',
     label: 'CAT add approved exemplar',
-    description: 'Save the current text of one translated segment as an approved voice exemplar in the bound project. Source, target, asset, segment, locales, and approval time are host-owned.',
-    promptSnippet: 'Mark a translated segment as an approved speaker exemplar',
+    description: 'Save the current text of one confirmed segment as an approved voice exemplar in the bound project. Source, target, asset, segment, locales, and approval time are host-owned.',
+    promptSnippet: 'Mark a confirmed segment as an approved speaker exemplar',
     parameters: Type.Object({
       segmentId: Type.String({ minLength: 1 }),
       speaker: Type.String({ minLength: 1, maxLength: 200 }),
@@ -57,6 +57,9 @@ export function createVoiceTools(runtime: CatToolRuntime) {
       if (!segment) throw new LinguistCatInvalidArgumentError('segmentId', 'segment does not exist in the bound project')
       if (segment.target.trim() === '') {
         throw new LinguistCatInvalidArgumentError('segmentId', 'segment has no translated target to approve')
+      }
+      if ((segment.currentStageState ?? 'untouched') !== 'confirmed') {
+        throw new LinguistCatInvalidArgumentError('segmentId', 'segment current stage is not confirmed')
       }
       const exemplar = db.tmUnits.addApprovedExemplar({
         source: segment.source,

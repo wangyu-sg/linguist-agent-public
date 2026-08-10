@@ -43,10 +43,20 @@ function readAssetId(record: Record<string, unknown>): string {
   return assetId
 }
 
+function readValidation(record: Record<string, unknown>): 'verified' | 'as-is' {
+  if ('mode' in record) invalid('mode is obsolete; use validation')
+  const validation = record.validation ?? 'verified'
+  if (validation !== 'verified' && validation !== 'as-is') {
+    invalid('validation must be verified or as-is')
+  }
+  return validation
+}
+
 function publicPreparation(
   prepared: LinguistPreparedDelivery,
 ): LinguistPrepareDeliveryResult {
   return {
+    validation: prepared.validation,
     preflight: prepared.preflight,
     ...(prepared.verification !== undefined
       ? { verification: prepared.verification }
@@ -90,9 +100,10 @@ export function createLinguistExportIpc(deps: {
         const record = assertRecord(input)
         const projectId = readProjectId(record)
         const assetId = readAssetId(record)
+        const validation = readValidation(record)
 
         const service = deps.getService()
-        const prepared = await service.prepareDelivery(projectId, assetId)
+        const prepared = await service.prepareDelivery(projectId, assetId, validation)
         if (prepared.staged === undefined || prepared.verification === undefined) {
           if (prepared.preflight.qa.openErrors > 0) {
             throw new LinguistExportBlockedByQaError(
@@ -124,11 +135,12 @@ export function createLinguistExportIpc(deps: {
         }
         const { id, assetId: artifactAssetId, sha256, segmentCount, createdAt } = delivered.artifact
         console.log(
-          `[Linguist IPC] 导出完成: 项目 ${projectId} 资产 ${assetId}（${delivered.verifiedSegments} 段）`,
+          `[Linguist IPC] 导出完成: 项目 ${projectId} 资产 ${assetId}（${validation}，${delivered.verifiedSegments} 段）`,
         )
         return {
           cancelled: false,
           filename: delivered.filename,
+          validation,
           artifact: {
             id,
             assetId: artifactAssetId,

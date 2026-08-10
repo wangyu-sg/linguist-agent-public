@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
+import { Provider } from 'jotai'
 import { createStore } from 'jotai/vanilla'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { AgentSessionMeta, LinguistProjectInfo } from '@proma/shared'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/tab-atoms'
+import { sessionHoverPreviewEnabledAtom } from '@/atoms/ui-preferences'
 import {
+  areProjectSessionRenderInputsEqual,
   LinguistSidebarContentView,
   moveProjectId,
   registerCreatedProjectSession,
@@ -19,6 +22,7 @@ function TestSessionRow({
   transferLabel,
   historyOnlyActions,
   delegationSummary,
+  disableMiniMap,
   onSelect,
 }: SharedProjectSessionRowProps): React.ReactElement {
   return (
@@ -27,6 +31,7 @@ function TestSessionRow({
       aria-label={`选择会话 ${session.title}`}
       aria-current={active || undefined}
       data-history-only={historyOnlyActions || undefined}
+      data-minimap-disabled={disableMiniMap || undefined}
       onClick={() => onSelect(session.id, session.title)}
     >
       {session.title}
@@ -72,6 +77,45 @@ function session(
 }
 
 describe('LinguistSidebarContent', () => {
+  test('given 一个项目的 Session 状态变化 when 比较其他项目行输入 then 不重渲染整个项目树', async () => {
+    const alpha = session('alpha-current', 'alpha')
+    const beta = session('beta-current', 'beta')
+    const previousIndicators = new Map([
+      [beta.id, 'running' as const],
+    ])
+    const nextIndicators = new Map([
+      [beta.id, 'blocked' as const],
+    ])
+
+    expect(areProjectSessionRenderInputsEqual(
+      [alpha],
+      [alpha],
+      previousIndicators,
+      nextIndicators,
+    )).toBeTrue()
+    expect(areProjectSessionRenderInputsEqual(
+      [beta],
+      [beta],
+      previousIndicators,
+      nextIndicators,
+    )).toBeFalse()
+    expect(areProjectSessionRenderInputsEqual(
+      [alpha],
+      [{ ...alpha, title: '已更新' }],
+      previousIndicators,
+      previousIndicators,
+    )).toBeFalse()
+
+    const source = await Bun.file(new URL('./LinguistSidebarContent.tsx', import.meta.url)).text()
+    expect(source).toContain('React.memo(ProjectRowView, areProjectRowPropsEqual)')
+    expect(source).toContain('React.memo(SessionTreeRowsView, areSessionTreeRowsPropsEqual)')
+    expect(source).toContain('onSelectSession={handleSelectSession}')
+    expect(source).toContain('onCreateSession={handleCreateSession}')
+    expect(source).toContain('onRenameSession={handleRenameSession}')
+    expect(source).toContain('onCopySession={handleCopySession}')
+    expect(source).toContain('onDeleteSession={handleDeleteSession}')
+  })
+
   test('given 项目列表加载中 when 渲染侧栏 then 提供可访问加载状态', () => {
     const html = renderToStaticMarkup(
       <LinguistSidebarContentView
@@ -142,6 +186,8 @@ describe('LinguistSidebarContent', () => {
     )
 
     expect(html).toContain('aria-label="新建本地化项目"')
+    expect(html).toContain('px-2 pb-1 pt-2')
+    expect(html).toContain('text-foreground/40')
     expect(html).toContain('已归档')
     expect(html).not.toContain('管理项目</')
   })
@@ -247,6 +293,24 @@ describe('LinguistSidebarContent', () => {
 
     expect(html).not.toContain('会话 old-idle')
     expect(html).toContain('会话 blocked')
+  })
+
+  test('given 用户关闭会话悬浮预览 when 渲染 Linguist 会话行 then 原生 Agent 行收到同一禁用偏好', () => {
+    const store = createStore()
+    store.set(sessionHoverPreviewEnabledAtom, false)
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistSidebarContentView
+          state={{ status: 'ready', projects: [project('alpha')] }}
+          sessions={[session('alpha-current', 'alpha')]}
+          onRetry={() => {}}
+          onOpenProject={() => {}}
+          SessionRowComponent={TestSessionRow}
+        />
+      </Provider>,
+    )
+
+    expect(html).toContain('data-minimap-disabled="true"')
   })
 
   test('given 活跃项目顺序 when 键盘上移或下移 then 复用不可变排序结果', () => {

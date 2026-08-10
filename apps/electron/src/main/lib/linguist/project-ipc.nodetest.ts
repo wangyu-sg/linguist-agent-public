@@ -7,12 +7,17 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LINGUIST_IMPORT_MAX_BYTES, type LinguistIpcResult } from '@proma/shared'
 import { XlsxAdapter } from '@linguist/cat-formats'
 import JSZip from 'jszip'
-import { createLinguistProjectIpc, type LinguistImportFilePicker } from './project-ipc'
+import {
+  createLinguistProjectIpc,
+  type LinguistImportFilePicker,
+  type LinguistImportPickerOptions,
+} from './project-ipc'
+import { readPickedFileWithinLimit } from './project-file-intake'
 import type { LinguistProjectService } from './project-service'
 import { INPUT, fixturePath, makeService, makeTempDir } from './test/service-testkit'
 
@@ -30,15 +35,24 @@ function makePicker(filePaths: string[] | null): { picker: LinguistImportFilePic
   return { picker, calls: () => calls }
 }
 
+function collectStrings(value: unknown, output: string[] = []): string[] {
+  if (typeof value === 'string') output.push(value)
+  else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, output))
+  else if (value !== null && typeof value === 'object') {
+    Object.values(value).forEach((item) => collectStrings(item, output))
+  }
+  return output
+}
+
 const CSV_FIXTURE = 'mini_dialogue.csv'
 
 /** Small real OOXML workbook: cover sheet first, nonstandard bilingual batch second. */
-async function nonstandardXlsx(): Promise<Uint8Array> {
+async function nonstandardXlsx(includeLockedRow = false): Promise<Uint8Array> {
   const zip = new JSZip()
   zip.file('xl/workbook.xml', `<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="封面" sheetId="1" r:id="rId1"/><sheet name="批次" sheetId="2" r:id="rId2"/></sheets></workbook>`)
   zip.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>`)
   zip.file('xl/worksheets/sheet1.xml', `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>说明</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>不是翻译批次</t></is></c></row></sheetData></worksheet>`)
-  zip.file('xl/worksheets/sheet2.xml', `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>文本编号</t></is></c><c r="B1" t="inlineStr"><is><t>中文原文</t></is></c><c r="C1" t="inlineStr"><is><t>英文译文</t></is></c><c r="D1" t="inlineStr"><is><t>备注</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>menu.start</t></is></c><c r="B2" t="inlineStr"><is><t>开始游戏</t></is></c><c r="C2" t="inlineStr"><is><t></t></is></c><c r="D2" t="inlineStr"><is><t>主菜单</t></is></c></row></sheetData></worksheet>`)
+  zip.file('xl/worksheets/sheet2.xml', `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>文本编号</t></is></c><c r="B1" t="inlineStr"><is><t>中文原文</t></is></c><c r="C1" t="inlineStr"><is><t>英文译文</t></is></c><c r="D1" t="inlineStr"><is><t>备注</t></is></c><c r="E1" t="inlineStr"><is><t>锁定</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>menu.start</t></is></c><c r="B2" t="inlineStr"><is><t>开始游戏</t></is></c><c r="C2" t="inlineStr"><is><t></t></is></c><c r="D2" t="inlineStr"><is><t>主菜单</t></is></c><c r="E2" t="inlineStr"><is><t>no</t></is></c></row>${includeLockedRow ? '<row r="3"><c r="A3" t="inlineStr"><is><t>legal.notice</t></is></c><c r="B3" t="inlineStr"><is><t>法律声明</t></is></c><c r="C3" t="inlineStr"><is><t>Legal notice</t></is></c><c r="D3" t="inlineStr"><is><t>法律</t></is></c><c r="E3" t="inlineStr"><is><t>yes</t></is></c></row>' : ''}</sheetData></worksheet>`)
   return zip.generateAsync({ type: 'uint8array' })
 }
 
@@ -214,7 +228,7 @@ test('unknown project id → PROJECT_NOT_FOUND across id-taking channels', async
       () => ipc.getSummary({ projectId: UNKNOWN }),
       () => ipc.archive({ projectId: UNKNOWN }),
       () => ipc.setLocales({ projectId: UNKNOWN, sourceLocale: 'en', targetLocale: 'ja' }),
-      () => ipc.import({ projectId: UNKNOWN }, picker),
+      () => ipc.import({ projectId: UNKNOWN, selection: 'files' }, picker),
     ]) {
       const result = await run()
       assert.equal(result.ok, false)
@@ -357,7 +371,7 @@ test('import: user cancel is a typed result, not an error', async () => {
     const project = service.createProject(INPUT)
     const { picker } = makePicker(null)
 
-    const result = await ipc.import({ projectId: project.id }, picker)
+    const result = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
     assert.equal(result.ok, true)
     if (result.ok) assert.deepEqual(result.data, { cancelled: true })
   } finally {
@@ -365,34 +379,119 @@ test('import: user cancel is a typed result, not an error', async () => {
   }
 })
 
-test('import: main reads picked file itself and returns service result + basename', async () => {
+test('import: a single CSV with batch evidence stays a batch through resource classification', async () => {
   const service = makeService()
   try {
     const ipc = makeIpc(service)
     const project = service.createProject(INPUT)
     const { picker } = makePicker([fixturePath(CSV_FIXTURE)])
 
-    const result = await ipc.import({ projectId: project.id }, picker)
+    const result = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
     assert.equal(result.ok, true)
-    if (!result.ok) return
-    assert.equal(result.data.cancelled, false)
-    if (result.data.cancelled || result.data.requiresXlsxMapping) return
-    assert.equal(result.data.filename, CSV_FIXTURE)
-    assert.equal(result.data.status, 'imported')
-    assert.match(result.data.assetId, /^ast_v2_[0-9a-f]{64}$/)
-    assert.ok(result.data.segmentCount > 0)
-    assert.ok(Array.isArray(result.data.warnings))
-    assert.match(result.data.sourceSha256, /^[0-9a-f]{64}$/)
+    if (!result.ok || result.data.cancelled || !result.data.bulk) return
+    assert.equal(result.data.imported, 1)
+    assert.deepEqual(
+      result.data.items.map(({ filename, status, resourceKind }) => ({ filename, status, resourceKind })),
+      [{ filename: CSV_FIXTURE, status: 'imported', resourceKind: 'batch' }],
+    )
 
     // 摘要随即反映导入（计数通道联动）
     const summary = await ipc.getSummary({ projectId: project.id })
     assert.equal(summary.ok, true)
     if (summary.ok) {
       assert.equal(summary.data.assetCount, 1)
-      assert.equal(summary.data.totalSegments, result.data.segmentCount)
+      assert.ok(summary.data.totalSegments > 0)
       const sum = Object.values(summary.data.segmentCounts).reduce((a, b) => a + b, 0)
-      assert.equal(sum, result.data.segmentCount)
+      assert.equal(sum, summary.data.totalSegments)
     }
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('import: a single known TM or Context file uses resource intake and the picker covers every supported context extension', async () => {
+  const service = makeService()
+  try {
+    const ipc = makeIpc(service)
+    const project = service.createProject(INPUT)
+    const sourceDir = makeTempDir()
+    const tmPath = join(sourceDir, 'memory.tmx')
+    const contextPath = join(sourceDir, 'brief.markdown')
+    writeFileSync(tmPath, `<?xml version="1.0"?><tmx version="1.4"><header srclang="en"/><body><tu><tuv xml:lang="en"><seg>Hello</seg></tuv><tuv xml:lang="zh-CN"><seg>你好</seg></tuv></tu></body></tmx>`)
+    writeFileSync(contextPath, '# Brief\nKeep labels concise.')
+
+    let pickerOptions: LinguistImportPickerOptions | undefined
+    const tmResult = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      async (options) => {
+        pickerOptions = options
+        return { canceled: false, filePaths: [tmPath] }
+      },
+    )
+    assert.equal(tmResult.ok, true)
+    if (!tmResult.ok || tmResult.data.cancelled || !tmResult.data.bulk) return
+    assert.equal(tmResult.data.imported, 1)
+    assert.equal(tmResult.data.items[0]?.resourceKind, 'tm')
+    assert.equal(service.queryTmReferences(project.id, { limit: 10, offset: 0 }).total, 1)
+
+    const extensions = pickerOptions?.filters?.[0]?.extensions ?? []
+    for (const extension of [
+      'tmx', 'tbx', 'sdltm', 'sdltb',
+      'pdf', 'doc', 'docx', 'rtf', 'pptx', 'md', 'markdown', 'txt',
+      'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp',
+    ]) {
+      assert.ok(extensions.includes(extension), `picker is missing .${extension}`)
+    }
+
+    const contextResult = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      makePicker([contextPath]).picker,
+    )
+    assert.equal(contextResult.ok, true)
+    if (!contextResult.ok || contextResult.data.cancelled || !contextResult.data.bulk) return
+    assert.equal(contextResult.data.imported, 1)
+    assert.equal(contextResult.data.items[0]?.resourceKind, 'context')
+    assert.equal(service.queryProjectAssets(project.id, 'contextDocs', { limit: 10, offset: 0 }).total, 1)
+    assert.equal(collectStrings([tmResult.data, contextResult.data]).some((value) => value.includes(sourceDir)), false)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('import: a single CSV uses auto resource classification for terminology and pure bilingual ambiguity', async () => {
+  const service = makeService()
+  try {
+    const ipc = makeIpc(service)
+    const project = service.createProject(INPUT)
+    const sourceDir = makeTempDir()
+    const termsPath = join(sourceDir, 'terms.csv')
+    const ambiguousPath = join(sourceDir, 'ambiguous.csv')
+    writeFileSync(termsPath, 'term,translation,status\nPotion,药水,required\n')
+    writeFileSync(ambiguousPath, 'source,target\nHello,你好\n')
+
+    const terms = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      makePicker([termsPath]).picker,
+    )
+    assert.equal(terms.ok, true)
+    if (!terms.ok || terms.data.cancelled || !terms.data.bulk) return
+    assert.deepEqual(
+      terms.data.items.map(({ filename, status, resourceKind }) => ({ filename, status, resourceKind })),
+      [{ filename: 'terms.csv', status: 'imported', resourceKind: 'terms' }],
+    )
+    assert.equal(service.queryTermReferences(project.id, { limit: 10, offset: 0 }).total, 1)
+
+    const ambiguous = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      makePicker([ambiguousPath]).picker,
+    )
+    assert.equal(ambiguous.ok, true)
+    if (!ambiguous.ok || ambiguous.data.cancelled || !ambiguous.data.bulk) return
+    assert.equal(ambiguous.data.needsInput, 1)
+    assert.match(ambiguous.data.items[0]?.message ?? '', /TM.*ID\/Key.*Agent/)
+    assert.equal(service.getProjectSummary(project.id).assetCount, 0)
+    assert.equal(service.queryTmReferences(project.id, { limit: 10, offset: 0 }).total, 0)
+    assert.equal(collectStrings([terms.data, ambiguous.data]).some((value) => value.includes(sourceDir)), false)
   } finally {
     service.closeAll()
   }
@@ -404,12 +503,15 @@ test('import: nonstandard XLSX waits for explicit mapping, rejects forged confir
   try {
     const project = service.createProject(INPUT)
     const sourcePath = join(makeTempDir(), 'nonstandard.xlsx')
-    writeFileSync(sourcePath, await nonstandardXlsx())
+    writeFileSync(sourcePath, await nonstandardXlsx(true))
     const ipc = makeIpc(service)
 
-    const picked = await ipc.import({ projectId: project.id }, makePicker([sourcePath]).picker)
+    const picked = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      makePicker([sourcePath]).picker,
+    )
     assert.equal(picked.ok, true)
-    if (!picked.ok || picked.data.cancelled || !picked.data.requiresXlsxMapping) return
+    if (!picked.ok || picked.data.cancelled || picked.data.bulk || !picked.data.requiresXlsxMapping) return
     assert.equal(service.openProject(project.id).assets.countByProject(), 0)
     const pending = picked.data
     const batch = pending.preview.sheets.find((sheet) => sheet.name === '批次')
@@ -417,13 +519,17 @@ test('import: nonstandard XLSX waits for explicit mapping, rejects forged confir
     assert.deepEqual(batch.headerRowNumbers, [1])
     assert.equal(batch.sampleRows[0]?.rowNo, 2)
     assert.equal(batch.columns.find((column) => column.header === '中文原文')?.selectable, true)
+    assert.ok(batch.suggestion.confidence > 0)
+    assert.ok(batch.suggestion.reasons.length > 0)
+    assert.equal(batch.suggestion.columns.context, '备注')
+    assert.equal(batch.suggestion.columns.locked, '锁定')
 
     const forged = await ipc.confirmXlsxMapping({
       projectId: project.id,
       mappingId: pending.mappingId,
       sourceSha256: '0'.repeat(64),
       sheetName: '批次',
-      columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+      columns: { key: '文本编号', source: '中文原文', target: '英文译文', locked: '锁定', context: '备注' },
     })
     assert.equal(forged.ok, false)
     if (!forged.ok) assert.equal(forged.error.code, 'INVALID_INPUT')
@@ -434,21 +540,46 @@ test('import: nonstandard XLSX waits for explicit mapping, rejects forged confir
       mappingId: pending.mappingId,
       sourceSha256: pending.sourceSha256,
       sheetName: '批次',
-      columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+      columns: { key: '文本编号', source: '中文原文', target: '英文译文', locked: '锁定', context: '备注' },
+      rememberMapping: true,
     })
     assert.equal(confirmed.ok, true)
     if (!confirmed.ok) return
     assert.equal(confirmed.data.requiresXlsxMapping, false)
     assert.equal(confirmed.data.status, 'imported')
+    assert.equal(confirmed.data.mappingUsed?.sheetName, '批次')
+    assert.equal(confirmed.data.mappingUsed?.profileId, service.getProject(project.id).workbookMappings?.[0]?.id)
+    assert.deepEqual(confirmed.data.mappingUsed?.columns, {
+      key: '文本编号',
+      source: '中文原文',
+      target: '英文译文',
+      locked: '锁定',
+      context: '备注',
+    })
+    assert.equal(
+      service.openProject(project.id).segments.query({ assetId: confirmed.data.assetId, limit: 10 })
+        .find((segment) => segment.key === 'legal.notice')?.locked,
+      true,
+    )
     const stored = service.openProject(project.id).assets.get(confirmed.data.assetId)
     assert.equal(
       stored?.formatConfigJson,
       JSON.stringify({
         version: 1,
         sheetName: '批次',
-        columns: { key: '文本编号', source: '中文原文', target: '英文译文', context: '备注' },
+        columns: { key: '文本编号', source: '中文原文', target: '英文译文', locked: '锁定', context: '备注' },
       }),
     )
+
+    const reused = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      makePicker([sourcePath]).picker,
+    )
+    assert.equal(reused.ok, true)
+    if (!reused.ok || reused.data.cancelled || reused.data.bulk || reused.data.requiresXlsxMapping) return
+    assert.equal(reused.data.status, 'skipped-duplicate')
+    assert.deepEqual(reused.data.mappingUsed, confirmed.data.mappingUsed)
+    assert.equal(collectStrings(reused.data).some((value) => value.includes(sourcePath)), false)
 
     // A token is one-shot after the exact source was imported.
     const replay = await ipc.confirmXlsxMapping({
@@ -477,7 +608,10 @@ test('import: nonstandard XLSX waits for explicit mapping, rejects forged confir
         targetLocale: 'zh-CN',
         formatConfigJson: reopenedAsset?.formatConfigJson,
       })
-      assert.deepEqual(roundTripped.segments.map((segment) => [segment.key, segment.target]), [['menu.start', 'Start game']])
+      assert.deepEqual(roundTripped.segments.map((segment) => [segment.key, segment.target, segment.locked]), [
+        ['menu.start', 'Start game', false],
+        ['legal.notice', 'Legal notice', true],
+      ])
       const stagedZip = await JSZip.loadAsync(stagedBytes)
       assert.ok((await stagedZip.file('xl/worksheets/sheet1.xml')!.async('text')).includes('不是翻译批次'))
     } finally {
@@ -496,9 +630,12 @@ test('import: the same XLSX bytes with a different confirmed mapping fail closed
     writeFileSync(sourcePath, await nonstandardXlsx())
     const ipc = makeIpc(service)
 
-    const firstPreview = await ipc.import({ projectId: project.id }, makePicker([sourcePath]).picker)
+    const firstPreview = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      makePicker([sourcePath]).picker,
+    )
     assert.equal(firstPreview.ok, true)
-    if (!firstPreview.ok || firstPreview.data.cancelled || !firstPreview.data.requiresXlsxMapping) return
+    if (!firstPreview.ok || firstPreview.data.cancelled || firstPreview.data.bulk || !firstPreview.data.requiresXlsxMapping) return
     const first = await ipc.confirmXlsxMapping({
       projectId: project.id,
       mappingId: firstPreview.data.mappingId,
@@ -509,9 +646,12 @@ test('import: the same XLSX bytes with a different confirmed mapping fail closed
     assert.equal(first.ok, true)
     if (!first.ok) return
 
-    const samePreview = await ipc.import({ projectId: project.id }, makePicker([sourcePath]).picker)
+    const samePreview = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      makePicker([sourcePath]).picker,
+    )
     assert.equal(samePreview.ok, true)
-    if (!samePreview.ok || samePreview.data.cancelled || !samePreview.data.requiresXlsxMapping) return
+    if (!samePreview.ok || samePreview.data.cancelled || samePreview.data.bulk || !samePreview.data.requiresXlsxMapping) return
     const same = await ipc.confirmXlsxMapping({
       projectId: project.id,
       mappingId: samePreview.data.mappingId,
@@ -524,9 +664,12 @@ test('import: the same XLSX bytes with a different confirmed mapping fail closed
     assert.equal(same.data.status, 'skipped-duplicate')
     assert.equal(same.data.assetId, first.data.assetId)
 
-    const remapPreview = await ipc.import({ projectId: project.id }, makePicker([sourcePath]).picker)
+    const remapPreview = await ipc.import(
+      { projectId: project.id, selection: 'files' },
+      makePicker([sourcePath]).picker,
+    )
     assert.equal(remapPreview.ok, true)
-    if (!remapPreview.ok || remapPreview.data.cancelled || !remapPreview.data.requiresXlsxMapping) return
+    if (!remapPreview.ok || remapPreview.data.cancelled || remapPreview.data.bulk || !remapPreview.data.requiresXlsxMapping) return
     const remap = await ipc.confirmXlsxMapping({
       projectId: project.id,
       mappingId: remapPreview.data.mappingId,
@@ -567,15 +710,15 @@ test('getSummary: assets list reflects imports in creation order (PB-033 wire sh
     assert.equal(before.ok, true)
     if (before.ok) assert.deepEqual(before.data.assets, [])
 
-    const { picker: pickCsv } = makePicker([fixturePath(CSV_FIXTURE)])
-    const importedCsv = await ipc.import({ projectId: project.id }, pickCsv)
-    assert.equal(importedCsv.ok, true)
-    if (!importedCsv.ok || importedCsv.data.cancelled || importedCsv.data.requiresXlsxMapping) return
+    const { picker: pickXliff } = makePicker([fixturePath('mini_game_ui.xliff')])
+    const importedXliff = await ipc.import({ projectId: project.id, selection: 'files' }, pickXliff)
+    assert.equal(importedXliff.ok, true)
+    if (!importedXliff.ok || importedXliff.data.cancelled || importedXliff.data.bulk || importedXliff.data.requiresXlsxMapping) return
 
     const { picker: pickJson } = makePicker([fixturePath('mini_items.json')])
-    const importedJson = await ipc.import({ projectId: project.id }, pickJson)
+    const importedJson = await ipc.import({ projectId: project.id, selection: 'files' }, pickJson)
     assert.equal(importedJson.ok, true)
-    if (!importedJson.ok || importedJson.data.cancelled || importedJson.data.requiresXlsxMapping) return
+    if (!importedJson.ok || importedJson.data.cancelled || importedJson.data.bulk || importedJson.data.requiresXlsxMapping) return
 
     // 摘要随即反映两次导入：资产按创建序累积，字段与导入结果一一对应
     const summary = await ipc.getSummary({ projectId: project.id })
@@ -597,11 +740,11 @@ test('getSummary: assets list reflects imports in creation order (PB-033 wire sh
       ...a2Metadata
     } = a2!
     assert.deepEqual(a1Metadata, {
-      assetId: importedCsv.data.assetId,
-      filename: CSV_FIXTURE,
-      formatId: importedCsv.data.formatId,
-      segmentCount: importedCsv.data.segmentCount,
-      sourceSha256: importedCsv.data.sourceSha256,
+      assetId: importedXliff.data.assetId,
+      filename: 'mini_game_ui.xliff',
+      formatId: importedXliff.data.formatId,
+      segmentCount: importedXliff.data.segmentCount,
+      sourceSha256: importedXliff.data.sourceSha256,
     })
     assert.deepEqual(a2Metadata, {
       assetId: importedJson.data.assetId,
@@ -629,7 +772,7 @@ test('import: archived project rejected before picker (PROJECT_ARCHIVED)', async
     await ipc.archive({ projectId: project.id })
     const { picker, calls } = makePicker([fixturePath(CSV_FIXTURE)])
 
-    const result = await ipc.import({ projectId: project.id }, picker)
+    const result = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
     assert.equal(result.ok, false)
     if (!result.ok) assert.equal(result.error.code, 'PROJECT_ARCHIVED')
     assert.equal(calls(), 0)
@@ -647,7 +790,7 @@ test('import: picked file over 50MB → IMPORT_TOO_LARGE（先于读盘，服务
     writeFileSync(bigPath, new Uint8Array(LINGUIST_IMPORT_MAX_BYTES + 1))
     const { picker } = makePicker([bigPath])
 
-    const result = await ipc.import({ projectId: project.id }, picker)
+    const result = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
     assert.equal(result.ok, false)
     if (!result.ok) assert.equal(result.error.code, 'IMPORT_TOO_LARGE')
     assert.equal(service.openProject(project.id).assets.countByProject(), 0)
@@ -665,7 +808,7 @@ test('import: unsupported content passes FORMAT_UNSUPPORTED through', async () =
     writeFileSync(binPath, new Uint8Array([0x00, 0x01, 0x02, 0x03, 0xff, 0xfe, 0xfd]))
     const { picker } = makePicker([binPath])
 
-    const result = await ipc.import({ projectId: project.id }, picker)
+    const result = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
     assert.equal(result.ok, false)
     if (!result.ok) assert.equal(result.error.code, 'FORMAT_UNSUPPORTED')
   } finally {
@@ -678,7 +821,7 @@ test('import: invalid projectId → INVALID_INPUT and picker never called', asyn
   try {
     const ipc = makeIpc(service)
     const { picker, calls } = makePicker([fixturePath(CSV_FIXTURE)])
-    const result = await ipc.import({ projectId: 'bad' }, picker)
+    const result = await ipc.import({ projectId: 'bad', selection: 'files' }, picker)
     assert.equal(result.ok, false)
     if (!result.ok) assert.equal(result.error.code, 'INVALID_INPUT')
     assert.equal(calls(), 0)
@@ -709,9 +852,9 @@ test('undoImportAsset: clean batch succeeds; summary drops the batch (LA-INTAKE-
     const ipc = makeIpc(service)
     const project = service.createProject(INPUT)
     const { picker } = makePicker([fixturePath(CSV_FIXTURE)])
-    const imported = await ipc.import({ projectId: project.id }, picker)
+    const imported = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
     assert.equal(imported.ok, true)
-    if (!imported.ok || imported.data.cancelled || imported.data.requiresXlsxMapping) return
+    if (!imported.ok || imported.data.cancelled || imported.data.bulk || imported.data.requiresXlsxMapping) return
     // 导入结果随线上行携带验证报告（全部通过）
     assert.equal(imported.data.verification.ok, true)
     assert.equal(imported.data.verification.checks.length, 4)
@@ -743,9 +886,9 @@ test('undoImportAsset: blocked error envelope carries per-category counts only (
     const ipc = makeIpc(service)
     const project = service.createProject(INPUT)
     const { picker } = makePicker([fixturePath(CSV_FIXTURE)])
-    const imported = await ipc.import({ projectId: project.id }, picker)
+    const imported = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
     assert.equal(imported.ok, true)
-    if (!imported.ok || imported.data.cancelled || imported.data.requiresXlsxMapping) return
+    if (!imported.ok || imported.data.cancelled || imported.data.bulk || imported.data.requiresXlsxMapping) return
 
     const db = service.openProject(project.id)
     const segment = db.segments.query({ assetId: imported.data.assetId, limit: 1 })[0]!
@@ -783,9 +926,9 @@ test('undoImportAsset: invalid ids → INVALID_INPUT; archived project → PROJE
     const ipc = makeIpc(service)
     const project = service.createProject(INPUT)
     const { picker } = makePicker([fixturePath(CSV_FIXTURE)])
-    const imported = await ipc.import({ projectId: project.id }, picker)
+    const imported = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
     assert.equal(imported.ok, true)
-    if (!imported.ok || imported.data.cancelled || imported.data.requiresXlsxMapping) return
+    if (!imported.ok || imported.data.cancelled || imported.data.bulk || imported.data.requiresXlsxMapping) return
 
     for (const input of [
       { projectId: 'bad', assetId: imported.data.assetId },
@@ -807,4 +950,94 @@ test('undoImportAsset: invalid ids → INVALID_INPUT; archived project → PROJE
   } finally {
     service.closeAll()
   }
+})
+
+test('import picker: multiple files use bulk intake and return a path-free per-item summary', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const ipc = makeIpc(service)
+    let options: LinguistImportPickerOptions | undefined
+    const paths = [fixturePath(CSV_FIXTURE), fixturePath('mini_items.json')]
+    const picker: LinguistImportFilePicker = async (nextOptions) => {
+      options = nextOptions
+      return { canceled: false, filePaths: paths }
+    }
+
+    const result = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
+
+    assert.equal(result.ok, true)
+    if (result.ok && !result.data.cancelled) assert.equal(result.data.bulk, true)
+    if (!result.ok || result.data.cancelled || !result.data.bulk) return
+    assert.deepEqual(options?.properties, ['openFile', 'multiSelections'])
+    assert.equal(result.data.found, 2)
+    assert.equal(result.data.imported, 2)
+    assert.equal(result.data.failed, 0)
+    assert.deepEqual(result.data.items.map((item) => item.filename).sort(), [CSV_FIXTURE, 'mini_items.json'])
+    assert.equal(JSON.stringify(result.data).includes(paths[0]!), false)
+    assert.equal(JSON.stringify(result.data).includes(paths[1]!), false)
+    assert.equal(service.getProjectSummary(project.id).assetCount, 2)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('import picker: directory selection recurses and one bad entry does not block valid files', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const root = makeTempDir()
+    const nested = join(root, 'nested')
+    mkdirSync(nested)
+    writeFileSync(join(root, CSV_FIXTURE), readFileSync(fixturePath(CSV_FIXTURE)))
+    writeFileSync(join(nested, 'mini_items.json'), readFileSync(fixturePath('mini_items.json')))
+    const missing = join(root, 'missing-directory')
+    let options: LinguistImportPickerOptions | undefined
+    const picker: LinguistImportFilePicker = async (nextOptions) => {
+      options = nextOptions
+      return { canceled: false, filePaths: [root, missing] }
+    }
+
+    const result = await makeIpc(service).import(
+      { projectId: project.id, selection: 'directory' },
+      picker,
+    )
+
+    assert.equal(result.ok, true)
+    if (result.ok && !result.data.cancelled) assert.equal(result.data.bulk, true)
+    if (!result.ok || result.data.cancelled || !result.data.bulk) return
+    assert.deepEqual(options?.properties, ['openDirectory', 'multiSelections'])
+    assert.equal(result.data.imported, 2)
+    assert.equal(result.data.failed, 1)
+    assert.equal(result.data.items.some((item) => item.status === 'failed'), true)
+    assert.equal(result.data.truncated, false)
+    assert.equal(JSON.stringify(result.data).includes(root), false)
+    assert.equal(service.getProjectSummary(project.id).assetCount, 2)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('import picker: invalid selection fails before opening the native dialog', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const { picker, calls } = makePicker([fixturePath(CSV_FIXTURE)])
+    const result = await makeIpc(service).import(
+      { projectId: project.id, selection: 'everything' },
+      picker,
+    )
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.equal(result.error.code, 'INVALID_INPUT')
+    assert.equal(calls(), 0)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('readPickedFileWithinLimit rejects a picked directory', async () => {
+  await assert.rejects(
+    readPickedFileWithinLimit(makeTempDir(), LINGUIST_IMPORT_MAX_BYTES),
+    /regular file/,
+  )
 })

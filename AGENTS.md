@@ -52,18 +52,18 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.16.34` |
+| Electron App | `@proma/electron 0.16.35` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.4.1`（manifest range `^6.0.3`） |
-| Shared | `@proma/shared 0.1.92` |
+| Shared | `@proma/shared 0.1.93` |
 | Claude Runtime | `@anthropic-ai/claude-agent-sdk 0.3.201` |
 | Pi Runtime（Electron App） | `@earendil-works/pi-* 0.82.1` |
-| CAT Core | `@linguist/cat-core 0.0.19` |
+| CAT Core | `@linguist/cat-core 0.0.20` |
 | CAT Formats | `@linguist/cat-formats 0.0.10` |
-| CAT Store | `@linguist/cat-store 0.0.34` |
-| CAT Tools | `@linguist/cat-tools 0.0.32` |
+| CAT Store | `@linguist/cat-store 0.0.35` |
+| CAT Tools | `@linguist/cat-tools 0.0.33` |
 | CAT schema | `15` |
 
 不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。
@@ -129,7 +129,8 @@ bun run smoke:vertical
 - Agent / Chat 必须保持原生 Proma 行为和界面。
 - Linguist 使用一等 `LocalizationProjectTab` 和 project-scoped Jotai 状态。
 - Workbench 内嵌同一个 `AgentView` 的 rail presentation。
-- Agent 会话树必须排除带 `linguistProjectId` 的会话；Linguist 侧栏只展示项目绑定会话，并复用 Agent 的会话行与树行为。
+- Full `AgentView` 保留 Proma Files / Changes 面板；rail presentation 只承载对话，不复制文件面板。
+- Agent 会话树必须排除带 `linguistProjectId` 的会话；Linguist 侧栏只展示项目绑定会话，并复用 Proma 展开/收起侧栏的主操作、搜索、项目头、会话行与树行为。Planning 与 Agent Skills 绑定普通 Agent workspace，故不在 Linguist 侧栏显示；这属于域隔离，不是功能遗漏。普通“新会话”只在当前 CAT 项目创建 General 会话，不得落入默认 Agent workspace。
 - Linguist 中点击项目进入 Workbench，点击会话进入 Full `AgentView`；项目归档、缺失或暂不可用时 Agent 对话仍可继续，CAT mutation 由项目 Store 状态 fail closed。
 - 禁止新增 `LinguistAgentView`、`LinguistComposer`、`LinguistThinkingBlock`、`LinguistToolCard`、`LinguistApprovalCard` 或第二套 Agent Session Store。
 - 禁止新增第二套 Session tree 状态、排序、委派、置顶、最近会话或 MiniMap 行为实现；项目域只提供分组与动作适配。
@@ -192,6 +193,7 @@ CAT 写入规则：
 - CAT 编辑器的 `Cmd/Ctrl+Enter` 表示确认当前阶段并前进，即使译文未改也必须可用；`Cmd/Ctrl+S` 仍只保存实际修改；
 - Segment 写入必须经过 revision CAS、locked 与 hard-rule 检查；
 - 项目 Agent 可把批次以 `verified` 或 `as-is` 保存到用户指定的绝对本地路径；默认不覆盖，只有用户明确要求时才原子覆盖普通文件；
+- 原生导入使用同一入口选择多文件或文件夹，原生导出同时提供 `verified` 和需显式确认的 `as-is`；Renderer 不得提交任意粘贴路径；
 - 导出必须从受管 source blob 生成，先过 QA / 阶段预检并重新导入验证；
 - 输出给模型和 renderer 的 DTO 不暴露绝对本机路径。
 
@@ -205,7 +207,7 @@ CAT 写入规则：
 
 CAT Tool 对外工厂是 `packages/linguist-cat-tools/src/factory.ts`；30 个工具按项目、参考、QA、Proposal、导入、交付、Tag、术语、Workbook 和 Voice 拆分，`tool-runtime.ts` 集中 Session authority、通知与结果投影。四种岗位共享同一完整 Toolset。项目 Agent 可导入绝对路径或 Session cwd 相对路径中的文件/目录，也可把批次保存到绝对本地路径。主进程必须重新校验 Session binding、文件可读性、交付模式与摘要，模型不得提交 `projectId`。小批目录直接同步处理；Durable Import Job 仍不在当前范围。
 
-同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级参考资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须显式确认 Sheet/列映射；XLSX Context 保留 Sheet、物理行号和单元格坐标。UI TM/TB 导入保留候选确认，项目 Agent 可直接登记授权的 TM/TB/Context。原生 SDLTM/SDLTB 可导入。批次源文件与保留原件的语言资产统一复用 Proma Preview Tab，不新增第二套预览器。
+同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级参考资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须确认 Sheet/列映射；可保存并复用的 XLSX mapping 必须匹配文件指纹或语义一致的唯一候选，歧义必须 fail closed，`locked` 列必须贯穿预览、保存和导入。CSV auto 只在列语义足够明确时分类；纯 `source/target` 等歧义表返回 `needsInput`。XLSX Context 保留 Sheet、物理行号和单元格坐标。UI TM/TB 导入保留候选确认，项目 Agent 可直接登记授权的 TM/TB/Context。只有已确认当前阶段的 Segment 可设为 approved exemplar；同一 Segment/角色/文本类型的新内容原子替换旧译例。原生 SDLTM/SDLTB 可导入。批次源文件与保留原件的语言资产统一复用 Proma Preview Tab，不新增第二套预览器。
 
 ## 数据目录
 
@@ -296,4 +298,4 @@ Proma 核心文件修改必须遵守：
 - `docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md`
 - `docs/roadmap/LINGUIST_FUSION_CURRENT_REALITY.md`
 
-历史报告不得被当作当前代码说明。G8 盲评、LF-048 的 IME/Native Open、AC-009 产品资格和 AC-011 14 天日用在取得真实证据前必须保持 pending / blocked；Native Save 防覆盖已有单独 packaged 手工证据。
+历史报告不得被当作当前代码说明。G8 盲评、LF-048 的 IME/Native Open/Save、AC-009 产品资格和 AC-011 14 天日用在取得真实证据前必须保持 pending / blocked。

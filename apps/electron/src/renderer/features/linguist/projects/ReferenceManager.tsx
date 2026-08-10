@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import type {
   LinguistReferenceCandidateSummary,
   LinguistReferenceImportInfo,
+  LinguistTermConflictInfo,
   LinguistTermInfo,
   LinguistTermStatus,
   LinguistTmInfo,
@@ -15,6 +16,7 @@ import { SentencePatternsPanel } from './SentencePatternsPanel'
 import { useOpenLinguistPreview } from './linguist-preview-open'
 
 type Tab = 'tm' | 'terms' | 'patterns'
+const PAGE_SIZE = 50
 
 /** 术语状态的用户语言标签（筛选、行内与表单共用同一份）。 */
 export const TERM_STATUS_LABELS: Record<LinguistTermStatus, string> = {
@@ -24,25 +26,17 @@ export const TERM_STATUS_LABELS: Record<LinguistTermStatus, string> = {
   allowed: '允许',
   deprecated: '弃用',
 }
+export const ACTIVE_TERM_CONFLICT_STATUSES = ['required', 'preferred'] as const
 
-/**
- * 术语冲突：同一源文术语存在两条及以上生效向（必须/推荐）译法时，
- * Agent 与 QA 无法判断该听哪一条，需要用户收敛。
- */
-export function findTermConflicts(
-  terms: readonly LinguistTermInfo[],
-): LinguistTermInfo[][] {
-  const byTerm = new Map<string, LinguistTermInfo[]>()
-  for (const item of terms) {
-    const list = byTerm.get(item.term) ?? []
-    list.push(item)
-    byTerm.set(item.term, list)
-  }
-  return [...byTerm.values()].filter(
-    (list) =>
-      list.filter((item) => item.status === 'required' || item.status === 'preferred').length
-        >= 2,
-  )
+/** 保留选中生效译法；其他生效译法降为“允许”，不删除有意义的一词多义。 */
+export function buildTermConflictResolution(
+  entries: readonly LinguistTermInfo[],
+  keepId: string,
+): LinguistTermInfo[] {
+  return entries.map((entry) =>
+    entry.id !== keepId && (entry.status === 'required' || entry.status === 'preferred')
+      ? { ...entry, status: 'allowed' }
+      : entry)
 }
 
 /** 「让 Agent 整理本批术语」任务措辞：新增/修改前先经用户确认。 */
@@ -63,9 +57,12 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
   const [query, setQuery] = React.useState('')
   const [tm, setTm] = React.useState<LinguistTmInfo[]>([])
   const [terms, setTerms] = React.useState<LinguistTermInfo[]>([])
+  const [termConflicts, setTermConflicts] = React.useState<LinguistTermConflictInfo[]>([])
   const [imports, setImports] = React.useState<LinguistReferenceImportInfo[]>([])
   const [candidate, setCandidate] = React.useState<PendingReferenceCandidate | null>(null)
   const [termStatus, setTermStatus] = React.useState<'all' | LinguistTermStatus>('all')
+  const [offset, setOffset] = React.useState(0)
+  const [total, setTotal] = React.useState(0)
   const [busy, setBusy] = React.useState(false)
   const [addingTerm, setAddingTerm] = React.useState(false)
   const [editingTermId, setEditingTermId] = React.useState<string | null>(null)
@@ -78,26 +75,28 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
     setBusy(true)
     try {
       if (tab === 'tm') {
-        const result = await window.electronAPI.linguistReferencesQueryTm({ projectId, query, limit: 50, offset: 0 })
+        const result = await window.electronAPI.linguistReferencesQueryTm({ projectId, query, limit: PAGE_SIZE, offset })
         if (!result.ok) {
           toast.error('读取参考库失败', { description: describeLinguistIpcError(result.error) })
           return
         }
         setTm(result.data.items)
+        setTotal(result.data.total)
         setImports(result.data.imports ?? [])
       } else {
         const result = await window.electronAPI.linguistReferencesQueryTerms({
           projectId,
           query,
           ...(termStatus === 'all' ? {} : { status: termStatus }),
-          limit: 50,
-          offset: 0,
+          limit: PAGE_SIZE,
+          offset,
         })
         if (!result.ok) {
           toast.error('读取参考库失败', { description: describeLinguistIpcError(result.error) })
           return
         }
         setTerms(result.data.items)
+        setTotal(result.data.total)
         setImports(result.data.imports ?? [])
       }
     } catch {
@@ -105,9 +104,31 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
     } finally {
       setBusy(false)
     }
-  }, [projectId, query, tab, termStatus])
+  }, [offset, projectId, query, tab, termStatus])
   React.useEffect(() => { void refresh() }, [refresh])
-  React.useEffect(() => { setCandidate(null) }, [projectId])
+  const refreshTermConflicts = React.useCallback(async (): Promise<void> => {
+    if (tab !== 'terms') return
+    try {
+      const result = await window.electronAPI.linguistReferencesListTermConflicts({
+        projectId,
+        statuses: [...ACTIVE_TERM_CONFLICT_STATUSES],
+      })
+      if (result.ok) setTermConflicts(result.data.conflicts)
+      else {
+        setTermConflicts([])
+        toast.error('读取术语冲突失败', { description: describeLinguistIpcError(result.error) })
+      }
+    } catch {
+      setTermConflicts([])
+      toast.error('读取术语冲突失败', { description: '与主进程通信异常（INTERNAL）' })
+    }
+  }, [projectId, tab])
+  React.useEffect(() => { void refreshTermConflicts() }, [refreshTermConflicts])
+  React.useEffect(() => {
+    setCandidate(null)
+    setTermConflicts([])
+    setOffset(0)
+  }, [projectId])
   const importReference = async (): Promise<void> => {
     setBusy(true)
     try {
@@ -129,7 +150,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
           return
         }
         toast.success(`已导入 ${result.data.imported} 条`, { description: result.data.warnings[0] })
-        await refresh()
+        await Promise.all([refresh(), refreshTermConflicts()])
       }
     } catch {
       toast.error('导入失败', { description: '与主进程通信异常（INTERNAL）' })
@@ -153,7 +174,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
       }
       setCandidate(null)
       toast.success(`已导入 ${result.data.imported} 条`, { description: result.data.warnings[0] })
-      await refresh()
+      await Promise.all([refresh(), refreshTermConflicts()])
     } catch {
       toast.error('确认导入失败', { description: '与主进程通信异常（INTERNAL）' })
     } finally {
@@ -188,7 +209,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
       toast.error('删除失败', { description: describeLinguistIpcError(result.error) })
       return
     }
-    await refresh()
+    await Promise.all([refresh(), refreshTermConflicts()])
   }
   const upsertTerm = async (draft: TermDraft, existing?: LinguistTermInfo): Promise<void> => {
     if (termBusy || archived) return
@@ -202,9 +223,8 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
         status: draft.status,
         caseSensitive: draft.caseSensitive,
         ...(draft.note.trim() !== '' ? { note: draft.note.trim() } : {}),
-        // PB-095 标注列只在显式 id 更新路径写入；编辑时回传原值保持不变。
-        ...(existing !== undefined && existing.module !== undefined ? { module: existing.module } : {}),
-        ...(existing !== undefined && existing.category !== undefined ? { category: existing.category } : {}),
+        ...(draft.module.trim() !== '' ? { module: draft.module.trim() } : {}),
+        ...(draft.category.trim() !== '' ? { category: draft.category.trim() } : {}),
         ...(existing !== undefined && existing.imageRef !== undefined ? { imageRef: existing.imageRef } : {}),
       })
       if (!result.ok) {
@@ -214,9 +234,43 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
       toast.success(existing === undefined ? `已新增术语「${result.data.term}」` : `已更新术语「${result.data.term}」`)
       setAddingTerm(false)
       setEditingTermId(null)
-      await refresh()
+      await Promise.all([refresh(), refreshTermConflicts()])
     } catch {
       toast.error('保存术语失败', { description: '与主进程通信异常（INTERNAL）' })
+    } finally {
+      setTermBusy(false)
+    }
+  }
+  const keepConflictTerm = async (
+    conflict: LinguistTermConflictInfo,
+    keepId: string,
+  ): Promise<void> => {
+    if (termBusy || archived) return
+    setTermBusy(true)
+    try {
+      const terms = buildTermConflictResolution(conflict.entries, keepId)
+      const result = await window.electronAPI.linguistReferencesUpsertTerms({
+        projectId,
+        terms: terms.map((entry) => ({
+          id: entry.id,
+          term: entry.term,
+          translation: entry.translation,
+          status: entry.status,
+          caseSensitive: entry.caseSensitive,
+          ...(entry.note === undefined ? {} : { note: entry.note }),
+          ...(entry.module === undefined ? {} : { module: entry.module }),
+          ...(entry.category === undefined ? {} : { category: entry.category }),
+          ...(entry.imageRef === undefined ? {} : { imageRef: entry.imageRef }),
+        })),
+      })
+      if (!result.ok) {
+        toast.error('解决术语冲突失败', { description: describeLinguistIpcError(result.error) })
+        return
+      }
+      toast.success('已保留所选译法', { description: '其他生效译法已改为“允许”，未删除任何条目。' })
+      await Promise.all([refresh(), refreshTermConflicts()])
+    } catch {
+      toast.error('解决术语冲突失败', { description: '与主进程通信异常（INTERNAL）' })
     } finally {
       setTermBusy(false)
     }
@@ -259,10 +313,6 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
     if (!opened) toast('项目会话尚未就绪，请稍后重试')
   }
   const items = tab === 'tm' ? tm : terms
-  const termConflicts = React.useMemo(
-    () => (tab === 'terms' ? findTermConflicts(terms) : []),
-    [tab, terms],
-  )
   return (
     <details className="rounded-xl bg-content-area shadow-sm ring-1 ring-border/35">
       <summary className="cursor-pointer list-none px-3 py-2.5 text-[12px] font-medium text-foreground/70">
@@ -270,11 +320,11 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
       </summary>
       <div className="space-y-2 border-t border-border/35 p-3">
         <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => setTab('tm')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'tm' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>翻译记忆</button>
-          <button type="button" onClick={() => setTab('terms')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'terms' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>术语库</button>
-          <button type="button" onClick={() => setTab('patterns')} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'patterns' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>句式</button>
+          <button type="button" onClick={() => { setTab('tm'); setOffset(0) }} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'tm' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>翻译记忆</button>
+          <button type="button" onClick={() => { setTab('terms'); setOffset(0) }} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'terms' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>术语库</button>
+          <button type="button" onClick={() => { setTab('patterns'); setOffset(0) }} className={`rounded-md px-2 py-1 text-[11px] ${tab === 'patterns' ? 'bg-primary/10 text-primary' : 'bg-foreground/[0.05]'}`}>句式</button>
           {tab === 'terms' && (
-            <select aria-label="术语状态" value={termStatus} onChange={(event) => setTermStatus(event.target.value as 'all' | LinguistTermStatus)} className="h-7 min-w-0 truncate rounded-md bg-background pl-2 pr-6 text-[11px] ring-1 ring-border/50">
+            <select aria-label="术语状态" value={termStatus} onChange={(event) => { setTermStatus(event.target.value as 'all' | LinguistTermStatus); setOffset(0) }} className="h-7 min-w-0 truncate rounded-md bg-background pl-2 pr-6 text-[11px] ring-1 ring-border/50">
               <option value="all">全部状态</option>
               {(Object.keys(TERM_STATUS_LABELS) as LinguistTermStatus[]).map((status) => (
                 <option key={status} value={status}>{TERM_STATUS_LABELS[status]}</option>
@@ -307,7 +357,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
           )}
           {tab !== 'patterns' && (
             <>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索" className="ml-auto h-7 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" />
+              <input value={query} onChange={(event) => { setQuery(event.target.value); setOffset(0) }} placeholder="搜索" className="ml-auto h-7 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50" />
               <button
                 type="button"
                 disabled={archived || busy || candidate !== null}
@@ -332,22 +382,45 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
         )}
 
         {tab === 'terms' && termConflicts.length > 0 && (
-          <div role="alert" className="rounded-lg bg-warning/10 px-2.5 py-2 text-[11px] text-warning">
+          <section aria-label="术语冲突" className="rounded-lg bg-warning/10 px-2.5 py-2 text-[11px] text-foreground/70">
             <p className="font-medium">
               {termConflicts.length} 组术语有多条生效译法（必须/推荐），Agent 与 QA 无法判断该听哪一条：
             </p>
-            <ul className="mt-1 space-y-0.5">
-              {termConflicts.map((group) => (
-                <li key={group[0]!.term} className="break-words">
-                  {group[0]!.term}：
-                  {group
-                    .filter((item) => item.status === 'required' || item.status === 'preferred')
-                    .map((item) => `${item.translation}（${TERM_STATUS_LABELS[item.status]}）`)
-                    .join('、')}
+            <ul className="mt-2 space-y-2">
+              {termConflicts.map((conflict) => (
+                <li key={conflict.normalizedTerm} className="rounded-md bg-background/65 p-2">
+                  <p className="font-medium text-foreground">{conflict.entries[0]?.term ?? conflict.normalizedTerm}</p>
+                  <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                    {conflict.entries
+                      .filter((entry) => entry.status === 'required' || entry.status === 'preferred')
+                      .map((entry) => (
+                        <div key={entry.id} className="rounded-md border border-border/45 p-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="break-words font-medium text-foreground">{entry.translation}</p>
+                              <p className="mt-0.5 text-foreground/55">
+                                {TERM_STATUS_LABELS[entry.status]}
+                                {entry.module === undefined ? '' : ` · 模块 ${entry.module}`}
+                                {entry.category === undefined ? '' : ` · 分类 ${entry.category}`}
+                              </p>
+                              {entry.note !== undefined && <p className="mt-0.5 break-words text-foreground/55">备注：{entry.note}</p>}
+                            </div>
+                            <button
+                              type="button"
+                              disabled={archived || termBusy}
+                              onClick={() => void keepConflictTerm(conflict, entry.id)}
+                              className="shrink-0 rounded-md bg-primary px-2 py-1 text-[10px] font-medium text-primary-foreground disabled:opacity-45"
+                            >
+                              保留此译法
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         )}
 
         {tab === 'terms' && addingTerm && (
@@ -387,6 +460,14 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
               </li>
             ))}
           </ul>
+        )}
+
+        {tab !== 'patterns' && total > PAGE_SIZE && (
+          <nav aria-label={`${tab === 'terms' ? '术语' : '翻译记忆'}分页`} className="flex items-center justify-end gap-2 text-[11px] text-foreground/55">
+            <span>{offset + 1}–{Math.min(offset + PAGE_SIZE, total)} / {total}</span>
+            <button type="button" disabled={busy || offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))} className="rounded-md bg-foreground/[0.06] px-2 py-1 disabled:opacity-40">上一页</button>
+            <button type="button" disabled={busy || offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)} className="rounded-md bg-foreground/[0.06] px-2 py-1 disabled:opacity-40">下一页</button>
+          </nav>
         )}
 
         {tab !== 'patterns' && imports.length > 0 && (
@@ -465,6 +546,8 @@ export interface TermDraft {
   status: LinguistTermStatus
   caseSensitive: boolean
   note: string
+  module: string
+  category: string
 }
 
 function TermEditForm({
@@ -484,6 +567,8 @@ function TermEditForm({
     status: initial?.status ?? 'preferred',
     caseSensitive: initial?.caseSensitive ?? false,
     note: initial?.note ?? '',
+    module: initial?.module ?? '',
+    category: initial?.category ?? '',
   })
   const invalid = draft.term.trim() === '' || draft.translation.trim() === ''
   const editing = initial !== undefined
@@ -536,6 +621,22 @@ function TermEditForm({
           />
           区分大小写
         </label>
+        <input
+          value={draft.module}
+          disabled={busy}
+          onChange={(event) => setDraft({ ...draft, module: event.target.value })}
+          placeholder="模块（可选）"
+          aria-label="模块（可选）"
+          className="h-7 min-w-0 flex-1 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50"
+        />
+        <input
+          value={draft.category}
+          disabled={busy}
+          onChange={(event) => setDraft({ ...draft, category: event.target.value })}
+          placeholder="分类（可选）"
+          aria-label="分类（可选）"
+          className="h-7 min-w-0 flex-1 rounded-md bg-background px-2 text-[11px] ring-1 ring-border/50"
+        />
         <input
           value={draft.note}
           disabled={busy}

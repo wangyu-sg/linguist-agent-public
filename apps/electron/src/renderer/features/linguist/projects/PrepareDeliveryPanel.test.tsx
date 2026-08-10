@@ -38,5 +38,16 @@ describe('PrepareDeliveryPanel', () => {
     expect(html).toContain('仅运行预检')
     expect(html).toContain('不会被覆盖')
     expect(html).toContain('建议、QA、本轮状态、格式回写与导出完整性')
+    expect(html).toContain('预检未通过时仍可明确选择按当前状态导出')
+  })
+
+  test('given 预检未通过 when 选择按当前状态导出 then 仅由无障碍对话框确认动作提交 as-is', async () => {
+    const source = await Bun.file(new URL('./PrepareDeliveryPanel.tsx', import.meta.url)).text()
+
+    expect(source).toContain('<AlertDialogTrigger asChild>')
+    expect(source).toMatch(/<AlertDialogCancel\s+disabled=\{saving\}>\s*取消\s*<\/AlertDialogCancel>/)
+    expect(source).toMatch(/<AlertDialogAction[\s\S]*?onClick=\{\(\) => onSave\('as-is'\)\}/)
+    expect(source).toContain("onClick={() => onSave('verified')}")
+    expect(source).not.toContain('confirmingAsIs')
   })
 })

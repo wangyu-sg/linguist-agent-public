@@ -227,13 +227,23 @@ export function ContextEvidenceView({
         <SourceSummary
           id={sourceId('voice')}
           label="Voice"
-          total={sources.voiceProfiles.total}
-          empty="无 Voice Profile"
-          items={sources.voiceProfiles.items.map((profile) => ({
-            id: profile.id,
-            title: profile.speaker,
-            detail: [profile.register, ...(profile.toneMarkers ?? [])].filter(Boolean).join(' · '),
-          }))}
+          total={sources.voiceProfiles.total + context.approvedExemplars.length}
+          empty="无 Voice Profile 或角色译例"
+          items={[
+            ...context.approvedExemplars.map((exemplar) => ({
+              id: exemplar.id,
+              title: `${exemplar.speaker} · ${exemplar.textType} · 已确认译例`,
+              detail: [
+                `${exemplar.source} → ${exemplar.target}`,
+                exemplar.note,
+              ].filter(Boolean).join(' · '),
+            })),
+            ...sources.voiceProfiles.items.map((profile) => ({
+              id: profile.id,
+              title: profile.speaker,
+              detail: [profile.register, ...(profile.toneMarkers ?? [])].filter(Boolean).join(' · '),
+            })),
+          ]}
         />
         <SourceSummary
           id={sourceId('context')}

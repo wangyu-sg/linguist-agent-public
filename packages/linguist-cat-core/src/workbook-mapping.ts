@@ -2,6 +2,7 @@ export type WorkbookMappingColumnRole =
   | 'key'
   | 'source'
   | 'target'
+  | 'locked'
   | 'context'
   | 'speaker'
   | 'status'
@@ -10,6 +11,7 @@ export interface WorkbookMappingColumns {
   key?: string
   source: string
   target: string
+  locked?: string
   context?: string
   speaker?: string
   status?: string
@@ -38,7 +40,7 @@ export function normalizeWorkbookMappingProfiles(
     if (typeof profile !== 'object' || profile === null) return false
     const item = profile as Partial<LinguistWorkbookMappingProfile>
     const columns = item.columns as Partial<WorkbookMappingColumns> | undefined
-    const optionalColumn = (role: 'key' | 'context' | 'speaker' | 'status'): boolean =>
+    const optionalColumn = (role: 'key' | 'locked' | 'context' | 'speaker' | 'status'): boolean =>
       columns?.[role] === undefined
       || (typeof columns[role] === 'string' && columns[role]!.trim() !== '')
     return typeof item.id === 'string'
@@ -57,6 +59,7 @@ export function normalizeWorkbookMappingProfiles(
       && typeof columns.target === 'string'
       && columns.target.trim() !== ''
       && optionalColumn('key')
+      && optionalColumn('locked')
       && optionalColumn('context')
       && optionalColumn('speaker')
       && optionalColumn('status')

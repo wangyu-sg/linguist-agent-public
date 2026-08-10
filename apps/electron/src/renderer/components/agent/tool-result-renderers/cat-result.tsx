@@ -30,6 +30,11 @@ export interface ProposalResultIdentity {
   proposalIds: string[]
 }
 
+interface ApplyResultNavigation {
+  label: string
+  location: CatResultLocation
+}
+
 function parseObject(result: string): Record<string, unknown> | null {
   try {
     const value: unknown = JSON.parse(result)
@@ -142,6 +147,38 @@ export function readCatResultLocation(
   return { projectId: payload.projectId }
 }
 
+export function readApplyResultNavigation(
+  payload: Record<string, unknown>,
+): ApplyResultNavigation[] {
+  if (
+    typeof payload.projectId !== 'string'
+    || !LINGUIST_PROJECT_ID_PATTERN.test(payload.projectId)
+  ) return []
+  const projectId = payload.projectId
+  const groups: ApplyResultNavigation[] = []
+  const add = (label: string, amount: unknown, ids: unknown): void => {
+    const total = count(amount)
+    if (
+      total === null
+      || total === 0
+      || !Array.isArray(ids)
+      || !ids.every((id) => typeof id === 'string' && LINGUIST_SEGMENT_ID_PATTERN.test(id))
+      || ids[0] === undefined
+    ) return
+    groups.push({ label: `${label} ${total}`, location: { projectId, segmentId: ids[0] } })
+  }
+  const changedId = typeof payload.segmentId === 'string' ? [payload.segmentId] : []
+  add('已写回', payload.applied, changedId)
+  add('保留建议', payload.pending, changedId)
+  add('Revision 冲突', arrayLength(payload.stale, true), payload.stale)
+  add('锁定跳过', arrayLength(payload.locked, true), payload.locked)
+  const failedIds = Array.isArray(payload.failed)
+    ? payload.failed.flatMap((item) => isObject(item) && typeof item.segmentId === 'string' ? [item.segmentId] : [])
+    : []
+  add('失败', arrayLength(payload.failed), failedIds)
+  return groups
+}
+
 function pagedSummary(
   payload: Record<string, unknown>,
   title: string,
@@ -209,6 +246,26 @@ function summarizeCatResult(
       return status === undefined || typeof payload.snapshotId !== 'string'
         ? null
         : { title: '建议快照', detail: `状态：${status}` }
+    }
+    case 'cat_apply_translations': {
+      const requested = count(payload.requested)
+      const applied = count(payload.applied)
+      const pending = count(payload.pending)
+      const stale = arrayLength(payload.stale, true)
+      const locked = arrayLength(payload.locked, true)
+      const failed = arrayLength(payload.failed)
+      if ([requested, applied, pending, stale, locked, failed].some((value) => value === null)) return null
+      return {
+        title: '写回结果',
+        detail: [
+          `处理 ${requested} 段`,
+          `已写回 ${applied}`,
+          `保留建议 ${pending}`,
+          `Revision 冲突 ${stale}`,
+          `锁定跳过 ${locked}`,
+          failed! > 0 ? `失败 ${failed}` : '',
+        ].filter(Boolean).join(' · '),
+      }
     }
     case 'cat_propose_translations': {
       const proposals = arrayLength(payload.proposalIds, true)
@@ -381,6 +438,9 @@ export function CatResultRenderer({
   const actionLabel = toolName === 'cat_run_qa' || toolName === 'cat_get_qa_findings'
     ? '查看问题'
     : '在 CAT 中查看'
+  const applyNavigation = toolName === 'cat_apply_translations' && payload !== null
+    ? readApplyResultNavigation(payload)
+    : []
 
   return (
     <section
@@ -389,12 +449,26 @@ export function CatResultRenderer({
     >
       <p className="text-[12px] font-medium text-foreground/80">{summary.title}</p>
       <p className="mt-0.5 text-[12px] text-muted-foreground">{summary.detail}</p>
+      {applyNavigation.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5" aria-label="写回结果定位">
+          {applyNavigation.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => requestNavigation(item.location)}
+              className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
       {proposalStatuses !== undefined && (
         <p className="mt-1 text-[11px] font-medium text-foreground/65">
           审核结果：{summarizeProposalReviewStatuses(proposalStatuses)}
         </p>
       )}
-      {location !== null && (
+      {location !== null && applyNavigation.length === 0 && (
         <button
           type="button"
           onClick={() => requestNavigation(location)}

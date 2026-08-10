@@ -28,10 +28,12 @@ const ROLE_ALIASES: Record<WorkbookMappingColumnRole, readonly string[]> = {
   key: ['id', 'key', 'stringid', 'segmentid', '唯一键'],
   source: ['source', 'src', 'original', 'sourcetext', '源文', '原文'],
   target: ['target', 'tgt', 'translation', 'targettext', '译文', '翻译'],
+  locked: ['locked', 'lock', '锁定'],
   context: ['context', 'note', 'notes', 'comment', '备注', '上下文'],
   speaker: ['speaker', 'character', 'voice', '说话人', '角色'],
   status: ['status', 'state', 'translationstatus', '状态'],
 }
+const MAPPING_COLUMN_ROLES = ['key', 'source', 'target', 'locked', 'context', 'speaker', 'status'] as const
 
 interface WorkbookFile {
   filename: string
@@ -64,7 +66,7 @@ function localeAliases(locale: string): string[] {
   return language === '' ? [] : [language]
 }
 
-function suggestMapping(
+export function suggestProjectWorkbookMapping(
   sheet: XlsxWorkbookSheet,
   sourceLocale: string,
   targetLocale: string,
@@ -81,7 +83,7 @@ function suggestMapping(
     source: [...ROLE_ALIASES.source, ...localeAliases(sourceLocale)],
     target: [...ROLE_ALIASES.target, ...localeAliases(targetLocale)],
   }
-  for (const role of ['key', 'source', 'target', 'context', 'speaker', 'status'] as const) {
+  for (const role of MAPPING_COLUMN_ROLES) {
     const match = normalized.find((column) => !used.has(column.col) && aliases[role].includes(column.normalized))
     if (!match) continue
     used.add(match.col)
@@ -127,19 +129,33 @@ function filenameMatches(pattern: string, filename: string): boolean {
   return new RegExp(`^${source}$`, 'i').test(filename)
 }
 
-function findProfile(
+export function findProjectWorkbookMappingProfile(
   project: LinguistProject,
   parsed: XlsxWorkbookParseResult,
   filename: string,
 ): LinguistWorkbookMappingProfile | undefined {
   const profiles = project.workbookMappings ?? []
-  return profiles.find((profile) => profile.workbookFingerprint === parsed.report.sourceSha256)
-    ?? profiles.find((profile) => {
-      const sheet = parsed.sheets.find((candidate) => candidate.name === profile.sheetName)
-      return sheet !== undefined
-        && filenameMatches(profile.filenamePattern, filename)
-        && headerSignature(sheet) === profile.headerSignature
-    })
+  const pickUnambiguous = (
+    candidates: LinguistWorkbookMappingProfile[],
+  ): LinguistWorkbookMappingProfile | undefined => {
+    const first = candidates[0]
+    if (first === undefined) return undefined
+    const semantics = (profile: LinguistWorkbookMappingProfile): string => JSON.stringify([
+      profile.sheetName,
+      ...MAPPING_COLUMN_ROLES.map((role) => profile.columns[role] ?? null),
+    ])
+    const expected = semantics(first)
+    if (!candidates.every((profile) => semantics(profile) === expected)) return undefined
+    return candidates.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)[0]
+  }
+  const exact = profiles.filter((profile) => profile.workbookFingerprint === parsed.report.sourceSha256)
+  if (exact.length > 0) return pickUnambiguous(exact)
+  return pickUnambiguous(profiles.filter((profile) => {
+    const sheet = parsed.sheets.find((candidate) => candidate.name === profile.sheetName)
+    return sheet !== undefined
+      && filenameMatches(profile.filenamePattern, filename)
+      && headerSignature(sheet) === profile.headerSignature
+  }))
 }
 
 function validateColumns(sheet: XlsxWorkbookSheet, columns: WorkbookMappingColumns): WorkbookMappingColumns {
@@ -147,7 +163,7 @@ function validateColumns(sheet: XlsxWorkbookSheet, columns: WorkbookMappingColum
   if (!header) throw new LinguistCatInvalidArgumentError('sheetName', 'selected sheet has no header row')
   const selected = new Set<string>()
   const next = { ...columns }
-  for (const role of ['key', 'source', 'target', 'context', 'speaker', 'status'] as const) {
+  for (const role of MAPPING_COLUMN_ROLES) {
     const value = columns[role]
     if (value === undefined) continue
     const normalized = normalizeDelimitedHeader(value)
@@ -180,7 +196,7 @@ export async function previewProjectWorkbookMapping(
   const file = await readWorkbookFile(cwd, filePath)
   const parsed = await parseWorkbook(file)
   const truncated = new Set(parsed.report.sampling.truncatedSheets.map((entry) => entry.sheet))
-  const matched = findProfile(project, parsed, file.filename)
+  const matched = findProjectWorkbookMappingProfile(project, parsed, file.filename)
   return {
     filename: file.filename,
     workbookFingerprint: parsed.report.sourceSha256,
@@ -201,7 +217,7 @@ export async function previewProjectWorkbookMapping(
       })),
       mergedRanges: sheet.mergedRanges,
       truncated: truncated.has(sheet.name),
-      suggestion: suggestMapping(sheet, project.sourceLocale, project.targetLocale),
+      suggestion: suggestProjectWorkbookMapping(sheet, project.sourceLocale, project.targetLocale),
     })),
     skippedSheets: parsed.skippedSheets,
   }
@@ -215,6 +231,20 @@ export async function createProjectWorkbookMappingProfile(
   now: string,
 ): Promise<LinguistWorkbookMappingProfile> {
   const file = await readWorkbookFile(cwd, filePath)
+  return createProjectWorkbookMappingProfileFromBytes(project, file.bytes, file.filename, input, now)
+}
+
+export async function createProjectWorkbookMappingProfileFromBytes(
+  project: LinguistProject,
+  bytes: Uint8Array,
+  filename: string,
+  input: LinguistSaveWorkbookMappingInput,
+  now: string,
+): Promise<LinguistWorkbookMappingProfile> {
+  if (filename !== basename(filename)) {
+    throw new LinguistCatInvalidArgumentError('filename', 'must be a basename without path separators')
+  }
+  const file = { bytes, filename }
   const parsed = await parseWorkbook(file)
   const sheet = parsed.sheets.find((candidate) => candidate.name === input.sheetName)
   if (!sheet) throw new LinguistCatInvalidArgumentError('sheetName', 'selected sheet does not exist')
@@ -238,22 +268,39 @@ export async function createProjectWorkbookMappingProfile(
   }
 }
 
+export interface ProjectWorkbookMappingMatch {
+  profileId: string
+  mapping: LinguistIntakeXlsxMapping
+}
+
+export async function matchProjectWorkbookMapping(
+  project: LinguistProject,
+  bytes: Uint8Array,
+  filename: string,
+): Promise<ProjectWorkbookMappingMatch | undefined> {
+  if ((project.workbookMappings?.length ?? 0) === 0) return undefined
+  const parsed = await parseWorkbook({ bytes, filename })
+  const profile = findProjectWorkbookMappingProfile(project, parsed, filename)
+  if (!profile) return undefined
+  return {
+    profileId: profile.id,
+    mapping: {
+      sheetName: profile.sheetName,
+      columns: {
+        ...(profile.columns.key === undefined ? {} : { key: profile.columns.key }),
+        source: profile.columns.source,
+        target: profile.columns.target,
+        ...(profile.columns.locked === undefined ? {} : { locked: profile.columns.locked }),
+        ...(profile.columns.context === undefined ? {} : { context: profile.columns.context }),
+      },
+    },
+  }
+}
+
 export async function resolveProjectWorkbookMapping(
   project: LinguistProject,
   bytes: Uint8Array,
   filename: string,
 ): Promise<LinguistIntakeXlsxMapping | undefined> {
-  if ((project.workbookMappings?.length ?? 0) === 0) return undefined
-  const parsed = await parseWorkbook({ bytes, filename })
-  const profile = findProfile(project, parsed, filename)
-  if (!profile) return undefined
-  return {
-    sheetName: profile.sheetName,
-    columns: {
-      ...(profile.columns.key === undefined ? {} : { key: profile.columns.key }),
-      source: profile.columns.source,
-      target: profile.columns.target,
-      ...(profile.columns.context === undefined ? {} : { context: profile.columns.context }),
-    },
-  }
+  return (await matchProjectWorkbookMapping(project, bytes, filename))?.mapping
 }

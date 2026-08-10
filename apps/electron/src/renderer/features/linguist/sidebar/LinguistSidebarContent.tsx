@@ -17,6 +17,7 @@ import {
   agentSessionsAtom,
   type SessionIndicatorStatus,
 } from '@/atoms/agent-atoms'
+import { sessionHoverPreviewEnabledAtom } from '@/atoms/ui-preferences'
 import {
   activeTabAtom,
   activeTabIdAtom,
@@ -55,9 +56,9 @@ import {
 import { openLocalizationProject } from '../projects/open-localization-project'
 import { openLinguistAgentSession } from '../projects/open-linguist-session'
 import {
-  registerCreatedProjectSession,
+  createProjectAgentSession,
+  resolveActiveLinguistProjectId,
   selectFallbackLinguistSession,
-  selectProjectAgentSession,
 } from '../projects/project-agent-session'
 import {
   clearLinguistWorkbenchUiStateAtom,
@@ -93,6 +94,26 @@ export function moveProjectId(
   const [moved] = next.splice(from, 1)
   next.splice(to, 0, moved!)
   return next
+}
+
+/** 只比较一个项目实际消费的 Session 数据，隔离其他项目的状态更新。 */
+export function areProjectSessionRenderInputsEqual(
+  previousSessions: readonly AgentSessionMeta[],
+  nextSessions: readonly AgentSessionMeta[],
+  previousIndicators: ReadonlyMap<string, SessionIndicatorStatus>,
+  nextIndicators: ReadonlyMap<string, SessionIndicatorStatus>,
+): boolean {
+  if (previousSessions.length !== nextSessions.length) return false
+  for (let index = 0; index < previousSessions.length; index += 1) {
+    if (previousSessions[index] !== nextSessions[index]) return false
+  }
+  for (const session of nextSessions) {
+    if (
+      (previousIndicators.get(session.id) ?? 'idle')
+      !== (nextIndicators.get(session.id) ?? 'idle')
+    ) return false
+  }
+  return true
 }
 
 export interface SharedProjectSessionRowProps {
@@ -258,8 +279,8 @@ export function LinguistSidebarContentView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col titlebar-no-drag">
-      <div className="flex items-center justify-between px-3 pb-1 pt-3">
-        <h2 className="px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60">
+      <div className="flex items-center justify-between px-2 pb-1 pt-2">
+        <h2 className="px-1.5 text-[13px] font-medium leading-[18px] text-foreground/40">
           {archiveView ? '已归档' : '项目'}
         </h2>
         {!archiveView && (
@@ -544,7 +565,7 @@ export function LinguistSidebarContent({
     id: string
     position: 'before' | 'after'
   } | null>(null)
-  const activeProjectId = activeTab?.type === 'linguist-project' ? activeTab.projectId : null
+  const activeProjectId = resolveActiveLinguistProjectId(activeTab, sessions)
   const projects = state.status === 'ready' ? state.projects : []
 
   React.useEffect(() => {
@@ -607,18 +628,14 @@ export function LinguistSidebarContent({
           return
         }
       }
-      const result = await window.electronAPI.linguistSessionsCreateForProject({ projectId, role })
+      const result = await createProjectAgentSession(store, projectId, role)
       if (!result.ok) {
         setSessionError({ projectId, message: describeLinguistIpcError(result.error) })
         return
       }
-      if (!registerCreatedProjectSession(store, projectId, result.data)) {
-        setSessionError({ projectId, message: '项目会话绑定不一致' })
-      } else {
-        store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
-          agentPresentation: 'full',
-        })
-      }
+      store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
+        agentPresentation: 'full',
+      })
     } catch {
       setSessionError({ projectId, message: '与主进程通信异常（INTERNAL）' })
     } finally {
@@ -658,12 +675,18 @@ export function LinguistSidebarContent({
     }
   }, [refresh, store])
 
+  const handleProjectArchived = React.useCallback((project: LinguistProjectInfo): void => {
+    refresh()
+    if (activeProjectId === project.id) closeProjectTab(project.id)
+  }, [activeProjectId, closeProjectTab, refresh])
   const { requestArchive, archiveDialog } = useProjectArchive({
-    onArchived: (project) => {
-      refresh()
-      if (activeProjectId === project.id) closeProjectTab(project.id)
-    },
+    onArchived: handleProjectArchived,
   })
+  const requestArchiveRef = React.useRef(requestArchive)
+  requestArchiveRef.current = requestArchive
+  const handleRequestArchive = React.useCallback((project: LinguistProjectInfo): void => {
+    requestArchiveRef.current(project)
+  }, [])
 
   const handleRenameSession = React.useCallback(async (
     projectId: string,
@@ -895,6 +918,20 @@ export function LinguistSidebarContent({
     }
   }, [refresh, state])
 
+  const handleProjectDragLeave = React.useCallback((): void => {
+    setProjectDropIndicator(null)
+  }, [])
+  const handleProjectDragEnd = React.useCallback((): void => {
+    setDraggingProjectId(null)
+    setProjectDropIndicator(null)
+  }, [])
+  const handleCopySession = React.useCallback((_projectId: string, sessionId: string): void => {
+    setCopySession(store.get(agentSessionsAtom).find((session) => session.id === sessionId) ?? null)
+  }, [store])
+  const handleDeleteSession = React.useCallback((projectId: string, sessionId: string): void => {
+    setPendingDeleteTarget({ kind: 'linguist-session', projectId, id: sessionId })
+  }, [])
+
   return (
     <>
       <LinguistSidebarContentView
@@ -915,49 +952,24 @@ export function LinguistSidebarContent({
         sessionError={sessionError}
         draggingProjectId={draggingProjectId}
         projectDropIndicator={projectDropIndicator}
-        onSelectSession={(projectId, sessionId) => {
-          void handleSelectSession(projectId, sessionId)
-        }}
-        onCreateSession={(projectId, role) => {
-          void handleCreateSession(projectId, role)
-        }}
-        onOpenProjectSettings={(projectId) => {
-          void handleOpenProjectSettings(projectId)
-        }}
+        onSelectSession={handleSelectSession}
+        onCreateSession={handleCreateSession}
+        onOpenProjectSettings={handleOpenProjectSettings}
         onRenameProject={handleRenameProject}
-        onArchiveProject={requestArchive}
+        onArchiveProject={handleRequestArchive}
         onDeleteProject={setPendingDeleteProject}
         onProjectDragStart={handleProjectDragStart}
         onProjectDragOver={handleProjectDragOver}
-        onProjectDragLeave={() => setProjectDropIndicator(null)}
-        onProjectDrop={(event, projectId) => {
-          void handleProjectDrop(event, projectId)
-        }}
-        onProjectDragEnd={() => {
-          setDraggingProjectId(null)
-          setProjectDropIndicator(null)
-        }}
-        onMoveProject={(projectId, offset) => {
-          void handleMoveProject(projectId, offset)
-        }}
-        onRenameSession={(projectId, sessionId, title) => {
-          void handleRenameSession(projectId, sessionId, title)
-        }}
-        onTogglePinSession={(projectId, sessionId) => {
-          void handleTogglePinSession(projectId, sessionId)
-        }}
-        onToggleStarSession={(projectId, sessionId) => {
-          void handleToggleStarSession(projectId, sessionId)
-        }}
-        onCopySession={(_projectId, sessionId) => {
-          setCopySession(store.get(agentSessionsAtom).find((session) => session.id === sessionId) ?? null)
-        }}
-        onToggleArchiveSession={(projectId, sessionId) => {
-          void handleToggleArchiveSession(projectId, sessionId)
-        }}
-        onDeleteSession={(projectId, sessionId) => {
-          setPendingDeleteTarget({ kind: 'linguist-session', projectId, id: sessionId })
-        }}
+        onProjectDragLeave={handleProjectDragLeave}
+        onProjectDrop={handleProjectDrop}
+        onProjectDragEnd={handleProjectDragEnd}
+        onMoveProject={handleMoveProject}
+        onRenameSession={handleRenameSession}
+        onTogglePinSession={handleTogglePinSession}
+        onToggleStarSession={handleToggleStarSession}
+        onCopySession={handleCopySession}
+        onToggleArchiveSession={handleToggleArchiveSession}
+        onDeleteSession={handleDeleteSession}
       />
 
       {archiveDialog}
@@ -1025,7 +1037,7 @@ export function LinguistSidebarContent({
   )
 }
 
-function ProjectRow({
+function ProjectRowView({
   project,
   active,
   onOpen,
@@ -1269,7 +1281,30 @@ function ProjectRow({
   )
 }
 
-function SessionTreeRows({
+type ProjectRowProps = Parameters<typeof ProjectRowView>[0]
+
+function areProjectRowPropsEqual(
+  previous: ProjectRowProps,
+  next: ProjectRowProps,
+): boolean {
+  const previousKeys = Object.keys(previous) as Array<keyof ProjectRowProps>
+  const nextKeys = Object.keys(next)
+  if (previousKeys.length !== nextKeys.length) return false
+  for (const key of previousKeys) {
+    if (key === 'sessions' || key === 'indicatorMap') continue
+    if (!Object.is(previous[key], next[key])) return false
+  }
+  return areProjectSessionRenderInputsEqual(
+    previous.sessions,
+    next.sessions,
+    previous.indicatorMap,
+    next.indicatorMap,
+  )
+}
+
+const ProjectRow = React.memo(ProjectRowView, areProjectRowPropsEqual)
+
+function SessionTreeRowsView({
   projectId,
   projectName,
   sessions,
@@ -1308,6 +1343,7 @@ function SessionTreeRows({
 }): React.ReactElement | null {
   const [extraCount, setExtraCount] = React.useState(0)
   const [expandedDelegationIds, setExpandedDelegationIds] = React.useState<Set<string>>(new Set())
+  const sessionHoverPreviewEnabled = useAtomValue(sessionHoverPreviewEnabledAtom)
   if (!SessionRowComponent || sessions.length === 0) return null
 
   const trees = buildAgentSessionTrees(sessions)
@@ -1358,6 +1394,7 @@ function SessionTreeRows({
                   : status === 'completed'
                     ? 'green'
                     : undefined}
+              disableMiniMap={!sessionHoverPreviewEnabled}
               relativeTimeNow={relativeTimeNow}
               workspaceName={`${getLinguistRoleOption(tree.session.linguistRole).shortLabel}${showProjectBadge && projectName ? ` · ${projectName}` : ''}`}
               transferLabel="复制到其他项目"
@@ -1380,6 +1417,7 @@ function SessionTreeRows({
                     active={child.id === currentSessionId}
                     indicatorStatus={indicatorMap.get(child.id) ?? 'idle'}
                     showPinIcon={!!child.pinned}
+                    disableMiniMap={!sessionHoverPreviewEnabled}
                     relativeTimeNow={relativeTimeNow}
                     workspaceName={`${getLinguistRoleOption(child.linguistRole).shortLabel}${showProjectBadge && projectName ? ` · ${projectName}` : ''}`}
                     transferLabel="复制到其他项目"
@@ -1410,6 +1448,29 @@ function SessionTreeRows({
     </div>
   )
 }
+
+type SessionTreeRowsProps = Parameters<typeof SessionTreeRowsView>[0]
+
+function areSessionTreeRowsPropsEqual(
+  previous: SessionTreeRowsProps,
+  next: SessionTreeRowsProps,
+): boolean {
+  const previousKeys = Object.keys(previous) as Array<keyof SessionTreeRowsProps>
+  const nextKeys = Object.keys(next)
+  if (previousKeys.length !== nextKeys.length) return false
+  for (const key of previousKeys) {
+    if (key === 'sessions' || key === 'indicatorMap') continue
+    if (!Object.is(previous[key], next[key])) return false
+  }
+  return areProjectSessionRenderInputsEqual(
+    previous.sessions,
+    next.sessions,
+    previous.indicatorMap,
+    next.indicatorMap,
+  )
+}
+
+const SessionTreeRows = React.memo(SessionTreeRowsView, areSessionTreeRowsPropsEqual)
 
 function ArchiveSection({
   title,

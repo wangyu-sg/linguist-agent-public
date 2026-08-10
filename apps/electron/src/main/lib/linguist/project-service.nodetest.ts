@@ -318,7 +318,9 @@ test('PB-072: QA waivers do not bypass verified export rules; as-is export stays
       () => service.stageExport(project.id, imported.assetId),
       (err: unknown) => (err as { code?: string }).code === 'FORMAT_EXPORT_ERROR',
     )
-    const staged = await service.stageAsIsExport(project.id, imported.assetId)
+    const preparedAsIs = await service.prepareDelivery(project.id, imported.assetId, 'as-is')
+    assert.equal(preparedAsIs.validation, 'as-is')
+    const staged = preparedAsIs.staged!
     assert.ok(staged.relativePath.startsWith('exports/'))
     assert.ok(existsSync(staged.stagingPath))
     assert.equal(staged.artifact.assetId, imported.assetId)

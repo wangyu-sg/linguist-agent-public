@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { LinguistTermInfo, LinguistTermStatus } from '@proma/shared'
-import { findTermConflicts, TERM_STATUS_LABELS } from './ReferenceManager'
+import {
+  ACTIVE_TERM_CONFLICT_STATUSES,
+  buildTermConflictResolution,
+  TERM_STATUS_LABELS,
+} from './ReferenceManager'
 
 function term(id: string, sourceTerm: string, status: LinguistTermStatus): LinguistTermInfo {
   return {
@@ -21,47 +25,19 @@ describe('术语管理', () => {
       allowed: '允许',
       deprecated: '弃用',
     })
+    expect(ACTIVE_TERM_CONFLICT_STATUSES).toEqual(['required', 'preferred'])
   })
 
-  test.each([
-    {
-      name: '同一术语两条必须：冲突',
-      terms: [term('a', 'Start', 'required'), term('b', 'Start', 'preferred')],
-      expectedGroups: 1,
-    },
-    {
-      name: '同一术语必须加禁用：不冲突（禁用是排除向）',
-      terms: [term('a', 'Start', 'required'), term('b', 'Start', 'forbidden')],
-      expectedGroups: 0,
-    },
-    {
-      name: '同一术语仅一条生效译法加一条弃用：不冲突',
-      terms: [term('a', 'Start', 'preferred'), term('b', 'Start', 'deprecated')],
-      expectedGroups: 0,
-    },
-    {
-      name: '不同术语各自生效：不冲突',
-      terms: [term('a', 'Start', 'required'), term('b', 'Score', 'preferred')],
-      expectedGroups: 0,
-    },
-    {
-      name: '三条生效译法同术语：冲突且整组返回',
-      terms: [
-        term('a', 'Start', 'required'),
-        term('b', 'Start', 'preferred'),
-        term('c', 'Start', 'preferred'),
-        term('d', 'Start', 'forbidden'),
-      ],
-      expectedGroups: 1,
-    },
-  ])('given $name when 检测冲突 then 组数=$expectedGroups', ({ terms, expectedGroups }) => {
-    const groups = findTermConflicts(terms)
-    expect(groups).toHaveLength(expectedGroups)
-    for (const group of groups) {
-      expect(
-        group.filter((item) => item.status === 'required' || item.status === 'preferred')
-          .length,
-      ).toBeGreaterThanOrEqual(2)
-    }
+  test('一键保留某条时不删除一词多义，只把其他生效译法改为允许', () => {
+    const entries = [
+      { ...term('keep', 'Start', 'required'), translation: '开始', module: 'UI', note: '按钮' },
+      { ...term('other', 'Start', 'preferred'), translation: '启动', category: '动词' },
+      { ...term('forbidden', 'Start', 'forbidden'), translation: '开端' },
+    ]
+    expect(buildTermConflictResolution(entries, 'keep')).toEqual([
+      entries[0]!,
+      { ...entries[1]!, status: 'allowed' },
+      entries[2]!,
+    ])
   })
 })

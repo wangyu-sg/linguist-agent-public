@@ -7,6 +7,8 @@ import {
   type ContextEvidenceSources,
 } from './ContextEvidencePanel'
 
+const TM_EVIDENCE_REF = `tm:tmu_v2_${'a'.repeat(64)}`
+
 const CONTEXT: LinguistCatContextResult = {
   segment: {
     id: 'seg-0000000000000001',
@@ -30,7 +32,7 @@ const CONTEXT: LinguistCatContextResult = {
     segmentId: 'seg-0000000000000001',
     baseRevision: 1,
     proposedTarget: '饮用药水',
-    evidenceRefs: ['tm:unit-1', 'context:combat-notes', 'manual-review'],
+    evidenceRefs: [TM_EVIDENCE_REF, 'context:combat-notes', 'manual-review'],
     termRefs: ['term:potion'],
     warnings: [],
     createdAt: '2026-07-27T00:00:00.000Z',
@@ -48,6 +50,19 @@ const CONTEXT: LinguistCatContextResult = {
     matchType: 'fuzzy',
   }],
   termMatches: [],
+  approvedExemplars: [{
+    id: 'exemplar-1',
+    source: 'Drink the potion',
+    target: '喝下药水',
+    sourceLocale: 'en',
+    targetLocale: 'zh-CN',
+    speaker: 'Narrator',
+    textType: 'dialogue',
+    assetId: 'ast-0000000000000001',
+    segmentId: 'seg-0000000000000001',
+    note: '简洁的教程口吻',
+    approvedAt: '2026-07-27T00:00:00.000Z',
+  }],
 }
 
 const SOURCES: ContextEvidenceSources = {
@@ -99,11 +114,14 @@ describe('ContextEvidencePanel', () => {
     expect(html).toContain('按钮文本使用祈使句')
     expect(html).toContain('Voice')
     expect(html).toContain('Narrator')
+    expect(html).toContain('喝下药水')
+    expect(html).toContain('简洁的教程口吻')
     expect(html).toContain('Context')
     expect(html).toContain('combat-notes.md')
     expect(html).toContain('TM')
     expect(html).toContain('game-v1.tmx')
-    expect(html).toContain('tm:unit-1')
+    expect(html).toContain('aria-label="建议的证据来源"')
+    expect(html).toContain(TM_EVIDENCE_REF)
     expect(html).toContain('context:combat-notes')
     expect(html).toContain('manual-review')
     expect(html).toContain('href="#linguist-context-source-project-a-tm"')
@@ -113,7 +131,7 @@ describe('ContextEvidencePanel', () => {
   })
 
   test('given evidence ref when 解析来源 then 只为可识别来源提供跳转目标', () => {
-    expect(evidenceProvenance('tm:unit-1')).toEqual({ kind: 'tm', label: 'TM' })
+    expect(evidenceProvenance(TM_EVIDENCE_REF)).toEqual({ kind: 'tm', label: 'TM' })
     expect(evidenceProvenance('style:ui-copy')).toEqual({ kind: 'style', label: 'Style' })
     expect(evidenceProvenance('voice:narrator')).toEqual({ kind: 'voice', label: 'Voice' })
     expect(evidenceProvenance('context:combat-notes')).toEqual({ kind: 'context', label: 'Context' })

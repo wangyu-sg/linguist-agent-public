@@ -9,6 +9,7 @@ import {
 import {
   runProjectQa,
   StoreNotFoundError,
+  type ApprovedExemplar,
   type PersistedQaFinding,
   type ProjectDatabase,
 } from '@linguist/cat-store'
@@ -22,6 +23,7 @@ import type {
   CatSegmentContext,
   CatWorkspacePage,
   CatWorkspaceQuery,
+  ApproveSegmentExemplarInput,
   StageMutationBatchResult,
   StageMutationFailure,
   StageMutationItem,
@@ -92,6 +94,15 @@ export class ProjectQuality {
           text: segment.source,
           limit: 10,
         }),
+        approvedExemplars: segment.context?.meta?.speaker?.trim()
+          ? db.tmUnits.listApprovedExemplars({
+              speaker: segment.context.meta.speaker.trim(),
+              limit: 5,
+            })
+          : db.tmUnits
+              .listApprovedExemplars({ limit: Number.MAX_SAFE_INTEGER })
+              .filter((exemplar) => exemplar.segmentId === segmentId)
+              .slice(0, 5),
         stageEvents: db.segments.listStageEvents(segmentId),
         qaFindings: db.qaFindings.list({ segmentId }).map((finding) => ({
           id: finding.id,
@@ -109,6 +120,40 @@ export class ProjectQuality {
             : {}),
         })),
       }
+    }, projectId)
+  }
+
+  /** 只有当前阶段已确认的 Segment 才能成为角色译例；正文与引用均由主进程取值。 */
+  addApprovedExemplar(
+    projectId: string,
+    input: ApproveSegmentExemplarInput,
+  ): ApprovedExemplar {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => {
+      const segment = db.segments.getById(input.segmentId)
+      if (segment === undefined) throw new UnknownSegmentError(input.segmentId)
+      const stageState = segment.currentStageState ?? 'untouched'
+      if (stageState !== 'confirmed') {
+        throw new InvalidStateTransitionError(
+          'approved-exemplar',
+          stageState,
+          'confirmed-segment',
+        )
+      }
+      const module = segment.context?.meta?.module?.trim()
+      return db.tmUnits.addApprovedExemplar({
+        source: segment.source,
+        target: segment.target,
+        sourceLocale: segment.sourceLocale,
+        targetLocale: segment.targetLocale,
+        speaker: input.speaker,
+        textType: input.textType,
+        ...(module ? { module } : {}),
+        assetId: segment.assetId,
+        segmentId: segment.id,
+        ...(input.note === undefined ? {} : { note: input.note }),
+      })
     }, projectId)
   }
 

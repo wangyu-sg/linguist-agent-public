@@ -280,40 +280,57 @@ export class TmUnitsRepository {
 
   addApprovedExemplar(input: ApprovedExemplarInput): ApprovedExemplar {
     if (input.target.trim() === '') throw new Error('Approved exemplar target must not be empty')
-    const existing = this.listApprovedExemplars({
-      speaker: input.speaker,
-      textType: input.textType,
-      limit: Number.MAX_SAFE_INTEGER,
-    }).find((item) => item.segmentId === input.segmentId)
-    if (existing) return existing
-    const approvedAt = this.now()
-    const metadata: ApprovedExemplarMetadata = {
-      speaker: input.speaker,
-      textType: input.textType,
-      ...(input.module === undefined ? {} : { module: input.module }),
-      assetId: input.assetId,
-      segmentId: input.segmentId,
-      ...(input.note === undefined ? {} : { note: input.note }),
-      approvedAt,
-    }
-    const origin = `${APPROVED_EXEMPLAR_ORIGIN_PREFIX}${JSON.stringify(metadata)}`
-    this.importMany([{
-      source: input.source,
-      target: input.target,
-      sourceLocale: input.sourceLocale,
-      targetLocale: input.targetLocale,
-      origin,
-    }])
-    const id = stableId(this.projectId, {
-      source: input.source,
-      target: input.target,
-      sourceLocale: input.sourceLocale,
-      targetLocale: input.targetLocale,
-      origin,
+    return this.db.transaction(`upsert approved exemplar ${input.segmentId}`, () => {
+      const existing = this.listApprovedExemplars({
+        speaker: input.speaker,
+        textType: input.textType,
+        limit: Number.MAX_SAFE_INTEGER,
+      }).find((item) => item.segmentId === input.segmentId)
+      const module = input.module ?? existing?.module
+      const note = input.note ?? existing?.note
+      if (existing !== undefined
+        && existing.source === input.source
+        && existing.target === input.target
+        && existing.sourceLocale === input.sourceLocale
+        && existing.targetLocale === input.targetLocale
+        && existing.module === module
+        && existing.assetId === input.assetId
+        && existing.note === note) {
+        return existing
+      }
+      if (existing !== undefined) {
+        this.db.db.prepare('DELETE FROM tm_units WHERE id = ? AND project_id = ?')
+          .run(existing.id, this.projectId)
+      }
+      const approvedAt = this.now()
+      const metadata: ApprovedExemplarMetadata = {
+        speaker: input.speaker,
+        textType: input.textType,
+        ...(module === undefined ? {} : { module }),
+        assetId: input.assetId,
+        segmentId: input.segmentId,
+        ...(note === undefined ? {} : { note }),
+        approvedAt,
+      }
+      const origin = `${APPROVED_EXEMPLAR_ORIGIN_PREFIX}${JSON.stringify(metadata)}`
+      this.importMany([{
+        source: input.source,
+        target: input.target,
+        sourceLocale: input.sourceLocale,
+        targetLocale: input.targetLocale,
+        origin,
+      }])
+      const id = stableId(this.projectId, {
+        source: input.source,
+        target: input.target,
+        sourceLocale: input.sourceLocale,
+        targetLocale: input.targetLocale,
+        origin,
+      })
+      return parseApprovedExemplar(this.db.db
+        .prepare('SELECT * FROM tm_units WHERE id = ? AND project_id = ?')
+        .get(id, this.projectId) as TmUnitRow)!
     })
-    return parseApprovedExemplar(this.db.db
-      .prepare('SELECT * FROM tm_units WHERE id = ? AND project_id = ?')
-      .get(id, this.projectId) as TmUnitRow)!
   }
 
   listApprovedExemplars(filter: ApprovedExemplarSearch = {}): ApprovedExemplar[] {

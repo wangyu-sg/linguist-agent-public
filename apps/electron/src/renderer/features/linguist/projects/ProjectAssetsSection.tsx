@@ -2,10 +2,10 @@
  * ProjectAssetsSection — 项目详情内的「批次（文件）」区（ticket PB-033）
  *
  * 职责：
- * - 「导入文件」入口：点击 → linguistProjectsImport（主进程原生选择器 +
+ * - 「导入资源」入口：菜单分流多文件 / 文件夹原生选择器 → linguistProjectsImport（
  *   主进程读盘解析，renderer 永不接触路径/字节，计划 §7.4）。归档（只读）
  *   项目禁用并给出原因提示。
- * - 进度：导入是单次 invoke（读取+解析+落库均在主进程内完成），没有分阶段
+ * - 进度：导入是单次 invoke（扫描+读取+解析+落库均在主进程内完成），没有分阶段
  *   事件流，故只呈现诚实的 indeterminate 忙碌态（role="status" + 阶段文案
  *   「导入中（读取并解析文件）」），绝不伪造 determinate 进度条。
  * - 结果：成功 → toast + 经 onSummaryRefresh 重拉 getSummary（真源），新批次
@@ -40,6 +40,7 @@ import {
   Download,
   Eye,
   FileText,
+  FolderOpen,
   Loader2,
   RefreshCw,
   Undo2,
@@ -52,10 +53,12 @@ import type {
   LinguistProjectConfirmXlsxMappingRequest,
   LinguistProjectImportResult,
   LinguistProjectSummary,
+  LinguistXlsxMappingUsedInfo,
 } from '@proma/shared'
 import { useOpenLinguistPreview } from './linguist-preview-open'
 import {
   GENERIC_XLIFF_FALLBACK_NOTICE,
+  describeFormatCapability,
   describeLinguistFormat,
   isGenericXliffFallback,
 } from './format-labels'
@@ -65,9 +68,19 @@ import {
   formatProjectTime,
   truncateSha256,
 } from './project-utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 /** 导入状态机：idle → busy → idle | error（error 可重试，重试重开选择器） */
-type ImportState = { status: 'idle' } | { status: 'busy' } | { status: 'error'; message: string }
+type ImportSelection = 'files' | 'directory'
+type ImportState =
+  | { status: 'idle' }
+  | { status: 'busy'; selection: ImportSelection }
+  | { status: 'error'; selection: ImportSelection; message: string }
 
 /** 导出状态机：同一时间只允许一个批次打开系统保存流程 */
 type ExportState =
@@ -91,12 +104,67 @@ interface LastImport {
   importedAt: string
 }
 
-type CompletedImport = Extract<LinguistProjectImportResult, { requiresXlsxMapping: false }>
+type CompletedImport = Extract<
+  LinguistProjectImportResult,
+  { bulk: false; requiresXlsxMapping: false }
+>
+type BulkImport = Extract<LinguistProjectImportResult, { bulk: true }>
 
-type PendingXlsxMapping = Omit<
+export type PendingXlsxMapping = Omit<
   Extract<LinguistProjectImportResult, { requiresXlsxMapping: true }>,
-  'cancelled' | 'requiresXlsxMapping'
-> & Pick<LinguistProjectConfirmXlsxMappingRequest, 'sheetName' | 'columns'>
+  'cancelled' | 'bulk' | 'requiresXlsxMapping'
+> & Pick<LinguistProjectConfirmXlsxMappingRequest, 'sheetName' | 'columns'> & {
+  rememberMapping: boolean
+}
+
+type XlsxPreviewResult = Extract<LinguistProjectImportResult, { requiresXlsxMapping: true }>
+
+export function describeWorkbookMappingUsed(mapping: LinguistXlsxMappingUsedInfo): string {
+  const columns = [
+    mapping.columns.key === undefined ? undefined : `ID=${mapping.columns.key}`,
+    `Source=${mapping.columns.source}`,
+    `Target=${mapping.columns.target}`,
+    mapping.columns.locked === undefined ? undefined : `Locked=${mapping.columns.locked}`,
+    mapping.columns.context === undefined ? undefined : `Context=${mapping.columns.context}`,
+  ].filter((item): item is string => item !== undefined)
+  return `${mapping.sheetName} · ${columns.join(' · ')}`
+}
+
+function suggestedColumnsForSheet(
+  sheet: XlsxPreviewResult['preview']['sheets'][number] | undefined,
+): LinguistProjectConfirmXlsxMappingRequest['columns'] {
+  if (sheet === undefined) return { source: '', target: '' }
+  const selectable = new Set(sheet.columns.filter((column) => column.selectable).map((column) => column.header))
+  const used = new Set<string>()
+  const columns: LinguistProjectConfirmXlsxMappingRequest['columns'] = { source: '', target: '' }
+  for (const role of ['key', 'source', 'target', 'locked', 'context'] as const) {
+    const value = sheet.suggestion.columns[role]
+    if (value === undefined || !selectable.has(value) || used.has(value)) continue
+    used.add(value)
+    columns[role] = value
+  }
+  return columns
+}
+
+export function createPendingXlsxMapping(result: XlsxPreviewResult): PendingXlsxMapping {
+  const sheet = [...result.preview.sheets].sort((left, right) => {
+    const visibility = Number(right.state === 'visible') - Number(left.state === 'visible')
+    return visibility !== 0 ? visibility : right.suggestion.confidence - left.suggestion.confidence
+  })[0]
+  return {
+    filename: result.filename,
+    mappingId: result.mappingId,
+    sourceSha256: result.sourceSha256,
+    preview: result.preview,
+    sheetName: sheet?.name ?? '',
+    columns: suggestedColumnsForSheet(sheet),
+    rememberMapping: false,
+  }
+}
+
+export function hasImportedProjectResources(result: BulkImport): boolean {
+  return result.items.some((item) => item.status === 'imported' && item.resourceKind !== 'batch')
+}
 
 /** 验证检查项 id → 中文标签（与 shared 契约的四项一一对应） */
 const VERIFICATION_CHECK_LABELS: Record<LinguistImportVerificationCheck['id'], string> = {
@@ -114,6 +182,48 @@ interface ProjectAssetsSectionProps {
   summary: LinguistProjectSummary | null
   /** 导入成功后重拉摘要（计数格 + 批次列表同步刷新；真源在主进程） */
   onSummaryRefresh: () => Promise<void>
+  /** 批量导入包含 TM/TB/Context 时刷新同页语言资产面板。 */
+  onResourcesChanged?: () => void
+}
+
+export function ProjectImportMenu({
+  busy,
+  disabled,
+  title,
+  onSelect,
+}: {
+  busy: boolean
+  disabled: boolean
+  title: string
+  onSelect: (selection: ImportSelection) => void
+}): React.ReactElement {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="导入资源"
+          disabled={disabled}
+          title={title}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-100 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+        >
+          {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+          <span>{busy ? '导入中…' : '导入资源'}</span>
+          {!busy && <ChevronDown size={12} aria-hidden="true" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="z-[9999] w-52">
+        <DropdownMenuItem onSelect={() => onSelect('files')}>
+          <FileText />
+          <span>选择文件…</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelect('directory')}>
+          <FolderOpen />
+          <span>选择文件夹…</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 export function ProjectAssetsSection({
@@ -121,12 +231,14 @@ export function ProjectAssetsSection({
   archived,
   summary,
   onSummaryRefresh,
+  onResourcesChanged,
 }: ProjectAssetsSectionProps): React.ReactElement {
   const [importState, setImportState] = React.useState<ImportState>({ status: 'idle' })
   const [exportState, setExportState] = React.useState<ExportState>({ status: 'idle' })
   const [undoState, setUndoState] = React.useState<UndoImportState>({ status: 'idle' })
   const [refreshing, setRefreshing] = React.useState(false)
   const [lastImport, setLastImport] = React.useState<LastImport | null>(null)
+  const [lastBulkImport, setLastBulkImport] = React.useState<BulkImport | null>(null)
   const [xlsxMapping, setXlsxMapping] = React.useState<PendingXlsxMapping | null>(null)
   const [warningsExpanded, setWarningsExpanded] = React.useState(false)
   /** 批次源文件预览统一进 Proma Preview Tab（不再弹第二套 LA modal）。 */
@@ -154,7 +266,10 @@ export function ProjectAssetsSection({
     }
   }
 
-  const completeImport = async (data: CompletedImport): Promise<void> => {
+  const completeImport = async (
+    data: CompletedImport,
+    mappingAction?: 'remembered' | 'reused',
+  ): Promise<void> => {
     setLastImport({
       assetId: data.assetId,
       filename: data.filename,
@@ -173,23 +288,28 @@ export function ProjectAssetsSection({
         `${data.segmentCount} 段 · ${describeLinguistFormat(data.formatId)}` +
         (isGenericXliffFallback(data.filename, data.formatId) ? ` · ${GENERIC_XLIFF_FALLBACK_NOTICE}` : '') +
         (data.status === 'skipped-duplicate' ? ' · 项目中已有同源批次' : '') +
+        (mappingAction === 'remembered' && data.mappingUsed !== undefined
+          ? ` · 已记住映射「${describeWorkbookMappingUsed(data.mappingUsed)}」`
+          : mappingAction === 'reused' && data.mappingUsed !== undefined
+            ? ` · 已复用映射「${describeWorkbookMappingUsed(data.mappingUsed)}」`
+            : '') +
         (data.warnings.length > 0 ? ` · ${data.warnings.length} 条警告` : ''),
     })
   }
 
-  const handleImport = async (): Promise<void> => {
+  const handleImport = async (selection: ImportSelection): Promise<void> => {
     if (importBusy || exportBusy || undoBusy || archived) return
-    setImportState({ status: 'busy' })
+    setImportState({ status: 'busy', selection })
     let result: Awaited<ReturnType<typeof window.electronAPI.linguistProjectsImport>>
     try {
-      result = await window.electronAPI.linguistProjectsImport({ projectId })
+      result = await window.electronAPI.linguistProjectsImport({ projectId, selection })
     } catch {
-      if (aliveRef.current) setImportState({ status: 'error', message: '与主进程通信异常（INTERNAL）' })
+      if (aliveRef.current) setImportState({ status: 'error', selection, message: '与主进程通信异常（INTERNAL）' })
       return
     }
     if (!aliveRef.current) return
     if (!result.ok) {
-      setImportState({ status: 'error', message: describeLinguistIpcError(result.error) })
+      setImportState({ status: 'error', selection, message: describeLinguistIpcError(result.error) })
       return
     }
     if (result.data.cancelled) {
@@ -198,24 +318,31 @@ export function ProjectAssetsSection({
       toast('已取消导入')
       return
     }
+    if (result.data.bulk) {
+      setLastBulkImport(result.data)
+      setImportState({ status: 'idle' })
+      await onSummaryRefresh()
+      if (!aliveRef.current) return
+      if (hasImportedProjectResources(result.data)) onResourcesChanged?.()
+      const issueCount = result.data.needsInput + result.data.unsupported + result.data.failed
+      const description = [
+        `导入 ${result.data.imported}`,
+        `重复 ${result.data.skippedDuplicate}`,
+        issueCount > 0 ? `待处理 ${issueCount}` : null,
+        result.data.truncated ? '已达到 500 项上限' : null,
+      ].filter((item): item is string => item !== null).join(' · ')
+      if (issueCount > 0 || result.data.truncated) toast.warning('批量导入已完成，部分项目需要处理', { description })
+      else toast.success('批量导入已完成', { description })
+      return
+    }
     if (result.data.requiresXlsxMapping) {
-      const sheetName = result.data.preview.sheets.find((sheet) => sheet.state === 'visible')?.name
-        ?? result.data.preview.sheets[0]?.name
-        ?? ''
-      setXlsxMapping({
-        filename: result.data.filename,
-        mappingId: result.data.mappingId,
-        sourceSha256: result.data.sourceSha256,
-        preview: result.data.preview,
-        sheetName,
-        columns: { source: '', target: '' },
-      })
+      setXlsxMapping(createPendingXlsxMapping(result.data))
       setImportState({ status: 'idle' })
       toast('请选择工作表及源文、译文列后确认导入')
       return
     }
     const data = result.data
-    await completeImport(data)
+    await completeImport(data, data.mappingUsed === undefined ? undefined : 'reused')
   }
 
   const handleConfirmXlsxMapping = async (): Promise<void> => {
@@ -226,7 +353,7 @@ export function ProjectAssetsSection({
       || importBusy
       || archived
     ) return
-    setImportState({ status: 'busy' })
+    setImportState({ status: 'busy', selection: 'files' })
     let result: Awaited<ReturnType<typeof window.electronAPI.linguistProjectsConfirmXlsxMapping>>
     try {
       result = await window.electronAPI.linguistProjectsConfirmXlsxMapping({
@@ -235,18 +362,24 @@ export function ProjectAssetsSection({
         sourceSha256: xlsxMapping.sourceSha256,
         sheetName: xlsxMapping.sheetName,
         columns: xlsxMapping.columns,
+        rememberMapping: xlsxMapping.rememberMapping,
       })
     } catch {
-      if (aliveRef.current) setImportState({ status: 'error', message: '与主进程通信异常（INTERNAL）' })
+      if (aliveRef.current) setImportState({ status: 'error', selection: 'files', message: '与主进程通信异常（INTERNAL）' })
       return
     }
     if (!aliveRef.current) return
     if (!result.ok) {
-      setImportState({ status: 'error', message: describeLinguistIpcError(result.error) })
+      setImportState({ status: 'error', selection: 'files', message: describeLinguistIpcError(result.error) })
       return
     }
     setXlsxMapping(null)
-    await completeImport(result.data)
+    await completeImport(
+      result.data,
+      result.data.mappingUsed === undefined
+        ? undefined
+        : xlsxMapping.rememberMapping ? 'remembered' : 'reused',
+    )
   }
 
   const handleExport = async (asset: LinguistAssetInfo): Promise<void> => {
@@ -257,6 +390,7 @@ export function ProjectAssetsSection({
       result = await window.electronAPI.linguistExportsSaveAsset({
         projectId,
         assetId: asset.assetId,
+        validation: 'verified',
       })
     } catch {
       if (aliveRef.current) {
@@ -381,16 +515,12 @@ export function ProjectAssetsSection({
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : undefined} />
           </button>
-          <button
-            type="button"
-            onClick={() => void handleImport()}
+          <ProjectImportMenu
+            busy={importBusy}
             disabled={archived || importBusy || exportBusy || undoBusy || xlsxMapping !== null}
-            title={archived ? '已归档项目为只读，无法导入' : xlsxMapping !== null ? '请先确认或取消当前 XLSX 映射' : '导入 XLIFF / CSV / TSV / JSON 批次文件；整个文件夹可以让项目 Agent 直接导入'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-100 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-          >
-            {importBusy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-            <span>{importBusy ? '导入中…' : '导入批次'}</span>
-          </button>
+            title={archived ? '已归档项目为只读，无法导入' : xlsxMapping !== null ? '请先确认或取消当前 XLSX 映射' : '选择多个文件或文件夹；单个 XLSX 会先确认映射'}
+            onSelect={(selection) => void handleImport(selection)}
+          />
         </div>
       </div>
 
@@ -418,7 +548,7 @@ export function ProjectAssetsSection({
           </div>
           <button
             type="button"
-            onClick={() => void handleImport()}
+            onClick={() => void handleImport(importState.selection)}
             className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium text-foreground/70 hover:bg-foreground/[0.07] hover:text-foreground transition-colors duration-100"
           >
             <RefreshCw size={12} />
@@ -434,7 +564,16 @@ export function ProjectAssetsSection({
           onChangeSheet={(sheetName) => {
             setXlsxMapping((current) => current === null
               ? null
-              : { ...current, sheetName, columns: { source: '', target: '' } })
+              : {
+                  ...current,
+                  sheetName,
+                  columns: suggestedColumnsForSheet(
+                    current.preview.sheets.find((sheet) => sheet.name === sheetName),
+                  ),
+                })
+          }}
+          onChangeRemember={(rememberMapping) => {
+            setXlsxMapping((current) => current === null ? null : { ...current, rememberMapping })
           }}
           onChangeColumn={(role, value) => {
             setXlsxMapping((current) => {
@@ -453,6 +592,10 @@ export function ProjectAssetsSection({
         />
       )}
 
+      {lastBulkImport !== null && (
+        <BulkImportSummary result={lastBulkImport} onDismiss={() => setLastBulkImport(null)} />
+      )}
+
       {/* 批次列表（真源 = getSummary 当次结果） */}
       {summary === null ? (
         <div className="rounded-xl border border-border/50 bg-content-area px-4 py-3 text-[13px] text-foreground/45">
@@ -463,7 +606,7 @@ export function ProjectAssetsSection({
           <FileText size={18} className="text-foreground/30" />
           <p className="text-[13px] text-foreground/50">还没有批次</p>
           <p className="text-[12px] text-foreground/40">
-            点击「导入批次」选择 XLIFF / CSV / TSV / JSON 文件，同一项目可累积多个批次；也可以让项目 Agent 直接导入整个文件夹。
+            打开「导入资源」后可选择多个文件，或递归导入文件夹并自动分类项目资源。
           </p>
         </div>
       ) : (
@@ -495,14 +638,61 @@ export function ProjectAssetsSection({
   )
 }
 
+export function BulkImportSummary({
+  result,
+  onDismiss,
+}: {
+  result: BulkImport
+  onDismiss: () => void
+}): React.ReactElement {
+  const details = result.items.filter((item) =>
+    (item.status === 'imported' && item.message !== undefined)
+    || item.status === 'needs-input'
+    || item.status === 'unsupported'
+    || item.status === 'failed')
+  return (
+    <section aria-label="批量导入结果" className="rounded-xl border border-border/55 bg-content-area px-4 py-3 text-[12px] text-foreground/60">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-foreground/85">批量导入结果</p>
+          <p className="mt-0.5">
+            发现 {result.found} · 导入 {result.imported} · 重复 {result.skippedDuplicate}
+            {' · '}待确认 {result.needsInput} · 不支持 {result.unsupported} · 失败 {result.failed}
+          </p>
+          {result.truncated && <p className="mt-1 text-warning">已达到 500 项上限，请缩小文件夹范围后继续。</p>}
+        </div>
+        <button type="button" aria-label="关闭批量导入结果" onClick={onDismiss} className="rounded-md p-1 hover:bg-foreground/[0.07]">
+          <X size={13} />
+        </button>
+      </div>
+      {details.length > 0 && (
+        <ul className="mt-2 space-y-1 border-t border-border/45 pt-2">
+          {details.slice(0, 20).map((item, index) => (
+            <li key={`${item.filename}-${index}`} className="break-words">
+              <span className="font-medium text-foreground/75">{item.filename}</span>
+              {' · '}{item.status === 'imported' ? '已导入' : item.status === 'needs-input' ? '需要确认' : item.status === 'unsupported' ? '不支持' : '失败'}
+              {item.message === undefined ? '' : ` · ${item.message}`}
+              {item.status === 'needs-input' && item.filename.toLowerCase().endsWith('.xlsx')
+                ? '；请在“导入资源 → 选择文件…”中单独选择以确认 Sheet/列映射'
+                : ''}
+            </li>
+          ))}
+          {details.length > 20 && <li>另有 {details.length - 20} 项未展开。</li>}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 type XlsxMappingColumnRole = keyof PendingXlsxMapping['columns']
 
 /** XLSX 只在主进程扫描；这里仅显示证据并提交用户明确选择的名称。 */
-function XlsxMappingConfirmPanel({
+export function XlsxMappingConfirmPanel({
   mapping,
   disabled,
   onChangeSheet,
   onChangeColumn,
+  onChangeRemember,
   onConfirm,
   onCancel,
 }: {
@@ -510,6 +700,7 @@ function XlsxMappingConfirmPanel({
   disabled: boolean
   onChangeSheet: (sheetName: string) => void
   onChangeColumn: (role: XlsxMappingColumnRole, value: string) => void
+  onChangeRemember: (rememberMapping: boolean) => void
   onConfirm: () => void
   onCancel: () => void
 }): React.ReactElement {
@@ -588,6 +779,16 @@ function XlsxMappingConfirmPanel({
             {select('context', '备注列')}
             {select('locked', '锁定列')}
           </div>
+          <div className="rounded-lg border border-border/45 bg-background/50 px-3 py-2 text-[12px] text-foreground/55">
+            <p className="font-medium text-foreground/70">
+              建议置信度 {Math.round(sheet.suggestion.confidence * 100)}%
+            </p>
+            {sheet.suggestion.reasons.length > 0 && (
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {sheet.suggestion.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+              </ul>
+            )}
+          </div>
           <details className="rounded-lg border border-border/45 bg-background/50 px-3 py-2 text-[12px] text-foreground/55">
             <summary className="cursor-pointer select-none">解析证据：表头行 {sheet.headerRowNumbers.join('、') || '未识别'} · 样本 {sheet.coverage.shownSampleRows}/{sheet.coverage.dataRows}</summary>
             <div className="mt-2 flex flex-col gap-1.5">
@@ -605,7 +806,19 @@ function XlsxMappingConfirmPanel({
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[12px] text-foreground/45">主进程会再次校验文件哈希、工作表和列名。</span>
+        <div className="flex flex-col gap-1 text-[12px] text-foreground/45">
+          <span>主进程会再次校验文件哈希、工作表和列名。</span>
+          <label className="inline-flex items-center gap-2 text-foreground/60">
+            <input
+              type="checkbox"
+              checked={mapping.rememberMapping}
+              disabled={disabled || sheet === undefined || requiredMissing}
+              onChange={(event) => onChangeRemember(event.target.checked)}
+              className="size-3.5 rounded border-border"
+            />
+            记住此映射
+          </label>
+        </div>
         <button
           type="button"
           onClick={onConfirm}
@@ -650,6 +863,7 @@ function AssetRow({
 }): React.ReactElement {
   const warningCount = lastImport?.warnings.length ?? 0
   const exporting = exportState.status === 'busy'
+  const formatCapability = describeFormatCapability(asset.formatId)
   return (
     <li className="rounded-xl border border-border/50 bg-content-area px-4 py-3 flex flex-col gap-1.5">
       <div className="flex items-center gap-2 min-w-0">
@@ -735,6 +949,9 @@ function AssetRow({
           </>
         )}
       </div>
+      {formatCapability !== undefined && (
+        <p className="text-[11px] text-foreground/50">{formatCapability}</p>
+      )}
       {/* LA-INTAKE-007 导入验证报告（仅刚导入行；逐项 ✓/✗，detail 悬停可见） */}
       {lastImport !== null && (
         <div

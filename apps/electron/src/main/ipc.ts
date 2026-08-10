@@ -5456,6 +5456,8 @@ export function registerIpcHandlers(): void {
     linguistCatWorkspaceIpc.confirmStageBulk(input))
   ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.GET_CONTEXT, async (_, input: unknown) =>
     linguistCatWorkspaceIpc.getContext(input))
+  ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.ADD_APPROVED_EXEMPLAR, async (_, input: unknown) =>
+    linguistCatWorkspaceIpc.addApprovedExemplar(input))
   ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.RUN_QA, async (_, input: unknown) =>
     linguistCatWorkspaceIpc.runQa(input))
   ipcMain.handle(LINGUIST_CAT_IPC_CHANNELS.LIST_QA_FINDINGS, async (_, input: unknown) =>

@@ -5,6 +5,7 @@ import {
   LINGUIST_QA_FINDING_ID_PATTERN,
   LINGUIST_SEGMENT_ID_PATTERN,
   type LinguistCatEditSegmentResult,
+  type LinguistCatAddApprovedExemplarResult,
   type LinguistCatConfirmStageBulkResult,
   type LinguistCatStageMutationResult,
   type LinguistCatContextResult,
@@ -25,6 +26,7 @@ import {
 } from '@proma/shared'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
 import type { LinguistProjectService } from './project-service'
+import { createLinguistProjectMutationEvent } from './session-cat-tools'
 
 const SEGMENT_STATUSES: ReadonlySet<string> = new Set([
   'untranslated',
@@ -44,6 +46,9 @@ const QA_WAIVER_REASON_MAX_LENGTH = 500
 const QA_WAIVER_OPERATOR_MAX_LENGTH = 120
 const QA_CODE_MAX_LENGTH = 120
 const PROJECT_EVENT_PAGE_MAX = 200
+const VOICE_SPEAKER_MAX_LENGTH = 200
+const VOICE_TEXT_TYPE_MAX_LENGTH = 120
+const VOICE_NOTE_MAX_LENGTH = 2_000
 
 export interface LinguistCatWorkspaceIpcDeps {
   getService: () => LinguistProjectService
@@ -109,6 +114,19 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
     }
   }
 
+  const notifyExemplarAdded = (projectId: string, segmentId: string): void => {
+    if (deps.onProjectMutation === undefined) return
+    try {
+      deps.onProjectMutation(createLinguistProjectMutationEvent(projectId, {
+        kind: 'project-updated',
+        segmentIds: [segmentId],
+      }))
+    } catch (error) {
+      // 译例已经提交；通知失败不能把成功写入伪装成失败。
+      console.error('[Linguist CAT] 广播 approved exemplar mutation 失败:', error)
+    }
+  }
+
   const readSegmentId = (record: Record<string, unknown>): string => {
     const segmentId = record.segmentId
     if (typeof segmentId !== 'string' || !LINGUIST_SEGMENT_ID_PATTERN.test(segmentId)) {
@@ -131,6 +149,31 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
       invalid('expectedRevision must be a non-negative integer')
     }
     return expectedRevision as number
+  }
+
+  const readRequiredVoiceText = (
+    record: Record<string, unknown>,
+    field: 'speaker' | 'textType',
+    maxLength: number,
+  ): string => {
+    const value = record[field]
+    if (
+      typeof value !== 'string'
+      || value.trim() === ''
+      || value.length > maxLength
+    ) {
+      invalid(`${field} must be a non-blank string of at most ${maxLength} characters`)
+    }
+    return value.trim()
+  }
+
+  const readOptionalVoiceNote = (record: Record<string, unknown>): string | undefined => {
+    const value = record.note
+    if (value === undefined) return undefined
+    if (typeof value !== 'string' || value.length > VOICE_NOTE_MAX_LENGTH) {
+      invalid(`note must be a string of at most ${VOICE_NOTE_MAX_LENGTH} characters`)
+    }
+    return value.trim() || undefined
   }
 
   const readWaiverEvidence = (record: Record<string, unknown>): {
@@ -386,6 +429,24 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
           readProjectId(record),
           readSegmentId(record),
         )
+      })
+    },
+
+    addApprovedExemplar(
+      input: unknown,
+    ): Promise<LinguistIpcResult<LinguistCatAddApprovedExemplarResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const segmentId = readSegmentId(record)
+        const exemplar = deps.getService().addApprovedExemplar(projectId, {
+          segmentId,
+          speaker: readRequiredVoiceText(record, 'speaker', VOICE_SPEAKER_MAX_LENGTH),
+          textType: readRequiredVoiceText(record, 'textType', VOICE_TEXT_TYPE_MAX_LENGTH),
+          note: readOptionalVoiceNote(record),
+        })
+        notifyExemplarAdded(projectId, segmentId)
+        return exemplar
       })
     },
 

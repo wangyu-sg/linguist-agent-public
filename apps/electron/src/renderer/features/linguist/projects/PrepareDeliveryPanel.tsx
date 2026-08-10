@@ -5,6 +5,17 @@ import type {
   LinguistAssetInfo,
   LinguistPrepareDeliveryResult,
 } from '@proma/shared'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { describeLinguistIpcError } from './project-utils'
 import { stageProgressSummary } from './workflow-ui'
@@ -64,13 +75,14 @@ export function PrepareDeliveryPanel({
     }
   }, [archived, assetId, onChanged, projectId])
 
-  const save = React.useCallback(async (): Promise<void> => {
+  const save = React.useCallback(async (validation: 'verified' | 'as-is'): Promise<void> => {
     if (assetId === '' || archived || saving) return
     setSaving(true)
     try {
       const result = await window.electronAPI.linguistExportsSaveAsset({
         projectId,
         assetId,
+        validation,
       })
       if (!result.ok) {
         toast.error('保存交付副本失败', {
@@ -82,7 +94,9 @@ export function PrepareDeliveryPanel({
       if (result.data.cancelled) return
       setState({ status: 'ready', result: result.data.preparation })
       toast.success(`已保存「${result.data.filename}」`, {
-        description: `${result.data.verifiedSegments} 段已重新导入验证；原文件未覆盖`,
+        description: validation === 'verified'
+          ? `${result.data.verifiedSegments} 段已重新导入验证；原文件未覆盖`
+          : `${result.data.verifiedSegments} 段已完成格式回读；未声明交付预检通过；原文件未覆盖`,
       })
       onChanged?.()
     } catch {
@@ -106,7 +120,7 @@ export function PrepareDeliveryPanel({
       || !preparation.preflight.ready
       || preparation.verification === undefined
     ) return
-    await save()
+    await save('verified')
   }, [prepare, save, saving, state.status])
 
   const copyReport = React.useCallback(async (): Promise<void> => {
@@ -162,6 +176,7 @@ export function PrepareDeliveryPanel({
 
       <p className="text-[11px] leading-5 text-foreground/50">
         输出使用新文件名并以排他复制保存；已存在的文件和受管数据目录都不会被覆盖。
+        预检未通过时仍可明确选择按当前状态导出；该路径不会被标记为预检通过。
       </p>
       {archived && (
         <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
@@ -185,7 +200,7 @@ export function PrepareDeliveryPanel({
         <DeliveryResult
           result={state.result}
           saving={saving}
-          onSave={() => void save()}
+          onSave={(validation) => void save(validation)}
           onCopyReport={() => void copyReport()}
         />
       )}
@@ -201,7 +216,7 @@ function DeliveryResult({
 }: {
   result: LinguistPrepareDeliveryResult
   saving: boolean
-  onSave: () => void
+  onSave: (validation: 'verified' | 'as-is') => void
   onCopyReport: () => void
 }): React.ReactElement {
   const { preflight, verification } = result
@@ -263,7 +278,7 @@ function DeliveryResult({
         <button
           type="button"
           disabled={!preflight.ready || verification === undefined || saving}
-          onClick={onSave}
+          onClick={() => onSave('verified')}
           className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-45"
         >
           {saving
@@ -271,6 +286,38 @@ function DeliveryResult({
             : <Download aria-hidden="true" className="size-3.5" />}
           导出交付副本
         </button>
+        {!preflight.ready && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                type="button"
+                disabled={saving}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-warning/10 px-3 text-xs font-medium text-warning disabled:opacity-45"
+              >
+                按当前状态导出…
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>按当前状态导出？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  这会绕过阶段完成度、开放 QA 与硬规则阻断；格式回写、重新导入、摘要校验、受管目录保护和禁止覆盖仍会执行。
+                  生成结果不会标记为“交付预检通过”。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={saving}>取消</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={saving}
+                  onClick={() => onSave('as-is')}
+                  className="bg-warning text-warning-foreground hover:bg-warning/90"
+                >
+                  仍按当前状态导出
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
         <button
           type="button"
           onClick={onCopyReport}

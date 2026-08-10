@@ -6,7 +6,8 @@ import {
 } from './contracts'
 import {
   linguistExtension,
-  LINGUIST_AGENT_HOST_CAPABILITIES,
+  LINGUIST_AGENT_FULL_HOST_CAPABILITIES,
+  LINGUIST_AGENT_RAIL_HOST_CAPABILITIES,
 } from './linguist-extension'
 import {
   createExtensionRegistry,
@@ -74,13 +75,20 @@ test('静态扩展 registry 拒绝重复贡献 ID', () => {
 })
 
 test('Host Parity canary: Linguist rail/full 登记所有 Proma 宿主能力键', () => {
-  expect(Object.keys(LINGUIST_AGENT_HOST_CAPABILITIES).sort()).toEqual(
-    Object.keys(DEFAULT_AGENT_HOST_CAPABILITIES).sort(),
-  )
+  for (const capabilities of [
+    LINGUIST_AGENT_RAIL_HOST_CAPABILITIES,
+    LINGUIST_AGENT_FULL_HOST_CAPABILITIES,
+  ]) {
+    expect(Object.keys(capabilities).sort()).toEqual(
+      Object.keys(DEFAULT_AGENT_HOST_CAPABILITIES).sort(),
+    )
+  }
   expect(linguistExtension.hostCapabilityManifests?.map((manifest) => manifest.capabilities)).toEqual([
-    LINGUIST_AGENT_HOST_CAPABILITIES,
-    LINGUIST_AGENT_HOST_CAPABILITIES,
+    LINGUIST_AGENT_RAIL_HOST_CAPABILITIES,
+    LINGUIST_AGENT_FULL_HOST_CAPABILITIES,
   ])
+  expect(LINGUIST_AGENT_RAIL_HOST_CAPABILITIES.filePanel).toBe(false)
+  expect(LINGUIST_AGENT_FULL_HOST_CAPABILITIES.filePanel).toBe(true)
 })
 
 test('Linguist 侧栏通过共享会话行槽组合，不复制 Agent 行组件', () => {

@@ -10,7 +10,7 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
 ## 当前状态
 
-当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.10；Electron App `0.16.34`、Electron `43.2.0`、`@proma/shared 0.1.92`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.19 / 0.0.10 / 0.0.34 / 0.0.32`、CAT schema `15`，仓库使用 Bun `1.3.14`。
+当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。基线固定为 Proma v0.16.10；Electron App `0.16.35`、Electron `43.2.0`、`@proma/shared 0.1.93`、Pi `0.82.1`、Claude Agent SDK `0.3.201`、CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.35 / 0.0.33`、CAT schema `15`，仓库使用 Bun `1.3.14`。
 
 应用有三个并列模式：
 
@@ -55,12 +55,14 @@ Proma Agent Runtime
 - `@linguist/cat-store` 管理每项目 `cat.db`、受管 source / blobs / exports / backups。
 - `@linguist/cat-tools` 的项目身份只来自 Session binding；模型不能提交 `projectId`。
 - UI 与 Agent 调用同一 `LinguistProjectService`；格式解析、事务、CAS、locked Segment、Tag/Placeholder/ICU、QA 和 round-trip 规则不重复实现。
-- Prompt Builder 保留单一版本与最终 Hash；诊断会显示岗位 fallback、Project Digest 完整/部分/跳过以及长度裁减。
-- `cat_import_resources` 可处理文件或小批目录，绝对路径直接使用，相对路径按 Session cwd 解析；权限体验只服从 Proma Session。
-- `cat_export_asset` 支持 `verified` / `as-is`。`verified` 检查结构、格式与重新导入；默认不覆盖，用户明确要求时才原子覆盖普通文件。
+- Prompt Builder 保留单一合同；Project Digest 以 `complete / partial / skipped` 和 `truncated` 暴露降级，失败时也向模型注入可见占位。Markdown 路径用 project-data 围栏把资料标记为数据而非指令。
+- Agent 的 `cat_import_resources` 可处理文件或小批目录，绝对路径直接使用，相对路径按 Session cwd 解析；原生 UI 的单一“导入资源”入口支持多文件或文件夹。Renderer 不接受任意粘贴路径，路径选择和读取 authority 留在主进程。
+- Agent 与原生 UI 都支持 `verified` / `as-is` 导出；`as-is` 需要明确确认。两种模式都检查格式生成与重新导入，默认不覆盖，用户明确要求时才原子覆盖普通文件。
 - Tag Profile 的扫描、Candidate、编辑器提示、Proposal、QA 与 `verified` export 使用同一 Scanner；普通可翻译 `[Damage]` 不会被内置规则硬锁。
 - Phrase split/master MXLIFF 按内容身份、Source hash、unit/context 与 placeholder 证据配对；`verified` 导出在 mapping 不完整或 stale 时阻断。
 - memoQ MQXLIFF 使用专用 Adapter，保留 inline code、确认状态与审校批注；实机客户样本仍需逐样本验证。
+
+Full `AgentView` 保留 Proma 的 Files / Changes 面板；Workbench 内的 rail 维持对话专用。Linguist 的展开与收起侧栏复用 Proma 同一套“新会话 + 搜索”宿主结构，普通新会话只在当前 CAT 项目创建 General 会话；CAT 项目分组与 Agent workspace 继续隔离。Planning 与 Agent Skills 绑定普通 Agent workspace，因而不显示在 Linguist 侧栏，这不是功能遗漏。Reviewer 与 Proofreader 的默认动作面向当前完整资产。术语冲突支持并排比较和一键保留；XLSX mapping 会建议列、显示置信度、保存并安全复用，歧义候选 fail closed，`locked` 列贯穿导入。已确认当前阶段的 Segment 可设为 approved exemplar，角色上下文会展示并复用这些译例。
 
 项目缺失、归档或暂不可用时，Agent 对话仍可继续；CAT 工具如实返回项目状态，写入由 Store fail closed。用户仍可用 Proma 文件、Shell、OCR、Excel、MCP 等能力诊断或恢复项目。
 
@@ -118,7 +120,7 @@ bun run smoke:vertical
 
 ## 尚缺的真实证据
 
-实现和自动回归不等于真实语言质量或产品资格。仍需完成同模型 Proma/Codex 对照、真实 Provider 四岗位全链、Native Open/IME/VoiceOver/键盘人工检查和从可用构建开始累计的 14 天日用。当前准确状态见 [SIMPLE_IMPLEMENTATION_STATUS.md](./docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md)、[HANDOFF.md](./docs/HANDOFF.md) 和 [TODO.md](./TODO.md)。
+实现和自动回归不等于真实语言质量或产品资格。仍需完成同模型 Proma/Codex 对照、真实 Provider 四岗位全链、真实 Phrase/memoQ 互操作、Native Open/Save、IME、VoiceOver、键盘人工检查和从可用构建开始累计的 14 天日用。当前准确状态见 [SIMPLE_IMPLEMENTATION_STATUS.md](./docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md)、[HANDOFF.md](./docs/HANDOFF.md) 和 [TODO.md](./TODO.md)。
 
 ## 许可
 

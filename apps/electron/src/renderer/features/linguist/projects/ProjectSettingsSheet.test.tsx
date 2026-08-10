@@ -136,8 +136,8 @@ describe('ProjectSettingsSheet', () => {
 
     expect(html).toContain('批次（文件）')
     expect(html).toContain('aria-label="刷新语言资产"')
-    expect(html).toContain('导入批次')
-    expect(html).toContain('整个文件夹可以让项目 Agent 直接导入')
+    expect(html).toContain('导入文件')
+    expect(html).toContain('导入文件夹')
     expect(html).toContain('TM / 术语库 / 句式管理')
     expect(html).toContain('Style Guide')
     expect(html).toContain('Voice Profiles')

@@ -80,7 +80,10 @@ test('PB-073: stages, opens native Save picker, copies to user destination, and 
     const destination = join(makeTempDir(), 'translated-dialogue.csv')
     const { picker, calls, lastOptions } = makePicker(destination)
 
-    const result = await makeIpc(service).saveAsset({ projectId: project.id, assetId: imported.assetId }, picker)
+    const result = await makeIpc(service).saveAsset(
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
+      picker,
+    )
 
     assert.equal(result.ok, true)
     if (!result.ok || result.data.cancelled) return
@@ -90,6 +93,7 @@ test('PB-073: stages, opens native Save picker, copies to user destination, and 
       defaultPath: 'mini_dialogue.translated.zh-CN.csv',
     })
     assert.equal(result.data.filename, 'translated-dialogue.csv')
+    assert.equal(result.data.validation, 'verified')
     assert.equal(result.data.verifiedSegments, imported.segmentCount)
     assert.equal(result.data.artifact.assetId, imported.assetId)
     assert.match(result.data.artifact.id, /^exp_v2_[0-9a-f]{64}$/)
@@ -179,7 +183,7 @@ test('AC-006: existing destinations fail closed without modifying the original b
     writeFileSync(destination, 'ORIGINAL')
 
     const result = await makeIpc(service).saveAsset(
-      { projectId: project.id, assetId: imported.assetId },
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
       makePicker(destination).picker,
     )
 
@@ -202,7 +206,7 @@ test('AC-006: direct and symlinked destinations under managed data fail closed',
     makeDeliveryReady(service, project.id, imported.assetId)
     const ipc = makeIpc(service)
     const direct = await ipc.saveAsset(
-      { projectId: project.id, assetId: imported.assetId },
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
       makePicker(join(service.rootDir, 'blocked.csv')).picker,
     )
     assert.equal(direct.ok, false)
@@ -214,7 +218,7 @@ test('AC-006: direct and symlinked destinations under managed data fail closed',
     const alias = join(makeTempDir(), 'managed-alias')
     symlinkSync(service.rootDir, alias, process.platform === 'win32' ? 'junction' : 'dir')
     const aliased = await ipc.saveAsset(
-      { projectId: project.id, assetId: imported.assetId },
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
       makePicker(join(alias, 'blocked.csv')).picker,
     )
     assert.equal(aliased.ok, false)
@@ -239,7 +243,7 @@ test('LA-EXPORT-001: any symlinked destination ancestor fails closed without fol
     const destination = join(alias, 'translated.csv')
 
     const result = await makeIpc(service).saveAsset(
-      { projectId: project.id, assetId: imported.assetId },
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
       makePicker(destination).picker,
     )
 
@@ -272,7 +276,7 @@ test('LA-EXPORT-001: staging replaced by a symlink during Save picker fails clos
     }
 
     const result = await makeIpc(service).saveAsset(
-      { projectId: project.id, assetId: imported.assetId },
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
       picker,
     )
 
@@ -294,7 +298,10 @@ test('PB-073: cancellation is normal and never creates a user destination', asyn
     makeDeliveryReady(service, project.id, imported.assetId)
     const { picker, calls } = makePicker(undefined)
 
-    const result = await makeIpc(service).saveAsset({ projectId: project.id, assetId: imported.assetId }, picker)
+    const result = await makeIpc(service).saveAsset(
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
+      picker,
+    )
 
     assert.equal(result.ok, true)
     if (result.ok) assert.deepEqual(result.data, { cancelled: true })
@@ -311,19 +318,45 @@ test('PB-073: invalid id, blocking QA and archived projects fail before native S
     const { picker, calls } = makePicker(join(makeTempDir(), 'should-not-exist.csv'))
     const ipc = makeIpc(service)
 
-    const invalid = await ipc.saveAsset({ projectId: project.id, assetId: 'bad' }, picker)
+    const invalid = await ipc.saveAsset({ projectId: project.id, assetId: 'bad', validation: 'verified' }, picker)
     assert.equal(invalid.ok, false)
     if (!invalid.ok) assert.equal(invalid.error.code, 'INVALID_INPUT')
 
     service.runQa(project.id)
-    const blocked = await ipc.saveAsset({ projectId: project.id, assetId: imported.assetId }, picker)
+    const blocked = await ipc.saveAsset(
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
+      picker,
+    )
     assert.equal(blocked.ok, false)
     if (!blocked.ok) assert.equal(blocked.error.code, 'EXPORT_BLOCKED_BY_QA')
 
     service.archiveProject(project.id)
-    const archived = await ipc.saveAsset({ projectId: project.id, assetId: imported.assetId }, picker)
+    const archived = await ipc.saveAsset(
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
+      picker,
+    )
     assert.equal(archived.ok, false)
     if (!archived.ok) assert.equal(archived.error.code, 'PROJECT_ARCHIVED')
+    assert.equal(calls(), 0)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('PB-074: omitted validation defaults to verified and EMPTY_TARGET blocks before native Save', async () => {
+  const service = makeService()
+  try {
+    const { project, imported } = await makeImportedAsset(service)
+    service.runQa(project.id)
+    const { picker, calls } = makePicker(join(makeTempDir(), 'must-not-open.csv'))
+
+    const result = await makeIpc(service).saveAsset(
+      { projectId: project.id, assetId: imported.assetId },
+      picker,
+    )
+
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.equal(result.error.code, 'EXPORT_BLOCKED_BY_QA')
     assert.equal(calls(), 0)
   } finally {
     service.closeAll()
@@ -433,11 +466,104 @@ test('Prepare Delivery IPC: 返回无路径的预检报告，未就绪时不打�
 
     const { picker, calls } = makePicker(join(makeTempDir(), 'must-not-exist.csv'))
     const save = await ipc.saveAsset(
-      { projectId: project.id, assetId: imported.assetId },
+      { projectId: project.id, assetId: imported.assetId, validation: 'verified' },
       picker,
     )
     assert.equal(save.ok, false)
     if (!save.ok) assert.equal(save.error.code, 'DELIVERY_NOT_READY')
+    assert.equal(calls(), 0)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('Prepare Delivery IPC: 结构规则失败进入预检并保留显式 as-is 出口', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const imported = await service.importAsset(project.id, {
+      bytes: readFixture('minimal_delivery.sdlxliff'),
+      filename: 'minimal_delivery.sdlxliff',
+    })
+    const db = service.openProject(project.id)
+    for (const [index, segment] of db.segments.query({ assetId: imported.assetId, limit: 10 }).entries()) {
+      const current = index === 0
+        ? db.segments.applyTargetEdit(segment.id, 'Click to start', segment.revision).segment
+        : segment
+      db.segments.confirmCurrentStage(current.id, 'translation', current.revision)
+    }
+
+    const ipc = makeIpc(service)
+    const prepared = await ipc.prepareAsset({ projectId: project.id, assetId: imported.assetId })
+    assert.equal(prepared.ok, true)
+    if (!prepared.ok) return
+    assert.equal(prepared.data.preflight.ready, false)
+    assert.deepEqual(prepared.data.preflight.blockers.map((blocker) => blocker.code), [
+      'STRUCTURAL_RULES',
+    ])
+    assert.match(prepared.data.preflight.blockers[0]!.message, /PLACEHOLDER_SIGNATURE_MISMATCH/)
+
+    const destination = join(makeTempDir(), 'structural-rules.as-is.sdlxliff')
+    const { picker, calls } = makePicker(destination)
+    const result = await ipc.saveAsset(
+      { projectId: project.id, assetId: imported.assetId, validation: 'as-is' },
+      picker,
+    )
+    assert.equal(result.ok, true)
+    assert.equal(calls(), 1)
+    assert.equal(existsSync(destination), true)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('Native Save: explicit as-is exports a blocked batch while preserving path and manifest guards', async () => {
+  const service = makeService()
+  try {
+    const { project, imported } = await makeImportedAsset(service)
+    const destination = join(makeTempDir(), 'dialogue.as-is.csv')
+    const { picker, calls } = makePicker(destination)
+
+    const result = await makeIpc(service).saveAsset(
+      { projectId: project.id, assetId: imported.assetId, validation: 'as-is' },
+      picker,
+    )
+
+    assert.equal(result.ok, true)
+    if (!result.ok || result.data.cancelled) return
+    assert.equal(calls(), 1)
+    assert.equal(result.data.validation, 'as-is')
+    assert.equal(result.data.preparation.validation, 'as-is')
+    assert.equal(result.data.preparation.preflight.ready, false)
+    assert.equal(existsSync(destination), true)
+    assert.equal(JSON.stringify(result.data).includes(service.rootDir), false)
+    assert.equal(JSON.stringify(result.data).includes('stagingPath'), false)
+    assert.equal(JSON.stringify(result.data).includes('"mode"'), false)
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('Native Save: invalid validation and obsolete mode fail before the picker', async () => {
+  const service = makeService()
+  try {
+    const { project, imported } = await makeImportedAsset(service)
+    const { picker, calls } = makePicker(join(makeTempDir(), 'must-not-exist.csv'))
+    const ipc = makeIpc(service)
+
+    const invalid = await ipc.saveAsset(
+      { projectId: project.id, assetId: imported.assetId, validation: 'draft' },
+      picker,
+    )
+    assert.equal(invalid.ok, false)
+    if (!invalid.ok) assert.equal(invalid.error.code, 'INVALID_INPUT')
+
+    const obsolete = await ipc.saveAsset(
+      { projectId: project.id, assetId: imported.assetId, mode: 'as-is' },
+      picker,
+    )
+    assert.equal(obsolete.ok, false)
+    if (!obsolete.ok) assert.equal(obsolete.error.code, 'INVALID_INPUT')
     assert.equal(calls(), 0)
   } finally {
     service.closeAll()

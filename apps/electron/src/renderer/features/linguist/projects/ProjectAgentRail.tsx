@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
-import { ArrowLeft, Maximize2, MoreHorizontal, PanelRightClose } from 'lucide-react'
+import { ArrowLeft, Maximize2, MoreHorizontal, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import { createLinguistTurnContextV1 } from '@proma/shared'
 import type {
@@ -14,10 +14,13 @@ import type {
 } from '@proma/shared'
 import {
   agentPendingPromptAtom,
+  agentDiffPanelTabAtom,
+  agentSessionPathMapAtom,
   agentSidePanelOpenAtom,
   agentSidePanelWidthAtom,
   agentSessionsAtom,
   type AgentPendingPrompt,
+  type AgentSidePanelTab,
 } from '@/atoms/agent-atoms'
 import { agentSideChatMapAtom } from '@/atoms/chat-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
@@ -77,6 +80,64 @@ type JotaiStore = ReturnType<typeof createStore>
 type CreateProjectSession = (
   input: LinguistSessionCreateForProjectRequest,
 ) => Promise<LinguistIpcResult<AgentSessionMeta>>
+
+/** Full 复用原生 Files / Changes / Chat；会话路径、活动 Tab 与开关均沿用 Agent atoms。 */
+export function ProjectAgentFullSidePanel({
+  sessionId,
+  width,
+}: {
+  sessionId: string
+  width: number
+}): React.ReactElement | null {
+  const sidePanelOpen = useAtomValue(agentSidePanelOpenAtom)
+  const sessionPath = useAtomValue(agentSessionPathMapAtom).get(sessionId) ?? null
+  const activeTab = useAtomValue(agentDiffPanelTabAtom).get(sessionId) ?? 'files'
+  const setDiffPanelTabs = useSetAtom(agentDiffPanelTabAtom)
+  const setActiveTab = React.useCallback((tab: AgentSidePanelTab): void => {
+    setDiffPanelTabs((previous) => {
+      if (previous.get(sessionId) === tab) return previous
+      const next = new Map(previous)
+      next.set(sessionId, tab)
+      return next
+    })
+  }, [sessionId, setDiffPanelTabs])
+
+  if (!sidePanelOpen) return null
+  return (
+    <aside
+      data-testid="linguist-agent-side-panel"
+      aria-label="项目 Agent 文件、改动与问答"
+      className="min-h-0 shrink-0 overflow-hidden"
+      style={{ width: `min(${width}px, calc(100% - 20rem))` }}
+    >
+      <SidePanel
+        sessionId={sessionId}
+        sessionPath={sessionPath}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        width={width}
+      />
+    </aside>
+  )
+}
+
+/** Full header 的关闭态恢复入口；不复制 SidePanel 自己的关闭状态。 */
+export function ProjectAgentFullPanelOpenButton(): React.ReactElement | null {
+  const [sidePanelOpen, setSidePanelOpen] = useAtom(agentSidePanelOpenAtom)
+  if (sidePanelOpen) return null
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label="打开文件与改动面板"
+      title="打开文件与改动面板"
+      onClick={() => setSidePanelOpen(true)}
+    >
+      <PanelRightOpen aria-hidden="true" />
+    </Button>
+  )
+}
 
 export type ProjectAgentRailSessionState =
   | { status: 'ready'; sessionId: string }
@@ -185,8 +246,13 @@ export interface ProjectAgentQuickAction {
 
 const QUICK_ACTION_SEGMENT_LIMIT = 50
 
-/** 片段级动作：冻结点击时的选择快照；项目级动作：只带项目/批次，不带选择。 */
-const BATCH_SCOPED_ACTIONS: ReadonlySet<ProjectAgentQuickActionId> = new Set(['terms', 'export'])
+/** 片段级动作冻结点击时的选择；批次/项目级动作只带对应范围，不带选择。 */
+const BATCH_SCOPED_ACTIONS: ReadonlySet<ProjectAgentQuickActionId> = new Set([
+  'review',
+  'proofread',
+  'terms',
+  'export',
+])
 const PROJECT_SCOPED_ACTIONS: ReadonlySet<ProjectAgentQuickActionId> = new Set(['qa', 'import'])
 
 export function buildProjectAgentQuickActions(
@@ -207,6 +273,8 @@ export function buildProjectAgentQuickActions(
     ? `当前已选 ${selectedCount} 个片段`
     : '当前片段'
   const selectedSuffix = selectedCount > 0 ? '已选' : '当前'
+  const assetDisabled = uiState.activeAssetId === undefined
+  const assetScope = assetDisabled ? '请先打开一个批次。' : '将处理当前批次的全部片段。'
 
   return [
     {
@@ -222,19 +290,19 @@ export function buildProjectAgentQuickActions(
       id: 'review',
       role: 'reviewer',
       placement: 'primary',
-      label: `审校${selectedSuffix}`,
-      prompt: `请完整审校${target}的 Source 与当前 Target，保留正确译文，修正所有实质问题，直接写回项目，不要只保留为待查看建议。`,
-      scope: segmentScope,
-      disabled: segmentDisabled,
+      label: '审校当前批次',
+      prompt: '请完整审校当前批次的全部片段及其 Source 与当前 Target，保留正确译文，修正所有实质问题，直接写回项目，不要只保留为待查看建议。',
+      scope: assetScope,
+      disabled: assetDisabled,
     },
     {
       id: 'proofread',
       role: 'proofreader',
       placement: 'primary',
-      label: `校对${selectedSuffix}`,
-      prompt: `请以目标语成品为中心校对${target}，润色表达并统一风格，直接写回项目，不要只保留为待查看建议。`,
-      scope: segmentScope,
-      disabled: segmentDisabled,
+      label: '校对当前批次',
+      prompt: '请以目标语成品为中心校对当前批次的全部片段，润色表达并统一风格，直接写回项目，不要只保留为待查看建议。',
+      scope: assetScope,
+      disabled: assetDisabled,
     },
     {
       id: 'translate-suggest',
@@ -358,7 +426,6 @@ export function ProjectAgentRail({
     : sessions.find((item) => item.id === sessionId)
   const currentRole: LinguistRole = currentSession?.linguistRole ?? 'general'
   const sideChatConversationId = useAtomValue(agentSideChatMapAtom).get(sessionId ?? '') ?? null
-  const sidePanelOpen = useAtomValue(agentSidePanelOpenAtom)
   const setPendingPrompt = useSetAtom(agentPendingPromptAtom)
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectId))
   const requestedSurfacePresentation = uiState.agentPresentation === 'full'
@@ -534,6 +601,7 @@ export function ProjectAgentRail({
               </p>
             </div>
           )}
+          {presentation === 'full' && <ProjectAgentFullPanelOpenButton />}
           {presentation === 'rail' && (
             <div
               role="group"
@@ -648,22 +716,11 @@ export function ProjectAgentRail({
               hostCapabilities={hostCapabilities}
             />
           </div>
-          {presentation === 'full' && sideChatConversationId && sidePanelOpen && (
-            <aside
-              data-testid="linguist-companion-chat"
-              aria-label="项目 Agent 问答"
-              className="min-h-0 shrink-0 overflow-hidden"
-              style={{ width: `min(${sharedSidePanelWidth}px, calc(100% - 20rem))` }}
-            >
-              <SidePanel
-                sessionId={sessionId}
-                sessionPath={null}
-                activeTab="chat"
-                onTabChange={() => {}}
-                chatOnly
-                width={sharedSidePanelWidth}
-              />
-            </aside>
+          {presentation === 'full' && (
+            <ProjectAgentFullSidePanel
+              sessionId={sessionId}
+              width={sharedSidePanelWidth}
+            />
           )}
         </div>
       </div>

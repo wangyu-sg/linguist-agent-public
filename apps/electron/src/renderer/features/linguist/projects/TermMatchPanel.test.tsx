@@ -224,7 +224,7 @@ describe('LF-052 Term Match Panel', () => {
 
     expect(html).toContain('potion')
     expect(html).toContain('药水')
-    expect(html).toContain('首选')
+    expect(html).toContain('推荐')
     expect(html).toContain('允许')
     expect(html).toContain('区分大小写')
     expect(html).toContain('不区分大小写')

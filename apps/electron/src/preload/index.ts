@@ -203,6 +203,8 @@ import type {
   LinguistCatConfirmStageBulkResult,
   LinguistCatGetContextRequest,
   LinguistCatContextResult,
+  LinguistCatAddApprovedExemplarRequest,
+  LinguistCatAddApprovedExemplarResult,
   LinguistCatRunQaRequest,
   LinguistCatRunQaResult,
   LinguistCatListQaFindingsRequest,
@@ -1469,6 +1471,10 @@ export interface ElectronAPI {
   linguistCatGetContext: (
     input: LinguistCatGetContextRequest,
   ) => Promise<LinguistIpcResult<LinguistCatContextResult>>
+  /** 把已确认 Segment 的主进程当前正文登记为角色译例。 */
+  linguistCatAddApprovedExemplar: (
+    input: LinguistCatAddApprovedExemplarRequest,
+  ) => Promise<LinguistIpcResult<LinguistCatAddApprovedExemplarResult>>
   /** 运行确定性 QA（不改 Segment），供项目界面与 Agent 共用。 */
   linguistCatRunQa: (
     input: LinguistCatRunQaRequest,
@@ -3240,6 +3246,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.CONFIRM_STAGE_BULK, input),
   linguistCatGetContext: (input: LinguistCatGetContextRequest) =>
     ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.GET_CONTEXT, input),
+  linguistCatAddApprovedExemplar: (input: LinguistCatAddApprovedExemplarRequest) =>
+    ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.ADD_APPROVED_EXEMPLAR, input),
   linguistCatRunQa: (input: LinguistCatRunQaRequest) =>
     ipcRenderer.invoke(LINGUIST_CAT_IPC_CHANNELS.RUN_QA, input),
   linguistCatListQaFindings: (input: LinguistCatListQaFindingsRequest) =>

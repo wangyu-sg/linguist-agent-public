@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { LinguistUnknownTagPatternInfo } from '@proma/shared'
 import {
   shouldShowUnknownTagNotice,
+  unknownTagScanRevision,
   unknownTagFingerprint,
 } from './UnknownTagNotice'
 
@@ -17,6 +18,20 @@ function pattern(shape: string, frequency: number): LinguistUnknownTagPatternInf
 }
 
 describe('未知 Tag 自动提示', () => {
+  test('项目时间不变时，导入或撤销批次仍会改变扫描 revision，资产顺序不影响结果', () => {
+    const projectUpdatedAt = '2026-08-10T00:00:00.000Z'
+    const first = { assetId: 'asset-a', sourceSha256: 'a'.repeat(64) }
+    const second = { assetId: 'asset-b', sourceSha256: 'b'.repeat(64) }
+
+    const empty = unknownTagScanRevision(projectUpdatedAt, [])
+    const imported = unknownTagScanRevision(projectUpdatedAt, [first])
+    const twoAssets = unknownTagScanRevision(projectUpdatedAt, [first, second])
+
+    expect(imported).not.toBe(empty)
+    expect(twoAssets).not.toBe(imported)
+    expect(unknownTagScanRevision(projectUpdatedAt, [second, first])).toBe(twoAssets)
+  })
+
   test('指纹与形状顺序无关，形状或频次变化即改变', () => {
     const a = unknownTagFingerprint([pattern('<g id={n}>', 3), pattern('<%pb>', 1)])
     const b = unknownTagFingerprint([pattern('<%pb>', 1), pattern('<g id={n}>', 3)])

@@ -101,3 +101,52 @@ test('Workbook Mapping: preview suggests columns, saves a profile, and reuses fi
   )
   service.closeAll()
 })
+
+test('Workbook Mapping: ambiguous filename/header profiles only reuse identical mapping semantics', async () => {
+  const root = makeTempDir()
+  const service = new LinguistProjectService({
+    rootDir: join(root, 'linguist'),
+    entropy: makeEntropy('workbook-mapping-ambiguity'),
+    now: makeClock(),
+    workspaceAllocator: () => 'ws-workbook-ambiguity',
+  })
+  service.init()
+  const firstPath = join(root, 'game-001.xlsx')
+  const secondPath = join(root, 'game-002.xlsx')
+  writeFileSync(firstPath, await workbookBytes('开始'))
+  writeFileSync(secondPath, await workbookBytes('游玩'))
+  const normal = {
+    sheetName: 'Strings',
+    columns: { key: 'String ID', source: 'English', target: 'Chinese', context: 'Context' },
+  }
+
+  const conflicting = service.createProject({ name: 'Conflicting', sourceLocale: 'en', targetLocale: 'zh-CN' })
+  await service.saveWorkbookMapping(conflicting.id, root, firstPath, {
+    ...normal,
+    filenamePattern: 'game-*.xlsx',
+  })
+  await service.saveWorkbookMapping(conflicting.id, root, firstPath, {
+    sheetName: 'Strings',
+    filenamePattern: 'game-002.xlsx',
+    columns: { key: 'String ID', source: 'Chinese', target: 'English', context: 'Context' },
+  })
+  assert.equal((await service.previewWorkbookMapping(conflicting.id, root, firstPath)).matchedProfileId, undefined)
+  assert.equal((await service.previewWorkbookMapping(conflicting.id, root, secondPath)).matchedProfileId, undefined)
+
+  const equivalent = service.createProject({ name: 'Equivalent', sourceLocale: 'en', targetLocale: 'zh-CN' })
+  const first = await service.saveWorkbookMapping(equivalent.id, root, firstPath, {
+    ...normal,
+    filenamePattern: 'game-*.xlsx',
+  })
+  const second = await service.saveWorkbookMapping(equivalent.id, root, firstPath, {
+    ...normal,
+    filenamePattern: 'game-002.xlsx',
+  })
+  assert.equal(
+    (await service.previewWorkbookMapping(equivalent.id, root, firstPath)).matchedProfileId,
+    [first.id, second.id].sort()[0],
+  )
+  const reused = await service.previewWorkbookMapping(equivalent.id, root, secondPath)
+  assert.equal(reused.matchedProfileId, [first.id, second.id].sort()[0])
+  service.closeAll()
+})

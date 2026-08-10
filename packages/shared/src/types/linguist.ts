@@ -129,6 +129,7 @@ export const LINGUIST_CAT_IPC_CHANNELS = {
   UNCONFIRM_STAGE: 'linguist.cat.unconfirmStage',
   CONFIRM_STAGE_BULK: 'linguist.cat.confirmStageBulk',
   GET_CONTEXT: 'linguist.cat.getContext',
+  ADD_APPROVED_EXEMPLAR: 'linguist.cat.addApprovedExemplar',
   RUN_QA: 'linguist.cat.runQa',
   LIST_QA_FINDINGS: 'linguist.cat.listQaFindings',
   RESOLVE_QA_FINDING: 'linguist.cat.resolveQaFinding',
@@ -836,6 +837,8 @@ export interface LinguistProjectOpenResult {
 
 export interface LinguistProjectImportRequest {
   projectId: string
+  /** Renderer 只选择原生对话框类型；路径始终由主进程持有。 */
+  selection: 'files' | 'directory'
 }
 
 export interface LinguistXlsxMappingColumnPreview {
@@ -859,6 +862,21 @@ export interface LinguistXlsxMappingSampleRow {
   cells: LinguistXlsxMappingSampleCell[]
 }
 
+/** Main-process suggestion only; renderer may edit every field before confirming. */
+export interface LinguistXlsxMappingSuggestion {
+  columns: {
+    key?: string
+    source?: string
+    target?: string
+    locked?: string
+    context?: string
+    speaker?: string
+    status?: string
+  }
+  confidence: number
+  reasons: string[]
+}
+
 export interface LinguistXlsxMappingPreviewSheet {
   name: string
   state: 'visible' | 'hidden' | 'veryHidden'
@@ -866,6 +884,7 @@ export interface LinguistXlsxMappingPreviewSheet {
   headerRowNumbers: number[]
   columns: LinguistXlsxMappingColumnPreview[]
   sampleRows: LinguistXlsxMappingSampleRow[]
+  suggestion: LinguistXlsxMappingSuggestion
   coverage: {
     physicalRows: number
     dataRows: number
@@ -907,6 +926,21 @@ export interface LinguistProjectConfirmXlsxMappingRequest {
     locked?: string
     context?: string
   }
+  /** Persist this main-process-bound workbook mapping for later matching. */
+  rememberMapping?: boolean
+}
+
+export interface LinguistXlsxMappingUsedInfo {
+  /** Opaque project-local profile id; never a filesystem path. */
+  profileId: string
+  sheetName: string
+  columns: {
+    key?: string
+    source: string
+    target: string
+    locked?: string
+    context?: string
+  }
 }
 
 /**
@@ -921,6 +955,7 @@ export type LinguistProjectImportResult =
   | { cancelled: true }
   | {
       cancelled: false
+      bulk: false
       requiresXlsxMapping: true
       /** Selected basename only; renderer never receives the source path. */
       filename: string
@@ -930,6 +965,7 @@ export type LinguistProjectImportResult =
     }
   | {
       cancelled: false
+      bulk: false
       requiresXlsxMapping: false
       /** 被选中文件的 basename（展示用元数据；绝非路径）。 */
       filename: string
@@ -941,11 +977,33 @@ export type LinguistProjectImportResult =
       sourceSha256: string
       verification: LinguistImportVerificationReport
       unknownTagSummary: LinguistUnknownTagPatternInfo[]
+      /** Present when a saved profile was created or reused for this import. */
+      mappingUsed?: LinguistXlsxMappingUsedInfo
+    }
+  | {
+      cancelled: false
+      bulk: true
+      found: number
+      ready: number
+      imported: number
+      skippedDuplicate: number
+      needsInput: number
+      unsupported: number
+      failed: number
+      truncated: boolean
+      items: Array<{
+        filename: string
+        status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'ready'
+        resourceKind?: 'batch' | 'tm' | 'terms' | 'context'
+        resourceId?: string
+        message?: string
+        unknownTagSummary?: LinguistUnknownTagPatternInfo[]
+      }>
     }
 
-export type LinguistProjectConfirmXlsxMappingResult = Exclude<
+export type LinguistProjectConfirmXlsxMappingResult = Extract<
   LinguistProjectImportResult,
-  { cancelled: true } | { requiresXlsxMapping: true }
+  { cancelled: false; bulk: false; requiresXlsxMapping: false }
 >
 
 export interface LinguistProjectGetSummaryRequest {
@@ -1089,6 +1147,31 @@ export interface LinguistCatGetContextRequest {
   segmentId: string
 }
 
+export interface LinguistApprovedExemplarInfo {
+  id: string
+  source: string
+  target: string
+  sourceLocale: string
+  targetLocale: string
+  speaker: string
+  textType: string
+  module?: string
+  assetId: string
+  segmentId: string
+  note?: string
+  approvedAt: string
+}
+
+export interface LinguistCatAddApprovedExemplarRequest {
+  projectId: string
+  segmentId: string
+  speaker: string
+  textType: string
+  note?: string
+}
+
+export type LinguistCatAddApprovedExemplarResult = LinguistApprovedExemplarInfo
+
 /** PB-096：QA 契约五档严重度（L0 Blocker → L4 Suggestion）。 */
 export type LinguistQaFindingSeverity = 'L0' | 'L1' | 'L2' | 'L3' | 'L4'
 export type LinguistQaFindingStatus = 'open' | 'resolved' | 'waived'
@@ -1180,6 +1263,7 @@ export interface LinguistCatContextResult {
   qaFindings: LinguistQaFindingInfo[]
   tmMatches: LinguistTmMatchInfo[]
   termMatches: LinguistTermMatchInfo[]
+  approvedExemplars: LinguistApprovedExemplarInfo[]
   stageEvents?: LinguistWorkflowStageEventInfo[]
 }
 
@@ -1762,15 +1846,20 @@ export interface LinguistProjectRestoreResult {
 export interface LinguistExportSaveAssetRequest {
   projectId: string
   assetId: string
+  validation: 'verified' | 'as-is'
 }
 
-export type LinguistPrepareDeliveryRequest = LinguistExportSaveAssetRequest
+export interface LinguistPrepareDeliveryRequest {
+  projectId: string
+  assetId: string
+}
 
 export type LinguistDeliveryBlockerCode =
   | 'PENDING_PROPOSALS'
   | 'UNCONFIRMED_SEGMENTS'
   | 'OPEN_QA_ERRORS'
   | 'PHRASE_MASTER_MAPPING'
+  | 'STRUCTURAL_RULES'
 
 export interface LinguistDeliveryBlockerInfo {
   code: LinguistDeliveryBlockerCode
@@ -1815,6 +1904,7 @@ export interface LinguistDeliveryVerification {
 }
 
 export interface LinguistPrepareDeliveryResult {
+  validation: 'verified' | 'as-is'
   preflight: LinguistDeliveryPreflight
   verification?: LinguistDeliveryVerification
   reportMarkdown: string
@@ -1843,6 +1933,7 @@ export type LinguistExportSaveAssetResult =
       cancelled: false
       /** 用户目标文件的 basename，仅供成功提示。 */
       filename: string
+      validation: 'verified' | 'as-is'
       artifact: LinguistExportArtifactInfo
       delivery: LinguistExportDeliveryVerification
       verifiedSegments: number

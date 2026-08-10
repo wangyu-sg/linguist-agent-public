@@ -63,6 +63,7 @@ function segmentContext(
       qaFindings: [],
       tmMatches: [],
       termMatches: [],
+      approvedExemplars: [],
     },
   }
 }

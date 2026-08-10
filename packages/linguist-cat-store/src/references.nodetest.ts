@@ -78,6 +78,17 @@ test('approved exemplars reuse TM authority and retain bounded voice metadata', 
     assert.equal(db.tmUnits.addApprovedExemplar(input).id, created.id)
     assert.equal(db.tmUnits.count(), 1)
 
+    const replaced = db.tmUnits.addApprovedExemplar({
+      ...input,
+      target: '大门现在关闭了。',
+      note: '改为克制的警告语气',
+    })
+    assert.notEqual(replaced.id, created.id)
+    assert.equal(replaced.target, '大门现在关闭了。')
+    assert.equal(replaced.note, '改为克制的警告语气')
+    assert.equal(db.tmUnits.count(), 1)
+    assert.equal(db.tmUnits.listApprovedExemplars({ speaker: 'Narrator' })[0]!.id, replaced.id)
+
     db.tmUnits.addApprovedExemplar({
       ...input,
       speaker: 'System',
@@ -87,7 +98,7 @@ test('approved exemplars reuse TM authority and retain bounded voice metadata', 
     })
     assert.deepEqual(
       db.tmUnits.listApprovedExemplars({ speaker: 'narrator', textType: 'dialogue', module: 'chapter-1' }),
-      [created],
+      [replaced],
     )
     assert.equal(db.tmUnits.listApprovedExemplars({ speaker: 'Narrator', module: 'menu' }).length, 0)
   } finally {

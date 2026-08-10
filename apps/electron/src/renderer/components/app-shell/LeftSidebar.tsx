@@ -20,6 +20,10 @@ import { ProjectCreateDialog } from '@/features/linguist/projects/ProjectCreateD
 import { refreshLinguistProjectListAtom } from '@/features/linguist/projects/project-list-atoms'
 import { openLocalizationProject } from '@/features/linguist/projects/open-localization-project'
 import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
+import {
+  createActiveLinguistProjectSession,
+  resolveActiveLinguistProjectId,
+} from '@/features/linguist/projects/project-agent-session'
 import { describeLinguistIpcError } from '@/features/linguist/projects/project-utils'
 import { SearchDialog } from './SearchDialog'
 import { UserAvatar } from '@/components/chat/UserAvatar'
@@ -75,6 +79,7 @@ import { previewPanelOpenMapAtom, previewFileMapAtom } from '@/atoms/preview-ato
 import { clearPreviewCacheForSession } from '@/components/diff/DiffTabContent'
 import {
   tabsAtom,
+  activeTabAtom,
   activeTabIdAtom,
   activeSessionIdAtom,
   sidebarCollapsedAtom,
@@ -642,6 +647,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const [userProfile, setUserProfile] = useAtom(userProfileAtom)
   const streamingIds = useAtomValue(streamingConversationIdsAtom)
   const mode = useAtomValue(appModeAtom)
+  const [creatingPrimaryItem, setCreatingPrimaryItem] = React.useState(false)
   const isMac = React.useMemo(() => detectIsMac(), [])
   const hasUpdate = useAtomValue(hasUpdateAtom)
   const updateStatus = useAtomValue(updateStatusAtom)
@@ -670,6 +676,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
   // Tab 状态
   const [tabs, setTabs] = useAtom(tabsAtom)
+  const activeTab = useAtomValue(activeTabAtom)
   const [activeTabId, setActiveTabId] = useAtom(activeTabIdAtom)
   // 会话高亮按"激活 Tab 所属会话"判定：预览 Tab 激活时其 owner 会话仍保持高亮
   const activeSessionId = useAtomValue(activeSessionIdAtom)
@@ -689,6 +696,17 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const searchDialogOpen = useAtomValue(searchDialogOpenAtom)
   const setSearchDialogOpen = useSetAtom(searchDialogOpenAtom)
   const newChatShortcutLabel = getAcceleratorDisplay(getActiveAccelerator('new-session'))
+  const activeLinguistProjectId = resolveActiveLinguistProjectId(activeTab, agentSessions)
+  const primaryItemDisabled = creatingPrimaryItem
+    || (mode === 'linguist' && activeLinguistProjectId === null)
+  const primaryItemLabel = mode === 'chat' ? '新对话' : '新会话'
+  const primaryItemAriaLabel = mode === 'chat'
+    ? '新建 Chat 对话'
+    : mode === 'agent'
+      ? '新建 Agent 会话'
+      : activeLinguistProjectId
+        ? '在当前本地化项目中新建通用会话'
+        : '请先打开本地化项目后再新建会话'
 
   const handleOpenSettings = React.useCallback((): void => {
     setSettingsOpen(true)
@@ -1193,6 +1211,36 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       console.error('[侧边栏] 创建 Agent 会话失败:', error)
     }
   }, [agentChannelId, agentModelId, currentWorkspaceId, openSession, setActiveView, setAgentSessions, setCurrentWorkspaceId, setSessionChannelMap, setSessionModelMap])
+
+  /** 三模式顶部“新建”共用入口；Linguist 只在当前 CAT 项目内创建 General 会话。 */
+  const handleCreatePrimaryItem = React.useCallback(async (): Promise<void> => {
+    if (creatingPrimaryItem) return
+    if (mode === 'agent') {
+      await createAgentSessionInWorkspace()
+      return
+    }
+    if (mode === 'chat') {
+      await createChat()
+      return
+    }
+    if (!resolveActiveLinguistProjectId(store.get(activeTabAtom), store.get(agentSessionsAtom))) {
+      toast.error('请先打开一个本地化项目')
+      return
+    }
+    setCreatingPrimaryItem(true)
+    try {
+      const result = await createActiveLinguistProjectSession(store)
+      if (!result.ok) {
+        toast.error('新建项目会话失败', {
+          description: describeLinguistIpcError(result.error),
+        })
+      }
+    } catch {
+      toast.error('新建项目会话失败', { description: '与主进程通信异常（INTERNAL）' })
+    } finally {
+      setCreatingPrimaryItem(false)
+    }
+  }, [createAgentSessionInWorkspace, createChat, creatingPrimaryItem, mode, store])
 
   /** 切换当前项目；点击当前已选中工作区标题时则折叠/展开其会话列表 */
   const handleSelectProject = React.useCallback((workspaceId: string): void => {
@@ -2364,21 +2412,27 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
 
         {/* 高频操作 */}
         <div className="flex flex-col items-center gap-1.5">
-          {mode !== 'linguist' && <Tooltip>
+          <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={mode === 'agent' ? '新建 Agent 会话' : '新建 Chat 对话'}
-                onClick={() => { void (mode === 'agent' ? createAgentSessionInWorkspace() : createChat()) }}
-                className="size-10 flex items-center justify-center rounded-[12px] text-foreground/70 bg-primary/5 hover:bg-primary/10 transition-colors titlebar-no-drag border border-dashed border-[hsl(var(--dashed-border))] hover:border-[hsl(var(--dashed-border-hover))]"
+                aria-label={primaryItemAriaLabel}
+                aria-busy={creatingPrimaryItem || undefined}
+                disabled={primaryItemDisabled}
+                onClick={() => { void handleCreatePrimaryItem() }}
+                className="size-10 flex items-center justify-center rounded-[12px] text-foreground/70 bg-primary/5 hover:bg-primary/10 transition-colors titlebar-no-drag border border-dashed border-[hsl(var(--dashed-border))] hover:border-[hsl(var(--dashed-border-hover))] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Plus size={16} />
+                {creatingPrimaryItem
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <Plus size={16} />}
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {mode === 'agent' ? '新会话' : '新对话'}
+              {primaryItemDisabled && mode === 'linguist'
+                ? '请先打开本地化项目'
+                : primaryItemLabel}
             </TooltipContent>
-          </Tooltip>}
+          </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -2530,21 +2584,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
         <div className="flex-1 min-w-0">
           <ModeSwitcher />
         </div>
-        {mode === 'linguist' && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="搜索会话"
-                onClick={() => setSearchDialogOpen(true)}
-                className="mt-2 size-10 flex-shrink-0 flex items-center justify-center rounded-[10px] text-foreground/40 sidebar-control-surface hover:text-foreground/60 transition-[background-color,color] duration-150 titlebar-no-drag"
-              >
-                <Search size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">搜索 ({getAcceleratorDisplay(getActiveAccelerator('global-search'))})</TooltipContent>
-          </Tooltip>
-        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -2563,19 +2602,25 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       </div>
 
       {/* 新对话/新会话按钮 + 搜索按钮 */}
-      {mode !== 'linguist' && <div className="px-3 pt-2 flex items-center gap-1.5">
+      <div className="px-3 pt-2 flex items-center gap-1.5">
         <button
           type="button"
-          onClick={() => { void (mode === 'agent' ? createAgentSessionInWorkspace() : createChat()) }}
-          className="flex-1 flex items-center gap-2 px-3 py-2 rounded-[10px] text-[13px] font-medium text-foreground/70 bg-primary/5 hover:bg-primary/10 transition-colors duration-100 titlebar-no-drag border border-dashed border-[hsl(var(--dashed-border))] hover:border-[hsl(var(--dashed-border-hover))]"
+          aria-label={primaryItemAriaLabel}
+          aria-busy={creatingPrimaryItem || undefined}
+          disabled={primaryItemDisabled}
+          onClick={() => { void handleCreatePrimaryItem() }}
+          className="flex-1 flex items-center gap-2 px-3 py-2 rounded-[10px] text-[13px] font-medium text-foreground/70 bg-primary/5 hover:bg-primary/10 transition-colors duration-100 titlebar-no-drag border border-dashed border-[hsl(var(--dashed-border))] hover:border-[hsl(var(--dashed-border-hover))] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <Plus size={14} />
-          <span>{mode === 'agent' ? '新会话' : '新对话'}</span>
+          {creatingPrimaryItem
+            ? <Loader2 size={14} className="animate-spin" />
+            : <Plus size={14} />}
+          <span>{primaryItemLabel}</span>
         </button>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
+              aria-label="搜索会话"
               onClick={() => setSearchDialogOpen(true)}
               className="flex-shrink-0 size-[36px] flex items-center justify-center rounded-[10px] text-foreground/40 bg-primary/5 hover:bg-primary/10 hover:text-foreground/60 transition-colors duration-100 titlebar-no-drag border border-dashed border-[hsl(var(--dashed-border))] hover:border-[hsl(var(--dashed-border-hover))]"
             >
@@ -2584,7 +2629,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
           </TooltipTrigger>
           <TooltipContent side="bottom">搜索 ({getAcceleratorDisplay(getActiveAccelerator('global-search'))})</TooltipContent>
         </Tooltip>
-      </div>}
+      </div>
 
       {/* 任务/日程入口：作为统一规划中心入口。 */}
       {mode !== 'linguist' && <div className="px-3 pt-2 pb-0.5">

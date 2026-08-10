@@ -152,6 +152,55 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     expect(renderRow(false, true)).not.toContain('data-target-double-click')
   })
 
+  test('given 当前活动 Segment when 已确认 then 显示设为角色译例入口，未确认或归档时不显示', () => {
+    const segment: LinguistSegmentInfo = {
+      id: 'segment-1',
+      assetId: 'asset-1',
+      ordinal: 0,
+      source: 'Stay close.',
+      target: '跟紧我。',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      status: 'translated',
+      currentStageState: 'confirmed',
+      locked: false,
+      revision: 1,
+      sourceHash: 'hash',
+    }
+    const renderRow = (currentStageState: LinguistSegmentInfo['currentStageState'], archived = false): string =>
+      renderToStaticMarkup(
+        <SegmentGrid
+          projectId="prj-0000000000000001"
+          total={1}
+          segmentIds={[segment.id]}
+          rows={new Map([[0, { ...segment, currentStageState }]])}
+          selectedIds={new Set()}
+          pendingBySegment={new Map()}
+          mutatingProposalIds={new Set()}
+          activeSegmentId={segment.id}
+          archived={archived}
+          workflowStage="translation"
+          onActiveSegmentChange={() => {}}
+          onOpenDetails={() => {}}
+          onOpenQa={() => {}}
+          onFocusIndex={() => {}}
+          onFocusIndexSettled={() => {}}
+          onToggleSelected={() => {}}
+          onVisibleRangeChange={() => {}}
+          onSaveTarget={async () => 'saved'}
+          onReloadTarget={async () => segment}
+          onConfirmAndAdvance={async () => {}}
+          onUnconfirmStage={async () => {}}
+          onReviewProposal={async () => {}}
+          onTargetEditorCapabilityChange={() => {}}
+        />,
+      )
+
+    expect(renderRow('confirmed')).toContain('设为角色译例')
+    expect(renderRow('draft')).not.toContain('设为角色译例')
+    expect(renderRow('confirmed', true)).not.toContain('设为角色译例')
+  })
+
   test('given 当前行有待查看建议与开放 QA when 渲染 Grid then 状态、数量和最高严重度均可读', () => {
     const segment: LinguistSegmentInfo = {
       id: 'segment-1',

@@ -6,7 +6,7 @@
 
 - [ ] VALID-001：使用同一模型和 reasoning，对同一真实语言任务比较 Web Chat、旧 LA 和当前 LA。
 - [ ] VALID-002：使用真实 Provider 和代表性格式，由四岗位完成翻译 → 全量双语审校 → 目标语校对 → `verified` 交付。
-- [ ] 真实 memoQ 样本：验证 MQXLIFF detect / import / modify / export / reimport、inline code、确认级别与审校批注互操作。
+- [ ] 真实 Phrase / memoQ 互操作：使用真实平台产物验证导入、修改、导出、重导、inline code、状态与审校批注。
 - [ ] VALID-003：从本轮可用构建开始累计 14 个真实日用日，记录阻断问题和数据完整性结果。
 - [ ] 真机人工：IME composition、Native Open/Save、Companion Chat round-trip、VoiceOver、keyboard-only、窄窗与拖拽/resize。
 - [ ] 取得上述证据后，再裁决个人 Alpha 资格。

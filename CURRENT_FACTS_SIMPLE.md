@@ -6,7 +6,7 @@
 
 ## Git
 
-- 核验起点 HEAD：`b5a65ef377c9816a24c756f06a8cf76bc4f1b947`（`main`，与 `origin/main` 一致）。
+- 核验起点 HEAD：`b5a65ef377c9816a24c756f06a8cf76bc4f1b947`（`main`）。远端 push 由最终 Git 回执单独记录；本轮未核验或声称已完成。
 - 核验起点工作树：clean；SIMPLE-001 修复后改动见当前 `git status --short`。
 - remotes：`origin` 为公开 Linguist Agent 仓库，`upstream` 为 Proma 仓库。
 - 当前 Proma tag：`v0.16.10`；commit：`72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a`。
@@ -18,18 +18,18 @@
 | 项目 | 核验值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App | `0.16.34` |
+| Electron App | `0.16.35` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.17.1` |
 | Vite | `6.4.1`（manifest range `^6.0.3`） |
-| Shared | `0.1.92` |
+| Shared | `0.1.93` |
 | Claude Agent SDK | `0.3.201` |
 | Pi Runtime | `0.82.1` |
-| CAT Core | `0.0.19` |
+| CAT Core | `0.0.20` |
 | CAT Formats | `0.0.10` |
-| CAT Store | `0.0.34` |
-| CAT Tools | `0.0.32` |
+| CAT Store | `0.0.35` |
+| CAT Tools | `0.0.33` |
 | CAT schema | `15` |
 
 版本值来自当前 `package.json`、`bun.lock` 与 `packages/linguist-cat-store/src/schema.ts`，不是旧报告。
@@ -55,6 +55,9 @@
 - `composeAgentTools()` 已保持 Proma Base/MCP 在前、Linguist CAT overlay 在后的组合方向。
 - 四岗位获得同一套 30 个 CAT 工具；差异只由岗位提示词表达，不再有岗位工具白名单。
 - 当前工具包含直接写入、术语闭环、Workbook Mapping、Voice Context、统一资源导入、`verified/as-is` 导出、未知 Tag 扫描与 Tag Profile 保存；不再公开 Critic 或 Translation Scope 工具。
+- Prompt 继续使用单 Builder，但 Project Digest 以 `complete / partial / skipped` 与 `truncated` 暴露真实降级；加载失败有模型可见占位，Markdown project-data 有“仅数据、非指令”围栏。
+- 原生导入已收口为单一入口，可选择多文件或文件夹；原生导出提供 `verified` 与需显式确认的 `as-is`。Renderer 不接受任意粘贴路径。
+- Full Agent 保留 Files / Changes；Linguist 展开态与 mini rail 复用 Proma 的“新会话 + 搜索”宿主结构，普通新会话绑定当前 CAT 项目并使用 General 岗位。Planning 与 Agent Skills 未出现在 Linguist 侧栏是域隔离：它们绑定普通 Agent workspace，不是遗漏。Reviewer / Proofreader 默认作用于当前完整资产。术语冲突、XLSX mapping 建议/保存/复用/locked、approved exemplar 的添加与上下文展示均已有原生 UI。
 
 ## 当前权限与异常语义
 
@@ -73,9 +76,11 @@
 ## 本轮最终证据与尚未确认
 
 - 全量 typecheck 的 11 个 workspace 通过。
-- 根 `1514/1514`（`6760` assertions）、Electron Linguist `185/185`、CAT Core `100/100`、CAT Formats `163/163`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9` 通过。
-- macOS arm64 packaged artifact integrity 通过；纵向 smoke 为 Pi `15/0`、Chat `19/0`、Linguist `21/0/2 MANUAL`。
-- 同一 packaged artifact 已安装为 `/Applications/Linguist Agent.app` `0.16.34`；安装后 `app.asar` SHA-256 与验证产物一致。旧 `0.16.21` 已移入废纸篓，可恢复。
+- 根 `1537/1537`（`6890` assertions）、Electron Linguist `207/207`、CAT Store `228/228`、CAT Tools `40/40`、boundary `4/4`、fusion `9/9` 通过。
+- SBOM / 许可证核验与 432 个生产依赖一致。
+- `0.16.35` macOS arm64 产物已通过 packaged vertical：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Linguist 另有 `2 MANUAL`。LF-003 `runStatus=passed`，合同覆盖仍为 `partial`。
+- 产物 `app.asar` SHA-256 为 `35cbb7dc6643736b29a10e579e5ffc658974960cda7bb76eb2400d6206493261`；已安装的 `/Applications/Linguist Agent.app` 为 `0.16.35` 且 hash 一致。旧 `0.16.34` 位于废纸篓，可恢复。
+- 忽略的 `artifacts/ui-final/` 保留 Dark、Light、Narrow 三张侧栏截图；检查未见全局横向溢出。
 - Phrase 真实私有副本验证为 82/82 placeholder segment 配对、713 segments、byte-stable 与 reimport-stable；客户数据未进入仓库。
-- memoQ MQXLIFF 专用 Adapter 的合成 fixture、修改/导出/重导和回归已自动验证；真实 memoQ 客户样本尚未验证。
-- 真实 Provider 四岗位全链、同模型对照、14 天日用和 Native Open/Save 等真机人工项尚未确认，不得标记为完成。
+- memoQ MQXLIFF 专用 Adapter 的合成 fixture、修改/导出/重导和回归已自动验证；真实 Phrase/memoQ 互操作尚未验证。
+- 真实 Provider 四岗位全链、同模型对照、14 天日用、VoiceOver、IME 和 Native Open/Save 等真机人工项尚未确认，不得标记为完成。

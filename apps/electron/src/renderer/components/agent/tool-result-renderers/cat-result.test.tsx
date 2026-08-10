@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { ToolResultRenderer } from '.'
 import {
   readCatResultLocation,
+  readApplyResultNavigation,
   readProposalResultIdentity,
   loadProposalReviewStatuses,
   serializeCatToolResultDetails,
@@ -65,6 +66,20 @@ describe('CAT Tool Result 原生摘要', () => {
         payload: { query: PRIVATE_TEXT, results: [{ translation: PRIVATE_TEXT }], total: 4, limit: 20 },
         title: '项目术语',
         detail: '找到 4 条术语',
+      },
+      {
+        toolName: 'cat_apply_translations',
+        payload: {
+          requested: 8,
+          applied: 4,
+          pending: 1,
+          stale: ['seg-stale-a', 'seg-stale-b'],
+          locked: ['seg-locked'],
+          failed: [],
+          proposalIds: [],
+        },
+        title: '写回结果',
+        detail: '处理 8 段 · 已写回 4 · 保留建议 1 · Revision 冲突 2 · 锁定跳过 1',
       },
       {
         toolName: 'cat_propose_translations',
@@ -222,6 +237,34 @@ describe('CAT Tool Result 原生摘要', () => {
       expect(html).not.toContain('<button')
       expect(readCatResultLocation(payload)).toBeNull()
     }
+  })
+
+  test('given 直达写回有冲突与锁定 when 展示结果 then 聚合计数且每组可定位对应片段', () => {
+    const staleId = 'seg-0000000000000002'
+    const lockedId = 'seg-0000000000000003'
+    const payload = {
+      projectId: PROJECT_ID,
+      segmentId: SEGMENT_ID,
+      requested: 4,
+      applied: 1,
+      pending: 0,
+      stale: [staleId],
+      locked: [lockedId],
+      failed: [{ segmentId: 'seg-0000000000000004', code: 'TAG_MISMATCH' }],
+      proposalIds: [],
+    }
+    const html = renderResult('cat_apply_translations', payload)
+    expect(html).toContain('处理 4 段 · 已写回 1 · 保留建议 0 · Revision 冲突 1 · 锁定跳过 1 · 失败 1')
+    expect(html).toContain('aria-label="写回结果定位"')
+    expect(html).toContain('已写回 1')
+    expect(html).toContain('Revision 冲突 1')
+    expect(html).toContain('锁定跳过 1')
+    expect(readApplyResultNavigation(payload).map((item) => item.location)).toEqual([
+      { projectId: PROJECT_ID, segmentId: SEGMENT_ID },
+      { projectId: PROJECT_ID, segmentId: staleId },
+      { projectId: PROJECT_ID, segmentId: lockedId },
+      { projectId: PROJECT_ID, segmentId: 'seg-0000000000000004' },
+    ])
   })
 
   test('given 持久化 proposal tool_result when Timeline 重开 then 只接受可信身份并汇总 DB 终态', () => {

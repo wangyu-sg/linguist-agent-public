@@ -416,11 +416,12 @@ test('workbook tools preview evidence and save a reusable bound-project profile'
       name: 'Game strings',
       filenamePattern: 'strings-*.xlsx',
       sheetName: 'Strings',
-      columns: { key: 'ID', source: 'Source', target: 'Target' },
-    })).details as { id: string; filenamePattern: string }
+      columns: { key: 'ID', source: 'Source', target: 'Target', locked: 'Lock' },
+    })).details as { id: string; filenamePattern: string; columns: { locked?: string } }
     assert.equal(savedPath, '/authorized/strings.xlsx')
     assert.equal(saved.id, 'wbm_0123456789abcdef01234567')
     assert.equal(saved.filenamePattern, 'strings-*.xlsx')
+    assert.equal(saved.columns.locked, 'Lock')
     assert.equal(mutations.at(-1)?.kind, 'project-updated')
     assertNoAbsolutePaths(saved, fixture.rootDir)
   } finally {
@@ -442,6 +443,20 @@ test('voice tools reuse profiles and translated segments as bounded approved con
     })).details as { id: string; speaker: string; register: string }
     assert.equal(profile.speaker, 'Narrator')
     assert.equal(profile.register, 'formal')
+
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_add_approved_exemplar'), {
+      segmentId: fixture.segmentsA[0]!.id,
+      speaker: 'Narrator',
+      textType: 'dialogue',
+    }), 'INVALID_ARGUMENT')
+    for (const index of [0, 2, 4]) {
+      fixture.db.segments.confirmCurrentStage(
+        fixture.segmentsA[index]!.id,
+        fixture.project.workflowStage ?? 'translation',
+        fixture.segmentsA[index]!.revision,
+        { actor: 'local-user', now: `2026-01-01T00:00:0${index}.000Z` },
+      )
+    }
 
     const approvedIds: string[] = []
     for (const index of [0, 2, 4]) {

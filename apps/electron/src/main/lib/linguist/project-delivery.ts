@@ -84,12 +84,33 @@ const EXPORT_STRUCTURAL_RULES = new Set<string>([
 export class ProjectDelivery {
   constructor(private readonly context: ProjectModuleContext) {}
 
+  private structuralRuleFailures(
+    project: LinguistProject,
+    db: ProjectDatabase,
+    asset: Asset,
+  ): Array<{ segmentId: string; codes: string[] }> {
+    return this.context.call(
+      () => db.segments.query({ assetId: asset.id, limit: asset.segmentCount }).flatMap((segment) => {
+        const codes = runDeterministicHardRules({
+          segment,
+          proposedTarget: segment.target,
+          ...(project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile }),
+        }).violations
+          .map((violation) => violation.code)
+          .filter((code) => EXPORT_STRUCTURAL_RULES.has(code))
+        return codes.length === 0 ? [] : [{ segmentId: segment.id, codes }]
+      }),
+      project.id,
+    )
+  }
+
   /**
    * 先汇总提案、QA 与当前阶段；只有无阻断时才生成并重新导入验证。
    */
   async prepareDelivery(
     projectId: string,
     assetId: string,
+    validation: 'verified' | 'as-is' = 'verified',
   ): Promise<LinguistPreparedDelivery> {
     const project = this.context.getProject(projectId)
     if (project.archivedAt !== undefined) {
@@ -209,6 +230,18 @@ export class ProjectDelivery {
         })
       }
     }
+    const structuralFailures = this.structuralRuleFailures(project, db, asset)
+    if (structuralFailures.length > 0) {
+      const examples = structuralFailures
+        .slice(0, 3)
+        .map((failure) => `${failure.segmentId}: ${failure.codes.join('/')}`)
+        .join('；')
+      blockers.push({
+        code: 'STRUCTURAL_RULES',
+        count: structuralFailures.length,
+        message: `Tag/占位符结构规则未通过 ${structuralFailures.length} 段（${examples}）`,
+      })
+    }
     const workflowStage = normalizeWorkflowStage(project.workflowStage)
     const expectedNativeStatus = nativeStatusForStage(
       workflowStage,
@@ -233,14 +266,21 @@ export class ProjectDelivery {
       ready: blockers.length === 0,
       blockers,
     }
-    if (!preflight.ready) {
+    if (!preflight.ready && validation === 'verified') {
       return {
+        validation,
         preflight,
         reportMarkdown: buildDeliveryReport(project, preflight),
       }
     }
 
-    const staged = await this.stageExport(projectId, assetId)
+    const staged = await this.stageExport(
+      projectId,
+      assetId,
+      validation === 'as-is'
+        ? { allowBlockingQa: true, allowHardRuleViolations: true }
+        : {},
+    )
     const verification: LinguistDeliveryVerification = {
       verifiedSegments: staged.verifiedSegments,
       ...staged.verification,
@@ -248,6 +288,7 @@ export class ProjectDelivery {
       suggestedFilename: staged.suggestedFilename,
     }
     return {
+      validation,
       preflight,
       verification,
       reportMarkdown: buildDeliveryReport(
@@ -266,23 +307,7 @@ export class ProjectDelivery {
     mode: 'verified' | 'as-is',
     overwrite: boolean,
   ): Promise<LinguistLocalExportResult> {
-    if (mode === 'as-is') {
-      const staged = await this.stageExport(projectId, assetId, {
-        allowBlockingQa: true,
-        allowHardRuleViolations: true,
-      })
-      const { artifact: _, projectRevision: __, ...result } = this.saveStagedDeliveryToPath(
-        projectId,
-        assetId,
-        staged,
-        destinationPath,
-        mode,
-        overwrite,
-      )
-      return result
-    }
-
-    const prepared = await this.prepareDelivery(projectId, assetId)
+    const prepared = await this.prepareDelivery(projectId, assetId, mode)
     if (prepared.staged === undefined) {
       throw new FormatExportError(
         prepared.preflight.formatId,
@@ -304,7 +329,7 @@ export class ProjectDelivery {
     destinationPath: string,
     overwrite = false,
   ): LinguistPreparedDeliverySaveResult {
-    const { preflight, staged, verification } = prepared
+    const { validation, preflight, staged, verification } = prepared
     if (staged === undefined || verification === undefined) {
       if (preflight.qa.openErrors > 0) {
         throw new LinguistExportBlockedByQaError(
@@ -324,7 +349,7 @@ export class ProjectDelivery {
       preflight.assetId,
       staged,
       destinationPath,
-      'verified',
+      validation,
       overwrite,
     )
   }
@@ -409,17 +434,9 @@ export class ProjectDelivery {
     const asset = this.context.call(() => db.assets.get(assetId), projectId)
     if (asset === undefined) throw new StoreNotFoundError('asset', assetId)
     if (options.allowHardRuleViolations !== true) {
-      const segments = this.context.call(
-        () => db.segments.query({ assetId, limit: asset.segmentCount }),
-        projectId,
-      )
-      const invalid = segments.filter((segment) => runDeterministicHardRules({
-        segment,
-        proposedTarget: segment.target,
-        ...(project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile }),
-      }).violations.some((violation) => EXPORT_STRUCTURAL_RULES.has(violation.code)))
-      if (invalid.length > 0) {
-        throw new FormatExportError(asset.formatId, `${invalid.length} segments failed deterministic Tag/placeholder rules`)
+      const failures = this.structuralRuleFailures(project, db, asset)
+      if (failures.length > 0) {
+        throw new FormatExportError(asset.formatId, `${failures.length} segments failed deterministic Tag/placeholder rules`)
       }
     }
     const adapter = this.context.registry.get(asset.formatId)

@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto'
 import {
   createWriteStream,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -66,6 +67,8 @@ const MODEL_ID = 'fake-cat-pb074'
 const LF026_ONLY = process.argv.includes('--lf026-only')
 const LF056_ONLY = process.argv.includes('--lf056-only')
 const PROPOSAL_ID_PATTERN = /prp(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})/
+const UI_EVIDENCE_DIR_INPUT = process.env.LINGUIST_UI_EVIDENCE_DIR?.trim()
+const UI_EVIDENCE_DIR = UI_EVIDENCE_DIR_INPUT ? resolve(UI_EVIDENCE_DIR_INPUT) : undefined
 
 interface CheckResult {
   name: string
@@ -1026,12 +1029,16 @@ async function runLanguageResourceDockGate(
   const termPanel = await openDockTab(dock, '术语')
   const termMatches = termPanel.getByRole('list', { name: '当前片段术语匹配', exact: true })
   await termMatches.waitFor({ timeout: 30_000 })
-  const termAction = termMatches.getByRole(
+  const preferredTermMatch = termMatches.getByRole('listitem')
+    .filter({ hasText: 'Welcome' })
+    .filter({ hasText: '欢迎' })
+  await preferredTermMatch.getByText('推荐', { exact: true }).waitFor({ timeout: 30_000 })
+  const termAction = preferredTermMatch.getByRole(
     'button',
-    { name: /插入首选 Contains 术语 Welcome → 欢迎到当前译文草稿/u },
+    { name: /^插入.+术语 Welcome → 欢迎到当前译文草稿$/u },
   )
   await termAction.waitFor({ timeout: 30_000 })
-  const termStatusVisible = await termAction.isVisible()
+  const termStatusVisible = await preferredTermMatch.getByText('推荐', { exact: true }).isVisible()
   await termAction.click()
   const termInserted = await waitFor(
     async () => await editor.inputValue() === '欢迎{player}',
@@ -1073,17 +1080,17 @@ async function runLanguageResourceDockGate(
 
   const contextPanel = await openDockTab(dock, '上下文/证据')
   const contextSources = contextPanel.locator('section[aria-label="片段上下文来源"]')
-  const evidence = contextPanel.locator('section[aria-label="Agent proposal evidence"]')
+  const evidence = contextPanel.locator('section[aria-label="建议的证据来源"]')
   await contextSources.getByText('必须保留玩家占位符', { exact: true }).waitFor({
     timeout: 30_000,
   })
-  await evidence.getByText(/tm:tmu-/u).waitFor({ timeout: 30_000 })
+  await evidence.getByText(/tm:tmu_v2_[0-9a-f]{64}/u).waitFor({ timeout: 30_000 })
   const contextVisible = await contextSources.getByText('System', { exact: true }).isVisible()
     && await contextSources.getByText('client', { exact: true }).isVisible()
-  const evidenceVisible = await evidence.getByText(/style:sgr-/u).isVisible()
-    && await evidence.getByText(/voice:vpr-/u).isVisible()
+  const evidenceVisible = await evidence.getByText(/style:sgr_v2_[0-9a-f]{64}/u).isVisible()
+    && await evidence.getByText(/voice:vpr_v2_[0-9a-f]{64}/u).isVisible()
     && await evidence.getByText(/context:segment-origin/u).isVisible()
-    && await evidence.getByText(/term:ter-/u).isVisible()
+    && await evidence.getByText(/term:ter_v2_[0-9a-f]{64}/u).isVisible()
   const openTermsFromEvidence = evidence.getByRole('button', { name: '查看术语', exact: true })
   await openTermsFromEvidence.click()
   const evidenceJumpedToTerms = await tabs
@@ -1116,7 +1123,7 @@ async function runLanguageResourceDockGate(
     .locator('article[aria-label^="QA Finding "]')
     .evaluateAll((articles) => articles.map((article) => article.getAttribute('aria-label') ?? ''))
   const alternateContextPanel = await openDockTab(dock, '上下文/证据')
-  await alternateContextPanel.getByText('当前片段没有待审 Proposal', { exact: true }).waitFor({
+  await alternateContextPanel.getByText('当前片段没有待查看建议', { exact: true }).waitFor({
     timeout: 30_000,
   })
   const alternateResourcesVisible = alternateQaLabels.length > 0
@@ -1134,21 +1141,44 @@ async function runLanguageResourceDockGate(
   })
   const restoredContextPanel = await openDockTab(dock, '上下文/证据')
   const restoredEvidence = restoredContextPanel.locator(
-    'section[aria-label="Agent proposal evidence"]',
+    'section[aria-label="建议的证据来源"]',
   )
-  await restoredEvidence.getByText(/tm:tmu-/u).waitFor({ timeout: 30_000 })
+  await restoredEvidence.getByText(/tm:tmu_v2_[0-9a-f]{64}/u).waitFor({ timeout: 30_000 })
   check(
     'lf056-active-segment-resources-refresh',
-    alternateResourcesVisible && await restoredEvidence.getByText(/term:ter-/u).isVisible(),
+    alternateResourcesVisible
+      && await restoredEvidence.getByText(/term:ter_v2_[0-9a-f]{64}/u).isVisible(),
     `alternate=${alternateSegmentId} QA=${JSON.stringify(alternateQaLabels)}` +
     `，back=${segmentId} TM/Terms/Evidence restored`,
   )
 
   const previewPanel = await openDockTab(dock, '预览')
   await previewPanel.getByText('mini_game_ui.xliff', { exact: true }).waitFor({ timeout: 30_000 })
-  await previewPanel.getByText('xliff_1_2 · 只读', { exact: true }).waitFor({ timeout: 30_000 })
-  await previewPanel.locator('pre').filter({ hasText: PB074_SOURCE }).waitFor({ timeout: 30_000 })
-  const editablePreviewCount = await previewPanel.locator(
+  await previewPanel.getByText(/^XLIFF 1\.2 · \d+ 段 · 只读$/u).waitFor({ timeout: 30_000 })
+  const agentRailButton = toolbar.getByRole('button', { name: 'Agent', exact: true })
+  if (await agentRailButton.getAttribute('aria-pressed') !== 'true') {
+    await agentRailButton.click()
+  }
+  await workspace
+    .getByRole('group', { name: '项目 Agent rail 控制', exact: true })
+    .waitFor({ timeout: 30_000 })
+  await previewPanel
+    .getByRole('button', { name: '在预览标签页中打开', exact: true })
+    .click()
+  const previewTab = page.getByRole(
+    'button',
+    { name: '打开标签页：预览：mini_game_ui.xliff', exact: true },
+  )
+  await previewTab.waitFor({ timeout: 30_000 })
+  await previewTab.click()
+  const semanticPreview = page.locator('[aria-label="批次语义预览"]')
+  await semanticPreview.waitFor({ timeout: 30_000 })
+  await semanticPreview.locator('li').filter({ hasText: PB074_SOURCE }).waitFor({ timeout: 30_000 })
+  await page.getByRole('button', { name: '查看原始文件', exact: true }).click()
+  const rawPreview = page.locator('[aria-label="原始文件预览"]')
+  await rawPreview.waitFor({ timeout: 30_000 })
+  await rawPreview.locator('pre').filter({ hasText: PB074_SOURCE }).waitFor({ timeout: 30_000 })
+  const editablePreviewCount = await rawPreview.locator(
     'textarea, input, [contenteditable="true"]',
   ).count()
   const sourceHashAfter = fileSha256(sourceBlobPath)
@@ -1158,6 +1188,13 @@ async function runLanguageResourceDockGate(
     `editable=${editablePreviewCount}，source sha256=${sourceHashAfter.slice(0, 12)}…`,
   )
 
+  await page
+    .getByRole('button', { name: `打开标签页：${PROJECT_NAME}`, exact: true })
+    .click()
+  await workspace.waitFor({ timeout: 30_000 })
+  if (await agentRailButton.getAttribute('aria-pressed') === 'true') {
+    await agentRailButton.click()
+  }
   await resourcesButton.click()
   await dock.waitFor({ state: 'hidden', timeout: 30_000 })
   await resourcesButton.click()
@@ -1320,9 +1357,108 @@ async function verifyLanguageResourceDockRecovery(
     'lf056-dock-restart-restores-layout',
     mainRestored && distractorRestored && mainStillRestored,
     `main=${mainState.location?.bottomDockTab}/${mainState.location?.bottomDockHeight}` +
-    `，distractor=${distractorState.location?.bottomDockTab}/${distractorState.location?.bottomDockHeight}` +
-    `，roundtrip=${mainStillRestored}`,
+      `，distractor=${distractorState.location?.bottomDockTab}/${distractorState.location?.bottomDockHeight}` +
+      `，roundtrip=${mainStillRestored}`,
   )
+}
+
+/** 可选的 packaged 视觉证据；未设置目录时默认 smoke 路径零变化。 */
+async function captureLinguistUiEvidence(page: Page): Promise<void> {
+  if (UI_EVIDENCE_DIR === undefined) return
+  mkdirSync(UI_EVIDENCE_DIR, { recursive: true })
+
+  const applyTheme = async (themeMode: 'dark' | 'light'): Promise<void> => {
+    await page.evaluate(async (mode) => {
+      window.localStorage.setItem('proma-theme-mode', mode)
+      const settings = await (window as unknown as {
+        electronAPI: {
+          updateSettings: (updates: { themeMode: 'dark' | 'light' }) => Promise<{ themeMode: string }>
+        }
+      }).electronAPI.updateSettings({ themeMode: mode })
+      if (settings.themeMode !== mode) throw new Error(`主题未保存：${settings.themeMode}`)
+    }, themeMode)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForFunction(
+      () => typeof (window as unknown as { electronAPI?: unknown }).electronAPI === 'object',
+      undefined,
+      { timeout: 60_000 },
+    )
+    await page.waitForFunction(
+      (dark) => document.documentElement.classList.contains('dark') === dark,
+      themeMode === 'dark',
+      { timeout: 30_000 },
+    )
+  }
+
+  const locateSurface = async (): Promise<{ workspace: Locator; sidebar: Locator }> => {
+    const activeWorkspace = page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
+    await activeWorkspace.waitFor({ timeout: 30_000 })
+    const { list: projectList } = await resolveVisibleLinguistProjectList(page)
+    const projectButton = projectList.getByRole(
+      'button',
+      { name: `打开项目 ${PROJECT_NAME}`, exact: true },
+    )
+    const sidebarRestored = await waitFor(
+      async () => await projectButton.getAttribute('aria-current') === 'page',
+      30_000,
+    )
+    if (!sidebarRestored) throw new Error('视觉证据截图前未恢复当前本地化项目侧边栏')
+    return { workspace: activeWorkspace, sidebar: projectList }
+  }
+
+  const saveScreenshot = async (filename: string): Promise<void> => {
+    await page.evaluate(async () => {
+      await document.fonts.ready
+      return true
+    })
+    await page.screenshot({
+      path: join(UI_EVIDENCE_DIR, filename),
+      animations: 'disabled',
+    })
+  }
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await applyTheme('dark')
+  await locateSurface()
+  await saveScreenshot('01-dark-linguist-sidebar-workbench.png')
+
+  await applyTheme('light')
+  let surface = await locateSurface()
+  await saveScreenshot('02-light-linguist-sidebar-workbench.png')
+
+  await page.setViewportSize({ width: 900, height: 720 })
+  await page.waitForFunction(() => window.innerWidth === 900 && window.innerHeight === 720)
+  surface = await locateSurface()
+  await saveScreenshot('03-narrow-light-linguist-sidebar-workbench.png')
+
+  const [workspaceBox, sidebarBox, toolbarBox, layout] = await Promise.all([
+    surface.workspace.boundingBox(),
+    surface.sidebar.boundingBox(),
+    surface.workspace
+      .locator('header[aria-label="本地化工作台工具栏"]')
+      .boundingBox(),
+    page.evaluate(() => ({
+      viewportWidth: window.innerWidth,
+      documentOverflow: Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - window.innerWidth,
+    })),
+  ])
+  const boxes = [workspaceBox, sidebarBox, toolbarBox]
+  const keyRectsInsideViewport = boxes.every(
+    (box) => box !== null && box.x >= -1 && box.x + box.width <= layout.viewportWidth + 1,
+  )
+  check(
+    'lf056-ui-evidence-light-dark-narrow',
+    layout.documentOverflow <= 1 && keyRectsInsideViewport,
+    `screenshots=${UI_EVIDENCE_DIR}，overflow=${layout.documentOverflow}px` +
+      `，侧边栏/工作台/工具栏未越界=${keyRectsInsideViewport}`,
+  )
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await applyTheme('dark')
+  await locateSurface()
 }
 
 async function openProjectAssetsSettings(
@@ -1608,6 +1744,7 @@ async function main(): Promise<void> {
       `，侧栏 aria-current=${navigation.sidebarCurrentCorrect}` +
       `，Project Tab=${navigation.projectTabVisible}，Asset/Segment=${navigation.locationVisible}`,
     )
+    await captureLinguistUiEvidence(launched.page)
     if (!LF026_ONLY && !LF056_ONLY) {
       const workflowStage = await launched.page.evaluate(async (id) => {
         const result = await (window as unknown as {

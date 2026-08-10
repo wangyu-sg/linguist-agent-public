@@ -253,6 +253,7 @@ export interface LinguistIntakeXlsxMapping {
     key?: string
     source: string
     target: string
+    locked?: string
     context?: string
   }
 }

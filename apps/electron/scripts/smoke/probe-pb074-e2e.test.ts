@@ -167,12 +167,24 @@ describe('LF-056 Language Resource Dock packaged 探针合同', () => {
     expect(probe).toContain('lf056-active-segment-resources-refresh')
     expect(probe).toContain("getByText('当前片段无 TM 匹配', { exact: true })")
     expect(probe).toContain("getByText('当前片段无术语匹配', { exact: true })")
-    expect(probe).toContain("getByText('当前片段没有待审 Proposal', { exact: true })")
+    expect(probe).toContain("getByText('当前片段没有待查看建议', { exact: true })")
+    expect(probe).not.toContain("getByText('当前片段没有待审 Proposal', { exact: true })")
     expect(probe).toContain('lf056-context-evidence')
     expect(probe).toContain('lf056-preview-readonly-source-unchanged')
     expect(probe).toContain(
-      "await previewPanel.getByText('xliff_1_2 · 只读', { exact: true }).waitFor({ timeout: 30_000 })",
+      'await previewPanel.getByText(/^XLIFF 1\\.2 · \\d+ 段 · 只读$/u).waitFor({ timeout: 30_000 })',
     )
+    expect(probe).not.toContain("getByText('xliff_1_2 · 只读'")
+    expect(probe).toContain("getByRole('button', { name: 'Agent', exact: true })")
+    expect(probe).toContain("getByRole('group', { name: '项目 Agent rail 控制', exact: true })")
+    expect(probe).toContain(".getByRole('button', { name: '在预览标签页中打开', exact: true })")
+    expect(probe).toContain("{ name: '打开标签页：预览：mini_game_ui.xliff', exact: true }")
+    expect(probe).toContain('await previewTab.click()')
+    expect(probe).toContain("page.locator('[aria-label=\"批次语义预览\"]')")
+    expect(probe).toContain("getByRole('button', { name: '查看原始文件', exact: true })")
+    expect(probe).toContain("page.locator('[aria-label=\"原始文件预览\"]')")
+    expect(probe).toContain("getByRole('button', { name: `打开标签页：${PROJECT_NAME}`, exact: true })")
+    expect(probe).not.toContain("previewPanel.locator('pre')")
     expect(probe).toContain("await openDockTab(dock, 'TM 匹配')")
     expect(probe).toContain("await openDockTab(dock, '术语')")
     expect(probe).toContain("await openDockTab(dock, '上下文/证据')")
@@ -180,5 +192,51 @@ describe('LF-056 Language Resource Dock packaged 探针合同', () => {
     expect(probe).toContain("getByRole('button', { name: '撤销译文编辑', exact: true })")
     expect(probe).toContain('linguistCatQuery')
     expect(probe).toContain('sourceHashBefore === sourceHashAfter')
+  })
+
+  test('Given canonical 术语状态文案变化, When LF-056 定位插入动作, Then 不绑定已退役的首选标签', () => {
+    expect(probe).toContain("const preferredTermMatch = termMatches.getByRole('listitem')")
+    expect(probe).toContain(".filter({ hasText: 'Welcome' })")
+    expect(probe).toContain(".filter({ hasText: '欢迎' })")
+    expect(probe).toContain("preferredTermMatch.getByText('推荐', { exact: true })")
+    expect(probe).toContain('{ name: /^插入.+术语 Welcome → 欢迎到当前译文草稿$/u }')
+    expect(probe).not.toContain('name: /插入首选 Contains 术语 Welcome → 欢迎到当前译文草稿/u')
+  })
+
+  test('Given current canonical evidence ids, When LF-056 locates proposal evidence, Then every locator accepts v2 refs', () => {
+    expect(probe).toContain('section[aria-label="建议的证据来源"]')
+    expect(probe).toContain('getByText(/tm:tmu_v2_[0-9a-f]{64}/u)')
+    expect(probe).toContain('getByText(/style:sgr_v2_[0-9a-f]{64}/u)')
+    expect(probe).toContain('getByText(/voice:vpr_v2_[0-9a-f]{64}/u)')
+    expect(probe).toContain('getByText(/term:ter_v2_[0-9a-f]{64}/u)')
+    expect(probe).not.toContain('section[aria-label="Agent proposal evidence"]')
+    expect(probe).not.toContain('getByText(/tm:tmu-/u)')
+    expect(probe).not.toContain('getByText(/style:sgr-/u)')
+    expect(probe).not.toContain('getByText(/voice:vpr-/u)')
+    expect(probe).not.toContain('getByText(/term:ter-/u)')
+  })
+
+  test('Given 侧边栏导航已稳定, When opt-in 截取视觉证据, Then 不依赖后续 LF-056 深层动作', () => {
+    const mainBody = probe.slice(probe.indexOf('async function main()'))
+    const navigationIndex = mainBody.indexOf("'lf026-linguist-navigation-discoverable'")
+    const captureIndex = mainBody.indexOf('await captureLinguistUiEvidence(launched.page)')
+    const dockGateIndex = mainBody.indexOf('await runLanguageResourceDockGate(')
+    expect(navigationIndex).toBeGreaterThanOrEqual(0)
+    expect(captureIndex).toBeGreaterThan(navigationIndex)
+    expect(captureIndex).toBeLessThan(dockGateIndex)
+
+    const recoveryBody = probe.slice(
+      probe.indexOf('async function verifyLanguageResourceDockRecovery('),
+      probe.indexOf('async function captureLinguistUiEvidence('),
+    )
+    expect(recoveryBody).not.toContain('captureLinguistUiEvidence')
+
+    const captureBody = probe.slice(
+      probe.indexOf('async function captureLinguistUiEvidence('),
+      probe.indexOf('async function openProjectAssetsSettings('),
+    )
+    expect(captureBody).toContain('resolveVisibleLinguistProjectList(page)')
+    expect(captureBody).not.toContain('section[aria-label="语言资产面板"]')
+    expect(captureBody).not.toContain('视觉证据截图前未恢复 Preview Dock')
   })
 })

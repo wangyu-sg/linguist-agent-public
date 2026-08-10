@@ -29,6 +29,7 @@ import type {
   ImportWarning,
 } from '@linguist/cat-formats'
 import type {
+  ApprovedExemplar,
   ContextDoc,
   ExportRecord,
   ReferenceImport,
@@ -349,7 +350,15 @@ export interface CatSegmentContext {
   qaFindings: CatQaFinding[]
   tmMatches: TmReferenceMatch[]
   termMatches: TermReferenceMatch[]
+  approvedExemplars: ApprovedExemplar[]
   stageEvents: WorkflowStageEvent[]
+}
+
+export interface ApproveSegmentExemplarInput {
+  segmentId: string
+  speaker: string
+  textType: string
+  note?: string
 }
 
 export interface CatQaFinding {
@@ -383,6 +392,7 @@ export type LinguistDeliveryBlockerCode =
   | 'UNCONFIRMED_SEGMENTS'
   | 'OPEN_QA_ERRORS'
   | 'PHRASE_MASTER_MAPPING'
+  | 'STRUCTURAL_RULES'
 
 export interface LinguistDeliveryBlocker {
   code: LinguistDeliveryBlockerCode
@@ -435,6 +445,7 @@ export interface LinguistPreparedDeliverySaveResult extends LinguistLocalExportR
 }
 
 export interface LinguistPreparedDelivery {
+  validation: 'verified' | 'as-is'
   preflight: LinguistDeliveryPreflight
   verification?: LinguistDeliveryVerification
   reportMarkdown: string
