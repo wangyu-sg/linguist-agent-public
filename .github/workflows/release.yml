@@ -87,13 +87,15 @@ jobs:
             if npx electron-builder --mac --arm64 --publish always; then
               exit 0
             fi
-            if [ "$i" -eq 3 ]; then
-              echo "三次打包均失败"
-              exit 1
+
+            if [ "$i" -lt 3 ]; then
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
             fi
-            echo "Attempt $i failed, retrying in 10s..."
-            sleep 10
           done
+
+          echo "macOS ARM64 packaging failed after 3 attempts"
+          exit 1
         working-directory: apps/electron
 
   build-mac-x64:
@@ -157,13 +159,15 @@ jobs:
             if npx electron-builder --mac --x64 --publish always; then
               exit 0
             fi
-            if [ "$i" -eq 3 ]; then
-              echo "三次打包均失败"
-              exit 1
+
+            if [ "$i" -lt 3 ]; then
+              echo "Attempt $i failed, retrying in 15s..."
+              sleep 15
             fi
-            echo "Attempt $i failed, retrying in 15s..."
-            sleep 15
           done
+
+          echo "macOS x64 packaging failed after 3 attempts"
+          exit 1
         working-directory: apps/electron
 
   merge-mac-yml:

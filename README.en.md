@@ -10,15 +10,15 @@ This AGPL-3.0 project derives from [Proma](https://github.com/proma-ai/Proma). S
 
 ## Current status
 
-This is a **personal-use Alpha** with no public-release plan. The baseline is Proma v0.16.10; Electron App `0.16.36`, Electron `43.2.0`, `@proma/shared 0.1.94`, Pi `0.82.1`, Claude Agent SDK `0.3.201`, CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.36 / 0.0.33`, CAT schema `15`, and Bun `1.3.14`.
+This is a **personal-use Alpha** with no public-release plan. The stable baseline is Proma `v0.17.1@6094036`; Electron App `0.17.1`, Electron `43.2.0`, `@proma/shared 0.1.94`, Pi `0.82.1`, CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.36 / 0.0.33`, CAT schema `15`, and Bun `1.3.14`.
 
 The app has three peer modes:
 
-- **Agent**: Proma's complete general Agent, including tools, files, MCP, Skills, permissions, Thinking, Queue / Steer, Planning, and Automations.
+- **Agent**: Proma's complete general Agent, including tools, files, MCP, Skills, trusted project instructions, Workspace Memory, permissions, Thinking, Queue / Steer, Planning, Collaboration, and Automations.
 - **Chat**: multi-provider chat, attachments, tools, context controls, and side-by-side comparison.
 - **Linguist**: projects, batches, TM/TB/Context, Segment editing, Proposals, QA, import/export, Tag Profiles, backup, and restore.
 
-Linguist reuses the same `AgentView`, Session Store, providers, models, permissions, and Proma Toolset. It does not create a restricted Agent or a second Composer.
+Agent uses a single **Pi Runtime**. Claude models remain available through Anthropic-protocol providers, but the product no longer ships the Claude Agent SDK or Nowledge Mem Runtime. Linguist reuses the same `AgentView`, Session Store, Workspace, providers, models, permissions, and Proma Toolset; it does not create a restricted Agent or a second Composer.
 
 ## Four professional roles
 
@@ -38,8 +38,8 @@ A Proposal is a visible, reviewable, reversible mutation carrying the Agent's cu
 ## CAT workflow
 
 ```text
-Proma Agent Runtime
-├── Base Tools / MCP / Files / Permission / Model
+Proma Pi Agent Runtime
+├── Workspace / Skills / MCP / AGENTS.md / Memory / Files / Planning / Collaboration
 └── Linguist Project Binding
     ├── one shared set of 30 CAT tools
     ├── built-in Common Quality Contract + current Role Markdown
@@ -55,16 +55,18 @@ Key boundaries:
 - `@linguist/cat-store` owns each project's `cat.db` and managed source / blobs / exports / backups.
 - `@linguist/cat-tools` derives project identity only from the Session binding; the model cannot provide a `projectId`.
 - UI and Agent tools call the same `LinguistProjectService`; parsing, transactions, CAS, locked Segments, Tag/Placeholder/ICU checks, QA, and round-trip rules are not duplicated.
-- The Prompt Builder keeps one version and one final hash; diagnostics expose Role fallback, complete/partial/skipped Project Digest status, and length truncation.
-- `cat_import_resources` accepts files or small directories. Absolute paths are used directly and relative paths resolve from the Session cwd; Proma Session permissions are the only permission experience.
-- `cat_export_asset` supports `verified` and `as-is`. Verified export checks structure, format, and re-import; overwrite defaults off and is an atomic regular-file replacement only when explicitly requested.
-- Tag discovery, candidates, editor hints, Proposals, QA, and verified export use one Scanner. Ordinary translatable text such as `[Damage]` is not hard-locked by default.
+- Prompt Builder keeps one contract; Project Digest exposes `complete / partial / skipped` and `truncated`, with a model-visible placeholder on failure.
+- `cat_import_resources` accepts files or small directories; the native UI accepts multiple files or a directory. Renderer never accepts arbitrary pasted paths, leaving path authority in the main process.
+- Agent tools and native UI support `verified` and explicitly confirmed `as-is` export. Both validate output generation and re-import, with overwrite off by default.
+- Tag discovery, candidates, editor hints, Proposals, QA, and verified export share one Scanner.
+- Phrase split/master MXLIFF pairing uses content evidence and blocks verified export when mapping is incomplete or stale.
 - memoQ MQXLIFF uses a dedicated adapter that preserves inline codes, confirmation status, and review comments; real customer samples still require per-sample validation.
-- Phrase split/master MXLIFF pairing uses content identity, Source hash, unit/context, and placeholder evidence. Verified export refuses incomplete or stale mappings.
-- Linguist reuses Proma's expanded and collapsed sidebar chrome for the primary new-session and search actions. A normal new session is created as General only inside the active CAT project; project grouping and Agent workspace grouping remain isolated. Planning and Agent Skills are bound to the general Agent workspace, so their absence from the Linguist sidebar is intentional domain isolation rather than a missing feature.
-- Batch navigation lists only real batches, refreshes in place, and selects the first valid batch when the current selection disappears. Footer progress, draft and source/target character counts are scoped to that batch; its stage label comes from the project workflow (`confirmed / reviewed / proofread`), not the Agent session role.
 
-Agent conversation remains available when a project is archived, missing, or temporarily unavailable. CAT tools report the real project state and Store writes fail closed, while Proma files, Shell, OCR, Excel, MCP, and other tools remain available for diagnosis or recovery.
+Full `AgentView` retains Proma's Files / Changes panel; the Workbench rail is conversation-only. A Linguist session directly inherits its Proma Workspace's Skills, MCP, trusted `AGENTS.md`, Memory, Files, Planning, Queue, and Collaboration. CAT project binding only adds domain context and tools; it does not duplicate host capabilities.
+
+Batch navigation lists only real batches, refreshes in place, and selects the first valid batch when the current selection disappears. Footer progress, draft count, and source/target character counts are scoped to that batch; stage labels follow project workflow (`confirmed / reviewed / proofread`).
+
+Agent conversation remains available when a project is archived, missing, or temporarily unavailable. CAT tools report the real project state and Store writes fail closed.
 
 ## Local data
 
@@ -78,7 +80,6 @@ Production uses `~/.linguist-agent/`; development uses `~/.linguist-agent-dev/`:
 ├── agent-workspaces/
 ├── attachments/
 ├── settings.json
-├── sdk-config/
 ├── planning.json
 └── linguist/
     ├── projects.json
@@ -120,7 +121,7 @@ Tests and smoke checks must use a task-specific temporary user-data directory an
 
 ## Evidence still required
 
-Implementation and automated regression do not prove language quality or product qualification. Same-model Proma/Codex comparison, a real-provider four-role workflow, Native Open/IME/VoiceOver/keyboard checks, and 14 days of real daily use still require elapsed human evidence. See [SIMPLE_IMPLEMENTATION_STATUS.md](./docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md), [HANDOFF.md](./docs/HANDOFF.md), and [TODO.md](./TODO.md).
+Implementation and automated regression do not prove language quality or product qualification. Same-model Proma/Codex comparison, a real-provider four-role workflow, Native Open/Save, IME, VoiceOver, keyboard checks, and 14 days of real daily use still require elapsed human evidence. See [SIMPLE_IMPLEMENTATION_STATUS.md](./docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md), [HANDOFF.md](./docs/HANDOFF.md), and [TODO.md](./TODO.md).
 
 ## License
 

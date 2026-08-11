@@ -14,6 +14,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:p
 import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { BrowserWindow } from 'electron'
 import type { WebContents } from 'electron'
+import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { AGENT_IPC_CHANNELS, LINGUIST_CAT_IPC_CHANNELS, MAX_ATTACHMENT_SIZE } from '@proma/shared'
 import type {
   AgentSendInput,
@@ -29,9 +30,7 @@ import type {
   AgentMessage,
   LinguistProjectMutationEvent,
 } from '@proma/shared'
-import { ClaudeAgentAdapter, scanAndKillOrphanedClaudeSubprocesses } from './adapters/claude-agent-adapter'
-import { PiAgentAdapter, cleanupPiRuntimeResources } from './adapters/pi-agent-adapter'
-import { RuntimeRoutingAgentAdapter } from './adapters/runtime-routing-agent-adapter'
+import { PiAgentAdapter } from './adapters/pi-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
 import { getAgentWorkspaceBySlug, getLocalProjectRootStatus, getProjectFilesPath } from './agent-workspace-manager'
@@ -45,10 +44,7 @@ import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
 // ===== 实例创建 =====
 
 const eventBus = new AgentEventBus()
-const adapter = new RuntimeRoutingAgentAdapter({
-  claude: new ClaudeAgentAdapter(),
-  pi: new PiAgentAdapter(),
-})
+const adapter = new PiAgentAdapter()
 const orchestrator = new AgentOrchestrator(adapter, eventBus)
 
 /** 导出 EventBus 供飞书 Bridge 等外部服务订阅事件 */
@@ -161,6 +157,11 @@ eventBus.use((sessionId, payload, next) => {
 })
 
 // ===== IPC 薄包装函数 =====
+
+/** 仅主进程内部使用的单次运行扩展，绝不经 IPC 序列化。 */
+export interface AgentRunExtensions {
+  piCustomTools?: ToolDefinition[]
+}
 
 /**
  * 运行 Agent 并流式推送事件到渲染进程
@@ -276,6 +277,7 @@ export async function runAgentHeadless(
     source?: AgentExternalRunSource
     originSessionId?: string
   },
+  extensions?: AgentRunExtensions,
 ): Promise<void> {
   // 委派子会话优先回到父会话所在 renderer，外部无界面运行才回退任意主窗口。
   const wc = getHeadlessAgentRunTarget(
@@ -351,7 +353,7 @@ export async function runAgentHeadless(
       onLinguistProjectMutation: (event) => {
         sendLinguistProjectMutation(wc, event)
       },
-    })
+    }, extensions)
   } catch (err) {
     console.error('[Agent 服务] runAgentHeadless 未处理异常:', err)
     const errorMessage = err instanceof Error ? err.message : '未知错误'
@@ -416,16 +418,6 @@ export function stopAllAgents(): void {
   orchestrator.stopAll()
 }
 
-/**
- * 退出前最后兜底：扫描并强杀所有孤儿 claude-agent-sdk 子进程
- *
- * 必须在 stopAllAgents() 之后调用。针对 pidMap 未覆盖、dispose 漏杀等极端场景。
- * 同步执行，不 await，确保 before-quit 能在 Electron 超时前完成。
- */
-export function killOrphanedClaudeSubprocesses(): void {
-  scanAndKillOrphanedClaudeSubprocesses()
-  cleanupPiRuntimeResources()
-}
 
 /**
  * 运行中动态切换会话的权限模式
