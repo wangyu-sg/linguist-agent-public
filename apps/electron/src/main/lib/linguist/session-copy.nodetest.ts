@@ -22,11 +22,14 @@ const LINGUIST_ROOT = join(tempHome, '.linguist-agent', 'linguist')
 let serviceSequence = 0
 
 function makeService(): LinguistProjectService {
+  const instance = ++serviceSequence
+  let workspaceSequence = 0
   const service = new LinguistProjectService({
     rootDir: LINGUIST_ROOT,
-    entropy: makeEntropy(`session-copy-${++serviceSequence}`),
+    entropy: makeEntropy(`session-copy-${instance}`),
     now: makeClock(),
-    workspaceAllocator: () => `ws-session-copy-${serviceSequence}`,
+    workspaceCreator: () => `ws-session-copy-${instance}-${++workspaceSequence}`,
+    workspaceResolver: () => true,
   })
   service.init()
   return service
@@ -57,16 +60,16 @@ function successResult(sessionId: string): SDKMessage {
   }
 }
 
-function seedClaudeArtifact(sessionId: string): void {
-  const directory = join(
-    tempHome,
-    '.linguist-agent',
-    'sdk-config',
-    'projects',
-    'session-copy-fixture',
-  )
+function seedPiArtifact(sessionId: string, assistantUuids: readonly string[]): void {
+  const directory = join(tempHome, '.linguist-agent', 'sdk-config', 'sessions')
   mkdirSync(directory, { recursive: true })
-  writeFileSync(join(directory, `${sessionId}.jsonl`), '{"type":"summary"}\n')
+  const piSessionFile = join(directory, `${sessionId}.jsonl`)
+  writeFileSync(piSessionFile, '')
+  sessions.updateAgentSessionMeta(sessionId, {
+    sdkSessionId: `pi-${sessionId}`,
+    piSessionFile,
+    piEntryBindings: Object.fromEntries(assistantUuids.map((uuid) => [uuid, `entry-${uuid}`])),
+  })
 }
 
 test('空白 Linguist 会话复制到健康活跃项目，并继承配置但清除侧栏/运行元数据', async () => {
@@ -116,11 +119,10 @@ test('空白 Linguist 会话复制到健康活跃项目，并继承配置但清�
   assert.equal(copied.linguistProjectId, targetProject.id)
   assert.equal(copied.linguistProjectName, '目标项目')
   assert.equal(copied.linguistRole, 'reviewer')
-  assert.equal(copied.agentRuntime, 'pi')
   assert.equal(copied.codexFastMode, true)
   assert.equal(copied.openAIThinkingLevel, 'high')
   assert.equal(copied.permissionMode, 'bypassPermissions')
-  assert.equal(copied.workspaceId, undefined)
+  assert.equal(copied.workspaceId, targetProject.promaWorkspaceId)
   assert.equal(copied.pinned, undefined)
   assert.equal(copied.starred, undefined)
   assert.equal(copied.archived, undefined)
@@ -205,15 +207,15 @@ test('已完成会话只传最新成功主线 assistant 给原生 fork，并使�
     'channel-id',
     undefined,
     'model-id',
-    'claude',
+    undefined,
+    undefined,
     {
       linguistProjectId: sourceProject.id,
       linguistProjectName: sourceProject.name,
       linguistRole: 'proofreader',
     },
   )
-  sessions.updateAgentSessionMeta(source.id, { sdkSessionId: 'sdk-source' })
-  seedClaudeArtifact('sdk-source')
+  seedPiArtifact(source.id, ['assistant-one', 'assistant-two'])
   sessions.appendSDKMessages(source.id, [
     {
       type: 'assistant',
@@ -243,9 +245,10 @@ test('已完成会话只传最新成功主线 assistant 给原生 fork，并使�
     return sessions.createAgentSession(
       options.title,
       source.channelId,
-      undefined,
+      options.workspaceId,
       source.modelId,
-      'claude',
+      undefined,
+      undefined,
       options.linguistBinding,
     )
   }
@@ -317,13 +320,14 @@ test('空白复制在元数据继承失败时回滚新会话', async () => {
   await assert.rejects(
     copy.copyLinguistSessionToProject(
       deps(service, {
-        createBlankSession: (sourceMeta, title, linguistBinding) => {
+        createBlankSession: (sourceMeta, title, workspaceId, linguistBinding) => {
           const created = sessions.createAgentSession(
             title,
             sourceMeta.channelId,
-            undefined,
+            workspaceId,
             sourceMeta.modelId,
-            sourceMeta.agentRuntime,
+            undefined,
+            undefined,
             linguistBinding,
           )
           sessions.deleteAgentSession(created.id)
@@ -358,15 +362,15 @@ test('缺失源项目只要历史 artifact 可读仍可复制', async () => {
     undefined,
     undefined,
     undefined,
-    'claude',
+    undefined,
+    undefined,
     {
       linguistProjectId: sourceProject.id,
       linguistProjectName: sourceProject.name,
       linguistRole: 'translator',
     },
   )
-  sessions.updateAgentSessionMeta(source.id, { sdkSessionId: 'sdk-missing-source' })
-  seedClaudeArtifact('sdk-missing-source')
+  seedPiArtifact(source.id, ['assistant-readable'])
   sessions.appendSDKMessages(source.id, [
     {
       type: 'assistant',
@@ -384,9 +388,10 @@ test('缺失源项目只要历史 artifact 可读仍可复制', async () => {
       forkSession: async (_input, options) => sessions.createAgentSession(
         options.title,
         undefined,
+        options.workspaceId,
         undefined,
         undefined,
-        'claude',
+        undefined,
         options.linguistBinding,
       ),
     }),
@@ -420,15 +425,15 @@ test('原生分叉失败返回稳定阻断原因且不留下副本', async () =>
     undefined,
     undefined,
     undefined,
-    'claude',
+    undefined,
+    undefined,
     {
       linguistProjectId: sourceProject.id,
       linguistProjectName: sourceProject.name,
       linguistRole: 'general',
     },
   )
-  sessions.updateAgentSessionMeta(source.id, { sdkSessionId: 'sdk-native-failure' })
-  seedClaudeArtifact('sdk-native-failure')
+  seedPiArtifact(source.id, ['assistant-native-failure'])
   sessions.appendSDKMessages(source.id, [
     {
       type: 'assistant',
@@ -477,15 +482,15 @@ test('目标在异步分叉期间归档时回滚已创建副本', async () => {
     undefined,
     undefined,
     undefined,
-    'claude',
+    undefined,
+    undefined,
     {
       linguistProjectId: sourceProject.id,
       linguistProjectName: sourceProject.name,
       linguistRole: 'general',
     },
   )
-  sessions.updateAgentSessionMeta(source.id, { sdkSessionId: 'sdk-target-race' })
-  seedClaudeArtifact('sdk-target-race')
+  seedPiArtifact(source.id, ['assistant-target-race'])
   sessions.appendSDKMessages(source.id, [
     {
       type: 'assistant',
@@ -504,9 +509,10 @@ test('目标在异步分叉期间归档时回滚已创建副本', async () => {
           const created = sessions.createAgentSession(
             options.title,
             undefined,
+            options.workspaceId,
             undefined,
             undefined,
-            'claude',
+            undefined,
             options.linguistBinding,
           )
           copiedId = created.id

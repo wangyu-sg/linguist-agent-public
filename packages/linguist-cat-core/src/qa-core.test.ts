@@ -37,7 +37,7 @@ describe('PB-070 deterministic QA Core', () => {
       segment(11, { source: 'Repeated source', target: '译文乙' }),
     ], {
       requiredTerminology: [{ sourceTerm: 'Save', targetTerm: '储存' }],
-      forbiddenTerms: ['禁词'],
+      forbiddenTerms: [{ sourceTerm: 'Save', term: '禁词' }],
     })
     const codes = new Set(findings.map((finding) => finding.code))
     const expected: QaRuleCode[] = [
@@ -61,12 +61,14 @@ describe('PB-070 deterministic QA Core', () => {
       expect(item.issueType).toBe(mapping.issueType)
       expect(item.disposition).toBe(mapping.disposition)
     }
-    // 契约定级抽查：占位符/标签 L0 defect；硬术语/数字 L1 defect
+    // 契约定级抽查：占位符/标签 L0 defect；术语硬门 L1；普通数字仅 QA。
     const byCode = new Map(findings.map((item) => [item.code, item]))
     expect(byCode.get(QA_RULE_CODES.PLACEHOLDER_MISMATCH)?.severity).toBe('L0')
     expect(byCode.get(QA_RULE_CODES.TAG_MISMATCH)?.issueType).toBe('format_tags')
     expect(byCode.get(QA_RULE_CODES.FORBIDDEN_TERM)?.issueType).toBe('terminology_hard')
     expect(byCode.get(QA_RULE_CODES.NUMBER_MISMATCH)?.issueType).toBe('numbers_units_dates')
+    expect(byCode.get(QA_RULE_CODES.NUMBER_MISMATCH)?.severity).toBe('L2')
+    expect(byCode.get(QA_RULE_CODES.NUMBER_MISMATCH)?.disposition).toBe('needs_review')
     // required 缺失始终是硬错误。
     const required = byCode.get(QA_RULE_CODES.REQUIRED_TERM)
     expect(required?.severity).toBe('L1')
@@ -124,7 +126,7 @@ describe('required / forbidden 术语硬规则矩阵', () => {
   ]
   const terms = {
     requiredTerminology: [{ sourceTerm: 'Save', targetTerm: '储存' }],
-    forbiddenTerms: ['禁词'],
+    forbiddenTerms: [{ sourceTerm: 'Save', term: '禁词' }],
   }
 
   test('required 在 strict 下为 L1 defect', () => {

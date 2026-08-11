@@ -202,7 +202,6 @@ test('validation negatives: bad id / bad locale / oversized name / wrong types â
       { name: 'blank name', run: () => ipc.create({ ...INPUT, name: '   ' }) },
       { name: 'non-string name', run: () => ipc.create({ ...INPUT, name: 7 }) },
       { name: 'bad includeArchived', run: () => ipc.list({ includeArchived: 'yes' }) },
-      { name: 'bad workspaceId (empty)', run: () => ipc.create({ ...INPUT, promaWorkspaceId: '' }) },
       { name: 'bad archive id', run: () => ipc.archive({ projectId: project.id.slice(0, -1) }) },
       { name: 'bad setLocales locale', run: () => ipc.setLocales({ projectId: project.id, sourceLocale: 'english', targetLocale: 'zh-CN' }) },
     ]

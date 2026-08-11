@@ -3093,7 +3093,7 @@ export function AgentView({
           >
             {(isPlanMode || isPermissionPlanMode) && !isDragOver && <PlanModeDashedBorder />}
             {isLegacyTranscript && (
-              <div className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-amber-700 dark:text-amber-300">
+              <div className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-warning">
                 <span>这是已退役 Claude runtime 的只读历史会话；原对话可查看，但不能继续、分叉或回退。</span>
                 <Button size="sm" variant="outline" onClick={() => void handleRetryInNewSession()} disabled={!agentChannelId}>
                   以 Pi 新会话继续

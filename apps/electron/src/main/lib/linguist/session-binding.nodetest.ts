@@ -11,16 +11,24 @@ const binding = await import('./session-binding')
 const sessionManager = await import('../agent-session-manager')
 
 let sequence = 0
-function setup() {
+function setup(options: { missingInitialWorkspace?: boolean } = {}) {
+  const workspaces = new Set<string>()
+  let workspaceSequence = 0
   const service = new LinguistProjectService({
     rootDir: join(tempHome, '.linguist-agent', 'linguist'),
     entropy: makeEntropy(`binding-${++sequence}`),
     now: makeClock(),
-    workspaceAllocator: () => `ws-binding-${sequence}`,
+    workspaceCreator: () => {
+      const id = `ws-binding-${sequence}-${++workspaceSequence}`
+      workspaces.add(id)
+      return id
+    },
+    workspaceResolver: (id) => workspaces.has(id),
   })
   service.init()
   const project = service.createProject({ name: `绑定项目 ${sequence}`, sourceLocale: 'en', targetLocale: 'zh-CN' })
-  return { service, project }
+  if (options.missingInitialWorkspace) workspaces.delete(project.promaWorkspaceId)
+  return { service, project, workspaces }
 }
 
 test('四种岗位均可创建，缺省岗位是 general，工具能力不写入角色 metadata', () => {
@@ -30,12 +38,27 @@ test('四种岗位均可创建，缺省岗位是 general，工具能力不写入
     for (const role of roles) {
       const session = binding.createLinguistProjectChatSession(service, { projectId: project.id, role })
       assert.equal(session.linguistProjectId, project.id)
+      assert.equal(session.workspaceId, project.promaWorkspaceId)
       assert.equal(session.linguistRole, role)
       assert.equal(session.linguistSessionRole, undefined)
     }
     const defaultSession = binding.createLinguistProjectChatSession(service, { projectId: project.id })
     assert.equal(defaultSession.linguistRole, 'general')
     assert.equal(defaultSession.title, '新 Agent 会话')
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('旧项目绑定的 workspace 缺失时，首次创建会话惰性重建并回写双绑定', () => {
+  const { service, project, workspaces } = setup({ missingInitialWorkspace: true })
+  try {
+    const session = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+    const repaired = service.getProject(project.id)
+    assert.notEqual(repaired.promaWorkspaceId, project.promaWorkspaceId)
+    assert.ok(workspaces.has(repaired.promaWorkspaceId))
+    assert.equal(session.workspaceId, repaired.promaWorkspaceId)
+    assert.equal(session.linguistProjectId, project.id)
   } finally {
     service.closeAll()
   }

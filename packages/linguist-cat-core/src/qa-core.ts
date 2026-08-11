@@ -47,17 +47,25 @@ export const QA_RULE_CODES = {
 
 export type QaRuleCode = (typeof QA_RULE_CODES)[keyof typeof QA_RULE_CODES]
 
-/** 术语表 preferred 一词多译冲突组（store 层用现成 conflict 标志语义预先算好）。 */
+/** 需人工判断的术语证据（冲突、歧义、未知 scope、preferred/deprecated）。 */
 export interface QaGlossaryConflict {
   sourceTerm: string
   translations: readonly string[]
+}
+
+export interface QaSegmentTerminology {
+  requiredTerminology?: readonly RequiredTerminologyRule[]
+  forbiddenTerms?: readonly ForbiddenTermRule[]
+  glossaryConflicts?: readonly QaGlossaryConflict[]
 }
 
 export interface QaRunOptions {
   /** general 保守；subtitle 容忍字幕省略号/强调标点与正常中英长度扩展。 */
   profile?: QaProfile
   requiredTerminology?: readonly RequiredTerminologyRule[]
-  forbiddenTerms?: readonly (ForbiddenTermRule | string)[]
+  forbiddenTerms?: readonly ForbiddenTermRule[]
+  /** Store evaluator 按 Segment 冻结的术语判定；存在时优先于全局术语选项。 */
+  terminologyBySegment?: Readonly<Record<string, QaSegmentTerminology>>
   minTargetLengthRatio?: number
   maxTargetLengthRatio?: number
   /** 术语执行策略（默认 prefer）；forbidden 条目永远 strict 阻断。 */
@@ -283,6 +291,7 @@ function segmentFindings(segment: Segment, options: QaRunOptions): OpenQaFinding
 
   const results: OpenQaFindingInput[] = []
   const emitted = new Set<QaRuleCode>()
+  const terminology = options.terminologyBySegment?.[segment.id as string]
   const emit = (spec: FindingSpec): void => {
     if (emitted.has(spec.code)) return
     emitted.add(spec.code)
@@ -292,10 +301,10 @@ function segmentFindings(segment: Segment, options: QaRunOptions): OpenQaFinding
   for (const violation of runDeterministicHardRules({
     segment,
     proposedTarget: segment.target,
-    requiredTerminology: options.requiredTerminology,
-    forbiddenTerms: options.forbiddenTerms,
+    requiredTerminology: terminology?.requiredTerminology ?? options.requiredTerminology,
+    forbiddenTerms: terminology?.forbiddenTerms ?? options.forbiddenTerms,
     ...(options.tagProfile !== undefined ? { tagProfile: options.tagProfile } : {}),
-  }).violations) {
+  }, { includeAdvisory: true }).violations) {
     const mapped = HARD_RULE_MAPPING[violation.code]
     if (mapped === undefined) continue
     emit(mapped.code === QA_RULE_CODES.REQUIRED_TERM ? REQUIRED_TERM_SPEC : mapped)
@@ -413,14 +422,14 @@ function segmentFindings(segment: Segment, options: QaRunOptions): OpenQaFinding
   }
 
   // 术语表内部冲突（一词多译）：不可一刀切判定，必须 query。
-  const conflicts = (options.glossaryConflicts ?? []).filter((conflict) =>
+  const conflicts = (terminology?.glossaryConflicts ?? options.glossaryConflicts ?? []).filter((conflict) =>
     conflict.sourceTerm.trim() !== ''
     && segment.source.normalize('NFKC').toLocaleLowerCase()
       .includes(conflict.sourceTerm.normalize('NFKC').toLocaleLowerCase()))
   if (conflicts.length > 0) {
     emit({
       code: QA_RULE_CODES.GLOSSARY_CONFLICT,
-      message: `术语表存在一词多译冲突：${conflicts
+      message: `术语需人工判断：${conflicts
         .map((conflict) => `${conflict.sourceTerm} → ${conflict.translations.join(' / ')}`)
         .join('；')}。`,
     })

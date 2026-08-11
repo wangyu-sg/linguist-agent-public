@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "baseline": "72fd1b1a474ab0375b9c126d11d3c7c4c8ed538a",
-  "formalMerge": "ea26177f36d59bd2781d7ff9264451a8430e2249",
-  "recomputedOn": "2026-08-10",
-  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.16.10 merge and extended for post-merge product work. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
+  "baseline": "6094036d3f6f4363c44ce8a11155ecd531a80aae",
+  "formalMerge": "96155d1ad2f131e10fd2f0a6998ec13573aa2ead",
+  "recomputedOn": "2026-08-11",
+  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.17.1 merge. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -12,6 +12,11 @@
     "apps/electron/src/renderer/features/linguist/",
     "apps/electron/src/main/lib/linguist/",
     "packages/linguist-*",
+    "apps/electron/default-skills/cultural-lqa/",
+    "apps/electron/default-skills/localization-readiness/",
+    "apps/electron/default-skills/release-lqa/",
+    "apps/electron/default-skills/terminology-candidate-mining/",
+    "apps/electron/default-skills/translator-brief/",
     "resources/linguist-skills/",
     "resources/linguist-roles/",
     ".gitignore",
@@ -151,6 +156,11 @@
       "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
     },
     {
+      "file": "apps/electron/scripts/build-cli.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: remove stale Claude SDK packaging language after adopting the upstream Pi-only runtime."
+    },
+    {
       "file": "apps/electron/scripts/run-electron-builder.test.ts",
       "ticket": "LA-SYNC-005",
       "reason": "Permanent Product Fork: remove Bun's lifecycle node shim before launching Electron Builder and keep the packaging gate on the real Node runtime."
@@ -186,6 +196,11 @@
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
     },
     {
+      "file": "apps/electron/src/main/lib/agent-collaboration-tools.ts",
+      "ticket": "LA-SYNC-003",
+      "reason": "Local Host Seam: extend native Proma Collaboration with trusted Linguist role metadata and a frozen CAT scope while retaining the shared session runner."
+    },
+    {
       "file": "apps/electron/src/main/lib/agent-island-navigation-policy.test.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
@@ -199,11 +214,6 @@
       "file": "apps/electron/src/main/lib/agent-orchestrator.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical. LA-PROMPT-001: the Linguist prompt overlay is built once from the canonical prompt contract and rendered per agentRuntime (pi → markdown, otherwise xml)."
-    },
-    {
-      "file": "apps/electron/src/main/lib/agent-prompt-builder.test.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
     },
     {
       "file": "apps/electron/src/main/lib/agent-service.ts",
@@ -237,11 +247,6 @@
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-usage.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
-    },
-    {
-      "file": "apps/electron/src/main/lib/agent-workspace-manager.test.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
     },
@@ -454,6 +459,11 @@
       "file": "apps/electron/src/main/lib/wechat-config.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+    },
+    {
+      "file": "apps/electron/src/main/lib/workspace-memory-window.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: every BrowserWindow explicitly keeps context isolation, sandboxing, disabled Node integration, and web security."
     },
     {
       "file": "apps/electron/src/main/lib/workspace-watcher.ts",
@@ -1011,11 +1021,6 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
-      "file": "apps/electron/src/renderer/components/settings/MemorySettings.tsx",
-      "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
-    },
-    {
       "file": "apps/electron/src/renderer/components/settings/MigrationSettings.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
@@ -1218,7 +1223,7 @@
     {
       "file": "bun.lock",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "reason": "Permanent Product Fork: record Linguist Agent workspace package versions while retaining the upstream Pi-only dependency graph."
     },
     {
       "file": "package.json",

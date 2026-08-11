@@ -20,7 +20,7 @@ describe('QA Finding（类型 + 不变量，无规则引擎）', () => {
     expect(finding.id).toMatch(/^qaf_v2_[0-9a-f]{64}$/)
     // PB-096：issueType/disposition 缺省按 code 静态映射表回填
     expect(finding.issueType).toBe('numbers_units_dates')
-    expect(finding.disposition).toBe('defect')
+    expect(finding.disposition).toBe('needs_review')
 
     const resolved = transitionQaFinding(finding, 'resolved')
     expect(resolved.status).toBe('resolved')

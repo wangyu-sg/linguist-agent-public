@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import * as os from 'node:os'
 import { join } from 'node:path'
 import type { SDKUserMessage } from '@proma/shared'
+import * as piCodingAgent from '@earendil-works/pi-coding-agent'
 import { electronMock, resetElectronMock } from './test/electron-mock'
 
 type AgentSessionManager = typeof import('./agent-session-manager')
@@ -17,6 +18,7 @@ const originalPromaDev = process.env.PROMA_DEV
 // agent-session-manager loads Pi lazily for fork/rewind, so this focused fake isolates
 // entry-tree semantics without requiring a real Pi session JSONL fixture.
 mock.module('@earendil-works/pi-coding-agent', () => ({
+  ...piCodingAgent,
   SessionManager: {
     open: (sessionFile: string) => ({
       createBranchedSession: (entryId: string) => {

@@ -38,7 +38,7 @@ describe('LF-026 packaged 探针合同', () => {
   test('Given the canonical PB-074 flow, When translation runs, Then it uses the current Project Agent and inline review paths', () => {
     expect(probe).toContain('agentChannelId: channel.id')
     expect(probe).toContain('agentModelId: args.modelId')
-    expect(probe).toContain("agentRuntime: 'pi'")
+    expect(probe).not.toContain("agentRuntime: 'pi'")
     expect(probe).toContain('header[aria-label="本地化工作台工具栏"]')
     expect(probe).toContain('aside[aria-label="项目 Agent"]')
     expect(probe).toContain('translateSelectedAndWaitComplete')

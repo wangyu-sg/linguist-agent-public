@@ -266,7 +266,7 @@ test('proposal hard rules fail closed in the Store and roll back the whole batch
       proposedTarget: segments[0]!.source,
     })
     db.termEntries.importMany([{
-      term: 'Alpha',
+      term: 'source',
       translation: segments[0]!.source,
       status: 'forbidden',
       caseSensitive: false,
@@ -286,7 +286,7 @@ test('proposal hard rules fail closed in the Store and roll back the whole batch
   }
 })
 
-test('required/forbidden terms are source-scoped hard gates while preferred stays advisory', () => {
+test('only unambiguous source-scoped terms are hard gates', () => {
   const { db, segments } = setup()
   try {
     db.termEntries.importMany([
@@ -300,6 +300,12 @@ test('required/forbidden terms are source-scoped hard gates while preferred stay
         term: 'Alpha',
         translation: '首选译法',
         status: 'preferred',
+        caseSensitive: false,
+      },
+      {
+        term: 'source',
+        translation: '源文',
+        status: 'required',
         caseSensitive: false,
       },
       {
@@ -325,7 +331,7 @@ test('required/forbidden terms are source-scoped hard gates while preferred stay
     assert.doesNotThrow(() => db.proposals.insertPending({
       segmentId: segments[0]!.id,
       baseRevision: 0,
-      proposedTarget: '包含阿尔法，但不采用首选译法，也出现仅 Beta 禁用',
+      proposedTarget: '包含源文，但不采用 Alpha 冲突译法，也出现仅 Beta 禁用',
     }))
   } finally {
     db.close()

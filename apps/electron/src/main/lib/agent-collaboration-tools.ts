@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { Type } from 'typebox'
 import type {
   AgentDelegationRole,
   AgentDelegationStatus,
@@ -16,6 +17,8 @@ import type {
   PermissionRequest,
   PromaPermissionMode,
   SDKMessage,
+  LinguistDelegatedScope,
+  LinguistRole,
 } from '@proma/shared'
 import {
   createAgentSession,
@@ -37,6 +40,7 @@ import {
   resolveDelegationPermissionMode,
 } from './agent-collaboration-utils'
 import { assertEnabledModelForChannel, listEnabledAgentModelsForChannel } from './agent-model-selection'
+import { getLinguistProjectService } from './linguist/project-service'
 
 interface CollaborationToolContext {
   sessionId: string
@@ -233,6 +237,12 @@ interface DelegateAgentArgs {
   expectedOutput?: string
   permissionMode?: PromaPermissionMode
   modelId?: string
+  linguistRole?: Exclude<LinguistRole, 'general'>
+  linguistScope?: {
+    batchId?: string
+    assetIds?: string[]
+    segmentIds?: string[]
+  }
 }
 
 interface StartDelegationResult {
@@ -256,6 +266,54 @@ function getRunningDelegationCount(parentSessionId: string): number {
   return Array.from(delegations.values())
     .filter((item) => item.parentSessionId === parentSessionId && item.status === 'running')
     .length
+}
+
+function freezeLinguistScope(
+  parent: AgentSessionMeta,
+  input: DelegateAgentArgs['linguistScope'],
+): LinguistDelegatedScope {
+  const projectId = parent.linguistProjectId!
+  const db = getLinguistProjectService().openProject(projectId)
+  const assetIds = [...new Set([
+    ...(input?.batchId ? [input.batchId] : []),
+    ...(input?.assetIds ?? []),
+  ])]
+  const segmentIds = [...new Set(input?.segmentIds ?? [])]
+
+  for (const assetId of assetIds) {
+    if (!db.assets.get(assetId)) throw new Error(`Linguist 委派批次不存在: ${assetId}`)
+    segmentIds.push(...db.segments.queryIds({ assetId }))
+  }
+  const frozenSegmentIds = [...new Set(segmentIds)]
+  const effectiveSegmentIds = frozenSegmentIds.length > 0 || input !== undefined
+    ? frozenSegmentIds
+    : db.segments.queryIds()
+  const found = new Set(db.segments.getByIds(effectiveSegmentIds).map((segment) => segment.id as string))
+  const missing = effectiveSegmentIds.find((segmentId) => !found.has(segmentId))
+  if (missing) throw new Error(`Linguist 委派 Segment 不存在: ${missing}`)
+  if (effectiveSegmentIds.length === 0) throw new Error('Linguist 委派范围没有 Segment')
+  return { assetIds, segmentIds: effectiveSegmentIds }
+}
+
+function resolveLinguistDelegation(
+  parent: AgentSessionMeta | undefined,
+  args: DelegateAgentArgs,
+): {
+  role: Exclude<LinguistRole, 'general'>
+  projectId: string
+  projectName: string
+  scope: LinguistDelegatedScope
+} | undefined {
+  if (!args.linguistRole) return undefined
+  if (!parent?.linguistProjectId || parent.linguistRole !== 'general') {
+    throw new Error('只有 Linguist General 会话可以委派本地化岗位')
+  }
+  return {
+    role: args.linguistRole,
+    projectId: parent.linguistProjectId,
+    projectName: parent.linguistProjectName ?? parent.linguistProjectId,
+    scope: freezeLinguistScope(parent, args.linguistScope),
+  }
 }
 
 function createDelegationCompletion(): Pick<DelegationRecord, 'completion' | 'resolveCompletion'> {
@@ -626,7 +684,8 @@ function startDelegation(
 ): StartDelegationResult {
   const task = assertNonBlank(args.task, 'task')
   const delegationId = randomUUID()
-  const role = args.role ?? 'custom'
+  const linguist = resolveLinguistDelegation(parent, args)
+  const role = args.role ?? (linguist?.role === 'translator' ? 'implement' : linguist ? 'review' : 'custom')
   const title = normalizeTitle(args.title, `协作：${task}`)
   const goal = truncateText(task, DELEGATION_GOAL_CHAR_LIMIT)
   const parentPermissionMode = getCurrentParentPermissionMode(parent, ctx.permissionMode)
@@ -644,7 +703,22 @@ function startDelegation(
 
   const { completion, resolveCompletion } = createDelegationCompletion()
 
-  const child = createAgentSession(title, ctx.channelId, ctx.workspaceId, effectiveModelId)
+  const child = createAgentSession(
+    title,
+    ctx.channelId,
+    ctx.workspaceId,
+    effectiveModelId,
+    undefined,
+    undefined,
+    linguist === undefined
+      ? undefined
+      : {
+          linguistProjectId: linguist.projectId,
+          linguistProjectName: linguist.projectName,
+          linguistRole: linguist.role,
+          linguistDelegatedScope: linguist.scope,
+        },
+  )
   const rootSessionId = parent?.rootSessionId ?? parent?.id ?? ctx.sessionId
   updateAgentSessionMeta(child.id, {
     parentSessionId: ctx.sessionId,
@@ -680,7 +754,9 @@ function startDelegation(
     parentSessionId: ctx.sessionId,
     delegationId,
     role,
-    task,
+    task: linguist === undefined
+      ? task
+      : `${task}\n\n冻结 CAT 范围：${JSON.stringify(linguist.scope)}。以共享 CAT Store 的当前 Source/Target 为准。`,
     expectedOutput: args.expectedOutput,
   })
 
@@ -730,8 +806,6 @@ export function buildPiCollaborationTools(
   sdk: typeof import('@earendil-works/pi-coding-agent'),
   ctx: CollaborationToolContext,
 ): unknown[] {
-  const { Type } = require('typebox') as typeof import('typebox')
-
   const roleType = Type.Optional(Type.Union([
     Type.Literal('explore'),
     Type.Literal('research'),
@@ -740,12 +814,25 @@ export function buildPiCollaborationTools(
     Type.Literal('custom'),
   ], { description: '子任务角色' }))
 
+  const linguistRoleType = Type.Optional(Type.Union([
+    Type.Literal('translator'),
+    Type.Literal('reviewer'),
+    Type.Literal('proofreader'),
+  ], { description: '可选 Linguist 岗位；仅 General 项目会话可用' }))
+  const linguistScopeType = Type.Optional(Type.Object({
+    batchId: Type.Optional(Type.String({ description: '当前批次 Asset ID' })),
+    assetIds: Type.Optional(Type.Array(Type.String(), { description: '指定 Asset ID 列表' })),
+    segmentIds: Type.Optional(Type.Array(Type.String(), { description: '指定 Segment ID 列表' })),
+  }))
+
   const delegateItemType = Type.Object({
     title: Type.Optional(Type.String({ description: '子会话标题' })),
     role: roleType,
     task: Type.String({ description: '发送给子 Agent 的完整任务说明' }),
     expectedOutput: Type.Optional(Type.String({ description: '希望子 Agent 最终返回的格式或要点' })),
     modelId: Type.Optional(Type.String({ description: '可选目标模型 ID' })),
+    linguistRole: linguistRoleType,
+    linguistScope: linguistScopeType,
   })
 
   function piJsonResult(payload: unknown): { content: Array<{ type: 'text'; text: string }>; details: unknown } {
@@ -775,6 +862,8 @@ export function buildPiCollaborationTools(
         task: Type.String({ description: '发送给子 Agent 的完整任务说明，必须自包含必要上下文' }),
         expectedOutput: Type.Optional(Type.String({ description: '希望子 Agent 最终返回的格式或要点' })),
         modelId: Type.Optional(Type.String({ description: '可选目标模型 ID' })),
+        linguistRole: linguistRoleType,
+        linguistScope: linguistScopeType,
       }),
       async execute(toolCallId: string, params: unknown) {
         const args = params as DelegateAgentArgs

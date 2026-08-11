@@ -59,6 +59,7 @@ type ForkSession = (
 type CreateBlankSession = (
   source: AgentSessionMeta,
   title: string,
+  workspaceId: string,
   linguistBinding: AgentSessionLinguistBinding,
 ) => AgentSessionMeta
 
@@ -159,7 +160,7 @@ export function getLinguistSessionCopyEligibility(
   }
   if (
     !hasAgentSessionNativeForkArtifact(source)
-    || (source.agentRuntime === 'pi' && !source.piEntryBindings?.[upToMessageUuid])
+    || !source.piEntryBindings?.[upToMessageUuid]
   ) {
     return blocked('HISTORY_UNREADABLE', '原生 session artifact 缺失或不可读')
   }
@@ -216,6 +217,7 @@ export async function copyLinguistSessionToProject(
 
   const service = deps.getService()
   const target = requireHealthyTarget(service, input.targetProjectId)
+  const targetWorkspaceId = service.ensureProjectWorkspace(target.id)
 
   const title = `${source.title}（副本）`
   const linguistBinding: AgentSessionLinguistBinding = {
@@ -230,6 +232,7 @@ export async function copyLinguistSessionToProject(
       copied = (deps.createBlankSession ?? createBlankLinguistSessionCopy)(
         source,
         title,
+        targetWorkspaceId,
         linguistBinding,
       )
     } else {
@@ -241,6 +244,7 @@ export async function copyLinguistSessionToProject(
           },
           {
             title,
+            workspaceId: targetWorkspaceId,
             linguistBinding,
             copyWorkspaceFiles: false,
             inheritSessionConfig: true,
@@ -278,7 +282,7 @@ export async function copyLinguistSessionToProject(
       || copied.linguistProjectId !== latestTarget.id
       || copied.linguistProjectName !== latestTarget.name
       || copied.linguistRole !== (source.linguistRole ?? 'general')
-      || copied.workspaceId !== undefined
+      || copied.workspaceId !== targetWorkspaceId
     ) {
       throw new LinguistSessionCopyTargetError('副本绑定校验失败')
     }

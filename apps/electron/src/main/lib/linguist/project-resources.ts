@@ -198,13 +198,7 @@ export class ProjectResources {
       const found = new Set(segments.map((segment) => segment.id as string))
       const missing = segmentIds.find((id) => !found.has(id))
       if (missing !== undefined) throw new StoreNotFoundError('segment', missing)
-      return db.termEntries.validateSegments(segments.map((segment) => ({
-        segmentId: segment.id as string,
-        source: segment.source,
-        target: segment.target,
-        ...(segment.context?.meta?.module === undefined ? {} : { module: segment.context.meta.module }),
-        ...(segment.context?.meta?.category === undefined ? {} : { category: segment.context.meta.category }),
-      })))
+      return db.termEntries.validateSegments(segments)
     }, projectId)
   }
 

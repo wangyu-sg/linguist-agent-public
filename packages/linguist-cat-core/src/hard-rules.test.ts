@@ -30,7 +30,7 @@ function run(overrides: Partial<DeterministicHardRuleInput> = {}) {
     segment,
     proposedTarget: '购买 {count} 个<b>HP-20</b>药水\\n现在\n{kind, select, rare {稀有} other {普通}}',
     requiredTerminology: [{ sourceTerm: 'potion', targetTerm: '药水' }],
-    forbiddenTerms: ['违禁词'],
+    forbiddenTerms: [{ sourceTerm: 'potion', term: '违禁词' }],
     ...overrides,
   })
 }
@@ -42,7 +42,7 @@ describe('PB-052 确定性硬规则', () => {
     expect(run()).toEqual(first)
   })
 
-  test('locked、placeholder/tag、ICU、newline、number/token 均独立阻断', () => {
+  test('locked、placeholder/tag、ICU 等结构问题独立阻断', () => {
     const cases: Array<[DeterministicHardRuleCode, Partial<DeterministicHardRuleInput>]> = [
       [DETERMINISTIC_HARD_RULE_CODES.LOCKED_SEGMENT, { segment: { ...segment, locked: true } }],
       [DETERMINISTIC_HARD_RULE_CODES.PLACEHOLDER_SIGNATURE_MISMATCH, {
@@ -54,18 +54,35 @@ describe('PB-052 确定性硬规则', () => {
       [DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH, {
         proposedTarget: '购买 {count} 个<b>HP-20</b>药水\\n现在\n{kind, select, other {普通}}',
       }],
-      [DETERMINISTIC_HARD_RULE_CODES.NEWLINE_SIGNATURE_MISMATCH, {
-        proposedTarget: '购买 {count} 个<b>HP-20</b>药水 现在 {kind, select, rare {稀有} other {普通}}',
-      }],
-      [DETERMINISTIC_HARD_RULE_CODES.NUMBER_SIGNATURE_MISMATCH, {
-        proposedTarget: '购买 {count} 个<b>HP-30</b>药水\\n现在\n{kind, select, rare {稀有} other {普通}}',
-      }],
-      [DETERMINISTIC_HARD_RULE_CODES.TOKEN_SIGNATURE_MISMATCH, {
-        proposedTarget: '购买 {count} 个<b>药水</b>\\n现在\n{kind, select, rare {稀有} other {普通}}',
-      }],
     ]
     for (const [code, overrides] of cases) {
       expect(run(overrides).violations.map((violation) => violation.code)).toContain(code)
+    }
+  })
+
+  test('换行、数字和一般字母数字 token 仅进入 QA，不阻断写回', () => {
+    const cases: Array<[DeterministicHardRuleCode, string]> = [
+      [
+        DETERMINISTIC_HARD_RULE_CODES.NEWLINE_SIGNATURE_MISMATCH,
+        '购买 {count} 个<b>HP-20</b>药水 现在 {kind, select, rare {稀有} other {普通}}',
+      ],
+      [
+        DETERMINISTIC_HARD_RULE_CODES.NUMBER_SIGNATURE_MISMATCH,
+        '购买 {count} 个<b>HP-30</b>药水\\n现在\n{kind, select, rare {稀有} other {普通}}',
+      ],
+      [
+        DETERMINISTIC_HARD_RULE_CODES.TOKEN_SIGNATURE_MISMATCH,
+        '购买 {count} 个<b>药水</b>\\n现在\n{kind, select, rare {稀有} other {普通}}',
+      ],
+    ]
+    for (const [code, proposedTarget] of cases) {
+      const input = {
+        segment,
+        proposedTarget,
+        requiredTerminology: [{ sourceTerm: 'potion', targetTerm: '药水' }],
+      }
+      expect(runDeterministicHardRules(input).violations.map((item) => item.code)).not.toContain(code)
+      expect(runDeterministicHardRules(input, { includeAdvisory: true }).violations.map((item) => item.code)).toContain(code)
     }
   })
 
@@ -78,6 +95,12 @@ describe('PB-052 确定性硬规则', () => {
     expect(run({
       proposedTarget: '购买 {count} 个<b>HP-20</b>药水（违禁词）\\n现在\n{kind, select, rare {稀有} other {普通}}',
     }).violations.map((violation) => violation.code)).toContain(
+      DETERMINISTIC_HARD_RULE_CODES.FORBIDDEN_TERM_PRESENT,
+    )
+    expect(run({
+      segment: { ...segment, source: 'Buy a drink' },
+      proposedTarget: '购买违禁词',
+    }).violations.map((violation) => violation.code)).not.toContain(
       DETERMINISTIC_HARD_RULE_CODES.FORBIDDEN_TERM_PRESENT,
     )
   })
@@ -101,7 +124,7 @@ describe('PB-052 确定性硬规则', () => {
       runDeterministicHardRules({
         segment: { ...segment, source, targetLocale: 'en-US' },
         proposedTarget,
-      }).violations.map((violation) => violation.code)
+      }, { includeAdvisory: true }).violations.map((violation) => violation.code)
 
     expect(codes('七号选手登场', 'No. 7 enters')).not.toContain(
       DETERMINISTIC_HARD_RULE_CODES.NUMBER_SIGNATURE_MISMATCH,
@@ -134,7 +157,7 @@ describe('PB-052 确定性硬规则', () => {
       runDeterministicHardRules({
         segment: { ...segment, source, targetLocale: 'zh-CN' },
         proposedTarget,
-      }).violations.map((violation) => violation.code)
+      }, { includeAdvisory: true }).violations.map((violation) => violation.code)
 
     const lexicalCases: ReadonlyArray<readonly [string, string]> = [
       ['May I enter?', '我可以进来吗？'],
@@ -253,8 +276,8 @@ describe('PB-097 tag 族引擎', () => {
     expect(pb097Run('%1$s 比 %2$s 大', '%2$s 比 %1$s 大')).toEqual({ ok: true, violations: [] })
   })
 
-  test('反斜杠转义族：\\t \\r 守恒（\\n 另有 NEWLINE 兜底）', () => {
-    expect(codesOf('第一行\\n第二行\\t缩进', '第一行\\n第二行')).toContain(
+  test('通用反斜杠转义不冒充结构 placeholder', () => {
+    expect(codesOf('第一行\\n第二行\\t缩进', '第一行\\n第二行')).not.toContain(
       DETERMINISTIC_HARD_RULE_CODES.TAG_PLACEHOLDER_FAMILY_MISMATCH,
     )
   })

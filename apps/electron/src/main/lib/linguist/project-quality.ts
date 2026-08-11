@@ -90,10 +90,9 @@ export class ProjectQuality {
           threshold: 0.6,
           limit: 5,
         }),
-        termMatches: db.termEntries.findMatches({
-          text: segment.source,
-          limit: 10,
-        }),
+        termMatches: db.termEntries.evaluateSegment(segment).matches
+          .slice(0, 10)
+          .map((item) => item.match),
         approvedExemplars: segment.context?.meta?.speaker?.trim()
           ? db.tmUnits.listApprovedExemplars({
               speaker: segment.context.meta.speaker.trim(),

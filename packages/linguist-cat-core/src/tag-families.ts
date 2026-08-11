@@ -116,7 +116,6 @@ interface CompiledFamily {
 //   等不会被误吞（这些由项目族登记）；
 // - brace-num / brace-named：{N} / {name} 占位符；
 // - printf：printf 全族（含 %1$s 位置参数、%.2f 精度、%03d 填充、%%）；
-// - escape：反斜杠转义 \n \r \t。
 const BUILTIN_FAMILIES: readonly CompiledFamily[] = [
   {
     id: 'xml',
@@ -175,14 +174,6 @@ const BUILTIN_FAMILIES: readonly CompiledFamily[] = [
     group: 'placeholder',
     // flags 刻意不含空格：避免散文 "100% sure" 的 "% s" 误命中。
     regex: /%(?:\d+\$)?[-+0#]*(?:\d+|\*)?(?:\.\d+)?[hlLjzt]*[diuoxXfFeEgGaAcspn%]/g,
-    skipIcuSpans: false,
-    kindOf: () => 'singleton',
-    pairKeyOf: () => null,
-  },
-  {
-    id: 'escape',
-    group: 'placeholder',
-    regex: /\\[nrt]/g,
     skipIcuSpans: false,
     kindOf: () => 'singleton',
     pairKeyOf: () => null,

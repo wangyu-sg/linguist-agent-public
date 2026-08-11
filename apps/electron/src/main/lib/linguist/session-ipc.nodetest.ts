@@ -47,7 +47,6 @@ test('createForProject: happy path returns bound Pi session meta', async () => {
   if (!result.ok) return
   assert.equal(result.data.linguistProjectId, project.id)
   assert.equal(result.data.linguistProjectName, 'IPC 绑定项目')
-  assert.equal(result.data.agentRuntime, 'pi')
   assert.equal(result.data.title, '新 Agent 会话')
 
   const titled = await ipc.createForProject({ projectId: project.id, title: '自定义标题' })
@@ -92,8 +91,6 @@ test('copy result projection never exposes native ids or absolute paths', () => 
     piSessionFile: '/private/pi.jsonl',
     piEntryBindings: { assistant: 'entry-id' },
     forkSourceDir: '/private/source',
-    forkSourceSdkSessionId: 'source-native-id',
-    resumeAtMessageUuid: 'message-id',
     attachedDirectories: ['/private/dir'],
     attachedFiles: ['/private/file'],
   })
@@ -103,8 +100,6 @@ test('copy result projection never exposes native ids or absolute paths', () => 
     'piSessionFile',
     'piEntryBindings',
     'forkSourceDir',
-    'forkSourceSdkSessionId',
-    'resumeAtMessageUuid',
     'attachedDirectories',
     'attachedFiles',
   ]) {

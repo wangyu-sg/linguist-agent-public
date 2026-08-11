@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import type { AgentSessionMeta, AgentWorkspace } from '@proma/shared'
+import type { AgentSessionMeta, AgentWorkspace, LinguistRole } from '@proma/shared'
 import { resolveAgentProfile } from '@proma/shared'
 import { getConfigDir, getAgentSessionWorkspacePath } from '../config-paths'
 import { getAgentWorkspace } from '../agent-workspace-manager'
@@ -16,7 +16,11 @@ export type AgentExecutionScope =
   | {
       kind: 'linguist-project'
       projectId: string
+      linguistRole: LinguistRole
       sessionId: string
+      workspaceId?: string
+      workspaceSlug?: string
+      workspaceName?: string
       cwd: string
     }
   | {
@@ -31,7 +35,7 @@ type ScopeDependencies = {
   ensureLinguistSession: (projectId: string, sessionId: string) => string
 }
 
-/** Linguist 身份优先于残留 workspaceId；调用者只消费统一 cwd 结果。 */
+/** cwd 由 Linguist 绑定决定；workspace 上下文正交保留供宿主能力使用。 */
 export function resolveAgentExecutionScope(
   session: AgentSessionMeta,
   overrides: Partial<ScopeDependencies> = {},
@@ -55,10 +59,21 @@ export function resolveAgentExecutionScope(
   }
 
   if (profile.kind === 'linguist') {
+    const workspace = session.workspaceId
+      ? deps.getWorkspace(session.workspaceId)
+      : undefined
     return {
       kind: 'linguist-project',
       projectId: profile.projectId,
+      linguistRole: profile.role,
       sessionId: session.id,
+      ...(workspace
+        ? {
+            workspaceId: workspace.id,
+            workspaceSlug: workspace.slug,
+            workspaceName: workspace.name,
+          }
+        : {}),
       cwd: deps.ensureLinguistSession(profile.projectId, session.id),
     }
   }

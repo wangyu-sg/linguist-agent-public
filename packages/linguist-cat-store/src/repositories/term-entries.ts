@@ -1,4 +1,9 @@
-import { deriveStableIdV2 } from '@linguist/cat-core'
+import {
+  deriveStableIdV2,
+  evaluateSegmentTermPolicy,
+  type Segment,
+  type SegmentTermPolicyEvaluation,
+} from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 import type { RunHarnessRepository } from '../run-harness'
@@ -67,14 +72,6 @@ export interface TermEntryMatch extends TermEntry {
 export interface TermEntryConflict {
   normalizedTerm: string
   entries: TermEntry[]
-}
-
-export interface TermValidationSegment {
-  segmentId: string
-  source: string
-  target: string
-  module?: string
-  category?: string
 }
 
 export interface TermValidationResult {
@@ -177,10 +174,6 @@ function cleanInput<T extends TermEntryImportInput>(input: T): T {
   return { ...input, term, translation }
 }
 
-function pureNumber(value: string): boolean {
-  return /^[\p{N}\s.,+\-]+$/u.test(value)
-}
-
 function bucketKey(value: string): string | undefined {
   const normalized = normalizeText(value)
   const han = normalized.match(/\p{Script=Han}/u)?.[0]
@@ -211,12 +204,6 @@ function occurrences(text: string, term: string, wholeToken = false): Array<{ st
     result.push({ start, end: start + term.length })
   }
   return result
-}
-
-function translationUsed(target: string, entry: TermEntry): boolean {
-  const text = normalizeText(target, !entry.caseSensitive)
-  const translation = normalizeText(entry.translation, !entry.caseSensitive)
-  return text === translation || occurrences(text, translation).length > 0
 }
 
 interface CompiledTermbase {
@@ -265,7 +252,6 @@ export class TermEntriesRepository {
       let unchanged = 0
       for (const rawInput of inputs) {
         const input = cleanInput(rawInput)
-        if (input.status !== 'required' && pureNumber(input.term)) continue
         const key = contentKey(input)
         if (existingContent.has(key)) {
           unchanged++
@@ -313,9 +299,6 @@ export class TermEntriesRepository {
 
   upsert(input: TermEntryUpsertInput): TermEntry {
     const cleaned = cleanInput(input)
-    if (cleaned.status !== 'required' && pureNumber(cleaned.term)) {
-      throw new TypeError('pure numeric terms require status required')
-    }
     return this.db.transaction(`upsert term entry ${cleaned.id ?? cleaned.term}`, () => {
       if (cleaned.id !== undefined) {
         const existing = this.db.db
@@ -561,52 +544,76 @@ export class TermEntriesRepository {
     }))
   }
 
-  validateSegments(segments: readonly TermValidationSegment[]): TermValidationResult {
+  evaluateSegment(
+    segment: Segment,
+    target = segment.target,
+  ): SegmentTermPolicyEvaluation<TermEntryMatch> {
+    const module = segment.context?.meta?.module
+    const category = segment.context?.meta?.category
+    return evaluateSegmentTermPolicy({
+      source: segment.source,
+      target,
+      sourceLocale: segment.sourceLocale,
+      targetLocale: segment.targetLocale,
+      assetId: segment.assetId as string,
+      ...(module === undefined ? {} : { module }),
+      ...(category === undefined ? {} : { category }),
+      segmentMetadata: segment.context?.meta ?? {},
+      candidates: this.findMatches({
+        text: segment.source,
+        limit: Number.MAX_SAFE_INTEGER,
+        ...(module === undefined ? {} : { module }),
+        ...(category === undefined ? {} : { category }),
+      }),
+    })
+  }
+
+  validateSegments(segments: readonly Segment[]): TermValidationResult {
     const result: TermValidationResult = {
       missingRequired: [],
       forbiddenHits: [],
       preferredNotUsed: [],
       unresolvedConflicts: [],
     }
-    const forbidden = this.compile().rows.filter((row) => row.status === 'forbidden')
     for (const segment of segments) {
-      const matches = this.findMatches({
-        text: segment.source,
-        statuses: ['required', 'preferred'],
-        limit: Number.MAX_SAFE_INTEGER,
-        ...(segment.module === undefined ? {} : { module: segment.module }),
-        ...(segment.category === undefined ? {} : { category: segment.category }),
-      })
+      const evaluated = this.evaluateSegment(segment).matches
       const seen = new Set<string>()
-      for (const match of matches) {
+      for (const item of evaluated) {
+        const match = item.match
         if (seen.has(match.id)) continue
         seen.add(match.id)
-        if (translationUsed(segment.target, match)) continue
-        const item = { segmentId: segment.segmentId, termId: match.id, term: match.term }
-        if (match.status === 'required') {
-          result.missingRequired.push({ ...item, expected: match.translation })
-        } else {
-          result.preferredNotUsed.push({ ...item, preferred: match.translation })
+        if (match.status === 'required' && item.enforcement === 'hard' && !item.targetUsed) {
+          result.missingRequired.push({
+            segmentId: segment.id as string,
+            termId: match.id,
+            term: match.term,
+            expected: match.translation,
+          })
+        } else if (match.status === 'forbidden' && item.enforcement === 'hard' && item.targetUsed) {
+          result.forbiddenHits.push({
+            segmentId: segment.id as string,
+            termId: match.id,
+            forbidden: match.translation,
+          })
+        } else if (match.status === 'preferred' && !item.targetUsed) {
+          result.preferredNotUsed.push({
+            segmentId: segment.id as string,
+            termId: match.id,
+            term: match.term,
+            preferred: match.translation,
+          })
         }
       }
-      const conflictGroups = Map.groupBy(matches.filter((match) => match.conflict), (match) => normalizeText(match.term))
+      const conflictGroups = Map.groupBy(
+        evaluated.map((item) => item.match).filter((match) => match.conflict),
+        (match) => normalizeText(match.term),
+      )
       for (const [term, entries] of conflictGroups) {
         result.unresolvedConflicts.push({
-          segmentId: segment.segmentId,
+          segmentId: segment.id as string,
           term,
           termIds: [...new Set(entries.map((entry) => entry.id))].sort(compareText),
         })
-      }
-      for (const row of forbidden) {
-        if (!this.applicable(row, segment)) continue
-        const entry = termEntryFromRow(row)
-        if (translationUsed(segment.target, entry)) {
-          result.forbiddenHits.push({
-            segmentId: segment.segmentId,
-            termId: entry.id,
-            forbidden: entry.translation,
-          })
-        }
       }
     }
     return result

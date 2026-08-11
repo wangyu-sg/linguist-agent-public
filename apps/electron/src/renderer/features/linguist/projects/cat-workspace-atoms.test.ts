@@ -537,7 +537,6 @@ describe('项目级 Workbench UI 状态', () => {
       {
         id: 'session-a',
         title: 'A',
-        agentRuntime: 'pi',
         linguistProjectId: 'project-a',
         linguistProjectName: 'Project A',
         createdAt: 1,
@@ -546,7 +545,6 @@ describe('项目级 Workbench UI 状态', () => {
       {
         id: 'session-b',
         title: 'B',
-        agentRuntime: 'pi',
         linguistProjectId: 'project-a',
         linguistProjectName: 'Project A',
         createdAt: 1,

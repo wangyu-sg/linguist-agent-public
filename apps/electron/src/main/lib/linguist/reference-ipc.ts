@@ -247,9 +247,6 @@ function readTermInput(record: Record<string, unknown>): {
   if (typeof status !== 'string' || !TERM_STATUSES.has(status as LinguistTermStatus)) {
     invalid('status must be a known term status')
   }
-  if (status !== 'required' && /^[\p{N}\s.,+\-]+$/u.test(term.trim())) {
-    invalid('pure numeric terms require status=required')
-  }
   if (typeof caseSensitive !== 'boolean') invalid('caseSensitive must be a boolean')
   if (note !== undefined && (typeof note !== 'string' || note.length > NOTE_MAX_LENGTH)) {
     invalid(`note must be a string of at most ${NOTE_MAX_LENGTH} characters`)

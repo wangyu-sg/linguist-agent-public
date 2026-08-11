@@ -67,7 +67,6 @@ function session(
   return {
     id,
     title: `会话 ${id}`,
-    agentRuntime: 'pi',
     linguistProjectId: projectId,
     linguistProjectName: `项目 ${projectId}`,
     archived,

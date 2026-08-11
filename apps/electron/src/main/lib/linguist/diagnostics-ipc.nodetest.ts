@@ -20,7 +20,6 @@ const session = (
   linguistProjectId: projectId,
   linguistProjectName: 'CUSTOMER_NAME_SENTINEL',
   linguistRole: 'reviewer',
-  agentRuntime: 'pi',
   createdAt: 1,
   updatedAt: 2,
   ...overrides,

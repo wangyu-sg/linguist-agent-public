@@ -1,7 +1,5 @@
-import type { AgentRuntime } from '@proma/shared'
-
 export interface LinguistRuntimeObservation {
-  runtime: AgentRuntime
+  runtime: 'pi'
   baseToolCount: number | null
   overlayToolCount: number
   observedAt: string

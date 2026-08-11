@@ -14,7 +14,6 @@ function session(overrides: Partial<AgentSessionMeta> = {}): AgentSessionMeta {
   return {
     id: 'session-a',
     title: '会话 A',
-    agentRuntime: 'pi',
     linguistProjectId: PROJECT_ID,
     linguistProjectName: '项目 A',
     createdAt: 1,

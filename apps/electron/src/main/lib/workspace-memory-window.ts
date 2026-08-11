@@ -69,6 +69,8 @@ function createWorkspaceMemoryWindow(workspaceSlug: string, relativePath?: strin
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
     },
     ...titleBarOptions,
   })

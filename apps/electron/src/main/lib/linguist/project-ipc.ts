@@ -47,7 +47,6 @@ import {
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
   LINGUIST_QA_PROFILES,
   LINGUIST_REFERENCE_IMPORT_ID_PATTERN,
-  LINGUIST_WORKSPACE_ID_MAX_LENGTH,
   LINGUIST_WORKFLOW_STAGES,
   type LinguistAssetPreviewResult,
   type LinguistBackupListResult,
@@ -189,15 +188,6 @@ function readDeleteConfirmation(record: Record<string, unknown>): string {
   const value = record.confirmationName
   if (typeof value !== 'string' || value.length > LINGUIST_PROJECT_NAME_MAX_LENGTH) {
     invalid(`confirmationName must be a string of at most ${LINGUIST_PROJECT_NAME_MAX_LENGTH} characters`)
-  }
-  return value
-}
-
-function readOptionalWorkspaceId(record: Record<string, unknown>): string | undefined {
-  const value = record.promaWorkspaceId
-  if (value === undefined) return undefined
-  if (typeof value !== 'string' || value.length === 0 || value.length > LINGUIST_WORKSPACE_ID_MAX_LENGTH) {
-    invalid(`promaWorkspaceId must be a string of at most ${LINGUIST_WORKSPACE_ID_MAX_LENGTH} characters`)
   }
   return value
 }
@@ -507,7 +497,6 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         const name = readProjectName(record)
         const sourceLocale = readLocale(record, 'sourceLocale')
         const targetLocale = readLocale(record, 'targetLocale')
-        const promaWorkspaceId = readOptionalWorkspaceId(record)
         const workflowStage = readWorkflowStage(record, true)
         const qaProfile = readQaProfile(record, true)
         const outputStatusPolicy = readOutputStatusPolicy(record, false)
@@ -517,7 +506,6 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
           targetLocale,
           workflowStage,
           ...(qaProfile !== undefined ? { qaProfile } : {}),
-          ...(promaWorkspaceId !== undefined ? { promaWorkspaceId } : {}),
           ...(outputStatusPolicy !== undefined && outputStatusPolicy !== null
             ? { outputStatusPolicy }
             : {}),

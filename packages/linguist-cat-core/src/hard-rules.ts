@@ -52,8 +52,8 @@ export interface RequiredTerminologyRule {
 }
 
 export interface ForbiddenTermRule {
-  /** When present, the target ban applies only if the source contains this term. */
-  sourceTerm?: string
+  /** The target ban applies only when this source trigger is present. */
+  sourceTerm: string
   term: string
   caseSensitive?: boolean
 }
@@ -62,7 +62,7 @@ export interface DeterministicHardRuleInput {
   segment: Pick<Segment, 'id' | 'source' | 'locked' | 'targetLocale'>
   proposedTarget: string
   requiredTerminology?: readonly RequiredTerminologyRule[]
-  forbiddenTerms?: readonly (ForbiddenTermRule | string)[]
+  forbiddenTerms?: readonly ForbiddenTermRule[]
   /** PB-097：项目 tag 族登记表；缺省 = 仅内置族（PB-052 既有行为）。 */
   tagProfile?: LinguistTagProfile
 }
@@ -507,7 +507,10 @@ function hasInvalidTargetEncoding(value: string): boolean {
   return false
 }
 
-export function runDeterministicHardRules(input: DeterministicHardRuleInput): DeterministicHardRuleResult {
+export function runDeterministicHardRules(
+  input: DeterministicHardRuleInput,
+  options: { includeAdvisory?: boolean } = {},
+): DeterministicHardRuleResult {
   const { segment, proposedTarget } = input
   const sourceIcu = icuSignature(segment.source)
   const targetIcu = icuSignature(proposedTarget, sourceIcu.standard)
@@ -607,25 +610,30 @@ export function runDeterministicHardRules(input: DeterministicHardRuleInput): De
       sourceIcu.signature,
       targetIcu.signature,
     ),
-    mismatch(
-      DETERMINISTIC_HARD_RULE_CODES.NEWLINE_SIGNATURE_MISMATCH,
-      'Newline signature differs between source and target.',
-      newlineSignature(segment.source),
-      newlineSignature(proposedTarget),
-    ),
-    mismatch(
-      DETERMINISTIC_HARD_RULE_CODES.NUMBER_SIGNATURE_MISMATCH,
-      'Number signature differs between source and target.',
-      numberSignature(segment.source, sourceIcu.spans),
-      numberSignature(proposedTarget, targetIcu.spans),
-    ),
-    mismatch(
-      DETERMINISTIC_HARD_RULE_CODES.TOKEN_SIGNATURE_MISMATCH,
-      'Alphanumeric token signature differs between source and target.',
-      tokenSignature(segment.source, sourceIcu.spans),
-      tokenSignature(proposedTarget, targetIcu.spans),
-    ),
   ]
+
+  if (options.includeAdvisory === true) {
+    candidates.push(
+      mismatch(
+        DETERMINISTIC_HARD_RULE_CODES.NEWLINE_SIGNATURE_MISMATCH,
+        'Newline signature differs between source and target.',
+        newlineSignature(segment.source),
+        newlineSignature(proposedTarget),
+      ),
+      mismatch(
+        DETERMINISTIC_HARD_RULE_CODES.NUMBER_SIGNATURE_MISMATCH,
+        'Number signature differs between source and target.',
+        numberSignature(segment.source, sourceIcu.spans),
+        numberSignature(proposedTarget, targetIcu.spans),
+      ),
+      mismatch(
+        DETERMINISTIC_HARD_RULE_CODES.TOKEN_SIGNATURE_MISMATCH,
+        'Alphanumeric token signature differs between source and target.',
+        tokenSignature(segment.source, sourceIcu.spans),
+        tokenSignature(proposedTarget, targetIcu.spans),
+      ),
+    )
+  }
 
   for (const rule of input.requiredTerminology ?? []) {
     if (
@@ -642,13 +650,9 @@ export function runDeterministicHardRules(input: DeterministicHardRuleInput): De
       })
     }
   }
-  for (const rawRule of input.forbiddenTerms ?? []) {
-    const rule = typeof rawRule === 'string' ? { term: rawRule } : rawRule
-    const sourceMatches = rule.sourceTerm === undefined
-      || (
-        rule.sourceTerm.trim().length > 0
-        && normalizedIncludes(segment.source, rule.sourceTerm, rule.caseSensitive)
-      )
+  for (const rule of input.forbiddenTerms ?? []) {
+    const sourceMatches = rule.sourceTerm.trim().length > 0
+      && normalizedIncludes(segment.source, rule.sourceTerm, rule.caseSensitive)
     if (
       sourceMatches
       && rule.term.trim()

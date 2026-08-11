@@ -68,7 +68,6 @@ test('packaged verifier 接受完整产物并拒绝被篡改的 legal 或 Pi run
       write(join(resources, 'legal', packagedName), sourceRelative)
     }
     const unpacked = join(resources, 'app.asar.unpacked', 'node_modules')
-    write(join(unpacked, '@anthropic-ai', 'claude-agent-sdk', 'package.json'), '{"version":"0.3.201"}')
     write(join(unpacked, 'sharp', 'package.json'), '{"version":"0.35.3"}')
     write(join(unpacked, '@img', 'sharp-darwin-arm64', 'package.json'), '{"version":"0.35.3"}')
     write(join(unpacked, '@img', 'sharp-libvips-darwin-arm64', 'package.json'), '{"version":"1.3.2"}')

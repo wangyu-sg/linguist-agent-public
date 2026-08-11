@@ -138,9 +138,8 @@ function collectDiagnostics(
     deps.getService,
     {
       rolesRoot: deps.getRolesRoot?.() ?? getDefaultLinguistRolesRoot(),
-      // LA-PROMPT-001：探针与真实发送同一 runtime→renderer 推导
-      // （orchestrator 用会话冻结 agentRuntime；无会话时回落 'xml'，同 dev.agentRuntime 的 'claude' 回落）。
-      renderer: session?.agentRuntime === 'pi' ? 'markdown' : 'xml',
+      // Pi-only：诊断探针与真实发送使用同一 Markdown renderer。
+      renderer: 'markdown',
     },
   )
   const promptProbeLatencyMs = Math.max(0, performance.now() - promptStartedAt)
@@ -196,7 +195,7 @@ function collectDiagnostics(
         ...(session === undefined
           ? {}
           : {
-            agentRuntime: observation?.runtime ?? session.agentRuntime ?? 'claude',
+            agentRuntime: observation?.runtime ?? 'pi',
             sessionCwd: resolveLinguistSessionWorkspacePath(
               deps.getConfigDir(),
               request.projectId,

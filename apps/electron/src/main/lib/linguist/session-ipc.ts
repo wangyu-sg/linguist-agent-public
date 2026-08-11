@@ -102,7 +102,6 @@ export function toRendererCopyResult(
     title: session.title,
     ...(session.channelId !== undefined ? { channelId: session.channelId } : {}),
     ...(session.modelId !== undefined ? { modelId: session.modelId } : {}),
-    ...(session.agentRuntime !== undefined ? { agentRuntime: session.agentRuntime } : {}),
     ...(session.codexFastMode !== undefined ? { codexFastMode: session.codexFastMode } : {}),
     ...(session.openAIThinkingLevel !== undefined
       ? { openAIThinkingLevel: session.openAIThinkingLevel }

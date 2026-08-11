@@ -44,7 +44,7 @@ function makeServiceOnLinguistRoot(): LinguistProjectService {
     rootDir: LINGUIST_ROOT,
     entropy: makeEntropy(`pb-042-${++serviceSeq}`),
     now: makeClock(),
-    workspaceAllocator: () => `ws-pb042-${serviceSeq}-${++workspaceSeq}`,
+    workspaceCreator: () => `ws-pb042-${serviceSeq}-${++workspaceSeq}`,
   })
   service.init()
   return service
@@ -105,7 +105,7 @@ test('bound active session: CAT tools execute end-to-end against a real seeded p
       toolCallId,
       modelProvider: 'anthropic',
       modelId: 'fake-model',
-      runtime: 'claude',
+      runtime: 'pi',
       role: 'assistant',
       strategy: 'balanced',
       linguistPromptVersion: '2.0.0',
@@ -207,7 +207,7 @@ test('bound active session: CAT tools execute end-to-end against a real seeded p
   const issuance = service.openProject(project.id).proposals.listIssuances(proposalId)[0]!
   assert.equal(issuance.runId, 'agent-turn-1')
   assert.equal(issuance.toolCallId, 'call-1')
-  assert.equal(issuance.runtime, 'claude')
+  assert.equal(issuance.runtime, 'pi')
   assert.equal(issuance.modelProvider, 'anthropic')
   assert.equal(issuance.toolsetHash, '4'.repeat(64))
   assert.equal(service.openProject(project.id).segments.getById(proposedSegment.id)?.target, proposedSegment.target)
@@ -219,6 +219,52 @@ test('bound active session: CAT tools execute end-to-end against a real seeded p
       assert.ok(!value.includes(tempHome), `DTO 泄漏绝对路径: ${value}`)
     }
   }
+
+  service.closeAll()
+})
+
+test('bound session: imported context images reach Pi as image content while text docs stay text-only', async () => {
+  const service = makeServiceOnLinguistRoot()
+  const project = service.createProject({ ...PROJECT_INPUT, name: 'context image 项目' })
+  const image = await service.importContextDoc(project.id, {
+    bytes: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    ),
+    filename: 'screen.png',
+  })
+  const text = await service.importContextDoc(project.id, {
+    bytes: Buffer.from('# Brief\nKeep labels short.'),
+    filename: 'brief.md',
+  })
+  const meta = binding.createLinguistProjectChatSession(service, { projectId: project.id })
+  const tool = toolByName(
+    catTools.resolveLinguistSessionCatTools(meta, () => service),
+    'cat_read_context_doc',
+  )
+
+  const imageResult = await tool.execute(
+    'read-image',
+    { docId: image.id } as never,
+    undefined,
+    undefined,
+    {} as never,
+  )
+  const imageBlock = imageResult.content.find((block) => block.type === 'image')
+  assert.ok(imageBlock)
+  assert.equal(imageBlock.mimeType, 'image/png')
+  assert.ok(Buffer.from(imageBlock.data, 'base64').byteLength > 0)
+  assert.equal(JSON.stringify(imageResult).includes(tempHome), false)
+
+  const textResult = await tool.execute(
+    'read-text',
+    { docId: text.id } as never,
+    undefined,
+    undefined,
+    {} as never,
+  )
+  assert.equal(textResult.content.some((block) => block.type === 'image'), false)
+  assert.match(String((textResult.details as { text?: string }).text), /Keep labels short\./)
 
   service.closeAll()
 })

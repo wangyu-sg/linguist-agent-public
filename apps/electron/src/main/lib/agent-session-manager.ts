@@ -348,6 +348,7 @@ export interface AgentSessionLinguistBinding {
   linguistProjectId: string
   linguistProjectName: string
   linguistRole: NonNullable<AgentSessionMeta['linguistRole']>
+  linguistDelegatedScope?: NonNullable<AgentSessionMeta['linguistDelegatedScope']>
 }
 
 /**
@@ -356,6 +357,7 @@ export interface AgentSessionLinguistBinding {
  */
 export interface AgentSessionForkOptions {
   title: string
+  workspaceId: string
   linguistBinding: AgentSessionLinguistBinding
   copyWorkspaceFiles: false
   inheritSessionConfig: true
@@ -370,6 +372,9 @@ function frozenLinguistBinding(
     linguistProjectId: session.linguistProjectId,
     linguistProjectName: session.linguistProjectName ?? session.linguistProjectId,
     linguistRole: session.linguistRole ?? 'general',
+    ...(session.linguistDelegatedScope === undefined
+      ? {}
+      : { linguistDelegatedScope: session.linguistDelegatedScope }),
   }
 }
 
@@ -467,19 +472,21 @@ export function createAgentSession(
 }
 
 /**
- * 创建不带历史的 Linguist 跨项目副本。只继承运行配置；工作区、附件、侧栏
- * 状态、自动化与委派字段均由新会话默认值清空。
+ * 创建不带历史的 Linguist 跨项目副本。只继承运行配置；绑定目标工作区，
+ * 附件、侧栏状态、自动化与委派字段均由新会话默认值清空。
  */
 export function createBlankLinguistSessionCopy(
   source: AgentSessionMeta,
   title: string,
+  workspaceId: string,
   linguistBinding: AgentSessionLinguistBinding,
 ): AgentSessionMeta {
   const created = createAgentSession(
     title,
     source.channelId,
-    undefined,
+    workspaceId,
     source.modelId,
+    undefined,
     undefined,
     linguistBinding,
   )
@@ -672,6 +679,7 @@ export function updateAgentSessionMeta(
     linguistProjectId: existing.linguistProjectId,
     linguistProjectName: existing.linguistProjectName,
     linguistRole: existing.linguistRole,
+    linguistDelegatedScope: existing.linguistDelegatedScope,
     ...(autoUnarchive ? { archived: false } : {}),
     updatedAt: isStarredOnly ? existing.updatedAt : Date.now(),
   }
@@ -699,6 +707,7 @@ export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta 
   delete updated.linguistProjectId
   delete updated.linguistProjectName
   delete updated.linguistRole
+  delete updated.linguistDelegatedScope
   delete updated.linguistSessionRole
   index.sessions[idx] = updated
   writeIndex(index)
@@ -1004,9 +1013,7 @@ async function forkPiAgentSession(
   const newMeta = createAgentSession(
     options?.title ?? `${sourceMeta.title} (fork)`,
     sourceMeta.channelId,
-    options || sourceExecutionScope.kind === 'linguist-project'
-      ? undefined
-      : sourceMeta.workspaceId,
+    options?.workspaceId ?? sourceMeta.workspaceId,
     forkModelId,
     sourceCwdMode,
     sourceWorkbenchLayout,

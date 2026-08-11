@@ -15,7 +15,6 @@ function session(
   return {
     id,
     title: id,
-    agentRuntime: 'pi',
     linguistProjectId: projectId,
     linguistProjectName: projectId,
     archived,

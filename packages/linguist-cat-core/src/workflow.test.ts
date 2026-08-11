@@ -5,6 +5,7 @@ import type { Segment } from './segment'
 import {
   confirmCurrentStage,
   nativeStatusForStage,
+  recordCurrentStageDecision,
   unconfirmCurrentStage,
 } from './workflow'
 
@@ -81,5 +82,44 @@ describe('本地化工作流状态映射', () => {
     expect(() => unconfirmCurrentStage(reopened.segment, 'editing', 3)).toThrow(
       'Invalid segment-stage state transition',
     )
+  })
+
+  test('岗位 decision 复用阶段事件：确认可审计，blocked 不伪造文本 revision', () => {
+    const segment: Segment = {
+      id: asSegmentId('seg-0000000000000002'),
+      assetId: asAssetId('ast-0000000000000001'),
+      ordinal: 1,
+      source: 'Source',
+      target: 'Target',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      status: 'translated',
+      currentStageState: 'untouched',
+      locked: false,
+      revision: 4,
+      sourceHash: 'source-hash-2',
+    }
+
+    const unchanged = recordCurrentStageDecision(segment, 'editing', 4, 'unchanged', {
+      actor: 'review-session',
+      now: '2026-08-11T00:00:00.000Z',
+    })
+    expect(unchanged.segment.currentStageState).toBe('confirmed')
+    expect(unchanged.event.action).toBe('unchanged')
+    expect(unchanged.event.segmentRevision).toBe(4)
+
+    const blocked = recordCurrentStageDecision(
+      { ...segment, locked: true },
+      'editing',
+      3,
+      'blocked',
+      { now: '2026-08-11T00:01:00.000Z' },
+    )
+    expect(blocked.segment.currentStageState).toBe('draft')
+    expect(blocked.segment.revision).toBe(4)
+    expect(blocked.event).toMatchObject({
+      action: 'blocked',
+      segmentRevision: 4,
+    })
   })
 })

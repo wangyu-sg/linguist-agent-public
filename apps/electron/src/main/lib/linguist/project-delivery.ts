@@ -68,7 +68,7 @@ import type {
 /** 导入体积上限：50MB。 */
 export const MAX_IMPORT_BYTES = 50 * 1024 * 1024
 
-const EXPORT_STRUCTURAL_RULES = new Set<string>([
+const EXPORT_HARD_RULES = new Set<string>([
   DETERMINISTIC_HARD_RULE_CODES.INVALID_TARGET_ENCODING,
   DETERMINISTIC_HARD_RULE_CODES.PLACEHOLDER_SIGNATURE_MISMATCH,
   DETERMINISTIC_HARD_RULE_CODES.TAG_PLACEHOLDER_FAMILY_MISMATCH,
@@ -77,27 +77,43 @@ const EXPORT_STRUCTURAL_RULES = new Set<string>([
   DETERMINISTIC_HARD_RULE_CODES.TAG_PAIRING_MISMATCH,
   DETERMINISTIC_HARD_RULE_CODES.ICU_SYNTAX_INVALID,
   DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH,
-  DETERMINISTIC_HARD_RULE_CODES.NEWLINE_SIGNATURE_MISMATCH,
+  DETERMINISTIC_HARD_RULE_CODES.REQUIRED_TERMINOLOGY_MISSING,
+  DETERMINISTIC_HARD_RULE_CODES.FORBIDDEN_TERM_PRESENT,
 ])
 
 /** 交付预检、确定性导出验证与源资产导入。 */
 export class ProjectDelivery {
   constructor(private readonly context: ProjectModuleContext) {}
 
-  private structuralRuleFailures(
+  private hardRuleFailures(
     project: LinguistProject,
     db: ProjectDatabase,
     asset: Asset,
   ): Array<{ segmentId: string; codes: string[] }> {
     return this.context.call(
       () => db.segments.query({ assetId: asset.id, limit: asset.segmentCount }).flatMap((segment) => {
+        const terms = db.termEntries.evaluateSegment(segment).matches
         const codes = runDeterministicHardRules({
           segment,
           proposedTarget: segment.target,
+          requiredTerminology: terms
+            .filter((item) => item.enforcement === 'hard' && item.match.status === 'required')
+            .map(({ match }) => ({
+              sourceTerm: match.term,
+              targetTerm: match.translation,
+              caseSensitive: match.caseSensitive,
+            })),
+          forbiddenTerms: terms
+            .filter((item) => item.enforcement === 'hard' && item.match.status === 'forbidden')
+            .map(({ match }) => ({
+              sourceTerm: match.term,
+              term: match.translation,
+              caseSensitive: match.caseSensitive,
+            })),
           ...(project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile }),
         }).violations
           .map((violation) => violation.code)
-          .filter((code) => EXPORT_STRUCTURAL_RULES.has(code))
+          .filter((code) => EXPORT_HARD_RULES.has(code))
         return codes.length === 0 ? [] : [{ segmentId: segment.id, codes }]
       }),
       project.id,
@@ -230,16 +246,16 @@ export class ProjectDelivery {
         })
       }
     }
-    const structuralFailures = this.structuralRuleFailures(project, db, asset)
-    if (structuralFailures.length > 0) {
-      const examples = structuralFailures
+    const hardRuleFailures = this.hardRuleFailures(project, db, asset)
+    if (hardRuleFailures.length > 0) {
+      const examples = hardRuleFailures
         .slice(0, 3)
         .map((failure) => `${failure.segmentId}: ${failure.codes.join('/')}`)
         .join('；')
       blockers.push({
         code: 'STRUCTURAL_RULES',
-        count: structuralFailures.length,
-        message: `Tag/占位符结构规则未通过 ${structuralFailures.length} 段（${examples}）`,
+        count: hardRuleFailures.length,
+        message: `确定性硬规则未通过 ${hardRuleFailures.length} 段（${examples}）`,
       })
     }
     const workflowStage = normalizeWorkflowStage(project.workflowStage)
@@ -434,9 +450,9 @@ export class ProjectDelivery {
     const asset = this.context.call(() => db.assets.get(assetId), projectId)
     if (asset === undefined) throw new StoreNotFoundError('asset', assetId)
     if (options.allowHardRuleViolations !== true) {
-      const failures = this.structuralRuleFailures(project, db, asset)
+      const failures = this.hardRuleFailures(project, db, asset)
       if (failures.length > 0) {
-        throw new FormatExportError(asset.formatId, `${failures.length} segments failed deterministic Tag/placeholder rules`)
+        throw new FormatExportError(asset.formatId, `${failures.length} segments failed deterministic hard rules`)
       }
     }
     const adapter = this.context.registry.get(asset.formatId)

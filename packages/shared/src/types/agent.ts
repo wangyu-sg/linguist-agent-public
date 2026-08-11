@@ -35,6 +35,12 @@ export interface AgentWorkspace {
   updatedAt: number
 }
 
+/** Linguist 委派在创建子会话时解析并冻结的 CAT 范围。 */
+export interface LinguistDelegatedScope {
+  assetIds: readonly string[]
+  segmentIds: readonly string[]
+}
+
 /** 新建项目的输入。 */
 export interface CreateAgentWorkspaceInput {
   /** 项目显示名称 */
@@ -733,6 +739,8 @@ export interface AgentSessionMeta {
   linguistProjectName?: string
   /** 当前 Linguist 岗位；只改变默认 Prompt，不改变工具、权限、模型或 Runtime。 */
   linguistRole?: LinguistRole
+  /** 父 General 委派时冻结的 CAT 范围；项目身份仍只来自 session binding。 */
+  linguistDelegatedScope?: LinguistDelegatedScope
   /** 旧版 decoder 输入；业务代码不得读取，索引加载时规范化为 linguistRole。 */
   linguistSessionRole?: 'reviewer' | 'auditor'
   /** 来源委派任务 ID（由 collaboration 工具生成，用于父子会话关联） */

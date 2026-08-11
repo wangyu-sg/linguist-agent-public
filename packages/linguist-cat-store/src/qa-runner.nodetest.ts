@@ -80,6 +80,7 @@ test('术语接线：required/forbidden 阻断，preferred 仅建议，一词多
       { term: 'Potion', translation: '药水', status: 'required', caseSensitive: false },
       // required 与 preferred 的不同译法仍是冲突组。
       { term: 'Potion', translation: '药剂', status: 'preferred', caseSensitive: false },
+      { term: 'Confirm', translation: '确认', status: 'required', caseSensitive: false },
       { term: 'Menu', translation: '菜单', status: 'preferred', caseSensitive: false },
       { term: 'Save', translation: '禁译词', status: 'forbidden', caseSensitive: false },
     ])
@@ -87,16 +88,18 @@ test('术语接线：required/forbidden 阻断，preferred 仅建议，一词多
     db.segments.applyTargetEdit(segments[0]!.id, '喝了它再说', 0)
     db.segments.applyTargetEdit(segments[1]!.id, '这里有禁译词出现', 0)
     // 源文手动改写为含术语的文本（imported 段源文不含 Potion/Save）
-    db.catDb.db.prepare('UPDATE segments SET source = ? WHERE id = ?').run('Drink the Potion from the Menu now', segments[0]!.id)
+    db.catDb.db.prepare('UPDATE segments SET source = ? WHERE id = ?').run('Confirm the Potion from the Menu now', segments[0]!.id)
     db.catDb.db.prepare('UPDATE segments SET source = ? WHERE id = ?').run('Press Save to continue', segments[1]!.id)
 
     const findings = runProjectQa(db)
     const byCode = new Map(findings.map((finding) => [finding.code, finding]))
 
+    const currentSegments = db.segments.getByIds(segments.map((segment) => segment.id as string))
     assert.deepEqual(
-      buildQaTermOptions(db).requiredTerminology?.map((term) => term.sourceTerm),
-      ['Potion'],
-      'preferred 不得冒充 required',
+      buildQaTermOptions(db, currentSegments).terminologyBySegment?.[segments[0]!.id as string]
+        ?.requiredTerminology?.map((term) => term.sourceTerm),
+      ['Confirm'],
+      '冲突 required 不得冒充硬权威',
     )
     // required 缺失始终阻断。
     const required = byCode.get('REQUIRED_TERM')

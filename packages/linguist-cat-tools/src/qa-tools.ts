@@ -50,7 +50,7 @@ export function createQaTools(runtime: CatToolRuntime) {
       const total = db.segments.count()
       const segments = total === 0 ? [] : db.segments.query({ limit: total })
       const qaOptions = {
-        ...buildQaTermOptions(db),
+        ...buildQaTermOptions(db, segments),
         glossaryPolicy: project.glossaryPolicy,
         profile: normalizeQaProfile(project.qaProfile),
         ...(project.tagProfile !== undefined ? { tagProfile: project.tagProfile } : {}),

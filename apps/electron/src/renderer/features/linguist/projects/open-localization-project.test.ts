@@ -120,7 +120,6 @@ describe('openLocalizationProject', () => {
     store.set(agentSessionsAtom, [{
       id: 'agent-1',
       title: '项目 Agent',
-      agentRuntime: 'pi',
       linguistProjectId: project().id,
       linguistProjectName: project().name,
       createdAt: 1,

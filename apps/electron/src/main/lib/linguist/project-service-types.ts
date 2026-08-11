@@ -61,8 +61,10 @@ export interface LinguistProjectServiceOptions {
   now?: () => string
   /** 应用版本；生产默认复用 Host 已初始化的 Proma 版本。 */
   applicationVersion?: string
-  /** 工作区 id 分配器；缺省按 agent-workspace-manager 约定用 randomUUID。 */
-  workspaceAllocator?: (projectName: string) => string
+  /** 创建真实 Proma workspace 并返回 id；测试可注入。 */
+  workspaceCreator?: (projectName: string) => string
+  /** 校验 workspace id 是否仍存在；测试可注入。 */
+  workspaceResolver?: (workspaceId: string) => boolean
   /** 格式注册表；缺省登记 XLIFF/CSV/JSON。 */
   registry?: CatFormatRegistry
 }

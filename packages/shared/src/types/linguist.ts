@@ -816,8 +816,6 @@ export interface LinguistProjectCreateRequest {
   name: string
   sourceLocale: string
   targetLocale: string
-  /** 显式关联既有 Proma 工作区 id；缺省时主进程按工作区 id 约定分配。 */
-  promaWorkspaceId?: string
   /** 新建界面必须显式提交；旧调用缺省时兼容为 translation。 */
   workflowStage?: LinguistWorkflowStage
   outputStatusPolicy?: LinguistWorkflowOutputStatusPolicy
@@ -1140,7 +1138,7 @@ export interface LinguistCatConfirmStageBulkResult {
 
 export interface LinguistWorkflowStageEventInfo {
   stage: LinguistWorkflowStage
-  action: 'confirmed' | 'unconfirmed'
+  action: 'confirmed' | 'unconfirmed' | 'unchanged' | 'corrected' | 'blocked'
   segmentRevision: number
   actor?: string
   createdAt: string
@@ -2017,7 +2015,7 @@ export interface LinguistDevDiagnostics {
     kind: 'linguist'
     role: import('./agent').LinguistRole
   }
-  agentRuntime?: import('./agent-provider').AgentRuntime
+  agentRuntime?: 'pi'
   sessionCwd?: string
   tools: {
     /** Claude SDK 不公开基础工具清单时为 null，不用 MCP server 数冒充。 */
@@ -2109,7 +2107,7 @@ export interface LinguistDiagnosticBundle {
     eventGap: LinguistDiagnosticsEventGap
   }
   runtime: {
-    agentRuntime?: import('./agent-provider').AgentRuntime
+    agentRuntime?: 'pi'
     baseToolCount: number | null
     overlayToolCount: number
     workerMode: 'node-worker_threads' | 'not_observed'
@@ -2240,7 +2238,6 @@ export type LinguistSessionCopyToProjectResult = Pick<
   | 'title'
   | 'channelId'
   | 'modelId'
-  | 'agentRuntime'
   | 'codexFastMode'
   | 'openAIThinkingLevel'
   | 'permissionMode'

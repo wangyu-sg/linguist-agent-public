@@ -18,14 +18,11 @@
  * 日志纪律（计划 §7.4）：只记录 id / 计数 / 错误码，绝不记录文件名、
  * 源文、译文等客户文本。
  *
- * promaWorkspaceId 关联决策（PB-030 范围说明）：创建项目时若调用方未显式
- * 指定，则按 agent-workspace-manager 的 id 约定（randomUUID，见
- * createAgentWorkspace）分配一个工作区 id 引用并写入项目元数据。真实的
- * Proma 工作区创建/绑定属于 PB-034 会话逻辑——本票不创建 agent 工作区、
- * 不写 agent-workspaces.json（避免重复名冲突与 skills 目录副作用）。
+ * promaWorkspaceId 关联决策：新项目直接复用 Proma 的正式 workspace
+ * 创建入口，并把真实 id 写入项目元数据。历史项目的 workspace
+ * 若已缺失，在首次创建项目会话时惰性重建并回写。
  */
 
-import { randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
@@ -76,6 +73,7 @@ import {
   type VoiceProfileUpsertInput,
 } from '@linguist/cat-store'
 import { getConfigDir } from '../config-paths'
+import { createAgentWorkspace, getAgentWorkspace } from '../agent-workspace-manager'
 import {
   LINGUIST_ASSET_ID_PATTERN,
   type LinguistExportFileInfo,
@@ -177,7 +175,8 @@ export class LinguistProjectService {
   private readonly entropy?: EntropySource
   private readonly now: () => string
   private readonly applicationVersion: string
-  private readonly workspaceAllocator: (projectName: string) => string
+  private readonly workspaceCreator: (projectName: string) => string
+  private readonly workspaceResolver: (workspaceId: string) => boolean
   private readonly registry: CatFormatRegistry
   private storeInstance?: CatStore
   private probe?: SqliteRuntimeProbe
@@ -191,7 +190,10 @@ export class LinguistProjectService {
     this.now = options.now ?? (() => new Date().toISOString())
     this.applicationVersion = options.applicationVersion ?? getPromaVersion()
     if (options.entropy !== undefined) this.entropy = options.entropy
-    this.workspaceAllocator = options.workspaceAllocator ?? (() => randomUUID())
+    this.workspaceCreator = options.workspaceCreator
+      ?? ((projectName) => createAgentWorkspace(projectName).id)
+    this.workspaceResolver = options.workspaceResolver
+      ?? ((workspaceId) => getAgentWorkspace(workspaceId) !== undefined)
     this.registry = options.registry ?? createDefaultCatFormatRegistry()
     const context: ProjectModuleContext = {
       rootDir: this.rootDir,
@@ -253,7 +255,10 @@ export class LinguistProjectService {
   }
 
   createProject(input: CreateLinguistProjectInput): LinguistProject {
-    const promaWorkspaceId = input.promaWorkspaceId ?? this.workspaceAllocator(input.name)
+    const promaWorkspaceId = input.promaWorkspaceId ?? this.workspaceCreator(input.name)
+    if (input.promaWorkspaceId !== undefined && !this.workspaceResolver(promaWorkspaceId)) {
+      throw new Error(`Proma 工作区不存在: ${promaWorkspaceId}`)
+    }
     const project = this.call(() =>
       this.store.createProject({
         name: input.name,
@@ -282,6 +287,17 @@ export class LinguistProjectService {
     }
     console.log(`[Linguist] 已创建 CAT 项目: ${project.id}（工作区 ${promaWorkspaceId}）`)
     return project
+  }
+
+  /** 历史项目的 workspace 缺失时惰性重建，并原子回写项目索引。 */
+  ensureProjectWorkspace(projectId: string): string {
+    const project = this.getProject(projectId)
+    if (this.workspaceResolver(project.promaWorkspaceId)) return project.promaWorkspaceId
+    const workspaceId = this.workspaceCreator(project.name)
+    return this.call(
+      () => this.store.updateProject(projectId, { promaWorkspaceId: workspaceId }),
+      projectId,
+    ).promaWorkspaceId
   }
 
   renameProject(projectId: string, name: string): LinguistProject {

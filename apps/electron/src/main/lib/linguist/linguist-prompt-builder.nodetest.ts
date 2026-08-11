@@ -25,7 +25,7 @@ function setup() {
     rootDir: join(root, `linguist-${Date.now()}`),
     entropy: makeEntropy(`prompt-${Date.now()}`),
     now: makeClock(),
-    workspaceAllocator: () => `ws-${Date.now()}`,
+    workspaceCreator: () => `ws-${Date.now()}`,
   })
   service.init()
   const project = service.createProject({ name: 'Prompt Test', sourceLocale: 'en', targetLocale: 'zh-CN' })

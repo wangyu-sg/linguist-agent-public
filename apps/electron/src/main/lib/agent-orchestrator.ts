@@ -1487,6 +1487,7 @@ export class AgentOrchestrator {
               ? {}
               : { toolsetHash: linguistToolsetHash }),
           }),
+          validatedLinguistContext,
         )
         : []
       const toolComposition = composeAgentTools(
@@ -1497,7 +1498,6 @@ export class AgentOrchestrator {
       const piCustomTools = toolComposition.mergedTools
       if (agentProfile.kind === 'linguist') {
         linguistToolsetHash = hashAgentToolComposition({
-          runtime: 'pi',
           toolNames: piCustomTools.map((tool) => tool.name),
           mcpServerNames: Object.keys(mcpServers),
         })
