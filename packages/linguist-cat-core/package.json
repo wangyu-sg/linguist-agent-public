@@ -1,6 +1,6 @@
 {
   "name": "@linguist/cat-core",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Pure CAT domain model for Linguist Agent: projects, assets, segments, proposals, QA findings. No IO.",

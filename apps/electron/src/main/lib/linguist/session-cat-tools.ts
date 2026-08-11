@@ -5,7 +5,7 @@
  * Phrase 配对和导出业务都在项目服务子模块中。
  */
 
-import type { AgentSessionMeta, LinguistProjectMutationEvent } from '@proma/shared'
+import type { AgentSessionMeta, LinguistProjectMutationEvent, LinguistTurnContextV1 } from '@proma/shared'
 import type { LinguistGenerationProvenance } from '@linguist/cat-core'
 import {
   createLinguistCatTools,
@@ -50,10 +50,18 @@ export function createLinguistProjectMutationEvent(
 }
 
 export function resolveLinguistSessionCatTools(
-  session: Pick<AgentSessionMeta, 'id' | 'modelId' | 'linguistProjectId'> | undefined,
+  session: Pick<
+    AgentSessionMeta,
+    | 'id'
+    | 'modelId'
+    | 'linguistProjectId'
+    | 'linguistRole'
+    | 'linguistDelegatedScope'
+  > | undefined,
   getService: LinguistServiceResolver,
   onProjectMutation?: LinguistProjectMutationSink,
   generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance,
+  turnContext?: Pick<LinguistTurnContextV1, 'assetId'>,
 ) {
   const projectId = session?.linguistProjectId
   if (!projectId) return []
@@ -68,6 +76,39 @@ export function resolveLinguistSessionCatTools(
     resolveProject,
     resultProjectId: projectId,
     sessionId: session.id,
+    ...(session.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
+    ...(session.linguistDelegatedScope !== undefined
+      ? { reviewScopeSegmentIds: session.linguistDelegatedScope.segmentIds }
+      : turnContext?.assetId === undefined
+        ? {}
+        : {
+            reviewScopeSegmentIds: getService()
+              .openProject(projectId)
+              .segments.queryIds({ assetId: turnContext.assetId }),
+          }),
+    readContextImage: async (docId) => {
+      currentBoundSession(session.id, projectId, 'docId')
+      try {
+        const { sourcePath } = getService().resolveContextDocPreviewPath(projectId, docId)
+        const { createReadToolDefinition } = await import('@earendil-works/pi-coding-agent')
+        const managedContextImageReader = createReadToolDefinition(process.cwd())
+        const result = await managedContextImageReader.execute(
+          'cat-context-image',
+          { path: sourcePath },
+          undefined,
+          undefined,
+          {} as never,
+        )
+        const image = result.content.find((block) => block.type === 'image')
+        if (image === undefined) throw new Error('not an inline image')
+        return { data: image.data, mimeType: image.mimeType }
+      } catch {
+        throw new LinguistCatInvalidArgumentError(
+          'docId',
+          'managed context image is unavailable or not supported',
+        )
+      }
+    },
     consistencyWorker: runLinguistConsistencyWorker,
     qaWorker: runLinguistQaWorker,
     importIntakeAsset: (filePath, resourceKind, xlsxMapping) => {

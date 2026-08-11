@@ -7,7 +7,7 @@
  * 2. 用 fs.mkdtemp 创建临时 HOME（打包应用写入 $HOME/.linguist-agent，不触碰真实 ~/.linguist-agent）
  * 3. playwright-core 使用隔离的 HOME 与 Electron userData 启动打包应用
  * 4. 通过 window.electronAPI 播种 fake 渠道 + onboardingCompleted
- * 5. 创建 Agent 工作区 + Pi Agent 会话（createAgentSession 默认 agentRuntime='pi'）
+ * 5. 创建 Agent 工作区 + Pi Agent 会话
  * 6. electronAPI.sendAgentMessage 发送消息，订阅 onAgentStreamEvent / onAgentStreamComplete /
  *    onAgentStreamError 收集真实主→渲染 IPC 流式事件
  * 7. 断言：
@@ -253,10 +253,9 @@ async function quitApp(app: ElectronApplication): Promise<void> {
 
 interface PiSessionInfo {
   sessionId: string
-  agentRuntime: string
 }
 
-/** 创建 Pi Agent 会话（createAgentSession 缺省 agentRuntime='pi'，PB-011 后 Pi 为唯一可见内核） */
+/** 创建 Pi Agent 会话；PB-011 后 Pi 是唯一内核。 */
 async function createPiSession(
   page: Page,
   title: string,
@@ -273,11 +272,11 @@ async function createPiSession(
             channelId?: string,
             workspaceId?: string,
             modelId?: string,
-          ) => Promise<{ id: string; agentRuntime?: string }>
+          ) => Promise<{ id: string }>
         }
       }).electronAPI
       const meta = await api.createAgentSession(t, c, w, m)
-      return { sessionId: meta.id, agentRuntime: meta.agentRuntime ?? '<undefined>' }
+      return { sessionId: meta.id }
     },
     [title, channelId, workspaceId, modelId] as const,
   )
@@ -297,7 +296,6 @@ async function sendPiMessage(
       userMessage: args.userMessage,
       channelId: args.channelId,
       modelId: args.modelId,
-      agentRuntime: 'pi',
       workspaceId: args.workspaceId,
       startedAt: Date.now(),
     })
@@ -378,8 +376,7 @@ async function main(): Promise<void> {
     let textSession: PiSessionInfo | undefined
     {
       textSession = await createPiSession(page, 'G1-Pi文本流', seeded.channelId, seeded.workspaceId, 'fake-text')
-      check('pi-session-created-text', textSession.sessionId.length > 0 && textSession.agentRuntime === 'pi',
-        `sessionId=${textSession.sessionId}，agentRuntime=${textSession.agentRuntime}`)
+      check('pi-session-created-text', textSession.sessionId.length > 0, `sessionId=${textSession.sessionId}`)
 
       await installEventCollectors(page)
       await sendPiMessage(page, {
@@ -418,8 +415,7 @@ async function main(): Promise<void> {
     // ===== 场景 B：Pi 思考流（fake-thinking，服务端发 reasoning_content）=====
     {
       const thinkSession = await createPiSession(page, 'G1-Pi思考流', seeded.channelId, seeded.workspaceId, 'fake-thinking')
-      check('pi-session-created-thinking', thinkSession.sessionId.length > 0 && thinkSession.agentRuntime === 'pi',
-        `sessionId=${thinkSession.sessionId}，agentRuntime=${thinkSession.agentRuntime}`)
+      check('pi-session-created-thinking', thinkSession.sessionId.length > 0, `sessionId=${thinkSession.sessionId}`)
 
       await installEventCollectors(page)
       await sendPiMessage(page, {
@@ -455,8 +451,7 @@ async function main(): Promise<void> {
     // 防止探针通过偷偷切换模型掩盖原会话重试问题。
     {
       const stopSession = await createPiSession(page, 'G1-Pi停止重试', seeded.channelId, seeded.workspaceId, 'fake-stop-retry')
-      check('pi-session-created-stop', stopSession.sessionId.length > 0 && stopSession.agentRuntime === 'pi',
-        `sessionId=${stopSession.sessionId}，agentRuntime=${stopSession.agentRuntime}`)
+      check('pi-session-created-stop', stopSession.sessionId.length > 0, `sessionId=${stopSession.sessionId}`)
 
       await installEventCollectors(page)
       const stopUserMessage = '开始长流输出'

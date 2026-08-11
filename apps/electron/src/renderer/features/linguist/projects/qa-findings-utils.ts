@@ -39,6 +39,32 @@ export const QA_SEVERITY_BADGE_CLASSES: Record<LinguistQaFindingSeverity, string
   L4: 'text-foreground/45',
 }
 
+/**
+ * 三级展示（K4）：把五档 severity 折叠成用户可行动的三类。
+ * 阻止写回 = 结构/placeholder/ICU/required/forbidden 等硬失败（L0/L1）；
+ * 需要检查 = 数字/换行/长度/preferred 偏离等 QA 提示（L2/L3）；
+ * 普通提示 = 建议项（L4，不计入缺陷率）。
+ */
+export type QaSeverityTier = 'blocking' | 'check' | 'notice'
+
+export const QA_SEVERITY_TIERS: Record<LinguistQaFindingSeverity, QaSeverityTier> = {
+  L0: 'blocking',
+  L1: 'blocking',
+  L2: 'check',
+  L3: 'check',
+  L4: 'notice',
+}
+
+export const QA_TIER_LABELS: Record<QaSeverityTier, string> = {
+  blocking: '阻止写回',
+  check: '需要检查',
+  notice: '普通提示',
+}
+
+export function qaSeverityTier(severity: LinguistQaFindingSeverity): QaSeverityTier {
+  return QA_SEVERITY_TIERS[severity]
+}
+
 export interface SegmentQaSummary {
   count: number
   highestSeverity: LinguistQaFindingSeverity

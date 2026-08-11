@@ -52,15 +52,21 @@ test('lifecycle: create → list → get → paths → archive（含显式 works
   }
 })
 
-test('default workspace allocator follows agent-workspace id convention (randomUUID)', () => {
-  const service = new LinguistProjectService({ rootDir: makeTempDir() })
+test('createProject creates a real Proma workspace and stores its id', () => {
+  const created: string[] = []
+  const service = new LinguistProjectService({
+    rootDir: makeTempDir(),
+    workspaceCreator: (name) => {
+      created.push(name)
+      return 'workspace-created'
+    },
+    workspaceResolver: (id) => id === 'workspace-created',
+  })
   service.init()
   try {
     const project = service.createProject(INPUT)
-    assert.match(
-      project.promaWorkspaceId,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    )
+    assert.deepEqual(created, ['Demo'])
+    assert.equal(project.promaWorkspaceId, 'workspace-created')
   } finally {
     service.closeAll()
   }
@@ -328,6 +334,37 @@ test('PB-072: QA waivers do not bypass verified export rules; as-is export stays
     assert.equal(staged.verifiedSegments, imported.segmentCount)
     assert.deepEqual(readFileSync(sourcePath), originalSource)
     assert.deepEqual(service.openProject(project.id).exports.listByAsset(imported.assetId), [staged.artifact])
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('verified export revalidates hard terminology while number changes remain advisory', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    const imported = await service.importAsset(project.id, {
+      bytes: new TextEncoder().encode('source,target\nAlpha 7,初稿 8\n'),
+      filename: 'terms.csv',
+    })
+    const db = service.openProject(project.id)
+    const segment = db.segments.query({ assetId: imported.assetId, limit: 1 })[0]!
+    db.termEntries.upsert({
+      term: 'Alpha',
+      translation: '阿尔法',
+      status: 'required',
+      caseSensitive: false,
+    })
+
+    await assert.rejects(
+      () => service.stageExport(project.id, imported.assetId),
+      (error: unknown) => (error as { code?: string }).code === 'FORMAT_EXPORT_ERROR',
+    )
+    db.segments.applyTargetEdit(segment.id, '阿尔法 8', segment.revision)
+    const numberFinding = service.runQa(project.id).find((finding) => finding.code === 'NUMBER_MISMATCH')
+    assert.equal(numberFinding?.severity, 'L2')
+    assert.equal(numberFinding?.disposition, 'needs_review')
+    await assert.doesNotReject(() => service.stageExport(project.id, imported.assetId))
   } finally {
     service.closeAll()
   }

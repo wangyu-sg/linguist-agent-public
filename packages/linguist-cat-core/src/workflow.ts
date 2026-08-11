@@ -8,7 +8,12 @@ export type WorkflowStage = (typeof WORKFLOW_STAGES)[number]
 
 export type CurrentStageState = 'untouched' | 'draft' | 'confirmed'
 
-export type WorkflowStageEventAction = 'confirmed' | 'unconfirmed'
+export type WorkflowStageDecision = 'unchanged' | 'corrected' | 'blocked'
+
+export type WorkflowStageEventAction =
+  | 'confirmed'
+  | 'unconfirmed'
+  | WorkflowStageDecision
 
 export interface WorkflowStageEvent {
   stage: WorkflowStage
@@ -123,6 +128,42 @@ export function unconfirmCurrentStage(
   return {
     segment: { ...segment, currentStageState: 'draft' },
     event: stageEvent(segment, stage, 'unconfirmed', options),
+  }
+}
+
+/**
+ * 记录岗位逐段决策。blocked 是审计证据而非确认：它允许 locked / stale
+ * 快照被明确标记，但事件始终绑定当前实际 revision，后续文本修改会令其失效。
+ */
+export function recordCurrentStageDecision(
+  segment: Segment,
+  stage: WorkflowStage,
+  expectedRevision: number,
+  decision: WorkflowStageDecision,
+  options: WorkflowStageMutationOptions = {},
+): WorkflowStageMutationResult {
+  if (decision === 'blocked') {
+    return {
+      segment: { ...segment, currentStageState: 'draft' },
+      event: stageEvent(segment, stage, decision, options),
+    }
+  }
+
+  assertSegmentEditable(segment)
+  assertRevision(segment, expectedRevision)
+  if (segment.target === '') {
+    throw new InvalidStateTransitionError('segment-stage', 'untranslated', `${stage}:${decision}`)
+  }
+  if (decision === 'corrected' && segment.currentStageState !== 'draft') {
+    throw new InvalidStateTransitionError(
+      'segment-stage',
+      `${stage}:${segment.currentStageState ?? 'untouched'}`,
+      `${stage}:corrected`,
+    )
+  }
+  return {
+    segment: { ...segment, currentStageState: 'confirmed' },
+    event: stageEvent(segment, stage, decision, options),
   }
 }
 import { InvalidStateTransitionError } from './errors'

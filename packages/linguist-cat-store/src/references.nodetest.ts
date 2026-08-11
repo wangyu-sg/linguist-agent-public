@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import type { AssetId, SegmentId } from '@linguist/cat-core'
 import { StoreNotFoundError, StoreReadOnlyError } from './errors'
 import { TermEntriesRepository } from './repositories/term-entries'
 import { TmUnitsRepository } from './repositories/tm-units'
@@ -446,10 +447,11 @@ test('term cleaning, compiled-cache invalidation, and post-translation validatio
     }), /non-empty/)
     assert.deepEqual(db.termEntries.importMany([
       { term: '123', translation: '一二三', status: 'preferred', caseSensitive: false },
-    ]), { imported: 0, unchanged: 0 })
+    ]), { imported: 1, unchanged: 0 })
     db.termEntries.importMany([
       { term: 'Potion', translation: '药水', status: 'required', caseSensitive: false },
       { term: 'Potion', translation: '药剂', status: 'preferred', caseSensitive: false },
+      { term: 'Confirm', translation: '确认', status: 'required', caseSensitive: false },
       { term: 'Menu', translation: '菜单', status: 'preferred', caseSensitive: false },
       { term: 'Legacy', translation: '禁词', status: 'forbidden', caseSensitive: false },
     ])
@@ -460,33 +462,54 @@ test('term cleaning, compiled-cache invalidation, and post-translation validatio
     assert.equal(db.termEntries.findMatches({ text: 'Use Shield' })[0]?.translation, '盾牌')
 
     assert.deepEqual(db.termEntries.validateSegments([{
-      segmentId: 'seg-1',
-      source: 'Open the Potion Menu',
+      id: 'seg-0000000000000001' as SegmentId,
+      assetId: 'ast-0000000000000001' as AssetId,
+      ordinal: 0,
+      source: 'Confirm the Potion Menu and Legacy',
       target: '打开药剂并显示禁词',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      status: 'translated',
+      locked: false,
+      revision: 0,
+      sourceHash: 'source-hash',
     }]), {
       missingRequired: [{
-        segmentId: 'seg-1',
-        termId: db.termEntries.list({ status: 'required' })[0]!.id,
-        term: 'Potion',
-        expected: '药水',
+        segmentId: 'seg-0000000000000001',
+        termId: db.termEntries.list({ status: 'required' }).find((entry) => entry.term === 'Confirm')!.id,
+        term: 'Confirm',
+        expected: '确认',
       }],
       forbiddenHits: [{
-        segmentId: 'seg-1',
+        segmentId: 'seg-0000000000000001',
         termId: db.termEntries.list({ status: 'forbidden' })[0]!.id,
         forbidden: '禁词',
       }],
       preferredNotUsed: [{
-        segmentId: 'seg-1',
+        segmentId: 'seg-0000000000000001',
         termId: db.termEntries.list({ status: 'preferred' }).find((entry) => entry.term === 'Menu')!.id,
         term: 'Menu',
         preferred: '菜单',
       }],
       unresolvedConflicts: [{
-        segmentId: 'seg-1',
+        segmentId: 'seg-0000000000000001',
         term: 'potion',
         termIds: db.termEntries.list({ query: 'Potion' }).map((entry) => entry.id).sort(),
       }],
     })
+    assert.equal(db.termEntries.validateSegments([{
+      id: 'seg-0000000000000002' as SegmentId,
+      assetId: 'ast-0000000000000001' as AssetId,
+      ordinal: 1,
+      source: 'Open the Menu',
+      target: '显示禁词',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      status: 'translated',
+      locked: false,
+      revision: 0,
+      sourceHash: 'source-hash-2',
+    }]).forbiddenHits.length, 0, 'forbidden 必须同时命中源文 trigger')
   } finally {
     db.close()
   }

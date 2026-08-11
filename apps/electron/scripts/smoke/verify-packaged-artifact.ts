@@ -116,7 +116,6 @@ export function verifyPackagedArtifact(appPath: string, repoRoot: string): void 
   }
 
   const unpacked = join(resources, 'app.asar.unpacked', 'node_modules')
-  requirePackageVersion(join(unpacked, '@anthropic-ai', 'claude-agent-sdk', 'package.json'), '0.3.201')
   requirePackageVersion(join(unpacked, 'sharp', 'package.json'), '0.35.3')
   requirePackageVersion(join(unpacked, '@img', 'sharp-darwin-arm64', 'package.json'), '0.35.3')
   requirePackageVersion(join(unpacked, '@img', 'sharp-libvips-darwin-arm64', 'package.json'), '1.3.2')

@@ -5,8 +5,8 @@
  * 持久化于 ~/.linguist-agent/agent-sessions.json，重启后绑定仍在）。Chat 模式的
  * Conversation 没有工作区/runtime 概念，Batch 4 的 CAT customTools 只会
  * 装配进 Agent 会话栈，因此绑定只存在于 Agent 会话栈。
- * LA-RUNTIME-001：新建项目会话与 ipc.ts 普通创建路径同一来源——继承并冻结
- * 创建时的 Proma 默认渠道/模型/runtime（settings.json），代码不含 runtime 字面量。
+ * 新建项目会话与 ipc.ts 普通创建路径同一来源——继承并冻结
+ * 创建时的 Proma 默认渠道/模型（settings.json）。
  *
  * 生命周期硬规则（计划 PB-034）：
  * 1. 普通对话（侧栏新建）绝不携带 linguistProjectId；
@@ -28,7 +28,6 @@ import type {
   LinguistSessionBindingStatus,
   LinguistRole,
 } from '@proma/shared'
-import { DEFAULT_AGENT_RUNTIME } from '../../../types'
 import { getSettings } from '../settings-service'
 import { createAgentSession, listAgentSessions } from '../agent-session-manager'
 import { LinguistProjectArchivedError } from './errors'
@@ -95,7 +94,7 @@ export function getLinguistSessionBinding(
  * 在项目内创建对话：项目必须存在且未归档（归档项目只读，fail closed），
  * 产物为 Agent 会话，元数据携带 linguistProjectId + 项目名快照。
  * role 只定义默认岗位，不参与工具、权限、模型和 Runtime 装配。
- * LA-RUNTIME-001：渠道/模型/runtime 继承并冻结创建时的 Proma 默认
+ * 渠道/模型继承并冻结创建时的 Proma 默认
  * （与 ipc.ts 普通会话创建路径同一 getSettings() 来源）。
  */
 export function createLinguistProjectChatSession(
@@ -109,12 +108,14 @@ export function createLinguistProjectChatSession(
   // 不传标题时保留 Proma 默认标题，让上游首轮自动标题管线真正触发；项目名已独立存入快照。
   const title = input.title?.trim() || undefined
   const settings = getSettings()
+  const workspaceId = service.ensureProjectWorkspace(project.id)
   return createAgentSession(
     title,
     settings.agentChannelId,
-    undefined,
+    workspaceId,
     settings.agentModelId,
-    settings.agentRuntime ?? DEFAULT_AGENT_RUNTIME,
+    undefined,
+    undefined,
     {
       linguistProjectId: project.id,
       linguistProjectName: project.name,

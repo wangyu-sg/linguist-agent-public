@@ -28,6 +28,8 @@ import type {
   QaRunOptions,
   Segment,
   SegmentStatus,
+  WorkflowStage,
+  WorkflowStageDecision,
   TagToken,
   SaveTagProfileCandidateInput,
   TagCandidateValidationResult,
@@ -66,6 +68,7 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_get_translation_context',
   'cat_get_proposal_snapshot',
   'cat_apply_translations',
+  'cat_confirm_segments',
   'cat_search_tm',
   'cat_search_terms',
   'cat_upsert_terms',
@@ -162,8 +165,14 @@ export interface LinguistCatToolsDeps {
   modelId?: string
   /** Stored as Proposal provenance when present. */
   sessionId?: string
+  /** 当前受信任 Linguist 岗位；cat_confirm_segments 由此推导 stage。 */
+  linguistRole?: 'general' | 'translator' | 'reviewer' | 'proofreader'
+  /** 委派时冻结的 Segment 范围；模型无对应入参。 */
+  reviewScopeSegmentIds?: readonly string[]
   /** Current-turn host provenance; resolved locally per tool call. */
   generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance
+  /** 读取已绑定项目的受管 Context 图片；宿主负责路径授权与图片校验。 */
+  readContextImage?: (docId: string) => Promise<{ data: string; mimeType: string }>
   /** Electron injects the packaged node:worker_threads QA entry. */
   qaWorker?: LinguistQaWorker
   /** Electron injects the same packaged worker for full-project consistency analysis. */
@@ -382,6 +391,25 @@ export interface CatApplyTranslationsResult {
   proposalIds: string[]
 }
 
+export interface CatConfirmSegmentsResult {
+  stage: WorkflowStage
+  decisions: Array<{
+    segmentId: string
+    decision: WorkflowStageDecision
+    revision: number
+  }>
+  coverage: {
+    scope: 'items' | 'delegated'
+    total: number
+    unchanged: number
+    corrected: number
+    blocked: number
+    pending: number
+    status: 'in_progress' | 'complete' | 'completed_with_blocks'
+  }
+  replayed: boolean
+}
+
 export interface CatAssetListItem {
   assetId: string
   /** Import-time file basename (metadata, never a path). */
@@ -535,8 +563,8 @@ export type CatSearchSentencePatternsResult = PagedResult<SentencePattern>
 
 /**
  * cat_read_context_doc（PB-095）：按字符分页读 context doc 的
- * text_extract。图片 kind 或无抽取文本时 text 缺省并带 note 说明——
- * 字节永不进工具输出（输出纪律：无路径、无二进制）。
+ * text_extract。图片 kind 或无抽取文本时 text 缺省并带 note 说明；
+ * 图片字节只能作为 Pi ImageContent 返回，details 仍不含路径或二进制。
  */
 export interface CatReadContextDocResult {
   docId: string

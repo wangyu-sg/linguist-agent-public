@@ -5,6 +5,7 @@ import {
   type QaFindingDisposition,
   type QaFindingSeverity,
   type Segment,
+  type WorkflowStage,
 } from '@linguist/cat-core'
 import {
   runProjectQa,
@@ -12,6 +13,7 @@ import {
   type ApprovedExemplar,
   type PersistedQaFinding,
   type ProjectDatabase,
+  type StageDecisionCoverage,
 } from '@linguist/cat-store'
 import {
   errorCodeOf,
@@ -90,10 +92,9 @@ export class ProjectQuality {
           threshold: 0.6,
           limit: 5,
         }),
-        termMatches: db.termEntries.findMatches({
-          text: segment.source,
-          limit: 10,
-        }),
+        termMatches: db.termEntries.evaluateSegment(segment).matches
+          .slice(0, 10)
+          .map((item) => item.match),
         approvedExemplars: segment.context?.meta?.speaker?.trim()
           ? db.tmUnits.listApprovedExemplars({
               speaker: segment.context.meta.speaker.trim(),
@@ -155,6 +156,23 @@ export class ProjectQuality {
         ...(input.note === undefined ? {} : { note: input.note }),
       })
     }, projectId)
+  }
+
+  /**
+   * 单批次单阶段的岗位 decision 覆盖（Reviewer/Proofreader 真实进度）。
+   * 只读聚合：归档项目仍可读；assetId 不属于本项目时自然得到 total=0。
+   */
+  getStageDecisionCoverage(
+    projectId: string,
+    assetId: string,
+    stage: WorkflowStage,
+  ): StageDecisionCoverage {
+    this.context.getProject(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(
+      () => db.segments.getStageDecisionCoverage(stage, db.segments.queryIds({ assetId })),
+      projectId,
+    )
   }
 
   /**

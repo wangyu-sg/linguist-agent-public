@@ -46,6 +46,7 @@ import {
   type ProposalRow,
   type SegmentRow,
 } from './rows'
+import type { TermEntriesRepository } from './term-entries'
 
 export interface ProposalMutationItem {
   proposalId: ProposalId | string
@@ -139,7 +140,10 @@ interface ProposalMutationRow {
 }
 
 export class ProposalsRepository {
-  constructor(private readonly db: CatDatabase) {}
+  constructor(
+    private readonly db: CatDatabase,
+    private readonly termEntries?: TermEntriesRepository,
+  ) {}
 
   /** 一次业务操作创建 Proposal，并按模式直接接受或保留 Pending；每段独立回滚。 */
   applyTranslations(
@@ -159,7 +163,7 @@ export class ProposalsRepository {
       proposalIds: [],
     }
     return this.db.transaction(`apply ${edits.length} translations`, () => {
-      const hardRules = this.mergeHardRuleOptions(options)
+      const hardRules: ProposalHardRuleOptions = options
       for (const edit of edits) {
         this.db.db.exec('SAVEPOINT apply_translation_item')
         try {
@@ -218,7 +222,7 @@ export class ProposalsRepository {
   ): TranslationProposal[] {
     if (inputs.length === 0) return []
     return this.db.transaction(`insert ${inputs.length} proposals`, () => {
-      const hardRuleOptions = this.mergeHardRuleOptions(options)
+      const hardRuleOptions: ProposalHardRuleOptions = options
       const proposals = new Map<string, TranslationProposal>()
       for (const input of inputs) {
         const proposal = this.insertPendingWithinTransaction(input, hardRuleOptions, options.issuance)
@@ -325,66 +329,37 @@ export class ProposalsRepository {
     })
   }
 
-  private storedHardRules(): Pick<
-    DeterministicHardRuleInput,
-    'requiredTerminology' | 'forbiddenTerms'
-  > {
-    const rows = this.db.db
-      .prepare(
-        `SELECT term, translation, status, case_sensitive
-         FROM term_entries
-         WHERE status IN ('required', 'forbidden')
-         ORDER BY id`,
-      )
-      .all() as Array<{
-        term: string
-        translation: string
-        status: 'required' | 'forbidden'
-        case_sensitive: number
-      }>
-    return {
-      requiredTerminology: rows
-        .filter((row) => row.status === 'required')
-        .map((row) => ({
-          sourceTerm: row.term,
-          targetTerm: row.translation,
-          caseSensitive: row.case_sensitive === 1,
-        })),
-      forbiddenTerms: rows
-        .filter((row) => row.status === 'forbidden')
-        .map((row) => ({
-          sourceTerm: row.term,
-          term: row.translation,
-          caseSensitive: row.case_sensitive === 1,
-        })),
-    }
-  }
-
-  private mergeHardRuleOptions(options: ProposalHardRuleOptions): ProposalHardRuleOptions {
-    const stored = this.storedHardRules()
-    return {
-      ...options,
-      requiredTerminology: [
-        ...(stored.requiredTerminology ?? []),
-        ...(options.requiredTerminology ?? []),
-      ],
-      forbiddenTerms: [
-        ...(stored.forbiddenTerms ?? []),
-        ...(options.forbiddenTerms ?? []),
-      ],
-    }
-  }
-
   private assertHardRules(
     segment: Segment,
     proposedTarget: string,
     options: ProposalHardRuleOptions,
     to: 'pending' | 'accepted',
   ): void {
+    const evaluated = this.termEntries?.evaluateSegment(segment, proposedTarget).matches ?? []
     const violation = runDeterministicHardRules({
       segment,
       proposedTarget,
       ...options,
+      requiredTerminology: [
+        ...evaluated
+          .filter((item) => item.enforcement === 'hard' && item.match.status === 'required')
+          .map(({ match }) => ({
+            sourceTerm: match.term,
+            targetTerm: match.translation,
+            caseSensitive: match.caseSensitive,
+          })),
+        ...(options.requiredTerminology ?? []),
+      ],
+      forbiddenTerms: [
+        ...evaluated
+          .filter((item) => item.enforcement === 'hard' && item.match.status === 'forbidden')
+          .map(({ match }) => ({
+            sourceTerm: match.term,
+            term: match.translation,
+            caseSensitive: match.caseSensitive,
+          })),
+        ...(options.forbiddenTerms ?? []),
+      ],
     }).violations[0]
     if (violation !== undefined) {
       throw new InvalidStateTransitionError('proposal-hard-rules', violation.code, to)
@@ -578,7 +553,7 @@ export class ProposalsRepository {
     const uniqueIds = [...new Set(proposalIds)]
     if (uniqueIds.length === 0) return []
     return this.db.transaction(`accept ${uniqueIds.length} proposals`, () => {
-      const hardRuleOptions = this.mergeHardRuleOptions(options)
+      const hardRuleOptions: ProposalHardRuleOptions = options
       return uniqueIds.map((proposalId) =>
         this.acceptWithinTransaction(proposalId, hardRuleOptions),
       )
@@ -592,7 +567,7 @@ export class ProposalsRepository {
   ): IdempotentProposalMutation<AcceptProposalResult[]> {
     const request = { items, now: options.now ?? null }
     return this.idempotentMutation('accept-selected', idempotencyKey, request, () => {
-      const hardRuleOptions = this.mergeHardRuleOptions(options)
+      const hardRuleOptions: ProposalHardRuleOptions = options
       return this.uniqueItems(items).map((item) => {
         this.assertExpectedRevision(item)
         return this.acceptWithinTransaction(item.proposalId, hardRuleOptions)
@@ -660,7 +635,7 @@ export class ProposalsRepository {
       if (original.status !== 'pending') {
         throw new InvalidStateTransitionError('proposal', original.status, 'accepted')
       }
-      const hardRuleOptions = this.mergeHardRuleOptions(input)
+      const hardRuleOptions: ProposalHardRuleOptions = input
       if (input.editedTarget === original.proposedTarget) {
         return this.acceptWithinTransaction(original.id, hardRuleOptions)
       }
@@ -703,7 +678,7 @@ export class ProposalsRepository {
         .prepare('SELECT * FROM segments WHERE id = ?')
         .get(original.segmentId) as SegmentRow | undefined
       if (!segment) throw new UnknownSegmentError(original.segmentId, `Proposal ${original.id}`)
-      const hardRuleOptions = this.mergeHardRuleOptions(input)
+      const hardRuleOptions: ProposalHardRuleOptions = input
       return this.insertPendingProposalWithinTransaction(reissueProposal(original, {
         baseRevision: segment.revision,
         reissueKey: idempotencyKey,

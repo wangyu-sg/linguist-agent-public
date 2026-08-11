@@ -76,12 +76,14 @@ export {
   confirmCurrentStage,
   nativeStatusForStage,
   normalizeWorkflowStage,
+  recordCurrentStageDecision,
   unconfirmCurrentStage,
   type CurrentStageState,
   type WorkflowOutputStatusPolicy,
   type WorkflowStage,
   type WorkflowStageEvent,
   type WorkflowStageEventAction,
+  type WorkflowStageDecision,
   type WorkflowStageMutationOptions,
   type WorkflowStageMutationResult,
 } from './workflow'
@@ -91,6 +93,16 @@ export {
   normalizeGlossaryPolicy,
   type LinguistGlossaryPolicy,
 } from './glossary-policy'
+
+export {
+  evaluateSegmentTermPolicy,
+  type EvaluatedTermPolicyMatch,
+  type SegmentTermPolicyEvaluation,
+  type SegmentTermPolicyInput,
+  type TermPolicyAdvisoryReason,
+  type TermPolicyCandidate,
+  type TermPolicyStatus,
+} from './term-policy'
 
 export {
   normalizeTagProfile,
@@ -188,6 +200,7 @@ export {
   QA_RULE_CODES,
   runQa,
   type QaGlossaryConflict,
+  type QaSegmentTerminology,
   type QaRuleCode,
   type QaRunOptions,
 } from './qa-core'

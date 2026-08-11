@@ -61,7 +61,6 @@ const MIGRATED_FILES = [
   'apps/electron/src/renderer/components/settings/BotHubSettings.tsx',
   'apps/electron/src/renderer/components/settings/VoiceInputSettings.tsx',
   'apps/electron/src/renderer/components/settings/MigrationSettings.tsx',
-  'apps/electron/src/renderer/components/settings/MemorySettings.tsx',
   'apps/electron/src/renderer/components/settings/SettingsPanel.tsx',
   'apps/electron/src/renderer/components/settings/ProxySettings.tsx',
   'apps/electron/src/renderer/components/settings/PromptSettings.tsx',

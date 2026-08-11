@@ -23,6 +23,7 @@ import {
   type AgentHostCapabilities,
 } from '@/host/contracts'
 import { getAgentSurfaceControls } from '@/host/extension-registry'
+import { useFocusAgentSessionInput } from '@/hooks/useFocusAgentSessionInput'
 import { SELECTION_ACTION_POPOVER_SELECTOR } from '@/lib/quoted-selection'
 
 const MAX_AGENT_HISTORY_QUOTED_CHARS = 2000
@@ -70,6 +71,7 @@ export function AgentHistorySelectionLayer({
   const setSideChatMap = useSetAtom(agentSideChatMapAtom)
   const setSidePanelOpen = useSetAtom(agentSidePanelOpenAtom)
   const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
+  const focusAgentSessionInput = useFocusAgentSessionInput()
   const [selection, setSelection] = React.useState<AgentHistorySelection | null>(null)
   const pointerSelectingRef = React.useRef(false)
   const captureTimerRef = React.useRef<number | null>(null)
@@ -217,8 +219,9 @@ export function AgentHistorySelectionLayer({
     })
     window.getSelection()?.removeAllRanges()
     clearSelection()
+    focusAgentSessionInput(sessionId)
     toast.success('已添加到 Agent 引用')
-  }, [clearSelection, selection, sessionId, setQuotedSelectionMap])
+  }, [clearSelection, focusAgentSessionInput, selection, sessionId, setQuotedSelectionMap])
 
   const handleOpenChatTab = React.useCallback(async (): Promise<void> => {
     if (!selection) return

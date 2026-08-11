@@ -56,7 +56,8 @@ export function makeService(rootDir = makeTempDir()): LinguistProjectService {
     rootDir,
     entropy: makeEntropy(),
     now: makeClock(),
-    workspaceAllocator: () => `ws-test-${++workspaceSeq}`,
+    workspaceCreator: () => `ws-test-${++workspaceSeq}`,
+    workspaceResolver: () => true,
   })
   service.init()
   return service

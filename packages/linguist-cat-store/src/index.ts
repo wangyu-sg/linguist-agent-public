@@ -87,7 +87,11 @@ export {
 } from './run-harness'
 
 export { AssetsRepository, type InsertImportedResult } from './repositories/assets'
-export { SegmentsRepository, type SegmentQuery } from './repositories/segments'
+export {
+  SegmentsRepository,
+  type SegmentQuery,
+  type StageDecisionCoverage,
+} from './repositories/segments'
 export {
   ProposalsRepository,
   type ApplyTranslationEdit,
@@ -141,7 +145,6 @@ export {
   type TermMatchOptions,
   type TermMatchType,
   type TermValidationResult,
-  type TermValidationSegment,
 } from './repositories/term-entries'
 export {
   ReferenceImportsRepository,

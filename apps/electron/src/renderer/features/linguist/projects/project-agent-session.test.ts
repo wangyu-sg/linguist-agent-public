@@ -18,7 +18,6 @@ function session(id: string, projectId: string): AgentSessionMeta {
   return {
     id,
     title: id,
-    agentRuntime: 'pi',
     linguistProjectId: projectId,
     linguistProjectName: projectId,
     createdAt: 1,

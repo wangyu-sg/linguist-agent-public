@@ -165,8 +165,8 @@ test('terminology IPC exposes bounded bulk CRUD, conflicts, and current-segment 
     const validation = await ipc.validateTerms({ projectId: project.id, segmentIds: [segmentId] })
     assert.equal(validation.ok, true)
     if (validation.ok) {
-      assert.equal(validation.data.missingRequired.length, 1)
-      assert.equal(validation.data.forbiddenHits.length, 1)
+      assert.equal(validation.data.missingRequired.length, 0)
+      assert.equal(validation.data.forbiddenHits.length, 0)
       assert.equal(validation.data.preferredNotUsed.length, 1)
       assert.equal(validation.data.unresolvedConflicts.length, 1)
     }
@@ -182,8 +182,8 @@ test('terminology IPC exposes bounded bulk CRUD, conflicts, and current-segment 
       projectId: project.id,
       terms: [{ term: '123', translation: '一二三', status: 'preferred', caseSensitive: false }],
     })
-    assert.equal(numeric.ok, false)
-    if (!numeric.ok) assert.equal(numeric.error.code, 'INVALID_INPUT')
+    assert.equal(numeric.ok, true)
+    if (numeric.ok) assert.equal(numeric.data.count, 1)
   } finally {
     service.closeAll()
   }

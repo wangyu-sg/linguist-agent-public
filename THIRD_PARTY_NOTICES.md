@@ -12,19 +12,6 @@
 
 ## 专有组件（重点复核项）
 
-### @anthropic-ai/claude-agent-sdk（及其平台包）
-
-- 版本：0.3.201（平台包：Linux glibc / musl 的 arm64 / x64、macOS arm64 /
-  x64、Windows arm64 / x64，按目标平台随包分发其一）
-- 许可：**专有**（© Anthropic PBC, All rights reserved；package.json 声明
-  "SEE LICENSE IN README.md"）
-- 来源：npm `@anthropic-ai/claude-agent-sdk`，
-  https://github.com/anthropics/claude-agent-sdk-typescript
-- 用途：应用内置的 Claude Agent 运行时（Agent 模式的默认 runtime）。
-- 声明：该组件为 Anthropic 专有软件，按其 Legal Agreements
-  （https://www.anthropic.com/legal）使用，**不**在 AGPL-3.0 覆盖范围内。
-  随发行物再分发的依据须在公开发行前由产品负责人最终确认。
-
 ### Anthropic 专有 Skills：docx / pdf / pptx / xlsx
 
 - 版本：docx 1.0.1、pdf 1.0.4、pptx 1.0.1、xlsx 1.0.1

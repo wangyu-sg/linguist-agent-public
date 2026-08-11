@@ -358,6 +358,40 @@ test('rebaseCurrentStage: switching T/E/P restores only a same-revision confirma
   }
 })
 
+test('stage decision coverage: 101 段必须逐段形成 decision，blocked 单独聚合', () => {
+  const store = new CatStore({ rootDir: makeTempDir(), entropy: makeEntropy(), now: makeClock() })
+  const project = store.createProject({ name: '101 review', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'ws' })
+  const db = store.openProject(project.id)
+  const { segments } = db.assets.insertImported(makeImportedAsset({ segmentCount: 101, fillEvery: 1 }))
+  const segmentIds = segments.map((segment) => segment.id as string)
+  try {
+    for (const segment of segments.slice(0, 100)) {
+      db.segments.recordCurrentStageDecision(segment.id, 'editing', 0, 'unchanged')
+    }
+    assert.deepEqual(db.segments.getStageDecisionCoverage('editing', segmentIds), {
+      total: 101,
+      unchanged: 100,
+      corrected: 0,
+      blocked: 0,
+      pending: 1,
+      status: 'in_progress',
+    })
+
+    db.segments.setLocked(segments[100]!.id, true)
+    db.segments.recordCurrentStageDecision(segments[100]!.id, 'editing', 0, 'blocked')
+    assert.deepEqual(db.segments.getStageDecisionCoverage('editing', segmentIds), {
+      total: 101,
+      unchanged: 100,
+      corrected: 0,
+      blocked: 1,
+      pending: 0,
+      status: 'completed_with_blocks',
+    })
+  } finally {
+    db.close()
+  }
+})
+
 test('countByStatus: GROUP BY counts with all statuses present, no row load (PB-031)', () => {
   const { db, segments } = setup(5)
   try {

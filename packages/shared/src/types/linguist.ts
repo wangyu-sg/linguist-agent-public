@@ -34,6 +34,8 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   CONFIRM_XLSX_MAPPING: 'linguist.projects.confirmXlsxMapping',
   /** 项目摘要（元数据 + 资产列表 + 按状态分段的段计数） */
   GET_SUMMARY: 'linguist.projects.getSummary',
+  /** 单批次单阶段的岗位 decision 覆盖统计（只读聚合） */
+  GET_STAGE_COVERAGE: 'linguist.projects.getStageCoverage',
   /** 重命名项目（沿用项目名校验；归档项目只读） */
   RENAME: 'linguist.projects.rename',
   /** 修改空项目语言对；已有批次或 TM/TB 时 fail closed。 */
@@ -816,8 +818,6 @@ export interface LinguistProjectCreateRequest {
   name: string
   sourceLocale: string
   targetLocale: string
-  /** 显式关联既有 Proma 工作区 id；缺省时主进程按工作区 id 约定分配。 */
-  promaWorkspaceId?: string
   /** 新建界面必须显式提交；旧调用缺省时兼容为 translation。 */
   workflowStage?: LinguistWorkflowStage
   outputStatusPolicy?: LinguistWorkflowOutputStatusPolicy
@@ -1014,6 +1014,25 @@ export interface LinguistProjectGetSummaryRequest {
   projectId: string
 }
 
+/** 单批次单阶段的岗位 decision 覆盖统计（Reviewer/Proofreader 真实进度）。 */
+export interface LinguistStageDecisionCoverage {
+  total: number
+  unchanged: number
+  corrected: number
+  blocked: number
+  /** 尚无当前 revision 有效 decision 的段数。 */
+  pending: number
+  status: 'in_progress' | 'complete' | 'completed_with_blocks'
+}
+
+export interface LinguistProjectGetStageCoverageRequest {
+  projectId: string
+  assetId: string
+  workflowStage: LinguistWorkflowStage
+}
+
+export type LinguistProjectGetStageCoverageResult = LinguistStageDecisionCoverage
+
 export interface LinguistProjectRenameRequest {
   projectId: string
   name: string
@@ -1140,7 +1159,7 @@ export interface LinguistCatConfirmStageBulkResult {
 
 export interface LinguistWorkflowStageEventInfo {
   stage: LinguistWorkflowStage
-  action: 'confirmed' | 'unconfirmed'
+  action: 'confirmed' | 'unconfirmed' | 'unchanged' | 'corrected' | 'blocked'
   segmentRevision: number
   actor?: string
   createdAt: string
@@ -2017,7 +2036,7 @@ export interface LinguistDevDiagnostics {
     kind: 'linguist'
     role: import('./agent').LinguistRole
   }
-  agentRuntime?: import('./agent-provider').AgentRuntime
+  agentRuntime?: 'pi'
   sessionCwd?: string
   tools: {
     /** Claude SDK 不公开基础工具清单时为 null，不用 MCP server 数冒充。 */
@@ -2109,7 +2128,7 @@ export interface LinguistDiagnosticBundle {
     eventGap: LinguistDiagnosticsEventGap
   }
   runtime: {
-    agentRuntime?: import('./agent-provider').AgentRuntime
+    agentRuntime?: 'pi'
     baseToolCount: number | null
     overlayToolCount: number
     workerMode: 'node-worker_threads' | 'not_observed'
@@ -2240,7 +2259,6 @@ export type LinguistSessionCopyToProjectResult = Pick<
   | 'title'
   | 'channelId'
   | 'modelId'
-  | 'agentRuntime'
   | 'codexFastMode'
   | 'openAIThinkingLevel'
   | 'permissionMode'

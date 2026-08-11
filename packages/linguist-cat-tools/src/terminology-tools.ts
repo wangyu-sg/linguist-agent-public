@@ -24,7 +24,7 @@ export function createTerminologyTools(runtime: CatToolRuntime) {
   const upsertTool = defineTool({
     name: 'cat_upsert_terms',
     label: 'CAT upsert terms',
-    description: 'Create or update 1-200 terminology entries in the bound project. Empty values are rejected; pure numeric source terms require status=required.',
+    description: 'Create or update 1-200 terminology entries in the bound project. Empty values are rejected.',
     promptSnippet: 'Create or update a bounded batch of project terminology entries',
     parameters: Type.Object({
       terms: Type.Array(Type.Object({
@@ -45,9 +45,6 @@ export function createTerminologyTools(runtime: CatToolRuntime) {
       for (const entry of params.terms) {
         if (entry.term.trim() === '' || entry.translation.trim() === '') {
           throw new LinguistCatInvalidArgumentError('terms', 'term and translation must be non-blank')
-        }
-        if (entry.status !== 'required' && /^[\p{N}\s.,+\-]+$/u.test(entry.term.trim())) {
-          throw new LinguistCatInvalidArgumentError('terms', 'pure numeric terms require status=required')
         }
       }
       const { db } = resolveBoundProject('cat_upsert_terms', toolCallId)
@@ -119,15 +116,7 @@ export function createTerminologyTools(runtime: CatToolRuntime) {
       const found = new Set(segments.map((segment) => segment.id as string))
       const missing = params.segmentIds.find((id) => !found.has(id))
       if (missing !== undefined) throw new StoreNotFoundError('segment', missing)
-      const result = db.termEntries.validateSegments(segments.map((segment) => ({
-        segmentId: segment.id as string,
-        source: segment.source,
-        target: segment.target,
-        ...(segment.context?.meta?.module === undefined
-          ? {} : { module: segment.context.meta.module }),
-        ...(segment.context?.meta?.category === undefined
-          ? {} : { category: segment.context.meta.category }),
-      })))
+      const result = db.termEntries.validateSegments(segments)
       return toolResult(result, deps.resultProjectId, params.segmentIds)
     },
   })

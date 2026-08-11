@@ -40,20 +40,15 @@ describe('composeAgentTools', () => {
 
   test('真实工具组合摘要与输入顺序无关，组合变化会改变 hash', () => {
     const first = hashAgentToolComposition({
-      runtime: 'claude',
-      basePreset: 'claude_code',
       toolNames: ['cat_run_qa', 'cat_project_summary'],
       mcpServerNames: ['linguist_cat', 'browser'],
     })
     expect(first).toMatch(/^[a-f0-9]{64}$/)
     expect(hashAgentToolComposition({
-      runtime: 'claude',
-      basePreset: 'claude_code',
       toolNames: ['cat_project_summary', 'cat_run_qa'],
       mcpServerNames: ['browser', 'linguist_cat'],
     })).toBe(first)
     expect(hashAgentToolComposition({
-      runtime: 'pi',
       toolNames: ['cat_project_summary'],
       mcpServerNames: [],
     })).not.toBe(first)

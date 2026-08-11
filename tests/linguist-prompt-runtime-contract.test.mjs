@@ -11,11 +11,11 @@ const diagnosticsIpc = readFileSync(
   'utf8',
 )
 
-test('LF-079: Pi 与 Claude 复用各自 Proma Base，并追加同一个 Linguist Prompt overlay', () => {
-  // LA-PROMPT-001：同一个 builder，wire 表达随 runtime 推导（pi → markdown，其余 → xml）。
+test('LF-079: Pi 复用 Proma Base，并追加 Linguist Prompt overlay', () => {
+  // LA-PROMPT-001：Pi-only 运行时始终使用 Markdown wire。
   assert.match(
     orchestrator,
-    /const linguistPromptBuild = agentProfile\.kind === 'linguist'\s*\?\s*buildLinguistPrompt\(\s*sessionMeta as [^,]+,\s*getLinguistProjectService,\s*\{ renderer: agentRuntime === 'pi' \? 'markdown' : 'xml' \},?\s*\)/,
+    /const linguistPromptBuild = agentProfile\.kind === 'linguist'\s*\?\s*buildLinguistPrompt\(\s*sessionMeta as [^,]+,\s*getLinguistProjectService,\s*\{ renderer: 'markdown' \},?\s*\)/,
   )
   assert.match(
     orchestrator,
@@ -25,10 +25,6 @@ test('LF-079: Pi 与 Claude 复用各自 Proma Base，并追加同一个 Linguis
     orchestrator,
     /systemPrompt: systemPromptAppend \+ buildPiAdditionalDirectoriesPrompt\(allAdditionalDirectories\)\s*\+ linguistSystemPrompt/,
   )
-  assert.match(
-    orchestrator,
-    /preset: 'claude_code',\s*append: systemPromptAppend \+ linguistSystemPrompt,/,
-  )
   assert.equal(
     orchestrator.match(/buildLinguistPrompt\(/g)?.length,
     1,
@@ -36,7 +32,7 @@ test('LF-079: Pi 与 Claude 复用各自 Proma Base，并追加同一个 Linguis
   )
 })
 
-test('LA-PROMPT-001: Dev Diagnostics 重探测与真实发送同一 runtime→renderer 推导', () => {
+test('LA-PROMPT-001: Dev Diagnostics 重探测与真实发送同用 Markdown renderer', () => {
   assert.equal(
     diagnosticsIpc.match(/buildLinguistPrompt\(/g)?.length,
     1,
@@ -44,6 +40,6 @@ test('LA-PROMPT-001: Dev Diagnostics 重探测与真实发送同一 runtime→re
   )
   assert.match(
     diagnosticsIpc,
-    /renderer: session\?\.agentRuntime === 'pi' \? 'markdown' : 'xml'/,
+    /renderer: 'markdown'/,
   )
 })

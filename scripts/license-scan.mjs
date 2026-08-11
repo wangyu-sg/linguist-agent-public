@@ -43,15 +43,6 @@ const FIRST_PARTY = /^(proma|@proma\/|@linguist\/)/
  */
 const EXCEPTIONS = new Map([
   ['jszip', '双许可 (MIT OR GPL-3.0-or-later)，按 MIT 采用'],
-  ['@anthropic-ai/claude-agent-sdk', 'Anthropic 专有许可（© Anthropic PBC, All rights reserved），再分发依据见 THIRD_PARTY_NOTICES.md'],
-  ['@anthropic-ai/claude-agent-sdk-linux-arm64', '同上（Anthropic 专有平台包）'],
-  ['@anthropic-ai/claude-agent-sdk-linux-arm64-musl', '同上（Anthropic 专有平台包）'],
-  ['@anthropic-ai/claude-agent-sdk-linux-x64', '同上（Anthropic 专有平台包）'],
-  ['@anthropic-ai/claude-agent-sdk-linux-x64-musl', '同上（Anthropic 专有平台包）'],
-  ['@anthropic-ai/claude-agent-sdk-darwin-arm64', '同上（Anthropic 专有平台包）'],
-  ['@anthropic-ai/claude-agent-sdk-darwin-x64', '同上（Anthropic 专有平台包）'],
-  ['@anthropic-ai/claude-agent-sdk-win32-arm64', '同上（Anthropic 专有平台包）'],
-  ['@anthropic-ai/claude-agent-sdk-win32-x64', '同上（Anthropic 专有平台包）'],
 ])
 
 function registeredException(name) {

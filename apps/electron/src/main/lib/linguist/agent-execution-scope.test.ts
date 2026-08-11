@@ -11,7 +11,7 @@ const deps = {
 }
 
 describe('resolveAgentExecutionScope', () => {
-  test('Given Linguist profile 与残留 workspaceId When 解析 Then 项目身份优先', () => {
+  test('Given Linguist 会话同时绑定 workspace When 解析 Then 保留 CAT cwd 与 workspace 能力上下文', () => {
     expect(resolveAgentExecutionScope({
       id: 'session-1',
       title: 'Session',
@@ -22,7 +22,11 @@ describe('resolveAgentExecutionScope', () => {
     }, deps)).toEqual({
       kind: 'linguist-project',
       projectId: 'project-1',
+      linguistRole: 'general',
       sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+      workspaceSlug: 'general',
+      workspaceName: 'General',
       cwd: '/linguist/project-1/session-1',
     })
   })

@@ -47,7 +47,6 @@ import {
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
   LINGUIST_QA_PROFILES,
   LINGUIST_REFERENCE_IMPORT_ID_PATTERN,
-  LINGUIST_WORKSPACE_ID_MAX_LENGTH,
   LINGUIST_WORKFLOW_STAGES,
   type LinguistAssetPreviewResult,
   type LinguistBackupListResult,
@@ -57,6 +56,7 @@ import {
   type LinguistProjectCreateResult,
   type LinguistProjectConfirmXlsxMappingResult,
   type LinguistProjectDeleteResult,
+  type LinguistProjectGetStageCoverageResult,
   type LinguistProjectImportResult,
   type LinguistProjectInfo,
   type LinguistProjectListResult,
@@ -189,15 +189,6 @@ function readDeleteConfirmation(record: Record<string, unknown>): string {
   const value = record.confirmationName
   if (typeof value !== 'string' || value.length > LINGUIST_PROJECT_NAME_MAX_LENGTH) {
     invalid(`confirmationName must be a string of at most ${LINGUIST_PROJECT_NAME_MAX_LENGTH} characters`)
-  }
-  return value
-}
-
-function readOptionalWorkspaceId(record: Record<string, unknown>): string | undefined {
-  const value = record.promaWorkspaceId
-  if (value === undefined) return undefined
-  if (typeof value !== 'string' || value.length === 0 || value.length > LINGUIST_WORKSPACE_ID_MAX_LENGTH) {
-    invalid(`promaWorkspaceId must be a string of at most ${LINGUIST_WORKSPACE_ID_MAX_LENGTH} characters`)
   }
   return value
 }
@@ -507,7 +498,6 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         const name = readProjectName(record)
         const sourceLocale = readLocale(record, 'sourceLocale')
         const targetLocale = readLocale(record, 'targetLocale')
-        const promaWorkspaceId = readOptionalWorkspaceId(record)
         const workflowStage = readWorkflowStage(record, true)
         const qaProfile = readQaProfile(record, true)
         const outputStatusPolicy = readOutputStatusPolicy(record, false)
@@ -517,7 +507,6 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
           targetLocale,
           workflowStage,
           ...(qaProfile !== undefined ? { qaProfile } : {}),
-          ...(promaWorkspaceId !== undefined ? { promaWorkspaceId } : {}),
           ...(outputStatusPolicy !== undefined && outputStatusPolicy !== null
             ? { outputStatusPolicy }
             : {}),
@@ -796,6 +785,22 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         const projectId = readProjectId(assertRecord(input))
         const summary = getService().getProjectSummary(projectId)
         return { ...summary, project: toProjectInfo(summary.project) }
+      })
+    },
+
+    /**
+     * linguist.projects.getStageCoverage — 单批次单阶段的岗位 decision 覆盖
+     * 统计（Reviewer/Proofreader 真实进度；只读聚合，不加载段行正文）。
+     */
+    getStageCoverage(
+      input: unknown,
+    ): Promise<LinguistIpcResult<LinguistProjectGetStageCoverageResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const assetId = readCatAssetId(record)
+        const workflowStage = readWorkflowStage(record)
+        return getService().getStageDecisionCoverage(projectId, assetId, workflowStage)
       })
     },
 

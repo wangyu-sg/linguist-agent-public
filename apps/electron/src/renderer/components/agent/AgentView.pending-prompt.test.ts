@@ -23,7 +23,6 @@ describe('AgentView pending prompt 自动发送', () => {
       {
         sessionId: 'session-1',
         channelId: 'channel-1',
-        agentRuntime: 'pi',
         startedAt: 123,
       },
       123,
@@ -48,7 +47,6 @@ describe('AgentView pending prompt 自动发送', () => {
       {
         sessionId: 'session-1',
         channelId: 'channel-1',
-        agentRuntime: 'pi',
         startedAt: 123,
       },
       123,

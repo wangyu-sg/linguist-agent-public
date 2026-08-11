@@ -249,7 +249,7 @@ test('PB-110: blob written before asset row — a sha-lying adapter fails with z
     registry,
     entropy: makeEntropy('pb-110-import-order'),
     now: makeClock(),
-    workspaceAllocator: () => `ws-pb110-${++workspaceSeq}`,
+    workspaceCreator: () => `ws-pb110-${++workspaceSeq}`,
   })
   service.init()
   try {

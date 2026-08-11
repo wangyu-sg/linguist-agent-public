@@ -34,7 +34,7 @@ test('Workbook Mapping: preview suggests columns, saves a profile, and reuses fi
     rootDir: join(root, 'linguist'),
     entropy: makeEntropy('workbook-mapping'),
     now: makeClock(),
-    workspaceAllocator: () => 'ws-workbook',
+    workspaceCreator: () => 'ws-workbook',
   })
   service.init()
   const project = service.createProject({ name: 'Workbook', sourceLocale: 'en', targetLocale: 'zh-CN' })
@@ -108,7 +108,7 @@ test('Workbook Mapping: ambiguous filename/header profiles only reuse identical 
     rootDir: join(root, 'linguist'),
     entropy: makeEntropy('workbook-mapping-ambiguity'),
     now: makeClock(),
-    workspaceAllocator: () => 'ws-workbook-ambiguity',
+    workspaceCreator: () => 'ws-workbook-ambiguity',
   })
   service.init()
   const firstPath = join(root, 'game-001.xlsx')

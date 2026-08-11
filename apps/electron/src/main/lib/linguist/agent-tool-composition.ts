@@ -39,14 +39,10 @@ export function composeAgentTools<TTool extends { name: string }>(
 
 /** 对宿主本轮实际装配的工具名、MCP server 与原生 preset 做稳定摘要。 */
 export function hashAgentToolComposition(input: {
-  runtime: 'claude' | 'pi'
   toolNames: readonly string[]
   mcpServerNames: readonly string[]
-  basePreset?: 'claude_code'
 }): string {
   return createHash('sha256').update(JSON.stringify({
-    runtime: input.runtime,
-    ...(input.basePreset === undefined ? {} : { basePreset: input.basePreset }),
     toolNames: [...new Set(input.toolNames)].sort(),
     mcpServerNames: [...new Set(input.mcpServerNames)].sort(),
   })).digest('hex')

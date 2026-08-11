@@ -106,7 +106,7 @@ import { createTray, destroyTray, getTray } from './tray'
 import { initializeRuntime } from './lib/runtime-init'
 import { seedDefaultSkills } from './lib/config-paths'
 import { upgradeDefaultSkillsInWorkspaces } from './lib/agent-workspace-manager'
-import { hasActiveAgentSessions, stopAllAgents, killOrphanedClaudeSubprocesses } from './lib/agent-service'
+import { hasActiveAgentSessions, stopAllAgents } from './lib/agent-service'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
 import { markRunningDelegationsAsInterrupted } from './lib/agent-session-manager'
 import { stopAllGenerations } from './lib/chat-service'
@@ -470,6 +470,9 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      // 排队消息的自动投递依赖 renderer 消费 STREAM_COMPLETE；窗口被遮挡、最小化或失焦时
+      // 不能让 Chromium 降速该事件循环，否则下一条消息会等到用户重新激活窗口才发送。
+      backgroundThrottling: false,
     },
     ...titleBarOptions,
   })
@@ -633,9 +636,9 @@ async function bootstrap(): Promise<void> {
   // 协议只接受主进程签发的 opaque token，不解析 renderer 提供的绝对路径。
   protocol.handle('proma-file', handlePromaFileRequest)
 
-  // 初始化运行时环境（Shell 环境 + Bun + Git 检测）
-  // 必须在其他初始化之前执行，确保环境变量正确加载
-  await safeAwait('initializeRuntime', () => initializeRuntime())
+  // 初始化运行时环境。Node.js 仅由 npx / npm 型 MCP 在实际连接时使用，
+  // 或由用户从设置手动检测；启动时不应将其作为 Agent 的前置要求。
+  await safeAwait('initializeRuntime', () => initializeRuntime({ skipNodeDetection: true }))
 
   // 同步默认 Skills 模板到 ~/.linguist-agent/default-skills/
   safeRun('seedDefaultSkills', seedDefaultSkills)
@@ -841,9 +844,6 @@ app.on('before-quit', () => {
   // 中止所有活跃的 Agent 和 Chat 子进程
   stopAllAgents()
   stopAllGenerations()
-  // 最后兜底：扫描并强杀所有孤儿 claude-agent-sdk 子进程（Issue #357）
-  // 针对 pidMap 未覆盖、dispose 漏杀等极端场景，确保不遗留残留进程
-  killOrphanedClaudeSubprocesses()
   // 清理更新器定时器
   cleanupUpdater()
   // 停止工作区文件监听

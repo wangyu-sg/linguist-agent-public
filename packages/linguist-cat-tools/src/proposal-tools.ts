@@ -362,7 +362,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
     const request = {
       segments,
       options: {
-        ...buildQaTermOptions(db),
+        ...buildQaTermOptions(db, segments),
         glossaryPolicy: project.glossaryPolicy,
         profile: normalizeQaProfile(project.qaProfile),
         ...(project.tagProfile !== undefined ? { tagProfile: project.tagProfile } : {}),

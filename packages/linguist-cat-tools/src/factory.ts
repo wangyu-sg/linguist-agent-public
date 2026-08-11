@@ -15,6 +15,7 @@ import { createTagTools } from './tag-tools'
 import { createTerminologyTools } from './terminology-tools'
 import { createWorkbookTools } from './workbook-tools'
 import { createVoiceTools } from './voice-tools'
+import { createStageTools } from './stage-tools'
 import { createCatToolRuntime } from './tool-runtime'
 import type { LinguistCatToolsDeps } from './types'
 
@@ -48,6 +49,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     createConsistencyProposalsTool,
   ] = createProposalTools(runtime)
   const [runQaTool, getQaFindingsTool] = createQaTools(runtime)
+  const [confirmSegmentsTool] = createStageTools(runtime)
   return [
     projectSummaryTool,
     listAssetsTool,
@@ -65,6 +67,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     getTranslationContextTool,
     getProposalSnapshotTool,
     applyTranslationsTool,
+    confirmSegmentsTool,
     searchTmTool,
     searchTermsTool,
     upsertTermsTool,

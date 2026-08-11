@@ -11,6 +11,7 @@
 import {
   applyTargetEdit,
   confirmCurrentStage as confirmCurrentStageDomain,
+  recordCurrentStageDecision as recordCurrentStageDecisionDomain,
   unconfirmCurrentStage as unconfirmCurrentStageDomain,
   UnknownSegmentError,
   type ApplyTargetEditOptions,
@@ -20,6 +21,7 @@ import {
   type SegmentStatus,
   type TargetEditResult,
   type WorkflowStage,
+  type WorkflowStageDecision,
   type WorkflowStageEvent,
   type WorkflowStageEventAction,
   type WorkflowStageMutationOptions,
@@ -37,6 +39,15 @@ export interface SegmentQuery {
   search?: string
   limit?: number
   offset?: number
+}
+
+export interface StageDecisionCoverage {
+  total: number
+  unchanged: number
+  corrected: number
+  blocked: number
+  pending: number
+  status: 'in_progress' | 'complete' | 'completed_with_blocks'
 }
 
 interface WorkflowStageEventRow {
@@ -473,6 +484,30 @@ export class SegmentsRepository {
     )
   }
 
+  /** 岗位逐段决定；blocked 也进入同一 append-only 阶段事件流。 */
+  recordCurrentStageDecision(
+    segmentId: SegmentId | string,
+    stage: WorkflowStage,
+    expectedRevision: number,
+    decision: WorkflowStageDecision,
+    options: WorkflowStageMutationOptions = {},
+  ): WorkflowStageMutationResult {
+    return this.mutateCurrentStage(
+      segmentId,
+      stage,
+      expectedRevision,
+      options,
+      (segment, currentStage, revision, mutationOptions) =>
+        recordCurrentStageDecisionDomain(
+          segment,
+          currentStage,
+          revision,
+          decision,
+          mutationOptions,
+        ),
+    )
+  }
+
   listStageEvents(segmentId: SegmentId | string): WorkflowStageEvent[] {
     const rows = this.db.db
       .prepare(
@@ -492,6 +527,45 @@ export class SegmentsRepository {
   }
 
   /**
+   * 统计显式冻结范围内当前 revision 的最新岗位 decision。旧 revision 或随后
+   * 被 unconfirm / generic confirm 覆盖的事件不算完成证据。
+   */
+  getStageDecisionCoverage(
+    stage: WorkflowStage,
+    segmentIds: readonly (SegmentId | string)[],
+  ): StageDecisionCoverage {
+    const uniqueIds = [...new Set(segmentIds)]
+    const segments = this.getByIds(uniqueIds)
+    const counts = { unchanged: 0, corrected: 0, blocked: 0 }
+    // ponytail: 明确 scope 逐段读审计流；大规模审校实测成瓶颈后再换 SQL window query。
+    for (const segment of segments) {
+      const latest = this.listStageEvents(segment.id)
+        .filter((event) => event.stage === stage)
+        .at(-1)
+      if (
+        latest?.segmentRevision === segment.revision
+        && (latest.action === 'unchanged'
+          || latest.action === 'corrected'
+          || latest.action === 'blocked')
+      ) {
+        counts[latest.action] += 1
+      }
+    }
+    const total = uniqueIds.length
+    const pending = total - counts.unchanged - counts.corrected - counts.blocked
+    return {
+      total,
+      ...counts,
+      pending,
+      status: pending > 0
+        ? 'in_progress'
+        : counts.blocked > 0
+          ? 'completed_with_blocks'
+          : 'complete',
+    }
+  }
+
+  /**
    * 切换项目阶段时重建本轮状态：只有该阶段最后一次事件仍是当前目标 revision
    * 的确认才算 confirmed；撤销为 draft，无记录或旧 revision 为 untouched。
    */
@@ -501,9 +575,9 @@ export class SegmentsRepository {
         `UPDATE segments
          SET current_stage_state = COALESCE((
            SELECT CASE
-             WHEN event.action = 'confirmed'
+             WHEN event.action IN ('confirmed', 'unchanged', 'corrected')
                AND event.segment_revision = segments.revision THEN 'confirmed'
-             WHEN event.action = 'unconfirmed'
+             WHEN event.action IN ('unconfirmed', 'blocked')
                AND event.segment_revision = segments.revision THEN 'draft'
              ELSE 'untouched'
            END

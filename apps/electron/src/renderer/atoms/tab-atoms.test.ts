@@ -205,7 +205,6 @@ describe('Localization Project Tab', () => {
     store.set(agentSessionsAtom, [{
       id: 'agent-1',
       title: '项目一会话',
-      agentRuntime: 'pi',
       linguistProjectId: 'project-1',
       linguistProjectName: '项目一',
       createdAt: 1,

@@ -476,7 +476,6 @@ async function seedChannel(page: Page, server: FakeModelServer): Promise<string>
     await api.updateSettings({
       agentChannelId: channel.id,
       agentModelId: args.modelId,
-      agentRuntime: 'pi',
     })
     return channel.id
   }, {
@@ -1847,7 +1846,6 @@ async function main(): Promise<void> {
         return {
           channelId: typeof settings.agentChannelId === 'string' ? settings.agentChannelId : undefined,
           modelId: typeof settings.agentModelId === 'string' ? settings.agentModelId : undefined,
-          runtime: typeof settings.agentRuntime === 'string' ? settings.agentRuntime : undefined,
         }
       })
       const agentPanelButton = workspace
@@ -1872,14 +1870,13 @@ async function main(): Promise<void> {
       const projectSessionIds = await listProjectSessionIds(launched.page, projectId)
       const configReady = agentSettings.channelId === channelId
         && agentSettings.modelId === MODEL_ID
-        && agentSettings.runtime === 'pi'
       const sessionReady = projectSessionIds.includes(sessionId)
       check(
         'pb074-project-agent-ready',
         configReady && sessionReady && railOpen && segmentSelected && quickActionReady,
         `channel=${agentSettings.channelId ?? 'none'}/${channelId}` +
         `，model=${agentSettings.modelId ?? 'none'}/${MODEL_ID}` +
-        `，runtime=${agentSettings.runtime ?? 'none'}，session=${sessionId}/${sessionReady}` +
+        `，session=${sessionId}/${sessionReady}` +
         `，rail=${railOpen}，selected=${segmentSelected}，quickAction=${quickActionReady}`,
       )
       if (!configReady || !sessionReady || !railOpen || !segmentSelected || !quickActionReady) {

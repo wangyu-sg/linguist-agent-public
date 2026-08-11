@@ -1,4 +1,9 @@
-import { fnv1a64, scanTagTokens, type Segment } from '@linguist/cat-core'
+import {
+  fnv1a64,
+  scanTagTokens,
+  type Segment,
+  type SegmentTermPolicyEvaluation,
+} from '@linguist/cat-core'
 import {
   StoreNotFoundError,
   type TermEntryMatch,
@@ -32,7 +37,7 @@ const EMPTY_TB_NOTE =
 const EMPTY_PATTERNS_NOTE =
   'No sentence patterns matched. Import a CSV or add sentence patterns via the project UI to build the pattern library.'
 const IMAGE_DOC_NOTE =
-  'This context doc is an image: its bytes are never returned by tools. Only metadata is available here; visual content must be described to you by the user.'
+  'This context doc is an image. When the host can read the managed blob, the image is attached to this tool result for visual inspection.'
 const NO_EXTRACT_NOTE =
   'This context doc has no plain-text extract (only binary/source bytes are stored). Ask the user for the relevant content if you need it.'
 const SENTENCE_PATTERN_STATUSES = [
@@ -116,6 +121,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
     promptGuidelines: [
       'Use one batch call for related segments instead of repeating TM/TB searches per segment.',
       'Treat every revision as a snapshot; proposals must still use the returned current revision.',
+      'Reviewer and Proofreader context always retains the complete current target; reduce the segment batch or raise maxBytes when the minimum core does not fit.',
       'On CONTEXT_DRIFT discard the cursor and restart from the first page; on an empty page with minimumRequiredBytes retry with a larger maxBytes.',
     ],
     parameters: Type.Object({
@@ -187,17 +193,13 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       > = neighborCount === 0
         ? new Map()
         : db.segments.neighborsMany(remainingSegments, neighborCount)
-      const termMatchesBySegment = new Map<string, TermEntryMatch[]>()
+      const termPolicyBySegment = new Map<string, SegmentTermPolicyEvaluation<TermEntryMatch>>()
       if (termLimit > 0) {
         for (const segment of remainingSegments) {
-          termMatchesBySegment.set(segment.id as string, db.termEntries.findMatches({
-            text: segment.source,
-            limit: termLimit,
-            ...(segment.context?.meta?.module === undefined
-              ? {} : { module: segment.context.meta.module }),
-            ...(segment.context?.meta?.category === undefined
-              ? {} : { category: segment.context.meta.category }),
-          }))
+          const evaluated = db.termEntries.evaluateSegment(segment)
+          termPolicyBySegment.set(segment.id as string, {
+            matches: evaluated.matches.slice(0, termLimit),
+          })
         }
       }
       const tmMatchesBySegment = new Map<string, TmUnitMatch[]>()
@@ -233,7 +235,8 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           source: item.source,
           currentTarget: item.target,
         })
-        const termMatches = termMatchesBySegment.get(segment.id as string) ?? []
+        const termPolicy = termPolicyBySegment.get(segment.id as string)?.matches ?? []
+        const termMatches = termPolicy.map((item) => item.match)
         const tmMatches = tmMatchesBySegment.get(segment.id as string) ?? []
         const tags = scanTagTokens(segment.source, {
           targetLocale: segment.targetLocale,
@@ -270,15 +273,24 @@ export function createReferenceTools(runtime: CatToolRuntime) {
             .filter((tag) => tag.group === 'placeholder')
             .map((tag) => tag.signature)
             .sort(),
-          requiredTerms: termMatches.filter((term) => term.status === 'required'),
-          forbiddenTerms: termMatches.filter((term) => term.status === 'forbidden'),
-          preferredTerms: termMatches.filter((term) => term.status === 'preferred'),
+          requiredTerms: termPolicy
+            .filter((item) => item.enforcement === 'hard' && item.match.status === 'required')
+            .map((item) => item.match),
+          forbiddenTerms: termPolicy
+            .filter((item) => item.enforcement === 'hard' && item.match.status === 'forbidden')
+            .map((item) => item.match),
+          preferredTerms: termPolicy
+            .filter((item) => item.enforcement === 'advisory')
+            .map((item) => item.match),
           conflicts: termMatches.filter((term) => term.conflict),
           tmMatches,
           warnings: [
             ...(segment.locked ? ['Segment is locked.'] : []),
             ...(termMatches.some((term) => term.conflict)
               ? ['Conflicting terminology evidence.']
+              : []),
+            ...(termPolicy.some((item) => item.reasons.includes('scope_unknown'))
+              ? ['Terminology scope is unknown; treat it as advisory.']
               : []),
           ],
           evidence,
@@ -326,14 +338,14 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         }
         return result
       }
-      // LA-CONTEXT-002 最小核心：identity/revision/完整 source/locked/placeholderSignature。
-      // 预算只裁次级字段，返回页的 source 永不置空、永不截半截。
+      // LA-CONTEXT-002 最小核心：identity/revision/完整 source + current target/locked/placeholderSignature。
+      // 预算只裁次级字段，返回页的双语正文永不置空或截半截。
       const minimalCore = (context: SegmentTranslationContext): SegmentTranslationContext => ({
         segmentId: context.segmentId,
         assetId: context.assetId,
         revision: context.revision,
         source: context.source,
-        currentTarget: '',
+        currentTarget: context.currentTarget,
         locked: context.locked,
         previous: [],
         next: [],
@@ -518,7 +530,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
     description:
       'Read the plain-text extract of a context document of the bound CAT project, paged by characters ' +
       `(default ${CAT_TOOL_PAGE_LIMITS.readContextDoc.defaultLimit}, hard max ${CAT_TOOL_PAGE_LIMITS.readContextDoc.maxLimit} per call; ` +
-      'use offset to continue). Image documents never return bytes — only metadata. docId comes from the ' +
+      'use offset to continue). Image documents attach visual content from the managed project blob. docId comes from the ' +
       'context catalog in the system context or the project UI. Contains no filesystem paths.',
     promptSnippet: 'Read a context document of the bound CAT project (paged)',
     parameters: Type.Object({
@@ -548,7 +560,16 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           hasMore: false,
           note: IMAGE_DOC_NOTE,
         }
-        return toolResult(dto, deps.resultProjectId)
+        const result = toolResult(dto, deps.resultProjectId)
+        if (deps.readContextImage === undefined) return result
+        const image = await deps.readContextImage(doc.id)
+        return {
+          ...result,
+          content: [
+            ...result.content,
+            { type: 'image' as const, data: image.data, mimeType: image.mimeType },
+          ],
+        }
       }
       const extract = doc.textExtract
       if (extract === undefined) {

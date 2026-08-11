@@ -60,7 +60,7 @@ export interface QaIssueMapping {
 /**
  * 规则码 -> 契约三元组静态映射。定级依据《通用缺陷等级》指引：
  * 占位符/标签/ICU 破坏 = L0 defect；硬术语（禁用/严格必需）= L1 defect；
- * 数字单位 = L1 defect；preferred 偏离由术语校验返回 advisory；
+ * 普通数字变化 = L2 needs_review；preferred 偏离由术语校验返回 advisory；
  * 一致性/标点/空白/长度 = L2–L3 defect；术语表冲突不可判定 = query。
  */
 export const QA_CODE_ISSUE_MAPPING: Readonly<Record<string, QaIssueMapping>> = {
@@ -70,7 +70,7 @@ export const QA_CODE_ISSUE_MAPPING: Readonly<Record<string, QaIssueMapping>> = {
   EMPTY_TARGET: { issueType: 'omission', severity: 'L1', disposition: 'defect' },
   FORBIDDEN_TERM: { issueType: 'terminology_hard', severity: 'L1', disposition: 'defect' },
   REQUIRED_TERM: { issueType: 'terminology_hard', severity: 'L1', disposition: 'defect' },
-  NUMBER_MISMATCH: { issueType: 'numbers_units_dates', severity: 'L1', disposition: 'defect' },
+  NUMBER_MISMATCH: { issueType: 'numbers_units_dates', severity: 'L2', disposition: 'needs_review' },
   WHITESPACE_MISMATCH: { issueType: 'whitespace_linebreaks', severity: 'L3', disposition: 'defect' },
   REPEATED_PUNCTUATION: { issueType: 'punctuation_typography', severity: 'L3', disposition: 'defect' },
   SOURCE_EQUALS_TARGET: { issueType: 'omission', severity: 'L2', disposition: 'defect' },

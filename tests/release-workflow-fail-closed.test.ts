@@ -17,7 +17,7 @@ describe('AC-002 发布链 fail-closed', () => {
   })
 
   test('macOS 三次重试全部失败时显式返回非零', () => {
-    expect(releaseWorkflow.match(/三次打包均失败/g)).toHaveLength(2)
+    expect(releaseWorkflow.match(/packaging failed after 3 attempts/g)).toHaveLength(2)
     expect(releaseWorkflow.match(/exit 1/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
   })
 

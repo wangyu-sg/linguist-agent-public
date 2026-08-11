@@ -1,7 +1,7 @@
 import * as React from 'react'
-import { useAtom } from 'jotai'
+import { useAtom, useAtomValue, useStore } from 'jotai'
 import { Archive, Bot, Languages, PanelBottom, PanelLeft, PanelRight, Settings } from 'lucide-react'
-import type { LinguistProjectInfo, LinguistProjectSummary } from '@proma/shared'
+import type { LinguistProjectInfo, LinguistProjectSummary, LinguistStageDecisionCoverage } from '@proma/shared'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -22,6 +22,12 @@ import {
 } from './cat-workspace-atoms'
 import { ProjectSettingsSheet } from './ProjectSettingsSheet'
 import { UnknownTagNotice, unknownTagScanRevision } from './UnknownTagNotice'
+import {
+  formatStageCoverage,
+  linguistStageCoverageAtomFamily,
+  refreshLinguistStageCoverage,
+  stageCoverageKey,
+} from './stage-coverage-atoms'
 import { stageProgressLabel, stageProgressSummary } from './workflow-ui'
 
 const PANEL_KEYBOARD_STEP = 16
@@ -127,6 +133,17 @@ export function LinguistWorkbenchShell({
   } | null>(null)
   const summary = summaryState.status === 'ready' ? summaryState.summary : undefined
   const activeAsset = summary?.assets.find((asset) => asset.assetId === uiState.activeAssetId)
+  const store = useStore()
+  const stageCoverage = useAtomValue(
+    linguistStageCoverageAtomFamily(
+      stageCoverageKey(project.id, uiState.activeAssetId ?? ''),
+    ),
+  )
+  // 批次切换或摘要刷新（含 Agent 确认触发的 mutation 刷新）后重拉覆盖统计。
+  React.useEffect(() => {
+    if (activeAsset === undefined) return
+    void refreshLinguistStageCoverage(store, project.id, activeAsset.assetId)
+  }, [store, project.id, activeAsset, summary])
   const agentOpen = uiState.agentPresentation !== 'closed'
   const agentFull = uiState.agentPresentation === 'full'
   const progressLabel = summaryState.status === 'ready'
@@ -553,6 +570,12 @@ export function LinguistWorkbenchShell({
               {activeAsset.currentStageCounts.draft}
             </span>
           )}
+          {activeAsset !== undefined && stageCoverage.editing !== undefined && (
+            <StageCoverageSpan stage="editing" coverage={stageCoverage.editing} />
+          )}
+          {activeAsset !== undefined && stageCoverage.proofreading !== undefined && (
+            <StageCoverageSpan stage="proofreading" coverage={stageCoverage.proofreading} />
+          )}
           <span>
             当前批次：{activeAsset?.filename ?? (summary?.assets.length === 0 ? '尚无批次' : '未选择批次')}
           </span>
@@ -572,5 +595,25 @@ export function LinguistWorkbenchShell({
         <span className="hidden sm:inline">↑↓ 切换片段 · Enter 编辑 · Esc 取消</span>
       </footer>}
     </section>
+  )
+}
+
+/** 状态栏单阶段覆盖紧凑展示；阻塞 > 0 用警告色（明显但不惊扰）。 */
+function StageCoverageSpan({
+  stage,
+  coverage,
+}: {
+  stage: 'editing' | 'proofreading'
+  coverage: LinguistStageDecisionCoverage
+}): React.ReactElement {
+  const view = formatStageCoverage(stage, coverage)
+  return (
+    <span
+      data-stage-coverage={stage}
+      data-complete={view.complete}
+      className={coverage.blocked > 0 ? 'text-warning' : undefined}
+    >
+      {view.text}
+    </span>
   )
 }

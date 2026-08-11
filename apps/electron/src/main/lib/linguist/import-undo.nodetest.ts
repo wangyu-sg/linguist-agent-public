@@ -137,7 +137,7 @@ test('verification failure rolls the whole import back (IMPORT_VERIFICATION_FAIL
     registry,
     entropy: makeEntropy('la-intake-007-verify'),
     now: makeClock(),
-    workspaceAllocator: () => `ws-la007-${++workspaceSeq}`,
+    workspaceCreator: () => `ws-la007-${++workspaceSeq}`,
   })
   service.init()
   try {

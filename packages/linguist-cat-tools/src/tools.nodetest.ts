@@ -244,6 +244,102 @@ test('factory: CAT tools expose project-local accept and export but no resolve o
   }
 })
 
+test('cat_confirm_segments: Reviewer 的 101 段冻结范围跨两批后才 complete', async () => {
+  const fixture = setup()
+  const { segments } = seedAsset(fixture.db, fixture.project, {
+    filename: 'review-101.tsv',
+    sha: '1'.repeat(64),
+    count: 101,
+    fillEvery: 1,
+    sourcePrefix: 'Review',
+  })
+  const scope = segments.map((segment) => segment.id as string)
+  try {
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      sessionId: 'review-session',
+      linguistRole: 'reviewer',
+      reviewScopeSegmentIds: scope,
+    })
+    const tool = toolByName(tools, 'cat_confirm_segments')
+    const first = (await invoke(tool, {
+      items: segments.slice(0, 100).map((segment) => ({
+        segmentId: segment.id,
+        expectedRevision: 0,
+        decision: 'unchanged',
+      })),
+    }, 'confirm-page-1')).details as { coverage: { unchanged: number; pending: number; status: string } }
+    assert.deepEqual(first.coverage, {
+      scope: 'delegated',
+      total: 101,
+      unchanged: 100,
+      corrected: 0,
+      blocked: 0,
+      pending: 1,
+      status: 'in_progress',
+    })
+
+    const second = (await invoke(tool, {
+      items: [{
+        segmentId: segments[100]!.id,
+        expectedRevision: 0,
+        decision: 'unchanged',
+      }],
+    }, 'confirm-page-2')).details as { stage: string; coverage: { pending: number; status: string } }
+    assert.equal(second.stage, 'editing')
+    assert.equal(second.coverage.pending, 0)
+    assert.equal(second.coverage.status, 'complete')
+    assert.equal(fixture.db.segments.listStageEvents(segments[100]!.id).at(-1)?.action, 'unchanged')
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('cat_confirm_segments: corrected 先写回，blocked 可记录 locked/stale；岗位决定 stage', async () => {
+  const fixture = setup()
+  try {
+    const correctedSegment = fixture.segmentsA[0]!
+    fixture.db.segments.applyTargetEdit(correctedSegment.id, 'Reviewer 最新译文', 0)
+    const lockedSegment = fixture.segmentsA[2]!
+    fixture.db.segments.setLocked(lockedSegment.id, true)
+    const staleSegment = fixture.segmentsA[4]!
+    fixture.db.segments.applyTargetEdit(staleSegment.id, '并发新译文', 0)
+
+    const reviewerTools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      sessionId: 'review-session',
+      linguistRole: 'reviewer',
+    })
+    const result = (await invoke(toolByName(reviewerTools, 'cat_confirm_segments'), {
+      items: [
+        { segmentId: correctedSegment.id, expectedRevision: 1, decision: 'corrected' },
+        { segmentId: lockedSegment.id, expectedRevision: 0, decision: 'blocked' },
+        { segmentId: staleSegment.id, expectedRevision: 0, decision: 'blocked' },
+      ],
+    }, 'confirm-mixed')).details as {
+      stage: string
+      coverage: { corrected: number; blocked: number; status: string }
+    }
+    assert.equal(result.stage, 'editing')
+    assert.equal(result.coverage.corrected, 1)
+    assert.equal(result.coverage.blocked, 2)
+    assert.equal(result.coverage.status, 'completed_with_blocks')
+    assert.equal(fixture.db.segments.listStageEvents(staleSegment.id).at(-1)?.segmentRevision, 1)
+
+    const proofreaderTools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      sessionId: 'proof-session',
+      linguistRole: 'proofreader',
+    })
+    const proof = (await invoke(toolByName(proofreaderTools, 'cat_confirm_segments'), {
+      items: [{ segmentId: correctedSegment.id, expectedRevision: 1, decision: 'unchanged' }],
+    }, 'confirm-proof')).details as { stage: string }
+    assert.equal(proof.stage, 'proofreading')
+  } finally {
+    fixture.db.close()
+  }
+})
+
 test('cat_export_asset delegates the bound asset and absolute destination without leaking its path', async () => {
   const fixture = setup()
   try {
@@ -839,25 +935,23 @@ test('cat_propose_translations enforces batch, target, signature, lock and CAS r
       }),
       'INVALID_ARGUMENT',
     )
-    await assertThrowsCode(
+    await assert.doesNotReject(
       invoke(tool, {
         segmentProposals: [{
           segmentId: taggedSegment.id,
           baseRevision: 0,
           proposedTarget: '你好 {name} <b>世界</b> Level 7',
         }],
-      }),
-      'INVALID_ARGUMENT',
+      }, 'soft-newline'),
     )
-    await assertThrowsCode(
+    await assert.doesNotReject(
       invoke(tool, {
         segmentProposals: [{
           segmentId: taggedSegment.id,
           baseRevision: 0,
           proposedTarget: '你好 {name} <b>世界</b>\n等级 8',
         }],
-      }),
-      'INVALID_ARGUMENT',
+      }, 'soft-number'),
     )
 
     fixture.db.segments.setLocked(fixture.segmentsA[0]!.id, true)
@@ -884,7 +978,7 @@ test('cat_propose_translations enforces batch, target, signature, lock and CAS r
       }),
       UnknownSegmentError,
     )
-    assert.equal(fixture.db.proposals.listPending().length, 0)
+    assert.equal(fixture.db.proposals.listPending().length, 2)
   } finally {
     fixture.db.close()
   }
@@ -1310,8 +1404,8 @@ test('terminology tools close CRUD, conflict, and current-segment validation in 
       preferredNotUsed: unknown[]
       unresolvedConflicts: unknown[]
     }
-    assert.equal(validation.missingRequired.length, 1)
-    assert.equal(validation.forbiddenHits.length, 1)
+    assert.equal(validation.missingRequired.length, 0)
+    assert.equal(validation.forbiddenHits.length, 0)
     assert.equal(validation.preferredNotUsed.length, 2)
     assert.equal(validation.unresolvedConflicts.length, 1)
 
@@ -1321,9 +1415,10 @@ test('terminology tools close CRUD, conflict, and current-segment validation in 
     })).details as { count: number; deletedTermIds: string[] }
     assert.deepEqual(deleted, { count: 1, deletedTermIds: [sourceTerm.id] })
     assert.equal(fixture.db.termEntries.get(sourceTerm.id), undefined)
-    await assertThrowsCode(invoke(toolByName(tools, 'cat_upsert_terms'), {
+    const numeric = (await invoke(toolByName(tools, 'cat_upsert_terms'), {
       terms: [{ term: '123', translation: '一二三', status: 'preferred' }],
-    }), 'INVALID_ARGUMENT')
+    })).details as { count: number }
+    assert.equal(numeric.count, 1)
   } finally {
     fixture.db.close()
   }
@@ -1415,8 +1510,8 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
     assert.deepEqual(dto.contexts[0]!.next.map((item) => item.segmentId), [
       fixture.segmentsA[3]!.id,
     ])
-    assert.equal(dto.contexts[0]!.requiredTerms.length, 1)
-    assert.equal(dto.contexts[0]!.preferredTerms.length, 1)
+    assert.equal(dto.contexts[0]!.requiredTerms.length, 0)
+    assert.equal(dto.contexts[0]!.preferredTerms.length, 2)
     assert.equal(dto.contexts[0]!.tmMatches.length, 1)
     assert.ok(dto.contexts[0]!.evidence.some((item) => item.kind === 'segment-revision'))
     assert.ok(dto.contexts[0]!.evidence.some((item) => item.kind === 'term'))
@@ -1455,7 +1550,7 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
       maxBytes: 1_800,
     })
     const firstPage = first.details as {
-      contexts: Array<{ segmentId: string; source: string }>
+      contexts: Array<{ segmentId: string; source: string; currentTarget: string }>
       cursor: string | null
       truncated: boolean
       nextCursor?: string
@@ -1475,6 +1570,8 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
     // LA-CONTEXT-002：返回页每段 source 永不空、永不半截
     for (const context of firstPage.contexts) {
       assert.ok(context.source.length > 0, 'returned page sources must never be empty')
+      const expected = fixture.db.segments.getById(context.segmentId)?.target
+      assert.equal(context.currentTarget, expected, '预算降级不得丢弃当前 Target')
     }
     assert.ok(firstPage.usedBytes <= firstPage.maxBytes)
     assert.ok(Buffer.byteLength(JSON.stringify(firstPage), 'utf8') <= firstPage.maxBytes)
@@ -1513,6 +1610,25 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
       maxBytes: 32_000,
       cursor: String(firstPage.contexts.length),
     }), 'INVALID_ARGUMENT')
+
+    fixture.db.catDb.db
+      .prepare('UPDATE segments SET context_json = ? WHERE id = ?')
+      .run(
+        JSON.stringify({ note: '审校备注'.repeat(2_000) }),
+        fixture.segmentsA[0]!.id,
+      )
+    const degraded = (await invoke(tool, {
+      segmentIds: [fixture.segmentsA[0]!.id],
+      includeNeighbors: false,
+      tmLimitPerSegment: 0,
+      termLimitPerSegment: 0,
+      maxBytes: 1_800,
+    })).details as {
+      contexts: Array<{ currentTarget: string; notes?: string; warnings: string[] }>
+    }
+    assert.equal(degraded.contexts[0]!.currentTarget, '译文 0')
+    assert.equal(degraded.contexts[0]!.notes, undefined)
+    assert.ok(degraded.contexts[0]!.warnings.some((warning) => warning.includes('truncated')))
 
     const boundedTool = toolByName(createLinguistCatTools({
       resolveProject: makeOkResolver(fixture),
@@ -1791,6 +1907,13 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_get_proposal_snapshot: { proposalId: 'prp-0000000000000000' },
       cat_apply_translations: {
         edits: [{ segmentId: fixture.segmentsA[0]!.id, baseRevision: 0, target: 'x' }],
+      },
+      cat_confirm_segments: {
+        items: [{
+          segmentId: fixture.segmentsA[0]!.id,
+          expectedRevision: 0,
+          decision: 'unchanged',
+        }],
       },
       cat_search_tm: { query: 'x' },
       cat_search_terms: { query: 'x' },
@@ -2236,7 +2359,7 @@ test('cat_search_sentence_patterns: filters + pagination hard cap + empty note',
   }
 })
 
-test('cat_read_context_doc: paged extract read + image metadata-only + not-found passthrough', async () => {
+test('cat_read_context_doc: paged extract read + image fallback metadata + not-found passthrough', async () => {
   const fixture = setup()
   try {
     const longText = `第一段。${'字'.repeat(9000)}`
@@ -2292,7 +2415,7 @@ test('cat_read_context_doc: paged extract read + image metadata-only + not-found
     assert.equal(clamped.limit, 8000)
     assert.ok(clamped.note?.includes('99999'))
 
-    // 图片：只回元数据说明，不回字节。
+    // 无宿主图片 reader 时只回元数据；Electron 绑定层负责附加 ImageContent。
     const imageResult = (await invoke(tool, { docId: image.id })).details as {
       kind: string
       text?: string

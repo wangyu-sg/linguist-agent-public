@@ -1,34 +1,49 @@
-import { runQa, type QaRunOptions } from '@linguist/cat-core'
+import { runQa, type QaRunOptions, type Segment } from '@linguist/cat-core'
 import type { ProjectDatabase } from './project-database'
 import type { QaRunPersistence } from './repositories/qa-findings'
 import type { PersistedQaFinding } from './repositories/rows'
 
 /**
- * PB-096 术语接线：从 term_entries 构建 QA 术语规则。
- * - forbidden 条目 → forbiddenTerms（永远 strict 阻断，L1 defect）；
- * - required 条目 → requiredTerminology（缺失始终阻断）；
- * - required/preferred 一词多译冲突组 → glossaryConflicts（glossary_conflict/query）。
- * 调用方显式传入的同名 option 优先（测试/工具直调场景）。
+ * 从统一 evaluator 为每个 Segment 构建术语 QA 快照。
  */
-export function buildQaTermOptions(db: ProjectDatabase): Pick<
+export function buildQaTermOptions(db: ProjectDatabase, segments: readonly Segment[]): Pick<
   QaRunOptions,
-  'requiredTerminology' | 'forbiddenTerms' | 'glossaryConflicts'
+  'terminologyBySegment'
 > {
-  const required = db.termEntries.list({ status: 'required', limit: Number.MAX_SAFE_INTEGER })
-  const forbidden = db.termEntries.list({ status: 'forbidden', limit: Number.MAX_SAFE_INTEGER })
   return {
-    requiredTerminology: required.map((entry) => ({
-      sourceTerm: entry.term,
-      targetTerm: entry.translation,
-      caseSensitive: entry.caseSensitive,
-    })),
-    forbiddenTerms: forbidden.map((entry) => ({
-      term: entry.translation,
-      caseSensitive: entry.caseSensitive,
-    })),
-    glossaryConflicts: db.termEntries.listConflicts({ statuses: ['required', 'preferred'] }).map((conflict) => ({
-      sourceTerm: conflict.entries[0]!.term,
-      translations: [...new Set(conflict.entries.map((entry) => entry.translation))].sort(),
+    terminologyBySegment: Object.fromEntries(segments.map((segment) => {
+      const evaluated = db.termEntries.evaluateSegment(segment).matches
+      const hard = evaluated.filter((item) => item.enforcement === 'hard')
+      const advisory = evaluated.filter((item) => item.enforcement === 'advisory' && (
+        item.match.status === 'required'
+        || item.match.status === 'forbidden'
+        || (item.match.status === 'preferred' && !item.targetUsed)
+        || (item.match.status === 'deprecated' && item.targetUsed)
+      ))
+      const advisoryGroups = Map.groupBy(
+        advisory,
+        (item) => item.match.term.normalize('NFKC').toLocaleLowerCase(),
+      )
+      return [segment.id as string, {
+        requiredTerminology: hard
+          .filter((item) => item.match.status === 'required')
+          .map(({ match }) => ({
+            sourceTerm: match.term,
+            targetTerm: match.translation,
+            caseSensitive: match.caseSensitive,
+          })),
+        forbiddenTerms: hard
+          .filter((item) => item.match.status === 'forbidden')
+          .map(({ match }) => ({
+            sourceTerm: match.term,
+            term: match.translation,
+            caseSensitive: match.caseSensitive,
+          })),
+        glossaryConflicts: [...advisoryGroups.values()].map((items) => ({
+          sourceTerm: items[0]!.match.term,
+          translations: [...new Set(items.map((item) => item.match.translation))].sort(),
+        })),
+      }]
     })),
   }
 }
@@ -41,7 +56,7 @@ export function runProjectQa(
 ): PersistedQaFinding[] {
   const total = db.segments.count()
   const segments = total === 0 ? [] : db.segments.query({ limit: total })
-  const termOptions = buildQaTermOptions(db)
+  const termOptions = buildQaTermOptions(db, segments)
   return db.qaFindings.replaceForProject(
     runQa(segments, {
       ...termOptions,

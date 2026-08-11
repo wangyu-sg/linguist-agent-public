@@ -153,6 +153,7 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
       IMPORT: 'linguist.projects.import',
       CONFIRM_XLSX_MAPPING: 'linguist.projects.confirmXlsxMapping',
       GET_SUMMARY: 'linguist.projects.getSummary',
+      GET_STAGE_COVERAGE: 'linguist.projects.getStageCoverage',
       RENAME: 'linguist.projects.rename',
       SET_LOCALES: 'linguist.projects.setLocales',
       REORDER_ACTIVE: 'linguist.projects.reorderActive',

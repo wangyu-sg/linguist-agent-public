@@ -27,6 +27,7 @@ export {
   LINGUIST_CAT_TOOL_NAMES,
   type CatAssetListItem,
   type CatApplyTranslationsResult,
+  type CatConfirmSegmentsResult,
   type CatBatchConsistencyFindingItem,
   type CatBatchConsistencyGroupItem,
   type CatConsistencyPlanResult,
@@ -87,3 +88,4 @@ export {
 export { createLinguistCatTools } from './factory'
 export { createTagTools } from './tag-tools'
 export { createTerminologyTools } from './terminology-tools'
+export { createStageTools } from './stage-tools'
