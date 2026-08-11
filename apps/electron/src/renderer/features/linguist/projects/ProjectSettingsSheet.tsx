@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ContextDocsPanel } from './ContextDocsPanel'
+import { ProjectAgentCapabilitiesSection } from './ProjectAgentCapabilitiesSection'
 import { ProjectDiagnosticsSettings } from './ProjectDiagnosticsSettings'
 import { ProjectMaintenanceSettings } from './ProjectMaintenanceSettings'
 import { ProjectWorkflowSettings } from './ProjectWorkflowSettings'
@@ -120,6 +121,7 @@ export function ProjectSettingsSheetBody({
           onUpdated={onSummaryRefresh}
         />
         <ProjectWorkflowSettings project={project} onUpdated={onSummaryRefresh} />
+        <ProjectAgentCapabilitiesSection project={project} onNavigate={onClose} />
       </TabsContent>
       <TabsContent value="resources">
         <ProjectResourceSettings

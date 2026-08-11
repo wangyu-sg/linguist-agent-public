@@ -272,6 +272,62 @@ describe('LinguistSidebarContent', () => {
     expect(html).not.toContain('会话 child')
   })
 
+  test('given 只委派 Reviewer when 展开子会话 then 显示审校岗位且不虚构翻译/校对', () => {
+    const root = session('root', 'alpha')
+    const child = session('child', 'alpha')
+    child.parentSessionId = root.id
+    child.sourceDelegationId = 'delegation-1'
+    child.linguistRole = 'reviewer'
+    const html = renderToStaticMarkup(
+      <LinguistSidebarContentView
+        state={{ status: 'ready', projects: [project('alpha')] }}
+        sessions={[root, child]}
+        activeProjectId="alpha"
+        currentSessionIds={new Map([['alpha', child.id]])}
+        onRetry={() => {}}
+        onOpenProject={() => {}}
+        SessionRowComponent={TestSessionRow}
+      />,
+    )
+
+    expect(html).toContain('会话 child')
+    expect(html).toContain('审校')
+    expect(html).not.toContain('翻译')
+    expect(html).not.toContain('校对')
+    // 通用 Proma delegation 标签不得冒充本地化岗位
+    expect(html).not.toContain('review')
+    expect(html).not.toContain('custom')
+  })
+
+  test('given General 完整委派一轮 when 展开 then 三岗位按真实委派各显示一次', () => {
+    const root = session('root', 'alpha')
+    const roles = ['translator', 'reviewer', 'proofreader'] as const
+    const children = roles.map((role, index) => {
+      const child = session(`child-${role}`, 'alpha')
+      child.parentSessionId = root.id
+      child.sourceDelegationId = `delegation-${index}`
+      child.linguistRole = role
+      child.createdAt = index + 1
+      return child
+    })
+    const html = renderToStaticMarkup(
+      <LinguistSidebarContentView
+        state={{ status: 'ready', projects: [project('alpha')] }}
+        sessions={[root, ...children]}
+        activeProjectId="alpha"
+        currentSessionIds={new Map([['alpha', children[0]!.id]])}
+        onRetry={() => {}}
+        onOpenProject={() => {}}
+        SessionRowComponent={TestSessionRow}
+      />,
+    )
+
+    expect(html).toContain('翻译')
+    expect(html).toContain('审校')
+    expect(html).toContain('校对')
+    expect(html).toContain('data-delegation-count="3"')
+  })
+
   test('given 三天外空闲会话和阻塞会话 when 渲染项目预览 then 只保留阻塞会话', () => {
     const now = 10 * 86_400_000
     const oldIdle = session('old-idle', 'alpha')

@@ -211,6 +211,11 @@
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
     },
     {
+      "file": "apps/electron/src/main/lib/agent-island-service.ts",
+      "ticket": "LA-SYNC-003",
+      "reason": "Local Host Seam: backport upstream #1527 so delegated child sessions are summarized by their parent instead of entering the user-level Agent Island inbox."
+    },
+    {
       "file": "apps/electron/src/main/lib/agent-orchestrator.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical. LA-PROMPT-001: the Linguist prompt overlay is built once from the canonical prompt contract and rendered per agentRuntime (pi → markdown, otherwise xml)."
@@ -387,11 +392,6 @@
     },
     {
       "file": "apps/electron/src/main/lib/quick-task-window.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
-    },
-    {
-      "file": "apps/electron/src/main/lib/settings-service.test.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
     },
@@ -1141,6 +1141,11 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
+      "file": "apps/electron/src/renderer/hooks/useGlobalAgentListeners.ts",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: backport upstream #1527 and pass delegated-session identity into the shared completion marker policy."
+    },
+    {
       "file": "apps/electron/src/renderer/hooks/useSwitchAppMode.ts",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
@@ -1159,6 +1164,11 @@
       "file": "apps/electron/src/renderer/lib/agent-message-queue.test.ts",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+    },
+    {
+      "file": "apps/electron/src/renderer/lib/agent-completion-presence.ts",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: backport upstream #1527 so delegated child completion does not create a duplicate user-level unread marker."
     },
     {
       "file": "apps/electron/src/renderer/lib/agent-message-queue.ts",

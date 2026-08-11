@@ -126,6 +126,8 @@ import type {
   LinguistProjectDeleteRequest,
   LinguistProjectDeleteResult,
   LinguistProjectGetSummaryRequest,
+  LinguistProjectGetStageCoverageRequest,
+  LinguistProjectGetStageCoverageResult,
   LinguistProjectConfirmXlsxMappingRequest,
   LinguistProjectConfirmXlsxMappingResult,
   LinguistProjectImportRequest,
@@ -1385,6 +1387,10 @@ export interface ElectronAPI {
   linguistProjectsGetSummary: (
     input: LinguistProjectGetSummaryRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectSummary>>
+  /** 单批次单阶段的岗位 decision 覆盖统计（Reviewer/Proofreader 真实进度） */
+  linguistProjectsGetStageCoverage: (
+    input: LinguistProjectGetStageCoverageRequest,
+  ) => Promise<LinguistIpcResult<LinguistProjectGetStageCoverageResult>>
   /** 重命名 CAT 项目；归档项目拒绝写入 */
   linguistProjectsRename: (
     input: LinguistProjectRenameRequest,
@@ -3246,6 +3252,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.UNDO_IMPORT_ASSET, input),
   linguistProjectsGetSummary: (input: LinguistProjectGetSummaryRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.GET_SUMMARY, input),
+  linguistProjectsGetStageCoverage: (input: LinguistProjectGetStageCoverageRequest) =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.GET_STAGE_COVERAGE, input),
   linguistProjectsRename: (input: LinguistProjectRenameRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.RENAME, input),
   linguistProjectsSetLocales: (input: LinguistProjectSetLocalesRequest) =>

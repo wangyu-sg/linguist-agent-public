@@ -8,9 +8,10 @@ describe('resolveActiveViewForMode', () => {
     expect(resolveActiveViewForMode('projects', 'linguist')).toBe('projects')
   })
 
-  test('given Agent 专属主区 when 进入 Linguist then 回到普通主区', () => {
+  test('given Agent 专属主区 when 进入 Linguist then planning 改写、agent-skills 保留', () => {
     expect(resolveActiveViewForMode('planning', 'linguist')).toBe('conversations')
-    expect(resolveActiveViewForMode('agent-skills', 'linguist')).toBe('conversations')
+    // K3：Linguist 项目「Agent 能力」入口复用唯一 AgentSkillsView，不再改写。
+    expect(resolveActiveViewForMode('agent-skills', 'linguist')).toBe('agent-skills')
   })
 
   test('given 非 Linguist 模式 when 切换模式 then 不改写通用路由', () => {

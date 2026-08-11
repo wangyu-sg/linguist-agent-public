@@ -6,7 +6,10 @@ import {
   QA_SEVERITIES,
   QA_SEVERITY_BADGE_CLASSES,
   QA_SEVERITY_LABELS,
+  QA_SEVERITY_TIERS,
+  QA_TIER_LABELS,
   isQaIssueType,
+  qaSeverityTier,
   summarizeOpenQaFindingsBySegment,
 } from './qa-findings-utils'
 
@@ -25,6 +28,26 @@ describe('PB-096 QA Findings 面板纯逻辑', () => {
     expect(QA_DISPOSITIONS).toEqual(['defect', 'needs_review', 'query', 'info'])
     for (const disposition of QA_DISPOSITIONS) {
       expect(QA_DISPOSITION_LABELS[disposition].length).toBeGreaterThan(0)
+    }
+  })
+
+  test('K4 三级展示：五档映射阻止写回/需要检查/普通提示，普通 QA 不再一律红色', () => {
+    expect(QA_SEVERITIES.map((severity) => qaSeverityTier(severity))).toEqual([
+      'blocking',
+      'blocking',
+      'check',
+      'check',
+      'notice',
+    ])
+    expect(QA_TIER_LABELS).toEqual({
+      blocking: '阻止写回',
+      check: '需要检查',
+      notice: '普通提示',
+    })
+    // 每档 tier 与徽标色一致：blocking 才用 destructive。
+    for (const severity of QA_SEVERITIES) {
+      const isBlocking = QA_SEVERITY_TIERS[severity] === 'blocking'
+      expect(QA_SEVERITY_BADGE_CLASSES[severity].includes('destructive')).toBe(isBlocking)
     }
   })
 

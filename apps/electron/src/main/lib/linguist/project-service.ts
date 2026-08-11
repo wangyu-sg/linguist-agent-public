@@ -64,6 +64,7 @@ import {
   type SentencePattern,
   type SentencePatternUpsertInput,
   type SqliteRuntimeProbe,
+  type StageDecisionCoverage,
   type StyleGuideRule,
   type StyleGuideRuleUpsertInput,
   type TechConstraint,
@@ -1104,6 +1105,15 @@ export class LinguistProjectService {
 
   runQa(projectId: string): CatQaFinding[] {
     return this.quality.runQa(projectId)
+  }
+
+  /** 单批次单阶段的岗位 decision 覆盖统计（只读）。 */
+  getStageDecisionCoverage(
+    projectId: string,
+    assetId: string,
+    stage: WorkflowStage,
+  ): StageDecisionCoverage {
+    return this.quality.getStageDecisionCoverage(projectId, assetId, stage)
   }
 
   listQaFindings(

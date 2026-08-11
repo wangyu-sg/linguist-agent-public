@@ -34,6 +34,8 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   CONFIRM_XLSX_MAPPING: 'linguist.projects.confirmXlsxMapping',
   /** 项目摘要（元数据 + 资产列表 + 按状态分段的段计数） */
   GET_SUMMARY: 'linguist.projects.getSummary',
+  /** 单批次单阶段的岗位 decision 覆盖统计（只读聚合） */
+  GET_STAGE_COVERAGE: 'linguist.projects.getStageCoverage',
   /** 重命名项目（沿用项目名校验；归档项目只读） */
   RENAME: 'linguist.projects.rename',
   /** 修改空项目语言对；已有批次或 TM/TB 时 fail closed。 */
@@ -1011,6 +1013,25 @@ export type LinguistProjectConfirmXlsxMappingResult = Extract<
 export interface LinguistProjectGetSummaryRequest {
   projectId: string
 }
+
+/** 单批次单阶段的岗位 decision 覆盖统计（Reviewer/Proofreader 真实进度）。 */
+export interface LinguistStageDecisionCoverage {
+  total: number
+  unchanged: number
+  corrected: number
+  blocked: number
+  /** 尚无当前 revision 有效 decision 的段数。 */
+  pending: number
+  status: 'in_progress' | 'complete' | 'completed_with_blocks'
+}
+
+export interface LinguistProjectGetStageCoverageRequest {
+  projectId: string
+  assetId: string
+  workflowStage: LinguistWorkflowStage
+}
+
+export type LinguistProjectGetStageCoverageResult = LinguistStageDecisionCoverage
 
 export interface LinguistProjectRenameRequest {
   projectId: string

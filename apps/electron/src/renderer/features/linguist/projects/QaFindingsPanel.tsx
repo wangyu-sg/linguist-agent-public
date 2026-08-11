@@ -20,6 +20,8 @@ import {
   QA_SEVERITIES,
   QA_SEVERITY_BADGE_CLASSES,
   QA_SEVERITY_LABELS,
+  QA_TIER_LABELS,
+  qaSeverityTier,
 } from './qa-findings-utils'
 
 const PAGE_SIZE = 100
@@ -501,7 +503,7 @@ export function QaFindingCard({
       <div className="flex items-start justify-between gap-2">
         <p className="font-medium text-foreground/75">{finding.code}</p>
         <span className={QA_SEVERITY_BADGE_CLASSES[finding.severity]}>
-          {QA_SEVERITY_LABELS[finding.severity]}
+          {QA_SEVERITY_LABELS[finding.severity]} · {QA_TIER_LABELS[qaSeverityTier(finding.severity)]}
         </span>
       </div>
       <p className="mt-0.5 text-[10px] text-foreground/45">

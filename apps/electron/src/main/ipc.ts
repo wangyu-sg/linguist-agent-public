@@ -5304,6 +5304,12 @@ export function registerIpcHandlers(): void {
     async (_, input: unknown) => linguistProjectIpc.getSummary(input)
   )
 
+  // 阶段覆盖：单批次单阶段岗位 decision 聚合（Reviewer/Proofreader 进度）。
+  ipcMain.handle(
+    LINGUIST_PROJECT_IPC_CHANNELS.GET_STAGE_COVERAGE,
+    async (_, input: unknown) => linguistProjectIpc.getStageCoverage(input)
+  )
+
   ipcMain.handle(
     LINGUIST_PROJECT_IPC_CHANNELS.RENAME,
     async (_, input: unknown) => linguistProjectIpc.rename(input)

@@ -14,10 +14,10 @@ import type { AppMode } from './app-mode'
 export type ActiveView = 'conversations' | 'planning' | 'agent-skills' | 'projects'
 export type AgentSkillsCapabilityTab = 'skills' | 'mcp' | 'memory'
 
-/** Linguist 只承载项目与工作台，不能继承 Agent 专属主区。 */
+/** Linguist 承载项目/工作台与只读的 Agent 能力管理视图（Skills/MCP/Memory）。 */
 export function resolveActiveViewForMode(activeView: ActiveView, appMode: AppMode): ActiveView {
   if (appMode === 'linguist') {
-    return activeView === 'projects' ? 'projects' : 'conversations'
+    return activeView === 'projects' || activeView === 'agent-skills' ? activeView : 'conversations'
   }
   return activeView === 'projects' ? 'conversations' : activeView
 }

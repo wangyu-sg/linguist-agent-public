@@ -56,6 +56,7 @@ import {
   type LinguistProjectCreateResult,
   type LinguistProjectConfirmXlsxMappingResult,
   type LinguistProjectDeleteResult,
+  type LinguistProjectGetStageCoverageResult,
   type LinguistProjectImportResult,
   type LinguistProjectInfo,
   type LinguistProjectListResult,
@@ -784,6 +785,22 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         const projectId = readProjectId(assertRecord(input))
         const summary = getService().getProjectSummary(projectId)
         return { ...summary, project: toProjectInfo(summary.project) }
+      })
+    },
+
+    /**
+     * linguist.projects.getStageCoverage — 单批次单阶段的岗位 decision 覆盖
+     * 统计（Reviewer/Proofreader 真实进度；只读聚合，不加载段行正文）。
+     */
+    getStageCoverage(
+      input: unknown,
+    ): Promise<LinguistIpcResult<LinguistProjectGetStageCoverageResult>> {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const assetId = readCatAssetId(record)
+        const workflowStage = readWorkflowStage(record)
+        return getService().getStageDecisionCoverage(projectId, assetId, workflowStage)
       })
     },
 

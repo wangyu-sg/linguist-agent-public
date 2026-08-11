@@ -7,7 +7,6 @@
 
 import type { AgentSessionMeta, LinguistProjectMutationEvent, LinguistTurnContextV1 } from '@proma/shared'
 import type { LinguistGenerationProvenance } from '@linguist/cat-core'
-import { createReadToolDefinition } from '@earendil-works/pi-coding-agent'
 import {
   createLinguistCatTools,
   LinguistCatInvalidArgumentError,
@@ -25,7 +24,6 @@ import { resolveLinguistBindingStatus, type LinguistServiceResolver } from './se
 export type LinguistProjectMutationSink = (event: LinguistProjectMutationEvent) => void
 
 const projectMutationRevisions = new Map<string, number>()
-const managedContextImageReader = createReadToolDefinition(process.cwd())
 
 function currentBoundSession(sessionId: string, projectId: string, field: string): AgentSessionMeta {
   const current = getAgentSessionMeta(sessionId)
@@ -92,6 +90,8 @@ export function resolveLinguistSessionCatTools(
       currentBoundSession(session.id, projectId, 'docId')
       try {
         const { sourcePath } = getService().resolveContextDocPreviewPath(projectId, docId)
+        const { createReadToolDefinition } = await import('@earendil-works/pi-coding-agent')
+        const managedContextImageReader = createReadToolDefinition(process.cwd())
         const result = await managedContextImageReader.execute(
           'cat-context-image',
           { path: sourcePath },

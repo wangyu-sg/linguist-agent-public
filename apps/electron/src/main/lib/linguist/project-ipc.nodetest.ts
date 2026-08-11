@@ -215,6 +215,75 @@ test('validation negatives: bad id / bad locale / oversized name / wrong types �
   }
 })
 
+test('getStageCoverage: imported batch reports full pending coverage; validation fail closed', async () => {
+  const service = makeService()
+  try {
+    const ipc = makeIpc(service)
+    const project = service.createProject(INPUT)
+    const { picker } = makePicker([fixturePath(CSV_FIXTURE)])
+    const imported = await ipc.import({ projectId: project.id, selection: 'files' }, picker)
+    assert.equal(imported.ok, true)
+
+    const summary = await ipc.getSummary({ projectId: project.id })
+    assert.equal(summary.ok, true)
+    if (!summary.ok) return
+    const asset = summary.data.assets[0]
+    assert.ok(asset !== undefined)
+
+    // 未做任何 decision：total=pending=批次段数，状态 in_progress。
+    const coverage = await ipc.getStageCoverage({
+      projectId: project.id,
+      assetId: asset.assetId,
+      workflowStage: 'editing',
+    })
+    assert.equal(coverage.ok, true)
+    if (coverage.ok) {
+      assert.equal(coverage.data.total, asset.segmentCount)
+      assert.equal(coverage.data.pending, asset.segmentCount)
+      assert.equal(coverage.data.unchanged, 0)
+      assert.equal(coverage.data.corrected, 0)
+      assert.equal(coverage.data.blocked, 0)
+      assert.equal(coverage.data.status, 'in_progress')
+    }
+
+    // 归档后仍可读（对话可继续，覆盖统计不伪造）。
+    const archived = await ipc.archive({ projectId: project.id })
+    assert.equal(archived.ok, true)
+    const archivedCoverage = await ipc.getStageCoverage({
+      projectId: project.id,
+      assetId: asset.assetId,
+      workflowStage: 'proofreading',
+    })
+    assert.equal(archivedCoverage.ok, true)
+
+    const badStage = await ipc.getStageCoverage({
+      projectId: project.id,
+      assetId: asset.assetId,
+      workflowStage: 'review',
+    })
+    assert.equal(badStage.ok, false)
+    if (!badStage.ok) assert.equal(badStage.error.code, 'INVALID_INPUT')
+
+    const badAsset = await ipc.getStageCoverage({
+      projectId: project.id,
+      assetId: 'not-a-stable-id',
+      workflowStage: 'editing',
+    })
+    assert.equal(badAsset.ok, false)
+    if (!badAsset.ok) assert.equal(badAsset.error.code, 'INVALID_INPUT')
+
+    const unknown = await ipc.getStageCoverage({
+      projectId: 'prj-0000000000000000',
+      assetId: asset.assetId,
+      workflowStage: 'editing',
+    })
+    assert.equal(unknown.ok, false)
+    if (!unknown.ok) assert.equal(unknown.error.code, 'PROJECT_NOT_FOUND')
+  } finally {
+    service.closeAll()
+  }
+})
+
 test('unknown project id → PROJECT_NOT_FOUND across id-taking channels', async () => {
   const service = makeService()
   try {
