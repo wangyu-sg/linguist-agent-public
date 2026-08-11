@@ -16,8 +16,8 @@
 | 层 | 当前值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App / Electron | `0.17.2` / `43.2.0` |
-| React / Jotai / Vite | `18.3.1` / `2.20.2` / `6.4.1` |
+| Electron App / Electron | `0.17.3` / `43.2.0` |
+| React / Jotai / Vite | `18.3.1` / `2.20.2` / `6.4.3` |
 | Shared | `0.1.95` |
 | Agent Runtime | Pi `0.82.1`；不包含 Claude Agent SDK / Nowledge Runtime |
 | CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.10 / 0.0.37 / 0.0.34` |
@@ -37,9 +37,10 @@
 
 ## 验证事实
 
-- 冻结依赖安装与 11 workspace typecheck 通过；根 `1517/1517`（`6881` assertions）、Electron Linguist `212/212`、CAT Store `230/230`、CAT Tools `42/42`、boundary `4/4`、fusion `9/9` 与许可证门禁均通过。
-- macOS arm64 packaged vertical：Agent `15 PASS / 0 FAIL`、Chat `19 / 0`、Linguist `21 / 0 / 2 MANUAL`。LF-003 `runStatus=passed`、coverage `partial`。
-- 产物与本机 `/Applications/Linguist Agent.app` 均为 `0.17.2`，`app.asar` SHA-256 均为 `f2d05f75249f369c0bb16e14368e658538feee4d76e4d02a087b9530750b0a9d`。旧 `0.16.36` 已移入废纸篓，可恢复。
+- 冻结依赖安装与 Electron typecheck 通过；根 `1518/1518`（`6884` assertions）、boundary `4/4`、fusion `9/9` 通过。上一完整 CAT 回归仍为 Electron Linguist `212/212`、CAT Store `230/230`、CAT Tools `42/42` 与许可证门禁通过。
+- 上一完整 macOS arm64 packaged vertical（`0.17.2`）：Agent `15 PASS / 0 FAIL`、Chat `19 / 0`、Linguist `21 / 0 / 2 MANUAL`。本次仅改显示元数据的 `0.17.3` 已通过 `smoke:pack` 与产物完整性校验，未冒充重跑完整 vertical。
+- 产物与本机 `/Applications/Linguist Agent.app` 均为 `0.17.3`，`app.asar` SHA-256 均为 `4cd09ad7161449ff3f41def2d924ae2afe973427842b9f3fa27c466b980c02b0`；安装后主进程已启动。旧 `0.17.2` 已移入废纸篓，可恢复。
+- About 与 Linguist Diagnostics 现显示 Proma `v0.17.1@6094036d` 和正式 merge `96155d1a`；回归测试直接对照 `proma-baseline.json`，防止再次漂移。
 - 已在真实用户 Provider 配置下用 `ChatGPT 订阅 (Codex) · GPT-5.6 Sol` 完成一次真实请求，得到精确响应 `REAL_PROVIDER_OK`。这只证明 Provider 请求路径可用，不等于四岗位语言质量验证。
 - 启动崩溃 `ERR_PACKAGE_PATH_NOT_EXPORTED` 已从根因修复：主进程不再用 CJS `require()` 加载 ESM-only Pi 包；修复后的同一产物已通过 packaged vertical 并安装。
 - SBOM 当前含 430 个第三方生产依赖；机读真源为 `docs/release/sbom-full.json`。

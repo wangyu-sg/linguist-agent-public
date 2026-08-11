@@ -10,7 +10,7 @@ This AGPL-3.0 project derives from [Proma](https://github.com/proma-ai/Proma). S
 
 ## Current status
 
-This is a **personal-use Alpha** with no public-release plan. The stable baseline is Proma `v0.17.1@6094036`; Electron App `0.17.2`, Electron `43.2.0`, `@proma/shared 0.1.95`, Pi `0.82.1`, CAT Core / Formats / Store / Tools `0.0.21 / 0.0.10 / 0.0.37 / 0.0.34`, CAT schema `15`, and Bun `1.3.14`.
+This is a **personal-use Alpha** with no public-release plan. The stable baseline is Proma `v0.17.1@6094036`; Electron App `0.17.3`, Electron `43.2.0`, `@proma/shared 0.1.95`, Pi `0.82.1`, CAT Core / Formats / Store / Tools `0.0.21 / 0.0.10 / 0.0.37 / 0.0.34`, CAT schema `15`, and Bun `1.3.14`.
 
 The app has three peer modes:
 

@@ -7,7 +7,7 @@
 | 项目 | 当前事实 |
 |---|---|
 | Proma Base / formal merge | `v0.17.1@6094036d` / `96155d1a` |
-| App / Electron | `0.17.2` / `43.2.0` |
+| App / Electron | `0.17.3` / `43.2.0` |
 | Bun / Pi | `1.3.14` / `0.82.1` |
 | Shared | `0.1.95` |
 | CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.10 / 0.0.37 / 0.0.34` |
@@ -25,11 +25,12 @@
 - 受管 Context 图片通过现有 `cat_read_context_doc` 返回 Pi ImageContent；无 OCR 服务或图片数据库。
 - 导入、Workbook Mapping、Tag、Phrase、memoQ、Voice / Exemplar、verified / as-is 导出继续使用既有 CAT Service / Store 边界。
 - packaged 主进程只异步加载 ESM-only Pi 模块，避免 CJS `require()` 启动崩溃。
+- About / Linguist Diagnostics 的 Proma Base 由 `linguist-build-metadata.ts` 展示，并由测试与 `proma-baseline.json` 对账；当前为 `v0.17.1@6094036d` / formal merge `96155d1a`。
 
 ## 已验证与未验证
 
 - 自动与 packaged 证据见 [实施报告](../implementation/LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md)。
-- 本机已安装并启动 `0.17.2`，且用真实 Provider 完成一次请求。
+- 本机已安装并启动 `0.17.3`；上一 `0.17.2` 构建曾用真实 Provider 完成一次请求。
 - 真实 Provider 四岗位代表性格式全链、真实 Phrase / memoQ、Native Open/Save、IME、VoiceOver 与 14 天日用仍待真实证据。
 
 历史 v0.16.x 报告与旧 queue 只代表当时状态，不覆盖本页。

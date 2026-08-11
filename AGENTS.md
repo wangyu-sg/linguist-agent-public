@@ -50,11 +50,11 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.17.2` |
+| Electron App | `@proma/electron 0.17.3` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.20.2`（manifest range `^2.17.1`） |
-| Vite | `6.4.1`（manifest range `^6.0.3`） |
+| Vite | `6.4.3`（manifest range `^6.0.3`） |
 | Shared | `@proma/shared 0.1.95` |
 | Agent Runtime | 仅 `@earendil-works/pi-* 0.82.1` |
 | CAT Core | `@linguist/cat-core 0.0.21` |

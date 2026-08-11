@@ -1,12 +1,12 @@
 # KNOWN_LIMITATIONS — 当前已知限制
 
-更新日期：2026-08-10
+更新日期：2026-08-11
 
 > 当前目标是作者本人使用的个人 Alpha。实现、单元验证、打包验证、真机人工和产品资格是不同证据等级。
 
 ## A. 尚缺的真实与人工证据
 
-1. **真实 Provider 与模型质量**：Fake Model、Prompt 合同和格式 round-trip 不证明真实 Pi/Claude Provider、网络重试或翻译质量。
+1. **真实 Provider 与模型质量**：一次真实 Provider 请求已证明请求路径可用，但不证明代表性格式、网络重试或翻译质量；Fake Model、Prompt 合同和格式 round-trip 也不能替代这些证据。
 2. **四岗位全链**：尚未用真实 Provider 完成 Translator → Reviewer → Proofreader → `verified` 交付并复核输出。
 3. **对照评估**：尚未用同一模型、同一 reasoning 和同一真实任务比较 Web Chat、旧 LA 与当前 LA。
 4. **14 天日用**：必须从当前可用构建重新累计，不能由开发日或自动测试补记。

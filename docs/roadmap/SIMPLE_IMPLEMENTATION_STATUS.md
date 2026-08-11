@@ -20,9 +20,9 @@
 
 ## 自动化与产物
 
-- 最终当前树：11 workspace typecheck、根 `1517/1517`（`6881` assertions）、Electron Linguist `212/212`、CAT Store `230/230`、CAT Tools `42/42`、boundary `4/4`、fusion `9/9` 和 license scan 全部通过。
-- macOS arm64 packaged vertical：Agent `15/15`、Chat `19/19`、Linguist `21/21`，另有 `2 MANUAL`；LF-003 coverage `partial`。
-- 安装版本 `0.17.2`；产物与安装 `app.asar` SHA-256 均为 `f2d05f75249f369c0bb16e14368e658538feee4d76e4d02a087b9530750b0a9d`。
+- 当前显示修复：Electron typecheck、根 `1518/1518`（`6884` assertions）、boundary `4/4`、fusion `9/9` 通过；上一完整 CAT 回归为 Electron Linguist `212/212`、CAT Store `230/230`、CAT Tools `42/42` 和 license scan 通过。
+- 上一完整 macOS arm64 packaged vertical（`0.17.2`）：Agent `15/15`、Chat `19/19`、Linguist `21/21`，另有 `2 MANUAL`；LF-003 coverage `partial`。`0.17.3` 已通过 `smoke:pack` 与完整性校验。
+- 安装版本 `0.17.3`；产物与安装 `app.asar` SHA-256 均为 `4cd09ad7161449ff3f41def2d924ae2afe973427842b9f3fa27c466b980c02b0`。
 - SBOM：430 个第三方生产依赖，许可证门禁通过。
 
 ## 证据边界

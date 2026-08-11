@@ -1,6 +1,6 @@
 # Linguist Agent 文档维护规则
 
-更新时间：2026-08-08
+更新时间：2026-08-11
 
 ## 事实优先级
 
@@ -25,7 +25,8 @@
 | `docs/HANDOFF.md` | 下一会话无需聊天历史即可继续的当前交接 |
 | `TODO.md` | 仍未完成且可行动的事项 |
 | `docs/DOCS_INDEX.md` | 文档地图与真源 |
-| `CURRENT_FACTS_SIMPLE.md` | 简化重构启动时的 Git、数据、实现与验证事实 |
+| `CURRENT_FACTS_SIMPLE.md` | 当前 Git、版本、实现、验证、产物与安装事实 |
+| `docs/architecture/proma-baseline.json` | Proma upstream、正式 merge、Runtime 与产品版本的机读真源 |
 | `LINGUIST_FUSION_CURRENT_REALITY.md` | 可验证的当前代码/工作区事实 |
 | `SIMPLE_IMPLEMENTATION_STATUS.md` | 当前简化方案 Ticket 状态；不伪造真实使用证据 |
 | `docs/roadmap/*_REPORT.md` | 历史或专项证据 |
@@ -47,7 +48,7 @@ README 与 AGENTS 的修改仍需用户允许；一次明确的“同步全部�
 
 ## 同步步骤
 
-1. 先读代码、manifest、简化状态表和最新真实命令输出。
+1. 先读代码、manifest、`proma-baseline.json`、当前状态表和最新真实命令输出。
 2. 搜索旧版本、旧数据根、旧 SDK、过期 Gate 结论、废弃 worktree 和“已完成/待完成”冲突。
 3. 更新最小 canonical 集合。
 4. 区分自动证据与人工证据。
@@ -57,6 +58,7 @@ README 与 AGENTS 的修改仍需用户允许；一次明确的“同步全部�
 
 ```bash
 git diff --check
+jq empty docs/architecture/proma-baseline.json
 bun run check:boundaries
 node --test tests/linguist-fusion-architecture.test.mjs
 ```
@@ -66,6 +68,7 @@ node --test tests/linguist-fusion-architecture.test.mjs
 ## 禁止事项
 
 - 不把已删除的统一蓝图、旧 queue、Proposal Critic、Auditor 或 Execution Policy 写回 active 产品；Git 历史只作历史证据。
+- active 树没有 Fusion queue；`docs/archive/` 内的 queue 只保留历史快照，不参与当前状态裁决。
 - 不把 Fake Model 写成翻译质量证据。
 - 不把 packaged smoke 写成 VoiceOver/IME/键盘人工验证。
 - 不把个人 Alpha 写成公开 Release Candidate。

@@ -11,6 +11,8 @@
 5. [TODO.md](../TODO.md) — 只列真实未完成项。
 6. [LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md](./implementation/LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md) — 本轮实施与验证报告。
 
+旧 Fusion queue 已退役，只在 [docs/archive/](./archive/) 保留历史快照；当前状态由上述事实文件与状态表维护。
+
 ## 状态与架构
 
 - [SIMPLE_IMPLEMENTATION_STATUS.md](./roadmap/SIMPLE_IMPLEMENTATION_STATUS.md)
