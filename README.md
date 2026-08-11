@@ -10,7 +10,7 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
 ## 当前状态
 
-当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。稳定基线是 Proma `v0.17.1@6094036`；Electron App `0.17.1`、Electron `43.2.0`、`@proma/shared 0.1.94`、Pi `0.82.1`、CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.36 / 0.0.33`、CAT schema `15`，仓库使用 Bun `1.3.14`。
+当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。稳定基线是 Proma `v0.17.1@6094036`；Electron App `0.17.2`、Electron `43.2.0`、`@proma/shared 0.1.95`、Pi `0.82.1`、CAT Core / Formats / Store / Tools `0.0.21 / 0.0.10 / 0.0.37 / 0.0.34`、CAT schema `15`，仓库使用 Bun `1.3.14`。
 
 应用有三个并列模式：
 
@@ -41,7 +41,7 @@ Proposal 是可见、可接受、可撤销的修改载体，承载 Agent 当前�
 Proma Pi Agent Runtime
 ├── Workspace / Skills / MCP / AGENTS.md / Memory / Files / Planning / Collaboration
 └── Linguist Project Binding
-    ├── 四岗位共享的 30 个 CAT Tools
+    ├── 四岗位共享的 31 个 CAT Tools
     ├── 内置 Common Quality Contract + 当前岗位 Markdown
     ├── Project Digest / Turn Context
     └── Linguist Domain Services
@@ -56,6 +56,10 @@ Proma Pi Agent Runtime
 - `@linguist/cat-tools` 的项目身份只来自 Session binding；模型不能提交 `projectId`。
 - UI 与 Agent 调用同一 `LinguistProjectService`；格式解析、事务、CAS、locked Segment、Tag/Placeholder/ICU、QA 和 round-trip 规则不重复实现。
 - Prompt Builder 保留单一合同；Project Digest 以 `complete / partial / skipped` 和 `truncated` 暴露降级，失败时也向模型注入可见占位。
+- General 可按任务选择性委派 Translator、Reviewer 或 Proofreader；子会话继承同一 Workspace 与 CAT 项目，并在创建时冻结 Segment 范围。岗位通过共享 CAT Store 交接，不复制译文到聊天。
+- `cat_confirm_segments` 记录 `unchanged / corrected / blocked` 决策；Reviewer 只有覆盖冻结范围内全部 Segment 才算完成，Proofreader 独立写入 proofreading 阶段。
+- 术语匹配、上下文、QA 与写回门禁共用同一 scope-aware evaluator；只有无冲突且适用范围明确的 required / forbidden 规则硬拦，数字、换行和普通 token 差异留给 QA。
+- 受管 Context 图片通过现有 `cat_read_context_doc` 作为视觉内容提供给 Pi 模型，不新增 OCR 或图片数据库。
 - Agent 的 `cat_import_resources` 可处理文件或小批目录；原生 UI 的单一入口支持多文件或文件夹。Renderer 不接受任意粘贴路径，路径 authority 留在主进程。
 - Agent 与原生 UI 都支持 `verified` / `as-is` 导出；`as-is` 需要明确确认。两种模式都检查格式生成与重新导入，默认不覆盖。
 - Tag Profile 的扫描、Candidate、编辑器提示、Proposal、QA 与 `verified` export 使用同一 Scanner。

@@ -50,17 +50,17 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.17.1` |
+| Electron App | `@proma/electron 0.17.2` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
-| Jotai | `2.17.1` |
+| Jotai | `2.20.2`（manifest range `^2.17.1`） |
 | Vite | `6.4.1`（manifest range `^6.0.3`） |
-| Shared | `@proma/shared 0.1.94` |
+| Shared | `@proma/shared 0.1.95` |
 | Agent Runtime | 仅 `@earendil-works/pi-* 0.82.1` |
-| CAT Core | `@linguist/cat-core 0.0.20` |
+| CAT Core | `@linguist/cat-core 0.0.21` |
 | CAT Formats | `@linguist/cat-formats 0.0.10` |
-| CAT Store | `@linguist/cat-store 0.0.36` |
-| CAT Tools | `@linguist/cat-tools 0.0.33` |
+| CAT Store | `@linguist/cat-store 0.0.37` |
+| CAT Tools | `@linguist/cat-tools 0.0.34` |
 | CAT schema | `15` |
 
 不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。
@@ -203,16 +203,18 @@ Electron Linguist Services
 CAT 写入规则：
 
 - 项目 Agent 可创建并接受 pending Proposal；读取工具不得写入；QA 和 consistency repair 不能直接提交 Segment。
+- General 可选择性委派 Translator / Reviewer / Proofreader；子会话必须继承同一 `workspaceId + linguistProjectId` 并冻结 Segment 范围，不得把 Subagent 变成强制流水线。
+- Reviewer / Proofreader 用 `cat_confirm_segments` 对冻结范围逐段记录 `unchanged / corrected / blocked`；读取一页或抽样不算完成。
 - `Cmd/Ctrl+Enter` 确认当前阶段并前进，即使译文未改也必须可用；`Cmd/Ctrl+S` 只保存实际修改。
-- Segment 写入必须经过 revision CAS、locked 与 hard-rule 检查。
+- Segment 写入必须经过 revision CAS、locked 与结构 hard-rule 检查。术语上下文、QA 与写回门禁共用 scope-aware evaluator；普通数字、换行、长度和 token 差异默认进入 QA，不作结构硬拦。
 - 项目 Agent 可把批次以 `verified` 或 `as-is` 保存到用户指定的绝对本地路径；默认不覆盖，只有用户明确要求时才原子覆盖普通文件。
 - 原生导入使用同一入口选择多文件或文件夹；原生导出提供 `verified` 和需显式确认的 `as-is`。Renderer 不得提交任意粘贴路径。
 - 导出必须从受管 source blob 生成，先过 QA / 阶段预检并重新导入验证。
 - 输出给模型和 renderer 的 DTO 不暴露绝对本机路径。
 
-`LinguistProjectService` 是现有门面，内部按 lifecycle、resources、quality、delivery 和稳定类型合同分层。CAT Tool 工厂位于 `packages/linguist-cat-tools/src/factory.ts`；30 个工具按项目、参考、QA、Proposal、导入、交付、Tag、术语、Workbook 和 Voice 拆分，四岗位共享同一完整 Toolset。主进程必须重新校验 Session binding、文件可读性、交付模式与摘要，模型不得提交 `projectId`。
+`LinguistProjectService` 是现有门面，内部按 lifecycle、resources、quality、delivery 和稳定类型合同分层。CAT Tool 工厂位于 `packages/linguist-cat-tools/src/factory.ts`；31 个工具按项目、参考、QA、Proposal、阶段确认、导入、交付、Tag、术语、Workbook 和 Voice 拆分，四岗位共享同一完整 Toolset。主进程必须重新校验 Session binding、文件可读性、交付模式与摘要，模型不得提交 `projectId`。
 
-同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须确认 Sheet / 列 mapping；复用 mapping 时歧义必须 fail closed，`locked` 列贯穿预览、保存和导入。只有已确认当前阶段的 Segment 可设为 approved exemplar。原生 SDLTM / SDLTB 可导入；批次源文件与保留原件的语言资产复用 Proma Preview Tab。
+同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须确认 Sheet / 列 mapping；复用 mapping 时歧义必须 fail closed，`locked` 列贯穿预览、保存和导入。只有已确认当前阶段的 Segment 可设为 approved exemplar。原生 SDLTM / SDLTB 可导入；批次源文件与保留原件的语言资产复用 Proma Preview Tab。受管 Context 图片通过现有读取工具作为 Pi 视觉内容提供，不新增 OCR 平台或图片数据库。
 
 ## 数据目录
 

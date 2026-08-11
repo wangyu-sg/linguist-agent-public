@@ -10,7 +10,7 @@ This AGPL-3.0 project derives from [Proma](https://github.com/proma-ai/Proma). S
 
 ## Current status
 
-This is a **personal-use Alpha** with no public-release plan. The stable baseline is Proma `v0.17.1@6094036`; Electron App `0.17.1`, Electron `43.2.0`, `@proma/shared 0.1.94`, Pi `0.82.1`, CAT Core / Formats / Store / Tools `0.0.20 / 0.0.10 / 0.0.36 / 0.0.33`, CAT schema `15`, and Bun `1.3.14`.
+This is a **personal-use Alpha** with no public-release plan. The stable baseline is Proma `v0.17.1@6094036`; Electron App `0.17.2`, Electron `43.2.0`, `@proma/shared 0.1.95`, Pi `0.82.1`, CAT Core / Formats / Store / Tools `0.0.21 / 0.0.10 / 0.0.37 / 0.0.34`, CAT schema `15`, and Bun `1.3.14`.
 
 The app has three peer modes:
 
@@ -41,7 +41,7 @@ A Proposal is a visible, reviewable, reversible mutation carrying the Agent's cu
 Proma Pi Agent Runtime
 ├── Workspace / Skills / MCP / AGENTS.md / Memory / Files / Planning / Collaboration
 └── Linguist Project Binding
-    ├── one shared set of 30 CAT tools
+    ├── one shared set of 31 CAT tools
     ├── built-in Common Quality Contract + current Role Markdown
     ├── Project Digest / Turn Context
     └── Linguist Domain Services
@@ -56,6 +56,10 @@ Key boundaries:
 - `@linguist/cat-tools` derives project identity only from the Session binding; the model cannot provide a `projectId`.
 - UI and Agent tools call the same `LinguistProjectService`; parsing, transactions, CAS, locked Segments, Tag/Placeholder/ICU checks, QA, and round-trip rules are not duplicated.
 - Prompt Builder keeps one contract; Project Digest exposes `complete / partial / skipped` and `truncated`, with a model-visible placeholder on failure.
+- General may selectively delegate to Translator, Reviewer, or Proofreader. Child sessions inherit the same Workspace and CAT project, freeze their Segment scope at creation, and hand off through the shared CAT Store rather than copied chat text.
+- `cat_confirm_segments` records `unchanged / corrected / blocked` decisions. Reviewer completion requires a decision for every frozen Segment; Proofreader records an independent proofreading stage.
+- Terminology context, QA, and write gates share one scope-aware evaluator. Only unambiguous, explicitly applicable required/forbidden rules block; numeric, newline, and ordinary-token differences remain QA signals.
+- Managed Context images are returned through the existing `cat_read_context_doc` tool as visual content for Pi models, without an OCR service or image database.
 - `cat_import_resources` accepts files or small directories; the native UI accepts multiple files or a directory. Renderer never accepts arbitrary pasted paths, leaving path authority in the main process.
 - Agent tools and native UI support `verified` and explicitly confirmed `as-is` export. Both validate output generation and re-import, with overwrite off by default.
 - Tag discovery, candidates, editor hints, Proposals, QA, and verified export share one Scanner.
