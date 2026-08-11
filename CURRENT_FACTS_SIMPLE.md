@@ -9,7 +9,7 @@
 - 施工起点：`main@3f53e7b66c10734d88455ad65ded51acc46ab33e`。
 - Proma 基线：`v0.17.1@6094036d3f6f4363c44ce8a11155ecd531a80aae`。
 - 正式 merge：`96155d1ad2f131e10fd2f0a6998ec13573aa2ead`。
-- 当前施工分支：`codex/la-proma-v0.17.1`；最终 main/push 以 Git 回执为准。
+- 最终 main merge：`dd154b0dd75fa78217bd7eb1edda70678d79707b`；push 以 Git 回执为准。
 
 ## 版本
 

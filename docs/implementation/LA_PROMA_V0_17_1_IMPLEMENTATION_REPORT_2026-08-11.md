@@ -8,7 +8,7 @@
 - upstream：Proma `v0.17.1@6094036d3f6f4363c44ce8a11155ecd531a80aae`
 - 正式 merge：`96155d1ad2f131e10fd2f0a6998ec13573aa2ead`
 - 实现提交：`a8b1ef35`；基线文档：`4437356c`；上游 #1527 修复：`2b958562`；收口：`ba23f0fb`
-- 施工分支：`codex/la-proma-v0.17.1`；最终 main merge / push 以 Git 回执为准。
+- 施工分支：`codex/la-proma-v0.17.1`；最终 main merge：`dd154b0d`；push 以 Git 回执为准。
 
 ## 2. Runtime 与路径收口
 
