@@ -118,6 +118,7 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
   FORMAT_EXPORT_ERROR: '导出失败',
   FORMAT_SEGMENT_LOST: '导出会丢失段，已中止',
   FORMAT_UNSUPPORTED: '不支持的文件格式',
+  FORMAT_AMBIGUOUS: '文件格式存在歧义',
   SEGMENT_LOCKED: '段已锁定',
   REVISION_CONFLICT: '内容已被其他操作修改，请刷新后重试',
   STALE_PROPOSAL: '建议已过期',

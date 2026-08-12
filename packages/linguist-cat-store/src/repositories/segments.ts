@@ -43,6 +43,7 @@ export interface SegmentQuery {
 
 export interface StageDecisionCoverage {
   total: number
+  confirmed: number
   unchanged: number
   corrected: number
   blocked: number
@@ -527,8 +528,8 @@ export class SegmentsRepository {
   }
 
   /**
-   * 统计显式冻结范围内当前 revision 的最新岗位 decision。旧 revision 或随后
-   * 被 unconfirm / generic confirm 覆盖的事件不算完成证据。
+   * 统计显式冻结范围内当前 revision 的最新岗位 decision。通用确认用于翻译阶段；
+   * 旧 revision 或随后被 unconfirm 覆盖的事件不算完成证据。
    */
   getStageDecisionCoverage(
     stage: WorkflowStage,
@@ -536,7 +537,7 @@ export class SegmentsRepository {
   ): StageDecisionCoverage {
     const uniqueIds = [...new Set(segmentIds)]
     const segments = this.getByIds(uniqueIds)
-    const counts = { unchanged: 0, corrected: 0, blocked: 0 }
+    const counts = { confirmed: 0, unchanged: 0, corrected: 0, blocked: 0 }
     // ponytail: 明确 scope 逐段读审计流；大规模审校实测成瓶颈后再换 SQL window query。
     for (const segment of segments) {
       const latest = this.listStageEvents(segment.id)
@@ -544,7 +545,8 @@ export class SegmentsRepository {
         .at(-1)
       if (
         latest?.segmentRevision === segment.revision
-        && (latest.action === 'unchanged'
+        && (latest.action === 'confirmed'
+          || latest.action === 'unchanged'
           || latest.action === 'corrected'
           || latest.action === 'blocked')
       ) {
@@ -552,7 +554,7 @@ export class SegmentsRepository {
       }
     }
     const total = uniqueIds.length
-    const pending = total - counts.unchanged - counts.corrected - counts.blocked
+    const pending = total - counts.confirmed - counts.unchanged - counts.corrected - counts.blocked
     return {
       total,
       ...counts,

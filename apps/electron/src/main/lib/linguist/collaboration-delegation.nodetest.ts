@@ -68,10 +68,12 @@ test('General 委派 Reviewer 时继承 workspace/project 并冻结真实 Segmen
       stage: 'editing',
       total: imported.segmentCount,
       decided: 0,
+      confirmed: 0,
       unchanged: 0,
       corrected: 0,
       blocked: 0,
-      complete: false,
+      pending: imported.segmentCount,
+      status: 'in_progress',
     })
 
     const db = service.openProject(project.id)
@@ -114,10 +116,12 @@ test('General 委派 Reviewer 时继承 workspace/project 并冻结真实 Segmen
       stage: 'editing',
       total: imported.segmentCount,
       decided: imported.segmentCount,
+      confirmed: 0,
       unchanged: imported.segmentCount - lockedCount,
       corrected: 0,
       blocked: lockedCount,
-      complete: true,
+      pending: 0,
+      status: lockedCount > 0 ? 'completed_with_blocks' : 'complete',
     })
   } finally {
     service.closeAll()

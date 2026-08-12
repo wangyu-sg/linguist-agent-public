@@ -9,6 +9,18 @@
  *   INTERNAL + 通用文案（不泄露 stack / 内部文本；日志只记 name/code）。
  */
 
+import { basename } from 'node:path'
+import {
+  FormatAmbiguousError,
+  FormatExportError,
+  FormatParseError,
+  FormatSegmentLostError,
+  FormatUnsupportedError,
+  MQXLIFF_ADAPTER_ID,
+  PHRASE_DOCX_ADAPTER_ID,
+  PHRASE_MXLIFF_ADAPTER_ID,
+  SDLXLIFF_ADAPTER_ID,
+} from '@linguist/cat-formats'
 import {
   LINGUIST_IPC_ERROR_CODES,
   LINGUIST_PROJECT_ID_PATTERN,
@@ -49,19 +61,111 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<string>(Object.values(LINGUIST_
 export function toIpcError(err: unknown): LinguistIpcError {
   const code = errorCodeOf(err)
   if (KNOWN_CODES.has(code)) {
-    const message = err instanceof Error ? err.message : String(err)
+    const formatDetails = readFormatDetails(err)
+    const message = formatDetails === undefined
+      ? err instanceof Error ? err.message : String(err)
+      : formatErrorMessage(formatDetails)
     // LA-INTAKE-007：类型化错误可选携带机器可读计数（如 IMPORT_UNDO_BLOCKED
     // 的下游引用计数）。防御性校验：只透传非负整数键值对，其他形状一律丢弃。
     const details = readNumericDetails(err)
-    return details === undefined
-      ? { code: code as LinguistIpcErrorCode, message }
-      : { code: code as LinguistIpcErrorCode, message, details }
+    return {
+      code: code as LinguistIpcErrorCode,
+      message,
+      ...(details === undefined ? {} : { details }),
+      ...(formatDetails === undefined ? {} : { formatDetails }),
+    }
   }
   // 未知错误：不泄露 message/stack（可能含内部细节）；日志同样只记 name。
   console.error(
     `[Linguist IPC] 未类型化错误（name=${err instanceof Error ? err.name : typeof err}），按 INTERNAL 返回`,
   )
   return { code: LINGUIST_IPC_ERROR_CODES.INTERNAL, message: 'Unexpected internal error.' }
+}
+
+function readFormatDetails(err: unknown): LinguistIpcError['formatDetails'] {
+  if (err instanceof FormatParseError) {
+    return {
+      code: err.code,
+      category: classifyParseFailure(err),
+      adapterId: err.adapterId,
+      filename: basename(err.filename),
+      detail: cleanFormatDetail(err.detail),
+    }
+  }
+  if (err instanceof FormatExportError) {
+    return {
+      code: err.code,
+      adapterId: err.adapterId,
+      detail: cleanFormatDetail(err.detail),
+    }
+  }
+  if (err instanceof FormatSegmentLostError) {
+    return {
+      code: err.code,
+      adapterId: err.adapterId,
+      missingSegmentIds: [...err.missingSegmentIds],
+      ...(err.detail === undefined ? {} : { detail: cleanFormatDetail(err.detail) }),
+    }
+  }
+  if (err instanceof FormatUnsupportedError) {
+    return {
+      code: err.code,
+      category: 'format_mismatch',
+      filename: basename(err.filename),
+      triedAdapterIds: [...err.triedAdapterIds],
+    }
+  }
+  if (err instanceof FormatAmbiguousError) {
+    return {
+      code: err.code,
+      category: 'format_ambiguous',
+      filename: basename(err.filename),
+      score: err.score,
+      adapterIds: [...err.adapterIds],
+    }
+  }
+  return undefined
+}
+
+const VENDOR_FORMAT_ADAPTER_IDS: ReadonlySet<string> = new Set([
+  MQXLIFF_ADAPTER_ID,
+  SDLXLIFF_ADAPTER_ID,
+  PHRASE_MXLIFF_ADAPTER_ID,
+  PHRASE_DOCX_ADAPTER_ID,
+])
+
+function classifyParseFailure(err: FormatParseError) {
+  if (/\b(?:XLIFF|TBX)\b.*\bnot supported\b/i.test(err.detail)) {
+    return 'unsupported_version'
+  }
+  if (
+    /(?:not valid UTF-8|ZIP container could not be read|文件不是有效的 UTF-8|XML 格式错误)/i
+      .test(err.detail)
+  ) {
+    return 'file_corrupt'
+  }
+  return VENDOR_FORMAT_ADAPTER_IDS.has(err.adapterId)
+    ? 'vendor_structure_incomplete'
+    : 'file_corrupt'
+}
+
+function cleanFormatDetail(detail: string): string {
+  return detail.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 2_000)
+}
+
+function formatErrorMessage(details: NonNullable<LinguistIpcError['formatDetails']>): string {
+  switch (details.code) {
+    case 'FORMAT_PARSE_ERROR':
+      return `[${details.adapterId}] failed to parse ${details.filename}: ${details.detail}`
+    case 'FORMAT_EXPORT_ERROR':
+      return `[${details.adapterId}] export failed: ${details.detail}`
+    case 'FORMAT_SEGMENT_LOST':
+      return `[${details.adapterId}] ${details.missingSegmentIds.length} segment(s) lost on round-trip`
+    case 'FORMAT_UNSUPPORTED':
+      return `No format adapter accepts ${details.filename}`
+    case 'FORMAT_AMBIGUOUS':
+      return `Ambiguous format for ${details.filename}: ${details.adapterIds.join(', ')} all scored ${details.score}`
+  }
 }
 
 /** 读取错误对象上可选的 details（Record<string, 非负整数>）；不合形状返回 undefined。 */

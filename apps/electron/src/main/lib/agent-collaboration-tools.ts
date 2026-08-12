@@ -18,6 +18,7 @@ import type {
   PromaPermissionMode,
   SDKMessage,
   LinguistDelegatedScope,
+  LinguistDelegationOutcome,
   LinguistRole,
 } from '@proma/shared'
 import {
@@ -72,17 +73,6 @@ interface DelegationRecord {
   resultSummary?: string
   completion: Promise<void>
   resolveCompletion: () => void
-}
-
-interface LinguistDelegationOutcome {
-  role: 'translator' | 'reviewer' | 'proofreader'
-  stage: 'translation' | 'editing' | 'proofreading'
-  total: number
-  decided: number
-  unchanged: number
-  corrected: number
-  blocked: number
-  complete: boolean
 }
 
 const LINGUIST_ROLE_STAGE: Record<
@@ -442,16 +432,11 @@ function getLinguistDelegationOutcome(
       .openProject(projectId)
       .segments
       .getStageDecisionCoverage(stage, segmentIds)
-    const decided = coverage.unchanged + coverage.corrected + coverage.blocked
     return {
       role,
       stage,
-      total: coverage.total,
-      decided,
-      unchanged: coverage.unchanged,
-      corrected: coverage.corrected,
-      blocked: coverage.blocked,
-      complete: decided === coverage.total,
+      ...coverage,
+      decided: coverage.total - coverage.pending,
     }
   } catch (error) {
     console.warn(`[协作工具] 无法读取 Linguist 委派完成证据: ${session.id}`, error)
