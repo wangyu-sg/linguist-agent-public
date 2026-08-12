@@ -17,7 +17,14 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { ModeSwitcher } from './ModeSwitcher'
 import { MAC_TITLEBAR_SAFE_AREA_HEIGHT } from './titlebar-safe-area'
 import { ProjectCreateDialog } from '@/features/linguist/projects/ProjectCreateDialog'
-import { refreshLinguistProjectListAtom } from '@/features/linguist/projects/project-list-atoms'
+import {
+  linguistProjectListStateAtom,
+  refreshLinguistProjectListAtom,
+} from '@/features/linguist/projects/project-list-atoms'
+import {
+  buildLinguistWorkspaceMap,
+  LinguistWorkspaceBadge,
+} from '@/features/linguist/projects/LinguistWorkspaceBadge'
 import { openLocalizationProject } from '@/features/linguist/projects/open-localization-project'
 import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
 import {
@@ -161,7 +168,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import type { ConversationMeta, AgentSessionMeta, AgentWorkspace, WorkspaceCapabilities } from '@proma/shared'
+import type { ConversationMeta, AgentSessionMeta, AgentWorkspace, WorkspaceCapabilities, LinguistProjectInfo } from '@proma/shared'
 
 function formatAutomationCount(count: number): string {
   return count > 99 ? '99+' : String(count)
@@ -697,6 +704,12 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const setSearchDialogOpen = useSetAtom(searchDialogOpenAtom)
   const newChatShortcutLabel = getAcceleratorDisplay(getActiveAccelerator('new-session'))
   const activeLinguistProjectId = resolveActiveLinguistProjectId(activeTab, agentSessions)
+  // K1：同一 LA 项目在 Agent 侧栏只显示为一个带 Linguist 标记的 Workspace
+  const linguistProjectListState = useAtomValue(linguistProjectListStateAtom)
+  const linguistWorkspaceMap = React.useMemo(
+    () => buildLinguistWorkspaceMap(linguistProjectListState),
+    [linguistProjectListState],
+  )
   const primaryItemDisabled = creatingPrimaryItem
     || (mode === 'linguist' && activeLinguistProjectId === null)
   const primaryItemLabel = mode === 'chat' ? '新对话' : '新会话'
@@ -1650,6 +1663,20 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       }
     }).catch(() => {
       toast.error('打开项目会话失败', {
+        description: '与主进程通信异常（INTERNAL）',
+      })
+    })
+  }, [store])
+
+  const handleOpenLinguistProject = React.useCallback((projectId: string): void => {
+    void openLocalizationProject(store, projectId).then((result) => {
+      if (!result.ok) {
+        toast.error('打开 Linguist 项目失败', {
+          description: describeLinguistIpcError(result.error),
+        })
+      }
+    }).catch(() => {
+      toast.error('打开 Linguist 项目失败', {
         description: '与主进程通信异常（INTERNAL）',
       })
     })
@@ -2876,6 +2903,8 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
                     group={group}
                     isAutomationGroup={isAuto}
                     workspaceNameMap={isAuto ? workspaceNameMap : undefined}
+                    linguistProject={isAuto ? undefined : linguistWorkspaceMap.get(group.workspace.id)}
+                    onOpenLinguist={handleOpenLinguistProject}
                     currentWorkspaceId={currentWorkspaceId}
                     expanded={(expandedExtraCountMap.get(group.workspace.id) ?? 0) > 0}
                     extraCount={expandedExtraCountMap.get(group.workspace.id) ?? 0}
@@ -3891,6 +3920,10 @@ interface AgentProjectGroupItemProps {
   isAutomationGroup?: boolean
   /** 工作区 ID → 名称映射，仅合成组用来给跨工作区会话渲染角标 */
   workspaceNameMap?: Map<string, string>
+  /** 绑定了 Linguist 项目的 Workspace：项目头显示 Linguist 标记，项目菜单提供「打开 Linguist」 */
+  linguistProject?: LinguistProjectInfo
+  /** 打开该 Workspace 对应 Linguist 项目的 Workbench */
+  onOpenLinguist?: (projectId: string) => void
   expanded: boolean
   collapsed: boolean
   /** 用户已点击"显示更多"额外展开的会话数量（基于 collapsedSessions 之上累加） */
@@ -3932,6 +3965,8 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
   currentWorkspaceId,
   isAutomationGroup = false,
   workspaceNameMap,
+  linguistProject,
+  onOpenLinguist,
   expanded,
   collapsed,
   extraCount,
@@ -4067,6 +4102,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                 projectRootStatus={group.workspace.projectRootStatus}
               />
             )}
+            {linguistProject && <LinguistWorkspaceBadge />}
             {isAutomationGroup && (
               <ChevronRight
                 size={12}
@@ -4138,6 +4174,15 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                   <FolderOpen size={14} />
                   设为当前项目
                 </DropdownMenuItem>
+                {linguistProject && onOpenLinguist && (
+                  <DropdownMenuItem
+                    className="py-1 text-xs [&>svg]:size-3.5"
+                    onSelect={() => onOpenLinguist(linguistProject.id)}
+                  >
+                    <Languages size={14} />
+                    打开 Linguist
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   className="py-1 text-xs [&>svg]:size-3.5"
                   onSelect={handleStartWorkspaceRename}
@@ -4294,7 +4339,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
             </div>
           ) : (
             <div className="px-1.5 py-0.5 text-[12px] text-foreground/22 select-none">
-              暂无会话
+              {linguistProject ? '普通会话为空 · Linguist 会话在 Linguist 模式' : '暂无会话'}
             </div>
           )
         ) : null}

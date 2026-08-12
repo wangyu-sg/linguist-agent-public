@@ -1,0 +1,61 @@
+import { describe, expect, test } from 'bun:test'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { DelegationResultRenderer } from './delegation-result'
+
+const REVIEWER_OUTCOME = {
+  role: 'reviewer',
+  stage: 'editing',
+  total: 101,
+  decided: 101,
+  unchanged: 72,
+  corrected: 29,
+  blocked: 0,
+  complete: true,
+}
+
+function renderResult(payload: unknown, isError = false): string {
+  return renderToStaticMarkup(
+    <DelegationResultRenderer result={JSON.stringify(payload)} isError={isError} />,
+  )
+}
+
+describe('DelegationResultRenderer', () => {
+  test('given 已结束但 CAT 未完成的审校委派 when 渲染 then 子会话状态与 CAT 阶段结果分行且不互相推断', () => {
+    const html = renderResult({
+      delegations: [
+        {
+          title: '审校当前批次',
+          status: 'completed',
+          linguistOutcome: { ...REVIEWER_OUTCOME, decided: 96, blocked: 2, complete: false },
+        },
+        {
+          title: '复审修正段',
+          status: 'running',
+          linguistOutcome: REVIEWER_OUTCOME,
+        },
+      ],
+    })
+
+    // 子会话状态如实展示：已结束 / 运行中
+    expect(html).toContain('已结束')
+    expect(html).toContain('运行中')
+    // “已结束”不推断为“已完成”：第一张卡是未完成（含阻塞），第二张才是已完成
+    expect(html).toContain('审校覆盖 96 / 101 · 未修改 72 · 已修正 29 · 阻塞 2')
+    expect(html).toContain('有阻塞')
+    expect(html).toContain('审校覆盖 101 / 101 · 未修改 72 · 已修正 29 · 阻塞 0')
+    expect(html).toContain('已完成')
+    // 岗位标签
+    expect(html).toContain('审校')
+  })
+
+  test('given 普通委派（无 linguistOutcome） when 渲染 then 回退默认渲染器不显示岗位与覆盖', () => {
+    const html = renderResult({
+      delegations: [{ title: '整理 README', status: 'completed' }],
+    })
+
+    expect(html).not.toContain('覆盖')
+    expect(html).not.toContain('审校')
+    // 默认渲染器的 key-value 表格仍展示原始字段
+    expect(html).toContain('delegations')
+  })
+})

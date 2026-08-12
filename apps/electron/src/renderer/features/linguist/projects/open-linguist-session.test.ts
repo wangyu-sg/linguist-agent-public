@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai/vanilla'
 import type { AgentSessionMeta, LinguistProjectInfo } from '@proma/shared'
-import { agentSessionsAtom } from '@/atoms/agent-atoms'
+import { agentSessionsAtom, agentSidePanelOpenAtom, agentDiffPanelTabAtom } from '@/atoms/agent-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { tabsAtom } from '@/atoms/tab-atoms'
 import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
-import { openLinguistAgentSession } from './open-linguist-session'
+import { openLinguistAgentSession, openLinguistProjectFilesPanel } from './open-linguist-session'
 
 const PROJECT_ID = 'prj-0000000000000001'
 
@@ -61,6 +61,30 @@ describe('打开 Linguist 项目会话', () => {
     expect(store.get(appModeAtom)).toBe('linguist')
     expect(store.get(projectCurrentAgentSessionIdMapAtom).get(PROJECT_ID)).toBe('session-a')
     expect(store.get(linguistWorkbenchUiStateAtomFamily(PROJECT_ID)).agentPresentation).toBe('full')
+  })
+
+  test('K3 Files 入口：进入同一 Full AgentView 并展开原生 Files 面板', async () => {
+    const store = createStore()
+    store.set(agentSessionsAtom, [session()])
+    store.set(projectCurrentAgentSessionIdMapAtom, new Map([[PROJECT_ID, 'session-a']]))
+    const result = await openLinguistProjectFilesPanel(store, PROJECT_ID, async () => ({
+      ok: true,
+      data: {
+        project: project(),
+        health: {
+          kind: 'quick',
+          projectId: PROJECT_ID,
+          healthy: true,
+          checkedAt: '2026-07-30T00:00:00.000Z',
+          checks: [],
+        },
+      },
+    }))
+
+    expect(result).toMatchObject({ ok: true })
+    expect(store.get(linguistWorkbenchUiStateAtomFamily(PROJECT_ID)).agentPresentation).toBe('full')
+    expect(store.get(agentSidePanelOpenAtom)).toBe(true)
+    expect(store.get(agentDiffPanelTabAtom).get('session-a')).toBe('files')
   })
 
   test('项目缺失时保留同一 AgentView 的只读历史入口', async () => {
