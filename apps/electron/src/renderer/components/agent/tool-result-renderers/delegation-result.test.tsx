@@ -73,7 +73,7 @@ describe('DelegationResultRenderer', () => {
   test('given 翻译委派带阻塞 when 渲染 then 显示确认口径与有阻塞', () => {
     const html = renderResult({ delegation: { title: '翻译批次', status: 'completed', linguistOutcome: TRANSLATOR_OUTCOME } })
 
-    expect(html).toContain('翻译覆盖 101 / 101 · 已确认 98 · 阻塞 3')
+    expect(html).toContain('翻译覆盖 98 / 101 · 阻塞 3')
     expect(html).toContain('有阻塞')
     expect(html).not.toContain('未修改')
   })
@@ -87,5 +87,12 @@ describe('DelegationResultRenderer', () => {
     expect(html).not.toContain('审校')
     // 默认渲染器的 key-value 表格仍展示原始字段
     expect(html).toContain('delegations')
+  })
+
+  test('given 损坏的旧委派结果 when 渲染 then 安全回退默认结果而不崩溃', () => {
+    const html = renderResult({ delegations: [null, { linguistOutcome: {} }] })
+
+    expect(html).toContain('delegations')
+    expect(html).not.toContain('覆盖')
   })
 })

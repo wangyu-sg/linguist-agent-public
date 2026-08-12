@@ -57,7 +57,7 @@ describe('formatStageCoverage（K2 验收）', () => {
     }))
     expect(view.decided).toBe(101)
     expect(view.complete).toBe(true)
-    expect(view.text).toBe('翻译 101 / 101 · 阻塞 3')
+    expect(view.text).toBe('翻译 98 / 101 · 阻塞 3')
 
     const inProgress = formatStageCoverage('translation', coverage({
       confirmed: 95,
@@ -68,7 +68,7 @@ describe('formatStageCoverage（K2 验收）', () => {
       status: 'in_progress',
     }))
     expect(inProgress.complete).toBe(false)
-    expect(inProgress.text).toBe('翻译 98 / 101 · 阻塞 3')
+    expect(inProgress.text).toBe('翻译 95 / 101 · 阻塞 3')
   })
 
   test('覆盖统计严格属于当前批次键', () => {

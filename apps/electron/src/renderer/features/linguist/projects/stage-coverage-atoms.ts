@@ -81,7 +81,7 @@ export function formatStageCoverage(
 ): StageCoverageText {
   const decided = coverage.total - coverage.pending
   const text = stage === 'translation'
-    ? `${STAGE_COVERAGE_LABELS[stage]} ${decided} / ${coverage.total} · 阻塞 ${coverage.blocked}`
+    ? `${STAGE_COVERAGE_LABELS[stage]} ${coverage.confirmed} / ${coverage.total} · 阻塞 ${coverage.blocked}`
     : `${STAGE_COVERAGE_LABELS[stage]} ${decided} / ${coverage.total}`
       + ` · 未修改 ${coverage.unchanged} · 已修正 ${coverage.corrected} · 阻塞 ${coverage.blocked}`
   return {

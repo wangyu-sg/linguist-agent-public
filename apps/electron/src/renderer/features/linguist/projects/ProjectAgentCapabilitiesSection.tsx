@@ -87,6 +87,8 @@ export function ProjectAgentCapabilitiesSection({
       if (!result.ok) {
         toast.error('打开 Files 失败', { description: describeLinguistIpcError(result.error) })
       }
+    }).catch(() => {
+      toast.error('打开 Files 失败', { description: '与主进程通信异常（INTERNAL）' })
     })
   }
 

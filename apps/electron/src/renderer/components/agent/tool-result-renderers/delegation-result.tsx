@@ -10,40 +10,58 @@
  */
 
 import * as React from 'react'
+import type { LinguistDelegationOutcome } from '@proma/shared'
 import { cn } from '@/lib/utils'
 import { getLinguistRoleOption } from '@/features/linguist/session-binding/LinguistRoleMenu'
 import { DefaultResultRenderer } from './default-result'
 
-/** 主进程 LinguistDelegationOutcome 的线格式镜像（extends LinguistStageDecisionCoverage）。 */
-interface LinguistDelegationOutcomePayload {
-  role: 'translator' | 'reviewer' | 'proofreader'
-  stage: 'translation' | 'editing' | 'proofreading'
-  total: number
-  confirmed: number
-  unchanged: number
-  corrected: number
-  blocked: number
-  pending: number
-  status: 'in_progress' | 'complete' | 'completed_with_blocks'
-  decided: number
-}
-
 interface DelegationSummaryPayload {
   title?: string
   status?: string
-  linguistOutcome?: LinguistDelegationOutcomePayload
+  linguistOutcome?: LinguistDelegationOutcome
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isLinguistDelegationOutcome(value: unknown): value is LinguistDelegationOutcome {
+  if (!isRecord(value)) return false
+  const numericFields = ['total', 'confirmed', 'unchanged', 'corrected', 'blocked', 'pending', 'decided'] as const
+  return ['translator', 'reviewer', 'proofreader'].includes(String(value.role))
+    && ['translation', 'editing', 'proofreading'].includes(String(value.stage))
+    && ['in_progress', 'complete', 'completed_with_blocks'].includes(String(value.status))
+    && numericFields.every((field) => Number.isInteger(value[field]) && Number(value[field]) >= 0)
+}
+
+function readDelegationSummary(value: unknown): DelegationSummaryPayload | null {
+  if (!isRecord(value)) return null
+  if (value.linguistOutcome !== undefined && !isLinguistDelegationOutcome(value.linguistOutcome)) {
+    return null
+  }
+  return {
+    ...(typeof value.title === 'string' ? { title: value.title } : {}),
+    ...(typeof value.status === 'string' ? { status: value.status } : {}),
+    ...(value.linguistOutcome === undefined ? {} : { linguistOutcome: value.linguistOutcome }),
+  }
 }
 
 /** 接受 { delegations: [...] }（wait/list/get_results）与 { delegation: {...} }（delegate_agent）两种包装。 */
 export function parseDelegationSummaries(result: string): DelegationSummaryPayload[] | null {
   try {
-    const parsed = JSON.parse(result) as {
-      delegations?: DelegationSummaryPayload[]
-      delegation?: DelegationSummaryPayload
+    const parsed: unknown = JSON.parse(result)
+    if (!isRecord(parsed)) return null
+    const values = Array.isArray(parsed.delegations)
+      ? parsed.delegations
+      : parsed.delegation === undefined ? null : [parsed.delegation]
+    if (values === null) return null
+    const summaries: DelegationSummaryPayload[] = []
+    for (const value of values) {
+      const summary = readDelegationSummary(value)
+      if (summary === null) return null
+      summaries.push(summary)
     }
-    if (Array.isArray(parsed?.delegations)) return parsed.delegations
-    if (parsed?.delegation && typeof parsed.delegation === 'object') return [parsed.delegation]
-    return null
+    return summaries
   } catch {
     return null
   }
@@ -68,17 +86,17 @@ export function delegationStatusLabel(status: string | undefined): string {
 }
 
 /** CAT 阶段结果：只看冻结范围的审计覆盖状态，不从会话状态推断。 */
-export function linguistStageOutcomeLabel(outcome: LinguistDelegationOutcomePayload): string {
+export function linguistStageOutcomeLabel(outcome: LinguistDelegationOutcome): string {
   if (outcome.status === 'complete') return '已完成'
   if (outcome.status === 'completed_with_blocks') return '有阻塞'
   return '未完成'
 }
 
 /** Translator 看通用确认数；Reviewer/Proofreader 看 decision 拆分。 */
-export function formatDelegationCoverage(outcome: LinguistDelegationOutcomePayload): string {
+export function formatDelegationCoverage(outcome: LinguistDelegationOutcome): string {
   const label = getLinguistRoleOption(outcome.role).shortLabel
   if (outcome.role === 'translator') {
-    return `${label}覆盖 ${outcome.decided} / ${outcome.total} · 已确认 ${outcome.confirmed} · 阻塞 ${outcome.blocked}`
+    return `${label}覆盖 ${outcome.confirmed} / ${outcome.total} · 阻塞 ${outcome.blocked}`
   }
   return `${label}覆盖 ${outcome.decided} / ${outcome.total} · 未修改 ${outcome.unchanged} · 已修正 ${outcome.corrected} · 阻塞 ${outcome.blocked}`
 }

@@ -83,8 +83,8 @@ export function FormatQualificationCard(): React.ReactElement {
               </span>
               <span
                 className={item.internalVerification === 'passed'
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-amber-600 dark:text-amber-400'}
+                  ? 'text-success'
+                  : 'text-warning'}
               >
                 内部验证：{item.internalVerification === 'passed' ? '通过' : '失败'}
               </span>
