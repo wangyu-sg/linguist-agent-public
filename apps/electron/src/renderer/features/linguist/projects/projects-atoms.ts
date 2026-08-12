@@ -22,11 +22,11 @@ export interface ProjectCreateDraft {
   qaProfile: LinguistQaProfile
 }
 
-/** 常用默认语言对：en → zh-CN（用户可改，仅为减少重复输入） */
+/** 常用默认语言对：zh-CN → en-US（用户可改，仅为减少重复选择） */
 export const DEFAULT_PROJECT_CREATE_DRAFT: ProjectCreateDraft = {
   name: '',
-  sourceLocale: 'en',
-  targetLocale: 'zh-CN',
+  sourceLocale: 'zh-CN',
+  targetLocale: 'en-US',
   workflowStage: 'translation',
   qaProfile: 'general',
 }

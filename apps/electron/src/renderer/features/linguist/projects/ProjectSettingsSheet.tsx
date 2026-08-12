@@ -5,15 +5,7 @@ import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { ContextDocsPanel } from './ContextDocsPanel'
 import { ProjectAgentCapabilitiesSection } from './ProjectAgentCapabilitiesSection'
 import { ProjectDiagnosticsSettings } from './ProjectDiagnosticsSettings'
@@ -24,6 +16,7 @@ import { ReferenceManager } from './ReferenceManager'
 import { StyleGuidePanel } from './StyleGuidePanel'
 import { TagProfilesPanel } from './TagProfilesPanel'
 import { VoiceProfilePanel } from './VoiceProfilePanel'
+import { ProjectLocaleSelect } from './ProjectLocaleSelect'
 import type { LinguistProjectSettingsTab } from './cat-workspace-atoms'
 import {
   describeLinguistIpcError,
@@ -204,23 +197,23 @@ export function ProjectLocaleSettings({
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="project-source-locale">源语言</Label>
-          <Input
+          <ProjectLocaleSelect
             id="project-source-locale"
             value={sourceLocale}
             disabled={saving || frozen}
-            onChange={(event) => setSourceLocale(event.target.value)}
-            aria-invalid={sourceError !== null}
+            onValueChange={setSourceLocale}
+            invalid={sourceError !== null}
           />
           {sourceError !== null && <p className="text-xs text-destructive">{sourceError}</p>}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="project-target-locale">目标语言</Label>
-          <Input
+          <ProjectLocaleSelect
             id="project-target-locale"
             value={targetLocale}
             disabled={saving || frozen}
-            onChange={(event) => setTargetLocale(event.target.value)}
-            aria-invalid={targetError !== null}
+            onValueChange={setTargetLocale}
+            invalid={targetError !== null}
           />
           {targetError !== null && <p className="text-xs text-destructive">{targetError}</p>}
         </div>

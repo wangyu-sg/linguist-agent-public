@@ -9,6 +9,24 @@ const fixtureSeeder = existsSync(fixtureSeederPath)
   : ''
 
 describe('LF-026 packaged 探针合同', () => {
+  test('Given 新建项目 locale 使用下拉默认值, When packaged probe 创建 fixture 项目, Then 先验证默认值再用下拉选择 fixture 语言对', () => {
+    const createProject = probe.slice(
+      probe.indexOf('async function createProjectViaUi('),
+      probe.indexOf('async function selectPrimaryMode('),
+    )
+
+    expect(createProject).toContain("getByRole('dialog', { name: '新建项目', exact: true })")
+    expect(createProject).toContain("locator('#project-create-source')")
+    expect(createProject).toContain("getByText('简体中文（zh-CN）', { exact: true })")
+    expect(createProject).toContain("locator('#project-create-target')")
+    expect(createProject).toContain("getByText('英语（美国，en-US）', { exact: true })")
+    expect(createProject).toContain("getByRole('option', { name: '英语（美国，en-US）', exact: true }).click()")
+    expect(createProject).toContain("getByRole('option', { name: '简体中文（zh-CN）', exact: true }).click()")
+    expect(createProject).not.toContain("fill('en-US')")
+    expect(createProject).not.toContain("fill('zh-CN')")
+    expect(probe).toContain('`项目 ${projectId}，en-US → zh-CN`')
+  })
+
   test('Given LF-026 only mode, When navigation checks finish, Then delivery work is skipped without bypassing cleanup', () => {
     expect(probe).toContain("const LF026_ONLY = process.argv.includes('--lf026-only')")
     expect(probe).toContain('if (!LF026_ONLY && !LF056_ONLY) {')

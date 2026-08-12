@@ -488,10 +488,19 @@ async function seedChannel(page: Page, server: FakeModelServer): Promise<string>
 async function createProjectViaUi(page: Page): Promise<string> {
   await page.getByRole('tab', { name: '本地化', exact: true }).click()
   await page.getByRole('button', { name: '新建项目' }).filter({ hasText: '新建项目' }).first().click()
-  await page.locator('#project-create-name').fill(PROJECT_NAME)
-  await page.locator('#project-create-source').fill('en-US')
-  await page.locator('#project-create-target').fill('zh-CN')
-  await page.getByRole('dialog').getByRole('button', { name: '创建项目' }).click()
+  const dialog = page.getByRole('dialog', { name: '新建项目', exact: true })
+  await dialog.locator('#project-create-name').fill(PROJECT_NAME)
+  await dialog.locator('#project-create-source')
+    .getByText('简体中文（zh-CN）', { exact: true })
+    .waitFor({ timeout: 30_000 })
+  await dialog.locator('#project-create-target')
+    .getByText('英语（美国，en-US）', { exact: true })
+    .waitFor({ timeout: 30_000 })
+  await dialog.locator('#project-create-source').click()
+  await page.getByRole('option', { name: '英语（美国，en-US）', exact: true }).click()
+  await dialog.locator('#project-create-target').click()
+  await page.getByRole('option', { name: '简体中文（zh-CN）', exact: true }).click()
+  await dialog.getByRole('button', { name: '创建项目', exact: true }).click()
   const projectList = await resolveVisibleLinguistProjectList(page)
   await projectList.list.getByRole(
     'button',
