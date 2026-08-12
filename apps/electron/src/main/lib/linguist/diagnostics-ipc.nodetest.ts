@@ -61,7 +61,6 @@ test('LA-OBS-001: status exposes Prompt source and one refresh re-probes the sam
     const ipc = createLinguistDiagnosticsIpc({
       getService: () => service,
       getSession: (id) => id === meta.id ? meta : undefined,
-      getConfigDir: () => join(makeTempDir(), '.linguist-agent-dev'),
       getRolesRoot: () => rolesRoot,
       isDevelopment: true,
     })
@@ -78,7 +77,7 @@ test('LA-OBS-001: status exposes Prompt source and one refresh re-probes the sam
     assert.equal(degraded.data.dev?.tools.overlay, 8)
     assert.equal(degraded.data.dev?.profile?.kind, 'linguist')
     assert.equal(degraded.data.dev?.profile?.role, 'reviewer')
-    assert.match(degraded.data.dev?.sessionCwd ?? '', /agent-workspaces/)
+    assert.doesNotMatch(degraded.data.dev?.sessionCwd ?? '', /linguist\/agent-workspaces/)
     assert.equal(
       (degraded.data.dev?.metrics.promptProbeLatencyMs ?? -1) >= 0,
       true,
@@ -153,7 +152,6 @@ test('LA-OBS-001: production status keeps Prompt health visible but omits Dev Di
     const ipc = createLinguistDiagnosticsIpc({
       getService: () => service,
       getSession: () => meta,
-      getConfigDir: () => '/private/customer/path',
       isDevelopment: false,
     })
 
@@ -198,7 +196,6 @@ test('LA-OBS-001: diagnostic preview is allowlisted and excludes customer text, 
     const ipc = createLinguistDiagnosticsIpc({
       getService: () => service,
       getSession: () => meta,
-      getConfigDir: () => '/private/CUSTOMER_PATH_SENTINEL',
       isDevelopment: true,
     })
 
@@ -244,7 +241,6 @@ test('LA-OBS-001: explicit bundle export uses exclusive verified write and never
     const ipc = createLinguistDiagnosticsIpc({
       getService: () => service,
       getSession: () => meta,
-      getConfigDir: () => makeTempDir(),
       isDevelopment: true,
     })
 

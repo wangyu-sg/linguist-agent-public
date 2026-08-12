@@ -53,8 +53,6 @@ import { convertLegacyMessage } from '@proma/session-core'
 import { clearNanoBananaAgentHistory } from './chat-tools/nano-banana-mcp'
 import { assertEnabledModelForChannel } from './agent-model-selection'
 import { copyForkWorkspaceFiles } from './agent-fork-workspace-copy'
-import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
-import { moveLinguistSessionWorkspaceToTrash } from './linguist/session-workspace'
 
 /**
  * 会话索引文件格式
@@ -397,11 +395,6 @@ function frozenLinguistBinding(
   }
 }
 
-function managedSessionDir(session: AgentSessionMeta): string | undefined {
-  const scope = resolveAgentExecutionScope(session)
-  return scope.kind === 'home' ? undefined : scope.cwd
-}
-
 function inheritedSessionConfig(
   source: AgentSessionMeta,
 ): Partial<Pick<
@@ -481,7 +474,7 @@ export function createAgentSession(
     // 索引已成功写入后，工作目录初始化失败也不能留下可见的半成品会话。
     if (indexWritten) {
       try {
-        deleteAgentSession(meta.id, { discardLinguistWorkspace: true })
+        deleteAgentSession(meta.id)
       } catch (cleanupError) {
         console.error(`[Agent 会话] 创建失败后清理半成品会话失败 (${meta.id}):`, cleanupError)
       }
@@ -516,7 +509,7 @@ export function createBlankLinguistSessionCopy(
       : updateAgentSessionMeta(created.id, inherited)
   } catch (error) {
     try {
-      deleteAgentSession(created.id, { discardLinguistWorkspace: true })
+      deleteAgentSession(created.id)
     } catch { /* 保留原始错误 */ }
     throw error
   }
@@ -754,7 +747,6 @@ export function updateAgentSessionLinguistRole(
  */
 export function deleteAgentSession(
   id: string,
-  options: { discardLinguistWorkspace?: boolean } = {},
 ): void {
   const index = readIndex()
   const idx = index.sessions.findIndex((s) => s.id === id)
@@ -777,26 +769,8 @@ export function deleteAgentSession(
     }
   }
 
-  // 正常删除保留到受管 Trash；尚未对外的创建失败可直接丢弃半成品。
-  if (removed.linguistProjectId) {
-    try {
-      if (options.discardLinguistWorkspace) {
-        const sessionDir = managedSessionDir(removed)
-        if (sessionDir && existsSync(sessionDir)) {
-          rmSyncWithRetry(sessionDir, { recursive: true, force: true })
-        }
-      } else {
-        const trashed = moveLinguistSessionWorkspaceToTrash(
-          getConfigDir(),
-          removed.linguistProjectId,
-          id,
-        )
-        if (trashed) console.log(`[Agent 会话] 已将 Linguist session 工作目录移入 Trash: ${id}`)
-      }
-    } catch (error) {
-      console.warn(`[Agent 会话] 清理 Linguist session 工作目录失败 (${id}):`, error)
-    }
-  } else if (removed.workspaceId) {
+  // 普通与 Linguist 会话共用同一个原生 session workbench；历史 LA 目录不自动删除。
+  if (removed.workspaceId) {
     const ws = getAgentWorkspace(removed.workspaceId)
     if (ws) {
       try {
@@ -1105,7 +1079,7 @@ async function forkPiAgentSession(
   } catch (error) {
     // 尚未对外返回的新 session 可安全清理，避免留下会被侧栏打开的半成品。
     try {
-      deleteAgentSession(newMeta.id, { discardLinguistWorkspace: Boolean(options) })
+      deleteAgentSession(newMeta.id)
     } catch { /* 保留原始错误 */ }
     for (const artifact of new Set([branchFile, piSessionFile])) {
       if (artifact && artifact !== sourceMeta.piSessionFile && existsSync(artifact)) {

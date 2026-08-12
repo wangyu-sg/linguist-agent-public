@@ -1,29 +1,23 @@
 import {
+  cpSync,
   existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
+  lstatSync,
+  readdirSync,
 } from 'node:fs'
-import { join } from 'node:path'
-import type { AgentProfile } from '@proma/shared'
-import { writeJsonFileAtomic } from '../safe-file'
+import { basename, join } from 'node:path'
 
-const SESSION_SUBDIRECTORIES = [
+const LEGACY_DIRECTORIES = new Set([
   '.context',
-  '.claude',
   'scripts',
   'reports',
   'scratch',
   'extracted',
-] as const
-
-interface LinguistSessionWorkspaceManifest {
-  projectId: string
-  sessionId: string
-  role: Extract<AgentProfile, { kind: 'linguist' }>['role']
-  createdAt: string
-  projectDisplayName: string
-}
+])
+const LEGACY_EXCLUDED_ENTRIES = new Set([
+  '.claude',
+  'memory',
+  'SESSION_MANIFEST.json',
+])
 
 function assertPathId(value: string, field: 'projectId' | 'sessionId'): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
@@ -31,7 +25,8 @@ function assertPathId(value: string, field: 'projectId' | 'sessionId'): void {
   }
 }
 
-export function resolveLinguistSessionWorkspacePath(
+/** 仅用于识别个人 Alpha 的历史目录；新会话不得再把这里作为 cwd。 */
+export function resolveLegacyLinguistSessionWorkspacePath(
   configDir: string,
   projectId: string,
   sessionId: string,
@@ -41,53 +36,46 @@ export function resolveLinguistSessionWorkspacePath(
   return join(configDir, 'linguist', 'agent-workspaces', projectId, sessionId)
 }
 
-/** 首次执行时建立项目专属 cwd；CAT DB 仍留在受管 Project Store。 */
-export function ensureLinguistSessionWorkspace(
-  configDir: string,
-  manifest: LinguistSessionWorkspaceManifest,
-): string {
-  const cwd = resolveLinguistSessionWorkspacePath(
-    configDir,
-    manifest.projectId,
-    manifest.sessionId,
-  )
-  mkdirSync(cwd, { recursive: true })
-  for (const child of SESSION_SUBDIRECTORIES) {
-    mkdirSync(join(cwd, child), { recursive: true })
-  }
-
-  const manifestPath = join(cwd, 'SESSION_MANIFEST.json')
-  if (existsSync(manifestPath)) {
-    const existing = JSON.parse(readFileSync(manifestPath, 'utf8')) as Partial<LinguistSessionWorkspaceManifest>
-    if (
-      existing.projectId !== manifest.projectId
-      || existing.sessionId !== manifest.sessionId
-    ) {
-      throw new Error('[Linguist workspace] SESSION_MANIFEST 与目录身份不一致')
-    }
-  } else {
-    writeJsonFileAtomic(manifestPath, manifest, true)
-  }
-  return cwd
-}
-
-/** 会话删除只移动工作目录到受管 Trash，保留恢复可能。 */
-export function moveLinguistSessionWorkspaceToTrash(
+/**
+ * 原生 workbench 为空时，尽力复制旧用户产物；不覆盖、不删除旧目录，也不迁移旧运行配置。
+ */
+export function migrateLegacyLinguistSessionWorkspace(
   configDir: string,
   projectId: string,
   sessionId: string,
-  deletedAt = new Date().toISOString(),
-): string | null {
-  const source = resolveLinguistSessionWorkspacePath(configDir, projectId, sessionId)
-  if (!existsSync(source)) return null
+  destination: string,
+): void {
+  const source = resolveLegacyLinguistSessionWorkspacePath(configDir, projectId, sessionId)
+  if (!existsSync(source) || !lstatSync(source).isDirectory()) return
+  if (readdirSync(destination).length > 0) {
+    console.warn(`[Linguist workspace] 原生 workbench 非空，保留旧目录供手动处理: ${sessionId}`)
+    return
+  }
 
-  const trashDir = join(configDir, 'linguist', 'trash', 'agent-workspaces', projectId)
-  mkdirSync(trashDir, { recursive: true })
-  const timestamp = deletedAt.replace(/[^0-9A-Za-z.-]/g, '-')
-  const basename = `${sessionId}-${timestamp}`
-  let destination = join(trashDir, basename)
-  let suffix = 2
-  while (existsSync(destination)) destination = join(trashDir, `${basename}-${suffix++}`)
-  renameSync(source, destination)
-  return destination
+  const failed: string[] = []
+  for (const entry of readdirSync(source)) {
+    if (LEGACY_EXCLUDED_ENTRIES.has(entry)) continue
+    const sourcePath = join(source, entry)
+    const stat = lstatSync(sourcePath)
+    if ((!LEGACY_DIRECTORIES.has(entry) || !stat.isDirectory()) && !stat.isFile()) continue
+    const destinationPath = join(destination, basename(entry))
+    if (existsSync(destinationPath)) {
+      failed.push(entry)
+      continue
+    }
+    try {
+      cpSync(sourcePath, destinationPath, {
+        recursive: stat.isDirectory(),
+        errorOnExist: true,
+        force: false,
+        filter: (path) => !lstatSync(path).isSymbolicLink(),
+      })
+    } catch {
+      failed.push(entry)
+    }
+  }
+
+  if (failed.length > 0) {
+    console.warn(`[Linguist workspace] 部分旧产物未迁移，旧目录已保留: ${sessionId} (${failed.join(', ')})`)
+  }
 }

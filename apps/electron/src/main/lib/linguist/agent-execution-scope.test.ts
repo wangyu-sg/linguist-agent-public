@@ -3,15 +3,16 @@ import { resolveAgentExecutionScope } from './agent-execution-scope'
 
 const deps = {
   homeDir: () => '/home/user',
+  configDir: () => '/config',
   getWorkspace: (id: string) => id === 'workspace-1'
     ? { id, name: 'General', slug: 'general', createdAt: 0, updatedAt: 0 }
     : undefined,
   ensureWorkspaceSession: (slug: string, sessionId: string) => `/workspaces/${slug}/${sessionId}`,
-  ensureLinguistSession: (projectId: string, sessionId: string) => `/linguist/${projectId}/${sessionId}`,
+  migrateLegacySession: () => undefined,
 }
 
 describe('resolveAgentExecutionScope', () => {
-  test('Given Linguist 会话同时绑定 workspace When 解析 Then 保留 CAT cwd 与 workspace 能力上下文', () => {
+  test('Given Linguist 会话同时绑定 workspace When 解析 Then 使用原生 cwd 并保留 CAT 身份', () => {
     expect(resolveAgentExecutionScope({
       id: 'session-1',
       title: 'Session',
@@ -27,7 +28,7 @@ describe('resolveAgentExecutionScope', () => {
       workspaceId: 'workspace-1',
       workspaceSlug: 'general',
       workspaceName: 'General',
-      cwd: '/linguist/project-1/session-1',
+      cwd: '/workspaces/general/session-1',
     })
   })
 

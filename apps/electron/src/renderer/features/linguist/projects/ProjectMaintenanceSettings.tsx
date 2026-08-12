@@ -195,7 +195,6 @@ const INTEGRITY_CHECK_LABELS: Record<string, string> = {
   job_lineage: '任务 checkpoint lineage',
   run_lineage: '运行变更 lineage',
   export_manifests: '导出清单',
-  session_workspaces: 'Session Workspace 引用',
 }
 
 function FullIntegrityScrubSection({

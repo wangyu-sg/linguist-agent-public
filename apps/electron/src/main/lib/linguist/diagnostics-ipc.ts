@@ -23,7 +23,7 @@ import {
 import {
   resolveLinguistSessionCatTools,
 } from './session-cat-tools'
-import { resolveLinguistSessionWorkspacePath } from './session-workspace'
+import { resolveAgentExecutionScope } from './agent-execution-scope'
 import { SecureExportError, writeBytesVerified } from './secure-export'
 import type { LinguistProjectService } from './project-service'
 
@@ -44,7 +44,6 @@ export type LinguistDiagnosticsSavePicker = (
 interface DiagnosticsDependencies {
   getService: () => LinguistProjectService
   getSession: (sessionId: string) => AgentSessionMeta | undefined
-  getConfigDir: () => string
   isDevelopment: boolean
   getRolesRoot?: () => string | undefined
 }
@@ -196,11 +195,7 @@ function collectDiagnostics(
           ? {}
           : {
             agentRuntime: observation?.runtime ?? 'pi',
-            sessionCwd: resolveLinguistSessionWorkspacePath(
-              deps.getConfigDir(),
-              request.projectId,
-              session.id,
-            ),
+            sessionCwd: resolveAgentExecutionScope(session).cwd,
           }),
         tools: {
           base: observation?.baseToolCount ?? null,

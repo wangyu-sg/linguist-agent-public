@@ -5532,7 +5532,6 @@ export function registerIpcHandlers(): void {
   const linguistDiagnosticsIpc = createLinguistDiagnosticsIpc({
     getService: getLinguistProjectService,
     getSession: getAgentSessionMeta,
-    getConfigDir,
     isDevelopment: !app.isPackaged,
   })
   ipcMain.handle(

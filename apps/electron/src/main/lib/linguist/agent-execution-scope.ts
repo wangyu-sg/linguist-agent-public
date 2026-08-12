@@ -3,7 +3,7 @@ import type { AgentSessionMeta, AgentWorkspace, LinguistRole } from '@proma/shar
 import { resolveAgentProfile } from '@proma/shared'
 import { getConfigDir, getAgentSessionWorkspacePath } from '../config-paths'
 import { getAgentWorkspace } from '../agent-workspace-manager'
-import { ensureLinguistSessionWorkspace } from './session-workspace'
+import { migrateLegacyLinguistSessionWorkspace } from './session-workspace'
 
 export type AgentExecutionScope =
   | {
@@ -30,12 +30,18 @@ export type AgentExecutionScope =
 
 type ScopeDependencies = {
   homeDir: () => string
+  configDir: () => string
   getWorkspace: (workspaceId: string) => AgentWorkspace | undefined
   ensureWorkspaceSession: (workspaceSlug: string, sessionId: string) => string
-  ensureLinguistSession: (projectId: string, sessionId: string) => string
+  migrateLegacySession: (
+    configDir: string,
+    projectId: string,
+    sessionId: string,
+    destination: string,
+  ) => void
 }
 
-/** cwd 由 Linguist 绑定决定；workspace 上下文正交保留供宿主能力使用。 */
+/** Workspace 决定宿主能力与 cwd；Linguist binding 只叠加 CAT 身份。 */
 export function resolveAgentExecutionScope(
   session: AgentSessionMeta,
   overrides: Partial<ScopeDependencies> = {},
@@ -43,18 +49,10 @@ export function resolveAgentExecutionScope(
   const profile = resolveAgentProfile(session)
   const deps: ScopeDependencies = {
     homeDir: homedir,
+    configDir: getConfigDir,
     getWorkspace: getAgentWorkspace,
     ensureWorkspaceSession: getAgentSessionWorkspacePath,
-    ensureLinguistSession: (projectId, sessionId) => ensureLinguistSessionWorkspace(
-      getConfigDir(),
-      {
-        projectId,
-        sessionId,
-        projectDisplayName: session.linguistProjectName ?? projectId,
-        role: profile.kind === 'linguist' ? profile.role : 'general',
-        createdAt: new Date(session.createdAt).toISOString(),
-      },
-    ),
+    migrateLegacySession: migrateLegacyLinguistSessionWorkspace,
     ...overrides,
   }
 
@@ -62,6 +60,17 @@ export function resolveAgentExecutionScope(
     const workspace = session.workspaceId
       ? deps.getWorkspace(session.workspaceId)
       : undefined
+    const cwd = workspace
+      ? deps.ensureWorkspaceSession(workspace.slug, session.id)
+      : deps.homeDir()
+    if (workspace) {
+      deps.migrateLegacySession(
+        deps.configDir(),
+        profile.projectId,
+        session.id,
+        cwd,
+      )
+    }
     return {
       kind: 'linguist-project',
       projectId: profile.projectId,
@@ -74,7 +83,7 @@ export function resolveAgentExecutionScope(
             workspaceName: workspace.name,
           }
         : {}),
-      cwd: deps.ensureLinguistSession(profile.projectId, session.id),
+      cwd,
     }
   }
 

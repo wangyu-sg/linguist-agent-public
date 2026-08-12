@@ -665,7 +665,6 @@ export type LinguistIntegrityCheckId =
   | 'job_lineage'
   | 'run_lineage'
   | 'export_manifests'
-  | 'session_workspaces'
 
 export interface LinguistIntegrityProblem {
   /** 稳定机器码与数量；不携带路径、文件名或客户内容。 */
