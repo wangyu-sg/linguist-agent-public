@@ -37,7 +37,7 @@
     },
     "apps/electron": {
       "name": "@proma/electron",
-      "version": "0.17.24",
+      "version": "0.17.25",
       "dependencies": {
         "@earendil-works/pi-agent-core": "0.82.1",
         "@earendil-works/pi-ai": "0.82.1",
@@ -200,7 +200,7 @@
     },
     "packages/linguist-cat-store": {
       "name": "@linguist/cat-store",
-      "version": "0.0.38",
+      "version": "0.0.39",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-formats": "workspace:*",
@@ -246,7 +246,7 @@
     },
     "packages/shared": {
       "name": "@proma/shared",
-      "version": "0.1.97",
+      "version": "0.1.98",
       "devDependencies": {
         "typescript": "^5.0.0",
       },

@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import type { LinguistProjectMutationEvent } from '@proma/shared'
 import { createLinguistAssetsIpc, type LinguistAssetsFilePicker } from './assets-ipc'
 import type { LinguistAssetPreviewDeps } from './project-ipc'
-import { INPUT, makeService, makeTempDir } from './test/service-testkit'
+import { fixturePath, INPUT, makeService, makeTempDir } from './test/service-testkit'
 import { projectPaths } from './paths'
 
 const CONTEXT_DOCX_FIXTURE = join(
@@ -208,6 +208,70 @@ test('assets IPC: context doc import stores blob + metadata; note update; delete
     for (let index = 1; index < mutations.length; index += 1) {
       assert.equal(mutations[index]?.revision, (mutations[index - 1]?.revision ?? 0) + 1)
     }
+  } finally {
+    service.closeAll()
+  }
+})
+
+test('assets IPC: Context Doc 可幂等关联/解除项目内 Segment，并按关联查询', async () => {
+  const service = makeService()
+  try {
+    const project = service.createProject(INPUT)
+    await service.importAsset(project.id, {
+      bytes: readFileSync(fixturePath('mini_items.json')),
+      filename: 'mini_items.json',
+    })
+    const segmentId = service.queryCatWorkspace(project.id, {
+      limit: 1,
+      offset: 0,
+      includeIndex: false,
+    }).segments[0]!.id
+    const imagePath = join(makeTempDir(), 'hud.png')
+    writeFileSync(imagePath, new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
+    const ipc = createLinguistAssetsIpc({
+      getService: () => service,
+      registerPreviewUrl: fakeRegisterPreviewUrl,
+    })
+    const imported = await ipc.importContextDoc({ projectId: project.id }, picker([imagePath]).picker)
+    assert.equal(imported.ok, true)
+    if (!imported.ok || imported.data.cancelled) return
+    const docId = imported.data.doc.id
+
+    const before = await ipc.query({ projectId: project.id, kind: 'contextDocs', segmentId })
+    assert.equal(before.ok, true)
+    if (before.ok) assert.equal(before.data.total, 0)
+
+    const linked = await ipc.setContextDocSegmentLink({ projectId: project.id, docId, segmentId, linked: true })
+    assert.deepEqual(linked, { ok: true, data: { docId, segmentId, linked: true } })
+    await ipc.setContextDocSegmentLink({ projectId: project.id, docId, segmentId, linked: true })
+    const afterLink = await ipc.query({ projectId: project.id, kind: 'contextDocs', segmentId })
+    assert.equal(afterLink.ok, true)
+    if (afterLink.ok) assert.equal(afterLink.data.total, 1)
+
+    const other = service.createProject({ ...INPUT, name: 'other' })
+    await service.importAsset(other.id, {
+      bytes: readFileSync(fixturePath('mini_items.json')),
+      filename: 'mini_items.json',
+    })
+    const foreignSegmentId = service.queryCatWorkspace(other.id, {
+      limit: 1,
+      offset: 0,
+      includeIndex: false,
+    }).segments[0]!.id
+    const crossProject = await ipc.setContextDocSegmentLink({
+      projectId: project.id,
+      docId,
+      segmentId: foreignSegmentId,
+      linked: true,
+    })
+    assert.equal(crossProject.ok, false)
+    if (!crossProject.ok) assert.equal(crossProject.error.code, 'STORE_NOT_FOUND')
+
+    const unlinked = await ipc.setContextDocSegmentLink({ projectId: project.id, docId, segmentId, linked: false })
+    assert.deepEqual(unlinked, { ok: true, data: { docId, segmentId, linked: false } })
+    const afterUnlink = await ipc.query({ projectId: project.id, kind: 'contextDocs', segmentId })
+    assert.equal(afterUnlink.ok, true)
+    if (afterUnlink.ok) assert.equal(afterUnlink.data.total, 0)
   } finally {
     service.closeAll()
   }

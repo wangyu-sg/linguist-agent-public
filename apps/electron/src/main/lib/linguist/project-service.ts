@@ -1029,6 +1029,15 @@ export class LinguistProjectService {
     return this.resources.upsertProjectAsset(projectId, kind, item)
   }
 
+  setContextDocSegmentLink(
+    projectId: string,
+    docId: string,
+    segmentId: string,
+    linked: boolean,
+  ): void {
+    this.resources.setContextDocSegmentLink(projectId, docId, segmentId, linked)
+  }
+
   deleteProjectAsset(
     projectId: string,
     kind: LinguistProjectAssetKind,

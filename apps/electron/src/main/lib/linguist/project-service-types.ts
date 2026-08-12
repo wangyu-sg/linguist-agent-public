@@ -321,6 +321,8 @@ export interface ProjectAssetsQuery {
   query?: string
   /** 仅 sentencePatterns 有效。 */
   status?: SentencePatternStatus
+  /** 仅 contextDocs 有效：只返回与该 Segment 显式关联的文档。 */
+  segmentId?: string
   limit: number
   offset: number
 }

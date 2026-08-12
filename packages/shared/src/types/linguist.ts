@@ -347,6 +347,8 @@ export const LINGUIST_ASSETS_IPC_CHANNELS = {
   IMPORT_SENTENCE_PATTERNS: 'linguist.assets.importSentencePatterns',
   /** 预览 context 文档 blob（text/html/url 三态分派；纯读，归档项目允许）。 */
   PREVIEW_CONTEXT_DOC: 'linguist.assets.previewContextDoc',
+  /** 幂等关联/解除一个 Context Doc 与项目内 Segment。 */
+  SET_CONTEXT_DOC_SEGMENT_LINK: 'linguist.assets.setContextDocSegmentLink',
 } as const
 
 export type LinguistAssetsIpcChannel =
@@ -1703,6 +1705,8 @@ export interface LinguistAssetsQueryRequest {
   query?: string
   /** 仅 sentencePatterns 有效。 */
   status?: LinguistSentencePatternStatus
+  /** 仅 contextDocs 有效：只返回与该 Segment 显式关联的文档。 */
+  segmentId?: string
   limit?: number
   offset?: number
 }
@@ -1789,6 +1793,19 @@ export type LinguistContextDocImportResult =
       filename: string
       doc: LinguistContextDocInfo
     }
+
+export interface LinguistContextDocSegmentLinkRequest {
+  projectId: string
+  docId: string
+  segmentId: string
+  linked: boolean
+}
+
+export interface LinguistContextDocSegmentLinkResult {
+  docId: string
+  segmentId: string
+  linked: boolean
+}
 
 export interface LinguistSentencePatternImportRequest {
   projectId: string

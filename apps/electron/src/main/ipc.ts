@@ -5695,6 +5695,8 @@ export function registerIpcHandlers(): void {
   // Context 文档 blob 预览（纯读，归档项目允许；三态分派在处理器内）。
   ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.PREVIEW_CONTEXT_DOC, async (_, input: unknown) =>
     linguistAssetsIpc.previewContextDoc(input))
+  ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.SET_CONTEXT_DOC_SEGMENT_LINK, async (_, input: unknown) =>
+    linguistAssetsIpc.setContextDocSegmentLink(input))
   ipcMain.handle(LINGUIST_ASSETS_IPC_CHANNELS.IMPORT_CONTEXT_DOC, async (event, input: unknown) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     return linguistAssetsIpc.importContextDoc(input, (options) =>

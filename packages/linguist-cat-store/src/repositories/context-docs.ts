@@ -30,6 +30,8 @@ export interface ContextDocSearch {
   /** Case-insensitive literal substring matched against filename OR note. */
   query?: string
   kind?: ContextDocKind
+  /** Only Context Docs explicitly linked to this Segment. */
+  segmentId?: string
   limit?: number
   offset?: number
 }
@@ -59,6 +61,13 @@ function buildWhere(projectId: string, filter: ContextDocSearch): { where: strin
   if (filter.kind !== undefined) {
     clauses.push('kind = ?')
     params.push(filter.kind)
+  }
+  if (filter.segmentId !== undefined) {
+    clauses.push(`EXISTS (
+      SELECT 1 FROM context_doc_segments links
+      WHERE links.context_doc_id = context_docs.id AND links.segment_id = ?
+    )`)
+    params.push(filter.segmentId)
   }
   return { where: `WHERE ${clauses.join(' AND ')}`, params }
 }
@@ -126,6 +135,24 @@ export class ContextDocsRepository {
         .run(note ?? null, id, this.projectId)
       if (Number(result.changes) === 0) throw new StoreNotFoundError('context doc', id)
       return this.get(id) as ContextDoc
+    })
+  }
+
+  /** Associate or disassociate one project-owned Context Doc and Segment. */
+  setSegmentLink(id: string, segmentId: string, linked: boolean): void {
+    this.db.transaction(`${linked ? 'link' : 'unlink'} context doc ${id} to segment ${segmentId}`, () => {
+      if (this.get(id) === undefined) throw new StoreNotFoundError('context doc', id)
+      const segment = this.db.db
+        .prepare(`SELECT 1 FROM segments
+          INNER JOIN assets ON assets.id = segments.asset_id
+          WHERE segments.id = ? AND assets.project_id = ?`)
+        .get(segmentId, this.projectId)
+      if (segment === undefined) throw new StoreNotFoundError('segment', segmentId)
+      this.db.db
+        .prepare(linked
+          ? 'INSERT OR IGNORE INTO context_doc_segments (context_doc_id, segment_id) VALUES (?, ?)'
+          : 'DELETE FROM context_doc_segments WHERE context_doc_id = ? AND segment_id = ?')
+        .run(id, segmentId)
     })
   }
 

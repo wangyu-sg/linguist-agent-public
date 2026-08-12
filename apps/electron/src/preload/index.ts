@@ -272,6 +272,8 @@ import type {
   LinguistContextDocImportRequest,
   LinguistContextDocImportResult,
   LinguistContextDocPreviewRequest,
+  LinguistContextDocSegmentLinkRequest,
+  LinguistContextDocSegmentLinkResult,
   LinguistSentencePatternImportRequest,
   LinguistSentencePatternImportResult,
   LinguistMigrationImportRequest,
@@ -1608,6 +1610,9 @@ export interface ElectronAPI {
   linguistAssetsPreviewContextDoc: (
     input: LinguistContextDocPreviewRequest,
   ) => Promise<LinguistIpcResult<LinguistAssetPreviewResult>>
+  linguistAssetsSetContextDocSegmentLink: (
+    input: LinguistContextDocSegmentLinkRequest,
+  ) => Promise<LinguistIpcResult<LinguistContextDocSegmentLinkResult>>
   linguistAssetsImportSentencePatterns: (
     input: LinguistSentencePatternImportRequest,
   ) => Promise<LinguistIpcResult<LinguistSentencePatternImportResult>>
@@ -3383,6 +3388,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_ASSETS_IPC_CHANNELS.IMPORT_CONTEXT_DOC, input),
   linguistAssetsPreviewContextDoc: (input: LinguistContextDocPreviewRequest) =>
     ipcRenderer.invoke(LINGUIST_ASSETS_IPC_CHANNELS.PREVIEW_CONTEXT_DOC, input),
+  linguistAssetsSetContextDocSegmentLink: (input: LinguistContextDocSegmentLinkRequest) =>
+    ipcRenderer.invoke(LINGUIST_ASSETS_IPC_CHANNELS.SET_CONTEXT_DOC_SEGMENT_LINK, input),
   linguistAssetsImportSentencePatterns: (input: LinguistSentencePatternImportRequest) =>
     ipcRenderer.invoke(LINGUIST_ASSETS_IPC_CHANNELS.IMPORT_SENTENCE_PATTERNS, input),
 
