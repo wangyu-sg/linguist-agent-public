@@ -8,8 +8,8 @@
  *   `<bpt>/<ept>`, namespaced variants) preserved VERBATIM in the segment
  *   strings (entities decoded, CDATA unwrapped — see xliff-xml.ts);
  * - segment key = trans-unit `id`, else `resname`, else synthesized
- *   `#tu-<ordinal>` (recorded as an import warning); duplicate keys are a
- *   FORMAT_PARSE_ERROR;
+ *   `#tu-<ordinal>` (recorded as an import warning); native ids reused by
+ *   another `<file>` are scoped without changing the source file;
  * - `translate="no"` (trans-unit or file level) or a truthy `mq:locked`
  *   (1/true/yes/locked) -> `locked: true`;
  * - `<note>` -> `context.note`; `resname` -> `context.origin`;
@@ -36,9 +36,6 @@
  * Known limitations:
  * - XLIFF 2.0 (`<xliff version="2.x">`, `<unit>/<segment>`) is rejected with
  *   a typed FormatParseError; no 2.0 support in this leg;
- * - a `<target>` inside `<alt-trans>` could be mistaken for the main target
- *   when the trans-unit has no main `<target>` (same behavior as the legacy
- *   parser); alt-trans content is otherwise preserved byte-identically;
  * - modified segments are re-encoded canonically (text runs escaped, inline
  *   tags verbatim, CDATA not re-wrapped), so they may differ in byte shape
  *   from a non-canonical original while decoding to identical content.
@@ -59,7 +56,7 @@ import {
   decodeXmlEntities,
   decodeXmlInline,
   encodeXmlInline,
-  findFirst,
+  findDirectChild,
   parseAttrs,
   setAttr,
   type FoundElement,
@@ -70,7 +67,6 @@ export const XLIFF_ADAPTER_ID = 'xliff_1_2'
 const XLIFF_ROOT_PATTERN = /<(?:[\w.-]+:)?xliff\b/i
 const FILE_PATTERN = /<((?:[\w.-]+:)?file)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const TRANS_UNIT_PATTERN = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>([\s\S]*?)<\/\1>/gi
-const SELF_CLOSING_TARGET_PATTERN = /<((?:[\w.-]+:)?target)\b([^>]*)\/>/i
 
 export interface XliffParsedUnit {
   ordinal: number
@@ -232,6 +228,7 @@ export class XliffAdapter implements CatFormatAdapter {
       edits.push({ start, end: start + match[0].length, replacement: this.rewriteUnit(unit, segment.target) })
     }
 
+    if (edits.length === 0) return originalBytes
     let out = text
     for (let i = edits.length - 1; i >= 0; i--) {
       const edit = edits[i]!
@@ -247,14 +244,8 @@ export class XliffAdapter implements CatFormatAdapter {
       const attrsRaw = newTarget === '' ? unit.target.attrsRaw : setAttr(unit.target.attrsRaw, 'state', 'translated')
       const nextTarget = `<${unit.target.tagName}${attrsRaw}>${encoded}</${unit.target.tagName}>`
       const at = unit.full.indexOf(unit.target.full)
-      if (at < 0) return unit.full // defensive; findFirst matched within this unit
+      if (at < 0) return unit.full // defensive; direct-child target matched within this unit
       return unit.full.slice(0, at) + nextTarget + unit.full.slice(at + unit.target.full.length)
-    }
-    const selfClosing = SELF_CLOSING_TARGET_PATTERN.exec(unit.full)
-    if (selfClosing) {
-      const tagName = selfClosing[1]!
-      const attrsRaw = newTarget === '' ? (selfClosing[2] ?? '') : setAttr(selfClosing[2] ?? '', 'state', 'translated')
-      return unit.full.replace(selfClosing[0], `<${tagName}${attrsRaw}>${encoded}</${tagName}>`)
     }
     const inserted = `<target state="translated">${encoded}</target>`
     return unit.full.replace(unit.source.full, `${unit.source.full}${inserted}`)
@@ -292,7 +283,9 @@ export class XliffAdapter implements CatFormatAdapter {
     const warnings: ImportWarning[] = []
     const units: XliffParsedUnit[] = []
     const seenKeys = new Set<string>()
+    const nativeKeyFiles = new Map<string, number>()
     FILE_PATTERN.lastIndex = 0
+    let fileOrdinal = 0
     for (const fileMatch of text.matchAll(FILE_PATTERN)) {
       const fileLocked = translateNo(parseAttrs(fileMatch[2] ?? ''))
       TRANS_UNIT_PATTERN.lastIndex = 0
@@ -302,7 +295,13 @@ export class XliffAdapter implements CatFormatAdapter {
         const inner = tuMatch[3] ?? ''
         const id = attrs.id?.trim() || undefined
         const resname = attrs.resname?.trim() || undefined
-        const key = id ?? resname ?? `#tu-${ordinal}`
+        const nativeKey = id ?? resname ?? `#tu-${ordinal}`
+        const nativeKeyFile = nativeKeyFiles.get(nativeKey)
+        if (nativeKeyFile === fileOrdinal) {
+          throw new FormatParseError(this.id, filename, `trans-unit #${ordinal}: duplicate key ${JSON.stringify(nativeKey)}`)
+        }
+        let key = nativeKeyFile === undefined ? nativeKey : `#file-${fileOrdinal}:${nativeKey}`
+        if (seenKeys.has(key)) key = `${key}:#tu-${ordinal}`
         if (id === undefined && resname === undefined) {
           warnings.push({
             code: 'xliff.missing_id',
@@ -310,16 +309,21 @@ export class XliffAdapter implements CatFormatAdapter {
             segmentKey: key,
           })
         }
-        if (seenKeys.has(key)) {
-          throw new FormatParseError(this.id, filename, `trans-unit #${ordinal}: duplicate key ${JSON.stringify(key)}`)
+        if (key !== nativeKey) {
+          warnings.push({
+            code: 'xliff.file_scoped_id',
+            message: `trans-unit #${ordinal}: native id ${JSON.stringify(nativeKey)} is reused in another <file>; scoped as ${JSON.stringify(key)}`,
+            segmentKey: key,
+          })
         }
         seenKeys.add(key)
-        const source = findFirst(inner, 'source')
+        nativeKeyFiles.set(nativeKey, fileOrdinal)
+        const source = findDirectChild(inner, 'source')
         if (!source) {
           throw new FormatParseError(this.id, filename, `trans-unit ${JSON.stringify(key)} has no <source> element`)
         }
-        const target = findFirst(inner, 'target')
-        const note = findFirst(inner, 'note')
+        const target = findDirectChild(inner, 'target')
+        const note = findDirectChild(inner, 'note')
         units.push({
           ordinal,
           key,
@@ -333,6 +337,7 @@ export class XliffAdapter implements CatFormatAdapter {
           note: note ? decodeXmlEntities(note.inner).trim() : undefined,
         })
       }
+      fileOrdinal += 1
     }
     if (units.length === 0) {
       throw new FormatParseError(this.id, filename, 'no <trans-unit> segments found')

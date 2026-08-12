@@ -12,7 +12,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createAsset, createProject, createSeededEntropy, type Segment } from '@linguist/cat-core'
-import { bindImportedSegments, CatFormatRegistry, FormatExportError, FormatParseError } from '../index'
+import { bindImportedSegments, CatFormatRegistry, FormatExportError, FormatParseError, FormatUnsupportedError } from '../index'
 import { assertRoundTrip } from '../testing/index'
 import { SdlXliffAdapter } from './sdlxliff'
 import { XliffAdapter } from './xliff'
@@ -99,14 +99,13 @@ async function boundSegments(filename: string, imported: Awaited<ReturnType<SdlX
 }
 
 describe('SdlXliffAdapter detect（置信度设计：sdl 走 sdl 路径，plain xliff 不误判）', () => {
-  test('sdl 命名空间 + .sdlxliff => 0.95；仅字节 => 0.7；无 sdl 命名空间的 .sdlxliff => 0.4；其余 => 0', async () => {
+  test('sdl 命名空间优先；无 sdl 命名空间的 .sdlxliff 不接管', async () => {
     const adapter = new SdlXliffAdapter()
     const bytes = sdlBytes()
-    expect(await adapter.detect(bytes, 'sample.sdlxliff')).toBe(0.95)
-    expect(await adapter.detect(bytes, 'renamed.bin')).toBe(0.7)
-    expect(await adapter.detect(bytes, 'renamed.xliff')).toBe(0.7)
-    // 无 sdl 命名空间的 .sdlxliff：plain XLIFF 伪装，低分让给 XliffAdapter
-    expect(await adapter.detect(fixtureBytes('mini_game_ui.xliff'), 'fake.sdlxliff')).toBe(0.4)
+    expect(await adapter.detect(bytes, 'sample.sdlxliff')).toBe(1)
+    expect(await adapter.detect(bytes, 'renamed.bin')).toBe(0.95)
+    expect(await adapter.detect(bytes, 'renamed.xliff')).toBe(0.95)
+    expect(await adapter.detect(fixtureBytes('mini_game_ui.xliff'), 'fake.sdlxliff')).toBe(0)
     expect(await adapter.detect(fixtureBytes('mini_game_ui.xliff'), 'mini_game_ui.xliff')).toBe(0)
     expect(await adapter.detect(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).toBe(0)
     expect(await adapter.detect(new TextEncoder().encode('plain text'), 'a.sdlxliff')).toBe(0)
@@ -119,12 +118,13 @@ describe('SdlXliffAdapter detect（置信度设计：sdl 走 sdl 路径，plain 
     expect((await registry.detectBest(sdl, 'sample.sdlxliff')).id).toBe('sdlxliff_1_2')
     expect((await registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'mini_game_ui.xliff')).id).toBe('xliff_1_2')
     expect((await registry.detectBest(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).id).toBe('mqxliff_1_2')
-    // sdl 字节 + 未知扩展名：0.7 > XliffAdapter 的 0.5 => sdl 路径
+    // 厂商内容优先于文件扩展名。
     expect((await registry.detectBest(sdl, 'renamed.bin')).id).toBe('sdlxliff_1_2')
-    // sdl 字节 + 显式 .xliff 扩展名：0.7 < XliffAdapter 的 0.9 => 尊重扩展名
-    expect((await registry.detectBest(sdl, 'renamed.xliff')).id).toBe('xliff_1_2')
-    // 无 sdl 命名空间的 .sdlxliff：0.4 < 0.5 => plain XLIFF 处理
-    expect((await registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'fake.sdlxliff')).id).toBe('xliff_1_2')
+    expect((await registry.detectBest(sdl, 'renamed.xliff')).id).toBe('sdlxliff_1_2')
+    // 保留的厂商扩展名与内容不符时 fail closed，不静默回退通用 XLIFF。
+    await expect(
+      registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'fake.sdlxliff'),
+    ).rejects.toBeInstanceOf(FormatUnsupportedError)
   })
 })
 
@@ -197,6 +197,19 @@ describe('SdlXliffAdapter import（mrk 分段 / sdl locked / conf 状态映射�
 })
 
 describe('SdlXliffAdapter round-trip（assertRoundTrip harness）', () => {
+  test('嵌套同名 mrk 保持完整 span 并可写回外层分段', async () => {
+    const bytes = new TextEncoder().encode(`<xliff xmlns:sdl="http://sdl.com/FileTypes/SdlXliff/1.0" version="1.2"><file><body>
+      <trans-unit id="nested"><seg-source><mrk mtype="seg" mid="1">Source <mrk mtype="term">term</mrk> tail</mrk></seg-source><target><mrk mtype="seg" mid="1">Target <mrk mtype="term">term</mrk> tail</mrk></target></trans-unit>
+    </body></file></xliff>`)
+    const { adapter, imported } = await importSdl(bytes, 'nested.sdlxliff')
+    expect(imported.segments[0]?.source).toBe('Source <mrk mtype="term">term</mrk> tail')
+    const { asset, segments } = await boundSegments('nested.sdlxliff', imported)
+    const changed = segments.map((segment) => ({ ...segment, target: 'Changed <mrk mtype="term">term</mrk> tail' }))
+    const exported = await adapter.export({ originalBytes: bytes, asset, segments: changed })
+    const reimported = await adapter.import({ bytes: exported, filename: 'nested.sdlxliff', sourceLocale: 'zh-CN', targetLocale: 'en-US' })
+    expect(reimported.segments[0]?.target).toBe('Changed <mrk mtype="term">term</mrk> tail')
+  })
+
   test('混合 fixture：字节稳定 + 修改子集写回 + 锁定段不动 + sdl: 元数据不回写', async () => {
     const report = await assertRoundTrip(new SdlXliffAdapter(), sdlBytes(), {
       filename: 'sample.sdlxliff',

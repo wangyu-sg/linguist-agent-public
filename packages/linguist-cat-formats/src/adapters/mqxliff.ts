@@ -127,7 +127,7 @@ export class MqXliffAdapter extends XliffAdapter {
       return 0
     }
     if (!/<(?:[\w.-]+:)?xliff\b/i.test(text) || !MQ_NAMESPACE_PATTERN.test(text)) return 0
-    return filename.toLowerCase().endsWith('.mqxliff') ? 1 : 0.8
+    return filename.toLowerCase().endsWith('.mqxliff') ? 1 : 0.95
   }
 
   protected override decodeInline(value: string): string {

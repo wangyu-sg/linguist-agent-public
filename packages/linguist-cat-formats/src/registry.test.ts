@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CatFormatAdapter, CatFormatExportInput, CatFormatImportInput } from './index'
-import { CatFormatRegistry, FormatUnsupportedError } from './index'
+import { CatFormatRegistry, FormatAmbiguousError, FormatUnsupportedError } from './index'
 import { encodeFakeTsv, FakeAdapter } from './testing/index'
 
 /** 最小存根 adapter：按魔数字节给高分、按扩展名给低分。 */
@@ -40,10 +40,10 @@ describe('CatFormatRegistry', () => {
     registry.register(new FakeAdapter()) // .ftsv → 0.9
     registry.register(makeStubAdapter('stub_magic', '.stub', [0xde, 0xad]))
     const bytes = new Uint8Array([0xde, 0xad, 0x00, 0x01])
-    const matches = await registry.detectAll(bytes, 'file.ftsv')
+    const matches = await registry.detectAll(bytes, 'file.unknown')
     // FakeAdapter 遇 NUL 字节得 0；stub 魔数命中
     expect(matches.map((m) => m.adapter.id)).toEqual(['stub_magic'])
-    expect((await registry.detectBest(bytes, 'file.ftsv')).id).toBe('stub_magic')
+    expect((await registry.detectBest(bytes, 'file.unknown')).id).toBe('stub_magic')
 
     const ftsvBytes = encodeFakeTsv([{ key: 'k', source: 's' }])
     const matches2 = await registry.detectAll(ftsvBytes, 'file.ftsv')
@@ -55,13 +55,16 @@ describe('CatFormatRegistry', () => {
     }
   })
 
-  test('同分时保持注册顺序（稳定排序）', async () => {
+  test('同分时 detectAll 保持注册顺序，detectBest 明确报歧义', async () => {
     const registry = new CatFormatRegistry()
     const a = makeStubAdapter('stub_a', '.tie', [])
     const b = makeStubAdapter('stub_b', '.tie', [])
     registry.register(a).register(b)
     const matches = await registry.detectAll(new Uint8Array([1, 2]), 'x.tie')
     expect(matches.map((m) => m.adapter.id)).toEqual(['stub_a', 'stub_b'])
+    await expect(registry.detectBest(new Uint8Array([1, 2]), 'x.tie')).rejects.toBeInstanceOf(
+      FormatAmbiguousError,
+    )
   })
 
   test('未知扩展名 + 无任何 detect 命中 → FormatUnsupportedError（含已尝试 adapter 列表）', async () => {

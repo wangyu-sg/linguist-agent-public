@@ -69,15 +69,12 @@
  *   non-segmented units).
  *
  * detect scoring (the registry picks the highest-scoring adapter):
- * - memsource m: namespace + `.mxliff` extension   -> 0.95 (beats
- *   XliffAdapter's 0.5 bytes-only score for the same file);
- * - memsource m: namespace, other extension        -> 0.7 (an explicit
- *   `.xliff`/`.mqxliff` extension still wins via XliffAdapter's 0.9 — same
- *   explicit-extension degradation rule as PB-086; an unknown extension
- *   routes here over XliffAdapter's 0.5);
- * - `.mxliff` extension, NO memsource namespace    -> 0.4 (below
- *   XliffAdapter's 0.5 — the file is plain XLIFF with an mxliff name and
- *   stays there);
+ * - memsource m: namespace + `.mxliff` extension   -> 1;
+ * - memsource m: namespace, other extension        -> 0.95 (vendor content
+ *   wins over the generic XLIFF extension score);
+ * - `.mxliff` extension, NO memsource namespace    -> 0 (the registry
+ *   rejects the preserved vendor extension instead of silently using
+ *   generic XLIFF);
  * - no memsource namespace, other extension        -> 0 (plain XLIFF /
  *   MQXLIFF / SDLXLIFF are never claimed).
  *
@@ -495,8 +492,8 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
     if (!XLIFF_ROOT_PATTERN.test(text)) return 0
     const hasMemsourceNamespace = MEMSOURCE_NAMESPACE_PATTERN.test(text)
     const hasMxliffExtension = filename.toLowerCase().endsWith('.mxliff')
-    if (hasMemsourceNamespace) return hasMxliffExtension ? 0.95 : 0.7
-    return hasMxliffExtension ? 0.4 : 0
+    if (hasMemsourceNamespace) return hasMxliffExtension ? 1 : 0.95
+    return 0
   }
 
   async import(input: CatFormatImportInput): Promise<ImportedCatAsset> {
