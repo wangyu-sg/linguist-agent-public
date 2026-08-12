@@ -133,7 +133,7 @@ export function MigrationSettings(): React.ReactElement {
         </div>
       </SettingsSection>
 
-      <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-800 dark:text-amber-200">
+      <div className="rounded-lg border border-warning/25 bg-warning-soft/60 px-4 py-3 text-sm leading-6 text-warning-foreground">
         数据文件夹可能包含会话、CAT 项目、文件和配置。请仅通过可信渠道传输。系统钥匙串中的 API Key 和登录凭据不会随文件夹复制。
       </div>
     </div>

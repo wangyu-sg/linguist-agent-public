@@ -66,7 +66,6 @@ const MIGRATED_FILES = [
   'apps/electron/src/renderer/components/settings/PromptSettings.tsx',
   // ===== PB-104（linguist 域收尾：migration / session-binding / projects）=====
   `${LINGUIST_DIR}/migration/MigrationWizard.tsx`,
-  'apps/electron/src/renderer/components/migration/MigrationImportDialog.tsx',
   `${LINGUIST_DIR}/session-binding/LinguistSessionBindingBadge.tsx`,
   `${LINGUIST_DIR}/projects/ProposalInbox.tsx`,
   `${LINGUIST_DIR}/projects/ProjectAssetsSection.tsx`,

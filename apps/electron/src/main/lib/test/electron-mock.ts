@@ -26,8 +26,10 @@ export const electronMock = {
     getPath: () => join(process.env.HOME ?? '/tmp', 'Library', 'Application Support'),
   },
   BrowserWindow: class {},
+  WebContentsView: class {},
   clipboard: {},
   dialog: {},
+  net: { fetch },
   nativeImage: { createFromPath: () => ({}) },
   nativeTheme: {},
   powerMonitor: {},
@@ -52,6 +54,9 @@ export const electronMock = {
       }
       return value.toString('utf-8')
     },
+  },
+  session: {
+    fromPartition: () => ({}),
   },
 }
 

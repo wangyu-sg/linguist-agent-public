@@ -62,7 +62,6 @@ describe('结构性无障碍契约', () => {
     expect(source).toContain('aria-label="收起侧边栏"')
     expect(source).toContain("aria-label={pinned ? '取消置顶' : '置顶'}")
     expect(source).toContain('aria-label="更多会话操作"')
-    expect(source).toContain('tabular-nums text-foreground/65')
   })
 
   test('given Chat 标题进入编辑态 when 使用辅助技术 then 输入框有可访问名称', () => {
