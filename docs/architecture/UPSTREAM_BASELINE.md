@@ -12,13 +12,13 @@
 | 施工分支 | `codex/proma-v0.17.15-workspace-unification` |
 | 验证日期 | `2026-08-12` |
 
-该 merge 相对 upstream 共变动 841 个路径：581 个允许路径、256 个已登记 Proma Core 触点、4 个仅做公开路径占位符替换。精确账本见 [proma-touchpoints.json](./proma-touchpoints.json)。
+该 merge 相对 upstream 共变动 841 个路径：581 个允许路径、256 个已登记 Proma Core 触点、4 个仅做公开路径占位符替换；当前精确账本为 258 个触点，见 [proma-touchpoints.json](./proma-touchpoints.json)。
 
 ## 运行时与产品版本
 
 | 项目 | 当前值 |
 |---|---|
-| Linguist Agent / upstream app | `0.17.22` / `0.17.15` |
+| Linguist Agent / upstream app | `0.17.24` / `0.17.15` |
 | Electron / Bun | `43.2.0` / `1.3.14` |
 | Pi Runtime | `0.82.1` |
 | Shared | `0.1.97` |

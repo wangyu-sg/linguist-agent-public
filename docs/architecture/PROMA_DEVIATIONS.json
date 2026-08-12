@@ -12,7 +12,7 @@
     "registeredCoreTouchpoints": 256
   },
   "currentLedger": {
-    "registeredCoreTouchpoints": 256
+    "registeredCoreTouchpoints": 258
   },
   "deviations": [
     {
@@ -36,7 +36,7 @@
       "id": "local-host-seams",
       "classification": "Local Host Seam",
       "ticket": "LA-SYNC-003 / LA-SYNC-004",
-      "registeredTouchpoints": 218,
+      "registeredTouchpoints": 220,
       "scope": [
         "runtime, session, preload, IPC, and shared contracts",
         "native Agent/Chat shell composition, sidebar, tabs, settings, and renderer state"

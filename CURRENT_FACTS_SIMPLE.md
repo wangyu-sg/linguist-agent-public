@@ -1,54 +1,59 @@
 # Linguist Agent 当前事实
 
-核验日期：2026-08-11（Asia/Shanghai）
+核验日期：2026-08-12（Asia/Shanghai）
 
 本文只记录可由代码、manifest、测试或真实运行输出确认的事实。历史报告不得覆盖本文。
 
 ## Git 与基线
 
-- 施工起点：`main@3f53e7b66c10734d88455ad65ded51acc46ab33e`。
-- Proma 基线：`v0.17.1@6094036d3f6f4363c44ce8a11155ecd531a80aae`。
-- 正式 merge：`96155d1ad2f131e10fd2f0a6998ec13573aa2ead`。
-- 最终 main merge：`dd154b0dd75fa78217bd7eb1edda70678d79707b`；push 以 Git 回执为准。
+- 当前施工分支：`codex/proma-v0.17.15-workspace-unification`。
+- Proma 基线：`v0.17.15@73e9d014b56dfda7554011bc02cf8ee5af2c5493`。
+- LA 起点：`4471505e3217cd2a286a2f03531b18512274ccc5`。
+- 正式 merge：`2ade7e7e045ce6beab817778b1b39f897045fdf3`。
+- C0–C3 checkpoint：`la-proma-v0.17.15-agent-core`，指向 `0516dfc302bd0df2c5c34ea52df37a9294130118`。
+- K4/K5 合同 checkpoint：`la-proma-v0.17.15-k5-contracts`，指向 `dea669b4f9260bbf863537e59da79fb439a643dd`；Kimi UI 经审查后由 `7779ac4c` 合入主线。
 
 ## 版本
 
 | 层 | 当前值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App / Electron | `0.17.3` / `43.2.0` |
+| Electron App / Electron | `0.17.24` / `43.2.0` |
 | React / Jotai / Vite | `18.3.1` / `2.20.2` / `6.4.3` |
-| Shared | `0.1.95` |
+| Shared | `0.1.97` |
 | Agent Runtime | Pi `0.82.1`；不包含 Claude Agent SDK / Nowledge Runtime |
-| CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.10 / 0.0.37 / 0.0.34` |
+| CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.11 / 0.0.38 / 0.0.34` |
 | CAT schema / Tool count | `15` / `31` |
 
-## 当前产品事实
+## 当前实现事实
 
-- 产品仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Workbench；没有第二套 Agent、Chat、Session、权限、Planning、Preview 或 Collaboration。
-- 每个 CAT 项目有真实 Proma Workspace。Linguist Session 同时绑定 `workspaceId + linguistProjectId`，因此直接继承 Workspace、Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration。
-- General 可选择性委派 Translator、Reviewer 或 Proofreader。子会话继承同一 Workspace / CAT 项目，并在创建时冻结 Segment 范围；交接通过共享 CAT Store，不复制聊天正文。
-- `cat_confirm_segments` 记录 Reviewer / Proofreader 的 `unchanged / corrected / blocked` 决策。Reviewer 必须覆盖冻结范围全部 Segment；101 段跨页覆盖已有回归。
-- 术语上下文、QA、写回门禁和 verified export 共用 scope-aware evaluator。只有无冲突、明确适用的 required / forbidden 规则硬拦；数字、换行和普通 token 差异进入 QA。
-- 五个最小本地化 Skill 随应用分发；受管 Context 图片沿用 `cat_read_context_doc` 作为 Pi 视觉内容，不新增 OCR 或图片服务。
-- 项目 Agent 设置复用 Proma 原生 Skills / Memory UI；阶段覆盖和 QA 阻断层级在 Workbench 可见。
-- 原生导入支持多文件或文件夹；Agent / 原生导出均支持 `verified` 与需明确确认的 `as-is`。Renderer 不接收任意路径。
-- Prompt 保留单 Builder；Project Digest 暴露 `complete / partial / skipped / truncated`，失败对模型可见，project-data 有数据围栏。
+- 产品仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench；没有第二套 Agent、Chat、Session、权限、Planning、Preview 或 Collaboration。
+- 一个 Linguist 项目对应一个正常可见的 Proma Workspace。新会话 cwd 直接使用原生 Workspace workbench，不再创建第二套 LA session workspace。
+- 历史 session workspace 只在原生 workbench 为空时做一次不覆盖复制；旧目录不删除，`.claude`、Memory 和旧 manifest 不迁入。
+- Linguist Runtime 保留 `workspaceId / workspaceSlug`，因此原生 Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue、Collaboration 与 CAT Tools 可在同一 runtime 组合；同 Workspace 的普通 Agent 不获得 CAT Tools。
+- General 可选择性委派 Translator、Reviewer 或 Proofreader，不强制三阶段。子会话继承同一 Workspace / CAT 项目并冻结 Segment 范围，通过共享 CAT Store 交接。
+- 委派结束状态与 CAT 完成证据分离：`linguistOutcome` 返回岗位、阶段、`confirmed / unchanged / corrected / blocked / pending` 与 `status`；进程结束不再冒充 CAT 阶段完成。
+- `cat_confirm_segments` 仍记录 Reviewer / Proofreader 的 `unchanged / corrected / blocked` 决策；Reviewer 冻结范围 100% 覆盖规则未放宽。
+- Agent 侧栏仍使用原生 Workspace 行，只增加 Linguist 标记和 Workbench 入口；项目设置复用原生 Skills、MCP、AGENTS.md、Memory 和 Files。
+- Workbench 直接展示 Translator / Reviewer / Proofreader 的 Store 覆盖；格式错误按五类 typed detail 给出下一步，格式资格严格分开“LA 内部验证”与“平台资格”。
+- XLIFF 厂商内容优先于通用扩展名；保留的厂商扩展名错配和 Adapter 最高分并列均 fail closed。通用 XLIFF 只读写 direct-child target，SDLXLIFF 支持嵌套 `mrk`，多 `<file>` 可复用 native id，未修改导出直接返回原始 bytes。
+- Store 未新增 SDL / Phrase / memoQ 路由硬编码；格式选择仍留在 format registry / adapter 层。
 
-## 验证事实
+## 本轮验证事实
 
-- 冻结依赖安装与 Electron typecheck 通过；根 `1518/1518`（`6884` assertions）、boundary `4/4`、fusion `9/9` 通过。上一完整 CAT 回归仍为 Electron Linguist `212/212`、CAT Store `230/230`、CAT Tools `42/42` 与许可证门禁通过。
-- 上一完整 macOS arm64 packaged vertical（`0.17.2`）：Agent `15 PASS / 0 FAIL`、Chat `19 / 0`、Linguist `21 / 0 / 2 MANUAL`。本次仅改显示元数据的 `0.17.3` 已通过 `smoke:pack` 与产物完整性校验，未冒充重跑完整 vertical。
-- 产物与本机 `/Applications/Linguist Agent.app` 均为 `0.17.3`，`app.asar` SHA-256 均为 `4cd09ad7161449ff3f41def2d924ae2afe973427842b9f3fa27c466b980c02b0`；安装后主进程已启动。旧 `0.17.2` 已移入废纸篓，可恢复。
-- About 与 Linguist Diagnostics 现显示 Proma `v0.17.1@6094036d` 和正式 merge `96155d1a`；回归测试直接对照 `proma-baseline.json`，防止再次漂移。
-- 已在真实用户 Provider 配置下用 `ChatGPT 订阅 (Codex) · GPT-5.6 Sol` 完成一次真实请求，得到精确响应 `REAL_PROVIDER_OK`。这只证明 Provider 请求路径可用，不等于四岗位语言质量验证。
-- 启动崩溃 `ERR_PACKAGE_PATH_NOT_EXPORTED` 已从根因修复：主进程不再用 CJS `require()` 加载 ESM-only Pi 包；修复后的同一产物已通过 packaged vertical 并安装。
-- SBOM 当前含 430 个第三方生产依赖；机读真源为 `docs/release/sbom-full.json`。
+- 全仓 `bun run typecheck` 通过。
+- CAT Formats `166/166` 通过；包含 direct target + alt-trans、SDL 嵌套 `mrk`、多 file 复用 id、原始 bytes、扩展名错配和同分歧义回归。
+- upstream boundary `4/4` 通过；v0.17.15 当前精确 Proma Core ledger 为 `258` 个触点。
+- Workspace / Session / Collaboration 相关回归已通过：agent-session `27`、binding/copy `13`、session CAT tools `11`、fusion architecture `10`，另有 migration/scope/integrity/diagnostics 和 delegation 专项测试。
+- 合并后全量 `bun test` 为 `1539 pass / 11 fail`；11 项均为本轮前已存在的 palette/a11y/匿名合同与 MCP HTTP 恢复失败，本轮 K1–K5 没有新增失败。
+- `bun run electron:build` 已完成 main、preload、renderer、CLI 和 Agent Island 构建；EventKit native 阶段因上游脚本调用 `npx node-gyp install 24.3.0` 且当前未获 headers 下载授权而停止。因此本分支尚未取得完整 build、packaged app 启动或 packaged vertical 证据。
+- 本机已安装版本仍是上一轮 `0.17.3`；它不证明当前 `0.17.24` 分支可打包或运行。
 
 ## 仍未取得的证据
 
+- 当前分支完整 Electron build、`smoke:pack`、packaged startup，以及 Chat / Agent / Linguist 各一次真实运行。
+- packaged app 中使用真实 Provider 完成 3–5 个匿名 Segment 的 General → Translator → Reviewer → Proofreader 全链。
 - 同模型、同 reasoning 的真实语言任务对照。
-- 真实 Provider 驱动代表性格式完成四岗位翻译 → 审校 → 校对 → `verified` 交付。
 - 真实 Phrase / memoQ 平台互操作、Native Open/Save、IME、VoiceOver、完整键盘与 14 天日用。
 
-这些项目保持 pending，不得由单元测试、Fake Model 或 packaged smoke 冒充完成。
+这些项目保持 pending，不得由单元测试、Fake Model、上一安装版本或部分 build 冒充完成。
