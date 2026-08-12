@@ -48,6 +48,11 @@ test('四岗位使用同一简化 builder，缺文件回退且普通会话不注
       assert.equal(built.status.projectDigestTruncated, false)
       assert.match(built.prompt, /cat_apply_translations/)
       assert.match(built.prompt, /后续.*检查.*不能成为本轮降低标准的理由/)
+      if (role === 'general') {
+        assert.match(built.prompt, /自主委派 Translator、Reviewer 或 Proofreader/)
+        assert.match(built.prompt, /不要默认强制完整三阶段/)
+        assert.match(built.prompt, /以 CAT Store 返回的实际完成证据为准/)
+      }
       assert.doesNotMatch(built.prompt, /linguist_prompt_manifest|fallback_layers|prompt_contract_hash/)
     }
     const fallback = buildLinguistPrompt(
