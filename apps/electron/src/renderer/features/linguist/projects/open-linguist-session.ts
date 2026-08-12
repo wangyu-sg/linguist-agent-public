@@ -5,7 +5,7 @@ import type {
   LinguistProjectOpenRequest,
   LinguistProjectOpenResult,
 } from '@proma/shared'
-import { agentSessionsAtom } from '@/atoms/agent-atoms'
+import { agentSessionsAtom, agentSidePanelOpenAtom, agentDiffPanelTabAtom } from '@/atoms/agent-atoms'
 import {
   openLocalizationProjectTab,
   tabsAtom,
@@ -14,6 +14,7 @@ import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
 import { openLocalizationProject } from './open-localization-project'
 import {
+  ensureProjectAgentSession,
   selectProjectAgentSession,
   selectProjectAgentSessionForHistory,
 } from './project-agent-session'
@@ -95,4 +96,22 @@ export async function openLinguistAgentSession(
     agentPresentation: 'full',
   })
   return { ok: true, data: { projectId, readOnlyHistory } }
+}
+
+/**
+ * K3「Agent 能力 → Files」入口：确保项目会话存在后进入 Full AgentView，
+ * 并展开原生 Files 侧面板。不新建第二套文件管理界面。
+ */
+export async function openLinguistProjectFilesPanel(
+  store: JotaiStore,
+  projectId: string,
+  openProject: OpenProject = (input) => window.electronAPI.linguistProjectsOpen(input),
+): Promise<LinguistIpcResult<OpenLinguistSessionResult>> {
+  const ensured = await ensureProjectAgentSession(store, projectId)
+  if (!ensured.ok) return ensured
+  const opened = await openLinguistAgentSession(store, ensured.data.id, openProject)
+  if (!opened.ok) return opened
+  store.set(agentSidePanelOpenAtom, true)
+  store.set(agentDiffPanelTabAtom, (prev) => new Map(prev).set(ensured.data.id, 'files'))
+  return opened
 }

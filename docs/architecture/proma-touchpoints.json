@@ -706,6 +706,16 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
+      "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.test.tsx",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+    },
+    {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/index.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."

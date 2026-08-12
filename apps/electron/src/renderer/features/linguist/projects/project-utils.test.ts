@@ -181,6 +181,53 @@ describe('LINGUIST_IPC_ERROR_MESSAGES（稳定码中文化）', () => {
       expect(text.length).toBeGreaterThan(code.length)
     }
   })
+
+  test('K5：厂商格式误路由时给出分类文案与下一步，不含内部细节', () => {
+    const mismatch = describeLinguistIpcError({
+      code: 'FORMAT_UNSUPPORTED',
+      message: 'not phrase mxliff',
+      formatDetails: {
+        code: 'FORMAT_UNSUPPORTED',
+        category: 'format_mismatch',
+        filename: 'batch.mxliff',
+        triedAdapterIds: ['phrase_mxliff', 'xliff'],
+      },
+    })
+    expect(mismatch).toContain('batch.mxliff')
+    expect(mismatch).toContain('扩展名与内容结构不匹配')
+    expect(mismatch).toContain('没有按通用格式导入')
+    expect(mismatch).toContain('（FORMAT_UNSUPPORTED）')
+    expect(mismatch).not.toContain('not phrase mxliff')
+
+    const ambiguous = describeLinguistIpcError({
+      code: 'FORMAT_AMBIGUOUS',
+      message: 'tie',
+      formatDetails: {
+        code: 'FORMAT_AMBIGUOUS',
+        category: 'format_ambiguous',
+        filename: 'batch.xlf',
+        score: 0.9,
+        adapterIds: ['xliff', 'mqxliff'],
+      },
+    })
+    expect(ambiguous).toContain('同时符合多种格式结构')
+    expect(ambiguous).toContain('（FORMAT_AMBIGUOUS）')
+
+    const corrupt = describeLinguistIpcError({
+      code: 'FORMAT_PARSE_ERROR',
+      message: 'stack…',
+      formatDetails: {
+        code: 'FORMAT_PARSE_ERROR',
+        category: 'file_corrupt',
+        adapterId: 'xliff',
+        filename: 'broken.xlf',
+        detail: 'XML 在第 12 行截断',
+      },
+    })
+    expect(corrupt).toContain('broken.xlf 已损坏')
+    expect(corrupt).toContain('XML 在第 12 行截断')
+    expect(corrupt).not.toContain('stack')
+  })
 })
 
 describe('describeImportUndoBlockedCounts（LA-INTAKE-007 撤销拒绝计数）', () => {

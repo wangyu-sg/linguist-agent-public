@@ -1,6 +1,6 @@
 {
   "name": "@proma/electron",
-  "version": "0.17.22",
+  "version": "0.17.24",
   "description": "Linguist Agent - desktop localization agent, built on Proma (AGPL-3.0) - Electron App",
   "main": "dist/main.cjs",
   "author": {

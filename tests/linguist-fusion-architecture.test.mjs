@@ -54,6 +54,7 @@ const FORBIDDEN_CAT_CORE_IMPORTS = [
 const REGISTERED_PROMA_TO_LINGUIST_IMPORTERS = new Set([
   'apps/electron/src/renderer/components/agent/AgentHeader.tsx',
   'apps/electron/src/renderer/components/agent/AgentView.tsx',
+  'apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx',
   'apps/electron/src/renderer/components/agent/SidePanel.tsx',
   'apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx',
   'apps/electron/src/renderer/components/app-shell/ModeSwitcher.tsx',
