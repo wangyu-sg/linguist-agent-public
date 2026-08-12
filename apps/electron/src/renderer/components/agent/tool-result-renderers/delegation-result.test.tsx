@@ -6,11 +6,26 @@ const REVIEWER_OUTCOME = {
   role: 'reviewer',
   stage: 'editing',
   total: 101,
-  decided: 101,
+  confirmed: 0,
   unchanged: 72,
   corrected: 29,
   blocked: 0,
-  complete: true,
+  pending: 0,
+  status: 'complete',
+  decided: 101,
+}
+
+const TRANSLATOR_OUTCOME = {
+  role: 'translator',
+  stage: 'translation',
+  total: 101,
+  confirmed: 98,
+  unchanged: 0,
+  corrected: 0,
+  blocked: 3,
+  pending: 0,
+  status: 'completed_with_blocks',
+  decided: 101,
 }
 
 function renderResult(payload: unknown, isError = false): string {
@@ -26,7 +41,14 @@ describe('DelegationResultRenderer', () => {
         {
           title: '审校当前批次',
           status: 'completed',
-          linguistOutcome: { ...REVIEWER_OUTCOME, decided: 96, blocked: 2, complete: false },
+          linguistOutcome: {
+            ...REVIEWER_OUTCOME,
+            corrected: 24,
+            blocked: 5,
+            pending: 5,
+            status: 'in_progress',
+            decided: 96,
+          },
         },
         {
           title: '复审修正段',
@@ -40,12 +62,20 @@ describe('DelegationResultRenderer', () => {
     expect(html).toContain('已结束')
     expect(html).toContain('运行中')
     // “已结束”不推断为“已完成”：第一张卡是未完成（含阻塞），第二张才是已完成
-    expect(html).toContain('审校覆盖 96 / 101 · 未修改 72 · 已修正 29 · 阻塞 2')
-    expect(html).toContain('有阻塞')
+    expect(html).toContain('审校覆盖 96 / 101 · 未修改 72 · 已修正 24 · 阻塞 5')
+    expect(html).toContain('未完成')
     expect(html).toContain('审校覆盖 101 / 101 · 未修改 72 · 已修正 29 · 阻塞 0')
     expect(html).toContain('已完成')
     // 岗位标签
     expect(html).toContain('审校')
+  })
+
+  test('given 翻译委派带阻塞 when 渲染 then 显示确认口径与有阻塞', () => {
+    const html = renderResult({ delegation: { title: '翻译批次', status: 'completed', linguistOutcome: TRANSLATOR_OUTCOME } })
+
+    expect(html).toContain('翻译覆盖 101 / 101 · 已确认 98 · 阻塞 3')
+    expect(html).toContain('有阻塞')
+    expect(html).not.toContain('未修改')
   })
 
   test('given 普通委派（无 linguistOutcome） when 渲染 then 回退默认渲染器不显示岗位与覆盖', () => {

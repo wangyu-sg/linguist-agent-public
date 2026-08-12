@@ -17,6 +17,7 @@ import type {
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { Button } from '@/components/ui/button'
 import { LINGUIST_BUILD_METADATA } from '@/lib/linguist-build-metadata'
+import { FormatQualificationCard } from './FormatQualificationCard'
 import { describeLinguistIpcError } from './project-utils'
 
 type DiagnosticsState = {
@@ -333,6 +334,7 @@ export function ProjectDiagnosticsSettings({
   return (
     <section aria-label="项目诊断" className="space-y-3 py-1">
       <BuildMetadataCard />
+      <FormatQualificationCard />
       <PromptStatusCard
         prompt={state.status?.prompt}
         loading={state.loading}

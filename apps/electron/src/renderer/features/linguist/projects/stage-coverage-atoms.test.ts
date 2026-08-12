@@ -46,6 +46,31 @@ describe('formatStageCoverage（K2 验收）', () => {
     expect(view.text).toBe('校对 101 / 101 · 未修改 89 · 已修正 10 · 阻塞 2')
   })
 
+  test('K4 翻译阶段只显示确认口径与阻塞，不显示未修改/已修正', () => {
+    const view = formatStageCoverage('translation', coverage({
+      confirmed: 98,
+      unchanged: 0,
+      corrected: 0,
+      blocked: 3,
+      pending: 0,
+      status: 'completed_with_blocks',
+    }))
+    expect(view.decided).toBe(101)
+    expect(view.complete).toBe(true)
+    expect(view.text).toBe('翻译 101 / 101 · 阻塞 3')
+
+    const inProgress = formatStageCoverage('translation', coverage({
+      confirmed: 95,
+      unchanged: 0,
+      corrected: 0,
+      blocked: 3,
+      pending: 3,
+      status: 'in_progress',
+    }))
+    expect(inProgress.complete).toBe(false)
+    expect(inProgress.text).toBe('翻译 98 / 101 · 阻塞 3')
+  })
+
   test('覆盖统计严格属于当前批次键', () => {
     expect(stageCoverageKey('prj-a', 'asset-1')).toBe('prj-a:asset-1')
     expect(stageCoverageKey('prj-a', 'asset-2')).not.toBe(stageCoverageKey('prj-b', 'asset-2'))

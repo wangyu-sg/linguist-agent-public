@@ -14,16 +14,18 @@ import { cn } from '@/lib/utils'
 import { getLinguistRoleOption } from '@/features/linguist/session-binding/LinguistRoleMenu'
 import { DefaultResultRenderer } from './default-result'
 
-/** 主进程 LinguistDelegationOutcome 的线格式镜像。 */
+/** 主进程 LinguistDelegationOutcome 的线格式镜像（extends LinguistStageDecisionCoverage）。 */
 interface LinguistDelegationOutcomePayload {
   role: 'translator' | 'reviewer' | 'proofreader'
   stage: 'translation' | 'editing' | 'proofreading'
   total: number
-  decided: number
+  confirmed: number
   unchanged: number
   corrected: number
   blocked: number
-  complete: boolean
+  pending: number
+  status: 'in_progress' | 'complete' | 'completed_with_blocks'
+  decided: number
 }
 
 interface DelegationSummaryPayload {
@@ -65,11 +67,20 @@ export function delegationStatusLabel(status: string | undefined): string {
   }
 }
 
-/** CAT 阶段结果：只看冻结范围的审计覆盖，不从会话状态推断。 */
+/** CAT 阶段结果：只看冻结范围的审计覆盖状态，不从会话状态推断。 */
 export function linguistStageOutcomeLabel(outcome: LinguistDelegationOutcomePayload): string {
-  if (outcome.complete) return '已完成'
-  if (outcome.blocked > 0) return '有阻塞'
+  if (outcome.status === 'complete') return '已完成'
+  if (outcome.status === 'completed_with_blocks') return '有阻塞'
   return '未完成'
+}
+
+/** Translator 看通用确认数；Reviewer/Proofreader 看 decision 拆分。 */
+export function formatDelegationCoverage(outcome: LinguistDelegationOutcomePayload): string {
+  const label = getLinguistRoleOption(outcome.role).shortLabel
+  if (outcome.role === 'translator') {
+    return `${label}覆盖 ${outcome.decided} / ${outcome.total} · 已确认 ${outcome.confirmed} · 阻塞 ${outcome.blocked}`
+  }
+  return `${label}覆盖 ${outcome.decided} / ${outcome.total} · 未修改 ${outcome.unchanged} · 已修正 ${outcome.corrected} · 阻塞 ${outcome.blocked}`
 }
 
 function DelegationSummaryRow({ item }: { item: DelegationSummaryPayload }): React.ReactElement {
@@ -89,11 +100,11 @@ function DelegationSummaryRow({ item }: { item: DelegationSummaryPayload }): Rea
       </div>
       {outcome && (
         <div className="mt-1 text-foreground/55">
-          {`${getLinguistRoleOption(outcome.role).shortLabel}覆盖 ${outcome.decided} / ${outcome.total} · 未修改 ${outcome.unchanged} · 已修正 ${outcome.corrected} · 阻塞 ${outcome.blocked}`}
+          {formatDelegationCoverage(outcome)}
           <span
             className={cn(
               'ml-2',
-              outcome.complete ? 'text-foreground/45' : 'text-warning',
+              outcome.status === 'complete' ? 'text-foreground/45' : 'text-warning',
             )}
           >
             {linguistStageOutcomeLabel(outcome)}

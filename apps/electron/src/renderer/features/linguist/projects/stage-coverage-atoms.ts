@@ -1,5 +1,5 @@
 /**
- * 阶段 decision 覆盖统计（K2：Reviewer/Proofreader 真实进度投影）。
+ * 阶段 decision 覆盖统计（K2/K4：Translator/Reviewer/Proofreader 真实进度投影）。
  *
  * 数据只来自主进程聚合 IPC（linguist.projects.getStageCoverage），前端不从
  * 可见段数 / Agent 文本 / Proposal 数推算覆盖率。本文件不含 React 依赖，
@@ -14,10 +14,11 @@ import type {
   LinguistWorkflowStage,
 } from '@proma/shared'
 
-/** 展示的阶段集合：Reviewer=editing、Proofreader=proofreading。 */
-export const COVERAGE_STAGES = ['editing', 'proofreading'] as const
+/** 展示的阶段集合：Translator=translation、Reviewer=editing、Proofreader=proofreading。 */
+export const COVERAGE_STAGES = ['translation', 'editing', 'proofreading'] as const
 
 export const STAGE_COVERAGE_LABELS: Record<(typeof COVERAGE_STAGES)[number], string> = {
+  translation: '翻译',
   editing: '审校',
   proofreading: '校对',
 }
@@ -37,7 +38,7 @@ export const linguistStageCoverageAtomFamily = atomFamily(
 
 type Store = ReturnType<typeof createStore>
 
-/** 拉取当前批次 editing / proofreading 覆盖并写入投影；失败阶段保持旧值。 */
+/** 拉取当前批次各阶段覆盖并写入投影；失败阶段保持旧值。 */
 export async function refreshLinguistStageCoverage(
   store: Store,
   projectId: string,
@@ -73,15 +74,18 @@ export interface StageCoverageText {
   complete: boolean
 }
 
-/** 状态栏紧凑文案；decided = total - pending，仅后端聚合值。 */
+/** 状态栏紧凑文案；decided = total - pending，仅后端聚合值。翻译阶段按 K4 只显示确认口径与阻塞。 */
 export function formatStageCoverage(
   stage: (typeof COVERAGE_STAGES)[number],
   coverage: LinguistStageDecisionCoverage,
 ): StageCoverageText {
   const decided = coverage.total - coverage.pending
+  const text = stage === 'translation'
+    ? `${STAGE_COVERAGE_LABELS[stage]} ${decided} / ${coverage.total} · 阻塞 ${coverage.blocked}`
+    : `${STAGE_COVERAGE_LABELS[stage]} ${decided} / ${coverage.total}`
+      + ` · 未修改 ${coverage.unchanged} · 已修正 ${coverage.corrected} · 阻塞 ${coverage.blocked}`
   return {
-    text: `${STAGE_COVERAGE_LABELS[stage]} ${decided} / ${coverage.total}`
-      + ` · 未修改 ${coverage.unchanged} · 已修正 ${coverage.corrected} · 阻塞 ${coverage.blocked}`,
+    text,
     decided,
     total: coverage.total,
     blocked: coverage.blocked,
