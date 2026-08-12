@@ -27,7 +27,7 @@ env:
 jobs:
   validate:
     name: 完整 CI 门禁
-    if: ${{ github.event_name != 'workflow_call' || inputs.run_validation }}
+    if: ${{ github.event_name == 'push' || inputs.run_validation }}
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ inputs.ref || github.ref }}
