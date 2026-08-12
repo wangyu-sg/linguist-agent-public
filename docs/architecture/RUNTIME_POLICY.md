@@ -1,6 +1,6 @@
 # Runtime Policy
 
-Linguist Agent 采用 Proma v0.17.1 的单一 Pi Runtime。Claude 模型仍可通过 Provider 使用，但不再包含 Claude Agent SDK runtime。
+Linguist Agent 采用 Proma v0.17.15 的单一 Pi Runtime。Claude 模型仍可通过 Provider 使用，但不再包含 Claude Agent SDK runtime。
 
 - Agent、Automations、远程桥与 Linguist 项目会话共用同一套 Pi Runtime、Provider 和 Session 实现；Chat 继续使用共享 Provider 层。
 - Linguist 不创建第二套 Runtime selector、路由或状态；项目能力只通过既有 Session authority 注入 CAT Tools。
