@@ -444,7 +444,9 @@ export function createAgentSession(
     channelId,
     modelId,
     workspaceId,
-    agentCwdMode: workspaceId ? agentCwdMode ?? 'project' : undefined,
+    agentCwdMode: workspaceId
+      ? linguistBinding ? 'session' : agentCwdMode ?? 'project'
+      : undefined,
     sessionWorkbenchLayout: workspaceId ? sessionWorkbenchLayout ?? 'root' : undefined,
     // 新会话继承已持久化的全局思考偏好，之后仍可按会话单独调整。
     reasoningLevel: defaultThinkingLevel,

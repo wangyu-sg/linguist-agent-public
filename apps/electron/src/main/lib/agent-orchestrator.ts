@@ -780,16 +780,9 @@ export class AgentOrchestrator {
       callbacks.onComplete([], { startedAt: streamStartedAt })
     }
 
-    // 会话元数据是运行项目的权威来源。渲染端的当前项目只是导航状态，不能
-    // 覆盖已存在会话的项目归属，否则会把 Agent cwd 指到另一个用户项目根。
-    // Linguist binding 是会话的唯一项目身份。忽略历史/异常元数据中的 workspaceId，
-    // 避免 Planning、协作或 Claude sidecar 把运行重新关联到另一个普通 Agent 项目。
-    const hasLinguistSessionBinding = sessionMeta
-      ? resolveAgentProfile(sessionMeta).kind === 'linguist'
-      : false
-    const sessionWorkspaceId = hasLinguistSessionBinding
-      ? undefined
-      : sessionMeta?.workspaceId
+    // 会话元数据是 Workspace 权威来源；Linguist binding 与它正交，只叠加 CAT 身份。
+    // 渲染端的当前项目只是导航状态，不能覆盖已存在会话的项目归属。
+    const sessionWorkspaceId = sessionMeta?.workspaceId
     if (sessionWorkspaceId && requestedWorkspaceId && requestedWorkspaceId !== sessionWorkspaceId) {
       reportPreflightError({
         code: 'unknown_error',
@@ -800,9 +793,7 @@ export class AgentOrchestrator {
       })
       return
     }
-    const workspaceId = hasLinguistSessionBinding
-      ? undefined
-      : sessionWorkspaceId ?? requestedWorkspaceId
+    const workspaceId = sessionWorkspaceId ?? requestedWorkspaceId
 
     // 本地项目根由用户管理。根目录被删除、替换为文件或无法访问时，绝不能
     // 进入 SDK/Agent 初始化链路，以免后续文件工具通过 mkdir 间接重建该目录。
@@ -977,14 +968,14 @@ export class AgentOrchestrator {
     try {
       console.log(`[Agent 编排] 启动 Pi runtime — 模型: ${modelId || DEFAULT_MODEL_ID}, resume: ${existingSdkSessionId ?? '无'}`)
 
-      // 会话 metadata 是执行身份真源；Linguist 项目 cwd 优先于任何残留 workspaceId。
+      // 会话 metadata 同时承载 Workspace 与可选 Linguist binding，两者不互斥。
       const executionScope = sessionMeta
         ? resolveAgentExecutionScope(sessionMeta)
         : { kind: 'home' as const, cwd: homedir() }
       agentCwd = executionScope.cwd
       workspaceSlug = undefined
       workspace = undefined
-      if (executionScope.kind !== 'linguist-project' && workspaceId) {
+      if (workspaceId) {
         const ws = getAgentWorkspace(workspaceId)
         if (!ws) {
           throw new Error(`指定的 Agent 项目不存在或已删除: ${workspaceId}`)
@@ -1015,12 +1006,6 @@ export class AgentOrchestrator {
         }
       }
       console.log(`[Agent 编排] 执行范围: ${executionScope.kind} (${sessionId})`)
-
-      if (executionScope.kind === 'linguist-project' && existingSdkSessionId) {
-        console.log(`[Agent 编排] 将尝试 resume: ${existingSdkSessionId}`)
-      } else if (executionScope.kind === 'linguist-project') {
-        console.log(`[Agent 编排] 无 sdkSessionId，将作为新会话启动（回填历史上下文）`)
-      }
 
       // 9.4.1 Fork session JSONL 迁移已在 forkAgentSession 中完成；fork 的 cwd 语义
       // 从源会话继承并持久化，避免历史相对路径在恢复时切换到另一文件根。
