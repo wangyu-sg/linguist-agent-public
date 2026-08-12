@@ -1,6 +1,6 @@
 {
   "name": "@proma/electron",
-  "version": "0.17.29",
+  "version": "0.17.30",
   "description": "Linguist Agent - desktop localization agent, built on Proma (AGPL-3.0) - Electron App",
   "main": "dist/main.cjs",
   "author": {
@@ -23,7 +23,7 @@
     "watch:main": "concurrently -k -n main,cat-worker,integrity-worker \"esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist/main.cjs --external:electron --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:sharp --watch=forever\" \"bun run watch:cat-job-worker\" \"bun run watch:integrity-scrub-worker\"",
     "watch:preload": "esbuild src/preload/index.ts --bundle --platform=node --format=cjs --outfile=dist/preload.cjs --external:electron --watch=forever",
     "build:renderer": "vite build",
-    "build:resources": "cp -r resources dist/",
+    "build:resources": "bun -e \"import { cpSync } from 'node:fs'; cpSync('resources', 'dist/resources', { recursive: true })\"",
     "build:agent-island-native": "bun run scripts/build-agent-island-native.ts",
     "build:eventkit-native": "bun run scripts/build-eventkit-native.ts",
     "build:native-helpers": "bun run build:agent-island-native && bun run build:eventkit-native",

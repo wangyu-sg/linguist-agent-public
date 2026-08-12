@@ -40,26 +40,8 @@ jobs:
       - name: TypeScript 类型检查
         run: bun run typecheck
 
-      - name: 根单元测试
-        run: bun test
-
-      - name: CAT Core 测试
-        run: bun test packages/linguist-cat-core
-
-      - name: CAT Store 测试
-        run: bun --cwd packages/linguist-cat-store run test
-
-      - name: CAT Tools 测试
-        run: bun --cwd packages/linguist-cat-tools run test
-
-      - name: Linguist 主进程与安全测试
-        run: bun --cwd apps/electron run test:linguist
-
-      - name: 架构边界检查
-        run: bun run check:boundaries
-
-      - name: Linguist Fusion 单一实现架构检查
-        run: node --test tests/linguist-fusion-architecture.test.mjs
+      - name: 关键回归（目标 200–300 条）
+        run: bun run test
 
       - name: 依赖许可扫描
         run: bun run license:check

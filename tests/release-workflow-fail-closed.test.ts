@@ -24,6 +24,7 @@ describe('AC-002 发布链 fail-closed', () => {
   })
 
   test('关键资源复制失败会终止构建', () => {
-    expect(electronPackage.scripts['build:resources']).toBe('cp -r resources dist/')
+    expect(electronPackage.scripts['build:resources']).toContain("cpSync('resources', 'dist/resources', { recursive: true })")
+    expect(electronPackage.scripts['build:resources']).not.toContain('|| true')
   })
 })

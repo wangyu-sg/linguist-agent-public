@@ -268,10 +268,11 @@ test('cat_confirm_segments: Reviewer 的 101 段冻结范围跨两批后才 comp
         expectedRevision: 0,
         decision: 'unchanged',
       })),
-    }, 'confirm-page-1')).details as { coverage: { unchanged: number; pending: number; status: string } }
+    }, 'confirm-page-1')).details as { coverage: { confirmed: number; unchanged: number; pending: number; status: string } }
     assert.deepEqual(first.coverage, {
       scope: 'delegated',
       total: 101,
+      confirmed: 0,
       unchanged: 100,
       corrected: 0,
       blocked: 0,
