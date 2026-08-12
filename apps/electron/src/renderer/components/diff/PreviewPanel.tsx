@@ -29,6 +29,7 @@ import { getActiveAccelerator, getAcceleratorDisplay } from '@/lib/shortcut-regi
 import { detectIsWindows } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import { DiffTabContent } from './DiffTabContent'
+import { PreviewContentErrorBoundary } from './PreviewContentErrorBoundary'
 import { DefaultAppOpenButton } from './DefaultAppOpenButton'
 import { getDefaultAppTargetPath, getPreviewFileAccess } from './preview-open-path'
 import { LinguistPreviewBody } from '@/features/linguist/projects/LinguistPreviewBody'
@@ -185,6 +186,7 @@ export function PreviewPanel({ sessionId }: PreviewPanelProps): React.ReactEleme
               target={currentFile.linguist}
             />
           ) : (
+            <PreviewContentErrorBoundary resetKey={`${sessionId}:${currentFile.filePath}`}>
             <DiffTabContent
               key={`${sessionId}:${currentFile.filePath}`}
               filePath={currentFile.filePath}
@@ -194,9 +196,12 @@ export function PreviewPanel({ sessionId }: PreviewPanelProps): React.ReactEleme
               previewOnly={currentFile.previewOnly}
               readOnly={currentFile.readOnly}
               basePaths={currentFile.basePaths}
+              workspaceSkillSlug={currentFile.workspaceSkillSlug}
+              legacySkillFilePath={currentFile.legacySkillFilePath}
               baseRef={currentFile.baseRef}
               onEmptyDiff={handleClosePanel}
             />
+          </PreviewContentErrorBoundary>
           )
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-xs">

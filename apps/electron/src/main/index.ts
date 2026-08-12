@@ -55,23 +55,13 @@ function registerProtocolsAndHandlers(): void {
     app.commandLine.appendSwitch('disable-lcd-text')
   }
 
-  // macOS 文件关联：在 app ready 之前注册 open-file 事件
-  app.on('open-file', (event, filePath) => {
-    event.preventDefault()
-    handleMigrationFileOpen(filePath)
-  })
-
-  // Windows 文件关联：当用户双击文件时，新实例的参数会通过 second-instance 传给已有实例
+  // Windows 等平台通过 second-instance 唤起已有主窗口。
   app.on('second-instance', (_event, argv) => {
     if (hasOpenPlanningArgument(argv)) {
       showPlanningWindow()
       return
     }
     showAndFocusMainWindow()
-    const fileArg = argv.find((arg) => arg.endsWith('.proma-backup') || arg.endsWith('.proma-share'))
-    if (fileArg) {
-      handleMigrationFileOpen(fileArg)
-    }
   })
 }
 
@@ -108,6 +98,7 @@ import { seedDefaultSkills } from './lib/config-paths'
 import { upgradeDefaultSkillsInWorkspaces } from './lib/agent-workspace-manager'
 import { hasActiveAgentSessions, stopAllAgents } from './lib/agent-service'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
+import { browserController } from './lib/browser-controller'
 import { markRunningDelegationsAsInterrupted } from './lib/agent-session-manager'
 import { stopAllGenerations } from './lib/chat-service'
 import { configureUpdater, initAutoUpdater, cleanupUpdater } from './lib/updater/auto-updater'
@@ -151,8 +142,6 @@ import { registerGlobalShortcut, unregisterAllGlobalShortcuts } from './lib/glob
 import { setPromaVersion } from '@proma/core'
 import { TRAY_IPC_CHANNELS } from '../types'
 
-const MIGRATION_IPC_OPEN = 'migration:open-import-file'
-
 /** macOS 26+ 使用 Swift/AppKit NSPanel；其他平台不创建 Agent Island surface。 */
 function startAgentIslandSurface(): void {
   if (!isAgentIslandSupported()) {
@@ -172,13 +161,6 @@ function startAgentIslandSurface(): void {
   })
   if (!startedNative) {
     console.warn('[agent-island] macOS 原生 helper 启动失败，已禁用')
-  }
-}
-
-/** 检查文件路径是否为迁移文件，如果是则通知渲染进程打开导入流程 */
-function handleMigrationFileOpen(filePath: string): void {
-  if (filePath.endsWith('.proma-backup') || filePath.endsWith('.proma-share')) {
-    sendToMainWindow(MIGRATION_IPC_OPEN, { filePath })
   }
 }
 
@@ -478,6 +460,7 @@ function createWindow(): void {
   })
   setStoredMainWindow(mainWindow)
   installWindowsZoomInFallback(mainWindow)
+  browserController.setOwnerWindow(mainWindow)
 
   // Load the renderer
   const isDev = !app.isPackaged
@@ -596,6 +579,7 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     setStoredMainWindow(null)
+    browserController.dispose()
     mainWindow = null
   })
 }
@@ -843,6 +827,7 @@ app.on('before-quit', () => {
 
   // 中止所有活跃的 Agent 和 Chat 子进程
   stopAllAgents()
+  browserController.dispose()
   stopAllGenerations()
   // 清理更新器定时器
   cleanupUpdater()
