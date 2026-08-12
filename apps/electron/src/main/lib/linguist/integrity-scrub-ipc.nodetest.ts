@@ -22,7 +22,7 @@ function report(projectId: string): LinguistIntegrityScrubReport {
     startedAt: '2026-07-29T00:00:00.000Z',
     completedAt: '2026-07-29T00:00:01.000Z',
     checks: [{
-      id: 'session_workspaces',
+      id: 'export_manifests',
       status: 'unavailable',
       checkedItems: 1,
       failedItems: 0,

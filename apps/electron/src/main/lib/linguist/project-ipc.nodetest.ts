@@ -1117,3 +1117,28 @@ test('readPickedFileWithinLimit rejects a picked directory', async () => {
     /regular file/,
   )
 })
+
+test('format qualification: 只读列出已注册格式且平台资格默认不夸大', async () => {
+  const ipc = createLinguistProjectIpc({
+    getService: () => { throw new Error('qualification must not open a project') },
+  })
+  const result = await ipc.listFormatQualifications()
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.deepEqual(
+    result.data.map((item) => item.formatId),
+    [
+      'mqxliff_1_2',
+      'xliff_1_2',
+      'sdlxliff_1_2',
+      'phrase_mxliff_1_2',
+      'phrase_bilingual_docx_1',
+      'csv_rfc4180',
+      'json_i18n',
+      'xlsx_ooxml',
+    ],
+  )
+  assert.equal(result.data.every((item) => item.internalVerification === 'passed'), true)
+  assert.equal(result.data.every((item) => item.platformQualification === 'unverified'), true)
+  assert.equal(result.data.every((item) => item.extensions.length > 0), true)
+})

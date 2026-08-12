@@ -11,7 +11,7 @@ import { readProjectBlob, removeProjectBlob, saveProjectBlob } from './blobs'
 import { StoreNotFoundError } from './errors'
 import { ContextDocsRepository } from './repositories/context-docs'
 import { CatStore } from './store'
-import { makeClock, makeEntropy, makeTempDir } from './testkit'
+import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
 
 function setup() {
   const store = new CatStore({ rootDir: makeTempDir(), entropy: makeEntropy('pb-095-ctx'), now: makeClock() })
@@ -124,6 +124,34 @@ test('context docs: filters + pagination + project isolation', () => {
     const foreign = other.list()[0]!
     assert.equal(db.contextDocs.get(foreign.id), undefined)
     assert.throws(() => db.contextDocs.delete(foreign.id), (error) => error instanceof StoreNotFoundError)
+  } finally {
+    db.close()
+  }
+})
+
+test('context docs: Segment 关联可查询、幂等解除，并拒绝未知 Segment', () => {
+  const { db } = setup()
+  try {
+    const { segments } = db.assets.insertImported(makeImportedAsset({ segmentCount: 2 }))
+    const doc = db.contextDocs.insert({
+      kind: 'image',
+      originalFilename: 'hud.png',
+      blobRelpath: 'blobs/hud.png',
+    })
+    const segmentId = segments[0]!.id
+
+    assert.deepEqual(db.contextDocs.list({ segmentId }), [])
+    db.contextDocs.setSegmentLink(doc.id, segmentId, true)
+    db.contextDocs.setSegmentLink(doc.id, segmentId, true)
+    assert.deepEqual(db.contextDocs.list({ segmentId }).map((item) => item.id), [doc.id])
+
+    db.contextDocs.setSegmentLink(doc.id, segmentId, false)
+    db.contextDocs.setSegmentLink(doc.id, segmentId, false)
+    assert.deepEqual(db.contextDocs.list({ segmentId }), [])
+    assert.throws(
+      () => db.contextDocs.setSegmentLink(doc.id, 'seg_v2_'.padEnd(71, '0'), true),
+      (error) => error instanceof StoreNotFoundError,
+    )
   } finally {
     db.close()
   }

@@ -18,6 +18,7 @@ import { TaskGetResultRenderer } from './task-get-result'
 import { TaskListResultRenderer } from './task-list-result'
 import { DefaultResultRenderer } from './default-result'
 import { CatResultRenderer } from './cat-result'
+import { DelegationResultRenderer } from './delegation-result'
 
 export interface ToolResultRendererProps {
   toolName: string
@@ -49,6 +50,11 @@ export function ToolResultRenderer({ toolName, input, result, isError, basePath 
       return <TaskGetResultRenderer result={result} isError={isError} />
     case 'TaskList':
       return <TaskListResultRenderer result={result} isError={isError} />
+    case 'mcp__collaboration__delegate_agent':
+    case 'mcp__collaboration__wait_for_delegations':
+    case 'mcp__collaboration__list_delegations':
+    case 'mcp__collaboration__get_delegation_results':
+      return <DelegationResultRenderer result={result} isError={isError} />
     default:
       if (toolName.startsWith('cat_')) {
         return <CatResultRenderer toolName={toolName} result={result} isError={isError} />

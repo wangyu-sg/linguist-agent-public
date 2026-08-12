@@ -15,6 +15,7 @@ import {
   LINGUIST_LOCALE_MAX_LENGTH,
   LINGUIST_LOCALE_PATTERN,
   LINGUIST_PROJECT_NAME_MAX_LENGTH,
+  type LinguistFormatErrorDetails,
   type LinguistIpcError,
   type LinguistIpcErrorCode,
   type LinguistProjectHealthCheckInfo,
@@ -118,6 +119,7 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
   FORMAT_EXPORT_ERROR: '导出失败',
   FORMAT_SEGMENT_LOST: '导出会丢失段，已中止',
   FORMAT_UNSUPPORTED: '不支持的文件格式',
+  FORMAT_AMBIGUOUS: '文件格式存在歧义',
   SEGMENT_LOCKED: '段已锁定',
   REVISION_CONFLICT: '内容已被其他操作修改，请刷新后重试',
   STALE_PROPOSAL: '建议已过期',
@@ -127,11 +129,43 @@ export const LINGUIST_IPC_ERROR_MESSAGES: Record<LinguistIpcErrorCode, string> =
 }
 
 /**
+ * K5：五类格式错误的用户可读文案。分类与字段来自共享合同
+ * LinguistFormatErrorDetails（renderer 安全：无绝对路径与 stack），
+ * 文案给下一步指引，不把“暂不验证”说成“兼容”。
+ */
+export function describeLinguistFormatErrorDetails(details: LinguistFormatErrorDetails): string {
+  switch (details.code) {
+    case 'FORMAT_UNSUPPORTED':
+      return `文件 ${details.filename} 的扩展名与内容结构不匹配（已尝试：${details.triedAdapterIds.join('、')}）。为避免丢失平台元数据，没有按通用格式导入；请确认文件来源后重试`
+    case 'FORMAT_AMBIGUOUS':
+      return `文件 ${details.filename} 同时符合多种格式结构（${details.adapterIds.join('、')}），无法确定唯一导入方式；请确认来源格式后重试`
+    case 'FORMAT_PARSE_ERROR':
+      switch (details.category) {
+        case 'unsupported_version':
+          return `该 ${details.adapterId} 文件使用了暂不支持的格式版本：${details.detail}`
+        case 'vendor_structure_incomplete':
+          return `该 ${details.adapterId} 文件的厂商结构不完整：${details.detail}`
+        case 'file_corrupt':
+          return `文件 ${details.filename} 已损坏，无法解析：${details.detail}`
+      }
+    // eslint-disable-next-line no-fallthrough
+    case 'FORMAT_EXPORT_ERROR':
+      return `导出失败：${details.detail}`
+    case 'FORMAT_SEGMENT_LOST':
+      return `导出会丢失 ${details.missingSegmentIds.length} 个段，已中止${details.detail !== undefined ? `：${details.detail}` : ''}`
+  }
+}
+
+/**
  * 把 IPC 错误信封渲染为一行中文可读文案，固定附稳定码后缀
  * （码是公开契约，便于支持与日志对齐）。输入错误与 DOCX 抽取错误的
- * message 只含校验规则/固定诊断，可安全透出帮助定位。
+ * message 只含校验规则/固定诊断，可安全透出帮助定位；格式错误优先
+ * 使用 formatDetails 的分类文案。
  */
 export function describeLinguistIpcError(error: LinguistIpcError): string {
+  if (error.formatDetails !== undefined) {
+    return `${describeLinguistFormatErrorDetails(error.formatDetails)}（${error.code}）`
+  }
   const base = LINGUIST_IPC_ERROR_MESSAGES[error.code] ?? '发生未知错误'
   if (
     error.code === LINGUIST_IPC_ERROR_CODES.INVALID_INPUT

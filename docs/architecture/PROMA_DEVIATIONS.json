@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
   "baseline": {
-    "tag": "v0.17.1",
-    "commit": "6094036d3f6f4363c44ce8a11155ecd531a80aae",
-    "formalMerge": "96155d1ad2f131e10fd2f0a6998ec13573aa2ead"
+    "tag": "v0.17.15",
+    "commit": "73e9d014b56dfda7554011bc02cf8ee5af2c5493",
+    "formalMerge": "2ade7e7e045ce6beab817778b1b39f897045fdf3"
   },
-  "recomputedOn": "2026-08-11",
+  "recomputedOn": "2026-08-12",
   "formalMergePatch": {
-    "changedPaths": 828,
-    "allowlistedPaths": 569,
-    "registeredCoreTouchpoints": 255
+    "changedPaths": 841,
+    "allowlistedPaths": 581,
+    "registeredCoreTouchpoints": 256
   },
   "currentLedger": {
-    "registeredCoreTouchpoints": 261
+    "registeredCoreTouchpoints": 258
   },
   "deviations": [
     {
@@ -36,12 +36,12 @@
       "id": "local-host-seams",
       "classification": "Local Host Seam",
       "ticket": "LA-SYNC-003 / LA-SYNC-004",
-      "registeredTouchpoints": 223,
+      "registeredTouchpoints": 220,
       "scope": [
         "runtime, session, preload, IPC, and shared contracts",
         "native Agent/Chat shell composition, sidebar, tabs, settings, and renderer state"
       ],
-      "rationale": "Proma v0.17.1 has no stable project-bound CAT authority and vertical-agent composition contract; these narrow seams retain the native Agent/Chat implementation.",
+      "rationale": "Proma v0.17.15 has no stable project-bound CAT authority and vertical-agent composition contract; these narrow seams retain the native Agent/Chat implementation.",
       "sunset": {
         "status": "review-at-upstream-sync",
         "condition": "Replace a seam only when upstream provides an equivalent stable Host Contract that preserves session authority and fail-closed CAT behavior."

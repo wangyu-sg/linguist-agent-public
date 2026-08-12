@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useStore } from 'jotai'
 import { Archive, Bot, Languages, PanelBottom, PanelLeft, PanelRight, Settings } from 'lucide-react'
-import type { LinguistProjectInfo, LinguistProjectSummary, LinguistStageDecisionCoverage } from '@proma/shared'
+import type { LinguistProjectInfo, LinguistProjectSummary, LinguistStageDecisionCoverage, LinguistWorkflowStage } from '@proma/shared'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -570,6 +570,9 @@ export function LinguistWorkbenchShell({
               {activeAsset.currentStageCounts.draft}
             </span>
           )}
+          {activeAsset !== undefined && stageCoverage.translation !== undefined && (
+            <StageCoverageSpan stage="translation" coverage={stageCoverage.translation} />
+          )}
           {activeAsset !== undefined && stageCoverage.editing !== undefined && (
             <StageCoverageSpan stage="editing" coverage={stageCoverage.editing} />
           )}
@@ -603,7 +606,7 @@ function StageCoverageSpan({
   stage,
   coverage,
 }: {
-  stage: 'editing' | 'proofreading'
+  stage: LinguistWorkflowStage
   coverage: LinguistStageDecisionCoverage
 }): React.ReactElement {
   const view = formatStageCoverage(stage, coverage)

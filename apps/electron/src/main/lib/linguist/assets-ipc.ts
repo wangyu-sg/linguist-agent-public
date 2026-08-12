@@ -15,6 +15,7 @@ import {
   LINGUIST_IMPORT_MAX_BYTES,
   LINGUIST_RESOURCE_IMPORT_MAX_BYTES,
   LINGUIST_PROJECT_ASSET_ID_PATTERN,
+  LINGUIST_SEGMENT_ID_PATTERN,
   type LinguistAssetPreviewResult,
   type LinguistAssetsDeleteResult,
   type LinguistAssetsQueryResult,
@@ -99,6 +100,13 @@ function readKind(record: Record<string, unknown>): LinguistProjectAssetKind {
 function readAssetId(value: unknown, label = 'id'): string {
   if (typeof value !== 'string' || !LINGUIST_PROJECT_ASSET_ID_PATTERN.test(value)) {
     invalid(`${label} must be a valid project-asset Stable ID`)
+  }
+  return value
+}
+
+function readSegmentId(value: unknown): string {
+  if (typeof value !== 'string' || !LINGUIST_SEGMENT_ID_PATTERN.test(value)) {
+    invalid('segmentId must be a valid Segment Stable ID')
   }
   return value
 }
@@ -298,9 +306,14 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
         const projectId = readProjectId(record)
         const kind = readKind(record)
         const page = readPage(record)
+        const segmentId = record.segmentId === undefined ? undefined : readSegmentId(record.segmentId)
+        if (segmentId !== undefined) {
+          if (kind !== 'contextDocs') invalid('segmentId is only supported for contextDocs')
+        }
         const query: ProjectAssetsQuery = {
           ...(page.query !== undefined ? { query: page.query } : {}),
           ...(page.status !== undefined ? { status: page.status } : {}),
+          ...(typeof segmentId === 'string' ? { segmentId } : {}),
           limit: page.limit,
           offset: page.offset,
         }
@@ -366,6 +379,19 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
         getService().deleteProjectAsset(projectId, kind, id)
         emitAssetMutation(projectId)
         return { id }
+      })
+    },
+
+    setContextDocSegmentLink(input: unknown) {
+      return wrap(() => {
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const docId = readAssetId(record.docId, 'docId')
+        const segmentId = readSegmentId(record.segmentId)
+        if (typeof record.linked !== 'boolean') invalid('linked must be a boolean')
+        getService().setContextDocSegmentLink(projectId, docId, segmentId, record.linked)
+        emitAssetMutation(projectId)
+        return { docId, segmentId, linked: record.linked }
       })
     },
 

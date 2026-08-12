@@ -38,7 +38,7 @@ export interface SchemaMigration {
 }
 
 /** Current schema version this build understands. */
-export const SCHEMA_VERSION = 15
+export const SCHEMA_VERSION = 16
 
 const MIGRATION_1_SQL = `
 CREATE TABLE assets (
@@ -621,6 +621,17 @@ const MIGRATION_15_SQL = `
 ALTER TABLE assets ADD COLUMN format_config_json TEXT;
 `
 
+/** K6 Context Doc ↔ Segment many-to-many links. */
+const MIGRATION_16_SQL = `
+CREATE TABLE context_doc_segments (
+  context_doc_id TEXT NOT NULL REFERENCES context_docs(id) ON DELETE CASCADE,
+  segment_id TEXT NOT NULL REFERENCES segments(id) ON DELETE CASCADE,
+  PRIMARY KEY (context_doc_id, segment_id)
+);
+CREATE INDEX idx_context_doc_segments_segment
+  ON context_doc_segments(segment_id, context_doc_id);
+`
+
 export const MIGRATIONS: readonly SchemaMigration[] = [
   { version: 1, description: 'initial CAT schema (plan 5.4)', sql: MIGRATION_1_SQL },
   { version: 2, description: 'idempotent human proposal mutations (PB-053)', sql: MIGRATION_2_SQL },
@@ -690,5 +701,10 @@ export const MIGRATIONS: readonly SchemaMigration[] = [
     version: 15,
     description: 'opaque adapter import configuration for faithful re-export',
     sql: MIGRATION_15_SQL,
+  },
+  {
+    version: 16,
+    description: 'Context Doc links to translation segments',
+    sql: MIGRATION_16_SQL,
   },
 ]

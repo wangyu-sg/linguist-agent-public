@@ -1,36 +1,37 @@
 # Linguist Fusion 当前事实
 
-更新日期：2026-08-11
+更新日期：2026-08-12
 
 ## 基线
 
 | 项目 | 当前事实 |
 |---|---|
-| Proma Base / formal merge | `v0.17.1@6094036d` / `96155d1a` |
-| App / Electron | `0.17.3` / `43.2.0` |
+| Proma Base / formal merge | `v0.17.15@73e9d014` / `2ade7e7e` |
+| App / Electron | `0.17.24` / `43.2.0` |
 | Bun / Pi | `1.3.14` / `0.82.1` |
-| Shared | `0.1.95` |
-| CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.10 / 0.0.37 / 0.0.34` |
+| Shared | `0.1.97` |
+| CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.11 / 0.0.38 / 0.0.34` |
 | CAT schema / Tool count | `15` / `31` |
 
 产品结构是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench。Runtime 为 Pi-only；Claude 模型可经 Provider 使用。
 
 ## 当前实现
 
-- 每个 CAT Project 绑定真实 Proma Workspace；Linguist Session 同时绑定 Workspace 与 CAT Project，直接继承 Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration。
-- General 可选择性委派三种专业岗位。子会话冻结 Segment 范围，使用共享 CAT Store，未引入强制流水线或第二套协作框架。
-- Reviewer / Proofreader 用 `cat_confirm_segments` 记录逐段决策；阶段覆盖通过四层 IPC 投影到 Workbench。
-- 术语由 Store 现有 matcher 匹配，再由 Core evaluator 统一分成 blocking / advisory。QA、上下文、写回和 verified export 不再各自重写规则。
-- 五个最小本地化 Skill 走现有默认 Skill seed / upgrade 链；项目 Agent 设置复用 Proma 原生 Skills / Memory 组件。
-- 受管 Context 图片通过现有 `cat_read_context_doc` 返回 Pi ImageContent；无 OCR 服务或图片数据库。
-- 导入、Workbook Mapping、Tag、Phrase、memoQ、Voice / Exemplar、verified / as-is 导出继续使用既有 CAT Service / Store 边界。
-- packaged 主进程只异步加载 ESM-only Pi 模块，避免 CJS `require()` 启动崩溃。
-- About / Linguist Diagnostics 的 Proma Base 由 `linguist-build-metadata.ts` 展示，并由测试与 `proma-baseline.json` 对账；当前为 `v0.17.1@6094036d` / formal merge `96155d1a`。
+- 一个 CAT Project 对应一个正常可见的 Proma Workspace。Linguist Session 使用原生 workbench cwd，并同时持有 `workspaceId + linguistProjectId`。
+- 旧 session workspace 只作一次历史文件迁移来源；它不再参与 cwd、垃圾回收、诊断或 integrity scope。
+- 原生 Workspace 的 Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration 与 CAT Tools 在同一 Orchestrator 组合；普通 Agent 仍无 CAT 写权限。
+- General 选择性委派三岗位。子会话冻结 Segment 范围、共享 CAT Store，返回 CAT Store 计算的 `linguistOutcome`，不引入强制流水线或第二套协作框架。
+- Reviewer / Proofreader 的 `unchanged / corrected / blocked` 仍由 `cat_confirm_segments` 逐段记录；覆盖不足时 delegation 可结束，但 `linguistOutcome.status` 保持 `in_progress`。
+- Agent 侧栏和项目设置复用原生 Workspace、Skills、MCP、AGENTS.md、Memory 与 Files；Workbench 只投影 Store 阶段覆盖、typed format error 和两层格式资格。
+- XLIFF registry 对厂商扩展名错配和最高分并列 fail closed；通用 XLIFF 与 SDLXLIFF 只通过内部 span 替换允许的 direct target / `mrk` 内容，未知骨架原样保留。
+- Proma v0.17.15 的浏览器、Skill usage、MCP HTTP 恢复、worktree、Preview 和 Session 修复直接继承，没有 Linguist 复制品。
+- About / Linguist Diagnostics 的 Proma Base 由 `linguist-build-metadata.ts` 展示，并与 `proma-baseline.json` 对账；当前登记 `v0.17.15@73e9d014` / formal merge `2ade7e7e`。
 
 ## 已验证与未验证
 
-- 自动与 packaged 证据见 [实施报告](../implementation/LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md)。
-- 本机已安装并启动 `0.17.3`；上一 `0.17.2` 构建曾用真实 Provider 完成一次请求。
-- 真实 Provider 四岗位代表性格式全链、真实 Phrase / memoQ、Native Open/Save、IME、VoiceOver 与 14 天日用仍待真实证据。
+- typecheck、格式包、boundary、fusion、Renderer build、Electron Linguist `213/213` 和 Workspace / Collaboration 专项自动回归已通过；全量为 `1539 pass / 11` 个既有失败。
+- 当前分支 Electron build 停在 EventKit headers 准备权限；尚无 packaged startup、vertical 或真实 Provider 四岗位证据。
+- 本机 `0.17.3` 是上一轮安装版本，不代表当前 `0.17.24`。
+- 真实 Phrase / memoQ、Native Open/Save、IME、VoiceOver 与 14 天日用仍待真实证据。
 
-历史 v0.16.x 报告与旧 queue 只代表当时状态，不覆盖本页。
+历史 v0.17.1 / v0.16.x 报告与旧 queue 只代表当时状态，不覆盖本页。

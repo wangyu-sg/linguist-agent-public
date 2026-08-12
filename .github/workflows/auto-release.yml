@@ -1,0 +1,89 @@
+name: Auto Release
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: la-release-main
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: 创建发布 Tag
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push'
+          && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.prepare.outputs.release }}
+      ref: ${{ steps.prepare.outputs.ref }}
+      tag: ${{ steps.prepare.outputs.tag }}
+    steps:
+      - name: 检出已通过 CI 的提交
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: 判断范围并创建 Tag
+        id: prepare
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "$CURRENT_MAIN" != "$HEAD_SHA" ]; then
+            echo 'main 已前进，由更新的 CI 处理发布。'
+            echo 'release=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERSION="$(node -p "require('./apps/electron/package.json').version")"
+          TAG="v${VERSION}"
+          if git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null; then
+            TAG_SHA="$(git rev-parse "${TAG}^{commit}")"
+            if [ "$TAG_SHA" = "$HEAD_SHA" ]; then
+              echo "复用 ${TAG}，继续未完成的发布。"
+            else
+              SCOPE="$(node scripts/release-scope.mjs --from "$TAG" --to "$HEAD_SHA")"
+              if [ "$(printf '%s\n' "$SCOPE" | sed -n 's/^release=//p')" != 'true' ]; then
+                echo '没有需要发布的产品变化。'
+                echo 'release=false' >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              echo "产品已有新变化，但应用版本仍为已发布的 ${VERSION}。" >&2
+              exit 1
+            fi
+          else
+            PREVIOUS_TAG="$(git tag --list 'v[0-9]*' --sort=-version:refname | head -1 || true)"
+            SCOPE="$(node scripts/release-scope.mjs --from "$PREVIOUS_TAG" --to "$HEAD_SHA")"
+            if [ "$(printf '%s\n' "$SCOPE" | sed -n 's/^release=//p')" != 'true' ]; then
+              echo '没有需要发布的产品变化。'
+              echo 'release=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            git config user.name 'Henry Wang'
+            git config user.email 'actions@users.noreply.github.com'
+            git tag -a "$TAG" "$HEAD_SHA" -m "Linguist Agent ${TAG}"
+            git push origin "$TAG"
+          fi
+
+          echo 'release=true' >> "$GITHUB_OUTPUT"
+          echo "ref=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.release == 'true' }}
+    uses: ./.github/workflows/release.yml
+    with:
+      ref: ${{ needs.prepare.outputs.ref }}
+      tag: ${{ needs.prepare.outputs.tag }}
+      run_validation: false
+    secrets: inherit

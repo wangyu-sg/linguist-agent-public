@@ -539,10 +539,17 @@ export function saveFilesToWorkspaceFiles(input: AgentSaveWorkspaceFilesInput): 
     file,
     initialTargetPath: resolveSafeWorkspaceFilePath(wsFilesDir, file.filename),
   }))
+  const decodedFiles = files.map(({ file, initialTargetPath }) => {
+    const buffer = Buffer.from(file.data, 'base64')
+    if (buffer.length > MAX_ATTACHMENT_SIZE) {
+      throw new Error(`文件超过 100MB 限制: ${file.filename}`)
+    }
+    return { file, initialTargetPath, buffer }
+  })
   const results: AgentSavedFile[] = []
   const usedPaths = new Set<string>()
 
-  for (const { file, initialTargetPath } of files) {
+  for (const { file, initialTargetPath, buffer } of decodedFiles) {
     let targetPath = initialTargetPath
 
     // 防止同名文件覆盖
@@ -562,13 +569,6 @@ export function saveFilesToWorkspaceFiles(input: AgentSaveWorkspaceFilesInput): 
     usedPaths.add(targetPath)
 
     mkdirSync(dirname(targetPath), { recursive: true })
-
-    if (file.data.length * 0.75 > MAX_ATTACHMENT_SIZE) {
-      console.warn(`[Agent 服务] 项目文件超过 100MB 限制，跳过: ${file.filename} (预估 ${(file.data.length * 0.75 / 1024 / 1024).toFixed(1)}MB)`)
-      continue
-    }
-
-    const buffer = Buffer.from(file.data, 'base64')
     writeFileSync(targetPath, buffer)
 
     const actualFilename = relative(wsFilesDir, targetPath)

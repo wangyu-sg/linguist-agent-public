@@ -9,6 +9,7 @@ import type {
   LinguistVoiceProfileInfo,
 } from '@proma/shared'
 import { describeLinguistIpcError } from './project-utils'
+import { LinkedContextImages } from './LinkedContextImages'
 import {
   getProjectMutationRefreshPlan,
   linguistProjectMutationStateAtomFamily,
@@ -38,6 +39,8 @@ type ContextEvidenceState =
       status: 'ready'
       context: LinguistCatContextResult
       sources: ContextEvidenceSources
+      /** 与当前 Segment 显式关联的 Context Docs（K6）。 */
+      linkedDocs: LinguistContextDocInfo[]
     }
 
 const SOURCE_PREVIEW_LIMIT = 3
@@ -59,10 +62,12 @@ export function evidenceProvenance(reference: string): EvidenceProvenance {
 export function ContextEvidencePanel({
   projectId,
   activeSegmentId,
+  archived = false,
   onOpenTerms,
 }: {
   projectId: string
   activeSegmentId?: string
+  archived?: boolean
   onOpenTerms: () => void
 }): React.ReactElement {
   const projectMutationState = useAtomValue(
@@ -126,14 +131,22 @@ export function ContextEvidencePanel({
         limit: SOURCE_PREVIEW_LIMIT,
         offset: 0,
       }),
-    ]).then(([context, styleRules, voiceProfiles, contextDocs]) => {
+      // K6：与当前 Segment 显式关联的 Context Docs（含图片 previewUrl）。
+      window.electronAPI.linguistAssetsQuery({
+        projectId,
+        kind: 'contextDocs',
+        segmentId: activeSegmentId,
+        limit: 50,
+        offset: 0,
+      }),
+    ]).then(([context, styleRules, voiceProfiles, contextDocs, linkedDocs]) => {
       if (cancelled) return
-      const failure = [context, styleRules, voiceProfiles, contextDocs].find((result) => !result.ok)
+      const failure = [context, styleRules, voiceProfiles, contextDocs, linkedDocs].find((result) => !result.ok)
       if (failure !== undefined && !failure.ok) {
         setState({ status: 'error', error: failure.error })
         return
       }
-      if (!context.ok || !styleRules.ok || !voiceProfiles.ok || !contextDocs.ok) return
+      if (!context.ok || !styleRules.ok || !voiceProfiles.ok || !contextDocs.ok || !linkedDocs.ok) return
       setState({
         status: 'ready',
         context: context.data,
@@ -151,6 +164,7 @@ export function ContextEvidencePanel({
             items: contextDocs.data.items as LinguistContextDocInfo[],
           },
         },
+        linkedDocs: linkedDocs.data.items as LinguistContextDocInfo[],
       })
     }).catch(() => {
       if (!cancelled) {
@@ -189,6 +203,14 @@ export function ContextEvidencePanel({
       projectId={projectId}
       context={state.context}
       sources={state.sources}
+      linkedImages={
+        <LinkedContextImages
+          projectId={projectId}
+          segmentId={state.context.segment.id}
+          docs={state.linkedDocs}
+          archived={archived}
+        />
+      }
       onOpenTerms={onOpenTerms}
     />
   )
@@ -198,11 +220,14 @@ export function ContextEvidenceView({
   projectId,
   context,
   sources,
+  linkedImages,
   onOpenTerms,
 }: {
   projectId: string
   context: LinguistCatContextResult
   sources: ContextEvidenceSources
+  /** K6 关联图片区（容器注入，保持本组件可纯静态渲染测试）。 */
+  linkedImages?: React.ReactNode
   onOpenTerms: () => void
 }): React.ReactElement {
   const sourceId = (kind: 'style' | 'voice' | 'context' | 'tm'): string =>
@@ -287,6 +312,7 @@ export function ContextEvidenceView({
             detail: `${match.matchType} · ${Math.round(match.score * 100)}%`,
           }))}
         />
+        {linkedImages}
       </section>
 
       <section aria-label="建议的证据来源" className="min-w-0">

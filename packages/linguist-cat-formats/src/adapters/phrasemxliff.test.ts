@@ -118,14 +118,13 @@ async function boundSegments(filename: string, imported: Awaited<ReturnType<Phra
 }
 
 describe('PhraseMxliffAdapter detect（置信度设计：phrase 走 phrase 路径，plain xliff/mq/sdl 不误判）', () => {
-  test('m: 命名空间 + .mxliff => 0.95；仅字节 => 0.7；无 m: 命名空间的 .mxliff => 0.4；其余 => 0', async () => {
+  test('m: 命名空间优先；无 m: 命名空间的 .mxliff 不接管', async () => {
     const adapter = new PhraseMxliffAdapter()
     const bytes = phraseBytes()
-    expect(await adapter.detect(bytes, 'sample.mxliff')).toBe(0.95)
-    expect(await adapter.detect(bytes, 'renamed.bin')).toBe(0.7)
-    expect(await adapter.detect(bytes, 'renamed.xliff')).toBe(0.7)
-    // 无 m: 命名空间的 .mxliff：plain XLIFF 伪装，低分让给 XliffAdapter
-    expect(await adapter.detect(fixtureBytes('mini_game_ui.xliff'), 'fake.mxliff')).toBe(0.4)
+    expect(await adapter.detect(bytes, 'sample.mxliff')).toBe(1)
+    expect(await adapter.detect(bytes, 'renamed.bin')).toBe(0.95)
+    expect(await adapter.detect(bytes, 'renamed.xliff')).toBe(0.95)
+    expect(await adapter.detect(fixtureBytes('mini_game_ui.xliff'), 'fake.mxliff')).toBe(0)
     expect(await adapter.detect(fixtureBytes('mini_game_ui.xliff'), 'mini_game_ui.xliff')).toBe(0)
     expect(await adapter.detect(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).toBe(0)
     expect(await adapter.detect(SDL_BYTES, 'sample.sdlxliff')).toBe(0)
@@ -144,12 +143,12 @@ describe('PhraseMxliffAdapter detect（置信度设计：phrase 走 phrase 路�
     expect((await registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'mini_game_ui.xliff')).id).toBe('xliff_1_2')
     expect((await registry.detectBest(fixtureBytes('sample.mqxliff'), 'sample.mqxliff')).id).toBe('mqxliff_1_2')
     expect((await registry.detectBest(SDL_BYTES, 'sample.sdlxliff')).id).toBe('sdlxliff_1_2')
-    // phrase 字节 + 未知扩展名：0.7 > XliffAdapter 的 0.5 => phrase 路径
+    // 厂商内容优先于文件扩展名。
     expect((await registry.detectBest(phrase, 'renamed.bin')).id).toBe('phrase_mxliff_1_2')
-    // phrase 字节 + 显式 .xliff 扩展名：0.7 < XliffAdapter 的 0.9 => 尊重扩展名
-    expect((await registry.detectBest(phrase, 'renamed.xliff')).id).toBe('xliff_1_2')
-    // 无 m: 命名空间的 .mxliff：0.4 < 0.5 => plain XLIFF 处理
-    expect((await registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'fake.mxliff')).id).toBe('xliff_1_2')
+    expect((await registry.detectBest(phrase, 'renamed.xliff')).id).toBe('phrase_mxliff_1_2')
+    await expect(
+      registry.detectBest(fixtureBytes('mini_game_ui.xliff'), 'fake.mxliff'),
+    ).rejects.toThrow(/No format adapter accepts/)
   })
 })
 

@@ -16,9 +16,11 @@ describe('AC-002 发布链 fail-closed', () => {
     expect(releaseWorkflow.match(/needs: validate/g)).toHaveLength(3)
   })
 
-  test('macOS 三次重试全部失败时显式返回非零', () => {
-    expect(releaseWorkflow.match(/packaging failed after 3 attempts/g)).toHaveLength(2)
-    expect(releaseWorkflow.match(/exit 1/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
+  test('所有平台成功且更新元数据齐全后才公开 Release', () => {
+    expect(releaseWorkflow).toContain('needs: [build-mac-arm64, build-mac-x64, build-windows-x64, merge-mac-yml]')
+    expect(releaseWorkflow).toContain("grep -Fx 'latest-mac.yml'")
+    expect(releaseWorkflow).toContain("grep -Fx 'latest.yml'")
+    expect(releaseWorkflow).toContain('--draft=false --latest')
   })
 
   test('关键资源复制失败会终止构建', () => {

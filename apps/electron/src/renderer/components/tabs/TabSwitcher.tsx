@@ -1,5 +1,5 @@
 /**
- * TabSwitcher — Ctrl+Tab 会话快速切换器
+ * TabSwitcher — Ctrl+Tab 标签快速切换器
  *
  * 列表按 MRU（最近访问）顺序排列，键盘和鼠标共享同一套选择模型。
  */
@@ -21,10 +21,16 @@ import {
   tabMruAtom,
   tabsAtom,
   type LocalizationProjectTab,
+  scratchPadPanelOpenAtom,
+  focusScratchPadTab,
+  SCRATCH_PAD_ID,
+  SCRATCH_PAD_TITLE,
 } from '@/atoms/tab-atoms'
 import { previewFileMapAtom } from '@/atoms/preview-atoms'
 import { getInitialTabSwitchIndex, promoteTabMru } from '@/lib/tab-switching'
 import { appModeAtom } from '@/atoms/app-mode'
+import { activeViewAtom } from '@/atoms/active-view'
+import { automationFormAtom } from '@/atoms/automation-atoms'
 import {
   conversationsAtom,
   currentConversationIdAtom,
@@ -40,11 +46,11 @@ import {
 } from '@/atoms/agent-atoms'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
-import { Bot, GitBranch, Languages, MessageSquare } from 'lucide-react'
+import { Bot, GitBranch, Languages, MessageSquare, StickyNote } from 'lucide-react'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 
 type SwitchSectionId = 'collaboration' | 'recent'
-type SwitchCandidateType = 'chat' | 'agent' | 'linguist-project'
+type SwitchCandidateType = 'chat' | 'agent' | 'scratch' | 'linguist-project'
 
 interface SwitchCandidate {
   id: string
@@ -75,6 +81,7 @@ export function TabSwitcher(): ReactElement | null {
   const setTabs = useSetAtom(tabsAtom)
   const activeTab = useAtomValue(activeTabAtom)
   const setActiveTabId = useSetAtom(activeTabIdAtom)
+  const setScratchPadPanelOpen = useSetAtom(scratchPadPanelOpenAtom)
   // MRU 与 Ctrl+Tab 起始定位均按会话 ID 归一化：预览 Tab 复用其 owner 会话 ID，
   // 与候选列表（会话 ID）对齐，避免处于预览 Tab 时需按两下才能切换。
   const activeSessionId = useAtomValue(activeSessionIdAtom)
@@ -91,7 +98,10 @@ export function TabSwitcher(): ReactElement | null {
   const unviewedCompletedIds = useAtomValue(unviewedCompletedSessionIdsAtom)
   const draftSessionIds = useAtomValue(draftSessionIdsAtom)
 
+  const appMode = useAtomValue(appModeAtom)
   const setAppMode = useSetAtom(appModeAtom)
+  const setActiveView = useSetAtom(activeViewAtom)
+  const setAutomationForm = useSetAtom(automationFormAtom)
   const setCurrentConversationId = useSetAtom(currentConversationIdAtom)
   const setCurrentAgentSessionId = useSetAtom(currentAgentSessionIdAtom)
   const setCurrentAgentWorkspaceId = useSetAtom(currentAgentWorkspaceIdAtom)
@@ -106,6 +116,13 @@ export function TabSwitcher(): ReactElement | null {
 
   const switcherModel = useMemo<SwitcherModel>(() => {
     const workspaceNameById = new Map(agentWorkspaces.map((workspace) => [workspace.id, workspace.name]))
+    const scratchPadCandidate: SwitchCandidate = {
+      id: SCRATCH_PAD_ID,
+      type: 'scratch',
+      title: SCRATCH_PAD_TITLE,
+      updatedAt: 0,
+      status: 'idle',
+    }
 
     const buildAgentCandidate = (session: AgentSessionMeta): SwitchCandidate => {
       const status = agentIndicatorMap.get(session.id)
@@ -146,7 +163,7 @@ export function TabSwitcher(): ReactElement | null {
         status: tabIndicatorMap.get(tab.id) ?? 'idle',
       }))
 
-    const allCandidates = [...chatCandidates, ...agentCandidates, ...projectCandidates]
+    const allCandidates = [scratchPadCandidate, ...chatCandidates, ...agentCandidates, ...projectCandidates]
 
     const candidateById = new Map(allCandidates.map((candidate) => [candidate.id, candidate]))
     const activeAgentSession = activeSessionId
@@ -259,6 +276,10 @@ export function TabSwitcher(): ReactElement | null {
 
   const activateCandidate = useCallback(
     (candidate: SwitchCandidate): void => {
+      // 快速切换器全局挂载；确认候选时必须退出任务/技能等覆盖视图。
+      setAutomationForm({ open: false, draft: null })
+      setActiveView('conversations')
+
       if (candidate.type === 'linguist-project') {
         const projectTab = tabsRef.current.find(
           (tab): tab is LocalizationProjectTab =>
@@ -272,6 +293,22 @@ export function TabSwitcher(): ReactElement | null {
           tabMruRef.current = next
           return next
         })
+        return
+      }
+
+      if (candidate.type === 'scratch') {
+        const nextTab = focusScratchPadTab(tabsRef.current)
+        setTabs(nextTab.tabs)
+        setActiveTabId(nextTab.activeTabId)
+        setScratchPadPanelOpen(nextTab.scratchPanelOpen)
+        activeSwitchTargetIdRef.current = candidate.id
+        setTabMru((prev) => {
+          const next = promoteTabMru(prev, candidate.id)
+          tabMruRef.current = next
+          return next
+        })
+        setCurrentConversationId(null)
+        if (appMode !== 'agent') setCurrentAgentSessionId(null)
         return
       }
 
@@ -325,8 +362,12 @@ export function TabSwitcher(): ReactElement | null {
       }
     },
     [
+      appMode,
       setActiveTabId,
+      setActiveView,
+      setScratchPadPanelOpen,
       setAppMode,
+      setAutomationForm,
       setCurrentAgentSessionId,
       setCurrentAgentWorkspaceId,
       setCurrentConversationId,
@@ -451,7 +492,7 @@ export function TabSwitcher(): ReactElement | null {
       <div className="relative bg-popover border border-border/50 rounded-xl shadow-2xl min-w-[420px] max-w-[540px] overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-border/40 bg-muted/30">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[13px] font-medium text-foreground">切换会话</span>
+            <span className="text-[13px] font-medium text-foreground">切换标签</span>
           </div>
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Kbd>Ctrl</Kbd>
@@ -563,6 +604,11 @@ function SwitcherCandidateRow({
           <>
             <Languages className="size-2.5" />
             Linguist
+          </>
+        ) : candidate.type === 'scratch' ? (
+          <>
+            <StickyNote className="size-2.5" />
+            草稿
           </>
         ) : (
           <>

@@ -39,6 +39,7 @@ test('四种岗位均可创建，缺省岗位是 general，工具能力不写入
       const session = binding.createLinguistProjectChatSession(service, { projectId: project.id, role })
       assert.equal(session.linguistProjectId, project.id)
       assert.equal(session.workspaceId, project.promaWorkspaceId)
+      assert.equal(session.agentCwdMode, 'session')
       assert.equal(session.linguistRole, role)
       assert.equal(session.linguistSessionRole, undefined)
     }

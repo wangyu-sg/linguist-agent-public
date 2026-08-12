@@ -57,6 +57,7 @@ import {
   type LinguistProjectConfirmXlsxMappingResult,
   type LinguistProjectDeleteResult,
   type LinguistProjectGetStageCoverageResult,
+  type LinguistFormatQualificationListResult,
   type LinguistProjectImportResult,
   type LinguistProjectInfo,
   type LinguistProjectListResult,
@@ -83,6 +84,7 @@ import { readPickedFileWithinLimit } from './project-file-intake'
 import type { LinguistProjectService } from './project-service'
 import type { XlsxImportMapping } from './project-service-types'
 import { suggestProjectWorkbookMapping } from './project-workbook-mapping'
+import { listDefaultFormatQualifications } from './format-qualification'
 
 // ===== picker 抽象（electron dialog 的最小镜像；ipc.ts 注入真实实现）=====
 
@@ -479,6 +481,11 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
   const pendingFiles = deps.pendingFiles ?? new PendingImportFileStore()
 
   return {
+    /** 全局只读资格清单；不打开项目，也不把自动测试夸大为平台资格。 */
+    listFormatQualifications(): Promise<LinguistIpcResult<LinguistFormatQualificationListResult>> {
+      return wrap(() => listDefaultFormatQualifications())
+    },
+
     /** linguist.projects.list — 列出项目（可选含已归档）。 */
     list(input: unknown): Promise<LinguistIpcResult<LinguistProjectListResult>> {
       return wrap(() => {

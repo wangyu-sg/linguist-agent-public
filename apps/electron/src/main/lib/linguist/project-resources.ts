@@ -259,7 +259,10 @@ export class ProjectResources {
           )
         }
         case 'contextDocs': {
-          const filter = { ...(text !== undefined ? { query: text } : {}) }
+          const filter = {
+            ...(text !== undefined ? { query: text } : {}),
+            ...(query.segmentId !== undefined ? { segmentId: query.segmentId } : {}),
+          }
           return page(
             db.contextDocs.list({
               ...filter,
@@ -355,6 +358,17 @@ export class ProjectResources {
           return db.voiceProfiles.upsert(item as VoiceProfileUpsertInput)
       }
     }, projectId)
+  }
+
+  setContextDocSegmentLink(
+    projectId: string,
+    docId: string,
+    segmentId: string,
+    linked: boolean,
+  ): void {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    this.context.call(() => db.contextDocs.setSegmentLink(docId, segmentId, linked), projectId)
   }
 
   /** 删除（归档先拒绝）；contextDocs 级联清尾 blob 文件（尽力而为）。 */

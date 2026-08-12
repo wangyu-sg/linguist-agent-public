@@ -1,7 +1,7 @@
 /**
  * PB-031 IPC 契约守卫测试（bun 安全，纯逻辑 + 源码形状断言，不触 DB）：
- * - 通道名与计划 §7.2 完全一致（机读契约，防改名；LF-072 起项目域 12 个）；
- * - 稳定错误码目录完整（IPC 层 2 + 服务层 7 + store 10 + format 4 + domain 6）；
+ * - 通道名与计划 §7.2 完全一致（机读契约，防改名）；
+ * - 稳定错误码目录完整（IPC 层 2 + 服务层 7 + store 10 + format 5 + domain 6）；
  * - 校验常量（id/locale 形状、长度上限、导入扩展名/体积上限、PB-111 备份名
  *   白名单形状）行为；
  * - preload 暴露的方法名与通道引用（源码级断言——preload 顶层
@@ -154,6 +154,7 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
       CONFIRM_XLSX_MAPPING: 'linguist.projects.confirmXlsxMapping',
       GET_SUMMARY: 'linguist.projects.getSummary',
       GET_STAGE_COVERAGE: 'linguist.projects.getStageCoverage',
+      LIST_FORMAT_QUALIFICATIONS: 'linguist.projects.listFormatQualifications',
       RENAME: 'linguist.projects.rename',
       SET_LOCALES: 'linguist.projects.setLocales',
       REORDER_ACTIVE: 'linguist.projects.reorderActive',
@@ -170,10 +171,10 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
     })
   })
 
-  test('stable error-code catalog is complete (36 codes)', () => {
+  test('stable error-code catalog is complete (37 codes)', () => {
     const codes: string[] = Object.values(LINGUIST_IPC_ERROR_CODES)
-    expect(codes.length).toBe(36)
-    expect(new Set(codes).size).toBe(36)
+    expect(codes.length).toBe(37)
+    expect(new Set(codes).size).toBe(37)
     // IPC 层
     expect(codes).toContain('INVALID_INPUT')
     expect(codes).toContain('INTERNAL')
@@ -208,7 +209,7 @@ describe('linguist project IPC channel contract (plan §7.2)', () => {
       expect(codes).toContain(c)
     }
     // format 穿透
-    for (const c of ['FORMAT_PARSE_ERROR', 'FORMAT_EXPORT_ERROR', 'FORMAT_SEGMENT_LOST', 'FORMAT_UNSUPPORTED']) {
+    for (const c of ['FORMAT_PARSE_ERROR', 'FORMAT_EXPORT_ERROR', 'FORMAT_SEGMENT_LOST', 'FORMAT_UNSUPPORTED', 'FORMAT_AMBIGUOUS']) {
       expect(codes).toContain(c)
     }
     // domain 穿透
@@ -299,6 +300,7 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
     'linguistProjectsConfirmXlsxMapping',
     'linguistProjectsUndoImportAsset',
     'linguistProjectsGetSummary',
+    'linguistProjectsListFormatQualifications',
     'linguistProjectsRename',
     'linguistProjectsReorderActive',
     'linguistProjectsArchive',
@@ -356,14 +358,14 @@ describe('preload / ipc.ts source shape (source-level assertions)', () => {
       expect(preloadSource).toContain(`${method}:`)
     }
     expect(preloadSource).toContain('LINGUIST_PROJECT_IPC_CHANNELS')
-    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
+    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'LIST_FORMAT_QUALIFICATIONS', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
       expect(preloadSource).toContain(`LINGUIST_PROJECT_IPC_CHANNELS.${member}`)
     }
   })
 
   test('ipc.ts registers all project channels with the dialog picker injected for import', () => {
     expect(ipcSource).toContain('createLinguistProjectIpc')
-    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
+    for (const member of ['LIST', 'CREATE', 'OPEN', 'IMPORT', 'UNDO_IMPORT_ASSET', 'GET_SUMMARY', 'LIST_FORMAT_QUALIFICATIONS', 'RENAME', 'REORDER_ACTIVE', 'ARCHIVE', 'DELETE', 'BACKUP', 'LIST_BACKUPS', 'PREVIEW_RESTORE', 'RESTORE']) {
       expect(ipcSource).toContain(`LINGUIST_PROJECT_IPC_CHANNELS.${member}`)
     }
     expect(ipcSource).toContain('dialog.showOpenDialog')

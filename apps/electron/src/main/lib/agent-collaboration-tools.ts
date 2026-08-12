@@ -18,6 +18,7 @@ import type {
   PromaPermissionMode,
   SDKMessage,
   LinguistDelegatedScope,
+  LinguistDelegationOutcome,
   LinguistRole,
 } from '@proma/shared'
 import {
@@ -72,6 +73,15 @@ interface DelegationRecord {
   resultSummary?: string
   completion: Promise<void>
   resolveCompletion: () => void
+}
+
+const LINGUIST_ROLE_STAGE: Record<
+  LinguistDelegationOutcome['role'],
+  LinguistDelegationOutcome['stage']
+> = {
+  translator: 'translation',
+  reviewer: 'editing',
+  proofreader: 'proofreading',
 }
 
 
@@ -402,7 +412,42 @@ function markDelegationFinished(
   record.resolveCompletion()
 }
 
+/** 委派状态只代表进程结束；Linguist 完成度必须实时读取冻结范围的 CAT 审计事件。 */
+function getLinguistDelegationOutcome(
+  session: AgentSessionMeta | undefined,
+): LinguistDelegationOutcome | undefined {
+  const role = session?.linguistRole
+  const projectId = session?.linguistProjectId
+  const segmentIds = session?.linguistDelegatedScope?.segmentIds
+  if (
+    role !== 'translator'
+    && role !== 'reviewer'
+    && role !== 'proofreader'
+  ) return undefined
+  if (!projectId || !segmentIds) return undefined
+
+  try {
+    const stage = LINGUIST_ROLE_STAGE[role]
+    const coverage = getLinguistProjectService()
+      .openProject(projectId)
+      .segments
+      .getStageDecisionCoverage(stage, segmentIds)
+    return {
+      role,
+      stage,
+      ...coverage,
+      decided: coverage.total - coverage.pending,
+    }
+  } catch (error) {
+    console.warn(`[协作工具] 无法读取 Linguist 委派完成证据: ${session.id}`, error)
+    return undefined
+  }
+}
+
 function getDelegationSummary(record: DelegationRecord): Record<string, unknown> {
+  const linguistOutcome = getLinguistDelegationOutcome(
+    getAgentSessionMeta(record.childSessionId),
+  )
   return {
     delegationId: record.delegationId,
     parentSessionId: record.parentSessionId,
@@ -418,6 +463,7 @@ function getDelegationSummary(record: DelegationRecord): Record<string, unknown>
     completedAt: record.completedAt,
     error: record.error,
     resultSummary: record.resultSummary,
+    ...(linguistOutcome === undefined ? {} : { linguistOutcome }),
     pendingBlockedEvents: getPendingBlockedEvents(record.delegationId),
   }
 }
@@ -430,20 +476,24 @@ function listKnownDelegations(parentSessionId: string): Array<Record<string, unk
   const liveIds = new Set(live.map((item) => item.delegationId))
   const persisted = listAgentSessions()
     .filter((session) => session.parentSessionId === parentSessionId && session.sourceDelegationId && !liveIds.has(session.sourceDelegationId))
-    .map((session) => ({
-      delegationId: session.sourceDelegationId,
-      parentSessionId,
-      childSessionId: session.id,
-      channelId: session.channelId,
-      modelId: session.modelId,
-      title: session.title,
-      role: session.delegationRole,
-      goal: session.delegationGoal,
-      permissionMode: session.permissionMode,
-      status: session.delegationStatus,
-      startedAt: session.createdAt,
-      completedAt: session.delegationStatus && session.delegationStatus !== 'running' ? session.updatedAt : undefined,
-    }))
+    .map((session) => {
+      const linguistOutcome = getLinguistDelegationOutcome(session)
+      return {
+        delegationId: session.sourceDelegationId,
+        parentSessionId,
+        childSessionId: session.id,
+        channelId: session.channelId,
+        modelId: session.modelId,
+        title: session.title,
+        role: session.delegationRole,
+        goal: session.delegationGoal,
+        permissionMode: session.permissionMode,
+        status: session.delegationStatus,
+        startedAt: session.createdAt,
+        completedAt: session.delegationStatus && session.delegationStatus !== 'running' ? session.updatedAt : undefined,
+        ...(linguistOutcome === undefined ? {} : { linguistOutcome }),
+      }
+    })
 
   return [...live, ...persisted]
 }
@@ -465,6 +515,7 @@ function getDelegationResult(parentSessionId: string, delegationId: string): Rec
   const resultSummary = session.delegationStatus && session.delegationStatus !== 'running'
     ? summarizeChildResult(session.id)
     : undefined
+  const linguistOutcome = getLinguistDelegationOutcome(session)
 
   return {
     delegationId,
@@ -480,6 +531,7 @@ function getDelegationResult(parentSessionId: string, delegationId: string): Rec
     startedAt: session.createdAt,
     completedAt: session.delegationStatus && session.delegationStatus !== 'running' ? session.updatedAt : undefined,
     resultSummary,
+    ...(linguistOutcome === undefined ? {} : { linguistOutcome }),
   }
 }
 

@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict'
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
 import JSZip from 'jszip'
 import { parseTermReference, parseTmReference } from './project-resource-parsers'
+
+const require = createRequire(import.meta.url)
+const { DatabaseSync } = require('node:sqlite') as {
+  DatabaseSync: new (path: string) => {
+    exec: (sql: string) => void
+    close: () => void
+  }
+}
 
 test('SDLTM 原生文件解析为项目 TM 条目', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'linguist-sdltm-test-'))

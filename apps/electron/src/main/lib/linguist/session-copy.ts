@@ -290,7 +290,7 @@ export async function copyLinguistSessionToProject(
   } catch (error) {
     if (copied?.id && copied.id !== source.id) {
       try {
-        deleteAgentSession(copied.id, { discardLinguistWorkspace: true })
+        deleteAgentSession(copied.id)
       } catch { /* 保留原始错误 */ }
     }
     throw error

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "baseline": "6094036d3f6f4363c44ce8a11155ecd531a80aae",
-  "formalMerge": "96155d1ad2f131e10fd2f0a6998ec13573aa2ead",
-  "recomputedOn": "2026-08-11",
-  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.17.1 merge. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
+  "baseline": "73e9d014b56dfda7554011bc02cf8ee5af2c5493",
+  "formalMerge": "2ade7e7e045ce6beab817778b1b39f897045fdf3",
+  "recomputedOn": "2026-08-12",
+  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.17.15 merge. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -32,6 +32,8 @@
     "THIRD_PARTY_NOTICES.md",
     "scripts/",
     ".github/workflows/ci.yml",
+    ".github/workflows/auto-release.yml",
+    ".github/workflows/upstream-sync.yml",
     "apps/electron/src/renderer/lib/linguist-build-metadata.ts"
   ],
   "touchpoints": [
@@ -209,11 +211,6 @@
       "file": "apps/electron/src/main/lib/agent-island-navigation-policy.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
-    },
-    {
-      "file": "apps/electron/src/main/lib/agent-island-service.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: backport upstream #1527 so delegated child sessions are summarized by their parent instead of entering the user-level Agent Island inbox."
     },
     {
       "file": "apps/electron/src/main/lib/agent-orchestrator.ts",
@@ -434,6 +431,11 @@
       "file": "apps/electron/src/main/lib/tutorial-service.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+    },
+    {
+      "file": "apps/electron/src/main/lib/updater/auto-updater.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: install downloaded Linguist Agent releases on normal app quit while preserving the existing immediate and idle install paths."
     },
     {
       "file": "apps/electron/src/main/lib/user-profile-service.ts",
@@ -711,6 +713,16 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
+      "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.test.tsx",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+    },
+    {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/index.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
@@ -879,16 +891,6 @@
       "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.tsx",
       "ticket": "LA-HOST-005",
       "reason": "Local Host Seam: the native Preview Tab branches previewFile.linguist targets to LinguistPreviewBody instead of the DiffTabContent file-reading chain."
-    },
-    {
-      "file": "apps/electron/src/renderer/components/diff/preview-opener.ts",
-      "ticket": "LA-HOST-005",
-      "reason": "Local Host Seam: Linguist resource previews force the native Preview Tab because their settings-sheet origin cannot host a hidden Agent split panel."
-    },
-    {
-      "file": "apps/electron/src/renderer/components/migration/MigrationImportDialog.tsx",
-      "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
       "file": "apps/electron/src/renderer/components/planning/PlanningReminderRail.test.ts",
@@ -1141,11 +1143,6 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
-      "file": "apps/electron/src/renderer/hooks/useGlobalAgentListeners.ts",
-      "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: backport upstream #1527 and pass delegated-session identity into the shared completion marker policy."
-    },
-    {
       "file": "apps/electron/src/renderer/hooks/useSwitchAppMode.ts",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
@@ -1164,11 +1161,6 @@
       "file": "apps/electron/src/renderer/lib/agent-message-queue.test.ts",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
-    },
-    {
-      "file": "apps/electron/src/renderer/lib/agent-completion-presence.ts",
-      "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: backport upstream #1527 so delegated child completion does not create a duplicate user-level unread marker."
     },
     {
       "file": "apps/electron/src/renderer/lib/agent-message-queue.ts",

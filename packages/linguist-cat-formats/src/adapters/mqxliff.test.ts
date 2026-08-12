@@ -42,7 +42,7 @@ describe('MqXliffAdapter', () => {
     const generic = new XliffAdapter()
     const registry = new CatFormatRegistry().register(mq).register(generic)
     expect(await mq.detect(bytes(), 'sample.mqxliff')).toBe(1)
-    expect(await mq.detect(bytes(), 'renamed.xliff')).toBe(0.8)
+    expect(await mq.detect(bytes(), 'renamed.xliff')).toBe(0.95)
     expect((await registry.detectBest(bytes(), 'sample.mqxliff')).id).toBe('mqxliff_1_2')
     expect(await mq.detect(new TextEncoder().encode('<xliff version="1.2"><file/></xliff>'), 'plain.mqxliff')).toBe(0)
 

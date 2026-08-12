@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   FORMAT_ERROR_CODES,
+  FormatAmbiguousError,
   FormatError,
   FormatExportError,
   FormatParseError,
@@ -15,6 +16,7 @@ describe('格式错误 code 稳定性', () => {
       FORMAT_EXPORT_ERROR: 'FORMAT_EXPORT_ERROR',
       FORMAT_SEGMENT_LOST: 'FORMAT_SEGMENT_LOST',
       FORMAT_UNSUPPORTED: 'FORMAT_UNSUPPORTED',
+      FORMAT_AMBIGUOUS: 'FORMAT_AMBIGUOUS',
     })
   })
 
@@ -36,6 +38,10 @@ describe('格式错误 code 稳定性', () => {
     expect(unsupported.code).toBe('FORMAT_UNSUPPORTED')
     expect(unsupported.message).toContain('x.unknown')
     expect(unsupported.message).toContain('fake_tsv')
+
+    const ambiguous = new FormatAmbiguousError('x.tie', 0.95, ['a', 'b'])
+    expect(ambiguous.code).toBe('FORMAT_AMBIGUOUS')
+    expect(ambiguous.adapterIds).toEqual(['a', 'b'])
   })
 
   test('全部错误均为 FormatError（可统一捕获），cause 透传', () => {
@@ -45,6 +51,7 @@ describe('格式错误 code 稳定性', () => {
       new FormatExportError('a', 'd'),
       new FormatSegmentLostError('a', []),
       new FormatUnsupportedError('f', []),
+      new FormatAmbiguousError('f', 1, ['a', 'b']),
     ]
     for (const err of errors) {
       expect(err).toBeInstanceOf(FormatError)

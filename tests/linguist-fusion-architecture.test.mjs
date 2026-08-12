@@ -54,6 +54,7 @@ const FORBIDDEN_CAT_CORE_IMPORTS = [
 const REGISTERED_PROMA_TO_LINGUIST_IMPORTERS = new Set([
   'apps/electron/src/renderer/components/agent/AgentHeader.tsx',
   'apps/electron/src/renderer/components/agent/AgentView.tsx',
+  'apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx',
   'apps/electron/src/renderer/components/agent/SidePanel.tsx',
   'apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx',
   'apps/electron/src/renderer/components/app-shell/ModeSwitcher.tsx',
@@ -302,4 +303,26 @@ test('三模式键盘导航：Ctrl+Tab 可返回已打开的 Linguist Project Ta
   assert.match(tabSwitcher, /candidate\.type === 'linguist-project'/)
   assert.match(tabSwitcher, /enterLinguistNavigation\(store, projectTab\.id, 'conversations'\)/)
   assert.match(tabSwitcher, /<Languages className="size-2\.5" \/>/)
+})
+
+test('Linguist Runtime 同时装配 Proma Workspace 能力与 CAT overlay', () => {
+  const orchestrator = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/main/lib/agent-orchestrator.ts'),
+    'utf8',
+  )
+  const executionScope = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/main/lib/linguist/agent-execution-scope.ts'),
+    'utf8',
+  )
+
+  assert.match(orchestrator, /const workspaceId = sessionWorkspaceId \?\? requestedWorkspaceId/)
+  assert.doesNotMatch(orchestrator, /hasLinguistSessionBinding|executionScope\.kind !== 'linguist-project'/)
+  assert.match(orchestrator, /buildPiBuiltinTools\(piSdk, \{[\s\S]*?workspaceId,[\s\S]*?workspaceSlug,/)
+  assert.match(orchestrator, /buildMcpServers\(workspaceSlug\)/)
+  assert.match(orchestrator, /getWorkspaceMemoryGuidance\(workspaceSlug\)/)
+  assert.match(orchestrator, /readWorkspaceAgentsMd\(workspaceSlug\)/)
+  assert.match(orchestrator, /additionalSkillPaths: \[getWorkspaceSkillsDir\(workspaceSlug\)\]/)
+  assert.match(orchestrator, /composeAgentTools\([\s\S]*?linguistCatTools/)
+  assert.match(executionScope, /ensureWorkspaceSession\(workspace\.slug, session\.id\)/)
+  assert.doesNotMatch(executionScope, /ensureLinguistSessionWorkspace/)
 })

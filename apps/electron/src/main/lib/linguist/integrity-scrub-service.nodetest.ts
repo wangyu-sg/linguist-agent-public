@@ -48,7 +48,6 @@ test('Full Integrity Scrub production runner executes in node:worker_threads', a
         'job_lineage',
         'run_lineage',
         'export_manifests',
-        'session_workspaces',
       ],
     )
     assert.ok(events.some((event) => event.state === 'running'))

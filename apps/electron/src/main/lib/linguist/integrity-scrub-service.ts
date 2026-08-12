@@ -43,7 +43,6 @@ export class IntegrityScrubService {
     const input: IntegrityScrubWorkerInput = {
       projectId,
       projectDir: service.getProjectPaths(projectId).projectDir,
-      rootDir: service.getStatus().rootDir,
       jobId: `scrub-${randomUUID()}`,
       startedAt: this.now(),
     }
