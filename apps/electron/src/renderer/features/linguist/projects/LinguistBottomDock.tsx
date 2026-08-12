@@ -142,6 +142,7 @@ export function LinguistBottomDock({
           <ContextEvidencePanel
             projectId={projectId}
             activeSegmentId={uiState.activeSegmentId}
+            archived={archived}
             onOpenTerms={() => setUiState({ bottomDockTab: 'terms' })}
           />
         ) : activeTab.id === 'preview' ? (
