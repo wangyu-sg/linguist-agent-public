@@ -1,9 +1,8 @@
 /**
  * ProjectCreateDialog — 「新建项目」对话框（ticket PB-032）
  *
- * 字段：名称 / 源语言 / 目标语言（locale 为文本输入 + 客户端预校验，
- * 规则镜像主进程 IPC：BCP-47 形状 ^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$、
- * ≤35 字符；名称 trim 非空、≤120 字符——见 project-utils.ts）。
+ * 字段：名称 / 源语言 / 目标语言（两个 locale 字段复用常用语言下拉，
+ * 客户端校验仍镜像主进程 IPC；名称 trim 非空、≤120 字符——见 project-utils.ts）。
  *
  * 提交路径：客户端预校验 → linguistProjectsCreate → 成功：toast + 重置草稿 +
  * 关闭 + 通知父级刷新列表；失败：信封错误码映射为中文文案显示在对话框内
@@ -40,6 +39,7 @@ import {
   projectCreateDialogOpenAtom,
   projectCreateDraftAtom,
 } from './projects-atoms'
+import { ProjectLocaleSelect } from './ProjectLocaleSelect'
 import { describeLinguistIpcError, validateLocaleInput, validateProjectNameInput } from './project-utils'
 
 /** 表单校验错误：逐字段 + 表单级（IPC 信封错误落这里） */
@@ -151,14 +151,13 @@ export function ProjectCreateDialog({ onCreated }: ProjectCreateDialogProps): Re
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="project-create-source">源语言</Label>
-              <Input
+              <ProjectLocaleSelect
                 id="project-create-source"
                 value={draft.sourceLocale}
-                onChange={(e) => updateField('sourceLocale', e.target.value)}
-                placeholder="如 en"
+                onValueChange={(value) => updateField('sourceLocale', value)}
                 disabled={submitting}
-                aria-invalid={errors.sourceLocale !== undefined}
-                aria-describedby={errors.sourceLocale !== undefined ? 'project-create-source-error' : undefined}
+                invalid={errors.sourceLocale !== undefined}
+                describedBy={errors.sourceLocale !== undefined ? 'project-create-source-error' : undefined}
               />
               {errors.sourceLocale !== undefined && (
                 <p id="project-create-source-error" className="text-[12px] text-destructive">
@@ -168,14 +167,13 @@ export function ProjectCreateDialog({ onCreated }: ProjectCreateDialogProps): Re
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="project-create-target">目标语言</Label>
-              <Input
+              <ProjectLocaleSelect
                 id="project-create-target"
                 value={draft.targetLocale}
-                onChange={(e) => updateField('targetLocale', e.target.value)}
-                placeholder="如 zh-CN"
+                onValueChange={(value) => updateField('targetLocale', value)}
                 disabled={submitting}
-                aria-invalid={errors.targetLocale !== undefined}
-                aria-describedby={errors.targetLocale !== undefined ? 'project-create-target-error' : undefined}
+                invalid={errors.targetLocale !== undefined}
+                describedBy={errors.targetLocale !== undefined ? 'project-create-target-error' : undefined}
               />
               {errors.targetLocale !== undefined && (
                 <p id="project-create-target-error" className="text-[12px] text-destructive">

@@ -79,8 +79,11 @@ describe('ProjectSettingsSheet', () => {
         onSummaryRefresh={() => undefined}
       />,
     )
-    expect(editable).toContain('project-source-locale')
-    expect(editable).toContain('project-target-locale')
+    expect(editable).toMatch(/<button[^>]*role="combobox"[^>]*id="project-source-locale"/)
+    expect(editable).toMatch(/<button[^>]*role="combobox"[^>]*id="project-target-locale"/)
+    expect(editable).not.toMatch(/<input[^>]*id="project-(?:source|target)-locale"/)
+    expect(editable).toContain('en（当前值）')
+    expect(editable).toContain('简体中文（zh-CN）')
     expect(editable).toContain('保存语言方向')
 
     const frozen = renderToStaticMarkup(
