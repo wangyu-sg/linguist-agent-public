@@ -161,9 +161,9 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     debug: (...args: unknown[]) => console.log('[更新-updater:debug]', ...args),
   }
 
-  // 自动下载，但不在用户正常退出时自动安装，避免重启应用后被动进入更新流程。
+  // 自动下载；用户正常退出时安装，下次启动直接进入新版本。
   autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.autoInstallOnAppQuit = true
 
   // 监听更新事件
   autoUpdater.on('checking-for-update', () => {
@@ -238,5 +238,5 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     win = null
   })
 
-  console.log('[更新] 自动更新模块已初始化（自动下载，支持空闲时安装）')
+  console.log('[更新] 自动更新模块已初始化（自动下载，退出或空闲时安装）')
 }

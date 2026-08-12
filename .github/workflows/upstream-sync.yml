@@ -1,0 +1,211 @@
+name: Sync Proma Stable Release
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 只检查和试合并，不推送候选分支
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: proma-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: 发现并合并 Proma 稳定版
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.prepare.outputs.changed }}
+      ready: ${{ steps.prepare.outputs.ready }}
+      candidate_ref: ${{ steps.prepare.outputs.candidate_ref }}
+      base_sha: ${{ steps.prepare.outputs.base_sha }}
+      release_tag: ${{ steps.prepare.outputs.release_tag }}
+      upstream_tag: ${{ steps.prepare.outputs.upstream_tag }}
+    steps:
+      - name: 检出 main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: 试合并并准备候选分支
+        id: prepare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          BASE_SHA="$(git rev-parse HEAD)"
+          BASELINE_TAG="$(node -p "require('./docs/architecture/proma-baseline.json').upstream.tag")"
+          RELEASE_JSON="$(curl -fsSL -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' https://api.github.com/repos/proma-ai/Proma/releases/latest)"
+          UPSTREAM_TAG="$(printf '%s' "$RELEASE_JSON" | jq -r '.tag_name')"
+          echo "base_sha=${BASE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "upstream_tag=${UPSTREAM_TAG}" >> "$GITHUB_OUTPUT"
+
+          if [ "$UPSTREAM_TAG" = "$BASELINE_TAG" ]; then
+            echo "已是最新稳定版 ${UPSTREAM_TAG}。"
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+          CANDIDATE="automation/proma-${UPSTREAM_TAG}"
+          git remote add upstream https://github.com/proma-ai/Proma.git
+          git fetch --force upstream "refs/tags/${UPSTREAM_TAG}:refs/tags/upstream-${UPSTREAM_TAG}"
+          UPSTREAM_SHA="$(git rev-parse "refs/tags/upstream-${UPSTREAM_TAG}^{commit}")"
+          UPSTREAM_APP_VERSION="$(git show "${UPSTREAM_SHA}:apps/electron/package.json" | jq -r '.version')"
+          node scripts/proma-sync-impact.mjs --to "$UPSTREAM_SHA" --out "$RUNNER_TEMP/proma-sync-impact.md"
+          git config user.name 'Henry Wang'
+          git config user.email 'actions@users.noreply.github.com'
+
+          if git fetch origin "refs/heads/${CANDIDATE}:refs/remotes/origin/${CANDIDATE}" 2>/dev/null \
+            && git merge-base --is-ancestor "$BASE_SHA" "origin/${CANDIDATE}"; then
+            LA_TAG="v$(git show "origin/${CANDIDATE}:apps/electron/package.json" | jq -r '.version')"
+            echo "继续验证现有候选分支 ${CANDIDATE}。"
+            echo "candidate_ref=${CANDIDATE}" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${LA_TAG}" >> "$GITHUB_OUTPUT"
+            if [ "$DRY_RUN" = 'true' ]; then
+              echo 'ready=false' >> "$GITHUB_OUTPUT"
+            else
+              echo 'ready=true' >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          git switch -c "$CANDIDATE" "$BASE_SHA"
+
+          if ! git merge --no-ff --no-edit "$UPSTREAM_SHA"; then
+            CONFLICTS="$(git diff --name-only --diff-filter=U)"
+            git merge --abort
+            TITLE="[Upstream Sync] Proma ${UPSTREAM_TAG} 需要处理"
+            BODY="Proma ${BASELINE_TAG} → ${UPSTREAM_TAG} 自动合并发生冲突。\n\n冲突文件：\n\`\`\`\n${CONFLICTS}\n\`\`\`\n\n候选分支：\`${CANDIDATE}\`\n运行：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            ISSUE="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
+            if [ -n "$ISSUE" ]; then
+              gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+            fi
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MERGE_SHA="$(git rev-parse HEAD)"
+          node scripts/update-proma-baseline.mjs \
+            --tag "$UPSTREAM_TAG" \
+            --commit "$UPSTREAM_SHA" \
+            --merge-commit "$MERGE_SHA" \
+            --local-parent "$BASE_SHA" \
+            --upstream-parent "$UPSTREAM_SHA" \
+            --branch "$CANDIDATE" \
+            --upstream-app-version "$UPSTREAM_APP_VERSION"
+          VERSION_OUTPUT="$(node scripts/release-version.mjs)"
+          LA_TAG="$(printf '%s\n' "$VERSION_OUTPUT" | sed -n 's/^tag=//p')"
+          git add apps/electron/package.json bun.lock docs/architecture/proma-baseline.json docs/architecture/proma-touchpoints.json docs/architecture/UPSTREAM_BASELINE.md
+          git commit -m "chore(sync): prepare Proma ${UPSTREAM_TAG}"
+
+          echo "candidate_ref=${CANDIDATE}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${LA_TAG}" >> "$GITHUB_OUTPUT"
+          if [ "$DRY_RUN" = 'true' ]; then
+            echo 'Dry run 完成，不推送候选分支。'
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git push --force origin "HEAD:refs/heads/${CANDIDATE}"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: 上传影响报告
+        if: ${{ steps.prepare.outputs.changed == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: proma-sync-impact
+          path: ${{ runner.temp }}/proma-sync-impact.md
+          if-no-files-found: ignore
+
+  validate:
+    name: 验证候选分支
+    needs: prepare
+    if: ${{ needs.prepare.outputs.ready == 'true' }}
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.prepare.outputs.candidate_ref }}
+
+  promote:
+    name: 快进 main 并创建 LA Tag
+    needs: [prepare, validate]
+    if: ${{ needs.validate.result == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.promote.outputs.ref }}
+    steps:
+      - name: 检出候选分支
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.prepare.outputs.candidate_ref }}
+          fetch-depth: 0
+
+      - name: 推进 main 与 Tag
+        id: promote
+        env:
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test "$CURRENT_MAIN" = "$BASE_SHA"
+          git push origin HEAD:main
+          git config user.name 'Henry Wang'
+          git config user.email 'actions@users.noreply.github.com'
+          git tag -a "$RELEASE_TAG" HEAD -m "Linguist Agent ${RELEASE_TAG}"
+          git push origin "$RELEASE_TAG"
+          echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  report-validation-failure:
+    name: 报告候选验证失败
+    needs: [prepare, validate]
+    if: ${{ always() && needs.prepare.outputs.ready == 'true' && needs.validate.result == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 创建或更新 Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_TAG: ${{ needs.prepare.outputs.upstream_tag }}
+          CANDIDATE: ${{ needs.prepare.outputs.candidate_ref }}
+        run: |
+          TITLE="[Upstream Sync] Proma ${UPSTREAM_TAG} 需要处理"
+          BODY="候选分支 \`${CANDIDATE}\` 未通过 CI。\n\n运行：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          ISSUE="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+          fi
+
+  release:
+    needs: [prepare, promote]
+    uses: ./.github/workflows/release.yml
+    with:
+      ref: ${{ needs.promote.outputs.ref }}
+      tag: ${{ needs.prepare.outputs.release_tag }}
+      run_validation: false
+    secrets: inherit
+
+  cleanup:
+    name: 清理候选分支
+    needs: [prepare, release]
+    if: ${{ needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 删除候选分支
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE: ${{ needs.prepare.outputs.candidate_ref }}
+        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE}"

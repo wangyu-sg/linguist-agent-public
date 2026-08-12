@@ -32,6 +32,8 @@
     "THIRD_PARTY_NOTICES.md",
     "scripts/",
     ".github/workflows/ci.yml",
+    ".github/workflows/auto-release.yml",
+    ".github/workflows/upstream-sync.yml",
     "apps/electron/src/renderer/lib/linguist-build-metadata.ts"
   ],
   "touchpoints": [
@@ -429,6 +431,11 @@
       "file": "apps/electron/src/main/lib/tutorial-service.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+    },
+    {
+      "file": "apps/electron/src/main/lib/updater/auto-updater.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: install downloaded Linguist Agent releases on normal app quit while preserving the existing immediate and idle install paths."
     },
     {
       "file": "apps/electron/src/main/lib/user-profile-service.ts",
