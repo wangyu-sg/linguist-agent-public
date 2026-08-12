@@ -5,6 +5,7 @@ import { formatStageCoverage, stageCoverageKey } from './stage-coverage-atoms'
 function coverage(partial: Partial<LinguistStageDecisionCoverage>): LinguistStageDecisionCoverage {
   return {
     total: 101,
+    confirmed: 0,
     unchanged: 72,
     corrected: 29,
     blocked: 0,

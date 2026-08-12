@@ -558,14 +558,29 @@ test('bound session imports external files and a mixed resource directory withou
   service.closeAll()
 })
 
-test('normal chat gets no CAT tools; missing binding attaches throwing tools (documented)', async () => {
+test('同一 Workspace 的普通会话无 CAT Tools，Linguist 会话同时保留 Workspace 与 CAT Tools', async () => {
   const service = makeServiceOnLinguistRoot()
   const project = service.createProject({ ...PROJECT_INPUT, name: '普通会话对照项目' })
 
-  // 普通会话（侧栏新建，绝不携带绑定）→ []
-  const normal = sessionManager.createAgentSession('普通对话', undefined, undefined, undefined, 'pi')
+  const linguist = binding.createLinguistProjectChatSession(service, {
+    projectId: project.id,
+    role: 'general',
+  })
+  const normal = sessionManager.createAgentSession(
+    '普通对话',
+    undefined,
+    linguist.workspaceId,
+    undefined,
+    'pi',
+  )
   assert.equal(normal.linguistProjectId, undefined)
   assert.deepEqual(catTools.resolveLinguistSessionCatTools(normal, () => service), [])
+
+  assert.equal(linguist.workspaceId, normal.workspaceId)
+  assert.deepEqual(
+    catTools.resolveLinguistSessionCatTools(linguist, () => service).map((tool) => tool.name),
+    [...LINGUIST_CAT_TOOL_NAMES],
+  )
 
   // 绑定 missing（索引无此项目）→ 仍装配标准工具；execute 抛 PROJECT_MISSING
   const missingMeta = sessionManager.createAgentSession('缺失项目会话', undefined, undefined, undefined, 'pi', {

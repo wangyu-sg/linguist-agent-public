@@ -370,6 +370,7 @@ test('stage decision coverage: 101 段必须逐段形成 decision，blocked 单�
     }
     assert.deepEqual(db.segments.getStageDecisionCoverage('editing', segmentIds), {
       total: 101,
+      confirmed: 0,
       unchanged: 100,
       corrected: 0,
       blocked: 0,
@@ -381,12 +382,37 @@ test('stage decision coverage: 101 段必须逐段形成 decision，blocked 单�
     db.segments.recordCurrentStageDecision(segments[100]!.id, 'editing', 0, 'blocked')
     assert.deepEqual(db.segments.getStageDecisionCoverage('editing', segmentIds), {
       total: 101,
+      confirmed: 0,
       unchanged: 100,
       corrected: 0,
       blocked: 1,
       pending: 0,
       status: 'completed_with_blocks',
     })
+  } finally {
+    db.close()
+  }
+})
+
+test('stage decision coverage: 当前 revision 的通用确认计入岗位覆盖', () => {
+  const store = new CatStore({ rootDir: makeTempDir(), entropy: makeEntropy(), now: makeClock() })
+  const project = store.createProject({ name: 'translation coverage', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'ws' })
+  const db = store.openProject(project.id)
+  const { segments } = db.assets.insertImported(makeImportedAsset({ segmentCount: 2, fillEvery: 1 }))
+  try {
+    db.segments.confirmCurrentStage(segments[0]!.id, 'translation', 0)
+    assert.deepEqual(
+      db.segments.getStageDecisionCoverage('translation', segments.map((segment) => segment.id)),
+      {
+        total: 2,
+        confirmed: 1,
+        unchanged: 0,
+        corrected: 0,
+        blocked: 0,
+        pending: 1,
+        status: 'in_progress',
+      },
+    )
   } finally {
     db.close()
   }

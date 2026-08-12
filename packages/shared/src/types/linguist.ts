@@ -36,6 +36,8 @@ export const LINGUIST_PROJECT_IPC_CHANNELS = {
   GET_SUMMARY: 'linguist.projects.getSummary',
   /** 单批次单阶段的岗位 decision 覆盖统计（只读聚合） */
   GET_STAGE_COVERAGE: 'linguist.projects.getStageCoverage',
+  /** 随应用发布的格式内部验证与平台资格（全局只读，不接收项目路径）。 */
+  LIST_FORMAT_QUALIFICATIONS: 'linguist.projects.listFormatQualifications',
   /** 重命名项目（沿用项目名校验；归档项目只读） */
   RENAME: 'linguist.projects.rename',
   /** 修改空项目语言对；已有批次或 TM/TB 时 fail closed。 */
@@ -410,6 +412,7 @@ export const LINGUIST_IPC_ERROR_CODES = {
   FORMAT_EXPORT_ERROR: 'FORMAT_EXPORT_ERROR',
   FORMAT_SEGMENT_LOST: 'FORMAT_SEGMENT_LOST',
   FORMAT_UNSUPPORTED: 'FORMAT_UNSUPPORTED',
+  FORMAT_AMBIGUOUS: 'FORMAT_AMBIGUOUS',
 
   // ---- cat-core domain 穿透（packages/linguist-cat-core/src/errors.ts）----
   SEGMENT_LOCKED: 'SEGMENT_LOCKED',
@@ -425,6 +428,60 @@ export type LinguistIpcErrorCode =
 
 // ===== 结果信封 =====
 
+export type LinguistFormatImportErrorCategory =
+  | 'format_mismatch'
+  | 'format_ambiguous'
+  | 'unsupported_version'
+  | 'vendor_structure_incomplete'
+  | 'file_corrupt'
+
+interface LinguistFormatParseErrorDetails {
+  code: 'FORMAT_PARSE_ERROR'
+  category: Extract<
+    LinguistFormatImportErrorCategory,
+    'unsupported_version' | 'vendor_structure_incomplete' | 'file_corrupt'
+  >
+  adapterId: string
+  filename: string
+  detail: string
+}
+
+interface LinguistFormatExportErrorDetails {
+  code: 'FORMAT_EXPORT_ERROR'
+  adapterId: string
+  detail: string
+}
+
+interface LinguistFormatSegmentLostErrorDetails {
+  code: 'FORMAT_SEGMENT_LOST'
+  adapterId: string
+  missingSegmentIds: readonly string[]
+  detail?: string
+}
+
+interface LinguistFormatUnsupportedErrorDetails {
+  code: 'FORMAT_UNSUPPORTED'
+  category: 'format_mismatch'
+  filename: string
+  triedAdapterIds: readonly string[]
+}
+
+interface LinguistFormatAmbiguousErrorDetails {
+  code: 'FORMAT_AMBIGUOUS'
+  category: 'format_ambiguous'
+  filename: string
+  score: number
+  adapterIds: readonly string[]
+}
+
+/** Renderer 可安全展示的格式错误详情；绝不携带绝对路径或 stack。 */
+export type LinguistFormatErrorDetails =
+  | LinguistFormatParseErrorDetails
+  | LinguistFormatExportErrorDetails
+  | LinguistFormatSegmentLostErrorDetails
+  | LinguistFormatUnsupportedErrorDetails
+  | LinguistFormatAmbiguousErrorDetails
+
 export interface LinguistIpcError {
   code: LinguistIpcErrorCode
   /** 人类可读描述；类型化错误透传其 message，未知错误为通用文案。 */
@@ -434,6 +491,7 @@ export interface LinguistIpcError {
    * 的下游引用计数）。只允许非负整数值；绝无客户文本。
    */
   details?: Record<string, number>
+  formatDetails?: LinguistFormatErrorDetails
 }
 
 export type LinguistIpcResult<T> =
@@ -1013,15 +1071,25 @@ export interface LinguistProjectGetSummaryRequest {
   projectId: string
 }
 
-/** 单批次单阶段的岗位 decision 覆盖统计（Reviewer/Proofreader 真实进度）。 */
+/** 单批次单阶段的岗位 decision 覆盖统计（Translator/Reviewer/Proofreader 真实进度）。 */
 export interface LinguistStageDecisionCoverage {
   total: number
+  /** 当前 revision 的通用阶段确认；不推断为 unchanged/corrected。 */
+  confirmed: number
   unchanged: number
   corrected: number
   blocked: number
   /** 尚无当前 revision 有效 decision 的段数。 */
   pending: number
   status: 'in_progress' | 'complete' | 'completed_with_blocks'
+}
+
+/** 协作子会话的 CAT 完成证据；进程状态由 delegation.status 单独表达。 */
+export interface LinguistDelegationOutcome extends LinguistStageDecisionCoverage {
+  role: 'translator' | 'reviewer' | 'proofreader'
+  stage: LinguistWorkflowStage
+  /** confirmed + unchanged + corrected + blocked。 */
+  decided: number
 }
 
 export interface LinguistProjectGetStageCoverageRequest {
@@ -1031,6 +1099,23 @@ export interface LinguistProjectGetStageCoverageRequest {
 }
 
 export type LinguistProjectGetStageCoverageResult = LinguistStageDecisionCoverage
+
+export type LinguistFormatInternalVerification = 'passed' | 'failed'
+
+export type LinguistFormatPlatformQualification =
+  | 'unverified'
+  | 'real_file_passed'
+  | 'platform_roundtrip_passed'
+  | 'native_target_passed'
+
+export interface LinguistFormatQualification {
+  formatId: string
+  extensions: readonly string[]
+  internalVerification: LinguistFormatInternalVerification
+  platformQualification: LinguistFormatPlatformQualification
+}
+
+export type LinguistFormatQualificationListResult = LinguistFormatQualification[]
 
 export interface LinguistProjectRenameRequest {
   projectId: string

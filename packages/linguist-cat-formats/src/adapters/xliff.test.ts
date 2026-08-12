@@ -134,6 +134,38 @@ describe('XliffAdapter import（结构/标签/锁定/状态）', () => {
     expect(imported.warnings[0]?.code).toBe('xliff.missing_id')
   })
 
+  test('只读取 direct-child target，写回不覆盖 alt-trans target', async () => {
+    const xml = `<xliff version="1.2"><file><body>
+      <trans-unit id="one"><source>One</source><target>Direct one</target><alt-trans><target>Alt one</target></alt-trans></trans-unit>
+      <trans-unit id="two"><source>Two</source><alt-trans><target>Alt two</target></alt-trans></trans-unit>
+    </body></file></xliff>`
+    const adapter = new XliffAdapter()
+    const bytes = new TextEncoder().encode(xml)
+    const imported = await adapter.import({ bytes, filename: 'direct-target.xliff', sourceLocale: 'en', targetLocale: 'zh' })
+    expect(imported.segments.map((segment) => segment.target)).toEqual(['Direct one', ''])
+    const { asset, segments } = await boundSegments('direct-target.xliff', adapter, imported)
+    const changed = segments.map((segment) => ({ ...segment, target: segment.key === 'one' ? 'New one' : 'New two' }))
+    const out = new TextDecoder().decode(await adapter.export({ originalBytes: bytes, asset, segments: changed }))
+    expect(out).toContain('<target state="translated">New one</target><alt-trans><target>Alt one</target>')
+    expect(out).toContain('<source>Two</source><target state="translated">New two</target><alt-trans><target>Alt two</target>')
+  })
+
+  test('多个 file 可复用 native id，导出仍写回各自 trans-unit', async () => {
+    const xml = `<xliff version="1.2">
+      <file original="a"><body><trans-unit id="shared"><source>A</source><target>甲</target></trans-unit></body></file>
+      <file original="b"><body><trans-unit id="shared"><source>B</source><target>乙</target></trans-unit></body></file>
+    </xliff>`
+    const adapter = new XliffAdapter()
+    const bytes = new TextEncoder().encode(xml)
+    const imported = await adapter.import({ bytes, filename: 'multi-file.xliff', sourceLocale: 'en', targetLocale: 'zh' })
+    expect(imported.segments.map((segment) => segment.key)).toEqual(['shared', '#file-1:shared'])
+    const { asset, segments } = await boundSegments('multi-file.xliff', adapter, imported)
+    const changed = segments.map((segment) => ({ ...segment, target: segment.source === 'A' ? 'A1' : 'B1' }))
+    const exported = await adapter.export({ originalBytes: bytes, asset, segments: changed })
+    const reimported = await adapter.import({ bytes: exported, filename: 'multi-file.xliff', sourceLocale: 'en', targetLocale: 'zh' })
+    expect(reimported.segments.map((segment) => segment.target)).toEqual(['A1', 'B1'])
+  })
+
   test('MQXLIFF：mq:locked => locked，mq:status 保守映射，<ph> 载荷逐字保留', async () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:mq="MQXliff">

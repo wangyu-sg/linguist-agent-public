@@ -6,7 +6,7 @@
  */
 
 import type { CatFormatAdapter } from './adapter'
-import { FormatUnsupportedError } from './errors'
+import { FormatAmbiguousError, FormatUnsupportedError } from './errors'
 
 export interface DetectedAdapter {
   adapter: CatFormatAdapter
@@ -43,7 +43,7 @@ export class CatFormatRegistry {
 
   /**
    * Runs every adapter's detect() and returns matches (score > 0) sorted by
-   * score descending; ties keep registration order (stable sort).
+   * score descending; callers must resolve top-score ties explicitly.
    */
   async detectAll(bytes: Uint8Array, filename: string): Promise<DetectedAdapter[]> {
     const scored: DetectedAdapter[] = []
@@ -62,12 +62,23 @@ export class CatFormatRegistry {
    */
   async detectBest(bytes: Uint8Array, filename: string): Promise<CatFormatAdapter> {
     const matches = await this.detectAll(bytes, filename)
+    const lower = filename.toLowerCase()
+    const extensionOwners = this.adapters.filter((adapter) =>
+      adapter.extensions.some((extension) => lower.endsWith(extension.toLowerCase())),
+    )
+    if (extensionOwners.length > 0 && !extensionOwners.some((owner) => matches.some(({ adapter }) => adapter === owner))) {
+      throw new FormatUnsupportedError(filename, extensionOwners.map((adapter) => adapter.id))
+    }
     const best = matches[0]
     if (!best) {
       throw new FormatUnsupportedError(
         filename,
         this.adapters.map((a) => a.id),
       )
+    }
+    const ties = matches.filter((match) => match.score === best.score)
+    if (ties.length > 1) {
+      throw new FormatAmbiguousError(filename, best.score, ties.map(({ adapter }) => adapter.id))
     }
     return best.adapter
   }

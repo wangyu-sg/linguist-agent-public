@@ -129,6 +129,7 @@ import type {
   LinguistProjectGetSummaryRequest,
   LinguistProjectGetStageCoverageRequest,
   LinguistProjectGetStageCoverageResult,
+  LinguistFormatQualificationListResult,
   LinguistProjectConfirmXlsxMappingRequest,
   LinguistProjectConfirmXlsxMappingResult,
   LinguistProjectImportRequest,
@@ -1396,6 +1397,10 @@ export interface ElectronAPI {
   linguistProjectsGetStageCoverage: (
     input: LinguistProjectGetStageCoverageRequest,
   ) => Promise<LinguistIpcResult<LinguistProjectGetStageCoverageResult>>
+  /** 随应用发布的格式验证与平台资格，只读且不接收项目路径。 */
+  linguistProjectsListFormatQualifications: () => Promise<
+    LinguistIpcResult<LinguistFormatQualificationListResult>
+  >
   /** 重命名 CAT 项目；归档项目拒绝写入 */
   linguistProjectsRename: (
     input: LinguistProjectRenameRequest,
@@ -3251,6 +3256,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.GET_SUMMARY, input),
   linguistProjectsGetStageCoverage: (input: LinguistProjectGetStageCoverageRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.GET_STAGE_COVERAGE, input),
+  linguistProjectsListFormatQualifications: () =>
+    ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.LIST_FORMAT_QUALIFICATIONS),
   linguistProjectsRename: (input: LinguistProjectRenameRequest) =>
     ipcRenderer.invoke(LINGUIST_PROJECT_IPC_CHANNELS.RENAME, input),
   linguistProjectsSetLocales: (input: LinguistProjectSetLocalesRequest) =>

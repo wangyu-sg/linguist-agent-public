@@ -21,6 +21,8 @@ export const FORMAT_ERROR_CODES = {
   FORMAT_SEGMENT_LOST: 'FORMAT_SEGMENT_LOST',
   /** No adapter accepts the given bytes/filename, or format is unsupported. */
   FORMAT_UNSUPPORTED: 'FORMAT_UNSUPPORTED',
+  /** Multiple adapters returned the same highest confidence. */
+  FORMAT_AMBIGUOUS: 'FORMAT_AMBIGUOUS',
 } as const
 
 export type FormatErrorCode = (typeof FORMAT_ERROR_CODES)[keyof typeof FORMAT_ERROR_CODES]
@@ -88,5 +90,18 @@ export class FormatUnsupportedError extends FormatError {
         (triedAdapterIds.length > 0 ? ` (tried: ${triedAdapterIds.join(', ')})` : ' (registry is empty)'),
     )
     this.name = 'FormatUnsupportedError'
+  }
+}
+
+/** Multiple adapters claim the same input with the same top confidence. */
+export class FormatAmbiguousError extends FormatError {
+  readonly code = FORMAT_ERROR_CODES.FORMAT_AMBIGUOUS
+  constructor(
+    readonly filename: string,
+    readonly score: number,
+    readonly adapterIds: readonly string[],
+  ) {
+    super(`Ambiguous format for ${filename}: ${adapterIds.join(', ')} all scored ${score}`)
+    this.name = 'FormatAmbiguousError'
   }
 }

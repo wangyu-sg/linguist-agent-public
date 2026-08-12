@@ -11,6 +11,7 @@
 
 export {
   FORMAT_ERROR_CODES,
+  FormatAmbiguousError,
   FormatError,
   FormatExportError,
   FormatParseError,

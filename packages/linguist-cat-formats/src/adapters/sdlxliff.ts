@@ -48,13 +48,11 @@
  *   legacy always-draft fallback (documented deviation).
  *
  * detect scoring (the registry picks the highest-scoring adapter):
- * - sdl namespace + `.sdlxliff` extension   -> 0.95 (beats XliffAdapter's
- *   0.5 bytes-only score for the same file — sdl files take the sdl path);
- * - sdl namespace, other extension          -> 0.7 (an explicit `.xliff`/
- *   `.mqxliff` extension still wins via XliffAdapter's 0.9; an unknown
- *   extension routes here over XliffAdapter's 0.5);
- * - `.sdlxliff` extension, NO sdl namespace -> 0.4 (below XliffAdapter's
- *   0.5 — the file is plain XLIFF with an sdl name and stays there);
+ * - sdl namespace + `.sdlxliff` extension   -> 1;
+ * - sdl namespace, other extension          -> 0.95 (vendor content wins
+ *   over the generic XLIFF extension score);
+ * - `.sdlxliff` extension, NO sdl namespace -> 0 (the registry rejects the
+ *   preserved vendor extension instead of silently using generic XLIFF);
  * - no sdl namespace, other extension       -> 0 (plain XLIFF / MQXLIFF are
  *   never claimed).
  *
@@ -82,9 +80,6 @@
  * - a malformed trans-unit without `<source>` (non-segmented shape) is a
  *   typed FormatParseError here (the legacy implementation skipped it
  *   silently) — failed content is never dropped quietly;
- * - a `<target>` inside `<alt-trans>` can be mistaken for the main target
- *   (same as XliffAdapter); the non-greedy mrk matcher does not support
- *   nested mrk elements of the same name (fine for real Trados files);
  * - modified segments are re-encoded canonically (text runs escaped, inline
  *   tags verbatim, CDATA not re-wrapped), so they may differ in byte shape
  *   from a non-canonical original while decoding to identical content.
@@ -111,10 +106,11 @@ import {
   decodeXmlInline,
   encodeXmlAttr,
   encodeXmlInline,
-  findFirst,
+  findDirectChild,
   parseAttrs,
   setAttr,
-  type FoundElement,
+  type XliffElementSpan,
+  XliffSpanIndex,
 } from './xliff-xml'
 
 export const SDLXLIFF_ADAPTER_ID = 'sdlxliff_1_2'
@@ -123,9 +119,6 @@ const XLIFF_ROOT_PATTERN = /<(?:[\w.-]+:)?xliff\b/i
 const SDL_NAMESPACE_PATTERN = /xmlns:sdl\s*=\s*["']/i
 const FILE_PATTERN = /<((?:[\w.-]+:)?file)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const TRANS_UNIT_PATTERN = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>([\s\S]*?)<\/\1>/gi
-const SELF_CLOSING_TARGET_PATTERN = /<((?:[\w.-]+:)?target)\b([^>]*)\/>/i
-/** 成对或自闭合 mrk；Trados 用 `<mrk .../>` 表示空目标段。 */
-const MRK_PATTERN = /<((?:[\w.-]+:)?mrk)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/gi
 /** `<sdl:seg .../>` / `<sdl:seg ...>...</sdl:seg>` (also tolerates an unprefixed `seg`). */
 const SEG_DEF_PATTERN = /<((?:sdl:)?seg)(?=[\s>/])([^>]*)(?:\/>|>[\s\S]*?<\/\1>)/gi
 
@@ -184,22 +177,15 @@ function parseSegDefs(text: string): Map<string, SdlSegDef> {
 }
 
 /** `<mrk mtype="seg">` elements inside a seg-source/target block. */
-function extractSegMrks(block: string | undefined): FoundElement[] {
+function extractSegMrks(block: string | undefined): XliffElementSpan[] {
   if (!block) return []
-  MRK_PATTERN.lastIndex = 0
-  const mrks: FoundElement[] = []
-  for (const match of block.matchAll(MRK_PATTERN)) {
-    const attrs = parseAttrs(match[2] ?? '')
-    if (attrs.mtype !== 'seg') continue
-    mrks.push({
-      full: match[0],
-      tagName: match[1]!,
-      attrsRaw: match[2] ?? '',
-      attrs,
-      inner: match[3] ?? '',
-    })
-  }
-  return mrks
+  return new XliffSpanIndex(block).find('mrk').filter((mrk) => {
+    if (mrk.attrs.mtype !== 'seg') return false
+    for (let parent = mrk.parent; parent; parent = parent.parent) {
+      if (parent.localName === 'mrk' && parent.attrs.mtype === 'seg') return false
+    }
+    return true
+  })
 }
 
 /**
@@ -216,15 +202,15 @@ function statusFromSdlConf(target: string, conf: string | undefined): SegmentSta
 
 /** Replaces the inner of `<mrk mtype="seg" mid="...">` inside a target block. */
 function replaceMrkInner(targetInner: string, mid: string, nextInner: string): { inner: string; found: boolean } {
-  let found = false
-  MRK_PATTERN.lastIndex = 0
-  const inner = targetInner.replace(MRK_PATTERN, (full, tagName: string, attrsRaw: string) => {
-    const attrs = parseAttrs(attrsRaw ?? '')
-    if (attrs.mtype !== 'seg' || attrs.mid !== mid) return full
-    found = true
-    return `<${tagName}${attrsRaw}>${nextInner}</${tagName}>`
-  })
-  return { inner, found }
+  const mrk = extractSegMrks(targetInner).find((candidate) => candidate.attrs.mid === mid)
+  if (!mrk) return { inner: targetInner, found: false }
+  const replacement = mrk.selfClosing
+    ? `<${mrk.tagName}${mrk.attrsRaw}>${nextInner}</${mrk.tagName}>`
+    : targetInner.slice(mrk.start, mrk.contentStart) + nextInner + targetInner.slice(mrk.contentEnd, mrk.end)
+  return {
+    inner: targetInner.slice(0, mrk.start) + replacement + targetInner.slice(mrk.end),
+    found: true,
+  }
 }
 
 export class SdlXliffAdapter implements CatFormatAdapter {
@@ -244,8 +230,8 @@ export class SdlXliffAdapter implements CatFormatAdapter {
     if (!XLIFF_ROOT_PATTERN.test(text)) return 0
     const hasSdlNamespace = SDL_NAMESPACE_PATTERN.test(text)
     const hasSdlExtension = filename.toLowerCase().endsWith('.sdlxliff')
-    if (hasSdlNamespace) return hasSdlExtension ? 0.95 : 0.7
-    return hasSdlExtension ? 0.4 : 0
+    if (hasSdlNamespace) return hasSdlExtension ? 1 : 0.95
+    return 0
   }
 
   async import(input: CatFormatImportInput): Promise<ImportedCatAsset> {
@@ -365,6 +351,9 @@ export class SdlXliffAdapter implements CatFormatAdapter {
         throw new FormatExportError(this.id, `segment key ${JSON.stringify(key)} is not present in the original template`)
       }
     }
+    if (changed.size === 0 && statusChanges.size === 0 && documentStatusChanges.size === 0) {
+      return originalBytes
+    }
 
     // Splice edits over the original text; untouched units keep their exact bytes.
     const edits: Array<{ start: number; end: number; replacement: string }> = []
@@ -445,23 +434,15 @@ export class SdlXliffAdapter implements CatFormatAdapter {
    * XliffAdapter — a non-empty written target gets state="translated").
    */
   private rewritePlainTarget(tuFull: string, encoded: string, markTranslated: boolean): string {
-    const target = findFirst(tuFull, 'target')
+    const target = findDirectChild(tuFull, 'target')
     if (target) {
       const attrsRaw = markTranslated ? setAttr(target.attrsRaw, 'state', 'translated') : target.attrsRaw
       const nextTarget = `<${target.tagName}${attrsRaw}>${encoded}</${target.tagName}>`
       const at = tuFull.indexOf(target.full)
-      if (at < 0) return tuFull // defensive; findFirst matched within this unit
+      if (at < 0) return tuFull // defensive; direct-child target matched within this unit
       return tuFull.slice(0, at) + nextTarget + tuFull.slice(at + target.full.length)
     }
-    const selfClosing = SELF_CLOSING_TARGET_PATTERN.exec(tuFull)
-    if (selfClosing) {
-      const tagName = selfClosing[1]!
-      const attrsRaw = markTranslated ? setAttr(selfClosing[2] ?? '', 'state', 'translated') : (selfClosing[2] ?? '')
-      const next = `<${tagName}${attrsRaw}>${encoded}</${tagName}>`
-      const at = tuFull.indexOf(selfClosing[0])
-      return tuFull.slice(0, at) + next + tuFull.slice(at + selfClosing[0].length)
-    }
-    const source = findFirst(tuFull, 'source')
+    const source = findDirectChild(tuFull, 'source')
     const inserted = `<target state="translated">${encoded}</target>`
     if (!source) return tuFull // defensive; import rejected source-less units
     const at = tuFull.indexOf(source.full)
@@ -478,7 +459,7 @@ export class SdlXliffAdapter implements CatFormatAdapter {
     const asMrk = (entry: { mid: string; encoded: string }): string =>
       `<mrk mtype="seg" mid="${encodeXmlAttr(entry.mid)}">${entry.encoded}</mrk>`
 
-    const target = findFirst(tuFull, 'target')
+    const target = findDirectChild(tuFull, 'target')
     if (target) {
       let inner = target.inner
       const missing: Array<{ mid: string; encoded: string }> = []
@@ -490,17 +471,11 @@ export class SdlXliffAdapter implements CatFormatAdapter {
       inner += missing.map(asMrk).join('')
       const nextTarget = `<${target.tagName}${target.attrsRaw}>${inner}</${target.tagName}>`
       const at = tuFull.indexOf(target.full)
-      if (at < 0) return tuFull // defensive; findFirst matched within this unit
+      if (at < 0) return tuFull // defensive; direct-child target matched within this unit
       return tuFull.slice(0, at) + nextTarget + tuFull.slice(at + target.full.length)
     }
     const mrks = entries.map(asMrk).join('')
-    const selfClosing = SELF_CLOSING_TARGET_PATTERN.exec(tuFull)
-    if (selfClosing) {
-      const next = `<${selfClosing[1]}${selfClosing[2]}>${mrks}</${selfClosing[1]}>`
-      const at = tuFull.indexOf(selfClosing[0])
-      return tuFull.slice(0, at) + next + tuFull.slice(at + selfClosing[0].length)
-    }
-    const segSource = findFirst(tuFull, 'seg-source')
+    const segSource = findDirectChild(tuFull, 'seg-source')
     if (!segSource) return tuFull // defensive; a segmented unit always has one
     const at = tuFull.indexOf(segSource.full)
     return tuFull.slice(0, at) + segSource.full + `<target>${mrks}</target>` + tuFull.slice(at + segSource.full.length)
@@ -555,12 +530,12 @@ export class SdlXliffAdapter implements CatFormatAdapter {
         const tuLocked = fileLocked || translateNo(attrs)
         const unit: ParsedSdlUnit = { full: tuMatch[0], segmented: false, segs: [] }
 
-        const segSource = findFirst(inner, 'seg-source')
+        const segSource = findDirectChild(inner, 'seg-source')
         const sourceMrks = extractSegMrks(segSource?.inner)
         if (sourceMrks.length > 0) {
           unit.segmented = true
           const segDefs = parseSegDefs(inner)
-          const target = findFirst(inner, 'target')
+          const target = findDirectChild(inner, 'target')
           const targetMrks = new Map(extractSegMrks(target?.inner).map((mrk) => [mrk.attrs.mid ?? '', mrk]))
           for (const srcMrk of sourceMrks) {
             const mid = srcMrk.attrs.mid
@@ -592,7 +567,7 @@ export class SdlXliffAdapter implements CatFormatAdapter {
             })
           }
         } else {
-          const source = findFirst(inner, 'source')
+          const source = findDirectChild(inner, 'source')
           if (!source) {
             throw new FormatParseError(
               this.id,
@@ -600,8 +575,8 @@ export class SdlXliffAdapter implements CatFormatAdapter {
               `trans-unit ${JSON.stringify(attrs.id ?? '?')} has neither <seg-source> segments nor a <source> element`,
             )
           }
-          const target = findFirst(inner, 'target')
-          const note = findFirst(inner, 'note')
+          const target = findDirectChild(inner, 'target')
+          const note = findDirectChild(inner, 'note')
           const id = attrs.id?.trim() || undefined
           const resname = attrs.resname?.trim() || undefined
           const key = id ?? resname ?? `#tu-${segmentCount}`

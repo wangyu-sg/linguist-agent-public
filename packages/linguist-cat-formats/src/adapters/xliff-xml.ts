@@ -91,6 +91,110 @@ export interface FoundElement {
   attrsRaw: string
   attrs: Record<string, string>
   inner: string
+  selfClosing?: boolean
+}
+
+export interface XliffElementSpan extends FoundElement {
+  localName: string
+  start: number
+  openEnd: number
+  contentStart: number
+  contentEnd: number
+  end: number
+  parent?: XliffElementSpan
+}
+
+function markupEnd(xml: string, start: number): number {
+  if (xml.startsWith('<!--', start)) {
+    const end = xml.indexOf('-->', start + 4)
+    return end < 0 ? xml.length : end + 3
+  }
+  if (xml.startsWith('<![CDATA[', start)) {
+    const end = xml.indexOf(']]>', start + 9)
+    return end < 0 ? xml.length : end + 3
+  }
+  if (xml.startsWith('<?', start)) {
+    const end = xml.indexOf('?>', start + 2)
+    return end < 0 ? xml.length : end + 2
+  }
+  let quote = ''
+  for (let index = start + 1; index < xml.length; index += 1) {
+    const char = xml[index]!
+    if (quote) {
+      if (char === quote) quote = ''
+    } else if (char === '"' || char === "'") quote = char
+    else if (char === '>') return index + 1
+  }
+  return xml.length
+}
+
+/** XLIFF 目标 span 索引：只建元素父子关系与字节位置，不解析或重序列化 XML。 */
+export class XliffSpanIndex {
+  readonly elements: XliffElementSpan[] = []
+
+  constructor(readonly xml: string) {
+    const stack: XliffElementSpan[] = []
+    for (let cursor = 0; cursor < xml.length;) {
+      const start = xml.indexOf('<', cursor)
+      if (start < 0) break
+      const end = markupEnd(xml, start)
+      const markup = xml.slice(start, end)
+      cursor = Math.max(end, start + 1)
+      if (/^<(?:!|\?)/.test(markup)) continue
+
+      const closing = /^<\/\s*([\w:.-]+)/.exec(markup)
+      if (closing) {
+        const tagName = closing[1]!
+        const stackIndex = stack.findLastIndex((candidate) => candidate.tagName === tagName)
+        if (stackIndex < 0) continue
+        const node = stack[stackIndex]!
+        stack.length = stackIndex
+        node.contentEnd = start
+        node.end = end
+        node.inner = xml.slice(node.contentStart, node.contentEnd)
+        node.full = xml.slice(node.start, node.end)
+        continue
+      }
+
+      const opening = /^<\s*([\w:.-]+)([\s\S]*?)\/?\s*>$/.exec(markup)
+      if (!opening) continue
+      const selfClosing = /\/\s*>$/.test(markup)
+      const attrsRaw = opening[2] ?? ''
+      const tagName = opening[1]!
+      const node: XliffElementSpan = {
+        full: markup,
+        tagName,
+        localName: tagName.split(':').at(-1)!.toLowerCase(),
+        attrsRaw,
+        attrs: parseAttrs(attrsRaw),
+        inner: '',
+        selfClosing,
+        start,
+        openEnd: end,
+        contentStart: end,
+        contentEnd: selfClosing ? end : 0,
+        end: selfClosing ? end : 0,
+        ...(stack.at(-1) === undefined ? {} : { parent: stack.at(-1) }),
+      }
+      this.elements.push(node)
+      if (!selfClosing) stack.push(node)
+    }
+  }
+
+  find(localName: string): XliffElementSpan[] {
+    const expected = localName.toLowerCase()
+    return this.elements.filter((element) => element.end > 0 && element.localName === expected)
+  }
+}
+
+/** 查找当前 block 的 direct child；若 block 本身是单一根元素，则查其 direct child。 */
+export function findDirectChild(block: string, name: string): FoundElement | undefined {
+  const index = new XliffSpanIndex(block)
+  const roots = index.elements.filter((element) => element.parent === undefined && element.end > 0)
+  const parent = roots.length === 1 && roots[0]!.localName !== name.toLowerCase()
+    ? roots[0]
+    : undefined
+  return index.find(name).find((element) => element.parent === parent)
 }
 
 /**
