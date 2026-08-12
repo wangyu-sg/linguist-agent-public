@@ -206,7 +206,7 @@ export function ContextEvidencePanel({
       linkedImages={
         <LinkedContextImages
           projectId={projectId}
-          segmentId={activeSegmentId as string}
+          segmentId={state.context.segment.id}
           docs={state.linkedDocs}
           archived={archived}
         />

@@ -24,6 +24,7 @@ export interface LinkedContextImagesViewProps {
   pickerOpen: boolean
   /** 选择器候选（项目内尚未关联的 Context Docs）。 */
   candidates: LinguistContextDocInfo[]
+  loadingCandidates: boolean
   /** 正在等待 IPC 返回的 doc id。 */
   busyDocId?: string
   onPreview: (doc: LinguistContextDocInfo) => void
@@ -37,6 +38,7 @@ export function LinkedContextImagesView({
   archived,
   pickerOpen,
   candidates,
+  loadingCandidates,
   busyDocId,
   onPreview,
   onUnlink,
@@ -113,7 +115,12 @@ export function LinkedContextImagesView({
           <p className="border-b border-border/35 px-2.5 py-1.5 text-[10px] text-muted-foreground">
             选择项目 Context Doc 关联到当前片段（图片 Agent 可直接查看）
           </p>
-          {candidates.length === 0 ? (
+          {loadingCandidates ? (
+            <p role="status" className="flex items-center gap-1.5 px-2.5 py-2 text-[11px] text-muted-foreground">
+              <Loader2 size={11} className="animate-spin" />
+              正在读取 Context Docs…
+            </p>
+          ) : candidates.length === 0 ? (
             <p className="px-2.5 py-2 text-[11px] text-muted-foreground">
               没有可关联的 Context Doc，请先在项目设置中导入。
             </p>
@@ -161,6 +168,7 @@ export function LinkedContextImages({
   const openLinguistPreview = useOpenLinguistPreview()
   const [pickerOpen, setPickerOpen] = React.useState(false)
   const [allDocs, setAllDocs] = React.useState<LinguistContextDocInfo[]>([])
+  const [loadingCandidates, setLoadingCandidates] = React.useState(false)
   const [busyDocId, setBusyDocId] = React.useState<string | undefined>(undefined)
 
   /** 候选 = 项目全部 Context Docs 中尚未与当前片段关联的。 */
@@ -175,6 +183,7 @@ export function LinkedContextImages({
       return
     }
     setPickerOpen(true)
+    setLoadingCandidates(true)
     void window.electronAPI.linguistAssetsQuery({
       projectId,
       kind: 'contextDocs',
@@ -183,11 +192,15 @@ export function LinkedContextImages({
     }).then((result) => {
       if (!result.ok) {
         toast.error('读取 Context Docs 失败', { description: describeLinguistIpcError(result.error) })
+        setPickerOpen(false)
         return
       }
       setAllDocs(result.data.items as LinguistContextDocInfo[])
     }).catch(() => {
       toast.error('读取 Context Docs 失败', { description: '与主进程通信异常（INTERNAL）' })
+      setPickerOpen(false)
+    }).finally(() => {
+      setLoadingCandidates(false)
     })
   }
 
@@ -231,6 +244,7 @@ export function LinkedContextImages({
       archived={archived}
       pickerOpen={pickerOpen}
       candidates={candidates}
+      loadingCandidates={loadingCandidates}
       busyDocId={busyDocId}
       onPreview={preview}
       onUnlink={(doc) => void setLink(doc, false)}

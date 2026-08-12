@@ -31,6 +31,7 @@ describe('LinkedContextImagesView', () => {
         docs={[LINKED_IMAGE, LINKED_DOC]}
         archived={false}
         pickerOpen
+        loadingCandidates={false}
         candidates={[{
           ...LINKED_IMAGE,
           id: 'doc-img-2',
@@ -60,6 +61,7 @@ describe('LinkedContextImagesView', () => {
         docs={[]}
         archived
         pickerOpen={false}
+        loadingCandidates={false}
         candidates={[]}
         onPreview={noop}
         onUnlink={noop}
@@ -70,5 +72,24 @@ describe('LinkedContextImagesView', () => {
 
     expect(html).toContain('当前片段还没有关联图片')
     expect(html).toContain('disabled=""')
+  })
+
+  test('given 关联候选仍在读取 when 展开选择器 then 显示加载态而不是空态', () => {
+    const html = renderToStaticMarkup(
+      <LinkedContextImagesView
+        docs={[]}
+        archived={false}
+        pickerOpen
+        loadingCandidates
+        candidates={[]}
+        onPreview={noop}
+        onUnlink={noop}
+        onTogglePicker={noop}
+        onLink={noop}
+      />,
+    )
+
+    expect(html).toContain('正在读取 Context Docs')
+    expect(html).not.toContain('没有可关联的 Context Doc')
   })
 })
