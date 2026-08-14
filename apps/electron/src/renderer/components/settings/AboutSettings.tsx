@@ -24,7 +24,7 @@ import { LINGUIST_BUILD_METADATA } from '@/lib/linguist-build-metadata'
 import { ReleaseNotesViewer } from './ReleaseNotesViewer'
 import { VersionHistory } from './VersionHistory'
 
-const GITHUB_RELEASES_URL = 'https://github.com/proma-ai/Proma/releases'
+const GITHUB_RELEASES_URL = 'https://github.com/wangyu-sg/linguist-agent-public/releases'
 
 /** 对应源码公开仓（AGPL-3.0 第 13 条 Corresponding Source，PB-116 指定的公开仓） */
 const SOURCE_CODE_URL = 'https://github.com/wangyu-sg/linguist-agent-public'

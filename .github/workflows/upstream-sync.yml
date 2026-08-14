@@ -87,10 +87,10 @@ jobs:
             CONFLICTS="$(git diff --name-only --diff-filter=U)"
             git merge --abort
             TITLE="[Upstream Sync] Proma ${UPSTREAM_TAG} 需要处理"
-            BODY="Proma ${BASELINE_TAG} → ${UPSTREAM_TAG} 自动合并发生冲突。\n\n冲突文件：\n\`\`\`\n${CONFLICTS}\n\`\`\`\n\n候选分支：\`${CANDIDATE}\`\n运行：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            BODY="Proma ${BASELINE_TAG} → ${UPSTREAM_TAG} 自动合并发生冲突。\n\n冲突文件：\n\`\`\`\n${CONFLICTS}\n\`\`\`\n\nGit 无法推送未解决的冲突状态，因此没有伪造候选分支。请从 main 手动合并 ${UPSTREAM_TAG}。\n\n最近运行：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             ISSUE="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
             if [ -n "$ISSUE" ]; then
-              gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+              gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "$BODY"
             else
               gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
             fi
@@ -181,10 +181,10 @@ jobs:
           CANDIDATE: ${{ needs.prepare.outputs.candidate_ref }}
         run: |
           TITLE="[Upstream Sync] Proma ${UPSTREAM_TAG} 需要处理"
-          BODY="候选分支 \`${CANDIDATE}\` 未通过 CI。\n\n运行：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          BODY="候选分支 \`${CANDIDATE}\` 未通过 CI。\n\n最近运行：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           ISSUE="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
           if [ -n "$ISSUE" ]; then
-            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+            gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "$BODY"
           else
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
           fi
@@ -208,4 +208,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CANDIDATE: ${{ needs.prepare.outputs.candidate_ref }}
-        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE}"
+        run: |
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE}"
+          TITLE="[Upstream Sync] Proma ${{ needs.prepare.outputs.upstream_tag }} 需要处理"
+          ISSUE="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$ISSUE" ]; then
+            gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY" --comment '自动同步、验证与发布已成功完成。'
+          fi

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 const root = join(import.meta.dir, '..')
 const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+const autoReleaseWorkflow = readFileSync(join(root, '.github/workflows/auto-release.yml'), 'utf8')
 const electronPackage = JSON.parse(
   readFileSync(join(root, 'apps/electron/package.json'), 'utf8'),
 ) as { scripts: Record<string, string> }
@@ -21,6 +22,16 @@ describe('AC-002 发布链 fail-closed', () => {
     expect(releaseWorkflow).toContain("grep -Fx 'latest-mac.yml'")
     expect(releaseWorkflow).toContain("grep -Fx 'latest.yml'")
     expect(releaseWorkflow).toContain('--draft=false --latest')
+    expect(releaseWorkflow).toContain("needs.merge-mac-yml.result == 'success'")
+  })
+
+  test('普通 main 提交只有显式声明 release 才创建安装包', () => {
+    expect(autoReleaseWorkflow).toContain("grep -qi '\\[release\\]'")
+  })
+
+  test('公开 Release 前删除未使用的差分资产', () => {
+    expect(releaseWorkflow).toContain('endswith(".blockmap")')
+    expect(releaseWorkflow).toContain('gh release delete-asset')
   })
 
   test('关键资源复制失败会终止构建', () => {

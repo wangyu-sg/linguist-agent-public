@@ -4,6 +4,7 @@
 # PB-010：开发期 bundle id。最终签名身份（证书 / Team ID / 正式 appId）在 PB-114 确定。
 appId: com.linguistagent.app
 productName: Linguist Agent
+artifactName: Linguist-Agent-${version}-${arch}.${ext}
 copyright: Copyright © 2026 Linguist Agent contributors; portions Copyright © 2024-2026 Erlich Liu
 
 # Electron 版本（CI 环境 bun workspace 下无法自动检测，需显式指定）
@@ -165,6 +166,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  differentialPackage: false
 
 # ============================================
 # 发布配置

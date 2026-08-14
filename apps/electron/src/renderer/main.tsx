@@ -404,7 +404,7 @@ function UpdaterInitializer(): null {
           <img src={PromaLogo} alt="Proma" className="size-8 rounded-lg" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-sm leading-5">
-              <span className="font-semibold tracking-tight">Proma 更新已下载</span>
+              <span className="font-semibold tracking-tight">Linguist Agent 更新已下载</span>
               <span className="text-xs text-primary">{versionLabel}</span>
             </div>
             <p className="text-xs leading-4 text-muted-foreground">所有 Agent 完成后即可自动安装。</p>
@@ -422,7 +422,7 @@ function UpdaterInitializer(): null {
             <button
               type="button"
               className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.96]"
-              onClick={() => { void window.electronAPI.openExternal('https://proma.cool/changelog') }}
+              onClick={() => { void window.electronAPI.openExternal('https://github.com/wangyu-sg/linguist-agent-public/releases') }}
             >
               查看更新
               <ArrowUpRight size={13} />

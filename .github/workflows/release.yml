@@ -4,6 +4,21 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 要发布的 Git ref
+        required: true
+        type: string
+      tag:
+        description: Release Tag（例如 v0.17.31）
+        required: true
+        type: string
+      run_validation:
+        description: 是否重新运行完整 CI
+        required: false
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       ref:
@@ -179,6 +194,7 @@ jobs:
   merge-mac-yml:
     name: 合并 macOS 更新元数据
     needs: [build-mac-arm64, build-mac-x64]
+    if: ${{ always() && needs.build-mac-arm64.result == 'success' && needs.build-mac-x64.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: 合并并上传 latest-mac.yml
@@ -187,9 +203,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir mac-assets
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-mac.zip' --dir mac-assets
-          ARM64_ZIP="$(find mac-assets -type f -name '*arm64-mac.zip' -print -quit)"
-          X64_ZIP="$(find mac-assets -type f -name '*-mac.zip' ! -name '*arm64*' -print -quit)"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern 'Linguist-Agent-*.zip' --dir mac-assets
+          ARM64_ZIP="$(find mac-assets -type f -name '*-arm64.zip' -print -quit)"
+          X64_ZIP="$(find mac-assets -type f -name '*-x64.zip' -print -quit)"
           test -n "$ARM64_ZIP"
           test -n "$X64_ZIP"
           ARM64_SHA="$(openssl dgst -sha512 -binary "$ARM64_ZIP" | base64 -w0)"
@@ -217,6 +233,7 @@ jobs:
   publish-release:
     name: 公开完整 Release
     needs: [build-mac-arm64, build-mac-x64, build-windows-x64, merge-mac-yml]
+    if: ${{ always() && needs.build-mac-arm64.result == 'success' && needs.build-mac-x64.result == 'success' && needs.build-windows-x64.result == 'success' && needs.merge-mac-yml.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: 检出发布版本
@@ -230,14 +247,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name | select(endswith(".blockmap"))' \
+            | while IFS= read -r ASSET; do
+                gh release delete-asset "$RELEASE_TAG" "$ASSET" --repo "$GITHUB_REPOSITORY" --yes
+              done
           ASSETS="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
           printf '%s\n' "$ASSETS" | grep -Fx 'latest-mac.yml'
           printf '%s\n' "$ASSETS" | grep -Fx 'latest.yml'
-          printf '%s\n' "$ASSETS" | grep -E 'arm64-mac\.zip$'
-          printf '%s\n' "$ASSETS" | grep -E -- '-mac\.zip$' | grep -v arm64
-          printf '%s\n' "$ASSETS" | grep -E 'arm64\.dmg$'
-          printf '%s\n' "$ASSETS" | grep -E '\.dmg$' | grep -v arm64
-          printf '%s\n' "$ASSETS" | grep -E '\.exe$'
+          printf '%s\n' "$ASSETS" | grep -E -- '-arm64\.zip$'
+          printf '%s\n' "$ASSETS" | grep -E -- '-x64\.zip$'
+          printf '%s\n' "$ASSETS" | grep -E -- '-arm64\.dmg$'
+          printf '%s\n' "$ASSETS" | grep -E -- '-x64\.dmg$'
+          printf '%s\n' "$ASSETS" | grep -E -- '-x64\.exe$'
           PREVIOUS_TAG="$(git tag --list 'v[0-9]*' --sort=-version:refname | grep -Fxv "$RELEASE_TAG" | head -1 || true)"
-          node scripts/generate-release-notes.mjs --from "$PREVIOUS_TAG" --to "$RELEASE_REF" --tag "$RELEASE_TAG"
+          CURRENT_BASELINE="$(node -p "require('./docs/architecture/proma-baseline.json').upstream.tag")"
+          PREVIOUS_BASELINE="$(git show "${PREVIOUS_TAG}:docs/architecture/proma-baseline.json" 2>/dev/null | jq -r '.upstream.tag // empty')"
+          NOTES_ARGS=()
+          if [ -n "$PREVIOUS_BASELINE" ] && [ "$PREVIOUS_BASELINE" != "$CURRENT_BASELINE" ]; then
+            gh api "repos/proma-ai/Proma/releases/tags/${CURRENT_BASELINE}" --jq '.body' > upstream-release-notes.md
+            NOTES_ARGS=(--upstream-notes upstream-release-notes.md)
+          fi
+          node scripts/generate-release-notes.mjs --from "$PREVIOUS_TAG" --to "$RELEASE_REF" --tag "$RELEASE_TAG" "${NOTES_ARGS[@]}"
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "Linguist Agent ${RELEASE_TAG#v}" --notes-file release-notes.md --draft=false --latest

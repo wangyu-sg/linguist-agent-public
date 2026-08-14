@@ -164,6 +164,8 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   // 自动下载；用户正常退出时安装，下次启动直接进入新版本。
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  // Release 只保留完整更新包，避免公开无意义的 blockmap 资产。
+  autoUpdater.disableDifferentialDownload = true
 
   // 监听更新事件
   autoUpdater.on('checking-for-update', () => {

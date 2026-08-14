@@ -44,6 +44,12 @@ jobs:
             exit 0
           fi
 
+          if ! git log -1 --format=%B "$HEAD_SHA" | grep -qi '\[release\]'; then
+            echo '当前提交未声明 [release]，只保留已通过的 CI，不创建安装包。'
+            echo 'release=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           VERSION="$(node -p "require('./apps/electron/package.json').version")"
           TAG="v${VERSION}"
           if git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null; then
