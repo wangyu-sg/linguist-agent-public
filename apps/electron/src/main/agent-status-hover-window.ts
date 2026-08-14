@@ -54,6 +54,8 @@ export class AgentStatusHoverWindow {
         preload: join(__dirname, 'preload.cjs'),
         contextIsolation: true,
         nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
       },
     })
 

@@ -1,18 +1,18 @@
-# Proma Core Touchpoints — v0.17.15
+# Proma Core Touchpoints — v0.17.26
 
-> 基线：`v0.17.15@73e9d014b56dfda7554011bc02cf8ee5af2c5493`
-> 正式 merge：`2ade7e7e045ce6beab817778b1b39f897045fdf3`
+> 基线：`v0.17.26@db94285a6c6eaeea6a75a3fcf9d67a22e8bc45ba`
+> 正式 merge：`0a09ee5e53e8ed647a4b130bce1d73c4631bd67e`
 > 机读真源：[proma-touchpoints.json](./proma-touchpoints.json)
 
 | 集合 | 路径数 |
 |---|---:|
-| formal merge 全部变动 | 841 |
-| 允许路径 | 581 |
+| formal merge 全部变动 | 862 |
+| 允许路径 | 599 |
 | 仅公开路径占位符替换 | 4 |
-| formal merge 已登记核心触点 | 256 |
-| 当前精确 ledger | 259 |
+| formal merge 已登记核心触点 | 259 |
+| 当前精确 ledger | 260 |
 
-当前分类为 Permanent Product Fork 38、Local Host Seam 220、Temporary Deviation 1；Linguist Extension 位于允许根，不计入核心触点。精确文件、票号和理由只维护在 JSON，避免双写漂移。
+当前分类为 Permanent Product Fork 40、Local Host Seam 219、Temporary Deviation 1；Linguist Extension 位于允许根，不计入核心触点。精确文件、票号和理由只维护在 JSON，避免双写漂移。
 
 ## 规则
 

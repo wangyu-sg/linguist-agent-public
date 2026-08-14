@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "baseline": "73e9d014b56dfda7554011bc02cf8ee5af2c5493",
-  "formalMerge": "2ade7e7e045ce6beab817778b1b39f897045fdf3",
-  "recomputedOn": "2026-08-12",
-  "comment": "Exact Proma-core touchpoints recomputed from the formal v0.17.15 merge. New Linguist code belongs in allowed roots; renderer/host is the static local composition root and the metadata module is display-only.",
+  "baseline": "db94285a6c6eaeea6a75a3fcf9d67a22e8bc45ba",
+  "formalMerge": "0a09ee5e53e8ed647a4b130bce1d73c4631bd67e",
+  "recomputedOn": "2026-08-14",
+  "comment": "Proma-core touchpoints tracked against v0.17.26; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -171,6 +171,11 @@
       "file": "apps/electron/scripts/run-electron-builder.ts",
       "ticket": "LA-SYNC-005",
       "reason": "Permanent Product Fork: remove Bun's lifecycle node shim before launching Electron Builder and keep the packaging gate on the real Node runtime."
+    },
+    {
+      "file": "apps/electron/src/main/agent-status-hover-window.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: enforce the product-wide BrowserWindow sandbox and web-security policy on the upstream Windows status surface."
     },
     {
       "file": "apps/electron/src/main/index.ts",
@@ -351,6 +356,11 @@
       "file": "apps/electron/src/main/lib/feishu-config.ts",
       "ticket": "LA-SYNC-003",
       "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+    },
+    {
+      "file": "apps/electron/src/main/lib/github-release-service.ts",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
     },
     {
       "file": "apps/electron/src/main/lib/mac-eventkit-native-addon.ts",
@@ -1039,11 +1049,6 @@
     },
     {
       "file": "apps/electron/src/renderer/components/settings/SettingsPanel.tsx",
-      "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
-    },
-    {
-      "file": "apps/electron/src/renderer/components/settings/StorageSettings.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
