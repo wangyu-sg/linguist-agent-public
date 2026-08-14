@@ -19,6 +19,8 @@ import {
   createAutomation,
   deleteAutomation,
   getAutomation,
+  getEffectiveAutomationScheduleFields,
+  validateExplicitAutomationScheduleFields,
   listAutomations,
   updateAutomation,
 } from '../automation-manager'
@@ -222,6 +224,9 @@ function summarizeAutomation(a: import('@proma/shared').Automation, includeHisto
     active: a.active,
     scheduleType: a.scheduleType,
     intervalMinutes: a.intervalMinutes,
+    activeWindowStart: a.activeWindowStart,
+    activeWindowEnd: a.activeWindowEnd,
+    activeWeekdays: a.activeWeekdays,
     timeOfDay: a.timeOfDay,
     dayOfWeek: a.dayOfWeek,
     dayOfMonth: a.dayOfMonth,
@@ -272,6 +277,15 @@ function validateScheduleFields(input: Partial<CreateAutomationInput | UpdateAut
   if (input.timeOfDay !== undefined && !TIME_OF_DAY_PATTERN.test(input.timeOfDay)) {
     throw new Error(`非法的 timeOfDay: ${String(input.timeOfDay)}`)
   }
+  if (input.activeWindowStart !== undefined && input.activeWindowStart !== null && !TIME_OF_DAY_PATTERN.test(input.activeWindowStart)) {
+    throw new Error(`非法的 activeWindowStart: ${String(input.activeWindowStart)}`)
+  }
+  if (input.activeWindowEnd !== undefined && input.activeWindowEnd !== null && !TIME_OF_DAY_PATTERN.test(input.activeWindowEnd)) {
+    throw new Error(`非法的 activeWindowEnd: ${String(input.activeWindowEnd)}`)
+  }
+  if (input.activeWeekdays !== undefined && input.activeWeekdays !== null && (!Array.isArray(input.activeWeekdays) || input.activeWeekdays.some((day) => !isFiniteInt(day) || day < 0 || day > 6))) {
+    throw new Error(`非法的 activeWeekdays: ${String(input.activeWeekdays)}`)
+  }
   if (input.dayOfWeek !== undefined && (!isFiniteInt(input.dayOfWeek) || input.dayOfWeek < 0 || input.dayOfWeek > 6)) {
     throw new Error(`非法的 dayOfWeek: ${String(input.dayOfWeek)}`)
   }
@@ -281,7 +295,7 @@ function validateScheduleFields(input: Partial<CreateAutomationInput | UpdateAut
   if (input.scheduledAt !== undefined && (typeof input.scheduledAt !== 'number' || !Number.isFinite(input.scheduledAt) || input.scheduledAt <= 0)) {
     throw new Error(`非法的 scheduledAt: ${String(input.scheduledAt)}（应为毫秒时间戳）`)
   }
-  if (input.maxRuns !== undefined && (!isFiniteInt(input.maxRuns) || input.maxRuns < 1)) {
+  if (input.maxRuns !== undefined && input.maxRuns !== null && (!isFiniteInt(input.maxRuns) || input.maxRuns < 1)) {
     throw new Error(`非法的 maxRuns: ${String(input.maxRuns)}（应为 ≥1 的整数）`)
   }
   if (input.sessionMode !== undefined && input.sessionMode !== 'daily' && input.sessionMode !== 'reuse') {
@@ -338,11 +352,17 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
           Type.Literal('once'),
         ], { description: '调度类型' }),
         intervalMinutes: Type.Optional(Type.Number({ description: '固定间隔分钟数；scheduleType=interval 时必填' })),
+        activeWindowStart: Type.Optional(Type.String({ description: 'interval 的每日有效开始时刻，HH:MM；需与 activeWindowEnd 同时设置' })),
+        activeWindowEnd: Type.Optional(Type.String({ description: 'interval 的每日有效结束时刻（不包含），HH:MM；需与 activeWindowStart 同时设置' })),
+        activeWeekdays: Type.Optional(Type.Array(Type.Number({ description: '运行日：0=周日，1=周一 … 6=周六；空数组表示每天' }), { description: 'interval 的周内运行日集合，例如工作日传 [1,2,3,4,5]' })),
         timeOfDay: Type.Optional(Type.String({ description: '每天/每周/每月触发时间，24 小时制 HH:MM' })),
         dayOfWeek: Type.Optional(Type.Number({ description: '每周触发日，0=周日，...，6=周六' })),
         dayOfMonth: Type.Optional(Type.Number({ description: '每月触发日，1-31' })),
         scheduledAt: Type.Optional(Type.Number({ description: '一次性任务的绝对触发时间（毫秒时间戳）；scheduleType=once 时必填' })),
-        maxRuns: Type.Optional(Type.Number({ description: '最大运行次数上限；达到后任务自动停用' })),
+        maxRuns: Type.Optional(Type.Union([
+          Type.Number({ description: '最大运行次数上限；达到后任务自动停用' }),
+          Type.Null({ description: '清除运行次数上限，长期运行' }),
+        ])),
         active: Type.Optional(Type.Boolean({ description: '创建后是否启用，默认 true' })),
         sessionMode: Type.Optional(Type.Union([Type.Literal('daily'), Type.Literal('reuse')], { description: '会话模式' })),
       }),
@@ -356,11 +376,14 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
           prompt: assertNonBlank(args.prompt as string, 'prompt'),
           scheduleType: args.scheduleType as AutomationScheduleType,
           intervalMinutes: (args.intervalMinutes as number) ?? 10,
+          activeWindowStart: args.activeWindowStart as string | undefined,
+          activeWindowEnd: args.activeWindowEnd as string | undefined,
+          activeWeekdays: args.activeWeekdays as number[] | undefined,
           timeOfDay: args.timeOfDay as string | undefined,
           dayOfWeek: args.dayOfWeek as number | undefined,
           dayOfMonth: args.dayOfMonth as number | undefined,
           scheduledAt: args.scheduledAt as number | undefined,
-          maxRuns: args.maxRuns as number | undefined,
+          maxRuns: args.maxRuns as number | null | undefined,
           channelId: ctx.channelId,
           modelId: ctx.modelId,
           workspaceId: ctx.workspaceId,
@@ -369,8 +392,20 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
           active: (args.active as boolean) ?? true,
         }
         validateScheduleFields(input)
+        validateExplicitAutomationScheduleFields(input, input.scheduleType)
         if (input.scheduleType === 'interval' && args.intervalMinutes === undefined) {
           throw new Error('scheduleType=interval 时 intervalMinutes 必填')
+        }
+        if ((input.activeWindowStart === undefined) !== (input.activeWindowEnd === undefined)) {
+          throw new Error('activeWindowStart 与 activeWindowEnd 必须同时设置')
+        }
+        if (input.activeWeekdays && input.activeWeekdays.length > 0 && input.scheduleType !== 'interval') {
+          throw new Error('周内运行日限制仅支持 interval')
+        }
+        if (input.activeWindowStart && input.activeWindowEnd) {
+          if (input.scheduleType !== 'interval' || input.activeWindowStart >= input.activeWindowEnd) {
+            throw new Error('每日执行窗口仅支持 interval，且开始时间必须早于结束时间')
+          }
         }
         if ((input.scheduleType === 'daily' || input.scheduleType === 'weekly' || input.scheduleType === 'monthly') && !input.timeOfDay) {
           throw new Error('scheduleType=daily/weekly/monthly 时 timeOfDay 必填')
@@ -405,11 +440,17 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
           Type.Literal('once'),
         ])),
         intervalMinutes: Type.Optional(Type.Number({ description: '新的固定间隔分钟数' })),
+        activeWindowStart: Type.Optional(Type.Union([Type.String({ description: '新的每日有效开始时刻 HH:MM' }), Type.Null({ description: '清除每日执行窗口' })])),
+        activeWindowEnd: Type.Optional(Type.Union([Type.String({ description: '新的每日有效结束时刻 HH:MM' }), Type.Null({ description: '清除每日执行窗口' })])),
+        activeWeekdays: Type.Optional(Type.Union([Type.Array(Type.Number({ description: '运行日：0=周日，1=周一 … 6=周六' })), Type.Null({ description: '清除周内运行日限制' })])),
         timeOfDay: Type.Optional(Type.String({ description: '新的每天/每周/每月触发时间' })),
         dayOfWeek: Type.Optional(Type.Number({ description: '新的每周触发日' })),
         dayOfMonth: Type.Optional(Type.Number({ description: '新的每月触发日' })),
         scheduledAt: Type.Optional(Type.Number({ description: '新的一次性触发时间（毫秒时间戳）' })),
-        maxRuns: Type.Optional(Type.Number({ description: '新的最大运行次数上限' })),
+        maxRuns: Type.Optional(Type.Union([
+          Type.Number({ description: '新的最大运行次数上限' }),
+          Type.Null({ description: '清除运行次数上限，改为不限次' }),
+        ])),
         active: Type.Optional(Type.Boolean({ description: '启用或暂停任务' })),
         sessionMode: Type.Optional(Type.Union([Type.Literal('daily'), Type.Literal('reuse')])),
       }),
@@ -423,22 +464,48 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
           prompt: (args.prompt as string)?.trim(),
           scheduleType: args.scheduleType as AutomationScheduleType | undefined,
           intervalMinutes: args.intervalMinutes as number | undefined,
+          activeWindowStart: args.activeWindowStart as string | null | undefined,
+          activeWindowEnd: args.activeWindowEnd as string | null | undefined,
+          activeWeekdays: args.activeWeekdays as number[] | null | undefined,
           timeOfDay: args.timeOfDay as string | undefined,
           dayOfWeek: args.dayOfWeek as number | undefined,
           dayOfMonth: args.dayOfMonth as number | undefined,
           scheduledAt: args.scheduledAt as number | undefined,
-          maxRuns: args.maxRuns as number | undefined,
+          maxRuns: args.maxRuns as number | null | undefined,
           active: args.active as boolean | undefined,
           sessionMode: args.sessionMode as 'daily' | 'reuse' | undefined,
         }
         if (input.name !== undefined) assertNonBlank(input.name, 'name')
         if (input.prompt !== undefined) assertNonBlank(input.prompt, 'prompt')
         validateScheduleFields(input)
-        if (input.scheduleType === 'once' && input.scheduledAt === undefined) {
-          const existing = getAutomation(id)
-          if (!existing?.scheduledAt) {
-            throw new Error('scheduleType 改为 once 时必须提供 scheduledAt')
-          }
+        const existing = getAutomation(id)
+        if (!existing) throw new Error(`定时任务不存在: ${id}`)
+        const scheduleType = input.scheduleType ?? existing.scheduleType
+        validateExplicitAutomationScheduleFields(input, scheduleType)
+        const effective = getEffectiveAutomationScheduleFields(input, existing)
+        if (effective.scheduleType === 'interval' && (!isFiniteInt(effective.intervalMinutes) || effective.intervalMinutes < 1)) {
+          throw new Error('scheduleType=interval 时 intervalMinutes 必填')
+        }
+        if ((effective.activeWindowStart === undefined) !== (effective.activeWindowEnd === undefined)) {
+          throw new Error('activeWindowStart 与 activeWindowEnd 必须同时设置或同时清除')
+        }
+        if (effective.activeWeekdays && effective.activeWeekdays.length > 0 && effective.scheduleType !== 'interval') {
+          throw new Error('周内运行日限制仅支持 interval')
+        }
+        if (effective.activeWindowStart && effective.activeWindowEnd && (effective.scheduleType !== 'interval' || effective.activeWindowStart >= effective.activeWindowEnd)) {
+          throw new Error('每日执行窗口仅支持 interval，且开始时间必须早于结束时间')
+        }
+        if ((effective.scheduleType === 'daily' || effective.scheduleType === 'weekly' || effective.scheduleType === 'monthly') && !effective.timeOfDay) {
+          throw new Error('scheduleType=daily/weekly/monthly 时 timeOfDay 必填')
+        }
+        if (effective.scheduleType === 'weekly' && effective.dayOfWeek === undefined) {
+          throw new Error('scheduleType=weekly 时 dayOfWeek 必填')
+        }
+        if (effective.scheduleType === 'monthly' && effective.dayOfMonth === undefined) {
+          throw new Error('scheduleType=monthly 时 dayOfMonth 必填')
+        }
+        if (effective.scheduleType === 'once' && effective.scheduledAt === undefined) {
+          throw new Error('scheduleType 改为 once 时必须提供 scheduledAt')
         }
         const automation = updateAutomation(input)
         if (!automation) throw new Error(`定时任务不存在: ${id}`)
@@ -845,8 +912,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
     sdk.defineTool({
       name: 'BrowserNavigate',
       label: '在受管浏览器中打开网页',
-      description: 'Navigate the Agent working in-app browser tab to a public HTTP/HTTPS URL. Localhost, private network addresses, downloads, popups, and browser permissions are blocked.',
-      parameters: Type.Object({ url: Type.String({ description: 'A complete public HTTP/HTTPS URL.' }), tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab, independent of the tab visible to the user.' })) }),
+      description: 'Navigate the Agent working in-app browser tab to a URL. The managed browser accepts any URL Chromium can load; downloads, popups, and browser permissions remain blocked.',
+      parameters: Type.Object({ url: Type.String({ description: 'A complete URL to navigate to. Protocol-relative and bare domain inputs are normalized to HTTPS.' }), tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab, independent of the tab visible to the user.' })) }),
       async execute(_id, params, signal?: AbortSignal) {
         const args = params as Record<string, unknown>
         return jsonToolResult(await browserController.navigate(ctx.sessionId, typeof args.url === 'string' ? args.url : '', typeof args.tabId === 'string' ? args.tabId : undefined, signal))
@@ -985,8 +1052,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
     sdk.defineTool({
       name: 'BrowserNewTab',
       label: '新建浏览器标签',
-      description: 'Create a new Agent working tab and activate it in the visible in-app browser. Optionally navigate it to a public HTTP/HTTPS URL.',
-      parameters: Type.Object({ url: Type.Optional(Type.String({ description: 'Optional public HTTP/HTTPS URL.' })) }),
+      description: 'Create a new Agent working tab and activate it in the visible in-app browser. Optionally navigate it to any URL Chromium can load.',
+      parameters: Type.Object({ url: Type.Optional(Type.String({ description: 'Optional URL to navigate to.' })) }),
       async execute(_id, params) {
         const url = typeof (params as Record<string, unknown>).url === 'string' ? (params as Record<string, string>).url : undefined
         return jsonToolResult(await browserController.createNewTab(ctx.sessionId, url))

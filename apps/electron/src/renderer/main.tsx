@@ -97,6 +97,7 @@ import { TabSwitcher } from './components/tabs/TabSwitcher'
 import { htmlToMarkdown, markdownToHtml } from './lib/markdown-rich-text'
 import { PromaLogo } from './lib/model-logo'
 import { initShortcutRegistry, updateShortcutOverrides } from './lib/shortcut-registry'
+import { initializePerformanceMonitor } from './lib/performance-monitor'
 import './styles/globals.css'
 import 'katex/dist/katex.min.css'
 
@@ -106,7 +107,10 @@ const isVoiceDictationIndicatorWindow = new URLSearchParams(window.location.sear
 const isDetachedPreviewWindow = new URLSearchParams(window.location.search).get('window') === 'detached-preview'
 const isPlanningWindow = new URLSearchParams(window.location.search).get('window') === 'planning'
 const isWorkspaceMemoryWindow = new URLSearchParams(window.location.search).get('window') === 'workspace-memory'
-const isMainWindow = !isQuickTaskWindow && !isVoiceDictationIndicatorWindow && !isDetachedPreviewWindow && !isPlanningWindow && !isWorkspaceMemoryWindow
+const isAgentStatusHoverWindow = new URLSearchParams(window.location.search).get('window') === 'agent-status-hover'
+const isMainWindow = !isQuickTaskWindow && !isVoiceDictationIndicatorWindow && !isDetachedPreviewWindow && !isPlanningWindow && !isWorkspaceMemoryWindow && !isAgentStatusHoverWindow
+
+initializePerformanceMonitor()
 
 // 主窗口和独立规划窗口均由内部面板管理滚动，避免页面本身出现第二层滚动。
 if (isMainWindow || isPlanningWindow || isWorkspaceMemoryWindow) {
@@ -1144,6 +1148,15 @@ if (isQuickTaskWindow) {
         <ThemeInitializer />
         <WorkspaceMemoryWindowApp />
         <Toaster position="bottom-right" />
+      </React.StrictMode>
+    )
+  })
+} else if (isAgentStatusHoverWindow) {
+  import('./components/agent-status-hover/HoverPanel').then(({ HoverPanel }) => {
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode>
+        <ThemeInitializer />
+        <HoverPanel />
       </React.StrictMode>
     )
   })

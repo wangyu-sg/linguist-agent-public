@@ -74,7 +74,7 @@ import { previewPanelOpenMapAtom, quotedSelectionMapAtom, quotedSelectionAtomFam
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 import {
   agentStreamingStatesAtom,
-  agentSessionStreamingStateAtomFamily,
+  agentSessionViewStreamStateAtomFamily,
   agentChannelIdAtom,
   agentModelIdAtom,
   agentSessionChannelMapAtom,
@@ -144,8 +144,8 @@ import {
 } from '@/lib/agent-message-queue'
 import type { AgentQueuedAttachment, AgentQueuedMessage, QueueDropPlacement } from '@/lib/agent-message-queue'
 
-/** 稳定的空 SDKMessage 数组引用，避免 ?? [] 每次创建新引用 */
-const EMPTY_SDK_MESSAGES: SDKMessage[] = []
+/** 稳定的空 string 数组引用，避免无附件会话的 memo 链每次渲染失效。 */
+const EMPTY_STRING_ARRAY: string[] = []
 const LONG_TEXT_ATTACHMENT_THRESHOLD = 2000
 
 function endOfToday(): number {
@@ -163,6 +163,62 @@ interface PreparedAgentAttachment {
   attachments: AgentQueuedAttachment[]
   additionalDirectories: string[]
 }
+
+type AgentScopedRichTextInputProps = Omit<
+  React.ComponentProps<typeof RichTextInput>,
+  'value' | 'onChange' | 'draftScopeKey' | 'draftSyncVersion' | 'htmlValue' | 'onHtmlChange' | 'sessionId'
+> & {
+  sessionId: string
+}
+
+/** 将高频草稿订阅限制在编辑器边界内，避免流式输入重渲染整个 AgentView。 */
+const AgentScopedRichTextInput = React.forwardRef<RichTextInputHandle, AgentScopedRichTextInputProps>(
+  function AgentScopedRichTextInput({ sessionId, ...props }, ref): React.ReactElement {
+    const value = useAtomValue(agentSessionDraftAtomFamily(sessionId))
+    const htmlValue = useAtomValue(agentSessionDraftHtmlAtomFamily(sessionId))
+    const draftSyncVersion = useAtomValue(agentSessionDraftSyncVersionAtomFamily(sessionId))
+    const setDraftsMap = useSetAtom(agentSessionDraftsAtom)
+    const setDraftHtmlMap = useSetAtom(agentSessionDraftHtmlAtom)
+
+    const handleChange = React.useCallback((nextValue: string): void => {
+      setDraftsMap((previous) => {
+        const currentValue = previous.get(sessionId) ?? ''
+        const normalizedValue = nextValue.trim() === '' ? '' : nextValue
+        if (currentValue === normalizedValue) return previous
+        const next = new Map(previous)
+        if (normalizedValue === '') next.delete(sessionId)
+        else next.set(sessionId, normalizedValue)
+        return next
+      })
+    }, [sessionId, setDraftsMap])
+
+    const handleHtmlChange = React.useCallback((nextHtml: string): void => {
+      setDraftHtmlMap((previous) => {
+        const normalizedHtml = !nextHtml || nextHtml === '<p></p>' ? '' : nextHtml
+        const currentHtml = previous.get(sessionId) ?? ''
+        if (currentHtml === normalizedHtml) return previous
+        const next = new Map(previous)
+        if (normalizedHtml === '') next.delete(sessionId)
+        else next.set(sessionId, normalizedHtml)
+        return next
+      })
+    }, [sessionId, setDraftHtmlMap])
+
+    return (
+      <RichTextInput
+        {...props}
+        ref={ref}
+        value={value}
+        onChange={handleChange}
+        draftScopeKey={sessionId}
+        draftSyncVersion={draftSyncVersion}
+        htmlValue={htmlValue}
+        onHtmlChange={handleHtmlChange}
+        sessionId={sessionId}
+      />
+    )
+  },
+)
 
 function createUserSDKMessage(
   text: string,
@@ -427,14 +483,13 @@ export function AgentView({
   const persistedSDKMessagesRef = React.useRef<SDKMessage[]>([])
   persistedSDKMessagesRef.current = persistedSDKMessages
   const setStreamingStates = useSetAtom(agentStreamingStatesAtom)
-  // 按 sessionId 切片订阅：仅本 session 的 streaming state 变化才让 AgentView 重渲染。
-  // 流式期间其他 session 的高频更新（每 token 一次）通过 base map atom 传播但派生
-  // atom 输出引用未变，订阅者跳过通知。
-  const streamState = useAtomValue(agentSessionStreamingStateAtomFamily(sessionId))
-  const streaming = streamState?.running ?? false
+  // 只订阅输入区/工具栏需要的低频流状态。逐 token content/toolActivities 由
+  // AgentMessages 独立消费，不能让 3000 行 AgentView 和输入框跟随每个 token 重渲染。
+  const streamViewState = useAtomValue(agentSessionViewStreamStateAtomFamily(sessionId))
+  const streaming = streamViewState.running
   // 软空闲态：本轮主体已结束、UI 可输入，但 SDK 通道仍开着等后台任务唤醒。
   // 此时服务端 activeSessions 仍保留，新消息须走注入通道而非新建 run。
-  const backgroundWaiting = streamState?.backgroundWaiting ?? false
+  const backgroundWaiting = streamViewState.backgroundWaiting ?? false
   const stoppedByUserSessions = useAtomValue(stoppedByUserSessionsAtom)
   // 点击停止后，底层 Pi query 仍需一个很短的收尾窗口。该窗口内不可发起/排队新消息，
   // 否则旧 run 与新 run 会交错，导致同一用户消息被重复展示或持久化。
@@ -442,10 +497,7 @@ export function AgentView({
   const sendWithCmdEnter = useAtomValue(sendWithCmdEnterAtom)
   const longTextPasteAsAttachmentEnabled = useAtomValue(longTextPasteAsAttachmentEnabledAtom)
   const stoppedByUser = stoppedByUserSessions.has(sessionId)
-  const liveMessagesMap = useAtomValue(liveMessagesMapAtom)
   const setLiveMessagesMap = useSetAtom(liveMessagesMapAtom)
-  // 稳定化空数组引用，避免 ?? [] 每次创建新引用导致下游 useMemo 链不必要重算
-  const liveMessages = liveMessagesMap.get(sessionId) ?? EMPTY_SDK_MESSAGES
   // Per-session 渠道/模型配置（优先读 session map，回退到全局默认值）
   const sessionChannelMap = useAtomValue(agentSessionChannelMapAtom)
   const sessionModelMap = useAtomValue(agentSessionModelMapAtom)
@@ -526,10 +578,13 @@ export function AgentView({
   }, [sessionId, sessionMetaChannelId, sessionMetaModelId, hasSessionMeta, defaultChannelId, defaultModelId, setSessionChannelMap, setSessionModelMap])
 
   const contextStatus: AgentContextStatus = {
-    isCompacting: streamState?.isCompacting ?? false,
-    inputTokens: streamState?.inputTokens,
-    contextWindow: streamState?.contextWindow,
-    contextUsageIsEstimated: streamState?.contextUsageIsEstimated,
+    isCompacting: streamViewState.isCompacting ?? false,
+    inputTokens: streamViewState.inputTokens,
+    outputTokens: streamViewState.outputTokens,
+    cacheReadTokens: streamViewState.cacheReadTokens,
+    cacheCreationTokens: streamViewState.cacheCreationTokens,
+    contextWindow: streamViewState.contextWindow,
+    contextUsageIsEstimated: streamViewState.contextUsageIsEstimated,
   }
   const setAgentStreamErrors = useSetAtom(agentStreamErrorsAtom)
   const streamErrors = useAtomValue(agentStreamErrorsAtom)
@@ -590,53 +645,50 @@ export function AgentView({
   const openSession = useOpenSession()
   const setAttachedDirsMap = useSetAtom(agentAttachedDirectoriesMapAtom)
   const attachedDirsMap = useAtomValue(agentAttachedDirectoriesMapAtom)
-  const attachedDirs = attachedDirsMap.get(sessionId) ?? []
+  const attachedDirs = attachedDirsMap.get(sessionId) ?? EMPTY_STRING_ARRAY
   const setAttachedFilesMap = useSetAtom(agentAttachedFilesMapAtom)
   const attachedFilesMap = useAtomValue(agentAttachedFilesMapAtom)
-  const attachedFiles = attachedFilesMap.get(sessionId) ?? []
+  const attachedFiles = attachedFilesMap.get(sessionId) ?? EMPTY_STRING_ARRAY
   const wsAttachedDirsMap = useAtomValue(workspaceAttachedDirectoriesMapAtom)
-  const wsAttachedDirs = currentWorkspaceId ? (wsAttachedDirsMap.get(currentWorkspaceId) ?? []) : []
+  const wsAttachedDirs = currentWorkspaceId
+    ? (wsAttachedDirsMap.get(currentWorkspaceId) ?? EMPTY_STRING_ARRAY)
+    : EMPTY_STRING_ARRAY
   const setWsAttachedFilesMap = useSetAtom(workspaceAttachedFilesMapAtom)
   const wsAttachedFilesMap = useAtomValue(workspaceAttachedFilesMapAtom)
-  const wsAttachedFiles = currentWorkspaceId ? (wsAttachedFilesMap.get(currentWorkspaceId) ?? []) : []
+  const wsAttachedFiles = currentWorkspaceId
+    ? (wsAttachedFilesMap.get(currentWorkspaceId) ?? EMPTY_STRING_ARRAY)
+    : EMPTY_STRING_ARRAY
 
-  // 按 sessionId 切片订阅 drafts/draftHtml：仅本 session 草稿变化才让 AgentView 重渲染。
-  // 输入框每次按键都会写整 Map atom，若直接订阅整 Map，AgentView 跟着每键重渲染。
-  const inputContent = useAtomValue(agentSessionDraftAtomFamily(sessionId))
-  const draftSyncVersion = useAtomValue(agentSessionDraftSyncVersionAtomFamily(sessionId))
+  // AgentView 只保留低频外部草稿写入；编辑器本地同步由 AgentScopedRichTextInput 订阅，
+  // 避免每次停顿保存草稿时重渲染整个 Agent 页面。
   const setDraftsMap = useSetAtom(agentSessionDraftsAtom)
   const setDraftSyncVersions = useSetAtom(agentSessionDraftSyncVersionsAtom)
-  const setInputContentFromEditor = React.useCallback((value: string) => {
-    setDraftsMap((prev) => {
-      const map = new Map(prev)
-      if (value.trim() === '') {
-        map.delete(sessionId)
-      } else {
-        map.set(sessionId, value)
-      }
-      return map
-    })
-  }, [sessionId, setDraftsMap])
-  // 仅非编辑器自身的写入才要求 RichTextInput 用受控内容覆盖文档。
-  const setInputContent = React.useCallback((value: string) => {
-    setDraftSyncVersions((prev) => {
-      const map = new Map(prev)
-      map.set(sessionId, (map.get(sessionId) ?? 0) + 1)
-      return map
-    })
-    setInputContentFromEditor(value)
-  }, [sessionId, setDraftSyncVersions, setInputContentFromEditor])
-  const inputHtmlContent = useAtomValue(agentSessionDraftHtmlAtomFamily(sessionId))
   const setDraftHtmlMap = useSetAtom(agentSessionDraftHtmlAtom)
+  const setInputContent = React.useCallback((value: string) => {
+    setDraftSyncVersions((previous) => {
+      const next = new Map(previous)
+      next.set(sessionId, (next.get(sessionId) ?? 0) + 1)
+      return next
+    })
+    setDraftsMap((previous) => {
+      const currentValue = previous.get(sessionId) ?? ''
+      const normalizedValue = value.trim() === '' ? '' : value
+      if (currentValue === normalizedValue) return previous
+      const next = new Map(previous)
+      if (normalizedValue === '') next.delete(sessionId)
+      else next.set(sessionId, normalizedValue)
+      return next
+    })
+  }, [sessionId, setDraftSyncVersions, setDraftsMap])
   const setInputHtmlContent = React.useCallback((html: string) => {
-    setDraftHtmlMap((prev) => {
-      const map = new Map(prev)
-      if (!html || html === '<p></p>') {
-        map.delete(sessionId)
-      } else {
-        map.set(sessionId, html)
-      }
-      return map
+    setDraftHtmlMap((previous) => {
+      const normalizedHtml = !html || html === '<p></p>' ? '' : html
+      const currentHtml = previous.get(sessionId) ?? ''
+      if (currentHtml === normalizedHtml) return previous
+      const next = new Map(previous)
+      if (normalizedHtml === '') next.delete(sessionId)
+      else next.set(sessionId, normalizedHtml)
+      return next
     })
   }, [sessionId, setDraftHtmlMap])
 
@@ -676,6 +728,9 @@ export function AgentView({
     setTodoDraftTitle(firstLine.replace(/^#{1,6}\s+/, '').slice(0, 500))
     setTodoGroupId('__none__')
     setTodoDialogOpen(true)
+  }, [])
+  const handleOpenRestoreProjectRootDialog = React.useCallback(() => {
+    setRestoreProjectRootDialogOpen(true)
   }, [])
 
   const handleCreateReplyTodo = React.useCallback(async (): Promise<void> => {
@@ -2145,8 +2200,9 @@ export function AgentView({
   const externalSelectedModel = computedSelectedModel ?? stableSelectedModelRef.current
 
   /** 发送消息 */
-  const handleSend = React.useCallback(async (overrideText?: string): Promise<void> => {
-    const text = (overrideText ?? inputContent).trim()
+  const handleSend = React.useCallback(async (overrideText?: string, fromEditor = false): Promise<void> => {
+    const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
+    const text = (overrideText ?? currentDraft).trim()
     // 如果输入为空但有建议，使用建议内容
     const effectiveText = text || suggestion || ''
     const pendingFilesSnapshot = pendingFilesRef.current
@@ -2189,13 +2245,8 @@ export function AgentView({
           ...(linguistContext ? { linguistContext } : {}),
         }),
       ])
-      // 入队对用户是隐性的：不提示的话，用户会以为消息已发出但 Agent 没反应。
-      // 固定 toast id 避免多条排队消息反复弹出；提示里同时给出打断入口。
-      toast.info('消息已加入队列，将在当前执行结束后自动发送', {
-        id: 'agent-view-queued-message-hint',
-        description: '如需立即处理，点击队列消息右侧的「立即发送」可打断当前执行（会终止正在运行的命令）。',
-      })
-      if (overrideText === undefined) {
+      // 入队后消息会出现在队列 UI 中，用户可见；不再弹 toast 打扰。
+      if (overrideText === undefined || fromEditor) {
         setInputContent('')
         setInputHtmlContent('')
       }
@@ -2227,7 +2278,7 @@ export function AgentView({
           : {}),
         ...(linguistContext ? { linguistContext } : {}),
       })
-      if (overrideText === undefined) {
+      if (overrideText === undefined || fromEditor) {
         setInputContent('')
         setInputHtmlContent('')
       }
@@ -2364,10 +2415,9 @@ export function AgentView({
       ...(mentions.mentionedCalendarEventIds.length > 0 && { mentionedCalendarEventIds: mentions.mentionedCalendarEventIds }),
     }
 
-    // 清空输入框（仅当发送的是用户自己输入的内容，而非推荐建议时）
-    // 用 === undefined 与上方 `overrideText ?? inputContent` 的取值语义保持一致，
-    // 避免未来出现 handleSend('') 时两条路径行为割裂
-    if (overrideText === undefined) {
+    // 清空输入框（仅当发送的是用户自己输入的内容，而非推荐建议时）。
+    // Enter 路径会显式传入已刷新的编辑器内容，因此也应清空。
+    if (overrideText === undefined || fromEditor) {
       setInputContent('')
       setInputHtmlContent('')
     }
@@ -2382,7 +2432,7 @@ export function AgentView({
         return map
       })
     })
-  }, [inputContent, createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, consumeQuotedSelection, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, captureTurnContext, isLegacyTranscript, isStopping])
+  }, [createBaseAdditionalDirectories, preparePendingFilesForSend, restoreQueuedAttachmentsToPending, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, backgroundWaiting, suggestion, hasAvailableModel, store, consumeQuotedSelection, setStreamingStates, setAgentStreamErrors, setPromptSuggestions, setInputContent, setLiveMessagesMap, permissionMode, messagesLoaded, setQueuedMessages, setQuotedSelectionMap, sendPlainTextAgentMessage, captureTurnContext, isLegacyTranscript, isStopping])
 
   /** 停止生成 */
   const handleStop = React.useCallback((): void => {
@@ -2756,7 +2806,6 @@ export function AgentView({
     (allExitPlanRequests.get(sessionId)?.length ?? 0) > 0
   const hasBlockingRequests = hasBannerOverlay || (allPermissionRequests.get(sessionId)?.length ?? 0) > 0
   const canSendQueuedNow = messagesLoaded && (streaming || !messagesRefreshing) && !!agentChannelId && hasAvailableModel && !hasBlockingRequests && !isStopping
-  const autoSendingQueuedRef = React.useRef(false)
   const queuedSendInFlightRef = React.useRef(false)
   const sendingQueuedMessageIdsRef = React.useRef<Set<string>>(new Set())
 
@@ -2797,23 +2846,25 @@ export function AgentView({
     }
     restoreQueuedAttachmentsToPending(message.attachments)
 
-    const hasDraft = inputContent.trim().length > 0
+    const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
+    const currentDraftHtml = store.get(agentSessionDraftHtmlAtom).get(sessionId) ?? ''
+    const hasDraft = currentDraft.trim().length > 0
     const nextDraft = hasDraft
-      ? `${inputContent.trimEnd()}\n\n${message.text}`
+      ? `${currentDraft.trimEnd()}\n\n${message.text}`
       : message.text
     setInputContent(nextDraft)
 
     // 已有草稿时，用「原草稿 HTML + 队列文本段落 HTML」合并，保留原草稿的 mention 等富文本节点；
     // 空草稿时留空 HTML，交给编辑器按纯文本重建（与正常输入渲染一致）。
     if (hasDraft) {
-      const draftHtml = inputHtmlContent.trim().length > 0
-        ? inputHtmlContent
-        : queuedTextToParagraphHtml(inputContent)
+      const draftHtml = currentDraftHtml.trim().length > 0
+        ? currentDraftHtml
+        : queuedTextToParagraphHtml(currentDraft)
       setInputHtmlContent(`${draftHtml}${queuedTextToParagraphHtml(message.text)}`)
     } else {
       setInputHtmlContent('')
     }
-  }, [inputContent, inputHtmlContent, queuedMessages, restoreQueuedAttachmentsToPending, sessionId, setInputContent, setInputHtmlContent, setQueuedMessages, setQuotedSelectionMap])
+  }, [queuedMessages, restoreQueuedAttachmentsToPending, sessionId, setInputContent, setInputHtmlContent, setQueuedMessages, setQuotedSelectionMap, store])
 
   const handleRemoveQueuedMessage = React.useCallback((messageId: string): void => {
     setQueuedMessages((prev) => removeQueuedMessage(prev, messageId))
@@ -2826,34 +2877,6 @@ export function AgentView({
   ): void => {
     setQueuedMessages((prev) => moveQueuedMessage(prev, sourceId, targetId, placement))
   }, [setQueuedMessages])
-
-  React.useEffect(() => {
-    if (autoSendingQueuedRef.current) return
-    if (queuedSendInFlightRef.current) return
-    if (queuedMessages.length === 0) return
-    if (messagesRefreshingRef.current) return
-    if (!canSendQueuedNow || streaming || stoppedByUser) return
-
-    const message = queuedMessages[0]
-    if (!message) return
-    if (sendingQueuedMessageIdsRef.current.has(message.id)) return
-
-    autoSendingQueuedRef.current = true
-    queuedSendInFlightRef.current = true
-    sendingQueuedMessageIdsRef.current.add(message.id)
-    setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
-    sendPlainTextAgentMessage(message)
-      .catch((error) => {
-        console.error('[AgentView] 自动发送队列消息失败:', error)
-        toast.error('自动发送队列消息失败', { description: String(error) })
-        setQueuedMessages((prev) => restoreQueuedMessageToFront(prev, message))
-      })
-      .finally(() => {
-        sendingQueuedMessageIdsRef.current.delete(message.id)
-        queuedSendInFlightRef.current = false
-        autoSendingQueuedRef.current = false
-      })
-  }, [canSendQueuedNow, queuedMessages, sendPlainTextAgentMessage, setQueuedMessages, stoppedByUser, streaming])
 
   // ===== 预览面板状态（toggle 快捷键，分屏布局在 MainArea） =====
   const setPreviewOpenMap = useSetAtom(previewPanelOpenMapAtom)
@@ -2871,7 +2894,17 @@ export function AgentView({
     return registerShortcut('toggle-preview-panel', togglePreviewPanel)
   }, [togglePreviewPanel])
 
-  const hasTextInput = inputContent.trim().length > 0
+  const [inputHasContent, setInputHasContent] = React.useState(
+    () => (store.get(agentSessionDraftsAtom).get(sessionId) ?? '').trim().length > 0,
+  )
+  const inputHasContentRef = React.useRef(inputHasContent)
+  inputHasContentRef.current = inputHasContent
+  const handleInputActivity = React.useCallback((hasContent: boolean): void => {
+    if (inputHasContentRef.current === hasContent) return
+    inputHasContentRef.current = hasContent
+    setInputHasContent(hasContent)
+  }, [])
+  const hasTextInput = inputHasContent
   const canSend = !isStopping && messagesLoaded && (streaming || !messagesRefreshing) && (hasTextInput || pendingFiles.length > 0 || !!suggestion) && agentChannelId !== null && hasAvailableModel && (!streaming || hasTextInput)
 
   const inputToolbarItems = React.useMemo<ToolbarItem[]>(() => [
@@ -3014,7 +3047,10 @@ export function AgentView({
       className={cn(
         canSend ? inputToolbarSendButtonClass : inputToolbarDisabledButtonClass
       )}
-      onClick={() => handleSend()}
+      onClick={() => {
+        const latestContent = richTextInputRef.current?.getMarkdown()
+        void handleSend(latestContent, true)
+      }}
       disabled={!canSend}
       aria-label="发送消息"
     >
@@ -3077,16 +3113,13 @@ export function AgentView({
           sessionModelId={agentModelId || undefined}
           messagesLoaded={messagesLoaded}
           persistedSDKMessages={persistedSDKMessages}
-          streaming={streaming}
-          streamState={streamState}
-          liveMessages={liveMessages}
           sessionPath={sessionPath}
           attachedDirs={allAttachedDirs}
           stoppedByUser={stoppedByUser}
           onRetry={handleRetry}
           onRetryInNewSession={handleRetryInNewSession}
           onRelinkProjectRoot={handleRelinkProjectRoot}
-          onRestoreProjectRoot={() => setRestoreProjectRootDialogOpen(true)}
+          onRestoreProjectRoot={handleOpenRestoreProjectRootDialog}
           onFork={isLegacyTranscript ? undefined : handleFork}
           onRewind={isLegacyTranscript ? undefined : handleRewindRequest}
           onCreateTodo={handleOpenReplyTodoDialog}
@@ -3215,10 +3248,11 @@ export function AgentView({
               </div>
             )}
 
-            <RichTextInput
+            <AgentScopedRichTextInput
               ref={richTextInputRef}
-              value={inputContent}
-              onChange={setInputContentFromEditor}
+              sessionId={sessionId}
+              onInputActivity={handleInputActivity}
+              draftSyncDelayMs={300}
               onSubmit={handleSend}
               onPasteFiles={handlePasteFiles}
               onPasteLongText={handlePasteLongText}
@@ -3235,17 +3269,12 @@ export function AgentView({
               }
               disabled={isLegacyTranscript || !agentChannelId || !hasAvailableModel}
               autoFocusTrigger={sessionId}
-              draftScopeKey={sessionId}
-              draftSyncVersion={draftSyncVersion}
               collapsible
               enableMentions
               workspacePath={sessionPath}
               workspaceSlug={workspaceSlug}
-              sessionId={sessionId}
               attachedDirs={workspaceMentionPaths}
               sessionAttachedDirs={sessionMentionPaths}
-              htmlValue={inputHtmlContent}
-              onHtmlChange={setInputHtmlContent}
               sendWithCmdEnter={sendWithCmdEnter}
               onAgentHistoryQuoteClick={handleAgentHistoryQuoteClick}
             />

@@ -1,7 +1,8 @@
-import { app, BrowserWindow, WebContentsView, session as electronSession, type Session } from 'electron'
+import { app, BrowserWindow, WebContentsView, session as electronSession, type DownloadItem, type Session, type WebContents } from 'electron'
+import path from 'node:path'
 import type { BrowserExecutionSource, BrowserOperationStatus, BrowserTraceAction, BrowserTraceItem, BrowserViewLayout, BrowserViewState, BrowserTabState } from '@proma/shared'
 import { AGENT_IPC_CHANNELS } from '@proma/shared'
-import { assertSafeBrowserDestination, assertSafeBrowserUrl } from './browser-policy'
+import { assertSafeBrowserDestination, assertSafeBrowserDownloadUrl, assertSafeBrowserUrl, isSupportedBrowserPopupUrl, isTransientBrowserPopupUrl } from './browser-policy'
 import { createAuthorizedPreviewUrl, isAuthorizedPreviewProtocol } from './browser-preview-service'
 import { handlePromaFileRequest } from './local-file-protocol'
 import { BrowserCdpTimeoutError, BrowserOperationAbortedError, BROWSER_OBSERVE_TIMEOUT_MS, resolveBrowserObserveAxDepth, throwIfBrowserOperationAborted, withBrowserCdpTimeout } from './browser-cdp'
@@ -12,6 +13,7 @@ import { hasAcknowledgedBrowserRiskDisclaimer } from './browser-risk-disclaimer'
 import { buildPromaBrowserUserAgent } from './browser-identity'
 import { assertBrowserScript, buildBrowserDomActionExpression, type BrowserDomActionInput } from './browser-script-policy'
 import { getSettings } from './settings-service'
+import { isValidImageBytes } from './image-content-validation'
 
 const MAX_TRACE_ITEMS = 30
 /** 总数超限时只回收 Agent 创建且未在使用的标签，绝不自动关闭用户标签。 */
@@ -19,6 +21,13 @@ const MAX_BROWSER_TABS = 20
 const MAX_SCREENSHOT_BYTES = 3 * 1024 * 1024
 const ACTION_HIGHLIGHT_DURATION_MS = 900
 const MAX_BROWSER_SCRIPT_RESULT_CHARS = 64_000
+
+/** 下载文件名脱敏：去掉控制字符与路径穿越，替换 Windows 非法字符，兜底默认名，避免写入 Downloads 之外的路径。 */
+function sanitizeDownloadFilename(raw: string): string {
+  const cleaned = (raw ?? '').replace(/[\x00-\x1f\x7f]/g, '').trim().split(/[\\/]/).pop() ?? ''
+  const safe = cleaned.replace(/[<>:"|?*]/g, '_').slice(0, 180)
+  return safe || `download-${Date.now()}`
+}
 
 type CdpResponse = Record<string, unknown>
 type RefEntry = { backendNodeId: number; generation: number; label: string; editable: boolean }
@@ -34,11 +43,28 @@ type BrowserTabRecord = {
   isLocalPreview: boolean
   /** 仅表示来源：由 Agent 创建的标签始终保留标识，不随当前工作标签切换而丢失。 */
   openedByAgent: boolean
+  /** 此标签是页面 window.open / target=_blank 创建的真实 child window。 */
+  openedByPopup: boolean
+  /** popup 的 opener tab，用于父标签关闭时递归回收子窗口。 */
+  openerTabId: string | null
+  /** about:blank/blob/data 仅允许作为 popup 首次导航，不可被后续导航复用。 */
+  popupInitialUrl: string | null
+  popupInitialNavigationPending: boolean
   /** 用于在超限时优先回收最久未使用的 Agent 标签。 */
   lastActivityAt: number
   highlightTimer?: ReturnType<typeof setTimeout>
   lastBounds?: BrowserViewLayout['bounds']
 }
+type BrowserTabOptions = {
+  isLocalPreview?: boolean
+  claimAsAgent?: boolean
+  openedByPopup?: boolean
+  openerTabId?: string
+  popupInitialUrl?: string
+  /** Electron setWindowOpenHandler 交给 createWindow 的完整 child 构造选项，必须原样使用。 */
+  viewOptions?: Electron.WebContentsViewConstructorOptions
+}
+
 export interface BrowserUserContextSnapshot {
   activeTabId: string
   url: string
@@ -70,6 +96,16 @@ type BrowserSessionConfiguration = {
   profileKey: string
   allowedRoots: string[]
   executionSource: BrowserExecutionSource
+}
+
+/**
+ * 主窗口只有一个原生浏览器展示槽。布局 revision 由 renderer 全局递增，
+ * 因此可跨 Agent session 拒绝晚到的 show IPC。
+ */
+type BrowserPresentation = {
+  sessionId: string
+  tabId: string
+  revision: number
 }
 
 export interface ConfigureBrowserSessionInput {
@@ -156,10 +192,16 @@ export class BrowserController {
   private owner: BrowserWindow | null = null
   private readonly sessions = new Map<string, BrowserSessionRecord>()
   private readonly configurations = new Map<string, BrowserSessionConfiguration>()
-  /** Electron persistent partition 生命周期长于 Agent session；同一 Session 只安装一次 guard。 */
+  /** Electron persistent partition 生命周期长于 Agent session；同一 Session 只安装一次网络 guard。 */
   private readonly guardedSessions = new WeakSet<Session>()
+  /** 下载事件属于 Electron Session，不能随 Proma 会话重复注册或闭包捕获已关闭的会话。 */
+  private readonly downloadGuardedSessions = new WeakSet<Session>()
   /** 自定义 partition 不继承 default session 的协议处理器，必须单独注册本地预览协议。 */
   private readonly previewProtocolSessions = new WeakSet<Session>()
+  /** 跨 Session 的唯一原生 WebContentsView 前台所有权。 */
+  private presentation: BrowserPresentation | null = null
+  /** 即使当前没有 Slot，也保留最新 show 代际以拒绝晚到的旧 show IPC。 */
+  private latestPresentationRevision = 0
 
   configureSession(sessionId: string, input: ConfigureBrowserSessionInput): void {
     const previous = this.configurations.get(sessionId)
@@ -192,6 +234,10 @@ export class BrowserController {
 
   private emit(browserSession: BrowserSessionRecord): void {
     if (!this.owner || this.owner.isDestroyed()) return
+    // WebContents 的关闭/导航事件可能晚于 disposeTab 到达；已移除的 session
+    // 不再发布状态，避免把正常的生命周期竞态升级为主进程未捕获异常。
+    if (this.sessions.get(browserSession.sessionId) !== browserSession) return
+    if (browserSession.tabs.size === 0 || !browserSession.tabs.has(browserSession.activeTabId)) return
     this.owner.webContents.send(AGENT_IPC_CHANNELS.BROWSER_STATE_CHANGED, this.buildState(browserSession))
   }
 
@@ -210,6 +256,7 @@ export class BrowserController {
         title: tab.state.title,
         loading: tab.state.loading,
         openedByAgent: tab.openedByAgent,
+        openedByPopup: tab.openedByPopup,
       })),
       url: active.state.url,
       title: active.state.title,
@@ -276,16 +323,20 @@ export class BrowserController {
   }
 
   private updateNavigationState(browserSession: BrowserSessionRecord, tab: BrowserTabRecord): void {
+    // Navigation callbacks can arrive after the tab was closed or its session removed.
+    if (this.sessions.get(browserSession.sessionId) !== browserSession) return
+    if (browserSession.tabs.get(tab.tabId) !== tab || tab.view.webContents.isDestroyed()) return
+
     const contents = tab.view.webContents
-    tab.state.url = contents.getURL()
-    tab.state.title = contents.getTitle() || '未命名页面'
-    tab.state.loading = contents.isLoading()
     try {
+      tab.state.url = contents.getURL()
+      tab.state.title = contents.getTitle() || '未命名页面'
+      tab.state.loading = contents.isLoading()
       tab.state.canGoBack = contents.canGoBack()
       tab.state.canGoForward = contents.canGoForward()
     } catch {
-      tab.state.canGoBack = false
-      tab.state.canGoForward = false
+      // The WebContents may be destroyed between the lifecycle check and the read.
+      return
     }
     this.emit(browserSession)
   }
@@ -381,7 +432,67 @@ export class BrowserController {
         .then(() => callback({ cancel: false }))
         .catch(() => callback({ cancel: true }))
     })
-    browserSession.on('will-download', (_event, item) => item.cancel())
+  }
+
+  /**
+   * 下载事件属于 Electron Session，而 workspace profile 会被多个 Proma 会话复用。
+   * 因而监听器只注册一次；每次触发时再用 WebContents 找到仍存活的来源 tab，避免
+   * 关闭会话遗留的 handler 重复 pause/resume/cancel 同一个 DownloadItem。
+   */
+  private installDownloadGuard(electronBrowserSession: Session): void {
+    if (this.downloadGuardedSessions.has(electronBrowserSession)) return
+    this.downloadGuardedSessions.add(electronBrowserSession)
+    electronBrowserSession.on('will-download', (_event, item, webContents) => {
+      const origin = this.findManagedDownloadOrigin(electronBrowserSession, webContents)
+      // 同 partition 中若存在非受管来源，默认拒绝，不能绕过受管浏览器的下载边界。
+      if (!origin) {
+        item.cancel()
+        return
+      }
+      this.handleDownload(origin.browserSession, origin.tab, item)
+    })
+  }
+
+  /**
+   * 将受管浏览器里的下载固定保存到系统「下载」目录。
+   * Electron 会在 will-download 回调返回后立即决定是否显示 Save As，因此必须同步
+   * setSavePath；随后暂停下载进行异步 DNS 校验，安全后才 resume，失败则 cancel。
+   */
+  private handleDownload(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, item: DownloadItem): void {
+    const url = item.getURL()
+    const filename = sanitizeDownloadFilename(item.getFilename())
+    item.setSavePath(path.join(app.getPath('downloads'), filename))
+    item.pause()
+    item.once('done', (_event, state) => {
+      if (!this.isManagedTabCurrent(browserSession, tab)) return
+      if (state === 'completed') this.trace(browserSession, tab, 'download', `已下载 ${filename}`, 'verified')
+      else this.trace(browserSession, tab, 'download', `下载 ${filename} 未完成（${state}）`, 'failed')
+    })
+    void assertSafeBrowserDownloadUrl(url)
+      .then(() => {
+        if (this.isManagedTabCurrent(browserSession, tab)) this.trace(browserSession, tab, 'download', `下载 ${filename} 到「下载」目录`, 'dispatched')
+        // 已通过校验的下载在来源 tab 被关闭后仍可继续，符合浏览器的常规下载行为。
+        item.resume()
+      })
+      .catch(() => {
+        item.cancel()
+        if (this.isManagedTabCurrent(browserSession, tab)) this.trace(browserSession, tab, 'download', '已阻止不安全或不受支持的下载', 'failed')
+      })
+  }
+
+  /** 从共享 Electron Session 的所有当前 Proma 会话中定位下载来源，绝不保留过期会话引用。 */
+  private findManagedDownloadOrigin(electronBrowserSession: Session, webContents: WebContents): { browserSession: BrowserSessionRecord; tab: BrowserTabRecord } | null {
+    for (const browserSession of this.sessions.values()) {
+      if (browserSession.browserSession !== electronBrowserSession) continue
+      for (const tab of browserSession.tabs.values()) {
+        if (!tab.view.webContents.isDestroyed() && tab.view.webContents === webContents) return { browserSession, tab }
+      }
+    }
+    return null
+  }
+
+  private isManagedTabCurrent(browserSession: BrowserSessionRecord, tab: BrowserTabRecord): boolean {
+    return this.sessions.get(browserSession.sessionId) === browserSession && browserSession.tabs.get(tab.tabId) === tab
   }
 
   private installPreviewProtocol(browserSession: Session): void {
@@ -415,13 +526,14 @@ export class BrowserController {
     this.installSessionGuards(browserSession)
     this.installPreviewProtocol(browserSession)
     this.sessions.set(sessionId, record)
+    this.installDownloadGuard(browserSession)
     return record
   }
 
-  private createTab(browserSession: BrowserSessionRecord, isLocalPreview = false, claimAsAgent = false): BrowserTabRecord {
+  private createTab(browserSession: BrowserSessionRecord, isLocalPreview = false, claimAsAgent = false, popupOptions?: Pick<BrowserTabOptions, 'openedByPopup' | 'openerTabId' | 'popupInitialUrl' | 'viewOptions'>): BrowserTabRecord {
     if (!this.owner || this.owner.isDestroyed()) throw new Error('主窗口尚未就绪，无法创建浏览器标签。')
     const tabId = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    const view = new WebContentsView({
+    const view = new WebContentsView(popupOptions?.viewOptions ?? {
       webPreferences: {
         partition: browserSession.partition,
         nodeIntegration: false,
@@ -430,6 +542,7 @@ export class BrowserController {
         webSecurity: true,
       },
     })
+    const popupInitialUrl = popupOptions?.popupInitialUrl ?? null
     const tab: BrowserTabRecord = {
       tabId,
       view,
@@ -439,20 +552,50 @@ export class BrowserController {
       commandTail: Promise.resolve(),
       isLocalPreview,
       openedByAgent: claimAsAgent,
+      openedByPopup: popupOptions?.openedByPopup ?? false,
+      openerTabId: popupOptions?.openerTabId ?? null,
+      popupInitialUrl,
+      popupInitialNavigationPending: popupInitialUrl !== null && isTransientBrowserPopupUrl(popupInitialUrl),
       lastActivityAt: Date.now(),
     }
     this.owner.contentView.addChildView(view)
     view.setVisible(false)
-    // WebContentsView 不应放任 target=_blank 创建脱离主窗口的 BrowserWindow；此前直接 deny
-    // 也导致用户和 Agent 点击站外链接没有任何反应。将安全的 HTTP(S) 目标转为当前受管浏览器的新标签。
     view.webContents.setWindowOpenHandler(({ url }) => {
-      void this.openExternalLinkInDisplayTab(browserSession, tab, url)
-      return { action: 'deny' }
+      if (!isSupportedBrowserPopupUrl(url)) {
+        this.trace(browserSession, tab, 'popup', '已阻止不安全或不受支持的新窗口链接', 'failed')
+        return { action: 'deny' }
+      }
+      // createWindow 必须同步返回；同时确认 opener 仍是当前受管会话的一部分，防止关闭后遗留 view。
+      if (this.sessions.get(browserSession.sessionId) !== browserSession || !browserSession.tabs.has(tab.tabId)) return { action: 'deny' }
+      // Electron 必须在此同步 callback 中用它交给的 options 构造 child WebContents；
+      // 提前创建独立 WebContents 会触发 "Invalid webContents" 并终止应用。
+      let popup: BrowserTabRecord | null = null
+      return {
+        action: 'allow',
+        outlivesOpener: false,
+        createWindow: (options) => {
+          popup = this.createTab(browserSession, false, false, {
+            openedByPopup: true,
+            openerTabId: tab.tabId,
+            popupInitialUrl: url,
+            // 必须原样传入 Electron 给 createWindow 的完整 options，不能只抽取 webPreferences。
+            viewOptions: options,
+          })
+          this.activateDisplayTab(browserSession, popup)
+          this.trace(browserSession, popup, 'popup', isTransientBrowserPopupUrl(url) ? '已打开临时新窗口' : '已打开新窗口', 'dispatched')
+          return popup.view.webContents
+        },
+      }
     })
     view.webContents.on('will-navigate', (event, url) => {
       // 在校验及真正导航前失效，避免 Observe 后在新页面按旧坐标操作。
       this.invalidateTabDocument(tab)
       try {
+        const isInitialTransientPopupNavigation = tab.popupInitialNavigationPending && tab.popupInitialUrl === url && isTransientBrowserPopupUrl(url)
+        if (isInitialTransientPopupNavigation) {
+          tab.popupInitialNavigationPending = false
+          return
+        }
         if (isAuthorizedPreviewProtocol(url) && tab.isLocalPreview) return
         assertSafeBrowserUrl(url)
       } catch {
@@ -463,17 +606,19 @@ export class BrowserController {
     view.webContents.on('did-start-loading', () => { this.invalidateTabDocument(tab); this.updateNavigationState(browserSession, tab) })
     view.webContents.on('did-stop-loading', () => this.updateNavigationState(browserSession, tab))
     view.webContents.on('page-title-updated', () => this.updateNavigationState(browserSession, tab))
-    view.webContents.on('did-navigate', () => { this.invalidateTabDocument(tab); this.updateNavigationState(browserSession, tab) })
-    view.webContents.on('did-navigate-in-page', () => { this.invalidateTabDocument(tab); this.updateNavigationState(browserSession, tab) })
+    view.webContents.on('did-navigate', () => { tab.popupInitialNavigationPending = false; this.invalidateTabDocument(tab); this.updateNavigationState(browserSession, tab) })
+    view.webContents.on('did-navigate-in-page', () => { tab.popupInitialNavigationPending = false; this.invalidateTabDocument(tab); this.updateNavigationState(browserSession, tab) })
     view.webContents.on('destroyed', () => {
       if (!browserSession.tabs.has(tab.tabId)) return
+      this.disposePopupChildren(browserSession, tab.tabId)
       browserSession.tabs.delete(tab.tabId)
+      this.clearAgentTargetHighlight(tab)
+      try { this.owner?.contentView.removeChildView(tab.view) } catch { /* owner 已销毁 */ }
+      this.repairTabSelection(browserSession, tab.tabId)
       if (browserSession.tabs.size === 0) {
         this.sessions.delete(browserSession.sessionId)
         return
       }
-      if (browserSession.activeTabId === tab.tabId) browserSession.activeTabId = browserSession.tabs.keys().next().value as string
-      if (browserSession.agentTabId === tab.tabId) browserSession.agentTabId = null
       this.emit(browserSession)
     })
     try { view.webContents.debugger.attach('1.3') } catch (error) { console.warn('[受管浏览器] CDP attach 失败:', error) }
@@ -572,18 +717,59 @@ export class BrowserController {
     return structuredClone(this.buildState(browserSession))
   }
 
+  /**
+   * 所有受管标签都挂在同一个 BrowserWindow.contentView，必须在 controller
+   * 层保证跨 Session 只有一个原生 View 可见，不能依赖 renderer 卸载顺序。
+   */
+  private hideAllViewsExcept(targetSessionId: string, targetTabId: string): Set<BrowserSessionRecord> {
+    const changedSessions = new Set<BrowserSessionRecord>()
+    for (const browserSession of this.sessions.values()) {
+      for (const tab of browserSession.tabs.values()) {
+        if (browserSession.sessionId === targetSessionId && tab.tabId === targetTabId) continue
+        tab.view.setVisible(false)
+        if (tab.state.visible) {
+          tab.state.visible = false
+          changedSessions.add(browserSession)
+        }
+      }
+    }
+    return changedSessions
+  }
+
+  private emitChangedSessions(changedSessions: Set<BrowserSessionRecord>): void {
+    for (const browserSession of changedSessions) this.emit(browserSession)
+  }
+
   setLayout(layout: BrowserViewLayout): void {
     const browserSession = this.sessions.get(layout.sessionId)
     if (!browserSession) return
-    // React effect cleanup 和新 slot 的 IPC 可以交错到达。只采纳最新一代布局，
-    // 避免已卸载 tab 的晚到 visible=false/true 覆盖当前 tab。
+    // React effect cleanup 和新 slot 的 IPC 可以交错到达。只采纳当前 Session 的最新布局。
     if (!Number.isSafeInteger(layout.revision) || layout.revision <= browserSession.lastLayoutRevision) return
     browserSession.lastLayoutRevision = layout.revision
     const tab = browserSession.tabs.get(layout.tabId ?? browserSession.activeTabId)
     // BrowserSlot 卸载与 tab 关闭可交错，晚到布局不应让 renderer 报错。
     if (!tab) return
+
     const bounds = layout.bounds
     const visible = layout.visible && bounds.width > 4 && bounds.height > 4 && !!this.owner && !this.owner.isDestroyed() && this.owner.isVisible()
+    if (!visible) {
+      tab.view.setVisible(false)
+      const changedSessions = new Set<BrowserSessionRecord>()
+      if (tab.state.visible) {
+        tab.state.visible = false
+        changedSessions.add(browserSession)
+      }
+      if (this.presentation?.sessionId === browserSession.sessionId && this.presentation.tabId === tab.tabId) {
+        this.presentation = null
+      }
+      this.emitChangedSessions(changedSessions)
+      return
+    }
+
+    // revision 在 renderer 全局单调递增。A 的旧 show 即使在 B 已显示后晚到，
+    // 也不能重新把 A 的原生 view 放到前台。
+    if (layout.revision <= this.latestPresentationRevision) return
+
     const zoomFactor = this.owner?.webContents.getZoomFactor() ?? 1
     const adjustedBounds = {
       x: Math.round(bounds.x * zoomFactor),
@@ -591,36 +777,68 @@ export class BrowserController {
       width: Math.round(bounds.width * zoomFactor),
       height: Math.round(bounds.height * zoomFactor),
     }
-    for (const other of browserSession.tabs.values()) {
-      if (other.tabId !== tab.tabId) other.view.setVisible(false)
-    }
-    if (visible && (!tab.lastBounds || Object.entries(adjustedBounds).some(([key, value]) => tab.lastBounds?.[key as keyof typeof adjustedBounds] !== value))) {
+    const changedSessions = this.hideAllViewsExcept(browserSession.sessionId, tab.tabId)
+    if (!tab.lastBounds || Object.entries(adjustedBounds).some(([key, value]) => tab.lastBounds?.[key as keyof typeof adjustedBounds] !== value)) {
       tab.view.setBounds(adjustedBounds)
       tab.lastBounds = { ...adjustedBounds }
     }
-    tab.view.setVisible(visible)
-    if (tab.state.visible !== visible) { tab.state.visible = visible; this.emit(browserSession) }
+    tab.view.setVisible(true)
+    if (!tab.state.visible) {
+      tab.state.visible = true
+      changedSessions.add(browserSession)
+    }
+    this.presentation = { sessionId: browserSession.sessionId, tabId: tab.tabId, revision: layout.revision }
+    this.latestPresentationRevision = layout.revision
+    this.emitChangedSessions(changedSessions)
   }
 
-  /** 将指定标签置于前台；复用当前显示区域，避免等待 renderer layout 往返时仍显示旧页面。 */
+  /**
+   * 会话内切 tab 可立即复用展示区域；后台 Session 只更新自身状态，绝不抢占
+   * 当前浏览器展示槽，等待其 BrowserSlot 成为前台后再由 setLayout 显示。
+   */
   private activateDisplayTab(browserSession: BrowserSessionRecord, tab: BrowserTabRecord): void {
     const previous = browserSession.tabs.get(browserSession.activeTabId)
     tab.lastActivityAt = Date.now()
     browserSession.activeTabId = tab.tabId
-    for (const other of browserSession.tabs.values()) {
-      if (other.tabId !== tab.tabId) other.view.setVisible(false)
+    if (this.presentation?.sessionId !== browserSession.sessionId) {
+      this.emit(browserSession)
+      return
     }
+
     if (!tab.lastBounds && previous?.lastBounds) {
       tab.view.setBounds(previous.lastBounds)
       tab.lastBounds = { ...previous.lastBounds }
     }
+    const changedSessions = this.hideAllViewsExcept(browserSession.sessionId, tab.tabId)
     const visible = !!tab.lastBounds && !!this.owner && !this.owner.isDestroyed() && this.owner.isVisible()
     tab.view.setVisible(visible)
-    if (tab.state.visible !== visible) tab.state.visible = visible
-    this.emit(browserSession)
+    if (tab.state.visible !== visible) {
+      tab.state.visible = visible
+      changedSessions.add(browserSession)
+    }
+    this.presentation = { ...this.presentation, tabId: tab.tabId }
+    this.emitChangedSessions(changedSessions)
+  }
+
+  private disposePopupChildren(browserSession: BrowserSessionRecord, openerTabId: string): void {
+    for (const child of [...browserSession.tabs.values()]) {
+      if (child.openerTabId === openerTabId) this.disposeTab(browserSession, child)
+    }
+  }
+
+  private repairTabSelection(browserSession: BrowserSessionRecord, removedTabId: string): void {
+    if (browserSession.activeTabId === removedTabId || !browserSession.tabs.has(browserSession.activeTabId)) {
+      browserSession.activeTabId = browserSession.tabs.keys().next().value as string
+    }
+    if (browserSession.agentTabId === removedTabId || (browserSession.agentTabId !== null && !browserSession.tabs.has(browserSession.agentTabId))) {
+      browserSession.agentTabId = null
+    }
   }
 
   private disposeTab(browserSession: BrowserSessionRecord, tab: BrowserTabRecord): void {
+    if (!browserSession.tabs.has(tab.tabId)) return
+    // Child windows use Electron's opener lifetime and must not outlive a tab closed from Proma UI either.
+    this.disposePopupChildren(browserSession, tab.tabId)
     browserSession.tabs.delete(tab.tabId)
     this.clearAgentTargetHighlight(tab)
     try { if (tab.view.webContents.debugger.isAttached()) tab.view.webContents.debugger.detach() } catch { /* 已销毁 */ }
@@ -703,8 +921,7 @@ export class BrowserController {
       this.sessions.delete(sessionId)
       return null
     }
-    if (browserSession.activeTabId === tab.tabId) browserSession.activeTabId = browserSession.tabs.keys().next().value as string
-    if (browserSession.agentTabId === tab.tabId) browserSession.agentTabId = null
+    this.repairTabSelection(browserSession, tab.tabId)
     this.emit(browserSession)
     return structuredClone(this.buildState(browserSession))
   }
@@ -757,37 +974,6 @@ export class BrowserController {
         throw error
       }
     })
-  }
-
-  /**
-   * 将 target=_blank / window.open 的公共站外链接保留在受管浏览器里。
-   * Electron 的 window.open handler 是同步的，因此先拒绝原生弹窗，再异步完成 DNS 安全校验并新建标签。
-   */
-  private async openExternalLinkInDisplayTab(browserSession: BrowserSessionRecord, sourceTab: BrowserTabRecord, url: string): Promise<void> {
-    let safeUrl: string
-    try {
-      safeUrl = await assertSafeBrowserDestination(url)
-    } catch {
-      // about:blank、私网和非 HTTP(S) popup 都不能转为新标签；保留简短账本供排查。
-      this.trace(browserSession, sourceTab, 'navigate', '已阻止不安全或不受支持的新窗口链接', 'failed')
-      return
-    }
-    // 链接点击后标签/会话可能已被用户关闭，不能在已销毁的上下文中创建 view。
-    if (this.sessions.get(browserSession.sessionId) !== browserSession || !browserSession.tabs.has(sourceTab.tabId)) return
-
-    const tab = this.createTab(browserSession)
-    this.activateDisplayTab(browserSession, tab)
-    const host = new URL(safeUrl).host
-    try {
-      await this.runTabOperation(browserSession, tab, undefined, async () => {
-        tab.isLocalPreview = false
-        await this.loadUrl(tab, safeUrl)
-        this.updateNavigationState(browserSession, tab)
-      })
-    } catch {
-      // 载入失败时保留新标签，用户仍可修改地址或返回原标签；不要静默丢失点击结果。
-      this.trace(browserSession, tab, 'navigate', `无法打开新窗口链接 ${host}`, 'failed')
-    }
   }
 
   /** 用户地址栏导航当前显示 tab，不会改变 Agent 的工作 tab。 */
@@ -995,8 +1181,11 @@ export class BrowserController {
     const tab = this.getAgentTab(browserSession, tabId)
     return this.runTabOperation(browserSession, tab, signal ?? browserSession.agentAbortController.signal, async (operationSignal) => {
       if (action.kind === 'key') {
-        await this.cdp(tab, 'Input.dispatchKeyEvent', { type: 'keyDown', key: action.key }, undefined, operationSignal)
-        await this.cdp(tab, 'Input.dispatchKeyEvent', { type: 'keyUp', key: action.key }, undefined, operationSignal)
+        // rawKeyDown 与 windowsVirtualKeyCode 让 Chromium 识别非字符导航键并触发
+        // 默认行为（PageDown 滚动、Enter 提交、Tab 移动焦点），只传 key 不会滚动。
+        const keyEvent = { key: action.key, code: action.code, windowsVirtualKeyCode: action.windowsVirtualKeyCode }
+        await this.cdp(tab, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', ...keyEvent }, undefined, operationSignal)
+        await this.cdp(tab, 'Input.dispatchKeyEvent', { type: 'keyUp', ...keyEvent }, undefined, operationSignal)
         this.trace(browserSession, tab, 'press', `按下 ${action.key}`, 'dispatched')
       } else {
         await this.cdp(tab, 'Input.insertText', { text: action.text }, undefined, operationSignal)
@@ -1094,7 +1283,20 @@ export class BrowserController {
       throwIfBrowserOperationAborted(operationSignal)
       const image = await withBrowserCdpTimeout(() => tab.view.webContents.capturePage(), 'Page.captureScreenshot', BROWSER_OBSERVE_TIMEOUT_MS + 3_000, operationSignal)
       throwIfBrowserOperationAborted(operationSignal)
+      if (image.isEmpty()) {
+        this.trace(browserSession, tab, 'screenshot', '截图为空，已拒绝返回无效图片', 'failed')
+        throw new Error('截图为空：浏览器页面尚未完成可捕获布局，请稍后重试或改用 BrowserObserve。')
+      }
+      const { width, height } = image.getSize()
+      if (width <= 0 || height <= 0) {
+        this.trace(browserSession, tab, 'screenshot', '截图尺寸无效，已拒绝返回无效图片', 'failed')
+        throw new Error('截图尺寸无效：浏览器页面尚未完成可捕获布局，请稍后重试或改用 BrowserObserve。')
+      }
       const buffer = image.toPNG()
+      if (!isValidImageBytes('image/png', buffer)) {
+        this.trace(browserSession, tab, 'screenshot', '截图 PNG 数据无效，已拒绝返回无效图片', 'failed')
+        throw new Error('截图 PNG 数据无效，请稍后重试或改用 BrowserObserve。')
+      }
       if (buffer.byteLength > MAX_SCREENSHOT_BYTES) throw new Error('截图过大，请缩小页面或改用 browser_observe。')
       this.trace(browserSession, tab, 'screenshot', '截取当前页面', 'verified')
       return { tabId: tab.tabId, url: tab.state.url, mimeType: 'image/png', base64: buffer.toString('base64') }

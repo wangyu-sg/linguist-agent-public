@@ -115,7 +115,7 @@ export interface VoiceDictationShownEvent {
 
 /** 外部应用听写状态条的实时显示数据。 */
 export interface VoiceDictationIndicatorEvent {
-  state: 'recording' | 'stopping'
+  state: 'preparing' | 'recording' | 'stopping'
   /** 已归一化、平滑处理后的麦克风音量（0~1）。 */
   volume: number
   /** 尚未提交给第三方应用的实时转写文本。 */
@@ -562,6 +562,20 @@ export const TRAY_IPC_CHANNELS = {
   OPEN_AGENT_SESSION: 'tray:open-agent-session',
   /** 创建新会话 */
   CREATE_SESSION: 'tray:create-session',
+} as const
+
+/** Windows Agent Island IPC 通道（主进程 ↔ 渲染进程） */
+export const WINDOWS_AGENT_ISLAND_IPC_CHANNELS = {
+  /** 主进程 → 渲染进程：委托播放提示音 */
+  PLAY_SOUND: 'windows-agent-island:play-sound',
+  /** 渲染进程（悬停窗）→ 主进程：点击跳转到会话 */
+  OPEN_SESSION: 'windows-agent-island:open-session',
+  /** 主进程 → 渲染进程（悬停窗）：推送全量 snapshot */
+  PUSH_SNAPSHOT: 'windows-agent-island:push-snapshot',
+  /** 渲染进程（悬停窗）→ 主进程：鼠标进入气泡区域 */
+  MOUSE_ENTER: 'windows-agent-island:mouse-enter',
+  /** 渲染进程（悬停窗）→ 主进程：鼠标离开气泡区域 */
+  MOUSE_LEAVE: 'windows-agent-island:mouse-leave',
 } as const
 
 /** 存储管理 IPC 通道 */
