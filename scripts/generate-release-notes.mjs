@@ -47,6 +47,15 @@ export function releaseNoteForCommit(subject, body = '') {
   return `**${CHANGE_LABELS[match[1].toLowerCase()]}**：${match[3].trim()}`
 }
 
+export function normalizeUpstreamNotes(notes) {
+  return notes
+    .trim()
+    .replace(/^#\s+[^\n]+\n+/u, '')
+    .replace(/\n##\s+(?:下载|Downloads?)\s*\n[\s\S]*$/iu, '')
+    .replace(/^##\s+/gmu, '#### ')
+    .trim()
+}
+
 export function buildReleaseNotes({ tag, notes, currentBaseline, previousBaseline, upstreamNotes = '' }) {
   const sections = [`## Linguist Agent ${tag}`]
   if (notes.length > 0) {
@@ -57,7 +66,7 @@ export function buildReleaseNotes({ tag, notes, currentBaseline, previousBaselin
 
   if (previousBaseline && previousBaseline !== currentBaseline) {
     const source = `https://github.com/proma-ai/Proma/releases/tag/${currentBaseline}`
-    const body = upstreamNotes.trim() || `详见 [Proma ${currentBaseline} Release](${source})。`
+    const body = normalizeUpstreamNotes(upstreamNotes) || `详见 [Proma ${currentBaseline} Release](${source})。`
     sections.push(`### Proma ${currentBaseline} 更新\n\n> 上游基线：${previousBaseline} → ${currentBaseline} · [原始 Release](${source})\n\n${body}`)
   } else {
     sections.push(`### Proma 基线\n\n- ${currentBaseline}`)
@@ -87,7 +96,7 @@ function main() {
   const currentBaseline = JSON.parse(readFileSync(join(options.root, 'docs/architecture/proma-baseline.json'), 'utf8')).upstream?.tag
   const tag = options.tag || `v${packageJson.version}`
   const range = options.from ? `${options.from}..${options.to}` : options.to
-  const commits = git(options.root, ['log', '--format=%s%x1f%b%x1e', '--max-count=100', range])
+  const commits = git(options.root, ['log', '--first-parent', '--format=%s%x1f%b%x1e', '--max-count=100', range])
     .split('\x1e')
     .map((record) => record.trim())
     .filter(Boolean)
