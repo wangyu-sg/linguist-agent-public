@@ -1083,6 +1083,16 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
+      "file": "apps/electron/src/renderer/components/tabs/tab-bar-action-layout.ts",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: keep the native TabBar action overlay clear of tabs and platform window controls."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/tabs/tab-bar-action-layout.test.ts",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: protect the native TabBar action overlay layout used by the Agent/Chat shell."
+    },
+    {
       "file": "apps/electron/src/renderer/components/tabs/TabBarItem.test.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."

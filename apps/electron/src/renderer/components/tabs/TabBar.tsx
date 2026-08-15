@@ -476,63 +476,53 @@ function TabBarInner({
         ))}
       </div>
 
-      <ShortcutGuideButton
-        positionClassName={actionLayout.shortcutPositionClassName}
+      <TabBarActions
+        positionClassName={actionLayout.actionPositionClassName}
         showBrowserButton={showBrowserButton}
+        showPanelButton={showOpenPanelButton}
         onOpenBrowser={openBrowser}
         onOpen={openShortcutGuide}
         onOpenFaq={openFaqDialog}
+        onTogglePanel={togglePanel}
       />
-
-      {/* 打开文件面板按钮：与文件面板打开时的 PanelRightClose 同坐标，避免开/关之间按钮位置跳变。
-          Windows 上需让出右上角 WindowControls 区域（126px）。 */}
-      {showOpenPanelButton && (
-        <AgentPanelOpenButton positionClassName={actionLayout.panelPositionClassName} onToggle={togglePanel} />
-      )}
     </div>
   )
 }
 
-function ShortcutGuideButton({
+function TabBarActions({
   positionClassName,
   showBrowserButton,
+  showPanelButton,
   onOpenBrowser,
   onOpen,
   onOpenFaq,
+  onTogglePanel,
 }: {
   positionClassName: string
   showBrowserButton: boolean
+  showPanelButton: boolean
   onOpenBrowser: () => void
   onOpen: () => void
   onOpenFaq: () => void
+  onTogglePanel: () => void
 }): React.ReactElement {
   return (
     <div
       className={cn(
-        "absolute flex items-center gap-1 titlebar-no-drag",
+        "absolute inset-y-0 z-10 flex items-end pb-[3px] titlebar-no-drag",
         positionClassName,
       )}
     >
-      {/* FAQ 快捷按钮（在快捷键地图左边） */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onOpenFaq}
-          >
-            <HelpCircle className="size-3.5" />
-            <span className="sr-only">查看常见问题</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p>查看常见问题</p>
-        </TooltipContent>
-      </Tooltip>
-
-      {showBrowserButton && (
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 -left-6 w-6 bg-gradient-to-r from-transparent to-[hsl(var(--tabbar-surface))] [mask-image:linear-gradient(to_right,transparent,black)] backdrop-blur-sm"
+      />
+      <div
+        data-tab-bar-action-island="true"
+        className="relative flex items-center gap-1 backdrop-blur-sm"
+        style={{ backgroundColor: 'hsl(var(--tabbar-surface) / 0.92)' }}
+      >
+        {/* FAQ 快捷按钮（在快捷键地图左边） */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -540,70 +530,82 @@ function ShortcutGuideButton({
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={() => void onOpenBrowser()}
+              onClick={onOpenFaq}
             >
-              <Globe2 className="size-3.5" />
-              <span className="sr-only">打开受管浏览器</span>
+              <HelpCircle className="size-3.5" />
+              <span className="sr-only">查看常见问题</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p>打开受管浏览器</p>
+            <p>查看常见问题</p>
           </TooltipContent>
         </Tooltip>
-      )}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onOpen}
-          >
-            <Keyboard className="size-3.5" />
-            <span className="sr-only">查看快捷键地图</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p>查看快捷键地图</p>
-        </TooltipContent>
-      </Tooltip>
+
+        {showBrowserButton && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => void onOpenBrowser()}
+              >
+                <Globe2 className="size-3.5" />
+                <span className="sr-only">打开受管浏览器</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>打开受管浏览器</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={onOpen}
+            >
+              <Keyboard className="size-3.5" />
+              <span className="sr-only">查看快捷键地图</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>查看快捷键地图</p>
+          </TooltipContent>
+        </Tooltip>
+        {showPanelButton && <AgentPanelOpenButton onToggle={onTogglePanel} />}
+      </div>
     </div>
   )
 }
 
 /** 打开 Agent 文件面板按钮。 */
 function AgentPanelOpenButton({
-  positionClassName,
   onToggle,
 }: {
-  positionClassName: string
   onToggle: () => void
 }): React.ReactElement {
   return (
-    <div
-      className={cn(
-        "absolute flex titlebar-no-drag",
-        positionClassName,
-      )}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="relative h-7 w-7"
-            onClick={onToggle}
-            aria-label="打开文件面板"
-          >
-            <PanelRight className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p>打开文件面板 ({navigator.platform.includes('Mac') ? '⌘⇧B' : 'Ctrl+Shift+B'})</p>
-        </TooltipContent>
-      </Tooltip>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="relative h-7 w-7"
+          onClick={onToggle}
+          aria-label="打开文件面板"
+        >
+          <PanelRight className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <p>打开文件面板 ({navigator.platform.includes('Mac') ? '⌘⇧B' : 'Ctrl+Shift+B'})</p>
+      </TooltipContent>
+    </Tooltip>
   )
 }
