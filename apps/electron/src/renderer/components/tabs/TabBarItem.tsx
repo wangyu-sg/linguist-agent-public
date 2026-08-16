@@ -198,7 +198,7 @@ export function TabBarItem({
         type="button"
         aria-label={`关闭标签页：${title}`}
         className={cn(
-          'absolute right-3 top-1/2 size-4 -translate-y-1/2 rounded-sm flex items-center justify-center',
+          'absolute right-3 top-1/2 z-[2] size-4 -translate-y-1/2 rounded-sm flex items-center justify-center',
           'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted-foreground/20 transition-opacity',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
           isActive && 'opacity-60',

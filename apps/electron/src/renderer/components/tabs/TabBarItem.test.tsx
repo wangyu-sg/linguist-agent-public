@@ -39,4 +39,29 @@ describe('TabBarItem', () => {
       /aria-label=\{`关闭标签页：\$\{title\}`\}[\s\S]*?onClick=\{handleCloseClick\}\s+onMouseDown=\{handleMouseDown\}/,
     )
   })
+
+  test('given 当前标签主体有层级 when 点击关闭按钮 then 关闭按钮位于主体之上', () => {
+    const html = renderToStaticMarkup(
+      <TabBarItem
+        id="session-a"
+        type="agent"
+        title="当前任务"
+        isActive
+        isStreaming="idle"
+        isHovered={false}
+        isLeaving={false}
+        onActivate={() => undefined}
+        onClose={() => undefined}
+        onMiddleClick={() => undefined}
+        onDragStart={() => undefined}
+        onHoverEnter={() => undefined}
+        onHoverLeave={() => undefined}
+        onPanelHoverEnter={() => undefined}
+        onPanelHoverLeave={() => undefined}
+      />,
+    )
+
+    const closeButton = html.match(/<button[^>]*aria-label="关闭标签页：当前任务"[^>]*>/)?.[0]
+    expect(closeButton).toContain('z-[2]')
+  })
 })
