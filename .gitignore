@@ -72,3 +72,4 @@ codex-teardown/
 asar-src/
 *.asar
 *.dmg
+.bitfun/

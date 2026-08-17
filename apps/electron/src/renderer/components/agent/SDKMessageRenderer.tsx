@@ -266,7 +266,7 @@ function extractToolResultForTask(message: SDKUserMessage, resultBlock: SDKToolR
 
 // ===== 助手头像 =====
 
-function AssistantLogo({ model }: { model?: string }): React.ReactElement {
+export function AssistantLogo({ model }: { model?: string }): React.ReactElement {
   const channels = useAtomValue(channelsAtom)
   if (model) {
     return (
@@ -545,15 +545,19 @@ export function AssistantTurnRenderer({ turn, allMessages, basePath, onFork, onR
 
             const groupBlocks = item.items.map((groupItem) => groupItem.block)
             const firstIndex = item.items[0]?.index ?? 0
+            const groupKey = `process-${firstIndex}`
             return (
               <ProcessBlockGroup
-                key={`process-${firstIndex}`}
+                key={groupKey}
                 blocks={groupBlocks}
                 isStreaming={isStreaming}
+                renderChildren={() => item.items.map((groupItem) => (
+                  <React.Fragment key={groupItem.index}>
+                    {renderProcessGroupBlock(groupItem.block, groupItem.index)}
+                  </React.Fragment>
+                ))}
                 isMessageTail={itemIndex === renderItems.length - 1}
-              >
-                {item.items.map((groupItem) => renderProcessGroupBlock(groupItem.block, groupItem.index))}
-              </ProcessBlockGroup>
+              />
             )
           })}
         </div>

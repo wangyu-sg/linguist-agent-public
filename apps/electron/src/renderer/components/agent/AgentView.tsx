@@ -74,7 +74,8 @@ import { previewPanelOpenMapAtom, quotedSelectionMapAtom, quotedSelectionAtomFam
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 import {
   agentStreamingStatesAtom,
-  agentSessionViewStreamStateAtomFamily,
+  agentSessionStreamingStateAtomFamily,
+  agentSessionInputStreamStateAtomFamily,
   agentChannelIdAtom,
   agentModelIdAtom,
   agentSessionChannelMapAtom,
@@ -114,9 +115,8 @@ import {
   allPendingAskUserRequestsAtom,
   allPendingPermissionRequestsAtom,
   allPendingExitPlanRequestsAtom,
-  finalizeStreamingActivities,
 } from '@/atoms/agent-atoms'
-import type { AgentContextStatus, AgentPendingPrompt } from '@/atoms/agent-atoms'
+import type { AgentPendingPrompt } from '@/atoms/agent-atoms'
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { longTextPasteAsAttachmentEnabledAtom } from '@/atoms/ui-preferences'
 import { channelsAtom } from '@/atoms/chat-atoms'
@@ -126,7 +126,7 @@ import { AgentSessionProvider } from '@/contexts/session-context'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { sendWithCmdEnterAtom } from '@/atoms/shortcut-atoms'
 import { useOpenPreview } from '@/components/diff/preview-opener'
-import type { AgentSendInput, AgentPendingFile, AgentThinkingLevel, FileDialogLargeFile, FileDialogResult, ModelOption, ReasoningCapability, SDKMessage, SDKUserMessage } from '@proma/shared'
+import type { AgentDeferredQueueMessageInput, AgentSendInput, AgentPendingFile, AgentThinkingLevel, FileDialogLargeFile, FileDialogResult, ModelOption, ReasoningCapability, SDKMessage, SDKUserMessage } from '@proma/shared'
 import { inferContextWindow, inferReasoningTransport, isCodexFastModeSupportedModel, MAX_ATTACHMENT_SIZE, normalizeReasoningCapabilityLevel, normalizeReasoningLevel, resolveReasoningCapability, resolveReasoningProfile } from '@proma/shared'
 import { fileToBase64, formatFileNames, getFileParentPath } from '@/lib/file-utils'
 import { getFilePanelDragData, INSERT_FILE_MENTION_EVENT, type FilePanelDragItem } from '@/lib/file-panel-drag'
@@ -479,13 +479,18 @@ export function AgentView({
   hostCapabilities = DEFAULT_AGENT_HOST_CAPABILITIES,
 }: AgentViewProps): React.ReactElement {
   const compact = presentation === 'rail'
-  const [persistedSDKMessages, setPersistedSDKMessages] = React.useState<SDKMessage[]>([])
+  const store = useStore()
+  const initialCachedMessages = store.get(agentSDKMessagesCacheAtom).get(sessionId)
+  const [persistedSDKMessages, setPersistedSDKMessages] = React.useState<SDKMessage[]>(
+    () => initialCachedMessages ?? [],
+  )
   const persistedSDKMessagesRef = React.useRef<SDKMessage[]>([])
   persistedSDKMessagesRef.current = persistedSDKMessages
+  const messagesRequestIdRef = React.useRef(0)
+  const messagesMutationVersionRef = React.useRef(0)
   const setStreamingStates = useSetAtom(agentStreamingStatesAtom)
-  // 只订阅输入区/工具栏需要的低频流状态。逐 token content/toolActivities 由
-  // AgentMessages 独立消费，不能让 3000 行 AgentView 和输入框跟随每个 token 重渲染。
-  const streamViewState = useAtomValue(agentSessionViewStreamStateAtomFamily(sessionId))
+  // 只订阅输入区/工具栏需要的低频流状态。
+  const streamViewState = useAtomValue(agentSessionInputStreamStateAtomFamily(sessionId))
   const streaming = streamViewState.running
   // 软空闲态：本轮主体已结束、UI 可输入，但 SDK 通道仍开着等后台任务唤醒。
   // 此时服务端 activeSessions 仍保留，新消息须走注入通道而非新建 run。
@@ -577,15 +582,6 @@ export function AgentView({
     }
   }, [sessionId, sessionMetaChannelId, sessionMetaModelId, hasSessionMeta, defaultChannelId, defaultModelId, setSessionChannelMap, setSessionModelMap])
 
-  const contextStatus: AgentContextStatus = {
-    isCompacting: streamViewState.isCompacting ?? false,
-    inputTokens: streamViewState.inputTokens,
-    outputTokens: streamViewState.outputTokens,
-    cacheReadTokens: streamViewState.cacheReadTokens,
-    cacheCreationTokens: streamViewState.cacheCreationTokens,
-    contextWindow: streamViewState.contextWindow,
-    contextUsageIsEstimated: streamViewState.contextUsageIsEstimated,
-  }
   const setAgentStreamErrors = useSetAtom(agentStreamErrorsAtom)
   const streamErrors = useAtomValue(agentStreamErrorsAtom)
   const agentError = streamErrors.get(sessionId) ?? null
@@ -596,7 +592,6 @@ export function AgentView({
   const persistedPermissionMode = useAtomValue(sessionPersistedPermissionModeAtom(sessionId))
   const permissionMode = permissionModeMap.get(sessionId) ?? persistedPermissionMode ?? defaultPermissionMode
   const isPermissionPlanMode = permissionMode === 'plan'
-  const store = useStore()
   const captureTurnContext = React.useCallback(() => {
     const projectId = sessionMeta?.linguistProjectId
     if (!projectId) return undefined
@@ -1024,6 +1019,8 @@ export function AgentView({
   const appendOptimisticPersistedMessage = React.useCallback((message: SDKMessage) => {
     // 切会话时优先命中内存缓存，因此乐观插入的用户消息也要同步写入缓存，
     // 否则“发送后立刻切走再切回”会短暂回退到旧消息数组。
+    // 本地乐观消息优先于正在进行中的旧 IPC 快照。
+    messagesMutationVersionRef.current += 1
     const next = [...persistedSDKMessagesRef.current, message]
     persistedSDKMessagesRef.current = next
     setPersistedSDKMessages(next)
@@ -1111,8 +1108,6 @@ export function AgentView({
       const existing = prev.get(sessionId)
       map.set(sessionId, {
         running: true,
-        content: '',
-        toolActivities: [],
         model: agentModelId || undefined,
         startedAt: streamStartedAt,
         inputTokens: existing?.inputTokens,
@@ -1232,8 +1227,8 @@ export function AgentView({
     streaming,
   ])
 
-  // 消息是否已完成首次加载（用于 auto-send 等待）
-  const [messagesLoaded, setMessagesLoaded] = React.useState(false)
+  // 消息首次加载状态直接由同步缓存决定；缓存命中时首个 render 就显示历史，IPC 只做后台校准。
+  const [messagesLoaded, setMessagesLoaded] = React.useState(initialCachedMessages !== undefined)
   const [messagesRefreshing, setMessagesRefreshing] = React.useState(false)
   const messagesRefreshingRef = React.useRef(false)
   const loadingSessionIdRef = React.useRef<string | null>(null)
@@ -1260,10 +1255,19 @@ export function AgentView({
     }
     messagesRefreshingRef.current = true
     setMessagesRefreshing(true)
+    const requestId = ++messagesRequestIdRef.current
+    const requestMutationVersion = messagesMutationVersionRef.current
     let cancelled = false
     window.electronAPI.getAgentSessionSDKMessages(sessionId)
       .then((sdkMsgs) => {
-        if (cancelled) return
+        if (cancelled || requestId !== messagesRequestIdRef.current) return
+        if (requestMutationVersion !== messagesMutationVersionRef.current) {
+          // 请求期间已有本地消息变更，旧 IPC 快照不能覆盖当前内存消息。
+          setMessagesLoaded(true)
+          messagesRefreshingRef.current = false
+          setMessagesRefreshing(false)
+          return
+        }
         // 写入缓存（含 LRU 淘汰，防止会话数增长导致内存无限膨胀）
         setMessagesCache((prev) => setSessionMessagesCache(prev, sessionId, sdkMsgs))
         unstable_batchedUpdates(() => {
@@ -1282,15 +1286,13 @@ export function AgentView({
             // 仍在运行中：不清除
             if (!state || state.running) return prev
             const map = new Map(prev)
-            // 软空闲态（后台任务等待）：必须保留 backgroundWaiting 标志（否则 handleSend 误走新建 run），
-            // 但展示字段 content/toolActivities 仍要清空——否则上一轮流式文本残留会被兜底气泡渲染成重复消息。
+            // 软空闲态（后台任务等待）：必须保留 backgroundWaiting 标志（否则 handleSend 误走新建 run）。
+            // 实时文本只在 liveMessages 中，完成消息刷新时随其统一清理。
             if (state.inputTokens !== undefined) {
-              // 保留 usage 数据，仅清除流式展示字段
+              // 保留 usage 数据，仅清除本轮工具活动展示状态。
               map.set(sessionId, {
                 running: false,
                 backgroundWaiting: state.backgroundWaiting,
-                content: '',
-                toolActivities: [],
                 inputTokens: state.inputTokens,
                 outputTokens: state.outputTokens,
                 cacheReadTokens: state.cacheReadTokens,
@@ -1305,8 +1307,6 @@ export function AgentView({
               map.set(sessionId, {
                 running: false,
                 backgroundWaiting: state.backgroundWaiting,
-                content: '',
-                toolActivities: [],
                 contextCompaction: state.contextCompaction,
               })
             } else {
@@ -1317,7 +1317,7 @@ export function AgentView({
           setLiveMessagesMap((prev) => {
             if (!prev.has(sessionId)) return prev
             // 仍在运行中，不清除实时消息（与 streamingStates 保护逻辑一致）
-            const streamingState = store.get(agentStreamingStatesAtom).get(sessionId)
+            const streamingState = store.get(agentSessionStreamingStateAtomFamily(sessionId))
             if (streamingState?.running) return prev
             const map = new Map(prev)
             map.delete(sessionId)
@@ -1397,8 +1397,6 @@ export function AgentView({
         const existing = prev.get(sessionId)
         map.set(sessionId, {
           running: true,
-          content: '',
-          toolActivities: [],
           model: snapshot.modelId,
           startedAt: streamStartedAt,
           inputTokens: existing?.inputTokens,
@@ -2232,19 +2230,51 @@ export function AgentView({
       if (pendingFilesSnapshot.length > 0 && !attachmentContext) return
 
       const quotedSelection = consumeQuotedSelection()
-      setQueuedMessages((prev) => [
-        ...prev,
-        createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, {
-          ...(attachmentContext
-            ? {
-              fileReferenceBlock: attachmentContext.referenceBlock,
-              attachments: attachmentContext.attachments,
-              additionalDirectories: attachmentContext.additionalDirectories,
-            }
-            : {}),
-          ...(linguistContext ? { linguistContext } : {}),
-        }),
-      ])
+      const message = createAgentQueuedMessage(effectiveText, crypto.randomUUID(), Date.now(), quotedSelection, {
+        ...(attachmentContext
+          ? {
+            fileReferenceBlock: attachmentContext.referenceBlock,
+            attachments: attachmentContext.attachments,
+            additionalDirectories: attachmentContext.additionalDirectories,
+          }
+          : {}),
+        ...(linguistContext ? { linguistContext } : {}),
+      })
+      const quotedSelectionBlock = quotedSelection
+        ? buildQuotedSelectionBlock(quotedSelection)
+        : ''
+      const payload = buildQueuedMessageSendPayload(message, quotedSelectionBlock)
+      const queuedInput: AgentDeferredQueueMessageInput = {
+        queueMessageId: message.id,
+        sessionId,
+        userMessage: payload.sdkText,
+        rawUserMessage: payload.rawText,
+        channelId: agentChannelId,
+        modelId: agentModelId || undefined,
+        workspaceId: currentWorkspaceId || undefined,
+        additionalDirectories: message.additionalDirectories,
+        permissionModeOverride: permissionMode,
+        mentionedSkills: payload.mentions.mentionedSkills,
+        mentionedMcpServers: payload.mentions.mentionedMcpServers,
+        mentionedSessionIds: payload.mentions.mentionedSessionIds,
+        mentionedTodoIds: payload.mentions.mentionedTodoIds,
+        mentionedCalendarEventIds: payload.mentions.mentionedCalendarEventIds,
+        ...(message.linguistContext ? { linguistContext: message.linguistContext } : {}),
+      }
+      setQueuedMessages((prev) => [...prev, message])
+      void window.electronAPI.enqueueAgentQueuedMessage(queuedInput).catch((error) => {
+        console.error('[AgentView] 主进程队列入队失败:', error)
+        setQueuedMessages((prev) => removeQueuedMessage(prev, message.id))
+        restoreQueuedAttachmentsToPending(message.attachments)
+        if (quotedSelection) {
+          setQuotedSelectionMap((prev) => {
+            const map = new Map(prev)
+            map.set(sessionId, quotedSelection)
+            return map
+          })
+        }
+        toast.error('消息加入队列失败', { description: String(error) })
+      })
       // 入队后消息会出现在队列 UI 中，用户可见；不再弹 toast 打扰。
       if (overrideText === undefined || fromEditor) {
         setInputContent('')
@@ -2375,8 +2405,6 @@ export function AgentView({
       const existing = prev.get(sessionId)
       map.set(sessionId, {
         running: true,
-        content: '',
-        toolActivities: [],
         model: agentModelId || undefined,
         startedAt: streamStartedAt,
         inputTokens: existing?.inputTokens,
@@ -2486,8 +2514,6 @@ export function AgentView({
       const map = new Map(prev)
       const current = prev.get(sessionId) ?? {
         running: true,
-        content: '',
-        toolActivities: [],
         model: agentModelId || undefined,
         startedAt: streamStartedAt,
       }
@@ -2591,6 +2617,7 @@ export function AgentView({
     // 在下一轮回复开始前仍被页面渲染。旧会话没有 UUID 时保留历史，由主进程幂等处理。
     const messagesAfterCleanup = removeRetriedErrorSDKMessage(persistedSDKMessages, retryOfErrorUuid)
     if (messagesAfterCleanup !== persistedSDKMessages) {
+      messagesMutationVersionRef.current += 1
       persistedSDKMessagesRef.current = messagesAfterCleanup
       setPersistedSDKMessages(messagesAfterCleanup)
       setMessagesCache((prev) => setSessionMessagesCache(prev, sessionId, messagesAfterCleanup))
@@ -2611,8 +2638,6 @@ export function AgentView({
       const existing = prev.get(sessionId)
       map.set(sessionId, {
         running: true,
-        content: '',
-        toolActivities: [],
         model: agentModelId || undefined,
         startedAt: streamStartedAt,
         inputTokens: existing?.inputTokens,
@@ -2657,8 +2682,6 @@ export function AgentView({
         const map = new Map(prev)
         map.set(meta.id, {
           running: true,
-          content: '',
-          toolActivities: [],
           model: agentModelId || undefined,
           startedAt: streamStartedAt,
         })
@@ -2818,12 +2841,19 @@ export function AgentView({
 
     queuedSendInFlightRef.current = true
     sendingQueuedMessageIdsRef.current.add(messageId)
-    setQueuedMessages((prev) => removeQueuedMessage(prev, messageId))
-    sendPlainTextAgentMessage(message)
+    void window.electronAPI.cancelAgentQueuedMessage({ sessionId, messageId })
+      .then((cancelled) => {
+        if (!cancelled) return
+        setQueuedMessages((prev) => removeQueuedMessage(prev, messageId))
+        return sendPlainTextAgentMessage(message).catch((error) => {
+          console.error('[AgentView] 队列消息发送失败:', error)
+          toast.error('队列消息发送失败', { description: String(error) })
+          setQueuedMessages((prev) => restoreQueuedMessageToFront(prev, message))
+        })
+      })
       .catch((error) => {
-        console.error('[AgentView] 队列消息发送失败:', error)
-        toast.error('队列消息发送失败', { description: String(error) })
-        setQueuedMessages((prev) => restoreQueuedMessageToFront(prev, message))
+        console.error('[AgentView] 取消主进程队列失败:', error)
+        toast.error('队列消息操作失败', { description: String(error) })
       })
       .finally(() => {
         sendingQueuedMessageIdsRef.current.delete(messageId)
@@ -2835,48 +2865,61 @@ export function AgentView({
     const message = queuedMessages.find((item) => item.id === messageId)
     if (!message) return
 
-    setQueuedMessages((prev) => removeQueuedMessage(prev, messageId))
-    const recalledQuotedSelection = message.quotedSelection
-    if (recalledQuotedSelection) {
-      setQuotedSelectionMap((prev) => {
-        const map = new Map(prev)
-        map.set(sessionId, recalledQuotedSelection)
-        return map
+    void window.electronAPI.cancelAgentQueuedMessage({ sessionId, messageId })
+      .then((cancelled) => {
+        if (!cancelled) return
+        setQueuedMessages((prev) => removeQueuedMessage(prev, messageId))
+        const recalledQuotedSelection = message.quotedSelection
+        if (recalledQuotedSelection) {
+          setQuotedSelectionMap((prev) => {
+            const map = new Map(prev)
+            map.set(sessionId, recalledQuotedSelection)
+            return map
+          })
+        }
+        restoreQueuedAttachmentsToPending(message.attachments)
+
+        const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
+        const currentDraftHtml = store.get(agentSessionDraftHtmlAtom).get(sessionId) ?? ''
+        const hasDraft = currentDraft.trim().length > 0
+        const nextDraft = hasDraft
+          ? `${currentDraft.trimEnd()}\n\n${message.text}`
+          : message.text
+        setInputContent(nextDraft)
+
+        // 已有草稿时，用「原草稿 HTML + 队列文本段落 HTML」合并，保留原草稿的 mention 等富文本节点；
+        // 空草稿时留空 HTML，交给编辑器按纯文本重建（与正常输入渲染一致）。
+        if (hasDraft) {
+          const draftHtml = currentDraftHtml.trim().length > 0
+            ? currentDraftHtml
+            : queuedTextToParagraphHtml(currentDraft)
+          setInputHtmlContent(`${draftHtml}${queuedTextToParagraphHtml(message.text)}`)
+        } else {
+          setInputHtmlContent('')
+        }
       })
-    }
-    restoreQueuedAttachmentsToPending(message.attachments)
-
-    const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
-    const currentDraftHtml = store.get(agentSessionDraftHtmlAtom).get(sessionId) ?? ''
-    const hasDraft = currentDraft.trim().length > 0
-    const nextDraft = hasDraft
-      ? `${currentDraft.trimEnd()}\n\n${message.text}`
-      : message.text
-    setInputContent(nextDraft)
-
-    // 已有草稿时，用「原草稿 HTML + 队列文本段落 HTML」合并，保留原草稿的 mention 等富文本节点；
-    // 空草稿时留空 HTML，交给编辑器按纯文本重建（与正常输入渲染一致）。
-    if (hasDraft) {
-      const draftHtml = currentDraftHtml.trim().length > 0
-        ? currentDraftHtml
-        : queuedTextToParagraphHtml(currentDraft)
-      setInputHtmlContent(`${draftHtml}${queuedTextToParagraphHtml(message.text)}`)
-    } else {
-      setInputHtmlContent('')
-    }
+      .catch((error) => {
+        console.warn('[AgentView] 撤回主进程队列消息失败:', error)
+      })
   }, [queuedMessages, restoreQueuedAttachmentsToPending, sessionId, setInputContent, setInputHtmlContent, setQueuedMessages, setQuotedSelectionMap, store])
 
   const handleRemoveQueuedMessage = React.useCallback((messageId: string): void => {
+    void window.electronAPI.cancelAgentQueuedMessage({ sessionId, messageId }).catch((error) => {
+      console.warn('[AgentView] 取消主进程队列失败:', error)
+    })
     setQueuedMessages((prev) => removeQueuedMessage(prev, messageId))
-  }, [setQueuedMessages])
+  }, [sessionId, setQueuedMessages])
 
   const handleMoveQueuedMessage = React.useCallback((
     sourceId: string,
     targetId: string,
     placement: QueueDropPlacement,
   ): void => {
+    void window.electronAPI.moveAgentQueuedMessage({ sessionId, sourceId, targetId, placement }).catch((error) => {
+      console.warn('[AgentView] 调整主进程队列顺序失败:', error)
+    })
     setQueuedMessages((prev) => moveQueuedMessage(prev, sourceId, targetId, placement))
-  }, [setQueuedMessages])
+  }, [sessionId, setQueuedMessages])
 
   // ===== 预览面板状态（toggle 快捷键，分屏布局在 MainArea） =====
   const setPreviewOpenMap = useSetAtom(previewPanelOpenMapAtom)
@@ -2977,13 +3020,6 @@ export function AgentView({
       key: 'context-usage',
       node: (
         <ContextUsageBadge
-          inputTokens={contextStatus.inputTokens}
-          outputTokens={contextStatus.outputTokens}
-          cacheReadTokens={contextStatus.cacheReadTokens}
-          cacheCreationTokens={contextStatus.cacheCreationTokens}
-          contextWindow={contextStatus.contextWindow}
-          isEstimated={contextStatus.contextUsageIsEstimated === true}
-          isCompacting={contextStatus.isCompacting}
           isProcessing={streaming}
           sessionId={sessionId}
           channelId={planQuotaChannelId}
@@ -3006,12 +3042,6 @@ export function AgentView({
     sessionId,
     agentThinking,
     setAgentThinking,
-    contextStatus.inputTokens,
-    contextStatus.outputTokens,
-    contextStatus.cacheReadTokens,
-    contextStatus.cacheCreationTokens,
-    contextStatus.contextWindow,
-    contextStatus.isCompacting,
     streaming,
     handleAttachContent,
     handleCompact,

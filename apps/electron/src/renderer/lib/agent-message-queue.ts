@@ -1,3 +1,4 @@
+import type { AgentStreamState } from '@/atoms/agent-atoms'
 import type { QuotedSelection } from '@/atoms/preview-atoms'
 import type { LinguistTurnContextV1 } from '@proma/shared'
 import {
@@ -71,6 +72,20 @@ export function createAgentQueuedMessage(
   if (options?.additionalDirectories && options.additionalDirectories.length > 0) message.additionalDirectories = options.additionalDirectories
   if (options?.linguistContext) message.linguistContext = options.linguistContext
   return message
+}
+
+export function createQueuedAgentStreamState(
+  previous: Pick<AgentStreamState, 'model' | 'inputTokens' | 'contextWindow'> | undefined,
+  startedAt: number,
+): AgentStreamState {
+  return {
+    running: true,
+    backgroundWaiting: false,
+    model: previous?.model,
+    startedAt,
+    inputTokens: previous?.inputTokens,
+    contextWindow: previous?.contextWindow,
+  }
 }
 
 export function removeQueuedMessage(

@@ -23,7 +23,7 @@ import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { ChatView } from '@/components/chat/ChatView'
 import { DeliverablesSection } from '@/features/linguist/projects/DeliverablesSection'
 import {
-  agentSidePanelOpenAtom,
+  agentSidePanelOpenAtomFamily,
   agentFileSourceFilterMapAtom,
   workspaceFilesVersionAtom,
   currentAgentWorkspaceIdAtom,
@@ -76,8 +76,8 @@ interface SidePanelProps {
 }
 
 export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chatOnly = false, width = 280 }: SidePanelProps): React.ReactElement {
-  // per-session 侧面板状态（默认打开）
-  const [isOpen, setIsOpen] = useAtom(agentSidePanelOpenAtom)
+  // 必须按 prop sessionId 绑定；Linguist rail 会话不一定等于全局当前会话。
+  const [isOpen, setIsOpen] = useAtom(agentSidePanelOpenAtomFamily(sessionId))
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 
   // Tab 系统

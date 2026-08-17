@@ -111,6 +111,10 @@ import type {
   WeChatConfig,
   WeChatBridgeState,
   AgentQueueMessageInput,
+  AgentDeferredQueueMessageInput,
+  AgentQueuedMessageControlInput,
+  AgentMoveQueuedMessageInput,
+  AgentQueuedMessageStatus,
   PendingRequestsSnapshot,
   NativeAgentIslandSnapshot,
   Automation,
@@ -401,7 +405,7 @@ export interface ElectronAPI {
   goForwardAgentBrowser: (sessionId: string) => Promise<import('@proma/shared').BrowserViewState>
   reloadAgentBrowser: (sessionId: string) => Promise<import('@proma/shared').BrowserViewState>
   closeAgentBrowser: (sessionId: string) => Promise<void>
-  onAgentBrowserStateChanged: (callback: (state: import('@proma/shared').BrowserViewState) => void) => () => void
+  onAgentBrowserStateChanged: (callback: (state: import('@proma/shared').BrowserStateChange) => void) => () => void
 
   // ===== 通用工具 =====
 
@@ -673,6 +677,15 @@ export interface ElectronAPI {
   /** 获取 Agent 会话列表 */
   listAgentSessions: () => Promise<AgentSessionMeta[]>
 
+  /** 获取未归档会话列表，供左侧 active 视图使用 */
+  listActiveAgentSessions: () => Promise<AgentSessionMeta[]>
+
+  /** 获取归档会话列表，进入归档视图时按需调用 */
+  listArchivedAgentSessions: () => Promise<AgentSessionMeta[]>
+
+  /** 获取归档会话数量，不返回归档元数据 */
+  countArchivedAgentSessions: () => Promise<number>
+
   /** 创建 Agent 会话 */
   createAgentSession: (title?: string, channelId?: string, workspaceId?: string, modelId?: string) => Promise<AgentSessionMeta>
 
@@ -745,6 +758,11 @@ export interface ElectronAPI {
 
   /** 流式追加发送 Agent 消息（Agent 运行中） */
   queueAgentMessage: (input: AgentQueueMessageInput) => Promise<string>
+  /** 将等待当前 run 结束的消息交给主进程 */
+  enqueueAgentQueuedMessage: (input: AgentDeferredQueueMessageInput) => Promise<void>
+  cancelAgentQueuedMessage: (input: AgentQueuedMessageControlInput) => Promise<boolean>
+  moveAgentQueuedMessage: (input: AgentMoveQueuedMessageInput) => Promise<boolean>
+  onAgentQueuedMessageStatus: (callback: (status: AgentQueuedMessageStatus) => void) => () => void
 
   // ===== Agent 后台任务管理 =====
 
@@ -1833,8 +1851,8 @@ const electronAPI: ElectronAPI = {
   goForwardAgentBrowser: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.GO_FORWARD_BROWSER, sessionId),
   reloadAgentBrowser: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.RELOAD_BROWSER, sessionId),
   closeAgentBrowser: (sessionId: string) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.CLOSE_BROWSER, sessionId),
-  onAgentBrowserStateChanged: (callback: (state: import('@proma/shared').BrowserViewState) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, state: import('@proma/shared').BrowserViewState) => callback(state)
+  onAgentBrowserStateChanged: (callback: (state: import('@proma/shared').BrowserStateChange) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: import('@proma/shared').BrowserStateChange) => callback(state)
     ipcRenderer.on(AGENT_IPC_CHANNELS.BROWSER_STATE_CHANGED, listener)
     return () => ipcRenderer.removeListener(AGENT_IPC_CHANNELS.BROWSER_STATE_CHANGED, listener)
   },
@@ -2199,6 +2217,18 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_SESSIONS)
   },
 
+  listActiveAgentSessions: () => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_ACTIVE_SESSIONS)
+  },
+
+  listArchivedAgentSessions: () => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.LIST_ARCHIVED_SESSIONS)
+  },
+
+  countArchivedAgentSessions: () => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.COUNT_ARCHIVED_SESSIONS)
+  },
+
   createAgentSession: (title?: string, channelId?: string, workspaceId?: string, modelId?: string) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.CREATE_SESSION, title, channelId, workspaceId, modelId)
   },
@@ -2292,6 +2322,20 @@ const electronAPI: ElectronAPI = {
   // Agent 队列消息
   queueAgentMessage: (input: AgentQueueMessageInput) => {
     return ipcRenderer.invoke(AGENT_IPC_CHANNELS.QUEUE_MESSAGE, input)
+  },
+  enqueueAgentQueuedMessage: (input: AgentDeferredQueueMessageInput) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.ENQUEUE_QUEUED_MESSAGE, input)
+  },
+  cancelAgentQueuedMessage: (input: AgentQueuedMessageControlInput) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.CANCEL_QUEUED_MESSAGE, input)
+  },
+  moveAgentQueuedMessage: (input: AgentMoveQueuedMessageInput) => {
+    return ipcRenderer.invoke(AGENT_IPC_CHANNELS.MOVE_QUEUED_MESSAGE, input)
+  },
+  onAgentQueuedMessageStatus: (callback: (status: AgentQueuedMessageStatus) => void) => {
+    const listener = (_: unknown, status: AgentQueuedMessageStatus): void => callback(status)
+    ipcRenderer.on(AGENT_IPC_CHANNELS.QUEUED_MESSAGE_STATUS, listener)
+    return () => { ipcRenderer.removeListener(AGENT_IPC_CHANNELS.QUEUED_MESSAGE_STATUS, listener) }
   },
 
   // Agent 后台任务管理

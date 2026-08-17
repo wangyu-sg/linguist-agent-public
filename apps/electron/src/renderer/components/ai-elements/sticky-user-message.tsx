@@ -50,6 +50,8 @@ interface StickyUserMessageProps {
   userMessages: readonly UserMessageData[]
   compact?: boolean
   hostRef: React.RefObject<HTMLDivElement>
+  /** 历史结构变化签名，用于 prepend 非用户消息时刷新用户位置缓存。 */
+  layoutSignature?: string
 }
 
 interface UserMessagePosition {
@@ -61,6 +63,7 @@ export function StickyUserMessage({
   userMessages,
   compact = false,
   hostRef,
+  layoutSignature,
 }: StickyUserMessageProps): React.ReactElement {
   const { scrollRef, stopScroll, state: stickyState } = useStickToBottomContext()
   const stickyEnabled = useAtomValue(stickyUserMessageEnabledAtom)
@@ -126,6 +129,13 @@ export function StickyUserMessage({
         positions.push({ id, bottom: rect.bottom - containerRect.top + el.scrollTop })
       }
       positionsRef.current = positions
+      const messageElements = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]'))
+      const lastUserMessageIndex = messageElements.findLastIndex(
+        (message) => message.dataset.messageRole === 'user',
+      )
+      for (const message of messageElements.slice(0, lastUserMessageIndex + 1)) {
+        resizeObserver.observe(message)
+      }
       updateStickyMessage()
     }
 
@@ -154,8 +164,10 @@ export function StickyUserMessage({
       }
       if (entries.some((entry) => entry.target !== el)) scheduleMeasure()
     })
-    // 只有最后一条用户消息及其之前的内容会改变用户消息的绝对位置。
-    // 当前流式 assistant 位于它之后，不纳入观察，避免每个流式高度更新重测整段历史。
+    // 只观察滚动容器尺寸和用户消息节点：assistant 流式内容位于最后一个用户消息之后，
+    // 它的高度变化不会改变已记录的用户消息位置。
+    resizeObserver.observe(el)
+
     const messageElements = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]'))
     const lastUserMessageIndex = messageElements.findLastIndex(
       (message) => message.dataset.messageRole === 'user',
@@ -171,7 +183,7 @@ export function StickyUserMessage({
       el.removeEventListener('scroll', scheduleScrollUpdate)
       resizeObserver.disconnect()
     }
-  }, [scrollRef, userMessageSignature, messageMap, stickyEnabled])
+  }, [scrollRef, userMessageSignature, messageMap, layoutSignature, stickyEnabled])
 
   // 点击回滚到原始消息
   const scrollToOriginal = React.useCallback(() => {

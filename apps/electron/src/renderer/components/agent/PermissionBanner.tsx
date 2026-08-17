@@ -12,7 +12,7 @@ import * as React from 'react'
 import { useAtom, useSetAtom } from 'jotai'
 import { Shield, ShieldAlert, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { allPendingPermissionRequestsAtom, agentStreamingStatesAtom, finalizeStreamingActivities } from '@/atoms/agent-atoms'
+import { allPendingPermissionRequestsAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
 import { summarizePermissionScope } from './permission-scope'
 import type { DangerLevel } from '@proma/shared'
 
@@ -80,7 +80,6 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
       map.set(sessionId, {
         ...current,
         running: false,
-        ...finalizeStreamingActivities(current.toolActivities),
       })
       return map
     })

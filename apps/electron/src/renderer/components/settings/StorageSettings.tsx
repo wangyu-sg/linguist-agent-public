@@ -227,7 +227,7 @@ export function StorageSettings(): React.ReactElement {
       {lastResult && (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
           {lastResult.freedBytes > 0 ? (
-            <span className="text-emerald-600 dark:text-emerald-400">
+            <span className="text-success">
               已释放 {formatBytes(lastResult.freedBytes)}，删除 {lastResult.deletedCount} 个文件
             </span>
           ) : (

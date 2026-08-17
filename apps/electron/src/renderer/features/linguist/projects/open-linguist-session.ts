@@ -5,7 +5,7 @@ import type {
   LinguistProjectOpenRequest,
   LinguistProjectOpenResult,
 } from '@proma/shared'
-import { agentSessionsAtom, agentSidePanelOpenAtom, agentDiffPanelTabAtom } from '@/atoms/agent-atoms'
+import { agentSessionsAtom, agentSidePanelOpenAtomFamily, agentDiffPanelTabAtom } from '@/atoms/agent-atoms'
 import {
   openLocalizationProjectTab,
   tabsAtom,
@@ -111,7 +111,7 @@ export async function openLinguistProjectFilesPanel(
   if (!ensured.ok) return ensured
   const opened = await openLinguistAgentSession(store, ensured.data.id, openProject)
   if (!opened.ok) return opened
-  store.set(agentSidePanelOpenAtom, true)
+  store.set(agentSidePanelOpenAtomFamily(ensured.data.id), true)
   store.set(agentDiffPanelTabAtom, (prev) => new Map(prev).set(ensured.data.id, 'files'))
   return opened
 }

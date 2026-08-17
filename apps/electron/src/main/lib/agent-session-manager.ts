@@ -237,10 +237,42 @@ function migrateRetiredClaudeRuntime(index: AgentSessionsIndex): boolean {
 }
 
 /**
+ * 会话索引的内存缓存。
+ *
+ * 重度使用后索引可达数 MB（实测 3600 个会话约 6.4MB），单次 JSON.parse 约 11ms。
+ * 一轮 Agent 会多次读写索引，累计上百毫秒全部同步阻塞主进程，而键盘事件需要经主进程
+ * IPC 转发到 renderer，因此表现为“renderer 内无长任务但输入延迟尖尖”。
+ * 用 mtime+size 校验缓存：既避免重复解析，也允许测试与外部直接改写索引文件后被正确感知。
+ */
+let indexCache: { data: AgentSessionsIndex; mtimeMs: number; size: number } | null = null
+
+/** 按当前索引文件状态记录缓存；stat 失败时丢弃缓存而不是保留可疑数据。 */
+function cacheIndex(data: AgentSessionsIndex): void {
+  try {
+    const stat = statSync(getAgentSessionsIndexPath())
+    indexCache = { data, mtimeMs: stat.mtimeMs, size: stat.size }
+  } catch {
+    indexCache = null
+  }
+}
+
+/**
  * 读取会话索引文件
  */
 function readIndex(): AgentSessionsIndex {
   const indexPath = getAgentSessionsIndexPath()
+
+  if (indexCache) {
+    try {
+      const stat = statSync(indexPath)
+      if (indexCache.mtimeMs === stat.mtimeMs && indexCache.size === stat.size) {
+        return indexCache.data
+      }
+    } catch {
+      indexCache = null
+    }
+  }
+
   const data = readJsonFileSafe<AgentSessionsIndex>(indexPath)
   if (data) {
     const permissionModeMigrated = migrateLegacyPermissionMode(data)
@@ -249,6 +281,7 @@ function readIndex(): AgentSessionsIndex {
     const retiredClaudeRuntimeMigrated = migrateRetiredClaudeRuntime(data)
     if (permissionModeMigrated || thinkingDefaultMigrated || linguistRolesMigrated || retiredClaudeRuntimeMigrated || data.version < INDEX_VERSION) {
       data.version = INDEX_VERSION
+      // writeIndex 会按写入后的文件状态刷新缓存。
       writeIndex(data)
       if (permissionModeMigrated) {
         console.log('[Agent 会话] 已迁移历史权限模式 auto → bypassPermissions')
@@ -260,6 +293,8 @@ function readIndex(): AgentSessionsIndex {
       if (retiredClaudeRuntimeMigrated) {
         console.log('[Agent 会话] 已将历史 Claude 会话迁移为 Pi transcript-only 会话')
       }
+    } else {
+      cacheIndex(data)
     }
     return data
   }
@@ -278,18 +313,40 @@ function writeIndex(index: AgentSessionsIndex): void {
 
   try {
     writeJsonFileAtomic(indexPath, index)
+    cacheIndex(index)
   } catch (error) {
     console.error('[Agent 会话] 写入索引文件失败:', error)
     throw new Error('写入 Agent 会话索引失败')
   }
 }
 
-/**
- * 获取所有会话（按 updatedAt 降序）
- */
+/** 按最近更新时间排序会话副本，避免修改索引数组本身。 */
+function sortSessionsByUpdatedAtDesc(sessions: AgentSessionMeta[]): AgentSessionMeta[] {
+  return [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/** 获取所有会话（按 updatedAt 降序） */
 export function listAgentSessions(): AgentSessionMeta[] {
   const index = readIndex()
-  return index.sessions.sort((a, b) => b.updatedAt - a.updatedAt)
+  return sortSessionsByUpdatedAtDesc(index.sessions)
+}
+
+/** 获取未归档会话，供侧栏 active 视图按需读取。 */
+export function listActiveAgentSessions(): AgentSessionMeta[] {
+  const index = readIndex()
+  return sortSessionsByUpdatedAtDesc(index.sessions.filter((session) => !session.archived))
+}
+
+/** 获取归档会话，只有用户进入归档视图时才调用。 */
+export function listArchivedAgentSessions(): AgentSessionMeta[] {
+  const index = readIndex()
+  return sortSessionsByUpdatedAtDesc(index.sessions.filter((session) => session.archived))
+}
+
+/** 获取归档数量，不把归档会话元数据传到 renderer。 */
+export function countArchivedAgentSessions(): number {
+  const index = readIndex()
+  return index.sessions.reduce((count, session) => count + (session.archived ? 1 : 0), 0)
 }
 
 /**
@@ -583,9 +640,14 @@ export function appendSDKMessages(id: string, messages: SDKMessage[]): void {
   const filePath = getAgentSessionMessagesPath(id)
 
   try {
+    // 整批只做一次同步追写：逐条 appendFileSync 会为每条消息各做一次 open/write/close，
+    // 一轮输出常见几十条消息，在多 Agent 并发下会持续阶段性阻塞主进程，
+    // 进而延迟键盘事件的 IPC 转发（表现为 renderer 内无长任务但输入延迟高）。
+    let payload = ''
     for (const message of messages) {
-      appendFileSync(filePath, serializeSDKMessageForStorage(message) + '\n', 'utf-8')
+      payload += serializeSDKMessageForStorage(message) + '\n'
     }
+    appendFileSync(filePath, payload, 'utf-8')
   } catch (error) {
     console.error(`[Agent 会话] 追加 SDKMessage 失败 (${id}):`, error)
     throw new Error('追加 SDKMessage 失败')

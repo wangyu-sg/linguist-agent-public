@@ -25,12 +25,16 @@ import type {
   AgentStreamEvent,
   AgentStreamPayload,
   AgentQueueMessageInput,
+  AgentDeferredQueueMessageInput,
+  AgentQueuedMessageControlInput,
+  AgentMoveQueuedMessageInput,
   PromaPermissionMode,
   AgentExternalRunSource,
   AgentMessage,
   LinguistProjectMutationEvent,
 } from '@proma/shared'
 import { PiAgentAdapter } from './adapters/pi-agent-adapter'
+import { PiUtilityAdapter } from './adapters/pi-utility-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
 import { getAgentWorkspaceBySlug, getLocalProjectRootStatus, getProjectFilesPath } from './agent-workspace-manager'
@@ -41,11 +45,14 @@ import { sendAgentStreamComplete } from './agent-completion-payload'
 import { saveFilesToManagedAgentSession } from './agent-session-file-storage'
 import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
 import { AgentStreamForwarder } from './agent-stream-forwarder'
+import { AgentQueueCoordinator } from './agent-queue-coordinator'
 
 // ===== 实例创建 =====
 
 const eventBus = new AgentEventBus()
-const adapter = new PiAgentAdapter()
+const useUtilityAgentRuntime = process.env.PROMA_AGENT_RUNTIME !== 'in-process'
+  && process.env.PROMA_AGENT_RUNTIME !== 'off'
+const adapter = useUtilityAgentRuntime ? new PiUtilityAdapter() : new PiAgentAdapter()
 const orchestrator = new AgentOrchestrator(adapter, eventBus)
 
 /** 导出 EventBus 供飞书 Bridge 等外部服务订阅事件 */
@@ -126,6 +133,15 @@ function sendLinguistProjectMutation(
   }
 }
 
+const agentQueueCoordinator = new AgentQueueCoordinator({
+  isActive: (sessionId) => orchestrator.isActive(sessionId),
+  getWebContents: (sessionId) => sessionWebContents.get(sessionId) ?? getMainRendererWebContents(),
+  startRun: (input, webContents) => runAgent(input, webContents),
+  sendStarted: (webContents, status) => {
+    if (!webContents.isDestroyed()) webContents.send(AGENT_IPC_CHANNELS.QUEUED_MESSAGE_STATUS, status)
+  },
+})
+
 function publishRunStopped(
   sessionId: string,
   stoppedByUser: boolean | undefined,
@@ -167,6 +183,9 @@ eventBus.use((sessionId, payload, next) => {
       console.error(`[EventBus] wc.send 失败: sessionId=${sessionId}, payload.kind=${(payload as Record<string, unknown>)?.kind}`, err)
     }
   }
+  if (payload.kind === 'sdk_message' && payload.message.type === 'system' && payload.message.subtype === 'task_notification') {
+    agentQueueCoordinator.onBackgroundTaskComplete(sessionId)
+  }
   next()
 })
 
@@ -199,6 +218,8 @@ export async function runAgent(
 ): Promise<void> {
   // 更新 webContents 映射（允许覆盖 — 由 orchestrator.activeSessions 处理真正的并发保护）
   registerWebContents(input.sessionId, webContents)
+  // deferred queue runs carry their queue id as an internal extension.
+  const queueMessageId = (input as Partial<AgentDeferredQueueMessageInput>).queueMessageId
   // 开始新一轮执行时清除"完成未确认"标记
   try {
     updateAgentSessionMeta(input.sessionId, { completedButUnconfirmed: false })
@@ -242,6 +263,12 @@ export async function runAgent(
             session: getSessionMetaForRenderer(input.sessionId),
           })
         }
+        agentQueueCoordinator.onRunComplete(
+          input.sessionId,
+          queueMessageId,
+          opts?.backgroundTasksPending === true,
+          opts?.stoppedByUser === true,
+        )
       },
       onRunStarted: ({ startedAt }) => {
         eventBus.emit(input.sessionId, {
@@ -278,6 +305,7 @@ export async function runAgent(
         stoppedByUser: false,
       })
     }
+    agentQueueCoordinator.onRunComplete(input.sessionId, queueMessageId, false, false)
   } finally {
     // 仅在 orchestrator 已完成此会话时清理映射
     // 避免被拒绝的请求误删仍在运行的会话映射
@@ -345,6 +373,12 @@ export async function runAgentHeadless(
             session: getSessionMetaForRenderer(runInput.sessionId),
           })
         }
+        agentQueueCoordinator.onRunComplete(
+          runInput.sessionId,
+          undefined,
+          opts?.backgroundTasksPending === true,
+          opts?.stoppedByUser === true,
+        )
       },
       onTitleUpdated: (title) => {
         callbacks.onTitleUpdated(title)
@@ -393,6 +427,7 @@ export async function runAgentHeadless(
         startedAt,
       })
     }
+    agentQueueCoordinator.onRunComplete(runInput.sessionId, undefined, false, false)
   } finally {
     if (!orchestrator.isActive(runInput.sessionId)) {
       sessionWebContents.delete(runInput.sessionId)
@@ -412,7 +447,7 @@ export async function generateAgentTitle(input: AgentGenerateTitleInput): Promis
  * 中止指定会话的 Agent 执行
  */
 export function stopAgent(sessionId: string): void {
-  orchestrator.stop(sessionId)
+  orchestrator.stop(sessionId, agentQueueCoordinator.isDispatching(sessionId))
 }
 
 setHeadlessAgentRunner(runAgentHeadless)
@@ -480,6 +515,23 @@ export async function queueAgentMessage(
     input.mentionedTodoIds,
     input.mentionedCalendarEventIds,
   )
+}
+
+export function enqueueAgentQueuedMessage(input: AgentDeferredQueueMessageInput, webContents: WebContents): void {
+  registerWebContents(input.sessionId, webContents)
+  agentQueueCoordinator.enqueue(input)
+}
+
+export function cancelAgentQueuedMessage(input: AgentQueuedMessageControlInput): boolean {
+  return agentQueueCoordinator.cancel(input)
+}
+
+export function moveAgentQueuedMessage(input: AgentMoveQueuedMessageInput): boolean {
+  return agentQueueCoordinator.move(input)
+}
+
+export function clearAgentQueuedMessages(sessionId: string): void {
+  agentQueueCoordinator.clear(sessionId)
 }
 
 // ===== 文件操作 =====

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai/vanilla'
 import type { AgentSessionMeta, LinguistProjectInfo } from '@proma/shared'
-import { agentSessionsAtom, agentSidePanelOpenAtom, agentDiffPanelTabAtom } from '@/atoms/agent-atoms'
+import { agentSessionsAtom, agentSidePanelOpenAtomFamily, agentDiffPanelTabAtom } from '@/atoms/agent-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { tabsAtom } from '@/atoms/tab-atoms'
@@ -83,7 +83,7 @@ describe('打开 Linguist 项目会话', () => {
 
     expect(result).toMatchObject({ ok: true })
     expect(store.get(linguistWorkbenchUiStateAtomFamily(PROJECT_ID)).agentPresentation).toBe('full')
-    expect(store.get(agentSidePanelOpenAtom)).toBe(true)
+    expect(store.get(agentSidePanelOpenAtomFamily('session-a'))).toBe(true)
     expect(store.get(agentDiffPanelTabAtom).get('session-a')).toBe('files')
   })
 

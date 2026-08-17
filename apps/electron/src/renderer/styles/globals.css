@@ -2549,3 +2549,9 @@
   .composer-context-chip-list { display: none; }
   .composer-context-chip-summary { display: inline-flex; }
 }
+
+@keyframes todo-complete {
+  0% { opacity: 1; transform: translateY(0); }
+  55% { opacity: 0.72; transform: translateY(2px); }
+  100% { opacity: 0; transform: translateY(5px); }
+}

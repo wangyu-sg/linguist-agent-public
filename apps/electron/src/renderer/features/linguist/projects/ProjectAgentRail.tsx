@@ -16,7 +16,7 @@ import {
   agentPendingPromptAtom,
   agentDiffPanelTabAtom,
   agentSessionPathMapAtom,
-  agentSidePanelOpenAtom,
+  agentSidePanelOpenAtomFamily,
   agentSidePanelWidthAtom,
   agentSessionsAtom,
   type AgentPendingPrompt,
@@ -89,7 +89,7 @@ export function ProjectAgentFullSidePanel({
   sessionId: string
   width: number
 }): React.ReactElement | null {
-  const sidePanelOpen = useAtomValue(agentSidePanelOpenAtom)
+  const sidePanelOpen = useAtomValue(agentSidePanelOpenAtomFamily(sessionId))
   const sessionPath = useAtomValue(agentSessionPathMapAtom).get(sessionId) ?? null
   const activeTab = useAtomValue(agentDiffPanelTabAtom).get(sessionId) ?? 'files'
   const setDiffPanelTabs = useSetAtom(agentDiffPanelTabAtom)
@@ -122,8 +122,8 @@ export function ProjectAgentFullSidePanel({
 }
 
 /** Full header 的关闭态恢复入口；不复制 SidePanel 自己的关闭状态。 */
-export function ProjectAgentFullPanelOpenButton(): React.ReactElement | null {
-  const [sidePanelOpen, setSidePanelOpen] = useAtom(agentSidePanelOpenAtom)
+export function ProjectAgentFullPanelOpenButton({ sessionId }: { sessionId: string }): React.ReactElement | null {
+  const [sidePanelOpen, setSidePanelOpen] = useAtom(agentSidePanelOpenAtomFamily(sessionId))
   if (sidePanelOpen) return null
   return (
     <Button
@@ -601,7 +601,7 @@ export function ProjectAgentRail({
               </p>
             </div>
           )}
-          {presentation === 'full' && <ProjectAgentFullPanelOpenButton />}
+          {presentation === 'full' && <ProjectAgentFullPanelOpenButton sessionId={sessionId} />}
           {presentation === 'rail' && (
             <div
               role="group"

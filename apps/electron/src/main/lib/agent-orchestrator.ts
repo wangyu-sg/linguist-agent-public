@@ -20,7 +20,7 @@ import { join, dirname } from 'node:path'
 import { accessSync, constants, existsSync, mkdirSync, realpathSync } from 'node:fs'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { app } from 'electron'
-import type { AgentSendInput, AgentMessage, AgentGenerateTitleInput, AgentProviderAdapter, AgentSessionMeta, CodexOAuthCredentials, XaiOAuthCredentials, TypedError, SDKMessage, SDKAssistantMessage, AgentStreamPayload, RewindSessionResult, SkillActivation, LinguistTurnContextV1, LinguistProjectMutationEvent } from '@proma/shared'
+import type { AgentSendInput, AgentMessage, AgentGenerateTitleInput, AgentProviderAdapter, AgentSessionMeta, CodexOAuthCredentials, XaiOAuthCredentials, TypedError, SDKMessage, SDKAssistantMessage, AgentStreamPayload, AgentAssistantDeltaPayload, RewindSessionResult, SkillActivation, LinguistTurnContextV1, LinguistProjectMutationEvent } from '@proma/shared'
 import {
   PROMA_DEFAULT_PERMISSION_MODE,
   PROMA_PERMISSION_MODE_CONFIG,
@@ -135,6 +135,19 @@ function isPartialSDKMessage(message: SDKMessage): boolean {
   return (message as Record<string, unknown>)._partial === true
 }
 
+function isAssistantDeltaSDKMessage(message: SDKMessage): message is SDKMessage & {
+  type: 'assistant_delta'
+  uuid: string
+  delta: AgentAssistantDeltaPayload['deltas'][number]
+  session_id?: string
+  _channelModelId?: string
+} {
+  const record = message as Record<string, unknown>
+  return record.type === 'assistant_delta'
+    && typeof record.uuid === 'string'
+    && !!record.delta
+}
+
 /** 默认会话标题（用于判断是否需要自动生成） */
 const DEFAULT_SESSION_TITLE = '新 Agent 会话'
 
@@ -241,6 +254,8 @@ export class AgentOrchestrator {
 
   /** 被用户手动中止的运行代际（在 stop 中标记，在对应运行的终态路径消费）。 */
   private stoppedBySessions = new Map<string, number>()
+  /** 队列启动投影已显示、但运行槽尚未占用时的停止请求。 */
+  private stoppedBeforeRunSessions = new Set<string>()
 
   /** 运行中会话的当前权限模式（支持运行时动态切换） */
   private sessionPermissionModes = new Map<string, PromaPermissionMode>()
@@ -384,16 +399,17 @@ export class AgentOrchestrator {
       if (!result) {
         console.warn('[Agent 标题生成] API 未返回可用标题')
         // OpenCode Go 的推理模型可能把输出预算全花在推理上返回空正文，或
-        // 内容块为数组；任何取不到可用标题的情况都回退到首行兜底，保证会话一定被重命名。
-        return channel.provider === 'opencode-go-openai' ? createFallbackTitle(userMessage) : null
+        // 内容块为数组；自定义渠道（custom）也可能返回空/异常；任何取不到可用标题的情况
+        // 都回退到首行兜底，保证会话一定被重命名。
+        return (channel.provider === 'opencode-go-openai' || channel.provider === 'custom') ? createFallbackTitle(userMessage) : null
       }
 
       console.log(`[Agent 标题生成] 生成标题成功: "${result}"`)
       return result
     } catch (error) {
       console.warn('[Agent 标题生成] 生成失败:', error)
-      // OpenCode Go 的服务端偶发返回空标题/异常响应/超时，异常路径同样要完成重命名。
-      return channel.provider === 'opencode-go-openai' ? createFallbackTitle(userMessage) : null
+      // OpenCode Go / 自定义渠道的服务端偶发返回空标题/异常响应/超时，异常路径同样要完成重命名。
+      return (channel.provider === 'opencode-go-openai' || channel.provider === 'custom') ? createFallbackTitle(userMessage) : null
     }
   }
 
@@ -571,11 +587,12 @@ export class AgentOrchestrator {
     userMessage: string,
     createdAt = Date.now(),
     linguistContext?: Readonly<LinguistTurnContextV1>,
+    uuid?: string,
   ): string {
-    const uuid = randomUUID()
+    const persistedUuid = uuid ?? randomUUID()
     const userSDKMsg: SDKMessage = {
       type: 'user',
-      uuid,
+      uuid: persistedUuid,
       message: {
         content: [{ type: 'text', text: userMessage }],
       },
@@ -584,7 +601,7 @@ export class AgentOrchestrator {
       ...(linguistContext ? { linguistContext } : {}),
     } as unknown as SDKMessage
     appendSDKMessages(sessionId, [userSDKMsg])
-    return uuid
+    return persistedUuid
   }
 
   private recordUserSkillActivations(
@@ -675,7 +692,7 @@ export class AgentOrchestrator {
     callbacks: SessionCallbacks,
     extensions: { piCustomTools?: ToolDefinition[] } = {},
   ): Promise<void> {
-    const { sessionId, userMessage, rawUserMessage, channelId, modelId, workspaceId: requestedWorkspaceId, additionalDirectories, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, mentionedTodoIds, mentionedCalendarEventIds, automationContext, retryOfErrorUuid, linguistContext } = input
+    const { sessionId, userMessage, rawUserMessage, userMessageUuid, channelId, modelId, workspaceId: requestedWorkspaceId, additionalDirectories, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, mentionedTodoIds, mentionedCalendarEventIds, automationContext, retryOfErrorUuid, linguistContext } = input
     const streamStartedAt = input.startedAt ?? Date.now()
     let userMessagePersisted = false
     let initialUserMessageUuid: string | undefined
@@ -702,6 +719,18 @@ export class AgentOrchestrator {
       return
     }
 
+    const completeBeforeRun = (options: {
+      stoppedByUser?: boolean
+      startedAt?: number
+    } = {}): void => {
+      const stoppedByUser = this.stoppedBeforeRunSessions.delete(sessionId)
+      callbacks.onComplete([], {
+        ...options,
+        startedAt: options.startedAt ?? streamStartedAt,
+        stoppedByUser: options.stoppedByUser === true || stoppedByUser,
+      })
+    }
+
     const persistInitialUserMessage = (): void => {
       if (userMessagePersisted) return
       // rawUserMessage 保留展示/持久化用的原始文本（@file 编码原文，remarkMentions 解码显示）；
@@ -711,6 +740,7 @@ export class AgentOrchestrator {
         rawUserMessage ?? userMessage,
         Date.now(),
         validatedLinguistContext,
+        userMessageUuid,
       )
       userMessagePersisted = true
     }
@@ -745,7 +775,7 @@ export class AgentOrchestrator {
         const message = error instanceof Error ? error.message : String(error)
         console.error('[Agent 编排] 持久化用户消息失败:', error)
         callbacks.onError(`消息保存失败：${message}`)
-        callbacks.onComplete([], { startedAt: streamStartedAt })
+        completeBeforeRun()
         return
       }
     }
@@ -777,7 +807,7 @@ export class AgentOrchestrator {
         console.error('[Agent 编排] 持久化 preflight error 失败:', e)
       }
       callbacks.onError(errorContent)
-      callbacks.onComplete([], { startedAt: streamStartedAt })
+      completeBeforeRun()
     }
 
     // 会话元数据是 Workspace 权威来源；Linguist binding 与它正交，只叠加 CAT 身份。
@@ -901,6 +931,10 @@ export class AgentOrchestrator {
     // 2.1 立即抢占会话槽位（在所有同步检查通过后、第一个 await 之前）
     // 防止 buildSdkEnv 等 await 期间并发调用绕过上方的检查，导致多条重复消息写入 JSONL
     // finally 块会通过 generation 匹配来安全清理，不影响正常流程
+    if (this.stoppedBeforeRunSessions.has(sessionId)) {
+      completeBeforeRun({ stoppedByUser: true })
+      return
+    }
     const runGeneration = ++this.nextRunGeneration
     this.activeSessions.set(sessionId, runGeneration)
     callbacks.onRunStarted?.({ startedAt: streamStartedAt })
@@ -1314,7 +1348,7 @@ export class AgentOrchestrator {
           return { behavior: 'allow' as const }
         }
 
-        // 所有 Pi 会话均可使用受管浏览器。主进程仍隔离网页，并拒绝私网、下载、弹窗和网页权限；
+        // 所有 Pi 会话均可使用受管浏览器。主进程仍隔离网页来源并默认拒绝网页权限；下载和弹窗留在受管浏览器内，
         // 页面内容始终视为不可信输入。计划模式仅允许只读浏览器操作。
         if (toolName.startsWith('Browser')) {
           if (currentMode === 'plan') {
@@ -1730,6 +1764,19 @@ export class AgentOrchestrator {
 
             pendingNext = null
             let msg = iterResult.value
+            if (isAssistantDeltaSDKMessage(msg)) {
+              this.eventBus.emit(sessionId, {
+                kind: 'sdk_delta',
+                delta: {
+                  uuid: msg.uuid,
+                  deltas: [msg.delta],
+                  session_id: msg.session_id,
+                  runStartedAt: streamStartedAt,
+                  _channelModelId: msg._channelModelId,
+                },
+              })
+              continue
+            }
             const isPartialMessage = isPartialSDKMessage(msg)
             if (msg.type === 'result') {
               const skillActivations = mergeSkillActivations(
@@ -1843,6 +1890,10 @@ export class AgentOrchestrator {
                   const partialOutput = stripPiAssistantError(assistantMsg)
                   if (modelId) partialOutput._channelModelId = modelId
                   partialOutput._channelProvider = channel.provider
+                  const partialRecord = partialOutput as SDKAssistantMessage & { _createdAt?: number }
+                  if (typeof partialRecord._createdAt !== 'number') {
+                    partialRecord._createdAt = streamStartedAt
+                  }
                   accumulatedMessages.push(partialOutput)
                   // Reuse the Pi UUID to replace the latest partial frame with normal markdown output.
                   this.eventBus.emit(sessionId, { kind: 'sdk_message', message: partialOutput })
@@ -1908,10 +1959,14 @@ export class AgentOrchestrator {
                   }
                   // 为 assistant 消息注入渠道信息，确保持久化后能正确匹配模型显示名与上下文窗口
                   if (msg.type === 'assistant') {
-                    if (modelId) {
-                      (msg as Record<string, unknown>)._channelModelId = modelId
+                    const assistantRecord = msg as Record<string, unknown>
+                    if (typeof assistantRecord._createdAt !== 'number') {
+                      assistantRecord._createdAt = streamStartedAt
                     }
-                    ;(msg as Record<string, unknown>)._channelProvider = channel.provider
+                    if (modelId) {
+                      assistantRecord._channelModelId = modelId
+                    }
+                    assistantRecord._channelProvider = channel.provider
                   }
                   accumulatedMessages.push(msg)
                 }
@@ -2198,12 +2253,18 @@ export class AgentOrchestrator {
    * 先从 activeSessions 移除（供 sendMessage catch 块检测用户中止），
    * 再调用 adapter.abort() 中止底层 SDK 进程。
    */
-  stop(sessionId: string): void {
+  stop(sessionId: string, stopBeforeRun = false): void {
     const runGeneration = this.activeSessions.get(sessionId)
     this.activeSessions.delete(sessionId)
     this.sessionPermissionModes.delete(sessionId)
     browserController.cancelSession(sessionId)
-    if (runGeneration != null) this.stoppedBySessions.set(sessionId, runGeneration)
+    if (runGeneration != null) {
+      this.stoppedBySessions.set(sessionId, runGeneration)
+    } else if (stopBeforeRun) {
+      // 队列启动状态已投影给 renderer 后，run 仍可能卡在预检阶段。
+      // 记录这次停止，防止预检完成后错误地创建一个无法终止的新 query。
+      this.stoppedBeforeRunSessions.add(sessionId)
+    }
     this.queuedMessageUuids.delete(sessionId)
     this.adapter.abort(sessionId)
     console.log(`[Agent 编排] 已中止会话: ${sessionId}`)
@@ -2306,6 +2367,7 @@ export class AgentOrchestrator {
     this.adapter.dispose()
     this.activeSessions.clear()
     this.sessionPermissionModes.clear()
+    this.stoppedBeforeRunSessions.clear()
     this.queuedMessageUuids.clear()
     this.pendingUserSkillActivations.clear()
   }

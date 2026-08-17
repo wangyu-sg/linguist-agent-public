@@ -571,7 +571,7 @@ function AutomationInitializer(): null {
   useEffect(() => {
     const load = (): void => {
       window.electronAPI.listAutomations().then(setAutomations).catch(console.error)
-      window.electronAPI.listAgentSessions().then(setAgentSessions).catch(console.error)
+      window.electronAPI.listActiveAgentSessions().then(setAgentSessions).catch(console.error)
     }
     load()
     const unsub = window.electronAPI.onAutomationChanged(load)
@@ -857,13 +857,13 @@ function TabStatePersistenceInitializer(): null {
 
   // 启动恢复：读取 settings.tabState + 校验会话有效性
   useEffect(() => {
-    Promise.all([
-      window.electronAPI.getSettings(),
-      window.electronAPI.listConversations(),
-      window.electronAPI.listAgentSessions(),
-      window.electronAPI.linguistProjectsList({ includeArchived: true }).catch(() => null),
-    ]).then(([settings, conversations, agentSessions, projectsResult]) => {
-      store.set(agentSessionsAtom, agentSessions)
+    const restore = async (): Promise<void> => {
+      const [settings, conversations, activeAgentSessions, projectsResult] = await Promise.all([
+        window.electronAPI.getSettings(),
+        window.electronAPI.listConversations(),
+        window.electronAPI.listActiveAgentSessions(),
+        window.electronAPI.linguistProjectsList({ includeArchived: true }).catch(() => null),
+      ])
       store.set(
         projectCurrentAgentSessionIdMapAtom,
         parseProjectAgentSessionPreferences(settings.linguistProjectAgentSessionIds),
@@ -873,10 +873,18 @@ function TabStatePersistenceInitializer(): null {
         settings.linguistProjectWorkbenchLocations,
       )
       const tabState = settings.tabState
-      if (!tabState?.tabs?.length) {
-        restoredRef.current = true
-        return
-      }
+      if (!tabState?.tabs?.length) return
+
+      // 已归档会话仅在上次打开的标签引用它时才读取，以兼容恢复该标签。
+      const activeAgentSessionIds = new Set(activeAgentSessions.map((session) => session.id))
+      const hasArchivedAgentTab = tabState.tabs.some(
+        (tab) => tab.type === 'agent' && !activeAgentSessionIds.has(tab.sessionId),
+      )
+      const archivedAgentSessions = hasArchivedAgentTab
+        ? await window.electronAPI.listArchivedAgentSessions()
+        : []
+      const agentSessions = [...activeAgentSessions, ...archivedAgentSessions]
+      store.set(agentSessionsAtom, agentSessions)
 
       // 构建有效 sessionId 集合
       const validSessionIds = new Set([
@@ -893,10 +901,7 @@ function TabStatePersistenceInitializer(): null {
       )
       const restored = restorePersistedTabState(tabState, validSessionIds, projectStatuses)
       const validTabs = restored.tabs
-      if (validTabs.length === 0) {
-        restoredRef.current = true
-        return
-      }
+      if (validTabs.length === 0) return
 
       const restoredActiveTabId = restored.activeTabId
       const activeTab = validTabs.find((t) => t.id === restoredActiveTabId) ?? validTabs[0] ?? null
@@ -921,7 +926,9 @@ function TabStatePersistenceInitializer(): null {
       }
 
       console.log(`[TabRestore] 已恢复 ${validTabs.length} 个会话/项目入口`)
-    }).catch((err) => console.error('[TabRestore] 恢复标签页失败:', err))
+    }
+
+    restore().catch((err) => console.error('[TabRestore] 恢复标签页失败:', err))
       .finally(() => { restoredRef.current = true })
   }, [store])
 

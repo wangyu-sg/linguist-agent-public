@@ -90,12 +90,12 @@ interface Exemption {
 const EXEMPTIONS: Exemption[] = [
   {
     file: `${AGENT_DIR}/ContentBlock.tsx`,
-    lineIncludes: 'text-green-500">+{phrase.diffStats.additions}',
+    lineIncludes: 'text-emerald-600 dark:text-emerald-400">+{phrase.diffStats.additions}',
     reason: 'diff 新增行数 +N 的绿色是 diff 语义（仿 git diff 配色），不是状态色，PB-101 明确保留',
   },
   {
     file: `${AGENT_DIR}/ContentBlock.tsx`,
-    lineIncludes: 'text-red-500">-{phrase.diffStats.deletions}',
+    lineIncludes: 'text-red-600 dark:text-red-400">-{phrase.diffStats.deletions}',
     reason: 'diff 删除行数 -N 的红色是 diff 语义（仿 git diff 配色），不是状态色，PB-101 明确保留',
   },
   {

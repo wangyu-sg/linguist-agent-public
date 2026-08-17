@@ -270,6 +270,9 @@ import {
 import { runPlanningNativeSync } from './lib/planning-native-sync-coordinator'
 import {
   listAgentSessions,
+  listActiveAgentSessions,
+  listArchivedAgentSessions,
+  countArchivedAgentSessions,
   createAgentSession,
   getAgentSessionMeta,
   getAgentSessionSDKMessages,
@@ -283,7 +286,7 @@ import {
   searchAgentSessionMessages,
   searchAgentSessionReferences,
 } from './lib/agent-session-manager'
-import { runAgent, stopAgent, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, queueAgentMessage, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
+import { runAgent, stopAgent, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, queueAgentMessage, enqueueAgentQueuedMessage, cancelAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
 import { permissionService } from './lib/agent-permission-service'
 import { askUserService } from './lib/agent-ask-user-service'
 import { exitPlanService } from './lib/agent-exit-plan-service'
@@ -2089,6 +2092,24 @@ export function registerIpcHandlers(): void {
     async (): Promise<AgentSessionMeta[]> => listAgentSessions()
   )
 
+  // 获取未归档会话列表（侧栏 active 视图）
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.LIST_ACTIVE_SESSIONS,
+    async (): Promise<AgentSessionMeta[]> => listActiveAgentSessions(),
+  )
+
+  // 获取归档会话列表（进入归档视图时按需加载）
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.LIST_ARCHIVED_SESSIONS,
+    async (): Promise<AgentSessionMeta[]> => listArchivedAgentSessions(),
+  )
+
+  // 获取归档会话数量（active 视图只展示计数）
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.COUNT_ARCHIVED_SESSIONS,
+    async (): Promise<number> => countArchivedAgentSessions(),
+  )
+
   // 创建 Agent 会话
   ipcMain.handle(
     AGENT_IPC_CHANNELS.CREATE_SESSION,
@@ -2267,6 +2288,7 @@ export function registerIpcHandlers(): void {
       askUserService.clearSessionPending(id)
       // 清理 ExitPlanMode 服务中的待处理请求
       exitPlanService.clearSessionPending(id)
+      clearAgentQueuedMessages(id)
       await browserController.close(id)
       deleteAgentSession(id)
       releaseAttachedFileWatchers(attachedFiles)
@@ -2890,7 +2912,27 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // ===== Agent 后台任务管理 =====
+  // 将等待当前 run 结束的消息交给主进程调度器
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.ENQUEUE_QUEUED_MESSAGE,
+    async (event, input: import('@proma/shared').AgentDeferredQueueMessageInput): Promise<void> => {
+      enqueueAgentQueuedMessage(input, event.sender)
+    },
+  )
+
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.CANCEL_QUEUED_MESSAGE,
+    async (_, input: import('@proma/shared').AgentQueuedMessageControlInput): Promise<boolean> => {
+      return cancelAgentQueuedMessage(input)
+    },
+  )
+
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.MOVE_QUEUED_MESSAGE,
+    async (_, input: import('@proma/shared').AgentMoveQueuedMessageInput): Promise<boolean> => {
+      return moveAgentQueuedMessage(input)
+    },
+  )
 
   // 获取任务输出（保留接口，供未来扩展）
   ipcMain.handle(

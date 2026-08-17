@@ -7,7 +7,7 @@
  */
 
 import * as React from 'react'
-import type { BrowserViewState } from '@proma/shared'
+import type { BrowserStateChange, BrowserViewState } from '@proma/shared'
 import { useAtomValue, useSetAtom, useAtom, useStore } from 'jotai'
 import {
   tabsAtom,
@@ -58,6 +58,9 @@ export function MainArea(): React.ReactElement {
   // DiffTabContent → ProseMirror editor mount + Shiki tokenize）让出主线程，避免点击 tab
   // 后必须等主区域渲染完才能看到 tab 切换效果
   const deferredActiveTabId = React.useDeferredValue(activeTabId)
+  // Agent 历史当前是完整 DOM，切换时使用当前 active tab，避免 deferred value 让旧会话继续占屏。
+  // Chat/Preview 仍保留 deferred 渲染，避免它们的重型编辑器阻塞 TabBar 响应。
+  const contentTabId = activeTab?.type === 'agent' ? activeTabId : deferredActiveTabId
 
   const previewOpenMap = useAtomValue(previewPanelOpenMapAtom)
   const [browserOpenMap, setBrowserOpenMap] = useAtom(browserPanelOpenMapAtom)
@@ -69,10 +72,16 @@ export function MainArea(): React.ReactElement {
   const rightWorkspaceDragging = React.useRef(false)
   const browserSessionId = activeTab?.type === 'agent' ? activeTab.sessionId : null
 
-  const publishBrowserState = React.useCallback((state: BrowserViewState) => {
+  const publishBrowserState = React.useCallback((state: BrowserStateChange) => {
+    if ('closed' in state) {
+      setBrowserOpenMap((previous) => { const next = new Map(previous); next.set(state.sessionId, false); return next })
+      setBrowserStateMap((previous) => { const next = new Map(previous); next.delete(state.sessionId); return next })
+      setPendingNavigationMap((previous) => { const next = new Map(previous); next.delete(state.sessionId); return next })
+      return
+    }
     setBrowserStateMap((previous) => { const next = new Map(previous); next.set(state.sessionId, state); return next })
     setBrowserOpenMap((previous) => { const next = new Map(previous); next.set(state.sessionId, true); return next })
-  }, [setBrowserOpenMap, setBrowserStateMap])
+  }, [setBrowserOpenMap, setBrowserStateMap, setPendingNavigationMap])
 
   React.useEffect(() => {
     // Vite renderer 可在 preload 热重载前先更新；旧 bridge 时浏览器功能不可用，
@@ -283,9 +292,9 @@ export function MainArea(): React.ReactElement {
                   <AutomationFormView />
                 ) : tabs.length === 0 ? (
                   <WelcomeView />
-                ) : deferredActiveTabId ? (
+                ) : contentTabId ? (
                   <div className="flex-1 min-h-0 titlebar-no-drag">
-                    <TabContent tabId={deferredActiveTabId} />
+                    <TabContent tabId={contentTabId} />
                   </div>
                 ) : null}
               </>

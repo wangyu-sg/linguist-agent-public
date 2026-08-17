@@ -8,7 +8,7 @@ import {
   agentDiffPanelTabAtom,
   agentSessionPathMapAtom,
   agentSessionsAtom,
-  agentSidePanelOpenAtom,
+  agentSidePanelOpenAtomFamily,
 } from '@/atoms/agent-atoms'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
@@ -55,7 +55,7 @@ describe('ProjectAgentRail', () => {
     store.set(agentSessionsAtom, [currentSession])
     store.set(agentSessionPathMapAtom, new Map([[currentSession.id, '/tmp/session-full-files']]))
     store.set(agentDiffPanelTabAtom, new Map([[currentSession.id, 'files']]))
-    store.set(agentSidePanelOpenAtom, true)
+    store.set(agentSidePanelOpenAtomFamily(currentSession.id), true)
 
     const html = renderToStaticMarkup(
       React.createElement(
@@ -79,13 +79,14 @@ describe('ProjectAgentRail', () => {
 
   test('given Full 文件面板已关闭 when 渲染 header 控制 then 提供可访问的重新打开入口', () => {
     const store = createStore()
-    store.set(agentSidePanelOpenAtom, false)
+    const sessionId = 'session-closed-files'
+    store.set(agentSidePanelOpenAtomFamily(sessionId), false)
 
     const html = renderToStaticMarkup(
       React.createElement(
         Provider,
         { store },
-        React.createElement(ProjectAgentFullPanelOpenButton),
+        React.createElement(ProjectAgentFullPanelOpenButton, { sessionId }),
       ),
     )
 

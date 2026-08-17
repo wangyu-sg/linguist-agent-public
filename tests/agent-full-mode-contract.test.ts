@@ -153,7 +153,8 @@ describe('Agent Full 模式行为契约', () => {
   })
 
   test('Given a running conversation, When messages update, Then tool lifecycle and recovery actions stay on the native renderer', () => {
-    expect(agentMessages).toContain('groupIntoTurns(allSDKMessages, sessionModelId)')
+    expect(agentMessages).toContain('groupMessagesForRendering(')
+    expect(agentMessages).toContain('allSDKMessages,')
     expect(agentMessages).toContain('<MessageGroupRenderer')
     expect(agentMessages).toContain('allMessages={allSDKMessages}')
     expect(agentMessages).toContain('onRetry={shouldDisableActions ? undefined : onRetry}')
