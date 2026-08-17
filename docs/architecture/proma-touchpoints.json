@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "baseline": "db94285a6c6eaeea6a75a3fcf9d67a22e8bc45ba",
-  "formalMerge": "0a09ee5e53e8ed647a4b130bce1d73c4631bd67e",
-  "recomputedOn": "2026-08-14",
-  "comment": "Proma-core touchpoints tracked against v0.17.26; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "baseline": "28ca96a56828f23d0c08b9222569479eb007ee6c",
+  "formalMerge": "34921b0cee92c78777cedef90bad3a8298522706",
+  "recomputedOn": "2026-08-17",
+  "comment": "Proma-core touchpoints tracked against v0.17.42; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -1053,6 +1053,11 @@
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
     {
+      "file": "apps/electron/src/renderer/components/settings/StorageSettings.tsx",
+      "ticket": "LA-SYNC-004",
+      "reason": "Local Host Seam: keep the shared storage result state on the Linguist Agent semantic color tokens."
+    },
+    {
       "file": "apps/electron/src/renderer/components/settings/ToolSettings.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
@@ -1246,6 +1251,11 @@
       "file": "package.json",
       "ticket": "LA-SYNC-005",
       "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+    },
+    {
+      "file": "packages/core/package.json",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: version the integrated core package independently from the upstream tag."
     },
     {
       "file": "packages/shared/package.json",

@@ -26,6 +26,7 @@ export const electronMock = {
     getPath: () => join(process.env.HOME ?? '/tmp', 'Library', 'Application Support'),
   },
   BrowserWindow: class {},
+  MessageChannelMain: class {},
   WebContentsView: class {},
   clipboard: {},
   dialog: {},
@@ -57,6 +58,11 @@ export const electronMock = {
   },
   session: {
     fromPartition: () => ({}),
+  },
+  utilityProcess: {
+    fork: () => {
+      throw new Error('utilityProcess is unavailable in this unit-test mock')
+    },
   },
 }
 

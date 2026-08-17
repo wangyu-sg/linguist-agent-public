@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
   "baseline": {
-    "tag": "v0.17.26",
-    "commit": "db94285a6c6eaeea6a75a3fcf9d67a22e8bc45ba",
-    "formalMerge": "0a09ee5e53e8ed647a4b130bce1d73c4631bd67e"
+    "tag": "v0.17.42",
+    "commit": "28ca96a56828f23d0c08b9222569479eb007ee6c",
+    "formalMerge": "34921b0cee92c78777cedef90bad3a8298522706"
   },
-  "recomputedOn": "2026-08-14",
+  "recomputedOn": "2026-08-17",
   "formalMergePatch": {
-    "changedPaths": 862,
+    "changedPaths": 867,
     "allowlistedPaths": 599,
-    "registeredCoreTouchpoints": 259
+    "registeredCoreTouchpoints": 264
   },
   "currentLedger": {
-    "registeredCoreTouchpoints": 260
+    "registeredCoreTouchpoints": 264
   },
   "deviations": [
     {
       "id": "permanent-product-fork",
       "classification": "Permanent Product Fork",
       "ticket": "LA-SYNC-005",
-      "registeredTouchpoints": 40,
+      "registeredTouchpoints": 41,
       "scope": [
         "package identity and dependency lock",
         "Electron packaging, builder runtime launcher, and branded resources",
@@ -36,12 +36,12 @@
       "id": "local-host-seams",
       "classification": "Local Host Seam",
       "ticket": "LA-SYNC-003 / LA-SYNC-004",
-      "registeredTouchpoints": 219,
+      "registeredTouchpoints": 222,
       "scope": [
         "runtime, session, preload, IPC, and shared contracts",
         "native Agent/Chat shell composition, sidebar, tabs, settings, and renderer state"
       ],
-      "rationale": "Proma v0.17.26 has no stable project-bound CAT authority and vertical-agent composition contract; these narrow seams retain the native Agent/Chat implementation.",
+      "rationale": "Proma v0.17.42 has no stable project-bound CAT authority and vertical-agent composition contract; these narrow seams retain the native Agent/Chat implementation.",
       "sunset": {
         "status": "review-at-upstream-sync",
         "condition": "Replace a seam only when upstream provides an equivalent stable Host Contract that preserves session authority and fail-closed CAT behavior."
