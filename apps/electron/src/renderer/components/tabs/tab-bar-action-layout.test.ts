@@ -21,4 +21,13 @@ describe('getTabBarActionLayout', () => {
     expect(source).toContain('absolute inset-y-0 -left-12 right-0')
     expect(source).toContain('[mask-image:linear-gradient(to_right,transparent_0,black_76px)]')
   })
+
+  test('given 浏览器已最小化且文件面板入口可见 when 渲染操作区 then 两个状态同时保留且只高亮浏览器按钮', async () => {
+    const source = await Bun.file(new URL('./TabBar.tsx', import.meta.url)).text()
+
+    expect(source).toContain('showPanelButton={showOpenPanelButton}')
+    expect(source).toContain('hasMinimizedBrowser={hasMinimizedBrowser}')
+    expect(source).toContain("hasMinimizedBrowser && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary'")
+    expect(source).toContain('onClick={onOpenFaq}')
+  })
 })

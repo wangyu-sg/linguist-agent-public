@@ -6,6 +6,7 @@ const root = join(import.meta.dir, '..')
 const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
 const autoReleaseWorkflow = readFileSync(join(root, '.github/workflows/auto-release.yml'), 'utf8')
+const upstreamSyncWorkflow = readFileSync(join(root, '.github/workflows/upstream-sync.yml'), 'utf8')
 const electronBuilderConfig = readFileSync(join(root, 'apps/electron/electron-builder.yml'), 'utf8')
 const macInstallHelpPath = join(root, 'apps/electron/resources/macos-install-help.txt')
 const electronPackage = JSON.parse(
@@ -29,6 +30,14 @@ describe('AC-002 发布链 fail-closed', () => {
 
   test('普通 main 提交只有显式声明 release 才创建安装包', () => {
     expect(autoReleaseWorkflow).toContain("grep -qi '\\[release\\]'")
+  })
+
+  test('上游同步先确定 LA 发布版本再生成基线文档', () => {
+    const versionIndex = upstreamSyncWorkflow.indexOf('VERSION_OUTPUT="$(node scripts/release-version.mjs)"')
+    const baselineIndex = upstreamSyncWorkflow.indexOf('node scripts/update-proma-baseline.mjs')
+
+    expect(versionIndex).toBeGreaterThan(-1)
+    expect(baselineIndex).toBeGreaterThan(versionIndex)
   })
 
   test('公开 Release 前删除未使用的差分资产', () => {

@@ -9,6 +9,7 @@ function source(path: string): string {
 }
 
 const agentView = source('apps/electron/src/renderer/components/agent/AgentView.tsx')
+const contentBlock = source('apps/electron/src/renderer/components/agent/ContentBlock.tsx')
 const agentMessages = source('apps/electron/src/renderer/components/agent/AgentMessages.tsx')
 const agentHeader = source('apps/electron/src/renderer/components/agent/AgentHeader.tsx')
 const askUserBanner = source('apps/electron/src/renderer/components/agent/AskUserBanner.tsx')
@@ -200,6 +201,15 @@ describe('Agent Full 模式行为契约', () => {
     expect(agentView).toContain('onRecall={handleRecallQueuedMessage}')
     expect(agentView).toContain('onRemove={handleRemoveQueuedMessage}')
     expect(agentView).toContain('onMove={handleMoveQueuedMessage}')
+  })
+
+  test('Given a stuck streaming run, When stop is still unconfirmed, Then the native Agent can retry abort and keep smooth live thinking', () => {
+    expect(agentView).toContain('if (!isStopping) {')
+    expect(agentView).toContain("aria-label={isStopping ? '再次停止 Agent' : '停止 Agent'}")
+    expect(agentView).not.toContain('disabled={isStopping}')
+    expect(contentBlock).toContain('const isLive = isStreaming && !dimmed')
+    expect(contentBlock).toContain('content: block.thinking,')
+    expect(contentBlock).toContain('isStreaming,')
   })
 
   test('Given an Agent session, When title or right-side preview changes, Then Tab/session sync and session-scoped preview remain intact', () => {

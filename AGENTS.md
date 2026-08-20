@@ -45,22 +45,22 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 
 ## 当前版本与技术栈
 
-稳定上游基线是 Proma `v0.17.26@db94285a6c6eaeea6a75a3fcf9d67a22e8bc45ba`。
+稳定上游基线是 Proma `v0.17.46@2a73cd6b7674935b0af1bd59d84b8db1195e77fe`。
 
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.17.34` |
+| Electron App | `@proma/electron 0.17.47` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.20.2`（manifest range `^2.17.1`） |
 | Vite | `6.4.3`（manifest range `^6.0.3`） |
-| Shared | `@proma/shared 0.1.95` |
-| Agent Runtime | 仅 `@earendil-works/pi-* 0.82.1` |
+| Shared | `@proma/shared 0.1.100` |
+| Agent Runtime | 仅 `@earendil-works/pi-* 0.84.2` |
 | CAT Core | `@linguist/cat-core 0.0.21` |
 | CAT Formats | `@linguist/cat-formats 0.0.11` |
 | CAT Store | `@linguist/cat-store 0.0.39` |
-| CAT Tools | `@linguist/cat-tools 0.0.34` |
+| CAT Tools | `@linguist/cat-tools 0.0.35` |
 | CAT schema | `16` |
 
 不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。

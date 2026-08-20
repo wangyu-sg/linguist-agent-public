@@ -1,14 +1,14 @@
-# Proma Deviations — v0.17.42
+# Proma Deviations — v0.17.46
 
 > 机读真源：[PROMA_DEVIATIONS.json](./PROMA_DEVIATIONS.json)
-> 基线：v0.17.42 / 28ca96a56828f23d0c08b9222569479eb007ee6c
-> formal merge：34921b0cee92c78777cedef90bad3a8298522706
+> 基线：v0.17.46 / 2a73cd6b7674935b0af1bd59d84b8db1195e77fe
+> formal merge：19584b802d31f37095714a4db48c6fa545cd2c32
 
-本账本回答“为什么这不是上游代码、何时可以删掉”，而不是把每个差异都当作永久正当化。精确路径见 [proma-touchpoints.json](./proma-touchpoints.json)。v0.17.42 formal merge 登记 264 个触点；当前账本共 264 个。
+本账本回答“为什么这不是上游代码、何时可以删掉”，而不是把每个差异都当作永久正当化。精确路径见 [proma-touchpoints.json](./proma-touchpoints.json)。v0.17.46 formal merge 登记 265 个触点；当前账本共 265 个。
 
 | 分类 | 当前范围 | 处理 / sunset |
 |---|---|---|
-| **Permanent Product Fork** | 产品身份、独立数据根、发布、安全策略、资源、CLI、lock/manifest（41 个已登记触点） | 产品仍为独立 Linguist Agent 时无计划移除；产品身份改变时重新评估。 |
+| **Permanent Product Fork** | 产品身份、独立数据根、发布、安全策略、资源、CLI、lock/manifest（42 个已登记触点） | 产品仍为独立 Linguist Agent 时无计划移除；产品身份改变时重新评估。 |
 | **Local Host Seam** | Runtime/Session/IPC/Preload/Shared 与原生 Agent/Chat Shell 的组合缝（222 个已登记触点） | 上游提供等价、稳定且仍可 fail closed 的 Host Contract 后，在下一次上游同步逐项替换或删除。 |
 | **Linguist Extension** | main/lib/linguist、features/linguist、packages/linguist-*、项目 skills | 不进入 Proma Core；CAT vertical 仍是产品能力时保留。 |
 | **Temporary Deviation** | pi-agent-adapter.ts 的 compaction continuation context preservation（1 个触点） | Proma/Pi 提供等价的 typed host-owned continuation hook 后移除；下次上游同步必须复核。 |
