@@ -514,13 +514,14 @@ function TabBarActions({
       )}
     >
       <div
+        data-tab-bar-action-fade="true"
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 -left-6 w-6 bg-gradient-to-r from-transparent to-[hsl(var(--tabbar-surface))] [mask-image:linear-gradient(to_right,transparent,black)] backdrop-blur-sm"
+        className="pointer-events-none absolute inset-y-0 -left-12 right-0 [mask-image:linear-gradient(to_right,transparent_0,black_76px)] backdrop-blur-sm"
+        style={{ backgroundColor: 'hsl(var(--tabbar-surface) / 0.92)' }}
       />
       <div
         data-tab-bar-action-island="true"
-        className="relative flex items-center gap-1 backdrop-blur-sm"
-        style={{ backgroundColor: 'hsl(var(--tabbar-surface) / 0.92)' }}
+        className="relative flex items-center gap-1"
       >
         {/* FAQ 快捷按钮（在快捷键地图左边） */}
         <Tooltip>

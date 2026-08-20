@@ -1,0 +1,11 @@
+Linguist Agent 首次打开说明
+
+1. 将 Linguist Agent 拖入“应用程序”（Applications）文件夹。
+2. 打开“终端”，复制并执行下面这条命令：
+
+xattr -dr com.apple.quarantine "/Applications/Linguist Agent.app"
+
+3. 从“应用程序”文件夹打开 Linguist Agent。
+
+这条命令只会移除 Linguist Agent.app 的下载隔离属性。
+后续版本将由 Linguist Agent 自动下载并安装。

@@ -3538,7 +3538,10 @@ function SessionItemActions({
 
   return (
     <div
-      className="session-item-actions relative flex-shrink-0 h-[22px] w-[50px]"
+      className={cn(
+        'session-item-actions relative h-[22px] flex-shrink-0',
+        historyOnly ? 'w-[22px]' : 'w-[74px]',
+      )}
       onClick={(e) => e.stopPropagation()}
     >
       <span
@@ -3563,7 +3566,7 @@ function SessionItemActions({
             type="button"
             aria-label={pinned ? '取消置顶' : '置顶'}
             className={cn(
-              'p-0.5 rounded transition-colors',
+              'flex size-[22px] items-center justify-center rounded-md transition-colors',
               pinned
                 ? 'text-primary/60 hover:bg-foreground/[0.08] hover:text-primary'
                 : 'text-foreground/30 hover:bg-foreground/[0.08] hover:text-foreground/60',

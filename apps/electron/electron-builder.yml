@@ -146,6 +146,11 @@ dmg:
       y: 220
       type: link
       path: /Applications
+    - x: 270
+      y: 330
+      type: file
+      path: resources/macos-install-help.txt
+      name: 首次打开说明.txt
   window:
     width: 540
     height: 380

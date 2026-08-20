@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = join(import.meta.dir, '..')
 const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
 const autoReleaseWorkflow = readFileSync(join(root, '.github/workflows/auto-release.yml'), 'utf8')
+const electronBuilderConfig = readFileSync(join(root, 'apps/electron/electron-builder.yml'), 'utf8')
+const macInstallHelpPath = join(root, 'apps/electron/resources/macos-install-help.txt')
 const electronPackage = JSON.parse(
   readFileSync(join(root, 'apps/electron/package.json'), 'utf8'),
 ) as { scripts: Record<string, string> }
@@ -32,6 +34,21 @@ describe('AC-002 发布链 fail-closed', () => {
   test('公开 Release 前删除未使用的差分资产', () => {
     expect(releaseWorkflow).toContain('endswith(".blockmap")')
     expect(releaseWorkflow).toContain('gh release delete-asset')
+  })
+
+  test('macOS 自动更新发布必须使用固定签名身份', () => {
+    expect(releaseWorkflow).not.toContain('继续生成个人 Alpha 未签名产物')
+    expect(releaseWorkflow.match(/test -n "\$MAC_CERTS"/g)).toHaveLength(2)
+    expect(releaseWorkflow.match(/security find-identity -v -p codesigning/g)).toHaveLength(2)
+  })
+
+  test('DMG 包含首次打开的解除隔离说明', () => {
+    expect(electronBuilderConfig).toContain('path: resources/macos-install-help.txt')
+    expect(existsSync(macInstallHelpPath)).toBe(true)
+    if (!existsSync(macInstallHelpPath)) return
+    expect(readFileSync(macInstallHelpPath, 'utf8')).toContain(
+      'xattr -dr com.apple.quarantine "/Applications/Linguist Agent.app"',
+    )
   })
 
   test('关键资源复制失败会终止构建', () => {

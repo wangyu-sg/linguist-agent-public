@@ -88,6 +88,11 @@
       "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
     },
     {
+      "file": "apps/electron/resources/macos-install-help.txt",
+      "ticket": "LA-SYNC-005",
+      "reason": "Permanent Product Fork: include the one-time quarantine removal command in the self-use macOS DMG while retaining automatic updates through a fixed signing identity."
+    },
+    {
       "file": "apps/electron/native/eventkit/macos-eventkit-addon.mm",
       "ticket": "LA-SYNC-005",
       "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."

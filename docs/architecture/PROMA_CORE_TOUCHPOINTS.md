@@ -10,9 +10,9 @@
 | 允许路径 | 599 |
 | 仅公开路径占位符替换 | 4 |
 | formal merge 已登记核心触点 | 264 |
-| 当前精确 ledger | 264 |
+| 当前精确 ledger | 265 |
 
-当前分类为 Permanent Product Fork 41、Local Host Seam 222、Temporary Deviation 1；Linguist Extension 位于允许根，不计入核心触点。精确文件、票号和理由只维护在 JSON，避免双写漂移。
+当前分类为 Permanent Product Fork 42、Local Host Seam 222、Temporary Deviation 1；Linguist Extension 位于允许根，不计入核心触点。精确文件、票号和理由只维护在 JSON，避免双写漂移。
 
 ## 规则
 

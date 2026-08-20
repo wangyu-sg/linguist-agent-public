@@ -75,10 +75,9 @@ jobs:
           MAC_CERTS: ${{ secrets.MAC_CERTS }}
           MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
         run: |
-          if [ -z "$MAC_CERTS" ]; then
-            echo '未配置 macOS 签名证书，继续生成个人 Alpha 未签名产物。'
-            exit 0
-          fi
+          set -euo pipefail
+          test -n "$MAC_CERTS"
+          test -n "$MAC_CERTS_PASSWORD"
           KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
           KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -86,14 +85,18 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           printf '%s' "$MAC_CERTS" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security import "$RUNNER_TEMP/cert.p12" -P "$MAC_CERTS_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security find-certificate -c 'Linguist Agent Self Update' -p "$KEYCHAIN_PATH" > "$RUNNER_TEMP/cert.pem"
+          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$RUNNER_TEMP/cert.pem"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-          rm "$RUNNER_TEMP/cert.p12"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F '"Linguist Agent Self Update"'
+          rm "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/cert.pem"
 
       - name: 构建并发布 macOS arm64 草稿资产
         working-directory: apps/electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_NAME: Linguist Agent Self Update
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -130,10 +133,9 @@ jobs:
           MAC_CERTS: ${{ secrets.MAC_CERTS }}
           MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
         run: |
-          if [ -z "$MAC_CERTS" ]; then
-            echo '未配置 macOS 签名证书，继续生成个人 Alpha 未签名产物。'
-            exit 0
-          fi
+          set -euo pipefail
+          test -n "$MAC_CERTS"
+          test -n "$MAC_CERTS_PASSWORD"
           KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
           KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -141,14 +143,18 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           printf '%s' "$MAC_CERTS" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security import "$RUNNER_TEMP/cert.p12" -P "$MAC_CERTS_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security find-certificate -c 'Linguist Agent Self Update' -p "$KEYCHAIN_PATH" > "$RUNNER_TEMP/cert.pem"
+          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$RUNNER_TEMP/cert.pem"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-          rm "$RUNNER_TEMP/cert.p12"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F '"Linguist Agent Self Update"'
+          rm "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/cert.pem"
 
       - name: 构建并发布 macOS x64 草稿资产
         working-directory: apps/electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_NAME: Linguist Agent Self Update
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

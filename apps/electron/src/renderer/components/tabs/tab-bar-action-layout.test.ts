@@ -13,4 +13,12 @@ describe('getTabBarActionLayout', () => {
     expect(getTabBarActionLayout(true, true, true).actionPositionClassName).toBe('right-[126px]')
     expect(getTabBarActionLayout(true, false, true).actionPositionClassName).toBe('right-[130px]')
   })
+
+  test('given 当前 Tab 延伸到操作区下方 when 渲染右侧渐变层 then 渐变覆盖完整操作区并延伸到第一个按钮', async () => {
+    const source = await Bun.file(new URL('./TabBar.tsx', import.meta.url)).text()
+
+    expect(source).toContain('data-tab-bar-action-fade="true"')
+    expect(source).toContain('absolute inset-y-0 -left-12 right-0')
+    expect(source).toContain('[mask-image:linear-gradient(to_right,transparent_0,black_76px)]')
+  })
 })

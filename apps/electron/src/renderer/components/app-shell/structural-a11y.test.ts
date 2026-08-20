@@ -64,6 +64,12 @@ describe('结构性无障碍契约', () => {
     expect(source).toContain('aria-label="更多会话操作"')
   })
 
+  test('given 会话操作区显示置顶、归档和更多 when 布局 then 容器容纳三个等宽按钮及间距', () => {
+    const source = readFileSync(TARGETS[0]!, 'utf8')
+    expect(source).toContain("historyOnly ? 'w-[22px]' : 'w-[74px]'")
+    expect(source).toContain("'flex size-[22px] items-center justify-center rounded-md transition-colors'")
+  })
+
   test('given Chat 标题进入编辑态 when 使用辅助技术 then 输入框有可访问名称', () => {
     const source = readFileSync(resolve(import.meta.dir, '../chat/ChatHeader.tsx'), 'utf8')
     expect(source).toContain('aria-label="对话标题"')
