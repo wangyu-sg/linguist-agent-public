@@ -39,6 +39,7 @@ describe('AC-002 发布链 fail-closed', () => {
   test('macOS 自动更新发布必须使用固定签名身份', () => {
     expect(releaseWorkflow).not.toContain('继续生成个人 Alpha 未签名产物')
     expect(releaseWorkflow.match(/test -n "\$MAC_CERTS"/g)).toHaveLength(2)
+    expect(releaseWorkflow.match(/sudo security add-trusted-cert -d -r trustRoot/g)).toHaveLength(2)
     expect(releaseWorkflow.match(/security find-identity -v -p codesigning/g)).toHaveLength(2)
   })
 
