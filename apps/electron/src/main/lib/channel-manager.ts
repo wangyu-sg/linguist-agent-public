@@ -59,7 +59,7 @@ import { writeJsonFileAtomic } from './safe-file'
 import pkg from '../../../package.json' with { type: 'json' }
 
 /** 当前配置版本 */
-const CONFIG_VERSION = 2
+const CONFIG_VERSION = 4
 /** 连接测试 / 模型拉取的统一超时时间 */
 const CHANNEL_TEST_TIMEOUT_MS = 15_000
 // ChatGPT backend 首次经代理 / Cloudflare 建连可能超过普通模型探测的 15 秒。
@@ -70,7 +70,7 @@ const DEEPSEEK_PRESET_MODELS: ChannelModel[] = [
   { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', enabled: true },
 ]
 const KIMI_PRESET_MODELS: ChannelModel[] = [
-  { id: 'k3', name: 'Kimi K3', enabled: true },
+  { id: 'kimi-k3', name: 'Kimi K3', enabled: true },
   { id: 'kimi-k2.6', name: 'Kimi K2.6', enabled: true },
 ]
 const XIAOMI_PRESET_MODELS: ChannelModel[] = [
@@ -91,7 +91,6 @@ const ARK_CODING_PLAN_MODELS: ChannelModel[] = [
   { id: 'doubao-seed-2.0-pro', name: 'Doubao Seed 2.0 Pro', enabled: true },
   { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite', enabled: true },
   { id: 'glm-5.3', name: 'GLM-5.3', enabled: true },
-  { id: 'glm-5.2', name: 'GLM-5.2', enabled: true },
   { id: 'k3', name: 'Kimi K3', enabled: true },
   { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', enabled: true },
   { id: 'minimax-m3', name: 'MiniMax M3', enabled: true },
@@ -214,6 +213,10 @@ function inferProviderFromBaseUrl(provider: ProviderType, baseUrl: string): Prov
  * 自动补端点后缀）」改为「完整请求地址（原样使用）」。把存量 baseUrl 一次性补全为旧版本实际
  * 请求过的完整端点，使升级后的运行时行为与升级前保持一致。详见 migrateCompatibleChannelBaseUrl。
  *
+ * v2 → v3：重命名内置火山方舟渠道。仅更新仍使用旧默认名称的渠道，保留用户自定义名称。
+ *
+ * v3 → v4：将豆包 API 的默认展示名更新为火山引擎 API。
+ *
  * @returns 迁移后的配置；`changed` 标记是否发生实际变更（决定是否需要回写文件）
  */
 function migrateConfig(config: ChannelsConfig): { config: ChannelsConfig; changed: boolean } {
@@ -223,17 +226,26 @@ function migrateConfig(config: ChannelsConfig): { config: ChannelsConfig; change
   }
 
   const channels = config.channels.map((channel) => {
-    if (channel.provider !== 'custom' && channel.provider !== 'anthropic-compatible') {
-      return channel
+    let migratedChannel = channel
+    if (version < 2 && (channel.provider === 'custom' || channel.provider === 'anthropic-compatible')) {
+      const migratedUrl = migrateCompatibleChannelBaseUrl(channel.baseUrl, channel.provider)
+      if (migratedUrl !== channel.baseUrl) {
+        console.log(
+          `[渠道管理] v${version}→v2 迁移渠道 ${channel.name} (${channel.provider}) Base URL: ${channel.baseUrl} → ${migratedUrl}`,
+        )
+        migratedChannel = { ...migratedChannel, baseUrl: migratedUrl }
+      }
     }
-    const migratedUrl = migrateCompatibleChannelBaseUrl(channel.baseUrl, channel.provider)
-    if (migratedUrl === channel.baseUrl) {
-      return channel
+    if (version < 3 && migratedChannel.provider === 'ark-coding-plan' && migratedChannel.name === '火山方舟 Coding Plan') {
+      migratedChannel = { ...migratedChannel, name: '火山方舟 Agent Plan' }
     }
-    console.log(
-      `[渠道管理] v${version}→v${CONFIG_VERSION} 迁移渠道 ${channel.name} (${channel.provider}) Base URL: ${channel.baseUrl} → ${migratedUrl}`,
-    )
-    return { ...channel, baseUrl: migratedUrl }
+    if (version < 3 && migratedChannel.provider === 'doubao' && migratedChannel.name === '豆包') {
+      migratedChannel = { ...migratedChannel, name: '火山方舟 Coding Plan' }
+    }
+    if (version < 4 && migratedChannel.provider === 'doubao-api' && migratedChannel.name === '豆包 API') {
+      migratedChannel = { ...migratedChannel, name: '火山引擎 API' }
+    }
+    return migratedChannel
   })
 
   return { config: { ...config, version: CONFIG_VERSION, channels }, changed: true }
@@ -834,6 +846,7 @@ export async function testChannel(channelId: string): Promise<ChannelTestResult>
       case 'opencode-go-openai':
       case 'zhipu':
       case 'doubao':
+      case 'doubao-api':
       case 'qwen':
       case 'custom':
         return await testOpenAICompatible(channel.baseUrl, apiKey, proxyUrl, provider)
@@ -1017,7 +1030,7 @@ async function testQwenTokenPlanMessages(
 }
 
 /**
- * 火山方舟 Coding Plan 当前没有可用的模型列表端点，连接测试改用极小的 messages 请求。
+ * 火山方舟 Agent Plan 当前没有可用的模型列表端点，连接测试改用极小的 messages 请求。
  */
 async function testArkCodingPlan(
   baseUrl: string,
@@ -1809,6 +1822,7 @@ export async function testChannelDirect(input: ChannelDirectTestInput): Promise<
       case 'opencode-go-openai':
       case 'zhipu':
       case 'doubao':
+      case 'doubao-api':
       case 'qwen':
       case 'custom':
         return await testOpenAICompatible(input.baseUrl, input.apiKey, proxyUrl, provider)
@@ -1886,7 +1900,7 @@ export async function fetchModels(input: FetchModelsInput): Promise<FetchModelsR
         if (provider === 'ark-coding-plan') {
           return {
             success: true,
-            message: `火山方舟 Coding Plan 未开放模型列表端点，已加载 ${ARK_CODING_PLAN_MODELS.length} 个预设模型`,
+            message: `火山方舟 Agent Plan 未开放模型列表端点，已加载 ${ARK_CODING_PLAN_MODELS.length} 个预设模型`,
             models: ARK_CODING_PLAN_MODELS,
           }
         }
@@ -1896,6 +1910,7 @@ export async function fetchModels(input: FetchModelsInput): Promise<FetchModelsR
       case 'opencode-go-openai':
       case 'zhipu':
       case 'doubao':
+      case 'doubao-api':
       case 'qwen':
       case 'custom':
         return await fetchOpenAICompatibleModels(input.baseUrl, input.apiKey, proxyUrl, provider)
