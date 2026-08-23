@@ -26,7 +26,6 @@ const LINGUIST_DIR = 'apps/electron/src/renderer/features/linguist'
 const MIGRATED_FILES = [
   `${AGENT_DIR}/AgentMessages.tsx`,
   `${AGENT_DIR}/AgentView.tsx`,
-  `${AGENT_DIR}/AgentPlaceholder.tsx`,
   `${AGENT_DIR}/ContentBlock.tsx`,
   `${AGENT_DIR}/tool-result-renderers/task-list-result.tsx`,
   `${AGENT_DIR}/tool-result-renderers/task-get-result.tsx`,

@@ -37,7 +37,7 @@
     },
     "apps/electron": {
       "name": "@proma/electron",
-      "version": "0.17.47",
+      "version": "0.17.60",
       "dependencies": {
         "@earendil-works/pi-agent-core": "0.84.2",
         "@earendil-works/pi-ai": "0.84.2",
@@ -246,7 +246,7 @@
     },
     "packages/shared": {
       "name": "@proma/shared",
-      "version": "0.1.100",
+      "version": "0.1.101",
       "devDependencies": {
         "typescript": "^5.0.0",
       },

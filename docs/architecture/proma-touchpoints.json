@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "baseline": "2a73cd6b7674935b0af1bd59d84b8db1195e77fe",
-  "formalMerge": "19584b802d31f37095714a4db48c6fa545cd2c32",
-  "recomputedOn": "2026-08-20",
-  "comment": "Proma-core touchpoints tracked against v0.17.46; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "baseline": "4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2",
+  "formalMerge": "f53612ca6566b58857173aa522fa73e229e5f08c",
+  "recomputedOn": "2026-08-23",
+  "comment": "Proma-core touchpoints tracked against v0.17.59; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -619,11 +619,6 @@
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentMessages.tsx",
-      "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
-    },
-    {
-      "file": "apps/electron/src/renderer/components/agent/AgentPlaceholder.tsx",
       "ticket": "LA-SYNC-004",
       "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
     },
@@ -1256,11 +1251,6 @@
       "file": "package.json",
       "ticket": "LA-SYNC-005",
       "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
-    },
-    {
-      "file": "packages/core/package.json",
-      "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: version the integrated core package independently from the upstream tag."
     },
     {
       "file": "packages/shared/package.json",
