@@ -315,7 +315,8 @@ test('Linguist Runtime 同时装配 Proma Workspace 能力与 CAT overlay', () =
     'utf8',
   )
 
-  assert.match(orchestrator, /const workspaceId = sessionWorkspaceId \?\? requestedWorkspaceId/)
+  assert.match(orchestrator, /const workspaceId = sessionMeta\?\.workspaceId \?\? requestedWorkspaceId/)
+  assert.doesNotMatch(orchestrator, /会话项目不匹配/)
   assert.doesNotMatch(orchestrator, /hasLinguistSessionBinding|executionScope\.kind !== 'linguist-project'/)
   assert.match(orchestrator, /buildPiBuiltinTools\(piSdk, \{[\s\S]*?workspaceId,[\s\S]*?workspaceSlug,/)
   assert.match(orchestrator, /buildMcpServers\(workspaceSlug\)/)

@@ -32,6 +32,7 @@ const linguistSidebarContent = source(
 const projectAgentRail = source(
   'apps/electron/src/renderer/features/linguist/projects/ProjectAgentRail.tsx',
 )
+const agentService = source('apps/electron/src/main/lib/agent-service.ts')
 const localizationWorkbench = source(
   'apps/electron/src/renderer/features/linguist/projects/LocalizationProjectWorkbench.tsx',
 )
@@ -44,7 +45,7 @@ describe('Agent Full 模式行为契约', () => {
     expect(tabContent).toMatch(/<AgentView\s+[^>]*sessionId=\{tab\.sessionId\}[^>]*\/>/)
     expect(agentView).toContain("presentation = 'full'")
     expect(agentView).toContain('data-agent-presentation={presentation}')
-    expect(agentView).toContain('<AgentSessionProvider sessionId={sessionId}>')
+    expect(agentView).not.toContain('AgentSessionProvider')
     expect(agentView).toContain('<AgentHeader sessionId={sessionId} compact={compact} />')
     expect(agentView).toContain('<AgentMessages')
     expect(agentView).toContain('<RichTextInput')
@@ -62,7 +63,6 @@ describe('Agent Full 模式行为契约', () => {
     expect(agentMessages).toContain("compact ? 'px-3 py-3' : undefined")
     expect(agentHeader).toContain("compact ? 'h-10 px-3' : 'h-[48px] px-4'")
     expect(agentHeader).toContain('{!compact && (')
-    expect(agentView.match(/<AgentSessionProvider sessionId=\{sessionId\}>/g)).toHaveLength(1)
     expect(agentView.match(/<AgentMessages/g)).toHaveLength(1)
     expect(agentView.match(/<RichTextInput\s/g)).toHaveLength(1)
   })
@@ -126,7 +126,7 @@ describe('Agent Full 模式行为契约', () => {
     expect(linguistBindingBadge).toContain('openLocalizationProject(store, projectId)')
     expect(linguistBindingBadge).toContain('返回 Linguist 项目')
     expect(projectAgentRail.match(/<AgentView/g)).toHaveLength(1)
-    expect(agentView.match(/<AgentSessionProvider sessionId=\{sessionId\}>/g)).toHaveLength(1)
+    expect(agentView).not.toContain('AgentSessionProvider')
   })
 
   test('Given a compact project Agent rail, When the CAT task needs space, Then Hide and Full controls stay beside its one-row actions', () => {
@@ -193,9 +193,11 @@ describe('Agent Full 模式行为契约', () => {
   })
 
   test('Given a busy Agent, When the user sends again, Then the existing queue/steer path and queue controls remain available', () => {
-    expect(agentView).toContain('await window.electronAPI.queueAgentMessage({')
-    expect(agentView).toContain('interrupt: interruptCurrentTurn')
-    expect(agentView).toContain('queueMessageIntoActiveAgent(message, payload.rawText, payload.sdkText, payload.mentions, streaming)')
+    expect(agentView).toContain('await window.electronAPI.submitOrEnqueueAgentMessage({')
+    expect(agentView).toContain("dispatch: 'now'")
+    expect(agentView).toContain('interrupt: streaming')
+    expect(agentView).toContain('linguistContext: message.linguistContext')
+    expect(agentService).toContain('linguistContext: input.linguistContext')
     expect(agentView).toContain('<AgentMessageQueue')
     expect(agentView).toContain('onSendNow={handleSendQueuedNow}')
     expect(agentView).toContain('onRecall={handleRecallQueuedMessage}')
