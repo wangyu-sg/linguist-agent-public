@@ -26,6 +26,8 @@ import type {
   AgentStreamPayload,
   AgentQueueMessageInput,
   AgentDeferredQueueMessageInput,
+  AgentSubmitOrEnqueueInput,
+  AgentSubmitOrEnqueueResult,
   AgentQueuedMessageControlInput,
   AgentMoveQueuedMessageInput,
   PromaPermissionMode,
@@ -46,6 +48,8 @@ import { saveFilesToManagedAgentSession } from './agent-session-file-storage'
 import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
 import { AgentStreamForwarder } from './agent-stream-forwarder'
 import { AgentQueueCoordinator } from './agent-queue-coordinator'
+import { isStaleActiveQueueError } from './agent-queue-routing'
+import { shouldStopBeforeAgentRun } from './agent-stop-policy'
 
 // ===== 实例创建 =====
 
@@ -141,6 +145,26 @@ const agentQueueCoordinator = new AgentQueueCoordinator({
     if (!webContents.isDestroyed()) webContents.send(AGENT_IPC_CHANNELS.QUEUED_MESSAGE_STATUS, status)
   },
 })
+
+/**
+ * Renderer run 在创建飞书镜像卡片时尚未进入 orchestrator.activeSessions。
+ * 在此期间保留启动槽位，避免会话迁移改变已接受请求的项目归属。
+ */
+const startingAgentSessions = new Set<string>()
+
+export function reserveAgentSessionStart(sessionId: string): () => void {
+  if (startingAgentSessions.has(sessionId) || orchestrator.isActive(sessionId)) {
+    throw new Error('会话正在启动或运行中，请等待当前请求结束后再发送。')
+  }
+  startingAgentSessions.add(sessionId)
+  return () => startingAgentSessions.delete(sessionId)
+}
+
+export function isAgentSessionBusy(sessionId: string): boolean {
+  return startingAgentSessions.has(sessionId)
+    || orchestrator.isActive(sessionId)
+    || agentQueueCoordinator.hasPending(sessionId)
+}
 
 function publishRunStopped(
   sessionId: string,
@@ -403,7 +427,7 @@ export async function runAgentHeadless(
             source: callbacks.source ?? 'bridge',
             sessionId: runInput.sessionId,
             title: session?.title,
-            workspaceId: runInput.workspaceId ?? session?.workspaceId,
+            workspaceId: session?.workspaceId ?? runInput.workspaceId,
             modelId: runInput.modelId,
             startedAt: persistedStartedAt,
             ...(session ? { session } : {}),
@@ -447,7 +471,16 @@ export async function generateAgentTitle(input: AgentGenerateTitleInput): Promis
  * 中止指定会话的 Agent 执行
  */
 export function stopAgent(sessionId: string): void {
-  orchestrator.stop(sessionId, agentQueueCoordinator.isDispatching(sessionId))
+  // SEND_MESSAGE reserves this slot before the async bridge setup reaches the
+  // orchestrator. Remember a stop in that window so the later run is never
+  // allowed to create an uncancellable adapter query.
+  orchestrator.stop(
+    sessionId,
+    shouldStopBeforeAgentRun(
+      startingAgentSessions.has(sessionId),
+      agentQueueCoordinator.isDispatching(sessionId),
+    ),
+  )
 }
 
 setHeadlessAgentRunner(runAgentHeadless)
@@ -517,6 +550,45 @@ export async function queueAgentMessage(
   )
 }
 
+/**
+ * 单一消息提交入口：主进程依据实时运行状态决定注入当前 Agent 或交给 deferred queue。
+ * renderer 的 streaming 状态仅用于展示，不能作为发送路由依据。
+ */
+export async function submitOrEnqueueAgentMessage(
+  input: AgentSubmitOrEnqueueInput,
+  webContents: WebContents,
+): Promise<AgentSubmitOrEnqueueResult> {
+  registerWebContents(input.sessionId, webContents)
+
+  if (input.dispatch === 'now' && orchestrator.isActive(input.sessionId)) {
+    try {
+      await queueAgentMessage({
+        sessionId: input.sessionId,
+        userMessage: input.userMessage,
+        rawUserMessage: input.rawUserMessage,
+        uuid: input.queueMessageId,
+        interrupt: input.interrupt,
+        mentionedSkills: input.mentionedSkills,
+        mentionedMcpServers: input.mentionedMcpServers,
+        mentionedSessionIds: input.mentionedSessionIds,
+        linguistContext: input.linguistContext,
+        mentionedTodoIds: input.mentionedTodoIds,
+        mentionedCalendarEventIds: input.mentionedCalendarEventIds,
+      }, webContents)
+      return { disposition: 'injected' }
+    } catch (error) {
+      // Pi Utility 在 query 结束、renderer 尚未收到 STREAM_COMPLETE 的窗口会拒绝注入。
+      // 该消息尚未被 SDK 接受，安全地降级到主进程队列，而非向用户暴露瞬态错误。
+      if (!isStaleActiveQueueError(error)) throw error
+      console.warn(`[Agent 服务] 活跃通道已结束，转入 deferred queue: sessionId=${input.sessionId}`)
+    }
+  }
+
+  agentQueueCoordinator.enqueue(input)
+  return { disposition: 'queued' }
+}
+
+/** 兼容旧调用：仅将消息追加到主进程 deferred queue。 */
 export function enqueueAgentQueuedMessage(input: AgentDeferredQueueMessageInput, webContents: WebContents): void {
   registerWebContents(input.sessionId, webContents)
   agentQueueCoordinator.enqueue(input)

@@ -2,16 +2,16 @@
   "schemaVersion": 1,
   "upstream": {
     "repository": "https://github.com/proma-ai/Proma",
-    "tag": "v0.17.46",
-    "commit": "2a73cd6b7674935b0af1bd59d84b8db1195e77fe",
-    "electronAppVersion": "0.17.46"
+    "tag": "v0.17.59",
+    "commit": "4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2",
+    "electronAppVersion": "0.17.59"
   },
   "formalMerge": {
-    "commit": "19584b802d31f37095714a4db48c6fa545cd2c32",
-    "localParent": "5cda029ca9b53beca2767c4c3e523b1037be92ad",
-    "upstreamParent": "2a73cd6b7674935b0af1bd59d84b8db1195e77fe",
-    "branch": "codex/sync-proma-v0.17.46",
-    "date": "2026-08-20"
+    "commit": "f53612ca6566b58857173aa522fa73e229e5f08c",
+    "localParent": "3cfb14ff09baea1c042356b93be2809fb11774c5",
+    "upstreamParent": "4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2",
+    "branch": "codex/sync-proma-v0.17.59",
+    "date": "2026-08-23"
   },
   "runtime": {
     "bun": "1.3.14",
@@ -19,8 +19,8 @@
     "pi": "0.84.2"
   },
   "product": {
-    "linguistAgentVersion": "0.17.47",
-    "sharedVersion": "0.1.100",
+    "linguistAgentVersion": "0.17.60",
+    "sharedVersion": "0.1.101",
     "catCoreVersion": "0.0.21",
     "catFormatsVersion": "0.0.11",
     "catStoreVersion": "0.0.39",

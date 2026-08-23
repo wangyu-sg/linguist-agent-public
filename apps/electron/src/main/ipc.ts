@@ -60,9 +60,6 @@ import type {
   AgentAttachFileInput,
   WorkspaceAttachDirectoryInput,
   WorkspaceAttachFileInput,
-  GetTaskOutputInput,
-  GetTaskOutputResult,
-  StopTaskInput,
   WorkspaceMcpConfig,
   SkillMeta,
   BulkImportSkillItemResult,
@@ -286,7 +283,7 @@ import {
   searchAgentSessionMessages,
   searchAgentSessionReferences,
 } from './lib/agent-session-manager'
-import { runAgent, stopAgent, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, queueAgentMessage, enqueueAgentQueuedMessage, cancelAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
+import { runAgent, stopAgent, generateAgentTitle, saveFilesToAgentSession, saveFilesToWorkspaceFiles, isAgentSessionActive, isAgentSessionBusy, reserveAgentSessionStart, queueAgentMessage, submitOrEnqueueAgentMessage, enqueueAgentQueuedMessage, cancelAgentQueuedMessage, moveAgentQueuedMessage, clearAgentQueuedMessages, updateAgentPermissionMode, rewindAgentSession, setVisibleAgentSession } from './lib/agent-service'
 import { permissionService } from './lib/agent-permission-service'
 import { askUserService } from './lib/agent-ask-user-service'
 import { exitPlanService } from './lib/agent-exit-plan-service'
@@ -2390,15 +2387,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.MOVE_SESSION_TO_WORKSPACE,
     async (_, input: MoveSessionToWorkspaceInput): Promise<AgentSessionMeta> => {
-      // 渲染进程的 running 状态可能比主进程 activeSessions 清理更早变为 false
-      // （STREAM_COMPLETE 在 finally 之前发送），短暂等待后重试一次
-      if (isAgentSessionActive(input.sessionId)) {
-        await new Promise((r) => setTimeout(r, 500))
-        if (isAgentSessionActive(input.sessionId)) {
-          throw new Error('会话正在运行中，请停止后再迁移')
-        }
+      if (isAgentSessionBusy(input.sessionId)) {
+        throw new Error('会话正在启动、运行或仍有排队消息，请停止或清空队列后再迁移')
       }
-      return moveSessionToWorkspace(input.sessionId, input.targetWorkspaceId)
+      const moved = moveSessionToWorkspace(input.sessionId, input.targetWorkspaceId)
+      feishuBridgeManager.syncWorkspaceForSession(moved.id, moved.workspaceId!)
+      return moved
     }
   )
 
@@ -2879,13 +2873,18 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.SEND_MESSAGE,
     async (event, input: AgentSendInput): Promise<void> => {
-      const session = getAgentSessionMeta(input.sessionId)
-      if (session) {
-        await feishuBridgeManager.startSessionMirrorRun(session).catch((error) => {
-          console.error('[飞书 Session 镜像] 流式卡片初始化失败:', error)
-        })
+      const releaseStart = reserveAgentSessionStart(input.sessionId)
+      try {
+        const session = getAgentSessionMeta(input.sessionId)
+        if (session) {
+          await feishuBridgeManager.startSessionMirrorRun(session).catch((error) => {
+            console.error('[飞书 Session 镜像] 流式卡片初始化失败:', error)
+          })
+        }
+        await runAgent(input, event.sender)
+      } finally {
+        releaseStart()
       }
-      await runAgent(input, event.sender)
     }
   )
 
@@ -2919,7 +2918,15 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // 将等待当前 run 结束的消息交给主进程调度器
+  // 主进程原子决定立即注入活跃 Agent 或进入 deferred queue。
+  ipcMain.handle(
+    AGENT_IPC_CHANNELS.SUBMIT_OR_ENQUEUE_MESSAGE,
+    async (event, input: import('@proma/shared').AgentSubmitOrEnqueueInput): Promise<import('@proma/shared').AgentSubmitOrEnqueueResult> => {
+      return submitOrEnqueueAgentMessage(input, event.sender)
+    },
+  )
+
+  // 兼容旧调用：将消息交给主进程 deferred queue。
   ipcMain.handle(
     AGENT_IPC_CHANNELS.ENQUEUE_QUEUED_MESSAGE,
     async (event, input: import('@proma/shared').AgentDeferredQueueMessageInput): Promise<void> => {
@@ -2941,24 +2948,6 @@ export function registerIpcHandlers(): void {
     },
   )
 
-  // 获取任务输出（保留接口，供未来扩展）
-  ipcMain.handle(
-    AGENT_IPC_CHANNELS.GET_TASK_OUTPUT,
-    async (_, input: GetTaskOutputInput): Promise<GetTaskOutputResult> => {
-      try {
-        // TODO: 实现通过 SDK 的 TaskOutput 获取任务输出
-        console.warn('[IPC] GET_TASK_OUTPUT: 当前版本暂未实现，返回空输出')
-        return {
-          output: '',
-          isComplete: false,
-        }
-      } catch (error) {
-        console.error('[IPC] 获取任务输出失败:', error)
-        throw error
-      }
-    }
-  )
-
   // ===== Agent 权限系统 =====
 
   // 响应权限请求
@@ -2974,23 +2963,6 @@ export function registerIpcHandlers(): void {
           sessionId,
           payload: { kind: 'proma_event', event: { type: 'permission_resolved', requestId, behavior } },
         })
-      }
-    }
-  )
-
-  // 停止任务
-  ipcMain.handle(
-    AGENT_IPC_CHANNELS.STOP_TASK,
-    async (_, input: StopTaskInput): Promise<void> => {
-      try {
-        if (input.type === 'shell') {
-          console.warn('[IPC] STOP_TASK: Shell 任务停止功能待实现')
-        } else {
-          console.warn('[IPC] STOP_TASK: Agent 任务暂不支持单独停止')
-        }
-      } catch (error) {
-        console.error('[IPC] 停止任务失败:', error)
-        throw error
       }
     }
   )
@@ -4405,8 +4377,8 @@ export function registerIpcHandlers(): void {
   // 测试飞书连接
   ipcMain.handle(
     FEISHU_IPC_CHANNELS.TEST_CONNECTION,
-    async (_, appId: string, appSecret: string): Promise<FeishuTestResult> => {
-      return feishuBridgeManager.testConnection(appId, appSecret)
+    async (_, appId: string, appSecret: string, domain?: import('@proma/shared').FeishuDomain): Promise<FeishuTestResult> => {
+      return feishuBridgeManager.testConnection(appId, appSecret, domain)
     }
   )
 

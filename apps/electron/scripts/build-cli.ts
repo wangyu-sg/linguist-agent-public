@@ -76,7 +76,7 @@ if (isWindows) {
 const started = Date.now()
 try {
   const result = spawnSync(
-    'bun',
+    process.execPath,
     compileArgs,
     { cwd: join(repoRoot, 'apps/cli'), stdio: 'inherit' },
   )

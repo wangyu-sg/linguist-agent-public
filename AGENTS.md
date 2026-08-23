@@ -45,17 +45,17 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 
 ## 当前版本与技术栈
 
-稳定上游基线是 Proma `v0.17.46@2a73cd6b7674935b0af1bd59d84b8db1195e77fe`。
+稳定上游基线是 Proma `v0.17.59@4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2`。
 
 | 层 | 当前事实 |
 |---|---|
 | Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.17.47` |
+| Electron App | `@proma/electron 0.17.60` |
 | Electron | `43.2.0` |
 | React | `18.3.1` |
 | Jotai | `2.20.2`（manifest range `^2.17.1`） |
 | Vite | `6.4.3`（manifest range `^6.0.3`） |
-| Shared | `@proma/shared 0.1.100` |
+| Shared | `@proma/shared 0.1.101` |
 | Agent Runtime | 仅 `@earendil-works/pi-* 0.84.2` |
 | CAT Core | `@linguist/cat-core 0.0.21` |
 | CAT Formats | `@linguist/cat-formats 0.0.11` |

@@ -53,7 +53,7 @@ export function buildExternalAgentRunActivation(
     tabs,
     activeTabId,
     title,
-    workspaceId: input.workspaceId ?? session?.workspaceId,
+    workspaceId: session?.workspaceId ?? input.workspaceId,
     modelId: input.modelId,
     streamState: {
       ...input.currentStreamState,

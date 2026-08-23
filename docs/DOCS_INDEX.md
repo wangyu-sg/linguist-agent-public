@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-08-12
+更新时间：2026-08-23
 
 ## 当前真源
 
@@ -30,7 +30,7 @@
 - [SBOM.md](./release/SBOM.md) / [sbom-full.json](./release/sbom-full.json)
 - [KNOWN_LIMITATIONS.md](./release/KNOWN_LIMITATIONS.md)
 - [NOTICE.md](../NOTICE.md)、[ATTRIBUTION.md](../ATTRIBUTION.md)、[SOURCE_PROVENANCE.md](./attribution/SOURCE_PROVENANCE.md)
-- [LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md](./implementation/LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md)、[FINAL_IMPLEMENTATION_REPORT_2026-08-10.md](./implementation/FINAL_IMPLEMENTATION_REPORT_2026-08-10.md) 与 G8/G9/G10 报告均为历史证据，不描述当前 v0.17.15 实现。
+- [LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md](./implementation/LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md)、[FINAL_IMPLEMENTATION_REPORT_2026-08-10.md](./implementation/FINAL_IMPLEMENTATION_REPORT_2026-08-10.md) 与 G8/G9/G10 报告均为历史证据，不描述当前 v0.17.59 实现。
 - [docs/archive/](./archive/) 保存旧基线与队列快照。
 
 维护规则见 [DOCUMENTATION_MAINTENANCE.md](./DOCUMENTATION_MAINTENANCE.md)。事实优先级始终是代码 / manifest / 测试 / 真实运行输出高于说明文档。
