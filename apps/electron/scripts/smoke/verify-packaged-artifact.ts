@@ -15,9 +15,9 @@ export const LEGAL_RESOURCES = [
 ] as const
 
 const ASAR_RUNTIME_PACKAGES = [
-  ['@earendil-works/pi-coding-agent', '0.82.1', 'dist/index.js'],
-  ['@earendil-works/pi-agent-core', '0.82.1', 'dist/index.js'],
-  ['@earendil-works/pi-ai', '0.82.1', 'dist/index.js'],
+  ['@earendil-works/pi-coding-agent', '0.84.2', 'dist/index.js'],
+  ['@earendil-works/pi-agent-core', '0.84.2', 'dist/index.js'],
+  ['@earendil-works/pi-ai', '0.84.2', 'dist/index.js'],
   ['pdfjs-dist', '4.10.38', 'legacy/build/pdf.mjs'],
 ] as const
 

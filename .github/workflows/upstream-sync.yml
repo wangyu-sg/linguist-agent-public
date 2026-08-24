@@ -36,6 +36,11 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
       - name: 试合并并准备候选分支
         id: prepare
         env:
@@ -83,11 +88,13 @@ jobs:
 
           git switch -c "$CANDIDATE" "$BASE_SHA"
 
-          if ! git merge --no-ff --no-edit "$UPSTREAM_SHA"; then
-            CONFLICTS="$(git diff --name-only --diff-filter=U)"
-            git merge --abort
+          report_sync_failure() {
+            ERROR_CODE="$1"
+            DETAILS="$2"
+            CONFLICTS="$(git diff --name-only --diff-filter=U || true)"
+            git merge --abort 2>/dev/null || true
             TITLE="[Upstream Sync] Proma ${UPSTREAM_TAG} 需要处理"
-            BODY="Proma ${BASELINE_TAG} → ${UPSTREAM_TAG} 自动合并发生冲突。\n\n冲突文件：\n\`\`\`\n${CONFLICTS}\n\`\`\`\n\nGit 无法推送未解决的冲突状态，因此没有伪造候选分支。请从 main 手动合并 ${UPSTREAM_TAG}。\n\n最近运行：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            BODY="Proma ${BASELINE_TAG} → ${UPSTREAM_TAG} 同步候选未通过确定性处理。\n\nResolver Error Code: \`${ERROR_CODE}\`\n\n未解决文件：\n\`\`\`\n${CONFLICTS}\n\`\`\`\n\n详情：\n\`\`\`\n${DETAILS}\n\`\`\`\n\n候选分支：\`${CANDIDATE}\`（未推送时仅为计划名称）\n影响报告：本次 Workflow 的 \`proma-sync-impact\` artifact\nWorkflow Run：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             ISSUE="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
             if [ -n "$ISSUE" ]; then
               gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "$BODY"
@@ -96,7 +103,38 @@ jobs:
             fi
             echo 'ready=false' >> "$GITHUB_OUTPUT"
             exit 0
+          }
+
+          MERGE_STATUS=0
+          git merge --no-commit --no-ff "$UPSTREAM_SHA" || MERGE_STATUS=$?
+          if [ "$MERGE_STATUS" -ne 0 ]; then
+            CONFLICTS="$(git diff --name-only --diff-filter=U)"
+            if [ -z "$CONFLICTS" ]; then
+              report_sync_failure 'UNKNOWN_CONFLICT' 'git merge 失败，但没有可分类的冲突文件。'
+            fi
+            if ! RESOLVER_OUTPUT="$(node scripts/resolve-proma-conflicts.mjs 2>&1)"; then
+              ERROR_CODE="$(printf '%s\n' "$RESOLVER_OUTPUT" | sed -n 's/^\([A-Z_]*\):.*/\1/p' | head -n 1)"
+              report_sync_failure "${ERROR_CODE:-UNKNOWN_CONFLICT}" "$RESOLVER_OUTPUT"
+            fi
           fi
+
+          git show "${UPSTREAM_SHA}:apps/electron/package.json" > "$RUNNER_TEMP/proma-electron-package.json"
+          if ! OVERLAY_OUTPUT="$(node scripts/apply-la-electron-overlay.mjs \
+            --base "$RUNNER_TEMP/proma-electron-package.json" \
+            --output apps/electron/package.json 2>&1)"; then
+            report_sync_failure 'OVERLAY_CONFLICT' "$OVERLAY_OUTPUT"
+          fi
+          bun install
+          if ! SEAM_OUTPUT="$(node scripts/verify-host-seams.mjs 2>&1)"; then
+            ERROR_CODE="$(printf '%s\n' "$SEAM_OUTPUT" | sed -n 's/^\([A-Z_]*\):.*/\1/p' | head -n 1)"
+            report_sync_failure "${ERROR_CODE:-HOST_SEAM_CONTRACT_CHANGED}" "$SEAM_OUTPUT"
+          fi
+          if ! DIFF_OUTPUT="$(git diff --check 2>&1)"; then
+            report_sync_failure 'HOST_SEAM_CONTRACT_CHANGED' "$DIFF_OUTPUT"
+          fi
+
+          git add -A
+          git commit -m "chore(sync): merge Proma ${UPSTREAM_TAG}"
 
           MERGE_SHA="$(git rev-parse HEAD)"
           VERSION_OUTPUT="$(node scripts/release-version.mjs)"

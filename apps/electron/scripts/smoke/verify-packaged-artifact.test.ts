@@ -36,7 +36,7 @@ function writeAsar(file: string, entries: Record<string, string>): void {
   writeFileSync(file, Buffer.concat([size, header, ...contents]))
 }
 
-function asarEntries(piVersion = '0.82.1'): Record<string, string> {
+function asarEntries(piVersion = '0.84.2'): Record<string, string> {
   return {
     'dist/cat-job-worker.cjs': 'worker',
     'dist/linguist-integrity-scrub-worker.cjs': 'worker',

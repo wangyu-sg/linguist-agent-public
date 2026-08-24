@@ -17,9 +17,6 @@ import type {
   PermissionRequest,
   PromaPermissionMode,
   SDKMessage,
-  LinguistDelegatedScope,
-  LinguistDelegationOutcome,
-  LinguistRole,
 } from '@proma/shared'
 import {
   createAgentSession,
@@ -43,7 +40,7 @@ import {
   resolveDelegationPermissionMode,
 } from './agent-collaboration-utils'
 import { assertEnabledModelForChannel, listEnabledAgentModelsForChannel } from './agent-model-selection'
-import { getLinguistProjectService } from './linguist/project-service'
+import { resolveLinguistDelegationMetadata, resolveLinguistDelegationOutcome, type LinguistDelegationRequest } from './linguist/delegation-host-extension'
 
 interface CollaborationToolContext {
   sessionId: string
@@ -76,16 +73,6 @@ interface DelegationRecord {
   completion: Promise<void>
   resolveCompletion: () => void
 }
-
-const LINGUIST_ROLE_STAGE: Record<
-  LinguistDelegationOutcome['role'],
-  LinguistDelegationOutcome['stage']
-> = {
-  translator: 'translation',
-  reviewer: 'editing',
-  proofreader: 'proofreading',
-}
-
 
 const RESULT_SUMMARY_CHAR_LIMIT = 50_000
 const DELEGATION_GOAL_CHAR_LIMIT = 1_000
@@ -240,19 +227,13 @@ function assertNonBlank(value: string | undefined, field: string): string {
   return trimmed
 }
 
-interface DelegateAgentArgs {
+interface DelegateAgentArgs extends LinguistDelegationRequest {
   title?: string
   role?: AgentDelegationRole
   task: string
   expectedOutput?: string
   permissionMode?: PromaPermissionMode
   modelId?: string
-  linguistRole?: Exclude<LinguistRole, 'general'>
-  linguistScope?: {
-    batchId?: string
-    assetIds?: string[]
-    segmentIds?: string[]
-  }
 }
 
 interface StartDelegationResult {
@@ -276,54 +257,6 @@ function getRunningDelegationCount(parentSessionId: string): number {
   return Array.from(delegations.values())
     .filter((item) => item.parentSessionId === parentSessionId && item.status === 'running')
     .length
-}
-
-function freezeLinguistScope(
-  parent: AgentSessionMeta,
-  input: DelegateAgentArgs['linguistScope'],
-): LinguistDelegatedScope {
-  const projectId = parent.linguistProjectId!
-  const db = getLinguistProjectService().openProject(projectId)
-  const assetIds = [...new Set([
-    ...(input?.batchId ? [input.batchId] : []),
-    ...(input?.assetIds ?? []),
-  ])]
-  const segmentIds = [...new Set(input?.segmentIds ?? [])]
-
-  for (const assetId of assetIds) {
-    if (!db.assets.get(assetId)) throw new Error(`Linguist 委派批次不存在: ${assetId}`)
-    segmentIds.push(...db.segments.queryIds({ assetId }))
-  }
-  const frozenSegmentIds = [...new Set(segmentIds)]
-  const effectiveSegmentIds = frozenSegmentIds.length > 0 || input !== undefined
-    ? frozenSegmentIds
-    : db.segments.queryIds()
-  const found = new Set(db.segments.getByIds(effectiveSegmentIds).map((segment) => segment.id as string))
-  const missing = effectiveSegmentIds.find((segmentId) => !found.has(segmentId))
-  if (missing) throw new Error(`Linguist 委派 Segment 不存在: ${missing}`)
-  if (effectiveSegmentIds.length === 0) throw new Error('Linguist 委派范围没有 Segment')
-  return { assetIds, segmentIds: effectiveSegmentIds }
-}
-
-function resolveLinguistDelegation(
-  parent: AgentSessionMeta | undefined,
-  args: DelegateAgentArgs,
-): {
-  role: Exclude<LinguistRole, 'general'>
-  projectId: string
-  projectName: string
-  scope: LinguistDelegatedScope
-} | undefined {
-  if (!args.linguistRole) return undefined
-  if (!parent?.linguistProjectId || parent.linguistRole !== 'general') {
-    throw new Error('只有 Linguist General 会话可以委派本地化岗位')
-  }
-  return {
-    role: args.linguistRole,
-    projectId: parent.linguistProjectId,
-    projectName: parent.linguistProjectName ?? parent.linguistProjectId,
-    scope: freezeLinguistScope(parent, args.linguistScope),
-  }
 }
 
 function createDelegationCompletion(): Pick<DelegationRecord, 'completion' | 'resolveCompletion'> {
@@ -412,40 +345,8 @@ function markDelegationFinished(
   record.resolveCompletion()
 }
 
-/** 委派状态只代表进程结束；Linguist 完成度必须实时读取冻结范围的 CAT 审计事件。 */
-function getLinguistDelegationOutcome(
-  session: AgentSessionMeta | undefined,
-): LinguistDelegationOutcome | undefined {
-  const role = session?.linguistRole
-  const projectId = session?.linguistProjectId
-  const segmentIds = session?.linguistDelegatedScope?.segmentIds
-  if (
-    role !== 'translator'
-    && role !== 'reviewer'
-    && role !== 'proofreader'
-  ) return undefined
-  if (!projectId || !segmentIds) return undefined
-
-  try {
-    const stage = LINGUIST_ROLE_STAGE[role]
-    const coverage = getLinguistProjectService()
-      .openProject(projectId)
-      .segments
-      .getStageDecisionCoverage(stage, segmentIds)
-    return {
-      role,
-      stage,
-      ...coverage,
-      decided: coverage.total - coverage.pending,
-    }
-  } catch (error) {
-    console.warn(`[协作工具] 无法读取 Linguist 委派完成证据: ${session.id}`, error)
-    return undefined
-  }
-}
-
 function getDelegationSummary(record: DelegationRecord): Record<string, unknown> {
-  const linguistOutcome = getLinguistDelegationOutcome(
+  const linguistOutcome = resolveLinguistDelegationOutcome(
     getAgentSessionMeta(record.childSessionId),
   )
   return {
@@ -477,7 +378,7 @@ function listKnownDelegations(parentSessionId: string): Array<Record<string, unk
   const persisted = listAgentSessions()
     .filter((session) => session.parentSessionId === parentSessionId && session.sourceDelegationId && !liveIds.has(session.sourceDelegationId))
     .map((session) => {
-      const linguistOutcome = getLinguistDelegationOutcome(session)
+      const linguistOutcome = resolveLinguistDelegationOutcome(session)
       return {
         delegationId: session.sourceDelegationId,
         parentSessionId,
@@ -515,7 +416,7 @@ function getDelegationResult(parentSessionId: string, delegationId: string): Rec
   const resultSummary = session.delegationStatus && session.delegationStatus !== 'running'
     ? summarizeChildResult(session.id)
     : undefined
-  const linguistOutcome = getLinguistDelegationOutcome(session)
+  const linguistOutcome = resolveLinguistDelegationOutcome(session)
 
   return {
     delegationId,
@@ -736,7 +637,8 @@ function startDelegation(
 ): StartDelegationResult {
   const task = assertNonBlank(args.task, 'task')
   const delegationId = randomUUID()
-  const linguist = resolveLinguistDelegation(parent, args)
+  // LA-HOST-SEAM: linguist-delegation
+  const linguist = resolveLinguistDelegationMetadata(parent, args)
   const role = args.role ?? (linguist?.role === 'translator' ? 'implement' : linguist ? 'review' : 'custom')
   const title = normalizeTitle(args.title, `协作：${task}`)
   const goal = truncateText(task, DELEGATION_GOAL_CHAR_LIMIT)

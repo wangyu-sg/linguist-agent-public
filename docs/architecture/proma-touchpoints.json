@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "baseline": "4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2",
   "formalMerge": "f53612ca6566b58857173aa522fa73e229e5f08c",
-  "recomputedOn": "2026-08-23",
-  "comment": "Proma-core touchpoints tracked against v0.17.59; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "recomputedOn": "2026-08-24",
+  "comment": "仅登记相对 Proma 基线仍存在的核心产品分叉、稳定 Host Seam 与生成物；LA 自有目录由 allowedNewPaths 管理。",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -34,1323 +34,2088 @@
     ".github/workflows/ci.yml",
     ".github/workflows/auto-release.yml",
     ".github/workflows/upstream-sync.yml",
-    "apps/electron/src/renderer/lib/linguist-build-metadata.ts"
+    "apps/electron/src/renderer/lib/linguist-build-metadata.ts",
+    "config/",
+    "apps/electron/src/preload/linguist-api.ts"
   ],
   "touchpoints": [
     {
       "file": ".github/workflows/release.yml",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
     },
     {
       "file": "apps/cli/package.json",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
     },
     {
       "file": "apps/cli/src/index.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
     },
     {
       "file": "apps/cli/src/paths.test.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
     },
     {
       "file": "apps/cli/src/paths.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
     },
     {
       "file": "apps/electron/default-skills/agent-collaboration/SKILL.md",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "默认 Skill 使用 Linguist Agent 的真实数据根与桌面产品上下文。"
     },
     {
       "file": "apps/electron/default-skills/session-cleaner/SKILL.md",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "默认 Skill 使用 Linguist Agent 的真实数据根与桌面产品上下文。"
     },
     {
       "file": "apps/electron/default-skills/session-cleaner/references/cli-usage.md",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "默认 Skill 使用 Linguist Agent 的真实数据根与桌面产品上下文。"
     },
     {
       "file": "apps/electron/default-skills/tool-builder/SKILL.md",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "默认 Skill 使用 Linguist Agent 的真实数据根与桌面产品上下文。"
     },
     {
       "file": "apps/electron/electron-builder.yml",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/macos-install-help.txt",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: include the one-time quarantine removal command in the self-use macOS DMG while retaining automatic updates through a fixed signing identity."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "include the one-time quarantine removal command in the self-use macOS DMG while retaining automatic updates through a fixed signing identity."
     },
     {
       "file": "apps/electron/native/eventkit/macos-eventkit-addon.mm",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
     },
     {
       "file": "apps/electron/package.json",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "generated",
+      "owner": "sync-automation",
+      "mergePolicy": "overlay",
+      "hook": "electron-manifest-overlay",
+      "reason": "从 Proma manifest 应用结构化 LA overlay，保留产品身份、CAT worker 与打包合同。"
     },
     {
       "file": "apps/electron/resources/generate-icons.sh",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/icon-source.png",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/icon.icns",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/icon.ico",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/icon.png",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/icon.svg",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/proma-logos/icon.svg",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/proma-logos/iconTemplate.png",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/proma-logos/iconTemplate@2x.png",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/proma-logos/iconTemplate@3x.png",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/resources/tutorial.md",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/scripts/generate-la-icon.mjs",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/scripts/build-cli.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: remove stale Claude SDK packaging language after adopting the upstream Pi-only runtime."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "remove stale Claude SDK packaging language after adopting the upstream Pi-only runtime."
     },
     {
       "file": "apps/electron/scripts/run-electron-builder.test.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: remove Bun's lifecycle node shim before launching Electron Builder and keep the packaging gate on the real Node runtime."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "remove Bun's lifecycle node shim before launching Electron Builder and keep the packaging gate on the real Node runtime."
     },
     {
       "file": "apps/electron/scripts/run-electron-builder.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: remove Bun's lifecycle node shim before launching Electron Builder and keep the packaging gate on the real Node runtime."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "remove Bun's lifecycle node shim before launching Electron Builder and keep the packaging gate on the real Node runtime."
     },
     {
       "file": "apps/electron/src/main/agent-status-hover-window.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: enforce the product-wide BrowserWindow sandbox and web-security policy on the upstream Windows status surface."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "enforce the product-wide BrowserWindow sandbox and web-security policy on the upstream Windows status surface."
     },
     {
       "file": "apps/electron/src/main/index.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/ipc.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "ticket": "LA-HOST-003",
+      "kind": "host-seam",
+      "owner": "codex-main-host",
+      "mergePolicy": "reapply-host-seam",
+      "hook": "linguist-ipc",
+      "reason": "在 Proma 主 IPC 注册流程中组合一次 Linguist IPC adapter。"
     },
     {
       "file": "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Temporary Deviation: preserve project-bound continuation context across Pi compaction until an equivalent host-owned runtime hook exists; review at the next upstream sync."
+      "ticket": "LA-HOST-004",
+      "kind": "temporary-deviation",
+      "owner": "codex-main-host",
+      "mergePolicy": "reapply-host-seam",
+      "hook": "pi-compaction-temporary-deviation",
+      "reason": "Pi 压缩续跑时重新注入已验证的 Linguist turn context；上游提供等价 hook 后删除。"
     },
     {
       "file": "apps/electron/src/main/lib/adapters/pi-context-compaction-tool.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/adapters/pi-message-adapter.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-collaboration-tools.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: extend native Proma Collaboration with trusted Linguist role metadata and a frozen CAT scope while retaining the shared session runner."
+      "ticket": "LA-HOST-002",
+      "kind": "host-seam",
+      "owner": "codex-main-host",
+      "mergePolicy": "reapply-host-seam",
+      "hook": "linguist-delegation",
+      "reason": "在 Proma Collaboration 中注入受信的 Linguist role、project binding、冻结范围与 outcome binding。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-island-navigation-policy.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-island-navigation-policy.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-orchestrator.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical. LA-PROMPT-001: the Linguist prompt overlay is built once from the canonical prompt contract and rendered per agentRuntime (pi → markdown, otherwise xml)."
+      "ticket": "LA-HOST-001",
+      "kind": "host-seam",
+      "owner": "codex-main-host",
+      "mergePolicy": "reapply-host-seam",
+      "hook": "agent-extension",
+      "reason": "在 Proma 原生 send/queue 流程中组合一次 Linguist prompt、turn context、CAT tools 与 execution scope。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-service.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-context-prompt.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-file-storage.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-file-storage.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-manager.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-manager.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-usage.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-workspace-manager.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/attachment-service.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/automation-manager.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/bridge-attachment-utils.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/channel-manager.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
       "file": "apps/electron/src/main/lib/channel-runtime-api-key.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
-    },
-    {
-      "file": "apps/electron/src/main/lib/chat-tool-config.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/chat-tools-watcher.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
       "file": "apps/electron/src/main/lib/chat-tools/nano-banana-tool.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
       "file": "apps/electron/src/main/lib/chat-tools/web-search-tool.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
       "file": "apps/electron/src/main/lib/config-paths-security.test.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/config-paths.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
       "file": "apps/electron/src/main/lib/conversation-manager.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/detached-preview-window.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/dingtalk-config.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/dingtalk-config.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/electron-user-data-path.test.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/electron-user-data-path.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/feishu-bridge.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/feishu-config.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/github-release-service.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/mac-eventkit-native-addon.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
     },
     {
       "file": "apps/electron/src/main/lib/planning-manager.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/planning-manager.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/planning-native-sync-coordinator.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
     },
     {
       "file": "apps/electron/src/main/lib/planning-native-sync-service.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
     },
     {
       "file": "apps/electron/src/main/lib/planning-window.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/proxy-settings-service.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
       "file": "apps/electron/src/main/lib/quick-task-window.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/settings-service.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
       "file": "apps/electron/src/main/lib/system-prompt-manager.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/test/electron-mock.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/title-generation.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/title-generation.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/todo-agent-start.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/todo-agent-start.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/tutorial-service.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/updater/auto-updater.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: install downloaded Linguist Agent releases on normal app quit while preserving the existing immediate and idle install paths."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "install downloaded Linguist Agent releases on normal app quit while preserving the existing immediate and idle install paths."
     },
     {
       "file": "apps/electron/src/main/lib/user-profile-service.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-output-result.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-output-result.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-window.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/wechat-config.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/workspace-memory-window.ts",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: every BrowserWindow explicitly keeps context isolation, sandboxing, disabled Node integration, and web security."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "every BrowserWindow explicitly keeps context isolation, sandboxing, disabled Node integration, and web security."
     },
     {
       "file": "apps/electron/src/main/lib/workspace-watcher.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/menu.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/tray.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/preload/index.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "ticket": "LA-HOST-003",
+      "kind": "host-seam",
+      "owner": "codex-main-host",
+      "mergePolicy": "reapply-host-seam",
+      "hook": "linguist-preload",
+      "reason": "在 Proma preload API 中组合一次 typed Linguist API。"
     },
     {
       "file": "apps/electron/src/renderer/App.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/active-view.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/active-view.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/agent-atoms.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/app-mode.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/app-mode.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/cat-result-navigation-atoms.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/markdown-font-size.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/preview-atoms.ts",
       "ticket": "LA-HOST-005",
-      "reason": "Local Host Seam: PreviewFile carries an opaque linguist target so the native Preview Tab can mount Linguist batch/context-doc previews without Proma knowing CAT details."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "PreviewFile carries an opaque linguist target so the native Preview Tab can mount Linguist batch/context-doc previews without Proma knowing CAT details."
     },
     {
       "file": "apps/electron/src/renderer/atoms/project-agent-session-atoms.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/project-agent-session-atoms.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/settings-tab.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/tab-atoms.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/tab-atoms.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/theme.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/AgentSkillsView.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/BuiltinMcpDetailSheet.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/McpCard.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/SkillCard.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/WorkspaceMemoryTab.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentHeader.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentHistorySelectionLayer.tsx",
       "ticket": "LA-HOST-004",
-      "reason": "Local Host Seam: expose selection actions only when the current Agent host capability manifest permits them."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "expose selection actions only when the current Agent host capability manifest permits them."
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentMessageQueue.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentMessages.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentView.pending-prompt.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentView.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AskUserBanner.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/ContentBlock.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/ContextUsageBadge.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/ExitPlanModeBanner.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/PermissionBanner.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/SDKMessageRenderer.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/SidePanel.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/TaskProgressCard.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/TaskProgressOverlay.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/agent-attachment-gate.test.ts",
       "ticket": "LA-HOST-005",
-      "reason": "Local Host Seam: verify the attachment save gate keeps ordinary sessions blocked and lets linguist-bound sessions save without a forged workspace slug."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "verify the attachment save gate keeps ordinary sessions blocked and lets linguist-bound sessions save without a forged workspace slug."
     },
     {
       "file": "apps/electron/src/renderer/components/agent/agent-attachment-gate.ts",
       "ticket": "LA-HOST-005",
-      "reason": "Local Host Seam: shared gate decides whether agent file attachments may be saved for a session; linguist project-bound sessions pass without forging a Proma workspace slug while ordinary sessions without workspace stay blocked."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "shared gate decides whether agent file attachments may be saved for a session; linguist project-bound sessions pass without forging a Proma workspace slug while ordinary sessions without workspace stay blocked."
     },
     {
       "file": "apps/electron/src/renderer/components/agent/permission-scope.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: expose the concrete permission scope and risk without relying on color alone."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "expose the concrete permission scope and risk without relying on color alone."
     },
     {
       "file": "apps/electron/src/renderer/components/agent/permission-scope.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: expose the concrete permission scope and risk without relying on color alone."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "expose the concrete permission scope and risk without relying on color alone."
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-phrase.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-phrase.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/bash-result.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/cat-result.test.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/cat-result.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.test.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/index.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/task-get-result.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/task-list-result.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-utils.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/conversation.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/message.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/sticky-user-message.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/sticky-user-message.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/AppShell.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/ModeSwitcher.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/SearchDialog.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/SearchDialog.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/mode-switcher-utils.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/mode-switcher-utils.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/right-rail-policy.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/right-rail-policy.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/structural-a11y.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/titlebar-safe-area.ts",
       "ticket": "LA-HOST-005",
-      "reason": "Local Host Seam: single macOS titlebar safe-area derivation shared by the sidebar expanded/collapsed branches so traffic lights never overlap content; replaces per-branch magic numbers."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "single macOS titlebar safe-area derivation shared by the sidebar expanded/collapsed branches so traffic lights never overlap content; replaces per-branch magic numbers."
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ChatHeader.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ChatInput.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ChatMessageItem.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ContextSettingsPopover.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ModelSelector.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/PromptEditorSidebar.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/SystemPromptSelector.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ToolSelectorPopover.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/DiffChangesList.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/DiffPanelTabBar.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/DiffPanelTabBar.test.tsx",
       "ticket": "LA-HOST-002",
-      "reason": "Local Host Seam: verify the shared Proma side-panel tab host exposes only Companion Chat in Linguist."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "verify the shared Proma side-panel tab host exposes only Companion Chat in Linguist."
     },
     {
       "file": "apps/electron/src/renderer/components/diff/DiffTabContent.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/PreviewPanel.tsx",
       "ticket": "LA-HOST-005",
-      "reason": "Local Host Seam: the native split preview panel mounts LinguistPreviewBody for linguist targets and hides the default-app open action that requires a host path."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "the native split preview panel mounts LinguistPreviewBody for linguist targets and hides the default-app open action that requires a host path."
     },
     {
       "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.linguist.test.tsx",
       "ticket": "LA-HOST-005",
-      "reason": "Local Host Seam: verify the native Preview Tab mounts Linguist batch/context-doc previews and keeps the DiffTabContent path for plain files."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "verify the native Preview Tab mounts Linguist batch/context-doc previews and keeps the DiffTabContent path for plain files."
     },
     {
       "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.tsx",
       "ticket": "LA-HOST-005",
-      "reason": "Local Host Seam: the native Preview Tab branches previewFile.linguist targets to LinguistPreviewBody instead of the DiffTabContent file-reading chain."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "the native Preview Tab branches previewFile.linguist targets to LinguistPreviewBody instead of the DiffTabContent file-reading chain."
     },
     {
       "file": "apps/electron/src/renderer/components/planning/PlanningReminderRail.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/planning/PlanningReminderRail.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/quick-task/QuickTaskApp.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/scratch-pad/ScratchPadView.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/scratch-pad/scratch-pad-opener.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/selection/SelectionActionPopover.tsx",
       "ticket": "LA-HOST-004",
-      "reason": "Local Host Seam: omit selection actions that the current Agent host cannot fulfill."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "omit selection actions that the current Agent host cannot fulfill."
     },
     {
       "file": "apps/electron/src/renderer/components/session-preview/SessionMiniMapPopover.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/AgentSessionActionsMenu.test.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/AgentSessionActionsMenu.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/AgentSessionTreeItem.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/ProjectSessionTreeGroupHeader.test.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/ProjectSessionTreeGroupHeader.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/agent-session-tree.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/agent-session-tree.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/session-actions.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/session-actions.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/AboutSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/AppearanceSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/BotHubSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ChannelForm.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ChannelSettings.test.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ChannelSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/DingTalkSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/FeishuSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/GeneralSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/McpServerForm.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/MigrationSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/PromptSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ProxySettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/SettingsPanel.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/StorageSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: keep the shared storage result state on the Linguist Agent semantic color tokens."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "keep the shared storage result state on the Linguist Agent semantic color tokens."
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ToolSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/VoiceInputSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/WeChatSettings.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
     },
     {
       "file": "apps/electron/src/renderer/components/shortcuts/GlobalShortcuts.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/MainArea.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabBar.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/tab-bar-action-layout.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: keep the native TabBar action overlay clear of tabs and platform window controls."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "keep the native TabBar action overlay clear of tabs and platform window controls."
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/tab-bar-action-layout.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: protect the native TabBar action overlay layout used by the Agent/Chat shell."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "protect the native TabBar action overlay layout used by the Agent/Chat shell."
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabBarItem.test.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabBarItem.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabContent.linguist.test.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabContent.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabSwitcher.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/tutorial/TutorialBanner.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/ui/confirm-dialog.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/ui/sheet.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/ui/spinner.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/voice-dictation/VoiceDictationApp.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/welcome/WelcomeEmptyState.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/components/welcome/WelcomeView.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useOpenSession.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useSwitchAppMode.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useSyncActiveTabSideEffects.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/index.html",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/lib/agent-message-queue.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/lib/agent-message-queue.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/lib/external-agent-run.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/lib/external-agent-session-opener.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/lib/external-agent-session-opener.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/lib/linguist-navigation.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/lib/mode-contributions.test.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/lib/mode-contributions.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/lib/quoted-selection.test.ts",
       "ticket": "LA-HOST-001",
-      "reason": "Local Host Seam: verify the shared Proma quoted-selection state remains isolated by Agent session id."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "verify the shared Proma quoted-selection state remains isolated by Agent session id."
     },
     {
       "file": "apps/electron/src/renderer/main.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/styles/globals.css",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/types/settings.ts",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "apps/electron/tailwind.config.js",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "bun.lock",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: record Linguist Agent workspace package versions while retaining the upstream Pi-only dependency graph."
+      "kind": "generated",
+      "owner": "sync-automation",
+      "mergePolicy": "regenerate",
+      "reason": "由 Bun 根据上游依赖与 Linguist workspace packages 重新生成。"
     },
     {
       "file": "package.json",
       "ticket": "LA-SYNC-005",
-      "reason": "Permanent Product Fork: package identity, independent data root, bundled resource, or packaging/runtime policy intentionally differs from Proma."
-    },
-    {
-      "file": "packages/shared/package.json",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
       "file": "packages/shared/src/types/agent-profile.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
     },
     {
       "file": "packages/shared/src/types/agent-profile.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/agent.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/channel.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/chat-tool.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
       "file": "packages/shared/src/types/chat.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/dingtalk.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
-    },
-    {
-      "file": "packages/shared/src/types/feishu.ts",
-      "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/index.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/linguist-asset-info.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
     },
     {
       "file": "packages/shared/src/types/linguist-turn-context.test.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
     },
     {
       "file": "packages/shared/src/types/linguist-turn-context.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/linguist.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/proxy.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/system-prompt.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/shared/src/types/wechat.ts",
       "ticket": "LA-SYNC-003",
-      "reason": "Local Host Seam: retain upstream runtime/session behavior while adding the narrow typed authority or project-binding bridge required by the Linguist vertical."
-    },
-    {
-      "file": "packages/ui/package.json",
-      "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "shared-contract",
+      "mergePolicy": "keep-la",
+      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
       "file": "packages/ui/src/code-block/CodeBlock.test.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
     },
     {
       "file": "packages/ui/src/code-block/CodeBlock.tsx",
       "ticket": "LA-SYNC-004",
-      "reason": "Local Host Seam: compose the Linguist mode into the native Agent/Chat shell without creating a second Agent or Chat implementation."
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "让共享 UI 组件使用 Linguist Agent 的语义样式与交互合同。"
     }
   ]
 }

@@ -314,6 +314,10 @@ test('Linguist Runtime 同时装配 Proma Workspace 能力与 CAT overlay', () =
     join(REPO_ROOT, 'apps/electron/src/main/lib/linguist/agent-execution-scope.ts'),
     'utf8',
   )
+  const hostExtension = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/main/lib/linguist/agent-host-extension.ts'),
+    'utf8',
+  )
 
   assert.match(orchestrator, /const workspaceId = sessionMeta\?\.workspaceId \?\? requestedWorkspaceId/)
   assert.doesNotMatch(orchestrator, /会话项目不匹配/)
@@ -323,7 +327,9 @@ test('Linguist Runtime 同时装配 Proma Workspace 能力与 CAT overlay', () =
   assert.match(orchestrator, /getWorkspaceMemoryGuidance\(workspaceSlug\)/)
   assert.match(orchestrator, /readWorkspaceAgentsMd\(workspaceSlug\)/)
   assert.match(orchestrator, /additionalSkillPaths: \[getWorkspaceSkillsDir\(workspaceSlug\)\]/)
-  assert.match(orchestrator, /composeAgentTools\([\s\S]*?linguistCatTools/)
+  assert.match(orchestrator, /resolveLinguistAgentHostExtension\(/)
+  assert.match(orchestrator, /linguistExtension\.composeTools\(/)
+  assert.match(hostExtension, /composeAgentTools\([\s\S]*?catTools/)
   assert.match(executionScope, /ensureWorkspaceSession\(workspace\.slug, session\.id\)/)
   assert.doesNotMatch(executionScope, /ensureLinguistSessionWorkspace/)
 })

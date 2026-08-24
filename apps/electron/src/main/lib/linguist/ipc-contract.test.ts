@@ -286,11 +286,11 @@ describe('validation constants', () => {
   })
 })
 
-describe('preload / ipc.ts source shape (source-level assertions)', () => {
+describe('Linguist preload / IPC adapter source shape', () => {
   // apps/electron/src/main/lib/linguist → 上溯三级到 src/
   const SRC_DIR = join(import.meta.dir, '..', '..', '..')
-  const preloadSource = readFileSync(join(SRC_DIR, 'preload', 'index.ts'), 'utf8')
-  const ipcSource = readFileSync(join(SRC_DIR, 'main', 'ipc.ts'), 'utf8')
+  const preloadSource = readFileSync(join(SRC_DIR, 'preload', 'linguist-api.ts'), 'utf8')
+  const ipcSource = readFileSync(join(SRC_DIR, 'main', 'lib', 'linguist', 'register-ipc.ts'), 'utf8')
 
   const PRELOAD_METHODS = [
     'linguistProjectsList',

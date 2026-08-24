@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "operations": [
+    { "path": ["version"], "value": "0.17.60", "overwrite": true },
+    {
+      "path": ["description"],
+      "expected": "Proma next gen ai software with general agents - Electron App",
+      "value": "Linguist Agent - desktop localization agent, built on Proma (AGPL-3.0) - Electron App"
+    },
+    {
+      "path": ["author"],
+      "expected": { "name": "ErlichLiu", "email": "erlichliu@gmail.com" },
+      "value": { "name": "Henry Wang" }
+    },
+    {
+      "path": ["scripts", "build:main"],
+      "expected": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist/main.cjs --external:electron --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:sharp",
+      "value": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist/main.cjs --external:electron --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:sharp && bun run build:cat-job-worker && bun run build:integrity-scrub-worker"
+    },
+    {
+      "path": ["scripts", "watch:main"],
+      "expected": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist/main.cjs --external:electron --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:sharp --watch=forever",
+      "value": "concurrently -k -n main,cat-worker,integrity-worker \"esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist/main.cjs --external:electron --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-agent-core --external:@earendil-works/pi-ai --external:sharp --watch=forever\" \"bun run watch:cat-job-worker\" \"bun run watch:integrity-scrub-worker\""
+    },
+    {
+      "path": ["scripts", "build:resources"],
+      "expected": "cp -r resources dist/ 2>/dev/null || true",
+      "value": "bun -e \"import { cpSync } from 'node:fs'; cpSync('resources', 'dist/resources', { recursive: true })\""
+    },
+    { "path": ["scripts", "pack"], "expected": "bun run build && bun run sync:runtime-deps && electron-builder --dir", "value": "bun run build && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts --dir" },
+    { "path": ["scripts", "dist"], "expected": "bun run build && bun run sync:runtime-deps && electron-builder", "value": "bun run build && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts" },
+    { "path": ["scripts", "dist:mac"], "expected": "bun run build && bun run sync:runtime-deps && electron-builder --mac", "value": "bun run build && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts --mac" },
+    { "path": ["scripts", "dist:win"], "expected": "bun run build && bun run sync:runtime-deps && electron-builder --win", "value": "bun run build && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts --win" },
+    { "path": ["scripts", "dist:linux"], "expected": "bun run build && bun run sync:runtime-deps && electron-builder --linux", "value": "bun run build && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts --linux" },
+    { "path": ["scripts", "build:cat-job-worker"], "value": "esbuild src/main/lib/linguist/cat-job-worker.ts --bundle --platform=node --format=cjs --outfile=dist/cat-job-worker.cjs" },
+    { "path": ["scripts", "build:integrity-scrub-worker"], "value": "esbuild src/main/lib/linguist/integrity-scrub-worker.ts --bundle --platform=node --format=cjs --outfile=dist/linguist-integrity-scrub-worker.cjs" },
+    { "path": ["scripts", "watch:cat-job-worker"], "value": "esbuild src/main/lib/linguist/cat-job-worker.ts --bundle --platform=node --format=cjs --outfile=dist/cat-job-worker.cjs --watch=forever" },
+    { "path": ["scripts", "watch:integrity-scrub-worker"], "value": "esbuild src/main/lib/linguist/integrity-scrub-worker.ts --bundle --platform=node --format=cjs --outfile=dist/linguist-integrity-scrub-worker.cjs --watch=forever" },
+    { "path": ["scripts", "test:linguist"], "value": "node --experimental-transform-types --import ./src/main/lib/linguist/test/register-ts-loader.mjs --test \"src/main/lib/linguist/**/*.nodetest.ts\"" },
+    { "path": ["scripts", "smoke:pack"], "value": "CSC_IDENTITY_AUTO_DISCOVERY=false bun run pack -- --mac --arm64 && bun run verify:packaged" },
+    { "path": ["scripts", "smoke:g0"], "value": "node scripts/smoke/run-g0-smoke.ts" },
+    { "path": ["scripts", "smoke:g1"], "value": "node scripts/smoke/probe-pi-stream.ts" },
+    { "path": ["scripts", "smoke:g7"], "value": "node scripts/smoke/probe-pb074-e2e.ts" },
+    { "path": ["scripts", "smoke:vertical"], "value": "node scripts/smoke/run-vertical-smoke.ts" },
+    { "path": ["scripts", "verify:packaged"], "value": "node scripts/smoke/verify-packaged-artifact.ts" },
+    { "path": ["dependencies", "@tanstack/react-virtual"], "value": "3.14.9" },
+    { "path": ["devDependencies", "@tanstack/react-virtual"], "expected": "^3.14.9", "remove": true },
+    { "path": ["devDependencies", "@linguist/cat-core"], "value": "workspace:*" },
+    { "path": ["devDependencies", "@linguist/cat-formats"], "value": "workspace:*" },
+    { "path": ["devDependencies", "@linguist/cat-store"], "value": "workspace:*" },
+    { "path": ["devDependencies", "@linguist/cat-tools"], "value": "workspace:*" },
+    { "path": ["devDependencies", "@linguist/legacy-migration"], "value": "workspace:*" },
+    { "path": ["devDependencies", "axe-core"], "value": "4.12.1" },
+    { "path": ["devDependencies", "playwright-core"], "value": "1.62.0" }
+  ]
+}

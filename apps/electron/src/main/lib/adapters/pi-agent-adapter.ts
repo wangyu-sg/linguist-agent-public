@@ -1903,6 +1903,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
                 })
                 if (continuation.shouldContinue) {
                   automaticCompactionContinuations += 1
+                  // LA-HOST-SEAM: pi-compaction-temporary-deviation
                   pendingCompactionContinuation = appendOutputFormatInstruction(
                     buildPiCompactionContinuationPrompt(
                       continuation.prompt,

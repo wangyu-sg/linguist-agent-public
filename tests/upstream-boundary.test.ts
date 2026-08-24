@@ -30,10 +30,15 @@ const PUBLIC_PATH_SCRUBS = [
 interface Touchpoint {
   file: string
   ticket: string
+  kind: 'product-fork' | 'host-seam' | 'temporary-deviation' | 'generated'
+  owner: string
+  mergePolicy: 'keep-la' | 'reapply-host-seam' | 'overlay' | 'regenerate'
+  hook?: string
   reason: string
 }
 
 interface Registry {
+  schemaVersion: number
   baseline: string
   allowedNewPaths: string[]
   touchpoints: Touchpoint[]
@@ -104,7 +109,7 @@ function isPublicPathScrubOnly(file: string, baseline: string): boolean {
   )
 }
 
-/** 返回相对基线的 committed + tracked/untracked 工作树改动。 */
+/** 返回当前工作树相对基线的 tracked/untracked 改动。 */
 function changedFilesVsBaseline(baseline: string): string[] | null {
   try {
     const run = (args: string[]): string => execFileSync('git', args, {
@@ -113,8 +118,7 @@ function changedFilesVsBaseline(baseline: string): string[] | null {
       stdio: ['ignore', 'pipe', 'pipe']
     })
     return [...new Set([
-      run(['diff', '--name-only', `${baseline}...HEAD`]),
-      run(['diff', '--name-only', 'HEAD']),
+      run(['diff', '--name-only', baseline, '--']),
       run(['ls-files', '--others', '--exclude-standard']),
     ].join('\n')
       .split('\n')
@@ -127,6 +131,7 @@ function changedFilesVsBaseline(baseline: string): string[] | null {
 
 test('registry is well-formed (no git required)', () => {
   const registry = loadRegistry()
+  expect(registry.schemaVersion).toBe(3)
   expect(/^[0-9a-f]{40}$/.test(registry.baseline)).toBe(true)
   expect(Array.isArray(registry.allowedNewPaths)).toBe(true)
   expect(registry.allowedNewPaths.length).toBeGreaterThan(0)
@@ -136,7 +141,14 @@ test('registry is well-formed (no git required)', () => {
     expect(tp.file).not.toStartWith('/')
     expect(tp.file.includes('\\')).toBe(false)
     expect(/^(?:(?:PB|LF|AC)-\d{3}|LA-(?:SYNC|HOST)-\d{3})$/.test(tp.ticket)).toBe(true)
+    expect(['product-fork', 'host-seam', 'temporary-deviation', 'generated']).toContain(tp.kind)
+    expect(tp.owner.trim().length).toBeGreaterThan(0)
+    expect(['keep-la', 'reapply-host-seam', 'overlay', 'regenerate']).toContain(tp.mergePolicy)
+    if (tp.kind === 'host-seam' || tp.kind === 'temporary-deviation') {
+      expect(tp.hook?.trim().length ?? 0).toBeGreaterThan(0)
+    }
     expect(tp.reason.trim().length).toBeGreaterThan(0)
+    expect(tp.reason).not.toMatch(/Local Host Seam: retain upstream|Local Host Seam: compose the Linguist|Permanent Product Fork: package identity/)
     expect(seen.has(tp.file)).toBe(false)
     seen.add(tp.file)
   }

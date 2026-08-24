@@ -43,6 +43,12 @@ jobs:
       - name: 关键回归（目标 200–300 条）
         run: bun run test
 
+      - name: Proma 同步合同
+        run: |
+          node scripts/audit-proma-drift.mjs > "$RUNNER_TEMP/proma-drift.json"
+          node scripts/verify-host-seams.mjs
+          node scripts/test-proma-sync-replay.mjs
+
       - name: 依赖许可扫描
         run: bun run license:check
 

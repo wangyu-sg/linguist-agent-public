@@ -14,8 +14,7 @@
  * 完全解耦 Electron IPC，可独立测试（mock Adapter + EventBus）。
  */
 
-import { createHash, randomUUID } from 'node:crypto'
-import { homedir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import { accessSync, constants, existsSync, mkdirSync, realpathSync } from 'node:fs'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
@@ -33,8 +32,6 @@ import {
   inferContextWindow,
   inferReasoningTransport,
   resolveReasoningProfile,
-  resolveAgentProfile,
-  serializeLinguistTurnContextV1,
   collectSkillActivations,
   mergeSkillActivations,
 } from '@proma/shared'
@@ -70,19 +67,7 @@ import { exitPlanService, type ExitPlanPermissionResult } from './agent-exit-pla
 import { validateToolInput } from './agent-tool-input-validator'
 import { estimateTokenCount, WRITE_CONTENT_TOKEN_THRESHOLD } from './agent-tool-token-estimator'
 import { buildPiBuiltinTools } from './adapters/pi-builtin-tools'
-import { getLinguistProjectService } from './linguist/project-service'
-import {
-  buildLinguistTurnContextBlock,
-  validateLinguistTurnContextForAgentTurn,
-} from './linguist/turn-context-validator'
-import { buildLinguistPrompt } from './linguist/linguist-prompt-builder'
-import { resolveLinguistSessionCatTools } from './linguist/session-cat-tools'
-import { resolveAgentExecutionScope } from './linguist/agent-execution-scope'
-import {
-  composeAgentTools,
-  hashAgentToolComposition,
-} from './linguist/agent-tool-composition'
-import { recordLinguistRuntimeObservation } from './linguist/runtime-diagnostics'
+import { resolveLinguistAgentHostExtension } from './linguist/agent-host-extension'
 import { buildPiMcpTools } from './adapters/pi-mcp-tools'
 import { buildAgentRuntimeEnv, type AgentRuntimeEnv } from './agent-runtime-env'
 import { isVisibleRunMessage } from './agent-run-message-visibility'
@@ -434,12 +419,7 @@ export class AgentOrchestrator {
 
       let hiddenContext: string | undefined
       if (meta.linguistProjectId !== undefined && meta.linguistRole !== undefined) {
-        let projectName = ''
-        try {
-          projectName = getLinguistProjectService().getProject(meta.linguistProjectId).name
-        } catch {
-          // 项目暂时缺失不应阻断 Agent 标题生成。
-        }
+        const projectName = meta.linguistProjectName ?? ''
         hiddenContext = `Linguist Role: ${meta.linguistRole}${projectName ? `\nProject: ${projectName}` : ''}`
       }
       const title = await this.generateTitle({
@@ -698,7 +678,7 @@ export class AgentOrchestrator {
     let userMessagePersisted = false
     let initialUserMessageUuid: string | undefined
     let sessionMeta = getAgentSessionMeta(sessionId)
-    let validatedLinguistContext: Readonly<LinguistTurnContextV1> | undefined
+    let linguistExtension: ReturnType<typeof resolveLinguistAgentHostExtension>
 
     if (!sessionMeta) {
       callbacks.onError('Agent 会话不存在')
@@ -708,11 +688,12 @@ export class AgentOrchestrator {
 
     try {
       // 持久化前先完成主进程 ownership 校验，拒绝把伪造 ID 写入历史。
-      validatedLinguistContext = validateLinguistTurnContextForAgentTurn(
-        linguistContext,
-        sessionMeta ?? undefined,
-        getLinguistProjectService,
-      )?.context
+      // LA-HOST-SEAM: agent-extension
+      linguistExtension = resolveLinguistAgentHostExtension({
+        session: sessionMeta,
+        turnContext: linguistContext,
+        onProjectMutation: callbacks.onLinguistProjectMutation,
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown context validation error'
       callbacks.onError(`Linguist Context 校验失败：${message}`)
@@ -740,7 +721,7 @@ export class AgentOrchestrator {
         sessionId,
         rawUserMessage ?? userMessage,
         Date.now(),
-        validatedLinguistContext,
+        linguistExtension.turnContext,
         userMessageUuid,
       )
       userMessagePersisted = true
@@ -992,9 +973,7 @@ export class AgentOrchestrator {
       console.log(`[Agent 编排] 启动 Pi runtime — 模型: ${modelId || DEFAULT_MODEL_ID}, resume: ${existingSdkSessionId ?? '无'}`)
 
       // 会话 metadata 同时承载 Workspace 与可选 Linguist binding，两者不互斥。
-      const executionScope = sessionMeta
-        ? resolveAgentExecutionScope(sessionMeta)
-        : { kind: 'home' as const, cwd: homedir() }
+      const executionScope = linguistExtension.executionScope
       agentCwd = executionScope.cwd
       workspaceSlug = undefined
       workspace = undefined
@@ -1090,9 +1069,7 @@ export class AgentOrchestrator {
         agentCwd,
         userBrowserContext: browserController.getUserContext(sessionId),
       })
-      const linguistContextBlock = validatedLinguistContext
-        ? buildLinguistTurnContextBlock(validatedLinguistContext)
-        : ''
+      const linguistContextBlock = linguistExtension.turnContextBlock
 
       // 11.5 注入 mention 引用指令（Skill/MCP/会话）— 仅影响 prompt，不影响持久化
       let enrichedMessage = userMessage
@@ -1467,26 +1444,6 @@ export class AgentOrchestrator {
         memoryGuidance,
         memoryRefreshOpportunity,
       }) + (automationContext ? `\n\n## 定时任务执行上下文\n\n${automationContext}` : '')
-      const agentProfile = resolveAgentProfile(sessionMeta)
-      // 同一份简化 Prompt 内容随 runtime 使用 XML 或 Markdown 外壳。
-      const linguistPromptBuild = agentProfile.kind === 'linguist'
-        ? buildLinguistPrompt(
-          sessionMeta as typeof sessionMeta & { linguistProjectId: string },
-          getLinguistProjectService,
-          { renderer: 'markdown' },
-        )
-        : undefined
-      const linguistSystemPrompt = linguistPromptBuild?.prompt ?? ''
-      const linguistTurnContextSnapshot = validatedLinguistContext === undefined
-        ? undefined
-        : serializeLinguistTurnContextV1(validatedLinguistContext)
-      const linguistTurnContextHash = linguistTurnContextSnapshot === undefined
-        ? undefined
-        : createHash('sha256').update(linguistTurnContextSnapshot).digest('hex')
-      const linguistRunId = agentProfile.kind === 'linguist'
-        ? `agent-turn:${sessionId}:${randomUUID()}`
-        : undefined
-      let linguistToolsetHash: string | undefined
       const startAutoTitleGeneration = (): void => {
         if (titleGenerationStarted) return
         titleGenerationStarted = true
@@ -1541,60 +1498,16 @@ export class AgentOrchestrator {
           event: { type: 'context_window', contextWindow },
         })
       }
-      // Linguist 项目会话只在 Proma 的 Pi custom tools 缝上追加 CAT overlay。
-      const linguistCatTools = agentProfile.kind === 'linguist'
-        ? resolveLinguistSessionCatTools(
-          sessionMeta,
-          getLinguistProjectService,
-          callbacks.onLinguistProjectMutation,
-          (toolCallId) => ({
-            sessionId,
-            runId: linguistRunId!,
-            toolCallId,
-            modelProvider: channel.provider,
-            modelId: resolvedModel,
-            runtime: 'pi',
-            // 质量档位废除；proposal_issuances.strategy 列保留
-            // legacy 读取（旧行仍有值），新行不再写入该字段。
-            linguistPromptVersion: linguistPromptBuild!.status.promptVersion,
-            promptHash: linguistPromptBuild!.status.promptHash,
-            ...(linguistTurnContextSnapshot === undefined
-              ? {}
-              : {
-                  turnContextVersion: validatedLinguistContext!.schemaVersion,
-                  turnContextSnapshot: linguistTurnContextSnapshot,
-                  turnContextHash: linguistTurnContextHash!,
-                }),
-            ...(linguistToolsetHash === undefined
-              ? {}
-              : { toolsetHash: linguistToolsetHash }),
-          }),
-          validatedLinguistContext,
-        )
-        : []
-      const toolComposition = composeAgentTools(
-        agentProfile,
-        [...piBuiltinTools, ...piMcpTools, ...(extensions.piCustomTools ?? [])] as ToolDefinition[],
-        () => linguistCatTools as ToolDefinition[],
-      )
-      const piCustomTools = toolComposition.mergedTools
-      if (agentProfile.kind === 'linguist') {
-        linguistToolsetHash = hashAgentToolComposition({
-          toolNames: piCustomTools.map((tool) => tool.name),
-          mcpServerNames: Object.keys(mcpServers),
-        })
-      }
+      const toolComposition = linguistExtension.composeTools({
+        baseTools: [...piBuiltinTools, ...piMcpTools, ...(extensions.piCustomTools ?? [])] as ToolDefinition[],
+        mcpServerNames: Object.keys(mcpServers),
+        modelProvider: channel.provider,
+        getModelId: () => resolvedModel,
+      })
+      const piCustomTools = toolComposition.tools
       console.log(
-        `[Agent 能力] Proma=${toolComposition.baseTools.length}, Linguist CAT=${toolComposition.overlayTools.length}`,
+        `[Agent 能力] Proma=${toolComposition.baseToolCount}, Linguist CAT=${toolComposition.overlayToolCount}`,
       )
-      if (agentProfile.kind === 'linguist') {
-        recordLinguistRuntimeObservation(sessionId, {
-          runtime: 'pi',
-          baseToolCount: toolComposition.baseTools.length,
-          overlayToolCount: linguistCatTools.length,
-          observedAt: new Date().toISOString(),
-        })
-      }
       const queryOptions: PiAgentQueryOptions = {
         sessionId,
         prompt: finalPrompt,
@@ -1614,7 +1527,7 @@ export class AgentOrchestrator {
         permissionMode: initialPermissionMode,
         canUseTool,
         systemPrompt: systemPromptAppend + buildPiAdditionalDirectoriesPrompt(allAdditionalDirectories)
-          + linguistSystemPrompt,
+          + linguistExtension.promptOverlay,
         ...(instructionFiles.length > 0 && { projectInstructionFiles: instructionFiles }),
         ...(projectInstructions && {
           projectInstructionScope: {
@@ -2398,11 +2311,12 @@ export class AgentOrchestrator {
     // 注入 mention 引用指令（Skill/MCP/会话）— 与 sendMessage 路径保持一致的 prompt 加工
     const meta = getAgentSessionMeta(sessionId)
 
-    const validatedLinguistContext = validateLinguistTurnContextForAgentTurn(
-      linguistContext,
-      meta ?? undefined,
-      getLinguistProjectService,
-    )?.context
+    if (!meta) throw new Error(`[Agent 编排] Agent 会话不存在: ${sessionId}`)
+    const linguistExtension = resolveLinguistAgentHostExtension({
+      session: meta,
+      turnContext: linguistContext,
+    })
+    const validatedLinguistContext = linguistExtension.turnContext
 
     const workspaceSlug = meta?.workspaceId
       ? getAgentWorkspace(meta.workspaceId)?.slug
@@ -2440,8 +2354,8 @@ export class AgentOrchestrator {
     if (referencedPlanningBlock) {
       enrichedText = `${referencedPlanningBlock}\n\n${enrichedText}`
     }
-    if (validatedLinguistContext) {
-      enrichedText = `${buildLinguistTurnContextBlock(validatedLinguistContext)}\n\n${enrichedText}`
+    if (linguistExtension.turnContextBlock) {
+      enrichedText = `${linguistExtension.turnContextBlock}\n\n${enrichedText}`
     }
 
     const uuid = presetUuid || randomUUID()

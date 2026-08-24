@@ -6,20 +6,21 @@
 
 | 集合 | 路径数 |
 |---|---:|
-| formal merge 全部变动 | 866 |
-| 允许路径 | 599 |
-| 仅公开路径占位符替换 | 4 |
-| formal merge 已登记核心触点 | 263 |
-| 当前精确 ledger | 263 |
+| Permanent Product Fork | 252 |
+| Generated / Overlay | 2 |
+| Main Host Seam | 4 |
+| Temporary Deviation | 1 |
+| 当前精确 ledger | 259 |
 
-当前分类为 Permanent Product Fork 41、Local Host Seam 221、Temporary Deviation 1；Linguist Extension 位于允许根，不计入核心触点。精确文件、票号和理由只维护在 JSON，避免双写漂移。
+账本使用 schema v3；每个条目都记录 `kind`、`owner`、`mergePolicy`、具体理由，以及 Host Seam 的稳定 `hook`。Linguist Extension 位于允许根，不计入 Proma Core Touchpoint。精确文件只维护在 JSON，避免双写漂移。
 
 ## 规则
 
 1. CAT 领域代码优先进入 `apps/electron/src/**/linguist/`、`packages/linguist-*`、`resources/linguist-*` 与默认本地化 Skill 目录。
-2. 修改 Proma Core 必须在同一变更中登记精确触点和理由；stale 条目同样会被 boundary test 拒绝。
+2. 修改 Proma Core 必须在同一变更中登记精确触点、所有者、合并策略和真实理由；stale 条目同样会被 boundary test 拒绝。
 3. `tests/upstream-boundary.test.ts` 同时检查 HEAD、tracked 工作树和 untracked 文件。
-4. Temporary Deviation 目前仅 Pi compaction continuation context；下次 upstream sync 必须复核并在上游提供等价 hook 后删除。
-5. 维护顺序固定为 baseline → 实际 diff → ledger → deviations → boundary + fusion。
+4. Main Host Seam 仅保留 Agent Extension、IPC、Preload 与 Collaboration 四处；Pi compaction continuation context 是唯一 Temporary Deviation。
+5. 同步规则由 [proma-sync-policy.json](./proma-sync-policy.json) 管理；Anchor 和深层领域 import 由 `scripts/verify-host-seams.mjs` 验证。
+6. 维护顺序固定为 baseline → 实际 diff → ledger → deviations → boundary + fusion。
 
 不要扩大白名单来掩盖核心改动，也不要把“已登记”误解为永久合理。

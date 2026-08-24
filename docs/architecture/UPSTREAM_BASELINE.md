@@ -18,7 +18,7 @@
 | Linguist Agent / upstream app | `0.17.60` / `0.17.59` |
 | Electron / Bun | `43.2.0` / `1.3.14` |
 | Pi Runtime | `0.84.2` |
-| Shared | `0.1.101` |
+| Shared | `0.1.63` |
 | CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.11 / 0.0.39 / 0.0.35` |
 | CAT schema | `16` |
 

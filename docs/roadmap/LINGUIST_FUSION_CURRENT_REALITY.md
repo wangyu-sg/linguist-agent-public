@@ -9,7 +9,7 @@
 | Proma Base / formal merge | `v0.17.59@4546c5f7` / `f53612ca` |
 | App / Electron | `0.17.60` / `43.2.0` |
 | Bun / Pi | `1.3.14` / `0.84.2` |
-| Shared | `0.1.101` |
+| Shared | `0.1.63` |
 | CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.11 / 0.0.39 / 0.0.35` |
 | CAT schema / Tool count | `16` / `31` |
 
@@ -27,9 +27,9 @@
 
 ## 已验证与未验证
 
-- typecheck、boundary、fusion、Agent Full、no-raw-palette 与 Electron Linguist `214/214` 通过；全量为 `1537 pass / 7` 个既有 MCP HTTP Session 恢复失败。
+- typecheck、boundary、fusion、Agent Full、no-raw-palette 与 Electron Linguist `214/214` 通过；全量为 `1558 pass / 0 fail`。
 - Electron 未打包构建的 main、workers、runtime、preload、renderer、CLI、Agent Island、EventKit 与 resources 均通过。
-- 尚无本轮 `smoke:pack`、packaged startup、vertical smoke 或真实 Provider 四岗位证据。
+- 本轮 `smoke:pack`、产物完整性与 Chat packaged vertical `19/19` 通过；完整 vertical 因 Pi 旧 `_partial` 断言和 Renderer rail 遮挡未通过。真实 Provider 四岗位证据仍缺失。
 - 真实 Phrase / memoQ、Native Open/Save、IME、VoiceOver 与 14 天日用仍待真实证据。
 
 历史 v0.17.1 / v0.16.x 报告与旧 queue 只代表当时状态，不覆盖本页。

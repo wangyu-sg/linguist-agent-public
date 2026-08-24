@@ -246,14 +246,14 @@
     },
     "packages/shared": {
       "name": "@proma/shared",
-      "version": "0.1.101",
+      "version": "0.1.63",
       "devDependencies": {
         "typescript": "^5.0.0",
       },
     },
     "packages/ui": {
       "name": "@proma/ui",
-      "version": "0.1.11",
+      "version": "0.1.10",
       "dependencies": {
         "@proma/core": "workspace:*",
         "beautiful-mermaid": "1.1.3",

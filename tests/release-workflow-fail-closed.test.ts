@@ -40,6 +40,14 @@ describe('AC-002 发布链 fail-closed', () => {
     expect(baselineIndex).toBeGreaterThan(versionIndex)
   })
 
+  test('上游同步按登记策略解决冲突并验证 Host Seam', () => {
+    expect(upstreamSyncWorkflow).toContain('git merge --no-commit --no-ff')
+    expect(upstreamSyncWorkflow).toContain('node scripts/resolve-proma-conflicts.mjs')
+    expect(upstreamSyncWorkflow).toContain('node scripts/apply-la-electron-overlay.mjs')
+    expect(upstreamSyncWorkflow).toContain('node scripts/verify-host-seams.mjs')
+    expect(upstreamSyncWorkflow).toContain('Resolver Error Code')
+  })
+
   test('公开 Release 前删除未使用的差分资产', () => {
     expect(releaseWorkflow).toContain('endswith(".blockmap")')
     expect(releaseWorkflow).toContain('gh release delete-asset')

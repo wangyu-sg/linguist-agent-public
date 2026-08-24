@@ -1,0 +1,101 @@
+import type {
+  AgentSessionMeta,
+  LinguistDelegatedScope,
+  LinguistDelegationOutcome,
+  LinguistRole,
+} from '@proma/shared'
+import { getLinguistProjectService } from './project-service'
+
+export interface LinguistDelegationRequest {
+  linguistRole?: Exclude<LinguistRole, 'general'>
+  linguistScope?: {
+    batchId?: string
+    assetIds?: string[]
+    segmentIds?: string[]
+  }
+}
+
+export interface LinguistDelegationMetadata {
+  role: Exclude<LinguistRole, 'general'>
+  projectId: string
+  projectName: string
+  scope: LinguistDelegatedScope
+}
+
+const ROLE_STAGE: Record<
+  LinguistDelegationOutcome['role'],
+  LinguistDelegationOutcome['stage']
+> = {
+  translator: 'translation',
+  reviewer: 'editing',
+  proofreader: 'proofreading',
+}
+
+function freezeScope(
+  parent: AgentSessionMeta & { linguistProjectId: string },
+  input: LinguistDelegationRequest['linguistScope'],
+): LinguistDelegatedScope {
+  const db = getLinguistProjectService().openProject(parent.linguistProjectId)
+  const assetIds = [...new Set([
+    ...(input?.batchId ? [input.batchId] : []),
+    ...(input?.assetIds ?? []),
+  ])]
+  const segmentIds = [...new Set(input?.segmentIds ?? [])]
+  for (const assetId of assetIds) {
+    if (!db.assets.get(assetId)) throw new Error(`Linguist 委派批次不存在: ${assetId}`)
+    segmentIds.push(...db.segments.queryIds({ assetId }))
+  }
+  const frozenSegmentIds = [...new Set(segmentIds)]
+  const effectiveSegmentIds = frozenSegmentIds.length > 0 || input !== undefined
+    ? frozenSegmentIds
+    : db.segments.queryIds()
+  const found = new Set(db.segments.getByIds(effectiveSegmentIds).map((segment) => segment.id as string))
+  const missing = effectiveSegmentIds.find((segmentId) => !found.has(segmentId))
+  if (missing) throw new Error(`Linguist 委派 Segment 不存在: ${missing}`)
+  if (effectiveSegmentIds.length === 0) throw new Error('Linguist 委派范围没有 Segment')
+  return { assetIds, segmentIds: effectiveSegmentIds }
+}
+
+export function resolveLinguistDelegationMetadata(
+  parent: AgentSessionMeta | undefined,
+  request: LinguistDelegationRequest,
+): LinguistDelegationMetadata | undefined {
+  if (!request.linguistRole) return undefined
+  if (!parent?.linguistProjectId || parent.linguistRole !== 'general') {
+    throw new Error('只有 Linguist General 会话可以委派本地化岗位')
+  }
+  return {
+    role: request.linguistRole,
+    projectId: parent.linguistProjectId,
+    projectName: parent.linguistProjectName ?? parent.linguistProjectId,
+    scope: freezeScope(parent as AgentSessionMeta & { linguistProjectId: string }, request.linguistScope),
+  }
+}
+
+/** 委派状态只代表进程结束；完成度实时读取冻结范围的 CAT 审计事件。 */
+export function resolveLinguistDelegationOutcome(
+  session: AgentSessionMeta | undefined,
+): LinguistDelegationOutcome | undefined {
+  const role = session?.linguistRole
+  const projectId = session?.linguistProjectId
+  const segmentIds = session?.linguistDelegatedScope?.segmentIds
+  if (role !== 'translator' && role !== 'reviewer' && role !== 'proofreader') return undefined
+  if (!projectId || !segmentIds) return undefined
+
+  try {
+    const stage = ROLE_STAGE[role]
+    const coverage = getLinguistProjectService()
+      .openProject(projectId)
+      .segments
+      .getStageDecisionCoverage(stage, segmentIds)
+    return {
+      role,
+      stage,
+      ...coverage,
+      decided: coverage.total - coverage.pending,
+    }
+  } catch (error) {
+    console.warn(`[协作工具] 无法读取 Linguist 委派完成证据: ${session.id}`, error)
+    return undefined
+  }
+}

@@ -6,6 +6,10 @@ const orchestrator = readFileSync(
   new URL('../apps/electron/src/main/lib/agent-orchestrator.ts', import.meta.url),
   'utf8',
 )
+const hostExtension = readFileSync(
+  new URL('../apps/electron/src/main/lib/linguist/agent-host-extension.ts', import.meta.url),
+  'utf8',
+)
 const diagnosticsIpc = readFileSync(
   new URL('../apps/electron/src/main/lib/linguist/diagnostics-ipc.ts', import.meta.url),
   'utf8',
@@ -14,19 +18,19 @@ const diagnosticsIpc = readFileSync(
 test('LF-079: Pi 复用 Proma Base，并追加 Linguist Prompt overlay', () => {
   // LA-PROMPT-001：Pi-only 运行时始终使用 Markdown wire。
   assert.match(
-    orchestrator,
-    /const linguistPromptBuild = agentProfile\.kind === 'linguist'\s*\?\s*buildLinguistPrompt\(\s*sessionMeta as [^,]+,\s*getLinguistProjectService,\s*\{ renderer: 'markdown' \},?\s*\)/,
+    hostExtension,
+    /const promptBuild = profile\.kind === 'linguist'[\s\S]*?buildLinguistPrompt\([\s\S]*?\{ renderer: 'markdown' \}/,
+  )
+  assert.match(
+    hostExtension,
+    /promptOverlay: promptBuild\?\.prompt \?\? ''/,
   )
   assert.match(
     orchestrator,
-    /const linguistSystemPrompt = linguistPromptBuild\?\.prompt \?\? ''/,
-  )
-  assert.match(
-    orchestrator,
-    /systemPrompt: systemPromptAppend \+ buildPiAdditionalDirectoriesPrompt\(allAdditionalDirectories\)\s*\+ linguistSystemPrompt/,
+    /systemPrompt: systemPromptAppend \+ buildPiAdditionalDirectoriesPrompt\(allAdditionalDirectories\)\s*\+ linguistExtension\.promptOverlay/,
   )
   assert.equal(
-    orchestrator.match(/buildLinguistPrompt\(/g)?.length,
+    hostExtension.match(/buildLinguistPrompt\(/g)?.length,
     1,
     'overlay 每次发送只构建一次',
   )

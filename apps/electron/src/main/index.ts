@@ -95,7 +95,7 @@ import { createApplicationMenu } from './menu'
 import { registerIpcHandlers, stopAllLinguistIntegrityScrubs } from './ipc'
 import { createTray, destroyTray, getTray, setTrayFlash } from './tray'
 import { initializeRuntime } from './lib/runtime-init'
-import { seedDefaultSkills } from './lib/config-paths'
+import { getConfigDir, seedDefaultSkills } from './lib/config-paths'
 import { upgradeDefaultSkillsInWorkspaces } from './lib/agent-workspace-manager'
 import { hasActiveAgentSessions, stopAllAgents } from './lib/agent-service'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
@@ -909,14 +909,15 @@ function handleBootstrapFailure(err: unknown): void {
 
   try {
     const message = err instanceof Error ? (err.stack ?? err.message) : String(err)
+    const configDir = getConfigDir()
     dialog.showErrorBox(
       'Linguist Agent 启动遇到错误',
       `部分功能可能不可用：\n\n${message}\n\n` +
         `日志位置：${app.getPath('logs')}\n\n` +
         `常见原因与排查：\n` +
         `1. 旧版进程未退出（终端运行 killall "Linguist Agent" 后重试）\n` +
-        `2. ~/.linguist-agent/ 配置损坏（重命名 ~/.linguist-agent 后重启）\n` +
-        `3. 系统 Keychain 无法解密保存的凭证（删除 ~/.linguist-agent/feishu.json 等后重新登录）\n\n` +
+        `2. 配置目录损坏（重命名 ${configDir} 后重启）\n` +
+        `3. 系统 Keychain 无法解密保存的凭证（删除 ${join(configDir, 'feishu.json')} 等后重新登录）\n\n` +
         `如需协助请到 GitHub Issues 反馈。`,
     )
   } catch {

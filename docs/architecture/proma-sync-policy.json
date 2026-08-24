@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "baselineFile": "docs/architecture/proma-baseline.json",
+  "rules": [
+    {
+      "patterns": [
+        "apps/electron/src/renderer/components/agent/AgentView.tsx",
+        "apps/electron/src/renderer/components/app-shell/AppShell.tsx"
+      ],
+      "policy": "reapply-host-seam",
+      "owner": "kimi-renderer-host",
+      "status": "awaiting-renderer-anchor"
+    },
+    {
+      "patterns": ["apps/electron/package.json"],
+      "policy": "overlay"
+    },
+    {
+      "patterns": [
+        "apps/electron/src/main/lib/agent-orchestrator.ts",
+        "apps/electron/src/main/ipc.ts",
+        "apps/electron/src/preload/index.ts",
+        "apps/electron/src/main/lib/agent-collaboration-tools.ts",
+        "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts"
+      ],
+      "policy": "reapply-host-seam",
+      "owner": "codex-main-host",
+      "status": "ready"
+    },
+    {
+      "patterns": [
+        "packages/core/package.json",
+        "packages/shared/package.json",
+        "packages/session-core/package.json",
+        "packages/ui/package.json",
+        "packages/shared/src/types/feishu.ts",
+        "apps/electron/src/main/lib/chat-tool-config.ts",
+        "apps/electron/src/renderer/components/agent/AgentPlaceholder.tsx"
+      ],
+      "policy": "take-upstream"
+    },
+    {
+      "patterns": [
+        "README.md",
+        "README.en.md",
+        "AGENTS.md",
+        "NOTICE.md",
+        "ATTRIBUTION.md",
+        "THIRD_PARTY_NOTICES.md",
+        "packages/linguist-**",
+        "resources/linguist-**",
+        "apps/electron/src/main/lib/linguist/**",
+        "apps/electron/src/renderer/features/linguist/**",
+        "apps/electron/default-skills/**",
+        "apps/electron/resources/**"
+      ],
+      "policy": "keep-la"
+    },
+    {
+      "patterns": [
+        "bun.lock",
+        "docs/architecture/proma-baseline.json",
+        "docs/architecture/proma-touchpoints.json",
+        "docs/architecture/UPSTREAM_BASELINE.md",
+        "apps/electron/src/renderer/lib/linguist-build-metadata.ts"
+      ],
+      "policy": "regenerate"
+    },
+    {
+      "patterns": ["**"],
+      "policy": "manual"
+    }
+  ]
+}
