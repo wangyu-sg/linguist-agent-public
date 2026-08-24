@@ -46,7 +46,8 @@ describe('AssetNavigator', () => {
     expect(html).toContain('aria-label="批次导航器"')
     expect(html).toContain('aria-label="刷新批次"')
     expect(html).not.toContain('全部批次')
-    expect(html).toContain('项目状态：已确认 11 / 20')
+    // U-09：批次面板计数标注「全项目」口径，与头部「本批次」前缀区分。
+    expect(html).toContain('项目状态（全项目）：已确认 11 / 20')
     expect(html).toContain('dialogue.json')
     expect(html).toContain('已确认 7 / 12 · QA 2')
     expect(html).toContain('menu.json')

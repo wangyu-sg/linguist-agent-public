@@ -42,6 +42,34 @@ export type TargetDraftAction =
 export const TARGET_UNDO_MAX_OPERATIONS = 200
 export const TARGET_UNDO_MAX_CHARACTERS = 200_000
 
+/**
+ * U-12：编辑 textarea 自适应高度的下限（px）。
+ * 约 4 行：text-[12px] leading-4 × 4 + py-1.5 上下各 6px。
+ */
+export const TARGET_TEXTAREA_MIN_HEIGHT = 76
+/** U-12：自适应高度上限为视口高度的 40%。 */
+export const TARGET_TEXTAREA_MAX_VIEWPORT_RATIO = 0.4
+
+/** 内容需要的高度收敛到 [min, max(视口 40%)]；纯函数便于单测。 */
+export function clampTargetTextareaHeight(scrollHeight: number, viewportHeight: number): number {
+  const maxHeight = Math.max(
+    TARGET_TEXTAREA_MIN_HEIGHT,
+    Math.floor(viewportHeight * TARGET_TEXTAREA_MAX_VIEWPORT_RATIO),
+  )
+  return Math.min(Math.max(scrollHeight, TARGET_TEXTAREA_MIN_HEIGHT), maxHeight)
+}
+
+/** 按内容重置 textarea 高度；超过上限时恢复内部滚动。调用方须避开 IME 组合期间。 */
+export function autoSizeTargetTextarea(
+  textarea: HTMLTextAreaElement,
+  viewportHeight: number,
+): void {
+  textarea.style.height = 'auto'
+  const nextHeight = clampTargetTextareaHeight(textarea.scrollHeight, viewportHeight)
+  textarea.style.height = `${nextHeight}px`
+  textarea.style.overflowY = textarea.scrollHeight > nextHeight ? 'auto' : 'hidden'
+}
+
 export interface TargetTextSelection {
   start: number
   end: number
@@ -381,6 +409,13 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
       onDraftChange?.(state.value, dirty)
     }, [dirty, onDraftChange, state.value])
 
+    // U-12：值变化后自适应高度；IME 组合期间跳过（避免重排闪烁），组合结束时补量。
+    React.useEffect(() => {
+      if (composingRef.current) return
+      const textarea = textareaRef.current
+      if (textarea !== null) autoSizeTargetTextarea(textarea, window.innerHeight)
+    }, [state.value])
+
     React.useEffect(() => {
       const caret = pendingCaretRef.current
       if (caret === undefined) return
@@ -569,6 +604,13 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
             )) {
               dispatch({ type: 'composition-end', value: state.value })
             }
+            // U-12：组合期间跳过了高度自适应，组合结束后补一次测量。
+            requestAnimationFrame(() => {
+              const el = textareaRef.current
+              if (el !== null && !composingRef.current) {
+                autoSizeTargetTextarea(el, window.innerHeight)
+              }
+            })
             // IME composition 期间不校正选区；compositionend 后再把光标吸出 hard span。
             requestAnimationFrame(() => {
               const el = textareaRef.current
@@ -653,7 +695,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
             else if (action === 'undo') undo()
             else redo()
           }}
-          className="h-16 w-full resize-none rounded-md bg-background px-2 py-1.5 text-[12px] leading-4 outline-none ring-1 ring-primary/45 read-only:cursor-not-allowed read-only:opacity-60"
+          className="min-h-[4.75rem] w-full resize-none overflow-y-hidden rounded-md bg-background px-2 py-1.5 text-[12px] leading-4 outline-none ring-1 ring-primary/45 read-only:cursor-not-allowed read-only:opacity-60"
         />
         <span className="flex min-w-0 flex-wrap items-center justify-between gap-1">
           <ProtectedTokenChips

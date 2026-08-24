@@ -3,8 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { LinguistSegmentInfo } from '@proma/shared'
 import {
   TargetEditor,
+  TARGET_TEXTAREA_MAX_VIEWPORT_RATIO,
+  TARGET_TEXTAREA_MIN_HEIGHT,
   TARGET_UNDO_MAX_CHARACTERS,
   TARGET_UNDO_MAX_OPERATIONS,
+  clampTargetTextareaHeight,
   createTargetDraftState,
   insertTargetText,
   targetDraftReducer,
@@ -193,5 +196,38 @@ describe('LF-044/LF-047 TargetEditor', () => {
     expect(html).toContain('readonly=""')
     expect(html).toMatch(/aria-label="保存译文"[^>]*disabled=""/)
     expect(html).toMatch(/aria-label="确认审校并前进"[^>]*disabled=""/)
+  })
+
+  test('U-12：编辑 textarea 不再固定三行高，改为 min 约 4 行 + 自适应内容高度', () => {
+    const html = renderToStaticMarkup(
+      <TargetEditor
+        index={0}
+        segment={segment}
+        archived={false}
+        confirmLabel="确认审校"
+        onCancel={() => {}}
+        onSave={async () => 'saved'}
+        onReload={async () => segment}
+      />,
+    )
+
+    const textarea = html.match(/<textarea[^>]*>/)?.[0]
+    expect(textarea).toBeDefined()
+    expect(textarea).toContain('min-h-[4.75rem]')
+    expect(textarea).toContain('resize-none')
+    expect(textarea).not.toContain('h-16')
+    expect(TARGET_TEXTAREA_MIN_HEIGHT).toBe(76)
+    expect(TARGET_TEXTAREA_MAX_VIEWPORT_RATIO).toBe(0.4)
+  })
+
+  test('U-12：自适应高度收敛在 min 4 行与视口 40% 之间', () => {
+    // 短译文：收紧到 min（约 4 行）。
+    expect(clampTargetTextareaHeight(20, 800)).toBe(TARGET_TEXTAREA_MIN_HEIGHT)
+    // 中等译文：按内容高度。
+    expect(clampTargetTextareaHeight(160, 800)).toBe(160)
+    // 长译文：封顶视口 40%。
+    expect(clampTargetTextareaHeight(900, 800)).toBe(320)
+    // 极小视口（200% zoom）：max 不低于 min，保持 4 行可用。
+    expect(clampTargetTextareaHeight(900, 120)).toBe(TARGET_TEXTAREA_MIN_HEIGHT)
   })
 })

@@ -2,17 +2,19 @@ import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { AlertTriangle, Loader2, RefreshCw, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import type {
-  LinguistAssetMetadata,
-  LinguistCurrentStageState,
-  LinguistIpcError,
-  LinguistProposalInfo,
-  LinguistQaFindingInfo,
-  LinguistSegmentInfo,
-  LinguistTagProfileInfo,
-  LinguistWorkflowStage,
+import {
+  LINGUIST_ASSET_ID_PATTERN,
+  type LinguistAssetMetadata,
+  type LinguistCurrentStageState,
+  type LinguistIpcError,
+  type LinguistProposalInfo,
+  type LinguistQaFindingInfo,
+  type LinguistSegmentInfo,
+  type LinguistTagProfileInfo,
+  type LinguistWorkflowStage,
 } from '@proma/shared'
 import {
+  buildQaFindingJumpPatch,
   clearQaFindingsCapability,
   getInvalidLinguistWorkbenchLocationPatch,
   linguistQaFindingsCapabilityAtomFamily,
@@ -37,6 +39,7 @@ import {
   proposalReviewBlock,
 } from './proposal-inbox-utils'
 import {
+  qaJumpDisabledReason,
   summarizeOpenQaFindingsBySegment,
   type SegmentQaSummary,
 } from './qa-findings-utils'
@@ -392,8 +395,40 @@ export function SegmentEditor({
   }, [data?.segmentIds, focusRow, setActiveSegmentId, setWorkbenchUiState])
 
   const jumpToQaFinding = React.useCallback((finding: LinguistQaFindingInfo): void => {
-    jumpToQaSegment(finding.segmentId)
-  }, [jumpToQaSegment])
+    // U-02 fail closed：归档或缺片段引用时直接拒绝（面板按钮已禁用，这里兜底）。
+    if (qaJumpDisabledReason(finding, archived) !== undefined) return
+    const segmentId = finding.segmentId
+    const index = data?.segmentIds.indexOf(segmentId) ?? -1
+    if (index >= 0) {
+      focusRow(index)
+      return
+    }
+    // 片段不在当前网格：先向主进程查它所属批次（只读查询），再显式 patch
+    // activeAssetId/activeSegmentId 切到该批次；聚焦交给 requestedSegmentId →
+    // focusRow → SegmentGrid focusIndex 的既有导航路径。
+    void (async (): Promise<void> => {
+      try {
+        const context = await window.electronAPI.linguistCatGetContext({ projectId, segmentId })
+        if (
+          !context.ok
+          || context.data.segment.id !== segmentId
+          || !LINGUIST_ASSET_ID_PATTERN.test(context.data.segment.assetId)
+        ) {
+          toast.error('无法定位到片段', {
+            description: context.ok
+              ? '片段上下文校验失败'
+              : describeLinguistIpcError(context.error),
+          })
+          return
+        }
+        setWorkbenchUiState((current) =>
+          buildQaFindingJumpPatch(current, context.data.segment.assetId, segmentId))
+        setRequestedSegmentId(segmentId)
+      } catch {
+        toast.error('无法定位到片段', { description: '与主进程通信异常（INTERNAL）' })
+      }
+    })()
+  }, [archived, data?.segmentIds, focusRow, projectId, setWorkbenchUiState, setRequestedSegmentId])
 
   const goToNextQa = React.useCallback((): void => {
     if (qaOpenCount === undefined || qaOpenCount === 0) {

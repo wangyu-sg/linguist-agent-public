@@ -83,7 +83,8 @@ export function AssetNavigator({
       </label>
       {summary !== undefined && (
         <p className="text-xs text-muted-foreground">
-          项目状态：{stageProgressSummary(
+          {/* U-09：此处为全项目口径，与头部「本批次」区分 */}
+          项目状态（全项目）：{stageProgressSummary(
             summary.project.workflowStage ?? 'translation',
             summary.currentStageCounts,
           )}

@@ -10,6 +10,9 @@
  *
  * a11y：Radix Dialog 负责焦点圈定与 Esc 关闭；每个输入配 label +
  * aria-invalid/aria-describedby 错误文本；表单级错误 role="alert"。
+ * 焦点归还（U-11）：受控 Dialog 没有 Radix Trigger，打开时记录触发元素，
+ * 关闭时经 onCloseAutoFocus 归还——创建成功落到侧栏「打开项目」按钮，
+ * 取消 / Esc 回到「新建项目」触发按钮。
  */
 
 import * as React from 'react'
@@ -50,6 +53,49 @@ interface FormErrors {
   form?: string
 }
 
+/** 侧栏「打开项目」按钮 selector：项目头（ProjectSessionTreeGroupHeader）以 aria-controls 标识项目 id。 */
+export function projectOpenButtonSelector(projectId: string): string {
+  return `button[aria-controls="project-sessions-${projectId}"]`
+}
+
+/** 可注入的 DOM 探针，便于无 DOM 环境下做行为测试。 */
+interface FocusProbe {
+  querySelector: (selector: string) => { focus: () => void } | null
+  schedule: (callback: () => void) => void
+}
+
+const defaultFocusProbe: FocusProbe = {
+  querySelector: (selector) => document.querySelector<HTMLElement>(selector),
+  schedule: (callback) => {
+    requestAnimationFrame(() => callback())
+  },
+}
+
+/** 项目列表刷新 IPC 通常远快于此上限；60 帧约 1 秒。 */
+export const PROJECT_OPEN_FOCUS_MAX_ATTEMPTS = 60
+
+/**
+ * U-11：创建成功后把焦点落到侧栏「打开项目」按钮。项目列表刷新晚于
+ * Dialog 关闭动画，做有限帧重试；最终找不到时回退到「新建项目」触发按钮。
+ */
+export function focusAfterProjectCreate(
+  projectId: string,
+  fallback: { focus: () => void } | null,
+  attemptsLeft: number = PROJECT_OPEN_FOCUS_MAX_ATTEMPTS,
+  probe: FocusProbe = defaultFocusProbe,
+): void {
+  const button = probe.querySelector(projectOpenButtonSelector(projectId))
+  if (button !== null) {
+    button.focus()
+    return
+  }
+  if (attemptsLeft <= 0) {
+    fallback?.focus()
+    return
+  }
+  probe.schedule(() => focusAfterProjectCreate(projectId, fallback, attemptsLeft - 1, probe))
+}
+
 interface ProjectCreateDialogProps {
   /** 创建成功后调用；调用方立即打开权威返回的项目。 */
   onCreated: (project: LinguistProjectInfo) => void
@@ -60,6 +106,30 @@ export function ProjectCreateDialog({ onCreated }: ProjectCreateDialogProps): Re
   const [draft, setDraft] = useAtom(projectCreateDraftAtom)
   const [errors, setErrors] = React.useState<FormErrors>({})
   const [submitting, setSubmitting] = React.useState(false)
+  /** 打开对话框前拥有焦点的元素（「新建项目」触发按钮），关闭时归还。 */
+  const triggerElementRef = React.useRef<HTMLElement | null>(null)
+  /** 本次关闭是否由创建成功触发；记录新项目 id 用于成功后的焦点落点。 */
+  const createdProjectIdRef = React.useRef<string | null>(null)
+
+  React.useEffect(() => {
+    if (!open) return
+    triggerElementRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    createdProjectIdRef.current = null
+  }, [open])
+
+  const handleCloseAutoFocus = (event: Event): void => {
+    // 受控 Dialog 没有 Radix Trigger 可回焦，自行接管关闭后的焦点落点。
+    event.preventDefault()
+    const createdProjectId = createdProjectIdRef.current
+    createdProjectIdRef.current = null
+    if (createdProjectId !== null) {
+      focusAfterProjectCreate(createdProjectId, triggerElementRef.current)
+      return
+    }
+    triggerElementRef.current?.focus()
+  }
 
   /** 更新单个字段；该字段已有错误时即时复验（给出正在修正的反馈） */
   const updateField = (field: 'name' | 'sourceLocale' | 'targetLocale', value: string): void => {
@@ -105,6 +175,7 @@ export function ProjectCreateDialog({ onCreated }: ProjectCreateDialogProps): Re
         toast.success(`项目「${result.data.name}」已创建`, {
           description: `${result.data.sourceLocale} → ${result.data.targetLocale}`,
         })
+        createdProjectIdRef.current = result.data.id
         setDraft(DEFAULT_PROJECT_CREATE_DRAFT)
         setErrors({})
         setOpen(false)
@@ -122,7 +193,7 @@ export function ProjectCreateDialog({ onCreated }: ProjectCreateDialogProps): Re
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!submitting) setOpen(next) }}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={handleCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>新建项目</DialogTitle>
           <DialogDescription>

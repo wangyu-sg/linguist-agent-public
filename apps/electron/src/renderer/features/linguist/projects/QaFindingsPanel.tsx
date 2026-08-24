@@ -21,6 +21,7 @@ import {
   QA_SEVERITY_BADGE_CLASSES,
   QA_SEVERITY_LABELS,
   QA_TIER_LABELS,
+  qaJumpDisabledReason,
   qaSeverityTier,
 } from './qa-findings-utils'
 
@@ -43,6 +44,20 @@ type QaState =
 
 export function qaFindingsScopeKey(projectId: string, segmentId?: string): string {
   return `${projectId}\0${segmentId ?? ''}`
+}
+
+/**
+ * U-02：面板默认是项目级列表；「仅当前片段」须用户显式打开，
+ * 且没有当前片段时 fail closed 回项目级，绝不猜测或过滤到错误片段。
+ */
+export function resolveQaPanelSegmentScope(
+  activeSegmentId: string | undefined,
+  currentSegmentOnly: boolean,
+): string | undefined {
+  if (!currentSegmentOnly || activeSegmentId === undefined || activeSegmentId.length === 0) {
+    return undefined
+  }
+  return activeSegmentId
 }
 
 export function qaStateMatchesScope(stateScopeKey: string, currentScopeKey: string): boolean {
@@ -121,12 +136,12 @@ export function QaPanelScopeNotice({
     <>
       <p id={`${scopeId}-run-note`} className="text-[11px] text-foreground/45">
         {segmentId === undefined
-          ? '运行、筛选与人工审核'
+          ? '显示整个项目的 Finding；运行 QA 也会扫描整个项目'
           : '仅显示当前片段；运行 QA 仍会扫描整个项目'}
       </p>
       {archived && (
         <p id={`${scopeId}-archived-note`} role="status" className="mt-1 text-[10px] text-warning">
-          项目已归档：仍可读取和跳转；运行、解决和豁免已禁用。
+          项目已归档：仍可读取；运行、定位、解决和豁免已禁用。
         </p>
       )}
     </>
@@ -135,14 +150,15 @@ export function QaPanelScopeNotice({
 
 export function QaFindingsPanel({
   projectId,
-  segmentId,
+  activeSegmentId,
   archived,
   onJump,
   onChanged,
   refreshToken,
 }: {
   projectId: string
-  segmentId?: string
+  /** 当前片段 ID；仅当用户显式打开「仅显示当前片段」时才作为过滤条件。 */
+  activeSegmentId?: string
   archived: boolean
   onJump: (finding: LinguistQaFindingInfo) => void
   onChanged: () => Promise<void>
@@ -151,7 +167,10 @@ export function QaFindingsPanel({
   const [statusFilter, setStatusFilter] = React.useState<LinguistQaFindingStatus>('open')
   const [severityFilter, setSeverityFilter] = React.useState<LinguistQaFindingSeverity | ''>('')
   const [dispositionFilter, setDispositionFilter] = React.useState<LinguistQaFindingDisposition | ''>('')
+  const [currentSegmentOnly, setCurrentSegmentOnly] = React.useState(false)
   const [offset, setOffset] = React.useState(0)
+  // U-02：默认项目级；segment 过滤只来自显式开关。
+  const segmentId = resolveQaPanelSegmentScope(activeSegmentId, currentSegmentOnly)
   const scopeKey = qaFindingsScopeKey(projectId, segmentId)
   const [state, setState] = React.useState<QaState>({ status: 'loading', scopeKey })
   const [reloadToken, setReloadToken] = React.useState(0)
@@ -367,6 +386,20 @@ export function QaFindingsPanel({
           {running ? '运行中' : segmentId === undefined ? '运行 QA' : '运行项目 QA'}
         </button>
       </div>
+      <div className="mt-2">
+        <label className="inline-flex items-center gap-1.5 text-[11px] text-foreground/60">
+          <input
+            type="checkbox"
+            checked={segmentId !== undefined}
+            disabled={activeSegmentId === undefined}
+            title={activeSegmentId === undefined ? '没有当前片段可筛选' : undefined}
+            aria-label="仅显示当前片段"
+            onChange={(event) => setCurrentSegmentOnly(event.target.checked)}
+            className="size-3.5 shrink-0 accent-primary disabled:opacity-40"
+          />
+          仅显示当前片段
+        </label>
+      </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
         <label className="text-[10px] text-foreground/45">
           状态
@@ -492,6 +525,9 @@ export function QaFindingCard({
     ?? (mutatingId !== undefined ? '另一个 QA 操作正在进行' : undefined)
   const waiveReason = qaWaiveDisabledReason(finding, archived)
     ?? (mutatingId !== undefined ? '另一个 QA 操作正在进行' : undefined)
+  // 定位是导航不是处置：不随 mutating 锁定，但归档/缺片段引用时 fail closed。
+  const jumpReason = qaJumpDisabledReason(finding, archived)
+  const jumpReasonId = `${idPrefix}-jump-reason-${finding.id}`
   const resolveReasonId = `${idPrefix}-resolve-reason-${finding.id}`
   const waiveReasonId = `${idPrefix}-waive-reason-${finding.id}`
   const waiverError = qaWaiverReasonError(waiverReason)
@@ -518,14 +554,21 @@ export function QaFindingCard({
         </p>
       )}
       <div className="mt-2 flex flex-wrap gap-1.5">
+        {/* 定位是次要导航动作，视觉层级低于解决/豁免：无背景 ghost 样式。 */}
         <button
           type="button"
+          disabled={jumpReason !== undefined}
+          aria-describedby={jumpReason === undefined ? undefined : jumpReasonId}
+          title={jumpReason}
           onClick={onJump}
-          className="inline-flex items-center gap-1 rounded-md bg-foreground/[0.06] px-2 py-1 hover:bg-foreground/[0.1]"
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-foreground/55 hover:bg-foreground/[0.06] hover:text-foreground/80 disabled:opacity-40"
         >
           <SkipForward aria-hidden="true" size={10} />
           跳到片段
         </button>
+        {jumpReason !== undefined && (
+          <span id={jumpReasonId} className="sr-only">{jumpReason}</span>
+        )}
         {finding.status === 'open' && (
           <>
             <button

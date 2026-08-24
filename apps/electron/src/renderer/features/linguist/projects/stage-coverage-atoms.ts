@@ -92,3 +92,8 @@ export function formatStageCoverage(
     complete: coverage.pending === 0,
   }
 }
+
+/** 该阶段是否已有任何 decision 或阻塞记录；全零阶段不在状态栏占位（U-06）。 */
+export function hasStageCoverageProgress(coverage: LinguistStageDecisionCoverage): boolean {
+  return coverage.total - coverage.pending > 0 || coverage.blocked > 0
+}
