@@ -35,7 +35,7 @@ import {
 } from './TargetEditor'
 import type { TargetSaveResult } from './cat-edit-utils'
 import { proposalReviewBlock, textDiffParts } from './proposal-inbox-utils'
-import { stageActionLabel, stageProgressLabel } from './workflow-ui'
+import { segmentStatusBadgeTitle, stageActionLabel, stageProgressLabel } from './workflow-ui'
 import { ApprovedExemplarDialog } from './ApprovedExemplarDialog'
 
 const ESTIMATED_ROW_HEIGHT = 72
@@ -311,11 +311,18 @@ function VirtualSegmentViewport({
       ref={scrollRef}
       data-testid="cat-virtual-scroll"
       role="rowgroup"
-      className="h-full min-h-0 flex-1 overflow-auto"
+      className="h-full min-h-0 flex-1 overflow-auto [scroll-padding-bottom:var(--bottom-dock-overlay-height,0px)]"
     >
       <div role="presentation" style={{ height: totalSize, position: 'relative' }}>
         {children}
       </div>
+      {/* 语言资产面板浮层（max-lg）让位：编辑行操作区可完整滚到浮层上方。 */}
+      <div
+        aria-hidden="true"
+        data-testid="cat-dock-overlay-spacer"
+        className="hidden max-lg:block"
+        style={{ height: 'var(--bottom-dock-overlay-height, 0px)' }}
+      />
     </div>
   )
 }
@@ -782,6 +789,7 @@ function TargetCell({
 }): React.ReactElement {
   const [editing, setEditing] = React.useState(false)
   const editButtonRef = React.useRef<HTMLButtonElement>(null)
+  const editingCellRef = React.useRef<HTMLSpanElement>(null)
   const restoreFocusRef = React.useRef(false)
   const handleCapabilityChange = React.useCallback(
     (handle: TargetEditorHandle | undefined): void => {
@@ -795,6 +803,16 @@ function TargetCell({
     restoreFocusRef.current = false
     if (active) editButtonRef.current?.focus()
   }, [active, editing])
+
+  // 进入编辑时把行滚入可视区；底部语言资产浮层经 scroll-padding 让位，
+  // 保证「保存 / 取消 / 确认并前进」操作区完整可见。
+  // 注意锚点必须是编辑态网格单元：折叠态按钮此时已卸载，其 ref 为 null。
+  React.useEffect(() => {
+    if (!editing) return
+    editingCellRef.current
+      ?.closest('[data-cat-row-index]')
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [editing])
 
   const closeEditor = (restoreFocus: boolean): void => {
     restoreFocusRef.current = restoreFocus
@@ -850,7 +868,7 @@ function TargetCell({
   }
 
   return (
-    <span role="gridcell">
+    <span role="gridcell" ref={editingCellRef}>
       <TargetEditor
         index={index}
         segment={segment}
@@ -929,7 +947,16 @@ function StatusCell({
             已锁定
           </span>
         ) : (
-          <span className={cn('truncate font-medium', STATUS_BADGE_CLASSES[segment.status])}>
+          // U-13：同色不同义的徽标自带 title 图例（阶段语义 + 颜色对应的整体状态）。
+          <span
+            className={cn('truncate font-medium', STATUS_BADGE_CLASSES[segment.status])}
+            title={segmentStatusBadgeTitle(
+              workflowStage,
+              stageState,
+              segment.status,
+              segment.target !== '',
+            )}
+          >
             {stageLabel}
           </span>
         )}
