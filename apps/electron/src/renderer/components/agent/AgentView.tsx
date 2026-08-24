@@ -21,21 +21,13 @@ import { CornerDownLeft, Square, Settings, X, Copy, Check, Brain, Sparkles, List
 import { AgentMessages, type AgentHistoryQuoteNavigationRequest } from './AgentMessages'
 import { AgentHeader } from './AgentHeader'
 import { AgentMessageQueue } from './AgentMessageQueue'
-import {
-  DEFAULT_AGENT_HOST_CAPABILITIES,
-  type AgentHostCapabilities,
-} from '@/host/contracts'
-import {
-  ComposerContextChips,
-  type ComposerContextChip,
-} from '@/features/linguist/composer/ComposerContextChips'
+import { useAgentHostExtension } from '@/host/agent-host-extension'
 import { ContextUsageBadge } from './ContextUsageBadge'
 import { PermissionBanner } from './PermissionBanner'
 import { PermissionModeSelector } from './PermissionModeSelector'
 import { AskUserBanner } from './AskUserBanner'
 import { ExitPlanModeBanner } from './ExitPlanModeBanner'
 import { PlanModeDashedBorder } from './PlanModeDashedBorder'
-import { resolveAgentAttachmentSaveGate } from './agent-attachment-gate'
 import { ModelSelector } from '@/components/chat/ModelSelector'
 import { AttachmentPreviewItem } from '@/components/chat/AttachmentPreviewItem'
 import { QuotedSelectionChip } from '@/components/diff/QuotedSelectionChip'
@@ -98,7 +90,6 @@ import {
   setSessionMessagesCache,
   agentDiffRefreshVersionAtom,
   agentSessionsAtom,
-  agentLinguistTurnContextCaptureAtom,
   agentAttachedDirectoriesMapAtom,
   agentAttachedFilesMapAtom,
   workspaceAttachedDirectoriesMapAtom,
@@ -462,18 +453,16 @@ function AgentThinkingPopover({ agentThinking, onToggle, codexConfig }: AgentThi
 export interface AgentViewProps {
   sessionId: string
   presentation?: 'full' | 'rail'
-  contextSummary?: readonly ComposerContextChip[]
-  /** 嵌入式宿主的已验证能力；普通 Agent 页面保持原有完整能力。 */
-  hostCapabilities?: AgentHostCapabilities
 }
 
 export function AgentView({
   sessionId,
   presentation = 'full',
-  contextSummary = [],
-  hostCapabilities = DEFAULT_AGENT_HOST_CAPABILITIES,
 }: AgentViewProps): React.ReactElement {
   const compact = presentation === 'rail'
+  // 宿主扩展:Linguist 绑定会话的 chips/上下文捕获/附件闸门/能力声明全部经此缝注入。
+  const hostExtension = useAgentHostExtension(sessionId, presentation)
+  const hostCapabilities = hostExtension.hostCapabilities
   const store = useStore()
   const initialCachedMessages = store.get(agentSDKMessagesCacheAtom).get(sessionId)
   const [persistedSDKMessages, setPersistedSDKMessages] = React.useState<SDKMessage[]>(
@@ -506,7 +495,6 @@ export function AgentView({
   const [defaultChannelId, setDefaultChannelId] = useAtom(agentChannelIdAtom)
   const [defaultModelId, setDefaultModelId] = useAtom(agentModelIdAtom)
   const sessions = useAtomValue(agentSessionsAtom)
-  const captureLinguistTurnContext = useAtomValue(agentLinguistTurnContextCaptureAtom)
   const planningGroups = useAtomValue(todoPlanningGroupsAtom)
   const [todoDialogOpen, setTodoDialogOpen] = React.useState(false)
   const [todoDraftTitle, setTodoDraftTitle] = React.useState('')
@@ -588,18 +576,7 @@ export function AgentView({
   const persistedPermissionMode = useAtomValue(sessionPersistedPermissionModeAtom(sessionId))
   const permissionMode = permissionModeMap.get(sessionId) ?? persistedPermissionMode ?? defaultPermissionMode
   const isPermissionPlanMode = permissionMode === 'plan'
-  const captureTurnContext = React.useCallback(() => {
-    const projectId = sessionMeta?.linguistProjectId
-    if (!projectId) return undefined
-    if (!captureLinguistTurnContext) return undefined
-    const snapshot = captureLinguistTurnContext(projectId)
-    if (snapshot.selectionTruncated) {
-      toast.info('已选片段超过上下文上限', {
-        description: `本轮仅携带前 ${snapshot.context.selectedSegmentIds.length} 个片段。`,
-      })
-    }
-    return snapshot.context
-  }, [captureLinguistTurnContext, sessionMeta?.linguistProjectId])
+  const captureTurnContext = hostExtension.captureTurnContext
   // 按自身 prop sessionId 读取引用：嵌入式 Linguist 项目会话不等于全局 current session。
   const currentQuotedSelection = useAtomValue(quotedSelectionAtomFamily(sessionId))
   const setQuotedSelectionMap = useSetAtom(quotedSelectionMapAtom)
@@ -1352,10 +1329,7 @@ export function AgentView({
     // Linguist 项目绑定会话没有 Proma workspace：附件仍走同一 session 受管存储 IPC，
     // 目录授权与 binding 校验在主进程完成，renderer 不伪造 workspace。
     const workspace = workspaces.find((w) => w.id === currentWorkspaceId)
-    const gate = resolveAgentAttachmentSaveGate({
-      linguistProjectId: sessionMeta?.linguistProjectId,
-      workspaceSlug: workspace?.slug,
-    })
+    const gate = hostExtension.attachmentGate.resolve(workspace?.slug)
     if (!gate.canSave) {
       toast.warning('暂时无法发送附件', {
         description: '当前 Agent 会话没有绑定有效项目。请在顶部选择项目，或新建 Agent 会话后重新上传。',
@@ -1475,7 +1449,7 @@ export function AgentView({
       })),
       additionalDirectories: Array.from(queuedAdditionalDirectories),
     }
-  }, [currentWorkspaceId, sessionId, sessionMeta?.linguistProjectId, setPendingFiles, workspaces])
+  }, [currentWorkspaceId, sessionId, hostExtension, setPendingFiles, workspaces])
 
   const restoreQueuedAttachmentsToPending = React.useCallback((attachments?: AgentQueuedAttachment[]): void => {
     if (!attachments || attachments.length === 0) return
@@ -1901,10 +1875,7 @@ export function AgentView({
 
           const workspace = workspaces.find((w) => w.id === currentWorkspaceId)
           // Linguist 绑定会话没有 Proma workspace：由主进程按 session 授权解析受管目录。
-          const dragGate = resolveAgentAttachmentSaveGate({
-            linguistProjectId: sessionMeta?.linguistProjectId,
-            workspaceSlug: workspace?.slug,
-          })
+          const dragGate = hostExtension.attachmentGate.resolve(workspace?.slug)
           const canSave = dragGate.canSave
           const savedRefs: Array<{ path: string; name: string }> = []
           const fallbackFiles: File[] = []
@@ -1958,7 +1929,7 @@ export function AgentView({
       // 无路径信息：回退，所有项按普通文件处理
       addFilesAsAttachments(droppedFiles)
     }
-  }, [sessionId, sessionMeta?.linguistProjectId, addFilesAsAttachments, addPanelDirectory, setAttachedDirsMap, workspaces, currentWorkspaceId])
+  }, [sessionId, hostExtension, addFilesAsAttachments, addPanelDirectory, setAttachedDirsMap, workspaces, currentWorkspaceId])
 
   /** ModelSelector 选择回调 */
   const handleModelSelect = React.useCallback((option: ModelOption): void => {
@@ -3106,7 +3077,7 @@ export function AgentView({
               </div>
             )}
 
-            <ComposerContextChips chips={contextSummary} />
+            {hostExtension.composerContextChips}
 
             {/* 附件 + 引用选中文本 Chip（同排并排） */}
             {(pendingFiles.length > 0 || currentQuotedSelection) && (

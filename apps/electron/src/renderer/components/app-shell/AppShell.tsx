@@ -16,13 +16,18 @@ import { agentSidePanelWidthAtom, currentAgentSessionIdAtom, currentSessionSideP
 import { leftSidebarWidthAtom } from '@/atoms/sidebar-atoms'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
 import { automationFormAtom } from '@/atoms/automation-atoms'
-import { activeViewAtom, resolveActiveViewForMode } from '@/atoms/active-view'
+import { activeViewAtom } from '@/atoms/active-view'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { WorkspaceMemoryChangeObserver } from '@/components/agent-skills/WorkspaceMemoryChangeObserver'
 import { interfaceVariantAtom } from '@/atoms/theme'
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { WindowControls } from '@/components/WindowControls'
-import { shouldShowAgentRail, shouldSuppressAgentRail } from './right-rail-policy'
+import {
+  resolveActiveViewForMode,
+  resolveRightRailPolicy,
+  shouldForceCollapseLeftSidebar,
+  shouldSuppressAgentRail,
+} from '@/host/app-mode-registry'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import { detectIsWindows, WINDOW_CONTROLS_INSET_RIGHT } from '@/lib/platform'
 import { cn } from '@/lib/utils'
@@ -71,8 +76,8 @@ export function AppShell(): React.ReactElement {
   const isClassic = interfaceVariant === 'classic'
   // 定时任务表单打开时隐藏右侧文件面板，让中间区域扩展到全宽（表单内含自己的右栏配置）
   const activeView = resolveActiveViewForMode(useAtomValue(activeViewAtom), appMode)
-  // Rail 可见性判定集中在 right-rail-policy（纯函数）。
-  const showRightPanel = shouldShowAgentRail({
+  // Rail 可见性判定集中在 app-mode-registry（纯函数）。
+  const showRightPanel = resolveRightRailPolicy({
     appMode,
     hasAgentSession: !!currentSessionId,
     automationFormOpen: automationForm.open,
@@ -145,7 +150,13 @@ export function AppShell(): React.ReactElement {
   // 「左栏 + 右栏 + 主区最小宽度」时右侧面板整体让位（不渲染）；视口加宽后
   // 自动恢复，不改写用户的面板开关状态。
   const viewportWidth = useViewportWidth()
-  const visibleLeftSidebarWidth = sidebarCollapsed ? 60 : clampedLeftSidebarWidth
+  // U-04 极窄视口（200% zoom 等）：左栏强制折叠为图标栏，先保主区最小可用宽度。
+  // 与右栏让位同理——仅本次渲染生效，不写回用户的折叠偏好，视口变宽后自动恢复。
+  const leftSidebarForceCollapsed = !sidebarCollapsed
+    && shouldForceCollapseLeftSidebar(viewportWidth, clampedLeftSidebarWidth, MIN_MAIN_AREA_WIDTH)
+  const visibleLeftSidebarWidth = (sidebarCollapsed || leftSidebarForceCollapsed)
+    ? 60
+    : clampedLeftSidebarWidth
   const rightPanelSuppressed = shouldSuppressAgentRail(
     viewportWidth,
     visibleLeftSidebarWidth,
@@ -219,9 +230,13 @@ export function AppShell(): React.ReactElement {
         <div className={cn('flex h-full w-full', settingsOpen && 'hidden')} aria-hidden={settingsOpen}>
             {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
             <div className={cn(isClassic ? 'p-2 pr-0' : '', 'relative z-[60] crt-sidebar')}>
-              <LeftSidebar width={clampedLeftSidebarWidth} noTransition={isDraggingLeftSidebar} />
-              {/* 侧边栏展开时显示拖拽手柄，折叠态隐藏 */}
-              {!sidebarCollapsed && (
+              <LeftSidebar
+                width={clampedLeftSidebarWidth}
+                noTransition={isDraggingLeftSidebar}
+                forceCollapsed={leftSidebarForceCollapsed}
+              />
+              {/* 侧边栏展开且未被强制折叠时显示拖拽手柄，折叠态隐藏 */}
+              {!sidebarCollapsed && !leftSidebarForceCollapsed && (
                 <div
                   className={cn(
                     'absolute right-0 top-0 bottom-0 w-4 translate-x-1/2 cursor-col-resize hover:bg-primary/5 active:bg-primary/50 transition-colors z-20'

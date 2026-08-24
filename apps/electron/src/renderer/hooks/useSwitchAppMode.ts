@@ -5,7 +5,11 @@ import { agentSessionsAtom, currentAgentSessionIdAtom } from '@/atoms/agent-atom
 import { conversationsAtom, currentConversationIdAtom } from '@/atoms/chat-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { tabsAtom } from '@/atoms/tab-atoms'
-import { canRestoreSessionForMode, findSessionToRestore } from '@/components/app-shell/mode-switcher-utils'
+import {
+  canRestoreSessionForMode,
+  findSessionToRestore,
+  getAppModeDefinition,
+} from '@/host/app-mode-registry'
 import { restoreLastLocalizationProject } from '@/lib/linguist-navigation'
 import { useCreateSession } from './useCreateSession'
 import { useOpenSession } from './useOpenSession'
@@ -28,7 +32,7 @@ export function useSwitchAppMode(): SwitchAppMode {
 
   return React.useCallback((targetMode: AppMode): void => {
     if (targetMode === mode) return
-    if (targetMode === 'linguist') {
+    if (getAppModeDefinition(targetMode).restoresProjectTab) {
       restoreLastLocalizationProject(store)
       return
     }

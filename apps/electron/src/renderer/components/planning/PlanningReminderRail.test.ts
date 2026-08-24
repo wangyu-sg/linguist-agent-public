@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createStore } from 'jotai'
-import { resolveActiveViewForMode, activeViewAtom } from '@/atoms/active-view'
+import { activeViewAtom } from '@/atoms/active-view'
+import { resolveActiveViewForMode } from '@/host/app-mode-registry'
 import { appModeAtom } from '@/atoms/app-mode'
 import { planningSelectedTodoIdAtom, planningTabAtom } from '@/atoms/planning-atoms'
 import { openPlanningTodoFromReminder } from './PlanningReminderRail'

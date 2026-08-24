@@ -352,6 +352,8 @@ export interface LeftSidebarProps {
   width?: number
   /** 拖拽过程中禁用 CSS transition，保证即时响应 */
   noTransition?: boolean
+  /** 极窄视口（如 200% zoom）下由 AppShell 请求强制折叠为图标栏；不写回用户折叠偏好 */
+  forceCollapsed?: boolean
 }
 
 /** 日期分组标签 */
@@ -611,7 +613,7 @@ function deleteSetEntry<T>(prev: Set<T>, value: T): Set<T> {
   return next
 }
 
-export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.ReactElement {
+export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebarProps): React.ReactElement {
   const [activeView, setActiveView] = useAtom(activeViewAtom)
   const setAgentSkillsTab = useSetAtom(agentSkillsTabAtom)
   const setAutomationForm = useSetAtom(automationFormAtom)
@@ -695,7 +697,10 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const [activeTabId, setActiveTabId] = useAtom(activeTabIdAtom)
   // 会话高亮按"激活 Tab 所属会话"判定：预览 Tab 激活时其 owner 会话仍保持高亮
   const activeSessionId = useAtomValue(activeSessionIdAtom)
-  const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
+  const [sidebarCollapsedPreference, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
+  // U-04：极窄视口（如 200% zoom）下 AppShell 可请求强制折叠为图标栏；
+  // 只影响本次渲染，不写回用户的折叠偏好，视口变宽后自动恢复。
+  const sidebarCollapsed = sidebarCollapsedPreference || forceCollapsed === true
   const { createChat } = useCreateSession()
   const openSession = useOpenSession()
   const syncActiveTabSideEffects = useSyncActiveTabSideEffects()

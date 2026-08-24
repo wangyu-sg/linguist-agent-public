@@ -55,7 +55,7 @@ import {
   updateShortcutOverrides,
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
-import { getNextMode } from '@/components/app-shell/mode-switcher-utils'
+import { resolveModeNavigation } from '@/host/app-mode-registry'
 import {
   shouldFallbackVoiceDictationToActiveTab,
   VOICE_DICTATION_CLEAR_PREVIEW_EVENT,
@@ -188,7 +188,7 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'toggle-mode',
     useCallback(
-      () => switchMode(getNextMode(appMode, 'ArrowRight')),
+      () => switchMode(resolveModeNavigation(appMode, 'ArrowRight')),
       [appMode, switchMode],
     ),
   )

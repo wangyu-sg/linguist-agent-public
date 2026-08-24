@@ -26,9 +26,7 @@ import { agentSideChatMapAtom } from '@/atoms/chat-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { AgentView } from '@/components/agent/AgentView'
 import { SidePanel } from '@/components/agent/SidePanel'
-import { extensionRegistry } from '@/host/extensions'
-import { UNAVAILABLE_AGENT_HOST_CAPABILITIES } from '@/host/contracts'
-import { getAgentSurfaceControls } from '@/host/extension-registry'
+import { useAgentSurfaceHostPresentation } from '@/host/agent-host-extension'
 import type { ComposerContextChip } from '@/features/linguist/composer/ComposerContextChips'
 import { Button } from '@/components/ui/button'
 import {
@@ -428,19 +426,12 @@ export function ProjectAgentRail({
   const sideChatConversationId = useAtomValue(agentSideChatMapAtom).get(sessionId ?? '') ?? null
   const setPendingPrompt = useSetAtom(agentPendingPromptAtom)
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectId))
-  const requestedSurfacePresentation = uiState.agentPresentation === 'full'
-    ? 'linguist-full'
-    : 'linguist-rail'
-  const agentSurface = extensionRegistry.getAgentSurfaceContext({
-    extensionId: 'linguist',
-    sessionId: sessionId ?? `project:${projectId}`,
-    presentation: requestedSurfacePresentation,
-  })
-  const hostCapabilities = agentSurface?.hostCapabilities ?? UNAVAILABLE_AGENT_HOST_CAPABILITIES
-  const surfaceControls = getAgentSurfaceControls(hostCapabilities)
-  const presentation = requestedSurfacePresentation === 'linguist-full' && surfaceControls.canExpandToFull
-    ? 'full'
-    : 'rail'
+  // 呈现裁决收口到 host seam:registry 能力声明 + 工作台意图 → 实际呈现。
+  const { presentation, canExpandToFull } = useAgentSurfaceHostPresentation(
+    projectId,
+    sessionId,
+    uiState.agentPresentation,
+  )
   const expandButtonRef = React.useRef<HTMLButtonElement>(null)
   const previousPresentation = React.useRef(presentation)
   const [failure, setFailure] = React.useState<ProjectAgentRailFailure | null>(null)
@@ -534,9 +525,9 @@ export function ProjectAgentRail({
   }, [projectId, retryToken, sessionId, store])
 
   React.useEffect(() => {
-    if (uiState.agentPresentation !== 'full' || surfaceControls.canExpandToFull) return
+    if (uiState.agentPresentation !== 'full' || canExpandToFull) return
     setUiState({ agentPresentation: 'rail' })
-  }, [setUiState, surfaceControls.canExpandToFull, uiState.agentPresentation])
+  }, [setUiState, canExpandToFull, uiState.agentPresentation])
 
   // 问题 10：只消费 Proma 已有的统一侧面板宽度；不再为 Companion 新增存储或拖拽系统。
   const sharedSidePanelWidth = useAtomValue(agentSidePanelWidthAtom)
@@ -551,11 +542,11 @@ export function ProjectAgentRail({
       previousSideChatId,
       sideChatConversationId,
       presentation,
-      surfaceControls.canExpandToFull,
+      canExpandToFull,
     )) {
       setUiState({ agentPresentation: 'full' })
     }
-  }, [presentation, setUiState, sideChatConversationId, surfaceControls.canExpandToFull])
+  }, [presentation, setUiState, sideChatConversationId, canExpandToFull])
 
   React.useEffect(() => {
     const wasFull = previousPresentation.current === 'full'
@@ -691,7 +682,7 @@ export function ProjectAgentRail({
               >
                 <PanelRightClose aria-hidden="true" />
               </Button>
-              {surfaceControls.canExpandToFull && (
+              {canExpandToFull && (
                 <Button
                   ref={expandButtonRef}
                   type="button"
@@ -712,8 +703,6 @@ export function ProjectAgentRail({
             <AgentView
               sessionId={sessionId}
               presentation={presentation}
-              contextSummary={contextSummary}
-              hostCapabilities={hostCapabilities}
             />
           </div>
           {presentation === 'full' && (
