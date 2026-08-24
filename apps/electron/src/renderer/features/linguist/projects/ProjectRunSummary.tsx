@@ -176,6 +176,23 @@ export function ProjectRunSummary({
     || summary?.canUndo !== true
     || state.status === 'undoing'
 
+  // U-07：无运行记录（或仍在读取）时折叠为一行轻量提示，不再以空面板占据主区右上；
+  // 有记录、有错误或有撤销结果时保持完整面板行为。
+  if (summary === null && state.error === undefined && state.undoResult === undefined) {
+    return (
+      <section
+        aria-label="本次运行"
+        className="shrink-0 border-b border-border/60 bg-content-area/65 px-4 py-1"
+      >
+        <p className="text-[11px] leading-4 text-muted-foreground/70">
+          {state.status === 'loading'
+            ? '正在读取最近运行…'
+            : '暂无 CAT 运行记录；项目 Agent 运行后可在此查看并撤销最近一批变更'}
+        </p>
+      </section>
+    )
+  }
+
   return (
     <section
       aria-label="本次运行"

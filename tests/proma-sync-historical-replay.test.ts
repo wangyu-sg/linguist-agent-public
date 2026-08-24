@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-test('固定 Proma v0.17.59 历史冲突得到 7 个确定性策略与 2 个 Kimi 待办', () => {
+test('固定 Proma v0.17.59 历史冲突得到 9 个确定性策略', () => {
   const result = spawnSync(process.execPath, [
     join(import.meta.dir, '../scripts/test-proma-sync-replay.mjs'),
     '--local', '3cfb14ff09baea1c042356b93be2809fb11774c5',
@@ -13,11 +13,9 @@ test('固定 Proma v0.17.59 历史冲突得到 7 个确定性策略与 2 个 Kim
   const replay = JSON.parse(result.stdout) as {
     conflicts: number
     deterministic: number
-    awaitingRendererAnchor: number
   }
   expect(replay).toMatchObject({
     conflicts: 9,
-    deterministic: 7,
-    awaitingRendererAnchor: 2,
+    deterministic: 9,
   })
 })

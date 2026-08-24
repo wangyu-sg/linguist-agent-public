@@ -81,7 +81,7 @@ describe('结构性无障碍契约', () => {
     expect(source).not.toContain('railRecentItems')
     expect(source).not.toContain('RailRecentButton')
     expect(source).toContain('aria-label="搜索"')
-    expect(source).toContain('aria-label="展开侧边栏"')
+    expect(source).toContain("'展开侧边栏'")
   })
 
   test('given 展开与收起两种形态 when 读取源码 then Agent 技能入口各自唯一', () => {

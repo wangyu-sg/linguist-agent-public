@@ -77,7 +77,7 @@ describe('LF-026 packaged 探针合同', () => {
     expect(probe).toContain("getByRole('tablist', { name: '语言资产', exact: true })")
     expect(probe).toContain("getByRole('tab', { name: 'QA', exact: true })")
     expect(probe).toContain("qaTab.getAttribute('aria-selected')")
-    expect(probe).toContain("findings.getByRole('button', { name: '运行整个项目 QA', exact: true })")
+    expect(probe).toContain("findings.getByRole('button', { name: '运行项目 QA', exact: true })")
     expect(probe).toContain('const emptyTargetArticle = qaFindings.locator(')
     expect(probe).toContain('const repeatedArticle = qaFindings.locator(')
     expect(probe).not.toContain("page.getByRole('button', { name: '运行 QA', exact: true })")

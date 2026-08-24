@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   nextStageItemLabel,
+  segmentStatusBadgeTitle,
   stageActionLabel,
   stageBulkConfirmationSummary,
   stageCompletionLabel,
@@ -47,5 +48,30 @@ describe('阶段感知中文状态', () => {
     )
     expect(nextStageItemLabel('editing')).toBe('下一个待审校')
     expect(nextStageItemLabel('proofreading')).toBe('下一个待校对')
+  })
+
+  test('U-13：同色不同义的徽标 title 同时给出阶段语义与颜色含义', () => {
+    // 审计案例：「待确认」以绿色（translated）出现——title 说明这是翻译阶段语义。
+    const pendingTranslation = segmentStatusBadgeTitle('translation', 'untouched', 'translated', true)
+    expect(pendingTranslation).toContain('翻译阶段 · 待确认')
+    expect(pendingTranslation).toContain('已有译文，等待确认翻译')
+    expect(pendingTranslation).toContain('徽标颜色对应整体状态：已翻译')
+
+    // 同一文案若出现在审校阶段（reviewed 紫），title 给出不同含义。
+    const pendingEditing = segmentStatusBadgeTitle('editing', 'untouched', 'reviewed', true)
+    expect(pendingEditing).toContain('审校阶段 · 待审校')
+    expect(pendingEditing).toContain('等待审校')
+    expect(pendingEditing).toContain('徽标颜色对应整体状态：已审校')
+  })
+
+  test('U-13：无译文的未翻译与已完成校对各有准确描述', () => {
+    const untranslated = segmentStatusBadgeTitle('translation', 'untouched', 'untranslated', false)
+    expect(untranslated).toContain('翻译阶段 · 未翻译')
+    expect(untranslated).toContain('尚无译文')
+    expect(untranslated).toContain('徽标颜色对应整体状态：未翻译')
+
+    const proofread = segmentStatusBadgeTitle('proofreading', 'confirmed', 'reviewed', true)
+    expect(proofread).toContain('校对阶段 · 已校对')
+    expect(proofread).toContain('片段完成')
   })
 })

@@ -46,24 +46,27 @@ const FORBIDDEN_CAT_CORE_IMPORTS = [
 /**
  * 这些是已登记的组合缝；允许删除，不允许未登记新增 importer。
  * App Shell / TabContent、全局搜索与设置页负责把 Linguist 产品面组合进 Proma 壳；
- * AgentView 的 contextSummary 是计划明确允许的窄 prop；AgentHeader / SidePanel
- * 是待后续 fusion 工单收窄的历史触点；PreviewTabContent / PreviewPanel 是
- * 原生 Preview Tab 的 Linguist 目标分支缝（LA-HOST-005，previewFile.linguist
+ * host/ 是 LA-HOST-SEAM 登记的宿主缝（agent-host-extension 收口 AgentView 的
+ * Linguist 扩展，linguist-extension 注册 Linguist 模式贡献）；AgentHeader /
+ * SidePanel 是待后续 fusion 工单收窄的历史触点；PreviewTabContent / PreviewPanel
+ * 是原生 Preview Tab 的 Linguist 目标分支缝（LA-HOST-005，previewFile.linguist
  * 为 opaque 目标，Proma 侧不感知 CAT 细节）。
  */
 const REGISTERED_PROMA_TO_LINGUIST_IMPORTERS = new Set([
   'apps/electron/src/renderer/components/agent/AgentHeader.tsx',
-  'apps/electron/src/renderer/components/agent/AgentView.tsx',
   'apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx',
   'apps/electron/src/renderer/components/agent/SidePanel.tsx',
   'apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx',
-  'apps/electron/src/renderer/components/app-shell/ModeSwitcher.tsx',
   'apps/electron/src/renderer/components/app-shell/SearchDialog.tsx',
   'apps/electron/src/renderer/components/diff/PreviewPanel.tsx',
   'apps/electron/src/renderer/components/diff/PreviewTabContent.tsx',
   'apps/electron/src/renderer/components/settings/MigrationSettings.tsx',
   'apps/electron/src/renderer/components/tabs/MainArea.tsx',
   'apps/electron/src/renderer/components/tabs/TabContent.tsx',
+  'apps/electron/src/renderer/host/agent-host-extension.tsx',
+  'apps/electron/src/renderer/host/linguist-extension.tsx',
+  // agent-host-extension 的行为测试：直接播种 linguist atom 以固定宿主缝契约。
+  'apps/electron/src/renderer/host/agent-host-extension.test.tsx',
 ])
 
 function listSourceFiles(root) {
@@ -154,7 +157,7 @@ test('CAT Core 不反向依赖 React、Electron 或 Proma UI', () => {
 
 test('Proma renderer 反向 import Linguist feature 只允许已登记触点', () => {
   const rendererRoot = join(REPO_ROOT, 'apps/electron/src/renderer')
-  const promaRoots = ['atoms', 'components', 'hooks', 'lib']
+  const promaRoots = ['atoms', 'components', 'hooks', 'lib', 'host']
   const violations = []
 
   for (const root of promaRoots) {

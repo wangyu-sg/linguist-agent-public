@@ -71,6 +71,19 @@ export interface SegmentQaSummary {
 }
 
 /**
+ * U-02：定位按钮的 fail-closed 禁用原因（与 resolve/waive 同一模式，
+ * 返回 undefined 表示允许跳转）。归档项目与缺片段引用的 Finding 一律禁止定位。
+ */
+export function qaJumpDisabledReason(
+  finding: LinguistQaFindingInfo,
+  archived: boolean,
+): string | undefined {
+  if (archived) return '项目已归档，不能定位到片段'
+  if (finding.segmentId.length === 0) return '该 Finding 没有可定位的片段'
+  return undefined
+}
+
+/**
  * Grid 只持有每个 Segment 的开放 QA 投影，不复制 Finding 正文或项目级总数。
  * QA_SEVERITIES 已按阻断到建议排序，因此较小的索引代表更高严重度。
  */

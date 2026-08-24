@@ -71,20 +71,20 @@ try {
   const files = conflicts.map((file) => {
     const rule = ruleFor(file, policy)
     if (!rule || rule.policy === 'manual') fail(`历史冲突未登记：${file}`)
+    if (rule.policy === 'reapply-host-seam' && rule.status !== 'ready') {
+      fail(`Host Seam 尚不可重放：${file}`)
+    }
     return {
       file,
       policy: rule.policy,
-      status: rule.status === 'awaiting-renderer-anchor'
-        ? 'awaiting-renderer-anchor'
-        : 'deterministic',
+      status: 'deterministic',
     }
   })
   console.log(JSON.stringify({
     local: refs.local,
     upstream: refs.upstream,
     conflicts: files.length,
-    deterministic: files.filter((file) => file.status === 'deterministic').length,
-    awaitingRendererAnchor: files.filter((file) => file.status === 'awaiting-renderer-anchor').length,
+    deterministic: files.length,
     files,
   }, null, 2))
 } finally {

@@ -16,10 +16,10 @@ import { Bot, Languages, MessageSquare } from 'lucide-react'
 import { extensionRegistry } from '@/host/extensions'
 import { cn } from '@/lib/utils'
 import {
-  MODE_SWITCHER_MODES,
+  APP_MODE_DEFINITIONS,
   getModeSliderTranslateX,
-  getNextMode,
-} from './mode-switcher-utils'
+  resolveModeNavigation,
+} from '@/host/app-mode-registry'
 
 const modeIcons: Record<AppMode, React.ReactNode> = {
   agent: <Bot size={15} />,
@@ -27,12 +27,12 @@ const modeIcons: Record<AppMode, React.ReactNode> = {
   linguist: <Languages size={15} />,
 }
 
-const modes: { value: AppMode; label: string; icon: React.ReactNode }[] = MODE_SWITCHER_MODES.map((mode) => {
-  const contribution = extensionRegistry.appModesFor(mode.value)[0]
+const modes: { value: AppMode; label: string; icon: React.ReactNode }[] = APP_MODE_DEFINITIONS.map((definition) => {
+  const contribution = extensionRegistry.appModesFor(definition.mode)[0]
   return {
-    ...mode,
-    label: contribution?.label ?? mode.label,
-    icon: contribution?.icon ?? modeIcons[mode.value],
+    value: definition.mode,
+    label: contribution?.label ?? definition.fallbackLabel,
+    icon: contribution?.icon ?? modeIcons[definition.mode],
   }
 })
 
@@ -51,7 +51,7 @@ export function ModeSwitcher({ ariaLabel = '主工作模式' }: { ariaLabel?: st
     if (!navigationKeys.has(event.key)) return
 
     event.preventDefault()
-    const targetMode = getNextMode(mode, event.key as 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End')
+    const targetMode = resolveModeNavigation(mode, event.key as 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End')
     handleModeSwitch(targetMode)
     requestAnimationFrame(() => modeButtonRefs.current.get(targetMode)?.focus())
   }, [handleModeSwitch, mode])

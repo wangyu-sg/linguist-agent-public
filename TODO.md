@@ -1,11 +1,9 @@
 # TODO
 
-更新时间：2026-08-23
+更新时间：2026-08-25
 
-> Proma v0.17.59 同步、自动回归与未打包构建已完成；以下项目仍需要 packaged 或真实运行证据。
+> Proma v0.17.59 同步、自动回归、打包与 Fake Model vertical 已完成；以下项目仍需要真实 Provider、平台或人工证据。
 
-- [ ] PACK-001：完成 `smoke:pack`、packaged startup 与 vertical smoke，分别验证 Agent / Chat / Linguist。
-- [ ] MCP-001：修复 7 个既有 Pi MCP Streamable HTTP Session 恢复测试失败，并验证真实 HTTP MCP 重连。
 - [ ] VALID-002：在当前 packaged app 中用真实 Provider 和 3–5 个匿名 Segment 完成 General → Translator → Reviewer → Proofreader，核对结构化 `linguistOutcome` 与 `verified` 交付。
 - [ ] VALID-001：同一模型、同一 reasoning、同一真实语言任务，对比 Web Chat、旧 LA 与当前 LA。
 - [ ] 使用真实 Phrase / memoQ 平台产物验证导入、修改、导出、重导、inline code、状态和审校批注。

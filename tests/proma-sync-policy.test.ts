@@ -29,7 +29,7 @@ test('同步策略登记六种 policy，未知冲突 Fail Closed', () => {
   expect(result.stderr).toContain('UNKNOWN_CONFLICT')
 })
 
-test('移除 Main Host Anchor 后验证器以稳定错误码失败', () => {
+test('移除 Renderer Host Anchor 后验证器以稳定错误码失败', () => {
   const fixture = mkdtempSync(join(tmpdir(), 'host-seam-contract-'))
   const files = [
     'apps/electron/src/main/lib/agent-orchestrator.ts',
@@ -37,6 +37,10 @@ test('移除 Main Host Anchor 后验证器以稳定错误码失败', () => {
     'apps/electron/src/main/lib/adapters/pi-agent-adapter.ts',
     'apps/electron/src/main/ipc.ts',
     'apps/electron/src/preload/index.ts',
+    'apps/electron/src/renderer/host/agent-host-extension.tsx',
+    'apps/electron/src/renderer/host/app-mode-registry.ts',
+    'apps/electron/src/renderer/components/agent/AgentView.tsx',
+    'apps/electron/src/renderer/components/app-shell/AppShell.tsx',
   ]
   try {
     for (const file of files) {
@@ -44,10 +48,10 @@ test('移除 Main Host Anchor 后验证器以稳定错误码失败', () => {
       mkdirSync(dirname(target), { recursive: true })
       cpSync(join(ROOT, file), target)
     }
-    const target = join(fixture, files[0])
+    const target = join(fixture, files[5])
     writeFileSync(
       target,
-      readFileSync(target, 'utf8').replace('// LA-HOST-SEAM: agent-extension', ''),
+      readFileSync(target, 'utf8').replace('// LA-HOST-SEAM: renderer-agent-extension', ''),
     )
     const result = spawnSync(process.execPath, [
       join(ROOT, 'scripts/verify-host-seams.mjs'),
@@ -69,6 +73,10 @@ test('Host Seam 冲突只保留 LA 冲突块，并保留上游非冲突改动', 
     'apps/electron/src/main/lib/adapters/pi-agent-adapter.ts',
     'apps/electron/src/main/ipc.ts',
     'apps/electron/src/preload/index.ts',
+    'apps/electron/src/renderer/host/agent-host-extension.tsx',
+    'apps/electron/src/renderer/host/app-mode-registry.ts',
+    'apps/electron/src/renderer/components/agent/AgentView.tsx',
+    'apps/electron/src/renderer/components/app-shell/AppShell.tsx',
     'scripts/verify-host-seams.mjs',
   ]
   const git = (args: string[]) => spawnSync('git', args, { cwd: fixture, encoding: 'utf8' })

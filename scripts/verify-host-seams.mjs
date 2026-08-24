@@ -21,6 +21,14 @@ function occurrences(source, pattern) {
   return source.match(pattern)?.length ?? 0
 }
 
+function readSource(root, file) {
+  try {
+    return readFileSync(join(root, file), 'utf8')
+  } catch (error) {
+    fail('HOST_SEAM_CONTRACT_CHANGED', `${file} 不可读（${error.message}）`)
+  }
+}
+
 const contracts = [
   {
     file: 'apps/electron/src/main/lib/agent-orchestrator.ts',
@@ -54,12 +62,7 @@ const contracts = [
 
 const root = parseRoot(process.argv.slice(2))
 for (const contract of contracts) {
-  let source
-  try {
-    source = readFileSync(join(root, contract.file), 'utf8')
-  } catch (error) {
-    fail('HOST_SEAM_CONTRACT_CHANGED', `${contract.file} 不可读（${error.message}）`)
-  }
+  const source = readSource(root, contract.file)
   const anchor = `// LA-HOST-SEAM: ${contract.anchor}`
   if (source.split(anchor).length - 1 !== 1) {
     fail('HOST_SEAM_ANCHOR_MISSING', `${contract.file} 必须且只能包含一个 ${anchor}`)
@@ -78,7 +81,7 @@ for (const contract of contracts) {
 }
 
 const piFile = 'apps/electron/src/main/lib/adapters/pi-agent-adapter.ts'
-const piSource = readFileSync(join(root, piFile), 'utf8')
+const piSource = readSource(root, piFile)
 const piAnchor = '// LA-HOST-SEAM: pi-compaction-temporary-deviation'
 if (piSource.split(piAnchor).length - 1 !== 1) {
   fail('HOST_SEAM_ANCHOR_MISSING', `${piFile} 必须且只能包含一个 ${piAnchor}`)
@@ -89,4 +92,50 @@ for (const required of ['input.compactionContinuationContext', 'buildPiCompactio
   }
 }
 
-console.log('host seams verified: 5')
+const rendererAdapters = [
+  {
+    file: 'apps/electron/src/renderer/host/agent-host-extension.tsx',
+    anchor: 'renderer-agent-extension',
+    required: ['export function useAgentHostExtension(', 'export function useAgentSurfaceHostPresentation('],
+    forbidden: /from ['"]@\/features\/linguist\/projects\/ProjectAgentRail['"]/,
+  },
+  {
+    file: 'apps/electron/src/renderer/host/app-mode-registry.ts',
+    anchor: 'app-mode-registry',
+    required: ['export const APP_MODE_DEFINITIONS', 'export function resolveActiveViewForMode(', 'export function resolveRightRailPolicy('],
+  },
+]
+for (const contract of rendererAdapters) {
+  const source = readSource(root, contract.file)
+  const anchor = `// LA-HOST-SEAM: ${contract.anchor}`
+  if (source.split(anchor).length - 1 !== 1) {
+    fail('HOST_SEAM_ANCHOR_MISSING', `${contract.file} 必须且只能包含一个 ${anchor}`)
+  }
+  for (const required of contract.required) {
+    if (!source.includes(required)) {
+      fail('HOST_SEAM_CONTRACT_CHANGED', `${contract.file} 缺少 Renderer Host 合同：${required}`)
+    }
+  }
+  if (contract.forbidden?.test(source)) {
+    fail('HOST_SEAM_CONTRACT_CHANGED', `${contract.file} 重新形成 Renderer 循环依赖`)
+  }
+}
+
+const agentView = readSource(root, 'apps/electron/src/renderer/components/agent/AgentView.tsx')
+if (
+  occurrences(agentView, /from ['"]@\/host\/agent-host-extension['"]/g) !== 1
+  || !agentView.includes('useAgentHostExtension(sessionId, presentation)')
+  || /from ['"][^'"]*features\/linguist\//.test(agentView)
+) {
+  fail('HOST_SEAM_CONTRACT_CHANGED', 'AgentView 不再只通过 Renderer Agent Host Adapter 接入 Linguist')
+}
+const appShell = readSource(root, 'apps/electron/src/renderer/components/app-shell/AppShell.tsx')
+if (
+  occurrences(appShell, /from ['"]@\/host\/app-mode-registry['"]/g) !== 1
+  || !appShell.includes('resolveRightRailPolicy({')
+  || /from ['"][^'"]*features\/linguist\//.test(appShell)
+) {
+  fail('HOST_SEAM_CONTRACT_CHANGED', 'AppShell 不再只通过 App Mode Registry 接入 Linguist')
+}
+
+console.log('host seams verified: 7')

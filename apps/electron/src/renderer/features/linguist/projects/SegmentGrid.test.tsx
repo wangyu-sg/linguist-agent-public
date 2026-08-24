@@ -460,6 +460,54 @@ describe('LF-043/LF-046/LF-047 Segment Grid', () => {
     expect(html).not.toContain('片段行 1')
   })
 
+  test('given E 阶段片段 when 渲染 STATUS 徽标 then title 图例给出阶段语义与颜色含义', () => {
+    const segment: LinguistSegmentInfo = {
+      id: 'segment-u13',
+      assetId: 'asset-1',
+      ordinal: 0,
+      source: 'Start',
+      target: '开始',
+      sourceLocale: 'en',
+      targetLocale: 'zh-CN',
+      status: 'translated',
+      locked: false,
+      revision: 1,
+      sourceHash: 'hash',
+      currentStageState: 'untouched',
+    }
+    const html = renderToStaticMarkup(
+      <SegmentGrid
+        projectId="prj-0000000000000001"
+        total={1}
+        segmentIds={[segment.id]}
+        rows={new Map([[0, segment]])}
+        selectedIds={new Set()}
+        pendingBySegment={new Map()}
+        mutatingProposalIds={new Set()}
+        qaBySegment={new Map()}
+        archived={false}
+        workflowStage="editing"
+        onActiveSegmentChange={() => {}}
+        onOpenDetails={() => {}}
+        onOpenQa={() => {}}
+        onFocusIndex={() => {}}
+        onFocusIndexSettled={() => {}}
+        onToggleSelected={() => {}}
+        onVisibleRangeChange={() => {}}
+        onSaveTarget={async () => 'saved'}
+        onReloadTarget={async () => segment}
+        onConfirmAndAdvance={async () => {}}
+        onUnconfirmStage={async () => {}}
+        onReviewProposal={async () => {}}
+        onTargetEditorCapabilityChange={() => {}}
+      />,
+    )
+
+    // U-13：徽标 title 即图例——阶段语义（审校阶段 · 待审校）+ 颜色对应的整体状态（已翻译）。
+    expect(html).toContain('审校阶段 · 待审校：等待审校，尚未开始本轮确认')
+    expect(html).toContain('徽标颜色对应整体状态：已翻译')
+  })
+
   test('given 未明确选中片段 when 渲染 then 首行不绘制假 active 但保留键盘入口', () => {
     const createSegment = (index: number): LinguistSegmentInfo => ({
       id: `segment-${index}`,

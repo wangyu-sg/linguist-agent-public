@@ -14,7 +14,7 @@ import { userProfileAtom } from '@/atoms/user-profile'
 import { appModeAtom } from '@/atoms/app-mode'
 import { getRandomTip, getPlatform, type Tip } from '@/lib/tips'
 import { ModeSwitcher } from '@/components/app-shell/ModeSwitcher'
-import { getWelcomeModeOptions } from '@/components/app-shell/mode-switcher-utils'
+import { resolveWelcomeModeDefinitions } from '@/host/app-mode-registry'
 
 /** 根据小时返回时段问候 */
 function getGreeting(hour: number): string {
@@ -48,7 +48,7 @@ export function WelcomeEmptyState(): React.ReactElement {
         <span>{tip.text}</span>
       </div>
 
-      {getWelcomeModeOptions(mode).length > 0 && (
+      {resolveWelcomeModeDefinitions(mode).length > 0 && (
         <div className="w-[320px]">
           <ModeSwitcher ariaLabel="新会话模式" />
         </div>

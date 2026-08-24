@@ -45,6 +45,7 @@ import {
   ProjectRunSummary,
   linguistProjectRunSummaryAtomFamily,
 } from './ProjectRunSummary'
+import { linguistProjectSummaryAtomFamily } from './project-summary-atoms'
 
 interface LoadingState {
   status: 'loading'
@@ -179,6 +180,7 @@ export function LocalizationProjectWorkbench({
     disposeWorkbenchAtoms(projectId)
     linguistProjectMutationStateAtomFamily.remove(projectId)
     linguistProjectRunSummaryAtomFamily.remove(projectId)
+    linguistProjectSummaryAtomFamily.remove(projectId)
   }, [disposeWorkbenchAtoms, projectId])
 
   React.useEffect(() => {
@@ -221,6 +223,8 @@ export function LocalizationProjectWorkbench({
         if (patch !== null) store.set(workbenchUiStateAtom, patch)
       }
       setSummaryState(nextSummaryState)
+      // 同步写入共享 atom:会话侧(Host 扩展 / Rail)不经 Workbench 组件即可读取摘要。
+      store.set(linguistProjectSummaryAtomFamily(projectId), nextSummaryState)
     })
     return () => {
       cancelled = true

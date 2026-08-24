@@ -8,8 +8,8 @@
         "apps/electron/src/renderer/components/app-shell/AppShell.tsx"
       ],
       "policy": "reapply-host-seam",
-      "owner": "kimi-renderer-host",
-      "status": "awaiting-renderer-anchor"
+      "owner": "renderer-host",
+      "status": "ready"
     },
     {
       "patterns": ["apps/electron/package.json"],
@@ -50,6 +50,7 @@
         "packages/linguist-**",
         "resources/linguist-**",
         "apps/electron/src/main/lib/linguist/**",
+        "apps/electron/src/renderer/host/**",
         "apps/electron/src/renderer/features/linguist/**",
         "apps/electron/default-skills/**",
         "apps/electron/resources/**"

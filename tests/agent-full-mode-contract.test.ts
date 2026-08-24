@@ -108,7 +108,9 @@ describe('Agent Full 模式行为契约', () => {
     expect(localizationWorkbench).toContain('<ProjectAgentRail')
     expect(projectAgentRail).toContain('<AgentView')
     expect(projectAgentRail).toContain('presentation={presentation}')
-    expect(projectAgentRail).toContain('contextSummary={contextSummary}')
+    // Linguist 上下文经 LA-HOST-SEAM 的 useAgentHostExtension 注入，不再走 AgentView prop。
+    expect(projectAgentRail).not.toContain('contextSummary={contextSummary}')
+    expect(projectAgentRail).not.toContain('hostCapabilities={')
     expect(projectAgentRail).not.toContain('LinguistComposer')
     expect(projectAgentRail).not.toContain('LinguistAgentMessages')
   })

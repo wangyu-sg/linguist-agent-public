@@ -119,6 +119,76 @@ describe('ProjectRunSummary K-004/K-005', () => {
     }
   })
 
+  test('U-07：无运行记录时折叠为一行轻量提示，不再渲染空面板与撤销按钮', () => {
+    const store = createStore()
+    store.set(linguistProjectRunSummaryAtomFamily('prj-a'), {
+      status: 'ready',
+      summary: null,
+    })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <ProjectRunSummary
+          projectId="prj-a"
+          sessionId="session-a"
+          archived={false}
+          refreshSequence={3}
+        />
+      </Provider>,
+    )
+
+    expect(html).toContain('aria-label="本次运行"')
+    expect(html).toContain('暂无 CAT 运行记录')
+    expect(html).not.toContain('撤销本次 CAT 变更')
+    expect(html).not.toContain('暂无可展示的 CAT 运行记录')
+    expect(html).not.toContain('<h2')
+    expect(html).not.toContain('<button')
+  })
+
+  test('U-07：仍在读取时也只是一行提示', () => {
+    const store = createStore()
+    store.set(linguistProjectRunSummaryAtomFamily('prj-a'), {
+      status: 'loading',
+      summary: null,
+    })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <ProjectRunSummary
+          projectId="prj-a"
+          archived={false}
+          refreshSequence={0}
+        />
+      </Provider>,
+    )
+
+    expect(html).toContain('正在读取最近运行…')
+    expect(html).not.toContain('撤销本次 CAT 变更')
+    expect(html).not.toContain('<button')
+  })
+
+  test('U-07：读取失败且无记录时保留完整错误提示', () => {
+    const store = createStore()
+    store.set(linguistProjectRunSummaryAtomFamily('prj-a'), {
+      status: 'error',
+      summary: null,
+      error: '项目数据不可用',
+    })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <ProjectRunSummary
+          projectId="prj-a"
+          archived={false}
+          refreshSequence={1}
+        />
+      </Provider>,
+    )
+
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('项目数据不可用')
+  })
+
   test('renderer sends the displayed run as a CAS token but never actor authority', async () => {
     let summaryRequest: LinguistRunSummaryRequest | undefined
     const loaded = await loadProjectRunSummary('prj-a', async (input) => {

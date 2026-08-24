@@ -92,12 +92,32 @@ export interface LinguistWorkbenchLocation {
   bottomDockHeight?: number
 }
 
-type WorkbenchUiStatePatch = Partial<
+export type WorkbenchUiStatePatch = Partial<
   Omit<
     LinguistWorkbenchUiState,
     'schemaVersion' | 'projectId' | 'lastVisitedAt' | 'uiRevision'
   >
 >
+
+/**
+ * U-02：QA Finding 定位的 Workbench 位置 patch。
+ * 显式切换到 Finding 所属批次与片段并记住批次内位置；同时清除 search/阶段筛选，
+ * 与 CatToolResultNavigationInitializer 的导航惯例一致。切换后的网格聚焦由
+ * SegmentEditor 的 requestedSegmentId → focusRow → focusIndex 既有路径接力完成。
+ */
+export function buildQaFindingJumpPatch(
+  current: LinguistWorkbenchUiState,
+  assetId: string,
+  segmentId: string,
+): WorkbenchUiStatePatch {
+  return {
+    activeAssetId: assetId,
+    activeSegmentId: segmentId,
+    assetActiveSegmentIds: { ...current.assetActiveSegmentIds, [assetId]: segmentId },
+    segmentStageStateFilter: undefined,
+    search: '',
+  }
+}
 type StoredWorkbenchUiState = Omit<
   LinguistWorkbenchUiState,
   'activeProjectAgentSessionId'

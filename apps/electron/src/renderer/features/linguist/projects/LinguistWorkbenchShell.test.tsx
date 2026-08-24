@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { Provider, createStore } from 'jotai'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { LinguistProjectInfo, LinguistProjectSummary } from '@proma/shared'
+import type {
+  LinguistProjectInfo,
+  LinguistProjectSummary,
+  LinguistStageDecisionCoverage,
+} from '@proma/shared'
 import {
   AGENT_RAIL_DEFAULT_WIDTH,
   AGENT_RAIL_MAX_WIDTH,
@@ -17,6 +21,11 @@ import {
   clampBottomDockHeight,
   linguistWorkbenchUiStateAtomFamily,
 } from './cat-workspace-atoms'
+import {
+  hasStageCoverageProgress,
+  linguistStageCoverageAtomFamily,
+  stageCoverageKey,
+} from './stage-coverage-atoms'
 import {
   CAT_COLUMN_MIN_WIDTH,
   getAssetNavigatorWidthFromKey,
@@ -120,10 +129,140 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).toContain('aria-label="调整语言资产面板高度"')
     expect(html).toContain('aria-label="本地化工作台状态栏"')
     expect(html).toContain('翻译草稿 1')
-    expect(html).toContain('当前批次：menu.json')
+    // U-06/U-09：整体进度与批次名收敛到头部，状态栏不再重复；头部带「本批次」口径。
+    expect(html).toContain('本批次 · 已确认 4 / 8')
+    expect(html.match(/已确认 4 \/ 8/g)).toHaveLength(1)
+    expect(html).not.toContain('当前批次')
+    expect(html).toContain('menu.json')
     expect(html).toContain('源文 80 字符')
     expect(html).toContain('译文 55 字符')
     expect(html).toContain('未选择片段')
+  })
+
+  test('given 全新批次零值覆盖 when 渲染状态栏 then 只保留当前阶段计数且零值不占位', () => {
+    const zeroCoverage: LinguistStageDecisionCoverage = {
+      total: 12,
+      pending: 12,
+      confirmed: 0,
+      unchanged: 0,
+      corrected: 0,
+      blocked: 0,
+      status: 'in_progress',
+    }
+    // 全新导入批次：当前阶段计数与草稿全为 0。
+    const freshSummary: LinguistProjectSummary = {
+      ...summary,
+      assets: [{
+        ...summary.assets[0]!,
+        currentStageCounts: { untouched: 12, draft: 0, confirmed: 0 },
+        targetCharacters: 0,
+      }],
+    }
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { activeAssetId: 'asset-1' })
+    store.set(linguistStageCoverageAtomFamily(stageCoverageKey(project.id, 'asset-1')), {
+      translation: zeroCoverage,
+      editing: zeroCoverage,
+      proofreading: zeroCoverage,
+    })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={project}
+          summaryState={{ status: 'ready', summary: freshSummary }}
+          onSummaryRefresh={() => undefined}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
+    )
+
+    const footerStart = html.indexOf('aria-label="本地化工作台状态栏"')
+    expect(footerStart).toBeGreaterThan(-1)
+    const footer = html.slice(footerStart)
+    // 当前阶段（翻译）计数始终保留；其余全零阶段不占位。
+    expect(footer).toContain('翻译 0 / 12')
+    expect(footer).not.toContain('审校 0 / 12')
+    expect(footer).not.toContain('校对 0 / 12')
+    // 草稿 0、译文 0 字符与重复信息不占位。
+    expect(footer).not.toContain('翻译草稿')
+    expect(footer).not.toContain('译文 0 字符')
+    expect(footer).not.toContain('已确认')
+    expect(footer).not.toContain('当前批次')
+    expect(hasStageCoverageProgress(zeroCoverage)).toBe(false)
+  })
+
+  test('given 非当前阶段已有 decision when 渲染状态栏 then 该阶段覆盖显示', () => {
+    const zeroCoverage: LinguistStageDecisionCoverage = {
+      total: 12,
+      pending: 12,
+      confirmed: 0,
+      unchanged: 0,
+      corrected: 0,
+      blocked: 0,
+      status: 'in_progress',
+    }
+    const editingProgress: LinguistStageDecisionCoverage = {
+      total: 12,
+      pending: 10,
+      confirmed: 0,
+      unchanged: 1,
+      corrected: 1,
+      blocked: 0,
+      status: 'in_progress',
+    }
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { activeAssetId: 'asset-1' })
+    store.set(linguistStageCoverageAtomFamily(stageCoverageKey(project.id, 'asset-1')), {
+      translation: zeroCoverage,
+      editing: editingProgress,
+      proofreading: zeroCoverage,
+    })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={project}
+          summaryState={{ status: 'ready', summary }}
+          onSummaryRefresh={() => undefined}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
+    )
+
+    const footer = html.slice(html.indexOf('aria-label="本地化工作台状态栏"'))
+    expect(footer).toContain('翻译 0 / 12')
+    expect(footer).toContain('审校 2 / 12')
+    expect(footer).toContain('未修改 1')
+    expect(footer).toContain('已修正 1')
+    expect(footer).not.toContain('校对 0 / 12')
+    expect(hasStageCoverageProgress(editingProgress)).toBe(true)
+  })
+
+  test('given 项目尚无批次 when 渲染头部进度 then 标注全项目口径', () => {
+    const emptySummary: LinguistProjectSummary = {
+      project,
+      assetCount: 0,
+      totalSegments: 0,
+      segmentCounts: { untranslated: 0, draft: 0, translated: 0, reviewed: 0 },
+      currentStageCounts: { untouched: 0, draft: 0, confirmed: 0 },
+      assets: [],
+    }
+
+    const html = renderToStaticMarkup(
+      <LinguistWorkbenchShell
+        project={project}
+        summaryState={{ status: 'ready', summary: emptySummary }}
+        onSummaryRefresh={() => undefined}
+      >
+        <div>Segment Grid</div>
+      </LinguistWorkbenchShell>,
+    )
+
+    expect(html).toContain('全项目 · 已确认 0 / 0')
+    expect(html).toContain('尚无批次')
   })
 
   test('given 用户首次展开 Agent when 工作台重渲染 then 才挂载 rail 插槽', () => {
@@ -326,5 +465,73 @@ describe('LinguistWorkbenchShell', () => {
     expect(html).not.toContain('--border)/0.35')
     expect(html.match(/data-resize-grip="true"/g)).toHaveLength(3)
     expect(html.match(/bg-transparent transition-colors group-hover:bg-primary\/70/g)).toHaveLength(3)
+  })
+
+  test('given Agent rail 浮层模式 when 渲染工作台 then 提供 scrim 点击脱困与 ESC 关闭语义', () => {
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { agentPresentation: 'rail' })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={project}
+          summaryState={{ status: 'ready', summary }}
+          onSummaryRefresh={() => undefined}
+          agentRail={<div>原生 Agent</div>}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
+    )
+
+    // U-03：scrim 只在 max-xl 浮层区间出现，点击关闭 rail；aside 声明 ESC 快捷键。
+    expect(html).toContain('data-workbench-slot="agent-rail-scrim"')
+    expect(html).toContain('max-xl:block')
+    expect(html).toContain('max-xl:bg-foreground/25')
+    expect(html).toContain('aria-keyshortcuts="Escape"')
+  })
+
+  test('given Agent full 呈现 when 渲染工作台 then 全屏布局不渲染浮层 scrim', () => {
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { agentPresentation: 'full' })
+
+    const html = renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={project}
+          summaryState={{ status: 'ready', summary }}
+          onSummaryRefresh={() => undefined}
+          agentRail={<div>原生 Agent</div>}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
+    )
+
+    expect(html).toContain('data-workbench-slot="agent-full"')
+    expect(html).not.toContain('data-workbench-slot="agent-rail-scrim"')
+  })
+
+  test('given 语言资产面板开关状态 when 渲染 CAT 列 then 向网格滚动区暴露浮层让位高度变量', () => {
+    const store = createStore()
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { bottomDockHeight: 300 })
+    const renderShell = (): string => renderToStaticMarkup(
+      <Provider store={store}>
+        <LinguistWorkbenchShell
+          project={project}
+          summaryState={{ status: 'ready', summary }}
+          onSummaryRefresh={() => undefined}
+          bottomDock={<div>语言资源</div>}
+        >
+          <div>Segment Grid</div>
+        </LinguistWorkbenchShell>
+      </Provider>,
+    )
+
+    // U-01：面板打开时 CAT 列暴露浮层高度，供网格滚动区 scroll-padding 与底部 spacer 让位。
+    expect(renderShell()).toContain('--bottom-dock-overlay-height:300px')
+
+    store.set(linguistWorkbenchUiStateAtomFamily(project.id), { bottomDockOpen: false })
+    expect(renderShell()).toContain('--bottom-dock-overlay-height:0px')
   })
 })

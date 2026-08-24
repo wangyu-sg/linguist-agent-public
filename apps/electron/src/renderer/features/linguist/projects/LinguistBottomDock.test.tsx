@@ -8,7 +8,7 @@ import {
 import { getNextBottomDockTab, LinguistBottomDock } from './LinguistBottomDock'
 
 describe('LinguistBottomDock', () => {
-  test('given 活动片段和已保存的 QA Tab when 渲染 then 挂载该片段的 QA 面板而不是旧占位', () => {
+  test('given 活动片段和已保存的 QA Tab when 渲染 then 默认挂载项目级 QA 面板且「仅当前片段」为显式开关', () => {
     const store = createStore()
     store.set(linguistWorkbenchUiStateAtomFamily('project-a'), {
       activeSegmentId: 'segment-a',
@@ -37,9 +37,10 @@ describe('LinguistBottomDock', () => {
     expect(html).toContain('aria-selected="true"')
     expect(html).toContain('id="linguist-dock-tab-project-a-qa" type="button" role="tab" aria-selected="true" aria-controls="linguist-dock-panel-project-a" tabindex="0"')
     expect(html).toContain('id="linguist-dock-tab-project-a-tm" type="button" role="tab" aria-selected="false" aria-controls="linguist-dock-panel-project-a" tabindex="-1"')
-    expect(html).toContain('aria-label="当前片段 QA Findings"')
-    expect(html).toContain('仅显示当前片段；运行 QA 仍会扫描整个项目')
-    expect(html).toContain('项目已归档：仍可读取和跳转；运行、解决和豁免已禁用。')
+    expect(html).toContain('aria-label="QA Findings"')
+    expect(html).toContain('显示整个项目的 Finding；运行 QA 也会扫描整个项目')
+    expect(html).toContain('aria-label="仅显示当前片段"')
+    expect(html).toContain('项目已归档：仍可读取；运行、定位、解决和豁免已禁用。')
     expect(html).not.toContain('选择片段后显示相关语言资产')
   })
 

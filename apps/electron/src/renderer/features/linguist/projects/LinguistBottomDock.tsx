@@ -132,7 +132,7 @@ export function LinguistBottomDock({
         ) : activeTab.id === 'qa' ? (
           <QaFindingsPanel
             projectId={projectId}
-            segmentId={uiState.activeSegmentId}
+            activeSegmentId={uiState.activeSegmentId}
             archived={archived}
             onJump={qaCapability?.jumpToFinding ?? ignoreQaJump}
             onChanged={qaCapability?.refreshAfterMutation ?? ignoreQaMutation}

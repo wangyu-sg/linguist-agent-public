@@ -26,10 +26,7 @@ import { agentSideChatMapAtom } from '@/atoms/chat-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { AgentView } from '@/components/agent/AgentView'
 import { SidePanel } from '@/components/agent/SidePanel'
-import { extensionRegistry } from '@/host/extensions'
-import { UNAVAILABLE_AGENT_HOST_CAPABILITIES } from '@/host/contracts'
-import { getAgentSurfaceControls } from '@/host/extension-registry'
-import type { ComposerContextChip } from '@/features/linguist/composer/ComposerContextChips'
+import { useAgentSurfaceHostPresentation } from '@/host/agent-host-extension'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -46,10 +43,9 @@ import {
   createSegmentAgentReference,
   linguistSegmentAgentReferenceAtomFamily,
   linguistWorkbenchUiStateAtomFamily,
-  resolveVisibleSegmentAgentReference,
-  type LinguistSegmentAgentReference,
   type LinguistWorkbenchUiState,
 } from './cat-workspace-atoms'
+import { buildProjectComposerContextChips } from './project-composer-context'
 import { describeLinguistIpcError } from './project-utils'
 import { ensureProjectAgentSession } from './project-agent-session'
 
@@ -164,60 +160,6 @@ export async function loadProjectAgentRailSession(
 interface ProjectAgentRailFailure {
   projectId: string
   error: LinguistIpcError
-}
-
-interface BuildProjectComposerContextChipsInput {
-  projectId: string
-  projectName: string
-  assets: readonly LinguistAssetInfo[]
-  uiState: LinguistWorkbenchUiState
-  /** 显式「为 Agent 引用」的片段（内部经 resolveVisibleSegmentAgentReference 按项目资产校验） */
-  segmentReference?: LinguistSegmentAgentReference
-  onRemoveSegmentReference?: () => void
-  onClearSelectedSegments: () => void
-}
-
-export function buildProjectComposerContextChips({
-  projectId,
-  projectName,
-  assets,
-  uiState,
-  segmentReference,
-  onRemoveSegmentReference,
-  onClearSelectedSegments,
-}: BuildProjectComposerContextChipsInput): readonly ComposerContextChip[] {
-  const activeAsset = assets.find((asset) => asset.assetId === uiState.activeAssetId)
-  const chips: ComposerContextChip[] = [{
-    id: 'project',
-    label: projectName,
-    scope: `项目范围 · ${projectId}`,
-  }]
-  if (uiState.activeAssetId) {
-    chips.push({
-      id: 'asset',
-      label: activeAsset?.filename ?? '当前批次',
-      scope: `批次范围 · ${uiState.activeAssetId}`,
-    })
-  }
-  // 片段 chip 只由显式「为 Agent 引用」驱动；键盘/编辑焦点不再隐式产生 Agent scope。
-  const visibleSegmentReference = resolveVisibleSegmentAgentReference(segmentReference, assets)
-  if (visibleSegmentReference) {
-    chips.push({
-      id: 'segment-reference',
-      label: '引用片段',
-      scope: `Agent 引用片段 · ${visibleSegmentReference.segmentId}`,
-      onRemove: onRemoveSegmentReference,
-    })
-  }
-  if (uiState.selectedSegmentIds.length > 0) {
-    chips.push({
-      id: 'selection',
-      label: `已选 ${uiState.selectedSegmentIds.length} 段`,
-      scope: `已选片段范围 · ${uiState.selectedSegmentIds.length} 段`,
-      onRemove: onClearSelectedSegments,
-    })
-  }
-  return chips
 }
 
 export type ProjectAgentQuickActionId =
@@ -428,19 +370,12 @@ export function ProjectAgentRail({
   const sideChatConversationId = useAtomValue(agentSideChatMapAtom).get(sessionId ?? '') ?? null
   const setPendingPrompt = useSetAtom(agentPendingPromptAtom)
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectId))
-  const requestedSurfacePresentation = uiState.agentPresentation === 'full'
-    ? 'linguist-full'
-    : 'linguist-rail'
-  const agentSurface = extensionRegistry.getAgentSurfaceContext({
-    extensionId: 'linguist',
-    sessionId: sessionId ?? `project:${projectId}`,
-    presentation: requestedSurfacePresentation,
-  })
-  const hostCapabilities = agentSurface?.hostCapabilities ?? UNAVAILABLE_AGENT_HOST_CAPABILITIES
-  const surfaceControls = getAgentSurfaceControls(hostCapabilities)
-  const presentation = requestedSurfacePresentation === 'linguist-full' && surfaceControls.canExpandToFull
-    ? 'full'
-    : 'rail'
+  // 呈现裁决收口到 host seam:registry 能力声明 + 工作台意图 → 实际呈现。
+  const { presentation, canExpandToFull } = useAgentSurfaceHostPresentation(
+    projectId,
+    sessionId,
+    uiState.agentPresentation,
+  )
   const expandButtonRef = React.useRef<HTMLButtonElement>(null)
   const previousPresentation = React.useRef(presentation)
   const [failure, setFailure] = React.useState<ProjectAgentRailFailure | null>(null)
@@ -534,9 +469,9 @@ export function ProjectAgentRail({
   }, [projectId, retryToken, sessionId, store])
 
   React.useEffect(() => {
-    if (uiState.agentPresentation !== 'full' || surfaceControls.canExpandToFull) return
+    if (uiState.agentPresentation !== 'full' || canExpandToFull) return
     setUiState({ agentPresentation: 'rail' })
-  }, [setUiState, surfaceControls.canExpandToFull, uiState.agentPresentation])
+  }, [setUiState, canExpandToFull, uiState.agentPresentation])
 
   // 问题 10：只消费 Proma 已有的统一侧面板宽度；不再为 Companion 新增存储或拖拽系统。
   const sharedSidePanelWidth = useAtomValue(agentSidePanelWidthAtom)
@@ -551,11 +486,11 @@ export function ProjectAgentRail({
       previousSideChatId,
       sideChatConversationId,
       presentation,
-      surfaceControls.canExpandToFull,
+      canExpandToFull,
     )) {
       setUiState({ agentPresentation: 'full' })
     }
-  }, [presentation, setUiState, sideChatConversationId, surfaceControls.canExpandToFull])
+  }, [presentation, setUiState, sideChatConversationId, canExpandToFull])
 
   React.useEffect(() => {
     const wasFull = previousPresentation.current === 'full'
@@ -691,7 +626,7 @@ export function ProjectAgentRail({
               >
                 <PanelRightClose aria-hidden="true" />
               </Button>
-              {surfaceControls.canExpandToFull && (
+              {canExpandToFull && (
                 <Button
                   ref={expandButtonRef}
                   type="button"
@@ -712,8 +647,6 @@ export function ProjectAgentRail({
             <AgentView
               sessionId={sessionId}
               presentation={presentation}
-              contextSummary={contextSummary}
-              hostCapabilities={hostCapabilities}
             />
           </div>
           {presentation === 'full' && (

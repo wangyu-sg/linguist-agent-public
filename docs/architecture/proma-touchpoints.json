@@ -790,14 +790,6 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/atoms/active-view.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/atoms/active-view.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1247,38 +1239,6 @@
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/SearchDialog.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/app-shell/mode-switcher-utils.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/app-shell/mode-switcher-utils.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/app-shell/right-rail-policy.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/app-shell/right-rail-policy.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",

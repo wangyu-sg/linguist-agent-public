@@ -14,13 +14,13 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import {
   buildProjectAgentQuickActions,
-  buildProjectComposerContextChips,
   createProjectAgentQuickActionPendingPrompt,
   ProjectAgentFullPanelOpenButton,
   loadProjectAgentRailSession,
   ProjectAgentFullSidePanel,
   shouldAutoExpandAgentForSideChat,
 } from './ProjectAgentRail'
+import { buildProjectComposerContextChips } from './project-composer-context'
 import {
   captureLinguistTurnContextSnapshot,
   createSegmentAgentReference,

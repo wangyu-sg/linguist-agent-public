@@ -11,14 +11,14 @@
  * 6. electronAPI.sendAgentMessage 发送消息，订阅 onAgentStreamEvent / onAgentStreamComplete /
  *    onAgentStreamError 收集真实主→渲染 IPC 流式事件
  * 7. 断言：
- *    - 场景 A（fake-text）：≥2 个 _partial assistant 文本事件（流式中间态，部分文本不含最终标记），
+ *    - 场景 A（fake-text）：≥2 个 sdk_delta 文本事件（流式中间态，部分文本不含最终标记），
  *      最终文本含 TEXT_FINAL_MARKER_G0，STREAM_COMPLETE 恰好 1 次
- *    - 场景 B（fake-thinking，服务端发 reasoning_content）：_partial assistant 事件中出现
+ *    - 场景 B（fake-thinking，服务端发 reasoning_content）：sdk_delta 事件中出现
  *      thinking 块且含 REASONING_DELTA_MARKER_G0，最终文本含 THINKING_FINAL_MARKER_G0，
  *      STREAM_COMPLETE 恰好 1 次
  *    - 场景 C（fake-stop-retry 流式中真实 Stop）：electronAPI.stopAgent（与 AgentView
  *      handleStop 同一 preload 调用）后 STREAM_COMPLETE 到达且 stoppedByUser=true，
- *      _partial 事件不再增长，无 STREAM_ERROR
+ *      sdk_delta 事件不再增长，无 STREAM_ERROR
  *    - 场景 D（同会话 Retry）：停止后的同一 Pi 会话重发同一条用户消息（与 AgentView
  *      handleRetry 同一 sendAgentMessage 路径），最终文本含 TEXT_FINAL_MARKER_G0，
  *      STREAM_COMPLETE 恰好 1 次且非 stoppedByUser
@@ -34,8 +34,8 @@
  *
  * 运行路径说明：全部断言走 Pi AGENT 运行时路径
  * （electronAPI.sendAgentMessage → agent-orchestrator → pi-agent-adapter →
- * pi-ai openai-completions provider → fake server SSE → message_update partial
- * 合并（20fps）→ convertPiMessage → AgentEventBus → webContents.send → preload
+ * pi-ai openai-completions provider → fake server SSE → message_update delta
+ * 合并（20fps）→ AgentEventBus → webContents.send → preload
  * onAgentStreamEvent）。provider `openai` 经 pi-model-registry 映射为 Pi API
  * `openai-completions`，baseUrl 为协议根 `http://127.0.0.1:<port>/v1`。
  */
@@ -93,25 +93,29 @@ function sleep(ms: number): Promise<void> {
 
 // ===== 渲染进程内的 Pi 流式事件收集器 =====
 //
-// SDKMessage（assistant，convertPiMessage 产出）结构：
-//   { type:'assistant', _partial?: true, uuid, message: { content: [
+// SDKMessage（assistant，convertPiMessage 产出）终态结构：
+//   { type:'assistant', uuid, message: { content: [
 //       { type:'text', text } | { type:'thinking', thinking } | { type:'tool_use', ... } ] } }
-// _partial 帧为 20fps 合并后的流式中间态（累计全文）；message_end 帧无 _partial 为最终帧。
+// sdk_delta 为 20fps 合并后的流式增量；message_end 产出上面的最终帧。
 
 interface AssistantContentBlock {
   type: string
   text?: string
-  thinking?: string
 }
 
 interface CollectedAssistant {
-  partial: boolean
   texts: string[]
-  thinkings: string[]
+}
+
+interface CollectedDelta {
+  sessionId: string
+  type: string
+  content: string
 }
 
 interface ProbeEvents {
   assistants: Array<{ sessionId: string } & CollectedAssistant>
+  deltas: CollectedDelta[]
   complete: Array<{ sessionId: string; stoppedByUser: boolean }>
   errors: Array<{ sessionId: string; error: string }>
 }
@@ -124,9 +128,11 @@ async function installEventCollectors(page: Page): Promise<void> {
           sessionId: string
           payload: {
             kind: string
+            delta?: {
+              deltas?: Array<{ type: string; delta?: string }>
+            }
             message?: {
               type?: string
-              _partial?: boolean
               message?: { content?: AssistantContentBlock[] }
             }
           }
@@ -138,19 +144,27 @@ async function installEventCollectors(page: Page): Promise<void> {
       __piProbeUnsub?: Array<() => void>
     }
     if (w.__piProbeUnsub) for (const u of w.__piProbeUnsub) u()
-    w.__piProbeEvents = { assistants: [], complete: [], errors: [] }
+    w.__piProbeEvents = { assistants: [], deltas: [], complete: [], errors: [] }
     const api = w.electronAPI
     w.__piProbeUnsub = [
       api.onAgentStreamEvent((e) => {
+        if (e?.payload?.kind === 'sdk_delta') {
+          for (const delta of e.payload.delta?.deltas ?? []) {
+            w.__piProbeEvents.deltas.push({
+              sessionId: e.sessionId,
+              type: delta.type,
+              content: delta.delta ?? '',
+            })
+          }
+          return
+        }
         if (e?.payload?.kind !== 'sdk_message') return
         const msg = e.payload.message
         if (!msg || msg.type !== 'assistant') return
         const content = msg.message?.content ?? []
         w.__piProbeEvents.assistants.push({
           sessionId: e.sessionId,
-          partial: msg._partial === true,
           texts: content.filter((b) => b.type === 'text').map((b) => b.text ?? ''),
-          thinkings: content.filter((b) => b.type === 'thinking').map((b) => b.thinking ?? ''),
         })
       }),
       api.onAgentStreamComplete((d) => w.__piProbeEvents.complete.push({ sessionId: d.sessionId, stoppedByUser: d.stoppedByUser === true })),
@@ -387,10 +401,12 @@ async function main(): Promise<void> {
         workspaceId: seeded.workspaceId,
       })
 
-      // 流式中间态：等到至少 2 个 _partial 文本事件
-      const partialsSeen = await waitFor(async () => {
+      // 流式中间态：等到至少 2 个文本 delta
+      const deltasSeen = await waitFor(async () => {
         const ev = await getEvents(page)
-        return ev.assistants.filter((a) => a.sessionId === textSession!.sessionId && a.partial && a.texts.length > 0).length >= 2
+        return ev.deltas.filter((delta) => delta.sessionId === textSession!.sessionId
+          && delta.type === 'text_delta'
+          && delta.content.length > 0).length >= 2
       }, 60_000)
 
       const completed = await waitFor(async () =>
@@ -398,16 +414,21 @@ async function main(): Promise<void> {
 
       const ev = await getEvents(page)
       const mine = ev.assistants.filter((a) => a.sessionId === textSession!.sessionId)
-      const partialTextEvents = mine.filter((a) => a.partial && a.texts.some((t) => t.length > 0))
+      const textDeltaEvents = ev.deltas.filter((delta) => delta.sessionId === textSession!.sessionId
+        && delta.type === 'text_delta'
+        && delta.content.length > 0)
       const allText = mine.map((a) => a.texts.join('')).join('')
       const finalSeen = allText.includes(MARKERS.text)
-      // 流式中间态证据：存在某个 _partial 帧文本不含最终标记（部分文本先于完整文本到达）
-      const intermediateSeen = partialTextEvents.some((a) => !a.texts.join('').includes(MARKERS.text))
+      let accumulatedDelta = ''
+      const intermediateSeen = textDeltaEvents.some((delta) => {
+        accumulatedDelta += delta.content
+        return accumulatedDelta.length > 0 && !accumulatedDelta.includes(MARKERS.text)
+      })
       const completeCount = ev.complete.filter((c) => c.sessionId === textSession!.sessionId).length
       const errorEvents = ev.errors.filter((e) => e.sessionId === textSession!.sessionId)
 
-      check('pi-text-streaming-partials', partialsSeen && intermediateSeen,
-        `_partial 文本事件 ${partialTextEvents.length} 个（≥2=${partialsSeen}），存在不含最终标记的中间帧=${intermediateSeen}`)
+      check('pi-text-streaming-deltas', deltasSeen && intermediateSeen,
+        `文本 delta ${textDeltaEvents.length} 个（≥2=${deltasSeen}），存在不含最终标记的中间态=${intermediateSeen}`)
       check('pi-text-final-and-complete', finalSeen && completed && completeCount === 1,
         `最终文本含 ${MARKERS.text}=${finalSeen}，STREAM_COMPLETE 次数=${completeCount}，STREAM_ERROR=${errorEvents.length}`)
     }
@@ -431,16 +452,18 @@ async function main(): Promise<void> {
 
       const ev = await getEvents(page)
       const mine = ev.assistants.filter((a) => a.sessionId === thinkSession.sessionId)
-      const partialThinkingEvents = mine.filter((a) => a.partial && a.thinkings.some((t) => t.length > 0))
-      const allThinking = mine.map((a) => a.thinkings.join('')).join('')
+      const thinkingDeltaEvents = ev.deltas.filter((delta) => delta.sessionId === thinkSession.sessionId
+        && delta.type === 'thinking_delta'
+        && delta.content.length > 0)
+      const allThinking = thinkingDeltaEvents.map((delta) => delta.content).join('')
       const thinkingMarkerSeen = allThinking.includes(MARKERS.thinkingReasoning)
       const allText = mine.map((a) => a.texts.join('')).join('')
       const finalSeen = allText.includes(MARKERS.thinking)
       const completeCount = ev.complete.filter((c) => c.sessionId === thinkSession.sessionId).length
       const errorEvents = ev.errors.filter((e) => e.sessionId === thinkSession.sessionId)
 
-      check('pi-thinking-delta', thinkingMarkerSeen && partialThinkingEvents.length >= 1,
-        `_partial thinking 事件 ${partialThinkingEvents.length} 个，thinking 块含 ${MARKERS.thinkingReasoning}=${thinkingMarkerSeen}`)
+      check('pi-thinking-delta', thinkingMarkerSeen && thinkingDeltaEvents.length >= 1,
+        `thinking delta ${thinkingDeltaEvents.length} 个，内容含 ${MARKERS.thinkingReasoning}=${thinkingMarkerSeen}`)
       check('pi-thinking-final-and-complete', finalSeen && completed && completeCount === 1,
         `最终文本含 ${MARKERS.thinking}=${finalSeen}，STREAM_COMPLETE 次数=${completeCount}，STREAM_ERROR=${errorEvents.length}`)
     }
@@ -463,10 +486,12 @@ async function main(): Promise<void> {
         workspaceId: seeded.workspaceId,
       }, false)
 
-      // 流式中间态：等到至少 2 个 _partial 文本事件（流确实在跑）
+      // 流式中间态：等到至少 2 个文本 delta（流确实在跑）
       const streamingSeen = await waitFor(async () => {
         const ev = await getEvents(page)
-        return ev.assistants.filter((a) => a.sessionId === stopSession.sessionId && a.partial && a.texts.length > 0).length >= 2
+        return ev.deltas.filter((delta) => delta.sessionId === stopSession.sessionId
+          && delta.type === 'text_delta'
+          && delta.content.length > 0).length >= 2
       }, 60_000)
 
       // 真实 Stop：与 AgentView handleStop 相同的 preload 调用
@@ -479,17 +504,17 @@ async function main(): Promise<void> {
       const stopCompleted = await waitFor(async () =>
         (await getEvents(page)).complete.some((c) => c.sessionId === stopSession.sessionId && c.stoppedByUser), 30_000)
 
-      const countAtStop = (await getEvents(page)).assistants
-        .filter((a) => a.sessionId === stopSession.sessionId && a.partial).length
+      const countAtStop = (await getEvents(page)).deltas
+        .filter((delta) => delta.sessionId === stopSession.sessionId && delta.type === 'text_delta').length
       // fake-stop-retry 首次请求 400ms/chunk；若未停止 1.2s 内会继续增长
       await sleep(1_200)
       const evAfterStop = await getEvents(page)
-      const countAfterStop = evAfterStop.assistants
-        .filter((a) => a.sessionId === stopSession.sessionId && a.partial).length
+      const countAfterStop = evAfterStop.deltas
+        .filter((delta) => delta.sessionId === stopSession.sessionId && delta.type === 'text_delta').length
       const halted = countAfterStop <= countAtStop + 1
       const stopErrors = evAfterStop.errors.filter((e) => e.sessionId === stopSession.sessionId)
       check('pi-agent-stop-converges', streamingSeen && stopCompleted && halted && stopErrors.length === 0,
-        `流式中间态=${streamingSeen}，stop 后 STREAM_COMPLETE(stoppedByUser=true)=${stopCompleted}，stop 时 _partial=${countAtStop}，1.2s 后=${countAfterStop}（流${halted ? '已停止' : '仍在继续'}），STREAM_ERROR=${stopErrors.length}`)
+        `流式中间态=${streamingSeen}，stop 后 STREAM_COMPLETE(stoppedByUser=true)=${stopCompleted}，stop 时 delta=${countAtStop}，1.2s 后=${countAfterStop}（流${halted ? '已停止' : '仍在继续'}），STREAM_ERROR=${stopErrors.length}`)
 
       // ----- Retry：同一 Pi 会话、同一模型重发同一条用户消息（handleRetry 的 sendAgentMessage 路径）-----
       await installEventCollectors(page)

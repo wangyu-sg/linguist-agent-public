@@ -1,7 +1,10 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useStore } from 'jotai'
 import { Archive, Bot, Languages, PanelBottom, PanelLeft, PanelRight, Settings } from 'lucide-react'
-import type { LinguistProjectInfo, LinguistProjectSummary, LinguistStageDecisionCoverage, LinguistWorkflowStage } from '@proma/shared'
+import type { LinguistProjectInfo, LinguistStageDecisionCoverage, LinguistWorkflowStage } from '@proma/shared'
+import type { WorkbenchSummaryState } from './project-summary-atoms'
+
+export type { WorkbenchSummaryState }
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -23,7 +26,9 @@ import {
 import { ProjectSettingsSheet } from './ProjectSettingsSheet'
 import { UnknownTagNotice, unknownTagScanRevision } from './UnknownTagNotice'
 import {
+  COVERAGE_STAGES,
   formatStageCoverage,
+  hasStageCoverageProgress,
   linguistStageCoverageAtomFamily,
   refreshLinguistStageCoverage,
   stageCoverageKey,
@@ -84,11 +89,6 @@ export function getBottomDockHeightFromKey(height: number, key: string): number 
   }
 }
 
-export type WorkbenchSummaryState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'ready'; summary: LinguistProjectSummary }
-
 interface LinguistWorkbenchShellProps {
   project: LinguistProjectInfo
   summaryState: WorkbenchSummaryState
@@ -146,12 +146,37 @@ export function LinguistWorkbenchShell({
   }, [store, project.id, activeAsset, summary])
   const agentOpen = uiState.agentPresentation !== 'closed'
   const agentFull = uiState.agentPresentation === 'full'
+  const agentToggleRef = React.useRef<HTMLButtonElement>(null)
+  /** 浮层脱困：scrim 点击 / ESC 关闭 rail 后焦点回到头部 Agent 开关。 */
+  const closeAgentRail = React.useCallback((): void => {
+    setUiState({ agentPresentation: 'closed' })
+    agentToggleRef.current?.focus()
+  }, [setUiState])
+  // rail 内「收起项目 Agent」按钮直接改 uiState，不经过 closeAgentRail；
+  // 统一在 open→closed 跳变时归还焦点，避免焦点随按钮卸载丢失到 body。
+  const agentOpenRef = React.useRef(agentOpen)
+  React.useEffect(() => {
+    if (agentOpenRef.current && !agentOpen) agentToggleRef.current?.focus()
+    agentOpenRef.current = agentOpen
+  }, [agentOpen])
+  const handleAgentRailEscape = React.useCallback(
+    (event: React.KeyboardEvent<HTMLElement>): void => {
+      if (event.key !== 'Escape') return
+      // 输入控件内的 Esc 留给控件自身（取消编辑 / 收起补全），不关 rail。
+      if (event.target instanceof HTMLElement
+        && event.target.closest('input, textarea, [contenteditable="true"]') !== null) return
+      event.stopPropagation()
+      closeAgentRail()
+    },
+    [closeAgentRail],
+  )
+  // U-09：头部进度带口径前缀——选中批次时为「本批次」，尚无批次时投影为全项目零值。
   const progressLabel = summaryState.status === 'ready'
     ? activeAsset !== undefined || summaryState.summary.assets.length === 0
-      ? stageProgressSummary(
+      ? `${activeAsset !== undefined ? '本批次' : '全项目'} · ${stageProgressSummary(
           project.workflowStage ?? 'translation',
           activeAsset?.currentStageCounts ?? summaryState.summary.currentStageCounts,
-        )
+        )}`
       : '请选择批次'
     : summaryState.status === 'loading'
       ? '统计加载中…'
@@ -370,6 +395,7 @@ export function LinguistWorkbenchShell({
           )}
           {agentRail !== undefined && (
             <Button
+              ref={agentToggleRef}
               type="button"
               variant="ghost"
               size="sm"
@@ -459,6 +485,12 @@ export function LinguistWorkbenchShell({
             'relative min-h-0 min-w-[32rem] flex-1 flex-col max-md:min-w-0',
             agentFull ? 'hidden' : 'flex',
           )}
+          style={{
+            // 语言资产面板在 max-lg 转为浮层时，把浮层高度传给网格滚动区让位。
+            '--bottom-dock-overlay-height': !agentFull && bottomDock !== undefined && uiState.bottomDockOpen
+              ? `${uiState.bottomDockHeight}px`
+              : '0px',
+          } as React.CSSProperties}
         >
           <UnknownTagNotice
             projectId={project.id}
@@ -510,11 +542,22 @@ export function LinguistWorkbenchShell({
           )}
         </div>
 
+        {agentRail !== undefined && agentOpen && !agentFull && (
+          <div
+            aria-hidden="true"
+            data-workbench-slot="agent-rail-scrim"
+            onClick={closeAgentRail}
+            className="hidden max-xl:block max-xl:absolute max-xl:inset-0 max-xl:z-10 max-xl:bg-foreground/25"
+          />
+        )}
+
         {agentRail !== undefined && agentOpen && (
           <aside
             aria-label="项目 Agent"
+            aria-keyshortcuts="Escape"
             data-workbench-slot={agentFull ? 'agent-full' : 'agent-rail'}
             data-linguist-agent-presentation={uiState.agentPresentation}
+            onKeyDown={handleAgentRailEscape}
             className={cn(
               'relative min-h-0 overflow-hidden bg-content-area/55',
               agentFull
@@ -562,30 +605,27 @@ export function LinguistWorkbenchShell({
         className="flex min-h-7 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-content-area px-4 py-1 text-[11px] text-muted-foreground shadow-[0_-1px_0_hsl(var(--border)/0.45)]"
       >
         <div className="flex flex-wrap items-center gap-x-3">
-          <span>{progressLabel}</span>
-          {activeAsset !== undefined && (
+          {/* U-06：只渲染非零指标与当前阶段计数；整体进度与批次名由头部承载，不再重复。 */}
+          {activeAsset !== undefined && activeAsset.currentStageCounts.draft > 0 && (
             <span>
               {stageProgressLabel(project.workflowStage ?? 'translation', 'draft', true)}
               {' '}
               {activeAsset.currentStageCounts.draft}
             </span>
           )}
-          {activeAsset !== undefined && stageCoverage.translation !== undefined && (
-            <StageCoverageSpan stage="translation" coverage={stageCoverage.translation} />
-          )}
-          {activeAsset !== undefined && stageCoverage.editing !== undefined && (
-            <StageCoverageSpan stage="editing" coverage={stageCoverage.editing} />
-          )}
-          {activeAsset !== undefined && stageCoverage.proofreading !== undefined && (
-            <StageCoverageSpan stage="proofreading" coverage={stageCoverage.proofreading} />
-          )}
-          <span>
-            当前批次：{activeAsset?.filename ?? (summary?.assets.length === 0 ? '尚无批次' : '未选择批次')}
-          </span>
-          {activeAsset !== undefined && <>
+          {activeAsset !== undefined && COVERAGE_STAGES.map((stage) => {
+            const coverage = stageCoverage[stage]
+            if (coverage === undefined) return null
+            const currentStage = project.workflowStage ?? 'translation'
+            if (stage !== currentStage && !hasStageCoverageProgress(coverage)) return null
+            return <StageCoverageSpan key={stage} stage={stage} coverage={coverage} />
+          })}
+          {activeAsset !== undefined && activeAsset.sourceCharacters > 0 && (
             <span>源文 {activeAsset.sourceCharacters} 字符</span>
+          )}
+          {activeAsset !== undefined && activeAsset.targetCharacters > 0 && (
             <span>译文 {activeAsset.targetCharacters} 字符</span>
-          </>}
+          )}
           <span title={uiState.activeSegmentId ?? undefined}>
             当前片段：{uiState.activeSegmentId === null || uiState.activeSegmentId === undefined
               ? '未选择片段'

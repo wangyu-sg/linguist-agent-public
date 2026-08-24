@@ -776,7 +776,8 @@ async function openLinguistWorkbenchAndSelectLocation(
   await row.getByRole('button', { name: /查看原始行 \d+ 上下文/u }).click()
   const status = workspace.locator('footer[aria-label="本地化工作台状态栏"]')
   const locationVisible = await asset.getAttribute('aria-current') === 'page'
-    && await status.getByText('当前批次：mini_game_ui.xliff', { exact: true }).isVisible()
+    && await workspace.locator('header[aria-label="本地化工作台工具栏"]')
+      .getByText('mini_game_ui.xliff', { exact: true }).isVisible()
     && await isSegmentStatusVisible(status, segmentId)
 
   for (const mode of ['Agent', '本地化', 'Chat', '本地化'] as const) {
@@ -834,7 +835,8 @@ async function readRecoveredLinguistLocation(
       && persisted.tab.projectId === projectId
       && persisted.tab.sessionId === undefined,
     locationVisible: await asset.getAttribute('aria-current') === 'page'
-      && await status.getByText('当前批次：mini_game_ui.xliff', { exact: true }).isVisible()
+      && await workspace.locator('header[aria-label="本地化工作台工具栏"]')
+        .getByText('mini_game_ui.xliff', { exact: true }).isVisible()
       && await isSegmentStatusVisible(status, segmentId),
   }
 }
@@ -859,13 +861,13 @@ async function openQaFindings(workspace: Locator): Promise<Locator> {
   if (!qaSelected) throw new Error('语言资产 QA Tab 未成功打开')
   const panel = dock.getByRole('tabpanel')
   await panel.waitFor({ timeout: 30_000 })
-  const findings = panel.locator('section[aria-label="当前片段 QA Findings"]')
+  const findings = panel.locator('section[aria-label="QA Findings"]')
   await findings.waitFor({ timeout: 30_000 })
   return findings
 }
 
 async function runQa(findings: Locator, expectedFinding: Locator): Promise<void> {
-  const button = findings.getByRole('button', { name: '运行整个项目 QA', exact: true })
+  const button = findings.getByRole('button', { name: '运行项目 QA', exact: true })
   await button.click()
   await expectedFinding.waitFor({ timeout: 30_000 })
 }
@@ -1860,20 +1862,24 @@ async function main(): Promise<void> {
       const agentPanelButton = workspace
         .locator('header[aria-label="本地化工作台工具栏"]')
         .getByRole('button', { name: 'Agent', exact: true })
-      if (await agentPanelButton.getAttribute('aria-pressed') !== 'true') {
-        await agentPanelButton.click()
-      }
       const agentRail = workspace.locator('aside[aria-label="项目 Agent"]')
-      const railOpen = await waitFor(
-        async () => await agentPanelButton.getAttribute('aria-pressed') === 'true'
-          && await agentRail.isVisible(),
-        30_000,
-      )
+      if (await agentPanelButton.getAttribute('aria-pressed') === 'true') {
+        const scrim = workspace.locator('[data-workbench-slot="agent-rail-scrim"]')
+        if (await scrim.isVisible()) await scrim.click({ position: { x: 8, y: 200 } })
+        else await agentPanelButton.click()
+        await waitFor(async () => await agentPanelButton.getAttribute('aria-pressed') === 'false', 10_000)
+      }
       const row = workspace.locator(`[role="row"][data-segment-id="${segmentId}"]`)
       await row.waitFor({ timeout: 30_000 })
       const segmentCheckbox = row.getByRole('checkbox')
       await segmentCheckbox.check()
       const segmentSelected = await segmentCheckbox.isChecked()
+      await agentPanelButton.click()
+      const railOpen = await waitFor(
+        async () => await agentPanelButton.getAttribute('aria-pressed') === 'true'
+          && await agentRail.isVisible(),
+        30_000,
+      )
       const quickAction = workspace.getByRole('button', { name: '翻译已选', exact: true })
       const quickActionReady = await quickAction.isVisible() && await quickAction.isEnabled()
       const projectSessionIds = await listProjectSessionIds(launched.page, projectId)
@@ -1933,6 +1939,11 @@ async function main(): Promise<void> {
 
       await selectPrimaryMode(launched.page, '本地化')
       await workspace.waitFor({ timeout: 30_000 })
+      const scrim = workspace.locator('[data-workbench-slot="agent-rail-scrim"]')
+      if (await scrim.isVisible()) {
+        await scrim.click({ position: { x: 8, y: 200 } })
+        await scrim.waitFor({ state: 'hidden', timeout: 10_000 })
+      }
       await row.getByRole('button', { name: /查看原始行 \d+ 上下文/u }).click()
       const proposalReview = row.locator('section[aria-label="当前行翻译建议"]')
       await proposalReview.waitFor({ timeout: 30_000 })
