@@ -64,14 +64,6 @@
       "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
     },
     {
-      "file": "apps/cli/src/paths.test.ts",
-      "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "product-build",
-      "mergePolicy": "keep-la",
-      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
-    },
-    {
       "file": "apps/cli/src/paths.ts",
       "ticket": "LA-SYNC-005",
       "kind": "product-fork",
@@ -249,14 +241,6 @@
       "reason": "remove stale Claude SDK packaging language after adopting the upstream Pi-only runtime."
     },
     {
-      "file": "apps/electron/scripts/run-electron-builder.test.ts",
-      "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "product-build",
-      "mergePolicy": "keep-la",
-      "reason": "remove Bun's lifecycle node shim before launching Electron Builder and keep the packaging gate on the real Node runtime."
-    },
-    {
       "file": "apps/electron/scripts/run-electron-builder.ts",
       "ticket": "LA-SYNC-005",
       "kind": "product-fork",
@@ -299,22 +283,6 @@
       "reason": "Pi 压缩续跑时重新注入已验证的 Linguist turn context；上游提供等价 hook 后删除。"
     },
     {
-      "file": "apps/electron/src/main/lib/adapters/pi-context-compaction-tool.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/adapters/pi-message-adapter.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
-    },
-    {
       "file": "apps/electron/src/main/lib/agent-collaboration-tools.ts",
       "ticket": "LA-HOST-002",
       "kind": "host-seam",
@@ -322,14 +290,6 @@
       "mergePolicy": "reapply-host-seam",
       "hook": "linguist-delegation",
       "reason": "在 Proma Collaboration 中注入受信的 Linguist role、project binding、冻结范围与 outcome binding。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/agent-island-navigation-policy.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-island-navigation-policy.ts",
@@ -365,28 +325,12 @@
       "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
     },
     {
-      "file": "apps/electron/src/main/lib/agent-session-file-storage.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
-    },
-    {
       "file": "apps/electron/src/main/lib/agent-session-file-storage.ts",
       "ticket": "LA-SYNC-003",
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/agent-session-manager.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-manager.ts",
@@ -445,14 +389,6 @@
       "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
     },
     {
-      "file": "apps/electron/src/main/lib/channel-runtime-api-key.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
-    },
-    {
       "file": "apps/electron/src/main/lib/chat-tools-watcher.ts",
       "ticket": "LA-SYNC-003",
       "kind": "product-fork",
@@ -475,14 +411,6 @@
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/config-paths-security.test.ts",
-      "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/config-paths.ts",
@@ -509,28 +437,12 @@
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
-      "file": "apps/electron/src/main/lib/dingtalk-config.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
-    },
-    {
       "file": "apps/electron/src/main/lib/dingtalk-config.ts",
       "ticket": "LA-SYNC-003",
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/electron-user-data-path.test.ts",
-      "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/electron-user-data-path.ts",
@@ -571,14 +483,6 @@
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
-    },
-    {
-      "file": "apps/electron/src/main/lib/planning-manager.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/planning-manager.ts",
@@ -653,28 +557,12 @@
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
-      "file": "apps/electron/src/main/lib/title-generation.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
-    },
-    {
       "file": "apps/electron/src/main/lib/title-generation.ts",
       "ticket": "LA-SYNC-003",
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/todo-agent-start.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/todo-agent-start.ts",
@@ -707,14 +595,6 @@
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/voice-dictation-output-result.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证主进程对 Linguist project binding、独立数据根或共享 runtime 合同的处理。"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-output-result.ts",
@@ -806,14 +686,6 @@
       "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
     },
     {
-      "file": "apps/electron/src/renderer/atoms/app-mode.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/atoms/app-mode.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -846,14 +718,6 @@
       "reason": "PreviewFile carries an opaque linguist target so the native Preview Tab can mount Linguist batch/context-doc previews without Proma knowing CAT details."
     },
     {
-      "file": "apps/electron/src/renderer/atoms/project-agent-session-atoms.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/atoms/project-agent-session-atoms.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -868,14 +732,6 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
-    },
-    {
-      "file": "apps/electron/src/renderer/atoms/tab-atoms.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/tab-atoms.ts",
@@ -966,14 +822,6 @@
       "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
-      "file": "apps/electron/src/renderer/components/agent/AgentView.pending-prompt.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/agent/AgentView.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1054,14 +902,6 @@
       "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
-      "file": "apps/electron/src/renderer/components/agent/agent-attachment-gate.test.ts",
-      "ticket": "LA-HOST-005",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "verify the attachment save gate keeps ordinary sessions blocked and lets linguist-bound sessions save without a forged workspace slug."
-    },
-    {
       "file": "apps/electron/src/renderer/components/agent/agent-attachment-gate.ts",
       "ticket": "LA-HOST-005",
       "kind": "product-fork",
@@ -1070,28 +910,12 @@
       "reason": "shared gate decides whether agent file attachments may be saved for a session; linguist project-bound sessions pass without forging a Proma workspace slug while ordinary sessions without workspace stay blocked."
     },
     {
-      "file": "apps/electron/src/renderer/components/agent/permission-scope.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "expose the concrete permission scope and risk without relying on color alone."
-    },
-    {
       "file": "apps/electron/src/renderer/components/agent/permission-scope.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "expose the concrete permission scope and risk without relying on color alone."
-    },
-    {
-      "file": "apps/electron/src/renderer/components/agent/tool-phrase.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-phrase.ts",
@@ -1110,28 +934,12 @@
       "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
     },
     {
-      "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/cat-result.test.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/cat-result.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.test.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx",
@@ -1190,14 +998,6 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/components/ai-elements/sticky-user-message.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/ai-elements/sticky-user-message.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1230,28 +1030,12 @@
       "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
-      "file": "apps/electron/src/renderer/components/app-shell/SearchDialog.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/app-shell/SearchDialog.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/app-shell/structural-a11y.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/titlebar-safe-area.ts",
@@ -1342,14 +1126,6 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/components/diff/DiffPanelTabBar.test.tsx",
-      "ticket": "LA-HOST-002",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "verify the shared Proma side-panel tab host exposes only Companion Chat in Linguist."
-    },
-    {
       "file": "apps/electron/src/renderer/components/diff/DiffTabContent.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1366,28 +1142,12 @@
       "reason": "the native split preview panel mounts LinguistPreviewBody for linguist targets and hides the default-app open action that requires a host path."
     },
     {
-      "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.linguist.test.tsx",
-      "ticket": "LA-HOST-005",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "verify the native Preview Tab mounts Linguist batch/context-doc previews and keeps the DiffTabContent path for plain files."
-    },
-    {
       "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.tsx",
       "ticket": "LA-HOST-005",
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "the native Preview Tab branches previewFile.linguist targets to LinguistPreviewBody instead of the DiffTabContent file-reading chain."
-    },
-    {
-      "file": "apps/electron/src/renderer/components/planning/PlanningReminderRail.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/planning/PlanningReminderRail.tsx",
@@ -1438,14 +1198,6 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/components/session-tree/AgentSessionActionsMenu.test.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/session-tree/AgentSessionActionsMenu.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1462,14 +1214,6 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/components/session-tree/ProjectSessionTreeGroupHeader.test.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/session-tree/ProjectSessionTreeGroupHeader.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1478,28 +1222,12 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/components/session-tree/agent-session-tree.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/session-tree/agent-session-tree.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/session-tree/session-actions.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/session-actions.ts",
@@ -1540,14 +1268,6 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/settings/ChannelSettings.test.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ChannelSettings.tsx",
@@ -1686,36 +1406,12 @@
       "reason": "keep the native TabBar action overlay clear of tabs and platform window controls."
     },
     {
-      "file": "apps/electron/src/renderer/components/tabs/tab-bar-action-layout.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "protect the native TabBar action overlay layout used by the Agent/Chat shell."
-    },
-    {
-      "file": "apps/electron/src/renderer/components/tabs/TabBarItem.test.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/tabs/TabBarItem.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/tabs/TabContent.linguist.test.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabContent.tsx",
@@ -1822,14 +1518,6 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/lib/agent-message-queue.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/lib/agent-message-queue.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1844,14 +1532,6 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/lib/external-agent-session-opener.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
     },
     {
       "file": "apps/electron/src/renderer/lib/external-agent-session-opener.ts",
@@ -1870,28 +1550,12 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/lib/mode-contributions.test.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "验证共享 Renderer 在 Linguist 第三模式下仍复用原生 Agent、Chat、导航与会话行为。"
-    },
-    {
       "file": "apps/electron/src/renderer/lib/mode-contributions.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/lib/quoted-selection.test.ts",
-      "ticket": "LA-HOST-001",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "verify the shared Proma quoted-selection state remains isolated by Agent session id."
     },
     {
       "file": "apps/electron/src/renderer/main.tsx",
@@ -1940,14 +1604,6 @@
       "owner": "product-build",
       "mergePolicy": "keep-la",
       "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
-    },
-    {
-      "file": "packages/shared/src/types/agent-profile.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "shared-contract",
-      "mergePolicy": "keep-la",
-      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
     },
     {
       "file": "packages/shared/src/types/agent-profile.ts",
@@ -2006,22 +1662,6 @@
       "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
     },
     {
-      "file": "packages/shared/src/types/linguist-asset-info.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "shared-contract",
-      "mergePolicy": "keep-la",
-      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
-    },
-    {
-      "file": "packages/shared/src/types/linguist-turn-context.test.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "shared-contract",
-      "mergePolicy": "keep-la",
-      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
-    },
-    {
       "file": "packages/shared/src/types/linguist-turn-context.ts",
       "ticket": "LA-SYNC-003",
       "kind": "product-fork",
@@ -2060,14 +1700,6 @@
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
       "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
-    },
-    {
-      "file": "packages/ui/src/code-block/CodeBlock.test.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "product-build",
-      "mergePolicy": "keep-la",
-      "reason": "验证 Linguist 产品分叉没有改变对应 Proma 公共合同。"
     },
     {
       "file": "packages/ui/src/code-block/CodeBlock.tsx",

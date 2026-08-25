@@ -12,7 +12,6 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --import ./test/register-ts-loader.mjs --test \"src/**/*.nodetest.ts\"",
     "cli": "node --experimental-transform-types --import ./test/register-ts-loader.mjs src/cli.ts"
   },
   "dependencies": {

@@ -18,9 +18,10 @@
 - App 保持 `0.17.60`，Shared 跟随 Proma 基线恢复为 `0.1.63`；baseline、touchpoints、README 与工程指南已对齐。
 - CLI 编译改用当前 Bun 可执行文件，避免子进程依赖 PATH。
 - Renderer Host Seam 已收敛到 Agent extension 与 app mode registry；Composer context 构建移入无环依赖的纯模块，极窄视口强制折叠不再留下无效展开动作。
-- 同步验证器现覆盖 `7` 个 Host 锚点，固定历史冲突回放为 `9/9` deterministic；touchpoint ledger 为 `254`。
+- 同步验证器现覆盖 `7` 个 Host 锚点，固定历史冲突回放为 `9/9` deterministic；touchpoint ledger 为 `208` 个生产触点。
 - Proma 自动同步保留策略解析、manifest overlay 与历史回放；CI 使用完整 Git 历史，并移除未被消费的 drift 报告和重复静态 seam 测试。
 - 内部启动初始化改为 fail fast；Linguist 会话绑定解析失败显式进入 unavailable 状态。
+- 测试代码只保留 `29` 个活跃文件、`293` 条门禁用例；Store、Tools 与 Electron 测试入口均为显式文件列表。
 
 ## 验证
 

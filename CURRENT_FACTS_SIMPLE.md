@@ -36,10 +36,11 @@
 - General 仍可选择性委派 Translator、Reviewer 或 Proofreader；子会话冻结 Segment 范围并共享 CAT Store，`linguistOutcome` 与子会话运行状态分开记录。
 - CAT 写入继续经过 Session authority、revision CAS、locked 与结构规则；读取、QA 与 consistency repair 不获得直接提交权。
 - CLI 构建脚本使用当前 Bun 的 `process.execPath` 启动 `bun build --compile`，不再依赖调用进程的 PATH 查找 Bun。
-- v0.17.59 精确 Proma Core ledger 为 `254` 个触点：Product Fork `247`、Generated `2`、Host Seam `4`、Temporary Deviation `1`。
+- v0.17.59 精确 Proma Core ledger 为 `208` 个生产触点：Product Fork `201`、Generated `2`、Host Seam `4`、Temporary Deviation `1`。
 - Host Seam 验证器覆盖 `7` 个锚点；固定 v0.17.59 历史冲突回放为 `9/9` deterministic。
 - Proma 自动同步保留策略解析、manifest overlay 与历史冲突回放；CI checkout 拉取完整历史。
 - 内部启动初始化失败直接终止，不再吞错后创建半初始化窗口；会话绑定 IPC 失败显式进入 unavailable 状态。
+- 测试代码收敛为 `29` 个活跃测试文件、`293` 条门禁用例；不再保留独立的全量库存测试。
 
 ## 本轮验证事实
 

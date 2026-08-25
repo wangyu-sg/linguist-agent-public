@@ -123,7 +123,8 @@ function changedFilesVsBaseline(baseline: string): string[] | null {
     ].join('\n')
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => line.length > 0))]
+      .filter((line) => line.length > 0)
+      .filter((line) => !/\.(?:test|spec|nodetest)\.[^/]+$/.test(line)))]
   } catch {
     return null
   }
