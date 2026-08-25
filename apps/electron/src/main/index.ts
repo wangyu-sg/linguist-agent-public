@@ -95,7 +95,7 @@ import { createApplicationMenu } from './menu'
 import { registerIpcHandlers, stopAllLinguistIntegrityScrubs } from './ipc'
 import { createTray, destroyTray, getTray, setTrayFlash } from './tray'
 import { initializeRuntime } from './lib/runtime-init'
-import { getConfigDir, seedDefaultSkills } from './lib/config-paths'
+import { seedDefaultSkills } from './lib/config-paths'
 import { upgradeDefaultSkillsInWorkspaces } from './lib/agent-workspace-manager'
 import { hasActiveAgentSessions, stopAllAgents } from './lib/agent-service'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
@@ -715,10 +715,10 @@ async function bootstrap(): Promise<void> {
   await safeAwait('initializeRuntime', () => initializeRuntime({ skipNodeDetection: true }))
 
   // 同步默认 Skills 模板到 ~/.linguist-agent/default-skills/
-  safeRun('seedDefaultSkills', seedDefaultSkills)
+  seedDefaultSkills()
 
   // 升级所有工作区中版本过旧的默认 Skills
-  safeRun('upgradeDefaultSkillsInWorkspaces', upgradeDefaultSkillsInWorkspaces)
+  upgradeDefaultSkillsInWorkspaces()
 
   // Create application menu
   const menu = createApplicationMenu()
@@ -729,10 +729,10 @@ async function bootstrap(): Promise<void> {
 
   // 初始化 Linguist CAT 项目服务（PB-030：仅实例化 + sqlite 探针；
   // IPC handler 注册属 PB-031；sqlite 不可用时服务自报降级，不阻断启动）
-  safeRun('initLinguistProjectService', () => initLinguistProjectService())
+  initLinguistProjectService()
 
   // 收敛上次退出时遗留的运行中委派子会话（内存态丢失，无法续跑）
-  safeRun('markRunningDelegationsAsInterrupted', markRunningDelegationsAsInterrupted)
+  markRunningDelegationsAsInterrupted()
 
   // Set dock icon on macOS
   // 确保 Dock 图标可见（dev 模式下通过 spawn 启动时可能不会自动显示）
@@ -862,8 +862,8 @@ async function bootstrap(): Promise<void> {
   safeRun('startBridgeSelfHealing', startBridgeSelfHealing)
 
   // 启动定时任务调度器（恢复持久化的 active 任务）
-  safeRun('startScheduler', startScheduler)
-  safeRun('startPlanningReminderScheduler', startPlanningReminderScheduler)
+  startScheduler()
+  startPlanningReminderScheduler()
   safeRun('startPlanningNativeSyncCoordinator', startPlanningNativeSyncCoordinator)
 
   app.on('activate', () => {
@@ -899,37 +899,12 @@ async function safeAwait(name: string, fn: () => Promise<unknown>): Promise<void
   }
 }
 
-/**
- * whenReady 顶层兜底：理论上 bootstrap 内的 safeRun/safeAwait 已经把所有可预期
- * 异常隔离掉了，能走到这里说明出了 bootstrap 本身控制流的意外（极端情况），
- * 此时仍尝试创建一个降级窗口，让用户至少能看到界面、复制日志、提交反馈。
- */
+/** 启动失败时显式终止，不在未知半初始化状态下再次注册 IPC 或创建窗口。 */
 function handleBootstrapFailure(err: unknown): void {
-  console.error('[启动] bootstrap 致命错误，进入降级模式:', err)
-
-  try {
-    const message = err instanceof Error ? (err.stack ?? err.message) : String(err)
-    const configDir = getConfigDir()
-    dialog.showErrorBox(
-      'Linguist Agent 启动遇到错误',
-      `部分功能可能不可用：\n\n${message}\n\n` +
-        `日志位置：${app.getPath('logs')}\n\n` +
-        `常见原因与排查：\n` +
-        `1. 旧版进程未退出（终端运行 killall "Linguist Agent" 后重试）\n` +
-        `2. 配置目录损坏（重命名 ${configDir} 后重启）\n` +
-        `3. 系统 Keychain 无法解密保存的凭证（删除 ${join(configDir, 'feishu.json')} 等后重新登录）\n\n` +
-        `如需协助请到 GitHub Issues 反馈。`,
-    )
-  } catch {
-    /* dialog 也失败，无能为力 */
-  }
-
-  try {
-    registerIpcHandlers()
-    createWindow()
-  } catch (fallbackErr) {
-    console.error('[启动] 降级窗口创建也失败:', fallbackErr)
-  }
+  console.error('[启动] bootstrap 致命错误:', err)
+  const message = err instanceof Error ? (err.stack ?? err.message) : String(err)
+  dialog.showErrorBox('Linguist Agent 启动失败', message)
+  app.quit()
 }
 
 app.on('window-all-closed', () => {

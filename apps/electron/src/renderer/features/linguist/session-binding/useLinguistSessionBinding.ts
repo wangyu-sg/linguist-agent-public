@@ -14,23 +14,39 @@ import type { AgentSessionMeta, LinguistSessionBindingInfo } from '@proma/shared
 /** 会话级绑定缓存（key = agent sessionId；仅缓存已解析结果，IPC 仍为真源）。 */
 export const linguistSessionBindingsAtom = atom<Record<string, LinguistSessionBindingInfo>>({})
 
-type BindingSession = Pick<AgentSessionMeta, 'id' | 'linguistProjectId'> | null | undefined
+type BindingSession = Pick<
+  AgentSessionMeta,
+  'id' | 'linguistProjectId' | 'linguistProjectName'
+> | null | undefined
 
 /**
  * 解析当前会话的项目绑定。session 无 linguistProjectId（普通会话）→ null；
  * 绑定会话在挂载/切换时经 IPC 实时解析（archived/missing 立即反映）。
  */
 export function useLinguistSessionBinding(session: BindingSession): LinguistSessionBindingInfo | null {
+  const projectId = session?.linguistProjectId ?? null
+  const projectName = session?.linguistProjectName ?? '项目'
   const sessionId = session?.linguistProjectId ? session.id : null
   const [bindings, setBindings] = useAtom(linguistSessionBindingsAtom)
 
   React.useEffect(() => {
-    if (!sessionId) return
+    if (!sessionId || !projectId) return
     let cancelled = false
+    const markUnavailable = (): void => {
+      if (cancelled) return
+      setBindings((previous) => ({
+        ...previous,
+        [sessionId]: { projectId, projectName, status: 'unavailable' },
+      }))
+    }
     void (async () => {
       try {
         const result = await window.electronAPI.linguistSessionsGetBinding({ sessionId })
-        if (cancelled || !result.ok) return
+        if (cancelled) return
+        if (!result.ok) {
+          markUnavailable()
+          return
+        }
         setBindings((prev) => {
           if (!result.data.binding) {
             // 会话已无绑定（异常态）：清掉陈旧缓存
@@ -42,13 +58,13 @@ export function useLinguistSessionBinding(session: BindingSession): LinguistSess
           return { ...prev, [sessionId]: result.data.binding }
         })
       } catch {
-        // 主进程通信异常：保持旧缓存，不崩 UI
+        markUnavailable()
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [sessionId, setBindings])
+  }, [projectId, projectName, sessionId, setBindings])
 
   if (!sessionId) return null
   return bindings[sessionId] ?? null

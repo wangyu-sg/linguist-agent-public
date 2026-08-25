@@ -11,7 +11,7 @@
 | 原生 Agent UI 收敛 | DONE | 删除上游已废弃的 Placeholder/Provider 包装；rail/full 仍复用同一 `AgentView`。 |
 | 岗位委派与完成证据 | DONE | 复用 Proma Collaboration；子会话继承双绑定和冻结范围；CAT Store 计算 `linguistOutcome`。 |
 | 版本、基线与文档 | DONE | App `0.17.60`、Shared `0.1.63`；baseline / ledger / deviations / canonical facts 已同步。 |
-| 自动回归 | DONE | typecheck、Renderer `641/641` 与全量 `1595 pass / 0 fail` 通过。 |
+| 自动回归 | DONE | typecheck 与默认 CI 关键回归 `293/293` 通过。 |
 | 未打包 Electron build | DONE | main / workers / runtime / preload / renderer / CLI / Agent Island / EventKit / resources 均通过。 |
 | Packaged 验证 | DONE / PARTIAL COVERAGE | `smoke:pack` 与完整 vertical 运行通过：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Native Open/Save 仍为人工门禁。 |
 | 真实 Provider 四岗位全链 | PENDING | 必须在当前 packaged app 内实际运行。 |
@@ -20,8 +20,7 @@
 
 ## 当前自动证据
 
-- 全仓 typecheck；boundary `4/4`；fusion `10/10`；Agent Full `17/17`；no-raw-palette `44/44`。
-- Electron Linguist `214/214`；全量 `1595 pass / 0 fail`。
+- 全仓 typecheck；默认 CI 关键回归 `293/293`；boundary `4/4`；fusion `10/10`；Host Seam `7/7`；历史冲突回放 `9/9`。
 - v0.17.59 精确 ledger `254`：Product Fork `247`、Generated `2`、Host Seam `4`、Temporary Deviation `1`。
 
 ## 证据边界

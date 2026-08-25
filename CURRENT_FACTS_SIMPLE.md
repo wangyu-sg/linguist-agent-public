@@ -6,11 +6,11 @@
 
 ## Git 与基线
 
-- 当前施工分支：`codex/maintenance-convergence`。
+- 当前交付分支：`main`。
 - Proma 基线：`v0.17.59@4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2`。
 - LA 起点：`3cfb14ff09baea1c042356b93be2809fb11774c5`。
 - 正式 merge：`f53612ca6566b58857173aa522fa73e229e5f08c`。
-- 正式 merge 之后另含版本、基线账本、构建修复与文档收口；分支尚未推送或合入 `main`。
+- 正式 merge 之后另含版本、基线账本、构建修复与文档收口。
 
 ## 版本
 
@@ -38,16 +38,17 @@
 - CLI 构建脚本使用当前 Bun 的 `process.execPath` 启动 `bun build --compile`，不再依赖调用进程的 PATH 查找 Bun。
 - v0.17.59 精确 Proma Core ledger 为 `254` 个触点：Product Fork `247`、Generated `2`、Host Seam `4`、Temporary Deviation `1`。
 - Host Seam 验证器覆盖 `7` 个锚点；固定 v0.17.59 历史冲突回放为 `9/9` deterministic。
+- Proma 自动同步保留策略解析、manifest overlay 与历史冲突回放；CI checkout 拉取完整历史。
+- 内部启动初始化失败直接终止，不再吞错后创建半初始化窗口；会话绑定 IPC 失败显式进入 unavailable 状态。
 
 ## 本轮验证事实
 
-- 全仓 typecheck 通过；Renderer `641/641` 通过。
-- upstream boundary `4/4`、fusion architecture `10/10`、Agent Full 合同 `17/17`、no-raw-palette `44/44` 通过。
-- Electron Linguist `214/214` 通过。
-- 全量 `bun test` 为 `1595 pass / 0 fail`。
+- 全仓 typecheck 通过；默认 CI 关键回归 `293/293` 通过。
+- upstream boundary `4/4`、fusion architecture `10/10`、Host Seam `7/7`、历史冲突回放 `9/9` 通过。
+- 许可门禁通过，darwin-arm64 SBOM 与当前 `433` 个第三方生产依赖一致。
 - `bun run electron:build` 通过；Electron main、CAT workers、Agent runtime、preload、renderer、CLI、Agent Island native、EventKit native 与 resources 均完成真实构建。
-- `smoke:pack` 与 packaged artifact 完整性通过。
-- 完整 `smoke:vertical` 运行通过：Pi Agent `15/15`、Chat `19/19`、Linguist `21/21`；报告 `runStatus=passed`、`coverageStatus=partial`，唯一自动化缺口为原生 Open/Save 对话框人工证据。
+- 上一轮 `smoke:pack` 与 packaged artifact 完整性通过。
+- 上一轮完整 `smoke:vertical` 运行通过：Pi Agent `15/15`、Chat `19/19`、Linguist `21/21`；报告 `runStatus=passed`、`coverageStatus=partial`，唯一自动化缺口为原生 Open/Save 对话框人工证据。
 - `git diff --check`、baseline/deviations/touchpoints JSON 解析通过；公开身份与镜像清洁测试通过。
 
 ## 仍未取得的证据

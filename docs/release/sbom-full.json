@@ -123,19 +123,31 @@
     "licenses": "Apache-2.0",
     "repository": "https://github.com/Chevrotain/chevrotain"
   },
-  "@earendil-works/pi-agent-core@0.82.1": {
+  "@earendil-works/pi-agent-core@0.84.2": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-ai@0.82.1": {
+  "@earendil-works/pi-ai@0.84.2": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-coding-agent@0.82.1": {
+  "@earendil-works/pi-client@0.84.2": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-tui@0.82.1": {
+  "@earendil-works/pi-coding-agent@0.84.2": {
+    "licenses": "MIT",
+    "repository": "https://github.com/earendil-works/pi"
+  },
+  "@earendil-works/pi-protocol@0.84.2": {
+    "licenses": "MIT",
+    "repository": "https://github.com/earendil-works/pi"
+  },
+  "@earendil-works/pi-telemetry@0.84.2": {
+    "licenses": "MIT",
+    "repository": "https://github.com/earendil-works/pi"
+  },
+  "@earendil-works/pi-tui@0.84.2": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
@@ -208,10 +220,6 @@
     "licenses": "MIT",
     "repository": "https://github.com/mermaid-js/mermaid"
   },
-  "@mistralai/mistralai@2.2.6": {
-    "licenses": "Apache-2.0",
-    "repository": "https://github.com/mistralai/client-ts"
-  },
   "@modelcontextprotocol/sdk@1.29.0": {
     "licenses": "MIT",
     "repository": "https://github.com/modelcontextprotocol/typescript-sdk"
@@ -227,10 +235,6 @@
     "optional": true
   },
   "@opentelemetry/api@1.9.0": {
-    "licenses": "Apache-2.0",
-    "repository": "https://github.com/open-telemetry/opentelemetry-js"
-  },
-  "@opentelemetry/semantic-conventions@1.42.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/open-telemetry/opentelemetry-js"
   },
@@ -365,11 +369,11 @@
     "licenses": "Apache-2.0",
     "repository": "https://github.com/awslabs/smithy-typescript"
   },
-  "@tanstack/react-virtual@3.14.7": {
+  "@tanstack/react-virtual@3.14.9": {
     "licenses": "MIT",
     "repository": "https://github.com/TanStack/virtual"
   },
-  "@tanstack/virtual-core@3.17.5": {
+  "@tanstack/virtual-core@3.17.7": {
     "licenses": "MIT",
     "repository": "https://github.com/TanStack/virtual"
   },
@@ -1036,6 +1040,10 @@
     "licenses": "ISC",
     "repository": "https://github.com/isaacs/node-graceful-fs"
   },
+  "grok-mermaid@0.2.2": {
+    "licenses": "Apache-2.0",
+    "repository": "https://github.com/xl0/grok-mermaid"
+  },
   "hachure-fill@0.5.2": {
     "licenses": "MIT",
     "repository": "https://github.com/pshihn/hachure-fill"
@@ -1336,7 +1344,7 @@
     "licenses": "MIT",
     "repository": "https://github.com/slevithan/oniguruma-to-es"
   },
-  "openai@6.26.0": {
+  "openai@6.40.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/openai/openai-node"
   },
@@ -1624,6 +1632,10 @@
     "licenses": "MIT",
     "repository": "https://github.com/sinclairzx81/typebox"
   },
+  "typebox@1.3.7": {
+    "licenses": "MIT",
+    "repository": "https://github.com/sinclairzx81/typebox"
+  },
   "typescript@5.9.3": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/microsoft/TypeScript"
@@ -1645,7 +1657,7 @@
     "repository": "https://github.com/nodejs/undici",
     "optional": true
   },
-  "undici@8.5.0": {
+  "undici@8.9.0": {
     "licenses": "MIT",
     "repository": "https://github.com/nodejs/undici"
   },

@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 分支：`codex/maintenance-convergence`。
+- 分支：`main`。
 - 基线：Proma `v0.17.59@4546c5f7`；正式 merge `f53612ca`；本地起点 `3cfb14ff`。
 - 当前版本：Electron `0.17.60`、Shared `0.1.63`、CAT Core / Formats / Store / Tools `0.0.21 / 0.0.11 / 0.0.39 / 0.0.35`、schema `16`。
 - Runtime：Pi `0.84.2` only；完整 Proma Agent + Chat + Linguist Vertical Agent Profile，无第二套 Host 能力。
@@ -19,13 +19,15 @@
 - CLI 编译改用当前 Bun 可执行文件，避免子进程依赖 PATH。
 - Renderer Host Seam 已收敛到 Agent extension 与 app mode registry；Composer context 构建移入无环依赖的纯模块，极窄视口强制折叠不再留下无效展开动作。
 - 同步验证器现覆盖 `7` 个 Host 锚点，固定历史冲突回放为 `9/9` deterministic；touchpoint ledger 为 `254`。
+- Proma 自动同步保留策略解析、manifest overlay 与历史回放；CI 使用完整 Git 历史，并移除未被消费的 drift 报告和重复静态 seam 测试。
+- 内部启动初始化改为 fail fast；Linguist 会话绑定解析失败显式进入 unavailable 状态。
 
 ## 验证
 
-- 全仓 typecheck 通过；boundary `4/4`、fusion `10/10`、Agent Full `17/17`、no-raw-palette `44/44`、Electron Linguist `214/214` 通过。
-- Renderer `641/641`、全量 `1595 pass / 0 fail`。
+- 全仓 typecheck 通过；默认 CI 关键回归 `293/293`、boundary `4/4`、fusion `10/10`、Host Seam `7/7`、历史冲突回放 `9/9` 通过。
+- 许可门禁通过；darwin-arm64 SBOM 已与当前生产依赖闭包同步。
 - Electron main / workers / Agent runtime / preload / renderer / CLI / Agent Island / EventKit / resources 的底层构建阶段全部通过。
-- `smoke:pack` 与产物完整性通过；完整 vertical 为 Agent `15/15`、Chat `19/19`、Linguist `21/21`，执行状态 passed。Native Open/Save 仍保留人工门禁；真实 Provider 四岗位全链仍无证据。分支尚未推送或合入 `main`。
+- 上一轮 `smoke:pack` 与产物完整性通过；完整 vertical 为 Agent `15/15`、Chat `19/19`、Linguist `21/21`，执行状态 passed。Native Open/Save 仍保留人工门禁；真实 Provider 四岗位全链仍无证据。
 
 ## 下一步
 
