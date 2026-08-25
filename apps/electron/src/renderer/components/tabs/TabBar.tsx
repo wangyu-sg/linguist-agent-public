@@ -374,15 +374,16 @@ function TabBarInner({
   // 鼠标滚轮横向滚动（使用原生事件监听器以支持 preventDefault）
   React.useEffect(() => {
     const el = scrollRef.current
-    if (!el) return
+    const bar = barRef.current
+    if (!el || !bar) return
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
-      el.scrollLeft += e.deltaY || e.deltaX
+      el.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
     }
 
-    el.addEventListener('wheel', handleWheel, { passive: false })
-    return () => el.removeEventListener('wheel', handleWheel)
+    bar.addEventListener('wheel', handleWheel, { passive: false })
+    return () => bar.removeEventListener('wheel', handleWheel)
   }, [])
 
   // 新增 tab 时自动滚动到最右
@@ -524,8 +525,10 @@ function TabBarActions({
       <div
         data-tab-bar-action-fade="true"
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 -left-12 right-0 [mask-image:linear-gradient(to_right,transparent_0,black_76px)] backdrop-blur-sm"
-        style={{ backgroundColor: 'hsl(var(--tabbar-surface) / 0.92)' }}
+        className="pointer-events-none absolute bottom-0 -left-12 -right-1 h-[34px] [mask-image:linear-gradient(to_right,transparent_0,black_48px)]"
+        style={{
+          background: 'linear-gradient(to bottom, hsl(var(--tabbar-surface)) 0 calc(100% - 1px), hsl(var(--border) / 0.8) calc(100% - 1px))',
+        }}
       />
       <div
         data-tab-bar-action-island="true"
