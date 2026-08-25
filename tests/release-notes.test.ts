@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { buildReleaseNotes, normalizeUpstreamNotes, releaseNoteForCommit } from '../scripts/generate-release-notes.mjs'
+import { buildReleaseNotes, normalizeUpstreamNotes, releaseNotesForCommit } from '../scripts/generate-release-notes.mjs'
 
 describe('Release notes', () => {
   test('过滤工程提交并保留用户可读变化', () => {
-    expect(releaseNoteForCommit('chore(ci): trim tests')).toBeUndefined()
-    expect(releaseNoteForCommit('fix(release): skip duplicate validation')).toBeUndefined()
-    expect(releaseNoteForCommit('fix(agent): 修复会话恢复')).toBe('**修复**：修复会话恢复')
-    expect(releaseNoteForCommit('chore: internal', 'Release-Note: 新增项目批次视图')).toBe('新增项目批次视图')
+    expect(releaseNotesForCommit('chore(ci): trim tests')).toEqual([])
+    expect(releaseNotesForCommit('fix(release): skip duplicate validation')).toEqual([])
+    expect(releaseNotesForCommit('fix(agent): 修复会话恢复')).toEqual(['**修复**：修复会话恢复'])
+    expect(releaseNotesForCommit('chore: internal', 'Release-Note: 新增项目批次视图\nRelease-Note: 改进窄窗口操作')).toEqual([
+      '新增项目批次视图',
+      '改进窄窗口操作',
+    ])
   })
 
   test('上游升级展示真实 Proma Release 内容', () => {

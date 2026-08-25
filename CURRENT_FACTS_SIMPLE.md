@@ -17,7 +17,7 @@
 | 层 | 当前值 |
 |---|---|
 | Bun | `1.3.14` |
-| Electron App / Electron | `0.17.60` / `43.2.0` |
+| Electron App / Electron | `0.17.61` / `43.2.0` |
 | React / Jotai / Vite | `18.3.1` / `2.20.2` / `6.4.3` |
 | Shared | `0.1.63` |
 | Agent Runtime | Pi `0.84.2`；不包含 Claude Agent SDK / Nowledge Runtime |

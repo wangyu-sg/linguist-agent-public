@@ -36,15 +36,15 @@ const CHANGE_LABELS = {
 
 const INTERNAL_SCOPES = new Set(['build', 'ci', 'docs', 'release', 'sync', 'test'])
 
-export function releaseNoteForCommit(subject, body = '') {
+export function releaseNotesForCommit(subject, body = '') {
   const explicit = body.split(/\r?\n/)
     .map((line) => /^Release-Note:\s*(.+)$/i.exec(line)?.[1]?.trim())
-    .find(Boolean)
-  if (explicit) return explicit.toLowerCase() === 'skip' ? undefined : explicit
+    .filter(Boolean)
+  if (explicit.length > 0) return explicit.filter((note) => note.toLowerCase() !== 'skip')
 
   const match = /^(feat|fix|perf|refactor)(?:\(([^)]+)\))?!?:\s*(.+)$/i.exec(subject)
-  if (!match || INTERNAL_SCOPES.has((match[2] ?? '').toLowerCase())) return undefined
-  return `**${CHANGE_LABELS[match[1].toLowerCase()]}**：${match[3].trim()}`
+  if (!match || INTERNAL_SCOPES.has((match[2] ?? '').toLowerCase())) return []
+  return [`**${CHANGE_LABELS[match[1].toLowerCase()]}**：${match[3].trim()}`]
 }
 
 export function normalizeUpstreamNotes(notes) {
@@ -105,8 +105,7 @@ function main() {
       return { subject: subject.trim(), body: body.trim() }
     })
   const notes = commits
-    .map(({ subject, body }) => releaseNoteForCommit(subject, body))
-    .filter(Boolean)
+    .flatMap(({ subject, body }) => releaseNotesForCommit(subject, body))
   const previousBaseline = baselineAt(options.root, options.from)
   const upstreamNotes = options.upstreamNotes ? readFileSync(options.upstreamNotes, 'utf8') : ''
   const content = buildReleaseNotes({ tag, notes, currentBaseline, previousBaseline, upstreamNotes })
