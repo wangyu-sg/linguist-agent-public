@@ -14,7 +14,8 @@
 
 ## 基线固定
 
-- Proma upstream baseline SHA：`702a8221bdeb6f3db7dc514b8e93e2a5a52f68df`
+- 当前 Proma upstream baseline：`v0.17.59@4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2`
+- 仓库初始 Proma root：`702a8221bdeb6f3db7dc514b8e93e2a5a52f68df`（历史来源，保留在 Git 记录中）
   （`docs/architecture/UPSTREAM_BASELINE.md`）
 - 旧 LA 冻结点：tag `la-v2-legacy-freeze-2026-07-25`，commit `c2014227b34c45294dafe9bab6f65346f4c3a654`
 

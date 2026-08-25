@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-08-23
+更新时间：2026-08-25
 
 ## 当前真源
 
@@ -17,6 +17,7 @@
 - [SIMPLE_IMPLEMENTATION_STATUS.md](./roadmap/SIMPLE_IMPLEMENTATION_STATUS.md)
 - [LINGUIST_FUSION_CURRENT_REALITY.md](./roadmap/LINGUIST_FUSION_CURRENT_REALITY.md)
 - [UPSTREAM_BASELINE.md](./architecture/UPSTREAM_BASELINE.md)
+- [UPSTREAM_SYNC.md](./architecture/UPSTREAM_SYNC.md)
 - [proma-baseline.json](./architecture/proma-baseline.json)
 - [PROMA_CORE_TOUCHPOINTS.md](./architecture/PROMA_CORE_TOUCHPOINTS.md)
 - [proma-touchpoints.json](./architecture/proma-touchpoints.json)

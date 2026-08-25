@@ -27,6 +27,7 @@ Linguist Agent 处于按票重建早期，仅最新 release 获得安全修复�
 ## 范围与说明
 
 - 本项目在本地存储用户的模型 API Key（经 Electron safeStorage 加密）与
-  OAuth token；用户数据目录为 `~/.proma/`（开发版 `~/.proma-dev/`）。
+  OAuth token；用户数据目录为 `~/.linguist-agent/`（开发版
+  `~/.linguist-agent-dev/`）。
   涉及这些凭据/数据的泄露风险属于高优先级。
 - 第三方依赖的漏洞请同时向上游报告；我们会在依赖升级窗口内跟进。

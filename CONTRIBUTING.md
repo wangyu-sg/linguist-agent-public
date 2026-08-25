@@ -40,7 +40,7 @@ Signed-off-by: Your Name <you@example.com>
 bun install --frozen-lockfile
 bun run typecheck        # 各包 tsc --noEmit
 bun test                 # 单元测试
-bun run electron:dev     # 开发模式（数据写入 ~/.proma-dev）
+bun run electron:dev     # 开发模式（数据写入 ~/.linguist-agent-dev）
 ```
 
 - PR 前必须通过 typecheck 与 test；涉及 CAT 包（`packages/linguist-*`）的

@@ -21,13 +21,6 @@
 ## 工作规范
 
 - 删除废弃的内部实现路径，不为内部代码保留兼容层、fallback 或双轨实现。用户持久化数据、项目数据库、导出格式和公开配置必须提供显式迁移，或明确声明为不兼容升级；内部清理不得破坏旧项目数据。
-- Choose the simplest implementation that fully meets the current requirements. Avoid speculative abstractions, configuration, and indirection.
-- Grow the system in layers. Start from the smallest version that works end to end, and add each new capability on top of a product that already works. Never trade a working product for unfinished complexity.
-- Keep components modular and concerns cleanly separated.
-- Prefer established, well-maintained libraries when they reduce overall complexity or improve reliability. Do not reimplement common functionality without a clear reason.
-- Lean on the dependencies already in the project before writing your own implementation or adding packages. Check documentation and types before assuming a dependency lacks a capability.
-- Make architectural decisions for the long term. Do not accept a stopgap intended to be replaced later.
-- Study how mature products solve the same problem and reuse proven patterns.
 
 ## 产品路线
 
@@ -227,40 +220,6 @@ CAT 写入规则：
 Chat 与 Pi 支持多 Provider；Claude 模型通过 Anthropic 协议 Provider 使用，ChatGPT subscription 通过 Codex OAuth 路径使用。Provider 配置入口在“设置 → 模型配置”。
 
 API Key 写入 `channels.json` 前必须经 Electron `safeStorage` 加密。Provider 导入失败必须零写入，并通过同目录原子替换提交最终配置。
-
-## Agent Communication and Finalization
-
-连续完成用户声明的完整范围。除非出现无法安全继续的真实阻塞，不要在阶段之间请求例行确认。
-
-### 过程更新
-
-- 只在出现新增结论、实际完成的阶段、真实阻塞或需要改变方案的事实时更新。
-- 不逐项播报文件读取、搜索、常规命令、测试启动和机械性修改。
-- 不重复初始计划、已知背景或上一条更新已经说明的内容。
-- 每个主要阶段至多发送一次简短更新。
-- 已经能够继续处理的问题直接处理，不把它包装成需要用户决定的问题。
-
-### Final-State Writing
-
-生成标题、文件名、注释、commit、PR、文档和最终交付说明时，从最终 diff、实际代码和验证结果重新生成内容。
-
-- 被否决方案、中间尝试和用户纠正只作为控制信息，不作为最终产物的身份。
-- “不要提 X”不应改写成“没有 X”“不含 X”或类似反向声明。
-- 只有安全、兼容、迁移、审计、真实基线变化或用户明确要求时，才说明被移除或未采用的内容。
-- 不把与本任务无关的既有改动算作本次成果。
-- 外部工具、Hook 或格式化器改变产物后，读取实际结果并重新检查。
-- 不增加“已清理”“无残留”“完全符合要求”等自我声明。
-
-### Final Response
-
-最终回复只包含：
-
-1. 已实现的结果；
-2. 重要改动；
-3. 实际运行的验证及结果；
-4. 仍然存在的真实阻塞。
-
-不复述整个施工过程。
 
 ## 默认 Skills、版本与提交
 

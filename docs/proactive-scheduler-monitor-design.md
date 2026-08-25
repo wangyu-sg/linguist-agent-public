@@ -3,6 +3,8 @@
 > 版本：Draft 1  
 > 日期：2026-05-18  
 > 范围：Proma OSS Electron app 的主动协作、定时任务、Monitor、Memory 插件化与 UI 设计
+>
+> 状态：历史设计输入，不是当前实现合同。当前产品以 Proma Automations、Pi Runtime 与仓库代码为准；后续自动化优化可复用本文的 durable scheduler / monitor 思路，但不得恢复第二套 Agent Runtime。
 
 ## 1. 背景
 

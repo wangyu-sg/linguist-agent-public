@@ -1,6 +1,6 @@
 # KNOWN_LIMITATIONS — 当前已知限制
 
-更新日期：2026-08-23
+更新日期：2026-08-25
 
 > 当前目标是作者本人使用的个人 Alpha。实现、单元验证、打包验证、真机人工和产品资格是不同证据等级。
 
@@ -31,7 +31,7 @@
 3. CJS bundle 对 `import.meta` 有既有 esbuild warning；packaged smoke 只能证明当前宿主路径。
 4. serious/critical Axe 自动回归不能替代真实屏幕阅读器和完整键盘操作。
 5. Full Integrity Scrub、Backup/Restore 有自动故障注入；真实磁盘耗尽、只读卷、断电和硬件损坏不是本轮 real-machine 证据。
-6. 当前 `0.17.60` 分支的未打包构建阶段已通过，但尚未运行 `smoke:pack`、packaged startup 或 vertical smoke；旧 packaged / 安装证据不能继承为本轮证据。
+6. 当前 `0.17.61` 已通过 `smoke:pack`、packaged startup 与 Fake Model vertical smoke；这些自动证据不能替代真实 Provider、Native Open/Save、IME 或辅助技术人工证据。
 
 ## D. 公众发行（不在当前范围）
 

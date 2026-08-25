@@ -1,6 +1,6 @@
 # Upstream Baseline — Proma v0.17.59
 
-> 更新日期：2026-08-23
+> 更新日期：2026-08-25
 > 机读真源：[proma-baseline.json](./proma-baseline.json)
 
 | 项目 | 值 |
@@ -15,7 +15,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| Linguist Agent / upstream app | `0.17.60` / `0.17.59` |
+| Linguist Agent / upstream app | `0.17.61` / `0.17.59` |
 | Electron / Bun | `43.2.0` / `1.3.14` |
 | Pi Runtime | `0.84.2` |
 | Shared | `0.1.63` |
