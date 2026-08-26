@@ -36,16 +36,16 @@
 - General 仍可选择性委派 Translator、Reviewer 或 Proofreader；子会话冻结 Segment 范围并共享 CAT Store，`linguistOutcome` 与子会话运行状态分开记录。
 - CAT 写入继续经过 Session authority、revision CAS、locked 与结构规则；读取、QA 与 consistency repair 不获得直接提交权。
 - CLI 构建脚本使用当前 Bun 的 `process.execPath` 启动 `bun build --compile`，不再依赖调用进程的 PATH 查找 Bun。
-- v0.17.59 精确 Proma Core ledger 为 `208` 个生产触点：Product Fork `201`、Generated `2`、Host Seam `4`、Temporary Deviation `1`。
-- Host Seam 验证器覆盖 `7` 个锚点；固定 v0.17.59 历史冲突回放为 `9/9` deterministic。
+- v0.17.59 精确 Proma Core ledger 为 `208` 个生产触点：Product Fork `199`、Generated `2`、Host Seam `6`、Temporary Deviation `1`。
+- Host Seam 验证器覆盖 `7` 个锚点；固定 v0.17.59 历史冲突 `9/9` 均能分类，并有一条 merge → resolver → overlay → verifier 集成回归。
 - Proma 自动同步保留策略解析、manifest overlay 与历史冲突回放；CI checkout 拉取完整历史。
 - 内部启动初始化失败直接终止，不再吞错后创建半初始化窗口；会话绑定 IPC 失败显式进入 unavailable 状态。
-- 测试代码收敛为 `29` 个活跃测试文件、`293` 条门禁用例；不再保留独立的全量库存测试。
+- 测试代码收敛为 `29` 个活跃测试文件、`296` 条门禁用例；不再保留独立的全量库存测试。
 
 ## 本轮验证事实
 
-- 全仓 typecheck 通过；默认 CI 关键回归 `293/293` 通过。
-- upstream boundary `4/4`、fusion architecture `10/10`、Host Seam `7/7`、历史冲突回放 `9/9` 通过。
+- 全仓 typecheck 通过；默认 CI 关键回归 `296/296` 通过。
+- upstream boundary `4/4`、fusion architecture `10/10`、Host Seam `7/7`、历史冲突分类 `9/9` 通过。
 - 许可门禁通过，darwin-arm64 SBOM 与当前 `433` 个第三方生产依赖一致。
 - `bun run electron:build` 通过；Electron main、CAT workers、Agent runtime、preload、renderer、CLI、Agent Island native、EventKit native 与 resources 均完成真实构建。
 - 上一轮 `smoke:pack` 与 packaged artifact 完整性通过。

@@ -1,7 +1,6 @@
 {
   "schemaVersion": 1,
   "operations": [
-    { "path": ["version"], "value": "0.17.60", "overwrite": true },
     {
       "path": ["description"],
       "expected": "Proma next gen ai software with general agents - Electron App",
@@ -36,7 +35,6 @@
     { "path": ["scripts", "build:integrity-scrub-worker"], "value": "esbuild src/main/lib/linguist/integrity-scrub-worker.ts --bundle --platform=node --format=cjs --outfile=dist/linguist-integrity-scrub-worker.cjs" },
     { "path": ["scripts", "watch:cat-job-worker"], "value": "esbuild src/main/lib/linguist/cat-job-worker.ts --bundle --platform=node --format=cjs --outfile=dist/cat-job-worker.cjs --watch=forever" },
     { "path": ["scripts", "watch:integrity-scrub-worker"], "value": "esbuild src/main/lib/linguist/integrity-scrub-worker.ts --bundle --platform=node --format=cjs --outfile=dist/linguist-integrity-scrub-worker.cjs --watch=forever" },
-    { "path": ["scripts", "test:linguist"], "value": "node --experimental-transform-types --import ./src/main/lib/linguist/test/register-ts-loader.mjs --test \"src/main/lib/linguist/**/*.nodetest.ts\"" },
     { "path": ["scripts", "smoke:pack"], "value": "CSC_IDENTITY_AUTO_DISCOVERY=false bun run pack -- --mac --arm64 && bun run verify:packaged" },
     { "path": ["scripts", "smoke:g0"], "value": "node scripts/smoke/run-g0-smoke.ts" },
     { "path": ["scripts", "smoke:g1"], "value": "node scripts/smoke/probe-pi-stream.ts" },

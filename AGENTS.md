@@ -92,10 +92,9 @@ bun run build
 bun run electron:build
 bun run electron:start
 bun run typecheck
-bun test
+bun run test
 bun run check:boundaries
 node --test tests/linguist-fusion-architecture.test.mjs
-bun run --filter='@proma/electron' test:linguist
 bun run --filter='@linguist/cat-tools' test
 ```
 

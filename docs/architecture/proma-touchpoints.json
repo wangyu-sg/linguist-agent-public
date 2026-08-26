@@ -269,7 +269,7 @@
       "ticket": "LA-HOST-003",
       "kind": "host-seam",
       "owner": "codex-main-host",
-      "mergePolicy": "reapply-host-seam",
+      "mergePolicy": "host-seam",
       "hook": "linguist-ipc",
       "reason": "在 Proma 主 IPC 注册流程中组合一次 Linguist IPC adapter。"
     },
@@ -278,7 +278,7 @@
       "ticket": "LA-HOST-004",
       "kind": "temporary-deviation",
       "owner": "codex-main-host",
-      "mergePolicy": "reapply-host-seam",
+      "mergePolicy": "host-seam",
       "hook": "pi-compaction-temporary-deviation",
       "reason": "Pi 压缩续跑时重新注入已验证的 Linguist turn context；上游提供等价 hook 后删除。"
     },
@@ -287,7 +287,7 @@
       "ticket": "LA-HOST-002",
       "kind": "host-seam",
       "owner": "codex-main-host",
-      "mergePolicy": "reapply-host-seam",
+      "mergePolicy": "host-seam",
       "hook": "linguist-delegation",
       "reason": "在 Proma Collaboration 中注入受信的 Linguist role、project binding、冻结范围与 outcome binding。"
     },
@@ -304,7 +304,7 @@
       "ticket": "LA-HOST-001",
       "kind": "host-seam",
       "owner": "codex-main-host",
-      "mergePolicy": "reapply-host-seam",
+      "mergePolicy": "host-seam",
       "hook": "agent-extension",
       "reason": "在 Proma 原生 send/queue 流程中组合一次 Linguist prompt、turn context、CAT tools 与 execution scope。"
     },
@@ -657,7 +657,7 @@
       "ticket": "LA-HOST-003",
       "kind": "host-seam",
       "owner": "codex-main-host",
-      "mergePolicy": "reapply-host-seam",
+      "mergePolicy": "host-seam",
       "hook": "linguist-preload",
       "reason": "在 Proma preload API 中组合一次 typed Linguist API。"
     },
@@ -824,10 +824,11 @@
     {
       "file": "apps/electron/src/renderer/components/agent/AgentView.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "kind": "host-seam",
+      "owner": "renderer-host",
+      "mergePolicy": "host-seam",
+      "hook": "renderer-agent-extension",
+      "reason": "通过 Renderer Agent Host Adapter 组合 Linguist extension 与 presentation，不直接依赖 Linguist feature。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AskUserBanner.tsx",
@@ -1008,10 +1009,11 @@
     {
       "file": "apps/electron/src/renderer/components/app-shell/AppShell.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "kind": "host-seam",
+      "owner": "renderer-host",
+      "mergePolicy": "host-seam",
+      "hook": "app-mode-registry",
+      "reason": "通过 App Mode Registry 组合 Linguist 第三模式与 rail policy，不直接依赖 Linguist feature。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx",

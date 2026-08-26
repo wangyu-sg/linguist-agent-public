@@ -104,10 +104,9 @@ Full `AgentView` 保留 Proma 的 Files / Changes 面板；Workbench rail 只承
 ```bash
 bun install --frozen-lockfile
 bun run typecheck
-bun test
+bun run test
 bun run check:boundaries
 node --test tests/linguist-fusion-architecture.test.mjs
-bun run --filter='@proma/electron' test:linguist
 bun run --filter='@linguist/cat-tools' test
 ```
 

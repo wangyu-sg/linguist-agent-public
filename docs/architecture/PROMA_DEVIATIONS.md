@@ -8,9 +8,9 @@
 
 | 分类 | 当前范围 | 处理 / sunset |
 |---|---|---|
-| **Permanent Product Fork** | 产品身份、独立数据根、发布、安全策略、资源、CLI、lock/manifest（201 个已登记生产触点） | 产品仍为独立 Linguist Agent 时无计划移除；产品身份改变时重新评估。 |
+| **Permanent Product Fork** | 产品身份、独立数据根、发布、安全策略、资源、CLI、lock/manifest（199 个已登记生产触点） | 产品仍为独立 Linguist Agent 时无计划移除；产品身份改变时重新评估。 |
 | **Generated / Overlay** | 上游同步生成或 overlay 的 manifest / metadata（2 个触点） | 每次同步重新生成并核对。 |
-| **Local Host Seam** | Runtime/Session/IPC/Preload/Shared 与原生 Agent/Chat Shell 的组合缝（4 个触点） | 上游提供等价、稳定且仍可 fail closed 的 Host Contract 后，在下一次上游同步逐项替换或删除。 |
+| **Local Host Seam** | Runtime/Session/IPC/Preload 与原生 Agent/Chat Shell 的组合缝（6 个触点） | 上游提供等价、稳定且仍可 fail closed 的 Host Contract 后，在下一次上游同步逐项替换或删除。 |
 | **Linguist Extension** | main/lib/linguist、features/linguist、packages/linguist-*、项目 skills | 不进入 Proma Core；CAT vertical 仍是产品能力时保留。 |
 | **Temporary Deviation** | pi-agent-adapter.ts 的 compaction continuation context preservation（1 个触点） | Proma/Pi 提供等价的 typed host-owned continuation hook 后移除；下次上游同步必须复核。 |
 

@@ -20,6 +20,7 @@ import { dirname, join } from 'node:path'
 
 const REPO_ROOT = dirname(import.meta.dir)
 const REGISTRY_PATH = join(REPO_ROOT, 'docs/architecture/proma-touchpoints.json')
+const SYNC_POLICY_PATH = join(REPO_ROOT, 'docs/architecture/proma-sync-policy.json')
 const USER_ROOT = '/Users'
 const PUBLIC_PATH_SCRUBS = [
   [`${USER_ROOT}/${['wang', 'yu'].join('')}`, `${USER_ROOT}/<local>`],
@@ -32,7 +33,7 @@ interface Touchpoint {
   ticket: string
   kind: 'product-fork' | 'host-seam' | 'temporary-deviation' | 'generated'
   owner: string
-  mergePolicy: 'keep-la' | 'reapply-host-seam' | 'overlay' | 'regenerate'
+  mergePolicy: 'keep-la' | 'host-seam' | 'overlay' | 'regenerate'
   hook?: string
   reason: string
 }
@@ -42,6 +43,10 @@ interface Registry {
   baseline: string
   allowedNewPaths: string[]
   touchpoints: Touchpoint[]
+}
+
+interface SyncPolicy {
+  rules: Array<{ patterns: string[]; policy: string }>
 }
 
 function loadRegistry(): Registry {
@@ -132,6 +137,7 @@ function changedFilesVsBaseline(baseline: string): string[] | null {
 
 test('registry is well-formed (no git required)', () => {
   const registry = loadRegistry()
+  const syncPolicy = JSON.parse(readFileSync(SYNC_POLICY_PATH, 'utf8')) as SyncPolicy
   expect(registry.schemaVersion).toBe(3)
   expect(/^[0-9a-f]{40}$/.test(registry.baseline)).toBe(true)
   expect(Array.isArray(registry.allowedNewPaths)).toBe(true)
@@ -144,7 +150,7 @@ test('registry is well-formed (no git required)', () => {
     expect(/^(?:(?:PB|LF|AC)-\d{3}|LA-(?:SYNC|HOST)-\d{3})$/.test(tp.ticket)).toBe(true)
     expect(['product-fork', 'host-seam', 'temporary-deviation', 'generated']).toContain(tp.kind)
     expect(tp.owner.trim().length).toBeGreaterThan(0)
-    expect(['keep-la', 'reapply-host-seam', 'overlay', 'regenerate']).toContain(tp.mergePolicy)
+    expect(['keep-la', 'host-seam', 'overlay', 'regenerate']).toContain(tp.mergePolicy)
     if (tp.kind === 'host-seam' || tp.kind === 'temporary-deviation') {
       expect(tp.hook?.trim().length ?? 0).toBeGreaterThan(0)
     }
@@ -153,6 +159,15 @@ test('registry is well-formed (no git required)', () => {
     expect(seen.has(tp.file)).toBe(false)
     seen.add(tp.file)
   }
+  const policyHostSeams = syncPolicy.rules
+    .filter((rule) => rule.policy === 'host-seam')
+    .flatMap((rule) => rule.patterns)
+    .sort()
+  const ledgerHostSeams = registry.touchpoints
+    .filter((touchpoint) => touchpoint.mergePolicy === 'host-seam')
+    .map((touchpoint) => touchpoint.file)
+    .sort()
+  expect(ledgerHostSeams).toEqual(policyHostSeams)
 })
 
 test('public mirror path scrub allows exact placeholders only', () => {

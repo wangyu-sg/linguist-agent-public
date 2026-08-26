@@ -104,10 +104,9 @@ General settings and conversations use JSON / JSONL; SQLite remains limited to e
 ```bash
 bun install --frozen-lockfile
 bun run typecheck
-bun test
+bun run test
 bun run check:boundaries
 node --test tests/linguist-fusion-architecture.test.mjs
-bun run --filter='@proma/electron' test:linguist
 bun run --filter='@linguist/cat-tools' test
 ```
 

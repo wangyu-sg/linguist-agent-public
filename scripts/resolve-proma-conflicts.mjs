@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -104,44 +104,12 @@ function applyOverlay(repo, file) {
   git(repo, ['add', '--', file])
 }
 
-function keepOursInConflictHunks(source, file) {
-  const output = []
-  let state = 'normal'
-  let conflicts = 0
-  for (const line of source.split('\n')) {
-    if (state === 'normal' && line.startsWith('<<<<<<< ')) {
-      state = 'ours'
-      conflicts += 1
-    } else if (state === 'ours' && line.startsWith('||||||| ')) {
-      state = 'base'
-    } else if ((state === 'ours' || state === 'base') && line === '=======') {
-      state = 'theirs'
-    } else if (state === 'theirs' && line.startsWith('>>>>>>> ')) {
-      state = 'normal'
-    } else if (state === 'normal' || state === 'ours') {
-      output.push(line)
-    }
-  }
-  if (state !== 'normal' || conflicts === 0) {
-    fail('HOST_SEAM_CONTRACT_CHANGED', `${file} 的冲突标记不完整或不存在`)
-  }
-  return output.join('\n')
-}
-
-function reapplyHostSeam(repo, file) {
-  const path = join(repo, file)
-  const source = readFileSync(path, 'utf8')
-  if (source.includes('<<<<<<< ')) writeFileSync(path, keepOursInConflictHunks(source, file))
-  else checkoutStage(repo, file, 'ours')
-  git(repo, ['add', '--', file])
-}
-
 const options = parseArgs(process.argv.slice(2))
 const policy = readJson(options.policy, '同步策略')
 if (policy?.schemaVersion !== 1 || !Array.isArray(policy.rules)) {
   fail('SYNC_POLICY_INVALID', '同步策略必须使用 schemaVersion=1 并提供 rules')
 }
-const knownPolicies = new Set(['keep-la', 'take-upstream', 'overlay', 'reapply-host-seam', 'regenerate', 'manual'])
+const knownPolicies = new Set(['keep-la', 'take-upstream', 'overlay', 'host-seam', 'regenerate', 'manual'])
 for (const rule of policy.rules) {
   if (!Array.isArray(rule.patterns) || !knownPolicies.has(rule.policy)) {
     fail('SYNC_POLICY_INVALID', '每条策略必须提供 patterns 和六种已知 policy 之一')
@@ -153,28 +121,17 @@ const baseline = readJson(baselinePath, 'Proma 基线')?.upstream?.commit
 if (typeof baseline !== 'string' || !baseline) fail('SYNC_POLICY_INVALID', 'Proma 基线缺少 upstream.commit')
 
 const results = []
-let replayedHostSeam = false
 for (const file of files) {
   const rule = resolveRule(file, policy)
   if (!rule || rule.policy === 'manual') fail('UNKNOWN_CONFLICT', `未登记冲突：${file}`)
-  if (rule.policy === 'reapply-host-seam' && rule.status !== 'ready') {
-    fail('HOST_SEAM_ANCHOR_MISSING', `${file} 尚无可重放 Anchor（${rule.status ?? 'unknown'}）`)
-  }
   results.push({ file, policy: rule.policy, status: options.dryRun ? 'classified' : 'resolved' })
   if (options.dryRun) continue
+  if (rule.policy === 'host-seam') {
+    fail('HOST_SEAM_CONTRACT_CHANGED', `${file} 的 Host Seam 与上游发生冲突，必须人工复核`)
+  }
   if (rule.policy === 'keep-la') checkoutStage(options.repo, file, 'ours')
   else if (rule.policy === 'take-upstream') checkoutStage(options.repo, file, 'theirs')
   else if (rule.policy === 'overlay') applyOverlay(options.repo, file)
-  else if (rule.policy === 'reapply-host-seam') {
-    reapplyHostSeam(options.repo, file)
-    replayedHostSeam = true
-  } else if (rule.policy === 'regenerate') checkoutStage(options.repo, file, 'ours')
-}
-
-if (replayedHostSeam) {
-  run(process.execPath, [join(options.repo, 'scripts/verify-host-seams.mjs'), '--root', options.repo], {
-    cwd: options.repo,
-    code: 'HOST_SEAM_CONTRACT_CHANGED',
-  })
+  else if (rule.policy === 'regenerate') checkoutStage(options.repo, file, 'ours')
 }
 console.log(JSON.stringify({ files: results, unresolved: unresolvedFiles(options.repo) }, null, 2))

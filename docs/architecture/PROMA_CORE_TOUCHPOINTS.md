@@ -6,9 +6,10 @@
 
 | 集合 | 路径数 |
 |---|---:|
-| Permanent Product Fork | 201 |
+| Permanent Product Fork | 199 |
 | Generated / Overlay | 2 |
 | Main Host Seam | 4 |
+| Renderer Host Seam | 2 |
 | Temporary Deviation | 1 |
 | 当前精确 ledger | 208 |
 
@@ -19,7 +20,7 @@
 1. CAT 领域代码优先进入 `apps/electron/src/**/linguist/`、`packages/linguist-*`、`resources/linguist-*` 与默认本地化 Skill 目录。
 2. 修改 Proma Core 生产代码必须在同一变更中登记精确触点、所有者、合并策略和真实理由；测试文件不进入生产触点账本，stale 条目同样会被 boundary test 拒绝。
 3. `tests/upstream-boundary.test.ts` 同时检查 HEAD、tracked 工作树和 untracked 文件。
-4. Main Host Seam 仅保留 Agent Extension、IPC、Preload 与 Collaboration 四处；Pi compaction continuation context 是唯一 Temporary Deviation。
+4. Main Host Seam 仅保留 Agent Extension、IPC、Preload 与 Collaboration 四处；Renderer Host Seam 仅保留 AgentView 与 AppShell 两处；Pi compaction continuation context 是唯一 Temporary Deviation。
 5. 同步规则由 [proma-sync-policy.json](./proma-sync-policy.json) 管理；Anchor 和深层领域 import 由 `scripts/verify-host-seams.mjs` 验证。
 6. 维护顺序固定为 baseline → 实际 diff → ledger → deviations → boundary + fusion。
 

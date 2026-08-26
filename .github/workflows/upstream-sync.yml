@@ -49,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE_SHA="$(git rev-parse HEAD)"
+          LA_APP_VERSION="$(git show "${BASE_SHA}:apps/electron/package.json" | jq -r '.version')"
           BASELINE_TAG="$(node -p "require('./docs/architecture/proma-baseline.json').upstream.tag")"
           RELEASE_JSON="$(curl -fsSL -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' https://api.github.com/repos/proma-ai/Proma/releases/latest)"
           UPSTREAM_TAG="$(printf '%s' "$RELEASE_JSON" | jq -r '.tag_name')"
@@ -124,6 +125,9 @@ jobs:
             --output apps/electron/package.json 2>&1)"; then
             report_sync_failure 'OVERLAY_CONFLICT' "$OVERLAY_OUTPUT"
           fi
+          jq --arg version "$LA_APP_VERSION" '.version = $version' \
+            apps/electron/package.json > "$RUNNER_TEMP/la-electron-package.json"
+          mv "$RUNNER_TEMP/la-electron-package.json" apps/electron/package.json
           bun install
           if ! SEAM_OUTPUT="$(node scripts/verify-host-seams.mjs 2>&1)"; then
             ERROR_CODE="$(printf '%s\n' "$SEAM_OUTPUT" | sed -n 's/^\([A-Z_]*\):.*/\1/p' | head -n 1)"

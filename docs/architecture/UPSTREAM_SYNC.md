@@ -10,7 +10,7 @@
 
 - 每 6 小时检查 Proma 最新 GitHub Release；已在当前基线时不产生分支或提交。
 - 新稳定版只在 `automation/proma-<tag>` 候选分支合并，CI 通过后才快进 `main`、创建 LA Tag 与 Release；不跟随上游 `main` 的任意提交。
-- 冲突按 [proma-sync-policy.json](./proma-sync-policy.json) 处理：能确定重放的 Host Seam、LA overlay 和上游接管路径自动处理；未登记或合同改变时快速失败并创建 Issue。
+- 冲突按 [proma-sync-policy.json](./proma-sync-policy.json) 处理：LA overlay 和明确的上游接管路径自动处理；Host Seam、未登记路径或合同改变时快速失败并创建 Issue。
 - [proma-baseline.json](./proma-baseline.json) 是版本与 merge 身份真源；[proma-touchpoints.json](./proma-touchpoints.json) 与 `PROMA_DEVIATIONS.json` 分别登记生产触点和偏差。
 - 自动同步保留完整 Proma Agent / Chat 与 LA Vertical Agent Profile，不建立兼容层或第二套宿主能力。
 

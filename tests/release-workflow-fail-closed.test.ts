@@ -3,10 +3,18 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = join(import.meta.dir, '..')
+
+interface ElectronOverlay {
+  operations: Array<{ path: string[] }>
+}
+
 const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
 const releaseWorkflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
 const autoReleaseWorkflow = readFileSync(join(root, '.github/workflows/auto-release.yml'), 'utf8')
 const upstreamSyncWorkflow = readFileSync(join(root, '.github/workflows/upstream-sync.yml'), 'utf8')
+const electronOverlay = JSON.parse(
+  readFileSync(join(root, 'config/la-electron-overlay.json'), 'utf8'),
+) as ElectronOverlay
 const electronBuilderConfig = readFileSync(join(root, 'apps/electron/electron-builder.yml'), 'utf8')
 const macInstallHelpPath = join(root, 'apps/electron/resources/macos-install-help.txt')
 const electronPackage = JSON.parse(
@@ -32,11 +40,20 @@ describe('AC-002 发布链 fail-closed', () => {
     expect(autoReleaseWorkflow).toContain("grep -qi '\\[release\\]'")
   })
 
-  test('上游同步先确定 LA 发布版本再生成基线文档', () => {
+  test('上游同步保留当前 LA 版本，再确定发布版本并生成基线文档', () => {
+    const captureIndex = upstreamSyncWorkflow.indexOf('LA_APP_VERSION="$(git show "${BASE_SHA}:apps/electron/package.json"')
+    const overlayIndex = upstreamSyncWorkflow.indexOf('node scripts/apply-la-electron-overlay.mjs')
+    const restoreIndex = upstreamSyncWorkflow.indexOf('jq --arg version "$LA_APP_VERSION"')
     const versionIndex = upstreamSyncWorkflow.indexOf('VERSION_OUTPUT="$(node scripts/release-version.mjs)"')
     const baselineIndex = upstreamSyncWorkflow.indexOf('node scripts/update-proma-baseline.mjs')
 
-    expect(versionIndex).toBeGreaterThan(-1)
+    expect(electronOverlay.operations.some(({ path }) => path.join('.') === 'version')).toBe(false)
+    expect(electronOverlay.operations.some(({ path }) => path.join('.') === 'scripts.test:linguist')).toBe(false)
+    expect(electronPackage.scripts['test:linguist']).toBeUndefined()
+    expect(captureIndex).toBeGreaterThan(-1)
+    expect(overlayIndex).toBeGreaterThan(captureIndex)
+    expect(restoreIndex).toBeGreaterThan(overlayIndex)
+    expect(versionIndex).toBeGreaterThan(restoreIndex)
     expect(baselineIndex).toBeGreaterThan(versionIndex)
   })
 

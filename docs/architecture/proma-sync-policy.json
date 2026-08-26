@@ -7,9 +7,8 @@
         "apps/electron/src/renderer/components/agent/AgentView.tsx",
         "apps/electron/src/renderer/components/app-shell/AppShell.tsx"
       ],
-      "policy": "reapply-host-seam",
-      "owner": "renderer-host",
-      "status": "ready"
+      "policy": "host-seam",
+      "owner": "renderer-host"
     },
     {
       "patterns": ["apps/electron/package.json"],
@@ -23,9 +22,8 @@
         "apps/electron/src/main/lib/agent-collaboration-tools.ts",
         "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts"
       ],
-      "policy": "reapply-host-seam",
-      "owner": "codex-main-host",
-      "status": "ready"
+      "policy": "host-seam",
+      "owner": "codex-main-host"
     },
     {
       "patterns": [
@@ -52,8 +50,27 @@
         "apps/electron/src/main/lib/linguist/**",
         "apps/electron/src/renderer/host/**",
         "apps/electron/src/renderer/features/linguist/**",
-        "apps/electron/default-skills/**",
-        "apps/electron/resources/**"
+        "apps/electron/default-skills/cultural-lqa/**",
+        "apps/electron/default-skills/localization-readiness/**",
+        "apps/electron/default-skills/release-lqa/**",
+        "apps/electron/default-skills/terminology-candidate-mining/**",
+        "apps/electron/default-skills/translator-brief/**",
+        "apps/electron/default-skills/agent-collaboration/SKILL.md",
+        "apps/electron/default-skills/session-cleaner/SKILL.md",
+        "apps/electron/default-skills/session-cleaner/references/cli-usage.md",
+        "apps/electron/default-skills/tool-builder/SKILL.md",
+        "apps/electron/resources/macos-install-help.txt",
+        "apps/electron/resources/generate-icons.sh",
+        "apps/electron/resources/icon-source.png",
+        "apps/electron/resources/icon.icns",
+        "apps/electron/resources/icon.ico",
+        "apps/electron/resources/icon.png",
+        "apps/electron/resources/icon.svg",
+        "apps/electron/resources/proma-logos/icon.svg",
+        "apps/electron/resources/proma-logos/iconTemplate.png",
+        "apps/electron/resources/proma-logos/iconTemplate@2x.png",
+        "apps/electron/resources/proma-logos/iconTemplate@3x.png",
+        "apps/electron/resources/tutorial.md"
       ],
       "policy": "keep-la"
     },

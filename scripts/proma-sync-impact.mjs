@@ -38,8 +38,13 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEFAULT_LEDGER = join(REPO_ROOT, 'docs/architecture/proma-touchpoints.json')
 const DEFAULT_BASELINE_FILE = join(REPO_ROOT, 'docs/architecture/proma-baseline.json')
 
-/** 分类严重度顺序：permanent fork 最高，host seam 次之，其余按名称排后 */
-const CLASSIFICATION_ORDER = ['Permanent Product Fork', 'Local Host Seam']
+const TOUCHPOINT_KIND_LABELS = {
+  'product-fork': 'Permanent Product Fork',
+  'host-seam': 'Local Host Seam',
+  'temporary-deviation': 'Temporary Deviation',
+  generated: 'Generated / Overlay',
+}
+const TOUCHPOINT_KIND_ORDER = Object.keys(TOUCHPOINT_KIND_LABELS)
 
 function fail(message) {
   console.error(`[proma-sync-impact] 错误：${message}`)
@@ -95,14 +100,9 @@ function loadLedger(path) {
   for (const tp of ledger.touchpoints) {
     if (typeof tp?.file !== 'string' || tp.file.length === 0) fail(`触点账本存在缺 file 的条目：${path}`)
     if (typeof tp?.ticket !== 'string' || typeof tp?.reason !== 'string') fail(`触点账本条目缺 ticket/reason：${tp.file}`)
+    if (!Object.hasOwn(TOUCHPOINT_KIND_LABELS, tp.kind)) fail(`触点账本条目 kind 无效：${tp.file}`)
   }
   return ledger
-}
-
-/** 分类取 reason 前缀（与 PROMA_CORE_TOUCHPOINTS.md 的分类表一致） */
-function classificationOf(touchpoint) {
-  const index = touchpoint.reason.indexOf(':')
-  return index > 0 ? touchpoint.reason.slice(0, index).trim() : '未分类'
 }
 
 /** 解析基线：--from 优先，其次 baseline-file upstream.commit，最后账本 baseline */
@@ -163,12 +163,8 @@ function loadLocalChanges(localRepo, baseline) {
   return { status: 'ok', files: new Set(result.files) }
 }
 
-function compareClassification(a, b) {
-  const rank = (name) => {
-    const index = CLASSIFICATION_ORDER.indexOf(name)
-    return index === -1 ? CLASSIFICATION_ORDER.length : index
-  }
-  return rank(a) - rank(b) || a.localeCompare(b)
+function compareKind(a, b) {
+  return TOUCHPOINT_KIND_ORDER.indexOf(a) - TOUCHPOINT_KIND_ORDER.indexOf(b)
 }
 
 function buildReport({ baseline, upstream, ledgerPath, ledger, local }) {
@@ -181,16 +177,16 @@ function buildReport({ baseline, upstream, ledgerPath, ledger, local }) {
   const affected = []
   for (const file of changedSet) {
     const tp = touchpointByFile.get(file)
-    if (tp) affected.push({ ...tp, classification: classificationOf(tp) })
+    if (tp) affected.push(tp)
   }
   const unhit = upstream.files.filter((file) => !touchpointByFile.has(file))
 
   const groups = new Map()
   for (const tp of affected) {
-    if (!groups.has(tp.classification)) groups.set(tp.classification, [])
-    groups.get(tp.classification).push(tp)
+    if (!groups.has(tp.kind)) groups.set(tp.kind, [])
+    groups.get(tp.kind).push(tp)
   }
-  const orderedGroups = [...groups.entries()].sort(([a], [b]) => compareClassification(a, b))
+  const orderedGroups = [...groups.entries()].sort(([a], [b]) => compareKind(a, b))
 
   let stale = []
   let affectedStale = []
@@ -231,7 +227,8 @@ function renderStdout(report) {
     lines.push('受影响触点：无（本次上游变更不触及任何登记 seam/fork）')
   } else {
     lines.push('受影响触点（按分类，严重度从高到低）:')
-    for (const [classification, items] of report.orderedGroups) {
+    for (const [kind, items] of report.orderedGroups) {
+      const classification = TOUCHPOINT_KIND_LABELS[kind]
       lines.push(`  [${classification}] ${items.length} 条`)
       for (const tp of items) lines.push(`    - ${tp.file} [${tp.ticket}]`)
     }
@@ -273,7 +270,8 @@ function renderMarkdown(report) {
   if (report.orderedGroups.length === 0) {
     lines.push('无。')
   } else {
-    for (const [classification, items] of report.orderedGroups) {
+    for (const [kind, items] of report.orderedGroups) {
+      const classification = TOUCHPOINT_KIND_LABELS[kind]
       lines.push(`### ${classification}（${items.length} 条）`)
       lines.push('')
       for (const tp of items) lines.push(`- \`${tp.file}\` [${tp.ticket}] ${tp.reason}`)

@@ -35,7 +35,6 @@
     "build": "bun run build:main && bun run build:agent-runtime && bun run build:preload && bun run build:renderer && bun run build:cli && bun run build:native-helpers && bun run build:resources",
     "start": "bun run build && bunx electron .",
     "typecheck": "tsc --noEmit",
-    "test:linguist": "bun test src/main/lib/agent-session-manager.test.ts src/main/lib/channel-runtime-api-key.test.ts src/main/lib/agent-permission-service.test.ts src/main/lib/config-paths-security.test.ts",
     "smoke:pack": "CSC_IDENTITY_AUTO_DISCOVERY=false bun run pack -- --mac --arm64 && bun run verify:packaged",
     "smoke:g0": "node scripts/smoke/run-g0-smoke.ts",
     "smoke:g1": "node scripts/smoke/probe-pi-stream.ts",

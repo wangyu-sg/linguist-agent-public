@@ -28,7 +28,7 @@
 
 ## 已验证与未验证
 
-- typecheck、默认 CI 关键回归 `293/293`、boundary `4/4`、fusion `10/10`、Host Seam `7/7` 与历史冲突回放 `9/9` 通过。
+- typecheck、默认 CI 关键回归 `296/296`、boundary `4/4`、fusion `10/10`、Host Seam `7/7` 与历史冲突分类 `9/9` 通过。
 - Electron 未打包构建的 main、workers、runtime、preload、renderer、CLI、Agent Island、EventKit 与 resources 均通过。
 - 本轮 `smoke:pack`、产物完整性与完整 packaged vertical 通过：Agent `15/15`、Chat `19/19`、Linguist `21/21`；Native Open/Save 仍为人工门禁，真实 Provider 四岗位证据仍缺失。
 - 真实 Phrase / memoQ、Native Open/Save、IME、VoiceOver 与 14 天日用仍待真实证据。
