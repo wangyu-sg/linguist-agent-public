@@ -117,6 +117,7 @@ test('同步链生成无冲突且通过 Host Seam 验证的最终树', () => {
   const seamFiles = [
     'apps/electron/src/main/lib/agent-orchestrator.ts',
     'apps/electron/src/main/lib/agent-collaboration-tools.ts',
+    'apps/electron/src/main/lib/adapters/pi-builtin-tools.ts',
     'apps/electron/src/main/lib/adapters/pi-agent-adapter.ts',
     'apps/electron/src/main/ipc.ts',
     'apps/electron/src/preload/index.ts',
