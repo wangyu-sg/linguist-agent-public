@@ -18,6 +18,7 @@ import { searchDialogOpenAtom } from '@/atoms/search-atoms'
 import {
   tabsAtom,
   activeTabIdAtom,
+  activeTabAtom,
   sidebarCollapsedAtom,
   openTab,
 } from '@/atoms/tab-atoms'
@@ -35,6 +36,9 @@ import {
   currentAgentWorkspaceIdAtom,
   agentWorkspacesAtom,
   agentAttachedFilesMapAtom,
+  agentDiffPanelTabAtom,
+  currentSessionSidePanelOpenAtom,
+  isWorkspaceComponentTab,
   agentLinguistExternalSessionOpenerAtom,
 } from '@/atoms/agent-atoms'
 import {
@@ -56,6 +60,8 @@ import {
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
 import { resolveModeNavigation } from '@/host/app-mode-registry'
+import { getLastInteractedStopTarget, resolveStopGenerationTarget } from '@/lib/stop-generation-target'
+import { CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT } from '@/lib/right-workspace-events'
 import {
   shouldFallbackVoiceDictationToActiveTab,
   VOICE_DICTATION_CLEAR_PREVIEW_EVENT,
@@ -84,6 +90,9 @@ export function GlobalShortcuts(): null {
 
   // Tab 管理（用于关闭标签页）
   const activeTabId = useAtomValue(activeTabIdAtom)
+  const activeTab = useAtomValue(activeTabAtom)
+  const activeAgentSidePanelTab = useAtomValue(agentDiffPanelTabAtom).get(activeTab?.type === 'agent' ? activeTab.sessionId : '')
+  const isActiveAgentSidePanelOpen = useAtomValue(currentSessionSidePanelOpenAtom)
 
   // 统一关闭逻辑：与 TabBar.handleClose 共用
   // 含 Agent 子进程 stop + 流式中的确认对话框（修复 Issue #357）
@@ -129,9 +138,23 @@ export function GlobalShortcuts(): null {
       return
     }
 
+    if (activeTab?.type === 'agent') {
+      // Agent 会话常驻左侧历史，不再由 Cmd+W 关闭；仅关闭右侧可关闭工作区 Tab。
+      if (
+        isActiveAgentSidePanelOpen
+        && activeAgentSidePanelTab
+        && (isWorkspaceComponentTab(activeAgentSidePanelTab) || activeAgentSidePanelTab.startsWith('preview:') || activeAgentSidePanelTab.startsWith('browser:') || activeAgentSidePanelTab.startsWith('exploration:') || activeAgentSidePanelTab.startsWith('delegation:'))
+      ) {
+        window.dispatchEvent(new CustomEvent(CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT, {
+          detail: { sessionId: activeTab.sessionId },
+        }))
+      }
+      return
+    }
+
     if (!activeTabId) return
     requestClose(activeTabId)
-  }, [shortcutGuideOpen, setShortcutGuideOpen, settingsOpen, setSettingsOpen, channelFormDirty, setSettingsCloseRequested, searchOpen, setSearchOpen, activeTabId, requestClose])
+  }, [shortcutGuideOpen, setShortcutGuideOpen, settingsOpen, setSettingsOpen, channelFormDirty, setSettingsCloseRequested, searchOpen, setSearchOpen, activeTab, activeAgentSidePanelTab, isActiveAgentSidePanelOpen, activeTabId, requestClose])
 
   // 监听菜单 IPC 事件（Cmd+W 被 Electron 菜单拦截后通过 IPC 转发）
   useEffect(() => {
@@ -154,16 +177,6 @@ export function GlobalShortcuts(): null {
   useShortcut(
     'global-search',
     useCallback(() => setSearchOpen(true), [setSearchOpen]),
-  )
-
-  // Cmd+Shift+T / Ctrl+Shift+T → 打开或聚焦独立任务/日程窗口
-  useShortcut(
-    'open-planning',
-    useCallback(() => {
-      void window.electronAPI.openPlanningWindow().catch((error) => {
-        console.error('[任务/日程] 打开独立窗口失败:', error)
-      })
-    }, []),
   )
 
   // Cmd+N → 新建对话/会话（根据当前模式）
@@ -209,12 +222,16 @@ export function GlobalShortcuts(): null {
     }, []),
   )
 
-  // Cmd+Shift+Backspace → 停止 Agent（通过 CustomEvent 分发到 ChatView/AgentView）
+  // Cmd+Shift+Backspace → 停止光标所在、或最近点击过的 Chat / Agent。
+  // 父会话与右侧委派子会话可能同时挂载，因此事件必须带目标，不能广播给全部视图。
   useShortcut(
     'stop-generation',
     useCallback(() => {
-      window.dispatchEvent(new CustomEvent('proma:stop-generation'))
-    }, []),
+      const target = getLastInteractedStopTarget()
+        ?? resolveStopGenerationTarget(activeTab, activeAgentSidePanelTab)
+      if (!target) return
+      window.dispatchEvent(new CustomEvent('proma:stop-generation', { detail: target }))
+    }, [activeAgentSidePanelTab, activeTab]),
   )
 
   // ===== 快速任务窗口 → 创建会话并自动发送 =====
@@ -411,13 +428,17 @@ export function GlobalShortcuts(): null {
       const fallbackTarget =
         currentMode === 'agent'
           ? { type: 'agent' as const, sessionId: store.get(currentAgentSessionIdAtom) }
-          : { type: 'chat' as const, sessionId: store.get(currentConversationIdAtom) }
+          : currentMode === 'chat'
+            ? { type: 'chat' as const, sessionId: store.get(currentConversationIdAtom) }
+            : null
       const target = activeTab ?? fallbackTarget
 
       if (
-        target.type !== 'agent' &&
-        target.type !== 'preview' &&
-        target.type !== 'chat'
+        target === null || (
+          target.type !== 'agent' &&
+          target.type !== 'preview' &&
+          target.type !== 'chat'
+        )
       ) {
         acknowledgeDelivery(false)
         return

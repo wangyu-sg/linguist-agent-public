@@ -6,11 +6,11 @@
  * 结构：
  * - 顶部：标题 + 工作区切换下拉
  * - 工具条：Skills / MCP 切换 + 搜索 + 社区市场（占位）+ 新增入口
- * - 内容：能力卡片网格（商店风），点击卡片打开右侧详情抽屉
+ * - 内容：能力卡片网格（商店风），点击卡片在当前 Skills 视图中预览详情
  */
 
 import * as React from 'react'
-import { useAtom, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { toast } from 'sonner'
 import { Blocks, ChevronDown, ChevronRight, Search, Plus, Store, FolderOpen, Check, Sparkles, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -21,17 +21,18 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { agentPendingPromptAtom, workspaceCapabilitiesVersionAtom } from '@/atoms/agent-atoms'
+import { agentPendingPromptAtom, skillDetailNavigationAtomFamily, workspaceCapabilitiesVersionAtom } from '@/atoms/agent-atoms'
 import { agentSkillsTabAtom } from '@/atoms/active-view'
 import { settingsOpenAtom, settingsTabAtom, toolSettingsFocusAtom, type ToolSettingsFocus } from '@/atoms/settings-tab'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
+import { AgentActionHint } from '@/components/agent/AgentActionHint'
 import type { BuiltinMcpServerSummary, McpServerEntry, SkillMeta } from '@proma/shared'
 import { useAgentSkillsData } from './useAgentSkillsData'
 import { SkillCard } from './SkillCard'
 import { McpCard } from './McpCard'
-import { SkillDetailSheet } from './SkillDetailSheet'
+import { SkillDetailView } from './SkillDetailView'
 import { McpDetailSheet } from './McpDetailSheet'
 import { BuiltinMcpDetailSheet } from './BuiltinMcpDetailSheet'
 import { ImportSkillDialog } from './ImportSkillDialog'
@@ -86,18 +87,27 @@ version: "1.0.0"
 - 是否有需要用户确认或后续合并同类项的建议`
 }
 
-export function AgentSkillsView(): React.ReactElement {
-  const data = useAgentSkillsData()
+export function AgentSkillsView({
+  embedded = false,
+  componentTab,
+  workspaceId,
+  sessionId,
+}: { embedded?: boolean; componentTab?: 'skills' | 'mcp'; workspaceId?: string; sessionId?: string } = {}): React.ReactElement {
+  const data = useAgentSkillsData(workspaceId)
   const bumpCapabilities = useSetAtom(workspaceCapabilitiesVersionAtom)
   const setPendingPrompt = useSetAtom(agentPendingPromptAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
   const setSettingsTab = useSetAtom(settingsTabAtom)
   const setToolSettingsFocus = useSetAtom(toolSettingsFocusAtom)
-  const { workspaces, currentWorkspaceId, selectProject } = useProjectActions()
+  const skillDetailNavigation = useAtomValue(skillDetailNavigationAtomFamily(sessionId ?? ''))
+  const setSkillDetailNavigation = useSetAtom(skillDetailNavigationAtomFamily(sessionId ?? ''))
+  const { workspaces, currentWorkspaceId: selectedWorkspaceId, selectProject } = useProjectActions()
   const { createAgent } = useCreateSession()
-  const currentWorkspace = workspaces.find((workspace) => workspace.id === currentWorkspaceId)
+  const currentWorkspace = workspaces.find((workspace) => workspace.id === (workspaceId ?? selectedWorkspaceId))
 
-  const [tab, setTab] = useAtom(agentSkillsTabAtom)
+  const [storedTab, setTab] = useAtom(agentSkillsTabAtom)
+  // 右侧组件锁定能力域，避免其内部的总览 Tab 与右侧工作区标签产生两套导航。
+  const tab = embedded && componentTab ? componentTab : storedTab
   const [search, setSearch] = React.useState('')
   const [selectedSkillSlug, setSelectedSkillSlug] = React.useState<string | null>(null)
   const [mcpSheetOpen, setMcpSheetOpen] = React.useState(false)
@@ -152,6 +162,22 @@ export function AgentSkillsView(): React.ReactElement {
   const selectedSkill = data.skills.find((s) => s.slug === selectedSkillSlug) ?? null
   const selectedIsBuiltin = selectedSkill ? data.defaultSkillSlugs.has(selectedSkill.slug) : false
 
+  React.useEffect(() => {
+    if (!skillDetailNavigation || data.loading) return
+    if (skillDetailNavigation.workspaceSlug && skillDetailNavigation.workspaceSlug !== data.workspaceSlug) {
+      toast.error('该 Skill 属于另一个项目，无法在当前 Skills 中打开')
+      setSkillDetailNavigation(null)
+      return
+    }
+    if (!data.skills.some((skill) => skill.slug === skillDetailNavigation.skillSlug)) {
+      toast.error('当前项目未找到该 Skill')
+      setSkillDetailNavigation(null)
+      return
+    }
+    setSelectedSkillSlug(skillDetailNavigation.skillSlug)
+    setSkillDetailNavigation(null)
+  }, [data.loading, data.skills, data.workspaceSlug, setSkillDetailNavigation, skillDetailNavigation])
+
   const openSkillFolder = (slug: string): void => {
     if (data.skillsDir) window.electronAPI.openFile(`${data.skillsDir}/${slug}`)
   }
@@ -198,6 +224,26 @@ export function AgentSkillsView(): React.ReactElement {
     }
   }, [classifyingSkills, createAgent, data.skills, data.skillsDir, data.workspaceName, setPendingPrompt])
 
+  const skillDeleteDialog = (
+    <ConfirmDialog
+      open={pendingDeleteSkill !== null}
+      onOpenChange={(open) => { if (!open) setPendingDeleteSkill(null) }}
+      title={`确认删除 Skill「${pendingDeleteSkill?.name}」？`}
+      description="删除后将无法恢复，确定要卸载这个 Skill 吗？"
+      confirmLabel="删除"
+      loadingLabel="删除中..."
+      loading={isDeletingSkill}
+      onConfirm={async () => {
+        if (!pendingDeleteSkill || isDeletingSkill) return
+        setIsDeletingSkill(true)
+        const ok = await data.deleteSkill(pendingDeleteSkill.slug, pendingDeleteSkill.name)
+        setIsDeletingSkill(false)
+        setPendingDeleteSkill(null)
+        if (ok) setSelectedSkillSlug(null)
+      }}
+    />
+  )
+
   if (!data.hasWorkspace) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
@@ -212,19 +258,40 @@ export function AgentSkillsView(): React.ReactElement {
     )
   }
 
+  if (selectedSkill) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <SkillDetailView
+          key={selectedSkill.slug}
+          skill={selectedSkill}
+          workspaceSlug={data.workspaceSlug}
+          isBuiltin={selectedIsBuiltin}
+          updating={data.updatingSkill === selectedSkill.slug}
+          onBack={() => setSelectedSkillSlug(null)}
+          onToggle={(enabled) => data.toggleSkill(selectedSkill.slug, enabled)}
+          onUpdate={() => data.updateSkill(selectedSkill.slug)}
+          onRequestDelete={() => setPendingDeleteSkill(selectedSkill)}
+          onOpenFolder={() => openSkillFolder(selectedSkill.slug)}
+          onChanged={() => bumpCapabilities((v) => v + 1)}
+        />
+        {skillDeleteDialog}
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* 标题栏 + 工作区切换 */}
       {/* 不加 titlebar-drag-region：与 DropdownMenu 嵌套时 drag/no-drag 会让 Radix 拿不到
           pointerdown，下拉打不开。窗口拖拽由 AppShell 顶部 0–50px 的全局 drag 层兜底。
           pt-14 让按钮整体位于全局 drag 层（0–50px, z-50）下方，避免被吃掉点击。 */}
-      <div className="titlebar-no-drag mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between px-8 pt-14 pb-4">
+      <div className={cn('titlebar-no-drag mx-auto flex w-full max-w-6xl shrink-0 items-center justify-between', embedded ? 'px-4 py-3' : 'px-8 pt-14 pb-4')}>
         <div className="flex items-center gap-2.5">
           <Blocks className="size-6 text-foreground/70" />
-          <h1 className="text-2xl font-semibold text-foreground">Agent 技能</h1>
+          <h1 className={cn('font-semibold text-foreground', embedded ? 'text-lg' : 'text-2xl')}>{embedded ? (tab === 'mcp' ? 'MCP' : 'Skills') : 'Agent 技能'}</h1>
         </div>
 
-        <Popover open={wsPopoverOpen} onOpenChange={setWsPopoverOpen}>
+        {!embedded && <Popover open={wsPopoverOpen} onOpenChange={setWsPopoverOpen}>
           <PopoverTrigger asChild>
             <button
               type="button"
@@ -245,7 +312,7 @@ export function AgentSkillsView(): React.ReactElement {
                 key={w.id}
                 type="button"
                 onClick={() => {
-                  if (w.id !== currentWorkspaceId) {
+                  if (w.id !== selectedWorkspaceId) {
                     selectProject(w.id, { resetView: false })
                     toast.success(`已切换到项目「${w.name}」`)
                   }
@@ -253,7 +320,7 @@ export function AgentSkillsView(): React.ReactElement {
                 }}
                 className={cn(
                   'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors',
-                  w.id === currentWorkspaceId
+                  w.id === selectedWorkspaceId
                     ? 'bg-accent text-accent-foreground'
                     : 'text-foreground/80 hover:bg-accent/50',
                 )}
@@ -263,17 +330,23 @@ export function AgentSkillsView(): React.ReactElement {
                   projectRootPath={w.projectRootPath}
                   projectRootStatus={w.projectRootStatus}
                 />
-                {w.id === currentWorkspaceId && <Check size={14} className="shrink-0 text-primary" />}
+                {w.id === selectedWorkspaceId && <Check size={14} className="shrink-0 text-primary" />}
               </button>
             ))}
           </PopoverContent>
-        </Popover>
+        </Popover>}
       </div>
 
+      {embedded && (
+        <div className="titlebar-no-drag mx-auto w-full max-w-6xl shrink-0 px-3 pb-3">
+          <AgentActionHint action={tab === 'skills' ? '创建、整理、更新或删除 Skills' : '查找、配置或移除 MCP'} />
+        </div>
+      )}
+
       {/* 工具条 */}
-      <div className="titlebar-no-drag mx-auto flex w-full max-w-6xl shrink-0 items-center gap-3 px-8 pb-4">
-        {/* Skills / MCP / 记忆切换 */}
-        <div className="relative flex h-8 items-stretch rounded-xl bg-muted p-0.5">
+      <div className={cn('titlebar-no-drag mx-auto flex w-full max-w-6xl shrink-0 items-center gap-3', embedded ? 'px-3 pb-3' : 'px-8 pb-4')}>
+        {/* 全屏能力中心保留总览切换；右侧组件由顶栏独占一个能力域。 */}
+        {!embedded && <div className="relative flex h-8 items-stretch rounded-xl bg-muted p-0.5">
           <div
             className={cn(
               'absolute bottom-0.5 top-0.5 w-[calc(33.333%-3px)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-in-out',
@@ -299,7 +372,7 @@ export function AgentSkillsView(): React.ReactElement {
               <span className="text-[11px] tabular-nums text-muted-foreground">{count}</span>
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* 搜索框 */}
         <div className="flex h-8 flex-1 items-center gap-2 rounded-lg border border-border/60 bg-content-area px-3 transition-colors focus-within:border-primary/40">
@@ -372,7 +445,7 @@ export function AgentSkillsView(): React.ReactElement {
 
       {/* 内容 */}
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto w-full max-w-6xl px-8 pb-10">
+        <div className={cn('mx-auto w-full max-w-6xl', embedded ? 'px-3 pb-4' : 'px-8 pb-10')}>
           {data.loading ? (
             <div className="py-20 text-center text-sm text-muted-foreground">加载中...</div>
           ) : tab === 'skills' ? (
@@ -405,38 +478,7 @@ export function AgentSkillsView(): React.ReactElement {
         </div>
       </div>
 
-      {/* 详情抽屉 */}
-      <SkillDetailSheet
-        skill={selectedSkill}
-        workspaceSlug={data.workspaceSlug}
-        isBuiltin={selectedIsBuiltin}
-        updating={data.updatingSkill === selectedSkill?.slug}
-        onOpenChange={(open) => { if (!open) setSelectedSkillSlug(null) }}
-        onToggle={(enabled) => selectedSkill && data.toggleSkill(selectedSkill.slug, enabled)}
-        onUpdate={() => selectedSkill && data.updateSkill(selectedSkill.slug)}
-        onRequestDelete={() => selectedSkill && setPendingDeleteSkill(selectedSkill)}
-        onOpenFolder={() => selectedSkill && openSkillFolder(selectedSkill.slug)}
-        onChanged={() => bumpCapabilities((v) => v + 1)}
-      />
-
-      {/* Skill 删除确认 */}
-      <ConfirmDialog
-        open={pendingDeleteSkill !== null}
-        onOpenChange={(open) => { if (!open) setPendingDeleteSkill(null) }}
-        title={`确认删除 Skill「${pendingDeleteSkill?.name}」？`}
-        description="删除后将无法恢复，确定要卸载这个 Skill 吗？"
-        confirmLabel="删除"
-        loadingLabel="删除中..."
-        loading={isDeletingSkill}
-        onConfirm={async () => {
-          if (!pendingDeleteSkill || isDeletingSkill) return
-          setIsDeletingSkill(true)
-          const ok = await data.deleteSkill(pendingDeleteSkill.slug, pendingDeleteSkill.name)
-          setIsDeletingSkill(false)
-          setPendingDeleteSkill(null)
-          if (ok) setSelectedSkillSlug(null)
-        }}
-      />
+      {skillDeleteDialog}
 
       {/* MCP 删除确认 */}
       <ConfirmDialog
@@ -663,7 +705,7 @@ function McpTab({ userEntries, builtinServers, total, onOpen, onOpenBuiltin, onT
       )}
 
       {builtinServers.length > 0 && (
-        <McpSection title="Proma 内置" count={builtinServers.length}>
+        <McpSection title="Proma 集成能力" count={builtinServers.length}>
           {builtinServers.map((server) => (
             <McpCard
               key={server.id}

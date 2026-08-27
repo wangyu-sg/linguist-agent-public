@@ -16,8 +16,8 @@ import {
   agentPendingPromptAtom,
   agentDiffPanelTabAtom,
   agentSessionPathMapAtom,
+  agentSidePanelLayoutAtomFamily,
   agentSidePanelOpenAtomFamily,
-  agentSidePanelWidthAtom,
   agentSessionsAtom,
   type AgentPendingPrompt,
   type AgentSidePanelTab,
@@ -87,7 +87,8 @@ export function ProjectAgentFullSidePanel({
 }): React.ReactElement | null {
   const sidePanelOpen = useAtomValue(agentSidePanelOpenAtomFamily(sessionId))
   const sessionPath = useAtomValue(agentSessionPathMapAtom).get(sessionId) ?? null
-  const activeTab = useAtomValue(agentDiffPanelTabAtom).get(sessionId) ?? 'files'
+  const storedTab = useAtomValue(agentDiffPanelTabAtom).get(sessionId) ?? 'files'
+  const activeTab: AgentSidePanelTab = storedTab === 'browser' || storedTab === 'preview' ? 'files' : storedTab
   const setDiffPanelTabs = useSetAtom(agentDiffPanelTabAtom)
   const setActiveTab = React.useCallback((tab: AgentSidePanelTab): void => {
     setDiffPanelTabs((previous) => {
@@ -473,8 +474,8 @@ export function ProjectAgentRail({
     setUiState({ agentPresentation: 'rail' })
   }, [setUiState, canExpandToFull, uiState.agentPresentation])
 
-  // 问题 10：只消费 Proma 已有的统一侧面板宽度；不再为 Companion 新增存储或拖拽系统。
-  const sharedSidePanelWidth = useAtomValue(agentSidePanelWidthAtom)
+  // 问题 10：只消费 Proma 按会话保存的侧面板宽度；不为 Companion 新增存储或拖拽系统。
+  const sharedSidePanelWidth = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId ?? '')).width
 
   // 问题 11：仅在 Companion Chat 新打开/切换会话时自动展开 full；
   // 「返回工作台」把 presentation 切回 rail 时 conversationId 不变，共享判定不再推回。
@@ -646,7 +647,7 @@ export function ProjectAgentRail({
           <div className="min-w-0 flex-1">
             <AgentView
               sessionId={sessionId}
-              presentation={presentation}
+              embedded={presentation === 'rail'}
             />
           </div>
           {presentation === 'full' && (

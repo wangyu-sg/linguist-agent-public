@@ -10,7 +10,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
-import { HelpCircle, Keyboard, Globe2, PanelRight } from 'lucide-react'
+import { HelpCircle, Keyboard, Globe, PanelRight } from 'lucide-react'
 import {
   tabsAtom,
   activeTabIdAtom,
@@ -26,6 +26,8 @@ import {
   agentWorkspacesAtom,
   currentAgentSessionIdAtom,
   currentAgentWorkspaceIdAtom,
+  agentDiffPanelTabAtom,
+  getBrowserSidePanelTab,
   unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
@@ -37,12 +39,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { TabBarItem } from './TabBarItem'
 import { getTabBarActionLayout } from './tab-bar-action-layout'
 import { useCloseTab } from '@/hooks/useCloseTab'
-import { detectIsWindows, WINDOW_CONTROLS_INSET_RIGHT } from '@/lib/platform'
-import { registerShortcut } from '@/lib/shortcut-registry'
 import { cn } from '@/lib/utils'
 import { shortcutGuideOpenAtom } from '@/atoms/shortcut-guide'
 import { faqDialogOpenAtom } from '@/atoms/faq-dialog'
-import { browserFilePanelManualRestoreSessionIdsAtom, browserPanelMinimizedMapAtom, browserPanelOpenMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
+import { browserPanelMinimizedMapAtom, browserPanelOpenMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
 // 浏览器入口对所有 Agent 会话开放；来源限制由主进程浏览器策略处理。
 
 export function TabBar(): React.ReactElement {
@@ -145,10 +145,6 @@ export function TabBar(): React.ReactElement {
           agentWorkspaceId: session.workspaceId,
         }).catch(console.error)
       }
-    } else if (tab.type === 'linguist-project') {
-      setAppMode('linguist')
-      setCurrentConversationId(null)
-      setCurrentAgentSessionId(null)
     } else if (tab.type === 'scratch' || tab.type === 'tutorial') {
       setCurrentConversationId(null)
       if (appMode !== 'agent') {
@@ -185,7 +181,7 @@ export function TabBar(): React.ReactElement {
     document.addEventListener('pointerup', handleUp)
   }, [tabs])
 
-  if (tabs.length === 0) return <div className="h-9 titlebar-drag-region" />
+  if (tabs.length === 0) return <div className="h-[34px] titlebar-drag-region" />
 
   return (
     <>
@@ -234,7 +230,6 @@ function TabBarInner({
   const enterTimerRef = React.useRef<ReturnType<typeof setTimeout>>()
   const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout>>()
   const fadeTimerRef = React.useRef<ReturnType<typeof setTimeout>>()
-  const isWindows = React.useMemo(() => detectIsWindows(), [])
 
   // 文件面板按会话独立保存；Agent 会话及其归属的预览 Tab 都可切换面板；
   // 仅 Agent 会话 Tab 在面板关闭时展示右上角"打开"按钮。
@@ -255,21 +250,14 @@ function TabBarInner({
   const setBrowserMinimizedMap = useSetAtom(browserPanelMinimizedMapAtom)
   const browserStateMap = useAtomValue(browserStateMapAtom)
   const setBrowserStateMap = useSetAtom(browserStateMapAtom)
-  const [browserFilePanelManualRestoreSessionIds, setBrowserFilePanelManualRestoreSessionIds] = useAtom(browserFilePanelManualRestoreSessionIdsAtom)
-  const activeBrowserIsOpen = activeAgentSession ? browserOpenMap.get(activeAgentSession.id) === true : false
+  const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
   const hasMinimizedBrowser = Boolean(activeAgentSession && browserStateMap.has(activeAgentSession.id) && browserMinimizedMap.get(activeAgentSession.id) === true)
-  const priorBrowserStateRef = React.useRef<{ sessionId: string | null; open: boolean }>({ sessionId: null, open: false })
-  const actionLayout = getTabBarActionLayout(isWindows, showOpenPanelButton, showBrowserButton)
+  const actionLayout = getTabBarActionLayout(showOpenPanelButton, showBrowserButton)
 
   const togglePanel = React.useCallback(() => {
     if (!isAgentContextTab(activeTab)) return
-    if (!isPanelOpen && activeAgentSession && browserOpenMap.get(activeAgentSession.id)) {
-      setBrowserFilePanelManualRestoreSessionIds((previous) => (
-        previous.includes(activeAgentSession.id) ? previous : [...previous, activeAgentSession.id]
-      ))
-    }
     setSidePanelOpen(!isPanelOpen)
-  }, [activeAgentSession, activeTab, browserOpenMap, isPanelOpen, setBrowserFilePanelManualRestoreSessionIds, setSidePanelOpen])
+  }, [activeTab, isPanelOpen, setSidePanelOpen])
 
   const openBrowser = React.useCallback(async () => {
     if (!activeAgentSession) return
@@ -279,24 +267,13 @@ function TabBarInner({
     setBrowserStateMap((previous) => { const next = new Map(previous); next.set(activeAgentSession.id, state); return next })
     setBrowserMinimizedMap((previous) => { const next = new Map(previous); next.delete(activeAgentSession.id); return next })
     setBrowserOpenMap((previous) => { const next = new Map(previous); next.set(activeAgentSession.id, true); return next })
-  }, [activeAgentSession, setBrowserMinimizedMap, setBrowserOpenMap, setBrowserStateMap])
-
-  React.useEffect(() => {
-    const sessionId = activeAgentSession?.id ?? null
-    const previous = priorBrowserStateRef.current
-    const shouldAutoCollapse = Boolean(
-      sessionId &&
-      previous.sessionId === sessionId &&
-      !previous.open &&
-      activeBrowserIsOpen &&
-      isPanelOpen &&
-      !browserFilePanelManualRestoreSessionIds.includes(sessionId),
-    )
-    priorBrowserStateRef.current = { sessionId, open: activeBrowserIsOpen }
-
-    if (!shouldAutoCollapse) return
-    setSidePanelOpen(false)
-  }, [activeAgentSession?.id, activeBrowserIsOpen, browserFilePanelManualRestoreSessionIds, isPanelOpen, setSidePanelOpen])
+    setSidePanelOpen(true)
+    setSidePanelTabMap((previous) => {
+      const next = new Map(previous)
+      next.set(activeAgentSession.id, getBrowserSidePanelTab(state.activeTabId))
+      return next
+    })
+  }, [activeAgentSession, setBrowserMinimizedMap, setBrowserOpenMap, setBrowserStateMap, setSidePanelOpen, setSidePanelTabMap])
 
   const openShortcutGuide = React.useCallback(() => {
     setShortcutGuideOpen(true)
@@ -305,10 +282,6 @@ function TabBarInner({
   const openFaqDialog = React.useCallback(() => {
     setFaqDialogOpen(true)
   }, [setFaqDialogOpen])
-
-  React.useEffect(() => {
-    return registerShortcut('toggle-right-panel', togglePanel)
-  }, [togglePanel])
 
   // 滚动容器 ref
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -437,12 +410,11 @@ function TabBarInner({
   }, [])
 
   return (
-    <div ref={barRef} className="main-tabbar flex h-9 items-end tabbar-bg relative">
-      {/* 顶部 TabBar 的空白区域必须保持可拖拽，尤其是 macOS/Windows 自定义标题栏。
-          注意：不要把 titlebar-no-drag 加到下面的整条 flex 容器上，否则标签右侧空白会再次失去拖拽能力。
-          Windows 上背景拖拽层避开右上角 WindowControls 区域（126px），防止 hitmask 重叠。
+    <div ref={barRef} className="main-tabbar flex items-end h-[34px] tabbar-bg relative">
+      {/* 顶部 TabBar 的空白区域保持可拖拽；系统控制按钮由窗口顶部的统一标题栏承载。
+          不要把 titlebar-no-drag 加到下面的整条 flex 容器上，否则标签右侧空白会失去拖拽能力。
           需要交互的单个 Tab 会在 TabBarItem 内部自己声明 titlebar-no-drag。 */}
-      <div className={cn("absolute inset-0 titlebar-drag-region", isWindows && WINDOW_CONTROLS_INSET_RIGHT)} />
+      <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
 
       {/* Tear-off 提示遮罩：拖出 TabBar 区域时，让 TabBar 下方出现一条高亮分割线 */}
       {tearingOff && (
@@ -482,21 +454,26 @@ function TabBarInner({
         ))}
       </div>
 
-      <TabBarActions
-        positionClassName={actionLayout.actionPositionClassName}
+      <ShortcutGuideButton
+        positionClassName={actionLayout.shortcutPositionClassName}
         showBrowserButton={showBrowserButton}
         showPanelButton={showOpenPanelButton}
         hasMinimizedBrowser={hasMinimizedBrowser}
         onOpenBrowser={openBrowser}
         onOpen={openShortcutGuide}
         onOpenFaq={openFaqDialog}
-        onTogglePanel={togglePanel}
       />
+
+      {/* 打开文件面板按钮：与文件面板打开时的 PanelRightClose 同坐标，避免开/关之间按钮位置跳变。
+          Windows 上需让出右上角 WindowControls 区域（126px）。 */}
+      {showOpenPanelButton && (
+        <AgentPanelOpenButton positionClassName={actionLayout.panelPositionClassName} onToggle={togglePanel} />
+      )}
     </div>
   )
 }
 
-function TabBarActions({
+function ShortcutGuideButton({
   positionClassName,
   showBrowserButton,
   showPanelButton,
@@ -504,7 +481,6 @@ function TabBarActions({
   onOpenBrowser,
   onOpen,
   onOpenFaq,
-  onTogglePanel,
 }: {
   positionClassName: string
   showBrowserButton: boolean
@@ -513,27 +489,26 @@ function TabBarActions({
   onOpenBrowser: () => void
   onOpen: () => void
   onOpenFaq: () => void
-  onTogglePanel: () => void
 }): React.ReactElement {
   return (
     <div
       className={cn(
-        "absolute inset-y-0 z-10 flex items-end pb-[3px] titlebar-no-drag",
+        "absolute flex items-center gap-1 titlebar-no-drag",
         positionClassName,
       )}
     >
       <div
         data-tab-bar-action-fade="true"
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-0 -left-12 -right-1 h-[34px] [mask-image:linear-gradient(to_right,transparent_0,black_48px)]"
+        className={cn(
+          "pointer-events-none absolute bottom-0 -left-12 h-[34px] [mask-image:linear-gradient(to_right,transparent_0,black_48px)]",
+          showPanelButton ? '-right-9' : '-right-1',
+        )}
         style={{
           background: 'linear-gradient(to bottom, hsl(var(--tabbar-surface)) 0 calc(100% - 1px), hsl(var(--border) / 0.8) calc(100% - 1px))',
         }}
       />
-      <div
-        data-tab-bar-action-island="true"
-        className="relative flex items-center gap-1"
-      >
+      <div className="relative flex items-center gap-1">
         {/* FAQ 快捷按钮（在快捷键地图左边） */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -566,7 +541,7 @@ function TabBarActions({
                 )}
                 onClick={() => void onOpenBrowser()}
               >
-                <Globe2 className="size-3.5" />
+                <Globe className="size-3.5" />
                 <span className="sr-only">打开受管浏览器</span>
               </Button>
             </TooltipTrigger>
@@ -592,7 +567,6 @@ function TabBarActions({
             <p>查看快捷键地图</p>
           </TooltipContent>
         </Tooltip>
-        {showPanelButton && <AgentPanelOpenButton onToggle={onTogglePanel} />}
       </div>
     </div>
   )
@@ -600,27 +574,35 @@ function TabBarActions({
 
 /** 打开 Agent 文件面板按钮。 */
 function AgentPanelOpenButton({
+  positionClassName,
   onToggle,
 }: {
+  positionClassName: string
   onToggle: () => void
 }): React.ReactElement {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="relative h-7 w-7"
-          onClick={onToggle}
-          aria-label="打开文件面板"
-        >
-          <PanelRight className="size-3.5" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        <p>打开文件面板 ({navigator.platform.includes('Mac') ? '⌘⇧B' : 'Ctrl+Shift+B'})</p>
-      </TooltipContent>
-    </Tooltip>
+    <div
+      className={cn(
+        "absolute flex titlebar-no-drag",
+        positionClassName,
+      )}
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="relative h-7 w-7"
+            onClick={onToggle}
+          >
+            <PanelRight className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <p>打开文件面板 ({navigator.platform.includes('Mac') ? '⌘⇧B' : 'Ctrl+Shift+B'})</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
   )
 }

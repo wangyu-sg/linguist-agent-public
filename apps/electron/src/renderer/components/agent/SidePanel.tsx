@@ -1,14 +1,15 @@
 /**
  * SidePanel — Agent 侧面板容器
  *
- * 展示 Agent 的文件/改动/问答侧面板；嵌入式 Host 可限制为 chat-only，默认打开状态。
+ * 直接展示文件浏览器，默认打开状态。
  * 切换按钮在面板关闭时显示活动指示点。
  */
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { X, ExternalLink, ChevronRight, MoreHorizontal, FolderSearch, Pencil, FolderInput, MessageSquarePlus } from 'lucide-react'
+import { X, ExternalLink, ChevronRight, MoreHorizontal, FolderSearch, Pencil, FolderInput, GitBranch, GitMerge, MessageSquarePlus, FileDiff, FileText, FolderOpen, Globe, MessageCircle, Brain, Split, Blocks, CalendarDays, ListTodo, Clock, ServerCog, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -17,10 +18,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { markdownToHtml } from '@/lib/markdown-rich-text'
 import { FileBrowser, FileDropZone, FileTypeIcon, FileSearchBar, computeRevealAncestors, isPathUnderRoot, computeTreeRowLayout, AncestorGuides, STICKY_ROW_BASE_CLASS, canBeSticky } from '@/components/file-browser'
 import { DiffPanelTabBar } from '@/components/diff/DiffPanelTabBar'
+import type { WorkspacePanelTab } from '@/components/diff/DiffPanelTabBar'
 import { DiffChangesList } from '@/components/diff/DiffChangesList'
 import { ChatView } from '@/components/chat/ChatView'
+import { AgentView } from '@/components/agent/AgentView'
 import { DeliverablesSection } from '@/features/linguist/projects/DeliverablesSection'
 import {
   agentSidePanelOpenAtomFamily,
@@ -37,18 +41,65 @@ import {
   agentDiffRefreshVersionAtom,
   agentNonGitFileChangesAtom,
   agentFileChangesCurrentRunAtom,
+  agentSessionComponentTabsAtomFamily,
+  agentSessionStreamingStateAtomFamily,
+  isWorkspaceComponentTab,
+  isUserPriorityWorkspaceComponentTab,
+  sanitizeWorkspaceComponentTabs,
+  getDelegationTabLabel,
   fileBrowserAutoRevealAtom,
   agentSelectedWorktreeAtom,
+  agentSideTemporaryAgentMapAtom,
+  agentSideDelegationMapAtom,
+  agentSDKMessagesCacheAtom,
+  agentLiveMessagesAtomFamily,
+  agentSessionDraftsAtom,
+  agentSessionDraftSyncVersionsAtom,
+  agentSessionDraftHtmlAtom,
+  agentTerminalTabsAtom,
 } from '@/atoms/agent-atoms'
-import type { AgentSidePanelTab, AgentFileSourceFilter } from '@/atoms/agent-atoms'
-import { WorkspaceMemoryChangeDock } from '@/components/agent-skills/WorkspaceMemoryChangeDock'
+import {
+  getBrowserSidePanelTab,
+  getBrowserTabIdFromSidePanelTab,
+  getDelegationSessionIdFromSidePanelTab,
+  getDelegationSidePanelTab,
+  getExplorationSessionIdFromSidePanelTab,
+  getExplorationSidePanelTab,
+  getPreviewIdFromSidePanelTab,
+  getPreviewSidePanelTab,
+  getTerminalIdFromSidePanelTab,
+  getTerminalSidePanelTab,
+} from '@/atoms/agent-atoms'
+import type { AgentSidePanelTab, AgentFileSourceFilter, AgentExplorationBranchTab, WorkspaceComponentTab } from '@/atoms/agent-atoms'
+import { WorkspaceMemoryTab } from '@/components/agent-skills/WorkspaceMemoryTab'
+import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
+import { PlanningView } from '@/components/planning/PlanningView'
+import { AutomationFormView } from '@/components/automation/AutomationFormView'
+import { automationFormAtom } from '@/atoms/automation-atoms'
+import { memoryFileNavigationAtom, workspaceMemoryChangesAtom } from '@/atoms/memory-change-atoms'
 import { agentSideChatMapAtom } from '@/atoms/chat-atoms'
 import { interfaceVariantAtom } from '@/atoms/theme'
-import { previewFileMapAtom } from '@/atoms/preview-atoms'
+import {
+  browserPanelMinimizedMapAtom,
+  browserPanelOpenMapAtom,
+  browserPendingNavigationMapAtom,
+  browserStateMapAtom,
+} from '@/atoms/browser-atoms'
+import { BrowserPanel } from '@/components/browser/BrowserPanel'
+import { getPreviewFileId, previewFileMapAtom, previewFilesMapAtom, previewPanelOpenMapAtom } from '@/atoms/preview-atoms'
+import { PreviewPanel } from '@/components/diff/PreviewPanel'
 import { useOpenPreview } from '@/components/diff/preview-opener'
-import { detectIsWindows } from '@/lib/platform'
-import type { FileEntry, AgentPendingFile } from '@proma/shared'
+import type { FileEntry, AgentPendingFile, AgentSessionMeta, SDKMessage, WorktreeInfo } from '@proma/shared'
 import { setFilePanelDragData, getMediaTypeFromFilename, dispatchInsertFileMention } from '@/lib/file-panel-drag'
+import { CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT } from '@/lib/right-workspace-events'
+import {
+  getPreviousRightPanelTab,
+  recordRightPanelTabVisit,
+  removeRightPanelTabFromHistory,
+} from '@/lib/right-panel-tab-history'
+import { rememberStopGenerationTarget } from '@/lib/stop-generation-target'
+import { TerminalTabContent } from '@/components/tabs/TerminalTabContent'
+import { shouldShowBothFileSources } from './file-panel-layout'
 
 function getPathBasename(filePath: string): string {
   return filePath.split(/[\\/]/).filter(Boolean).pop() || filePath
@@ -65,26 +116,193 @@ function joinPath(parentDir: string, name: string): string {
   return parentDir ? `${parentDir}${separator}${name}` : name
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[char] ?? char)
+}
+
+function getLatestExplorationConclusion(messages: SDKMessage[], sourceMessageId: string): string {
+  // fork 会复制分叉点之前的完整历史；只能带回锚点之后的新 assistant 回复，
+  // 否则刚打开分支就会把主线已有结论误当作探索结果。
+  let sourceIndex = -1
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] as { uuid?: unknown }
+    if (message.uuid === sourceMessageId) {
+      sourceIndex = index
+      break
+    }
+  }
+  if (sourceIndex < 0) return ''
+
+  for (let index = messages.length - 1; index > sourceIndex; index -= 1) {
+    const message = messages[index] as { type?: unknown; message?: { content?: unknown } }
+    if (message.type !== 'assistant' || !Array.isArray(message.message?.content)) continue
+    const text = message.message.content
+      .flatMap((block) => {
+        if (!block || typeof block !== 'object') return []
+        const record = block as { type?: unknown; text?: unknown }
+        return record.type === 'text' && typeof record.text === 'string' ? [record.text] : []
+      })
+      .join('\n')
+      .trim()
+    if (text) return text
+  }
+  return ''
+}
+
+/**
+ * 右侧嵌入 Agent 在切换时轻微淡入并横移 1px，缓和不同消息高度瞬间替换的视觉跳变。
+ * 首次打开不播放，且尊重系统的减少动态效果偏好。
+ */
+function SideAgentSessionContent({ contentKey, children }: { contentKey: string; children: React.ReactNode }): React.ReactElement {
+  const previousContentKeyRef = React.useRef<string | null>(null)
+  const shouldAnimate = previousContentKeyRef.current !== null && previousContentKeyRef.current !== contentKey
+
+  React.useEffect(() => {
+    previousContentKeyRef.current = contentKey
+  }, [contentKey])
+
+  return (
+    <div
+      key={contentKey}
+      className={cn(
+        'min-h-0 flex-1 overflow-hidden',
+        shouldAnimate && 'animate-in fade-in-0 slide-in-from-right-1 duration-150 motion-reduce:animate-none',
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+/**
+ * 探索分支正在流式输出时，只有带回按钮需要知道“是否已有新增 assistant 内容”。
+ * 将该订阅隔离在小组件中，避免每个 token 都重渲染整块文件/Tab 侧栏。
+ */
+function ExplorationBringBackAction({
+  parentSessionId,
+  branch,
+  sessions,
+}: {
+  parentSessionId: string
+  branch: AgentExplorationBranchTab
+  sessions: AgentSessionMeta[]
+}): React.ReactElement {
+  const explorationMessagesCache = useAtomValue(agentSDKMessagesCacheAtom)
+  const explorationLiveMessages = useAtomValue(agentLiveMessagesAtomFamily(branch.sessionId))
+  const parentDrafts = useAtomValue(agentSessionDraftsAtom)
+  const parentDraftHtml = useAtomValue(agentSessionDraftHtmlAtom)
+  const setParentDrafts = useSetAtom(agentSessionDraftsAtom)
+  const setParentDraftSyncVersions = useSetAtom(agentSessionDraftSyncVersionsAtom)
+  const setParentDraftHtml = useSetAtom(agentSessionDraftHtmlAtom)
+  const latestExplorationConclusion = React.useMemo(
+    () => getLatestExplorationConclusion(
+      [...(explorationMessagesCache.get(branch.sessionId) ?? []), ...explorationLiveMessages],
+      branch.sourceMessageId,
+    ),
+    [branch.sessionId, branch.sourceMessageId, explorationLiveMessages, explorationMessagesCache],
+  )
+  const handleBringExplorationBack = React.useCallback(() => {
+    if (!latestExplorationConclusion) {
+      toast.info('探索分支还没有可带回的 Agent 结论')
+      return
+    }
+    const branchTitle = sessions.find((item) => item.id === branch.sessionId)?.title || '探索分支'
+    const referenceLabel = `探索后新增内容 · ${branchTitle}`
+    const referenceMarkdown = `这是探索后的新增内容：&session:${branch.sessionId}::${encodeURIComponent(referenceLabel)}`
+    const referenceHtml = `<p>这是探索后的新增内容：<span data-type="mention" data-id="${escapeHtml(branch.sessionId)}" data-label="${escapeHtml(referenceLabel)}" data-mention-suggestion-char="&">${escapeHtml(referenceLabel)}</span></p>`
+    setParentDraftSyncVersions((previous) => {
+      const next = new Map(previous)
+      next.set(parentSessionId, (next.get(parentSessionId) ?? 0) + 1)
+      return next
+    })
+    setParentDrafts((previous) => {
+      const next = new Map(previous)
+      const current = parentDrafts.get(parentSessionId)?.trim() ?? ''
+      next.set(parentSessionId, current ? `${current}\n\n${referenceMarkdown}` : referenceMarkdown)
+      return next
+    })
+    setParentDraftHtml((previous) => {
+      const currentHtml = parentDraftHtml.get(parentSessionId) || markdownToHtml(parentDrafts.get(parentSessionId) ?? '')
+      const nextHtml = currentHtml ? `${currentHtml}<p></p>${referenceHtml}` : referenceHtml
+      const next = new Map(previous)
+      next.set(parentSessionId, nextHtml)
+      return next
+    })
+    toast.success('已添加探索引用', { description: '探索 Tab 保持打开；主会话发送后 Agent 会读取该标记。' })
+  }, [branch.sessionId, latestExplorationConclusion, parentDraftHtml, parentDrafts, parentSessionId, sessions, setParentDraftHtml, setParentDrafts, setParentDraftSyncVersions])
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon" className="size-7 active:scale-[0.96]" onClick={handleBringExplorationBack} disabled={!latestExplorationConclusion} aria-label="添加探索引用">
+          <GitMerge className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{latestExplorationConclusion ? '将探索后新增内容作为会话引用添加到主线草稿；探索 Tab 保持打开，不会自动发送' : '完成一轮新的探索回复后即可添加引用'}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 interface SidePanelProps {
   sessionId: string
   sessionPath: string | null
   activeTab: AgentSidePanelTab
   onTabChange: (tab: AgentSidePanelTab) => void
-  /** 嵌入式 Host 只开放 Companion Chat 时隐藏 Files / Changes。 */
-  chatOnly?: boolean
   width?: number
 }
 
-export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chatOnly = false, width = 280 }: SidePanelProps): React.ReactElement {
-  // 必须按 prop sessionId 绑定；Linguist rail 会话不一定等于全局当前会话。
-  const [isOpen, setIsOpen] = useAtom(agentSidePanelOpenAtomFamily(sessionId))
-  const isWindows = React.useMemo(() => detectIsWindows(), [])
+export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, width = 460 }: SidePanelProps): React.ReactElement {
+  // 按会话保存最近访问顺序。该历史仅存在于当前 renderer 进程，避免恢复失效的临时 Tab。
+  const rightPanelTabHistoryRef = React.useRef(new Map<string, AgentSidePanelTab[]>())
+  const workspaceTabsRef = React.useRef<WorkspacePanelTab[]>([])
 
+  React.useEffect(() => {
+    const history = rightPanelTabHistoryRef.current.get(sessionId) ?? []
+    rightPanelTabHistoryRef.current.set(sessionId, recordRightPanelTabVisit(history, activeTab))
+  }, [activeTab, sessionId])
+
+  const getPreviousTabBeforeClose = React.useCallback((closingTab: AgentSidePanelTab): AgentSidePanelTab => {
+    const history = rightPanelTabHistoryRef.current.get(sessionId) ?? []
+    const availableTabs = new Set(workspaceTabsRef.current
+      .map((tab) => tab.id)
+      .filter((tab) => tab !== closingTab))
+    const nextTab = getPreviousRightPanelTab(history, closingTab, availableTabs)
+    rightPanelTabHistoryRef.current.set(sessionId, removeRightPanelTabFromHistory(history, closingTab))
+    return nextTab
+  }, [sessionId])
+
+  const returnToPreviousTabAfterClose = React.useCallback((closingTab: AgentSidePanelTab): AgentSidePanelTab => {
+    const nextTab = getPreviousTabBeforeClose(closingTab)
+    if (activeTab === closingTab) onTabChange(nextTab)
+    return nextTab
+  }, [activeTab, getPreviousTabBeforeClose, onTabChange])
+
+  const showBothFileSources = shouldShowBothFileSources(width)
+  // 侧面板状态按 sessionId 持久化，切换会话不会互相覆盖。
+  const [isOpen, setIsOpen] = useAtom(agentSidePanelOpenAtomFamily(sessionId))
   // Tab 系统
   const previewFileMap = useAtomValue(previewFileMapAtom)
-  const selectedFilePath = previewFileMap.get(sessionId)?.filePath
+  const setPreviewFileMap = useSetAtom(previewFileMapAtom)
+  const previewFilesMap = useAtomValue(previewFilesMapAtom)
+  const setPreviewFilesMap = useSetAtom(previewFilesMapAtom)
+  const previewOpenMap = useAtomValue(previewPanelOpenMapAtom)
+  const setPreviewOpenMap = useSetAtom(previewPanelOpenMapAtom)
+  const previewFiles = previewFilesMap.get(sessionId) ?? []
+  const requestedPreviewId = getPreviewIdFromSidePanelTab(activeTab)
+  const currentPreviewFile = (requestedPreviewId ? previewFiles.find((file) => getPreviewFileId(file) === requestedPreviewId) : null)
+    ?? previewFileMap.get(sessionId) ?? null
+  const previewOpen = previewFiles.length > 0 || previewOpenMap.get(sessionId) === true
+  const selectedFilePath = currentPreviewFile?.filePath
 
   const openPreview = useOpenPreview()
+  const setBrowserOpenMap = useSetAtom(browserPanelOpenMapAtom)
+  const setBrowserMinimizedMap = useSetAtom(browserPanelMinimizedMapAtom)
 
   // 用 ref 存 basePaths 相关值，避免声明顺序问题
   const basePathsRef = React.useRef<string[]>([])
@@ -408,13 +626,23 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chat
       return { ...prev, [sessionId]: source }
     })
   }, [sessionId, setFileSourceFilterMap])
-  const showSessionFiles = fileSourceFilter === 'session'
-  const showProjectFiles = fileSourceFilter === 'project'
+  const showSessionFiles = showBothFileSources || fileSourceFilter === 'session'
+  const showProjectFiles = showBothFileSources || fileSourceFilter === 'project'
 
+  const sessionFileRoots = React.useMemo(
+    () => sessionPath ? [{ path: sessionPath, scope: 'session' as const }] : [],
+    [sessionPath],
+  )
+  const projectFileRoots = React.useMemo(
+    () => workspaceFilesPath && !isProjectRootUnavailable
+      ? [{ path: workspaceFilesPath, scope: 'project' as const }]
+      : [],
+    [isProjectRootUnavailable, workspaceFilesPath],
+  )
   const visibleFileRoots = React.useMemo(() => [
-    ...(showProjectFiles && workspaceFilesPath && !isProjectRootUnavailable ? [{ path: workspaceFilesPath, scope: 'project' as const }] : []),
-    ...(showSessionFiles && sessionPath ? [{ path: sessionPath, scope: 'session' as const }] : []),
-  ], [showProjectFiles, workspaceFilesPath, isProjectRootUnavailable, showSessionFiles, sessionPath])
+    ...(showProjectFiles ? projectFileRoots : []),
+    ...(showSessionFiles ? sessionFileRoots : []),
+  ], [projectFileRoots, sessionFileRoots, showProjectFiles, showSessionFiles])
 
   // Files 将会话与项目文件放在同一视图；FileBrowser 自己处理对应根目录的自动定位。
   // RightSidePanel 完全由用户控制，不因 Agent 文件变更自动打开。
@@ -430,11 +658,82 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chat
   const sideChatMap = useAtomValue(agentSideChatMapAtom)
   const setSideChatMap = useSetAtom(agentSideChatMapAtom)
   const sideChatConversationId = sideChatMap.get(sessionId) ?? null
-  const effectiveActiveTab: AgentSidePanelTab = chatOnly
-    ? 'chat'
-    : activeTab === 'chat' && !sideChatConversationId
+  const sideTemporaryAgentMap = useAtomValue(agentSideTemporaryAgentMapAtom)
+  const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
+  const sideTemporaryAgents = sideTemporaryAgentMap.get(sessionId) ?? []
+  const sideDelegationMap = useAtomValue(agentSideDelegationMapAtom)
+  const setSideDelegationMap = useSetAtom(agentSideDelegationMapAtom)
+  const sideDelegationSessionIds = sideDelegationMap.get(sessionId) ?? []
+  const terminalTabsMap = useAtomValue(agentTerminalTabsAtom)
+  const setTerminalTabsMap = useSetAtom(agentTerminalTabsAtom)
+  const terminalTabs = terminalTabsMap.get(sessionId) ?? []
+  const activeTerminalId = getTerminalIdFromSidePanelTab(activeTab)
+  const activeDelegationSessionId = getDelegationSessionIdFromSidePanelTab(activeTab)
+  const activeDelegationSession = activeDelegationSessionId
+    ? sessions.find((item) => item.id === activeDelegationSessionId && item.parentSessionId === sessionId && !!item.sourceDelegationId) ?? null
+    : null
+  const activeExplorationSessionId = getExplorationSessionIdFromSidePanelTab(activeTab)
+  const activeExplorationBranch = activeExplorationSessionId
+    ? sideTemporaryAgents.find((branch) => branch.sessionId === activeExplorationSessionId) ?? null
+    : null
+  // Todo / 日程 / 能力 / 记忆的数据仍归属于 workspace，但右侧 Tab 仅属于当前 session。
+  const [workspaceComponentTabs, setWorkspaceComponentTabs] = useAtom(agentSessionComponentTabsAtomFamily(sessionId))
+  const automationFormOpen = useAtomValue(automationFormAtom).open
+
+  React.useEffect(() => {
+    const validTabs = sanitizeWorkspaceComponentTabs(workspaceComponentTabs)
+    if (validTabs === workspaceComponentTabs) return
+    setWorkspaceComponentTabs(validTabs)
+  }, [setWorkspaceComponentTabs, workspaceComponentTabs])
+
+  const agentStreamState = useAtomValue(agentSessionStreamingStateAtomFamily(sessionId))
+  const memoryChangesMap = useAtomValue(workspaceMemoryChangesAtom)
+  const setMemoryNavigationRequest = useSetAtom(memoryFileNavigationAtom)
+  const latestMemoryChange = workspaceSlug ? memoryChangesMap.get(workspaceSlug)?.[0] : undefined
+  const lastActivatedMemoryChangeRef = React.useRef<string | null>(null)
+  const effectiveActiveTab: AgentSidePanelTab = activeTab === 'chat' && !sideChatConversationId
     ? 'files'
-    : activeTab
+    // `temporary-agent` 是旧的单分支内存状态；新状态使用 exploration:<sessionId>。
+    : activeTab === 'temporary-agent' || (activeExplorationSessionId !== null && !activeExplorationBranch) || (activeDelegationSessionId !== null && !activeDelegationSession) || (activeTerminalId !== null && !terminalTabs.some((terminal) => terminal.terminalId === activeTerminalId))
+      ? 'files'
+      : isWorkspaceComponentTab(activeTab) && (!workspaceSlug || !workspaceComponentTabs.includes(activeTab))
+        ? 'files'
+        : activeTab
+
+  // memory 写入不能沿用通用组件激活：只有 watcher 捕获真实文件变更后才能生成受限 Diff。
+  // SidePanel 按 session 挂载，因此只会为正在运行的来源 session 路由这次 Diff；其他会话不受影响。
+  React.useEffect(() => {
+    const runStartedAt = agentStreamState?.startedAt
+    if (!agentStreamState?.running || !runStartedAt || !latestMemoryChange || latestMemoryChange.changedAt < runStartedAt) return
+    const changeId = `${latestMemoryChange.relativePath}:${latestMemoryChange.changedAt}`
+    if (lastActivatedMemoryChangeRef.current === changeId) return
+    lastActivatedMemoryChangeRef.current = changeId
+    setWorkspaceComponentTabs((previous) => previous.includes('memory') ? previous : [...previous, 'memory'])
+
+    // 用户正在阅读 Skills 或项目记忆时，只保留新变更，不抢焦点或覆盖其当前文件。
+    if (isOpen && isUserPriorityWorkspaceComponentTab(effectiveActiveTab)) return
+
+    setMemoryNavigationRequest({ workspaceSlug: workspaceSlug!, relativePath: latestMemoryChange.relativePath, mode: 'change' })
+    setIsOpen(true)
+    onTabChange('memory')
+  }, [agentStreamState?.running, agentStreamState?.startedAt, effectiveActiveTab, isOpen, latestMemoryChange, onTabChange, setIsOpen, setMemoryNavigationRequest, setWorkspaceComponentTabs, workspaceSlug])
+
+  const handleClosePreviewTab = React.useCallback((previewId: string) => {
+    const remaining = previewFiles.filter((file) => getPreviewFileId(file) !== previewId)
+    setPreviewFilesMap((previous) => {
+      const next = new Map(previous)
+      if (remaining.length > 0) next.set(sessionId, remaining)
+      else next.delete(sessionId)
+      return next
+    })
+    const fallback = remaining.at(-1) ?? null
+    setPreviewOpenMap((previous) => {
+      const next = new Map(previous)
+      next.set(sessionId, fallback !== null)
+      return next
+    })
+    if (getPreviewIdFromSidePanelTab(activeTab) === previewId) returnToPreviousTabAfterClose(getPreviewSidePanelTab(previewId))
+  }, [activeTab, previewFiles, returnToPreviousTabAfterClose, sessionId, setPreviewFilesMap, setPreviewOpenMap])
 
   const handleCloseChatTab = React.useCallback(() => {
     setSideChatMap((prev) => {
@@ -443,16 +742,393 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chat
       next.delete(sessionId)
       return next
     })
-    if (activeTab === 'chat') {
-      onTabChange('files')
-    }
-  }, [activeTab, onTabChange, sessionId, setSideChatMap])
+    if (activeTab === 'chat') returnToPreviousTabAfterClose('chat')
+  }, [activeTab, returnToPreviousTabAfterClose, sessionId, setSideChatMap])
 
+  const handleCloseExplorationTab = React.useCallback((branchSessionId: string) => {
+    setSideTemporaryAgentMap((prev) => {
+      const openBranches = prev.get(sessionId) ?? []
+      const remaining = openBranches.filter((branch) => branch.sessionId !== branchSessionId)
+      if (remaining.length === openBranches.length) return prev
+      const next = new Map(prev)
+      if (remaining.length > 0) next.set(sessionId, remaining)
+      else next.delete(sessionId)
+      return next
+    })
+    if (getExplorationSessionIdFromSidePanelTab(activeTab) === branchSessionId) {
+      returnToPreviousTabAfterClose(getExplorationSidePanelTab(branchSessionId))
+    }
+  }, [activeTab, returnToPreviousTabAfterClose, sessionId, setSideTemporaryAgentMap])
+
+  const handleCloseDelegationTab = React.useCallback((childSessionId: string) => {
+    setSideDelegationMap((prev) => {
+      const openChildIds = prev.get(sessionId) ?? []
+      const remaining = openChildIds.filter((id) => id !== childSessionId)
+      if (remaining.length === openChildIds.length) return prev
+      const next = new Map(prev)
+      if (remaining.length > 0) next.set(sessionId, remaining)
+      else next.delete(sessionId)
+      return next
+    })
+    if (getDelegationSessionIdFromSidePanelTab(activeTab) === childSessionId) {
+      returnToPreviousTabAfterClose(getDelegationSidePanelTab(childSessionId))
+    }
+  }, [activeTab, returnToPreviousTabAfterClose, sessionId, setSideDelegationMap])
+
+  // 分支是正常持久化会话，但若用户从左侧删除了它，右侧不能保留悬空 Tab。
+  React.useEffect(() => {
+    const validBranchIds = new Set(sessions.map((item) => item.id))
+    const remaining = sideTemporaryAgents.filter((branch) => validBranchIds.has(branch.sessionId))
+    if (remaining.length === sideTemporaryAgents.length) return
+    setSideTemporaryAgentMap((prev) => {
+      const current = prev.get(sessionId) ?? []
+      const nextRemaining = current.filter((branch) => validBranchIds.has(branch.sessionId))
+      if (nextRemaining.length === current.length) return prev
+      const next = new Map(prev)
+      if (nextRemaining.length > 0) next.set(sessionId, nextRemaining)
+      else next.delete(sessionId)
+      return next
+    })
+    if (activeExplorationSessionId && !validBranchIds.has(activeExplorationSessionId)) {
+      returnToPreviousTabAfterClose(getExplorationSidePanelTab(activeExplorationSessionId))
+    }
+  }, [activeExplorationSessionId, returnToPreviousTabAfterClose, sessionId, sessions, setSideTemporaryAgentMap, sideTemporaryAgents])
+
+  // 子 Agent 被从左侧删除后，同样移除右侧的悬空观察 Tab；不改变左侧树的现有渲染与排序。
+  React.useEffect(() => {
+    const validChildIds = new Set(sessions
+      .filter((item) => item.parentSessionId === sessionId && !!item.sourceDelegationId)
+      .map((item) => item.id))
+    const remaining = sideDelegationSessionIds.filter((id) => validChildIds.has(id))
+    if (remaining.length === sideDelegationSessionIds.length) return
+    setSideDelegationMap((prev) => {
+      const current = prev.get(sessionId) ?? []
+      const nextRemaining = current.filter((id) => validChildIds.has(id))
+      if (nextRemaining.length === current.length) return prev
+      const next = new Map(prev)
+      if (nextRemaining.length > 0) next.set(sessionId, nextRemaining)
+      else next.delete(sessionId)
+      return next
+    })
+    if (activeDelegationSessionId && !validChildIds.has(activeDelegationSessionId)) {
+      returnToPreviousTabAfterClose(getDelegationSidePanelTab(activeDelegationSessionId))
+    }
+  }, [activeDelegationSessionId, returnToPreviousTabAfterClose, sessionId, sessions, setSideDelegationMap, sideDelegationSessionIds])
+
+  // 浏览器状态由 MainArea 的全局订阅同步到 atom；右侧工作区只负责呈现和显式打开。
+  // 这样切换文件/改动时 BrowserSlot 会正确隐藏原生 WebContentsView，而不会销毁网页会话。
+  const browserStateMap = useAtomValue(browserStateMapAtom)
+  const setBrowserStateMap = useSetAtom(browserStateMapAtom)
+  const setPendingNavigationMap = useSetAtom(browserPendingNavigationMapAtom)
+  const browserState = browserStateMap.get(sessionId) ?? null
+  const openingBrowserSessionRef = React.useRef<string | null>(null)
+  // 右侧 Tab 可被快速连续点击。必须串行落盘到原生 controller，否则迟到的旧选择
+  // 会把 WebContentsView 切回已卸载的 Slot，造成页面不可见。
+  const desiredBrowserTabIdRef = React.useRef<string | null>(null)
+  const browserSelectionInFlightRef = React.useRef(false)
+
+  const publishBrowserState = React.useCallback((state: NonNullable<typeof browserState>) => {
+    setBrowserStateMap((previous) => {
+      const next = new Map(previous)
+      next.set(sessionId, state)
+      return next
+    })
+    setBrowserMinimizedMap((previous) => {
+      const next = new Map(previous)
+      next.delete(sessionId)
+      return next
+    })
+    setBrowserOpenMap((previous) => {
+      const next = new Map(previous)
+      next.set(sessionId, true)
+      return next
+    })
+  }, [sessionId, setBrowserMinimizedMap, setBrowserOpenMap, setBrowserStateMap])
+
+  const ensureBrowserOpen = React.useCallback(async () => {
+    if (openingBrowserSessionRef.current === sessionId) return null
+    const open = (window.electronAPI as Partial<typeof window.electronAPI>).openAgentBrowser
+    if (typeof open !== 'function') return null
+    openingBrowserSessionRef.current = sessionId
+    try {
+      const state = await open(sessionId)
+      publishBrowserState(state)
+      return state
+    } catch (error) {
+      console.error('[SidePanel] 打开受管浏览器失败:', error)
+      return null
+    } finally {
+      if (openingBrowserSessionRef.current === sessionId) openingBrowserSessionRef.current = null
+    }
+  }, [publishBrowserState, sessionId])
+
+  const flushBrowserTabSelection = React.useCallback(() => {
+    if (browserSelectionInFlightRef.current) return
+    browserSelectionInFlightRef.current = true
+    void (async () => {
+      try {
+        while (desiredBrowserTabIdRef.current) {
+          const targetTabId = desiredBrowserTabIdRef.current
+          desiredBrowserTabIdRef.current = null
+          const state = await window.electronAPI.selectAgentBrowserTab({ sessionId, tabId: targetTabId })
+          publishBrowserState(state)
+        }
+      } catch (error) {
+        console.error('[SidePanel] 切换受管浏览器标签失败:', error)
+      } finally {
+        browserSelectionInFlightRef.current = false
+        // 请求完成的瞬间可能又点击了其他标签，继续落到最终目标。
+        if (desiredBrowserTabIdRef.current) flushBrowserTabSelection()
+      }
+    })()
+  }, [publishBrowserState, sessionId])
+
+  const handleWorkspaceTabChange = React.useCallback((tab: AgentSidePanelTab) => {
+    // 点击会话类右侧 Tab 本身即代表用户将停止目标切换到其可见会话；
+    // 否则父会话的旧交互记录会抢在当前右侧会话之前被快捷键使用。
+    const delegatedSessionId = getDelegationSessionIdFromSidePanelTab(tab)
+    if (delegatedSessionId && sideDelegationSessionIds.includes(delegatedSessionId)) {
+      rememberStopGenerationTarget({ kind: 'agent', sessionId: delegatedSessionId })
+    } else {
+      const explorationSessionId = getExplorationSessionIdFromSidePanelTab(tab)
+      if (explorationSessionId && sideTemporaryAgents.some((branch) => branch.sessionId === explorationSessionId)) {
+        rememberStopGenerationTarget({ kind: 'agent', sessionId: explorationSessionId })
+      } else if (tab === 'chat' && sideChatConversationId) {
+        rememberStopGenerationTarget({ kind: 'chat', sessionId: sideChatConversationId })
+      }
+    }
+
+    // 记忆编辑器采用防抖自动保存，并在组件卸载时 flush；切换组件不丢草稿。
+    const previewId = getPreviewIdFromSidePanelTab(tab)
+    if (previewId) {
+      const file = previewFiles.find((item) => getPreviewFileId(item) === previewId)
+      if (file) {
+        setPreviewFileMap((previous) => {
+          const next = new Map(previous)
+          next.set(sessionId, file)
+          return next
+        })
+      }
+    }
+    const browserTabId = getBrowserTabIdFromSidePanelTab(tab)
+    onTabChange(tab)
+    if (!browserTabId) return
+    desiredBrowserTabIdRef.current = browserTabId
+    flushBrowserTabSelection()
+  }, [flushBrowserTabSelection, onTabChange, previewFiles, sessionId, setPreviewFileMap, sideChatConversationId, sideDelegationSessionIds, sideTemporaryAgents])
+
+  const handleOpenBrowserTab = React.useCallback(async () => {
+    try {
+      const state = browserState
+        ? await window.electronAPI.createAgentBrowserTab({ sessionId })
+        : await ensureBrowserOpen()
+      if (!state) return
+      publishBrowserState(state)
+      onTabChange(getBrowserSidePanelTab(state.activeTabId))
+    } catch (error) {
+      console.error('[SidePanel] 新建受管浏览器标签失败:', error)
+    }
+  }, [browserState, ensureBrowserOpen, onTabChange, publishBrowserState, sessionId])
+
+  const handleOpenTerminal = React.useCallback((cwd?: string, title = '终端') => {
+    const terminalId = crypto.randomUUID()
+    setTerminalTabsMap((previous) => {
+      const next = new Map(previous)
+      next.set(sessionId, [...(next.get(sessionId) ?? []), { terminalId, title, cwd }])
+      return next
+    })
+    onTabChange(getTerminalSidePanelTab(terminalId))
+  }, [onTabChange, sessionId, setTerminalTabsMap])
+
+  const handleOpenWorktreeTerminal = React.useCallback((worktree: WorktreeInfo) => {
+    handleOpenTerminal(worktree.path, `终端 · ${worktree.branch}`)
+  }, [handleOpenTerminal])
+
+  const handleCloseBrowserTab = React.useCallback(async (browserTabId: string) => {
+    try {
+      const state = await window.electronAPI.closeAgentBrowserTab({ sessionId, tabId: browserTabId })
+      if (state) {
+        publishBrowserState(state)
+        if (getBrowserTabIdFromSidePanelTab(activeTab) === browserTabId) {
+          handleWorkspaceTabChange(getPreviousTabBeforeClose(getBrowserSidePanelTab(browserTabId)))
+        } else {
+          getPreviousTabBeforeClose(getBrowserSidePanelTab(browserTabId))
+        }
+        return
+      }
+      setBrowserOpenMap((previous) => {
+        const next = new Map(previous)
+        next.set(sessionId, false)
+        return next
+      })
+      setBrowserMinimizedMap((previous) => {
+        const next = new Map(previous)
+        next.delete(sessionId)
+        return next
+      })
+      setBrowserStateMap((previous) => {
+        const next = new Map(previous)
+        next.delete(sessionId)
+        return next
+      })
+      setPendingNavigationMap((previous) => {
+        const next = new Map(previous)
+        next.delete(sessionId)
+        return next
+      })
+      returnToPreviousTabAfterClose(getBrowserSidePanelTab(browserTabId))
+    } catch (error) {
+      console.error('[SidePanel] 关闭受管浏览器标签失败:', error)
+    }
+  }, [activeTab, getPreviousTabBeforeClose, handleWorkspaceTabChange, publishBrowserState, returnToPreviousTabAfterClose, sessionId, setBrowserMinimizedMap, setBrowserOpenMap, setBrowserStateMap, setPendingNavigationMap])
+
+  const activeBrowserTabId = getBrowserTabIdFromSidePanelTab(effectiveActiveTab)
+  React.useEffect(() => {
+    if (activeBrowserTabId && !browserState?.tabs.some((tab) => tab.tabId === activeBrowserTabId)) {
+      returnToPreviousTabAfterClose(getBrowserSidePanelTab(activeBrowserTabId))
+    }
+  }, [activeBrowserTabId, browserState?.tabs, returnToPreviousTabAfterClose])
+
+  const showBrowserActivity = Boolean(browserState?.activity && browserState.executionSource !== 'user')
+  // WebContentsView 是原生子视图，会盖住 renderer 的 portal。加号菜单打开时，
+  // BrowserPanel 为它保留一个固定避让区，而非 setVisible(false)。
+  const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
+  const workspaceTabs = React.useMemo<WorkspacePanelTab[]>(() => [
+    { id: 'files', label: '文件', icon: <FolderOpen className="size-3.5" /> },
+    { id: 'changes', label: '改动', icon: <FileDiff className="size-3.5" /> },
+    ...workspaceComponentTabs.map((component) => {
+      const meta: Record<WorkspaceComponentTab, { label: string; icon: React.ReactNode }> = {
+        todos: { label: 'Todo', icon: <ListTodo className="size-3.5" /> },
+        calendar: { label: '日程', icon: <CalendarDays className="size-3.5" /> },
+        automations: { label: '定时任务', icon: <Clock className="size-3.5" /> },
+        skills: { label: 'Skills', icon: <Blocks className="size-3.5" /> },
+        mcp: { label: 'MCP', icon: <ServerCog className="size-3.5" /> },
+        memory: { label: '项目记忆', icon: <Brain className="size-3.5" /> },
+      }
+      return { id: component, ...meta[component], closable: true }
+    }),
+    ...previewFiles.map((file) => ({
+      id: getPreviewSidePanelTab(getPreviewFileId(file)),
+      label: file.filePath.split(/[\\/]/).pop() || '预览',
+      icon: <FileText className="size-3.5" />,
+      closable: true,
+    })),
+    ...terminalTabs.map((terminal) => ({
+      id: getTerminalSidePanelTab(terminal.terminalId),
+      label: terminal.title,
+      icon: <SquareTerminal className="size-3.5" />,
+      closable: true,
+    })),
+    ...(sideChatConversationId ? [{ id: 'chat' as const, label: '问答', icon: <MessageCircle className="size-3.5" />, closable: true }] : []),
+    ...sideTemporaryAgents.map((branch) => ({
+      id: getExplorationSidePanelTab(branch.sessionId),
+      label: sessions.find((item) => item.id === branch.sessionId)?.title || '探索分支',
+      icon: <Split className="size-3.5" />,
+      closable: true,
+    })),
+    ...sideDelegationSessionIds.flatMap((childSessionId) => {
+      const child = sessions.find((item) => (
+        item.id === childSessionId && item.parentSessionId === sessionId && !!item.sourceDelegationId
+      ))
+      return child ? [{
+        id: getDelegationSidePanelTab(child.id),
+        label: getDelegationTabLabel(child.title),
+        icon: <GitBranch className="size-3.5" />,
+        closable: true,
+      }] : []
+    }),
+    ...(browserState?.tabs.map((tab) => ({
+      id: getBrowserSidePanelTab(tab.tabId),
+      label: tab.title || '新建标签页',
+      icon: <Globe className="size-3.5" />,
+      // Agent 当前工作标签不能直接销毁，否则未指定 tabId 的后续浏览器工具会失去目标。
+      closable: tab.tabId !== browserState.agentTabId,
+      activity: showBrowserActivity && activeBrowserTabId !== tab.tabId && browserState.activeTabId === tab.tabId,
+    })) ?? []),
+  ], [activeBrowserTabId, browserState, previewFiles, sessions, sessionId, showBrowserActivity, sideChatConversationId, sideDelegationSessionIds, sideTemporaryAgents, terminalTabs, workspaceComponentTabs])
+  workspaceTabsRef.current = workspaceTabs
+
+  const handleCloseWorkspaceTab = React.useCallback((tab: AgentSidePanelTab) => {
+    const terminalId = getTerminalIdFromSidePanelTab(tab)
+    if (terminalId) {
+      void window.electronAPI.killTerminal(terminalId).catch(console.error)
+      setTerminalTabsMap((previous) => {
+        const current = previous.get(sessionId) ?? []
+        if (!current.some((terminal) => terminal.terminalId === terminalId)) return previous
+        const next = new Map(previous)
+        const remaining = current.filter((terminal) => terminal.terminalId !== terminalId)
+        if (remaining.length > 0) next.set(sessionId, remaining)
+        else next.delete(sessionId)
+        return next
+      })
+      returnToPreviousTabAfterClose(tab)
+      return
+    }
+    if (isWorkspaceComponentTab(tab)) {
+      setWorkspaceComponentTabs((previous) => previous.filter((component) => component !== tab))
+      returnToPreviousTabAfterClose(tab)
+      return
+    }
+    const previewId = getPreviewIdFromSidePanelTab(tab)
+    if (previewId) { handleClosePreviewTab(previewId); return }
+    if (tab === 'chat') { handleCloseChatTab(); return }
+    const explorationSessionId = getExplorationSessionIdFromSidePanelTab(tab)
+    if (explorationSessionId) { handleCloseExplorationTab(explorationSessionId); return }
+    const delegationSessionId = getDelegationSessionIdFromSidePanelTab(tab)
+    if (delegationSessionId) { handleCloseDelegationTab(delegationSessionId); return }
+    const browserTabId = getBrowserTabIdFromSidePanelTab(tab)
+    if (browserTabId && browserTabId !== browserState?.agentTabId) void handleCloseBrowserTab(browserTabId)
+  }, [browserState?.agentTabId, handleCloseBrowserTab, handleCloseChatTab, handleCloseDelegationTab, handleCloseExplorationTab, handleClosePreviewTab, returnToPreviousTabAfterClose, sessionId, setTerminalTabsMap, setWorkspaceComponentTabs])
+
+  React.useEffect(() => {
+    const handleCloseActiveWorkspaceTab = (event: Event) => {
+      const { sessionId: targetSessionId } = (event as CustomEvent<{ sessionId?: string }>).detail ?? {}
+      if (targetSessionId === sessionId) handleCloseWorkspaceTab(activeTab)
+    }
+    window.addEventListener(CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT, handleCloseActiveWorkspaceTab)
+    return () => window.removeEventListener(CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT, handleCloseActiveWorkspaceTab)
+  }, [activeTab, handleCloseWorkspaceTab, sessionId])
+
+  const renderFileSourceContent = (scope: 'session' | 'project'): React.ReactElement => {
+    const isSession = scope === 'session'
+    const hasAttachedItems = isSession ? hasSessionAttachedItems : hasWorkspaceAttachedItems
+    const roots = isSession ? sessionFileRoots : projectFileRoots
+
+    return (
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label={isSession ? '会话文件' : '项目文件'}>
+        <h3 className="flex h-8 shrink-0 items-center px-3 text-[11px] font-medium text-muted-foreground">
+          {isSession ? '会话文件' : '项目文件'}
+        </h3>
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin pt-1">
+          {isSession && <DeliverablesSection sessionId={sessionId} />}
+          {isSession && attachedFiles.length > 0 && (
+            <AttachedFilesSection scope="session" showSessionBadge={false} attachedFiles={attachedFiles} onDetach={handleDetachFile} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} allowedPaths={basePathsRef.current} sessionId={sessionId} />
+          )}
+          {isSession && attachedDirs.length > 0 && (
+            <AttachedDirsSection scope="session" showSessionBadge={false} attachedDirs={attachedDirs} onDetach={handleDetachDirectory} refreshVersion={filesVersion} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} allowedPaths={basePathsRef.current} sessionId={sessionId} />
+          )}
+          {!isSession && wsAttachedFiles.length > 0 && (
+            <AttachedFilesSection scope="project" attachedFiles={wsAttachedFiles} onDetach={handleDetachWorkspaceFile} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} allowedPaths={basePathsRef.current} sessionId={sessionId} />
+          )}
+          {!isSession && wsAttachedDirs.length > 0 && (
+            <AttachedDirsSection scope="project" attachedDirs={wsAttachedDirs} onDetach={handleDetachWorkspaceDirectory} refreshVersion={filesVersion} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} allowedPaths={basePathsRef.current} sessionId={sessionId} />
+          )}
+          {!isSession && isProjectRootUnavailable && <div className="mx-2 my-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">本地项目根目录不可用；当前会话文件仍可访问。</div>}
+          <FileBrowser roots={roots} access={fileAccess} projectRootPath={isProjectRootUnavailable ? null : workspaceFilesPath} showSessionBadge={false} hideToolbar embedded hideEmpty={hasAttachedItems} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} />
+          {workspaceSlug && (isSession ? (
+            <FileDropZone workspaceSlug={workspaceSlug} sessionId={sessionId} target="session" onFilesUploaded={handleFilesUploaded} onFilesAttached={handleSessionFilesAttached} onAttachFolder={handleAttachSessionFolder} onFoldersDropped={handleSessionFoldersDropped} />
+          ) : !isProjectRootUnavailable ? (
+            <FileDropZone workspaceSlug={workspaceSlug} target="workspace" onFilesUploaded={handleFilesUploaded} onFilesAttached={handleWorkspaceFilesAttached} onAttachFolder={handleAttachWorkspaceFolder} onFoldersDropped={handleWorkspaceFoldersDropped} />
+          ) : null)}
+        </div>
+      </section>
+    )
+  }
 
   return (
     <div
       className={cn(
-        'relative z-0 h-full max-w-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area',
+        'relative z-0 h-full flex-shrink-0 overflow-hidden titlebar-drag-region bg-content-area',
         isClassic && 'rounded-2xl shadow-xl dark:shadow-md',
         shouldAnimate && 'transition-[width] duration-300 ease-in-out',
         isOpen ? '' : '!w-0',
@@ -463,28 +1139,84 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chat
       <div
         className={cn(
           'w-full h-full flex flex-col titlebar-no-drag',
-          isWindows ? 'pt-[34px]' : 'pt-0',
           shouldAnimate && 'transition-opacity duration-300',
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
         )}
         >
           <DiffPanelTabBar
+            tabs={workspaceTabs}
             activeTab={effectiveActiveTab}
-            onTabChange={onTabChange}
+            onTabChange={handleWorkspaceTabChange}
+            onCloseTab={handleCloseWorkspaceTab}
+            onOpenBrowser={() => void handleOpenBrowserTab()}
+            onAddTabMenuOpenChange={setIsAddTabMenuOpen}
+            onOpenFile={() => handleWorkspaceTabChange('files')}
+            onOpenTerminal={handleOpenTerminal}
+            onOpenWorkspaceComponent={(component) => {
+              setWorkspaceComponentTabs((previous) => previous.includes(component) ? previous : [...previous, component])
+              onTabChange(component)
+            }}
+            activeTabAction={activeExplorationBranch ? (
+              <ExplorationBringBackAction parentSessionId={sessionId} branch={activeExplorationBranch} sessions={sessions} />
+            ) : undefined}
             onClose={() => setIsOpen(false)}
-            onCloseChat={handleCloseChatTab}
-            showChatTab={chatOnly || Boolean(sideChatConversationId)}
-            chatOnly={chatOnly}
-            isWindows={isWindows}
           />
 
-          {effectiveActiveTab === 'chat' ? (
+          <SidePanelTerminalTabs
+            terminals={terminalTabs}
+            activeTerminalId={getTerminalIdFromSidePanelTab(effectiveActiveTab)}
+            sessionId={sessionId}
+            cwd={sessionPath ?? undefined}
+          />
+
+          {requestedPreviewId && currentPreviewFile ? (
+            <div className="min-h-0 flex-1 overflow-hidden"><PreviewPanel sessionId={sessionId} file={currentPreviewFile} onClose={() => handleClosePreviewTab(requestedPreviewId)} /></div>
+          ) : activeBrowserTabId ? (
+            browserState && browserState.tabs.some((tab) => tab.tabId === activeBrowserTabId) ? (
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <BrowserPanel
+                  sessionId={sessionId}
+                  tabId={activeBrowserTabId}
+                  state={browserState}
+                  isAddTabMenuOpen={isAddTabMenuOpen}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">浏览器标签已关闭</div>
+            )
+          ) : effectiveActiveTab === 'chat' ? (
             sideChatConversationId ? (
               <div className="min-h-0 flex-1 overflow-hidden">
                 <ChatView conversationId={sideChatConversationId} />
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">暂无问答会话</div>
+            )
+          ) : activeExplorationBranch ? (
+            <SideAgentSessionContent contentKey={`exploration:${activeExplorationBranch.sessionId}`}>
+              <AgentView sessionId={activeExplorationBranch.sessionId} embedded />
+            </SideAgentSessionContent>
+          ) : activeDelegationSession ? (
+            <SideAgentSessionContent contentKey={`delegation:${activeDelegationSession.id}`}>
+              <AgentView sessionId={activeDelegationSession.id} embedded />
+            </SideAgentSessionContent>
+          ) : effectiveActiveTab === 'todos' ? (
+            <PlanningView embedded componentTab="todos" />
+          ) : effectiveActiveTab === 'calendar' ? (
+            <PlanningView embedded componentTab="calendar" />
+          ) : effectiveActiveTab === 'automations' ? (
+            automationFormOpen ? <AutomationFormView embedded /> : <PlanningView embedded componentTab="automations" />
+          ) : effectiveActiveTab === 'skills' ? (
+            <AgentSkillsView embedded componentTab="skills" workspaceId={currentWorkspaceId ?? undefined} sessionId={sessionId} />
+          ) : effectiveActiveTab === 'mcp' ? (
+            <AgentSkillsView embedded componentTab="mcp" workspaceId={currentWorkspaceId ?? undefined} sessionId={sessionId} />
+          ) : effectiveActiveTab === 'memory' ? (
+            workspaceSlug ? (
+              <div className="min-h-0 flex-1 overflow-hidden p-2">
+                <WorkspaceMemoryTab workspaceSlug={workspaceSlug} sessionId={sessionId} embedded />
+              </div>
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">等待项目初始化...</div>
             )
           ) : effectiveActiveTab === 'changes' ? (
             sessionPath ? (
@@ -500,6 +1232,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chat
                 onFileClick={handleDiffFileClick}
                 workspaceSlug={workspaceSlug || undefined}
                 worktreeRepoPaths={worktreeRepoPathsMemo}
+                onOpenWorktreeTerminal={handleOpenWorktreeTerminal}
                 nonGitFileChanges={nonGitFileChanges}
                 currentFileChangeRunId={fileChangesCurrentRunId}
                 onPlainFileClick={handleFilePreview}
@@ -516,137 +1249,83 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, chat
                     sessionPath={sessionPath}
                     sessionAttachedDirs={attachedDirs}
                     workspaceAttachedDirs={wsAttachedDirs}
-                    sourceFilter={fileSourceFilter}
-                    showSessionBadge={false}
+                    sourceFilter={showBothFileSources ? 'all' : fileSourceFilter}
+                    showSessionBadge={showBothFileSources}
                     placeholder="搜索文件..."
                     sessionId={sessionId}
                     onFilePreview={handleFilePreview}
                   >
-                    <div className="file-source-tabbar main-tabbar mt-1.5 flex h-7 border-b border-border/80" role="tablist" aria-label="文件来源">
-                      <button
-                        type="button"
-                        role="tab"
-                        className={cn(
-                          'relative flex-1 h-7 px-2 text-[11px] transition-colors select-none',
-                          fileSourceFilter === 'session'
-                            ? 'app-tab-active text-foreground'
-                            : 'app-tab-inactive text-muted-foreground hover:text-foreground',
-                        )}
-                        aria-selected={fileSourceFilter === 'session'}
-                        onClick={() => setFileSourceFilter('session')}
-                      >
-                        会话文件
-                      </button>
-                      <button
-                        type="button"
-                        role="tab"
-                        className={cn(
-                          'relative flex-1 h-7 px-2 text-[11px] transition-colors select-none',
-                          fileSourceFilter === 'project'
-                            ? 'app-tab-active text-foreground'
-                            : 'app-tab-inactive text-muted-foreground hover:text-foreground',
-                        )}
-                        aria-selected={fileSourceFilter === 'project'}
-                        onClick={() => setFileSourceFilter('project')}
-                      >
-                        项目文件
-                      </button>
-                    </div>
-                  </FileSearchBar>
-                  <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pt-1">
-                    {/* 拖拽引用提示：引用块样式，左侧竖线 + 缩进，与下方文件列表内容左对齐 */}
-                    <div className="mb-1.5 ml-4 border-l-2 border-primary/40 pl-2 text-[11px] leading-4 text-foreground/75">
-                      支持拖拽文件或文件夹到输入框，实现引用
-                    </div>
-                    {/* 绑定 Linguist 项目时才由组件实际渲染；保持在统一 Files 宿主内。 */}
-                    {showSessionFiles && <DeliverablesSection sessionId={sessionId} />}
-                    {showProjectFiles && wsAttachedFiles.length > 0 && (
-                      <AttachedFilesSection
-                        scope="project"
-                        attachedFiles={wsAttachedFiles}
-                        onDetach={handleDetachWorkspaceFile}
-                        onAddToChat={handleAddToChat}
-                        onFilePreview={handleFilePreview}
-                        allowedPaths={basePathsRef.current}
-                        sessionId={sessionId}
-                      />
-                    )}
-                    {showProjectFiles && wsAttachedDirs.length > 0 && (
-                      <AttachedDirsSection
-                        scope="project"
-                        attachedDirs={wsAttachedDirs}
-                        onDetach={handleDetachWorkspaceDirectory}
-                        refreshVersion={filesVersion}
-                        onAddToChat={handleAddToChat}
-                        onFilePreview={handleFilePreview}
-                        allowedPaths={basePathsRef.current}
-                        sessionId={sessionId}
-                      />
-                    )}
-                    {showSessionFiles && attachedFiles.length > 0 && (
-                      <AttachedFilesSection
-                        scope="session"
-                        showSessionBadge={false}
-                        attachedFiles={attachedFiles}
-                        onDetach={handleDetachFile}
-                        onAddToChat={handleAddToChat}
-                        onFilePreview={handleFilePreview}
-                        allowedPaths={basePathsRef.current}
-                        sessionId={sessionId}
-                      />
-                    )}
-                    {showSessionFiles && attachedDirs.length > 0 && (
-                      <AttachedDirsSection
-                        scope="session"
-                        showSessionBadge={false}
-                        attachedDirs={attachedDirs}
-                        onDetach={handleDetachDirectory}
-                        refreshVersion={filesVersion}
-                        onAddToChat={handleAddToChat}
-                        onFilePreview={handleFilePreview}
-                        allowedPaths={basePathsRef.current}
-                        sessionId={sessionId}
-                      />
-                    )}
-                    {showProjectFiles && isProjectRootUnavailable && (
-                      <div className="mx-2 my-2 px-3 py-2 text-xs text-destructive bg-destructive/10 rounded-md">
-                        本地项目根目录不可用；当前会话文件仍可访问。
+                    {!showBothFileSources && (
+                      <div className="file-source-tabbar main-tabbar mt-1.5 flex h-7 border-b border-border/80" role="tablist" aria-label="文件来源">
+                        <button
+                          type="button"
+                          role="tab"
+                          className={cn(
+                            'relative flex-1 h-7 px-2 text-[11px] transition-colors select-none',
+                            fileSourceFilter === 'session'
+                              ? 'app-tab-active text-foreground'
+                              : 'app-tab-inactive text-muted-foreground hover:text-foreground',
+                          )}
+                          aria-selected={fileSourceFilter === 'session'}
+                          onClick={() => setFileSourceFilter('session')}
+                        >
+                          会话文件
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          className={cn(
+                            'relative flex-1 h-7 px-2 text-[11px] transition-colors select-none',
+                            fileSourceFilter === 'project'
+                              ? 'app-tab-active text-foreground'
+                              : 'app-tab-inactive text-muted-foreground hover:text-foreground',
+                          )}
+                          aria-selected={fileSourceFilter === 'project'}
+                          onClick={() => setFileSourceFilter('project')}
+                        >
+                          项目文件
+                        </button>
                       </div>
                     )}
-                    <FileBrowser
-                      roots={visibleFileRoots}
-                      access={fileAccess}
-                      projectRootPath={isProjectRootUnavailable ? null : workspaceFilesPath}
-                      showSessionBadge={false}
-                      hideToolbar
-                      embedded
-                      hideEmpty={hasVisibleSessionAttachedItems || hasVisibleWorkspaceAttachedItems}
-                      onAddToChat={handleAddToChat}
-                      onFilePreview={handleFilePreview}
-                    />
-                    {showSessionFiles && workspaceSlug && (
-                      <FileDropZone
-                        workspaceSlug={workspaceSlug}
-                        sessionId={sessionId}
-                        target="session"
-                        onFilesUploaded={handleFilesUploaded}
-                        onFilesAttached={handleSessionFilesAttached}
-                        onAttachFolder={handleAttachSessionFolder}
-                        onFoldersDropped={handleSessionFoldersDropped}
-                      />
-                    )}
-                    {showProjectFiles && !isProjectRootUnavailable && workspaceSlug && (
-                      <FileDropZone
-                        workspaceSlug={workspaceSlug}
-                        target="workspace"
-                        onFilesUploaded={handleFilesUploaded}
-                        onFilesAttached={handleWorkspaceFilesAttached}
-                        onAttachFolder={handleAttachWorkspaceFolder}
-                        onFoldersDropped={handleWorkspaceFoldersDropped}
-                      />
-                    )}
-                  </div>
-                  {workspaceSlug && <WorkspaceMemoryChangeDock workspaceSlug={workspaceSlug} />}
+                  </FileSearchBar>
+                  {showBothFileSources ? (
+                    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-border/70 overflow-hidden pt-2">
+                      {renderFileSourceContent('session')}
+                      {renderFileSourceContent('project')}
+                    </div>
+                  ) : (
+                    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pt-1">
+                      {/* 拖拽引用提示：引用块样式，左侧竖线 + 缩进，与下方文件列表内容左对齐 */}
+                      <div className="mb-1.5 ml-4 border-l-2 border-primary/40 pl-2 text-[11px] leading-4 text-foreground/75">
+                        支持拖拽文件或文件夹到输入框，实现引用
+                      </div>
+                      {showSessionFiles && <DeliverablesSection sessionId={sessionId} />}
+                      {showProjectFiles && wsAttachedFiles.length > 0 && (
+                        <AttachedFilesSection scope="project" attachedFiles={wsAttachedFiles} onDetach={handleDetachWorkspaceFile} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} allowedPaths={basePathsRef.current} sessionId={sessionId} />
+                      )}
+                      {showProjectFiles && wsAttachedDirs.length > 0 && (
+                        <AttachedDirsSection scope="project" attachedDirs={wsAttachedDirs} onDetach={handleDetachWorkspaceDirectory} refreshVersion={filesVersion} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} allowedPaths={basePathsRef.current} sessionId={sessionId} />
+                      )}
+                      {showSessionFiles && attachedFiles.length > 0 && (
+                        <AttachedFilesSection scope="session" showSessionBadge={false} attachedFiles={attachedFiles} onDetach={handleDetachFile} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} allowedPaths={basePathsRef.current} sessionId={sessionId} />
+                      )}
+                      {showSessionFiles && attachedDirs.length > 0 && (
+                        <AttachedDirsSection scope="session" showSessionBadge={false} attachedDirs={attachedDirs} onDetach={handleDetachDirectory} refreshVersion={filesVersion} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} allowedPaths={basePathsRef.current} sessionId={sessionId} />
+                      )}
+                      {showProjectFiles && isProjectRootUnavailable && (
+                        <div className="mx-2 my-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                          本地项目根目录不可用；当前会话文件仍可访问。
+                        </div>
+                      )}
+                      <FileBrowser roots={visibleFileRoots} access={fileAccess} projectRootPath={isProjectRootUnavailable ? null : workspaceFilesPath} showSessionBadge={false} hideToolbar embedded hideEmpty={hasVisibleSessionAttachedItems || hasVisibleWorkspaceAttachedItems} onAddToChat={handleAddToChat} onFilePreview={handleFilePreview} />
+                      {showSessionFiles && workspaceSlug && (
+                        <FileDropZone workspaceSlug={workspaceSlug} sessionId={sessionId} target="session" onFilesUploaded={handleFilesUploaded} onFilesAttached={handleSessionFilesAttached} onAttachFolder={handleAttachSessionFolder} onFoldersDropped={handleSessionFoldersDropped} />
+                      )}
+                      {showProjectFiles && !isProjectRootUnavailable && workspaceSlug && (
+                        <FileDropZone workspaceSlug={workspaceSlug} target="workspace" onFilesUploaded={handleFilesUploaded} onFilesAttached={handleWorkspaceFilesAttached} onAttachFolder={handleAttachWorkspaceFolder} onFoldersDropped={handleWorkspaceFoldersDropped} />
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">等待会话初始化...</div>
@@ -1364,5 +2043,31 @@ function AttachedDirItem({ entry, depth, selectedPaths, onSelect, refreshVersion
         </div>
       )}
     </>
+  )
+}
+
+function SidePanelTerminalTabs({
+  terminals,
+  activeTerminalId,
+  sessionId,
+  cwd,
+}: {
+  terminals: Array<{ terminalId: string; title: string; cwd?: string }>
+  activeTerminalId: string | null
+  sessionId: string
+  cwd?: string
+}): React.ReactElement {
+  return (
+    <div className={cn('relative min-h-0 flex-1', activeTerminalId ? 'flex' : 'hidden')}>
+      {terminals.map((terminal) => (
+        <div
+          key={terminal.terminalId}
+          className={cn('absolute inset-0', terminal.terminalId === activeTerminalId ? 'block' : 'hidden')}
+          aria-hidden={terminal.terminalId !== activeTerminalId}
+        >
+          <TerminalTabContent terminalId={terminal.terminalId} sessionId={sessionId} cwd={terminal.cwd ?? cwd} terminateOnUnmount={false} />
+        </div>
+      ))}
+    </div>
   )
 }

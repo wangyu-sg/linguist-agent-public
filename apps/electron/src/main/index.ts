@@ -57,11 +57,7 @@ function registerProtocolsAndHandlers(): void {
   }
 
   // Windows 等平台通过 second-instance 唤起已有主窗口。
-  app.on('second-instance', (_event, argv) => {
-    if (hasOpenPlanningArgument(argv)) {
-      showPlanningWindow()
-      return
-    }
+  app.on('second-instance', () => {
     showAndFocusMainWindow()
   })
 }
@@ -98,6 +94,7 @@ import { initializeRuntime } from './lib/runtime-init'
 import { seedDefaultSkills } from './lib/config-paths'
 import { upgradeDefaultSkillsInWorkspaces } from './lib/agent-workspace-manager'
 import { hasActiveAgentSessions, stopAllAgents } from './lib/agent-service'
+import { stopAllTerminals } from './lib/terminal-service'
 import { disposePiMcpConnections } from './lib/adapters/pi-mcp-tools'
 import { browserController } from './lib/browser-controller'
 import { markRunningDelegationsAsInterrupted } from './lib/agent-session-manager'
@@ -134,9 +131,6 @@ import { wechatBridge } from './lib/wechat-bridge'
 import { getWeChatConfig } from './lib/wechat-config'
 import { createQuickTaskWindow, toggleQuickTaskWindow, destroyQuickTaskWindow } from './lib/quick-task-window'
 import { getAgentStatusHoverWindow, destroyAgentStatusHoverWindow } from './agent-status-hover-window'
-import { destroyPlanningWindow, showPlanningWindow } from './lib/planning-window'
-import { configurePlanningQuickEntries } from './lib/planning-quick-entry'
-import { hasOpenPlanningArgument } from './lib/planning-quick-entry-model'
 import { handleNativeAgentIslandEvent, initAgentIslandService, disposeAgentIslandService, publishAgentIslandNow } from './lib/agent-island-service'
 import { disposeMacAgentIslandNativeHost, startMacAgentIslandNativeHost, isMacAgentIslandNativeHostReady } from './lib/mac-agent-island-native-host'
 import { isAgentIslandServiceSupported, isMacAgentIslandSurfaceSupported } from './lib/macos-version'
@@ -751,22 +745,12 @@ async function bootstrap(): Promise<void> {
   // Create main window (will be shown when ready)
   createWindow()
 
-  // 为 Dock、任务栏右键菜单与首次启动参数提供任务/日程的直接入口。
-  safeRun('configurePlanningQuickEntries', () => {
-    configurePlanningQuickEntries({
-      showMainWindow: showAndFocusMainWindow,
-      showPlanningWindow,
-    })
-  })
-  if (hasOpenPlanningArgument(process.argv)) showPlanningWindow()
-
   // Create system tray icon
   const hoverWin = process.platform === 'win32' ? getAgentStatusHoverWindow() : null
   if (hoverWin) safeRun('ensureHoverWindow', () => hoverWin.ensureCreated())
 
   createTray({
     showMainWindow: showAndFocusMainWindow,
-    showPlanningWindow,
     openAgentSession: (sessionId, title) => {
       sendToMainWindow(TRAY_IPC_CHANNELS.OPEN_AGENT_SESSION, { sessionId, title })
     },
@@ -828,7 +812,6 @@ async function bootstrap(): Promise<void> {
         openAgentSession: (sessionId, title) => {
           sendToMainWindow(TRAY_IPC_CHANNELS.OPEN_AGENT_SESSION, { sessionId, title })
         },
-        openPlanning: showPlanningWindow,
         enabled: () => getSettings().agentIsland?.enabled !== false,
       })
     })
@@ -847,9 +830,6 @@ async function bootstrap(): Promise<void> {
   )
   safeRun('registerGlobalShortcut:show-main-window', () =>
     registerGlobalShortcut('show-main-window', showAndFocusMainWindow),
-  )
-  safeRun('registerGlobalShortcut:open-planning', () =>
-    registerGlobalShortcut('open-planning', showPlanningWindow),
   )
   safeRun('registerGlobalShortcut:voice-dictation', () =>
     registerGlobalShortcut('voice-dictation', () => {
@@ -921,6 +901,7 @@ app.on('before-quit', () => {
 
   // 中止所有活跃的 Agent 和 Chat 子进程
   stopAllAgents()
+  void stopAllTerminals()
   browserController.dispose()
   stopAllGenerations()
   // 清理更新器定时器
@@ -945,7 +926,6 @@ app.on('before-quit', () => {
   unregisterAllGlobalShortcuts()
   // 销毁辅助窗口
   destroyQuickTaskWindow()
-  destroyPlanningWindow()
   destroyVoiceDictationWindow()
   destroyAgentStatusHoverWindow()
   // 销毁原生 macOS 灵动岛服务（其他平台从未创建 surface）

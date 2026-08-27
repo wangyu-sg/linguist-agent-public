@@ -734,7 +734,7 @@ export function getAgentSessionSDKMessages(id: string): SDKMessage[] {
  */
 export function updateAgentSessionMeta(
   id: string,
-  updates: Partial<Pick<AgentSessionMeta, 'title' | 'channelId' | 'modelId' | 'sdkSessionId' | 'piSessionFile' | 'piEntryBindings' | 'codexFastMode' | 'reasoningLevel' | 'openAIThinkingLevel' | 'workspaceId' | 'activeWorktree' | 'pinned' | 'starred' | 'archived' | 'attachedDirectories' | 'attachedFiles' | 'forkSourceDir' | 'stoppedByUser' | 'permissionMode' | 'completedButUnconfirmed' | 'sourceAutomationId' | 'automationGraduated' | 'parentSessionId' | 'rootSessionId' | 'sourceDelegationId' | 'delegationRole' | 'delegationStatus' | 'delegationDepth' | 'delegationGoal'>>,
+  updates: Partial<Pick<AgentSessionMeta, 'title' | 'channelId' | 'modelId' | 'sdkSessionId' | 'piSessionFile' | 'piEntryBindings' | 'codexFastMode' | 'reasoningLevel' | 'openAIThinkingLevel' | 'workspaceId' | 'activeWorktree' | 'pinned' | 'starred' | 'archived' | 'attachedDirectories' | 'attachedFiles' | 'forkSourceDir' | 'explorationParentSessionId' | 'explorationSourceMessageId' | 'explorationSourceLabel' | 'explorationTitleInitializedAt' | 'stoppedByUser' | 'permissionMode' | 'completedButUnconfirmed' | 'sourceAutomationId' | 'automationGraduated' | 'parentSessionId' | 'rootSessionId' | 'sourceDelegationId' | 'delegationRole' | 'delegationStatus' | 'delegationDepth' | 'delegationGoal'>>,
 ): AgentSessionMeta {
   const index = readIndex()
   const idx = index.sessions.findIndex((s) => s.id === id)
@@ -1110,19 +1110,25 @@ async function forkPiAgentSession(
 
     const inherited = options?.inheritSessionConfig ? inheritedSessionConfig(sourceMeta) : {}
     const sourceMetadata = options ? {} : { forkSourceDir: sourceDir }
+    const explorationMeta = input.explorationSourceLabel ? {
+      explorationParentSessionId: sourceMeta.id,
+      explorationSourceMessageId: targetUuid,
+      explorationSourceLabel: input.explorationSourceLabel,
+    } : {}
     updateAgentSessionMeta(newMeta.id, {
       sdkSessionId: forkedManager.getSessionId(),
       piSessionFile,
       piEntryBindings: branchBindings,
       activeWorktree: destinationActiveWorktree,
       ...sourceMetadata,
+      ...explorationMeta,
       ...inherited,
     })
     newMeta.sdkSessionId = forkedManager.getSessionId()
     newMeta.piSessionFile = piSessionFile
     newMeta.piEntryBindings = branchBindings
     newMeta.activeWorktree = destinationActiveWorktree
-    Object.assign(newMeta, sourceMetadata, inherited)
+    Object.assign(newMeta, sourceMetadata, explorationMeta, inherited)
 
     if ((!options || options.copyWorkspaceFiles) && sourceWorkbenchDir && destWorkbenchDir) {
       copyForkWorkspaceFiles(sourceWorkbenchDir, destWorkbenchDir)
