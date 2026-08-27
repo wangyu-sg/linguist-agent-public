@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
   "baseline": {
-    "tag": "v0.17.59",
-    "commit": "4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2",
-    "formalMerge": "f53612ca6566b58857173aa522fa73e229e5f08c"
+    "tag": "v0.18.2",
+    "commit": "92a635faa522d5d40544b06fdf74a28152012c71",
+    "formalMerge": "fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79"
   },
-  "recomputedOn": "2026-08-23",
+  "recomputedOn": "2026-08-27",
   "formalMergePatch": {
-    "changedPaths": 866,
-    "allowlistedPaths": 599,
-    "registeredCoreTouchpoints": 263
+    "changedPaths": 728,
+    "allowlistedPaths": 524,
+    "registeredCoreTouchpoints": 204
   },
   "currentLedger": {
-    "registeredCoreTouchpoints": 263
+    "registeredCoreTouchpoints": 204
   },
   "deviations": [
     {
       "id": "permanent-product-fork",
       "classification": "Permanent Product Fork",
       "ticket": "LA-SYNC-005",
-      "registeredTouchpoints": 41,
+      "registeredTouchpoints": 195,
       "scope": [
         "package identity and dependency lock",
         "Electron packaging, builder runtime launcher, and branded resources",
@@ -36,12 +36,12 @@
       "id": "local-host-seams",
       "classification": "Local Host Seam",
       "ticket": "LA-SYNC-003 / LA-SYNC-004",
-      "registeredTouchpoints": 221,
+      "registeredTouchpoints": 6,
       "scope": [
         "runtime, session, preload, IPC, and shared contracts",
         "native Agent/Chat shell composition, sidebar, tabs, settings, and renderer state"
       ],
-      "rationale": "Proma v0.17.59 has no stable project-bound CAT authority and vertical-agent composition contract; these narrow seams retain the native Agent/Chat implementation.",
+      "rationale": "Proma v0.18.2 has no stable project-bound CAT authority and vertical-agent composition contract; these narrow seams retain the native Agent/Chat implementation.",
       "sunset": {
         "status": "review-at-upstream-sync",
         "condition": "Replace a seam only when upstream provides an equivalent stable Host Contract that preserves session authority and fail-closed CAT behavior."

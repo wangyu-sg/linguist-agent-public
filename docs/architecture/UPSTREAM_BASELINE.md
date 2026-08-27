@@ -1,21 +1,21 @@
-# Upstream Baseline — Proma v0.17.59
+# Upstream Baseline — Proma v0.18.2
 
-> 更新日期：2026-08-25
+> 更新日期：2026-08-27
 > 机读真源：[proma-baseline.json](./proma-baseline.json)
 
 | 项目 | 值 |
 |---|---|
 | upstream | `https://github.com/proma-ai/Proma` |
-| tag / commit | `v0.17.59` / `4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2` |
-| 本地起点 | `3cfb14ff09baea1c042356b93be2809fb11774c5` |
-| LA merge commit | `f53612ca6566b58857173aa522fa73e229e5f08c` |
-| 施工分支 | `codex/sync-proma-v0.17.59` |
+| tag / commit | `v0.18.2` / `92a635faa522d5d40544b06fdf74a28152012c71` |
+| 本地起点 | `87f4843fef92a553a43f6de59d831832df6f0a42` |
+| LA merge commit | `fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79` |
+| 施工分支 | `codex/proma-v0.18.2` |
 
 ## 运行时与产品版本
 
 | 项目 | 当前值 |
 |---|---|
-| Linguist Agent / upstream app | `0.17.61` / `0.17.59` |
+| Linguist Agent / upstream app | `0.17.61` / `0.18.2` |
 | Electron / Bun | `43.2.0` / `1.3.14` |
 | Pi Runtime | `0.84.2` |
 | Shared | `0.1.63` |

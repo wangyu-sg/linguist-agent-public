@@ -1,15 +1,15 @@
 # Linguist Agent 当前事实
 
-核验日期：2026-08-25（Asia/Shanghai）
+核验日期：2026-08-27（Asia/Shanghai）
 
 本文只记录可由代码、manifest、测试或真实运行输出确认的事实。历史报告不得覆盖本文。
 
 ## Git 与基线
 
 - 当前交付分支：`main`。
-- Proma 基线：`v0.17.59@4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2`。
-- LA 起点：`3cfb14ff09baea1c042356b93be2809fb11774c5`。
-- 正式 merge：`f53612ca6566b58857173aa522fa73e229e5f08c`。
+- Proma 基线：`v0.18.2@92a635faa522d5d40544b06fdf74a28152012c71`。
+- LA 起点：`87f4843fef92a553a43f6de59d831832df6f0a42`。
+- 正式 merge：`fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79`。
 - 正式 merge 之后另含版本、基线账本、构建修复与文档收口。
 
 ## 版本
@@ -27,16 +27,16 @@
 ## 当前实现事实
 
 - 产品仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench；没有第二套 Agent、Chat、Session、权限、Planning、Preview 或 Collaboration。
-- 本轮一次 merge Proma v0.17.59；上游 Workspace metadata authority、atomic submit/queue、Agent UI 清理及其他原生能力直接继承，不建立兼容层。
+- 本轮一次 merge Proma v0.18.2；统一右侧工作区、Terminal、浏览器操作、归档分组、窗口布局及 Workspace 稳定性修复直接继承上游。
 - `submitOrEnqueueAgentMessage` 的即时提交路径继续携带冻结的 `linguistContext`；普通 Agent 与 Linguist rail/full 仍共用原生 `AgentView`、队列和工具生命周期。
-- Renderer 只通过 `agent-host-extension.tsx` 与 `app-mode-registry.ts` 两个锚点组合 Linguist；`AgentView` 的公开 props 收敛为 `sessionId + presentation`，AppShell / ModeSwitcher 不直接 import Linguist feature。
+- Renderer 只通过 `agent-host-extension.tsx` 与 `app-mode-registry.ts` 两个锚点组合 Linguist；`AgentView` 沿用上游 `sessionId + embedded` 合同，AppShell / ModeSwitcher 不直接 import Linguist feature。
 - QA 默认项目级列表并支持跨批次定位；窄视口 Agent rail 使用可关闭浮层，极窄视口左栏固定为图标栏且不改写用户偏好。
 - 上游已删除的 `AgentPlaceholder` 与旧 Provider/AppShell 包装路径保持删除；相关 touchpoint 与静态测试清单同步清理。
 - Linguist Session 继续由 `workspaceId + linguistProjectId` 绑定项目；Workspace 的 Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration 与 CAT Tools 在同一 runtime 组合。
 - General 仍可选择性委派 Translator、Reviewer 或 Proofreader；子会话冻结 Segment 范围并共享 CAT Store，`linguistOutcome` 与子会话运行状态分开记录。
 - CAT 写入继续经过 Session authority、revision CAS、locked 与结构规则；读取、QA 与 consistency repair 不获得直接提交权。
 - CLI 构建脚本使用当前 Bun 的 `process.execPath` 启动 `bun build --compile`，不再依赖调用进程的 PATH 查找 Bun。
-- v0.17.59 精确 Proma Core ledger 为 `208` 个生产触点：Product Fork `199`、Generated `2`、Host Seam `6`、Temporary Deviation `1`。
+- v0.18.2 精确 Proma Core ledger 为 `204` 个生产触点：Product Fork `195`、Generated `2`、Host Seam `6`、Temporary Deviation `1`。
 - Host Seam 验证器覆盖 `7` 个锚点；固定 v0.17.59 历史冲突 `9/9` 均能分类，并有一条 merge → resolver → overlay → verifier 集成回归。
 - Proma 自动同步保留策略解析、manifest overlay 与历史冲突回放；CI checkout 拉取完整历史。
 - 内部启动初始化失败直接终止，不再吞错后创建半初始化窗口；会话绑定 IPC 失败显式进入 unavailable 状态。

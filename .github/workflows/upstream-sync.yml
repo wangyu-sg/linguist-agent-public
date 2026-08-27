@@ -133,7 +133,7 @@ jobs:
             ERROR_CODE="$(printf '%s\n' "$SEAM_OUTPUT" | sed -n 's/^\([A-Z_]*\):.*/\1/p' | head -n 1)"
             report_sync_failure "${ERROR_CODE:-HOST_SEAM_CONTRACT_CHANGED}" "$SEAM_OUTPUT"
           fi
-          if ! DIFF_OUTPUT="$(git diff --check 2>&1)"; then
+          if ! DIFF_OUTPUT="$(git diff --check -- . ':(glob,exclude)**/*.patch' 2>&1)"; then
             report_sync_failure 'HOST_SEAM_CONTRACT_CHANGED' "$DIFF_OUTPUT"
           fi
 

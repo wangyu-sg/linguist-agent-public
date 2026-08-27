@@ -1,14 +1,14 @@
-# Proma Deviations — v0.17.59
+# Proma Deviations — v0.18.2
 
 > 机读真源：[PROMA_DEVIATIONS.json](./PROMA_DEVIATIONS.json)
-> 基线：v0.17.59 / 4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2
-> formal merge：f53612ca6566b58857173aa522fa73e229e5f08c
+> 基线：v0.18.2 / 92a635faa522d5d40544b06fdf74a28152012c71
+> formal merge：fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79
 
-本账本回答“为什么这不是上游代码、何时可以删掉”，而不是把每个差异都当作永久正当化。精确路径见 [proma-touchpoints.json](./proma-touchpoints.json)。当前账本共 `208` 个生产触点，测试文件不计入。
+本账本回答“为什么这不是上游代码、何时可以删掉”，而不是把每个差异都当作永久正当化。精确路径见 [proma-touchpoints.json](./proma-touchpoints.json)。当前账本共 `204` 个生产触点，测试文件不计入。
 
 | 分类 | 当前范围 | 处理 / sunset |
 |---|---|---|
-| **Permanent Product Fork** | 产品身份、独立数据根、发布、安全策略、资源、CLI、lock/manifest（199 个已登记生产触点） | 产品仍为独立 Linguist Agent 时无计划移除；产品身份改变时重新评估。 |
+| **Permanent Product Fork** | 产品身份、独立数据根、发布、安全策略、资源、CLI、lock/manifest（195 个已登记生产触点） | 产品仍为独立 Linguist Agent 时无计划移除；产品身份改变时重新评估。 |
 | **Generated / Overlay** | 上游同步生成或 overlay 的 manifest / metadata（2 个触点） | 每次同步重新生成并核对。 |
 | **Local Host Seam** | Runtime/Session/IPC/Preload 与原生 Agent/Chat Shell 的组合缝（6 个触点） | 上游提供等价、稳定且仍可 fail closed 的 Host Contract 后，在下一次上游同步逐项替换或删除。 |
 | **Linguist Extension** | main/lib/linguist、features/linguist、packages/linguist-*、项目 skills | 不进入 Proma Core；CAT vertical 仍是产品能力时保留。 |

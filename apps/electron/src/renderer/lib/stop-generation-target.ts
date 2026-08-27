@@ -4,7 +4,7 @@ export type StopGenerationTarget =
 
 interface SessionTabLike {
   type: string
-  sessionId?: string
+  sessionId: string
 }
 
 let lastInteractedStopTarget: StopGenerationTarget | null = null
@@ -37,7 +37,7 @@ export function resolveStopGenerationTarget(
   activeTab: SessionTabLike | null,
   activeAgentSidePanelTab: string | undefined,
 ): StopGenerationTarget | null {
-  if (!activeTab?.sessionId) return null
+  if (!activeTab) return null
 
   if (activeTab.type === 'agent') {
     const delegatedChildSessionId = activeAgentSidePanelTab?.startsWith('delegation:')

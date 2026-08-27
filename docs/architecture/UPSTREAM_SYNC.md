@@ -2,7 +2,7 @@
 
 > 更新日期：2026-08-25
 >
-> 当前基线：[Proma v0.17.59](./UPSTREAM_BASELINE.md)
+> 当前基线：[Proma v0.18.2](./UPSTREAM_BASELINE.md)
 >
 > 自动流程：[upstream-sync.yml](../../.github/workflows/upstream-sync.yml)
 

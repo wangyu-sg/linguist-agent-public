@@ -1,12 +1,12 @@
 # Linguist Agent 当前实施状态
 
-更新时间：2026-08-25
+更新时间：2026-08-27
 
 > `DONE` 表示实现和自动回归完成，不等于 packaged、真实 Provider、真机人工或产品资格。
 
 | 范围 | 状态 | 当前证据 |
 |---|---|---|
-| Proma v0.17.59 基线 | DONE | `4546c5f7` 已由 `f53612ca` 一次 merge；三模式、独立数据根和 CAT authority 保留。 |
+| Proma v0.18.2 基线 | DONE | `92a635fa` 已由 `fc8e8f3d` 一次 merge；三模式、独立数据根和 CAT authority 保留。 |
 | 上游 Agent/Workspace 集成 | DONE | Workspace metadata authority 与 atomic submit/queue 已合入；即时路径继续传递冻结 `linguistContext`。 |
 | 原生 Agent UI 收敛 | DONE | 删除上游已废弃的 Placeholder/Provider 包装；rail/full 仍复用同一 `AgentView`。 |
 | 岗位委派与完成证据 | DONE | 复用 Proma Collaboration；子会话继承双绑定和冻结范围；CAT Store 计算 `linguistOutcome`。 |
@@ -21,7 +21,7 @@
 ## 当前自动证据
 
 - 全仓 typecheck；默认 CI 关键回归 `296/296`；boundary `4/4`；fusion `10/10`；Host Seam `7/7`；历史冲突分类 `9/9`。
-- v0.17.59 精确生产 ledger `208`：Product Fork `199`、Generated `2`、Host Seam `6`、Temporary Deviation `1`。
+- v0.18.2 精确生产 ledger `204`：Product Fork `195`、Generated `2`、Host Seam `6`、Temporary Deviation `1`。
 
 ## 证据边界
 

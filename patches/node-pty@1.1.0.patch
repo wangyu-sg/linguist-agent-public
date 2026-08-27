@@ -32,7 +32,6 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..5844ccf314a4352fbe80ee06ba8b8ddb
 +// transforming that valid path a second time into app.asar.unpacked.unpacked.
 +helperPath = helperPath.replace(/app\.asar(?!\.unpacked)/, 'app.asar.unpacked');
 +helperPath = helperPath.replace(/node_modules\.asar(?!\.unpacked)/, 'node_modules.asar.unpacked');
--
-+
+ 
  const DEFAULT_FILE = 'sh';
  const DEFAULT_NAME = 'xterm';

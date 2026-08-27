@@ -1,9 +1,9 @@
 {
   "schemaVersion": 3,
-  "baseline": "4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2",
-  "formalMerge": "f53612ca6566b58857173aa522fa73e229e5f08c",
-  "recomputedOn": "2026-08-24",
-  "comment": "仅登记相对 Proma 基线仍存在的核心产品分叉、稳定 Host Seam 与生成物；LA 自有目录由 allowedNewPaths 管理。",
+  "baseline": "92a635faa522d5d40544b06fdf74a28152012c71",
+  "formalMerge": "fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79",
+  "recomputedOn": "2026-08-27",
+  "comment": "Proma-core touchpoints tracked against v0.18.2; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -507,14 +507,6 @@
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
-    },
-    {
-      "file": "apps/electron/src/main/lib/planning-window.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
       "file": "apps/electron/src/main/lib/proxy-settings-service.ts",
@@ -1112,22 +1104,6 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/components/diff/DiffChangesList.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/diff/DiffPanelTabBar.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/diff/DiffTabContent.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1398,14 +1374,6 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/tabs/tab-bar-action-layout.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "keep the native TabBar action overlay clear of tabs and platform window controls."
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabBarItem.tsx",

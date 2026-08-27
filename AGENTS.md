@@ -38,7 +38,7 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 
 ## 当前版本与技术栈
 
-稳定上游基线是 Proma `v0.17.59@4546c5f7d0fbfa4ed1d58aec63705fc75a9020c2`。
+稳定上游基线是 Proma `v0.18.2@92a635faa522d5d40544b06fdf74a28152012c71`。
 
 | 层 | 当前事实 |
 |---|---|

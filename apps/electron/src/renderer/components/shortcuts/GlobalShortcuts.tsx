@@ -228,7 +228,10 @@ export function GlobalShortcuts(): null {
     'stop-generation',
     useCallback(() => {
       const target = getLastInteractedStopTarget()
-        ?? resolveStopGenerationTarget(activeTab, activeAgentSidePanelTab)
+        ?? resolveStopGenerationTarget(
+          activeTab?.type === 'agent' || activeTab?.type === 'chat' ? activeTab : null,
+          activeAgentSidePanelTab,
+        )
       if (!target) return
       window.dispatchEvent(new CustomEvent('proma:stop-generation', { detail: target }))
     }, [activeAgentSidePanelTab, activeTab]),
