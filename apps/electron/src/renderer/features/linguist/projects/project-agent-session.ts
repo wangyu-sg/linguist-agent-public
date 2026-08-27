@@ -5,12 +5,21 @@ import type {
   LinguistRole,
   LinguistSessionCreateForProjectRequest,
 } from '@proma/shared'
-import { agentSessionsAtom } from '@/atoms/agent-atoms'
+import {
+  agentSessionsAtom,
+  currentAgentSessionIdAtom,
+  currentAgentWorkspaceIdAtom,
+} from '@/atoms/agent-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
-import { activeTabAtom, type TabItem } from '@/atoms/tab-atoms'
+import {
+  activeTabAtom,
+  openTab,
+  tabsAtom,
+  type TabItem,
+} from '@/atoms/tab-atoms'
+import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
-import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
 
 type JotaiStore = ReturnType<typeof createStore>
 type CreateProjectSession = (
@@ -148,16 +157,24 @@ export async function createActiveLinguistProjectSession(
   }
   const result = await createProjectAgentSession(store, projectId, 'general', createSession)
   if (result.ok) {
-    store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
-      agentPresentation: 'full',
+    const opened = openTab(store.get(tabsAtom), {
+      type: 'agent',
+      sessionId: result.data.id,
+      title: result.data.title,
     })
+    store.set(tabsAtom, opened.tabs)
+    enterLinguistNavigation(store, opened.activeTabId, 'conversations')
+    store.set(currentAgentSessionIdAtom, result.data.id)
+    if (result.data.workspaceId) {
+      store.set(currentAgentWorkspaceIdAtom, result.data.workspaceId)
+    }
   }
   return result
 }
 
 /**
- * LF-032 懒创建 seam：只有 Agent rail / 发送等调用方明确需要会话时才调用。
- * 同项目并发请求共用一次 IPC，避免首次打开 rail 与发送同时产生两个会话。
+ * LF-032 懒创建 seam：只有原生 Agent Tab / 发送等调用方明确需要会话时才调用。
+ * 同项目并发请求共用一次 IPC，避免首次打开 Agent 与发送同时产生两个会话。
  */
 export function ensureProjectAgentSession(
   store: JotaiStore,

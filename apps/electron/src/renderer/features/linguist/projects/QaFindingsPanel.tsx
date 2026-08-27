@@ -134,7 +134,7 @@ export function QaPanelScopeNotice({
 }): React.ReactElement {
   return (
     <>
-      <p id={`${scopeId}-run-note`} className="text-[11px] text-foreground/45">
+      <p id={`${scopeId}-run-note`} className="text-[11px] text-foreground/60">
         {segmentId === undefined
           ? '显示整个项目的 Finding；运行 QA 只扫描当前批次'
           : '仅显示当前片段；运行 QA 只扫描当前批次'}
@@ -406,26 +406,26 @@ export function QaFindingsPanel({
         </label>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <label className="text-[10px] text-foreground/45">
+        <label className="text-[10px] text-foreground/60">
           状态
           <select
             aria-label="QA 状态筛选"
             value={statusFilter}
             onChange={(event) => { setStatusFilter(event.target.value as LinguistQaFindingStatus); setOffset(0) }}
-            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] ring-1 ring-border/45"
+            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] text-foreground/70 ring-1 ring-border/45"
           >
             <option value="open">待处理</option>
             <option value="resolved">已解决</option>
             <option value="waived">已豁免</option>
           </select>
         </label>
-        <label className="text-[10px] text-foreground/45">
+        <label className="text-[10px] text-foreground/60">
           严重度
           <select
             aria-label="QA 严重度筛选"
             value={severityFilter}
             onChange={(event) => { setSeverityFilter(event.target.value as LinguistQaFindingSeverity | ''); setOffset(0) }}
-            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] ring-1 ring-border/45"
+            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] text-foreground/70 ring-1 ring-border/45"
           >
             <option value="">全部</option>
             {QA_SEVERITIES.map((severity) => (
@@ -433,13 +433,13 @@ export function QaFindingsPanel({
             ))}
           </select>
         </label>
-        <label className="text-[10px] text-foreground/45">
+        <label className="text-[10px] text-foreground/60">
           处置
           <select
             aria-label="QA 处置筛选"
             value={dispositionFilter}
             onChange={(event) => { setDispositionFilter(event.target.value as LinguistQaFindingDisposition | ''); setOffset(0) }}
-            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] ring-1 ring-border/45"
+            className="mt-1 h-7 w-full min-w-0 truncate rounded-md bg-background pl-1.5 pr-6 text-[11px] text-foreground/70 ring-1 ring-border/45"
           >
             <option value="">全部</option>
             {QA_DISPOSITIONS.map((disposition) => (
@@ -450,14 +450,14 @@ export function QaFindingsPanel({
       </div>
       <div className="mt-3 space-y-2">
         {visibleState.status === 'loading' ? (
-          <p aria-live="polite" className="flex items-center gap-1.5 text-[11px] text-foreground/45"><Loader2 aria-hidden="true" size={11} className="animate-spin" />正在读取…</p>
+          <p aria-live="polite" className="flex items-center gap-1.5 text-[11px] text-foreground/60"><Loader2 aria-hidden="true" size={11} className="animate-spin" />正在读取…</p>
         ) : visibleState.status === 'error' ? (
           <p role="alert" className="text-[11px] text-destructive">{describeLinguistIpcError(visibleState.error)}</p>
         ) : visibleState.data.total === 0 ? (
-          <p className="text-[12px] text-foreground/45">尚无符合筛选的 Finding</p>
+          <p className="text-[12px] text-foreground/60">尚无符合筛选的 Finding</p>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-2 text-[11px] text-foreground/45">
+            <div className="flex items-center justify-between gap-2 text-[11px] text-foreground/60">
               <p>共 {visibleState.data.total} 条（{visibleState.data.offset + 1}–{visibleState.data.offset + visibleState.data.items.length}）</p>
               <div className="flex gap-1">
                 <button type="button" aria-label="上一页 QA Finding" disabled={visibleState.data.offset === 0} onClick={() => setOffset((value) => Math.max(0, value - PAGE_SIZE))} className="rounded bg-foreground/[0.06] px-1.5 py-0.5 disabled:opacity-40">上一页</button>
@@ -547,12 +547,12 @@ export function QaFindingCard({
           {QA_SEVERITY_LABELS[finding.severity]} · {QA_TIER_LABELS[qaSeverityTier(finding.severity)]}
         </span>
       </div>
-      <p className="mt-0.5 text-[10px] text-foreground/45">
+      <p className="mt-0.5 text-[10px] text-foreground/60">
         {finding.issueType} · {QA_DISPOSITION_LABELS[finding.disposition]}
       </p>
       <p className="mt-1 text-foreground/55">{finding.message}</p>
       {finding.waiverReason !== undefined && (
-        <p className="mt-1 text-foreground/45">
+        <p className="mt-1 text-foreground/60">
           豁免：{finding.waiverReason}
           {finding.waivedBy ? ` · ${finding.waivedBy}` : ''}
           {finding.waivedAt ? ` · ${new Date(finding.waivedAt).toLocaleString()}` : ''}
@@ -636,7 +636,7 @@ export function QaFindingCard({
           <p
             id={waiverHelpId}
             role={waiverError === undefined ? 'status' : 'alert'}
-            className={waiverError === undefined ? 'text-foreground/45' : 'text-destructive'}
+            className={waiverError === undefined ? 'text-foreground/60' : 'text-destructive'}
           >
             {waiverError ?? '豁免原因有效'} · {waiverReason.length}/{QA_WAIVER_REASON_MAX_LENGTH}
           </p>

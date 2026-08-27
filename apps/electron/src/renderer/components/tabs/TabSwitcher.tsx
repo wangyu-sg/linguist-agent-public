@@ -49,6 +49,10 @@ import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { Bot, GitBranch, Languages, MessageSquare, StickyNote } from 'lucide-react'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 import { isOrdinaryAgentSession } from '@/components/session-tree/agent-session-tree'
+import {
+  getAgentSessionLinguistProjectId,
+  getAgentSessionLinguistProjectName,
+} from '@/lib/agent-session-list'
 
 type SwitchSectionId = 'collaboration' | 'recent'
 type SwitchCandidateType = 'chat' | 'agent' | 'scratch' | 'linguist-project'
@@ -136,7 +140,8 @@ export function TabSwitcher(): ReactElement | null {
         updatedAt: session.updatedAt,
         status,
         workspaceId: session.workspaceId,
-        workspaceName: session.workspaceId ? workspaceNameById.get(session.workspaceId) : undefined,
+        workspaceName: getAgentSessionLinguistProjectName(session, agentSessions)
+          ?? (session.workspaceId ? workspaceNameById.get(session.workspaceId) : undefined),
         isDelegation: !!session.sourceDelegationId,
       }
     }
@@ -151,9 +156,12 @@ export function TabSwitcher(): ReactElement | null {
         status: streamingConversationIds.has(conversation.id) ? 'running' : 'idle',
       }))
 
+    const openAgentSessionIds = new Set(
+      tabs.flatMap((tab) => tab.type === 'agent' ? [tab.sessionId] : []),
+    )
     const agentCandidates = agentSessions
       .filter((session) => (
-        isOrdinaryAgentSession(session, agentSessions)
+        (isOrdinaryAgentSession(session, agentSessions) || openAgentSessionIds.has(session.id))
         && !session.archived
         && !draftSessionIds.has(session.id)
       ))
@@ -349,7 +357,12 @@ export function TabSwitcher(): ReactElement | null {
         return
       }
 
-      setAppMode('agent')
+      const session = agentSessions.find((item) => item.id === candidate.id)
+      setAppMode(
+        session && getAgentSessionLinguistProjectId(session, agentSessions)
+          ? 'linguist'
+          : 'agent',
+      )
       setCurrentAgentSessionId(candidate.id)
       setCurrentConversationId(null)
 

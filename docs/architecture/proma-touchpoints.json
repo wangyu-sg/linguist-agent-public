@@ -1177,6 +1177,14 @@
       "reason": "the native Preview Tab branches previewFile.linguist targets to LinguistPreviewBody instead of the DiffTabContent file-reading chain."
     },
     {
+      "file": "apps/electron/src/renderer/components/file-browser/FileDropZone.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "提高 Agent 与 Linguist 共用右侧文件工作区操作标签的对比度。"
+    },
+    {
       "file": "apps/electron/src/renderer/components/planning/PlanningReminderRail.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1526,7 +1534,15 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让绑定 Linguist 项目的 Agent 通知返回唯一项目 Tab，不再创建重复 Agent Tab。"
+      "reason": "让绑定 Linguist 项目的 Agent 通知打开其原生 Agent Tab，并保持 Linguist 模式归属。"
+    },
+    {
+      "file": "apps/electron/src/renderer/hooks/useFocusAgentSessionInput.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "复用统一 Tab 导航副作用，让项目绑定会话保持 Linguist 模式并继续使用原生 AgentView。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useSwitchAppMode.ts",
@@ -1582,7 +1598,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让协作子会话的列表归属跟随父会话，避免同一会话树跨 Agent 与 Linguist 重复显示。"
+      "reason": "让协作子会话的项目归属和项目徽标跟随父会话，避免同一会话树跨 Agent 与 Linguist 重复显示。"
     },
     {
       "file": "apps/electron/src/renderer/lib/linguist-navigation.ts",

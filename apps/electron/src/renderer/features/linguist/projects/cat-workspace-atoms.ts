@@ -21,7 +21,6 @@ const BOTTOM_DOCK_TABS = [
 ] as const
 
 export type LinguistBottomDockTab = (typeof BOTTOM_DOCK_TABS)[number]
-export type LinguistAgentPresentation = 'closed' | 'rail' | 'full'
 
 /** 项目设置 Sheet 的分类 tab；「查看」类入口可直达具体分类。 */
 export type LinguistProjectSettingsTab =
@@ -34,19 +33,12 @@ export type LinguistProjectSettingsTab =
 export const ASSET_NAVIGATOR_MIN_WIDTH = 180
 export const ASSET_NAVIGATOR_DEFAULT_WIDTH = 240
 export const ASSET_NAVIGATOR_MAX_WIDTH = 420
-export const AGENT_RAIL_MIN_WIDTH = 340
-export const AGENT_RAIL_DEFAULT_WIDTH = 420
-export const AGENT_RAIL_MAX_WIDTH = 520
 export const BOTTOM_DOCK_MIN_HEIGHT = 160
 export const BOTTOM_DOCK_DEFAULT_HEIGHT = 240
 export const BOTTOM_DOCK_MAX_HEIGHT = 480
 
 export function clampAssetNavigatorWidth(width: number): number {
   return Math.min(ASSET_NAVIGATOR_MAX_WIDTH, Math.max(ASSET_NAVIGATOR_MIN_WIDTH, width))
-}
-
-export function clampAgentRailWidth(width: number): number {
-  return Math.min(AGENT_RAIL_MAX_WIDTH, Math.max(AGENT_RAIL_MIN_WIDTH, width))
 }
 
 export function clampBottomDockHeight(height: number): number {
@@ -70,8 +62,6 @@ export interface LinguistWorkbenchUiState {
   bottomDockOpen: boolean
   bottomDockTab: LinguistBottomDockTab
   bottomDockHeight: number
-  agentPresentation: LinguistAgentPresentation
-  agentRailWidth: number
   projectSettingsOpen: boolean
   activeProjectAgentSessionId?: string
   lastVisitedAt: string
@@ -83,10 +73,6 @@ export interface LinguistWorkbenchLocation {
   activeSegmentId?: string
   assetNavigatorOpen?: boolean
   assetNavigatorWidth?: number
-  agentPresentation?: LinguistAgentPresentation
-  /** 仅用于读取旧 settings；序列化时统一写入 agentPresentation。 */
-  agentRailOpen?: boolean
-  agentRailWidth?: number
   bottomDockOpen?: boolean
   bottomDockTab?: LinguistBottomDockTab
   bottomDockHeight?: number
@@ -175,8 +161,6 @@ function createWorkbenchUiState(projectId: string): StoredWorkbenchUiState {
     bottomDockOpen: true,
     bottomDockTab: 'tm',
     bottomDockHeight: BOTTOM_DOCK_DEFAULT_HEIGHT,
-    agentPresentation: 'closed',
-    agentRailWidth: AGENT_RAIL_DEFAULT_WIDTH,
     projectSettingsOpen: false,
     lastVisitedAt: new Date().toISOString(),
     uiRevision: 0,
@@ -203,16 +187,6 @@ function getLocation(value: unknown): LinguistWorkbenchLocation | null {
     && Number.isFinite(raw.assetNavigatorWidth)
     ? clampAssetNavigatorWidth(raw.assetNavigatorWidth)
     : undefined
-  const agentPresentation = raw.agentPresentation === 'closed'
-    || raw.agentPresentation === 'rail'
-    || raw.agentPresentation === 'full'
-    ? raw.agentPresentation
-    : typeof raw.agentRailOpen === 'boolean'
-      ? raw.agentRailOpen ? 'rail' : 'closed'
-      : undefined
-  const agentRailWidth = typeof raw.agentRailWidth === 'number' && Number.isFinite(raw.agentRailWidth)
-    ? clampAgentRailWidth(raw.agentRailWidth)
-    : undefined
   const bottomDockOpen = typeof raw.bottomDockOpen === 'boolean' ? raw.bottomDockOpen : undefined
   const bottomDockTab = typeof raw.bottomDockTab === 'string'
     && BOTTOM_DOCK_TABS.includes(raw.bottomDockTab as LinguistBottomDockTab)
@@ -227,8 +201,6 @@ function getLocation(value: unknown): LinguistWorkbenchLocation | null {
     && activeSegmentId === undefined
     && assetNavigatorOpen === undefined
     && assetNavigatorWidth === undefined
-    && agentPresentation === undefined
-    && agentRailWidth === undefined
     && bottomDockOpen === undefined
     && bottomDockTab === undefined
     && bottomDockHeight === undefined
@@ -240,8 +212,6 @@ function getLocation(value: unknown): LinguistWorkbenchLocation | null {
     ...(activeSegmentId !== undefined ? { activeSegmentId } : {}),
     ...(assetNavigatorOpen !== undefined ? { assetNavigatorOpen } : {}),
     ...(assetNavigatorWidth !== undefined ? { assetNavigatorWidth } : {}),
-    ...(agentPresentation !== undefined ? { agentPresentation } : {}),
-    ...(agentRailWidth !== undefined ? { agentRailWidth } : {}),
     ...(bottomDockOpen !== undefined ? { bottomDockOpen } : {}),
     ...(bottomDockTab !== undefined ? { bottomDockTab } : {}),
     ...(bottomDockHeight !== undefined ? { bottomDockHeight } : {}),
@@ -341,9 +311,6 @@ function createProjectWorkbenchUiStateAtom(projectId: string) {
         ...storedPatch,
         assetNavigatorWidth: clampAssetNavigatorWidth(
           storedPatch.assetNavigatorWidth ?? currentStored.assetNavigatorWidth,
-        ),
-        agentRailWidth: clampAgentRailWidth(
-          storedPatch.agentRailWidth ?? currentStored.agentRailWidth,
         ),
         bottomDockHeight: clampBottomDockHeight(
           storedPatch.bottomDockHeight ?? currentStored.bottomDockHeight,
@@ -489,7 +456,7 @@ export const disposeLinguistWorkbenchAtomFamiliesAtom = atom(
  *
  * 写入方只有 SegmentGrid 行的「为 Agent 引用」动作；键盘焦点、虚拟列表首行、
  * 自动恢复编辑位置都不会触碰该 atom，Agent 默认只有 Project + Batch scope。
- * ProjectAgentRail 与 turn snapshot 都从同一 project-scoped atom 读取。
+ * AgentView 的项目引用与 turn snapshot 都从同一 project-scoped atom 读取。
  */
 /** 仅当被引用片段属于当前项目批次时才对 Agent 可见；否则视为其他项目的残留引用。 */
 export function resolveVisibleSegmentAgentReference(

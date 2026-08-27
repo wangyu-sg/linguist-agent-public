@@ -20,6 +20,7 @@ import {
   unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
 import type { TabItem } from '@/atoms/tab-atoms'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 
 export type SyncActiveTabSideEffects = (newActiveTab: TabItem | null) => void
 
@@ -70,8 +71,13 @@ export function useSyncActiveTabSideEffects(): SyncActiveTabSideEffects {
         return
       }
 
-      // Agent / 会话预览
-      setAppMode('agent')
+      // Agent / 会话预览：项目绑定会话复用原生 AgentView，但仍属于 Linguist 模式。
+      const session = agentSessions.find((item) => item.id === newActiveTab.sessionId)
+      setAppMode(
+        session && getAgentSessionLinguistProjectId(session, agentSessions)
+          ? 'linguist'
+          : 'agent',
+      )
       setCurrentAgentSessionId(newActiveTab.sessionId)
       setCurrentConversationId(null)
 
@@ -84,7 +90,6 @@ export function useSyncActiveTabSideEffects(): SyncActiveTabSideEffects {
       })
 
       // 同步 workspace
-      const session = agentSessions.find((s) => s.id === newActiveTab.sessionId)
       if (session?.workspaceId) {
         setCurrentAgentWorkspaceId(session.workspaceId)
         window.electronAPI.updateSettings({

@@ -2466,7 +2466,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
       rows.push({
         id: 'chat-pinned-heading',
         estimateSize: 30,
-        content: <div className="pl-[18px] pr-3.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">置顶</div>,
+        content: <div className="pl-[18px] pr-3.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">置顶</div>,
       })
       for (const conv of pinnedConversations) {
         rows.push({
@@ -2499,7 +2499,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
       estimateSize: 34,
       content: (
         <div className="group/chat-section relative flex items-center px-2 pt-2 pb-1">
-          <span className="ml-[4px] px-1.5 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">对话</span>
+          <span className="ml-[4px] px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">对话</span>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -2523,7 +2523,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
       rows.push({
         id: `chat-date-${group.label}`,
         estimateSize: 30,
-        content: <div className="ml-[4px] px-3.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">{group.label}</div>,
+        content: <div className="ml-[4px] px-3.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">{group.label}</div>,
       })
       for (const conv of group.items) {
         rows.push({
@@ -2557,7 +2557,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
       rows.push({
         id: `chat-archived-date-${group.label}`,
         estimateSize: 30,
-        content: <div className="px-3 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">{group.label}</div>,
+        content: <div className="px-3 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">{group.label}</div>,
       })
       for (const conv of group.items) {
         rows.push({
@@ -2814,7 +2814,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
       rows.push({
         id: 'agent-pinned-heading',
         estimateSize: 30,
-        content: <div className="pl-[18px] pr-3.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">置顶</div>,
+        content: <div className="pl-[18px] pr-3.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">置顶</div>,
       })
       for (const item of pinnedAgentSessionTrees) {
         pushSessionTreeRows(item, false, false, workspaceNameMap)
@@ -2826,7 +2826,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
       estimateSize: 34,
       content: (
         <div className="px-2 pt-2 pb-1 flex items-center justify-between">
-          <span className="px-1.5 text-[13px] font-medium leading-[18px] text-foreground/40 select-none">项目</span>
+          <span className="px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">项目</span>
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -3729,7 +3729,7 @@ function SessionItemActions({
       <span
         title={`最后更新：${new Date(updatedAt).toLocaleString('zh-CN')}`}
         className={cn(
-          'absolute inset-y-0 right-0 block w-full overflow-hidden whitespace-nowrap text-right text-[11px] leading-[22px] tabular-nums text-foreground/35 transition-opacity duration-100',
+          'absolute inset-y-0 right-0 block w-full overflow-hidden whitespace-nowrap text-right text-[11px] leading-[22px] tabular-nums text-foreground/60 transition-opacity duration-100',
           actionsVisible ? 'opacity-0' : 'opacity-100 group-hover:opacity-0',
         )}
       >

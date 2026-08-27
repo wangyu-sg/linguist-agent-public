@@ -1004,9 +1004,9 @@
 }
 
 /* ===== 工作区 Badge 文字颜色（追踪 workspace-item-selected 的字色） ===== */
-/* 默认主题（light / dark / system）兜底色：与原先 text-foreground/40 保持一致 */
+/* 默认主题（light / dark / system）兜底色 */
 .workspace-badge {
-  color: hsl(var(--foreground) / 0.4);
+  color: hsl(var(--foreground) / 0.7);
 }
 /* 晴空碧海 */
 .theme-ocean-light .workspace-badge {

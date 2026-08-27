@@ -67,7 +67,7 @@ import {
 } from './atoms/markdown-font-size'
 import { useGlobalAgentListeners } from './hooks/useGlobalAgentListeners'
 import { useGlobalChatListeners } from './hooks/useGlobalChatListeners'
-import { activeTabIdAtom, createLocalizationProjectTabId, ensureScratchPadTab, getPersistableTabState, getPersistedTabMru, restorePersistedTabState, scratchPadContentAtom, scratchPadLoadedAtom, SCRATCH_PAD_ID, tabMruAtom, tabsAtom } from './atoms/tab-atoms'
+import { activeTabIdAtom, ensureScratchPadTab, getPersistableTabState, getPersistedTabMru, restorePersistedTabState, scratchPadContentAtom, scratchPadLoadedAtom, SCRATCH_PAD_ID, tabMruAtom, tabsAtom } from './atoms/tab-atoms'
 import {
   parseProjectAgentSessionPreferences,
   projectCurrentAgentSessionIdMapAtom,
@@ -907,37 +907,10 @@ function TabStatePersistenceInitializer(): null {
           : [],
       )
       const restored = restorePersistedTabState(tabState, validSessionIds, projectStatuses)
-      const linguistProjectBySessionId = new Map(
-        agentSessions.flatMap((session) => {
-          const projectId = getAgentSessionLinguistProjectId(session, agentSessions)
-          return projectId ? [[session.id, projectId] as const] : []
-        }),
-      )
-      const removedAgentTabs = restored.tabs.filter((tab) => (
-        tab.type === 'agent' && linguistProjectBySessionId.has(tab.sessionId)
-      ))
-      const validTabs = restored.tabs.filter((tab) => (
-        tab.type !== 'agent' || !linguistProjectBySessionId.has(tab.sessionId)
-      ))
-      for (const tab of removedAgentTabs) {
-        if (tab.type !== 'agent') continue
-        const projectId = linguistProjectBySessionId.get(tab.sessionId)!
-        const projectTabId = createLocalizationProjectTabId(projectId)
-        if (validTabs.some((candidate) => candidate.id === projectTabId)) continue
-        const session = agentSessions.find((candidate) => candidate.id === tab.sessionId)
-        validTabs.push({
-          id: projectTabId,
-          type: 'linguist-project',
-          projectId,
-          title: session?.linguistProjectName ?? '本地化项目',
-        })
-      }
+      const validTabs = restored.tabs
       if (validTabs.length === 0) return
 
-      const removedActiveProjectId = removedAgentTabs.find((tab) => tab.id === restored.activeTabId)
-      const restoredActiveTabId = removedActiveProjectId?.type === 'agent'
-        ? createLocalizationProjectTabId(linguistProjectBySessionId.get(removedActiveProjectId.sessionId)!)
-        : restored.activeTabId
+      const restoredActiveTabId = restored.activeTabId
       const activeTab = validTabs.find((t) => t.id === restoredActiveTabId) ?? validTabs[0] ?? null
       store.set(tabsAtom, ensureScratchPadTab(validTabs))
       store.set(activeTabIdAtom, restoredActiveTabId)
@@ -950,7 +923,13 @@ function TabStatePersistenceInitializer(): null {
           store.set(appModeAtom, 'chat')
           store.set(currentConversationIdAtom, activeTab.sessionId)
         } else if (activeTab.type === 'agent') {
-          store.set(appModeAtom, 'agent')
+          const session = agentSessions.find((item) => item.id === activeTab.sessionId)
+          store.set(
+            appModeAtom,
+            session && getAgentSessionLinguistProjectId(session, agentSessions)
+              ? 'linguist'
+              : 'agent',
+          )
           store.set(currentAgentSessionIdAtom, activeTab.sessionId)
         } else if (activeTab.type === 'linguist-project') {
           store.set(appModeAtom, 'linguist')

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useStore } from 'jotai'
-import { Archive, Bot, Languages, PanelBottom, PanelLeft, PanelRight, Settings } from 'lucide-react'
+import { Archive, Bot, Languages, PanelBottom, PanelLeft, Settings } from 'lucide-react'
 import type { LinguistProjectInfo, LinguistStageDecisionCoverage, LinguistWorkflowStage } from '@proma/shared'
 import type { WorkbenchSummaryState } from './project-summary-atoms'
 
@@ -8,16 +8,12 @@ export type { WorkbenchSummaryState }
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
-  AGENT_RAIL_DEFAULT_WIDTH,
-  AGENT_RAIL_MAX_WIDTH,
-  AGENT_RAIL_MIN_WIDTH,
   ASSET_NAVIGATOR_DEFAULT_WIDTH,
   ASSET_NAVIGATOR_MAX_WIDTH,
   ASSET_NAVIGATOR_MIN_WIDTH,
   BOTTOM_DOCK_DEFAULT_HEIGHT,
   BOTTOM_DOCK_MAX_HEIGHT,
   BOTTOM_DOCK_MIN_HEIGHT,
-  clampAgentRailWidth,
   clampAssetNavigatorWidth,
   clampBottomDockHeight,
   linguistProjectSettingsTabAtomFamily,
@@ -36,7 +32,6 @@ import {
 import { stageProgressLabel, stageProgressSummary } from './workflow-ui'
 
 const PANEL_KEYBOARD_STEP = 16
-export const CAT_COLUMN_MIN_WIDTH = 512
 
 export function getAssetNavigatorWidthFromKey(width: number, key: string): number | null {
   switch (key) {
@@ -50,23 +45,6 @@ export function getAssetNavigatorWidthFromKey(width: number, key: string): numbe
       return ASSET_NAVIGATOR_MAX_WIDTH
     case 'Enter':
       return ASSET_NAVIGATOR_DEFAULT_WIDTH
-    default:
-      return null
-  }
-}
-
-export function getAgentRailWidthFromKey(width: number, key: string): number | null {
-  switch (key) {
-    case 'ArrowLeft':
-      return clampAgentRailWidth(width + PANEL_KEYBOARD_STEP)
-    case 'ArrowRight':
-      return clampAgentRailWidth(width - PANEL_KEYBOARD_STEP)
-    case 'Home':
-      return AGENT_RAIL_MIN_WIDTH
-    case 'End':
-      return AGENT_RAIL_MAX_WIDTH
-    case 'Enter':
-      return AGENT_RAIL_DEFAULT_WIDTH
     default:
       return null
   }
@@ -96,7 +74,7 @@ interface LinguistWorkbenchShellProps {
   onProjectArchived?: (project: LinguistProjectInfo) => void
   onProjectDeleted?: (projectId: string) => void
   assetNavigator?: React.ReactNode
-  agentRail?: React.ReactNode
+  onOpenAgent?: () => void
   bottomDock?: React.ReactNode
   children: React.ReactNode
 }
@@ -108,7 +86,7 @@ export function LinguistWorkbenchShell({
   onProjectArchived,
   onProjectDeleted,
   assetNavigator,
-  agentRail,
+  onOpenAgent,
   bottomDock,
   children,
 }: LinguistWorkbenchShellProps): React.ReactElement {
@@ -117,11 +95,6 @@ export function LinguistWorkbenchShell({
     linguistProjectSettingsTabAtomFamily(project.id),
   )
   const assetNavigatorResizeStart = React.useRef<{
-    pointerId: number
-    clientX: number
-    width: number
-  } | null>(null)
-  const agentRailResizeStart = React.useRef<{
     pointerId: number
     clientX: number
     width: number
@@ -144,32 +117,6 @@ export function LinguistWorkbenchShell({
     if (activeAsset === undefined) return
     void refreshLinguistStageCoverage(store, project.id, activeAsset.assetId)
   }, [store, project.id, activeAsset, summary])
-  const agentOpen = uiState.agentPresentation !== 'closed'
-  const agentFull = uiState.agentPresentation === 'full'
-  const agentToggleRef = React.useRef<HTMLButtonElement>(null)
-  /** 浮层脱困：scrim 点击 / ESC 关闭 rail 后焦点回到头部 Agent 开关。 */
-  const closeAgentRail = React.useCallback((): void => {
-    setUiState({ agentPresentation: 'closed' })
-    agentToggleRef.current?.focus()
-  }, [setUiState])
-  // rail 内「收起项目 Agent」按钮直接改 uiState，不经过 closeAgentRail；
-  // 统一在 open→closed 跳变时归还焦点，避免焦点随按钮卸载丢失到 body。
-  const agentOpenRef = React.useRef(agentOpen)
-  React.useEffect(() => {
-    if (agentOpenRef.current && !agentOpen) agentToggleRef.current?.focus()
-    agentOpenRef.current = agentOpen
-  }, [agentOpen])
-  const handleAgentRailEscape = React.useCallback(
-    (event: React.KeyboardEvent<HTMLElement>): void => {
-      if (event.key !== 'Escape') return
-      // 输入控件内的 Esc 留给控件自身（取消编辑 / 收起补全），不关 rail。
-      if (event.target instanceof HTMLElement
-        && event.target.closest('input, textarea, [contenteditable="true"]') !== null) return
-      event.stopPropagation()
-      closeAgentRail()
-    },
-    [closeAgentRail],
-  )
   // U-09：头部进度带口径前缀——选中批次时为「本批次」，尚无批次时投影为全项目零值。
   const progressLabel = summaryState.status === 'ready'
     ? activeAsset !== undefined || summaryState.summary.assets.length === 0
@@ -181,16 +128,6 @@ export function LinguistWorkbenchShell({
     : summaryState.status === 'loading'
       ? '统计加载中…'
       : '统计不可用'
-  const agentRailStyle = {
-    width: uiState.agentRailWidth,
-    '--agent-rail-inline-max': `calc(100% - ${
-      CAT_COLUMN_MIN_WIDTH
-      + (assetNavigator !== undefined && uiState.assetNavigatorOpen
-        ? uiState.assetNavigatorWidth
-        : 0)
-    }px)`,
-  } as React.CSSProperties
-
   const handleAssetNavigatorPointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => {
       if (event.button !== 0) return
@@ -238,53 +175,6 @@ export function LinguistWorkbenchShell({
       setUiState({ assetNavigatorWidth: width })
     },
     [setUiState, uiState.assetNavigatorWidth],
-  )
-
-  const handleAgentRailPointerDown = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>): void => {
-      if (event.button !== 0) return
-      event.preventDefault()
-      event.currentTarget.focus()
-      event.currentTarget.setPointerCapture(event.pointerId)
-      agentRailResizeStart.current = {
-        pointerId: event.pointerId,
-        clientX: event.clientX,
-        width: uiState.agentRailWidth,
-      }
-    },
-    [uiState.agentRailWidth],
-  )
-
-  const handleAgentRailPointerMove = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>): void => {
-      const start = agentRailResizeStart.current
-      if (start?.pointerId !== event.pointerId) return
-      setUiState({
-        agentRailWidth: clampAgentRailWidth(start.width + start.clientX - event.clientX),
-      })
-    },
-    [setUiState],
-  )
-
-  const handleAgentRailPointerEnd = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>): void => {
-      if (agentRailResizeStart.current?.pointerId !== event.pointerId) return
-      agentRailResizeStart.current = null
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId)
-      }
-    },
-    [],
-  )
-
-  const handleAgentRailKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>): void => {
-      const width = getAgentRailWidthFromKey(uiState.agentRailWidth, event.key)
-      if (width === null) return
-      event.preventDefault()
-      setUiState({ agentRailWidth: width })
-    },
-    [setUiState, uiState.agentRailWidth],
   )
 
   const handleBottomDockPointerDown = React.useCallback(
@@ -393,21 +283,14 @@ export function LinguistWorkbenchShell({
               语言资产
             </Button>
           )}
-          {agentRail !== undefined && (
+          {onOpenAgent !== undefined && (
             <Button
-              ref={agentToggleRef}
               type="button"
               variant="ghost"
               size="sm"
-              aria-pressed={agentOpen}
-              onClick={() => setUiState({
-                agentPresentation: agentOpen ? 'closed' : 'rail',
-              })}
-              className={cn(agentOpen && 'bg-accent/70')}
+              onClick={onOpenAgent}
             >
-              {agentOpen
-                ? <PanelRight aria-hidden="true" />
-                : <Bot aria-hidden="true" />}
+              <Bot aria-hidden="true" />
               Agent
             </Button>
           )}
@@ -439,7 +322,7 @@ export function LinguistWorkbenchShell({
       />
 
       <div className="relative flex min-h-0 flex-1">
-        {!agentFull && assetNavigator !== undefined && uiState.assetNavigatorOpen && (
+        {assetNavigator !== undefined && uiState.assetNavigatorOpen && (
           <aside
             aria-label="批次导航"
             data-workbench-slot="asset-navigator"
@@ -483,11 +366,11 @@ export function LinguistWorkbenchShell({
           data-workbench-slot="cat-column"
           className={cn(
             'relative min-h-0 min-w-[32rem] flex-1 flex-col max-md:min-w-0',
-            agentFull ? 'hidden' : 'flex',
+            'flex',
           )}
           style={{
             // 语言资产面板在 max-lg 转为浮层时，把浮层高度传给网格滚动区让位。
-            '--bottom-dock-overlay-height': !agentFull && bottomDock !== undefined && uiState.bottomDockOpen
+            '--bottom-dock-overlay-height': bottomDock !== undefined && uiState.bottomDockOpen
               ? `${uiState.bottomDockHeight}px`
               : '0px',
           } as React.CSSProperties}
@@ -501,7 +384,7 @@ export function LinguistWorkbenchShell({
             {children}
           </main>
 
-          {!agentFull && bottomDock !== undefined && uiState.bottomDockOpen && (
+          {bottomDock !== undefined && uiState.bottomDockOpen && (
             <section
               aria-label="语言资产面板"
               data-workbench-slot="bottom-dock"
@@ -542,65 +425,9 @@ export function LinguistWorkbenchShell({
           )}
         </div>
 
-        {agentRail !== undefined && agentOpen && !agentFull && (
-          <div
-            aria-hidden="true"
-            data-workbench-slot="agent-rail-scrim"
-            onClick={closeAgentRail}
-            className="hidden max-2xl:block max-2xl:absolute max-2xl:inset-0 max-2xl:z-10 max-2xl:bg-foreground/25"
-          />
-        )}
-
-        {agentRail !== undefined && agentOpen && (
-          <aside
-            aria-label="项目 Agent"
-            aria-keyshortcuts="Escape"
-            data-workbench-slot={agentFull ? 'agent-full' : 'agent-rail'}
-            data-linguist-agent-presentation={uiState.agentPresentation}
-            onKeyDown={handleAgentRailEscape}
-            className={cn(
-              'relative min-h-0 overflow-hidden bg-content-area/55',
-              agentFull
-                ? 'flex-1'
-                : 'shrink-0 shadow-[-1px_0_0_hsl(var(--border)/0.45)] 2xl:max-w-[var(--agent-rail-inline-max)] max-2xl:absolute max-2xl:inset-y-0 max-2xl:right-0 max-2xl:z-20 max-2xl:max-w-[calc(100%-3rem)] max-2xl:bg-content-area max-2xl:shadow-xl',
-            )}
-            style={agentFull ? undefined : agentRailStyle}
-          >
-            {!agentFull && <div
-              role="separator"
-              aria-label="调整项目 Agent 宽度"
-              aria-orientation="vertical"
-              aria-valuemin={AGENT_RAIL_MIN_WIDTH}
-              aria-valuemax={AGENT_RAIL_MAX_WIDTH}
-              aria-valuenow={uiState.agentRailWidth}
-              aria-valuetext={`${uiState.agentRailWidth} 像素`}
-              tabIndex={0}
-              title="拖动调整宽度；方向键微调；Enter 或双击复位"
-              onPointerDown={handleAgentRailPointerDown}
-              onPointerMove={handleAgentRailPointerMove}
-              onPointerUp={handleAgentRailPointerEnd}
-              onPointerCancel={handleAgentRailPointerEnd}
-              onLostPointerCapture={() => {
-                agentRailResizeStart.current = null
-              }}
-              onKeyDown={handleAgentRailKeyDown}
-              onDoubleClick={() => setUiState({
-                agentRailWidth: AGENT_RAIL_DEFAULT_WIDTH,
-              })}
-              className="group absolute inset-y-0 left-0 z-10 w-2 -translate-x-1/2 cursor-col-resize touch-none bg-transparent outline-none"
-            >
-              <span
-                aria-hidden="true"
-                data-resize-grip="true"
-                className="pointer-events-none absolute inset-y-4 left-1/2 w-px -translate-x-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/70 group-focus-visible:bg-primary"
-              />
-            </div>}
-            {agentRail}
-          </aside>
-        )}
       </div>
 
-      {!agentFull && <footer
+      <footer
         aria-label="本地化工作台状态栏"
         className="flex min-h-7 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-content-area px-4 py-1 text-[11px] text-muted-foreground shadow-[0_-1px_0_hsl(var(--border)/0.45)]"
       >
@@ -636,7 +463,7 @@ export function LinguistWorkbenchShell({
           )}
         </div>
         <span className="hidden sm:inline">↑↓ 切换片段 · Enter 编辑 · Esc 取消</span>
-      </footer>}
+      </footer>
     </section>
   )
 }

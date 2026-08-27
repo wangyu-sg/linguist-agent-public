@@ -372,14 +372,10 @@ export interface AppSettings {
   mainWindowState?: MainWindowState
 }
 
-/** Linguist Project 的可恢复编辑位置与 Agent Rail 布局。 */
+/** Linguist Project 的可恢复编辑位置。 */
 export interface LinguistWorkbenchLocation {
   activeAssetId?: string
   activeSegmentId?: string
-  agentPresentation?: 'closed' | 'rail' | 'full'
-  /** 兼容读取旧 settings；新写入统一使用 agentPresentation。 */
-  agentRailOpen?: boolean
-  agentRailWidth?: number
 }
 
 /** 当前发布的 Onboarding 内容版本。提升该值可让所有用户重新完成新版引导。 */

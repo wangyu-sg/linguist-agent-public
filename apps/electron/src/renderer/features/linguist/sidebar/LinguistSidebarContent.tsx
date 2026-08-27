@@ -285,7 +285,7 @@ export function LinguistSidebarContentView({
   return (
     <div className="flex min-h-0 flex-1 flex-col titlebar-no-drag">
       <div className="flex items-center justify-between px-2 pb-1 pt-2">
-        <h2 className="px-1.5 text-[13px] font-medium leading-[18px] text-foreground/40">
+        <h2 className="px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60">
           {archiveView ? '已归档' : '项目'}
         </h2>
         {!archiveView && (
@@ -343,7 +343,7 @@ export function LinguistSidebarContentView({
 
         {state.status === 'ready' && !archiveView && pinnedSessionTrees.length > 0 && (
           <div className="mb-2">
-            <div className="px-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/40">
+            <div className="px-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/60">
               置顶
             </div>
             <div className="ml-4 flex flex-col gap-0.5">
@@ -461,7 +461,7 @@ export function LinguistSidebarContentView({
                   project={project}
                   active={project.id === activeProjectId}
                   onOpen={onOpenProject}
-                  sessions={boundSessions.filter((session) => session.linguistProjectId === project.id)}
+                  sessions={boundSessions.filter((session) => getProjectId(session) === project.id)}
                   currentSessionId={project.id === activeProjectId
                     ? currentSessionIds.get(project.id)
                     : undefined}
@@ -524,9 +524,9 @@ export function LinguistSidebarContentView({
             <button
               type="button"
               onClick={onShowArchived}
-              className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-[12px] text-foreground/40 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/60"
+              className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-[12px] text-foreground/60 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/80"
             >
-              <Archive size={13} className="text-foreground/30" />
+              <Archive size={13} className="text-foreground/50" />
               <span>已归档{archiveCount > 0 ? ` (${archiveCount})` : ''}</span>
             </button>
           )}
@@ -589,9 +589,6 @@ export function LinguistSidebarContent({
   }, [store])
 
   const handleOpenProject = React.useCallback((projectId: string): void => {
-    store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
-      agentPresentation: 'closed',
-    })
     void openLocalizationProject(store, projectId)
       .then((result) => {
         if (!result.ok) {
@@ -638,9 +635,10 @@ export function LinguistSidebarContent({
         setSessionError({ projectId, message: describeLinguistIpcError(result.error) })
         return
       }
-      store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
-        agentPresentation: 'full',
-      })
+      const opened = await openLinguistAgentSession(store, result.data.id)
+      if (!opened.ok) {
+        setSessionError({ projectId, message: describeLinguistIpcError(opened.error) })
+      }
     } catch {
       setSessionError({ projectId, message: '与主进程通信异常（INTERNAL）' })
     } finally {
@@ -652,11 +650,7 @@ export function LinguistSidebarContent({
     projectId: string,
     sessionId: string,
   ): void => {
-    if (!selectFallbackLinguistSession(store, projectId, sessionId)) {
-      store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
-        agentPresentation: 'closed',
-      })
-    }
+    selectFallbackLinguistSession(store, projectId, sessionId)
   }, [store])
 
   const handleRenameProject = React.useCallback(async (
@@ -1116,7 +1110,6 @@ function ProjectRowView({
   const [name, setName] = React.useState(project.name)
   const [renameError, setRenameError] = React.useState<string | null>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
-  const uiState = useAtomValue(linguistWorkbenchUiStateAtomFamily(project.id))
   const archived = project.archivedAt !== undefined
 
   const startRename = (): void => {
@@ -1150,10 +1143,6 @@ function ProjectRowView({
   }
 
   const handleProjectNameClick = (): void => {
-    if (active && uiState.agentPresentation !== 'full') {
-      setCollapsed((value) => !value)
-      return
-    }
     setCollapsed(false)
     onOpen(project.id)
   }

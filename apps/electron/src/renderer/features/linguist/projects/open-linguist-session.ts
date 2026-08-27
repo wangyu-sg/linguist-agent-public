@@ -5,14 +5,21 @@ import type {
   LinguistProjectOpenRequest,
   LinguistProjectOpenResult,
 } from '@proma/shared'
-import { agentSessionsAtom, agentSidePanelOpenAtomFamily, agentDiffPanelTabAtom } from '@/atoms/agent-atoms'
 import {
+  agentDiffPanelTabAtom,
+  agentSessionsAtom,
+  agentSidePanelOpenAtomFamily,
+  currentAgentSessionIdAtom,
+  currentAgentWorkspaceIdAtom,
+} from '@/atoms/agent-atoms'
+import {
+  activeTabIdAtom,
   openLocalizationProjectTab,
+  openTab,
   tabsAtom,
 } from '@/atoms/tab-atoms'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
-import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
 import { openLocalizationProject } from './open-localization-project'
 import {
   ensureProjectAgentSession,
@@ -54,7 +61,7 @@ function openMissingProjectHistory(
   enterLinguistNavigation(store, opened.activeTabId, 'conversations')
 }
 
-/** 所有 Linguist 会话入口共用：先打开权威项目，再选择同一个 AgentView。 */
+/** 所有 Linguist 会话入口共用：先打开权威项目，再进入原生 Agent Tab。 */
 export async function openLinguistAgentSession(
   store: JotaiStore,
   sessionId: string,
@@ -94,17 +101,15 @@ export async function openLinguistAgentSession(
       error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
     }
   }
-  const projectSessionIds = new Set(
-    sessions
-      .filter((candidate) => getAgentSessionLinguistProjectId(candidate, sessions) === projectId)
-      .map((candidate) => candidate.id),
-  )
-  store.set(tabsAtom, (tabs) => tabs.filter((tab) => (
-    tab.type !== 'agent' || !projectSessionIds.has(tab.sessionId)
-  )))
-  store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
-    agentPresentation: 'full',
+  const openedAgent = openTab(store.get(tabsAtom), {
+    type: 'agent',
+    sessionId: session.id,
+    title: session.title,
   })
+  store.set(tabsAtom, openedAgent.tabs)
+  store.set(activeTabIdAtom, openedAgent.activeTabId)
+  store.set(currentAgentSessionIdAtom, session.id)
+  if (session.workspaceId) store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
   return { ok: true, data: { projectId, readOnlyHistory } }
 }
 

@@ -22,7 +22,7 @@ export interface TabBarItemProps {
   id: string
   type: TabType
   title: string
-  workspaceName?: string
+  contextLabel?: string
   isActive: boolean
   isStreaming: SessionIndicatorStatus
   /** 是否显示 hover 预览面板（由父级管理） */
@@ -53,7 +53,7 @@ export function TabBarItem({
   id,
   type,
   title,
-  workspaceName,
+  contextLabel,
   isActive,
   isStreaming,
   isHovered,
@@ -186,9 +186,9 @@ export function TabBarItem({
           </span>
         )}
 
-        {workspaceName && !isNarrow && (
+        {contextLabel && !isNarrow && (
           <span className="shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[86px]">
-            {workspaceName}
+            {contextLabel}
           </span>
         )}
 

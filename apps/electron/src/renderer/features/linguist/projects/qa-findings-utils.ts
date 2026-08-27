@@ -28,15 +28,15 @@ export const QA_SEVERITY_LABELS: Record<LinguistQaFindingSeverity, string> = {
 }
 
 /**
- * 五档徽标色（PB-100 token 层状态色）：L0/L1 危险色，L2 警告色，
- * L3 信息色，L4 弱化前景（建议项不计入缺陷率）。
+ * 五档徽标色：L0/L1 以高对比字重区分，L2/L3 使用可读的状态前景色，
+ * L4 弱化前景（建议项不计入缺陷率）。
  */
 export const QA_SEVERITY_BADGE_CLASSES: Record<LinguistQaFindingSeverity, string> = {
-  L0: 'text-destructive',
-  L1: 'text-destructive',
-  L2: 'text-warning',
-  L3: 'text-info',
-  L4: 'text-foreground/45',
+  L0: 'font-semibold text-foreground',
+  L1: 'font-semibold text-foreground',
+  L2: 'text-warning-foreground',
+  L3: 'text-info-foreground',
+  L4: 'text-foreground/60',
 }
 
 /**

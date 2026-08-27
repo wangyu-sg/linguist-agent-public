@@ -68,6 +68,7 @@ import {
   VOICE_DICTATION_PREVIEW_EVENT,
 } from '@/lib/voice-input-focus'
 import { routeExternalAgentSession } from '@/lib/external-agent-session-opener'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 
 /**
  * 快捷键初始化 + 全局 Handler 注册
@@ -455,7 +456,14 @@ export function GlobalShortcuts(): null {
 
       if (target.type === 'agent' || target.type === 'preview') {
         const sessionId = target.sessionId
-        store.set(appModeAtom, 'agent')
+        const sessions = store.get(agentSessionsAtom)
+        const session = sessions.find((item) => item.id === sessionId)
+        store.set(
+          appModeAtom,
+          session && getAgentSessionLinguistProjectId(session, sessions)
+            ? 'linguist'
+            : 'agent',
+        )
         store.set(currentAgentSessionIdAtom, sessionId)
         store.set(agentSessionDraftsAtom, (prev) => {
           const map = new Map(prev)

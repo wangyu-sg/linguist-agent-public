@@ -29,7 +29,6 @@ import {
   shouldForceCollapseLeftSidebar,
   shouldSuppressAgentRail,
 } from '@/host/app-mode-registry'
-import { activeHostedAgentSidePanelSessionIdAtom } from '@/host/agent-host-extension'
 import { detectIsWindows } from '@/lib/platform'
 import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
 import { cn } from '@/lib/utils'
@@ -104,8 +103,7 @@ export function AppShell(): React.ReactElement {
   const { workspaces, currentWorkspaceId } = useProjectActions()
   const currentWorkspace = workspaces.find((workspace) => workspace.id === currentWorkspaceId)
   const currentAgentSessionId = useAtomValue(currentAgentSessionIdAtom)
-  const hostedAgentSessionId = useAtomValue(activeHostedAgentSidePanelSessionIdAtom)
-  const rightPanelSessionId = appMode === 'linguist' ? hostedAgentSessionId : currentAgentSessionId
+  const rightPanelSessionId = currentAgentSessionId
   const activeRightPanelTab = useAtomValue(agentDiffPanelTabAtom).get(rightPanelSessionId ?? '')
   const isPanelOpen = useAtomValue(agentSidePanelOpenAtomFamily(rightPanelSessionId ?? ''))
   const automationForm = useAtomValue(automationFormAtom)

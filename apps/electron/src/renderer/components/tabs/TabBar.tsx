@@ -36,6 +36,7 @@ import { getTabBarActionLayout } from './tab-bar-action-layout'
 import { useCloseTab } from '@/hooks/useCloseTab'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { cn } from '@/lib/utils'
+import { getAgentSessionLinguistProjectName } from '@/lib/agent-session-list'
 import { shortcutGuideOpenAtom } from '@/atoms/shortcut-guide'
 import { faqDialogOpenAtom } from '@/atoms/faq-dialog'
 import { browserPanelMinimizedMapAtom, browserPanelOpenMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
@@ -70,15 +71,15 @@ export function TabBar(): React.ReactElement {
     }
   }, [store, tabs])
 
-  const workspaceNameBySessionId = React.useMemo(() => {
+  const contextLabelBySessionId = React.useMemo(() => {
     const workspaceNameMap = new Map(agentWorkspaces.map((workspace) => [workspace.id, workspace.name]))
-    const sessionWorkspaceNameMap = new Map<string, string>()
+    const labels = new Map<string, string>()
     for (const session of agentSessions) {
-      if (!session.workspaceId) continue
-      const workspaceName = workspaceNameMap.get(session.workspaceId)
-      if (workspaceName) sessionWorkspaceNameMap.set(session.id, workspaceName)
+      const label = getAgentSessionLinguistProjectName(session, agentSessions)
+        ?? (session.workspaceId ? workspaceNameMap.get(session.workspaceId) : undefined)
+      if (label) labels.set(session.id, label)
     }
-    return sessionWorkspaceNameMap
+    return labels
   }, [agentSessions, agentWorkspaces])
 
   const automationSessionIds = React.useMemo(() => {
@@ -151,7 +152,7 @@ export function TabBar(): React.ReactElement {
         tabs={tabs}
         activeTabId={activeTabId}
         streamingMap={indicatorMap}
-        workspaceNameBySessionId={workspaceNameBySessionId}
+        contextLabelBySessionId={contextLabelBySessionId}
         automationSessionIds={automationSessionIds}
         delegationSessionIds={delegationSessionIds}
         onActivate={handleActivate}
@@ -168,7 +169,7 @@ function TabBarInner({
   tabs,
   activeTabId,
   streamingMap,
-  workspaceNameBySessionId,
+  contextLabelBySessionId,
   automationSessionIds,
   delegationSessionIds,
   onActivate,
@@ -179,7 +180,7 @@ function TabBarInner({
   tabs: TabItem[]
   activeTabId: string | null
   streamingMap: Map<string, SessionIndicatorStatus>
-  workspaceNameBySessionId: Map<string, string>
+  contextLabelBySessionId: Map<string, string>
   automationSessionIds: Set<string>
   delegationSessionIds: Set<string>
   onActivate: (tabId: string) => void
@@ -397,7 +398,7 @@ function TabBarInner({
             id={tab.id}
             type={tab.type}
             title={tab.title}
-            workspaceName={tab.type === 'agent' ? workspaceNameBySessionId.get(tab.sessionId) : undefined}
+            contextLabel={tab.type === 'agent' ? contextLabelBySessionId.get(tab.sessionId) : undefined}
             isAutomation={tab.type === 'agent' && automationSessionIds.has(tab.sessionId)}
             isDelegation={tab.type === 'agent' && delegationSessionIds.has(tab.sessionId)}
             isActive={tab.id === activeTabId}

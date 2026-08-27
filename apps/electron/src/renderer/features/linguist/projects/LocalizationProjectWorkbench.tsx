@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom, useStore } from 'jotai'
+import { toast } from 'sonner'
 import type {
   LinguistIpcError,
   LinguistIpcResult,
@@ -22,7 +23,6 @@ import {
   getAssetNavigatorSummarySelectionPatch,
 } from './AssetNavigator'
 import { LinguistBottomDock } from './LinguistBottomDock'
-import { ProjectAgentRail } from './ProjectAgentRail'
 import {
   LinguistWorkbenchShell,
   type WorkbenchSummaryState,
@@ -46,6 +46,8 @@ import {
   linguistProjectRunSummaryAtomFamily,
 } from './ProjectRunSummary'
 import { linguistProjectSummaryAtomFamily } from './project-summary-atoms'
+import { openLinguistAgentSession } from './open-linguist-session'
+import { ensureProjectAgentSession } from './project-agent-session'
 
 interface LoadingState {
   status: 'loading'
@@ -129,6 +131,28 @@ export function LocalizationProjectWorkbench({
   const invalidateSummary = React.useCallback((): void => {
     setSummaryRefreshToken((current) => current + 1)
   }, [])
+  const openProjectAgent = React.useCallback((): void => {
+    void ensureProjectAgentSession(store, projectId)
+      .then((result) => {
+        if (!result.ok) {
+          toast.error('项目 Agent 启动失败', {
+            description: describeLinguistIpcError(result.error),
+          })
+          return null
+        }
+        return openLinguistAgentSession(store, result.data.id)
+      })
+      .then((result) => {
+        if (result !== null && !result.ok) {
+          toast.error('项目 Agent 启动失败', {
+            description: describeLinguistIpcError(result.error),
+          })
+        }
+      })
+      .catch(() => {
+        toast.error('项目 Agent 启动失败', { description: '与主进程通信异常（INTERNAL）' })
+      })
+  }, [projectId, store])
 
   React.useEffect(() => {
     let cancelled = false
@@ -290,13 +314,7 @@ export function LocalizationProjectWorkbench({
           onRefresh={invalidateSummary}
         />
       )}
-      agentRail={(
-        <ProjectAgentRail
-          projectId={currentProject.id}
-          projectName={currentProject.name}
-          assets={summaryState.status === 'ready' ? summaryState.summary.assets : []}
-        />
-      )}
+      onOpenAgent={openProjectAgent}
       bottomDock={(
         <LinguistBottomDock
           projectId={state.project.id}

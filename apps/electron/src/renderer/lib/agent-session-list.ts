@@ -4,6 +4,7 @@ import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 interface LinguistSessionOwnership {
   id: string
   linguistProjectId?: string
+  linguistProjectName?: string
   parentSessionId?: string
   sourceDelegationId?: string
 }
@@ -20,7 +21,19 @@ export function getAgentSessionLinguistProjectId(
 ): string | undefined {
   if (session.linguistProjectId) return session.linguistProjectId
   if (!session.parentSessionId || !session.sourceDelegationId) return undefined
-  return sessions.find((candidate) => candidate.id === session.parentSessionId)?.linguistProjectId
+  const parent = sessions.find((candidate) => candidate.id === session.parentSessionId)
+  return parent ? getAgentSessionLinguistProjectId(parent, sessions) : undefined
+}
+
+/** 受委派子会话的项目徽标沿用父会话项目名。 */
+export function getAgentSessionLinguistProjectName(
+  session: LinguistSessionOwnership,
+  sessions: readonly LinguistSessionOwnership[],
+): string | undefined {
+  if (session.linguistProjectName) return session.linguistProjectName
+  if (!session.parentSessionId || !session.sourceDelegationId) return undefined
+  const parent = sessions.find((candidate) => candidate.id === session.parentSessionId)
+  return parent ? getAgentSessionLinguistProjectName(parent, sessions) : undefined
 }
 
 /** 按最近更新时间排序 Agent 会话，保持与主进程 listAgentSessions 一致。 */

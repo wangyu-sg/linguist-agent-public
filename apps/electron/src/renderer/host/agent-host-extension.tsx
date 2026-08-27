@@ -10,7 +10,7 @@
  */
 
 import * as React from 'react'
-import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
 import { toast } from 'sonner'
 import type { LinguistTurnContextV1 } from '@proma/shared'
@@ -18,8 +18,6 @@ import {
   agentLinguistTurnContextCaptureAtom,
   agentSessionsAtom,
 } from '@/atoms/agent-atoms'
-import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
-import { activeTabAtom } from '@/atoms/tab-atoms'
 import {
   resolveAgentAttachmentSaveGate,
   type AgentAttachmentSaveGate,
@@ -60,7 +58,7 @@ export interface AgentHostExtension {
 const NO_PROJECT = ''
 type JotaiStore = ReturnType<typeof createStore>
 
-/** 通用导航只问宿主是否接管；绑定项目的父/子会话统一返回项目 Tab。 */
+/** 通用导航只问宿主是否接管；绑定项目的父/子会话统一进入原生 Agent Tab。 */
 export function openHostedAgentSession(
   store: JotaiStore,
   sessionId: string,
@@ -72,14 +70,6 @@ export function openHostedAgentSession(
     if (!result.ok) throw new Error(result.error.message)
   })
 }
-
-/** 当前全屏 Linguist Agent 交给 AppShell 原生右栏承载。 */
-export const activeHostedAgentSidePanelSessionIdAtom = atom((get) => {
-  const activeTab = get(activeTabAtom)
-  if (activeTab?.type !== 'linguist-project') return null
-  if (get(linguistWorkbenchUiStateAtomFamily(activeTab.projectId)).agentPresentation !== 'full') return null
-  return get(projectCurrentAgentSessionIdMapAtom).get(activeTab.projectId) ?? null
-})
 
 export function useAgentHostExtension(
   sessionId: string,
@@ -151,16 +141,12 @@ export function useAgentHostExtension(
 }
 
 export interface AgentSurfaceHostPresentation {
-  /** 宿主裁决后的实际呈现(能力不允许 full 时回落 rail)。 */
   presentation: 'rail' | 'full'
   hostCapabilities: AgentHostCapabilities
   canExpandToFull: boolean
 }
 
-/**
- * Rail 侧呈现桥接:把工作台 UI 意图(agentPresentation)经 registry 能力声明
- * 裁决为实际呈现。会话未创建时以 `project:<id>` 占位查询能力清单。
- */
+/** Renderer Host Seam 的呈现裁决合同。 */
 export function useAgentSurfaceHostPresentation(
   projectId: string,
   sessionId: string | undefined,
