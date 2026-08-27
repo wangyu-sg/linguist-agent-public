@@ -7,7 +7,7 @@
 | 项目 | 当前事实 |
 |---|---|
 | Proma Base / formal merge | `v0.18.2@92a635fa` / `fc8e8f3d` |
-| App / Electron | `0.17.61` / `43.2.0` |
+| App / Electron | `0.17.62` / `43.2.0` |
 | Bun / Pi | `1.3.14` / `0.84.2` |
 | Shared | `0.1.63` |
 | CAT Core / Formats / Store / Tools | `0.0.21 / 0.0.11 / 0.0.39 / 0.0.35` |

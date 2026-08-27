@@ -6,7 +6,7 @@
 
 - 分支：`main`。
 - 基线：Proma `v0.18.2@92a635fa`；正式 merge `fc8e8f3d`；本地起点 `87f4843f`。
-- 当前版本：Electron `0.17.61`、Shared `0.1.63`、CAT Core / Formats / Store / Tools `0.0.21 / 0.0.11 / 0.0.39 / 0.0.35`、schema `16`。
+- 当前版本：Electron `0.17.62`、Shared `0.1.63`、CAT Core / Formats / Store / Tools `0.0.21 / 0.0.11 / 0.0.39 / 0.0.35`、schema `16`。
 - Runtime：Pi `0.84.2` only；完整 Proma Agent + Chat + Linguist Vertical Agent Profile，无第二套 Host 能力。
 
 ## 本轮已完成
@@ -15,7 +15,7 @@
 - 保留三模式、独立数据根、CAT authority、Linguist rail/full presentation 与 Collaboration 冻结范围。
 - 修复 atomic submit 的即时路径遗漏 `linguistContext`；Renderer、Shared IPC 与主进程继续传递同一冻结快照。
 - 接受上游删除的 `AgentPlaceholder`、旧 Agent Provider/AppShell Context，并清理对应 touchpoint 与过期测试条目。
-- App 发布为 `0.17.61`，Shared 为 `0.1.63`；baseline、touchpoints、README 与工程指南已对齐。
+- App 发布为 `0.17.62`，Shared 为 `0.1.63`；baseline、touchpoints、README 与工程指南已对齐。
 - CLI 编译改用当前 Bun 可执行文件，避免子进程依赖 PATH。
 - Renderer Host Seam 已收敛到 Agent extension 与 app mode registry；Composer context 构建移入无环依赖的纯模块，极窄视口强制折叠不再留下无效展开动作。
 - 同步验证器现覆盖 `7` 个 Host 锚点；固定历史冲突 `9/9` 均能分类，并有一条 merge → resolver → overlay → verifier 集成回归；touchpoint ledger 为 `204` 个生产触点。

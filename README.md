@@ -10,7 +10,7 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
 ## 当前状态
 
-当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。稳定基线是 Proma `v0.18.2@92a635fa`；Electron App `0.17.61`、Electron `43.2.0`、`@proma/shared 0.1.63`、Pi `0.84.2`、CAT Core / Formats / Store / Tools `0.0.21 / 0.0.11 / 0.0.39 / 0.0.35`、CAT schema `16`，仓库使用 Bun `1.3.14`。
+当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。稳定基线是 Proma `v0.18.2@92a635fa`；Electron App `0.17.62`、Electron `43.2.0`、`@proma/shared 0.1.63`、Pi `0.84.2`、CAT Core / Formats / Store / Tools `0.0.21 / 0.0.11 / 0.0.39 / 0.0.35`、CAT schema `16`，仓库使用 Bun `1.3.14`。
 
 应用有三个并列模式：
 
