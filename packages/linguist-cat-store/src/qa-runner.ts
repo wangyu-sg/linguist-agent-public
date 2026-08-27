@@ -48,16 +48,18 @@ export function buildQaTermOptions(db: ProjectDatabase, segments: readonly Segme
   }
 }
 
-/** Run the pure QA Core and atomically replace all open project Findings. */
-export function runProjectQa(
+/** Run the pure QA Core and atomically replace open Findings for one batch. */
+export function runAssetQa(
   db: ProjectDatabase,
+  assetId: string,
   options: QaRunOptions = {},
   persistence: QaRunPersistence = {},
 ): PersistedQaFinding[] {
-  const total = db.segments.count()
-  const segments = total === 0 ? [] : db.segments.query({ limit: total })
+  const total = db.segments.count({ assetId })
+  const segments = total === 0 ? [] : db.segments.query({ assetId, limit: total })
   const termOptions = buildQaTermOptions(db, segments)
-  return db.qaFindings.replaceForProject(
+  return db.qaFindings.replaceForAsset(
+    assetId,
     runQa(segments, {
       ...termOptions,
       // 显式传入的 option 覆盖 term_entries 派生值（undefined 不覆盖）。

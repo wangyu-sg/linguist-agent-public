@@ -90,8 +90,8 @@ export function buildQaFindingsRequest({
   }
 }
 
-export function buildQaRunRequest(projectId: string): LinguistCatRunQaRequest {
-  return { projectId }
+export function buildQaRunRequest(projectId: string, assetId: string): LinguistCatRunQaRequest {
+  return { projectId, assetId }
 }
 
 export function qaResolveDisabledReason(
@@ -136,8 +136,8 @@ export function QaPanelScopeNotice({
     <>
       <p id={`${scopeId}-run-note`} className="text-[11px] text-foreground/45">
         {segmentId === undefined
-          ? '显示整个项目的 Finding；运行 QA 也会扫描整个项目'
-          : '仅显示当前片段；运行 QA 仍会扫描整个项目'}
+          ? '显示整个项目的 Finding；运行 QA 只扫描当前批次'
+          : '仅显示当前片段；运行 QA 只扫描当前批次'}
       </p>
       {archived && (
         <p id={`${scopeId}-archived-note`} role="status" className="mt-1 text-[10px] text-warning">
@@ -150,6 +150,7 @@ export function QaPanelScopeNotice({
 
 export function QaFindingsPanel({
   projectId,
+  activeAssetId,
   activeSegmentId,
   archived,
   onJump,
@@ -157,6 +158,8 @@ export function QaFindingsPanel({
   refreshToken,
 }: {
   projectId: string
+  /** QA 执行范围固定为当前批次；Finding 列表仍可按项目查看。 */
+  activeAssetId?: string
   /** 当前片段 ID；仅当用户显式打开「仅显示当前片段」时才作为过滤条件。 */
   activeSegmentId?: string
   archived: boolean
@@ -232,10 +235,10 @@ export function QaFindingsPanel({
   }, [scopeKey])
 
   const rerun = async (): Promise<void> => {
-    if (running || archived) return
+    if (running || archived || activeAssetId === undefined) return
     setRunning(true)
     try {
-      const result = await window.electronAPI.linguistCatRunQa(buildQaRunRequest(projectId))
+      const result = await window.electronAPI.linguistCatRunQa(buildQaRunRequest(projectId, activeAssetId))
       if (!result.ok) {
         toast.error('QA 运行失败', { description: describeLinguistIpcError(result.error) })
         return
@@ -371,19 +374,21 @@ export function QaFindingsPanel({
         </div>
         <button
           type="button"
-          disabled={archived || running}
-          aria-label={segmentId === undefined ? '运行项目 QA' : '运行整个项目 QA'}
+          disabled={archived || running || activeAssetId === undefined}
+          aria-label="运行当前批次 QA"
           aria-describedby={archived
             ? `${accessibilityScopeId}-archived-note`
             : `${accessibilityScopeId}-run-note`}
-          title={archived ? '项目已归档，不能运行 QA' : undefined}
+          title={archived
+            ? '项目已归档，不能运行 QA'
+            : activeAssetId === undefined ? '请先选择批次' : undefined}
           onClick={() => void rerun()}
           className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] text-primary-foreground disabled:opacity-40"
         >
           {running
             ? <Loader2 aria-hidden="true" size={11} className="animate-spin" />
             : <RefreshCw aria-hidden="true" size={11} />}
-          {running ? '运行中' : segmentId === undefined ? '运行 QA' : '运行项目 QA'}
+          {running ? '运行中' : '运行 QA'}
         </button>
       </div>
       <div className="mt-2">

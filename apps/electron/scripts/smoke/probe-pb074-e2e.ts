@@ -867,7 +867,7 @@ async function openQaFindings(workspace: Locator): Promise<Locator> {
 }
 
 async function runQa(findings: Locator, expectedFinding: Locator): Promise<void> {
-  const button = findings.getByRole('button', { name: '运行项目 QA', exact: true })
+  const button = findings.getByRole('button', { name: '运行当前批次 QA', exact: true })
   await button.click()
   await expectedFinding.waitFor({ timeout: 30_000 })
 }

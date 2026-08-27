@@ -147,10 +147,11 @@ const QUICK_ACTION_SEGMENT_LIMIT = 50
 const BATCH_SCOPED_ACTIONS: ReadonlySet<ProjectAgentQuickActionId> = new Set([
   'review',
   'proofread',
+  'qa',
   'terms',
   'export',
 ])
-const PROJECT_SCOPED_ACTIONS: ReadonlySet<ProjectAgentQuickActionId> = new Set(['qa', 'import'])
+const PROJECT_SCOPED_ACTIONS: ReadonlySet<ProjectAgentQuickActionId> = new Set(['import'])
 
 export function buildProjectAgentQuickActions(
   uiState: LinguistWorkbenchUiState,
@@ -232,10 +233,10 @@ export function buildProjectAgentQuickActions(
       id: 'qa',
       role: 'general',
       placement: 'overflow',
-      label: '项目 QA',
-      prompt: '请运行整个项目的确定性 QA。检查范围必须是整个项目，当前选择不限制检查范围；请使用现有 CAT Tools 报告发现的问题。',
-      scope: 'QA 始终检查整个项目，当前选择不限制范围。',
-      disabled: false,
+      label: '当前批次 QA',
+      prompt: '请运行当前批次的确定性 QA，并使用现有 CAT Tools 报告发现的问题。',
+      scope: assetScope,
+      disabled: assetDisabled,
     },
     {
       id: 'terms',

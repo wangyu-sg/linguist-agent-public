@@ -452,8 +452,13 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
 
     runQa(input: unknown): Promise<LinguistIpcResult<LinguistCatRunQaResult>> {
       return wrap(() => {
-        const projectId = readProjectId(assertRecord(input))
-        const findings = deps.getService().runQa(projectId)
+        const record = assertRecord(input)
+        const projectId = readProjectId(record)
+        const assetId = record.assetId
+        if (typeof assetId !== 'string' || !LINGUIST_ASSET_ID_PATTERN.test(assetId)) {
+          invalid('assetId must be a valid Stable ID')
+        }
+        const findings = deps.getService().runQa(projectId, assetId)
         // PB-096：按契约五档 severity 与四值 disposition 计数
         const severityCounts: Record<LinguistQaFindingSeverity, number> = { L0: 0, L1: 0, L2: 0, L3: 0, L4: 0 }
         const dispositionCounts: Record<LinguistQaFindingDisposition, number> = { defect: 0, needs_review: 0, query: 0, info: 0 }

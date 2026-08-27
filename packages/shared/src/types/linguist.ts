@@ -1319,6 +1319,7 @@ export interface LinguistQaFindingInfo {
 
 export interface LinguistCatRunQaRequest {
   projectId: string
+  assetId: string
 }
 
 /** PB-096：按契约五档 severity 与四值 disposition 计数。 */

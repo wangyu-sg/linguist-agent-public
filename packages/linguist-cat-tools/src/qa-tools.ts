@@ -5,6 +5,7 @@ import {
   type QaFindingListFilter,
 } from '@linguist/cat-store'
 import { Type } from 'typebox'
+import { LinguistCatAssetNotFoundError } from './errors'
 import { runQaWorkerJob, type WorkerJobProgress } from './job-runner'
 import { pageHasMore, resolvePage } from './pagination'
 import {
@@ -21,7 +22,9 @@ import {
   type CatToolRuntime,
 } from './tool-runtime'
 
-const RUN_QA_PARAMETERS = Type.Object({})
+const RUN_QA_PARAMETERS = Type.Object({
+  assetId: Type.String({ minLength: 1, description: 'Asset id from cat_list_assets.' }),
+})
 
 /** 确定性 QA 执行与 Finding 读取；不提供 resolve/waive。 */
 export function createQaTools(runtime: CatToolRuntime) {
@@ -34,21 +37,23 @@ export function createQaTools(runtime: CatToolRuntime) {
     name: 'cat_run_qa',
     label: 'CAT run QA',
     description:
-      'Run deterministic QA for every segment in the bound CAT project and persist reviewable findings. ' +
+      'Run deterministic QA for every segment in one asset of the bound CAT project and persist reviewable findings. ' +
       'This never changes segment text, revision, or review status. Only a human can resolve or waive findings.',
-    promptSnippet: 'Run deterministic QA on the bound CAT project',
+    promptSnippet: 'Run deterministic QA on one batch of the bound CAT project',
     promptGuidelines: [
       'Report findings to the user; never claim they are resolved or waived.',
     ],
     parameters: RUN_QA_PARAMETERS,
-    async execute(toolCallId, _params, signal, onUpdate) {
+    async execute(toolCallId, params, signal, onUpdate) {
       // PB-096：term_entries、项目 profile 与 tagProfile 一起冻结进 worker snapshot。
       // required / forbidden 都是硬规则；preferred advisory 由 cat_validate_terms 返回。
       // PB-097：项目 tagProfile 进同一道确定性 QA（缺省 = 仅内置族）。
       const { project, db } = resolveBoundProject('cat_run_qa', toolCallId)
+      const { assetId } = params
+      if (db.assets.get(assetId) === undefined) throw new LinguistCatAssetNotFoundError(assetId)
       const runId = `qa:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`
-      const total = db.segments.count()
-      const segments = total === 0 ? [] : db.segments.query({ limit: total })
+      const total = db.segments.count({ assetId })
+      const segments = total === 0 ? [] : db.segments.query({ assetId, limit: total })
       const qaOptions = {
         ...buildQaTermOptions(db, segments),
         glossaryPolicy: project.glossaryPolicy,
@@ -65,7 +70,7 @@ export function createQaTools(runtime: CatToolRuntime) {
           idempotencyKey: `cat_run_qa:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`,
         },
         operation: 'cat_run_qa',
-        payload: {},
+        payload: { assetId },
         mutate: () => {
           const before = new Map(
             db.qaFindings.list().map((finding) => [finding.id as string, finding]),

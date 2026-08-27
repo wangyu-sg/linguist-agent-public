@@ -24,6 +24,7 @@ import {
 } from '@linguist/cat-core'
 import {
   CatStore,
+  runAssetQa,
   StoreIdempotencyConflictError,
   StoreNotFoundError,
   StoreReadOnlyError,
@@ -610,22 +611,25 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
       resolveProject: makeOkResolver(fixture),
       onMutation: (mutation) => mutations.push(mutation),
     })
-    const run = (await invoke(toolByName(tools, 'cat_run_qa'), {})).details as {
+    const run = (await invoke(toolByName(tools, 'cat_run_qa'), {
+      assetId: fixture.assetA.id,
+    })).details as {
       total: number
       severityCounts: Record<string, number>
       dispositionCounts: Record<string, number>
     }
-    assert.equal(run.total, 12)
-    // PB-096：8 条 EMPTY_TARGET（L1 defect）+ 4 条 TARGET_LENGTH_WARNING（L3 defect）
-    assert.deepEqual(run.severityCounts, { L0: 0, L1: 8, L2: 0, L3: 4, L4: 0 })
-    assert.deepEqual(run.dispositionCounts, { defect: 12, needs_review: 0, query: 0, info: 0 })
+    assert.equal(run.total, 8)
+    // 当前批次：4 条 EMPTY_TARGET（L1 defect）+ 4 条 TARGET_LENGTH_WARNING（L3 defect）
+    assert.deepEqual(run.severityCounts, { L0: 0, L1: 4, L2: 0, L3: 4, L4: 0 })
+    assert.deepEqual(run.dispositionCounts, { defect: 8, needs_review: 0, query: 0, info: 0 })
+    assert.equal(fixture.db.qaFindings.list({ assetId: fixture.assetB.id }).length, 0)
 
     const page = (await invoke(toolByName(tools, 'cat_get_qa_findings'), {
       status: 'open',
       severity: 'L1',
       limit: 3,
     })).details as PagedResult<{ code: string; status: string; segmentRevision: number }>
-    assert.equal(page.total, 8)
+    assert.equal(page.total, 4)
     assert.equal(page.items.length, 3)
     assert.equal(page.hasMore, true)
     assert.ok(page.items.every((finding) => finding.code === 'EMPTY_TARGET'))
@@ -642,13 +646,17 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
       [...(mutations[0]!.qaFindingIds ?? [])].sort(),
       fixture.db.qaFindings.list({}).map((finding) => finding.id as string).sort(),
     )
-    const repeated = (await invoke(toolByName(tools, 'cat_run_qa'), {})).details
+    const repeated = (await invoke(toolByName(tools, 'cat_run_qa'), {
+      assetId: fixture.assetA.id,
+    })).details
     assert.deepEqual(repeated, run)
     assert.equal(mutations.length, 1)
     const fixedSegment = fixture.segmentsA[1]!
     const resolvedId = fixture.db.qaFindings.list({ segmentId: fixedSegment.id, status: 'open' })[0]!.id as string
     fixture.db.segments.applyTargetEdit(fixedSegment.id, '阿尔法源文 1', 0)
-    await invoke(toolByName(tools, 'cat_run_qa'), {}, 'call-2')
+    await invoke(toolByName(tools, 'cat_run_qa'), {
+      assetId: fixture.assetA.id,
+    }, 'call-2')
     assert.equal(mutations.length, 2)
     assert.deepEqual(mutations[1]!.resolvedQaFindingIds, [resolvedId])
     assert.ok(mutations[1]!.segmentIds?.includes(fixedSegment.id))
@@ -660,9 +668,19 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
     )
     const summary = fixture.db.runs.getRunChangeSummary('qa:session-unavailable:call-1')
     assert.equal(summary.mutationCount, 1)
-    assert.equal(summary.changes.qaFindingsCreated, 12)
+    assert.equal(summary.changes.qaFindingsCreated, 8)
     assert.deepEqual(summary.eventSequence, { first: 1, last: 5 })
     assert.equal(summary.canUndo, false)
+
+    await invoke(toolByName(tools, 'cat_run_qa'), {
+      assetId: fixture.assetB.id,
+    }, 'call-b')
+    const otherBatchFinding = fixture.db.qaFindings.list({
+      assetId: fixture.assetB.id,
+      status: 'open',
+    })[0]!
+    runAssetQa(fixture.db, fixture.assetA.id)
+    assert.equal(fixture.db.qaFindings.getById(otherBatchFinding.id)?.status, 'open')
   } finally {
     fixture.db.close()
   }
@@ -1930,7 +1948,7 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_accept_proposals: {
         proposals: [{ proposalId: 'prp-0000000000000000', expectedRevision: 0 }],
       },
-      cat_run_qa: {},
+      cat_run_qa: { assetId: fixture.assetA.id },
       cat_get_qa_findings: {},
       cat_plan_consistency_repairs: {},
       cat_create_consistency_proposals: {
@@ -1986,7 +2004,7 @@ test('output discipline: recursive no-absolute-path scan, JSON round-trip, zero 
       ['cat_get_segments', { limit: 3, search: 'source' }],
       ['cat_search_tm', { query: 'x' }],
       ['cat_search_terms', { query: 'x' }],
-      ['cat_run_qa', {}],
+      ['cat_run_qa', { assetId: fixture.assetA.id }],
       ['cat_get_qa_findings', { limit: 3 }],
       ['cat_search_sentence_patterns', { limit: 3 }],
     ]

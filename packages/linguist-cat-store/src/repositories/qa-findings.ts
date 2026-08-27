@@ -113,13 +113,14 @@ export class QaFindingsRepository {
     )
   }
 
-  /** Deterministic project rerun. Historical CRITIC_* rows are never auto-closed. */
-  replaceForProject(
+  /** Deterministic batch rerun. Historical CRITIC_* rows are never auto-closed. */
+  replaceForAsset(
+    assetId: string,
     inputs: readonly QaFindingPersistenceInput[],
     segmentRevisions: ReadonlyMap<string, number>,
     persistence: QaRunPersistence = {},
   ): PersistedQaFinding[] {
-    return this.replaceOpen(inputs, segmentRevisions, persistence)
+    return this.replaceOpen(inputs, segmentRevisions, persistence, undefined, assetId)
   }
 
   /**
@@ -149,17 +150,22 @@ export class QaFindingsRepository {
     segmentRevisions: ReadonlyMap<string, number>,
     persistence: QaRunPersistence,
     onlySegmentId?: string,
+    onlyAssetId?: string,
   ): PersistedQaFinding[] {
     return this.db.transaction('replace open qa findings', () => {
       const findings = this.observe(inputs, segmentRevisions, persistence)
       const observedIds = new Set(findings.map((finding) => finding.id as string))
-      const rows = this.db.db
-        .prepare(
-          onlySegmentId === undefined
-            ? "SELECT id FROM qa_findings WHERE status = 'open' AND substr(code, 1, 7) <> 'CRITIC_'"
-            : "SELECT id FROM qa_findings WHERE segment_id = ? AND status = 'open' AND substr(code, 1, 7) <> 'CRITIC_'",
-        )
-        .all(...(onlySegmentId === undefined ? [] : [onlySegmentId])) as Array<{ id: string }>
+      const rows = (onlySegmentId !== undefined
+        ? this.db.db.prepare(
+          "SELECT id FROM qa_findings WHERE segment_id = ? AND status = 'open' AND substr(code, 1, 7) <> 'CRITIC_'",
+        ).all(onlySegmentId)
+        : onlyAssetId !== undefined
+          ? this.db.db.prepare(
+            "SELECT id FROM qa_findings WHERE segment_id IN (SELECT id FROM segments WHERE asset_id = ?) AND status = 'open' AND substr(code, 1, 7) <> 'CRITIC_'",
+          ).all(onlyAssetId)
+          : this.db.db.prepare(
+            "SELECT id FROM qa_findings WHERE status = 'open' AND substr(code, 1, 7) <> 'CRITIC_'",
+          ).all()) as Array<{ id: string }>
       const at = persistence.observedAt ?? this.now()
       const runId = persistence.runId ?? `qa:${at}`
       for (const row of rows) {

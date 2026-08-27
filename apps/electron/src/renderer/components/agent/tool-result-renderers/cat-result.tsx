@@ -435,9 +435,6 @@ export function CatResultRenderer({
   const summary = payload === null ? null : summarizeCatResult(toolName, payload)
   if (summary === null) return <DefaultResultRenderer result={result} isError={isError} />
   const location = payload === null ? null : readCatResultLocation(payload)
-  const actionLabel = toolName === 'cat_run_qa' || toolName === 'cat_get_qa_findings'
-    ? '查看问题'
-    : '在 CAT 中查看'
   const applyNavigation = toolName === 'cat_apply_translations' && payload !== null
     ? readApplyResultNavigation(payload)
     : []
@@ -449,6 +446,9 @@ export function CatResultRenderer({
     >
       <p className="text-[12px] font-medium text-foreground/80">{summary.title}</p>
       <p className="mt-0.5 text-[12px] text-muted-foreground">{summary.detail}</p>
+      <div className="mt-2">
+        <DefaultResultRenderer result={result} isError={false} />
+      </div>
       {applyNavigation.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5" aria-label="写回结果定位">
           {applyNavigation.map((item) => (
@@ -468,13 +468,13 @@ export function CatResultRenderer({
           审核结果：{summarizeProposalReviewStatuses(proposalStatuses)}
         </p>
       )}
-      {location !== null && applyNavigation.length === 0 && (
+      {location?.segmentId !== undefined && applyNavigation.length === 0 && (
         <button
           type="button"
           onClick={() => requestNavigation(location)}
           className="mt-2 rounded-md bg-primary/10 px-2.5 py-1 text-[12px] font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
-          {actionLabel}
+          定位首个片段
         </button>
       )}
     </section>

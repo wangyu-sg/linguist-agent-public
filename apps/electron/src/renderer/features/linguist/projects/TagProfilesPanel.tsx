@@ -153,7 +153,23 @@ export function TagProfilesPanel({ project, onUpdated }: {
           </div>
         ))}
       </TagSection>
-      <TagSection title="候选" empty={`暂无候选；当前扫描发现 ${patterns.length} 种未登记形状，可由项目 Agent 判断并提交。`}>
+      <TagSection title="未登记与候选" empty="暂无未登记形状或候选。">
+        {patterns.map((pattern) => (
+          <div key={pattern.patternShape} className="rounded-lg border border-border/60 bg-background/65 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <code className="break-all text-xs text-foreground/80">{pattern.patternShape}</code>
+              <span className="shrink-0 text-[11px] text-muted-foreground">出现 {pattern.frequency} 次</span>
+            </div>
+            <div className="mt-2 space-y-1">
+              {pattern.examples.map((example) => (
+                <div key={example.id} className="flex gap-2 rounded bg-muted px-2 py-1 text-[11px]">
+                  <span className="shrink-0 text-muted-foreground">{example.side === 'source' ? '源文' : '译文'}</span>
+                  <code className="break-all text-foreground/75">{example.value}</code>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
         {candidates.map((candidate) => <CandidateRow key={candidate.id} projectId={project.id} candidate={candidate} examples={examples} archived={archived} onUpdated={onUpdated} />)}
       </TagSection>
       <TagSection title="已忽略" empty="暂无已忽略或已禁用条目。">

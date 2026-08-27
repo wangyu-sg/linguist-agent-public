@@ -116,7 +116,7 @@ export {
 export {
   type PersistedQaFinding,
 } from './repositories/rows'
-export { buildQaTermOptions, runProjectQa } from './qa-runner'
+export { buildQaTermOptions, runAssetQa } from './qa-runner'
 export { ExportsRepository, type ExportRecord, type RecordExportInput } from './repositories/exports'
 export {
   TmUnitsRepository,

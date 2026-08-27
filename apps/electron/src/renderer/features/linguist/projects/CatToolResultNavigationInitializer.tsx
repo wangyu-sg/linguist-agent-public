@@ -43,6 +43,9 @@ export async function navigateToCatResult(
     return 'none'
   }
   if (!opened.ok) return 'none'
+  store.set(linguistWorkbenchUiStateAtomFamily(location.projectId), {
+    agentPresentation: 'rail',
+  })
   const segmentId = location.segmentId
   if (segmentId === undefined) return 'project'
 

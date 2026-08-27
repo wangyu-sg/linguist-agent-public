@@ -1112,8 +1112,8 @@ export class LinguistProjectService {
     return this.quality.addApprovedExemplar(projectId, input)
   }
 
-  runQa(projectId: string): CatQaFinding[] {
-    return this.quality.runQa(projectId)
+  runQa(projectId: string, assetId: string): CatQaFinding[] {
+    return this.quality.runQa(projectId, assetId)
   }
 
   /** 单批次单阶段的岗位 decision 覆盖统计（只读）。 */

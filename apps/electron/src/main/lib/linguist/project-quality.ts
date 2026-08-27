@@ -8,7 +8,7 @@ import {
   type WorkflowStage,
 } from '@linguist/cat-core'
 import {
-  runProjectQa,
+  runAssetQa,
   StoreNotFoundError,
   type ApprovedExemplar,
   type PersistedQaFinding,
@@ -179,22 +179,22 @@ export class ProjectQuality {
    * 重跑确定性 QA，只替换 open Finding，不改 Segment。
    * forbidden 术语仍为 L1 阻断，preferred 偏离按项目策略定级。
    */
-  runQa(projectId: string): CatQaFinding[] {
+  runQa(projectId: string, assetId: string): CatQaFinding[] {
     const project = this.context.getProject(projectId)
     if (project.archivedAt !== undefined) {
       throw new LinguistProjectArchivedError(projectId)
     }
     const db = this.context.openProject(projectId)
-    return this.context.call(
-      () => this.toQaFindings(db, runProjectQa(db, {
+    return this.context.call(() => {
+      if (db.assets.get(assetId) === undefined) throw new StoreNotFoundError('asset', assetId)
+      return this.toQaFindings(db, runAssetQa(db, assetId, {
         glossaryPolicy: project.glossaryPolicy,
         profile: normalizeQaProfile(project.qaProfile),
         ...(project.tagProfile !== undefined
           ? { tagProfile: project.tagProfile }
           : {}),
-      })),
-      projectId,
-    )
+      }))
+    }, projectId)
   }
 
   /** Finding 始终携带句段当前 revision，供人工审核界面判定陈旧状态。 */
