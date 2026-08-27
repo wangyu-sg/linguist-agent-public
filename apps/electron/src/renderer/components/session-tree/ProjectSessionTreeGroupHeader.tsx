@@ -25,6 +25,8 @@ export interface ProjectSessionTreeGroupHeaderProps {
   onDragStart?: React.DragEventHandler<HTMLSpanElement>
   contextMenuItems?: React.ReactNode
   nameButtonClassName?: string
+  /** null 表示会话列表由虚拟列表承载，当前 DOM 中没有可关联的控制区域。 */
+  controlsId?: string | null
 }
 
 /**
@@ -51,7 +53,11 @@ export function ProjectSessionTreeGroupHeader({
   onDragStart,
   contextMenuItems,
   nameButtonClassName,
+  controlsId,
 }: ProjectSessionTreeGroupHeaderProps): React.ReactElement {
+  const sessionControlsId = controlsId === null
+    ? undefined
+    : controlsId ?? `project-sessions-${projectId}`
   const headerContent = (
     <>
       {draggable && (
@@ -71,7 +77,7 @@ export function ProjectSessionTreeGroupHeader({
           type="button"
           aria-label={`${collapsed ? '展开' : '折叠'}项目 ${name}`}
           aria-expanded={!collapsed}
-          aria-controls={`project-sessions-${projectId}`}
+          aria-controls={sessionControlsId}
           onClick={(event) => {
             event.stopPropagation()
             onToggleCollapse()
@@ -105,7 +111,7 @@ export function ProjectSessionTreeGroupHeader({
           aria-label={ariaLabel ?? `打开项目 ${name}`}
           aria-current={current ? 'page' : undefined}
           aria-expanded={!collapsed}
-          aria-controls={`project-sessions-${projectId}`}
+          aria-controls={sessionControlsId}
           onClick={(event) => {
             event.stopPropagation()
             onSelect()

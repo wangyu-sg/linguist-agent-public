@@ -13,7 +13,7 @@
 import * as React from 'react'
 import { FolderOpen, FolderInput, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useProjectActions } from '@/hooks/useProjectActions'
 import { LocalProjectBadge } from './LocalProjectBadge'
 
@@ -98,7 +98,7 @@ export function CollapsedWorkspacePopover({
       setOpen(v)
       if (!v) setCreating(false)
     }}>
-      <PopoverTrigger asChild>
+      <PopoverAnchor asChild>
         <span
           onMouseEnter={() => {
             cancelClose()
@@ -114,7 +114,7 @@ export function CollapsedWorkspacePopover({
         >
           {children}
         </span>
-      </PopoverTrigger>
+      </PopoverAnchor>
       <PopoverContent
         side="right"
         align="start"

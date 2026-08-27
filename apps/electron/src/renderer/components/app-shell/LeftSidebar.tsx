@@ -4539,6 +4539,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
 
       <ProjectSessionTreeGroupHeader
         projectId={group.workspace.id}
+        controlsId={hideSessions ? null : undefined}
         name={group.workspace.name}
         current={isCurrent}
         collapsed={collapsed}

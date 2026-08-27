@@ -686,6 +686,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
         return handleImageMentionClick(event)
       },
       attributes: {
+        'aria-label': '消息输入框',
+        role: 'textbox',
         class: cn(
           'prose dark:prose-invert max-w-none focus:outline-none',
           'min-h-[101px] w-full text-[15px] leading-[1.6]',

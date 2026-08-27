@@ -9,6 +9,7 @@
 
 import type { ActiveView } from '@/atoms/active-view'
 import type { AppMode } from '@/atoms/app-mode'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 
 export interface AppModeDefinition {
   mode: AppMode
@@ -21,8 +22,6 @@ export interface AppModeDefinition {
   restoresSession: boolean
   /** 切换到该模式时恢复上次本地化项目标签(Linguist)。 */
   restoresProjectTab: boolean
-  /** 欢迎页/空白页是否展示该模式的切换入口。 */
-  showsInWelcome: boolean
   /** 该模式主区是否允许挂载 Agent Rail(右侧文件/改动面板)。 */
   allowsAgentRail: boolean
 }
@@ -35,7 +34,6 @@ export const APP_MODE_DEFINITIONS: readonly AppModeDefinition[] = [
     fallbackView: 'conversations',
     restoresSession: true,
     restoresProjectTab: false,
-    showsInWelcome: true,
     allowsAgentRail: true,
   },
   {
@@ -45,7 +43,6 @@ export const APP_MODE_DEFINITIONS: readonly AppModeDefinition[] = [
     fallbackView: 'conversations',
     restoresSession: true,
     restoresProjectTab: false,
-    showsInWelcome: true,
     allowsAgentRail: false,
   },
   {
@@ -55,7 +52,6 @@ export const APP_MODE_DEFINITIONS: readonly AppModeDefinition[] = [
     fallbackView: 'conversations',
     restoresSession: false,
     restoresProjectTab: true,
-    showsInWelcome: false,
     allowsAgentRail: true,
   },
 ]
@@ -91,11 +87,6 @@ export function getModeSliderTranslateX(mode: AppMode): number {
   return APP_MODE_DEFINITIONS.findIndex((item) => item.mode === mode) * 100
 }
 
-/** 欢迎页模式入口:仅展示注册表中声明 showsInWelcome 的模式。 */
-export function resolveWelcomeModeDefinitions(mode: AppMode): readonly AppModeDefinition[] {
-  return getAppModeDefinition(mode).showsInWelcome ? APP_MODE_DEFINITIONS : []
-}
-
 // ===== 会话恢复 =====
 
 interface RestorableSession {
@@ -103,6 +94,8 @@ interface RestorableSession {
   title: string
   archived?: boolean
   linguistProjectId?: string
+  parentSessionId?: string
+  sourceDelegationId?: string
 }
 
 interface RestorableTab {
@@ -126,7 +119,7 @@ export function findSessionToRestore(
 ): RestorableSession | null {
   // Agent 模式不复用 Linguist 项目绑定会话;Chat 无绑定会话概念,全量候选。
   const eligibleSessions = mode === 'agent'
-    ? sessions.filter((session) => !session.linguistProjectId)
+    ? sessions.filter((session) => !getAgentSessionLinguistProjectId(session, sessions))
     : sessions
   const last = lastId ? eligibleSessions.find((session) => session.id === lastId) : undefined
   if (last) return last

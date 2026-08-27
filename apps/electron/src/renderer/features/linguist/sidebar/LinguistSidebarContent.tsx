@@ -1171,6 +1171,7 @@ function ProjectRowView({
       )}
       <ProjectSessionTreeGroupHeader
         projectId={project.id}
+        controlsId={collapsed ? null : undefined}
         name={project.name}
         current={active}
         collapsed={collapsed}

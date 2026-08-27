@@ -378,6 +378,7 @@ function AgentThinkingPopover({ agentThinking, onToggle, codexConfig }: AgentThi
           variant="ghost"
           size="icon"
           className={cn(inputToolbarButtonClass, isEnabled && inputToolbarActiveButtonClass)}
+          aria-label={isEnabled ? '关闭深度思考' : '开启深度思考'}
           onClick={handleButtonClick}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}

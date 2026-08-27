@@ -85,8 +85,11 @@ export function useAgentHostExtension(
   sessionId: string,
   presentation: 'full' | 'rail' = 'full',
 ): AgentHostExtension {
-  const sessionMeta = useAtomValue(agentSessionsAtom).find((item) => item.id === sessionId)
-  const linguistProjectId = sessionMeta?.linguistProjectId
+  const sessions = useAtomValue(agentSessionsAtom)
+  const sessionMeta = sessions.find((item) => item.id === sessionId)
+  const linguistProjectId = sessionMeta
+    ? getAgentSessionLinguistProjectId(sessionMeta, sessions)
+    : undefined
   const projectKey = linguistProjectId ?? NO_PROJECT
 
   const summaryState = useAtomValue(linguistProjectSummaryAtomFamily(projectKey))

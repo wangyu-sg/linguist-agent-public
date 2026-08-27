@@ -11,10 +11,7 @@ import * as React from 'react'
 import { useAtomValue } from 'jotai'
 import { Lightbulb } from 'lucide-react'
 import { userProfileAtom } from '@/atoms/user-profile'
-import { appModeAtom } from '@/atoms/app-mode'
 import { getRandomTip, getPlatform, type Tip } from '@/lib/tips'
-import { ModeSwitcher } from '@/components/app-shell/ModeSwitcher'
-import { resolveWelcomeModeDefinitions } from '@/host/app-mode-registry'
 
 /** 根据小时返回时段问候 */
 function getGreeting(hour: number): string {
@@ -26,7 +23,6 @@ function getGreeting(hour: number): string {
 
 export function WelcomeEmptyState(): React.ReactElement {
   const userProfile = useAtomValue(userProfileAtom)
-  const mode = useAtomValue(appModeAtom)
 
   // 稳定的随机 Tip（组件挂载时选一条）
   const [tip] = React.useState<Tip>(() => getRandomTip(getPlatform()))
@@ -48,11 +44,6 @@ export function WelcomeEmptyState(): React.ReactElement {
         <span>{tip.text}</span>
       </div>
 
-      {resolveWelcomeModeDefinitions(mode).length > 0 && (
-        <div className="w-[320px]">
-          <ModeSwitcher ariaLabel="新会话模式" />
-        </div>
-      )}
     </div>
   )
 }

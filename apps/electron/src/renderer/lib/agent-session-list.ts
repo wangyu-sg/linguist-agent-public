@@ -1,15 +1,22 @@
 import type { AgentSessionMeta, AgentWorkspace } from '@proma/shared'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 
+interface LinguistSessionOwnership {
+  id: string
+  linguistProjectId?: string
+  parentSessionId?: string
+  sourceDelegationId?: string
+}
+
 interface AgentSessionTreeLike {
   session: Pick<AgentSessionMeta, 'id'>
   childSessions: readonly Pick<AgentSessionMeta, 'id'>[]
 }
 
-/** 子会话的列表归属跟随父会话；CAT 权限仍只读取子会话自己的显式绑定。 */
+/** 受委派子会话继承父会话的 Linguist 项目归属。 */
 export function getAgentSessionLinguistProjectId(
-  session: AgentSessionMeta,
-  sessions: readonly AgentSessionMeta[],
+  session: LinguistSessionOwnership,
+  sessions: readonly LinguistSessionOwnership[],
 ): string | undefined {
   if (session.linguistProjectId) return session.linguistProjectId
   if (!session.parentSessionId || !session.sourceDelegationId) return undefined

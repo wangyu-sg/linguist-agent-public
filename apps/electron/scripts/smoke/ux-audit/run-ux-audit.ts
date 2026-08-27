@@ -221,14 +221,46 @@ async function launchDevApp(tmpHome: string, logStream: WriteStream): Promise<{ 
   // 快速任务等辅助窗口也加载 dev URL,必须用 ?window= 查询参数排除,只认主窗口。
   const isMainWindow = (url: string): boolean =>
     url.startsWith('http://127.0.0.1:5173') && !url.includes('window=')
-  const page = await waitFor(async () => {
+  await waitFor(async () => {
     const found = app.windows().find((win) => isMainWindow(win.url()))
     return found !== undefined
   }, 90_000).then((ok) => {
     if (!ok) throw new Error('未找到 dev 主窗口')
-    return app.windows().find((win) => isMainWindow(win.url()))!
   })
 
+  // vite 冷编译可能耗时数十秒,首轮渲染也可能白屏;等待主界面就绪,
+  // 辅助窗口启动时会短暂经过主 URL,每轮重新选择主窗口,避免抓住随后跳转的 Scratch Pad。
+  let page: Page | undefined
+  for (let attempt = 0; attempt < 8 && page === undefined; attempt++) {
+    let candidate: Page | undefined
+    let largestArea = 0
+    for (const windowPage of app.windows().filter((win) => isMainWindow(win.url()))) {
+      const area = await windowPage.evaluate(() => innerWidth * innerHeight).catch(() => 0)
+      if (area <= largestArea) continue
+      candidate = windowPage
+      largestArea = area
+    }
+    const mainUiReady = candidate !== undefined && await candidate.getByRole('tablist', { name: '主工作模式' })
+      .waitFor({ timeout: 30_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (mainUiReady && candidate !== undefined) {
+      page = candidate
+    } else {
+      console.warn(`[ux-audit] 主界面未就绪,第 ${attempt + 1} 次 reload`)
+      await candidate?.reload().catch(() => undefined)
+    }
+  }
+  if (page === undefined) {
+    const urls = app.windows().map((win) => win.url())
+    const candidate = app.windows().find((win) => isMainWindow(win.url()))
+    const bodyText = await candidate?.evaluate(
+      () => document.body?.innerText?.slice(0, 200) ?? '',
+    ).catch(() => '(evaluate 失败)')
+    console.error(`[ux-audit] 窗口列表: ${JSON.stringify(urls)}`)
+    console.error(`[ux-audit] body 前 200 字符: ${bodyText}`)
+    throw new Error('主界面多次 reload 后仍未就绪')
+  }
   page.on('console', (message) => {
     if (message.type() !== 'error') return
     const text = message.text()
@@ -236,29 +268,6 @@ async function launchDevApp(tmpHome: string, logStream: WriteStream): Promise<{ 
     consoleErrors.push(text.slice(0, 300))
   })
   page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${String(error).slice(0, 300)}`))
-
-  // vite 冷编译可能耗时数十秒,首轮渲染也可能白屏;等待主界面就绪,
-  // 超时则 reload 重试,最终失败时 dump 全部窗口状态便于诊断。
-  let mainUiReady = false
-  for (let attempt = 0; attempt < 8 && !mainUiReady; attempt++) {
-    mainUiReady = await page.getByRole('tablist', { name: '主工作模式' })
-      .waitFor({ timeout: 30_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (!mainUiReady) {
-      console.warn(`[ux-audit] 主界面未就绪,第 ${attempt + 1} 次 reload`)
-      await page.reload().catch(() => undefined)
-    }
-  }
-  if (!mainUiReady) {
-    const urls = app.windows().map((win) => win.url())
-    const bodyText = await page.evaluate(
-      () => document.body?.innerText?.slice(0, 200) ?? '',
-    ).catch(() => '(evaluate 失败)')
-    console.error(`[ux-audit] 窗口列表: ${JSON.stringify(urls)}`)
-    console.error(`[ux-audit] body 前 200 字符: ${bodyText}`)
-    throw new Error('主界面多次 reload 后仍未就绪')
-  }
   await waitFor(async () =>
     page.evaluate(() => typeof (window as unknown as { electronAPI?: unknown }).electronAPI === 'object'),
     60_000)
@@ -361,6 +370,7 @@ async function main(): Promise<void> {
       themeMode: 'light',
       agentChannelId: channelId,
       agentModelId: 'fake-text',
+      scratchPadActive: false,
       // 教程浮层 dismiss 走同一 settings 通道;临时 HOME 每次全新,预置避免污染证据(U-05)。
       tutorialBannerDismissed: true,
     }))
@@ -404,6 +414,7 @@ async function main(): Promise<void> {
     await page.getByRole('button', { name: '新建项目' }).filter({ hasText: '新建项目' }).first().click()
     const createDialog = page.getByRole('dialog', { name: '新建项目', exact: true })
     await createDialog.waitFor({ timeout: 15_000 })
+    await sleep(250)
     const dialogFocus = await probeFocus(page)
     await capture(page, outDir, 'create-project-dialog', {
       dialogInitialFocus: dialogFocus ? `${dialogFocus.tag}:${dialogFocus.label ?? dialogFocus.text ?? ''}` : 'none',

@@ -318,6 +318,10 @@ function ScratchPadEditor({ variant }: ScratchPadEditorProps): React.ReactElemen
     extensions,
     content: content || '',
     editorProps: {
+      attributes: {
+        'aria-label': '草稿编辑器',
+        role: 'textbox',
+      },
       handleDOMEvents: {
         // 草稿保存为 Markdown 时段落必须以空行分隔；复制到系统剪贴板时只保留普通文本换行，
         // 避免 Windows/外部编辑器再次将 Markdown 段落间隔渲染为额外空白。

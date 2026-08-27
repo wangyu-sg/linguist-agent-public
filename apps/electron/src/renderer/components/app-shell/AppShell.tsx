@@ -27,6 +27,7 @@ import {
   resolveActiveViewForMode,
   resolveRightRailPolicy,
   shouldForceCollapseLeftSidebar,
+  shouldSuppressAgentRail,
 } from '@/host/app-mode-registry'
 import { activeHostedAgentSidePanelSessionIdAtom } from '@/host/agent-host-extension'
 import { detectIsWindows } from '@/lib/platform'
@@ -43,6 +44,7 @@ const RIGHT_PANEL_MAX_VIEWPORT_RATIO = 3 / 5
 const EXPANDED_WORKSPACE_DEFAULT_VIEWPORT_RATIO = 2 / 5
 // 窄窗口时优先保留主会话的最小可读宽度；扩展工作区的 480px 仅在空间足够时强制。
 const MIN_MAIN_AREA_WIDTH = 320
+const MIN_MAIN_AREA_WITH_EXPANDED_LEFT_SIDEBAR = 512
 const COLLAPSED_LEFT_SIDEBAR_WIDTH = 60
 const CLASSIC_LEFT_SIDEBAR_LEADING_PADDING = 8
 
@@ -113,7 +115,7 @@ export function AppShell(): React.ReactElement {
   const isClassic = interfaceVariant === 'classic'
   // 定时任务表单打开时隐藏右侧文件面板，让中间区域扩展到全宽（表单内含自己的右栏配置）
   const activeView = resolveActiveViewForMode(useAtomValue(activeViewAtom), appMode)
-  const showRightPanel = resolveRightRailPolicy({
+  const rightPanelAllowed = resolveRightRailPolicy({
     appMode,
     hasAgentSession: !!rightPanelSessionId,
     automationFormOpen: automationForm.open,
@@ -184,7 +186,7 @@ export function AppShell(): React.ReactElement {
   const leftSidebarForceCollapsed = shouldForceCollapseLeftSidebar(
     viewportWidth,
     clampedLeftSidebarWidth,
-    MIN_MAIN_AREA_WIDTH,
+    MIN_MAIN_AREA_WITH_EXPANDED_LEFT_SIDEBAR,
   )
   const dragging = React.useRef(false)
   const currentSessionIdRef = React.useRef(rightPanelSessionId)
@@ -213,6 +215,12 @@ export function AppShell(): React.ReactElement {
   const usesWidePanelLayout = rightPanelLayout.hasOpenedWideWorkspace
   const persistedRightPanelWidth = usesWidePanelLayout ? effectiveWidePanelWidth : clampedRightPanelWidth
   const displayedRightPanelWidth = draggedRightPanelWidth ?? persistedRightPanelWidth
+  const showRightPanel = rightPanelAllowed && !shouldSuppressAgentRail(
+    viewportWidth,
+    leftSidebarOccupiedWidth,
+    displayedRightPanelWidth,
+    MIN_MAIN_AREA_WIDTH,
+  )
 
   React.useEffect(() => {
     return () => rightPanelDragCleanup.current?.()

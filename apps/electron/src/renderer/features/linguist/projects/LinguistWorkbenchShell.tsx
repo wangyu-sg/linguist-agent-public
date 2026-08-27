@@ -338,7 +338,7 @@ export function LinguistWorkbenchShell({
     <section aria-label={`${project.name} 本地化工作台`} className="relative flex h-full min-h-0 flex-col bg-background">
       <header
         aria-label="本地化工作台工具栏"
-        className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 bg-content-area/90 px-4 py-2 shadow-[0_1px_0_hsl(var(--border)/0.45)] max-md:flex-nowrap max-md:overflow-x-auto"
+        className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 bg-content-area/90 px-4 py-2 shadow-[0_1px_0_hsl(var(--border)/0.45)] max-md:flex-col max-md:items-stretch max-md:gap-2"
       >
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -354,19 +354,19 @@ export function LinguistWorkbenchShell({
                 </span>
               )}
             </div>
-            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <p className="flex min-w-0 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
               <span className="font-mono">{project.sourceLocale} → {project.targetLocale}</span>
-              <span aria-hidden="true">·</span>
-              <span>{progressLabel}</span>
-              <span aria-hidden="true">·</span>
-              <span className="max-w-44 truncate">
+              <span aria-hidden="true" className="max-sm:hidden">·</span>
+              <span className="shrink-0 max-sm:hidden">{progressLabel}</span>
+              <span aria-hidden="true" className="max-sm:hidden">·</span>
+              <span className="max-w-44 truncate max-sm:hidden">
                 {activeAsset?.filename ?? (summary?.assets.length === 0 ? '尚无批次' : '未选择批次')}
               </span>
             </p>
           </div>
         </div>
 
-        <div aria-label="工作台面板开关" className="flex items-center gap-1">
+        <div aria-label="工作台面板开关" className="flex items-center gap-1 overflow-x-auto [&>button]:shrink-0">
           {assetNavigator !== undefined && (
             <Button
               type="button"
@@ -443,7 +443,7 @@ export function LinguistWorkbenchShell({
           <aside
             aria-label="批次导航"
             data-workbench-slot="asset-navigator"
-            className="relative min-h-0 shrink-0 overflow-hidden bg-content-area/55 shadow-[1px_0_0_hsl(var(--border)/0.45)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:max-w-[calc(100%-3rem)] max-md:bg-content-area max-md:shadow-xl"
+            className="relative min-h-0 shrink-0 overflow-hidden bg-content-area/55 shadow-[1px_0_0_hsl(var(--border)/0.45)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:max-w-72 max-md:bg-content-area max-md:shadow-xl"
             style={{ width: uiState.assetNavigatorWidth }}
           >
             <div
@@ -547,7 +547,7 @@ export function LinguistWorkbenchShell({
             aria-hidden="true"
             data-workbench-slot="agent-rail-scrim"
             onClick={closeAgentRail}
-            className="hidden max-xl:block max-xl:absolute max-xl:inset-0 max-xl:z-10 max-xl:bg-foreground/25"
+            className="hidden max-2xl:block max-2xl:absolute max-2xl:inset-0 max-2xl:z-10 max-2xl:bg-foreground/25"
           />
         )}
 
@@ -562,7 +562,7 @@ export function LinguistWorkbenchShell({
               'relative min-h-0 overflow-hidden bg-content-area/55',
               agentFull
                 ? 'flex-1'
-                : 'shrink-0 shadow-[-1px_0_0_hsl(var(--border)/0.45)] xl:max-w-[var(--agent-rail-inline-max)] max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-20 max-xl:max-w-[calc(100%-3rem)] max-xl:bg-content-area max-xl:shadow-xl',
+                : 'shrink-0 shadow-[-1px_0_0_hsl(var(--border)/0.45)] 2xl:max-w-[var(--agent-rail-inline-max)] max-2xl:absolute max-2xl:inset-y-0 max-2xl:right-0 max-2xl:z-20 max-2xl:max-w-[calc(100%-3rem)] max-2xl:bg-content-area max-2xl:shadow-xl',
             )}
             style={agentFull ? undefined : agentRailStyle}
           >
