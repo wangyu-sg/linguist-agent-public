@@ -1,6 +1,7 @@
 import { atom } from 'jotai'
 import type { AgentSessionMeta } from '@proma/shared'
 import { agentSessionsAtom } from './agent-atoms'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 
 type SessionSelectionUpdate =
   | Map<string, string>
@@ -27,8 +28,9 @@ export function serializeProjectAgentSessionIds(
 function isSelectableProjectSession(
   session: AgentSessionMeta,
   projectId: string,
+  sessions: readonly AgentSessionMeta[],
 ): boolean {
-  return session.linguistProjectId === projectId
+  return getAgentSessionLinguistProjectId(session, sessions) === projectId
 }
 
 export function resolveProjectAgentSessionIds(
@@ -40,7 +42,7 @@ export function resolveProjectAgentSessionIds(
 
   for (const [projectId, sessionId] of preferences) {
     const session = sessionsById.get(sessionId)
-    if (session && isSelectableProjectSession(session, projectId)) {
+    if (session && isSelectableProjectSession(session, projectId, sessions)) {
       resolved.set(projectId, sessionId)
     }
   }

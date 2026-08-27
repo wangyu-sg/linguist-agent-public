@@ -933,7 +933,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
     () => {
       if (viewMode !== 'active') return []
       const filtered = agentSessions.filter((s) =>
-        isOrdinaryAgentSession(s)
+        isOrdinaryAgentSession(s, agentSessions)
         && s.pinned
         && !draftSessionIds.has(s.id)
         && !hasPinnedVisibleParent(s, agentSessions)
@@ -1572,7 +1572,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
     () => {
       const sessions = sortAgentSessionsByUpdatedAtDesc(
         agentSessions.filter((session) =>
-          isOrdinaryAgentSession(session)
+          isOrdinaryAgentSession(session, agentSessions)
           && !session.archived
           && !session.pinned
           && !draftSessionIds.has(session.id)
@@ -2251,7 +2251,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
 
       const visibleHistory = sortAgentSessionsByUpdatedAtDesc(
         agentSessions.filter((session) =>
-          isOrdinaryAgentSession(session)
+          isOrdinaryAgentSession(session, agentSessions)
           && !session.archived
           && !session.pinned
           && !draftSessionIds.has(session.id)
@@ -2298,7 +2298,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
   const archivedAgentSessionProjectGroups = React.useMemo(() => {
     if (viewMode !== 'archived') return []
     return groupArchivedAgentSessionsByProject({
-      sessions: agentSessions.filter(isOrdinaryAgentSession),
+      sessions: agentSessions.filter((session) => isOrdinaryAgentSession(session, agentSessions)),
       workspaces,
       excludedSessionIds: draftSessionIds,
     }).map((group) => ({

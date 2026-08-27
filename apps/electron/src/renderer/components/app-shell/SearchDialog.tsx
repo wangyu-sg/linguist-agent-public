@@ -47,6 +47,7 @@ import { openLinguistAgentSession } from '@/features/linguist/projects/open-ling
 import { describeLinguistIpcError } from '@/features/linguist/projects/project-utils'
 import { linguistProjectListStateAtom } from '@/features/linguist/projects/project-list-atoms'
 import { findBestSearchMatch } from '@proma/shared'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 
 /** 标题搜索结果项 */
 interface TitleResult {
@@ -74,15 +75,17 @@ interface ContentResult {
 type SearchResult = TitleResult | ContentResult
 
 export function getAgentSearchIdentity(
-  session: Pick<AgentSessionMeta, 'linguistProjectId' | 'linguistProjectName'> | undefined,
+  session: AgentSessionMeta | undefined,
+  sessions: readonly AgentSessionMeta[],
   projectNames?: ReadonlyMap<string, string>,
 ): { type: 'agent' | 'linguist'; projectName?: string } {
-  return session?.linguistProjectId
+  const projectId = session ? getAgentSessionLinguistProjectId(session, sessions) : undefined
+  return projectId
     ? {
         type: 'linguist',
-        projectName: projectNames?.get(session.linguistProjectId)
-          ?? session.linguistProjectName
-          ?? session.linguistProjectId,
+        projectName: projectNames?.get(projectId)
+          ?? session?.linguistProjectName
+          ?? projectId,
       }
     : { type: 'agent' }
 }
@@ -335,11 +338,11 @@ export function SearchDialog(): React.ReactElement {
         .map((c) => ({ id: c.id, title: c.title, type: 'chat' as const, archived: c.archived, updatedAt: c.updatedAt }))
       : isAgentMode
         ? agentSessions
-          .filter((s) => matchesTitle(s.title) && getAgentSearchIdentity(s, linguistProjectNameMap).type === appMode)
+          .filter((s) => matchesTitle(s.title) && getAgentSearchIdentity(s, agentSessions, linguistProjectNameMap).type === appMode)
           .map((s) => ({
             id: s.id,
             title: s.title,
-            ...getAgentSearchIdentity(s, linguistProjectNameMap),
+            ...getAgentSearchIdentity(s, agentSessions, linguistProjectNameMap),
             archived: s.archived,
             updatedAt: s.updatedAt,
           }))
@@ -376,7 +379,7 @@ export function SearchDialog(): React.ReactElement {
           return {
             id: r.sessionId,
             title: r.sessionTitle,
-            ...getAgentSearchIdentity(session, linguistProjectNameMap),
+            ...getAgentSearchIdentity(session, agentSessions, linguistProjectNameMap),
             messageId: r.messageId,
             snippet: r.snippet,
             matchStart: r.matchStart,

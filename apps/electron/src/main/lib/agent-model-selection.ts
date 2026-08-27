@@ -1,4 +1,4 @@
-import { getChannelById } from './channel-manager'
+import { getChannelById, listChannels } from './channel-manager'
 import type { ProviderType } from '@proma/shared'
 
 export interface AvailableAgentModel {
@@ -67,4 +67,10 @@ export function listEnabledAgentModelsForChannel(
         source: model.source,
       })),
   }
+}
+
+export function listEnabledAgentModels(): AvailableAgentModelsForChannel[] {
+  return listChannels()
+    .filter((channel) => channel.enabled)
+    .map((channel) => listEnabledAgentModelsForChannel(channel.id, '读取可用 Agent 模型'))
 }

@@ -519,6 +519,7 @@ export function GlobalShortcuts(): null {
         store.set(agentSessionsAtom, sessions)
         const opened = await routeExternalAgentSession(
           session,
+          sessions,
           store.get(agentLinguistExternalSessionOpenerAtom),
           () => {
             store.set(appModeAtom, 'agent')

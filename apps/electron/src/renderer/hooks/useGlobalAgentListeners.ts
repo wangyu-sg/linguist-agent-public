@@ -90,6 +90,7 @@ import { removeQueuedMessage, createQueuedAgentStreamState } from '@/lib/agent-m
 import { createAgentStreamEventBatcher } from '@/lib/agent-stream-event-batcher'
 import { getChangedWorkspaceComponentFromSdkMessage, shouldRevealChangedWorkspaceComponentImmediately } from '@/lib/agent-component-activation'
 import { mergeActiveAgentSessionSnapshot } from '@/lib/agent-active-session-snapshot'
+import { openHostedAgentSession } from '@/host/agent-host-extension'
 
 /** 触发右侧文件浏览器自动定位的写入类工具集合 */
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Update'])
@@ -625,14 +626,26 @@ export function useGlobalAgentListeners(): void {
 
     /** 构建导航到指定会话的回调 */
     const makeNavigateToSession = (sessionId: string, sessionTitle: string) => () => {
+      const hostedNavigation = openHostedAgentSession(store, sessionId)
+      if (hostedNavigation) {
+        void hostedNavigation.then(
+          undefined,
+          (error: unknown) => {
+            toast.error('打开项目会话失败', {
+              description: error instanceof Error ? error.message : '与主进程通信异常',
+            })
+          },
+        )
+        return
+      }
+      const sessions = store.get(agentSessionsAtom)
+      const session = sessions.find((item) => item.id === sessionId)
       const tabs = store.get(tabsAtom)
       const result = openTab(tabs, { type: 'agent', sessionId, title: sessionTitle })
       store.set(tabsAtom, result.tabs)
       store.set(activeTabIdAtom, result.activeTabId)
       store.set(appModeAtom, 'agent')
       store.set(currentAgentSessionIdAtom, sessionId)
-      const sessions = store.get(agentSessionsAtom)
-      const session = sessions.find((s) => s.id === sessionId)
       if (session?.workspaceId) {
         store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
       }

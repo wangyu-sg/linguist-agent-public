@@ -385,6 +385,7 @@ function TabBarInner({
 
       <div
         ref={scrollRef}
+        style={{ maskImage: actionLayout.scrollMaskImage }}
         className={cn(
           "relative flex items-end flex-1 min-w-0 overflow-x-auto scrollbar-none",
           actionLayout.scrollPaddingClassName,

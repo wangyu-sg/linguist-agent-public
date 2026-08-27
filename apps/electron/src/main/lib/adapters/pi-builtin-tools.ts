@@ -13,6 +13,7 @@ import type { AgentToolResult } from '@earendil-works/pi-agent-core'
 import { AGENT_IPC_CHANNELS, normalizePathForCompare } from '@proma/shared'
 import type {
   CreateAutomationInput,
+  LinguistTurnContextV1,
   PromaPermissionMode,
   UpdateAutomationInput,
 } from '@proma/shared'
@@ -108,6 +109,7 @@ export interface PiBuiltinToolsContext {
   allowedRoots?: string[]
   permissionMode?: PromaPermissionMode
   triggeredBy?: 'user' | 'automation' | 'delegation' | 'external'
+  linguistContext?: Readonly<LinguistTurnContextV1>
   /** Windows 设备是否已有可供 Pi Bash 使用的 Git Bash 或 WSL。 */
   windowsShellAvailable?: boolean
 }
@@ -1485,6 +1487,8 @@ export async function buildPiBuiltinTools(
         workspaceId: ctx.workspaceId,
         permissionMode: ctx.permissionMode,
         triggeredBy: ctx.triggeredBy === 'external' ? 'user' : ctx.triggeredBy,
+        // LA-HOST-SEAM: linguist-delegation
+        linguistContext: ctx.linguistContext,
       })
       tools.push(...collaborationTools as ToolDefinition[])
     } catch (error) {

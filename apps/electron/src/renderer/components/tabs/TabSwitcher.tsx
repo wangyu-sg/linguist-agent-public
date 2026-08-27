@@ -48,6 +48,7 @@ import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { Bot, GitBranch, Languages, MessageSquare, StickyNote } from 'lucide-react'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
+import { isOrdinaryAgentSession } from '@/components/session-tree/agent-session-tree'
 
 type SwitchSectionId = 'collaboration' | 'recent'
 type SwitchCandidateType = 'chat' | 'agent' | 'scratch' | 'linguist-project'
@@ -151,7 +152,11 @@ export function TabSwitcher(): ReactElement | null {
       }))
 
     const agentCandidates = agentSessions
-      .filter((session) => !session.archived && !draftSessionIds.has(session.id))
+      .filter((session) => (
+        isOrdinaryAgentSession(session, agentSessions)
+        && !session.archived
+        && !draftSessionIds.has(session.id)
+      ))
       .map(buildAgentCandidate)
 
     const projectCandidates = tabs

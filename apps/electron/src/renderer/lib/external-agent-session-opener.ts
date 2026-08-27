@@ -1,4 +1,5 @@
 import type { AgentSessionMeta } from '@proma/shared'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 
 /** 由组合根注入；Proma 通用入口不反向依赖 Linguist feature。 */
 export type ExternalLinguistSessionOpener = (sessionId: string) => Promise<void>
@@ -15,10 +16,11 @@ export type ExternalAgentSessionOpenResult =
  */
 export async function routeExternalAgentSession(
   session: AgentSessionMeta,
+  sessions: readonly AgentSessionMeta[],
   openLinguistSession: ExternalLinguistSessionOpener | null,
   openOrdinarySession: () => void,
 ): Promise<ExternalAgentSessionOpenResult> {
-  if (!session.linguistProjectId) {
+  if (!getAgentSessionLinguistProjectId(session, sessions)) {
     openOrdinarySession()
     return { kind: 'opened-ordinary' }
   }

@@ -8,10 +8,8 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { appModeAtom } from '@/atoms/app-mode'
 import {
-  currentAgentSessionIdAtom,
-  currentSessionSidePanelOpenAtom,
+  agentSidePanelOpenAtomFamily,
   agentSessionPathMapAtom,
   agentDiffPanelTabAtom,
   agentTerminalTabsAtom,
@@ -24,14 +22,13 @@ import { SidePanel } from '@/components/agent/SidePanel'
 import { browserPanelOpenMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
 import { getPreviewFileId, previewFileMapAtom } from '@/atoms/preview-atoms'
 
-export function RightSidePanel({ width }: { width?: number }): React.ReactElement | null {
-  const appMode = useAtomValue(appModeAtom)
-  const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
+export function RightSidePanel({ sessionId, width }: { sessionId: string; width?: number }): React.ReactElement {
+  const currentSessionId = sessionId
   const sessionPathMap = useAtomValue(agentSessionPathMapAtom)
   const diffPanelTabMap = useAtomValue(agentDiffPanelTabAtom)
   const setDiffPanelTabMap = useSetAtom(agentDiffPanelTabAtom)
   const setTerminalTabsMap = useSetAtom(agentTerminalTabsAtom)
-  const setSidePanelOpen = useSetAtom(currentSessionSidePanelOpenAtom)
+  const setSidePanelOpen = useSetAtom(agentSidePanelOpenAtomFamily(sessionId))
   const browserOpenMap = useAtomValue(browserPanelOpenMapAtom)
   const browserStateMap = useAtomValue(browserStateMapAtom)
   const browserOpen = currentSessionId ? browserOpenMap.get(currentSessionId) === true : false
@@ -108,10 +105,6 @@ export function RightSidePanel({ width }: { width?: number }): React.ReactElemen
     })
     pendingBrowserActivationRef.current = null
   }, [browserOpen, browserState?.activeTabId, currentSessionId, setDiffPanelTabMap, setSidePanelOpen])
-
-  if (appMode !== 'agent' || !currentSessionId) {
-    return null
-  }
 
   const sessionPath = sessionPathMap.get(currentSessionId) ?? null
   const storedTab = diffPanelTabMap.get(currentSessionId) ?? 'files'

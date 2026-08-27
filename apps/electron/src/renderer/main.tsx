@@ -67,7 +67,7 @@ import {
 } from './atoms/markdown-font-size'
 import { useGlobalAgentListeners } from './hooks/useGlobalAgentListeners'
 import { useGlobalChatListeners } from './hooks/useGlobalChatListeners'
-import { activeTabIdAtom, ensureScratchPadTab, getPersistableTabState, getPersistedTabMru, restorePersistedTabState, scratchPadContentAtom, scratchPadLoadedAtom, SCRATCH_PAD_ID, tabMruAtom, tabsAtom } from './atoms/tab-atoms'
+import { activeTabIdAtom, createLocalizationProjectTabId, ensureScratchPadTab, getPersistableTabState, getPersistedTabMru, restorePersistedTabState, scratchPadContentAtom, scratchPadLoadedAtom, SCRATCH_PAD_ID, tabMruAtom, tabsAtom } from './atoms/tab-atoms'
 import {
   parseProjectAgentSessionPreferences,
   projectCurrentAgentSessionIdMapAtom,
@@ -80,6 +80,7 @@ import {
 } from './features/linguist/projects/cat-workspace-atoms'
 import { CatToolResultNavigationInitializer } from './features/linguist/projects/CatToolResultNavigationInitializer'
 import { openLinguistAgentSession } from './features/linguist/projects/open-linguist-session'
+import { getAgentSessionLinguistProjectId } from './lib/agent-session-list'
 import { chatToolsAtom } from './atoms/chat-tool-atoms'
 import { feishuBotStatesAtom } from './atoms/feishu-atoms'
 import { dingtalkBotStatesAtom } from './atoms/dingtalk-atoms'
@@ -906,10 +907,37 @@ function TabStatePersistenceInitializer(): null {
           : [],
       )
       const restored = restorePersistedTabState(tabState, validSessionIds, projectStatuses)
-      const validTabs = restored.tabs
+      const linguistProjectBySessionId = new Map(
+        agentSessions.flatMap((session) => {
+          const projectId = getAgentSessionLinguistProjectId(session, agentSessions)
+          return projectId ? [[session.id, projectId] as const] : []
+        }),
+      )
+      const removedAgentTabs = restored.tabs.filter((tab) => (
+        tab.type === 'agent' && linguistProjectBySessionId.has(tab.sessionId)
+      ))
+      const validTabs = restored.tabs.filter((tab) => (
+        tab.type !== 'agent' || !linguistProjectBySessionId.has(tab.sessionId)
+      ))
+      for (const tab of removedAgentTabs) {
+        if (tab.type !== 'agent') continue
+        const projectId = linguistProjectBySessionId.get(tab.sessionId)!
+        const projectTabId = createLocalizationProjectTabId(projectId)
+        if (validTabs.some((candidate) => candidate.id === projectTabId)) continue
+        const session = agentSessions.find((candidate) => candidate.id === tab.sessionId)
+        validTabs.push({
+          id: projectTabId,
+          type: 'linguist-project',
+          projectId,
+          title: session?.linguistProjectName ?? '本地化项目',
+        })
+      }
       if (validTabs.length === 0) return
 
-      const restoredActiveTabId = restored.activeTabId
+      const removedActiveProjectId = removedAgentTabs.find((tab) => tab.id === restored.activeTabId)
+      const restoredActiveTabId = removedActiveProjectId?.type === 'agent'
+        ? createLocalizationProjectTabId(linguistProjectBySessionId.get(removedActiveProjectId.sessionId)!)
+        : restored.activeTabId
       const activeTab = validTabs.find((t) => t.id === restoredActiveTabId) ?? validTabs[0] ?? null
       store.set(tabsAtom, ensureScratchPadTab(validTabs))
       store.set(activeTabIdAtom, restoredActiveTabId)

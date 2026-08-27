@@ -56,7 +56,7 @@ export const APP_MODE_DEFINITIONS: readonly AppModeDefinition[] = [
     restoresSession: false,
     restoresProjectTab: true,
     showsInWelcome: false,
-    allowsAgentRail: false,
+    allowsAgentRail: true,
   },
 ]
 

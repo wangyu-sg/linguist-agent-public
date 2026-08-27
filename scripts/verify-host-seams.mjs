@@ -80,6 +80,18 @@ for (const contract of contracts) {
   }
 }
 
+const piBuiltinFile = 'apps/electron/src/main/lib/adapters/pi-builtin-tools.ts'
+const piBuiltinSource = readSource(root, piBuiltinFile)
+const piBuiltinAnchor = '// LA-HOST-SEAM: linguist-delegation'
+if (piBuiltinSource.split(piBuiltinAnchor).length - 1 !== 1) {
+  fail('HOST_SEAM_ANCHOR_MISSING', `${piBuiltinFile} 必须且只能包含一个 ${piBuiltinAnchor}`)
+}
+for (const required of ['linguistContext?: Readonly<LinguistTurnContextV1>', 'linguistContext: ctx.linguistContext']) {
+  if (!piBuiltinSource.includes(required)) {
+    fail('HOST_SEAM_CONTRACT_CHANGED', `${piBuiltinFile} 缺少 Linguist 委派 Context 合同：${required}`)
+  }
+}
+
 const piFile = 'apps/electron/src/main/lib/adapters/pi-agent-adapter.ts'
 const piSource = readSource(root, piFile)
 const piAnchor = '// LA-HOST-SEAM: pi-compaction-temporary-deviation'
@@ -138,4 +150,4 @@ if (
   fail('HOST_SEAM_CONTRACT_CHANGED', 'AppShell 不再只通过 App Mode Registry 接入 Linguist')
 }
 
-console.log('host seams verified: 7')
+console.log('host seams verified: 8')

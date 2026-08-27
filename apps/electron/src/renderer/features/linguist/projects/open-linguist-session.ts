@@ -11,6 +11,7 @@ import {
   tabsAtom,
 } from '@/atoms/tab-atoms'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
 import { openLocalizationProject } from './open-localization-project'
 import {
@@ -32,8 +33,8 @@ export interface OpenLinguistSessionResult {
 function openMissingProjectHistory(
   store: JotaiStore,
   session: AgentSessionMeta,
+  projectId: string,
 ): void {
-  const projectId = session.linguistProjectId!
   const opened = openLocalizationProjectTab(store.get(tabsAtom), {
     projectId,
     title: session.linguistProjectName ?? projectId,
@@ -60,7 +61,8 @@ export async function openLinguistAgentSession(
   openProject: OpenProject = (input) => window.electronAPI.linguistProjectsOpen(input),
 ): Promise<LinguistIpcResult<OpenLinguistSessionResult>> {
   const session = store.get(agentSessionsAtom).find((item) => item.id === sessionId)
-  const projectId = session?.linguistProjectId
+  const sessions = store.get(agentSessionsAtom)
+  const projectId = session ? getAgentSessionLinguistProjectId(session, sessions) : undefined
   if (!session || !projectId) {
     return {
       ok: false,
@@ -75,7 +77,7 @@ export async function openLinguistAgentSession(
       || opened.error.code === 'PROJECT_UNHEALTHY'
       || opened.error.code === 'STORE_NOT_FOUND'
     ) {
-      openMissingProjectHistory(store, session)
+      openMissingProjectHistory(store, session, projectId)
       return { ok: true, data: { projectId, readOnlyHistory: true } }
     }
     return opened
@@ -92,6 +94,14 @@ export async function openLinguistAgentSession(
       error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
     }
   }
+  const projectSessionIds = new Set(
+    sessions
+      .filter((candidate) => getAgentSessionLinguistProjectId(candidate, sessions) === projectId)
+      .map((candidate) => candidate.id),
+  )
+  store.set(tabsAtom, (tabs) => tabs.filter((tab) => (
+    tab.type !== 'agent' || !projectSessionIds.has(tab.sessionId)
+  )))
   store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
     agentPresentation: 'full',
   })

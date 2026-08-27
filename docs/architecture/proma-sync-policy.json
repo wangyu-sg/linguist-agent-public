@@ -20,6 +20,7 @@
         "apps/electron/src/main/ipc.ts",
         "apps/electron/src/preload/index.ts",
         "apps/electron/src/main/lib/agent-collaboration-tools.ts",
+        "apps/electron/src/main/lib/adapters/pi-builtin-tools.ts",
         "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts"
       ],
       "policy": "host-seam",

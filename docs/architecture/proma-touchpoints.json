@@ -283,6 +283,15 @@
       "reason": "Pi 压缩续跑时重新注入已验证的 Linguist turn context；上游提供等价 hook 后删除。"
     },
     {
+      "file": "apps/electron/src/main/lib/adapters/pi-builtin-tools.ts",
+      "ticket": "LA-HOST-002",
+      "kind": "host-seam",
+      "owner": "codex-main-host",
+      "mergePolicy": "host-seam",
+      "hook": "linguist-delegation",
+      "reason": "把当前已验证的 Linguist turn context 交给 Proma Collaboration，供绑定项目的子会话复用同一宿主快照。"
+    },
+    {
       "file": "apps/electron/src/main/lib/agent-collaboration-tools.ts",
       "ticket": "LA-HOST-002",
       "kind": "host-seam",
@@ -298,6 +307,14 @@
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/agent-model-selection.ts",
+      "ticket": "LA-SYNC-003",
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma Collaboration 从全部已启用渠道选择目标 Agent 模型。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-orchestrator.ts",
@@ -1008,6 +1025,14 @@
       "reason": "通过 App Mode Registry 组合 Linguist 第三模式与 rail policy，不直接依赖 Linguist feature。"
     },
     {
+      "file": "apps/electron/src/renderer/components/app-shell/RightSidePanel.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让 Proma 原生右侧工作区按显式 Agent Session 承载 Agent 与 Linguist 全屏会话。"
+    },
+    {
       "file": "apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1480,6 +1505,14 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
+      "file": "apps/electron/src/renderer/hooks/useGlobalAgentListeners.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让绑定 Linguist 项目的 Agent 通知返回唯一项目 Tab，不再创建重复 Agent Tab。"
+    },
+    {
       "file": "apps/electron/src/renderer/hooks/useSwitchAppMode.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1526,6 +1559,14 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+    },
+    {
+      "file": "apps/electron/src/renderer/lib/agent-session-list.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让协作子会话的列表归属跟随父会话，避免同一会话树跨 Agent 与 Linguist 重复显示。"
     },
     {
       "file": "apps/electron/src/renderer/lib/linguist-navigation.ts",

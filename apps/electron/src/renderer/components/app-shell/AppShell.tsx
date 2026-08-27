@@ -12,7 +12,7 @@ import { LeftSidebar } from './LeftSidebar'
 import { RightSidePanel } from './RightSidePanel'
 import { MainArea } from '@/components/tabs/MainArea'
 import { appModeAtom } from '@/atoms/app-mode'
-import { agentDiffPanelTabAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts } from '@/atoms/agent-atoms'
+import { agentDiffPanelTabAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelOpenAtomFamily, currentAgentSessionIdAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts } from '@/atoms/agent-atoms'
 import { leftSidebarWidthAtom } from '@/atoms/sidebar-atoms'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
 import { automationFormAtom } from '@/atoms/automation-atoms'
@@ -28,6 +28,7 @@ import {
   resolveRightRailPolicy,
   shouldForceCollapseLeftSidebar,
 } from '@/host/app-mode-registry'
+import { activeHostedAgentSidePanelSessionIdAtom } from '@/host/agent-host-extension'
 import { detectIsWindows } from '@/lib/platform'
 import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
 import { cn } from '@/lib/utils'
@@ -100,9 +101,11 @@ export function AppShell(): React.ReactElement {
   const appMode = useAtomValue(appModeAtom)
   const { workspaces, currentWorkspaceId } = useProjectActions()
   const currentWorkspace = workspaces.find((workspace) => workspace.id === currentWorkspaceId)
-  const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
-  const activeRightPanelTab = useAtomValue(agentDiffPanelTabAtom).get(currentSessionId ?? '')
-  const isPanelOpen = useAtomValue(currentSessionSidePanelOpenAtom)
+  const currentAgentSessionId = useAtomValue(currentAgentSessionIdAtom)
+  const hostedAgentSessionId = useAtomValue(activeHostedAgentSidePanelSessionIdAtom)
+  const rightPanelSessionId = appMode === 'linguist' ? hostedAgentSessionId : currentAgentSessionId
+  const activeRightPanelTab = useAtomValue(agentDiffPanelTabAtom).get(rightPanelSessionId ?? '')
+  const isPanelOpen = useAtomValue(agentSidePanelOpenAtomFamily(rightPanelSessionId ?? ''))
   const automationForm = useAtomValue(automationFormAtom)
   const interfaceVariant = useAtomValue(interfaceVariantAtom)
   const settingsOpen = useAtomValue(settingsOpenAtom)
@@ -112,7 +115,7 @@ export function AppShell(): React.ReactElement {
   const activeView = resolveActiveViewForMode(useAtomValue(activeViewAtom), appMode)
   const showRightPanel = resolveRightRailPolicy({
     appMode,
-    hasAgentSession: !!currentSessionId,
+    hasAgentSession: !!rightPanelSessionId,
     automationFormOpen: automationForm.open,
     activeView,
   })
@@ -176,7 +179,7 @@ export function AppShell(): React.ReactElement {
   // 右侧工作区可拖拽到应用视口的 3/5；每个 Session 恢复自己的普通与宽视图布局。
   const agentSessions = useAtomValue(agentSessionsAtom)
   const setRightPanelLayouts = useSetAtom(agentSidePanelLayoutMapAtom)
-  const [rightPanelLayout, setRightPanelLayout] = useAtom(agentSidePanelLayoutAtomFamily(currentSessionId ?? ''))
+  const [rightPanelLayout, setRightPanelLayout] = useAtom(agentSidePanelLayoutAtomFamily(rightPanelSessionId ?? ''))
   const [viewportWidth, setViewportWidth] = React.useState(() => window.innerWidth)
   const leftSidebarForceCollapsed = shouldForceCollapseLeftSidebar(
     viewportWidth,
@@ -184,10 +187,10 @@ export function AppShell(): React.ReactElement {
     MIN_MAIN_AREA_WIDTH,
   )
   const dragging = React.useRef(false)
-  const currentSessionIdRef = React.useRef(currentSessionId)
+  const currentSessionIdRef = React.useRef(rightPanelSessionId)
   const rightPanelDragCleanup = React.useRef<(() => void) | null>(null)
   const [draggedRightPanelWidth, setDraggedRightPanelWidth] = React.useState<number | null>(null)
-  currentSessionIdRef.current = currentSessionId
+  currentSessionIdRef.current = rightPanelSessionId
   const isExpandedRightWorkspace = isExpandedWorkspaceTab(activeRightPanelTab)
   const rightPanelMinimumWidth = getRightPanelMinWidth(
     activeRightPanelTab === 'todos',
@@ -213,17 +216,17 @@ export function AppShell(): React.ReactElement {
 
   React.useEffect(() => {
     return () => rightPanelDragCleanup.current?.()
-  }, [currentSessionId])
+  }, [rightPanelSessionId])
 
   React.useEffect(() => {
-    setRightPanelLayouts((previous) => pruneAgentSidePanelLayouts(previous, agentSessions, currentSessionId ?? undefined))
-  }, [agentSessions, currentSessionId, setRightPanelLayouts])
+    setRightPanelLayouts((previous) => pruneAgentSidePanelLayouts(previous, agentSessions, rightPanelSessionId ?? undefined))
+  }, [agentSessions, rightPanelSessionId, setRightPanelLayouts])
 
   React.useEffect(() => {
-    if (isExpandedRightWorkspace && currentSessionId && !rightPanelLayout.hasOpenedWideWorkspace) {
+    if (isExpandedRightWorkspace && rightPanelSessionId && !rightPanelLayout.hasOpenedWideWorkspace) {
       setRightPanelLayout((previous) => ({ ...previous, hasOpenedWideWorkspace: true }))
     }
-  }, [currentSessionId, isExpandedRightWorkspace, rightPanelLayout.hasOpenedWideWorkspace, setRightPanelLayout])
+  }, [rightPanelSessionId, isExpandedRightWorkspace, rightPanelLayout.hasOpenedWideWorkspace, setRightPanelLayout])
 
   React.useEffect(() => {
     const updateViewportWidth = () => setViewportWidth(window.innerWidth)
@@ -232,18 +235,18 @@ export function AppShell(): React.ReactElement {
   }, [])
 
   React.useEffect(() => {
-    if (currentSessionId && clampedRightPanelWidth !== rightPanelLayout.width) {
+    if (rightPanelSessionId && clampedRightPanelWidth !== rightPanelLayout.width) {
       setRightPanelLayout((previous) => ({ ...previous, width: clampedRightPanelWidth }))
     }
-  }, [clampedRightPanelWidth, currentSessionId, rightPanelLayout.width, setRightPanelLayout])
+  }, [clampedRightPanelWidth, rightPanelSessionId, rightPanelLayout.width, setRightPanelLayout])
 
   const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
-    if (!currentSessionId) return
+    if (!rightPanelSessionId) return
 
     e.preventDefault()
     rightPanelDragCleanup.current?.()
     dragging.current = true
-    const dragSessionId = currentSessionId
+    const dragSessionId = rightPanelSessionId
     const startX = e.clientX
     const startWidth = displayedRightPanelWidth
     const isWideWorkspace = usesWidePanelLayout
@@ -298,7 +301,7 @@ export function AppShell(): React.ReactElement {
     rightPanelDragCleanup.current = cancelDrag
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
-  }, [currentSessionId, displayedRightPanelWidth, leftSidebarOccupiedWidth, rightPanelMinimumWidth, setRightPanelLayout, usesWidePanelLayout, viewportWidth])
+  }, [displayedRightPanelWidth, leftSidebarOccupiedWidth, rightPanelMinimumWidth, rightPanelSessionId, setRightPanelLayout, usesWidePanelLayout, viewportWidth])
 
   return (
     <>
@@ -359,7 +362,7 @@ export function AppShell(): React.ReactElement {
                     onMouseDown={handleMouseDown}
                   />
                 )}
-                <RightSidePanel width={displayedRightPanelWidth} />
+                <RightSidePanel sessionId={rightPanelSessionId!} width={displayedRightPanelWidth} />
               </div>
             )}
         </div>

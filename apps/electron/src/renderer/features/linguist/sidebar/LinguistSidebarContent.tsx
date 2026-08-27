@@ -34,7 +34,6 @@ import {
 import {
   buildAgentSessionTrees,
   buildPinnedAgentSessionTrees,
-  countCompletedDelegatedChildren,
   getSessionTreeStatus,
   hasPinnedVisibleParent,
   selectVisibleAgentSessionTrees,
@@ -42,7 +41,11 @@ import {
 } from '@/components/session-tree/agent-session-tree'
 import { ProjectSessionTreeGroupHeader } from '@/components/session-tree/ProjectSessionTreeGroupHeader'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
+import {
+  countSettledDelegatedChildren,
+  getAgentSessionLinguistProjectId,
+  replaceAgentSessionInFreshnessOrder,
+} from '@/lib/agent-session-list'
 import {
   linguistProjectListStateAtom,
   refreshLinguistProjectListAtom,
@@ -123,7 +126,7 @@ export interface SharedProjectSessionRowProps {
   showPinIcon?: boolean
   delegationSummary?: {
     total: number
-    completed: number
+    settled: number
     expanded: boolean
     onToggle: () => void
   }
@@ -224,22 +227,24 @@ export function LinguistSidebarContentView({
   const projectById = new Map(allProjects.map((project) => [project.id, project]))
   const activeProjectIds = new Set(activeProjects.map((project) => project.id))
   const projectNameMap = new Map(allProjects.map((project) => [project.id, project.name]))
-  const boundSessions = sessions.filter((session) => !!session.linguistProjectId)
+  const getProjectId = (session: AgentSessionMeta): string | undefined =>
+    getAgentSessionLinguistProjectId(session, sessions)
+  const boundSessions = sessions.filter((session) => getProjectId(session) !== undefined)
   const activeBoundSessions = boundSessions.filter((session) =>
-    session.archived !== true && activeProjectIds.has(session.linguistProjectId!),
+    session.archived !== true && activeProjectIds.has(getProjectId(session)!),
   )
   const pinnedSessionTrees = buildPinnedAgentSessionTrees(activeBoundSessions)
   const archivedSessionGroups = activeProjects
     .map((project) => ({
       project,
       sessions: boundSessions.filter((session) =>
-        session.linguistProjectId === project.id && session.archived === true,
+        getProjectId(session) === project.id && session.archived === true,
       ),
     }))
     .filter((group) => group.sessions.length > 0)
   const missingGroups = new Map<string, AgentSessionMeta[]>()
   for (const session of boundSessions) {
-    const projectId = session.linguistProjectId!
+    const projectId = getProjectId(session)!
     if (projectById.has(projectId)) continue
     const group = missingGroups.get(projectId) ?? []
     group.push(session)
@@ -343,7 +348,7 @@ export function LinguistSidebarContentView({
             </div>
             <div className="ml-4 flex flex-col gap-0.5">
               {pinnedSessionTrees.map((tree) => {
-                const projectId = tree.session.linguistProjectId!
+                const projectId = getProjectId(tree.session)!
                 return (
                   <SessionTreeRows
                     key={tree.session.id}
@@ -382,7 +387,7 @@ export function LinguistSidebarContentView({
                 active={project.id === activeProjectId}
                 onOpen={onOpenProject}
                 sessions={boundSessions.filter((session) =>
-                  session.linguistProjectId === project.id
+                  getProjectId(session) === project.id
                   && session.archived !== true
                   && !session.pinned
                   && !hasPinnedVisibleParent(session, activeBoundSessions),
@@ -1378,7 +1383,7 @@ function SessionTreeRowsView({
               showPinIcon={!!tree.session.pinned}
               delegationSummary={tree.childSessions.length > 0 ? {
                 total: tree.childSessions.length,
-                completed: countCompletedDelegatedChildren(tree.childSessions),
+                settled: countSettledDelegatedChildren(tree.childSessions, indicatorMap),
                 expanded,
                 onToggle: () => setExpandedDelegationIds((previous) => {
                   const next = new Set(previous)

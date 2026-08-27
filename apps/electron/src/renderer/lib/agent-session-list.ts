@@ -6,6 +6,16 @@ interface AgentSessionTreeLike {
   childSessions: readonly Pick<AgentSessionMeta, 'id'>[]
 }
 
+/** 子会话的列表归属跟随父会话；CAT 权限仍只读取子会话自己的显式绑定。 */
+export function getAgentSessionLinguistProjectId(
+  session: AgentSessionMeta,
+  sessions: readonly AgentSessionMeta[],
+): string | undefined {
+  if (session.linguistProjectId) return session.linguistProjectId
+  if (!session.parentSessionId || !session.sourceDelegationId) return undefined
+  return sessions.find((candidate) => candidate.id === session.parentSessionId)?.linguistProjectId
+}
+
 /** 按最近更新时间排序 Agent 会话，保持与主进程 listAgentSessions 一致。 */
 export function sortAgentSessionsByUpdatedAtDesc(
   sessions: readonly AgentSessionMeta[],

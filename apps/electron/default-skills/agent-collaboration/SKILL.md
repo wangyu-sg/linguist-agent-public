@@ -2,7 +2,7 @@
 name: agent-collaboration
 description: Proma 协作子 Agent Skill。当需要并行探索多个方向（多样性探索）、对抗性审查验证已有方案、或多个长耗时独立任务需要真实可见的子会话时触发。用于判断是否以及如何调用 Proma 内置 collaboration 工具创建协作子会话。简单搜索、短调研、单文件修改、一次性代码审查由父会话直接使用普通工具完成。
 group: proma
-version: "1.1.2"
+version: "1.1.3"
 ---
 
 # Proma Agent Collaboration
@@ -13,7 +13,7 @@ Proma 已提供内置 `collaboration` MCP 工具。你必须通过这些工具�
 
 可用工具：
 
-- `collaboration.list_available_agent_models`：查看父会话当前渠道下可用于协作子 Agent 的模型。
+- `collaboration.list_available_agent_models`：查看全部已启用渠道中可用于协作子 Agent 的模型与 `channelId`。
 - `collaboration.delegate_agent`：创建单个真实子会话。
 - `collaboration.delegate_agents`：批量创建真实子会话，适合已经明确分片的大型并行任务。
 - `collaboration.wait_for_delegations`：等待子会话，支持 `mode=all` 等全部，或 `mode=any` 先收敛一部分完成结果。
@@ -67,7 +67,9 @@ Proma 已提供内置 `collaboration` MCP 工具。你必须通过这些工具�
 - 小型并行任务优先拆 2-8 个子会话；大型扫描、批量审查、跨模块调研可以使用 `delegate_agents` 批量创建。
 - 每个子任务必须独立、自包含、可完成。
 - 委派说明里写清楚目标、范围、禁止事项、预期输出。
-- 如需让不同子会话使用同一渠道下的不同模型，先调用 `list_available_agent_models` 查看可用模型，再为 `delegate_agent` 或 `delegate_agents.items[]` 传 `modelId`；不传则继承父会话当前模型。
+- 如需指定模型，先调用 `list_available_agent_models`，再从同一条模型记录传入 `channelId` 与 `modelId`；不传则继承父会话当前渠道和模型。
+- 需要目标模型的最高可用推理档时传 `reasoningEffort: "max"`，并以委派结果返回的 `effectiveReasoningEffort` 为准。
+- Linguist 项目中的 CAT 子任务必须显式传入 `linguistRole` 与 `linguistScope`；普通协作子会话不获得 CAT 工具。
 - 权限模式不要高于父会话；高风险修改优先让子会话只调研或审查。
 - 子会话不能继续创建子会话。
 

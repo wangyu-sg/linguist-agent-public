@@ -10,13 +10,16 @@
  */
 
 import * as React from 'react'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
+import type { createStore } from 'jotai/vanilla'
 import { toast } from 'sonner'
 import type { LinguistTurnContextV1 } from '@proma/shared'
 import {
   agentLinguistTurnContextCaptureAtom,
   agentSessionsAtom,
 } from '@/atoms/agent-atoms'
+import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
+import { activeTabAtom } from '@/atoms/tab-atoms'
 import {
   resolveAgentAttachmentSaveGate,
   type AgentAttachmentSaveGate,
@@ -28,6 +31,8 @@ import {
 } from '@/features/linguist/projects/cat-workspace-atoms'
 import { linguistProjectSummaryAtomFamily } from '@/features/linguist/projects/project-summary-atoms'
 import { buildProjectComposerContextChips } from '@/features/linguist/projects/project-composer-context'
+import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 import {
   DEFAULT_AGENT_HOST_CAPABILITIES,
   UNAVAILABLE_AGENT_HOST_CAPABILITIES,
@@ -53,6 +58,28 @@ export interface AgentHostExtension {
 
 /** 无绑定时订阅用占位 projectId;对应 atom 从不被写入,保持惰性。 */
 const NO_PROJECT = ''
+type JotaiStore = ReturnType<typeof createStore>
+
+/** 通用导航只问宿主是否接管；绑定项目的父/子会话统一返回项目 Tab。 */
+export function openHostedAgentSession(
+  store: JotaiStore,
+  sessionId: string,
+): Promise<void> | null {
+  const sessions = store.get(agentSessionsAtom)
+  const session = sessions.find((candidate) => candidate.id === sessionId)
+  if (!session || !getAgentSessionLinguistProjectId(session, sessions)) return null
+  return openLinguistAgentSession(store, sessionId).then((result) => {
+    if (!result.ok) throw new Error(result.error.message)
+  })
+}
+
+/** 当前全屏 Linguist Agent 交给 AppShell 原生右栏承载。 */
+export const activeHostedAgentSidePanelSessionIdAtom = atom((get) => {
+  const activeTab = get(activeTabAtom)
+  if (activeTab?.type !== 'linguist-project') return null
+  if (get(linguistWorkbenchUiStateAtomFamily(activeTab.projectId)).agentPresentation !== 'full') return null
+  return get(projectCurrentAgentSessionIdMapAtom).get(activeTab.projectId) ?? null
+})
 
 export function useAgentHostExtension(
   sessionId: string,

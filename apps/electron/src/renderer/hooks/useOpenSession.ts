@@ -7,6 +7,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
+import { toast } from 'sonner'
 import {
   tabsAtom,
   activeTabIdAtom,
@@ -31,6 +32,7 @@ import {
   settingsOpenAtom,
   settingsPendingSessionNavigationAtom,
 } from '@/atoms/settings-tab'
+import { openHostedAgentSession } from '@/host/agent-host-extension'
 
 interface OpenSessionOptions {
   bypassSettingsGuard?: boolean
@@ -64,6 +66,18 @@ export function useOpenSession(): OpenSessionFn {
         return
       }
       setSettingsOpen(false)
+      const hostedNavigation = type === 'agent' ? openHostedAgentSession(store, sessionId) : null
+      if (hostedNavigation) {
+        void hostedNavigation.then(
+          undefined,
+          (error: unknown) => {
+            toast.error('打开项目会话失败', {
+              description: error instanceof Error ? error.message : '与主进程通信异常',
+            })
+          },
+        )
+        return
+      }
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
       const restore = type === 'agent'
         ? buildOpenTabRestore(

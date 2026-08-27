@@ -1,5 +1,6 @@
 import type { AgentSessionMeta } from '@proma/shared'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 
 export interface AgentSessionTreeNode {
   session: AgentSessionMeta
@@ -91,8 +92,11 @@ export function treeContainsSessionId(
   )
 }
 
-export function isOrdinaryAgentSession(session: AgentSessionMeta): boolean {
-  return !session.linguistProjectId
+export function isOrdinaryAgentSession(
+  session: AgentSessionMeta,
+  sessions: readonly AgentSessionMeta[],
+): boolean {
+  return getAgentSessionLinguistProjectId(session, sessions) === undefined
 }
 
 export function isLinguistProjectSession(

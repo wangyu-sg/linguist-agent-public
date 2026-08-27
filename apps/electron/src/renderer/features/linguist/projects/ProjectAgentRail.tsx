@@ -14,18 +14,13 @@ import type {
 } from '@proma/shared'
 import {
   agentPendingPromptAtom,
-  agentDiffPanelTabAtom,
-  agentSessionPathMapAtom,
-  agentSidePanelLayoutAtomFamily,
   agentSidePanelOpenAtomFamily,
   agentSessionsAtom,
   type AgentPendingPrompt,
-  type AgentSidePanelTab,
 } from '@/atoms/agent-atoms'
 import { agentSideChatMapAtom } from '@/atoms/chat-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { AgentView } from '@/components/agent/AgentView'
-import { SidePanel } from '@/components/agent/SidePanel'
 import { useAgentSurfaceHostPresentation } from '@/host/agent-host-extension'
 import { Button } from '@/components/ui/button'
 import {
@@ -76,47 +71,6 @@ type JotaiStore = ReturnType<typeof createStore>
 type CreateProjectSession = (
   input: LinguistSessionCreateForProjectRequest,
 ) => Promise<LinguistIpcResult<AgentSessionMeta>>
-
-/** Full 复用原生 Files / Changes / Chat；会话路径、活动 Tab 与开关均沿用 Agent atoms。 */
-export function ProjectAgentFullSidePanel({
-  sessionId,
-  width,
-}: {
-  sessionId: string
-  width: number
-}): React.ReactElement | null {
-  const sidePanelOpen = useAtomValue(agentSidePanelOpenAtomFamily(sessionId))
-  const sessionPath = useAtomValue(agentSessionPathMapAtom).get(sessionId) ?? null
-  const storedTab = useAtomValue(agentDiffPanelTabAtom).get(sessionId) ?? 'files'
-  const activeTab: AgentSidePanelTab = storedTab === 'browser' || storedTab === 'preview' ? 'files' : storedTab
-  const setDiffPanelTabs = useSetAtom(agentDiffPanelTabAtom)
-  const setActiveTab = React.useCallback((tab: AgentSidePanelTab): void => {
-    setDiffPanelTabs((previous) => {
-      if (previous.get(sessionId) === tab) return previous
-      const next = new Map(previous)
-      next.set(sessionId, tab)
-      return next
-    })
-  }, [sessionId, setDiffPanelTabs])
-
-  if (!sidePanelOpen) return null
-  return (
-    <aside
-      data-testid="linguist-agent-side-panel"
-      aria-label="项目 Agent 文件、改动与问答"
-      className="min-h-0 shrink-0 overflow-hidden"
-      style={{ width: `min(${width}px, calc(100% - 20rem))` }}
-    >
-      <SidePanel
-        sessionId={sessionId}
-        sessionPath={sessionPath}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        width={width}
-      />
-    </aside>
-  )
-}
 
 /** Full header 的关闭态恢复入口；不复制 SidePanel 自己的关闭状态。 */
 export function ProjectAgentFullPanelOpenButton({ sessionId }: { sessionId: string }): React.ReactElement | null {
@@ -474,9 +428,6 @@ export function ProjectAgentRail({
     setUiState({ agentPresentation: 'rail' })
   }, [setUiState, canExpandToFull, uiState.agentPresentation])
 
-  // 问题 10：只消费 Proma 按会话保存的侧面板宽度；不为 Companion 新增存储或拖拽系统。
-  const sharedSidePanelWidth = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId ?? '')).width
-
   // 问题 11：仅在 Companion Chat 新打开/切换会话时自动展开 full；
   // 「返回工作台」把 presentation 切回 rail 时 conversationId 不变，共享判定不再推回。
   const previousSideChatIdRef = React.useRef(sideChatConversationId)
@@ -643,19 +594,11 @@ export function ProjectAgentRail({
             </div>
           )}
         </div>
-        <div className="flex min-h-0 flex-1">
-          <div className="min-w-0 flex-1">
-            <AgentView
-              sessionId={sessionId}
-              embedded={presentation === 'rail'}
-            />
-          </div>
-          {presentation === 'full' && (
-            <ProjectAgentFullSidePanel
-              sessionId={sessionId}
-              width={sharedSidePanelWidth}
-            />
-          )}
+        <div className="min-h-0 flex-1">
+          <AgentView
+            sessionId={sessionId}
+            embedded={presentation === 'rail'}
+          />
         </div>
       </div>
     )

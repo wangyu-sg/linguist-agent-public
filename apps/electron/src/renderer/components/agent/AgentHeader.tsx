@@ -7,7 +7,7 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { Check, ChevronDown, Pencil, Split, X } from 'lucide-react'
-import { agentSessionsAtom, agentSideTemporaryAgentMapAtom, agentDiffPanelTabAtom, currentSessionSidePanelOpenAtom, getExplorationSidePanelTab } from '@/atoms/agent-atoms'
+import { agentSessionsAtom, agentSidePanelOpenAtomFamily, agentSideTemporaryAgentMapAtom, agentDiffPanelTabAtom, getExplorationSidePanelTab } from '@/atoms/agent-atoms'
 import { tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import {
@@ -34,7 +34,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
   const setTabs = useSetAtom(tabsAtom)
   const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
   const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
-  const setRightPanelOpen = useSetAtom(currentSessionSidePanelOpenAtom)
+  const setRightPanelOpen = useSetAtom(agentSidePanelOpenAtomFamily(sessionId))
   const [editing, setEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState('')
   const inputRef = React.useRef<HTMLInputElement>(null)

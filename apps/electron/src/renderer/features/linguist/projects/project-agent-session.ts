@@ -9,6 +9,7 @@ import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { activeTabAtom, type TabItem } from '@/atoms/tab-atoms'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 import { linguistWorkbenchUiStateAtomFamily } from './cat-workspace-atoms'
 
 type JotaiStore = ReturnType<typeof createStore>
@@ -24,8 +25,11 @@ const pendingCreates = new WeakMap<
 function isUsableProjectSession(
   session: AgentSessionMeta | undefined,
   projectId: string,
+  sessions: readonly AgentSessionMeta[],
 ): session is AgentSessionMeta {
-  return session?.linguistProjectId === projectId && session.archived !== true
+  return session !== undefined
+    && getAgentSessionLinguistProjectId(session, sessions) === projectId
+    && session.archived !== true
 }
 
 export function selectProjectAgentSession(
@@ -34,7 +38,7 @@ export function selectProjectAgentSession(
   sessionId: string,
 ): boolean {
   const session = store.get(agentSessionsAtom).find((item) => item.id === sessionId)
-  if (!isUsableProjectSession(session, projectId)) return false
+  if (!isUsableProjectSession(session, projectId, store.get(agentSessionsAtom))) return false
 
   store.set(projectCurrentAgentSessionIdMapAtom, (previous) => {
     const next = new Map(previous)
@@ -51,7 +55,7 @@ export function selectProjectAgentSessionForHistory(
   sessionId: string,
 ): boolean {
   const session = store.get(agentSessionsAtom).find((item) => item.id === sessionId)
-  if (session?.linguistProjectId !== projectId) return false
+  if (!session || getAgentSessionLinguistProjectId(session, store.get(agentSessionsAtom)) !== projectId) return false
   store.set(projectCurrentAgentSessionIdMapAtom, (previous) => {
     const next = new Map(previous)
     next.set(projectId, sessionId)
@@ -68,7 +72,7 @@ export function selectFallbackLinguistSession(
   const fallback = store.get(agentSessionsAtom)
     .filter((session) =>
       session.id !== excludedSessionId
-      && isUsableProjectSession(session, projectId),
+      && isUsableProjectSession(session, projectId, store.get(agentSessionsAtom)),
     )
     .sort((left, right) =>
       Number(!!right.pinned) - Number(!!left.pinned)
@@ -90,7 +94,7 @@ export function registerCreatedProjectSession(
   projectId: string,
   session: AgentSessionMeta,
 ): boolean {
-  if (!isUsableProjectSession(session, projectId)) return false
+  if (!isUsableProjectSession(session, projectId, [...store.get(agentSessionsAtom), session])) return false
   store.set(agentSessionsAtom, (previous) =>
     replaceAgentSessionInFreshnessOrder(previous, session),
   )
@@ -103,7 +107,8 @@ export function resolveActiveLinguistProjectId(
 ): string | null {
   if (activeTab?.type === 'linguist-project') return activeTab.projectId
   if (activeTab?.type !== 'agent' && activeTab?.type !== 'preview') return null
-  return sessions.find((session) => session.id === activeTab.sessionId)?.linguistProjectId ?? null
+  const session = sessions.find((item) => item.id === activeTab.sessionId)
+  return session ? getAgentSessionLinguistProjectId(session, sessions) ?? null : null
 }
 
 /** 用户显式新建：不复用当前会话，但仍统一校验项目绑定并登记原生 Session。 */
@@ -162,7 +167,7 @@ export function ensureProjectAgentSession(
 ): Promise<LinguistIpcResult<AgentSessionMeta>> {
   const currentId = store.get(projectCurrentAgentSessionIdMapAtom).get(projectId)
   const current = store.get(agentSessionsAtom).find((session) => session.id === currentId)
-  if (isUsableProjectSession(current, projectId)) {
+  if (isUsableProjectSession(current, projectId, store.get(agentSessionsAtom))) {
     return Promise.resolve({ ok: true, data: current })
   }
 
