@@ -19,18 +19,13 @@ import {
 } from '@/atoms/tab-atoms'
 import type { TabItem } from '@/atoms/tab-atoms'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
-import { currentConversationIdAtom } from '@/atoms/chat-atoms'
 import {
   agentSessionsAtom,
   currentSessionSidePanelOpenAtom,
   agentWorkspacesAtom,
-  currentAgentSessionIdAtom,
-  currentAgentWorkspaceIdAtom,
   agentDiffPanelTabAtom,
   getBrowserSidePanelTab,
-  unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
-import { appModeAtom } from '@/atoms/app-mode'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { tearOffPreviewToSplit } from '@/components/diff/preview-opener'
 import { tearOffScratchToSplit } from '@/components/scratch-pad/scratch-pad-opener'
@@ -39,6 +34,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { TabBarItem } from './TabBarItem'
 import { getTabBarActionLayout } from './tab-bar-action-layout'
 import { useCloseTab } from '@/hooks/useCloseTab'
+import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { cn } from '@/lib/utils'
 import { shortcutGuideOpenAtom } from '@/atoms/shortcut-guide'
 import { faqDialogOpenAtom } from '@/atoms/faq-dialog'
@@ -50,16 +46,10 @@ export function TabBar(): React.ReactElement {
   const [activeTabId, setActiveTabId] = useAtom(activeTabIdAtom)
   const indicatorMap = useAtomValue(tabIndicatorMapAtom)
 
-  // Tab 切换时同步 sidebar 状态
-  const appMode = useAtomValue(appModeAtom)
-  const setAppMode = useSetAtom(appModeAtom)
-  const setCurrentConversationId = useSetAtom(currentConversationIdAtom)
-  const setCurrentAgentSessionId = useSetAtom(currentAgentSessionIdAtom)
   const agentSessions = useAtomValue(agentSessionsAtom)
   const agentWorkspaces = useAtomValue(agentWorkspacesAtom)
-  const setCurrentAgentWorkspaceId = useSetAtom(currentAgentWorkspaceIdAtom)
-  const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
   const setAutomationForm = useSetAtom(automationFormAtom)
+  const syncActiveTabSideEffects = useSyncActiveTabSideEffects()
 
   // 统一关闭逻辑：关闭当前会话入口并回到 Scratch Pad，不停止后台 Agent
   const { requestClose } = useCloseTab()
@@ -122,36 +112,8 @@ export function TabBar(): React.ReactElement {
 
     const tab = tabs.find((t) => t.id === tabId)
     if (!tab) return
-
-    if (tab.type === 'chat') {
-      setAppMode('chat')
-      setCurrentConversationId(tab.sessionId)
-    } else if (tab.type === 'agent' || tab.type === 'preview') {
-      setAppMode('agent')
-      setCurrentAgentSessionId(tab.sessionId)
-
-      // 用户打开查看后只清除未读角标；是否完成由用户通过对勾确认。
-      setUnviewedCompleted((prev) => {
-        if (!prev.has(tab.sessionId)) return prev
-        const next = new Set(prev)
-        next.delete(tab.sessionId)
-        return next
-      })
-
-      const session = agentSessions.find((s) => s.id === tab.sessionId)
-      if (session?.workspaceId) {
-        setCurrentAgentWorkspaceId(session.workspaceId)
-        window.electronAPI.updateSettings({
-          agentWorkspaceId: session.workspaceId,
-        }).catch(console.error)
-      }
-    } else if (tab.type === 'scratch' || tab.type === 'tutorial') {
-      setCurrentConversationId(null)
-      if (appMode !== 'agent') {
-        setCurrentAgentSessionId(null)
-      }
-    }
-  }, [setActiveTabId, setAutomationForm, tabs, agentSessions, appMode, setAppMode, setCurrentConversationId, setCurrentAgentSessionId, setCurrentAgentWorkspaceId, setUnviewedCompleted])
+    syncActiveTabSideEffects(tab)
+  }, [setActiveTabId, setAutomationForm, syncActiveTabSideEffects, tabs])
 
   const handleDragStart = React.useCallback((tabId: string, e: React.PointerEvent) => {
     if (e.button !== 0) return // 只处理左键
@@ -181,7 +143,7 @@ export function TabBar(): React.ReactElement {
     document.addEventListener('pointerup', handleUp)
   }, [tabs])
 
-  if (tabs.length === 0) return <div className="h-[34px] titlebar-drag-region" />
+  if (tabs.length === 0) return <div className="h-10 titlebar-drag-region" />
 
   return (
     <>
@@ -410,7 +372,7 @@ function TabBarInner({
   }, [])
 
   return (
-    <div ref={barRef} className="main-tabbar flex items-end h-[34px] tabbar-bg relative">
+    <div ref={barRef} className="main-tabbar relative flex h-10 items-end tabbar-bg">
       {/* 顶部 TabBar 的空白区域保持可拖拽；系统控制按钮由窗口顶部的统一标题栏承载。
           不要把 titlebar-no-drag 加到下面的整条 flex 容器上，否则标签右侧空白会失去拖拽能力。
           需要交互的单个 Tab 会在 TabBarItem 内部自己声明 titlebar-no-drag。 */}
@@ -457,7 +419,6 @@ function TabBarInner({
       <ShortcutGuideButton
         positionClassName={actionLayout.shortcutPositionClassName}
         showBrowserButton={showBrowserButton}
-        showPanelButton={showOpenPanelButton}
         hasMinimizedBrowser={hasMinimizedBrowser}
         onOpenBrowser={openBrowser}
         onOpen={openShortcutGuide}
@@ -476,7 +437,6 @@ function TabBarInner({
 function ShortcutGuideButton({
   positionClassName,
   showBrowserButton,
-  showPanelButton,
   hasMinimizedBrowser,
   onOpenBrowser,
   onOpen,
@@ -484,7 +444,6 @@ function ShortcutGuideButton({
 }: {
   positionClassName: string
   showBrowserButton: boolean
-  showPanelButton: boolean
   hasMinimizedBrowser: boolean
   onOpenBrowser: () => void
   onOpen: () => void
@@ -497,18 +456,7 @@ function ShortcutGuideButton({
         positionClassName,
       )}
     >
-      <div
-        data-tab-bar-action-fade="true"
-        aria-hidden="true"
-        className={cn(
-          "pointer-events-none absolute bottom-0 -left-12 h-[34px] [mask-image:linear-gradient(to_right,transparent_0,black_48px)]",
-          showPanelButton ? '-right-9' : '-right-1',
-        )}
-        style={{
-          background: 'linear-gradient(to bottom, hsl(var(--tabbar-surface)) 0 calc(100% - 1px), hsl(var(--border) / 0.8) calc(100% - 1px))',
-        }}
-      />
-      <div className="relative flex items-center gap-1">
+      <div className="flex items-center gap-1">
         {/* FAQ 快捷按钮（在快捷键地图左边） */}
         <Tooltip>
           <TooltipTrigger asChild>

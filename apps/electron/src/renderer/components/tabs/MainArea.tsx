@@ -63,15 +63,13 @@ export function MainArea(): React.ReactElement {
   // TabBar 立即反馈，较重的中心内容可让出当前交互帧；Agent 历史则保持当前会话避免旧内容占屏。
   const deferredActiveTabId = React.useDeferredValue(activeTabId)
   const contentTabId = activeTab?.type === 'agent' ? activeTabId : deferredActiveTabId
-  // Agent 会话从左侧历史列表切换，中心区不再重复展示同一组顶部 Tab。
-  const showCenterTabBar = activeTab?.type !== 'agent'
   const [isRightPanelOpen, setRightPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
   const toggleRightPanel = React.useCallback(() => {
     if (activeTab?.type !== 'agent') return
     setRightPanelOpen(!isRightPanelOpen)
   }, [activeTab?.type, isRightPanelOpen, setRightPanelOpen])
 
-  // 不能依赖 TabBar 注册：Agent 会话已不渲染中心 TabBar，快捷键需要在常驻主内容区监听。
+  // 快捷键由常驻主内容区统一注册，避免依赖某个具体顶栏是否渲染。
   React.useEffect(() => registerShortcut('toggle-right-panel', toggleRightPanel), [toggleRightPanel])
 
   // 浏览器状态仍由主内容区常驻订阅，右侧工作区只读取 atom 渲染，避免侧栏收起时遗漏状态更新。
@@ -195,7 +193,7 @@ export function MainArea(): React.ReactElement {
             <ProjectsView />
           ) : (
             <>
-              {showCenterTabBar && <TabBar />}
+              <TabBar />
               {automationFormOpen && activeView !== 'conversations' ? (
                 <AutomationFormView />
               ) : tabs.length === 0 ? (

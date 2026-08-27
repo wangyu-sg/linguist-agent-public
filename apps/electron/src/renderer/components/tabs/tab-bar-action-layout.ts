@@ -8,8 +8,8 @@ export interface TabBarActionLayout {
 export function getTabBarActionLayout(hasPanelButton: boolean, hasBrowserButton = false): TabBarActionLayout {
   return {
     scrollPaddingClassName: hasPanelButton
-      ? (hasBrowserButton ? 'pr-28' : 'pr-20')
-      : (hasBrowserButton ? 'pr-20' : 'pr-10'),
+      ? (hasBrowserButton ? 'pr-32' : 'pr-24')
+      : (hasBrowserButton ? 'pr-24' : 'pr-16'),
     shortcutPositionClassName: hasPanelButton
       ? 'inset-y-0 items-end pb-[3px] z-10 right-9'
       : 'inset-y-0 items-end pb-[3px] z-10 right-1',

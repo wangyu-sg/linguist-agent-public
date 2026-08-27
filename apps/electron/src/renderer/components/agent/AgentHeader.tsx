@@ -5,8 +5,8 @@
  */
 
 import * as React from 'react'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { Check, ChevronDown, PanelRight, Pencil, Split, X } from 'lucide-react'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { Check, ChevronDown, Pencil, Split, X } from 'lucide-react'
 import { agentSessionsAtom, agentSideTemporaryAgentMapAtom, agentDiffPanelTabAtom, currentSessionSidePanelOpenAtom, getExplorationSidePanelTab } from '@/atoms/agent-atoms'
 import { tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
@@ -34,7 +34,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
   const setTabs = useSetAtom(tabsAtom)
   const setSideTemporaryAgentMap = useSetAtom(agentSideTemporaryAgentMapAtom)
   const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
-  const [isRightPanelOpen, setRightPanelOpen] = useAtom(currentSessionSidePanelOpenAtom)
+  const setRightPanelOpen = useSetAtom(currentSessionSidePanelOpenAtom)
   const [editing, setEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState('')
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -102,7 +102,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
 
   return (
     <>
-    <div className="relative z-[51] flex items-center gap-2 px-3 h-[48px]">
+    <div className="relative z-[51] flex h-10 items-center gap-2 px-3">
       {/* 页面标题栏仍可拖动；系统控制按钮由窗口顶部的统一标题栏承载。 */}
       <div className="absolute inset-0 titlebar-drag-region pointer-events-none" />
       {editing ? (
@@ -114,7 +114,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
             onKeyDown={handleKeyDown}
             onBlur={saveTitle}
             aria-label="会话标题"
-            className="flex-1 bg-transparent text-[15px] font-normal border-b border-primary/50 outline-none px-0 py-0.5 min-w-0"
+            className="min-w-0 flex-1 border-b border-primary/50 bg-transparent px-0 py-0.5 text-sm font-normal outline-none"
             maxLength={100}
           />
           <button
@@ -145,7 +145,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
               className="titlebar-no-drag group flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted/60"
               aria-label={`会话菜单：${session.title}`}
             >
-              <span className="truncate text-[15px] font-normal text-foreground">{session.title}</span>
+              <span className="truncate text-sm font-normal text-foreground">{session.title}</span>
               <ChevronDown className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </button>
           </DropdownMenuTrigger>
@@ -188,16 +188,6 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      )}
-      {!isRightPanelOpen && (
-        <button
-          type="button"
-          onClick={() => setRightPanelOpen(true)}
-          className="titlebar-no-drag ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
-          aria-label="展开右侧工作区"
-        >
-          <PanelRight className="size-4" />
-        </button>
       )}
     </div>
     <LinguistSessionBindingNotice session={session} />

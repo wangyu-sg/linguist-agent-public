@@ -104,7 +104,7 @@ export function DiffPanelTabBar({
     <div className="relative flex h-10 shrink-0 items-center border-b border-border/50 bg-content-area">
       <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
       <div className="relative flex min-w-0 flex-1 items-center titlebar-no-drag">
-        <div ref={tabListRef} className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 py-1 scrollbar-none" role="tablist" aria-label="右侧工作区">
+        <div ref={tabListRef} className="flex h-10 min-w-0 flex-1 items-end overflow-x-auto overscroll-x-contain px-2 scrollbar-none" role="tablist" aria-label="右侧工作区">
           {tabs.map((tab) => {
             const selected = activeTab === tab.id
             const isChangesTab = tab.id === 'changes'
@@ -116,9 +116,9 @@ export function DiffPanelTabBar({
                   else tabRefs.current.delete(tab.id)
                 }}
                 className={cn(
-                  'group flex h-7 min-w-[84px] max-w-60 shrink-0 items-center rounded-lg transition-[background-color,color] duration-150',
+                  'group relative flex h-[34px] min-w-[84px] max-w-60 shrink-0 items-center transition-[background-color,color] duration-150',
                   selected
-                    ? 'bg-foreground/[0.08] text-foreground'
+                    ? 'text-foreground after:absolute after:inset-x-[5px] after:bottom-0 after:h-[3px] after:bg-[hsl(var(--tab-indicator))]'
                     : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                 )}
               >
@@ -127,7 +127,7 @@ export function DiffPanelTabBar({
                   role="tab"
                   aria-selected={selected}
                   onClick={() => selectTab(tab.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 self-stretch px-3 text-left text-[13px] outline-none"
+                  className="flex min-w-0 flex-1 items-center gap-2 self-stretch px-3 text-left text-xs outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   {tab.activity || (isChangesTab && unseenChanges && !selected) ? (
                     <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="有未查看更新" />
