@@ -50,6 +50,12 @@ jobs:
             exit 0
           fi
 
+          RELEASE_NOTES="$(git log -1 --format=%B "$HEAD_SHA" | sed -nE 's/^Release-Note:[[:space:]]*(.+)$/\1/ip' | grep -Eiv '^[[:space:]]*skip[[:space:]]*$' || true)"
+          if [ -z "$RELEASE_NOTES" ]; then
+            echo '发布提交缺少 Release-Note，拒绝将内部 Commit 标题公开为更新日志。' >&2
+            exit 1
+          fi
+
           VERSION="$(node -p "require('./apps/electron/package.json').version")"
           TAG="v${VERSION}"
           if git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null; then

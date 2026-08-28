@@ -27,24 +27,11 @@ function parseArgs(argv) {
   return options
 }
 
-const CHANGE_LABELS = {
-  feat: '新增',
-  fix: '修复',
-  perf: '优化',
-  refactor: '调整',
-}
-
-const INTERNAL_SCOPES = new Set(['build', 'ci', 'docs', 'release', 'sync', 'test'])
-
-export function releaseNotesForCommit(subject, body = '') {
-  const explicit = body.split(/\r?\n/)
+export function releaseNotesForCommit(_subject, body = '') {
+  return body.split(/\r?\n/)
     .map((line) => /^Release-Note:\s*(.+)$/i.exec(line)?.[1]?.trim())
     .filter(Boolean)
-  if (explicit.length > 0) return explicit.filter((note) => note.toLowerCase() !== 'skip')
-
-  const match = /^(feat|fix|perf|refactor)(?:\(([^)]+)\))?!?:\s*(.+)$/i.exec(subject)
-  if (!match || INTERNAL_SCOPES.has((match[2] ?? '').toLowerCase())) return []
-  return [`**${CHANGE_LABELS[match[1].toLowerCase()]}**：${match[3].trim()}`]
+    .filter((note) => note.toLowerCase() !== 'skip')
 }
 
 export function normalizeUpstreamNotes(notes) {
@@ -107,6 +94,9 @@ function main() {
   const notes = commits
     .flatMap(({ subject, body }) => releaseNotesForCommit(subject, body))
   const previousBaseline = baselineAt(options.root, options.from)
+  if (notes.length === 0 && (!previousBaseline || previousBaseline === currentBaseline)) {
+    fail('本地产品发布缺少 Release-Note，拒绝使用内部 Commit 标题生成公开更新日志')
+  }
   const upstreamNotes = options.upstreamNotes ? readFileSync(options.upstreamNotes, 'utf8') : ''
   const content = buildReleaseNotes({ tag, notes, currentBaseline, previousBaseline, upstreamNotes })
   writeFileSync(resolve(options.root, options.out), content)

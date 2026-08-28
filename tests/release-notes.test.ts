@@ -2,14 +2,15 @@ import { describe, expect, test } from 'bun:test'
 import { buildReleaseNotes, normalizeUpstreamNotes, releaseNotesForCommit } from '../scripts/generate-release-notes.mjs'
 
 describe('Release notes', () => {
-  test('过滤工程提交并保留用户可读变化', () => {
+  test('只接受明确编辑的公开更新日志', () => {
     expect(releaseNotesForCommit('chore(ci): trim tests')).toEqual([])
     expect(releaseNotesForCommit('fix(release): skip duplicate validation')).toEqual([])
-    expect(releaseNotesForCommit('fix(agent): 修复会话恢复')).toEqual(['**修复**：修复会话恢复'])
+    expect(releaseNotesForCommit('fix(agent): restore agent session tabs')).toEqual([])
     expect(releaseNotesForCommit('chore: internal', 'Release-Note: 新增项目批次视图\nRelease-Note: 改进窄窗口操作')).toEqual([
       '新增项目批次视图',
       '改进窄窗口操作',
     ])
+    expect(releaseNotesForCommit('feat: internal', 'Release-Note: skip')).toEqual([])
   })
 
   test('上游升级展示真实 Proma Release 内容', () => {
