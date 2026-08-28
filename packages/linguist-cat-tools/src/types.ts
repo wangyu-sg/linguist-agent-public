@@ -432,6 +432,15 @@ export interface CatConfirmSegmentsResult {
     pending: number
     status: 'in_progress' | 'complete' | 'completed_with_blocks'
   }
+  /** 宿主签发的双覆盖完成状态；Segment decision complete 不能替代 Evidence complete。 */
+  fullReview?: {
+    status: 'in_progress' | 'blocked' | 'stale' | 'complete'
+    requiredEvidence: number
+    presentedEvidence: number
+    pendingEvidence: number
+    blockingGaps: number
+    warnings: number
+  }
   replayed: boolean
 }
 

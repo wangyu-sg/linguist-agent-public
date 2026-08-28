@@ -235,11 +235,18 @@ function isExportManifest(
 } {
   if (typeof value !== 'object' || value === null) return false
   const item = value as Record<string, unknown>
+  const evidence = item.evidence
+  const validEvidence = evidence === undefined || (
+    typeof evidence === 'object'
+    && evidence !== null
+    && ['not-applicable', 'in-progress', 'blocked', 'stale', 'complete'].includes(String((evidence as Record<string, unknown>).status))
+    && Array.isArray((evidence as Record<string, unknown>).gaps)
+  )
   return item.schemaVersion === 1
     && typeof item.artifactId === 'string'
-    && /^exp-[0-9a-f]{16}$/.test(item.artifactId)
+    && /^(?:exp-[0-9a-f]{16}|exp_v2_[0-9a-f]{64})$/.test(item.artifactId)
     && typeof item.assetId === 'string'
-    && /^ast-[0-9a-f]{16}$/.test(item.assetId)
+    && /^ast(?:-[0-9a-f]{16}|_v2_[0-9a-f]{64})$/.test(item.assetId)
     && typeof item.sha256 === 'string'
     && /^[0-9a-f]{64}$/.test(item.sha256)
     && typeof item.sizeBytes === 'number'
@@ -249,6 +256,8 @@ function isExportManifest(
     && typeof item.verifiedAt === 'string'
     && typeof item.projectRevision === 'string'
     && /^rev-[0-9a-f]{64}$/.test(item.projectRevision)
+    && (item.validation === undefined || item.validation === 'verified' || item.validation === 'as-is')
+    && validEvidence
 }
 
 export function checkExportManifests(

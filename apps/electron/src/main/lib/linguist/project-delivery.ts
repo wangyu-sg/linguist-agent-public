@@ -9,6 +9,7 @@ import {
   type LinguistProject,
   type UnknownTagPatternResult,
   type QaFindingSeverity,
+  type WorkflowStage,
 } from '@linguist/cat-core'
 import {
   FormatExportError,
@@ -55,6 +56,7 @@ import type {
   ImportVerificationCheck,
   ImportVerificationReport,
   LinguistDeliveryBlocker,
+  LinguistDeliveryEvidenceSummary,
   LinguistDeliveryPreflight,
   LinguistDeliveryQaSummary,
   LinguistDeliveryVerification,
@@ -80,6 +82,52 @@ const EXPORT_HARD_RULES = new Set<string>([
   DETERMINISTIC_HARD_RULE_CODES.REQUIRED_TERMINOLOGY_MISSING,
   DETERMINISTIC_HARD_RULE_CODES.FORBIDDEN_TERM_PRESENT,
 ])
+
+export function summarizeDeliveryEvidence(
+  db: ProjectDatabase,
+  assetId: string,
+  stage: WorkflowStage,
+): LinguistDeliveryEvidenceSummary {
+  const latestByScope = new Map<string, ReturnType<ProjectDatabase['stageEvidence']['list']>[number]>()
+  for (const state of db.stageEvidence.list(stage)) {
+    if (!state.plan.assetIds.includes(assetId) || latestByScope.has(state.baseline.segmentScopeHash)) continue
+    latestByScope.set(state.baseline.segmentScopeHash, state)
+  }
+  const states = [...latestByScope.values()]
+  if (states.length === 0) {
+    return { status: 'not-applicable', stageRuns: 0, required: 0, presented: 0, pending: 0, gaps: [] }
+  }
+  const completions = states.map((state) => db.stageEvidence.refreshCompletion(
+    state.stageRunId,
+    db.segments.getStageDecisionCoverage(state.stage, state.plan.segmentIds),
+  ))
+  const gaps = new Map<string, LinguistDeliveryEvidenceSummary['gaps'][number]>()
+  for (const completion of completions) {
+    for (const gap of [...completion.blockingGaps, ...completion.warnings]) {
+      gaps.set(gap.id, {
+        code: gap.code,
+        severity: gap.severity,
+        summary: gap.summary,
+        suggestedAction: gap.suggestedAction,
+      })
+    }
+  }
+  const statuses = completions.map((completion) => completion.status)
+  return {
+    status: statuses.includes('stale')
+      ? 'stale'
+      : statuses.includes('blocked')
+        ? 'blocked'
+        : statuses.includes('in_progress')
+          ? 'in-progress'
+          : 'complete',
+    stageRuns: states.length,
+    required: completions.reduce((sum, item) => sum + item.presentation.required, 0),
+    presented: completions.reduce((sum, item) => sum + item.presentation.presented, 0),
+    pending: completions.reduce((sum, item) => sum + item.presentation.pending.length, 0),
+    gaps: [...gaps.values()],
+  }
+}
 
 /** 交付预检、确定性导出验证与源资产导入。 */
 export class ProjectDelivery {
@@ -259,6 +307,32 @@ export class ProjectDelivery {
       })
     }
     const workflowStage = normalizeWorkflowStage(project.workflowStage)
+    const evidence = this.context.call(
+      () => summarizeDeliveryEvidence(db, assetId, workflowStage),
+      projectId,
+    )
+    const blockingEvidenceGaps = evidence.gaps.filter((gap) => gap.severity === 'blocking').length
+    if (evidence.status === 'stale') {
+      blockers.push({
+        code: 'EVIDENCE_STAGE_STALE',
+        count: 1,
+        message: '本轮参考资料、映射、规则或授权范围已变化，请刷新后重新确认',
+      })
+    }
+    if (evidence.pending > 0) {
+      blockers.push({
+        code: 'EVIDENCE_REQUIRED_PENDING',
+        count: evidence.pending,
+        message: `仍有 ${evidence.pending} 项已声明必需的证据尚未进入模型请求`,
+      })
+    }
+    if (blockingEvidenceGaps > 0) {
+      blockers.push({
+        code: 'EVIDENCE_BLOCKING_GAPS',
+        count: blockingEvidenceGaps,
+        message: `仍有 ${blockingEvidenceGaps} 项显式阻断的证据缺口`,
+      })
+    }
     const expectedNativeStatus = nativeStatusForStage(
       workflowStage,
       asset.formatId,
@@ -279,6 +353,7 @@ export class ProjectDelivery {
       unconfirmedUnlockedSegments,
       pendingProposalCount,
       qa,
+      evidence,
       ready: blockers.length === 0,
       blockers,
     }
@@ -294,8 +369,8 @@ export class ProjectDelivery {
       projectId,
       assetId,
       validation === 'as-is'
-        ? { allowBlockingQa: true, allowHardRuleViolations: true }
-        : {},
+        ? { allowBlockingQa: true, allowHardRuleViolations: true, validation }
+        : { validation },
     )
     const verification: LinguistDeliveryVerification = {
       verifiedSegments: staged.verifiedSegments,
@@ -421,7 +496,11 @@ export class ProjectDelivery {
   async stageExport(
     projectId: string,
     assetId: string,
-    options: { allowBlockingQa?: boolean; allowHardRuleViolations?: boolean } = {},
+    options: {
+      allowBlockingQa?: boolean
+      allowHardRuleViolations?: boolean
+      validation?: 'verified' | 'as-is'
+    } = {},
   ): Promise<LinguistStagedExport> {
     const project = this.context.getProject(projectId)
     if (project.archivedAt !== undefined) {
@@ -475,6 +554,8 @@ export class ProjectDelivery {
         stagingPath: staged.stagingPath,
         artifact: staged.artifact,
         projectRevision: computeLinguistProjectRevision(project, db),
+        validation: options.validation ?? 'verified',
+        evidence: summarizeDeliveryEvidence(db, assetId, normalizeWorkflowStage(project.workflowStage)),
       })
       return staged
     } catch (err) {

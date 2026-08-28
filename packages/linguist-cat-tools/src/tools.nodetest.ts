@@ -248,7 +248,7 @@ test('factory: CAT tools expose project-local accept and export but no resolve o
 
 test('cat_confirm_segments: Reviewer 的 101 段冻结范围跨两批后才 complete', async () => {
   const fixture = setup()
-  const { segments } = seedAsset(fixture.db, fixture.project, {
+  const { asset, segments } = seedAsset(fixture.db, fixture.project, {
     filename: 'review-101.tsv',
     sha: '1'.repeat(64),
     count: 101,
@@ -257,10 +257,41 @@ test('cat_confirm_segments: Reviewer 的 101 段冻结范围跨两批后才 comp
   })
   const scope = segments.map((segment) => segment.id as string)
   try {
+    const stageRunId = 'stage-review-101'
+    const requirement = {
+      evidence: { ref: { kind: 'asset' as const, id: asset.id }, version: asset.sourceSha256 },
+      purpose: 'source-authority' as const,
+      requiredness: 'required' as const,
+      scope: { kind: 'assets' as const, assetIds: [asset.id] },
+      anchorIds: [],
+      rationale: '主批次 Source',
+    }
+    const baseline = createStageEvidenceBaseline({
+      stageRunId,
+      discoveryScopeHash: 'scope',
+      mappingRevision: 'mapping',
+      ruleSetRevision: 'rules',
+      segmentIds: scope,
+      evidence: [requirement.evidence],
+    })
+    fixture.db.stageEvidence.create({
+      stageRunId,
+      sessionId: 'review-session',
+      plan: {
+        stageRunId,
+        role: 'reviewer',
+        stage: 'editing',
+        assetIds: [asset.id],
+        segmentIds: scope,
+        requirements: [requirement],
+      },
+      baseline,
+    })
     const tools = createLinguistCatTools({
       resolveProject: makeOkResolver(fixture),
       sessionId: 'review-session',
       linguistRole: 'reviewer',
+      stageEvidenceRunId: stageRunId,
       reviewScopeSegmentIds: scope,
     })
     const tool = toolByName(tools, 'cat_confirm_segments')
@@ -288,10 +319,38 @@ test('cat_confirm_segments: Reviewer 的 101 段冻结范围跨两批后才 comp
         expectedRevision: 0,
         decision: 'unchanged',
       }],
-    }, 'confirm-page-2')).details as { stage: string; coverage: { pending: number; status: string } }
+    }, 'confirm-page-2')).details as {
+      stage: string
+      coverage: { pending: number; status: string }
+      fullReview: { status: string; pendingEvidence: number }
+    }
     assert.equal(second.stage, 'editing')
     assert.equal(second.coverage.pending, 0)
     assert.equal(second.coverage.status, 'complete')
+    assert.deepEqual(second.fullReview, {
+      status: 'blocked',
+      requiredEvidence: 1,
+      presentedEvidence: 0,
+      pendingEvidence: 1,
+      blockingGaps: 0,
+      warnings: 0,
+    })
+    fixture.db.stageEvidence.recordReceipt({
+      stageRunId,
+      baselineHash: baseline.baselineHash,
+      sessionId: 'review-session',
+      generationRunId: 'generation-after-read',
+      segmentIds: scope,
+      evidence: [{ ref: requirement.evidence.ref, anchorIds: [] }],
+    })
+    const completed = (await invoke(tool, {
+      items: [{
+        segmentId: segments[100]!.id,
+        expectedRevision: 0,
+        decision: 'unchanged',
+      }],
+    }, 'confirm-after-evidence')).details as { fullReview: { status: string } }
+    assert.equal(completed.fullReview.status, 'complete')
     assert.equal(fixture.db.segments.listStageEvents(segments[100]!.id).at(-1)?.action, 'unchanged')
   } finally {
     fixture.db.close()

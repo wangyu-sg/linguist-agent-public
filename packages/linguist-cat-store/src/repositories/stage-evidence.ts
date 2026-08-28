@@ -65,6 +65,22 @@ export interface StageEvidencePresentationCoverage {
   pending: Array<{ evidence: StageEvidenceRef; anchorIds: string[] }>
 }
 
+export interface StageEvidenceCompletion {
+  status: 'in_progress' | 'blocked' | 'stale' | 'complete'
+  decisions: {
+    total: number
+    confirmed: number
+    unchanged: number
+    corrected: number
+    blocked: number
+    pending: number
+    status: 'in_progress' | 'complete' | 'completed_with_blocks'
+  }
+  presentation: StageEvidencePresentationCoverage
+  blockingGaps: EvidenceGap[]
+  warnings: EvidenceGap[]
+}
+
 interface StageEvidenceStateRow {
   stage_run_id: string
   project_id: string
@@ -257,12 +273,25 @@ export class StageEvidenceRepository {
     return row === undefined ? undefined : stateFromRow(row)
   }
 
+  list(stage?: WorkflowStage): StageEvidenceState[] {
+    const rows = stage === undefined
+      ? this.db.db.prepare(`
+          SELECT * FROM stage_evidence_states
+          WHERE project_id = ? ORDER BY updated_at DESC, stage_run_id
+        `).all(this.projectId)
+      : this.db.db.prepare(`
+          SELECT * FROM stage_evidence_states
+          WHERE project_id = ? AND stage = ? ORDER BY updated_at DESC, stage_run_id
+        `).all(this.projectId, stage)
+    return (rows as StageEvidenceStateRow[]).map(stateFromRow)
+  }
+
   markStale(stageRunId: string, reason: string): StageEvidenceState {
     if (reason.trim() === '') throw new TypeError('Stage Evidence stale reason must be non-blank')
     const result = this.db.db.prepare(`
       UPDATE stage_evidence_states
       SET status = 'stale', stale_reason = ?, updated_at = ?
-      WHERE stage_run_id = ? AND project_id = ? AND status <> 'complete'
+      WHERE stage_run_id = ? AND project_id = ?
     `).run(reason, this.now(), stageRunId, this.projectId)
     if (result.changes === 0 && this.get(stageRunId) === undefined) {
       throw new StoreNotFoundError('stage evidence state', stageRunId)
@@ -340,6 +369,37 @@ export class StageEvidenceRepository {
       return covered ? [] : [{ evidence: item.evidence.ref, anchorIds: missingAnchors }]
     })
     return { required: required.length, presented: required.length - pending.length, pending }
+  }
+
+  refreshCompletion(
+    stageRunId: string,
+    decisions: StageEvidenceCompletion['decisions'],
+  ): StageEvidenceCompletion {
+    const state = this.get(stageRunId)
+    if (state === undefined) throw new StoreNotFoundError('stage evidence state', stageRunId)
+    const presentation = this.getPresentationCoverage(stageRunId)
+    const gaps = this.listOpenGaps(stageRunId)
+    const blockingGaps = gaps.filter((gap) => gap.severity === 'blocking')
+    const warnings = gaps.filter((gap) => gap.severity === 'warning')
+    const status: StageEvidenceCompletion['status'] = state.status === 'stale'
+      ? 'stale'
+      : decisions.pending > 0
+        ? 'in_progress'
+        : decisions.blocked > 0 || presentation.pending.length > 0 || blockingGaps.length > 0
+          ? 'blocked'
+          : 'complete'
+    if (status === 'complete' && state.status !== 'complete') {
+      this.db.db.prepare(`
+        UPDATE stage_evidence_states SET status = 'complete', stale_reason = NULL, updated_at = ?
+        WHERE stage_run_id = ? AND project_id = ?
+      `).run(this.now(), stageRunId, this.projectId)
+    } else if (status !== 'complete' && status !== 'stale' && state.status === 'complete') {
+      this.db.db.prepare(`
+        UPDATE stage_evidence_states SET status = ?, updated_at = ?
+        WHERE stage_run_id = ? AND project_id = ?
+      `).run(gaps.length > 0 ? 'ready-with-gaps' : 'ready', this.now(), stageRunId, this.projectId)
+    }
+    return { status, decisions, presentation, blockingGaps, warnings }
   }
 
   replaceProjectInventoryGaps(inputs: readonly ProjectInventoryGapInput[]): EvidenceGap[] {

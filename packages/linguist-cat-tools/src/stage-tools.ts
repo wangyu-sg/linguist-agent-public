@@ -30,7 +30,7 @@ export function createStageTools(runtime: CatToolRuntime) {
     description:
       'Record explicit unchanged, corrected, or blocked decisions for 1-200 segments in the bound project. ' +
       'The current trusted Linguist role determines translation, editing, or proofreading; the model cannot choose a stage or project. ' +
-      'Delegated sessions report progress against their frozen Segment scope.',
+      'Delegated sessions report progress against their frozen Segment scope; fullReview is complete only after both decision and required Evidence coverage pass.',
     promptSnippet: 'Record explicit per-segment completion decisions for the current Linguist role',
     promptGuidelines: [
       'Use unchanged only after reading Source and the complete current Target.',
@@ -120,6 +120,18 @@ export function createStageTools(runtime: CatToolRuntime) {
       })
       const coverageIds = delegatedScope ?? itemIds
       const coverage = db.segments.getStageDecisionCoverage(stage, coverageIds)
+      const evidenceState = deps.stageEvidenceRunId === undefined
+        ? undefined
+        : db.stageEvidence.get(deps.stageEvidenceRunId)
+      if (deps.stageEvidenceRunId !== undefined && evidenceState === undefined) {
+        throw new Error('Host Stage Evidence state is missing')
+      }
+      const completion = evidenceState === undefined
+        ? undefined
+        : db.stageEvidence.refreshCompletion(
+            evidenceState.stageRunId,
+            db.segments.getStageDecisionCoverage(stage, evidenceState.plan.segmentIds),
+          )
       const dto: CatConfirmSegmentsResult = {
         stage,
         decisions: mutation.result.decisions,
@@ -127,6 +139,18 @@ export function createStageTools(runtime: CatToolRuntime) {
           scope: delegatedScope === undefined ? 'items' : 'delegated',
           ...coverage,
         },
+        ...(completion === undefined
+          ? {}
+          : {
+              fullReview: {
+                status: completion.status,
+                requiredEvidence: completion.presentation.required,
+                presentedEvidence: completion.presentation.presented,
+                pendingEvidence: completion.presentation.pending.length,
+                blockingGaps: completion.blockingGaps.length,
+                warnings: completion.warnings.length,
+              },
+            }),
         replayed: mutation.replayed,
       }
       if (!mutation.replayed && mutation.event !== undefined) {

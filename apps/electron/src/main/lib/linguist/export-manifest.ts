@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import type { ExportRecord } from '@linguist/cat-store'
 import { LINGUIST_ASSET_ID_PATTERN } from '@proma/shared'
 import { writeJsonFileAtomic } from '../safe-file'
+import type { LinguistDeliveryEvidenceSummary } from './project-service-types'
 
 const MANIFEST_DIRECTORY = '.export-manifests'
 const SHA256_PATTERN = /^[0-9a-f]{64}$/
@@ -23,6 +24,24 @@ export interface LinguistExportManifest {
   createdAt: string
   verifiedAt: string
   projectRevision: string
+  validation?: 'verified' | 'as-is'
+  evidence?: LinguistDeliveryEvidenceSummary
+}
+
+function isEvidenceSummary(value: unknown): value is LinguistDeliveryEvidenceSummary {
+  if (typeof value !== 'object' || value === null) return false
+  const item = value as Partial<LinguistDeliveryEvidenceSummary>
+  return ['not-applicable', 'in-progress', 'blocked', 'stale', 'complete'].includes(String(item.status))
+    && Number.isSafeInteger(item.stageRuns) && Number(item.stageRuns) >= 0
+    && Number.isSafeInteger(item.required) && Number(item.required) >= 0
+    && Number.isSafeInteger(item.presented) && Number(item.presented) >= 0
+    && Number.isSafeInteger(item.pending) && Number(item.pending) >= 0
+    && Array.isArray(item.gaps)
+    && item.gaps.every((gap) => typeof gap === 'object' && gap !== null
+      && typeof gap.code === 'string'
+      && (gap.severity === 'blocking' || gap.severity === 'warning')
+      && typeof gap.summary === 'string'
+      && typeof gap.suggestedAction === 'string')
 }
 
 function manifestDirectory(exportsDir: string): string {
@@ -46,6 +65,8 @@ function isManifest(value: unknown): value is LinguistExportManifest {
     && typeof record.verifiedAt === 'string'
     && typeof record.projectRevision === 'string'
     && REVISION_PATTERN.test(record.projectRevision)
+    && (record.validation === undefined || record.validation === 'verified' || record.validation === 'as-is')
+    && (record.evidence === undefined || isEvidenceSummary(record.evidence))
 }
 
 export function recordLinguistExportManifest(input: {
@@ -53,6 +74,8 @@ export function recordLinguistExportManifest(input: {
   stagingPath: string
   artifact: ExportRecord
   projectRevision: string
+  validation: 'verified' | 'as-is'
+  evidence: LinguistDeliveryEvidenceSummary
 }): LinguistExportManifest {
   const staging = lstatSync(input.stagingPath)
   if (staging.isSymbolicLink() || !staging.isFile()) {
@@ -73,6 +96,8 @@ export function recordLinguistExportManifest(input: {
     createdAt: input.artifact.createdAt,
     verifiedAt: new Date().toISOString(),
     projectRevision: input.projectRevision,
+    validation: input.validation,
+    evidence: input.evidence,
   }
   writeJsonFileAtomic(
     join(directory, `${input.artifact.id}.json`),

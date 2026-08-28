@@ -108,6 +108,7 @@ mock.module('./linguist/project-service', () => ({
         getByIds: (ids: readonly string[]) => ids.map((id) => ({ id })),
         getStageDecisionCoverage: (_stage: string, ids: readonly string[]) => ({ total: ids.length, pending: ids.length }),
       },
+      stageEvidence: { get: () => undefined },
     }),
   }),
 }))

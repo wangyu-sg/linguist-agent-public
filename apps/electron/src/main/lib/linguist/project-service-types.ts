@@ -397,6 +397,9 @@ export type LinguistDeliveryBlockerCode =
   | 'OPEN_QA_ERRORS'
   | 'PHRASE_MASTER_MAPPING'
   | 'STRUCTURAL_RULES'
+  | 'EVIDENCE_STAGE_STALE'
+  | 'EVIDENCE_REQUIRED_PENDING'
+  | 'EVIDENCE_BLOCKING_GAPS'
 
 export interface LinguistDeliveryBlocker {
   code: LinguistDeliveryBlockerCode
@@ -409,6 +412,22 @@ export interface LinguistDeliveryQaSummary {
   openWarnings: number
   waived: number
   bySeverity: Record<QaFindingSeverity, number>
+}
+
+export interface LinguistDeliveryEvidenceGap {
+  code: string
+  severity: 'blocking' | 'warning'
+  summary: string
+  suggestedAction: string
+}
+
+export interface LinguistDeliveryEvidenceSummary {
+  status: 'not-applicable' | 'in-progress' | 'blocked' | 'stale' | 'complete'
+  stageRuns: number
+  required: number
+  presented: number
+  pending: number
+  gaps: LinguistDeliveryEvidenceGap[]
 }
 
 export interface LinguistDeliveryPreflight {
@@ -424,6 +443,7 @@ export interface LinguistDeliveryPreflight {
   unconfirmedUnlockedSegments: number
   pendingProposalCount: number
   qa: LinguistDeliveryQaSummary
+  evidence: LinguistDeliveryEvidenceSummary
   ready: boolean
   blockers: LinguistDeliveryBlocker[]
 }

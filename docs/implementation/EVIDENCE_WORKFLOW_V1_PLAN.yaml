@@ -3,7 +3,7 @@ initiative: Evidence Workflow V1
 branch: feature/evidence-workflow-v1
 baseCommit: 649134cc
 status: in_progress
-currentBatch: 4
+currentBatch: 5
 mergePolicy: all_batches_and_final_gate_only
 releasePolicy: no_intermediate_release
 
@@ -82,21 +82,29 @@ batches:
 
   - id: 4
     name: Stage Evidence Plan 与自动调用
-    status: in_progress
-    commit: null
+    status: completed
+    commit: 3f50742a
     acceptance:
       - Stage 开始时生成 required、conditional、optional 与 open gaps
       - translation context 自动提供小型强关联证据和 required pending
       - Context 内容进入模型请求时由宿主记录 Receipt
       - 父子 Session 共享同一 Evidence Baseline
-    verification: []
+    verification:
+      - delegated parent/child Stage baseline host test: passed 1/1
+      - unmapped worksheet content remains a persistent non-blocking PM confirmation warning: passed
+      - presented Context text/image receipt test: passed
+      - cat-tools test: passed 44/44
+      - cat-store test: passed 52/52
+      - prompt and session IPC tests: passed 4/4
+      - cat-core cat-formats cat-store cat-tools electron typecheck: passed
 
   - id: 5
     name: 完成门禁与导出
-    status: pending
+    status: in_progress
     commit: null
     acceptance:
-      - required Gap 或 presentation coverage 缺失时不能 Full Review Complete
+      - 仅显式 blocking Gap 或 required presentation coverage 缺失时不能 Full Review Complete
+      - 未映射内容默认仅提醒向 PM 确认，不阻断审校、确认或交付
       - 现有 Verified Preflight 同时检查 Stage 与 Evidence Coverage
       - 现有 Export Manifest 记录覆盖摘要
       - as-is 保留并明确列出缺口

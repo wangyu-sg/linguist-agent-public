@@ -1092,6 +1092,14 @@ export interface LinguistDelegationOutcome extends LinguistStageDecisionCoverage
   stage: LinguistWorkflowStage
   /** confirmed + unchanged + corrected + blocked。 */
   decided: number
+  evidence?: {
+    status: 'in_progress' | 'blocked' | 'stale' | 'complete'
+    required: number
+    presented: number
+    pending: number
+    blockingGaps: number
+    warnings: number
+  }
 }
 
 export interface LinguistProjectGetStageCoverageRequest {
@@ -1985,6 +1993,9 @@ export type LinguistDeliveryBlockerCode =
   | 'OPEN_QA_ERRORS'
   | 'PHRASE_MASTER_MAPPING'
   | 'STRUCTURAL_RULES'
+  | 'EVIDENCE_STAGE_STALE'
+  | 'EVIDENCE_REQUIRED_PENDING'
+  | 'EVIDENCE_BLOCKING_GAPS'
 
 export interface LinguistDeliveryBlockerInfo {
   code: LinguistDeliveryBlockerCode
@@ -1997,6 +2008,20 @@ export interface LinguistDeliveryQaSummary {
   openWarnings: number
   waived: number
   bySeverity: Record<LinguistQaFindingSeverity, number>
+}
+
+export interface LinguistDeliveryEvidenceSummary {
+  status: 'not-applicable' | 'in-progress' | 'blocked' | 'stale' | 'complete'
+  stageRuns: number
+  required: number
+  presented: number
+  pending: number
+  gaps: Array<{
+    code: string
+    severity: 'blocking' | 'warning'
+    summary: string
+    suggestedAction: string
+  }>
 }
 
 export interface LinguistDeliveryPreflight {
@@ -2012,6 +2037,7 @@ export interface LinguistDeliveryPreflight {
   unconfirmedUnlockedSegments: number
   pendingProposalCount: number
   qa: LinguistDeliveryQaSummary
+  evidence: LinguistDeliveryEvidenceSummary
   ready: boolean
   blockers: LinguistDeliveryBlockerInfo[]
 }

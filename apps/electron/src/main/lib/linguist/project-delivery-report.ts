@@ -23,12 +23,19 @@ export function buildDeliveryReport(
     `- 本轮进度：未处理 ${preflight.stageCounts.untouched} / 草稿 ${preflight.stageCounts.draft} / 已确认 ${preflight.stageCounts.confirmed}`,
     `- 待处理提案：${preflight.pendingProposalCount}`,
     `- QA：错误 ${preflight.qa.openErrors} / 警告 ${preflight.qa.openWarnings} / 已豁免 ${preflight.qa.waived}`,
+    `- 证据覆盖：${preflight.evidence.status}（${preflight.evidence.presented}/${preflight.evidence.required}，待呈现 ${preflight.evidence.pending}）`,
     `- 目标原生状态：${nativeStatus}`,
   ]
   if (preflight.blockers.length > 0) {
     lines.push(
       '- 阻断项：',
       ...preflight.blockers.map((blocker) => `  - ${blocker.message}`),
+    )
+  }
+  if (preflight.evidence.gaps.length > 0) {
+    lines.push(
+      '- 证据提醒：',
+      ...preflight.evidence.gaps.map((gap) => `  - [${gap.severity}] ${gap.summary}；${gap.suggestedAction}`),
     )
   }
   if (verification !== undefined) {

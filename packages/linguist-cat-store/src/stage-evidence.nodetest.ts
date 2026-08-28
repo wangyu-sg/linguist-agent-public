@@ -55,6 +55,7 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
     })
 
     db.segments.applyTargetEdit(imported.segments[0]!.id, 'Edited target', 0)
+    db.segments.applyTargetEdit(imported.segments[1]!.id, 'Second target', 0)
 
     const persisted = db.stageEvidence.get(stageRunId)
     assert.equal(persisted?.status, 'ready')
@@ -89,6 +90,35 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
       receipt.id,
     )
     assert.equal(db.stageEvidence.listReceipts(stageRunId).length, 1)
+
+    db.segments.recordCurrentStageDecision(imported.segments[0]!.id, 'editing', 1, 'unchanged')
+    db.segments.recordCurrentStageDecision(imported.segments[1]!.id, 'editing', 1, 'unchanged')
+    db.stageEvidence.replaceStageGaps(stageRunId, [{
+      id: 'gap-required',
+      code: 'REQUIRED_RESOURCE_MISSING',
+      severity: 'blocking',
+      summary: '用户已声明的必需资料缺失',
+      suggestedAction: '补充资料或由用户显式豁免',
+    }])
+    assert.equal(db.stageEvidence.refreshCompletion(
+      stageRunId,
+      db.segments.getStageDecisionCoverage('editing', plan.segmentIds),
+    ).status, 'blocked')
+
+    db.stageEvidence.replaceStageGaps(stageRunId, [{
+      id: 'gap-pm-confirm',
+      code: 'UNMAPPED_CLIENT_VISIBLE_CONTENT',
+      severity: 'warning',
+      summary: '伴生表有一行未映射',
+      suggestedAction: '向 PM 确认，不自行修改 CAT 主文件',
+    }])
+    const completed = db.stageEvidence.refreshCompletion(
+      stageRunId,
+      db.segments.getStageDecisionCoverage('editing', plan.segmentIds),
+    )
+    assert.equal(completed.status, 'complete')
+    assert.equal(completed.warnings.length, 1)
+    assert.equal(db.stageEvidence.get(stageRunId)?.status, 'complete')
 
     assert.equal(db.stageEvidence.markStale(stageRunId, '参考资料已变化').status, 'stale')
   } finally {

@@ -88,15 +88,40 @@ export function resolveLinguistDelegationOutcome(
 
   try {
     const stage = ROLE_STAGE[role]
-    const coverage = getLinguistProjectService()
-      .openProject(projectId)
-      .segments
-      .getStageDecisionCoverage(stage, segmentIds)
+    const db = getLinguistProjectService().openProject(projectId)
+    const coverage = db.segments.getStageDecisionCoverage(stage, segmentIds)
+    const evidenceState = session.sourceDelegationId === undefined
+      ? undefined
+      : db.stageEvidence.get(`stage:${session.sourceDelegationId}`)
+    const evidence = evidenceState === undefined
+      ? undefined
+      : db.stageEvidence.refreshCompletion(
+          evidenceState.stageRunId,
+          db.segments.getStageDecisionCoverage(stage, evidenceState.plan.segmentIds),
+        )
+    const status = evidence === undefined || evidence.status === 'complete'
+      ? coverage.status
+      : evidence.status === 'in_progress'
+        ? 'in_progress'
+        : 'completed_with_blocks'
     return {
       role,
       stage,
       ...coverage,
+      status,
       decided: coverage.total - coverage.pending,
+      ...(evidence === undefined
+        ? {}
+        : {
+            evidence: {
+              status: evidence.status,
+              required: evidence.presentation.required,
+              presented: evidence.presentation.presented,
+              pending: evidence.presentation.pending.length,
+              blockingGaps: evidence.blockingGaps.length,
+              warnings: evidence.warnings.length,
+            },
+          }),
     }
   } catch (error) {
     console.warn(`[协作工具] 无法读取 Linguist 委派完成证据: ${session.id}`, error)
