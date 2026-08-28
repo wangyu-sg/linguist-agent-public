@@ -46,7 +46,13 @@ import type {
   AgentActiveWorktree,
   SessionWorkbenchLayout,
 } from '@proma/shared'
-import { migratePermissionMode, mergeSkillActivations, findBestSearchMatch, insertTopSearchResult } from '@proma/shared'
+import {
+  LINGUIST_IPC_ERROR_CODES,
+  migratePermissionMode,
+  mergeSkillActivations,
+  findBestSearchMatch,
+  insertTopSearchResult,
+} from '@proma/shared'
 import { getConversationMessages } from './conversation-manager'
 // 旧格式 → SDKMessage 的转换逻辑下沉到 @proma/session-core 作为唯一真源，避免主进程与渲染层各存一份。
 import { convertLegacyMessage } from '@proma/session-core'
@@ -803,6 +809,16 @@ export function updateAgentSessionLinguistRole(
   const index = readIndex()
   const session = index.sessions.find((item) => item.id === id)
   if (!session?.linguistProjectId) throw new Error('Linguist 项目会话不存在')
+  if (
+    session.sourceDelegationId !== undefined
+    || session.parentSessionId !== undefined
+    || getAgentSessionSDKMessages(id).some((message) => message.type === 'user' || message.type === 'assistant')
+  ) {
+    throw Object.assign(
+      new Error('已执行的 Linguist 会话不能切换岗位，请新建对应岗位对话'),
+      { code: LINGUIST_IPC_ERROR_CODES.INVALID_INPUT },
+    )
+  }
   session.linguistRole = role
   delete session.linguistSessionRole
   session.updatedAt = Date.now()
