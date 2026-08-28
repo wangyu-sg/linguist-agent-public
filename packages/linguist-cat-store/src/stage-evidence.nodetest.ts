@@ -1,0 +1,66 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { createStageEvidenceBaseline, type StageEvidencePlan } from '@linguist/cat-core'
+import { CatStore } from './store'
+import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
+
+function setup() {
+  const store = new CatStore({ rootDir: makeTempDir(), entropy: makeEntropy(), now: makeClock() })
+  const project = store.createProject({
+    name: 'Evidence',
+    sourceLocale: 'en',
+    targetLocale: 'zh-CN',
+    promaWorkspaceId: 'workspace-1',
+  })
+  const db = store.openProject(project.id)
+  const imported = db.assets.insertImported(makeImportedAsset({ segmentCount: 2 }))
+  return { db, imported }
+}
+
+test('Stage Evidence state freezes evidence facts and scope without becoming stale after a normal Target edit', () => {
+  const { db, imported } = setup()
+  try {
+    const stageRunId = 'stage-run-1'
+    const plan: StageEvidencePlan = {
+      stageRunId,
+      role: 'reviewer',
+      stage: 'editing',
+      assetIds: [imported.asset.id],
+      segmentIds: imported.segments.map((segment) => segment.id),
+      requirements: [{
+        evidence: {
+          ref: { kind: 'asset', id: imported.asset.id },
+          version: imported.asset.sourceSha256,
+        },
+        purpose: 'source-authority',
+        requiredness: 'required',
+        scope: { kind: 'assets', assetIds: [imported.asset.id] },
+        anchorIds: [],
+        rationale: '主批次是 Source authority',
+      }],
+    }
+    const baseline = createStageEvidenceBaseline({
+      stageRunId,
+      discoveryScopeHash: 'scope-v1',
+      mappingRevision: 'mapping-v1',
+      ruleSetRevision: 'rules-v1',
+      segmentIds: plan.segmentIds,
+      evidence: plan.requirements.map((item) => item.evidence),
+    })
+    db.stageEvidence.create({
+      stageRunId,
+      sessionId: 'session-1',
+      plan,
+      baseline,
+    })
+
+    db.segments.applyTargetEdit(imported.segments[0]!.id, 'Edited target', 0)
+
+    const persisted = db.stageEvidence.get(stageRunId)
+    assert.equal(persisted?.status, 'ready')
+    assert.deepEqual(persisted?.baseline, baseline)
+    assert.deepEqual(persisted?.plan.segmentIds, plan.segmentIds)
+  } finally {
+    db.close()
+  }
+})

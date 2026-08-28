@@ -219,6 +219,25 @@ export {
 } from './evidence'
 
 export {
+  createStageEvidenceBaseline,
+  type CreateStageEvidenceBaselineInput,
+  type ContextAnchor,
+  type ContextAnchorLocator,
+  type StageEvidenceBaseline,
+  type StageEvidenceGap,
+  type StageEvidenceGapCode,
+  type StageEvidencePlan,
+  type StageEvidencePurpose,
+  type StageEvidenceRef,
+  type StageEvidenceReceipt,
+  type StageEvidenceRequiredness,
+  type StageEvidenceRequirement,
+  type StageEvidenceRole,
+  type StageEvidenceScope,
+  type VersionedStageEvidenceRef,
+} from './stage-evidence'
+
+export {
   analyzeBatchConsistency,
   BATCH_CONSISTENCY_CODES,
   buildBatchConsistencyPass,

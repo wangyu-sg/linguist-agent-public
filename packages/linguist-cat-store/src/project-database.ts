@@ -33,6 +33,7 @@ import { QaFindingsRepository } from './repositories/qa-findings'
 import { ReferenceImportsRepository } from './repositories/reference-imports'
 import { SegmentsRepository } from './repositories/segments'
 import { SentencePatternsRepository } from './repositories/sentence-patterns'
+import { StageEvidenceRepository } from './repositories/stage-evidence'
 import { StyleGuideRulesRepository } from './repositories/style-guide-rules'
 import { TechConstraintsRepository } from './repositories/tech-constraints'
 import { TermEntriesRepository } from './repositories/term-entries'
@@ -66,6 +67,7 @@ export class ProjectDatabase {
   readonly contextDocs: ContextDocsRepository
   readonly techConstraints: TechConstraintsRepository
   readonly voiceProfiles: VoiceProfilesRepository
+  readonly stageEvidence: StageEvidenceRepository
   readonly runs: RunHarnessRepository
 
   private constructor(catDb: CatDatabase, projectId: ProjectId, now: () => string) {
@@ -84,6 +86,7 @@ export class ProjectDatabase {
     this.styleGuideRules = new StyleGuideRulesRepository(catDb, projectId, now, this.runs)
     this.sentencePatterns = new SentencePatternsRepository(catDb, projectId, now)
     this.contextDocs = new ContextDocsRepository(catDb, projectId, now)
+    this.stageEvidence = new StageEvidenceRepository(catDb, projectId, now)
     this.techConstraints = new TechConstraintsRepository(catDb, projectId, now)
     this.voiceProfiles = new VoiceProfilesRepository(catDb, projectId, now)
   }

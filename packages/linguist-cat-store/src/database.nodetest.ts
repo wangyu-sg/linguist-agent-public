@@ -28,6 +28,9 @@ const PLAN_TABLES = [
   'project_events',
   'project_event_acks',
   'run_changes',
+  'stage_evidence_states',
+  'stage_evidence_gaps',
+  'stage_evidence_receipts',
   'schema_migrations',
 ]
 
@@ -650,6 +653,45 @@ test('migration 13: invalid legacy proposal rolls back forward schema and backfi
     )
   } finally {
     inspected.close()
+  }
+})
+
+test('migration 17: existing v16 projects gain Stage Evidence state without rewriting CAT content', () => {
+  const path = join(makeTempDir(), 'cat.db')
+  const LegacyDatabase = loadDatabaseSync()
+  const legacy = new LegacyDatabase(path)
+  legacy.exec(`
+    CREATE TABLE schema_migrations (
+      version INTEGER PRIMARY KEY,
+      applied_at TEXT NOT NULL,
+      description TEXT NOT NULL
+    )
+  `)
+  const record = legacy.prepare(
+    'INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)',
+  )
+  for (const migration of MIGRATIONS.filter((item) => item.version <= 16)) {
+    legacy.exec(migration.sql)
+    migration.backfill?.(legacy)
+    record.run(migration.version, '2026-01-01T00:00:00.000Z', migration.description)
+  }
+  legacy.exec(`
+    PRAGMA application_id = ${LINGUIST_APPLICATION_ID};
+    PRAGMA user_version = 16;
+  `)
+  legacy.close()
+
+  const migrated = CatDatabase.open(path)
+  try {
+    assert.equal(migrated.schemaVersion, 17)
+    const tables = new Set((migrated.db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .all() as Array<{ name: string }>).map((row) => row.name))
+    assert.equal(tables.has('stage_evidence_states'), true)
+    assert.equal(tables.has('stage_evidence_gaps'), true)
+    assert.equal(tables.has('stage_evidence_receipts'), true)
+  } finally {
+    migrated.close()
   }
 })
 

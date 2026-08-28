@@ -38,7 +38,7 @@ export interface SchemaMigration {
 }
 
 /** Current schema version this build understands. */
-export const SCHEMA_VERSION = 16
+export const SCHEMA_VERSION = 17
 
 const MIGRATION_1_SQL = `
 CREATE TABLE assets (
@@ -632,6 +632,54 @@ CREATE INDEX idx_context_doc_segments_segment
   ON context_doc_segments(segment_id, context_doc_id);
 `
 
+const MIGRATION_17_SQL = `
+CREATE TABLE stage_evidence_states (
+  stage_run_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('translator', 'reviewer', 'proofreader')),
+  stage TEXT NOT NULL CHECK(stage IN ('translation', 'editing', 'proofreading')),
+  plan_json TEXT NOT NULL,
+  baseline_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('planning', 'ready', 'ready-with-gaps', 'stale', 'complete')),
+  stale_reason TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_stage_evidence_states_project_status
+  ON stage_evidence_states(project_id, status, updated_at, stage_run_id);
+
+CREATE TABLE stage_evidence_gaps (
+  gap_id TEXT PRIMARY KEY,
+  stage_run_id TEXT NOT NULL REFERENCES stage_evidence_states(stage_run_id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  severity TEXT NOT NULL CHECK(severity IN ('blocking', 'warning')),
+  evidence_ref_json TEXT,
+  summary TEXT NOT NULL,
+  suggested_action TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('open', 'resolved', 'waived')),
+  created_at TEXT NOT NULL,
+  resolved_at TEXT,
+  resolved_by TEXT CHECK(resolved_by IS NULL OR resolved_by IN ('system', 'agent', 'user'))
+);
+CREATE INDEX idx_stage_evidence_gaps_run_status
+  ON stage_evidence_gaps(stage_run_id, status, severity, gap_id);
+
+CREATE TABLE stage_evidence_receipts (
+  receipt_id TEXT PRIMARY KEY,
+  stage_run_id TEXT NOT NULL REFERENCES stage_evidence_states(stage_run_id) ON DELETE CASCADE,
+  baseline_hash TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  generation_run_id TEXT NOT NULL,
+  tool_call_id TEXT,
+  segment_ids_json TEXT NOT NULL,
+  evidence_json TEXT NOT NULL,
+  presented_at TEXT NOT NULL
+);
+CREATE INDEX idx_stage_evidence_receipts_run
+  ON stage_evidence_receipts(stage_run_id, presented_at, receipt_id);
+`
+
 export const MIGRATIONS: readonly SchemaMigration[] = [
   { version: 1, description: 'initial CAT schema (plan 5.4)', sql: MIGRATION_1_SQL },
   { version: 2, description: 'idempotent human proposal mutations (PB-053)', sql: MIGRATION_2_SQL },
@@ -706,5 +754,10 @@ export const MIGRATIONS: readonly SchemaMigration[] = [
     version: 16,
     description: 'Context Doc links to translation segments',
     sql: MIGRATION_16_SQL,
+  },
+  {
+    version: 17,
+    description: 'Stage Evidence baseline, gaps, and presentation receipts',
+    sql: MIGRATION_17_SQL,
   },
 ]

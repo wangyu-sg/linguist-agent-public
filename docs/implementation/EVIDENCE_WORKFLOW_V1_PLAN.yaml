@@ -1,0 +1,116 @@
+schemaVersion: 1
+initiative: Evidence Workflow V1
+branch: feature/evidence-workflow-v1
+baseCommit: 649134cc
+status: in_progress
+currentBatch: 1
+mergePolicy: all_batches_and_final_gate_only
+releasePolicy: no_intermediate_release
+
+architecture:
+  taskEntity: forbidden
+  duplicateEvidenceCatalog: forbidden
+  genericEvidenceGraph: forbidden
+  secondDeliveryAttestation: forbidden
+  reusableFacts:
+    - Session
+    - LinguistRole
+    - StageRun
+    - Asset
+    - FrozenSegmentScope
+    - ContextDoc
+    - StageCoverage
+    - DeliveryPreflight
+    - ExportManifest
+  newFacts:
+    - ProjectDiscoveryScope
+    - StageEvidenceBaseline
+    - StageEvidenceGap
+    - StageEvidenceReceipt
+    - ContextAnchor
+
+batches:
+  - id: 1
+    name: 领域模型和授权范围
+    status: in_progress
+    commit: null
+    acceptance:
+      - 不新增通用 Task 实体
+      - Evidence Baseline 不冻结可正常变化的 Segment Revision
+      - ProjectDiscoveryScope 仅由宿主从受信 Workspace 与附件生成
+      - 明确 Gap、Receipt、Context Anchor 与 Stage Evidence 状态合同
+    verification: []
+
+  - id: 2
+    name: 自动资产预检
+    status: pending
+    commit: null
+    acceptance:
+      - 复用现有递归扫描和 dryRun
+      - 导入或解析失败形成持久 Gap
+      - 返回发现、解析、未映射、媒体与版本冲突摘要
+      - 简单单文件项目自动 Ready 且不询问
+    verification: []
+
+  - id: 3
+    name: 通用 Context Extraction
+    status: pending
+    commit: null
+    acceptance:
+      - Context XLSX 不要求双语 Batch mapping
+      - XLSX 支持嵌入图片、drawing anchor 与 Sheet/Row/Cell 定位
+      - ContextExtraction 合同覆盖文字、媒体、锚点与警告
+      - Asset、Segment 与 Context anchor 使用类型化链接
+      - 匿名异构伴生资料 Fixture 通过
+    verification: []
+
+  - id: 4
+    name: Stage Evidence Plan 与自动调用
+    status: pending
+    commit: null
+    acceptance:
+      - Stage 开始时生成 required、conditional、optional 与 open gaps
+      - translation context 自动提供小型强关联证据和 required pending
+      - Context 内容进入模型请求时由宿主记录 Receipt
+      - 父子 Session 共享同一 Evidence Baseline
+    verification: []
+
+  - id: 5
+    name: 完成门禁与导出
+    status: pending
+    commit: null
+    acceptance:
+      - required Gap 或 presentation coverage 缺失时不能 Full Review Complete
+      - 现有 Verified Preflight 同时检查 Stage 与 Evidence Coverage
+      - 现有 Export Manifest 记录覆盖摘要
+      - as-is 保留并明确列出缺口
+      - 不建立第二套 Delivery Attestation
+    verification: []
+
+  - id: 6
+    name: UI、回归与真实验证
+    status: pending
+    commit: null
+    acceptance:
+      - 提供紧凑的资产与证据覆盖面板
+      - 系统签发状态与 Agent 自然语言分开显示
+      - 简单单文件与至少两种异构资料组合回归通过
+      - Translator、Reviewer、Proofreader 共享证据闭环
+      - packaged smoke 与 export/reimport 通过
+    verification: []
+
+finalGate:
+  status: pending
+  acceptance:
+    - 单文件简单项目无额外摩擦
+    - 复杂项目自动发现伴生资料且未知资料不静默忽略
+    - 导入失败形成持久 Gap
+    - Segment 可获取关联文字和图片
+    - 必需资料进入模型请求后才产生 Receipt
+    - 正常 Target 修改不令 Evidence Baseline stale
+    - 参考资料或授权范围变化会令当前 Stage stale
+    - Full Review 受 Stage 与 Evidence 双 Coverage 控制
+    - Verified 与 as-is Manifest 准确反映覆盖和缺口
+    - Agent 文本不能冒充系统 Verified 状态
+    - 匿名异构 Fixture、全量测试、typecheck、build 与 smoke 通过
+  verification: []

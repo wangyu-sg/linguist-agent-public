@@ -170,6 +170,12 @@ export {
   type ContextDocSearch,
 } from './repositories/context-docs'
 export {
+  StageEvidenceRepository,
+  type CreateStageEvidenceStateInput,
+  type StageEvidenceState,
+  type StageEvidenceStateStatus,
+} from './repositories/stage-evidence'
+export {
   TechConstraintsRepository,
   type TechConstraintInput,
   type TechConstraintSearch,
