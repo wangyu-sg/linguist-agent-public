@@ -28,6 +28,8 @@ const PLAN_TABLES = [
   'project_events',
   'project_event_acks',
   'run_changes',
+  'context_anchors',
+  'context_evidence_links',
   'stage_evidence_states',
   'evidence_gaps',
   'stage_evidence_receipts',
@@ -656,7 +658,7 @@ test('migration 13: invalid legacy proposal rolls back forward schema and backfi
   }
 })
 
-test('migration 17: existing v16 projects gain Stage Evidence state without rewriting CAT content', () => {
+test('migration 17: existing v16 Context links migrate into typed Evidence links without rewriting CAT content', () => {
   const path = join(makeTempDir(), 'cat.db')
   const LegacyDatabase = loadDatabaseSync()
   const legacy = new LegacyDatabase(path)
@@ -676,6 +678,21 @@ test('migration 17: existing v16 projects gain Stage Evidence state without rewr
     record.run(migration.version, '2026-01-01T00:00:00.000Z', migration.description)
   }
   legacy.exec(`
+    INSERT INTO assets
+      (id, project_id, format_id, original_filename, source_sha256, segment_count, created_at)
+    VALUES ('asset-v16', 'project-v16', 'xliff', 'source.xlf', '${'a'.repeat(64)}', 1, '2026-01-01T00:00:00.000Z');
+    INSERT INTO segments
+      (id, asset_id, ordinal, key, source, target, source_locale, target_locale,
+       status, locked, revision, source_hash, context_json)
+    VALUES ('segment-v16', 'asset-v16', 0, 'key-1', '源文', 'Target', 'zh-CN', 'en',
+      'translated', 0, 0, '${'b'.repeat(64)}', NULL);
+    INSERT INTO context_docs
+      (id, project_id, kind, original_filename, blob_relpath, created_at)
+    VALUES ('context-v16', 'project-v16', 'doc', 'brief.md', 'blobs/brief.md', '2026-01-01T00:00:00.000Z');
+    INSERT INTO context_doc_segments (context_doc_id, segment_id)
+    VALUES ('context-v16', 'segment-v16');
+  `)
+  legacy.exec(`
     PRAGMA application_id = ${LINGUIST_APPLICATION_ID};
     PRAGMA user_version = 16;
   `)
@@ -690,6 +707,19 @@ test('migration 17: existing v16 projects gain Stage Evidence state without rewr
     assert.equal(tables.has('stage_evidence_states'), true)
     assert.equal(tables.has('evidence_gaps'), true)
     assert.equal(tables.has('stage_evidence_receipts'), true)
+    assert.equal(tables.has('context_anchors'), true)
+    assert.equal(tables.has('context_evidence_links'), true)
+    assert.equal(tables.has('context_doc_segments'), false)
+    assert.deepEqual({ ...(migrated.db.prepare(`
+      SELECT context_doc_id, segment_id, relation_type, requiredness, mapping_revision
+      FROM context_evidence_links
+    `).get() as Record<string, unknown>) }, {
+      context_doc_id: 'context-v16',
+      segment_id: 'segment-v16',
+      relation_type: 'segment',
+      requiredness: 'conditional',
+      mapping_revision: 'v16-direct-link',
+    })
   } finally {
     migrated.close()
   }

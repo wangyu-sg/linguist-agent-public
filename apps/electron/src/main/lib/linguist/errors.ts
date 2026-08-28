@@ -195,20 +195,26 @@ export class LinguistProjectLocaleChangeBlockedError extends LinguistServiceErro
   }
 }
 
-export type ContextDocExtractDiagnostic = 'DOCX_PARSE_FAILED' | 'DOCX_EMPTY_TEXT'
+export type ContextDocExtractDiagnostic =
+  | 'DOCX_PARSE_FAILED'
+  | 'DOCX_EMPTY_TEXT'
+  | 'PDF_PARSE_FAILED'
+  | 'PDF_EMPTY_TEXT'
 
 const CONTEXT_DOC_EXTRACT_MESSAGES: Record<ContextDocExtractDiagnostic, string> = {
   DOCX_PARSE_FAILED:
     '文件不是可解析的 DOCX/OOXML，可能已损坏或加密。请先用 Word 或 LibreOffice 打开并另存为新的 .docx 后重试；仍失败时请导出为 UTF-8 .txt/.md。',
   DOCX_EMPTY_TEXT:
     '文件可读取，但未发现普通段落正文（可能仅含图片、扫描内容或文本框）。请将正文复制到普通段落后另存为 .docx，或导出为 UTF-8 .txt/.md。',
+  PDF_PARSE_FAILED: '文件不是可解析的 PDF，可能已损坏或加密。请重新导出 PDF 后重试。',
+  PDF_EMPTY_TEXT: 'PDF 未包含可提取文字，可能是扫描件；请补充可读文本或对应图片。',
 }
 
 /** Context Doc 抽取失败；message 只含固定诊断，不含路径或客户正文。 */
 export class LinguistContextDocExtractError extends LinguistServiceError {
   readonly code = LINGUIST_SERVICE_ERROR_CODES.CONTEXT_DOC_EXTRACT_FAILED
   constructor(readonly diagnostic: ContextDocExtractDiagnostic) {
-    super(`DOCX 文本抽取失败（${diagnostic}）：${CONTEXT_DOC_EXTRACT_MESSAGES[diagnostic]}`)
+    super(`Context 文本抽取失败（${diagnostic}）：${CONTEXT_DOC_EXTRACT_MESSAGES[diagnostic]}`)
     this.name = 'LinguistContextDocExtractError'
   }
 }

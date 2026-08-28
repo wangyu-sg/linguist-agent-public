@@ -3,7 +3,7 @@ initiative: Evidence Workflow V1
 branch: feature/evidence-workflow-v1
 baseCommit: 649134cc
 status: in_progress
-currentBatch: 2
+currentBatch: 3
 mergePolicy: all_batches_and_final_gate_only
 releasePolicy: no_intermediate_release
 
@@ -25,7 +25,7 @@ architecture:
   newFacts:
     - ProjectDiscoveryScope
     - StageEvidenceBaseline
-    - StageEvidenceGap
+    - EvidenceGap
     - StageEvidenceReceipt
     - ContextAnchor
 
@@ -47,18 +47,23 @@ batches:
 
   - id: 2
     name: 自动资产预检
-    status: in_progress
-    commit: null
+    status: completed
+    commit: ddf83e7f
     acceptance:
       - 复用现有递归扫描和 dryRun
       - 导入或解析失败形成持久 Gap
       - 返回发现、解析、未映射、媒体与版本冲突摘要
       - 简单单文件项目自动 Ready 且不询问
-    verification: []
+    verification:
+      - project inventory and discovery pure tests: passed 3/3
+      - cat-store test: passed 51/51
+      - cat-tools test: passed 43/43
+      - cat-core cat-store cat-tools electron typecheck: passed
+      - bun install --frozen-lockfile: no changes
 
   - id: 3
     name: 通用 Context Extraction
-    status: pending
+    status: in_progress
     commit: null
     acceptance:
       - Context XLSX 不要求双语 Batch mapping

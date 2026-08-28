@@ -543,6 +543,23 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       const doc = db.contextDocs.get(params.docId)
       if (doc === undefined) throw new StoreNotFoundError('context doc', params.docId)
       const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.readContextDoc)
+      const anchors = db.contextDocs.listAnchors(doc.id)
+      const extractedMedia = new Map<string, { docId: string; filename: string; anchorIds: string[] }>()
+      for (const anchor of anchors) {
+        if (anchor.mediaContextDocId === undefined) continue
+        const mediaDoc = db.contextDocs.get(anchor.mediaContextDocId)
+        if (mediaDoc === undefined) continue
+        const current = extractedMedia.get(mediaDoc.id)
+        if (current === undefined) {
+          extractedMedia.set(mediaDoc.id, {
+            docId: mediaDoc.id,
+            filename: mediaDoc.originalFilename,
+            anchorIds: [anchor.id],
+          })
+        } else {
+          current.anchorIds.push(anchor.id)
+        }
+      }
       const base = {
         docId: doc.id,
         kind: doc.kind,
@@ -550,6 +567,9 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         createdAt: doc.createdAt,
         ...(doc.sha256 !== undefined ? { sha256: doc.sha256 } : {}),
         ...(doc.note !== undefined ? { docNote: doc.note } : {}),
+        ...(anchors.length === 0 ? {} : { anchors }),
+        ...(extractedMedia.size === 0 ? {} : { extractedMedia: [...extractedMedia.values()] }),
+        ...(doc.extractionWarnings.length === 0 ? {} : { extractionWarnings: doc.extractionWarnings }),
       }
       if (doc.kind === 'image') {
         const dto: CatReadContextDocResult = {

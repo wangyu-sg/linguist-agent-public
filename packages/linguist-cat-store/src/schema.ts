@@ -633,6 +633,57 @@ CREATE INDEX idx_context_doc_segments_segment
 `
 
 const MIGRATION_17_SQL = `
+ALTER TABLE context_docs ADD COLUMN parent_context_doc_id TEXT REFERENCES context_docs(id) ON DELETE CASCADE;
+ALTER TABLE context_docs ADD COLUMN extraction_warnings_json TEXT NOT NULL DEFAULT '[]';
+CREATE INDEX idx_context_docs_parent
+  ON context_docs(project_id, parent_context_doc_id, created_at, id);
+
+CREATE TABLE context_anchors (
+  id TEXT PRIMARY KEY,
+  context_doc_id TEXT NOT NULL REFERENCES context_docs(id) ON DELETE CASCADE,
+  locator_json TEXT NOT NULL,
+  label TEXT,
+  text_extract TEXT,
+  media_context_doc_id TEXT REFERENCES context_docs(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_context_anchors_doc
+  ON context_anchors(context_doc_id, id);
+
+CREATE TABLE context_evidence_links (
+  context_doc_id TEXT NOT NULL REFERENCES context_docs(id) ON DELETE CASCADE,
+  anchor_id TEXT REFERENCES context_anchors(id) ON DELETE CASCADE,
+  relation_type TEXT NOT NULL CHECK(relation_type IN ('asset', 'segment')),
+  asset_id TEXT REFERENCES assets(id) ON DELETE CASCADE,
+  segment_id TEXT REFERENCES segments(id) ON DELETE CASCADE,
+  requiredness TEXT NOT NULL CHECK(requiredness IN ('required', 'conditional', 'optional')),
+  mapping_revision TEXT NOT NULL,
+  CHECK(
+    (relation_type = 'asset' AND asset_id IS NOT NULL AND segment_id IS NULL)
+    OR (relation_type = 'segment' AND segment_id IS NOT NULL AND asset_id IS NULL)
+  )
+);
+CREATE UNIQUE INDEX idx_context_evidence_links_identity
+  ON context_evidence_links(
+    context_doc_id,
+    COALESCE(anchor_id, ''),
+    relation_type,
+    COALESCE(asset_id, ''),
+    COALESCE(segment_id, '')
+  );
+CREATE INDEX idx_context_evidence_links_asset
+  ON context_evidence_links(asset_id, context_doc_id, anchor_id);
+CREATE INDEX idx_context_evidence_links_segment
+  ON context_evidence_links(segment_id, context_doc_id, anchor_id);
+
+INSERT INTO context_evidence_links (
+  context_doc_id, anchor_id, relation_type, asset_id, segment_id,
+  requiredness, mapping_revision
+)
+SELECT context_doc_id, NULL, 'segment', NULL, segment_id, 'conditional', 'v16-direct-link'
+FROM context_doc_segments;
+DROP TABLE context_doc_segments;
+
 CREATE TABLE stage_evidence_states (
   stage_run_id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,

@@ -450,6 +450,8 @@ export interface ContextDoc {
   sha256?: string
   note?: string
   textExtract?: string
+  parentContextDocId?: string
+  extractionWarnings: Array<{ code: string; message: string }>
   createdAt: string
 }
 
@@ -462,6 +464,8 @@ export interface ContextDocRow {
   sha256: string | null
   note: string | null
   text_extract: string | null
+  parent_context_doc_id: string | null
+  extraction_warnings_json: string
   created_at: string
 }
 
@@ -496,6 +500,8 @@ export function contextDocFromRow(row: ContextDocRow): ContextDoc {
     ...(row.sha256 !== null ? { sha256: row.sha256 } : {}),
     ...(row.note !== null ? { note: row.note } : {}),
     ...(row.text_extract !== null ? { textExtract: row.text_extract } : {}),
+    ...(row.parent_context_doc_id !== null ? { parentContextDocId: row.parent_context_doc_id } : {}),
+    extractionWarnings: JSON.parse(row.extraction_warnings_json) as Array<{ code: string; message: string }>,
     createdAt: row.created_at,
   }
 }

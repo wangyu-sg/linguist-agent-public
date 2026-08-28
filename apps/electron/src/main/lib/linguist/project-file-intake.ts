@@ -203,7 +203,7 @@ async function importEntry(
       importedCount: 1,
       unchangedCount: 0,
       sourceSha256: doc.sha256 ?? sha256Hex(bytes),
-      warnings: [],
+      warnings: doc.extractionWarnings.map((warning) => warning.message),
     }
   }
   const result = await service.importReference(projectId, resourceKind, {
@@ -258,7 +258,11 @@ export async function importProjectFile(
       'Phrase split MXLIFF requires cat_import_resources with its master XLIFF',
     )
   }
-  if (extname(entry.filename).toLowerCase() === '.xlsx' && xlsxMapping === undefined) {
+  if (
+    resourceKind !== 'context'
+    && extname(entry.filename).toLowerCase() === '.xlsx'
+    && xlsxMapping === undefined
+  ) {
     xlsxMapping = await service.resolveWorkbookMapping(
       projectId,
       await readFile(entry.path),
@@ -395,7 +399,7 @@ export async function importProjectResources(
         continue
       }
       let xlsxMapping = input.xlsxMapping
-      if (extension === '.xlsx' && xlsxMapping === undefined) {
+      if (resourceKind !== 'context' && extension === '.xlsx' && xlsxMapping === undefined) {
         bytes ??= (await readPickedFileWithinLimit(entry.path, LINGUIST_IMPORT_MAX_BYTES)).bytes
         xlsxMapping = await service.resolveWorkbookMapping(projectId, bytes, filename)
         if (xlsxMapping === undefined) {

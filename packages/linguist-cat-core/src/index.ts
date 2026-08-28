@@ -221,7 +221,6 @@ export {
 export {
   createStageEvidenceBaseline,
   type CreateStageEvidenceBaselineInput,
-  type ContextAnchor,
   type ContextAnchorLocator,
   type StageEvidenceBaseline,
   type EvidenceGap,
@@ -236,6 +235,17 @@ export {
   type StageEvidenceScope,
   type VersionedStageEvidenceRef,
 } from './stage-evidence'
+
+export {
+  type ContextAnchor,
+  type ContextEvidenceLink,
+  type ContextEvidenceRelation,
+  type ContextExtraction,
+  type ContextExtractionWarning,
+  type ContextMedia,
+  type ContextTextSection,
+  type ExtractedContextAnchor,
+} from './context-evidence'
 
 export {
   analyzeBatchConsistency,

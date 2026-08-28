@@ -2433,7 +2433,13 @@ test('cat_read_context_doc: paged extract read + image fallback metadata + not-f
       kind: 'image',
       originalFilename: 'hud.png',
       blobRelpath: 'blobs/ctx-hud.png',
+      parentContextDocId: doc.id,
     })
+    fixture.db.contextDocs.replaceExtraction(doc.id, [{
+      id: 'ctxa-hud',
+      locator: { kind: 'image', mediaId: 'ctxm-hud', page: 2 },
+      mediaContextDocId: image.id,
+    }])
     const noExtract = fixture.db.contextDocs.insert({
       kind: 'doc',
       originalFilename: 'data.bin',
@@ -2451,9 +2457,17 @@ test('cat_read_context_doc: paged extract read + image fallback metadata + not-f
       limit: number
       filename: string
       docNote?: string
+      anchors?: Array<{ id: string }>
+      extractedMedia?: Array<{ docId: string; anchorIds: string[] }>
     }
     assert.equal(page1.filename, '设定.md')
     assert.equal(page1.docNote, '世界观')
+    assert.deepEqual(page1.anchors?.map((anchor) => anchor.id), ['ctxa-hud'])
+    assert.deepEqual(page1.extractedMedia, [{
+      docId: image.id,
+      filename: 'hud.png',
+      anchorIds: ['ctxa-hud'],
+    }])
     assert.equal(page1.totalChars, longText.length)
     assert.equal(page1.text.length, 4000)
     assert.equal(page1.hasMore, true)

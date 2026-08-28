@@ -100,13 +100,6 @@ export type ContextAnchorLocator =
   | { kind: 'paragraph'; index: number }
   | { kind: 'image'; mediaId: string; sheet?: string; row?: number; cell?: string; page?: number }
 
-export interface ContextAnchor {
-  id: string
-  contextDocId: string
-  locator: ContextAnchorLocator
-  label?: string
-}
-
 export interface StageEvidenceReceipt {
   id: string
   stageRunId: string

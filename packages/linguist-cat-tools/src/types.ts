@@ -16,6 +16,8 @@
 import type {
   BatchConsistencyDimensions,
   BatchConsistencyPass,
+  ContextAnchor,
+  ContextExtractionWarning,
   EvidenceGap,
   LinguistProject,
   LinguistGenerationProvenance,
@@ -603,6 +605,16 @@ export interface CatReadContextDocResult {
   totalChars: number
   hasMore: boolean
   text?: string
+  /** 可定位的页、段落、单元格或图片锚点；不含媒体字节。 */
+  anchors?: ContextAnchor[]
+  /** 从父文档抽取的受管媒体，需按 docId 再读取才会进入模型请求。 */
+  extractedMedia?: Array<{
+    docId: string
+    filename: string
+    anchorIds: string[]
+  }>
+  /** 抽取时产生的显式缺口或降级说明。 */
+  extractionWarnings?: ContextExtractionWarning[]
   /** 图片说明 / 无抽取说明 / clamp 提示。 */
   note?: string
 }

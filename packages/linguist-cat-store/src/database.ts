@@ -313,8 +313,11 @@ function expectedTablesThrough(schemaVersion: number): string[] {
   const tables = new Set<string>()
   for (const migration of MIGRATIONS) {
     if (migration.version > schemaVersion) break
-    for (const match of migration.sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)?\s+([A-Za-z_][A-Za-z0-9_]*)/gi)) {
-      tables.add(match[1]!)
+    for (const match of migration.sql.matchAll(
+      /CREATE TABLE(?: IF NOT EXISTS)?\s+([A-Za-z_][A-Za-z0-9_]*)|DROP TABLE(?: IF EXISTS)?\s+([A-Za-z_][A-Za-z0-9_]*)/gi,
+    )) {
+      if (match[1] !== undefined) tables.add(match[1])
+      else if (match[2] !== undefined) tables.delete(match[2])
     }
   }
   return [...tables]
