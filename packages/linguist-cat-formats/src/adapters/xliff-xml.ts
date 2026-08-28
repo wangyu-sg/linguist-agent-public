@@ -86,6 +86,9 @@ export function setAttr(attrsRaw: string, name: string, value: string): string {
 export interface FoundElement {
   /** The full matched element markup, e.g. `<target state="new">x</target>`. */
   full: string
+  /** Character offsets within the searched block. */
+  start: number
+  end: number
   /** Tag name as written (may carry a namespace prefix). */
   tagName: string
   attrsRaw: string
@@ -208,6 +211,8 @@ export function findFirst(block: string, name: string): FoundElement | undefined
   if (!match) return undefined
   return {
     full: match[0],
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length,
     tagName: match[1]!,
     attrsRaw: match[2] ?? '',
     attrs: parseAttrs(match[2] ?? ''),

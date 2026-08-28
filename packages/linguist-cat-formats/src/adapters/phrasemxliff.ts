@@ -100,8 +100,6 @@
  *   elements of the same name (fine for real Phrase exports); group
  *   context is best-effort metadata — a missed group note never fails
  *   import;
- * - a `<target>` inside `<alt-trans>` can be mistaken for the main target
- *   (same as XliffAdapter);
  * - modified segments are re-encoded canonically (text runs escaped, inline
  *   tags verbatim, CDATA not re-wrapped), so they may differ in byte shape
  *   from a non-canonical original while decoding to identical content.
@@ -123,7 +121,7 @@ import {
   decodeXmlEntities,
   decodeXmlInline,
   encodeXmlInline,
-  findFirst,
+  findDirectChild,
   parseAttrs,
   setAttr,
 } from './xliff-xml'
@@ -135,7 +133,6 @@ const XLIFF_ROOT_PATTERN = /<(?:[\w.-]+:)?xliff\b/i
 const MEMSOURCE_NAMESPACE_PATTERN = /xmlns:m\s*=\s*["'][^"']*memsource\.com\/mxlf/i
 const FILE_PATTERN = /<((?:[\w.-]+:)?file)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const TRANS_UNIT_PATTERN = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>([\s\S]*?)<\/\1>/gi
-const SELF_CLOSING_TARGET_PATTERN = /<((?:[\w.-]+:)?target)\b([^>]*)\/>/i
 const GROUP_PATTERN = /<((?:[\w.-]+:)?group)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const CONTEXT_PATTERN = /<((?:[\w.-]+:)?context)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 
@@ -329,8 +326,13 @@ export function parsePhraseMxliffFormatConfig(
 
 function rehydratePhraseValue(value: string, mapping?: PhraseMxliffTagMapping): string {
   if (mapping === undefined) return value
-  const byPlaceholder = new Map(mapping.placeholders.map((placeholder, index) => [placeholder, mapping.tags[index]]))
-  return value.replace(PHRASE_PLACEHOLDER_PATTERN, (placeholder) => byPlaceholder.get(placeholder) ?? placeholder)
+  const byPlaceholder = new Map<string, string[]>()
+  mapping.placeholders.forEach((placeholder, index) => {
+    const tags = byPlaceholder.get(placeholder) ?? []
+    tags.push(mapping.tags[index]!)
+    byPlaceholder.set(placeholder, tags)
+  })
+  return value.replace(PHRASE_PLACEHOLDER_PATTERN, (placeholder) => byPlaceholder.get(placeholder)?.shift() ?? placeholder)
 }
 
 function dehydratePhraseValue(value: string, mapping?: PhraseMxliffTagMapping): string {
@@ -363,7 +365,7 @@ function parseMasterUnits(text: string): MasterUnitForPairing[] {
   TRANS_UNIT_PATTERN.lastIndex = 0
   for (const match of text.matchAll(TRANS_UNIT_PATTERN)) {
     const attrs = parseAttrs(match[2] ?? '')
-    const source = findFirst(match[3] ?? '', 'seg-source') ?? findFirst(match[3] ?? '', 'source')
+    const source = findDirectChild(match[3] ?? '', 'seg-source') ?? findDirectChild(match[3] ?? '', 'source')
     if (!source) continue
     const sourceRich = decodeXmlInline(source.inner)
     units.push({
@@ -414,11 +416,13 @@ export async function probePhraseMasterPair(
   let matchedSegments = 0
   let unmatchedSegments = 0
   let ambiguousSegments = 0
+  let splitOrdinal = 0
   TRANS_UNIT_PATTERN.lastIndex = 0
   for (const match of splitText.matchAll(TRANS_UNIT_PATTERN)) {
     const attrs = parseAttrs(match[2] ?? '')
-    const key = attrs.id?.trim() || attrs.resname?.trim()
-    const source = findFirst(match[3] ?? '', 'source')
+    const key = attrs.id?.trim() || attrs.resname?.trim() || `#tu-${splitOrdinal}`
+    splitOrdinal += 1
+    const source = findDirectChild(match[3] ?? '', 'source')
     if (!key || !source) continue
     const sourceText = decodeXmlInline(source.inner)
     const placeholders = phrasePlaceholders(sourceText)
@@ -610,27 +614,22 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
       const edit = edits[i]!
       out = out.slice(0, edit.start) + edit.replacement + out.slice(edit.end)
     }
+    if (edits.length === 0) return originalBytes
     return new TextEncoder().encode(out)
   }
 
   /** Rewrites a single trans-unit's `<target>`; everything else stays verbatim. */
   private rewriteUnit(tuFull: string, newTarget: string): string {
     const encoded = encodeXmlInline(newTarget)
-    const target = findFirst(tuFull, 'target')
+    const target = findDirectChild(tuFull, 'target')
     if (target) {
       const attrsRaw = newTarget === '' ? target.attrsRaw : setAttr(target.attrsRaw, 'state', 'translated')
       const nextTarget = `<${target.tagName}${attrsRaw}>${encoded}</${target.tagName}>`
       const at = tuFull.indexOf(target.full)
-      if (at < 0) return tuFull // defensive; findFirst matched within this unit
+      if (at < 0) return tuFull // defensive; findDirectChild matched within this unit
       return tuFull.slice(0, at) + nextTarget + tuFull.slice(at + target.full.length)
     }
-    const selfClosing = SELF_CLOSING_TARGET_PATTERN.exec(tuFull)
-    if (selfClosing) {
-      const tagName = selfClosing[1]!
-      const attrsRaw = newTarget === '' ? (selfClosing[2] ?? '') : setAttr(selfClosing[2] ?? '', 'state', 'translated')
-      return tuFull.replace(selfClosing[0], `<${tagName}${attrsRaw}>${encoded}</${tagName}>`)
-    }
-    const source = findFirst(tuFull, 'source')
+    const source = findDirectChild(tuFull, 'source')
     const inserted = `<target state="translated">${encoded}</target>`
     if (!source) return tuFull // defensive; import rejected source-less units
     return tuFull.replace(source.full, `${source.full}${inserted}`)
@@ -683,12 +682,12 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
           throw new FormatParseError(this.id, filename, `trans-unit #${ordinal}: duplicate key ${JSON.stringify(key)}`)
         }
         seenKeys.add(key)
-        const source = findFirst(inner, 'source')
+        const source = findDirectChild(inner, 'source')
         if (!source) {
           throw new FormatParseError(this.id, filename, `trans-unit ${JSON.stringify(key)} has no <source> element`)
         }
-        const target = findFirst(inner, 'target')
-        const note = findFirst(inner, 'note')
+        const target = findDirectChild(inner, 'target')
+        const note = findDirectChild(inner, 'note')
         const paraId = attrs['m:para-id']
         const groupNote = paraId ? groupContexts.get(paraId)?.note : undefined
         const sourceText = decodeXmlInline(source.inner)

@@ -6,13 +6,16 @@ import type {
   LinguistPromptStatusInfo,
   LinguistRole,
 } from '@proma/shared'
+import { LINGUIST_IPC_ERROR_CODES } from '@proma/shared'
 import type { ProjectDatabase } from '@linguist/cat-store'
 import type { LinguistServiceResolver } from './session-binding'
 
-export const LINGUIST_PROMPT_VERSION = '3.1.0'
+export const LINGUIST_PROMPT_VERSION = '3.1.1'
 export const LINGUIST_PROMPT_MAX_CHARS = 18_000
+export const LINGUIST_ROLE_PROMPT_UNAVAILABLE = 'LINGUIST_ROLE_PROMPT_UNAVAILABLE'
 const ROLE_MAX_CHARS = 6_000
 const DIGEST_TRUNCATED = '\n…（Project Digest 已达到 Prompt 总长度上限；其余资料请按需查询）'
+const ROLE_FALLBACK_NOTICE = '系统警告：通用岗位资源不可用，已使用内置短提示；该提示不包含项目专属规则。'
 
 const PROFILE = `# Linguist Agent
 
@@ -54,6 +57,7 @@ export interface LinguistPromptBuildResult {
 interface PromptParts {
   role: LinguistRole
   rolePrompt: string
+  roleNotice?: string
   digestNotice?: string
   digest?: string
 }
@@ -89,8 +93,14 @@ export function loadRolePrompt(
       const content = readFileSync(join(rolesRoot, `${role}.md`), 'utf8').trim()
       if (content.length > 0 && content.length <= ROLE_MAX_CHARS) return { content, source: 'bundle' }
     } catch {
-      // 缺少岗位文件时使用内置短提示，不阻断会话。
+      // 统一转为岗位不可用；错误消息不包含本机路径。
     }
+  }
+  if (role !== 'general') {
+    throw Object.assign(
+      new Error(`${LINGUIST_ROLE_PROMPT_UNAVAILABLE}: ${role} 岗位资源不可用`),
+      { code: LINGUIST_IPC_ERROR_CODES.INVALID_INPUT },
+    )
   }
   return { content: FALLBACK_ROLES[role], source: 'fallback' }
 }
@@ -229,6 +239,7 @@ function render(parts: PromptParts, renderer: LinguistPromptRenderer): string {
   const sections = [
     { name: 'profile', content: PROFILE },
     { name: 'quality', content: LINGUIST_QUALITY_PROMPT },
+    ...(parts.roleNotice === undefined ? [] : [{ name: 'role_prompt_status', content: parts.roleNotice }]),
     { name: 'role', content: parts.rolePrompt },
   ]
   if (parts.digestNotice !== undefined) {
@@ -277,6 +288,7 @@ export function buildLinguistPrompt(
   const parts = {
     role,
     rolePrompt: rolePrompt.content,
+    ...(rolePrompt.source === 'fallback' && role === 'general' ? { roleNotice: ROLE_FALLBACK_NOTICE } : {}),
     ...(digest.notice === undefined ? {} : { digestNotice: digest.notice }),
     digest: digest.digest,
   }

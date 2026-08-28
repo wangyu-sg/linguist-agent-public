@@ -17,6 +17,7 @@ const electronOverlay = JSON.parse(
 ) as ElectronOverlay
 const electronBuilderConfig = readFileSync(join(root, 'apps/electron/electron-builder.yml'), 'utf8')
 const macInstallHelpPath = join(root, 'apps/electron/resources/macos-install-help.txt')
+const linguistRolesRoot = join(root, 'resources/linguist-roles')
 const electronPackage = JSON.parse(
   readFileSync(join(root, 'apps/electron/package.json'), 'utf8'),
 ) as { scripts: Record<string, string> }
@@ -89,5 +90,17 @@ describe('AC-002 发布链 fail-closed', () => {
   test('关键资源复制失败会终止构建', () => {
     expect(electronPackage.scripts['build:resources']).toContain("cpSync('resources', 'dist/resources', { recursive: true })")
     expect(electronPackage.scripts['build:resources']).not.toContain('|| true')
+  })
+
+  test('四个 Linguist 岗位 Prompt 资源存在、非空且被打包', () => {
+    for (const role of ['general', 'translator', 'reviewer', 'proofreader']) {
+      const path = join(linguistRolesRoot, `${role}.md`)
+      expect(existsSync(path)).toBe(true)
+      const content = readFileSync(path, 'utf8').trim()
+      expect(content.length).toBeGreaterThan(0)
+      expect(content.length).toBeLessThanOrEqual(6_000)
+    }
+    expect(electronBuilderConfig).toContain('from: ../../resources/linguist-roles')
+    expect(electronBuilderConfig).toContain('to: linguist-roles')
   })
 })

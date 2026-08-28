@@ -4,6 +4,7 @@ import {
   decodeXmlEntities,
   encodeXmlInline,
   encodeXmlText,
+  findDirectChild,
   findFirst,
   parseAttrs,
   setAttr,
@@ -12,6 +13,7 @@ import { XliffAdapter, type XliffParsedUnit } from './xliff'
 
 export const MQXLIFF_ADAPTER_ID = 'mqxliff_1_2'
 const MQ_NAMESPACE_PATTERN = /xmlns:mq\s*=\s*(["'])(?:MQXliff|[^"']*memoq[^"']*)\1/i
+const FILE_PATTERN = /<((?:[\w.-]+:)?file)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const TRANS_UNIT_PATTERN = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const INLINE_CODE_PATTERN = /<((?:[\w.-]+:)?(?:bpt|ept|ph))\b[^>]*>([\s\S]*?)<\/\1>/gi
 
@@ -89,16 +91,16 @@ function encodeMqTarget(text: string, sourceInner: string): string {
 }
 
 function rewriteMqTargetInUnit(full: string, targetText: string, now: string, status: string): string {
-  const source = findFirst(full, 'source')
+  const source = findDirectChild(full, 'source')
   if (!source) return full
-  const target = findFirst(full, 'target')
+  const target = findDirectChild(full, 'target')
   const encoded = encodeMqTarget(targetText, source.inner)
   const nextTarget = target
     ? `<${target.tagName}${setAttr(target.attrsRaw, 'xml:space', 'preserve')}>${encoded}</${target.tagName}>`
     : `<target xml:space="preserve">${encoded}</target>`
   let next = target
-    ? full.replace(target.full, nextTarget)
-    : full.replace(source.full, `${source.full}${nextTarget}`)
+    ? full.slice(0, target.start) + nextTarget + full.slice(target.end)
+    : full.slice(0, source.end) + nextTarget + full.slice(source.end)
   const open = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>/i.exec(next)
   if (open) {
     let attrs = setAttr(open[2] ?? '', 'mq:status', status)
@@ -176,13 +178,21 @@ export function writeMqXliffDefects(
   const updatedIds: string[] = []
   const commentedIds: string[] = []
   const skippedLockedIds: string[] = []
-  const next = content.replace(TRANS_UNIT_PATTERN, (full, _tagName, attrsRaw) => {
+  FILE_PATTERN.lastIndex = 0
+  const lockedFileRanges = [...content.matchAll(FILE_PATTERN)]
+    .filter((match) => (parseAttrs(match[2] ?? '').translate ?? '').trim().toLowerCase() === 'no')
+    .map((match) => {
+      const start = match.index ?? 0
+      return { start, end: start + match[0].length }
+    })
+  const next = content.replace(TRANS_UNIT_PATTERN, (full, _tagName, attrsRaw, _inner, offset: number) => {
     const attrs = parseAttrs(attrsRaw ?? '')
     const id = attrs.id ?? ''
     const defect = byId.get(id)
     if (!defect) return full
     seen.add(id)
-    const locked = (attrs.translate ?? '').toLowerCase() === 'no'
+    const fileLocked = lockedFileRanges.some((range) => offset >= range.start && offset < range.end)
+    const locked = fileLocked || (attrs.translate ?? '').toLowerCase() === 'no'
       || ['1', 'true', 'yes', 'locked'].includes((attrs['mq:locked'] ?? '').toLowerCase())
     if (locked) {
       skippedLockedIds.push(id)

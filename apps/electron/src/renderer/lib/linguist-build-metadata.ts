@@ -11,7 +11,7 @@ export const LINGUIST_BUILD_METADATA = {
   promaBaseCommit: '92a635faa522d5d40544b06fdf74a28152012c71',
   formalMergeCommit: 'fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79',
   catSchema: 16,
-  promptVersion: '3.1.0',
+  promptVersion: '3.1.1',
   hostContract: '未单独版本化',
   hostContractDetail: '代码未定义独立 runtime version constant',
 } as const

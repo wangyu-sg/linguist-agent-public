@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
-import type { SDKUserMessage } from '@proma/shared'
+import type { AgentSessionMeta, SDKUserMessage } from '@proma/shared'
 import * as piCodingAgent from '@earendil-works/pi-coding-agent'
 import { electronMock, resetElectronMock } from './test/electron-mock'
 
@@ -72,6 +72,9 @@ function writeAgentSessionsIndex(sessions: Array<{
   piEntryBindings?: Record<string, string>
   forkSourceSdkSessionId?: string
   resumeAtMessageUuid?: string
+  linguistRole?: AgentSessionMeta['linguistRole']
+  sourceDelegationId?: string
+  parentSessionId?: string
 }>): void {
   const dir = join(tempHome, '.linguist-agent')
   mkdirSync(dir, { recursive: true })
@@ -350,6 +353,70 @@ describe('Agent 会话 runtime 元数据', () => {
     expect(manager.getAgentSessionMeta(session.id)).toMatchObject({
       archived: true,
       stoppedByUser: false,
+    })
+  })
+})
+
+describe('Linguist 会话岗位身份', () => {
+  test('Given 没有持久化消息的项目会话 When 修改岗位 Then 允许更新岗位', () => {
+    writeAgentSessionsIndex([{
+      id: 'linguist-empty-role',
+      title: '空白项目会话',
+      workspaceId: 'workspace-a',
+      createdAt: 1,
+      updatedAt: 123,
+      linguistProjectId: 'prj-0123456789abcdef',
+      linguistRole: 'general',
+    }])
+
+    const updated = manager.updateAgentSessionLinguistRole('linguist-empty-role', 'reviewer')
+
+    expect(updated.linguistRole).toBe('reviewer')
+    expect(manager.getAgentSessionMeta('linguist-empty-role')?.linguistRole).toBe('reviewer')
+  })
+
+  test('Given 项目会话已有持久化用户消息 When 修改岗位 Then 拒绝且保持原岗位和更新时间', () => {
+    writeAgentSessionsIndex([{
+      id: 'linguist-used-role',
+      title: '已使用项目会话',
+      workspaceId: 'workspace-a',
+      createdAt: 1,
+      updatedAt: 456,
+      linguistProjectId: 'prj-0123456789abcdef',
+      linguistRole: 'translator',
+    }])
+    writeAgentSessionJsonl('linguist-used-role', [JSON.stringify({
+      type: 'user',
+      message: { content: [{ type: 'text', text: '翻译这段' }] },
+      parent_tool_use_id: null,
+    })])
+
+    expect(() => manager.updateAgentSessionLinguistRole('linguist-used-role', 'reviewer'))
+      .toThrow('请新建对应岗位对话')
+    expect(manager.getAgentSessionMeta('linguist-used-role')).toMatchObject({
+      linguistRole: 'translator',
+      updatedAt: 456,
+    })
+  })
+
+  test('Given 委派子会话尚无消息 When 修改岗位 Then 始终拒绝', () => {
+    writeAgentSessionsIndex([{
+      id: 'linguist-delegated-role',
+      title: '委派审校会话',
+      workspaceId: 'workspace-a',
+      createdAt: 1,
+      updatedAt: 789,
+      linguistProjectId: 'prj-0123456789abcdef',
+      linguistRole: 'reviewer',
+      sourceDelegationId: 'delegation-1',
+      parentSessionId: 'parent-session',
+    }])
+
+    expect(() => manager.updateAgentSessionLinguistRole('linguist-delegated-role', 'proofreader'))
+      .toThrow('请新建对应岗位对话')
+    expect(manager.getAgentSessionMeta('linguist-delegated-role')).toMatchObject({
+      linguistRole: 'reviewer',
+      updatedAt: 789,
     })
   })
 })
