@@ -23,7 +23,8 @@ test('专业岗位 Prompt 缺失时以稳定错误拒绝，并且不泄露本机
   try {
     loadRolePrompt('reviewer', rolesRoot)
   } catch (error) {
-    expect(error).toMatchObject({ code: 'LINGUIST_ROLE_PROMPT_UNAVAILABLE' })
+    expect(error).toMatchObject({ code: 'INVALID_INPUT' })
+    expect(error instanceof Error ? error.message : String(error)).toContain('LINGUIST_ROLE_PROMPT_UNAVAILABLE')
     expect(error instanceof Error ? error.message : String(error)).not.toContain(rolesRoot)
   }
 })

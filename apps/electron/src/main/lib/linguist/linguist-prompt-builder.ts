@@ -6,6 +6,7 @@ import type {
   LinguistPromptStatusInfo,
   LinguistRole,
 } from '@proma/shared'
+import { LINGUIST_IPC_ERROR_CODES } from '@proma/shared'
 import type { ProjectDatabase } from '@linguist/cat-store'
 import type { LinguistServiceResolver } from './session-binding'
 
@@ -98,7 +99,7 @@ export function loadRolePrompt(
   if (role !== 'general') {
     throw Object.assign(
       new Error(`${LINGUIST_ROLE_PROMPT_UNAVAILABLE}: ${role} 岗位资源不可用`),
-      { code: LINGUIST_ROLE_PROMPT_UNAVAILABLE },
+      { code: LINGUIST_IPC_ERROR_CODES.INVALID_INPUT },
     )
   }
   return { content: FALLBACK_ROLES[role], source: 'fallback' }
