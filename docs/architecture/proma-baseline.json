@@ -19,13 +19,13 @@
     "pi": "0.84.2"
   },
   "product": {
-    "linguistAgentVersion": "0.17.62",
+    "linguistAgentVersion": "0.17.63",
     "sharedVersion": "0.1.63",
-    "catCoreVersion": "0.0.21",
-    "catFormatsVersion": "0.0.11",
-    "catStoreVersion": "0.0.39",
-    "catToolsVersion": "0.0.35",
-    "catSchema": 16
+    "catCoreVersion": "0.0.22",
+    "catFormatsVersion": "0.0.12",
+    "catStoreVersion": "0.0.40",
+    "catToolsVersion": "0.0.36",
+    "catSchema": 17
   },
   "contracts": {
     "prompt": {
