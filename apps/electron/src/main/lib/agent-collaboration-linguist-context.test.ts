@@ -29,6 +29,7 @@ const parent = {
 
 const sessions = new Map<string, AgentSessionMeta>([[parent.id, parent]])
 let capturedRunInput: Record<string, unknown> | undefined
+const capturedRunInputs: Record<string, unknown>[] = []
 let collaborationTools: CollaborationToolsModule
 
 mock.module('./agent-session-manager', () => ({
@@ -65,8 +66,13 @@ mock.module('./agent-session-manager', () => ({
 }))
 
 mock.module('./agent-headless-runner-registry', () => ({
-  runRegisteredHeadlessAgent: (input: Record<string, unknown>) => {
+  runRegisteredHeadlessAgent: (
+    input: Record<string, unknown>,
+    callbacks: { onComplete?: (messages: unknown[]) => void },
+  ) => {
     capturedRunInput = input
+    capturedRunInputs.push(input)
+    callbacks.onComplete?.([])
     return Promise.resolve()
   },
   stopRegisteredAgent: () => {},
@@ -113,6 +119,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   capturedRunInput = undefined
+  capturedRunInputs.length = 0
 })
 
 test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', async () => {
@@ -154,4 +161,55 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
   await delegate.execute('tool-call-2', { task: '普通协作任务' })
   expect(capturedRunInput?.linguistContext).toBeUndefined()
   expect(sessions.get('child-session')?.linguistProjectId).toBeUndefined()
+})
+
+test('Linguist 委派续跑复用持久化子会话绑定，不读取新的父会话 Context', async () => {
+  const sdk = {
+    defineTool: (definition: ToolDefinition) => definition,
+  } as unknown as typeof import('@earendil-works/pi-coding-agent')
+  const tools = collaborationTools.buildPiCollaborationTools(sdk, {
+    sessionId: parent.id,
+    channelId: parent.channelId!,
+    modelId: 'gpt-5.5',
+    workspaceId: parent.workspaceId,
+    permissionMode: parent.permissionMode,
+    linguistContext: parentContext,
+  } as Parameters<CollaborationToolsModule['buildPiCollaborationTools']>[1]) as ToolDefinition[]
+  const delegate = tools.find((tool) => tool.name === 'mcp__collaboration__delegate_agent')!
+  const continueDelegation = tools.find((tool) => tool.name === 'mcp__collaboration__continue_delegation')!
+
+  const first = await delegate.execute('continuation-delegate', {
+    task: '审校当前资产',
+    linguistRole: 'reviewer',
+    linguistScope: { assetIds: [parentContext.assetId] },
+  }) as { details: { delegation: { delegationId: string } } }
+  expect(sessions.get('child-session')).toMatchObject({
+    linguistProjectId: parentContext.projectId,
+    linguistRole: 'reviewer',
+    linguistDelegatedScope: {
+      assetIds: [parentContext.assetId],
+      segmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
+    },
+  })
+
+  await continueDelegation.execute('continuation-follow-up', {
+    delegationId: first.details.delegation.delegationId,
+    message: '继续检查冻结范围',
+  })
+
+  expect(capturedRunInputs).toHaveLength(2)
+  expect(capturedRunInputs[1]).toMatchObject({
+    sessionId: 'child-session',
+    userMessage: '继续检查冻结范围',
+  })
+  expect(capturedRunInputs[1]?.linguistContext).toBeUndefined()
+  expect(sessions.get('child-session')).toMatchObject({
+    linguistProjectId: parentContext.projectId,
+    linguistRole: 'reviewer',
+    linguistDelegatedScope: {
+      assetIds: [parentContext.assetId],
+      segmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
+    },
+    delegationStatus: 'completed',
+  })
 })
