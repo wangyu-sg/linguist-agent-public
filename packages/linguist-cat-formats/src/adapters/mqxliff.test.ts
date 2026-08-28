@@ -74,6 +74,9 @@ describe('MqXliffAdapter round-trip', () => {
     const output = new TextDecoder().decode(report.exportedBytes)
     expect(output).toContain('mq:status="ConfirmedTranslator"')
     expect(output).toContain('mq:lastchangedtimestamp="2026-08-28T12:00:00Z"')
+    const unit3 = /<trans-unit id="3"[\s\S]*?<\/trans-unit>/.exec(output)?.[0] ?? ''
+    const target3 = /<target\b[^>]*>([\s\S]*?)<\/target>/.exec(unit3)?.[1] ?? ''
+    expect(target3).toContain('<ph id="1">')
   })
 })
 
@@ -134,7 +137,7 @@ describe('MqXliffAdapter inline code and locked boundaries', () => {
 describe('memoQ defect comment write-back', () => {
   test('特殊字符可转义并保持 XML 可解析；locked 不写 target/comment，missingIds 明确返回', () => {
     const source = `<xliff version="1.2" xmlns:mq="MQXliff"><file><body>
-      <trans-unit id="open"><source>Open</source><target>Old</target></trans-unit>
+      <trans-unit id="open"><source>Open</source><alt-trans><target>Alt</target></alt-trans><target>Old</target></trans-unit>
       <trans-unit id="locked" mq:locked="true"><source>Locked</source><target>Keep</target></trans-unit>
     </body></file></xliff>`
     const result = writeMqXliffDefects(source, [
@@ -152,6 +155,7 @@ describe('memoQ defect comment write-back', () => {
     expect(result.content).toContain('5 &lt; 6 &amp; "quote"')
     expect(result.content).toContain('mq:status="Edited"')
     expect(result.content).toContain('mq:lastchangedtimestamp="2026-08-28T12:00:00Z"')
+    expect(result.content).toContain('<alt-trans><target>Alt</target></alt-trans>')
     expect(result.content).toContain('<target>Keep</target>')
     expect(result.content).not.toContain('must stay')
     const document = new DOMParser().parseFromString(result.content, 'text/xml')

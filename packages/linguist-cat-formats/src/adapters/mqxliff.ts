@@ -4,6 +4,7 @@ import {
   decodeXmlEntities,
   encodeXmlInline,
   encodeXmlText,
+  findDirectChild,
   findFirst,
   parseAttrs,
   setAttr,
@@ -90,16 +91,16 @@ function encodeMqTarget(text: string, sourceInner: string): string {
 }
 
 function rewriteMqTargetInUnit(full: string, targetText: string, now: string, status: string): string {
-  const source = findFirst(full, 'source')
+  const source = findDirectChild(full, 'source')
   if (!source) return full
-  const target = findFirst(full, 'target')
+  const target = findDirectChild(full, 'target')
   const encoded = encodeMqTarget(targetText, source.inner)
   const nextTarget = target
     ? `<${target.tagName}${setAttr(target.attrsRaw, 'xml:space', 'preserve')}>${encoded}</${target.tagName}>`
     : `<target xml:space="preserve">${encoded}</target>`
   let next = target
-    ? full.replace(target.full, nextTarget)
-    : full.replace(source.full, `${source.full}${nextTarget}`)
+    ? full.slice(0, target.start) + nextTarget + full.slice(target.end)
+    : full.slice(0, source.end) + nextTarget + full.slice(source.end)
   const open = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>/i.exec(next)
   if (open) {
     let attrs = setAttr(open[2] ?? '', 'mq:status', status)
