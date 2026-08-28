@@ -100,8 +100,6 @@
  *   elements of the same name (fine for real Phrase exports); group
  *   context is best-effort metadata — a missed group note never fails
  *   import;
- * - a `<target>` inside `<alt-trans>` can be mistaken for the main target
- *   (same as XliffAdapter);
  * - modified segments are re-encoded canonically (text runs escaped, inline
  *   tags verbatim, CDATA not re-wrapped), so they may differ in byte shape
  *   from a non-canonical original while decoding to identical content.
@@ -123,7 +121,7 @@ import {
   decodeXmlEntities,
   decodeXmlInline,
   encodeXmlInline,
-  findFirst,
+  findDirectChild,
   parseAttrs,
   setAttr,
 } from './xliff-xml'
@@ -363,7 +361,7 @@ function parseMasterUnits(text: string): MasterUnitForPairing[] {
   TRANS_UNIT_PATTERN.lastIndex = 0
   for (const match of text.matchAll(TRANS_UNIT_PATTERN)) {
     const attrs = parseAttrs(match[2] ?? '')
-    const source = findFirst(match[3] ?? '', 'seg-source') ?? findFirst(match[3] ?? '', 'source')
+    const source = findDirectChild(match[3] ?? '', 'seg-source') ?? findDirectChild(match[3] ?? '', 'source')
     if (!source) continue
     const sourceRich = decodeXmlInline(source.inner)
     units.push({
@@ -418,7 +416,7 @@ export async function probePhraseMasterPair(
   for (const match of splitText.matchAll(TRANS_UNIT_PATTERN)) {
     const attrs = parseAttrs(match[2] ?? '')
     const key = attrs.id?.trim() || attrs.resname?.trim()
-    const source = findFirst(match[3] ?? '', 'source')
+    const source = findDirectChild(match[3] ?? '', 'source')
     if (!key || !source) continue
     const sourceText = decodeXmlInline(source.inner)
     const placeholders = phrasePlaceholders(sourceText)
@@ -616,12 +614,12 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
   /** Rewrites a single trans-unit's `<target>`; everything else stays verbatim. */
   private rewriteUnit(tuFull: string, newTarget: string): string {
     const encoded = encodeXmlInline(newTarget)
-    const target = findFirst(tuFull, 'target')
+    const target = findDirectChild(tuFull, 'target')
     if (target) {
       const attrsRaw = newTarget === '' ? target.attrsRaw : setAttr(target.attrsRaw, 'state', 'translated')
       const nextTarget = `<${target.tagName}${attrsRaw}>${encoded}</${target.tagName}>`
       const at = tuFull.indexOf(target.full)
-      if (at < 0) return tuFull // defensive; findFirst matched within this unit
+      if (at < 0) return tuFull // defensive; findDirectChild matched within this unit
       return tuFull.slice(0, at) + nextTarget + tuFull.slice(at + target.full.length)
     }
     const selfClosing = SELF_CLOSING_TARGET_PATTERN.exec(tuFull)
@@ -630,7 +628,7 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
       const attrsRaw = newTarget === '' ? (selfClosing[2] ?? '') : setAttr(selfClosing[2] ?? '', 'state', 'translated')
       return tuFull.replace(selfClosing[0], `<${tagName}${attrsRaw}>${encoded}</${tagName}>`)
     }
-    const source = findFirst(tuFull, 'source')
+    const source = findDirectChild(tuFull, 'source')
     const inserted = `<target state="translated">${encoded}</target>`
     if (!source) return tuFull // defensive; import rejected source-less units
     return tuFull.replace(source.full, `${source.full}${inserted}`)
@@ -683,12 +681,12 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
           throw new FormatParseError(this.id, filename, `trans-unit #${ordinal}: duplicate key ${JSON.stringify(key)}`)
         }
         seenKeys.add(key)
-        const source = findFirst(inner, 'source')
+        const source = findDirectChild(inner, 'source')
         if (!source) {
           throw new FormatParseError(this.id, filename, `trans-unit ${JSON.stringify(key)} has no <source> element`)
         }
-        const target = findFirst(inner, 'target')
-        const note = findFirst(inner, 'note')
+        const target = findDirectChild(inner, 'target')
+        const note = findDirectChild(inner, 'note')
         const paraId = attrs['m:para-id']
         const groupNote = paraId ? groupContexts.get(paraId)?.note : undefined
         const sourceText = decodeXmlInline(source.inner)
