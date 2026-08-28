@@ -10,6 +10,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
+import type { LinguistRole } from '@proma/shared'
 import { HelpCircle, Keyboard, Globe, PanelRight } from 'lucide-react'
 import {
   tabsAtom,
@@ -42,6 +43,13 @@ import { faqDialogOpenAtom } from '@/atoms/faq-dialog'
 import { browserPanelMinimizedMapAtom, browserPanelOpenMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
 // 浏览器入口对所有 Agent 会话开放；来源限制由主进程浏览器策略处理。
 
+const LINGUIST_ROLE_SHORT_LABEL: Record<LinguistRole, string> = {
+  general: '通用',
+  translator: '翻译',
+  reviewer: '审校',
+  proofreader: '校对',
+}
+
 export function TabBar(): React.ReactElement {
   const tabs = useAtomValue(tabsAtom)
   const [activeTabId, setActiveTabId] = useAtom(activeTabIdAtom)
@@ -71,15 +79,23 @@ export function TabBar(): React.ReactElement {
     }
   }, [store, tabs])
 
-  const contextLabelBySessionId = React.useMemo(() => {
+  const contextBySessionId = React.useMemo(() => {
     const workspaceNameMap = new Map(agentWorkspaces.map((workspace) => [workspace.id, workspace.name]))
-    const labels = new Map<string, string>()
+    const contexts = new Map<string, { label: string; roleLabel?: string }>()
     for (const session of agentSessions) {
-      const label = getAgentSessionLinguistProjectName(session, agentSessions)
+      const linguistProjectName = getAgentSessionLinguistProjectName(session, agentSessions)
+      const label = linguistProjectName
         ?? (session.workspaceId ? workspaceNameMap.get(session.workspaceId) : undefined)
-      if (label) labels.set(session.id, label)
+      if (label) {
+        contexts.set(session.id, {
+          label,
+          roleLabel: linguistProjectName
+            ? LINGUIST_ROLE_SHORT_LABEL[session.linguistRole ?? 'general']
+            : undefined,
+        })
+      }
     }
-    return labels
+    return contexts
   }, [agentSessions, agentWorkspaces])
 
   const automationSessionIds = React.useMemo(() => {
@@ -152,7 +168,7 @@ export function TabBar(): React.ReactElement {
         tabs={tabs}
         activeTabId={activeTabId}
         streamingMap={indicatorMap}
-        contextLabelBySessionId={contextLabelBySessionId}
+        contextBySessionId={contextBySessionId}
         automationSessionIds={automationSessionIds}
         delegationSessionIds={delegationSessionIds}
         onActivate={handleActivate}
@@ -169,7 +185,7 @@ function TabBarInner({
   tabs,
   activeTabId,
   streamingMap,
-  contextLabelBySessionId,
+  contextBySessionId,
   automationSessionIds,
   delegationSessionIds,
   onActivate,
@@ -180,7 +196,7 @@ function TabBarInner({
   tabs: TabItem[]
   activeTabId: string | null
   streamingMap: Map<string, SessionIndicatorStatus>
-  contextLabelBySessionId: Map<string, string>
+  contextBySessionId: Map<string, { label: string; roleLabel?: string }>
   automationSessionIds: Set<string>
   delegationSessionIds: Set<string>
   onActivate: (tabId: string) => void
@@ -392,13 +408,19 @@ function TabBarInner({
           actionLayout.scrollPaddingClassName,
         )}
       >
-        {tabs.map((tab) => (
-          <TabBarItem
-            key={tab.id}
-            id={tab.id}
-            type={tab.type}
-            title={tab.title}
-            contextLabel={tab.type === 'agent' ? contextLabelBySessionId.get(tab.sessionId) : undefined}
+        {tabs.map((tab) => {
+          const sessionContext = tab.type === 'agent' || tab.type === 'preview'
+            ? contextBySessionId.get(tab.sessionId)
+            : undefined
+          return (
+            <TabBarItem
+              key={tab.id}
+              id={tab.id}
+              type={tab.type}
+              title={tab.title}
+              displayTitle={tab.type === 'linguist-project' ? '工作台' : undefined}
+              contextLabel={tab.type === 'linguist-project' ? tab.title : sessionContext?.label}
+              roleLabel={sessionContext?.roleLabel}
             isAutomation={tab.type === 'agent' && automationSessionIds.has(tab.sessionId)}
             isDelegation={tab.type === 'agent' && delegationSessionIds.has(tab.sessionId)}
             isActive={tab.id === activeTabId}
@@ -414,8 +436,9 @@ function TabBarInner({
             onHoverLeave={handleTabHoverLeave}
             onPanelHoverEnter={handlePanelHoverEnter}
             onPanelHoverLeave={handleTabHoverLeave}
-          />
-        ))}
+            />
+          )
+        })}
       </div>
 
       <ShortcutGuideButton

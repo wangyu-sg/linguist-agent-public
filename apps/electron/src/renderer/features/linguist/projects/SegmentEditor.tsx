@@ -139,6 +139,7 @@ export function SegmentEditor({
   const loadingOffsets = React.useRef(new Set<number>())
   const handledMutationRevisions = React.useRef(new Map<string, number>())
   const stageMutatingSegmentIds = React.useRef(new Set<string>())
+  const lastFocusedSegmentId = React.useRef<string>()
   const deferredSearch = React.useDeferredValue(filters.search)
   const signature = `${projectId}\0${filters.assetId ?? ''}\0${filters.currentStageState ?? ''}\0${deferredSearch}`
   const data = state.status === 'ready' ? state.data : undefined
@@ -374,9 +375,16 @@ export function SegmentEditor({
   }, [data, focusRow, requestedSegmentId])
 
   React.useEffect(() => {
-    if (activeSegmentId === undefined || data?.signature !== signature) return
+    if (activeSegmentId === undefined) {
+      lastFocusedSegmentId.current = undefined
+      return
+    }
+    if (data?.signature !== signature || lastFocusedSegmentId.current === activeSegmentId) return
     const index = data.segmentIds.indexOf(activeSegmentId)
-    if (index >= 0) setPendingFocusIndex(index)
+    if (index >= 0) {
+      lastFocusedSegmentId.current = activeSegmentId
+      setPendingFocusIndex(index)
+    }
   }, [activeSegmentId, data, signature])
 
   const jumpToQaSegment = React.useCallback((segmentId: string): void => {

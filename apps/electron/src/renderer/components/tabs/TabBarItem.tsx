@@ -9,7 +9,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { useAtomValue } from 'jotai'
-import { FileText, StickyNote, X, Clock, GitBranch } from 'lucide-react'
+import { Bot, FileText, Languages, StickyNote, X, Clock, GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TabType, TabMinimapItem } from '@/atoms/tab-atoms'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
@@ -22,7 +22,9 @@ export interface TabBarItemProps {
   id: string
   type: TabType
   title: string
+  displayTitle?: string
   contextLabel?: string
+  roleLabel?: string
   isActive: boolean
   isStreaming: SessionIndicatorStatus
   /** 是否显示 hover 预览面板（由父级管理） */
@@ -53,7 +55,9 @@ export function TabBarItem({
   id,
   type,
   title,
+  displayTitle,
   contextLabel,
+  roleLabel,
   isActive,
   isStreaming,
   isHovered,
@@ -173,6 +177,9 @@ export function TabBarItem({
         {type === 'preview' && !isNarrow && (
           <FileText className="size-3.5 shrink-0 text-muted-foreground" />
         )}
+        {type === 'linguist-project' && !isNarrow && (
+          <Languages className="size-3.5 shrink-0 text-muted-foreground" />
+        )}
 
         {/* 标题（窄状态下隐藏，用 spacer 撑开让关闭按钮靠右） */}
         {isNarrow ? (
@@ -182,13 +189,20 @@ export function TabBarItem({
             {showAgentSpinner && <Spinner size="sm" className="mr-2 shrink-0 text-primary/70" />}
             {isAutomation && <Clock className="size-3 shrink-0 text-foreground/40" />}
             {isDelegation && !isAutomation && <GitBranch className="size-3 shrink-0 text-foreground/40" />}
-            <span className="min-w-0 truncate">{title}</span>
+            {type === 'agent' && roleLabel && <Bot className="size-3.5 shrink-0 text-muted-foreground" />}
+            <span className="min-w-0 truncate">{displayTitle ?? title}</span>
           </span>
         )}
 
         {contextLabel && !isNarrow && (
           <span className="shrink-0 px-1.5 py-0 rounded-full bg-primary/10 text-[10px] leading-4 workspace-badge font-medium truncate max-w-[86px]">
             {contextLabel}
+          </span>
+        )}
+
+        {roleLabel && !isNarrow && (
+          <span className="shrink-0 px-1.5 py-0 rounded-full bg-muted text-[10px] leading-4 text-muted-foreground font-medium">
+            {roleLabel}
           </span>
         )}
 
