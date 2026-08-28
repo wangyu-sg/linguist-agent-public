@@ -63,7 +63,7 @@ describe('MqXliffAdapter round-trip', () => {
         name: 'memoQ inline code sequence preserved',
         assert: (before, after) => {
           const tokens = (value: string) => value.match(/<color=[^>]+>|<\/color>|\\n|\{0\}/g) ?? []
-          if (JSON.stringify(tokens(before.source)) !== JSON.stringify(tokens(after.source))) {
+          if (JSON.stringify(tokens(before.target)) !== JSON.stringify(tokens(after.target))) {
             throw new Error('memoQ inline code sequence changed')
           }
         },
@@ -107,8 +107,9 @@ describe('MqXliffAdapter inline code and locked boundaries', () => {
         ? { ...segment, target: 'z{0}{0}w' }
         : segment),
     }))
-    const first = exported.indexOf('<ph id="1">')
-    const second = exported.indexOf('<ph id="2">')
+    const target = /<target\b[^>]*>([\s\S]*?)<\/target>/.exec(exported)?.[1] ?? ''
+    const first = target.indexOf('<ph id="1">')
+    const second = target.indexOf('<ph id="2">')
     expect(first).toBeGreaterThan(-1)
     expect(first).toBeLessThan(second)
 
@@ -155,5 +156,15 @@ describe('memoQ defect comment write-back', () => {
     expect(result.content).not.toContain('must stay')
     const document = new DOMParser().parseFromString(result.content, 'text/xml')
     expect(document.getElementsByTagName('parsererror').length).toBe(0)
+  })
+
+  test('file-level translate="no" prevents target and comment write-back', () => {
+    const source = `<xliff version="1.2" xmlns:mq="MQXliff"><file translate="no"><body><trans-unit id="open"><source>Open</source><target>Old</target></trans-unit></body></file></xliff>`
+    const result = writeMqXliffDefects(source, [
+      { id: 'open', suggested: 'New', severity: 'L1', issueType: 'tag', comment: 'must stay', disposition: 'defect' },
+    ], NOW)
+
+    expect(result).toMatchObject({ updatedIds: [], commentedIds: [], skippedLockedIds: ['open'], missingIds: [] })
+    expect(result.content).toBe(source)
   })
 })

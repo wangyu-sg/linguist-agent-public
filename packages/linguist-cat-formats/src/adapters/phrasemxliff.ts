@@ -133,7 +133,6 @@ const XLIFF_ROOT_PATTERN = /<(?:[\w.-]+:)?xliff\b/i
 const MEMSOURCE_NAMESPACE_PATTERN = /xmlns:m\s*=\s*["'][^"']*memsource\.com\/mxlf/i
 const FILE_PATTERN = /<((?:[\w.-]+:)?file)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const TRANS_UNIT_PATTERN = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>([\s\S]*?)<\/\1>/gi
-const SELF_CLOSING_TARGET_PATTERN = /<((?:[\w.-]+:)?target)\b([^>]*)\/>/i
 const GROUP_PATTERN = /<((?:[\w.-]+:)?group)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const CONTEXT_PATTERN = /<((?:[\w.-]+:)?context)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 
@@ -327,8 +326,13 @@ export function parsePhraseMxliffFormatConfig(
 
 function rehydratePhraseValue(value: string, mapping?: PhraseMxliffTagMapping): string {
   if (mapping === undefined) return value
-  const byPlaceholder = new Map(mapping.placeholders.map((placeholder, index) => [placeholder, mapping.tags[index]]))
-  return value.replace(PHRASE_PLACEHOLDER_PATTERN, (placeholder) => byPlaceholder.get(placeholder) ?? placeholder)
+  const byPlaceholder = new Map<string, string[]>()
+  mapping.placeholders.forEach((placeholder, index) => {
+    const tags = byPlaceholder.get(placeholder) ?? []
+    tags.push(mapping.tags[index]!)
+    byPlaceholder.set(placeholder, tags)
+  })
+  return value.replace(PHRASE_PLACEHOLDER_PATTERN, (placeholder) => byPlaceholder.get(placeholder)?.shift() ?? placeholder)
 }
 
 function dehydratePhraseValue(value: string, mapping?: PhraseMxliffTagMapping): string {
@@ -412,10 +416,12 @@ export async function probePhraseMasterPair(
   let matchedSegments = 0
   let unmatchedSegments = 0
   let ambiguousSegments = 0
+  let splitOrdinal = 0
   TRANS_UNIT_PATTERN.lastIndex = 0
   for (const match of splitText.matchAll(TRANS_UNIT_PATTERN)) {
     const attrs = parseAttrs(match[2] ?? '')
-    const key = attrs.id?.trim() || attrs.resname?.trim()
+    const key = attrs.id?.trim() || attrs.resname?.trim() || `#tu-${splitOrdinal}`
+    splitOrdinal += 1
     const source = findDirectChild(match[3] ?? '', 'source')
     if (!key || !source) continue
     const sourceText = decodeXmlInline(source.inner)
@@ -608,6 +614,7 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
       const edit = edits[i]!
       out = out.slice(0, edit.start) + edit.replacement + out.slice(edit.end)
     }
+    if (edits.length === 0) return originalBytes
     return new TextEncoder().encode(out)
   }
 
@@ -621,12 +628,6 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
       const at = tuFull.indexOf(target.full)
       if (at < 0) return tuFull // defensive; findDirectChild matched within this unit
       return tuFull.slice(0, at) + nextTarget + tuFull.slice(at + target.full.length)
-    }
-    const selfClosing = SELF_CLOSING_TARGET_PATTERN.exec(tuFull)
-    if (selfClosing) {
-      const tagName = selfClosing[1]!
-      const attrsRaw = newTarget === '' ? (selfClosing[2] ?? '') : setAttr(selfClosing[2] ?? '', 'state', 'translated')
-      return tuFull.replace(selfClosing[0], `<${tagName}${attrsRaw}>${encoded}</${tagName}>`)
     }
     const source = findDirectChild(tuFull, 'source')
     const inserted = `<target state="translated">${encoded}</target>`

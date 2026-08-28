@@ -12,6 +12,7 @@ import { XliffAdapter, type XliffParsedUnit } from './xliff'
 
 export const MQXLIFF_ADAPTER_ID = 'mqxliff_1_2'
 const MQ_NAMESPACE_PATTERN = /xmlns:mq\s*=\s*(["'])(?:MQXliff|[^"']*memoq[^"']*)\1/i
+const FILE_PATTERN = /<((?:[\w.-]+:)?file)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const TRANS_UNIT_PATTERN = /<((?:[\w.-]+:)?trans-unit)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 const INLINE_CODE_PATTERN = /<((?:[\w.-]+:)?(?:bpt|ept|ph))\b[^>]*>([\s\S]*?)<\/\1>/gi
 
@@ -176,13 +177,21 @@ export function writeMqXliffDefects(
   const updatedIds: string[] = []
   const commentedIds: string[] = []
   const skippedLockedIds: string[] = []
-  const next = content.replace(TRANS_UNIT_PATTERN, (full, _tagName, attrsRaw) => {
+  FILE_PATTERN.lastIndex = 0
+  const lockedFileRanges = [...content.matchAll(FILE_PATTERN)]
+    .filter((match) => (parseAttrs(match[2] ?? '').translate ?? '').trim().toLowerCase() === 'no')
+    .map((match) => {
+      const start = match.index ?? 0
+      return { start, end: start + match[0].length }
+    })
+  const next = content.replace(TRANS_UNIT_PATTERN, (full, _tagName, attrsRaw, _inner, offset: number) => {
     const attrs = parseAttrs(attrsRaw ?? '')
     const id = attrs.id ?? ''
     const defect = byId.get(id)
     if (!defect) return full
     seen.add(id)
-    const locked = (attrs.translate ?? '').toLowerCase() === 'no'
+    const fileLocked = lockedFileRanges.some((range) => offset >= range.start && offset < range.end)
+    const locked = fileLocked || (attrs.translate ?? '').toLowerCase() === 'no'
       || ['1', 'true', 'yes', 'locked'].includes((attrs['mq:locked'] ?? '').toLowerCase())
     if (locked) {
       skippedLockedIds.push(id)
