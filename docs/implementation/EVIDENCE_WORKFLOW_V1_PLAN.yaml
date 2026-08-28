@@ -2,8 +2,8 @@ schemaVersion: 1
 initiative: Evidence Workflow V1
 branch: feature/evidence-workflow-v1
 baseCommit: 649134cc
-status: in_progress
-currentBatch: 6
+status: completed
+currentBatch: null
 mergePolicy: all_batches_and_final_gate_only
 releasePolicy: no_intermediate_release
 
@@ -120,18 +120,26 @@ batches:
 
   - id: 6
     name: UI、回归与真实验证
-    status: in_progress
-    commit: null
+    status: completed
+    commit: 94f36644
     acceptance:
       - 提供紧凑的资产与证据覆盖面板
       - 系统签发状态与 Agent 自然语言分开显示
       - 简单单文件与至少两种异构资料组合回归通过
       - Translator、Reviewer、Proofreader 共享证据闭环
       - packaged smoke 与 export/reimport 通过
-    verification: []
+    verification:
+      - compact system-signed evidence coverage panel and delegation evidence summary: implemented
+      - Translator → Reviewer → Proofreader host Evidence loop: passed 1/1
+      - root typecheck: passed
+      - packaged artifact build and integrity verification: passed
+      - Agent packaged vertical: passed 15/15
+      - Chat packaged vertical: passed 19/19
+      - Linguist packaged vertical and export/reimport: passed 21/21
+      - native Open/Save dialogs remain explicitly manual and are not reported as automated
 
 finalGate:
-  status: pending
+  status: completed
   acceptance:
     - 单文件简单项目无额外摩擦
     - 复杂项目自动发现伴生资料且未知资料不静默忽略
@@ -144,4 +152,11 @@ finalGate:
     - Verified 与 as-is Manifest 准确反映覆盖和缺口
     - Agent 文本不能冒充系统 Verified 状态
     - 匿名异构 Fixture、全量测试、typecheck、build 与 smoke 通过
-  verification: []
+  verification:
+    - simple single-asset Stage auto-presents its managed source evidence without extra prompts
+    - heterogeneous XLSX DOCX PDF image and unsupported-format fixtures produce extracted evidence or explicit gaps
+    - warning-only unmapped rows/media persist a PM-confirmation reminder without blocking review or delivery
+    - required Evidence Receipt, stale-baseline, dual-coverage and verified/as-is tests passed
+    - anonymous heterogeneous fixture contains no HOK names, fixed workbook names, fixed columns or customer-count branches
+    - full repository tests, typecheck, upstream boundaries and fusion architecture passed
+    - packaged vertical runStatus passed; automated contract coverage remains partial only for native Open/Save dialogs
