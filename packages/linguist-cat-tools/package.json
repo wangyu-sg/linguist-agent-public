@@ -1,6 +1,6 @@
 {
   "name": "@linguist/cat-tools",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Session-bound Linguist CAT Pi ToolDefinitions for project reads, Proposal-only translation suggestions, and deterministic QA. Electron-free; the app injects project and session context.",

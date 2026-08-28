@@ -6,6 +6,7 @@ import type {
   LinguistImportResourcesResult,
   LinguistIntakeImportResult,
   LinguistIntakeResourceKind,
+  LinguistProjectEvidenceInventoryResult,
 } from './types'
 
 const RESOURCE_KINDS = new Set<LinguistIntakeResourceKind>(['batch', 'tm', 'terms', 'context'])
@@ -113,5 +114,23 @@ export function createIntakeTools(runtime: CatToolRuntime) {
     },
   })
 
-  return [importResourcesTool, importAssetTool] as const
+  const refreshProjectInventoryTool = defineTool({
+    name: 'cat_refresh_project_inventory',
+    label: 'CAT refresh project inventory',
+    description: 'Refresh the bound project evidence inventory across host-authorized workspace and attachment locations. The model cannot provide scan paths. Returns host-persisted gaps for unreadable, ambiguous, unsupported, truncated, or version-conflicting evidence.',
+    promptSnippet: 'Refresh the host-authorized project asset and evidence inventory before formal stage work',
+    parameters: Type.Object({}),
+    async execute(toolCallId) {
+      resolveBoundProject('cat_refresh_project_inventory', toolCallId)
+      if (deps.refreshProjectEvidenceInventory === undefined) {
+        throw new LinguistCatInvalidArgumentError('inventory', 'project evidence inventory is unavailable')
+      }
+      const result: LinguistProjectEvidenceInventoryResult =
+        await deps.refreshProjectEvidenceInventory()
+      notifyMutation({ kind: 'project-updated' })
+      return toolResult(result, deps.resultProjectId)
+    },
+  })
+
+  return [importResourcesTool, refreshProjectInventoryTool, importAssetTool] as const
 }

@@ -70,7 +70,7 @@ export interface StageEvidencePlan {
   requirements: StageEvidenceRequirement[]
 }
 
-export type StageEvidenceGapCode =
+export type EvidenceGapCode =
   | 'REQUIRED_RESOURCE_MISSING'
   | 'RESOURCE_IMPORT_FAILED'
   | 'RESOURCE_EXTRACTION_FAILED'
@@ -80,10 +80,10 @@ export type StageEvidenceGapCode =
   | 'REQUIRED_MEDIA_UNPRESENTED'
   | 'EVIDENCE_CHANGED_DURING_STAGE'
 
-export interface StageEvidenceGap {
+export interface EvidenceGap {
   id: string
-  stageRunId: string
-  code: StageEvidenceGapCode
+  stageRunId?: string
+  code: EvidenceGapCode
   severity: 'blocking' | 'warning'
   evidence?: StageEvidenceRef
   summary: string

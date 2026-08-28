@@ -3,7 +3,7 @@ initiative: Evidence Workflow V1
 branch: feature/evidence-workflow-v1
 baseCommit: 649134cc
 status: in_progress
-currentBatch: 1
+currentBatch: 2
 mergePolicy: all_batches_and_final_gate_only
 releasePolicy: no_intermediate_release
 
@@ -32,18 +32,22 @@ architecture:
 batches:
   - id: 1
     name: 领域模型和授权范围
-    status: in_progress
-    commit: null
+    status: completed
+    commit: be52715e
     acceptance:
       - 不新增通用 Task 实体
       - Evidence Baseline 不冻结可正常变化的 Segment Revision
       - ProjectDiscoveryScope 仅由宿主从受信 Workspace 与附件生成
       - 明确 Gap、Receipt、Context Anchor 与 Stage Evidence 状态合同
-    verification: []
+    verification:
+      - bun test stage-evidence.test.ts project-discovery-scope.test.ts: passed 2/2
+      - bun run --filter='@linguist/cat-store' test: passed 50/50
+      - cat-core cat-store electron typecheck: passed
+      - bun install --frozen-lockfile: no changes
 
   - id: 2
     name: 自动资产预检
-    status: pending
+    status: in_progress
     commit: null
     acceptance:
       - 复用现有递归扫描和 dryRun

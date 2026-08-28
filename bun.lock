@@ -215,7 +215,7 @@
     },
     "packages/linguist-cat-tools": {
       "name": "@linguist/cat-tools",
-      "version": "0.0.35",
+      "version": "0.0.36",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-store": "workspace:*",

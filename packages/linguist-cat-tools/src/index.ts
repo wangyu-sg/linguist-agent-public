@@ -56,6 +56,7 @@ export {
   type LinguistImportResourceItem,
   type LinguistImportResourcesInput,
   type LinguistImportResourcesResult,
+  type LinguistProjectEvidenceInventoryResult,
   type LinguistExportAssetResult,
   type LinguistIntakeResourceKind,
   type LinguistIntakeXlsxMapping,

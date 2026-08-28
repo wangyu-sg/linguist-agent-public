@@ -172,6 +172,7 @@ export {
 export {
   StageEvidenceRepository,
   type CreateStageEvidenceStateInput,
+  type ProjectInventoryGapInput,
   type StageEvidenceState,
   type StageEvidenceStateStatus,
 } from './repositories/stage-evidence'

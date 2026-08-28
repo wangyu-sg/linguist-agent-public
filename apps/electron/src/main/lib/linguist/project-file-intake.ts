@@ -368,6 +368,7 @@ export async function importProjectResources(
           items.push({
             filename,
             status: 'needs-input',
+            sourceSha256: sha256Hex(bytes),
             message: 'CSV 只有 Source/Target，无法判断是批次还是翻译记忆；若是 TM，请在“TM / 术语库 / 句式管理”导入；若是批次，请补充 ID/Key 列，或让项目 Agent 明确按批次导入',
           })
           continue
@@ -390,7 +391,7 @@ export async function importProjectResources(
         }
       }
       if (resourceKind === undefined) {
-        items.push({ filename, status: 'unsupported' })
+        items.push({ filename, status: 'unsupported', sourceSha256: sha256Hex(bytes!) })
         continue
       }
       let xlsxMapping = input.xlsxMapping
@@ -398,13 +399,23 @@ export async function importProjectResources(
         bytes ??= (await readPickedFileWithinLimit(entry.path, LINGUIST_IMPORT_MAX_BYTES)).bytes
         xlsxMapping = await service.resolveWorkbookMapping(projectId, bytes, filename)
         if (xlsxMapping === undefined) {
-          items.push({ filename, status: 'needs-input', resourceKind, message: '需要确认 Sheet 与列映射' })
+          items.push({
+            filename,
+            status: 'needs-input',
+            resourceKind,
+            sourceSha256: sha256Hex(bytes),
+            message: '需要确认 Sheet 与列映射',
+          })
           continue
         }
       }
       assertEntryWithinLimit(entry, resourceKind)
       if (input.dryRun) {
-        items.push({ filename, status: 'ready', resourceKind })
+        const maxBytes = resourceKind === 'batch'
+          ? LINGUIST_IMPORT_MAX_BYTES
+          : LINGUIST_RESOURCE_IMPORT_MAX_BYTES
+        bytes ??= (await readPickedFileWithinLimit(entry.path, maxBytes)).bytes
+        items.push({ filename, status: 'ready', resourceKind, sourceSha256: sha256Hex(bytes) })
         continue
       }
       const master = phrasePairs.get(entry.path)
@@ -415,6 +426,7 @@ export async function importProjectResources(
         status: imported.status,
         resourceKind,
         resourceId: imported.resourceId,
+        sourceSha256: imported.sourceSha256,
         ...(phrasePairMessages.get(entry.path) === undefined ? {} : { message: phrasePairMessages.get(entry.path) }),
         ...(imported.unknownTagSummary === undefined ? {} : { unknownTagSummary: imported.unknownTagSummary }),
       })

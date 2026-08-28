@@ -459,6 +459,44 @@ test('intake tool delegates authorized file import kind to the host', async () =
   }
 })
 
+test('project inventory refresh has no path input and returns the host-signed evidence summary', async () => {
+  const fixture = setup()
+  try {
+    let calls = 0
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      refreshProjectEvidenceInventory: async () => {
+        calls += 1
+        return {
+          status: 'ready',
+          discoveryScopeHash: 'scope-hash',
+          discovered: 1,
+          registered: 1,
+          readyToImport: 1,
+          unmapped: 0,
+          media: 0,
+          versionConflicts: 0,
+          unsupported: 0,
+          failed: 0,
+          truncated: false,
+          items: [{ filename: 'source.xliff', status: 'ready', resourceKind: 'batch' }],
+          gaps: [],
+        }
+      },
+    })
+
+    const result = (await invoke(toolByName(tools, 'cat_refresh_project_inventory'), {})).details as {
+      status: string
+      discoveryScopeHash: string
+    }
+    assert.equal(calls, 1)
+    assert.equal(result.status, 'ready')
+    assert.equal(result.discoveryScopeHash, 'scope-hash')
+  } finally {
+    fixture.db.close()
+  }
+})
+
 test('workbook tools preview evidence and save a reusable bound-project profile', async () => {
   const fixture = setup()
   try {
@@ -1898,6 +1936,7 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_list_assets: {},
       cat_get_segments: {},
       cat_import_resources: { paths: ['/missing'] },
+      cat_refresh_project_inventory: {},
       cat_import_asset: { filePath: '/missing', resourceKind: 'batch' },
       cat_preview_workbook_mapping: { filePath: '/missing.xlsx' },
       cat_save_workbook_mapping: {

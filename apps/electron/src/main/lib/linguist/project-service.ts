@@ -85,6 +85,7 @@ import type {
   LinguistIntakeImportResult,
   LinguistIntakeResourceKind,
   LinguistIntakeXlsxMapping,
+  LinguistProjectEvidenceInventoryResult,
   LinguistSaveWorkbookMappingInput,
   LinguistWorkbookMappingPreview,
 } from '@linguist/cat-tools'
@@ -102,6 +103,8 @@ import {
   importProjectFile,
   importProjectResources,
 } from './project-file-intake'
+import { refreshProjectEvidenceInventory } from './project-evidence-inventory'
+import type { ProjectDiscoveryScope } from './project-discovery-scope'
 import {
   createProjectWorkbookMappingProfile,
   createProjectWorkbookMappingProfileFromBytes,
@@ -1356,6 +1359,13 @@ export class LinguistProjectService {
     input: LinguistImportResourcesInput,
   ): Promise<LinguistImportResourcesResult> {
     return importProjectResources(this, projectId, cwd, input)
+  }
+
+  refreshEvidenceInventory(
+    projectId: string,
+    scope: ProjectDiscoveryScope,
+  ): Promise<LinguistProjectEvidenceInventoryResult> {
+    return refreshProjectEvidenceInventory(this, projectId, scope)
   }
 
   /** LA-INTAKE-007：撤销一次导入（无下游引用才允许；归档 fail closed）。 */

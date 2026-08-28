@@ -15,6 +15,7 @@ import {
 } from '@linguist/cat-tools'
 import { getAgentSessionMeta } from '../agent-session-manager'
 import { resolveAgentExecutionScope } from './agent-execution-scope'
+import { resolveProjectDiscoveryScope } from './project-discovery-scope'
 import {
   runLinguistConsistencyWorker,
   runLinguistQaWorker,
@@ -127,6 +128,14 @@ export function resolveLinguistSessionCatTools(
         projectId,
         resolveAgentExecutionScope(current).cwd,
         input,
+      )
+    },
+    refreshProjectEvidenceInventory: () => {
+      const current = currentBoundSession(session.id, projectId, 'inventory')
+      const service = getService()
+      return service.refreshEvidenceInventory(
+        projectId,
+        resolveProjectDiscoveryScope({ session: current }),
       )
     },
     previewWorkbookMapping: (filePath) => {

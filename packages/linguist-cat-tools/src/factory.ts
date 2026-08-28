@@ -26,7 +26,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const runtime = createCatToolRuntime(deps)
   const [projectSummaryTool, listAssetsTool, getSegmentsTool] =
     createProjectTools(runtime)
-  const [importResourcesTool, importAssetTool] = createIntakeTools(runtime)
+  const [importResourcesTool, refreshProjectInventoryTool, importAssetTool] = createIntakeTools(runtime)
   const [previewWorkbookMappingTool, saveWorkbookMappingTool] = createWorkbookTools(runtime)
   const [upsertVoiceProfileTool, addApprovedExemplarTool, getVoiceContextTool] = createVoiceTools(runtime)
   const [exportAssetTool] = createDeliveryTools(runtime)
@@ -55,6 +55,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     listAssetsTool,
     getSegmentsTool,
     importResourcesTool,
+    refreshProjectInventoryTool,
     importAssetTool,
     previewWorkbookMappingTool,
     saveWorkbookMappingTool,

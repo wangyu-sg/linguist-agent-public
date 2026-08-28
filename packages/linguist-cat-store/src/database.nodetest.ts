@@ -29,7 +29,7 @@ const PLAN_TABLES = [
   'project_event_acks',
   'run_changes',
   'stage_evidence_states',
-  'stage_evidence_gaps',
+  'evidence_gaps',
   'stage_evidence_receipts',
   'schema_migrations',
 ]
@@ -688,7 +688,7 @@ test('migration 17: existing v16 projects gain Stage Evidence state without rewr
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
       .all() as Array<{ name: string }>).map((row) => row.name))
     assert.equal(tables.has('stage_evidence_states'), true)
-    assert.equal(tables.has('stage_evidence_gaps'), true)
+    assert.equal(tables.has('evidence_gaps'), true)
     assert.equal(tables.has('stage_evidence_receipts'), true)
   } finally {
     migrated.close()

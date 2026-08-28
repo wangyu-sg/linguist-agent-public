@@ -16,6 +16,7 @@
 import type {
   BatchConsistencyDimensions,
   BatchConsistencyPass,
+  EvidenceGap,
   LinguistProject,
   LinguistGenerationProvenance,
   ProposalIssuance,
@@ -56,6 +57,7 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_list_assets',
   'cat_get_segments',
   'cat_import_resources',
+  'cat_refresh_project_inventory',
   'cat_import_asset',
   'cat_preview_workbook_mapping',
   'cat_save_workbook_mapping',
@@ -185,6 +187,8 @@ export interface LinguistCatToolsDeps {
   ) => Promise<LinguistIntakeImportResult>
   /** 导入文件或目录中的多个资源；路径权限沿用 Proma Session。 */
   importResources?: (input: LinguistImportResourcesInput) => Promise<LinguistImportResourcesResult>
+  /** 由宿主扫描当前项目授权范围；模型不能提供或扩张路径。 */
+  refreshProjectEvidenceInventory?: () => Promise<LinguistProjectEvidenceInventoryResult>
   /** 读取 XLSX 证据并给出确定性列映射建议；宿主负责路径授权。 */
   previewWorkbookMapping?: (filePath: string) => Promise<LinguistWorkbookMappingPreview>
   /** 重新读取并校验 XLSX 后保存当前绑定项目的轻量 mapping profile。 */
@@ -240,6 +244,7 @@ export interface LinguistImportResourceItem {
   status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'ready'
   resourceKind?: LinguistIntakeResourceKind
   resourceId?: string
+  sourceSha256?: string
   message?: string
   unknownTagSummary?: UnknownTagPatternResult[]
 }
@@ -254,6 +259,22 @@ export interface LinguistImportResourcesResult {
   failed: number
   truncated: boolean
   items: LinguistImportResourceItem[]
+}
+
+export interface LinguistProjectEvidenceInventoryResult {
+  status: 'ready' | 'needs-input' | 'blocked'
+  discoveryScopeHash: string
+  discovered: number
+  registered: number
+  readyToImport: number
+  unmapped: number
+  media: number
+  versionConflicts: number
+  unsupported: number
+  failed: number
+  truncated: boolean
+  items: LinguistImportResourceItem[]
+  gaps: EvidenceGap[]
 }
 
 export interface LinguistIntakeXlsxMapping {

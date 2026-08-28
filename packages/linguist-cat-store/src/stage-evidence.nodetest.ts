@@ -64,3 +64,22 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
     db.close()
   }
 })
+
+test('Project Evidence inventory gaps persist, resolve when absent, and reopen when rediscovered', () => {
+  const { db } = setup()
+  try {
+    const gap = {
+      id: 'gap-unmapped-brief',
+      code: 'UNMAPPED_CLIENT_VISIBLE_CONTENT' as const,
+      severity: 'warning' as const,
+      summary: 'brief.bin 尚未识别',
+      suggestedAction: '确认文件用途或显式排除',
+    }
+
+    assert.equal(db.stageEvidence.replaceProjectInventoryGaps([gap])[0]?.status, 'open')
+    assert.equal(db.stageEvidence.replaceProjectInventoryGaps([])[0]?.status, 'resolved')
+    assert.equal(db.stageEvidence.replaceProjectInventoryGaps([gap])[0]?.status, 'open')
+  } finally {
+    db.close()
+  }
+})

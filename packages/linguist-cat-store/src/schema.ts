@@ -649,9 +649,10 @@ CREATE TABLE stage_evidence_states (
 CREATE INDEX idx_stage_evidence_states_project_status
   ON stage_evidence_states(project_id, status, updated_at, stage_run_id);
 
-CREATE TABLE stage_evidence_gaps (
+CREATE TABLE evidence_gaps (
   gap_id TEXT PRIMARY KEY,
-  stage_run_id TEXT NOT NULL REFERENCES stage_evidence_states(stage_run_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL,
+  stage_run_id TEXT REFERENCES stage_evidence_states(stage_run_id) ON DELETE CASCADE,
   code TEXT NOT NULL,
   severity TEXT NOT NULL CHECK(severity IN ('blocking', 'warning')),
   evidence_ref_json TEXT,
@@ -662,8 +663,8 @@ CREATE TABLE stage_evidence_gaps (
   resolved_at TEXT,
   resolved_by TEXT CHECK(resolved_by IS NULL OR resolved_by IN ('system', 'agent', 'user'))
 );
-CREATE INDEX idx_stage_evidence_gaps_run_status
-  ON stage_evidence_gaps(stage_run_id, status, severity, gap_id);
+CREATE INDEX idx_evidence_gaps_project_run_status
+  ON evidence_gaps(project_id, stage_run_id, status, severity, gap_id);
 
 CREATE TABLE stage_evidence_receipts (
   receipt_id TEXT PRIMARY KEY,
