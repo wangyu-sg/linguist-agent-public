@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { Type } from 'typebox'
-import { normalizeReasoningCapabilityLevel } from '@proma/shared'
+import { createLinguistTurnContextV1, normalizeReasoningCapabilityLevel } from '@proma/shared'
 import type {
   AgentDelegationRole,
   AgentDelegationStatus,
@@ -643,6 +643,20 @@ function stopDelegation(parentSessionId: string, delegationId: string): Record<s
   }
 }
 
+function createDelegatedLinguistContext(
+  session: Pick<AgentSessionMeta, 'linguistProjectId' | 'linguistDelegatedScope'>,
+  startedAt: number,
+  uiRevision: number,
+): Readonly<LinguistTurnContextV1> | undefined {
+  if (!session.linguistProjectId || !session.linguistDelegatedScope) return undefined
+  return createLinguistTurnContextV1({
+    projectId: session.linguistProjectId,
+    selectedSegmentIds: session.linguistDelegatedScope.segmentIds,
+    capturedAt: new Date(startedAt).toISOString(),
+    uiRevision,
+  }).context
+}
+
 async function startDelegation(
   ctx: CollaborationToolContext,
   parent: AgentSessionMeta | undefined,
@@ -728,6 +742,12 @@ async function startDelegation(
   delegations.set(delegationId, record)
   pruneFinishedDelegations()
 
+  const childLinguistContext = createDelegatedLinguistContext(
+    child,
+    record.startedAt,
+    ctx.linguistContext?.uiRevision ?? 0,
+  )
+
   const prompt = buildDelegationPrompt({
     parentSessionId: ctx.sessionId,
     delegationId,
@@ -748,7 +768,7 @@ async function startDelegation(
       permissionModeOverride: permissionMode,
       triggeredBy: 'delegation',
       startedAt: record.startedAt,
-      linguistContext: linguist ? ctx.linguistContext : undefined,
+      linguistContext: childLinguistContext,
     },
     {
       source: 'delegation',
@@ -1126,6 +1146,8 @@ export function buildPiCollaborationTools(
 
         updateAgentSessionMeta(record.childSessionId, { delegationStatus: 'running' })
 
+        const startedAt = Date.now()
+        const child = getAgentSessionMeta(record.childSessionId)!
         runRegisteredHeadlessAgent(
           {
             sessionId: record.childSessionId,
@@ -1135,7 +1157,8 @@ export function buildPiCollaborationTools(
             workspaceId: ctx.workspaceId,
             permissionModeOverride: record.permissionMode,
             triggeredBy: 'delegation',
-            startedAt: Date.now(),
+            startedAt,
+            linguistContext: createDelegatedLinguistContext(child, startedAt, 0),
           },
           {
             source: 'delegation',

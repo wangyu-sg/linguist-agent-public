@@ -16,7 +16,7 @@ export interface LinguistDelegationRequest {
 }
 
 export interface LinguistDelegationMetadata {
-  role: Exclude<LinguistRole, 'general'>
+  role: LinguistRole
   projectId: string
   projectName: string
   scope: LinguistDelegatedScope
@@ -60,12 +60,16 @@ export function resolveLinguistDelegationMetadata(
   parent: AgentSessionMeta | undefined,
   request: LinguistDelegationRequest,
 ): LinguistDelegationMetadata | undefined {
-  if (!request.linguistRole) return undefined
-  if (!parent?.linguistProjectId || parent.linguistRole !== 'general') {
+  if (!parent?.linguistProjectId) {
+    if (!request.linguistRole) return undefined
+    throw new Error('只有 Linguist General 会话可以委派本地化岗位')
+  }
+  if (parent.linguistRole !== 'general') {
+    if (!request.linguistRole) return undefined
     throw new Error('只有 Linguist General 会话可以委派本地化岗位')
   }
   return {
-    role: request.linguistRole,
+    role: request.linguistRole ?? 'general',
     projectId: parent.linguistProjectId,
     projectName: parent.linguistProjectName ?? parent.linguistProjectId,
     scope: freezeScope(parent as AgentSessionMeta & { linguistProjectId: string }, request.linguistScope),

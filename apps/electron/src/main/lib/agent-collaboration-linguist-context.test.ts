@@ -10,8 +10,8 @@ interface ToolDefinition {
 
 const parentContext: LinguistTurnContextV1 = {
   schemaVersion: 1,
-  projectId: 'prj-test-collaboration',
-  assetId: 'ast-test-review-scope',
+  projectId: 'prj-1111111111111111',
+  assetId: 'ast-1111111111111111',
   selectedSegmentIds: [],
   capturedAt: '2026-01-01T00:00:00.000Z',
   uiRevision: 1,
@@ -65,8 +65,12 @@ mock.module('./agent-session-manager', () => ({
 }))
 
 mock.module('./agent-headless-runner-registry', () => ({
-  runRegisteredHeadlessAgent: (input: Record<string, unknown>) => {
+  runRegisteredHeadlessAgent: (
+    input: Record<string, unknown>,
+    callbacks: { onComplete: (messages?: unknown[]) => void },
+  ) => {
     capturedRunInput = input
+    if (input.userMessage === '继续审校。') callbacks.onComplete([])
     return Promise.resolve()
   },
   stopRegisteredAgent: () => {},
@@ -91,20 +95,17 @@ mock.module('./adapters/pi-model-registry', () => ({
   }),
 }))
 
-mock.module('./linguist/delegation-host-extension', () => ({
-  resolveLinguistDelegationMetadata: (
-    _parent: AgentSessionMeta,
-    request: { linguistRole?: string },
-  ) => request.linguistRole ? ({
-    role: 'reviewer',
-    projectId: parentContext.projectId,
-    projectName: '测试项目',
-    scope: {
-      assetIds: [parentContext.assetId],
-      segmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
-    },
-  }) : undefined,
-  resolveLinguistDelegationOutcome: () => undefined,
+mock.module('./linguist/project-service', () => ({
+  getLinguistProjectService: () => ({
+    openProject: () => ({
+      assets: { get: (assetId: string) => assetId === parentContext.assetId ? { id: assetId } : undefined },
+      segments: {
+        queryIds: () => ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
+        getByIds: (ids: readonly string[]) => ids.map((id) => ({ id })),
+        getStageDecisionCoverage: (_stage: string, ids: readonly string[]) => ({ total: ids.length, pending: ids.length }),
+      },
+    }),
+  }),
 }))
 
 beforeAll(async () => {
@@ -138,7 +139,12 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
     linguistScope: { assetIds: [parentContext.assetId] },
   }) as { details: Record<string, unknown> }
 
-  expect(capturedRunInput?.linguistContext).toEqual(parentContext)
+  expect(capturedRunInput?.linguistContext).toMatchObject({
+    schemaVersion: 1,
+    projectId: parentContext.projectId,
+    selectedSegmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
+    uiRevision: parentContext.uiRevision,
+  })
   expect(capturedRunInput?.channelId).toBe('channel-deepseek')
   expect(sessions.get('child-session')).toMatchObject({
     channelId: 'channel-deepseek',
@@ -152,6 +158,72 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
   })
 
   await delegate.execute('tool-call-2', { task: '普通协作任务' })
-  expect(capturedRunInput?.linguistContext).toBeUndefined()
-  expect(sessions.get('child-session')?.linguistProjectId).toBeUndefined()
+  expect(capturedRunInput?.linguistContext).toMatchObject({
+    projectId: parentContext.projectId,
+    selectedSegmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
+  })
+  expect(sessions.get('child-session')).toMatchObject({
+    linguistProjectId: parentContext.projectId,
+    linguistRole: 'general',
+  })
+})
+
+test('Linguist 委派在父轮次没有 UI 快照时仍冻结自身 CAT 范围', async () => {
+  const sdk = {
+    defineTool: (definition: ToolDefinition) => definition,
+  } as unknown as typeof import('@earendil-works/pi-coding-agent')
+  const tools = collaborationTools.buildPiCollaborationTools(sdk, {
+    sessionId: parent.id,
+    channelId: parent.channelId!,
+    modelId: 'gpt-5.5',
+    workspaceId: parent.workspaceId,
+    permissionMode: parent.permissionMode,
+  } as Parameters<CollaborationToolsModule['buildPiCollaborationTools']>[1]) as ToolDefinition[]
+  const delegate = tools.find((tool) => tool.name === 'mcp__collaboration__delegate_agent')!
+
+  await delegate.execute('tool-call-without-parent-context', {
+    task: '审校当前资产',
+    linguistRole: 'reviewer',
+    linguistScope: { assetIds: [parentContext.assetId] },
+  })
+
+  expect(capturedRunInput?.linguistContext).toMatchObject({
+    schemaVersion: 1,
+    projectId: parentContext.projectId,
+    selectedSegmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
+  })
+})
+
+test('Linguist 委派追加后续指令时保留冻结 CAT 范围', async () => {
+  const sdk = {
+    defineTool: (definition: ToolDefinition) => definition,
+  } as unknown as typeof import('@earendil-works/pi-coding-agent')
+  const tools = collaborationTools.buildPiCollaborationTools(sdk, {
+    sessionId: parent.id,
+    channelId: parent.channelId!,
+    modelId: 'gpt-5.5',
+    workspaceId: parent.workspaceId,
+    permissionMode: parent.permissionMode,
+  } as Parameters<CollaborationToolsModule['buildPiCollaborationTools']>[1]) as ToolDefinition[]
+  const delegate = tools.find((tool) => tool.name === 'mcp__collaboration__delegate_agent')!
+  const stop = tools.find((tool) => tool.name === 'mcp__collaboration__stop_delegation')!
+  const continueDelegation = tools.find((tool) => tool.name === 'mcp__collaboration__continue_delegation')!
+
+  const started = await delegate.execute('tool-call-for-continuation', {
+    task: '审校当前资产',
+    linguistRole: 'reviewer',
+    linguistScope: { assetIds: [parentContext.assetId] },
+  }) as { details: { delegation: { delegationId: string } } }
+  await stop.execute('stop-for-continuation', {
+    delegationId: started.details.delegation.delegationId,
+  })
+  await continueDelegation.execute('continue-without-parent-context', {
+    delegationId: started.details.delegation.delegationId,
+    message: '继续审校。',
+  })
+
+  expect(capturedRunInput?.linguistContext).toMatchObject({
+    projectId: parentContext.projectId,
+    selectedSegmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
+  })
 })

@@ -48,13 +48,13 @@ export function resolveProjectAgentSessionIds(
   }
 
   const freshest = [...sessions]
-    .filter((session) => session.linguistProjectId && session.archived !== true)
+    .filter((session) => getAgentSessionLinguistProjectId(session, sessions) !== undefined && session.archived !== true)
     .sort((left, right) =>
       right.updatedAt - left.updatedAt || right.createdAt - left.createdAt,
     )
   for (const session of freshest) {
-    const projectId = session.linguistProjectId
-    if (projectId && !resolved.has(projectId)) {
+    const projectId = getAgentSessionLinguistProjectId(session, sessions)
+    if (projectId !== undefined && !resolved.has(projectId)) {
       resolved.set(projectId, session.id)
     }
   }
