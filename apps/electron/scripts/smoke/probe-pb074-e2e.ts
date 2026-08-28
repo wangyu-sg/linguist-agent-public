@@ -433,7 +433,6 @@ async function getEvents(page: Page): Promise<ProbeEvents> {
 
 async function translateSelectedAndWaitComplete(
   page: Page,
-  workspace: Locator,
   sessionId: string,
 ): Promise<boolean> {
   const eventsBefore = await getEvents(page)
@@ -443,7 +442,11 @@ async function translateSelectedAndWaitComplete(
   const errorsBefore = eventsBefore.errors.filter(
     (event) => event.sessionId === sessionId,
   ).length
-  await workspace.getByRole('button', { name: '翻译已选', exact: true }).click()
+  const fullAgent = page.locator('[data-agent-presentation="full"]')
+  const composer = fullAgent.locator('[contenteditable="true"], textarea').first()
+  await composer.click()
+  await page.keyboard.type('翻译已选片段')
+  await fullAgent.getByRole('button', { name: '发送消息', exact: true }).click()
   await waitFor(
     async () => {
       const events = await getEvents(page)
@@ -649,7 +652,10 @@ async function createAndOpenProjectSessionViaSidebar(
     'button',
     { name: `打开项目 ${PROJECT_NAME}`, exact: true },
   )
-  await projectButton.click()
+  await page.getByRole(
+    'button',
+    { name: `打开标签页：${PROJECT_NAME}`, exact: true },
+  ).click()
   const workspace = page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
   await workspace.waitFor({ timeout: 30_000 })
   const before = await listProjectSessionIds(page, projectId)
@@ -664,17 +670,11 @@ async function createAndOpenProjectSessionViaSidebar(
   }, 30_000)
   if (!created) throw new Error(`项目 Session 创建异常: ${createdSessionIds.length}`)
   const sessionId = createdSessionIds[0]!
-  const fullAgent = page.locator(
-    'aside[aria-label="项目 Agent"][data-workbench-slot="agent-full"]',
-  )
+  const fullAgent = page.locator('[data-agent-presentation="full"]')
   await fullAgent.waitFor({ timeout: 30_000 })
-  const returnToWorkbench = fullAgent.getByRole(
-    'button',
-    { name: '返回本地化工作台', exact: true },
-  )
-  const fullAgentOpened = await returnToWorkbench.isVisible()
+  const fullAgentOpened = await fullAgent.isVisible()
     && await projectButton.getAttribute('aria-current') === 'page'
-  await returnToWorkbench.click()
+  await projectButton.click()
   await workspace.waitFor({ timeout: 30_000 })
   return { sessionId, fullAgentOpened }
 }
@@ -1165,13 +1165,6 @@ async function runLanguageResourceDockGate(
   const previewPanel = await openDockTab(dock, '预览')
   await previewPanel.getByText('mini_game_ui.xliff', { exact: true }).waitFor({ timeout: 30_000 })
   await previewPanel.getByText(/^XLIFF 1\.2 · \d+ 段 · 只读$/u).waitFor({ timeout: 30_000 })
-  const agentRailButton = toolbar.getByRole('button', { name: 'Agent', exact: true })
-  if (await agentRailButton.getAttribute('aria-pressed') !== 'true') {
-    await agentRailButton.click()
-  }
-  await workspace
-    .getByRole('group', { name: '项目 Agent rail 控制', exact: true })
-    .waitFor({ timeout: 30_000 })
   await previewPanel
     .getByRole('button', { name: '在预览标签页中打开', exact: true })
     .click()
@@ -1202,9 +1195,6 @@ async function runLanguageResourceDockGate(
     .getByRole('button', { name: `打开标签页：${PROJECT_NAME}`, exact: true })
     .click()
   await workspace.waitFor({ timeout: 30_000 })
-  if (await agentRailButton.getAttribute('aria-pressed') === 'true') {
-    await agentRailButton.click()
-  }
   await resourcesButton.click()
   await dock.waitFor({ state: 'hidden', timeout: 30_000 })
   await resourcesButton.click()
@@ -1862,45 +1852,35 @@ async function main(): Promise<void> {
       const agentPanelButton = workspace
         .locator('header[aria-label="本地化工作台工具栏"]')
         .getByRole('button', { name: 'Agent', exact: true })
-      const agentRail = workspace.locator('aside[aria-label="项目 Agent"]')
-      if (await agentPanelButton.getAttribute('aria-pressed') === 'true') {
-        const scrim = workspace.locator('[data-workbench-slot="agent-rail-scrim"]')
-        if (await scrim.isVisible()) await scrim.click({ position: { x: 8, y: 200 } })
-        else await agentPanelButton.click()
-        await waitFor(async () => await agentPanelButton.getAttribute('aria-pressed') === 'false', 10_000)
-      }
       const row = workspace.locator(`[role="row"][data-segment-id="${segmentId}"]`)
       await row.waitFor({ timeout: 30_000 })
       const segmentCheckbox = row.getByRole('checkbox')
       await segmentCheckbox.check()
       const segmentSelected = await segmentCheckbox.isChecked()
       await agentPanelButton.click()
-      const railOpen = await waitFor(
-        async () => await agentPanelButton.getAttribute('aria-pressed') === 'true'
-          && await agentRail.isVisible(),
-        30_000,
-      )
-      const quickAction = workspace.getByRole('button', { name: '翻译已选', exact: true })
-      const quickActionReady = await quickAction.isVisible() && await quickAction.isEnabled()
+      const fullAgent = launched.page.locator('[data-agent-presentation="full"]')
+      await fullAgent.waitFor({ timeout: 30_000 })
+      const composer = fullAgent.locator('[contenteditable="true"], textarea').first()
+      const fullAgentReady = await fullAgent.isVisible() && await composer.isVisible()
       const projectSessionIds = await listProjectSessionIds(launched.page, projectId)
       const configReady = agentSettings.channelId === channelId
         && agentSettings.modelId === MODEL_ID
       const sessionReady = projectSessionIds.includes(sessionId)
       check(
         'pb074-project-agent-ready',
-        configReady && sessionReady && railOpen && segmentSelected && quickActionReady,
+        configReady && sessionReady && fullAgentReady && segmentSelected,
         `channel=${agentSettings.channelId ?? 'none'}/${channelId}` +
         `，model=${agentSettings.modelId ?? 'none'}/${MODEL_ID}` +
         `，session=${sessionId}/${sessionReady}` +
-        `，rail=${railOpen}，selected=${segmentSelected}，quickAction=${quickActionReady}`,
+        `，full Agent=${fullAgentReady}，selected=${segmentSelected}`,
       )
-      if (!configReady || !sessionReady || !railOpen || !segmentSelected || !quickActionReady) {
-        throw new Error('项目 Agent 快捷翻译前置条件未就绪')
+      if (!configReady || !sessionReady || !fullAgentReady || !segmentSelected) {
+        throw new Error('项目 Agent 翻译前置条件未就绪')
       }
 
       await installEventCollectors(launched.page)
       const logsBefore = server.logs.length
-      const completed = await translateSelectedAndWaitComplete(launched.page, workspace, sessionId)
+      const completed = await translateSelectedAndWaitComplete(launched.page, sessionId)
       const logs = server.logs.slice(logsBefore).filter(
         (entry) => entry.model === MODEL_ID && entry.stream === true,
       )
@@ -1937,13 +1917,11 @@ async function main(): Promise<void> {
           : sessionErrors.map((event) => event.error).join(' | ')}`,
       )
 
-      await selectPrimaryMode(launched.page, '本地化')
+      await launched.page.getByRole(
+        'button',
+        { name: `打开标签页：${PROJECT_NAME}`, exact: true },
+      ).click()
       await workspace.waitFor({ timeout: 30_000 })
-      const scrim = workspace.locator('[data-workbench-slot="agent-rail-scrim"]')
-      if (await scrim.isVisible()) {
-        await scrim.click({ position: { x: 8, y: 200 } })
-        await scrim.waitFor({ state: 'hidden', timeout: 10_000 })
-      }
       await row.getByRole('button', { name: /查看原始行 \d+ 上下文/u }).click()
       const proposalReview = row.locator('section[aria-label="当前行翻译建议"]')
       await proposalReview.waitFor({ timeout: 30_000 })
@@ -2079,7 +2057,7 @@ async function main(): Promise<void> {
       )
       const closeProjectSettings = projectSettings.sheet.getByRole(
         'button',
-        { name: 'Close', exact: true },
+        { name: '关闭', exact: true },
       )
       const closeButtonReady = await closeProjectSettings.isVisible()
       await closeProjectSettings.click()

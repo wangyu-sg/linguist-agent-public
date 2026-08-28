@@ -117,17 +117,26 @@ function DelegationSummaryRow({ item }: { item: DelegationSummaryPayload }): Rea
         </span>
       </div>
       {outcome && (
-        <div className="mt-1 text-foreground/55">
-          {formatDelegationCoverage(outcome)}
-          <span
-            className={cn(
-              'ml-2',
-              outcome.status === 'complete' ? 'text-foreground/45' : 'text-warning',
-            )}
-          >
-            {linguistStageOutcomeLabel(outcome)}
-          </span>
-        </div>
+        <>
+          <div className="mt-1 text-foreground/55">
+            {formatDelegationCoverage(outcome)}
+            <span
+              className={cn(
+                'ml-2',
+                outcome.status === 'complete' ? 'text-foreground/45' : 'text-warning',
+              )}
+            >
+              {linguistStageOutcomeLabel(outcome)}
+            </span>
+          </div>
+          {outcome.evidence && (
+            <div className="mt-1 text-[11px] text-foreground/45">
+              系统证据 {outcome.evidence.presented}/{outcome.evidence.required}
+              {' · '}待呈现 {outcome.evidence.pending}
+              {' · '}提醒 {outcome.evidence.warnings}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

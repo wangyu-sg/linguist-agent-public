@@ -247,6 +247,37 @@ function DeliveryResult({
         <Metric label="开放 QA 错误" value={preflight.qa.openErrors} />
         <Metric label="QA 警告 / 已豁免" value={`${preflight.qa.openWarnings} / ${preflight.qa.waived}`} />
       </dl>
+      <section
+        aria-label="系统签发的资产与证据覆盖"
+        className="space-y-2 rounded-xl border border-border/55 bg-foreground/[0.025] p-3 text-[11px]"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-medium text-foreground">系统签发 · 资产与证据覆盖</p>
+          <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-foreground/60">
+            {preflight.evidence.status}
+          </span>
+        </div>
+        <p className="text-foreground/60">
+          {preflight.segmentCount} 段 · Stage {preflight.evidence.stageRuns} 个
+          {' · '}必需证据 {preflight.evidence.presented}/{preflight.evidence.required}
+          {' · '}待呈现 {preflight.evidence.pending}
+        </p>
+        {preflight.evidence.status === 'not-applicable' && (
+          <p className="text-foreground/50">本批次没有适用的 Agent Stage Evidence，不额外阻断手工作业。</p>
+        )}
+        {preflight.evidence.gaps.length > 0 && (
+          <ul className="space-y-1 text-foreground/65">
+            {preflight.evidence.gaps.map((gap, index) => (
+              <li key={`${gap.code}-${index}`}>
+                <span className={gap.severity === 'blocking' ? 'text-destructive' : 'text-warning'}>
+                  {gap.severity === 'blocking' ? '阻断' : '提醒'}
+                </span>
+                {' · '}{gap.summary}；{gap.suggestedAction}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       {preflight.expectedNativeStatus !== undefined && (
         <p className="text-[11px] text-foreground/60">
           原生状态回写：<code className="rounded bg-foreground/[0.06] px-1 py-0.5">{preflight.expectedNativeStatus}</code>
@@ -301,7 +332,7 @@ function DeliveryResult({
               <AlertDialogHeader>
                 <AlertDialogTitle>按当前状态导出？</AlertDialogTitle>
                 <AlertDialogDescription>
-                  这会绕过阶段完成度、开放 QA 与硬规则阻断；格式回写、重新导入、摘要校验、受管目录保护和禁止覆盖仍会执行。
+                  这会绕过阶段与必需证据完成度、开放 QA 与硬规则阻断；格式回写、重新导入、摘要校验、受管目录保护和禁止覆盖仍会执行。
                   生成结果不会标记为“交付预检通过”。
                 </AlertDialogDescription>
               </AlertDialogHeader>

@@ -3,7 +3,7 @@ initiative: Evidence Workflow V1
 branch: feature/evidence-workflow-v1
 baseCommit: 649134cc
 status: in_progress
-currentBatch: 5
+currentBatch: 6
 mergePolicy: all_batches_and_final_gate_only
 releasePolicy: no_intermediate_release
 
@@ -100,8 +100,8 @@ batches:
 
   - id: 5
     name: 完成门禁与导出
-    status: in_progress
-    commit: null
+    status: completed
+    commit: 8f2f562f
     acceptance:
       - 仅显式 blocking Gap 或 required presentation coverage 缺失时不能 Full Review Complete
       - 未映射内容默认仅提醒向 PM 确认，不阻断审校、确认或交付
@@ -109,11 +109,18 @@ batches:
       - 现有 Export Manifest 记录覆盖摘要
       - as-is 保留并明确列出缺口
       - 不建立第二套 Delivery Attestation
-    verification: []
+    verification:
+      - dual decision/Evidence Full Review gate in cat_confirm_segments: passed
+      - warning-only PM confirmation remains deliverable; blocking Gap stops completion: passed
+      - delivery evidence summary and verified/as-is manifest test: passed 2/2
+      - cat-tools test: passed 44/44
+      - cat-store test: passed 52/52
+      - root typecheck and upstream boundary check: passed
+      - Linguist fusion architecture test: passed 10/10
 
   - id: 6
     name: UI、回归与真实验证
-    status: pending
+    status: in_progress
     commit: null
     acceptance:
       - 提供紧凑的资产与证据覆盖面板
