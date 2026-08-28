@@ -95,7 +95,7 @@ export interface EvidenceGap {
 }
 
 export type ContextAnchorLocator =
-  | { kind: 'sheet'; sheet: string; row?: number; cell?: string }
+  | { kind: 'sheet'; sheet: string; row?: number; cell?: string; rowKind?: 'header' | 'data' | 'skipped' }
   | { kind: 'page'; page: number }
   | { kind: 'paragraph'; index: number }
   | { kind: 'image'; mediaId: string; sheet?: string; row?: number; cell?: string; page?: number }

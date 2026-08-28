@@ -16,8 +16,10 @@ import {
   CAT_TOOL_PAGE_LIMITS,
   type CatEvidenceRef,
   type CatGetTranslationContextResult,
+  type CatLinkedContextEvidence,
   type CatProjectRuleItem,
   type CatReadContextDocResult,
+  type CatRequiredEvidencePending,
   type CatSearchSentencePatternsResult,
   type CatSearchTermsResult,
   type CatSearchTmResult,
@@ -46,22 +48,22 @@ const SENTENCE_PATTERN_STATUSES = [
   'rejected',
 ] as const
 
-/** LA-CONTEXT-001：includeProjectRules 首页注入的规则条数硬上限。 */
+/** LA-CONTEXT-001：首页自动注入的规则条数硬上限。 */
 const PROJECT_RULES_LIMIT = 20
+const INLINE_CONTEXT_TEXT_MAX_CHARS = 2_000
+const REQUIREDNESS_RANK = { optional: 0, conditional: 1, required: 2 } as const
 
 function translationContextCursorKey(
   segmentIds: readonly string[],
   neighborCount: number,
   tmLimit: number,
   termLimit: number,
-  includeProjectRules: boolean,
 ): string {
   return fnv1a64(JSON.stringify([
     segmentIds,
     neighborCount,
     tmLimit,
     termLimit,
-    includeProjectRules,
   ]))
 }
 
@@ -114,14 +116,17 @@ export function createReferenceTools(runtime: CatToolRuntime) {
     label: 'CAT get translation context',
     description:
       'Read translation context for 1-50 segment ids from the bound project in input order. ' +
-      'Returns revision snapshots, optional neighbors, TM/TB matches, tags, and stable evidence ids. ' +
-      'This tool is read-only; results may be truncated by maxBytes and continued with a cursor that ' +
+      'Returns revision snapshots, neighbors, TM/TB matches, project rules, linked Context excerpts, ' +
+      'required Evidence pending fetches, and host-signed Stage Evidence coverage. ' +
+      'This tool does not mutate linguistic content; the host may append Evidence Receipts for content actually presented. ' +
+      'Results may be truncated by maxBytes and continued with a cursor that ' +
       'binds the project snapshot — after a project mutation the next page fails with CONTEXT_DRIFT.',
     promptSnippet: 'Read bounded batch translation context from the bound CAT project',
     promptGuidelines: [
       'Use one batch call for related segments instead of repeating TM/TB searches per segment.',
       'Treat every revision as a snapshot; proposals must still use the returned current revision.',
       'Reviewer and Proofreader context always retains the complete current target; reduce the segment batch or raise maxBytes when the minimum core does not fit.',
+      'Fetch every requiredEvidencePending item with cat_read_context_doc before confirming the Stage.',
       'On CONTEXT_DRIFT discard the cursor and restart from the first page; on an empty page with minimumRequiredBytes retry with a larger maxBytes.',
     ],
     parameters: Type.Object({
@@ -130,7 +135,6 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       neighborCount: Type.Optional(Type.Integer({ minimum: 0, maximum: 5 })),
       tmLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10 })),
       termLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10 })),
-      includeProjectRules: Type.Optional(Type.Boolean()),
       maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144 })),
       cursor: Type.Optional(Type.String()),
     }),
@@ -155,13 +159,11 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         throw new LinguistCatInvalidArgumentError('maxBytes', 'expected an integer from 1024 to 262144')
       }
       const { project, db } = resolveBoundProject('cat_get_translation_context', toolCallId)
-      const includeProjectRules = params.includeProjectRules ?? false
       const cursorKey = translationContextCursorKey(
         params.segmentIds,
         neighborCount,
         tmLimit,
         termLimit,
-        includeProjectRules,
       )
       const { offset: cursorOffset, eventSequence } = translationContextCursorOffset(
         params.cursor,
@@ -170,7 +172,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         db.runs.latestEventSequence,
       )
       // 规则快照只注入第一页（offset=0），条数有界；后续页靠 cursor 内事件序列判漂移。
-      const projectRules: CatProjectRuleItem[] = includeProjectRules && cursorOffset === 0
+      const projectRules: CatProjectRuleItem[] = cursorOffset === 0
         ? db.styleGuideRules.list({ limit: PROJECT_RULES_LIMIT, offset: 0 }).map((rule) => ({
           ruleId: rule.id,
           ...(rule.groupKey !== undefined ? { groupKey: rule.groupKey } : {}),
@@ -187,6 +189,61 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         )
       }
       const remainingSegments = segments.slice(cursorOffset)
+      const linkedContextBySegment = new Map<string, CatLinkedContextEvidence[]>()
+      const pendingEvidenceBySegment = new Map<string, CatRequiredEvidencePending[]>()
+      const contextDocs = db.contextDocs.list({ limit: db.contextDocs.count() })
+      const contextEvidence = contextDocs.map((doc) => ({
+        doc,
+        anchors: new Map(db.contextDocs.listAnchors(doc.id).map((anchor) => [anchor.id, anchor])),
+        links: db.contextDocs.listEvidenceLinks(doc.id),
+      }))
+      for (const segment of remainingSegments) {
+        const linkedContext: CatLinkedContextEvidence[] = []
+        const pending: CatRequiredEvidencePending[] = []
+        for (const { doc, anchors, links } of contextEvidence) {
+          const grouped = new Map<string, 'required' | 'conditional' | 'optional'>()
+          for (const link of links) {
+            const relevant = link.relation.kind === 'segment'
+              ? link.relation.segmentId === segment.id
+              : link.relation.assetId === segment.assetId
+            if (!relevant) continue
+            const key = link.anchorId ?? ''
+            const current = grouped.get(key) ?? 'optional'
+            if (REQUIREDNESS_RANK[link.requiredness] > REQUIREDNESS_RANK[current]) {
+              grouped.set(key, link.requiredness)
+            }
+          }
+          for (const [anchorId, requiredness] of grouped) {
+            const anchor = anchorId === '' ? undefined : anchors.get(anchorId)
+            const text = anchor?.text ?? (anchor === undefined ? doc.textExtract : undefined)
+            if (text !== undefined && text.length <= INLINE_CONTEXT_TEXT_MAX_CHARS) {
+              linkedContext.push({
+                docId: doc.id,
+                filename: doc.originalFilename,
+                ...(anchor === undefined ? {} : { anchorId: anchor.id, locator: anchor.locator }),
+                text,
+                requiredness,
+              })
+              continue
+            }
+            if (requiredness !== 'required') continue
+            const media = anchor?.mediaContextDocId === undefined
+              ? undefined
+              : db.contextDocs.get(anchor.mediaContextDocId)
+            pending.push({
+              docId: media?.id ?? doc.id,
+              filename: media?.originalFilename ?? doc.originalFilename,
+              anchorIds: anchor === undefined ? [] : [anchor.id],
+              kind: media === undefined ? 'document' : 'image',
+              reason: media === undefined
+                ? '必需 Context 正文超过自动注入上限，需调用 cat_read_context_doc'
+                : '必需视觉证据尚未进入模型请求，需调用 cat_read_context_doc',
+            })
+          }
+        }
+        linkedContextBySegment.set(segment.id as string, linkedContext)
+        pendingEvidenceBySegment.set(segment.id as string, pending)
+      }
       const neighborsBySegment: ReadonlyMap<
         string,
         { previous: Segment[]; next: Segment[] }
@@ -284,6 +341,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
             .map((item) => item.match),
           conflicts: termMatches.filter((term) => term.conflict),
           tmMatches,
+          linkedContext: linkedContextBySegment.get(segment.id as string) ?? [],
           warnings: [
             ...(segment.locked ? ['Segment is locked.'] : []),
             ...(termMatches.some((term) => term.conflict)
@@ -291,6 +349,9 @@ export function createReferenceTools(runtime: CatToolRuntime) {
               : []),
             ...(termPolicy.some((item) => item.reasons.includes('scope_unknown'))
               ? ['Terminology scope is unknown; treat it as advisory.']
+              : []),
+            ...((pendingEvidenceBySegment.get(segment.id as string)?.length ?? 0) > 0
+              ? ['Required Context evidence is pending explicit fetch.']
               : []),
           ],
           evidence,
@@ -308,12 +369,60 @@ export function createReferenceTools(runtime: CatToolRuntime) {
             }
         return Buffer.byteLength(JSON.stringify(details), 'utf8')
       }
+      const requiredPendingFor = (
+        items: readonly SegmentTranslationContext[],
+      ): CatRequiredEvidencePending[] => {
+        const pending = new Map<string, CatRequiredEvidencePending>()
+        for (const item of items) {
+          for (const evidence of pendingEvidenceBySegment.get(item.segmentId) ?? []) {
+            const key = `${evidence.docId}\u0000${evidence.kind}\u0000${evidence.reason}`
+            const current = pending.get(key)
+            if (current === undefined) pending.set(key, { ...evidence, anchorIds: [...evidence.anchorIds] })
+            else current.anchorIds.push(...evidence.anchorIds)
+          }
+          const presentedAnchors = new Set(item.linkedContext.map((evidence) => evidence.anchorId ?? ''))
+          for (const evidence of linkedContextBySegment.get(item.segmentId) ?? []) {
+            if (evidence.requiredness !== 'required' || presentedAnchors.has(evidence.anchorId ?? '')) continue
+            const key = `${evidence.docId}\u0000document\u0000budget`
+            const current = pending.get(key)
+            const anchorIds = evidence.anchorId === undefined ? [] : [evidence.anchorId]
+            if (current === undefined) {
+              pending.set(key, {
+                docId: evidence.docId,
+                filename: evidence.filename,
+                anchorIds,
+                kind: 'document',
+                reason: '必需 Context 正文未进入当前预算页，需缩小 Segment 批次或调用 cat_read_context_doc',
+              })
+            } else current.anchorIds.push(...anchorIds)
+          }
+        }
+        return [...pending.values()].map((item) => ({
+          ...item,
+          anchorIds: [...new Set(item.anchorIds)].sort(),
+        }))
+      }
+      const stageSummary = (): CatGetTranslationContextResult['stageEvidence'] => {
+        if (deps.stageEvidenceRunId === undefined) return undefined
+        const state = db.stageEvidence.get(deps.stageEvidenceRunId)
+        if (state === undefined) throw new Error('Host Stage Evidence state is missing')
+        const coverage = db.stageEvidence.getPresentationCoverage(state.stageRunId)
+        return {
+          stageRunId: state.stageRunId,
+          status: state.status,
+          required: coverage.required,
+          presented: coverage.presented,
+          pending: coverage.pending.length,
+        }
+      }
       const page = (
         items: SegmentTranslationContext[],
         minimumRequiredBytes?: number,
       ): CatGetTranslationContextResult => {
         const nextIndex = cursorOffset + items.length
         const truncated = nextIndex < params.segmentIds.length
+        const requiredEvidencePending = requiredPendingFor(items)
+        const evidenceSummary = stageSummary()
         const result: CatGetTranslationContextResult = {
           contexts: items,
           totalRequested: params.segmentIds.length,
@@ -327,6 +436,8 @@ export function createReferenceTools(runtime: CatToolRuntime) {
               }
             : {}),
           ...(projectRules.length > 0 ? { projectRules } : {}),
+          ...(requiredEvidencePending.length > 0 ? { requiredEvidencePending } : {}),
+          ...(evidenceSummary === undefined ? {} : { stageEvidence: evidenceSummary }),
           ...(minimumRequiredBytes !== undefined ? { minimumRequiredBytes } : {}),
           maxBytes,
           usedBytes: 0,
@@ -356,6 +467,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         preferredTerms: [],
         conflicts: [],
         tmMatches: [],
+        linkedContext: [],
         warnings: [
           ...(context.locked ? ['Segment is locked.'] : []),
           'Context fields were truncated to fit maxBytes.',
@@ -388,6 +500,43 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           'maxBytes',
           'budget cannot hold the minimum context envelope',
         )
+      }
+      const presented = new Map<string, { ref: { kind: 'asset' | 'context-doc' | 'style-rule'; id: string }; anchorIds: Set<string> }>()
+      const addPresented = (
+        ref: { kind: 'asset' | 'context-doc' | 'style-rule'; id: string },
+        anchorIds: readonly string[],
+      ): void => {
+        const key = `${ref.kind}\u0000${ref.id}`
+        const current = presented.get(key) ?? { ref, anchorIds: new Set<string>() }
+        anchorIds.forEach((anchorId) => current.anchorIds.add(anchorId))
+        presented.set(key, current)
+      }
+      for (const context of dto.contexts) {
+        addPresented({ kind: 'asset', id: context.assetId }, [])
+        for (const evidence of context.linkedContext) {
+          addPresented(
+            { kind: 'context-doc', id: evidence.docId },
+            evidence.anchorId === undefined ? [] : [evidence.anchorId],
+          )
+        }
+      }
+      for (const rule of dto.projectRules ?? []) {
+        addPresented({ kind: 'style-rule', id: rule.ruleId }, [])
+      }
+      runtime.recordEvidencePresentation(
+        db,
+        toolCallId,
+        dto.contexts.map((context) => context.segmentId),
+        [...presented.values()].map((item) => ({
+          ref: item.ref,
+          anchorIds: [...item.anchorIds].sort(),
+        })),
+      )
+      if (dto.stageEvidence !== undefined) dto.stageEvidence = stageSummary()!
+      for (let index = 0; index < 4; index += 1) {
+        const size = measured(dto)
+        if (size === dto.usedBytes) break
+        dto.usedBytes = size
       }
       return toolResult(dto, deps.resultProjectId, dto.contexts.map((context) => context.segmentId))
     },
@@ -542,6 +691,24 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       const { db } = resolveBoundProject('cat_read_context_doc', toolCallId)
       const doc = db.contextDocs.get(params.docId)
       if (doc === undefined) throw new StoreNotFoundError('context doc', params.docId)
+      const evidenceDocId = doc.parentContextDocId ?? doc.id
+      const evidenceAnchors = doc.parentContextDocId === undefined
+        ? db.contextDocs.listAnchors(doc.id)
+        : db.contextDocs.listAnchors(doc.parentContextDocId)
+          .filter((anchor) => anchor.mediaContextDocId === doc.id)
+      const evidenceRequirement = deps.stageEvidenceRunId === undefined
+        ? undefined
+        : db.stageEvidence.get(deps.stageEvidenceRunId)?.plan.requirements
+          .find((item) => item.evidence.ref.kind === 'context-doc' && item.evidence.ref.id === evidenceDocId)
+      const evidenceSegmentIds = evidenceRequirement?.scope.kind === 'segments'
+        ? evidenceRequirement.scope.segmentIds
+        : []
+      const recordPresentation = (anchorIds: string[]): void => runtime.recordEvidencePresentation(
+        db,
+        toolCallId,
+        evidenceSegmentIds,
+        [{ ref: { kind: 'context-doc', id: evidenceDocId }, anchorIds }],
+      )
       const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.readContextDoc)
       const anchors = db.contextDocs.listAnchors(doc.id)
       const extractedMedia = new Map<string, { docId: string; filename: string; anchorIds: string[] }>()
@@ -583,13 +750,15 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         const result = toolResult(dto, deps.resultProjectId)
         if (deps.readContextImage === undefined) return result
         const image = await deps.readContextImage(doc.id)
-        return {
+        const withImage = {
           ...result,
           content: [
             ...result.content,
             { type: 'image' as const, data: image.data, mimeType: image.mimeType },
           ],
         }
+        recordPresentation(evidenceAnchors.map((anchor) => anchor.id))
+        return withImage
       }
       const extract = doc.textExtract
       if (extract === undefined) {
@@ -612,6 +781,19 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         hasMore: pageHasMore(extract.length, page.offset, text.length),
         text,
         ...(page.note !== undefined ? { note: page.note } : {}),
+      }
+      const pageEnd = page.offset + text.length
+      const presentedAnchorIds = evidenceAnchors
+        .filter((anchor) => {
+          const start = extract.indexOf(`[anchor=${anchor.id}`)
+          if (start < page.offset) return false
+          const next = extract.indexOf('\n[anchor=', start + 1)
+          const end = next < 0 ? extract.length : next
+          return end <= pageEnd
+        })
+        .map((anchor) => anchor.id)
+      if (presentedAnchorIds.length > 0 || (evidenceAnchors.length === 0 && page.offset === 0 && !dto.hasMore)) {
+        recordPresentation(presentedAnchorIds)
       }
       return toolResult(dto, deps.resultProjectId)
     },

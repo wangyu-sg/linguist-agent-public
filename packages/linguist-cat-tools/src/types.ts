@@ -171,6 +171,8 @@ export interface LinguistCatToolsDeps {
   sessionId?: string
   /** 当前受信任 Linguist 岗位；cat_confirm_segments 由此推导 stage。 */
   linguistRole?: 'general' | 'translator' | 'reviewer' | 'proofreader'
+  /** 宿主创建或恢复的冻结 Stage Evidence 执行；模型无对应入参。 */
+  stageEvidenceRunId?: string
   /** 委派时冻结的 Segment 范围；模型无对应入参。 */
   reviewScopeSegmentIds?: readonly string[]
   /** Current-turn host provenance; resolved locally per tool call. */
@@ -472,6 +474,23 @@ export interface CatEvidenceRef {
   kind: 'segment-revision' | 'neighbor' | 'term' | 'tm'
 }
 
+export interface CatLinkedContextEvidence {
+  docId: string
+  filename: string
+  anchorId?: string
+  locator?: ContextAnchor['locator']
+  text: string
+  requiredness: 'required' | 'conditional' | 'optional'
+}
+
+export interface CatRequiredEvidencePending {
+  docId: string
+  filename: string
+  anchorIds: string[]
+  kind: 'document' | 'image'
+  reason: string
+}
+
 export interface SegmentTranslationContext {
   segmentId: string
   assetId: string
@@ -492,11 +511,13 @@ export interface SegmentTranslationContext {
   preferredTerms: TermEntryMatch[]
   conflicts: TermEntryMatch[]
   tmMatches: TmUnitMatch[]
+  /** 已自动进入本次工具结果的小型强关联 Context 正文。 */
+  linkedContext: CatLinkedContextEvidence[]
   warnings: string[]
   evidence: CatEvidenceRef[]
 }
 
-/** LA-CONTEXT-001：includeProjectRules=true 时第一页注入的项目规则快照条目。 */
+/** LA-CONTEXT-001：第一页自动注入的项目规则快照条目。 */
 export interface CatProjectRuleItem {
   ruleId: string
   groupKey?: string
@@ -513,8 +534,18 @@ export interface CatGetTranslationContextResult {
   truncated: boolean
   nextCursor?: string
   suggestedSegmentIds?: string[]
-  /** 仅第一页（offset=0）且 includeProjectRules=true 时注入；条数有界。 */
+  /** 仅第一页（offset=0）自动注入；条数有界。 */
   projectRules?: CatProjectRuleItem[]
+  /** 必需但尚未进入模型请求的大型文档或视觉证据。 */
+  requiredEvidencePending?: CatRequiredEvidencePending[]
+  /** 宿主签发的 Stage Evidence 覆盖；Agent 文本不能改写。 */
+  stageEvidence?: {
+    stageRunId: string
+    status: 'planning' | 'ready' | 'ready-with-gaps' | 'stale' | 'complete'
+    required: number
+    presented: number
+    pending: number
+  }
   /**
    * LA-CONTEXT-002：预算连下一段最小核心都放不下时返回（contexts 为空、
    * cursor 不推进），取值是重试该页所需的最低 maxBytes。

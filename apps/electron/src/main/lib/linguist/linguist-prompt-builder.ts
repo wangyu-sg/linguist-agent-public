@@ -10,7 +10,7 @@ import { LINGUIST_IPC_ERROR_CODES } from '@proma/shared'
 import type { ProjectDatabase } from '@linguist/cat-store'
 import type { LinguistServiceResolver } from './session-binding'
 
-export const LINGUIST_PROMPT_VERSION = '3.1.1'
+export const LINGUIST_PROMPT_VERSION = '3.1.2'
 export const LINGUIST_PROMPT_MAX_CHARS = 18_000
 export const LINGUIST_ROLE_PROMPT_UNAVAILABLE = 'LINGUIST_ROLE_PROMPT_UNAVAILABLE'
 const ROLE_MAX_CHARS = 6_000
@@ -31,7 +31,9 @@ export const LINGUIST_QUALITY_PROMPT = `# 通用专业合同
 
 将当前认为正确的译文写入项目时优先调用 cat_apply_translations。默认直接应用；用户要求先看建议时使用 proposal 模式。不要为了证明工作量修改正确译文。
 
-只有真正的歧义、外部决定或缺失资料无法由现有工具解决时才向用户提问。`
+只有真正的歧义、外部决定或缺失资料无法由现有工具解决时才向用户提问。
+
+Translator、Reviewer、Proofreader 开始正式处理时，先对冻结范围调用 cat_get_translation_context。它会自动提供项目规则和已映射的小型 Context；requiredEvidencePending 中的资料必须继续用 cat_read_context_doc 获取。只有宿主在资料真实进入模型请求时签发的 Receipt 才计入 Evidence Coverage，不能用自然语言声称“已读”代替。`
 
 const FALLBACK_ROLES: Record<LinguistRole, string> = {
   general: '你是通用本地化项目 Agent。根据用户目标直接使用完整 Proma 与 CAT 能力完成导入、分析、处理、QA 和导出。',

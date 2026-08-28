@@ -336,7 +336,7 @@ export class ContextDocsRepository {
           requiredness, mapping_revision
         )
         SELECT anchor.context_doc_id, anchor.id, 'segment', NULL, segment.id,
-               'conditional', ?
+               'required', ?
         FROM context_anchors AS anchor
         INNER JOIN segments AS segment
           ON anchor.text_extract <> ''
@@ -375,7 +375,11 @@ export class ContextDocsRepository {
         if (linked.length > 0) rowLinks.set(key, [...(rowLinks.get(key) ?? []), ...linked])
       }
       for (const anchor of anchors) {
-        if (anchor.locator.kind !== 'image' || anchor.locator.sheet === undefined || anchor.locator.row === undefined) continue
+        if (
+          (anchor.locator.kind !== 'sheet' && anchor.locator.kind !== 'image')
+          || anchor.locator.sheet === undefined
+          || anchor.locator.row === undefined
+        ) continue
         const linked = rowLinks.get(`${anchor.locator.sheet}\u0000${anchor.locator.row}`) ?? []
         for (const source of linked) {
           this.setEvidenceLink({

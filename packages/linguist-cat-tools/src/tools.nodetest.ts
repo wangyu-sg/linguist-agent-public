@@ -13,6 +13,7 @@ import type { AgentToolResult, ExtensionContext } from '@earendil-works/pi-codin
 import {
   createAsset,
   createSeededEntropy,
+  createStageEvidenceBaseline,
   deriveSegmentId,
   SegmentLockedError,
   StaleProposalError,
@@ -1868,7 +1869,7 @@ test('cat_get_translation_context: public human and TM/TB commits invalidate a p
   }
 })
 
-test('cat_get_translation_context: includeProjectRules injects bounded rules on the first page only (LA-CONTEXT-001)', async () => {
+test('cat_get_translation_context: automatically injects bounded rules on the first page only (LA-CONTEXT-001)', async () => {
   const fixture = setup()
   try {
     for (let index = 0; index < 25; index += 1) {
@@ -1882,7 +1883,6 @@ test('cat_get_translation_context: includeProjectRules injects bounded rules on 
     const segmentIds = fixture.segmentsA.map((segment) => segment.id as string)
     const params = {
       segmentIds,
-      includeProjectRules: true,
       includeNeighbors: false,
       tmLimitPerSegment: 0,
       termLimitPerSegment: 0,
@@ -1914,15 +1914,15 @@ test('cat_get_translation_context: includeProjectRules injects bounded rules on 
     })).details as { contexts: unknown[]; projectRules?: unknown[] }
     assert.equal(second.projectRules, undefined)
     assert.ok(second.contexts.length > 0)
-    // 未显式开启则不注入
-    const withoutRules = (await invoke(tool, {
+    // 新请求首页无需模型开关，仍自动带规则。
+    const automaticRules = (await invoke(tool, {
       segmentIds: segmentIds.slice(0, 1),
       includeNeighbors: false,
       tmLimitPerSegment: 0,
       termLimitPerSegment: 0,
       maxBytes: 32_000,
     })).details as { projectRules?: unknown[] }
-    assert.equal(withoutRules.projectRules, undefined)
+    assert.equal(automaticRules.projectRules?.length, 20)
   } finally {
     fixture.db.close()
   }
@@ -2515,6 +2515,131 @@ test('cat_read_context_doc: paged extract read + image fallback metadata + not-f
 
     // 输出纪律：无绝对路径泄漏。
     assertNoAbsolutePaths(page1, fixture.rootDir)
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('Stage Evidence receipts are host-written only for Context text and images actually presented', async () => {
+  const fixture = setup()
+  try {
+    const segment = fixture.segmentsA[0]!
+    const parent = fixture.db.contextDocs.insert({
+      kind: 'doc',
+      originalFilename: 'visual-brief.xlsx',
+      blobRelpath: 'blobs/visual-brief.xlsx',
+      sha256: 'd'.repeat(64),
+      textExtract: '[anchor=anchor-text] Pull direction is downward.',
+    })
+    const image = fixture.db.contextDocs.insert({
+      kind: 'image',
+      originalFilename: 'frame.png',
+      blobRelpath: 'blobs/frame.png',
+      sha256: 'e'.repeat(64),
+      parentContextDocId: parent.id,
+    })
+    fixture.db.contextDocs.replaceExtraction(parent.id, [{
+      id: 'anchor-text',
+      locator: { kind: 'sheet', sheet: 'Brief', row: 2, cell: 'B2', rowKind: 'data' },
+      text: 'Pull direction is downward.',
+    }, {
+      id: 'anchor-image',
+      locator: { kind: 'image', mediaId: image.id, sheet: 'Brief', row: 2, cell: 'B2' },
+      mediaContextDocId: image.id,
+    }])
+    for (const anchorId of ['anchor-text', 'anchor-image']) {
+      fixture.db.contextDocs.setEvidenceLink({
+        contextDocId: parent.id,
+        anchorId,
+        relation: { kind: 'segment', segmentId: segment.id },
+        requiredness: 'required',
+        mappingRevision: 'mapping-1',
+      })
+    }
+    const stageRunId = 'stage:receipt-test'
+    const requirements = [{
+      evidence: {
+        ref: { kind: 'asset' as const, id: fixture.assetA.id },
+        version: fixture.assetA.sourceSha256,
+      },
+      purpose: 'source-authority' as const,
+      requiredness: 'required' as const,
+      scope: { kind: 'assets' as const, assetIds: [fixture.assetA.id] },
+      anchorIds: [],
+      rationale: 'source',
+    }, {
+      evidence: {
+        ref: { kind: 'context-doc' as const, id: parent.id },
+        version: parent.sha256!,
+      },
+      purpose: 'visual-fact' as const,
+      requiredness: 'required' as const,
+      scope: { kind: 'segments' as const, segmentIds: [segment.id] },
+      anchorIds: ['anchor-image', 'anchor-text'],
+      rationale: 'linked context',
+    }]
+    const baseline = createStageEvidenceBaseline({
+      stageRunId,
+      discoveryScopeHash: 'scope-1',
+      mappingRevision: 'mapping-1',
+      ruleSetRevision: 'rules-1',
+      segmentIds: [segment.id],
+      evidence: requirements.map((item) => item.evidence),
+    })
+    fixture.db.stageEvidence.create({
+      stageRunId,
+      sessionId: 'review-session',
+      plan: {
+        stageRunId,
+        role: 'reviewer',
+        stage: 'editing',
+        assetIds: [fixture.assetA.id],
+        segmentIds: [segment.id],
+        requirements,
+      },
+      baseline,
+    })
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      sessionId: 'review-session',
+      stageEvidenceRunId: stageRunId,
+      generationProvenance: (toolCallId) => ({ runId: `generation:${toolCallId}` }),
+      readContextImage: async () => ({ data: 'iVBORw0KGgo=', mimeType: 'image/png' }),
+    })
+
+    const contextResult = (await invoke(
+      toolByName(tools, 'cat_get_translation_context'),
+      { segmentIds: [segment.id], includeNeighbors: false },
+      'context-call',
+    )).details as {
+      contexts: Array<{ linkedContext: Array<{ anchorId?: string }> }>
+      requiredEvidencePending?: Array<{ docId: string; anchorIds: string[] }>
+      stageEvidence: { required: number; presented: number; pending: number }
+    }
+    assert.deepEqual(contextResult.contexts[0]?.linkedContext.map((item) => item.anchorId), ['anchor-text'])
+    assert.deepEqual(contextResult.requiredEvidencePending, [{
+      docId: image.id,
+      filename: 'frame.png',
+      anchorIds: ['anchor-image'],
+      kind: 'image',
+      reason: '必需视觉证据尚未进入模型请求，需调用 cat_read_context_doc',
+    }])
+    assert.deepEqual(contextResult.stageEvidence, {
+      stageRunId,
+      status: 'ready',
+      required: 2,
+      presented: 1,
+      pending: 1,
+    })
+
+    const imageResult = await invoke(toolByName(tools, 'cat_read_context_doc'), { docId: image.id }, 'image-call')
+    assert.equal(imageResult.content.some((block) => block.type === 'image'), true)
+    assert.deepEqual(fixture.db.stageEvidence.getPresentationCoverage(stageRunId), {
+      required: 2,
+      presented: 2,
+      pending: [],
+    })
+    assert.equal(fixture.db.stageEvidence.listReceipts(stageRunId).length, 2)
   } finally {
     fixture.db.close()
   }

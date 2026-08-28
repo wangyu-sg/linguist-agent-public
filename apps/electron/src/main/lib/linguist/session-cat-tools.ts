@@ -21,6 +21,7 @@ import {
   runLinguistQaWorker,
 } from './cat-job-worker-client'
 import { resolveLinguistBindingStatus, type LinguistServiceResolver } from './session-binding'
+import { ensureStageEvidenceForSession } from './stage-evidence-host'
 
 export type LinguistProjectMutationSink = (event: LinguistProjectMutationEvent) => void
 
@@ -58,6 +59,7 @@ export function resolveLinguistSessionCatTools(
     | 'linguistProjectId'
     | 'linguistRole'
     | 'linguistDelegatedScope'
+    | 'sourceDelegationId'
   > | undefined,
   getService: LinguistServiceResolver,
   onProjectMutation?: LinguistProjectMutationSink,
@@ -73,20 +75,27 @@ export function resolveLinguistSessionCatTools(
     }
     return { project: service.getProject(projectId), db: service.openProject(projectId) }
   }
+  const current = currentBoundSession(session.id, projectId, 'sessionId')
+  const db = getService().openProject(projectId)
+  const reviewScopeSegmentIds = session.linguistDelegatedScope?.segmentIds
+    ?? (turnContext?.assetId === undefined
+      ? db.segments.queryIds()
+      : db.segments.queryIds({ assetId: turnContext.assetId }))
+  const stageEvidence = db.readOnly
+    ? undefined
+    : ensureStageEvidenceForSession({
+        session: current,
+        db,
+        discoveryScope: resolveProjectDiscoveryScope({ session: current }),
+        fallbackSegmentIds: reviewScopeSegmentIds,
+      })
   return createLinguistCatTools({
     resolveProject,
     resultProjectId: projectId,
     sessionId: session.id,
     ...(session.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
-    ...(session.linguistDelegatedScope !== undefined
-      ? { reviewScopeSegmentIds: session.linguistDelegatedScope.segmentIds }
-      : turnContext?.assetId === undefined
-        ? {}
-        : {
-            reviewScopeSegmentIds: getService()
-              .openProject(projectId)
-              .segments.queryIds({ assetId: turnContext.assetId }),
-          }),
+    ...(stageEvidence === undefined ? {} : { stageEvidenceRunId: stageEvidence.stageRunId }),
+    ...(session.linguistRole === 'general' ? {} : { reviewScopeSegmentIds }),
     readContextImage: async (docId) => {
       currentBoundSession(session.id, projectId, 'docId')
       try {

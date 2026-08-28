@@ -193,9 +193,13 @@ export async function extractXlsxContext(
   const textSections: ContextExtraction['textSections'] = []
   const anchors: ContextExtraction['anchors'] = []
   for (const sheet of workbook.sheets) {
-    const rows = [...sheet.skippedRowsAboveHeader, ...sheet.headers, ...sheet.rows]
-      .sort((left, right) => left.rowNo - right.rowNo)
-    for (const row of rows) {
+    const rows = [
+      ...sheet.skippedRowsAboveHeader.map((row) => ({ row, rowKind: 'skipped' as const })),
+      ...sheet.headers.map((row) => ({ row, rowKind: 'header' as const })),
+      ...sheet.rows.map((row) => ({ row, rowKind: 'data' as const })),
+    ]
+      .sort((left, right) => left.row.rowNo - right.row.rowNo)
+    for (const { row, rowKind } of rows) {
       for (const cell of row.cells) {
         if (cell.value === '') continue
         const anchorId = stableId('ctxa', workbook.report.sourceSha256, sheet.name, cell.ref)
@@ -203,7 +207,7 @@ export async function extractXlsxContext(
         textSections.push({ id: sectionId, anchorId, text: cell.value })
         anchors.push({
           id: anchorId,
-          locator: { kind: 'sheet', sheet: sheet.name, row: row.rowNo, cell: cell.ref },
+          locator: { kind: 'sheet', sheet: sheet.name, row: row.rowNo, cell: cell.ref, rowKind },
           label: `${sheet.name}!${cell.ref}`,
           textSectionId: sectionId,
         })

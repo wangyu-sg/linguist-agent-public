@@ -6,7 +6,9 @@ import type {
   LinguistGenerationProvenance,
   ProposalIssuanceInput,
   Segment,
+  StageEvidenceReceipt,
 } from '@linguist/cat-core'
+import type { ProjectDatabase } from '@linguist/cat-store'
 import type { TSchema } from 'typebox'
 import type {
   CatSegmentListItem,
@@ -83,6 +85,12 @@ export interface CatToolRuntime {
   proposalProvenance: (
     toolCallId: string,
   ) => ProposalIssuanceInput & { toolCallId: string; runId: string }
+  recordEvidencePresentation: (
+    db: ProjectDatabase,
+    toolCallId: string,
+    segmentIds: readonly string[],
+    evidence: StageEvidenceReceipt['evidence'],
+  ) => void
 }
 
 /** 把宿主 authority 与通知策略集中在一处，具体 Tool 只实现领域行为。 */
@@ -124,5 +132,22 @@ export function createCatToolRuntime(
       }
     },
     proposalProvenance,
+    recordEvidencePresentation(db, toolCallId, segmentIds, evidence) {
+      if (deps.stageEvidenceRunId === undefined || evidence.length === 0) return
+      const state = db.stageEvidence.get(deps.stageEvidenceRunId)
+      if (state === undefined) throw new Error('Host Stage Evidence state is missing')
+      const provenance = proposalProvenance(toolCallId)
+      const sessionId = provenance.sessionId ?? deps.sessionId
+      if (sessionId === undefined) throw new Error('Host Stage Evidence session is missing')
+      db.stageEvidence.recordReceipt({
+        stageRunId: state.stageRunId,
+        baselineHash: state.baseline.baselineHash,
+        sessionId,
+        generationRunId: provenance.runId,
+        toolCallId,
+        segmentIds: [...new Set(segmentIds)],
+        evidence,
+      })
+    },
   }
 }

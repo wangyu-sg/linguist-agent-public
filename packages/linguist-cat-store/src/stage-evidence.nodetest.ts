@@ -60,6 +60,37 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
     assert.equal(persisted?.status, 'ready')
     assert.deepEqual(persisted?.baseline, baseline)
     assert.deepEqual(persisted?.plan.segmentIds, plan.segmentIds)
+
+    const receipt = db.stageEvidence.recordReceipt({
+      stageRunId,
+      baselineHash: baseline.baselineHash,
+      sessionId: 'child-session-1',
+      generationRunId: 'generation-1',
+      toolCallId: 'tool-1',
+      segmentIds: [imported.segments[0]!.id],
+      evidence: [{ ref: plan.requirements[0]!.evidence.ref, anchorIds: [] }],
+    })
+    assert.equal(receipt.sessionId, 'child-session-1')
+    assert.deepEqual(db.stageEvidence.getPresentationCoverage(stageRunId), {
+      required: 1,
+      presented: 1,
+      pending: [],
+    })
+    assert.equal(
+      db.stageEvidence.recordReceipt({
+        stageRunId,
+        baselineHash: baseline.baselineHash,
+        sessionId: 'child-session-1',
+        generationRunId: 'generation-1',
+        toolCallId: 'tool-1',
+        segmentIds: [imported.segments[0]!.id],
+        evidence: [{ ref: plan.requirements[0]!.evidence.ref, anchorIds: [] }],
+      }).id,
+      receipt.id,
+    )
+    assert.equal(db.stageEvidence.listReceipts(stageRunId).length, 1)
+
+    assert.equal(db.stageEvidence.markStale(stageRunId, '参考资料已变化').status, 'stale')
   } finally {
     db.close()
   }

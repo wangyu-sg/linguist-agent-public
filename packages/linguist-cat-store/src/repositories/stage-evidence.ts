@@ -2,12 +2,13 @@ import type {
   EvidenceGap,
   EvidenceGapCode,
   StageEvidenceRef,
+  StageEvidenceReceipt,
   StageEvidenceBaseline,
   StageEvidencePlan,
   StageEvidenceRole,
   WorkflowStage,
 } from '@linguist/cat-core'
-import { createStageEvidenceBaseline } from '@linguist/cat-core'
+import { createStageEvidenceBaseline, deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 
@@ -48,6 +49,22 @@ export interface ProjectInventoryGapInput {
   suggestedAction: string
 }
 
+export interface RecordStageEvidenceReceiptInput {
+  stageRunId: string
+  baselineHash: string
+  sessionId: string
+  generationRunId: string
+  toolCallId?: string
+  segmentIds: string[]
+  evidence: StageEvidenceReceipt['evidence']
+}
+
+export interface StageEvidencePresentationCoverage {
+  required: number
+  presented: number
+  pending: Array<{ evidence: StageEvidenceRef; anchorIds: string[] }>
+}
+
 interface StageEvidenceStateRow {
   stage_run_id: string
   project_id: string
@@ -74,6 +91,18 @@ interface EvidenceGapRow {
   created_at: string
   resolved_at: string | null
   resolved_by: 'system' | 'agent' | 'user' | null
+}
+
+interface StageEvidenceReceiptRow {
+  receipt_id: string
+  stage_run_id: string
+  baseline_hash: string
+  session_id: string
+  generation_run_id: string
+  tool_call_id: string | null
+  segment_ids_json: string
+  evidence_json: string
+  presented_at: string
 }
 
 const ROLE_STAGE: Record<StageEvidenceRole, WorkflowStage> = {
@@ -114,6 +143,24 @@ function gapFromRow(row: EvidenceGapRow): EvidenceGap {
     ...(row.resolved_at === null ? {} : { resolvedAt: row.resolved_at }),
     ...(row.resolved_by === null ? {} : { resolvedBy: row.resolved_by }),
   }
+}
+
+function receiptFromRow(row: StageEvidenceReceiptRow): StageEvidenceReceipt {
+  return {
+    id: row.receipt_id,
+    stageRunId: row.stage_run_id,
+    baselineHash: row.baseline_hash,
+    sessionId: row.session_id,
+    generationRunId: row.generation_run_id,
+    ...(row.tool_call_id === null ? {} : { toolCallId: row.tool_call_id }),
+    segmentIds: JSON.parse(row.segment_ids_json) as string[],
+    evidence: JSON.parse(row.evidence_json) as StageEvidenceReceipt['evidence'],
+    presentedAt: row.presented_at,
+  }
+}
+
+function evidenceRefKey(ref: StageEvidenceRef): string {
+  return `${ref.kind}\u0000${ref.id}`
 }
 
 export class StageEvidenceRepository {
@@ -176,11 +223,16 @@ export class StageEvidenceRepository {
       }
 
       const at = this.now()
+      const hasOpenProjectGaps = this.db.db.prepare(`
+        SELECT 1 FROM evidence_gaps
+        WHERE project_id = ? AND stage_run_id IS NULL AND status = 'open'
+        LIMIT 1
+      `).get(this.projectId) !== undefined
       this.db.db.prepare(`
         INSERT INTO stage_evidence_states (
           stage_run_id, project_id, session_id, role, stage, plan_json,
           baseline_json, status, stale_reason, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ready', NULL, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
       `).run(
         input.stageRunId,
         this.projectId,
@@ -189,6 +241,7 @@ export class StageEvidenceRepository {
         input.plan.stage,
         JSON.stringify(input.plan),
         JSON.stringify(input.baseline),
+        hasOpenProjectGaps ? 'ready-with-gaps' : 'ready',
         at,
         at,
       )
@@ -202,6 +255,91 @@ export class StageEvidenceRepository {
       WHERE stage_run_id = ? AND project_id = ?
     `).get(stageRunId, this.projectId) as StageEvidenceStateRow | undefined
     return row === undefined ? undefined : stateFromRow(row)
+  }
+
+  markStale(stageRunId: string, reason: string): StageEvidenceState {
+    if (reason.trim() === '') throw new TypeError('Stage Evidence stale reason must be non-blank')
+    const result = this.db.db.prepare(`
+      UPDATE stage_evidence_states
+      SET status = 'stale', stale_reason = ?, updated_at = ?
+      WHERE stage_run_id = ? AND project_id = ? AND status <> 'complete'
+    `).run(reason, this.now(), stageRunId, this.projectId)
+    if (result.changes === 0 && this.get(stageRunId) === undefined) {
+      throw new StoreNotFoundError('stage evidence state', stageRunId)
+    }
+    return this.get(stageRunId) as StageEvidenceState
+  }
+
+  recordReceipt(input: RecordStageEvidenceReceiptInput): StageEvidenceReceipt {
+    const state = this.get(input.stageRunId)
+    if (state === undefined) throw new StoreNotFoundError('stage evidence state', input.stageRunId)
+    if (state.baseline.baselineHash !== input.baselineHash) {
+      throw new TypeError('Stage Evidence receipt baseline does not match the frozen Stage')
+    }
+    if (input.sessionId.trim() === '' || input.generationRunId.trim() === '' || input.evidence.length === 0) {
+      throw new TypeError('Stage Evidence receipt requires session, generation, and evidence')
+    }
+    const planned = new Set(state.plan.requirements.map((item) => evidenceRefKey(item.evidence.ref)))
+    const unplanned = input.evidence.find((item) => !planned.has(evidenceRefKey(item.ref)))
+    if (unplanned !== undefined) throw new TypeError('Stage Evidence receipt contains unplanned evidence')
+    const receiptId = deriveStableIdV2('evr', [
+      input.stageRunId,
+      input.baselineHash,
+      input.sessionId,
+      input.generationRunId,
+      input.toolCallId ?? null,
+      JSON.stringify([...new Set(input.segmentIds)].sort()),
+      JSON.stringify(input.evidence),
+    ])
+    const at = this.now()
+    this.db.db.prepare(`
+      INSERT OR IGNORE INTO stage_evidence_receipts (
+        receipt_id, stage_run_id, baseline_hash, session_id, generation_run_id,
+        tool_call_id, segment_ids_json, evidence_json, presented_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      receiptId,
+      input.stageRunId,
+      input.baselineHash,
+      input.sessionId,
+      input.generationRunId,
+      input.toolCallId ?? null,
+      JSON.stringify([...new Set(input.segmentIds)].sort()),
+      JSON.stringify(input.evidence),
+      at,
+    )
+    const row = this.db.db.prepare('SELECT * FROM stage_evidence_receipts WHERE receipt_id = ?')
+      .get(receiptId) as StageEvidenceReceiptRow
+    return receiptFromRow(row)
+  }
+
+  listReceipts(stageRunId: string): StageEvidenceReceipt[] {
+    return (this.db.db.prepare(`
+      SELECT * FROM stage_evidence_receipts
+      WHERE stage_run_id = ? ORDER BY presented_at, receipt_id
+    `).all(stageRunId) as StageEvidenceReceiptRow[]).map(receiptFromRow)
+  }
+
+  getPresentationCoverage(stageRunId: string): StageEvidencePresentationCoverage {
+    const state = this.get(stageRunId)
+    if (state === undefined) throw new StoreNotFoundError('stage evidence state', stageRunId)
+    const presented = new Map<string, Set<string>>()
+    for (const receipt of this.listReceipts(stageRunId)) {
+      if (receipt.baselineHash !== state.baseline.baselineHash) continue
+      for (const item of receipt.evidence) {
+        const anchors = presented.get(evidenceRefKey(item.ref)) ?? new Set<string>()
+        item.anchorIds.forEach((anchorId) => anchors.add(anchorId))
+        presented.set(evidenceRefKey(item.ref), anchors)
+      }
+    }
+    const required = state.plan.requirements.filter((item) => item.requiredness === 'required')
+    const pending = required.flatMap((item) => {
+      const anchors = presented.get(evidenceRefKey(item.evidence.ref))
+      const missingAnchors = item.anchorIds.filter((anchorId) => !anchors?.has(anchorId))
+      const covered = item.anchorIds.length === 0 ? anchors !== undefined : missingAnchors.length === 0
+      return covered ? [] : [{ evidence: item.evidence.ref, anchorIds: missingAnchors }]
+    })
+    return { required: required.length, presented: required.length - pending.length, pending }
   }
 
   replaceProjectInventoryGaps(inputs: readonly ProjectInventoryGapInput[]): EvidenceGap[] {
@@ -255,5 +393,74 @@ export class StageEvidenceRepository {
       WHERE project_id = ? AND stage_run_id IS NULL
       ORDER BY status, severity, gap_id
     `).all(this.projectId) as EvidenceGapRow[]).map(gapFromRow)
+  }
+
+  replaceStageGaps(
+    stageRunId: string,
+    inputs: readonly ProjectInventoryGapInput[],
+  ): EvidenceGap[] {
+    if (this.get(stageRunId) === undefined) throw new StoreNotFoundError('stage evidence state', stageRunId)
+    if (new Set(inputs.map((input) => input.id)).size !== inputs.length) {
+      throw new TypeError('Stage Evidence gap ids must be unique')
+    }
+    return this.db.transaction(`replace Stage Evidence gaps ${stageRunId}`, () => {
+      const at = this.now()
+      this.db.db.prepare(`
+        UPDATE evidence_gaps
+        SET status = 'resolved', resolved_at = ?, resolved_by = 'system'
+        WHERE project_id = ? AND stage_run_id = ? AND status = 'open'
+      `).run(at, this.projectId, stageRunId)
+      const upsert = this.db.db.prepare(`
+        INSERT INTO evidence_gaps (
+          gap_id, project_id, stage_run_id, code, severity, evidence_ref_json,
+          summary, suggested_action, status, created_at, resolved_at, resolved_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, NULL, NULL)
+        ON CONFLICT(gap_id) DO UPDATE SET
+          code = excluded.code,
+          severity = excluded.severity,
+          evidence_ref_json = excluded.evidence_ref_json,
+          summary = excluded.summary,
+          suggested_action = excluded.suggested_action,
+          status = CASE WHEN evidence_gaps.status = 'waived' THEN 'waived' ELSE 'open' END,
+          resolved_at = CASE WHEN evidence_gaps.status = 'waived' THEN evidence_gaps.resolved_at ELSE NULL END,
+          resolved_by = CASE WHEN evidence_gaps.status = 'waived' THEN evidence_gaps.resolved_by ELSE NULL END
+      `)
+      for (const input of inputs) {
+        if (input.id.trim() === '' || input.summary.trim() === '' || input.suggestedAction.trim() === '') {
+          throw new TypeError('Stage Evidence gaps require non-blank id, summary, and action')
+        }
+        upsert.run(
+          input.id,
+          this.projectId,
+          stageRunId,
+          input.code,
+          input.severity,
+          input.evidence === undefined ? null : JSON.stringify(input.evidence),
+          input.summary,
+          input.suggestedAction,
+          at,
+        )
+      }
+      const gaps = this.listOpenGaps(stageRunId)
+      this.db.db.prepare(`
+        UPDATE stage_evidence_states
+        SET status = CASE
+          WHEN status IN ('stale', 'complete') THEN status
+          WHEN ? > 0 THEN 'ready-with-gaps'
+          ELSE 'ready'
+        END, updated_at = ?
+        WHERE stage_run_id = ? AND project_id = ?
+      `).run(gaps.length, at, stageRunId, this.projectId)
+      return gaps
+    })
+  }
+
+  listOpenGaps(stageRunId: string): EvidenceGap[] {
+    return (this.db.db.prepare(`
+      SELECT * FROM evidence_gaps
+      WHERE project_id = ? AND status = 'open'
+        AND (stage_run_id IS NULL OR stage_run_id = ?)
+      ORDER BY severity, gap_id
+    `).all(this.projectId, stageRunId) as EvidenceGapRow[]).map(gapFromRow)
   }
 }
