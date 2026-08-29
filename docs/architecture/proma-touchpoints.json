@@ -1,9 +1,9 @@
 {
   "schemaVersion": 3,
-  "baseline": "92a635faa522d5d40544b06fdf74a28152012c71",
-  "formalMerge": "fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79",
-  "recomputedOn": "2026-08-27",
-  "comment": "Proma-core touchpoints tracked against v0.18.2; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "baseline": "3f1725c5b2e46c6aa85d64c175870c1fcb3bb5ed",
+  "formalMerge": "8819a4a0990dfedffb691bf1e5cc04cc78a0d6d5",
+  "recomputedOn": "2026-08-29",
+  "comment": "Proma-core touchpoints tracked against v0.19.1; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -775,23 +775,7 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/components/agent-skills/McpCard.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/agent-skills/SkillCard.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/agent-skills/WorkspaceMemoryTab.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
@@ -889,14 +873,6 @@
     },
     {
       "file": "apps/electron/src/renderer/components/agent/SDKMessageRenderer.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/agent/SidePanel.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
@@ -1024,14 +1000,6 @@
       "reason": "为 Agent 与 Linguist 共用的消息编辑器提供明确的 textbox 无障碍语义。"
     },
     {
-      "file": "apps/electron/src/renderer/components/ai-elements/sticky-user-message.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/app-shell/AppShell.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "host-seam",
@@ -1145,28 +1113,20 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
-      "file": "apps/electron/src/renderer/components/diff/DiffTabContent.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/diff/DiffPanelTabBar.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Agent 会话 Tab 与右侧工作区 Tab 使用同一套顶栏高度和选中态。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/diff/PreviewPanel.tsx",
       "ticket": "LA-HOST-005",
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "the native split preview panel mounts LinguistPreviewBody for linguist targets and hides the default-app open action that requires a host path."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/preview-opener.ts",
+      "ticket": "LA-HOST-005",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "让显式 mode: tab 真正打开 Proma 主预览标签；默认调用继续使用右侧预览工作区。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.tsx",
@@ -1194,22 +1154,6 @@
     },
     {
       "file": "apps/electron/src/renderer/components/quick-task/QuickTaskApp.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/scratch-pad/ScratchPadView.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/scratch-pad/scratch-pad-opener.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
@@ -1330,14 +1274,6 @@
     },
     {
       "file": "apps/electron/src/renderer/components/settings/GeneralSettings.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/settings/McpServerForm.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
@@ -1570,14 +1506,6 @@
     },
     {
       "file": "apps/electron/src/renderer/lib/agent-message-queue.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
-      "file": "apps/electron/src/renderer/lib/external-agent-run.ts",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
       "owner": "renderer-product",
