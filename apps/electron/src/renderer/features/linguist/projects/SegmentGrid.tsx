@@ -404,6 +404,7 @@ function SegmentRow({
   onReviewProposal,
   onTargetEditorCapabilityChange,
 }: SegmentRowProps): React.ReactElement {
+  const expanded = active || proposal !== undefined || qaSummary !== undefined
   const row = (
     <div
       ref={measureElement}
@@ -504,7 +505,7 @@ function SegmentRow({
           <SourceCell
             index={segment.ordinal}
             segment={segment}
-            expanded={active}
+            expanded={expanded}
             tabbable={tabbable}
             onActivate={onActiveSegmentChange}
             tagProfile={tagProfile}
@@ -515,7 +516,7 @@ function SegmentRow({
             archived={archived}
             workflowStage={workflowStage}
             tagProfile={tagProfile}
-            expanded={active}
+            expanded={expanded}
             active={active}
             tabbable={tabbable}
             onActivate={() => onActiveSegmentChange(segment.id, segment.assetId)}
@@ -746,7 +747,7 @@ function SourceCell({
         onClick={() => onActivate(segment.id, segment.assetId)}
         className={cn(
           'w-full whitespace-pre-wrap break-words rounded-md px-1.5 py-1 text-left text-foreground/60 hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-          !expanded && 'line-clamp-2',
+          !expanded && 'line-clamp-3',
         )}
       >
         <SegmentText text={segment.source} tagProfile={tagProfile} />
@@ -851,7 +852,7 @@ function TargetCell({
           <span
             className={cn(
               'flex-1 whitespace-pre-wrap break-words',
-              !expanded && 'line-clamp-2',
+              !expanded && 'line-clamp-3',
             )}
           >
             {segment.target ? <SegmentText text={segment.target} tagProfile={tagProfile} /> : '—'}

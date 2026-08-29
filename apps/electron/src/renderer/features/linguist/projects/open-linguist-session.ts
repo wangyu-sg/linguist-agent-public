@@ -13,14 +13,11 @@ import {
   currentAgentWorkspaceIdAtom,
 } from '@/atoms/agent-atoms'
 import {
-  activeTabIdAtom,
-  openLocalizationProjectTab,
   openTab,
   tabsAtom,
 } from '@/atoms/tab-atoms'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
-import { openLocalizationProject } from './open-localization-project'
 import {
   ensureProjectAgentSession,
   selectProjectAgentSession,
@@ -37,28 +34,29 @@ export interface OpenLinguistSessionResult {
   readOnlyHistory: boolean
 }
 
-function openMissingProjectHistory(
+export function activateLinguistAgentSession(
   store: JotaiStore,
   session: AgentSessionMeta,
   projectId: string,
-): void {
-  const opened = openLocalizationProjectTab(store.get(tabsAtom), {
-    projectId,
-    title: session.linguistProjectName ?? projectId,
+  readOnlyHistory: boolean,
+): boolean {
+  const selected = readOnlyHistory
+    ? selectProjectAgentSessionForHistory(store, projectId, session.id)
+    : selectProjectAgentSession(store, projectId, session.id)
+  if (!selected) return false
+
+  const opened = openTab(store.get(tabsAtom).filter((tab) => tab.type !== 'linguist-project'), {
+    type: 'agent',
+    sessionId: session.id,
+    title: session.title,
   })
-  store.set(
-    tabsAtom,
-    opened.tabs.map((tab) =>
-      tab.id === opened.activeTabId && tab.type === 'linguist-project'
-        ? {
-            ...tab,
-            repairState: 'missing' as const,
-            historySessionId: session.id,
-          }
-        : tab,
-    ),
-  )
+  store.set(tabsAtom, opened.tabs)
   enterLinguistNavigation(store, opened.activeTabId, 'conversations')
+  store.set(currentAgentSessionIdAtom, session.id)
+  if (session.workspaceId) store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
+  store.set(agentSidePanelOpenAtomFamily(session.id), true)
+  store.set(agentDiffPanelTabAtom, (previous) => new Map(previous).set(session.id, 'linguist'))
+  return true
 }
 
 /** 所有 Linguist 会话入口共用：先打开权威项目，再进入原生 Agent Tab。 */
@@ -77,39 +75,38 @@ export async function openLinguistAgentSession(
     }
   }
 
-  const opened = await openLocalizationProject(store, projectId, openProject)
+  const opened = await openProject({ projectId })
   if (!opened.ok) {
     if (
       opened.error.code === 'PROJECT_NOT_FOUND'
       || opened.error.code === 'PROJECT_UNHEALTHY'
       || opened.error.code === 'STORE_NOT_FOUND'
     ) {
-      openMissingProjectHistory(store, session, projectId)
+      if (!activateLinguistAgentSession(store, session, projectId, true)) {
+        return {
+          ok: false,
+          error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
+        }
+      }
       return { ok: true, data: { projectId, readOnlyHistory: true } }
     }
     return opened
   }
+  if (opened.data.project.id !== projectId || opened.data.health.projectId !== projectId) {
+    return {
+      ok: false,
+      error: { code: 'INTERNAL', message: '项目身份校验失败' },
+    }
+  }
 
   const readOnlyHistory = opened.data.project.archivedAt !== undefined
     || session.archived === true
-  const selected = readOnlyHistory
-    ? selectProjectAgentSessionForHistory(store, projectId, sessionId)
-    : selectProjectAgentSession(store, projectId, sessionId)
-  if (!selected) {
+  if (!activateLinguistAgentSession(store, session, projectId, readOnlyHistory)) {
     return {
       ok: false,
       error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
     }
   }
-  const openedAgent = openTab(store.get(tabsAtom), {
-    type: 'agent',
-    sessionId: session.id,
-    title: session.title,
-  })
-  store.set(tabsAtom, openedAgent.tabs)
-  store.set(activeTabIdAtom, openedAgent.activeTabId)
-  store.set(currentAgentSessionIdAtom, session.id)
-  if (session.workspaceId) store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
   return { ok: true, data: { projectId, readOnlyHistory } }
 }
 

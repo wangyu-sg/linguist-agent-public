@@ -19,7 +19,7 @@
 | Electron / Bun | `43.2.0` / `1.3.14` |
 | Pi Runtime | `0.84.2` |
 | Shared | `0.1.66` |
-| CAT Core / Formats / Store / Tools | `0.0.22 / 0.0.12 / 0.0.40 / 0.0.36` |
+| CAT Core / Formats / Store / Tools | `0.0.22 / 0.0.12 / 0.0.41 / 0.0.36` |
 | CAT schema | `17` |
 
 ## 保留差异

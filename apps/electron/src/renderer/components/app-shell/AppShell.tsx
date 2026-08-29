@@ -15,7 +15,12 @@ import { appModeAtom } from '@/atoms/app-mode'
 import { agentDiffPanelTabAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelSplitMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts, fileBrowserExpandedPathsAtom, fileBrowserScrollTopMapAtom, pruneFileBrowserStateMap } from '@/atoms/agent-atoms'
 import { leftSidebarWidthAtom } from '@/atoms/sidebar-atoms'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
-import { clampRightPanelWidth, getRightPanelMaxWidth } from './right-panel-layout'
+import {
+  clampRightPanelWidth,
+  getExpandedRightWorkspaceLayout,
+  getRightPanelMaxWidth,
+  MIN_MAIN_AREA_WIDTH,
+} from './right-panel-layout'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { useProjectActions } from '@/hooks/useProjectActions'
@@ -43,7 +48,6 @@ const MIN_TODO_PANEL_WIDTH = 600
 const MIN_SPLIT_PANEL_WIDTH = 720
 const EXPANDED_WORKSPACE_DEFAULT_VIEWPORT_RATIO = 2 / 5
 // 窄窗口时优先保留主会话的最小可读宽度；扩展工作区的 480px 仅在空间足够时强制。
-const MIN_MAIN_AREA_WIDTH = 320
 const MIN_MAIN_AREA_WITH_EXPANDED_LEFT_SIDEBAR = 512
 const COLLAPSED_LEFT_SIDEBAR_WIDTH = 60
 
@@ -52,6 +56,7 @@ function isExpandedWorkspaceTab(tab: string | undefined): boolean {
     tab
     && (
       isWorkspaceComponentTab(tab)
+      || tab === 'linguist'
       || tab === 'browser'
       || tab === 'preview'
       || tab.startsWith('browser:')
@@ -162,11 +167,12 @@ export function AppShell(): React.ReactElement {
   const setRightPanelSplitMap = useSetAtom(agentSidePanelSplitMapAtom)
   const [rightPanelLayout, setRightPanelLayout] = useAtom(agentSidePanelLayoutAtomFamily(currentSessionId ?? ''))
   const [viewportWidth, setViewportWidth] = React.useState(() => window.innerWidth)
+  const rightWorkspaceExpanded = isPanelOpen && rightPanelLayout.expanded
   const leftSidebarForceCollapsed = shouldForceCollapseLeftSidebar(
     viewportWidth,
     clampedLeftSidebarWidth,
     MIN_MAIN_AREA_WITH_EXPANDED_LEFT_SIDEBAR,
-  )
+  ) || rightWorkspaceExpanded
   const dragging = React.useRef(false)
   const currentSessionIdRef = React.useRef(currentSessionId)
   const rightPanelDragCleanup = React.useRef<(() => void) | null>(null)
@@ -182,6 +188,10 @@ export function AppShell(): React.ReactElement {
     ? COLLAPSED_LEFT_SIDEBAR_WIDTH
     : clampedLeftSidebarWidth
   const leftSidebarOccupiedWidth = leftSidebarContentWidth + 1
+  const expandedRightWorkspaceLayout = getExpandedRightWorkspaceLayout(
+    viewportWidth,
+    leftSidebarOccupiedWidth,
+  )
   const rightPanelMinimumWidth = activeRightPanelSplit
     ? MIN_SPLIT_PANEL_WIDTH
     : ordinaryRightPanelMinimumWidth
@@ -215,12 +225,17 @@ export function AppShell(): React.ReactElement {
   // 并排仅临时借用宽布局；退出后自动回到 Session 先前的普通/宽工作区宽度。
   const usesWidePanelLayout = rightPanelLayout.hasOpenedWideWorkspace || activeRightPanelSplit !== null
   const persistedRightPanelWidth = usesWidePanelLayout ? effectiveWidePanelWidth : clampedRightPanelWidth
-  const displayedRightPanelWidth = draggedRightPanelWidth ?? persistedRightPanelWidth
-  const showRightPanel = rightPanelAllowed && !shouldSuppressAgentRail(
-    viewportWidth,
-    leftSidebarOccupiedWidth,
-    displayedRightPanelWidth,
-    MIN_MAIN_AREA_WIDTH,
+  const displayedRightPanelWidth = rightWorkspaceExpanded
+    ? expandedRightWorkspaceLayout.rightPanelWidth
+    : draggedRightPanelWidth ?? persistedRightPanelWidth
+  const showRightPanel = rightPanelAllowed && (
+    rightWorkspaceExpanded
+    || !shouldSuppressAgentRail(
+      viewportWidth,
+      leftSidebarOccupiedWidth,
+      displayedRightPanelWidth,
+      MIN_MAIN_AREA_WIDTH,
+    )
   )
 
   React.useEffect(() => {
@@ -353,6 +368,7 @@ export function AppShell(): React.ReactElement {
                 width={clampedLeftSidebarWidth}
                 noTransition={isDraggingLeftSidebar}
                 forceCollapsed={leftSidebarForceCollapsed}
+                forceCollapsedReason={rightWorkspaceExpanded ? '还原右侧工作区后可展开侧边栏' : undefined}
               />
               {/* 侧边栏展开时显示拖拽手柄，折叠态隐藏 */}
               {!sidebarCollapsed && !leftSidebarForceCollapsed && (
@@ -367,7 +383,20 @@ export function AppShell(): React.ReactElement {
             <div aria-hidden="true" className="relative z-[61] w-px flex-shrink-0 bg-border/80 dark:bg-border/70" />
 
             {/* 中间容器：relative z-[60] 使其在 z-50 拖动区域之上 */}
-            <div className="flex-1 min-w-0 relative z-[60]">
+            <div
+              className={cn(
+                'min-w-0 relative z-[60]',
+                rightWorkspaceExpanded && expandedRightWorkspaceLayout.mainAreaWidth === 0
+                  ? 'hidden'
+                  : 'flex-1',
+              )}
+              style={rightWorkspaceExpanded && expandedRightWorkspaceLayout.mainAreaWidth > 0
+                ? {
+                    flex: `0 0 ${expandedRightWorkspaceLayout.mainAreaWidth}px`,
+                    width: expandedRightWorkspaceLayout.mainAreaWidth,
+                  }
+                : undefined}
+            >
               {/* 主内容区域（TabBar + TabContent） */}
               <MainArea />
               {/* 全局 Toast 固定在 Agent 历史主区右上角，不进入右侧原生浏览器面板。 */}
@@ -381,7 +410,7 @@ export function AppShell(): React.ReactElement {
               >
                 <div aria-hidden="true" className="pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-px bg-border/80 dark:bg-border/70" />
                 {/* 拖拽手柄 */}
-                {isPanelOpen && (
+                {isPanelOpen && !rightWorkspaceExpanded && (
                   <div
                     className={cn(
                       'absolute left-0 top-0 bottom-0 w-[8px] -translate-x-1/2 cursor-col-resize active:bg-primary/50 transition-colors z-20'

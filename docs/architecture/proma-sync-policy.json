@@ -5,6 +5,7 @@
     {
       "patterns": [
         "apps/electron/src/renderer/components/agent/AgentView.tsx",
+        "apps/electron/src/renderer/components/agent/SidePanel.tsx",
         "apps/electron/src/renderer/components/app-shell/AppShell.tsx"
       ],
       "policy": "host-seam",

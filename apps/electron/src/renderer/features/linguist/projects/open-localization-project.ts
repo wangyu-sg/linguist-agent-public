@@ -4,11 +4,8 @@ import type {
   LinguistProjectOpenRequest,
   LinguistProjectOpenResult,
 } from '@proma/shared'
-import {
-  openLocalizationProjectTab,
-  tabsAtom,
-} from '@/atoms/tab-atoms'
-import { enterLinguistNavigation } from '@/lib/linguist-navigation'
+import { ensureProjectAgentSession } from './project-agent-session'
+import { activateLinguistAgentSession } from './open-linguist-session'
 
 export { restoreLastLocalizationProject } from '@/lib/linguist-navigation'
 
@@ -18,7 +15,7 @@ type OpenProject = (
 ) => Promise<LinguistIpcResult<LinguistProjectOpenResult>>
 
 /**
- * 打开项目服务后进入一等 Project Tab。失败时不改变当前导航。
+ * 打开项目服务后进入项目 Agent，并在右侧工作区展示 CAT。
  */
 export async function openLocalizationProject(
   store: JotaiStore,
@@ -37,11 +34,18 @@ export async function openLocalizationProject(
     }
   }
 
-  const opened = openLocalizationProjectTab(store.get(tabsAtom), {
-    projectId: result.data.project.id,
-    title: result.data.project.name,
-  })
-  store.set(tabsAtom, opened.tabs)
-  enterLinguistNavigation(store, opened.activeTabId, 'conversations')
+  const session = await ensureProjectAgentSession(store, projectId)
+  if (!session.ok) return session
+  if (!activateLinguistAgentSession(
+    store,
+    session.data,
+    projectId,
+    result.data.project.archivedAt !== undefined,
+  )) {
+    return {
+      ok: false,
+      error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
+    }
+  }
   return result
 }

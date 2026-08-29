@@ -4,6 +4,7 @@
  * 直接展示文件浏览器，默认打开状态。
  * 切换按钮在面板关闭时显示活动指示点。
  */
+// LA-HOST-SEAM: renderer-right-workspace-extension
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
@@ -63,6 +64,7 @@ import {
   agentTerminalTabsAtom,
   agentSidePanelSplitMapAtom,
   agentSidePanelSplitRatioMapAtom,
+  agentSidePanelLayoutAtomFamily,
 } from '@/atoms/agent-atoms'
 import {
   getBrowserSidePanelTab,
@@ -124,6 +126,7 @@ import {
   selectRightWorkspaceSplitTab,
 } from '@/lib/right-workspace-split'
 import type { RightWorkspacePane, RightWorkspaceSplitState } from '@/lib/right-workspace-split'
+import { useAgentRightWorkspaceHostExtension } from '@/host/agent-host-extension'
 
 function BrowserTabIcon({ favicon }: { favicon?: string }): React.ReactElement {
   const [loadFailed, setLoadFailed] = React.useState(false)
@@ -434,6 +437,8 @@ interface SidePanelProps {
 }
 
 export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, width = 460 }: SidePanelProps): React.ReactElement {
+  const [sidePanelLayout, setSidePanelLayout] = useAtom(agentSidePanelLayoutAtomFamily(sessionId))
+  const hostWorkspace = useAgentRightWorkspaceHostExtension(sessionId)
   // 按会话保存最近访问顺序。该历史仅存在于当前 renderer 进程，避免恢复失效的临时 Tab。
   const rightPanelTabHistoryRef = React.useRef(new Map<string, AgentSidePanelTab[]>())
   const workspaceTabsRef = React.useRef<WorkspacePanelTab[]>([])
@@ -862,6 +867,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   const lastActivatedMemoryChangeRef = React.useRef<string | null>(null)
   const effectiveActiveTab: AgentSidePanelTab = activeTab === 'chat' && !sideChatConversationId
     ? 'files'
+    : activeTab === 'linguist' && hostWorkspace.tab === null
+      ? 'files'
     // `temporary-agent` 是旧的单分支内存状态；新状态使用 exploration:<sessionId>。
     : activeTab === 'temporary-agent' || (activeExplorationSessionId !== null && !activeExplorationBranch) || (activeDelegationSessionId !== null && !activeDelegationSession) || (activeTerminalId !== null && !terminalTabs.some((terminal) => terminal.terminalId === activeTerminalId))
       ? 'files'
@@ -1230,6 +1237,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   // BrowserPanel 为它保留一个固定避让区，而非 setVisible(false)。
   const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
   const workspaceTabs = React.useMemo<WorkspacePanelTab[]>(() => [
+    ...(hostWorkspace.tab ? [hostWorkspace.tab] : []),
     { id: 'files', label: '文件', icon: <FolderOpen className="size-3.5" /> },
     { id: 'changes', label: '改动', icon: <FileDiff className="size-3.5" /> },
     ...workspaceComponentTabs.map((component) => {
@@ -1282,7 +1290,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       closable: true,
       activity: showBrowserActivity && activeBrowserTabId !== tab.tabId && browserState.activeTabId === tab.tabId,
     })) ?? []),
-  ], [activeBrowserTabId, browserState, previewFiles, sessions, sessionId, showBrowserActivity, sideChatConversationId, sideDelegationSessionIds, sideTemporaryAgents, terminalTabs, workspaceComponentTabs])
+  ], [activeBrowserTabId, browserState, hostWorkspace.tab, previewFiles, sessions, sessionId, showBrowserActivity, sideChatConversationId, sideDelegationSessionIds, sideTemporaryAgents, terminalTabs, workspaceComponentTabs])
   workspaceTabsRef.current = workspaceTabs
 
   React.useEffect(() => {
@@ -1523,6 +1531,8 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
     const hasVisibleSessionAttachedItems = showSessionFiles && hasSessionAttachedItems
     const hasVisibleWorkspaceAttachedItems = showProjectFiles && hasWorkspaceAttachedItems
 
+    if (paneTab === 'linguist') return hostWorkspace.content
+
     if (paneTerminal) {
       return (
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -1759,6 +1769,11 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
             onTabDrop={handleTabDrop}
             onSplitTab={handleSplitTab}
             onCollapseSplit={split ? handleCollapseSplit : undefined}
+            expanded={sidePanelLayout.expanded}
+            onExpandedChange={(expanded) => setSidePanelLayout((previous) => ({
+              ...previous,
+              expanded,
+            }))}
             activeTabAction={activeExplorationBranch ? (
               <ExplorationBringBackAction parentSessionId={sessionId} branch={activeExplorationBranch} sessions={sessions} />
             ) : undefined}

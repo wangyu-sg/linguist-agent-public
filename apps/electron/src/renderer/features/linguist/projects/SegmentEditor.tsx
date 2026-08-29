@@ -141,7 +141,7 @@ export function SegmentEditor({
   const stageMutatingSegmentIds = React.useRef(new Set<string>())
   const lastFocusedSegmentId = React.useRef<string>()
   const deferredSearch = React.useDeferredValue(filters.search)
-  const signature = `${projectId}\0${filters.assetId ?? ''}\0${filters.currentStageState ?? ''}\0${deferredSearch}`
+  const signature = `${projectId}\0${workflowStage}\0${filters.assetId ?? ''}\0${filters.currentStageState ?? ''}\0${deferredSearch}`
   const data = state.status === 'ready' ? state.data : undefined
   const selectedPendingIds = [...selectedIds].filter((id) => pendingBySegment.has(id))
   const updateEditorCapability = React.useCallback((

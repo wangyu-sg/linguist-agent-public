@@ -592,8 +592,14 @@ export class ProposalsRepository {
       .prepare('UPDATE proposals SET status = ? WHERE id = ?')
       .run(result.proposal.status, proposalId)
     this.db.db
-      .prepare('UPDATE segments SET target = ?, status = ?, revision = ? WHERE id = ?')
-      .run(result.segment.target, result.segment.status, result.segment.revision, result.segment.id)
+      .prepare('UPDATE segments SET target = ?, status = ?, current_stage_state = ?, revision = ? WHERE id = ?')
+      .run(
+        result.segment.target,
+        result.segment.status,
+        result.segment.currentStageState,
+        result.segment.revision,
+        result.segment.id,
+      )
     this.db.db
       .prepare(
         'INSERT INTO segment_revisions (segment_id, revision, target, status, source, created_at) VALUES (?, ?, ?, ?, ?, ?)',

@@ -6,7 +6,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, MessageCircle, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X } from 'lucide-react'
+import { Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, Maximize2, MessageCircle, Minimize2, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X } from 'lucide-react'
 import { OBSIDIAN_NAME, ObsidianIcon } from '@/components/obsidian/obsidian-brand'
 import { cn } from '@/lib/utils'
 import { getScrollLeftToRevealTab } from '@/lib/tab-visibility'
@@ -63,6 +63,8 @@ interface DiffPanelTabBarProps {
   onTabDrop?: (state: RightWorkspaceTabDragState) => void
   onSplitTab?: (tab: AgentSidePanelTab, pane: RightWorkspacePane) => void
   onCollapseSplit?: () => void
+  expanded?: boolean
+  onExpandedChange?: (expanded: boolean) => void
   onClose?: () => void
 }
 
@@ -85,6 +87,8 @@ export function DiffPanelTabBar({
   onTabDrop,
   onSplitTab,
   onCollapseSplit,
+  expanded = false,
+  onExpandedChange,
   onClose,
 }: DiffPanelTabBarProps): React.ReactElement {
   const unseenMap = useAtomValue(agentDiffUnseenChangesAtom)
@@ -421,6 +425,21 @@ export function DiffPanelTabBar({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        {onExpandedChange && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => onExpandedChange(!expanded)}
+                className="mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
+                aria-label={expanded ? '还原面板' : '展开面板'}
+              >
+                {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{expanded ? '还原面板' : '展开面板'}</TooltipContent>
+          </Tooltip>
+        )}
         {onClose && (
           <Tooltip>
             <TooltipTrigger asChild>

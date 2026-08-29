@@ -203,17 +203,15 @@ test('LF-077：旧 ProjectsSidebarEntry 不再提供日常项目工作入口', (
   assert.match(mainArea, /activeView === 'projects'[\s\S]*?<ProjectsView \/>/)
 })
 
-test('LF-074：删除 ProjectDetail 内部工作导航，项目卡直接进入一等 Project Tab', () => {
+test('LF-074：项目卡进入原生 Agent 主会话，CAT 挂在右侧工作区', () => {
   const projectsRoot = join(LINGUIST_FEATURE_ROOT, 'projects')
   const openProject = readFileSync(join(projectsRoot, 'open-localization-project.ts'), 'utf8')
 
   assert.equal(existsSync(join(projectsRoot, 'ProjectDetailPanel.tsx')), false)
   assert.equal(existsSync(join(projectsRoot, 'ProjectChatsSection.tsx')), false)
-  assert.match(openProject, /openLocalizationProjectTab/)
-  assert.match(
-    openProject,
-    /enterLinguistNavigation\(store, opened\.activeTabId, 'conversations'\)/,
-  )
+  assert.match(openProject, /ensureProjectAgentSession/)
+  assert.match(openProject, /activateLinguistAgentSession/)
+  assert.doesNotMatch(openProject, /openLocalizationProjectTab/)
 })
 
 test('LF-075：Bottom Dock 接管上下文能力后删除旧 CatContextRail', () => {
@@ -296,16 +294,20 @@ test('LF-078：Legacy UI 删除后只保留单一 Workbench 与主进程 CAT 真
   )
 })
 
-test('三模式键盘导航：Ctrl+Tab 可返回已打开的 Linguist Project Tab', () => {
-  const tabSwitcher = readFileSync(
-    join(REPO_ROOT, 'apps/electron/src/renderer/components/tabs/TabSwitcher.tsx'),
+test('三模式导航：Linguist 会话复用原生 Agent Tab 与右侧 CAT 工作区', () => {
+  const sessionOpener = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/renderer/hooks/useOpenSession.ts'),
+    'utf8',
+  )
+  const hostExtension = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/renderer/host/agent-host-extension.tsx'),
     'utf8',
   )
 
-  assert.match(tabSwitcher, /tab\.type === 'linguist-project'/)
-  assert.match(tabSwitcher, /candidate\.type === 'linguist-project'/)
-  assert.match(tabSwitcher, /enterLinguistNavigation\(store, projectTab\.id, 'conversations'\)/)
-  assert.match(tabSwitcher, /<Languages className="size-2\.5" \/>/)
+  assert.match(sessionOpener, /openHostedAgentSession\(store, sessionId\)/)
+  assert.match(hostExtension, /openLinguistAgentSession\(store, sessionId\)/)
+  assert.match(hostExtension, /id: 'linguist'/)
+  assert.match(hostExtension, /<LocalizationProjectWorkbench projectId=\{projectId\} presentation="workspace" \/>/)
 })
 
 test('Linguist Runtime 同时装配 Proma Workspace 能力与 CAT overlay', () => {

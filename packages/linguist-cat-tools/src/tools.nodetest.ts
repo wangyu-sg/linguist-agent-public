@@ -454,6 +454,13 @@ test('cat_export_asset delegates the bound asset and absolute destination withou
 test('cat_accept_proposals atomically applies pending proposals without exporting files', async () => {
   const fixture = setup()
   try {
+    fixture.db.segments.applyTargetEdit(
+      fixture.segmentsA[0]!.id,
+      '原有译文',
+      0,
+      { status: 'translated' },
+    )
+    fixture.db.segments.confirmCurrentStage(fixture.segmentsA[0]!.id, 'translation', 1)
     const mutations: LinguistCatToolMutation[] = []
     const tools = createLinguistCatTools({
       resolveProject: makeOkResolver(fixture),
@@ -463,24 +470,25 @@ test('cat_accept_proposals atomically applies pending proposals without exportin
     const proposed = await invoke(toolByName(tools, 'cat_propose_translations'), {
       segmentProposals: [{
         segmentId: fixture.segmentsA[0]!.id,
-        baseRevision: 0,
+        baseRevision: 1,
         proposedTarget: '已由 Agent 写入 0',
       }],
     })
     const proposalId = (proposed.details as { proposalIds: string[] }).proposalIds[0]!
     const accepted = await invoke(toolByName(tools, 'cat_accept_proposals'), {
-      proposals: [{ proposalId, expectedRevision: 0 }],
+      proposals: [{ proposalId, expectedRevision: 1 }],
     })
     assert.deepEqual(accepted.details, {
       accepted: [{
         proposalId,
         segmentId: fixture.segmentsA[0]!.id,
-        revision: 1,
+        revision: 2,
         status: 'translated',
       }],
       replayed: false,
     })
     assert.equal(fixture.db.segments.getById(fixture.segmentsA[0]!.id)?.target, '已由 Agent 写入 0')
+    assert.equal(fixture.db.segments.getById(fixture.segmentsA[0]!.id)?.currentStageState, 'draft')
     assert.equal(mutations.at(-1)?.kind, 'project-updated')
   } finally {
     fixture.db.close()

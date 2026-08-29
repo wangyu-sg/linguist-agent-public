@@ -23,9 +23,9 @@
     "sharedVersion": "0.1.66",
     "catCoreVersion": "0.0.22",
     "catFormatsVersion": "0.0.12",
-    "catStoreVersion": "0.0.40",
+    "catStoreVersion": "0.0.41",
     "catToolsVersion": "0.0.36",
-    "catSchema": 17
+    "catSchema": 18
   },
   "contracts": {
     "prompt": {

@@ -38,7 +38,7 @@ export interface SchemaMigration {
 }
 
 /** Current schema version this build understands. */
-export const SCHEMA_VERSION = 17
+export const SCHEMA_VERSION = 18
 
 const MIGRATION_1_SQL = `
 CREATE TABLE assets (
@@ -732,6 +732,26 @@ CREATE INDEX idx_stage_evidence_receipts_run
   ON stage_evidence_receipts(stage_run_id, presented_at, receipt_id);
 `
 
+const MIGRATION_18_SQL = `
+UPDATE segments
+SET current_stage_state = 'draft'
+WHERE current_stage_state = 'confirmed'
+  AND EXISTS (
+    SELECT 1
+    FROM segment_revisions AS revision
+    WHERE revision.segment_id = segments.id
+      AND revision.revision = segments.revision
+      AND revision.source = 'proposal'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM segment_stage_events AS event
+    WHERE event.segment_id = segments.id
+      AND event.segment_revision = segments.revision
+      AND event.action IN ('confirmed', 'unchanged', 'corrected')
+  );
+`
+
 export const MIGRATIONS: readonly SchemaMigration[] = [
   { version: 1, description: 'initial CAT schema (plan 5.4)', sql: MIGRATION_1_SQL },
   { version: 2, description: 'idempotent human proposal mutations (PB-053)', sql: MIGRATION_2_SQL },
@@ -811,5 +831,10 @@ export const MIGRATIONS: readonly SchemaMigration[] = [
     version: 17,
     description: 'Stage Evidence baseline, gaps, and presentation receipts',
     sql: MIGRATION_17_SQL,
+  },
+  {
+    version: 18,
+    description: 'reopen accepted proposals that were not reconfirmed',
+    sql: MIGRATION_18_SQL,
   },
 ]

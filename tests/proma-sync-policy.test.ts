@@ -124,6 +124,7 @@ test('同步链生成无冲突且通过 Host Seam 验证的最终树', () => {
     'apps/electron/src/renderer/host/agent-host-extension.tsx',
     'apps/electron/src/renderer/host/app-mode-registry.ts',
     'apps/electron/src/renderer/components/agent/AgentView.tsx',
+    'apps/electron/src/renderer/components/agent/SidePanel.tsx',
     'apps/electron/src/renderer/components/app-shell/AppShell.tsx',
   ]
   try {

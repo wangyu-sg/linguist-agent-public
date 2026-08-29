@@ -107,8 +107,10 @@ export async function loadLocalizationProjectSummary(
 
 export function LocalizationProjectWorkbench({
   projectId,
+  presentation = 'page',
 }: {
   projectId: string
+  presentation?: 'page' | 'workspace'
 }): React.ReactElement {
   const store = useStore()
   const refreshProjectList = useSetAtom(refreshLinguistProjectListAtom)
@@ -288,6 +290,7 @@ export function LocalizationProjectWorkbench({
   return (
     <LinguistWorkbenchShell
       project={currentProject}
+      presentation={presentation}
       summaryState={summaryState}
       onSummaryRefresh={invalidateSummary}
       onProjectArchived={(project) => {
@@ -314,7 +317,7 @@ export function LocalizationProjectWorkbench({
           onRefresh={invalidateSummary}
         />
       )}
-      onOpenAgent={openProjectAgent}
+      onOpenAgent={presentation === 'page' ? openProjectAgent : undefined}
       bottomDock={(
         <LinguistBottomDock
           projectId={state.project.id}
@@ -337,6 +340,7 @@ export function LocalizationProjectWorkbench({
           sessionId={currentAgentSessionId}
           archived={currentProject.archivedAt !== undefined}
           refreshSequence={mutationState.lastSequence}
+          compact={presentation === 'workspace'}
         />
         <div className="min-h-0 flex-1">
           <SegmentEditor

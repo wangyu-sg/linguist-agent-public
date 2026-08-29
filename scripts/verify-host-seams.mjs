@@ -116,6 +116,12 @@ const rendererAdapters = [
     anchor: 'app-mode-registry',
     required: ['export const APP_MODE_DEFINITIONS', 'export function resolveActiveViewForMode(', 'export function resolveRightRailPolicy('],
   },
+  {
+    file: 'apps/electron/src/renderer/components/agent/SidePanel.tsx',
+    anchor: 'renderer-right-workspace-extension',
+    required: ['useAgentRightWorkspaceHostExtension(sessionId)', "paneTab === 'linguist'"],
+    forbidden: /from ['"][^'"]*features\/linguist\//,
+  },
 ]
 for (const contract of rendererAdapters) {
   const source = readSource(root, contract.file)
@@ -150,4 +156,4 @@ if (
   fail('HOST_SEAM_CONTRACT_CHANGED', 'AppShell 不再只通过 App Mode Registry 接入 Linguist')
 }
 
-console.log('host seams verified: 8')
+console.log('host seams verified: 9')

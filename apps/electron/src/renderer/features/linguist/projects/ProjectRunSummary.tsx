@@ -120,12 +120,14 @@ export function ProjectRunSummary({
   sessionId,
   archived,
   refreshSequence,
+  compact = false,
 }: {
   projectId: string
   sessionId?: string
   archived: boolean
   refreshSequence: number
-}): React.ReactElement {
+  compact?: boolean
+}): React.ReactElement | null {
   const [state, setState] = useAtom(linguistProjectRunSummaryAtomFamily(projectId))
 
   React.useEffect(() => {
@@ -175,6 +177,41 @@ export function ProjectRunSummary({
     || sessionId === undefined
     || summary?.canUndo !== true
     || state.status === 'undoing'
+
+  if (compact) {
+    if (summary === null && state.error === undefined && state.undoResult === undefined) return null
+    return (
+      <section
+        aria-label="本次运行"
+        className="flex min-h-7 shrink-0 items-center justify-between gap-2 border-b border-border/50 bg-content-area/55 px-3 py-1 text-[11px] text-muted-foreground"
+      >
+        <span className="min-w-0 truncate">
+          {state.error !== undefined
+            ? `本次运行：${state.error}`
+            : state.undoResult !== undefined
+              ? undoStatusLabel(state.undoResult)
+              : summary === null
+                ? '暂无 CAT 运行记录'
+                : [
+                    summary.job ? jobStatusLabel(summary.job.status) : null,
+                    `建议 ${summary.changes.proposalsCreated}`,
+                    `QA ${qaCount}`,
+                    `文件 ${summary.changes.filesTouched}`,
+                  ].filter(Boolean).join(' · ')}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 shrink-0 px-2 text-[11px]"
+          disabled={undoDisabled}
+          onClick={() => { void undo() }}
+        >
+          {state.status === 'undoing' ? '撤销中…' : '撤销本次'}
+        </Button>
+      </section>
+    )
+  }
 
   // U-07：无运行记录（或仍在读取）时折叠为一行轻量提示，不再以空面板占据主区右上；
   // 有记录、有错误或有撤销结果时保持完整面板行为。

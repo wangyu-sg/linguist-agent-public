@@ -13,7 +13,9 @@ import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
 import { toast } from 'sonner'
+import { Languages } from 'lucide-react'
 import type { LinguistTurnContextV1 } from '@proma/shared'
+import type { WorkspacePanelTab } from '@/components/diff/DiffPanelTabBar'
 import {
   agentLinguistTurnContextCaptureAtom,
   agentSessionsAtom,
@@ -30,6 +32,7 @@ import {
 import { linguistProjectSummaryAtomFamily } from '@/features/linguist/projects/project-summary-atoms'
 import { buildProjectComposerContextChips } from '@/features/linguist/projects/project-composer-context'
 import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
+import { LocalizationProjectWorkbench } from '@/features/linguist/projects/LocalizationProjectWorkbench'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 import {
   DEFAULT_AGENT_HOST_CAPABILITIES,
@@ -52,6 +55,11 @@ export interface AgentHostExtension {
   hostCapabilities: AgentHostCapabilities
   /** 附件落盘闸门(封装 linguistProjectId,AgentView 不直接接触项目身份)。 */
   attachmentGate: AgentHostAttachmentGate
+}
+
+export interface AgentRightWorkspaceHostExtension {
+  tab: WorkspacePanelTab | null
+  content: React.ReactNode
 }
 
 /** 无绑定时订阅用占位 projectId;对应 atom 从不被写入,保持惰性。 */
@@ -138,6 +146,30 @@ export function useAgentHostExtension(
     hostCapabilities,
     attachmentGate,
   }
+}
+
+/** 绑定 Linguist 项目的 Agent 会话在 Proma 右侧工作区贡献唯一 CAT Tab。 */
+export function useAgentRightWorkspaceHostExtension(
+  sessionId: string,
+): AgentRightWorkspaceHostExtension {
+  const sessions = useAtomValue(agentSessionsAtom)
+  const session = sessions.find((item) => item.id === sessionId)
+  const projectId = session ? getAgentSessionLinguistProjectId(session, sessions) : undefined
+  const summaryState = useAtomValue(linguistProjectSummaryAtomFamily(projectId ?? NO_PROJECT))
+  const projectName = summaryState.status === 'ready'
+    ? summaryState.summary.project.name
+    : session?.linguistProjectName
+
+  return React.useMemo(() => projectId === undefined
+    ? { tab: null, content: null }
+    : {
+        tab: {
+          id: 'linguist',
+          label: projectName ?? 'CAT 工作台',
+          icon: <Languages className="size-3.5" />,
+        },
+        content: <LocalizationProjectWorkbench projectId={projectId} presentation="workspace" />,
+      }, [projectId, projectName])
 }
 
 export interface AgentSurfaceHostPresentation {

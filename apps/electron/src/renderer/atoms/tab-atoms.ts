@@ -308,7 +308,11 @@ export function openLocalizationProjectTab(
 }
 
 function getPersistentTabs(tabs: TabItem[]): TabItem[] {
-  return tabs.filter((tab) => tab.id !== TUTORIAL_TAB_ID && !isPreviewTab(tab))
+  return tabs.filter((tab) => (
+    tab.id !== TUTORIAL_TAB_ID
+    && !isPreviewTab(tab)
+    && tab.type !== 'linguist-project'
+  ))
 }
 
 export type LocalizationProjectRestoreStatus = 'active' | 'archived'

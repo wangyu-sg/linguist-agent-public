@@ -342,6 +342,7 @@ export interface LeftSidebarProps {
   noTransition?: boolean
   /** 极窄视口（如 200% zoom）下由 AppShell 请求强制折叠为图标栏；不写回用户折叠偏好 */
   forceCollapsed?: boolean
+  forceCollapsedReason?: string
 }
 
 /** 日期分组标签 */
@@ -680,7 +681,7 @@ function deleteSetEntry<T>(prev: Set<T>, value: T): Set<T> {
   return next
 }
 
-export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebarProps): React.ReactElement {
+export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapsedReason }: LeftSidebarProps): React.ReactElement {
   const [activeView, setActiveView] = useAtom(activeViewAtom)
   const setAutomationForm = useSetAtom(automationFormAtom)
   const setPlanningTab = useSetAtom(planningTabAtom)
@@ -3267,8 +3268,8 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={forceCollapsed ? '视口过窄，无法展开侧边栏' : '展开侧边栏'}
-                title={forceCollapsed ? '放大窗口或降低缩放比例后可展开' : undefined}
+                aria-label={forceCollapsed ? forceCollapsedReason ?? '视口过窄，无法展开侧边栏' : '展开侧边栏'}
+                title={forceCollapsed ? forceCollapsedReason ?? '放大窗口或降低缩放比例后可展开' : undefined}
                 disabled={forceCollapsed}
                 onClick={() => setSidebarCollapsed(false)}
                 className="group flex size-10 items-center justify-center p-1 titlebar-no-drag disabled:cursor-not-allowed disabled:opacity-40"
@@ -3279,8 +3280,9 @@ export function LeftSidebar({ width, noTransition, forceCollapsed }: LeftSidebar
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              展开侧边栏 (
-              {navigator.platform.includes("Mac") ? "⌘B" : "Ctrl+Shift+E"})
+              {forceCollapsed
+                ? forceCollapsedReason ?? '放大窗口或降低缩放比例后可展开'
+                : `展开侧边栏 (${navigator.platform.includes('Mac') ? '⌘B' : 'Ctrl+Shift+E'})`}
             </TooltipContent>
           </Tooltip>
 

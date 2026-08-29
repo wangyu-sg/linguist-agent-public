@@ -700,7 +700,7 @@ test('migration 17: existing v16 Context links migrate into typed Evidence links
 
   const migrated = CatDatabase.open(path)
   try {
-    assert.equal(migrated.schemaVersion, 17)
+    assert.equal(migrated.schemaVersion, 18)
     const tables = new Set((migrated.db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
       .all() as Array<{ name: string }>).map((row) => row.name))
@@ -720,6 +720,65 @@ test('migration 17: existing v16 Context links migrate into typed Evidence links
       requiredness: 'conditional',
       mapping_revision: 'v16-direct-link',
     })
+  } finally {
+    migrated.close()
+  }
+})
+
+test('migration 18: accepted proposals reopen only when the new revision was not reconfirmed', () => {
+  const path = join(makeTempDir(), 'cat.db')
+  const LegacyDatabase = loadDatabaseSync()
+  const legacy = new LegacyDatabase(path)
+  legacy.exec(`
+    CREATE TABLE schema_migrations (
+      version INTEGER PRIMARY KEY,
+      applied_at TEXT NOT NULL,
+      description TEXT NOT NULL
+    )
+  `)
+  const record = legacy.prepare(
+    'INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)',
+  )
+  for (const migration of MIGRATIONS.filter((item) => item.version <= 17)) {
+    legacy.exec(migration.sql)
+    migration.backfill?.(legacy)
+    record.run(migration.version, '2026-01-01T00:00:00.000Z', migration.description)
+  }
+  legacy.exec(`
+    INSERT INTO assets
+      (id, project_id, format_id, original_filename, source_sha256, segment_count, created_at)
+    VALUES ('asset-v17', 'project-v17', 'xliff', 'source.xlf', '${'a'.repeat(64)}', 2, '2026-01-01T00:00:00.000Z');
+    INSERT INTO segments
+      (id, asset_id, ordinal, source, target, source_locale, target_locale,
+       status, locked, revision, source_hash, current_stage_state)
+    VALUES
+      ('reopen', 'asset-v17', 0, 'A', 'A1', 'zh-CN', 'en', 'translated', 0, 1, '${'b'.repeat(64)}', 'confirmed'),
+      ('keep', 'asset-v17', 1, 'B', 'B1', 'zh-CN', 'en', 'translated', 0, 1, '${'c'.repeat(64)}', 'confirmed');
+    INSERT INTO segment_revisions
+      (segment_id, revision, target, status, source, created_at)
+    VALUES
+      ('reopen', 1, 'A1', 'translated', 'proposal', '2026-01-02T00:00:00.000Z'),
+      ('keep', 1, 'B1', 'translated', 'proposal', '2026-01-02T00:00:00.000Z');
+    INSERT INTO segment_stage_events
+      (segment_id, stage, action, segment_revision, created_at)
+    VALUES
+      ('reopen', 'translation', 'confirmed', 0, '2026-01-01T00:00:00.000Z'),
+      ('keep', 'translation', 'confirmed', 1, '2026-01-03T00:00:00.000Z');
+    PRAGMA application_id = ${LINGUIST_APPLICATION_ID};
+    PRAGMA user_version = 17;
+  `)
+  legacy.close()
+
+  const migrated = CatDatabase.open(path)
+  try {
+    assert.equal(migrated.schemaVersion, 18)
+    const rows = migrated.db.prepare(
+      "SELECT id, current_stage_state FROM segments WHERE id IN ('reopen', 'keep') ORDER BY id",
+    ).all() as Array<{ id: string; current_stage_state: string }>
+    assert.deepEqual(rows.map((row) => ({ ...row })), [
+      { id: 'keep', current_stage_state: 'confirmed' },
+      { id: 'reopen', current_stage_state: 'draft' },
+    ])
   } finally {
     migrated.close()
   }

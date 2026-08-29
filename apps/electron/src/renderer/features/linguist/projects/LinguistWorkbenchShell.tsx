@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useAtom, useAtomValue, useStore } from 'jotai'
 import { Archive, Bot, Languages, PanelBottom, PanelLeft, Settings } from 'lucide-react'
 import type { LinguistProjectInfo, LinguistStageDecisionCoverage, LinguistWorkflowStage } from '@proma/shared'
+import { toast } from 'sonner'
 import type { WorkbenchSummaryState } from './project-summary-atoms'
 
 export type { WorkbenchSummaryState }
@@ -20,11 +21,10 @@ import {
   linguistWorkbenchUiStateAtomFamily,
 } from './cat-workspace-atoms'
 import { ProjectSettingsSheet } from './ProjectSettingsSheet'
+import { describeLinguistIpcError } from './project-utils'
 import { UnknownTagNotice, unknownTagScanRevision } from './UnknownTagNotice'
 import {
-  COVERAGE_STAGES,
   formatStageCoverage,
-  hasStageCoverageProgress,
   linguistStageCoverageAtomFamily,
   refreshLinguistStageCoverage,
   stageCoverageKey,
@@ -76,6 +76,7 @@ interface LinguistWorkbenchShellProps {
   assetNavigator?: React.ReactNode
   onOpenAgent?: () => void
   bottomDock?: React.ReactNode
+  presentation?: 'page' | 'workspace'
   children: React.ReactNode
 }
 
@@ -88,6 +89,7 @@ export function LinguistWorkbenchShell({
   assetNavigator,
   onOpenAgent,
   bottomDock,
+  presentation = 'page',
   children,
 }: LinguistWorkbenchShellProps): React.ReactElement {
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(project.id))
@@ -106,6 +108,7 @@ export function LinguistWorkbenchShell({
   } | null>(null)
   const summary = summaryState.status === 'ready' ? summaryState.summary : undefined
   const activeAsset = summary?.assets.find((asset) => asset.assetId === uiState.activeAssetId)
+  const [stageSaving, setStageSaving] = React.useState(false)
   const store = useStore()
   const stageCoverage = useAtomValue(
     linguistStageCoverageAtomFamily(
@@ -128,6 +131,27 @@ export function LinguistWorkbenchShell({
     : summaryState.status === 'loading'
       ? '统计加载中…'
       : '统计不可用'
+  const handleWorkflowStageChange = React.useCallback(async (
+    workflowStage: LinguistWorkflowStage,
+  ): Promise<void> => {
+    if (stageSaving || project.archivedAt !== undefined || workflowStage === project.workflowStage) return
+    setStageSaving(true)
+    try {
+      const result = await window.electronAPI.linguistProjectsSetWorkflowConfig({
+        projectId: project.id,
+        workflowStage,
+      })
+      if (!result.ok) {
+        toast.error('任务阶段切换失败', { description: describeLinguistIpcError(result.error) })
+        return
+      }
+      onSummaryRefresh()
+    } catch {
+      toast.error('任务阶段切换失败', { description: '与主进程通信异常（INTERNAL）' })
+    } finally {
+      setStageSaving(false)
+    }
+  }, [onSummaryRefresh, project.archivedAt, project.id, project.workflowStage, stageSaving])
   const handleAssetNavigatorPointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => {
       if (event.button !== 0) return
@@ -228,61 +252,52 @@ export function LinguistWorkbenchShell({
     <section aria-label={`${project.name} 本地化工作台`} className="relative flex h-full min-h-0 flex-col bg-background">
       <header
         aria-label="本地化工作台工具栏"
-        className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 bg-content-area/90 px-4 py-2 shadow-[0_1px_0_hsl(var(--border)/0.45)] max-md:flex-col max-md:items-stretch max-md:gap-2"
+        className="flex h-11 shrink-0 items-center gap-2 overflow-x-auto bg-content-area/90 px-2 shadow-[0_1px_0_hsl(var(--border)/0.45)]"
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Languages aria-hidden="true" className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="truncate text-sm font-semibold text-foreground">{project.name}</h1>
-              {project.archivedAt !== undefined && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] text-muted-foreground">
-                  <Archive aria-hidden="true" className="size-3" />
-                  已归档 · 只读
-                </span>
-              )}
-            </div>
-            <p className="flex min-w-0 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
-              <span className="font-mono">{project.sourceLocale} → {project.targetLocale}</span>
-              <span aria-hidden="true" className="max-sm:hidden">·</span>
-              <span className="shrink-0 max-sm:hidden">{progressLabel}</span>
-              <span aria-hidden="true" className="max-sm:hidden">·</span>
-              <span className="max-w-44 truncate max-sm:hidden">
-                {activeAsset?.filename ?? (summary?.assets.length === 0 ? '尚无批次' : '未选择批次')}
-              </span>
-            </p>
-          </div>
+        {assetNavigator !== undefined && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-pressed={uiState.assetNavigatorOpen}
+            onClick={() => setUiState({ assetNavigatorOpen: !uiState.assetNavigatorOpen })}
+            className={cn('shrink-0', uiState.assetNavigatorOpen && 'bg-accent/70')}
+          >
+            <PanelLeft aria-hidden="true" />
+            批次
+          </Button>
+        )}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Languages aria-hidden="true" className="size-4 shrink-0 text-primary" />
+          <h1 className="max-w-40 truncate text-sm font-semibold text-foreground">{project.name}</h1>
+          {project.archivedAt !== undefined && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] text-muted-foreground">
+              <Archive aria-hidden="true" className="size-3" />
+              只读
+            </span>
+          )}
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">
+            {project.sourceLocale} → {project.targetLocale}
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            {activeAsset?.filename ?? (summary?.assets.length === 0 ? '尚无批次' : '未选择批次')}
+          </span>
+          <span className="hidden shrink-0 text-xs text-muted-foreground xl:inline">{progressLabel}</span>
         </div>
-
-        <div aria-label="工作台面板开关" className="flex items-center gap-1 overflow-x-auto [&>button]:shrink-0">
-          {assetNavigator !== undefined && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-pressed={uiState.assetNavigatorOpen}
-              onClick={() => setUiState({ assetNavigatorOpen: !uiState.assetNavigatorOpen })}
-              className={cn(uiState.assetNavigatorOpen && 'bg-accent/70')}
-            >
-              <PanelLeft aria-hidden="true" />
-              批次
-            </Button>
-          )}
-          {bottomDock !== undefined && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-pressed={uiState.bottomDockOpen}
-              onClick={() => setUiState({ bottomDockOpen: !uiState.bottomDockOpen })}
-              className={cn(uiState.bottomDockOpen && 'bg-accent/70')}
-            >
-              <PanelBottom aria-hidden="true" />
-              语言资产
-            </Button>
-          )}
+        <label className="shrink-0">
+          <span className="sr-only">当前任务阶段</span>
+          <select
+            value={project.workflowStage ?? 'translation'}
+            disabled={stageSaving || project.archivedAt !== undefined}
+            onChange={(event) => void handleWorkflowStageChange(event.target.value as LinguistWorkflowStage)}
+            className="h-8 rounded-md bg-background px-2 text-xs outline-none ring-1 ring-border/60 focus:ring-primary/50"
+          >
+            <option value="translation">T · 翻译</option>
+            <option value="editing">E · 审校</option>
+            <option value="proofreading">P · 校对</option>
+          </select>
+        </label>
+        <div aria-label="工作台操作" className="flex shrink-0 items-center gap-1">
           {onOpenAgent !== undefined && (
             <Button
               type="button"
@@ -301,7 +316,7 @@ export function LinguistWorkbenchShell({
             onClick={() => setUiState({ projectSettingsOpen: true })}
           >
             <Settings aria-hidden="true" />
-            项目设置
+            <span className={cn(presentation === 'workspace' && 'sr-only')}>项目设置</span>
           </Button>
         </div>
       </header>
@@ -326,7 +341,10 @@ export function LinguistWorkbenchShell({
           <aside
             aria-label="批次导航"
             data-workbench-slot="asset-navigator"
-            className="relative min-h-0 shrink-0 overflow-hidden bg-content-area/55 shadow-[1px_0_0_hsl(var(--border)/0.45)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:max-w-72 max-md:bg-content-area max-md:shadow-xl"
+            className={cn(
+              'relative min-h-0 shrink-0 overflow-hidden bg-content-area/55 shadow-[1px_0_0_hsl(var(--border)/0.45)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:max-w-72 max-md:bg-content-area max-md:shadow-xl',
+              presentation === 'workspace' && 'absolute inset-y-0 left-0 z-20 max-w-72 bg-content-area shadow-xl',
+            )}
             style={{ width: uiState.assetNavigatorWidth }}
           >
             <div
@@ -367,6 +385,7 @@ export function LinguistWorkbenchShell({
           className={cn(
             'relative min-h-0 min-w-[32rem] flex-1 flex-col max-md:min-w-0',
             'flex',
+            presentation === 'workspace' && 'min-w-0',
           )}
           style={{
             // 语言资产面板在 max-lg 转为浮层时，把浮层高度传给网格滚动区让位。
@@ -388,7 +407,10 @@ export function LinguistWorkbenchShell({
             <section
               aria-label="语言资产面板"
               data-workbench-slot="bottom-dock"
-              className="relative min-h-0 shrink-0 overflow-hidden bg-content-area/70 shadow-[0_-1px_0_hsl(var(--border)/0.45)] max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20 max-lg:shadow-xl"
+              className={cn(
+                'relative min-h-0 shrink-0 overflow-hidden bg-content-area/70 shadow-[0_-1px_0_hsl(var(--border)/0.45)] max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20 max-lg:shadow-xl',
+                presentation === 'workspace' && 'absolute inset-x-0 bottom-0 z-20 shadow-xl',
+              )}
               style={{ height: uiState.bottomDockHeight }}
             >
               <div
@@ -440,13 +462,12 @@ export function LinguistWorkbenchShell({
               {activeAsset.currentStageCounts.draft}
             </span>
           )}
-          {activeAsset !== undefined && COVERAGE_STAGES.map((stage) => {
-            const coverage = stageCoverage[stage]
-            if (coverage === undefined) return null
-            const currentStage = project.workflowStage ?? 'translation'
-            if (stage !== currentStage && !hasStageCoverageProgress(coverage)) return null
-            return <StageCoverageSpan key={stage} stage={stage} coverage={coverage} />
-          })}
+          {activeAsset !== undefined && stageCoverage[project.workflowStage ?? 'translation'] !== undefined && (
+            <StageCoverageSpan
+              stage={project.workflowStage ?? 'translation'}
+              coverage={stageCoverage[project.workflowStage ?? 'translation']!}
+            />
+          )}
           {activeAsset !== undefined && activeAsset.sourceCharacters > 0 && (
             <span>源文 {activeAsset.sourceCharacters} 字符</span>
           )}
@@ -462,7 +483,22 @@ export function LinguistWorkbenchShell({
             <span>已选择 {uiState.selectedSegmentIds.length}</span>
           )}
         </div>
-        <span className="hidden sm:inline">↑↓ 切换片段 · Enter 编辑 · Esc 取消</span>
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline">↑↓ 切换片段 · Enter 编辑 · Esc 取消</span>
+          {bottomDock !== undefined && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={uiState.bottomDockOpen}
+              onClick={() => setUiState({ bottomDockOpen: !uiState.bottomDockOpen })}
+              className={cn('h-6 shrink-0 px-2 text-[11px]', uiState.bottomDockOpen && 'bg-accent/70')}
+            >
+              <PanelBottom aria-hidden="true" />
+              语言资产
+            </Button>
+          )}
+        </div>
       </footer>
     </section>
   )

@@ -931,12 +931,14 @@ function TabStatePersistenceInitializer(): null {
           : [],
       )
       const restored = restorePersistedTabState(tabState, validSessionIds, projectStatuses)
-      const validTabs = restored.tabs.filter(
-        (tab) => tab.type === 'linguist-project' || tab.id === restored.activeTabId,
-      )
+      const restoredActiveTab = restored.tabs.find((tab) => tab.id === restored.activeTabId)
+      const activeSessionTab = restoredActiveTab?.type === 'linguist-project'
+        ? restored.tabs.findLast((tab) => tab.type === 'agent')
+        : restoredActiveTab
+      const validTabs = activeSessionTab ? [activeSessionTab] : []
       if (validTabs.length === 0) return
 
-      const restoredActiveTabId = restored.activeTabId
+      const restoredActiveTabId = activeSessionTab!.id
       const activeTab = validTabs.find((t) => t.id === restoredActiveTabId) ?? validTabs[0] ?? null
       store.set(tabsAtom, validTabs)
       store.set(activeTabIdAtom, restoredActiveTabId)

@@ -1000,6 +1000,15 @@
       "reason": "为 Agent 与 Linguist 共用的消息编辑器提供明确的 textbox 无障碍语义。"
     },
     {
+      "file": "apps/electron/src/renderer/components/agent/SidePanel.tsx",
+      "ticket": "LA-HOST-009",
+      "kind": "host-seam",
+      "owner": "renderer-host",
+      "mergePolicy": "host-seam",
+      "hook": "renderer-right-workspace-extension",
+      "reason": "让 Proma 原生右侧工作区通过单一 Host Extension 挂载项目绑定会话的 CAT Tab。"
+    },
+    {
       "file": "apps/electron/src/renderer/components/app-shell/AppShell.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "host-seam",
@@ -1007,6 +1016,14 @@
       "mergePolicy": "host-seam",
       "hook": "app-mode-registry",
       "reason": "通过 App Mode Registry 组合 Linguist 第三模式与 rail policy，不直接依赖 Linguist feature。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/app-shell/right-panel-layout.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "复用 Proma 右侧工作区布局，并支持用户显式展开工作区时保留窄 Agent 主区。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/RightSidePanel.tsx",
@@ -1127,6 +1144,14 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "让显式 mode: tab 真正打开 Proma 主预览标签；默认调用继续使用右侧预览工作区。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/DiffPanelTabBar.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "为 Proma 原生右侧工作区提供显式展开与还原操作。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.tsx",

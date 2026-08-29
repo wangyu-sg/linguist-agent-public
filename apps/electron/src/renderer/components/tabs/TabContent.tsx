@@ -15,6 +15,7 @@ import { PreviewTabContent } from '@/components/diff/PreviewTabContent'
 import { MarkdownRichEditor } from '@/components/diff/MarkdownRichEditor'
 import { MarkdownToc } from '@/components/diff/MarkdownToc'
 import { LocalizationProjectWorkbench } from '@/features/linguist/projects/LocalizationProjectWorkbench'
+import { agentSidePanelLayoutAtomFamily } from '@/atoms/agent-atoms'
 import { TabErrorBoundary } from './TabErrorBoundary'
 
 export interface TabContentProps {
@@ -86,8 +87,15 @@ export function TabContent({ tabId }: TabContentProps): React.ReactElement {
   }
 
   return (
-    <TabErrorBoundary key={tab.sessionId} sessionId={tab.sessionId}>
-      <AgentView sessionId={tab.sessionId} />
+    <AgentTabContent sessionId={tab.sessionId} />
+  )
+}
+
+function AgentTabContent({ sessionId }: { sessionId: string }): React.ReactElement {
+  const layout = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId))
+  return (
+    <TabErrorBoundary key={sessionId} sessionId={sessionId}>
+      <AgentView sessionId={sessionId} embedded={layout.expanded} />
     </TabErrorBoundary>
   )
 }

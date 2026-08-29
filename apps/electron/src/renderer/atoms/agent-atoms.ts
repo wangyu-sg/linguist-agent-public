@@ -543,6 +543,7 @@ export interface AgentSidePanelLayout {
   width: number
   hasOpenedWideWorkspace: boolean
   widePanelWidthOverride: number | null
+  expanded: boolean
 }
 
 export const MAX_PERSISTED_AGENT_SIDE_PANEL_LAYOUTS = 50
@@ -592,10 +593,14 @@ export const agentSidePanelLayoutMapAtom = atomWithStorage<Record<string, AgentS
 
 /** 指定 Agent Session 的右侧工作区布局。 */
 export const agentSidePanelLayoutAtomFamily = atomFamily((sessionId: string) => atom(
-  (get) => get(agentSidePanelLayoutMapAtom)[sessionId] ?? {
-    width: get(legacyAgentSidePanelWidthAtom),
-    hasOpenedWideWorkspace: false,
-    widePanelWidthOverride: null,
+  (get) => {
+    const stored = get(agentSidePanelLayoutMapAtom)[sessionId]
+    return {
+      width: stored?.width ?? get(legacyAgentSidePanelWidthAtom),
+      hasOpenedWideWorkspace: stored?.hasOpenedWideWorkspace ?? false,
+      widePanelWidthOverride: stored?.widePanelWidthOverride ?? null,
+      expanded: stored?.expanded ?? false,
+    }
   },
   (get, set, update: AgentSidePanelLayout | ((previous: AgentSidePanelLayout) => AgentSidePanelLayout)) => {
     set(agentSidePanelLayoutMapAtom, (previous) => {
@@ -603,6 +608,7 @@ export const agentSidePanelLayoutAtomFamily = atomFamily((sessionId: string) => 
         width: get(legacyAgentSidePanelWidthAtom),
         hasOpenedWideWorkspace: false,
         widePanelWidthOverride: null,
+        expanded: false,
       }
       const next = typeof update === 'function' ? update(current) : update
       const nextLayouts = { ...previous, [sessionId]: next }
@@ -686,7 +692,7 @@ export function getDelegationTabLabel(title: string | null | undefined): string 
   return title?.trim() || '委派任务'
 }
 
-export type AgentSidePanelBaseTab = 'files' | 'changes' | 'chat' | 'temporary-agent' | WorkspaceComponentTab
+export type AgentSidePanelBaseTab = 'files' | 'changes' | 'chat' | 'linguist' | 'temporary-agent' | WorkspaceComponentTab
 /** 工作区组件、每个 Pi 探索分支、协作子 Agent、浏览器网页和文件预览都处于右侧工作区顶栏。 */
 export type AgentSidePanelTab = AgentSidePanelBaseTab | `exploration:${string}` | `delegation:${string}` | `browser:${string}` | `preview:${string}` | `terminal:${string}`
 
