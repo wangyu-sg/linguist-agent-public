@@ -11,51 +11,36 @@ import type { AgentSessionMeta, ConversationMeta } from '@proma/shared'
 import { cn } from '@/lib/utils'
 import {
   activeTabIdAtom,
-  activeTabAtom,
   activeSessionIdAtom,
-  getTabMruId,
   openTab,
   buildOpenTabRestore,
   sessionViewStateMapAtom,
-  tabIndicatorMapAtom,
   tabMruAtom,
   tabsAtom,
   type LocalizationProjectTab,
-  scratchPadPanelOpenAtom,
-  focusScratchPadTab,
-  SCRATCH_PAD_ID,
-  SCRATCH_PAD_TITLE,
 } from '@/atoms/tab-atoms'
 import { previewFileMapAtom } from '@/atoms/preview-atoms'
 import { getInitialTabSwitchIndex, promoteTabMru } from '@/lib/tab-switching'
-import { appModeAtom } from '@/atoms/app-mode'
 import { activeViewAtom } from '@/atoms/active-view'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import {
   conversationsAtom,
-  currentConversationIdAtom,
   streamingConversationIdsAtom,
 } from '@/atoms/chat-atoms'
 import {
   agentSessionIndicatorMapAtom,
   agentSessionsAtom,
   agentWorkspacesAtom,
-  currentAgentSessionIdAtom,
-  currentAgentWorkspaceIdAtom,
   unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
-import { Bot, GitBranch, Languages, MessageSquare, StickyNote } from 'lucide-react'
+import { Bot, GitBranch, Languages, MessageSquare } from 'lucide-react'
+import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
-import { isOrdinaryAgentSession } from '@/components/session-tree/agent-session-tree'
-import {
-  getAgentSessionLinguistProjectId,
-  getAgentSessionLinguistProjectName,
-} from '@/lib/agent-session-list'
 
 type SwitchSectionId = 'collaboration' | 'recent'
-type SwitchCandidateType = 'chat' | 'agent' | 'scratch' | 'linguist-project'
+type SwitchCandidateType = 'chat' | 'agent' | 'linguist-project'
 
 interface SwitchCandidate {
   id: string
@@ -84,14 +69,10 @@ export function TabSwitcher(): ReactElement | null {
   const store = useStore()
   const tabs = useAtomValue(tabsAtom)
   const setTabs = useSetAtom(tabsAtom)
-  const activeTab = useAtomValue(activeTabAtom)
   const setActiveTabId = useSetAtom(activeTabIdAtom)
-  const setScratchPadPanelOpen = useSetAtom(scratchPadPanelOpenAtom)
   // MRU 与 Ctrl+Tab 起始定位均按会话 ID 归一化：预览 Tab 复用其 owner 会话 ID，
   // 与候选列表（会话 ID）对齐，避免处于预览 Tab 时需按两下才能切换。
   const activeSessionId = useAtomValue(activeSessionIdAtom)
-  const activeSwitchTargetId = activeTab ? getTabMruId(activeTab) : null
-  const tabIndicatorMap = useAtomValue(tabIndicatorMapAtom)
   const tabMru = useAtomValue(tabMruAtom)
   const setTabMru = useSetAtom(tabMruAtom)
 
@@ -103,15 +84,9 @@ export function TabSwitcher(): ReactElement | null {
   const unviewedCompletedIds = useAtomValue(unviewedCompletedSessionIdsAtom)
   const draftSessionIds = useAtomValue(draftSessionIdsAtom)
 
-  const appMode = useAtomValue(appModeAtom)
-  const setAppMode = useSetAtom(appModeAtom)
   const setActiveView = useSetAtom(activeViewAtom)
   const setAutomationForm = useSetAtom(automationFormAtom)
-  const setCurrentConversationId = useSetAtom(currentConversationIdAtom)
-  const currentAgentSessionId = useAtomValue(currentAgentSessionIdAtom)
-  const setCurrentAgentSessionId = useSetAtom(currentAgentSessionIdAtom)
-  const setCurrentAgentWorkspaceId = useSetAtom(currentAgentWorkspaceIdAtom)
-  const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
+  const syncActiveTabSideEffects = useSyncActiveTabSideEffects()
 
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -122,14 +97,6 @@ export function TabSwitcher(): ReactElement | null {
 
   const switcherModel = useMemo<SwitcherModel>(() => {
     const workspaceNameById = new Map(agentWorkspaces.map((workspace) => [workspace.id, workspace.name]))
-    const scratchPadCandidate: SwitchCandidate = {
-      id: SCRATCH_PAD_ID,
-      type: 'scratch',
-      title: SCRATCH_PAD_TITLE,
-      updatedAt: 0,
-      status: 'idle',
-    }
-
     const buildAgentCandidate = (session: AgentSessionMeta): SwitchCandidate => {
       const status = agentIndicatorMap.get(session.id)
         ?? (unviewedCompletedIds.has(session.id) ? 'completed' : 'idle')
@@ -140,8 +107,7 @@ export function TabSwitcher(): ReactElement | null {
         updatedAt: session.updatedAt,
         status,
         workspaceId: session.workspaceId,
-        workspaceName: getAgentSessionLinguistProjectName(session, agentSessions)
-          ?? (session.workspaceId ? workspaceNameById.get(session.workspaceId) : undefined),
+        workspaceName: session.workspaceId ? workspaceNameById.get(session.workspaceId) : undefined,
         isDelegation: !!session.sourceDelegationId,
       }
     }
@@ -156,15 +122,8 @@ export function TabSwitcher(): ReactElement | null {
         status: streamingConversationIds.has(conversation.id) ? 'running' : 'idle',
       }))
 
-    const openAgentSessionIds = new Set(
-      tabs.flatMap((tab) => tab.type === 'agent' ? [tab.sessionId] : []),
-    )
     const agentCandidates = agentSessions
-      .filter((session) => (
-        (isOrdinaryAgentSession(session, agentSessions) || openAgentSessionIds.has(session.id))
-        && !session.archived
-        && !draftSessionIds.has(session.id)
-      ))
+      .filter((session) => !session.archived && !draftSessionIds.has(session.id))
       .map(buildAgentCandidate)
 
     const projectCandidates = tabs
@@ -174,10 +133,10 @@ export function TabSwitcher(): ReactElement | null {
         type: 'linguist-project',
         title: tab.title,
         updatedAt: 0,
-        status: tabIndicatorMap.get(tab.id) ?? 'idle',
+        status: 'idle',
       }))
 
-    const allCandidates = [scratchPadCandidate, ...chatCandidates, ...agentCandidates, ...projectCandidates]
+    const allCandidates = [...chatCandidates, ...agentCandidates, ...projectCandidates]
 
     const candidateById = new Map(allCandidates.map((candidate) => [candidate.id, candidate]))
     const activeAgentSession = activeSessionId
@@ -252,7 +211,6 @@ export function TabSwitcher(): ReactElement | null {
     draftSessionIds,
     streamingConversationIds,
     tabMru,
-    tabIndicatorMap,
     tabs,
     unviewedCompletedIds,
   ])
@@ -260,7 +218,7 @@ export function TabSwitcher(): ReactElement | null {
   // Refs 用于事件回调中读取最新值，避免全局键盘监听闭包过期。
   const isOpenRef = useRef(false)
   const selectedIndexRef = useRef(0)
-  const activeSwitchTargetIdRef = useRef<string | null>(activeSwitchTargetId)
+  const activeSessionIdRef = useRef<string | null>(activeSessionId)
   const candidatesRef = useRef<SwitchCandidate[]>(switcherModel.candidates)
   const tabMruRef = useRef<string[]>(tabMru)
   const tabsRef = useRef(tabs)
@@ -268,18 +226,18 @@ export function TabSwitcher(): ReactElement | null {
 
   isOpenRef.current = isOpen
   selectedIndexRef.current = selectedIndex
-  activeSwitchTargetIdRef.current = activeSwitchTargetId
+  activeSessionIdRef.current = activeSessionId
   candidatesRef.current = switcherModel.candidates
   tabMruRef.current = tabMru
   tabsRef.current = tabs
 
   useEffect(() => {
     setTabMru((prev) => {
-      const next = promoteTabMru(prev, activeSwitchTargetId)
+      const next = promoteTabMru(prev, activeSessionId)
       tabMruRef.current = next
       return next
     })
-  }, [activeSwitchTargetId, setTabMru])
+  }, [activeSessionId, setTabMru])
 
   const closeSwitcher = useCallback((): void => {
     setIsOpen(false)
@@ -290,7 +248,8 @@ export function TabSwitcher(): ReactElement | null {
 
   const activateCandidate = useCallback(
     (candidate: SwitchCandidate): void => {
-      // 快速切换器全局挂载；确认候选时必须退出任务/技能等覆盖视图。
+      // 快速切换器全局挂载；确认候选时必须退出任务/技能等覆盖视图，
+      // 否则 activeTab 已变更而 TabContent 仍不可见。
       setAutomationForm({ open: false, draft: null })
       setActiveView('conversations')
 
@@ -301,28 +260,12 @@ export function TabSwitcher(): ReactElement | null {
         )
         if (!projectTab) return
         enterLinguistNavigation(store, projectTab.id, 'conversations')
-        activeSwitchTargetIdRef.current = candidate.id
+        activeSessionIdRef.current = candidate.id
         setTabMru((prev) => {
           const next = promoteTabMru(prev, candidate.id)
           tabMruRef.current = next
           return next
         })
-        return
-      }
-
-      if (candidate.type === 'scratch') {
-        const nextTab = focusScratchPadTab(tabsRef.current)
-        setTabs(nextTab.tabs)
-        setActiveTabId(nextTab.activeTabId)
-        setScratchPadPanelOpen(nextTab.scratchPanelOpen)
-        activeSwitchTargetIdRef.current = candidate.id
-        setTabMru((prev) => {
-          const next = promoteTabMru(prev, candidate.id)
-          tabMruRef.current = next
-          return next
-        })
-        setCurrentConversationId(null)
-        if (appMode !== 'agent') setCurrentAgentSessionId(null)
         return
       }
 
@@ -341,59 +284,27 @@ export function TabSwitcher(): ReactElement | null {
       }, restore)
       setTabs(nextTab.tabs)
       setActiveTabId(nextTab.activeTabId)
+      syncActiveTabSideEffects(
+        nextTab.tabs.find((tab) => tab.id === nextTab.activeTabId) ?? null,
+      )
       // MRU/起始定位按会话 ID 归一化：即使 restore 后激活的是预览 Tab，
       // 也以 candidate.id（会话 ID）记账，保证与候选列表对齐。
-      activeSwitchTargetIdRef.current = candidate.id
+      activeSessionIdRef.current = candidate.id
       setTabMru((prev) => {
         const next = promoteTabMru(prev, candidate.id)
         tabMruRef.current = next
         return next
       })
 
-      if (candidate.type === 'chat') {
-        setAppMode('chat')
-        setCurrentConversationId(candidate.id)
-        setCurrentAgentSessionId(null)
-        return
-      }
-
-      const session = agentSessions.find((item) => item.id === candidate.id)
-      setAppMode(
-        session && getAgentSessionLinguistProjectId(session, agentSessions)
-          ? 'linguist'
-          : 'agent',
-      )
-      setCurrentAgentSessionId(candidate.id)
-      setCurrentConversationId(null)
-
-      setUnviewedCompleted((prev) => {
-        if (!prev.has(candidate.id)) return prev
-        const next = new Set(prev)
-        next.delete(candidate.id)
-        return next
-      })
-
-      if (candidate.workspaceId) {
-        setCurrentAgentWorkspaceId(candidate.workspaceId)
-        window.electronAPI
-          .updateSettings({ agentWorkspaceId: candidate.workspaceId })
-          .catch(console.error)
-      }
     },
     [
-      appMode,
-      currentAgentSessionId,
       setActiveTabId,
       setActiveView,
-      setScratchPadPanelOpen,
-      setAppMode,
       setAutomationForm,
-      setCurrentAgentSessionId,
-      setCurrentAgentWorkspaceId,
-      setCurrentConversationId,
       setTabMru,
       setTabs,
-      setUnviewedCompleted,
+      store,
+      syncActiveTabSideEffects,
     ],
   )
 
@@ -405,17 +316,17 @@ export function TabSwitcher(): ReactElement | null {
   useEffect(() => {
     const getNextIndex = (direction: 1 | -1): number => {
       const candidates = candidatesRef.current
-          return getInitialTabSwitchIndex(
-            candidates,
-            activeSwitchTargetIdRef.current,
+      return getInitialTabSwitchIndex(
+        candidates,
+        activeSessionIdRef.current,
         tabMruRef.current,
         direction,
       )
     }
 
-      const hasAlternateTarget = (): boolean => {
-        const candidates = candidatesRef.current
-        return candidates.some((candidate) => candidate.id !== activeSwitchTargetIdRef.current)
+    const hasAlternateTarget = (): boolean => {
+      const candidates = candidatesRef.current
+      return candidates.some((candidate) => candidate.id !== activeSessionIdRef.current)
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -624,11 +535,6 @@ function SwitcherCandidateRow({
           <>
             <Languages className="size-2.5" />
             Linguist
-          </>
-        ) : candidate.type === 'scratch' ? (
-          <>
-            <StickyNote className="size-2.5" />
-            草稿
           </>
         ) : (
           <>

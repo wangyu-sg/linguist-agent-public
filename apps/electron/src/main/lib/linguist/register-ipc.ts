@@ -60,8 +60,6 @@ export function registerLinguistIpc(): void {
         (await import('../file-preview-service')).resolveAndReadFile(filePath),
       extractText: async (filePath) =>
         (await import('../document-parser')).extractTextFromFile(filePath),
-      convertDocxToHtml: async (filePath) =>
-        (await import('../file-preview-service')).convertDocxToHtml(filePath),
       convertOfficeToHtml: async (filePath) =>
         (await import('../file-preview-service')).convertOfficeToHtml(filePath),
       registerPreviewUrl: registerPromaFilePath,
@@ -392,8 +390,6 @@ export function registerLinguistIpc(): void {
         (await import('../file-preview-service')).resolveAndReadFile(filePath),
       extractText: async (filePath) =>
         (await import('../document-parser')).extractTextFromFile(filePath),
-      convertDocxToHtml: async (filePath) =>
-        (await import('../file-preview-service')).convertDocxToHtml(filePath),
       convertOfficeToHtml: async (filePath) =>
         (await import('../file-preview-service')).convertOfficeToHtml(filePath),
       registerPreviewUrl: registerPromaFilePath,

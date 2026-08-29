@@ -70,6 +70,9 @@ jobs:
       - name: 校验版本
         run: test "$RELEASE_TAG" = "v$(node -p "require('./apps/electron/package.json').version")"
 
+      - name: 准备 OfficeCLI（macOS arm64）
+        run: bun run --filter='@proma/electron' prepare:officecli
+
       - name: 导入 macOS 签名证书
         env:
           MAC_CERTS: ${{ secrets.MAC_CERTS }}
@@ -127,6 +130,9 @@ jobs:
 
       - name: 校验版本
         run: test "$RELEASE_TAG" = "v$(node -p "require('./apps/electron/package.json').version")"
+
+      - name: 准备 OfficeCLI（macOS x64）
+        run: bun run --filter='@proma/electron' prepare:officecli
 
       - name: 导入 macOS 签名证书
         env:
@@ -186,6 +192,9 @@ jobs:
       - name: 校验版本
         shell: bash
         run: test "$RELEASE_TAG" = "v$(node -p "require('./apps/electron/package.json').version")"
+
+      - name: 准备 OfficeCLI（Windows x64）
+        run: bun run --filter='@proma/electron' prepare:officecli
 
       - name: 构建并发布 Windows x64 草稿资产
         working-directory: apps/electron

@@ -1,7 +1,7 @@
 /**
  * Tab Atoms — 当前工作区入口状态管理
  *
- * 顶部只保留 Scratch Pad 与当前会话两个入口；会话恢复与导航交给左侧列表。
+ * 顶部保留当前会话与 Linguist 项目入口；会话恢复与导航交给左侧列表。
  * 通过桥接 atom 与现有 currentConversationIdAtom / currentAgentSessionIdAtom 同步，
  * 确保所有现有派生 atoms 无需修改。
  */
@@ -26,10 +26,7 @@ export { projectCurrentAgentSessionIdMapAtom } from './project-agent-session-ato
 // ===== 类型定义 =====
 
 /** 标签页类型（Settings 不作为 Tab，保留独立视图） */
-export type TabType = 'chat' | 'agent' | 'scratch' | 'preview' | 'tutorial' | 'linguist-project'
-
-/** Scratch Pad 专用的固定 sessionId */
-export const SCRATCH_PAD_ID = '__scratch-pad__'
+export type TabType = 'chat' | 'agent' | 'preview' | 'tutorial' | 'linguist-project'
 
 /** 教程 Tab 固定 ID */
 export const TUTORIAL_TAB_ID = '__tutorial__'
@@ -37,9 +34,6 @@ export const TUTORIAL_TAB_TITLE = 'Linguist Agent 使用教程'
 
 /** 会话预览 Tab 的 ID 前缀：运行时临时入口，不参与持久化 */
 const PREVIEW_TAB_PREFIX = '__preview__:'
-
-/** Scratch Pad 标签默认标题 */
-export const SCRATCH_PAD_TITLE = 'Scratch Pad'
 
 export interface SessionTab {
   id: string
@@ -52,13 +46,6 @@ export interface PreviewTab {
   id: string
   type: 'preview'
   sessionId: string
-  title: string
-}
-
-export interface ScratchTab {
-  id: typeof SCRATCH_PAD_ID
-  type: 'scratch'
-  sessionId: typeof SCRATCH_PAD_ID
   title: string
 }
 
@@ -85,7 +72,6 @@ export interface LocalizationProjectTab {
 export type TabItem =
   | SessionTab
   | PreviewTab
-  | ScratchTab
   | TutorialTab
   | LocalizationProjectTab
 
@@ -130,7 +116,7 @@ export const tabMruAtom = atom<string[]>([])
 const tabsStateAtom = atom<TabItem[]>([])
 const activeTabIdStateAtom = atom<string | null>(null)
 
-/** 顶部入口列表：Scratch Pad + 当前会话 */
+/** 顶部入口列表：Linguist 项目 + 当前会话 */
 export const tabsAtom = atom(
   (get) => get(tabsStateAtom),
   (get, set, update: AtomUpdate<TabItem[]>) => {
@@ -186,58 +172,6 @@ export interface TabMinimapItem {
 }
 export const tabMinimapCacheAtom = atom<Map<string, TabMinimapItem[]>>(new Map())
 
-/** Scratch Pad 编辑器视图变体，用于隔离全屏页与右侧分屏的滚动位置 */
-export type ScratchPadViewVariant = 'page' | 'pane'
-
-export interface ScratchPadScrollPosition {
-  top: number
-  left: number
-}
-
-export type ScratchPadScrollPositions = Record<ScratchPadViewVariant, ScratchPadScrollPosition>
-
-/**
- * Scratch Pad 的滚动位置（仅运行期内存态）。
- * 全屏页和右侧分屏使用不同的滚动容器，不能互相覆盖位置。
- */
-export const scratchPadScrollPositionsAtom = atom<ScratchPadScrollPositions>({
-  page: { top: 0, left: 0 },
-  pane: { top: 0, left: 0 },
-})
-
-export function updateScratchPadScrollPosition(
-  positions: ScratchPadScrollPositions,
-  variant: ScratchPadViewVariant,
-  position: ScratchPadScrollPosition,
-): ScratchPadScrollPositions {
-  const nextPosition = {
-    top: Math.max(0, position.top),
-    left: Math.max(0, position.left),
-  }
-  const previousPosition = positions[variant]
-  if (
-    previousPosition.top === nextPosition.top
-    && previousPosition.left === nextPosition.left
-  ) {
-    return positions
-  }
-  return { ...positions, [variant]: nextPosition }
-}
-
-/** Scratch Pad 编辑内容（HTML 字符串，供 TipTap 编辑器使用） */
-export const scratchPadContentAtom = atom<string>('')
-/** Scratch Pad 内容是否已从磁盘加载 */
-export const scratchPadLoadedAtom = atom<boolean>(false)
-/** Scratch Pad 是否固定在 Agent 右侧分屏；通过拖出 Scratch Tab 打开 */
-export const scratchPadPanelOpenAtom = atom<boolean>(false)
-/** 右侧工作区中 Preview 与 Scratch 并排时，Preview 占比 */
-export const rightWorkspaceSplitRatioAtom = atomWithStorage<number>(
-  'proma-right-workspace-split-ratio',
-  0.58,
-  undefined,
-  { getOnInit: true },
-)
-
 // ===== 派生 Atoms =====
 
 /** 当前活跃标签 */
@@ -267,7 +201,6 @@ export const tabStreamingMapAtom = atom<Map<string, boolean>>((get) => {
   const projectSessions = get(projectCurrentAgentSessionIdMapAtom)
   const map = new Map<string, boolean>()
   for (const tab of tabs) {
-    if (tab.type === 'scratch') continue
     if (tab.type === 'chat') {
       map.set(tab.id, chatStreaming.has(tab.sessionId))
     } else if (tab.type === 'agent') {
@@ -289,7 +222,6 @@ export const tabIndicatorMapAtom = atom<Map<string, SessionIndicatorStatus>>((ge
   const projectSessions = get(projectCurrentAgentSessionIdMapAtom)
   const map = new Map<string, SessionIndicatorStatus>()
   for (const tab of tabs) {
-    if (tab.type === 'scratch') continue
     if (tab.type === 'chat') {
       map.set(tab.id, chatStreaming.has(tab.sessionId) ? 'running' : 'idle')
     } else if (tab.type === 'agent') {
@@ -309,34 +241,6 @@ export const tabIndicatorMapAtom = atom<Map<string, SessionIndicatorStatus>>((ge
 })
 
 // ===== 操作函数 =====
-
-function createScratchPadTab(): ScratchTab {
-  return {
-    id: SCRATCH_PAD_ID,
-    type: 'scratch',
-    sessionId: SCRATCH_PAD_ID,
-    title: SCRATCH_PAD_TITLE,
-  }
-}
-
-/**
- * 将固定草稿 Tab 放回顶部并聚焦，同时保留现有会话/预览上下文。
- * 草稿被拖到右侧分屏时会暂时从 tabsAtom 移除，Ctrl+Tab 需要通过此入口恢复它。
- */
-export function focusScratchPadTab(tabs: TabItem[]): {
-  tabs: TabItem[]
-  activeTabId: string
-  scratchPanelOpen: false
-} {
-  const scratchTab = tabs.find((tab) => tab.id === SCRATCH_PAD_ID && tab.type === 'scratch')
-    ?? createScratchPadTab()
-  return {
-    tabs: [scratchTab, ...tabs.filter((tab) => tab.id !== SCRATCH_PAD_ID)],
-    activeTabId: SCRATCH_PAD_ID,
-    // 从右侧分屏回到完整草稿页时，必须关闭分屏；否则下次切回 Agent 会话会出现重复草稿。
-    scratchPanelOpen: false,
-  }
-}
 
 export function createPreviewTabId(sessionId: string): string {
   return `${PREVIEW_TAB_PREFIX}${sessionId}`
@@ -381,8 +285,6 @@ export function openLocalizationProjectTab(
   item: Pick<LocalizationProjectTab, 'projectId' | 'title'>,
 ): { tabs: TabItem[]; activeTabId: LocalizationProjectTab['id'] } {
   const id = createLocalizationProjectTabId(item.projectId)
-  const scratchTab = tabs.find((tab): tab is ScratchTab => tab.type === 'scratch')
-    ?? createScratchPadTab()
   const existing = tabs.find(
     (tab): tab is LocalizationProjectTab =>
       tab.type === 'linguist-project' && tab.projectId === item.projectId,
@@ -398,8 +300,7 @@ export function openLocalizationProjectTab(
 
   return {
     tabs: [
-      scratchTab,
-      ...tabs.filter((tab) => tab.type !== 'scratch' && tab.id !== id),
+      ...tabs.filter((tab) => tab.id !== id),
       projectTab,
     ],
     activeTabId: id,
@@ -407,7 +308,7 @@ export function openLocalizationProjectTab(
 }
 
 function getPersistentTabs(tabs: TabItem[]): TabItem[] {
-  return tabs.filter((tab) => tab.id !== SCRATCH_PAD_ID && tab.id !== TUTORIAL_TAB_ID && !isPreviewTab(tab))
+  return tabs.filter((tab) => tab.id !== TUTORIAL_TAB_ID && !isPreviewTab(tab))
 }
 
 export type LocalizationProjectRestoreStatus = 'active' | 'archived'
@@ -561,17 +462,9 @@ export function openTab(
   },
   restore?: OpenTabRestore,
 ): { tabs: TabItem[]; activeTabId: string } {
-  const scratchTab = tabs.find((t) => t.id === SCRATCH_PAD_ID) ?? createScratchPadTab()
   const projectTabs = tabs.filter(
     (tab): tab is LocalizationProjectTab => tab.type === 'linguist-project',
   )
-
-  if (item.type === 'scratch') {
-    return {
-      tabs: [scratchTab, ...projectTabs],
-      activeTabId: SCRATCH_PAD_ID,
-    }
-  }
 
   if (item.type === 'tutorial') {
     const tutorialTab: TabItem = tabs.find((t) => t.id === TUTORIAL_TAB_ID) ?? {
@@ -581,7 +474,7 @@ export function openTab(
       title: TUTORIAL_TAB_TITLE,
     }
     return {
-      tabs: [scratchTab, ...projectTabs, tutorialTab],
+      tabs: [...projectTabs, tutorialTab],
       activeTabId: TUTORIAL_TAB_ID,
     }
   }
@@ -601,7 +494,7 @@ export function openTab(
     }
 
     return {
-      tabs: [scratchTab, ...projectTabs, ownerAgentTab, previewTab],
+      tabs: [...projectTabs, ownerAgentTab, previewTab],
       activeTabId: previewTab.id,
     }
   }
@@ -626,13 +519,13 @@ export function openTab(
       title: restore.previewTitle,
     }
     return {
-      tabs: [scratchTab, ...projectTabs, sessionTab, previewTab],
+      tabs: [...projectTabs, sessionTab, previewTab],
       activeTabId: restore.lastView === 'preview' ? previewTab.id : sessionTab.id,
     }
   }
 
   return {
-    tabs: [scratchTab, ...projectTabs, sessionTab],
+    tabs: [...projectTabs, sessionTab],
     activeTabId: sessionTab.id,
   }
 }
@@ -657,15 +550,12 @@ export function buildOpenTabRestore(
   }
 }
 
-/** 关闭标签页（scratch tab 不可关闭） */
+/** 关闭标签页 */
 export function closeTab(
   tabs: TabItem[],
   activeTabId: string | null,
   tabId: string,
 ): { tabs: TabItem[]; activeTabId: string | null } {
-  // Scratch Pad 不可关闭
-  if (tabId === SCRATCH_PAD_ID) return { tabs, activeTabId }
-
   const tabIndex = tabs.findIndex((t) => t.id === tabId)
   if (tabIndex === -1) return { tabs, activeTabId }
   const closingTab = tabs[tabIndex]!
@@ -687,15 +577,13 @@ export function closeTab(
   return { tabs: newTabs, activeTabId: newActiveTabId }
 }
 
-/** 重排标签顺序（当前只保留 Scratch + 当前会话，保留函数用于兼容旧调用） */
+/** 重排标签顺序 */
 export function reorderTabs(
   tabs: TabItem[],
   fromIndex: number,
   toIndex: number,
 ): TabItem[] {
   if (fromIndex === toIndex) return tabs
-  // Scratch 不可移出第 0 位
-  if (tabs[0]?.id === SCRATCH_PAD_ID && (fromIndex === 0 || toIndex === 0)) return tabs
   const newTabs = [...tabs]
   const [moved] = newTabs.splice(fromIndex, 1)
   newTabs.splice(toIndex, 0, moved!)
@@ -714,19 +602,4 @@ export function updateTabTitle(
     }
     return !isPreviewTab(tab) && tab.sessionId === entityId ? { ...tab, title } : tab
   })
-}
-
-/** 确保 Scratch Pad 位于首位；保留项目入口，同时只保留一个会话入口。 */
-export function ensureScratchPadTab(tabs: TabItem[]): TabItem[] {
-  const scratchTab = tabs.find((tab): tab is ScratchTab => tab.type === 'scratch')
-    ?? createScratchPadTab()
-  const projectTabs = tabs.filter(
-    (tab): tab is LocalizationProjectTab => tab.type === 'linguist-project',
-  )
-  const sessionTab = tabs.filter(
-    (tab) => isSessionTab(tab) || tab.type === 'tutorial',
-  ).at(-1)
-  return sessionTab
-    ? [scratchTab, ...projectTabs, sessionTab]
-    : [scratchTab, ...projectTabs]
 }

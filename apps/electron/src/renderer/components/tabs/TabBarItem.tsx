@@ -9,12 +9,11 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { useAtomValue } from 'jotai'
-import { Bot, FileText, Languages, StickyNote, X, Clock, GitBranch } from 'lucide-react'
+import { Bot, FileText, Languages, X, Clock, GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TabType, TabMinimapItem } from '@/atoms/tab-atoms'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
 import { tabMinimapCacheAtom } from '@/atoms/tab-atoms'
-import { interfaceVariantAtom } from '@/atoms/theme'
 import { Spinner } from '@/components/ui/spinner'
 import { TabPreviewPanel } from './TabPreviewPanel'
 
@@ -77,8 +76,6 @@ export function TabBarItem({
   const buttonRef = React.useRef<HTMLButtonElement>(null)
   const [isNarrow, setIsNarrow] = React.useState(false)
   const minimapCache = useAtomValue(tabMinimapCacheAtom)
-  const interfaceVariant = useAtomValue(interfaceVariantAtom)
-  const isClassic = interfaceVariant === 'classic'
 
   React.useEffect(() => {
     const el = buttonRef.current
@@ -92,8 +89,6 @@ export function TabBarItem({
   }, [])
 
   const handleMouseDown = (e: React.MouseEvent): void => {
-    // Scratch Pad 不可中键关闭
-    if (type === 'scratch') return
     if (e.button === 1) {
       e.preventDefault()
       onMiddleClick()
@@ -104,47 +99,12 @@ export function TabBarItem({
     onClose()
   }
 
-  const isScratch = type === 'scratch'
   const showAgentSpinner =
     (type === 'agent' || type === 'linguist-project') && isStreaming === 'running'
   const previewItems = minimapCache.get(id) ?? []
   // 当前 active Tab 不显示预览面板
   const showPreview = isHovered && !isActive
 
-  // Scratch Pad 是固定草稿入口
-  if (isScratch) {
-    return (
-      <div
-        className="relative flex-shrink-0 titlebar-no-drag"
-        onMouseEnter={onHoverEnter}
-        onMouseLeave={onHoverLeave}
-      >
-        <button
-          ref={buttonRef}
-          type="button"
-          className={cn(
-            'group relative flex items-center justify-center gap-1.5 min-w-[82px] px-3 h-[34px]',
-            isClassic ? 'rounded-t-lg' : 'rounded-none',
-            'text-xs transition-colors select-none cursor-pointer',
-            'border-t border-l border-r border-transparent',
-            isActive
-              ? isClassic
-                ? 'bg-content-area text-foreground border-border/50'
-                : 'app-tab-active text-foreground border-border/80'
-              : isClassic
-                ? 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                : 'app-tab-inactive text-muted-foreground hover:text-foreground',
-          )}
-          onClick={onActivate}
-          onMouseDown={handleMouseDown}
-          onPointerDown={onDragStart}
-        >
-          <StickyNote className="size-3.5" />
-          <span className="truncate">草稿</span>
-        </button>
-      </div>
-    )
-  }
 
   return (
     <div
@@ -158,16 +118,12 @@ export function TabBarItem({
         aria-label={`打开标签页：${title}`}
         className={cn(
           'relative flex items-center gap-1.5 pl-3 pr-8 h-[34px] w-full',
-          isClassic ? 'rounded-t-lg' : 'rounded-none',
+          'rounded-none',
           'text-xs transition-colors select-none cursor-pointer',
           'border-t border-l border-r border-transparent',
           isActive
-            ? isClassic
-              ? 'bg-content-area text-foreground border-border/50'
-              : 'app-tab-active text-foreground border-border/80'
-            : isClassic
-              ? 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              : 'app-tab-inactive text-muted-foreground hover:text-foreground',
+            ? 'app-tab-active text-foreground border-border/80'
+            : 'app-tab-inactive text-muted-foreground hover:text-foreground',
           isTearingOff && 'ring-2 ring-primary/70 ring-offset-0 bg-primary/10',
         )}
         onClick={onActivate}
@@ -201,7 +157,7 @@ export function TabBarItem({
         )}
 
         {roleLabel && !isNarrow && (
-          <span className="shrink-0 px-1.5 py-0 rounded-full bg-muted text-[10px] leading-4 text-muted-foreground font-medium">
+          <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-medium leading-4 text-muted-foreground">
             {roleLabel}
           </span>
         )}
@@ -212,8 +168,8 @@ export function TabBarItem({
         type="button"
         aria-label={`关闭标签页：${title}`}
         className={cn(
-          'absolute right-3 top-1/2 z-[2] size-4 -translate-y-1/2 rounded-sm flex items-center justify-center',
-          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted-foreground/20 transition-opacity',
+          'absolute right-3 top-1/2 z-[2] flex size-4 -translate-y-1/2 items-center justify-center rounded-sm',
+          'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted-foreground/20',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
           isActive && 'opacity-60',
         )}

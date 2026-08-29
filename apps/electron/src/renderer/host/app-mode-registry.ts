@@ -30,7 +30,7 @@ export const APP_MODE_DEFINITIONS: readonly AppModeDefinition[] = [
   {
     mode: 'agent',
     fallbackLabel: 'Agent',
-    allowedViews: ['conversations', 'planning', 'agent-skills'],
+    allowedViews: ['conversations', 'planning', 'agent-skills', 'vault'],
     fallbackView: 'conversations',
     restoresSession: true,
     restoresProjectTab: false,
@@ -39,7 +39,7 @@ export const APP_MODE_DEFINITIONS: readonly AppModeDefinition[] = [
   {
     mode: 'chat',
     fallbackLabel: 'Chat',
-    allowedViews: ['conversations', 'planning', 'agent-skills'],
+    allowedViews: ['conversations', 'planning', 'agent-skills', 'vault'],
     fallbackView: 'conversations',
     restoresSession: true,
     restoresProjectTab: false,

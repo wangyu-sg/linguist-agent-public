@@ -52,6 +52,8 @@ export interface BrowserTabSummary {
   tabId: string
   url: string
   title: string
+  /** 页面声明的 HTTP(S) favicon；未提供或加载失败时 renderer 使用默认图标。 */
+  favicon?: string
   loading: boolean
   /** 此标签由 Agent 创建（与当前默认工作标签无关）。 */
   openedByAgent: boolean
@@ -88,6 +90,12 @@ export interface BrowserSessionClosed {
 }
 
 export type BrowserStateChange = BrowserViewState | BrowserSessionClosed
+
+/** 原生 WebContentsView 获得用户焦点；renderer 用它同步双 Pane 焦点与工具栏目标。 */
+export interface BrowserTabFocusChange {
+  sessionId: string
+  tabId: string
+}
 
 export interface BrowserNavigateInput {
   sessionId: string

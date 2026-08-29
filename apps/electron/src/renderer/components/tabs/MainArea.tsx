@@ -2,36 +2,31 @@
  * MainArea — 主内容区域
  *
  * 组合 TabBar + TabContent。文件、Markdown 和 Diff 预览统一由右侧工作区承载；
- * MainArea 仅保留对话主区，以及 Scratch Pad 的临时分屏。
+ * MainArea 仅保留对话主区。
  */
 
 import * as React from 'react'
-import type { BrowserStateChange } from '@proma/shared'
+import type { BrowserStateChange, BrowserTabFocusChange } from '@proma/shared'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
 import {
   tabsAtom,
   activeTabIdAtom,
   activeTabAtom,
-  scratchPadPanelOpenAtom,
 } from '@/atoms/tab-atoms'
 import { Panel } from '@/components/app-shell/Panel'
 import { WelcomeView } from '@/components/welcome/WelcomeView'
-import { ScratchPadPane } from '@/components/scratch-pad/ScratchPadView'
-import { previewSplitRatioAtom } from '@/atoms/preview-atoms'
-import { closeScratchInSplit } from '@/components/scratch-pad/scratch-pad-opener'
 import { useTrackSessionView } from '@/hooks/useTrackSessionView'
 import { TabBar } from './TabBar'
 import { TabContent } from './TabContent'
 import { AutomationFormView } from '@/components/automation/AutomationFormView'
 import { PlanningView } from '@/components/planning/PlanningView'
 import { AgentSkillsView } from '@/components/agent-skills/AgentSkillsView'
+import { VaultView } from '@/components/vault/VaultView'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { appModeAtom } from '@/atoms/app-mode'
 import { resolveActiveViewForMode } from '@/host/app-mode-registry'
-import { interfaceVariantAtom } from '@/atoms/theme'
 import { ProjectsView } from '@/features/linguist/projects/ProjectsView'
-import { cn } from '@/lib/utils'
 import { registerShortcut } from '@/lib/shortcut-registry'
 import {
   agentDiffPanelTabAtom,
@@ -56,8 +51,6 @@ export function MainArea(): React.ReactElement {
   const automationFormOpen = useAtomValue(automationFormAtom).open
   const appMode = useAtomValue(appModeAtom)
   const activeView = resolveActiveViewForMode(useAtomValue(activeViewAtom), appMode)
-  const interfaceVariant = useAtomValue(interfaceVariantAtom)
-  const isClassic = interfaceVariant === 'classic'
   const store = useStore()
 
   // TabBar 立即反馈，较重的中心内容可让出当前交互帧；Agent 历史则保持当前会话避免旧内容占屏。
@@ -120,6 +113,25 @@ export function MainArea(): React.ReactElement {
     return subscribe(publishBrowserState)
   }, [publishBrowserState])
 
+  const focusNativeBrowserTab = React.useCallback((change: BrowserTabFocusChange) => {
+    // WebContentsView 不在 React DOM 中；点击后台 Browser Pane 的网页正文只能由主进程
+    // 把原生 focus 映射回右侧 Pane/Tab 焦点。后台 Agent Session 不得借此抢前台。
+    if (activeTab?.type !== 'agent' || activeTab.sessionId !== change.sessionId) return
+    store.set(agentSidePanelOpenAtomFamily(change.sessionId), true)
+    setAgentSidePanelTabMap((previous) => {
+      if (previous.get(change.sessionId) === getBrowserSidePanelTab(change.tabId)) return previous
+      const next = new Map(previous)
+      next.set(change.sessionId, getBrowserSidePanelTab(change.tabId))
+      return next
+    })
+  }, [activeTab, setAgentSidePanelTabMap, store])
+
+  React.useEffect(() => {
+    const subscribe = (window.electronAPI as Partial<typeof window.electronAPI>).onAgentBrowserTabFocused
+    if (typeof subscribe !== 'function') return
+    return subscribe(focusNativeBrowserTab)
+  }, [focusNativeBrowserTab])
+
   React.useEffect(() => {
     if (!browserSessionId) return
     const getState = (window.electronAPI as Partial<typeof window.electronAPI>).getAgentBrowserState
@@ -131,66 +143,23 @@ export function MainArea(): React.ReactElement {
     return () => { cancelled = true }
   }, [browserSessionId, publishBrowserState])
 
-  const scratchPanelOpen = useAtomValue(scratchPadPanelOpenAtom)
-  const showScratchPanel = activeTab?.type === 'agent' && scratchPanelOpen && activeView === 'conversations'
-  // Scratch 复用旧的预览分栏比例，保持已有用户布局。
-  const [scratchSplitRatio, setScratchSplitRatio] = useAtom(previewSplitRatioAtom)
-  const scratchDragging = React.useRef(false)
-
-  const handleScratchDragStart = React.useCallback((event: React.MouseEvent) => {
-    event.preventDefault()
-    scratchDragging.current = true
-    const startX = event.clientX
-    const startRatio = scratchSplitRatio
-    const container = (event.currentTarget as HTMLElement).closest('[data-scratch-split-container]') as HTMLElement | null
-    const containerWidth = container?.clientWidth ?? 1
-    let latestClientX = startX
-    let rafId = 0
-
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'col-resize'
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!scratchDragging.current) return
-      latestClientX = moveEvent.clientX
-      if (rafId) return
-      rafId = requestAnimationFrame(() => {
-        rafId = 0
-        const nextRatio = Math.max(0.3, Math.min(0.8, startRatio + (latestClientX - startX) / containerWidth))
-        setScratchSplitRatio(nextRatio)
-      })
-    }
-    const onMouseUp = () => {
-      scratchDragging.current = false
-      if (rafId) cancelAnimationFrame(rafId)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }, [scratchSplitRatio, setScratchSplitRatio])
-
-  const handleCloseScratchPanel = React.useCallback(() => closeScratchInSplit(store), [store])
-
   React.useEffect(() => {
     if (tabs.length > 0 && !activeTabId) setActiveTabId(tabs[0]!.id)
   }, [tabs, activeTabId, setActiveTabId])
 
-  const leftFlexStyle: React.CSSProperties = showScratchPanel
-    ? { flex: `0 0 calc(${scratchSplitRatio * 100}% - 6px)` }
-    : { flex: '1 1 auto' }
 
   return (
-    <Panel variant="grow" className={cn('bg-content-area', isClassic && 'rounded-2xl shadow-xl dark:shadow-sm')}>
-      <div className="flex flex-1 min-h-0 overflow-hidden" data-scratch-split-container>
-        <div className="flex flex-col min-w-0 h-full" style={leftFlexStyle}>
+    <Panel variant="grow" className="bg-content-area">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 flex-col min-w-0 h-full">
           {activeView === 'planning' ? (
             automationFormOpen ? <AutomationFormView /> : <PlanningView />
           ) : activeView === 'agent-skills' ? (
             <AgentSkillsView />
           ) : activeView === 'projects' ? (
             <ProjectsView />
+          ) : activeView === 'vault' ? (
+            <VaultView />
           ) : (
             <>
               <TabBar />
@@ -204,15 +173,6 @@ export function MainArea(): React.ReactElement {
             </>
           )}
         </div>
-        {showScratchPanel && (
-          <>
-            <div
-              className="w-[8px] cursor-col-resize bg-border/40 hover:bg-primary/30 active:bg-primary/50 transition-colors flex-shrink-0 self-stretch"
-              onMouseDown={handleScratchDragStart}
-            />
-            <div className="flex-1 min-w-0 h-full overflow-hidden"><ScratchPadPane onClose={handleCloseScratchPanel} /></div>
-          </>
-        )}
       </div>
     </Panel>
   )

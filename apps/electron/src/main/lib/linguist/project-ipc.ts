@@ -133,9 +133,7 @@ export interface LinguistAssetPreviewDeps {
   readText: (filePath: string) => Promise<{ content: string } | null>
   /** 旧版 Word/WPS 等二进制文档 → 纯文本。 */
   extractText?: (filePath: string) => Promise<string>
-  /** docx → HTML（null = 转换失败）。 */
-  convertDocxToHtml: (filePath: string) => Promise<{ html: string } | null>
-  /** xlsx → HTML + 提取纯文本（null = 转换失败）。 */
+  /** Office 文档 → HTML + 提取纯文本（null = 转换失败）。 */
   convertOfficeToHtml: (filePath: string) => Promise<{ html: string; text: string } | null>
   /** 已围栏的绝对路径 → proma-file:// 不透明 token URL。 */
   registerPreviewUrl: (absPath: string) => string
@@ -443,7 +441,7 @@ async function previewManagedSource(
     }
   }
   if (ext === 'docx') {
-    const converted = await assetPreview.convertDocxToHtml(sourcePath)
+    const converted = await assetPreview.convertOfficeToHtml(sourcePath)
     if (converted === null) throw new Error('managed source preview: docx conversion failed')
     return { kind: 'html', html: converted.html, filename: originalFilename }
   }

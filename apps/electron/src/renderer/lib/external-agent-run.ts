@@ -2,6 +2,7 @@ import type { AgentSessionMeta } from '@proma/shared'
 import type { AgentStreamState } from '@/atoms/agent-atoms'
 import type { TabItem } from '@/atoms/tab-atoms'
 
+/** 顶部入口与 TabItem 保持同一类型契约，避免已删除的入口类型回流。 */
 export type ExternalAgentRunTab = TabItem
 
 export interface ExternalAgentRunActivationInput {

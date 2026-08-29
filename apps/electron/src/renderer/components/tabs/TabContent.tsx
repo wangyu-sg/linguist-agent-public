@@ -14,7 +14,6 @@ import { AgentView } from '@/components/agent'
 import { PreviewTabContent } from '@/components/diff/PreviewTabContent'
 import { MarkdownRichEditor } from '@/components/diff/MarkdownRichEditor'
 import { MarkdownToc } from '@/components/diff/MarkdownToc'
-import { ScratchPadView } from '@/components/scratch-pad/ScratchPadView'
 import { LocalizationProjectWorkbench } from '@/features/linguist/projects/LocalizationProjectWorkbench'
 import { TabErrorBoundary } from './TabErrorBoundary'
 
@@ -39,10 +38,6 @@ export function TabContent({ tabId }: TabContentProps): React.ReactElement {
         标签页不存在
       </div>
     )
-  }
-
-  if (tab.type === 'scratch') {
-    return <ScratchPadView />
   }
 
   if (tab.type === 'tutorial') {
@@ -71,18 +66,12 @@ export function TabContent({ tabId }: TabContentProps): React.ReactElement {
     }
     if (tab.historySessionId) {
       return (
-        <div
-          data-testid="linguist-missing-project-history"
-          className="flex h-full min-h-0 flex-col"
-        >
+        <div data-testid="linguist-missing-project-history" className="flex h-full min-h-0 flex-col">
           <div className="shrink-0 border-b border-destructive/20 bg-destructive/[0.06] px-4 py-2 text-xs text-destructive">
             项目目录不可用；当前仅显示会话历史，发送与 CAT 操作已阻断。
           </div>
           <div className="min-h-0 flex-1">
-            <TabErrorBoundary
-              key={tab.historySessionId}
-              sessionId={tab.historySessionId}
-            >
+            <TabErrorBoundary key={tab.historySessionId} sessionId={tab.historySessionId}>
               <AgentView sessionId={tab.historySessionId} />
             </TabErrorBoundary>
           </div>

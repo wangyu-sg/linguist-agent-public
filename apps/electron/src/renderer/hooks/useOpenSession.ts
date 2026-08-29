@@ -116,7 +116,7 @@ export function useOpenSession(): OpenSessionFn {
           }).catch(console.error)
         }
       } else {
-        // Scratch/教程等辅助 Tab 不再是主模式，维持在 Agent 上下文中。
+        // 教程等非会话 Tab 不创建或选择会话。
         setAppMode('agent')
         setCurrentConversationId(null)
         setCurrentAgentSessionId(null)

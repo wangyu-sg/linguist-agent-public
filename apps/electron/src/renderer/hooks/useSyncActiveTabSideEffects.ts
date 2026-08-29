@@ -31,7 +31,6 @@ export function useSyncActiveTabSideEffects(): SyncActiveTabSideEffects {
   const setCurrentAgentWorkspaceId = useSetAtom(currentAgentWorkspaceIdAtom)
   const setUnviewedCompleted = useSetAtom(unviewedCompletedSessionIdsAtom)
   const agentSessions = useAtomValue(agentSessionsAtom)
-  const appMode = useAtomValue(appModeAtom)
 
   return useCallback<SyncActiveTabSideEffects>(
     (newActiveTab) => {
@@ -49,14 +48,6 @@ export function useSyncActiveTabSideEffects(): SyncActiveTabSideEffects {
         return
       }
 
-      if (newActiveTab.type === 'scratch') {
-        // Agent 模式下切到 Scratch Pad 时保持右侧文件面板不收起
-        setCurrentConversationId(null)
-        if (appMode !== 'agent') {
-          setCurrentAgentSessionId(null)
-        }
-        return
-      }
 
       if (newActiveTab.type === 'linguist-project') {
         setAppMode('linguist')
@@ -98,7 +89,6 @@ export function useSyncActiveTabSideEffects(): SyncActiveTabSideEffects {
       }
     },
     [
-      appMode,
       setAppMode,
       setCurrentConversationId,
       setCurrentAgentSessionId,

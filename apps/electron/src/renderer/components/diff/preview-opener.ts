@@ -2,7 +2,7 @@
  * useOpenPreview — 统一的预览入口 Hook
  *
  * 把分散在 SidePanel / PreviewOpenButton / AgentView 等处的「打开预览」逻辑收敛到一处。
- * 文件、Markdown 与 Diff 一律在右侧工作区的预览 Tab 打开，不再占用主内容区。
+ * 默认在右侧工作区打开；显式 mode: 'tab' 的入口则打开主预览 Tab。
  */
 
 import * as React from 'react'
@@ -17,7 +17,9 @@ import {
 import {
   activeTabIdAtom,
   closeTab,
+  getPreviewTabTitle,
   isPreviewTab,
+  openTab,
   sessionViewStateMapAtom,
   tabsAtom,
 } from '@/atoms/tab-atoms'
@@ -26,7 +28,6 @@ import { agentDiffPanelTabAtom, agentSidePanelOpenAtomFamily, getPreviewSidePane
 /** Jotai store 类型（从 useStore 推导，避免直接 import 内部 Store 类型） */
 type JotaiStore = ReturnType<typeof useStore>
 
-/** 兼容旧调用方；右侧工作区方案下不再使用 mode。 */
 export interface OpenPreviewOptions {
   mode?: 'tab' | 'split'
 }
@@ -35,7 +36,7 @@ export function useOpenPreview() {
   const store = useStore()
 
   return React.useCallback(
-    (sessionId: string, file: PreviewFile, _options?: OpenPreviewOptions) => {
+    (sessionId: string, file: PreviewFile, options?: OpenPreviewOptions) => {
       const previewId = getPreviewFileId(file)
       store.set(previewFilesMapAtom, (prev) => {
         const next = new Map(prev)
@@ -53,6 +54,21 @@ export function useOpenPreview() {
         next.set(sessionId, file)
         return next
       })
+      if (options?.mode === 'tab') {
+        const opened = openTab(store.get(tabsAtom), {
+          type: 'preview',
+          sessionId,
+          title: getPreviewTabTitle(file.filePath),
+        })
+        store.set(tabsAtom, opened.tabs)
+        store.set(activeTabIdAtom, opened.activeTabId)
+        store.set(sessionViewStateMapAtom, (prev) => {
+          const next = new Map(prev)
+          next.set(sessionId, { previewTabOpen: true, lastView: 'preview' })
+          return next
+        })
+        return
+      }
       store.set(previewPanelOpenMapAtom, (prev) => {
         const next = new Map(prev)
         next.set(sessionId, true)

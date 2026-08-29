@@ -499,7 +499,7 @@ export function createLinguistAssetsIpc(deps: LinguistAssetsIpcDeps) {
           }
         }
         if (ext === 'docx') {
-          const converted = await assetPreview.convertDocxToHtml(sourcePath)
+          const converted = await assetPreview.convertOfficeToHtml(sourcePath)
           if (converted === null) throw new Error('context doc preview: docx conversion failed')
           return { kind: 'html', html: converted.html, filename: originalFilename }
         }

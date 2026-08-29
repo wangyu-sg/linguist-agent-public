@@ -29,7 +29,6 @@ import {
 } from '@/atoms/agent-atoms'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { tearOffPreviewToSplit } from '@/components/diff/preview-opener'
-import { tearOffScratchToSplit } from '@/components/scratch-pad/scratch-pad-opener'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TabBarItem } from './TabBarItem'
@@ -60,12 +59,12 @@ export function TabBar(): React.ReactElement {
   const setAutomationForm = useSetAtom(automationFormAtom)
   const syncActiveTabSideEffects = useSyncActiveTabSideEffects()
 
-  // 统一关闭逻辑：关闭当前会话入口并回到 Scratch Pad，不停止后台 Agent
+  // 统一关闭逻辑：关闭当前会话入口，不停止后台 Agent
   const { requestClose } = useCloseTab()
   const store = useStore()
 
   /**
-   * Tear-off：把 preview/scratch Tab 拖出 TabBar 时，转成 Agent 右侧分屏。
+   * Tear-off：把 preview Tab 拖出 TabBar 时，转成 Agent 右侧分屏。
    * preview 公共实现在 preview-opener.ts，PreviewTabContent 顶栏切换按钮共用同一份逻辑。
    */
   const handleTearOff = React.useCallback((tabId: string) => {
@@ -73,9 +72,6 @@ export function TabBar(): React.ReactElement {
     if (tab?.type === 'preview') {
       tearOffPreviewToSplit(store, tabId)
       return
-    }
-    if (tab?.type === 'scratch') {
-      tearOffScratchToSplit(store)
     }
   }, [store, tabs])
 
@@ -160,7 +156,7 @@ export function TabBar(): React.ReactElement {
     document.addEventListener('pointerup', handleUp)
   }, [tabs])
 
-  if (tabs.length === 0) return <div className="h-10 titlebar-drag-region" />
+  if (tabs.length === 0) return <div className="h-[34px] titlebar-drag-region" />
 
   return (
     <>
@@ -268,14 +264,14 @@ function TabBarInner({
   // 整条 TabBar 容器 ref，用于拖拽 tear-off 时检测鼠标是否离开 TabBar 区域
   const barRef = React.useRef<HTMLDivElement>(null)
 
-  // 拖出 TabBar 区域时给出视觉提示（preview/scratch Tab 可 tear-off）
+  // 拖出 TabBar 区域时给出视觉提示（仅 preview Tab 可 tear-off）
   const [tearingOff, setTearingOff] = React.useState<string | null>(null)
 
-  // 拦截外层 handleDragStart：若拖出 TabBar 区域且是 preview/scratch Tab，触发 tear-off
+  // 拦截外层 handleDragStart：若拖出 TabBar 区域且是 preview Tab，触发 tear-off
   const handleDragStartWithTearOff = React.useCallback((tabId: string, e: React.PointerEvent) => {
     const tab = tabs.find((t) => t.id === tabId)
-    // 仅 preview / scratch Tab 支持拖出转分屏
-    if (!tab || (tab.type !== 'preview' && tab.type !== 'scratch')) {
+    // 仅 preview Tab 支持拖出转分屏
+    if (!tab || tab.type !== 'preview') {
       onDragStart(tabId, e)
       return
     }
@@ -389,7 +385,7 @@ function TabBarInner({
   }, [])
 
   return (
-    <div ref={barRef} className="main-tabbar relative flex h-10 items-end tabbar-bg">
+    <div ref={barRef} className="main-tabbar flex items-end h-[34px] tabbar-bg relative">
       {/* 顶部 TabBar 的空白区域保持可拖拽；系统控制按钮由窗口顶部的统一标题栏承载。
           不要把 titlebar-no-drag 加到下面的整条 flex 容器上，否则标签右侧空白会失去拖拽能力。
           需要交互的单个 Tab 会在 TabBarItem 内部自己声明 titlebar-no-drag。 */}
@@ -411,15 +407,14 @@ function TabBarInner({
           const sessionContext = tab.type === 'agent' || tab.type === 'preview'
             ? contextBySessionId.get(tab.sessionId)
             : undefined
-          return (
-            <TabBarItem
-              key={tab.id}
-              id={tab.id}
-              type={tab.type}
-              title={tab.title}
-              displayTitle={tab.type === 'linguist-project' ? '工作台' : undefined}
-              contextLabel={tab.type === 'linguist-project' ? tab.title : sessionContext?.label}
-              roleLabel={sessionContext?.roleLabel}
+          return <TabBarItem
+            key={tab.id}
+            id={tab.id}
+            type={tab.type}
+            title={tab.title}
+            displayTitle={tab.type === 'linguist-project' ? '工作台' : undefined}
+            contextLabel={tab.type === 'linguist-project' ? tab.title : sessionContext?.label}
+            roleLabel={sessionContext?.roleLabel}
             isAutomation={tab.type === 'agent' && automationSessionIds.has(tab.sessionId)}
             isDelegation={tab.type === 'agent' && delegationSessionIds.has(tab.sessionId)}
             isActive={tab.id === activeTabId}
@@ -435,8 +430,7 @@ function TabBarInner({
             onHoverLeave={handleTabHoverLeave}
             onPanelHoverEnter={handlePanelHoverEnter}
             onPanelHoverLeave={handleTabHoverLeave}
-            />
-          )
+          />
         })}
       </div>
 
@@ -480,66 +474,64 @@ function ShortcutGuideButton({
         positionClassName,
       )}
     >
-      <div className="flex items-center gap-1">
-        {/* FAQ 快捷按钮（在快捷键地图左边） */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onOpenFaq}
-            >
-              <HelpCircle className="size-3.5" />
-              <span className="sr-only">查看常见问题</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>查看常见问题</p>
-          </TooltipContent>
-        </Tooltip>
+      {/* FAQ 快捷按钮（在快捷键地图左边） */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onOpenFaq}
+          >
+            <HelpCircle className="size-3.5" />
+            <span className="sr-only">查看常见问题</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <p>查看常见问题</p>
+        </TooltipContent>
+      </Tooltip>
 
-        {showBrowserButton && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-7 w-7',
-                  hasMinimizedBrowser && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
-                )}
-                onClick={() => void onOpenBrowser()}
-              >
-                <Globe className="size-3.5" />
-                <span className="sr-only">打开受管浏览器</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>打开受管浏览器</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
+      {showBrowserButton && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
-              onClick={onOpen}
+              className={cn(
+                'h-7 w-7',
+                hasMinimizedBrowser && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+              )}
+              onClick={() => void onOpenBrowser()}
             >
-              <Keyboard className="size-3.5" />
-              <span className="sr-only">查看快捷键地图</span>
+              <Globe className="size-3.5" />
+              <span className="sr-only">打开受管浏览器</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p>查看快捷键地图</p>
+            <p>打开受管浏览器</p>
           </TooltipContent>
         </Tooltip>
-      </div>
+      )}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onOpen}
+          >
+            <Keyboard className="size-3.5" />
+            <span className="sr-only">查看快捷键地图</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <p>查看快捷键地图</p>
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }
