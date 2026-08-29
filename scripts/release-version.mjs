@@ -43,8 +43,8 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
 }
 
-function versionTags(root) {
-  const result = spawnSync('git', ['tag', '--list', 'v[0-9]*', '--sort=-version:refname'], {
+function versionTags(root, current) {
+  const result = spawnSync('git', ['tag', '--list', `v${current[0]}.${current[1]}.*`, '--sort=-version:refname'], {
     cwd: root,
     encoding: 'utf8',
   })
@@ -66,7 +66,7 @@ function main() {
   const packageJson = readJson(packagePath)
   const baseline = readJson(baselinePath)
   const current = parseVersion(packageJson.version)
-  const tags = versionTags(root)
+  const tags = versionTags(root, current)
   const parsedTags = tags.flatMap((tag) => {
     try { return [{ tag, version: parseVersion(tag.slice(1)) }] } catch { return [] }
   })
