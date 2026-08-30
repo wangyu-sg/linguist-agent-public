@@ -1,9 +1,9 @@
 {
   "schemaVersion": 3,
-  "baseline": "3f1725c5b2e46c6aa85d64c175870c1fcb3bb5ed",
-  "formalMerge": "8819a4a0990dfedffb691bf1e5cc04cc78a0d6d5",
-  "recomputedOn": "2026-08-29",
-  "comment": "Proma-core touchpoints tracked against v0.19.1; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "baseline": "c261cbc5344a6d4a22d30de57e489efd0e56062d",
+  "formalMerge": "cf2832f3ebb07a65a7af30d5834858b6a8dfec5b",
+  "recomputedOn": "2026-08-30",
+  "comment": "Proma-core touchpoints tracked against v0.19.5; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -239,6 +239,14 @@
       "owner": "product-build",
       "mergePolicy": "keep-la",
       "reason": "remove stale Claude SDK packaging language after adopting the upstream Pi-only runtime."
+    },
+    {
+      "file": "apps/electron/scripts/build-eventkit-native.ts",
+      "ticket": "LA-SYNC-005",
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "从 Electron workspace 自身的 node_modules 解析原生构建依赖，兼容 Bun 的隔离式 workspace 安装。"
     },
     {
       "file": "apps/electron/scripts/run-electron-builder.ts",
