@@ -4,7 +4,7 @@
  *
  * 用法：bun run license:scan / bun run license:check
  *
- * 本仓是 bun workspace + 根目录提升安装，license-checker 的 --production 在
+ * 本仓是 bun workspace + 隔离式安装，license-checker 的 --production 在
  * monorepo 下不可靠（只认起始目录的 node_modules 与 package.json），因此：
  *
  * 1. 自行从各 workspace 清单（root + packages/* + apps/* 的
@@ -89,8 +89,9 @@ async function readJson(file) {
 async function resolvePackage(name, fromDir) {
   let dir = fromDir
   for (;;) {
-    const manifest = await readJson(path.join(dir, 'node_modules', name, 'package.json'))
-    if (manifest) return { manifest, dir: path.join(dir, 'node_modules', name) }
+    const packageDir = path.join(dir, 'node_modules', name)
+    const manifest = await readJson(path.join(packageDir, 'package.json'))
+    if (manifest) return { manifest, dir: await fs.realpath(packageDir) }
     const parent = path.dirname(dir)
     if (parent === dir) return null
     dir = parent
