@@ -35,8 +35,8 @@ import {
   shouldForceCollapseLeftSidebar,
   shouldSuppressAgentRail,
 } from '@/host/app-mode-registry'
-import { detectIsWindows } from '@/lib/platform'
-import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
+import { detectIsMac, detectIsWindows } from '@/lib/platform'
+import { getMacTitlebarLeadingInsetPx, getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -137,6 +137,7 @@ export function AppShell(): React.ReactElement {
     automationFormOpen: automationForm.open,
     activeView,
   })
+  const isMac = React.useMemo(() => detectIsMac(), [])
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 
   // 左侧边栏可拖拽宽度
@@ -223,6 +224,7 @@ export function AppShell(): React.ReactElement {
     ? COLLAPSED_LEFT_SIDEBAR_WIDTH
     : clampedLeftSidebarWidth
   const leftSidebarOccupiedWidth = leftSidebarContentWidth + 1
+  const macTitlebarLeadingInsetPx = getMacTitlebarLeadingInsetPx(isMac, leftSidebarOccupiedWidth)
   const expandedRightWorkspaceLayout = getExpandedRightWorkspaceLayout(
     viewportWidth,
     leftSidebarOccupiedWidth,
@@ -396,7 +398,11 @@ export function AppShell(): React.ReactElement {
       <WindowControls />
 
       <div className="shell-bg relative h-screen w-screen overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900">
-        <div className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')} aria-hidden={settingsOpen}>
+        <div
+          className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
+          style={{ '--mac-titlebar-leading-inset': `${macTitlebarLeadingInsetPx}px` } as React.CSSProperties}
+          aria-hidden={settingsOpen}
+        >
             {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
             <div className="relative z-[60] crt-sidebar">
               <LeftSidebar

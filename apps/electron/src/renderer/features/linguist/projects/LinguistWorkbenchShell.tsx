@@ -408,8 +408,8 @@ export function LinguistWorkbenchShell({
               aria-label="语言资产面板"
               data-workbench-slot="bottom-dock"
               className={cn(
-                'relative min-h-0 shrink-0 overflow-hidden bg-content-area shadow-[0_-1px_0_hsl(var(--border)/0.45)] max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20 max-lg:shadow-xl',
-                presentation === 'workspace' && 'absolute inset-x-0 bottom-0 z-20 shadow-xl',
+                'relative min-h-0 shrink-0 overflow-hidden border-t border-border/50 bg-content-area max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20',
+                presentation === 'workspace' && 'absolute inset-x-0 bottom-0 z-20',
               )}
               style={{ height: uiState.bottomDockHeight }}
             >
@@ -451,7 +451,7 @@ export function LinguistWorkbenchShell({
 
       <footer
         aria-label="本地化工作台状态栏"
-        className="flex min-h-7 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-content-area px-4 py-1 text-[11px] text-muted-foreground shadow-[0_-1px_0_hsl(var(--border)/0.45)]"
+        className="flex min-h-7 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/50 bg-content-area px-4 py-1 text-[11px] text-muted-foreground"
       >
         <div className="flex flex-wrap items-center gap-x-3">
           {/* U-06：只渲染非零指标与当前阶段计数；整体进度与批次名由头部承载，不再重复。 */}

@@ -385,7 +385,11 @@ function TabBarInner({
   }, [])
 
   return (
-    <div ref={barRef} className="main-tabbar flex items-end h-[34px] tabbar-bg relative">
+    <div
+      ref={barRef}
+      className="main-tabbar flex items-end h-[34px] tabbar-bg relative"
+      style={{ paddingLeft: 'var(--mac-titlebar-leading-inset, 0px)' }}
+    >
       {/* 顶部 TabBar 的空白区域保持可拖拽；系统控制按钮由窗口顶部的统一标题栏承载。
           不要把 titlebar-no-drag 加到下面的整条 flex 容器上，否则标签右侧空白会失去拖拽能力。
           需要交互的单个 Tab 会在 TabBarItem 内部自己声明 titlebar-no-drag。 */}

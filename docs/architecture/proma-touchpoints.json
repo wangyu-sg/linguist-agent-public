@@ -1586,6 +1586,14 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
+      "file": "apps/electron/src/renderer/lib/window-titlebar-layout.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在 macOS 折叠侧栏时按原生红绿灯安全右缘计算顶栏横向留白，避免首个 Tab 进入系统按钮区域。"
+    },
+    {
       "file": "apps/electron/src/renderer/main.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",

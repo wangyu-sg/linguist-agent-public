@@ -225,6 +225,30 @@ test('LF-075：Bottom Dock 接管上下文能力后删除旧 CatContextRail', ()
   assert.match(bottomDock, /ContextEvidencePanel/)
 })
 
+test('语言资产 Dock 与状态栏使用同一不透明层级边界', () => {
+  const shell = readFileSync(
+    join(LINGUIST_FEATURE_ROOT, 'projects/LinguistWorkbenchShell.tsx'),
+    'utf8',
+  )
+  const dockStart = shell.indexOf('aria-label="语言资产面板"')
+  const dockEnd = shell.indexOf('style={{ height: uiState.bottomDockHeight }}', dockStart)
+  const footerStart = shell.indexOf('aria-label="本地化工作台状态栏"')
+  const footerEnd = shell.indexOf('>', footerStart)
+  assert.ok(dockStart >= 0 && dockEnd > dockStart)
+  assert.ok(footerStart >= 0 && footerEnd > footerStart)
+
+  for (const [name, source] of [
+    ['Dock', shell.slice(dockStart, dockEnd)],
+    ['状态栏', shell.slice(footerStart, footerEnd)],
+  ]) {
+    assert.match(source, /\bbg-content-area\b/, `${name} 必须使用实色内容区背景`)
+    assert.doesNotMatch(source, /bg-content-area\//, `${name} 不得使用透明背景`)
+    assert.doesNotMatch(source, /\bshadow-(?!none\b)[^\s'"]+/, `${name} 不得叠加悬浮阴影`)
+    assert.match(source, /\bborder-t\b/, `${name} 必须使用顶部 hairline`)
+    assert.match(source, /\bborder-border\/50\b/, `${name} 必须使用统一边界颜色`)
+  }
+})
+
 test('LF-076：Workbench 只保留生产 Grid，资源管理统一进入 Project Settings', () => {
   const projectsRoot = join(LINGUIST_FEATURE_ROOT, 'projects')
   const workbench = readFileSync(join(projectsRoot, 'LocalizationProjectWorkbench.tsx'), 'utf8')
