@@ -9,6 +9,15 @@ function source(path: string): string {
 }
 
 describe('LF-003 Packaged Vertical Smoke 合同', () => {
+  test('Given runtime sync replaces app node_modules, When packaging starts, Then native rebuild runs first', () => {
+    const manifest = JSON.parse(source('apps/electron/package.json')) as { scripts: Record<string, string> }
+
+    for (const name of ['pack', 'dist', 'dist:mac', 'dist:win', 'dist:linux']) {
+      const script = manifest.scripts[name]
+      expect(script.indexOf('rebuild:node-pty')).toBeLessThan(script.indexOf('sync:runtime-deps'))
+    }
+  })
+
   test('Given a product batch, When smoke starts, Then it builds once and reuses native packaged probes', () => {
     const runner = source('apps/electron/scripts/smoke/run-vertical-smoke.ts')
     const agentProbe = source('apps/electron/scripts/smoke/probe-pi-stream.ts')
