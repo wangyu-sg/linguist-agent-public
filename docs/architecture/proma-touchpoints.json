@@ -48,6 +48,14 @@
       "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
     },
     {
+      "file": "CHANGELOG.md",
+      "ticket": "LA-SYNC-005",
+      "kind": "product-fork",
+      "owner": "product-build",
+      "mergePolicy": "keep-la",
+      "reason": "保留 Linguist Agent 的版本历史与公开 Release 说明真源。"
+    },
+    {
       "file": "apps/cli/package.json",
       "ticket": "LA-SYNC-005",
       "kind": "product-fork",

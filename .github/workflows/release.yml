@@ -106,7 +106,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
-          bunx electron-builder --mac --arm64 --publish always
+          bun run scripts/run-electron-builder.ts --mac --arm64 --publish always
 
   build-mac-x64:
     name: build (macOS x64)
@@ -167,7 +167,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
-          bunx electron-builder --mac --x64 --publish always
+          bun run scripts/run-electron-builder.ts --mac --x64 --publish always
 
   build-windows-x64:
     name: build (Windows x64)
@@ -204,7 +204,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
-          bunx electron-builder --win --x64 --publish always
+          bun run scripts/run-electron-builder.ts --win --x64 --publish always
 
   merge-mac-yml:
     name: 合并 macOS 更新元数据
@@ -255,7 +255,6 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ env.RELEASE_REF }}
-          fetch-depth: 0
 
       - name: 检查资产并生成说明
         env:
@@ -274,13 +273,5 @@ jobs:
           printf '%s\n' "$ASSETS" | grep -E -- '-arm64\.dmg$'
           printf '%s\n' "$ASSETS" | grep -E -- '-x64\.dmg$'
           printf '%s\n' "$ASSETS" | grep -E -- '-x64\.exe$'
-          PREVIOUS_TAG="$(git tag --list 'v[0-9]*' --sort=-version:refname | grep -Fxv "$RELEASE_TAG" | head -1 || true)"
-          CURRENT_BASELINE="$(node -p "require('./docs/architecture/proma-baseline.json').upstream.tag")"
-          PREVIOUS_BASELINE="$(git show "${PREVIOUS_TAG}:docs/architecture/proma-baseline.json" 2>/dev/null | jq -r '.upstream.tag // empty')"
-          NOTES_ARGS=()
-          if [ -n "$PREVIOUS_BASELINE" ] && [ "$PREVIOUS_BASELINE" != "$CURRENT_BASELINE" ]; then
-            gh api "repos/proma-ai/Proma/releases/tags/${CURRENT_BASELINE}" --jq '.body' > upstream-release-notes.md
-            NOTES_ARGS=(--upstream-notes upstream-release-notes.md)
-          fi
-          node scripts/generate-release-notes.mjs --from "$PREVIOUS_TAG" --to "$RELEASE_REF" --tag "$RELEASE_TAG" "${NOTES_ARGS[@]}"
+          node scripts/generate-release-notes.mjs --tag "$RELEASE_TAG"
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "Linguist Agent ${RELEASE_TAG#v}" --notes-file release-notes.md --draft=false --latest

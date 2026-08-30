@@ -37,10 +37,29 @@ describe('AC-002 发布链 fail-closed', () => {
     expect(releaseWorkflow).toContain("needs.merge-mac-yml.result == 'success'")
   })
 
-  test('普通 main 提交只有显式声明 release 且附带编辑后日志才创建安装包', () => {
+  test('普通 main 提交只有显式声明 release 且 CHANGELOG 包含对应版本才创建 Tag', () => {
     expect(autoReleaseWorkflow).toContain("grep -qi '\\[release\\]'")
-    expect(autoReleaseWorkflow).toContain('Release-Note:')
-    expect(autoReleaseWorkflow).toContain('拒绝将内部 Commit 标题公开为更新日志')
+    expect(autoReleaseWorkflow).not.toContain('Release-Note:')
+    const changelogIndex = autoReleaseWorkflow.indexOf(
+      'node scripts/generate-release-notes.mjs --tag "$TAG"',
+    )
+    const tagIndex = autoReleaseWorkflow.indexOf('git tag -a "$TAG"')
+    expect(changelogIndex).toBeGreaterThan(-1)
+    expect(tagIndex).toBeGreaterThan(changelogIndex)
+  })
+
+  test('GitHub Release 说明只从 CHANGELOG 的指定版本节生成', () => {
+    expect(releaseWorkflow).toContain(
+      'node scripts/generate-release-notes.mjs --tag "$RELEASE_TAG"',
+    )
+    expect(releaseWorkflow).not.toContain('--upstream-notes')
+    expect(releaseWorkflow).not.toContain('repos/proma-ai/Proma/releases/tags')
+    expect(releaseWorkflow).not.toContain('--from "$PREVIOUS_TAG"')
+  })
+
+  test('三个发布构建都使用仓库锁定的 Electron Builder 入口', () => {
+    expect(releaseWorkflow.match(/bun run scripts\/run-electron-builder\.ts/g)).toHaveLength(3)
+    expect(releaseWorkflow).not.toContain('bunx electron-builder')
   })
 
   test('上游同步保留当前 LA 版本，再确定发布版本并生成基线文档', () => {

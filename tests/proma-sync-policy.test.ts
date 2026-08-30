@@ -111,6 +111,100 @@ test('Host Seam 冲突必须 fail closed', () => {
   }
 })
 
+test('无人值守同步提升版本时晋升 CHANGELOG Unreleased', () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'release-version-changelog-'))
+  try {
+    mkdirSync(join(fixture, 'apps/electron'), { recursive: true })
+    mkdirSync(join(fixture, 'docs/architecture'), { recursive: true })
+    writeFileSync(join(fixture, 'apps/electron/package.json'), `${JSON.stringify({
+      name: '@proma/electron',
+      version: '0.17.65',
+    }, null, 2)}\n`)
+    writeFileSync(join(fixture, 'docs/architecture/proma-baseline.json'), `${JSON.stringify({
+      upstream: { tag: 'v0.19.5' },
+      product: { linguistAgentVersion: '0.17.65' },
+    }, null, 2)}\n`)
+    writeFileSync(join(fixture, 'bun.lock'), `{
+  "workspaces": {
+    "apps/electron": {
+      "name": "@proma/electron",
+      "version": "0.17.65"
+    }
+  }
+}\n`)
+    writeFileSync(join(fixture, 'CHANGELOG.md'), `# Changelog
+
+## [Unreleased]
+
+### Fixed
+
+- 修复候选分支问题。
+
+## [0.17.65] - 2026-08-30
+
+### Changed
+
+- 旧版本内容。
+
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...HEAD
+[0.17.65]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.64...v0.17.65
+`)
+    expect(spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: fixture }).status).toBe(0)
+
+    const result = spawnSync(process.execPath, [
+      join(ROOT, 'scripts/release-version.mjs'),
+      '--root', fixture,
+      '--upstream-tag', 'v0.19.6',
+    ], { encoding: 'utf8' })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('changed_files=apps/electron/package.json,bun.lock,docs/architecture/proma-baseline.json,CHANGELOG.md')
+    expect(JSON.parse(readFileSync(join(fixture, 'apps/electron/package.json'), 'utf8')).version).toBe('0.17.66')
+    expect(readFileSync(join(fixture, 'bun.lock'), 'utf8')).toContain('"version": "0.17.66"')
+
+    const changelog = readFileSync(join(fixture, 'CHANGELOG.md'), 'utf8')
+    expect(changelog.match(/^## \[Unreleased\]$/gmu)).toHaveLength(1)
+    expect(changelog).toMatch(/^## \[Unreleased\]\n\n## \[0\.17\.66\] - \d{4}-\d{2}-\d{2}$/mu)
+    expect(changelog).toContain('- 修复候选分支问题。')
+    expect(changelog).toContain(
+      '- Proma 基线由 [v0.19.5](https://github.com/proma-ai/Proma/releases/tag/v0.19.5) 升级至 [v0.19.6](https://github.com/proma-ai/Proma/releases/tag/v0.19.6)。',
+    )
+    expect(changelog).toContain('[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.66...HEAD')
+    expect(changelog).toContain('[0.17.66]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...v0.17.66')
+
+    const releaseNotesPath = join(fixture, 'release-notes.md')
+    const generator = spawnSync(process.execPath, [
+      join(ROOT, 'scripts/generate-release-notes.mjs'),
+      '--root', fixture,
+      '--tag', 'v0.17.66',
+      '--out', releaseNotesPath,
+    ], { encoding: 'utf8' })
+    expect(generator.status, generator.stderr).toBe(0)
+    expect(readFileSync(releaseNotesPath, 'utf8')).toContain(
+      '## [0.17.66]',
+    )
+  } finally {
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
+test('无人值守同步在推送候选分支前预检 CHANGELOG 发布说明', () => {
+  const workflow = readFileSync(join(ROOT, '.github/workflows/upstream-sync.yml'), 'utf8')
+  const upstreamTagIndex = workflow.indexOf('export PROMA_UPSTREAM_TAG="$UPSTREAM_TAG"')
+  const versionIndex = workflow.indexOf('VERSION_OUTPUT="$(node scripts/release-version.mjs)"')
+  const stageIndex = workflow.indexOf('git add apps/electron/package.json bun.lock CHANGELOG.md')
+  const generatorIndex = workflow.indexOf('node scripts/generate-release-notes.mjs --tag "$LA_TAG"')
+  const dryRunIndex = workflow.indexOf("if [ \"$DRY_RUN\" = 'true' ]", generatorIndex)
+  const pushIndex = workflow.indexOf('git push --force origin', generatorIndex)
+
+  expect(upstreamTagIndex).toBeGreaterThan(-1)
+  expect(versionIndex).toBeGreaterThan(upstreamTagIndex)
+  expect(stageIndex).toBeGreaterThan(versionIndex)
+  expect(generatorIndex).toBeGreaterThan(stageIndex)
+  expect(dryRunIndex).toBeGreaterThan(generatorIndex)
+  expect(pushIndex).toBeGreaterThan(generatorIndex)
+})
+
 test('同步链生成无冲突且通过 Host Seam 验证的最终树', () => {
   const fixture = mkdtempSync(join(tmpdir(), 'proma-sync-e2e-'))
   const git = (args: string[]) => spawnSync('git', args, { cwd: fixture, encoding: 'utf8' })

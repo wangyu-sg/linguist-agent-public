@@ -2,7 +2,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
 
 const DEFAULT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -12,94 +11,59 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const options = { root: DEFAULT_ROOT, from: '', to: 'HEAD', out: 'release-notes.md', tag: '', upstreamNotes: '' }
+  const options = { root: DEFAULT_ROOT, out: 'release-notes.md', tag: '' }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     const value = () => argv[++index] ?? fail(`${arg} 缺少取值`)
-    if (arg === '--from') options.from = value()
-    else if (arg === '--to') options.to = value()
-    else if (arg === '--out') options.out = value()
+    if (arg === '--out') options.out = value()
     else if (arg === '--tag') options.tag = value()
-    else if (arg === '--upstream-notes') options.upstreamNotes = resolve(value())
     else if (arg === '--root') options.root = resolve(value())
     else fail(`未知选项：${arg}`)
   }
   return options
 }
 
-export function releaseNotesForCommit(_subject, body = '') {
-  return body.split(/\r?\n/)
-    .map((line) => /^Release-Note:\s*(.+)$/i.exec(line)?.[1]?.trim())
-    .filter(Boolean)
-    .filter((note) => note.toLowerCase() !== 'skip')
-}
+export function extractChangelogVersion(markdown, tag) {
+  const version = tag.trim().replace(/^v/u, '')
+  if (!version) throw new Error('未指定发布版本')
 
-export function normalizeUpstreamNotes(notes) {
-  return notes
-    .trim()
-    .replace(/^#\s+[^\n]+\n+/u, '')
-    .replace(/\n##\s+(?:下载|Downloads?)\s*\n[\s\S]*$/iu, '')
-    .replace(/^##\s+/gmu, '#### ')
-    .trim()
-}
-
-export function buildReleaseNotes({ tag, notes, currentBaseline, previousBaseline, upstreamNotes = '' }) {
-  const sections = [`## Linguist Agent ${tag}`]
-  if (notes.length > 0) {
-    sections.push(`### Linguist Agent 更新\n\n${notes.map((note) => `- ${note}`).join('\n')}`)
-  } else if (!previousBaseline || previousBaseline === currentBaseline) {
-    sections.push('本版本仅包含发布基础设施维护，不涉及应用功能变化。')
+  const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const headingPattern = new RegExp(
+    `^## \\[${escapedVersion}\\] - \\d{4}-\\d{2}-\\d{2}\\s*$`,
+    'gmu',
+  )
+  const headings = [...markdown.matchAll(headingPattern)]
+  if (headings.length !== 1) {
+    throw new Error(
+      headings.length === 0
+        ? `CHANGELOG.md 缺少版本 ${version}`
+        : `CHANGELOG.md 包含重复版本 ${version}`,
+    )
   }
 
-  if (previousBaseline && previousBaseline !== currentBaseline) {
-    const source = `https://github.com/proma-ai/Proma/releases/tag/${currentBaseline}`
-    const body = normalizeUpstreamNotes(upstreamNotes) || `详见 [Proma ${currentBaseline} Release](${source})。`
-    sections.push(`### Proma ${currentBaseline} 更新\n\n> 上游基线：${previousBaseline} → ${currentBaseline} · [原始 Release](${source})\n\n${body}`)
-  } else {
-    sections.push(`### Proma 基线\n\n- ${currentBaseline}`)
-  }
-  return `${sections.join('\n\n')}\n`
-}
+  const heading = headings[0][0].trimEnd()
+  const contentStart = (headings[0].index ?? 0) + headings[0][0].length
+  const remainder = markdown.slice(contentStart)
+  const boundary = /^(?:##\s+|\[[^\]\r\n]+\]:\s+\S+)/mu.exec(remainder)
+  const content = remainder.slice(0, boundary?.index ?? remainder.length).trim()
+  if (!content) throw new Error(`CHANGELOG.md 的版本 ${version} 没有发布内容`)
 
-function git(root, args, optional = false) {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
-  if (result.status !== 0) {
-    if (optional) return ''
-    fail(`git ${args.join(' ')} 失败：${result.stderr.trim()}`)
-  }
-  return result.stdout.trim()
-}
-
-function baselineAt(root, ref) {
-  if (!ref) return undefined
-  const raw = git(root, ['show', `${ref}:docs/architecture/proma-baseline.json`], true)
-  if (!raw) return undefined
-  try { return JSON.parse(raw).upstream?.tag } catch { return undefined }
+  return `${heading}\n\n${content}`
 }
 
 function main() {
-  const options = parseArgs(process.argv.slice(2))
-  const packageJson = JSON.parse(readFileSync(join(options.root, 'apps/electron/package.json'), 'utf8'))
-  const currentBaseline = JSON.parse(readFileSync(join(options.root, 'docs/architecture/proma-baseline.json'), 'utf8')).upstream?.tag
-  const tag = options.tag || `v${packageJson.version}`
-  const range = options.from ? `${options.from}..${options.to}` : options.to
-  const commits = git(options.root, ['log', '--first-parent', '--format=%s%x1f%b%x1e', '--max-count=100', range])
-    .split('\x1e')
-    .map((record) => record.trim())
-    .filter(Boolean)
-    .map((record) => {
-      const [subject = '', body = ''] = record.split('\x1f')
-      return { subject: subject.trim(), body: body.trim() }
-    })
-  const notes = commits
-    .flatMap(({ subject, body }) => releaseNotesForCommit(subject, body))
-  const previousBaseline = baselineAt(options.root, options.from)
-  if (notes.length === 0 && (!previousBaseline || previousBaseline === currentBaseline)) {
-    fail('本地产品发布缺少 Release-Note，拒绝使用内部 Commit 标题生成公开更新日志')
+  try {
+    const options = parseArgs(process.argv.slice(2))
+    const packageJson = JSON.parse(
+      readFileSync(join(options.root, 'apps/electron/package.json'), 'utf8'),
+    )
+    const tag = options.tag || `v${packageJson.version}`
+    const changelog = readFileSync(join(options.root, 'CHANGELOG.md'), 'utf8')
+    const content = extractChangelogVersion(changelog, tag)
+    writeFileSync(resolve(options.root, options.out), `${content}\n`)
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
   }
-  const upstreamNotes = options.upstreamNotes ? readFileSync(options.upstreamNotes, 'utf8') : ''
-  const content = buildReleaseNotes({ tag, notes, currentBaseline, previousBaseline, upstreamNotes })
-  writeFileSync(resolve(options.root, options.out), content)
 }
 
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) main()

@@ -141,6 +141,7 @@ jobs:
           git commit -m "chore(sync): merge Proma ${UPSTREAM_TAG}"
 
           MERGE_SHA="$(git rev-parse HEAD)"
+          export PROMA_UPSTREAM_TAG="$UPSTREAM_TAG"
           VERSION_OUTPUT="$(node scripts/release-version.mjs)"
           node scripts/update-proma-baseline.mjs \
             --tag "$UPSTREAM_TAG" \
@@ -151,8 +152,10 @@ jobs:
             --branch "$CANDIDATE" \
             --upstream-app-version "$UPSTREAM_APP_VERSION"
           LA_TAG="$(printf '%s\n' "$VERSION_OUTPUT" | sed -n 's/^tag=//p')"
-          git add apps/electron/package.json bun.lock docs/architecture/proma-baseline.json docs/architecture/proma-touchpoints.json docs/architecture/UPSTREAM_BASELINE.md
+          git add apps/electron/package.json bun.lock CHANGELOG.md docs/architecture/proma-baseline.json docs/architecture/proma-touchpoints.json docs/architecture/UPSTREAM_BASELINE.md
           git commit -m "chore(sync): prepare Proma ${UPSTREAM_TAG}"
+          node scripts/generate-release-notes.mjs --tag "$LA_TAG" --out "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
 
           echo "candidate_ref=${CANDIDATE}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${LA_TAG}" >> "$GITHUB_OUTPUT"
