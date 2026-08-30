@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { BookOpen, ChevronDown, ChevronRight, ChevronsUpDown, CircleHelp, Folder, FolderOpen, Loader2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VaultCandidate, VaultFileEntry, VaultFocus, VaultReadResult, VaultSummary } from '@proma/shared'
@@ -11,6 +11,24 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { VaultLiveMarkdownEditor } from './VaultLiveMarkdownEditor'
+import type { LiveMarkdownTextSelection } from '@/components/markdown/LiveMarkdownEditor'
+import { SelectionActionPopover } from '@/components/selection/SelectionActionPopover'
+import { focusChatInput } from '@/components/chat/focus-chat-input'
+import { getOrCreateSideChat } from '@/lib/side-chat'
+import { insertAgentInputQuote } from '@/lib/agent-input-quote'
+import { useFocusAgentSessionInput } from '@/hooks/useFocusAgentSessionInput'
+import {
+  agentDiffPanelTabAtom,
+  agentSidePanelOpenAtomFamily,
+} from '@/atoms/agent-atoms'
+import {
+  agentSideChatMapAtom,
+  conversationsAtom,
+  conversationDraftsAtom,
+  conversationQuotedSelectionMapAtom,
+  selectedModelAtom,
+} from '@/atoms/chat-atoms'
+import { quotedSelectionMapAtom } from '@/atoms/preview-atoms'
 import {
   focusedVaultFolderAtom,
   selectedVaultFileAtom,
@@ -26,6 +44,11 @@ const VAULT_SIDEBAR_MIN_WIDTH = 180
 const VAULT_SIDEBAR_MAX_WIDTH = 520
 const PROMA_MANAGED_VAULT_DISPLAY_NAME = 'Proma Vault'
 const PROMA_SELF_MANAGED_VAULT_LABEL = 'Proma 自建 Vault'
+const MAX_QUOTED_CHARS = 2000
+
+interface VaultTextSelection extends LiveMarkdownTextSelection {
+  text: string
+}
 
 function getVaultCandidateDisplayName(candidate: VaultCandidate): string {
   return candidate.isPromaManaged ? PROMA_MANAGED_VAULT_DISPLAY_NAME : candidate.displayName
@@ -217,26 +240,144 @@ function VaultFileList({
 
 function VaultMarkdownEditor({
   readResult,
+  sessionId,
   onSave,
   onRename,
   onOpenTutorial,
 }: {
   readResult: VaultReadResult
-  onSave: (nextContent: string, options?: { silent?: boolean }) => Promise<void>
+  /** 嵌入 Agent 右侧工作区时，用于接入 Agent 引用与右侧问答。 */
+  sessionId?: string
+  onSave: (nextContent: string, options?: { silent?: boolean; expectedSha256?: string }) => Promise<void>
   onRename: (name: string) => Promise<void>
   onOpenTutorial: () => void
 }): React.ReactElement {
   const [draft, setDraft] = React.useState(readResult.content)
-  const previousReadContentRef = React.useRef(readResult.content)
+  const lastReadContentRef = React.useRef(readResult.content)
+  const saveBaseRef = React.useRef({ content: readResult.content, sha256: readResult.sha256 })
+  const externalConflictRef = React.useRef(false)
   const [saving, setSaving] = React.useState(false)
   const [filename, setFilename] = React.useState(displayDocumentTitle(readResult.relativePath.split('/').pop() ?? readResult.relativePath))
   const editorPageRef = React.useRef<HTMLDivElement>(null)
+  const [selection, setSelection] = React.useState<VaultTextSelection | null>(null)
+  const openSelectionChatPendingRef = React.useRef(false)
+  const selectedChatModel = useAtomValue(selectedModelAtom)
+  const setQuotedSelectionMap = useSetAtom(quotedSelectionMapAtom)
+  const conversations = useAtomValue(conversationsAtom)
+  const sideChatMap = useAtomValue(agentSideChatMapAtom)
+  const setConversations = useSetAtom(conversationsAtom)
+  const setConversationDrafts = useSetAtom(conversationDraftsAtom)
+  const setChatQuotedSelectionMap = useSetAtom(conversationQuotedSelectionMapAtom)
+  const setSideChatMap = useSetAtom(agentSideChatMapAtom)
+  const setSidePanelOpen = useSetAtom(agentSidePanelOpenAtomFamily(sessionId ?? 'standalone'))
+  const setSidePanelTabMap = useSetAtom(agentDiffPanelTabAtom)
+  const focusAgentSessionInput = useFocusAgentSessionInput()
+
+  const clearSelection = React.useCallback(() => setSelection(null), [])
+  const handleTextSelectionChange = React.useCallback((nextSelection: LiveMarkdownTextSelection | null) => {
+    if (!nextSelection) {
+      clearSelection()
+      return
+    }
+    const text = nextSelection.text.slice(0, MAX_QUOTED_CHARS)
+    setSelection({ ...nextSelection, text })
+  }, [clearSelection])
+  const createQuote = React.useCallback(() => selection ? ({
+    text: selection.text,
+    filePath: readResult.relativePath,
+    sourceType: 'file' as const,
+    sourceLabel: `Obsidian · ${readResult.relativePath}`,
+    capturedAt: Date.now(),
+  }) : null, [readResult.relativePath, selection])
+  const addSelectionToAgent = React.useCallback(() => {
+    if (!sessionId) {
+      toast.info('请从 Agent 会话右侧打开 Obsidian 后再添加引用')
+      return
+    }
+    const quote = createQuote()
+    if (!quote) return
+    if (!insertAgentInputQuote(sessionId, quote)) {
+      setQuotedSelectionMap((previous) => new Map(previous).set(sessionId, quote))
+    }
+    clearSelection()
+    focusAgentSessionInput(sessionId)
+  }, [clearSelection, createQuote, focusAgentSessionInput, sessionId, setQuotedSelectionMap])
+  const openSelectionChat = React.useCallback(async (): Promise<void> => {
+    if (!sessionId) {
+      toast.info('请从 Agent 会话右侧打开 Obsidian 后再发起右侧问答')
+      return
+    }
+    const quote = createQuote()
+    if (!quote || openSelectionChatPendingRef.current) return
+
+    const activeConversationId = sideChatMap.get(sessionId) ?? null
+    // 右侧已绑定有效 Chat 时始终复用，避免因激活 Tab 状态短暂不同步而重复创建会话。
+    if (activeConversationId) {
+      setChatQuotedSelectionMap((previous) => new Map(previous).set(activeConversationId, quote))
+      setSidePanelOpen(true)
+      setSidePanelTabMap((previous) => new Map(previous).set(sessionId, 'chat'))
+      clearSelection()
+      focusChatInput(activeConversationId)
+      return
+    }
+
+    openSelectionChatPendingRef.current = true
+    try {
+      const conversation = await getOrCreateSideChat(sessionId, () => window.electronAPI.createConversation(
+        'Obsidian 选区问答',
+        selectedChatModel?.modelId,
+        selectedChatModel?.channelId,
+      ))
+      setConversations((previous) => previous.some((item) => item.id === conversation.id) ? previous : [conversation, ...previous])
+      setConversationDrafts((previous) => new Map(previous).set(conversation.id, '我的问题：'))
+      setSideChatMap((previous) => new Map(previous).set(sessionId, conversation.id))
+      setSidePanelOpen(true)
+      setSidePanelTabMap((previous) => new Map(previous).set(sessionId, 'chat'))
+      setChatQuotedSelectionMap((previous) => new Map(previous).set(conversation.id, quote))
+      clearSelection()
+      focusChatInput(conversation.id)
+    } catch (error) {
+      console.error('[VaultView] 打开 Obsidian 选区聊天失败:', error)
+      toast.error('打开右侧问答失败')
+    } finally {
+      openSelectionChatPendingRef.current = false
+    }
+  }, [
+    clearSelection,
+    conversations,
+    createQuote,
+    selectedChatModel,
+    sessionId,
+    setConversationDrafts,
+    setConversations,
+    setChatQuotedSelectionMap,
+    setQuotedSelectionMap,
+    setSideChatMap,
+    setSidePanelOpen,
+    setSidePanelTabMap,
+    sideChatMap,
+  ])
+
   React.useEffect(() => {
-    const previousReadContent = previousReadContentRef.current
-    previousReadContentRef.current = readResult.content
-    if (!shouldAdoptVaultReadContent(draft, previousReadContent)) return
+    const previousReadContent = lastReadContentRef.current
+    if (readResult.content === previousReadContent) return
+    lastReadContentRef.current = readResult.content
+
+    // A direct Agent/external write must never replace the revision used to save
+    // a dirty draft. Keeping the prior SHA forces the existing optimistic-write
+    // conflict path instead of silently overwriting the Agent's document.
+    if (!shouldAdoptVaultReadContent(draft, previousReadContent) && readResult.content !== draft) {
+      if (!externalConflictRef.current) {
+        externalConflictRef.current = true
+        toast.error('笔记已被外部修改；本地草稿未保存，请重新打开后合并')
+      }
+      return
+    }
+
+    externalConflictRef.current = false
+    saveBaseRef.current = { content: readResult.content, sha256: readResult.sha256 }
     setDraft(readResult.content)
-  }, [draft, readResult.content])
+  }, [draft, readResult.content, readResult.sha256])
 
 
   const handleEditorPageWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
@@ -248,20 +389,20 @@ function VaultMarkdownEditor({
   }
 
   const save = React.useCallback(async (silent = false): Promise<void> => {
-    if (saving || draft === readResult.content) return
+    if (saving || externalConflictRef.current || draft === saveBaseRef.current.content) return
     setSaving(true)
     try {
-      await onSave(draft, { silent })
+      await onSave(draft, { silent, expectedSha256: saveBaseRef.current.sha256 })
     } finally {
       setSaving(false)
     }
-  }, [draft, onSave, readResult.content, saving])
+  }, [draft, onSave, saving])
 
   React.useEffect(() => {
-    if (saving || draft === readResult.content) return
+    if (saving || externalConflictRef.current || draft === saveBaseRef.current.content) return
     const timer = window.setTimeout(() => { void save(true) }, 700)
     return () => window.clearTimeout(timer)
-  }, [draft, readResult.content, save, saving])
+  }, [draft, save, saving])
 
   const rename = async (): Promise<void> => {
     const currentName = displayDocumentTitle(readResult.relativePath.split('/').pop() ?? readResult.relativePath)
@@ -311,28 +452,42 @@ function VaultMarkdownEditor({
         </div>
         <div className="min-h-0 flex-1">
           <VaultLiveMarkdownEditor
+            relativePath={readResult.relativePath}
             value={draft}
             onChange={setDraft}
             onSave={() => { void save() }}
+            onTextSelectionChange={handleTextSelectionChange}
           />
         </div>
       </div>
+      {selection && (
+        <SelectionActionPopover
+          x={selection.x}
+          y={selection.y}
+          onAddToAgent={addSelectionToAgent}
+          onOpenChat={openSelectionChat}
+        />
+      )}
     </div>
   )
 }
 
 function VaultMarkdownPane({
   readResult,
+  sessionId,
   loading,
   hasVault,
+  reopenVersion,
   onSave,
   onRename,
   onOpenTutorial,
 }: {
   readResult: VaultReadResult | null
+  sessionId?: string
   loading: boolean
   hasVault: boolean
-  onSave: (nextContent: string, options?: { silent?: boolean }) => Promise<void>
+  reopenVersion: number
+  onSave: (nextContent: string, options?: { silent?: boolean; expectedSha256?: string }) => Promise<void>
   onRename: (name: string) => Promise<void>
   onOpenTutorial: () => void
 }): React.ReactElement {
@@ -356,8 +511,9 @@ function VaultMarkdownPane({
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-muted/25">
       <VaultMarkdownEditor
-        key={getVaultEditorKey(readResult.relativePath)}
+        key={getVaultEditorKey(readResult.relativePath, reopenVersion)}
         readResult={readResult}
+        sessionId={sessionId}
         onSave={onSave}
         onRename={onRename}
         onOpenTutorial={onOpenTutorial}
@@ -374,6 +530,7 @@ export function VaultView({ embedded = false, sessionId }: { embedded?: boolean;
   const [files, setFiles] = React.useState<VaultFileEntry[]>([])
   const [loading, setLoading] = React.useState(true)
   const [fileLoading, setFileLoading] = React.useState(false)
+  const [editorReopenVersion, setEditorReopenVersion] = React.useState(0)
   const [selectedFile, setSelectedFile] = useAtom(selectedVaultFileAtom)
   const [focusedFolder, setFocusedFolder] = useAtom(focusedVaultFolderAtom)
   const [readResult, setReadResult] = useAtom(vaultReadResultAtom)
@@ -495,6 +652,35 @@ export function VaultView({ embedded = false, sessionId }: { embedded?: boolean;
     void refresh({ showLoading })
   }, [refresh, refreshToken])
 
+  // Agent tools can edit a Vault file directly, outside the renderer's own save
+  // IPC. Poll only the currently open note, never the whole Vault tree, so this
+  // stays scoped and a remote edit is reflected without changing navigation.
+  React.useEffect(() => {
+    const relativePath = readResult?.relativePath
+    const sha256 = readResult?.sha256
+    if (!relativePath || !sha256) return
+    let cancelled = false
+    let checking = false
+    const checkCurrentFile = async (): Promise<void> => {
+      if (checking || cancelled || selectedFileRef.current !== relativePath) return
+      checking = true
+      try {
+        const next = await window.electronAPI.readVaultFile(relativePath)
+        if (!cancelled && selectedFileRef.current === relativePath && next.sha256 !== sha256) setReadResult(next)
+      } catch {
+        // A concurrent rename/delete follows the existing refresh and open-file
+        // error paths; the lightweight current-file check remains silent.
+      } finally {
+        checking = false
+      }
+    }
+    const timer = window.setInterval(() => { void checkCurrentFile() }, 1_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [readResult?.relativePath, readResult?.sha256, setReadResult])
+
   const refreshVaultCandidates = React.useCallback(async (): Promise<void> => {
     setCandidatesLoading(true)
     try {
@@ -511,12 +697,18 @@ export function VaultView({ embedded = false, sessionId }: { embedded?: boolean;
   }, [refreshVaultCandidates])
 
   const openFile = React.useCallback(async (relativePath: string): Promise<void> => {
+    const reopenCurrentFile = selectedFileRef.current === relativePath
     const requestId = ++readRequestRef.current
     selectFile(relativePath)
     setFileLoading(true)
     try {
       const result = await window.electronAPI.readVaultFile(relativePath)
-      if (requestId === readRequestRef.current) setReadResult(result)
+      if (requestId === readRequestRef.current) {
+        setReadResult(result)
+        // An explicit click on the selected note is the recovery path after an
+        // external-write conflict: discard the local draft and remount from disk.
+        if (reopenCurrentFile) setEditorReopenVersion((version) => version + 1)
+      }
     } catch (error) {
       if (requestId === readRequestRef.current) {
         toast.error(error instanceof Error ? error.message : '无法打开笔记')
@@ -616,13 +808,13 @@ export function VaultView({ embedded = false, sessionId }: { embedded?: boolean;
     }
   }
 
-  const save = async (content: string, { silent = false }: { silent?: boolean } = {}): Promise<void> => {
+  const save = async (content: string, { silent = false, expectedSha256 }: { silent?: boolean; expectedSha256?: string } = {}): Promise<void> => {
     if (!readResult) return
     try {
       const result = await window.electronAPI.writeVaultFile({
         relativePath: readResult.relativePath,
         content,
-        expectedSha256: readResult.sha256,
+        expectedSha256: expectedSha256 ?? readResult.sha256,
       })
       if (!result.ok) {
         toast.error('文件已在外部修改，请重新打开后再保存')
@@ -819,8 +1011,10 @@ export function VaultView({ embedded = false, sessionId }: { embedded?: boolean;
           </aside>
           <VaultMarkdownPane
             readResult={readResult}
+            sessionId={sessionId}
             loading={fileLoading}
             hasVault={config !== null}
+            reopenVersion={editorReopenVersion}
             onSave={save}
             onRename={rename}
             onOpenTutorial={() => setVaultHelpOpen(true)}

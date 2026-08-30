@@ -3,7 +3,7 @@
   "operations": [
     {
       "path": ["description"],
-      "expected": "Proma next gen ai software with general agents - Electron App",
+      "expected": "Proma，为专业用户设计的 Agent - Electron App",
       "value": "Linguist Agent - desktop localization agent, built on Proma (AGPL-3.0) - Electron App"
     },
     {

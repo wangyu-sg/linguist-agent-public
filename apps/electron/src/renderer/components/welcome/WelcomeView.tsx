@@ -124,12 +124,30 @@ export function WelcomeView(): React.ReactElement {
           createAgent: currentCreateAgent,
         } = latestRef.current
 
-        // Agent 模式：按当前工作区过滤
-        // 1. 优先复用现有非归档、非 draft 会话
+        // Agent 模式：按当前工作区过滤。持久化草稿在侧栏中无入口，必须优先恢复，
+        // 否则同项目的普通会话会让草稿永久不可访问。
+        const draftSession = freshSessions.find(
+          (s) => isOrdinaryAgentSession(s, freshSessions)
+            && !s.archived
+            && s.workspaceId === currentWs
+            && (s.isDraft || currentDrafts.has(s.id)),
+        )
+        if (draftSession) {
+          const result = openTab(currentTabs, {
+            type: 'agent',
+            sessionId: draftSession.id,
+            title: draftSession.title,
+          })
+          currentSetTabs(result.tabs)
+          currentSetActiveTabId(result.activeTabId)
+          return
+        }
+        // 没有草稿时，复用现有普通会话。
         const existing = freshSessions.find(
           (s) => isOrdinaryAgentSession(s, freshSessions)
             && !s.archived
             && s.workspaceId === currentWs
+            && !s.isDraft
             && !currentDrafts.has(s.id),
         )
         if (existing) {
@@ -142,24 +160,7 @@ export function WelcomeView(): React.ReactElement {
           currentSetActiveTabId(result.activeTabId)
           return
         }
-        // 2. 检查是否已有 draft 会话（当前工作区），复用而不是创建新的
-        const draftSession = freshSessions.find(
-          (s) => isOrdinaryAgentSession(s, freshSessions)
-            && !s.archived
-            && s.workspaceId === currentWs
-            && currentDrafts.has(s.id),
-        )
-        if (draftSession) {
-          const result = openTab(currentTabs, {
-            type: 'agent',
-            sessionId: draftSession.id,
-            title: draftSession.title,
-          })
-          currentSetTabs(result.tabs)
-          currentSetActiveTabId(result.activeTabId)
-          return
-        }
-        // 3. 没有任何会话时才创建新的 draft 会话
+        // 没有任何会话时才创建新的 draft 会话
         currentCreateAgent({ draft: true })
       }).catch(console.error)
     }

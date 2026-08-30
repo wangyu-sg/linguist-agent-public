@@ -56,6 +56,7 @@ import {
   longTextPasteAsAttachmentEnabledAtom,
   richTextRenderingEnabledAtom,
   sessionHoverPreviewEnabledAtom,
+  productivityToolsAtom,
   initializeUiPreferences,
 } from './atoms/ui-preferences'
 import {
@@ -693,14 +694,16 @@ function UiPreferencesInitializer(): null {
   const setLongTextPasteAsAttachmentEnabled = useSetAtom(longTextPasteAsAttachmentEnabledAtom)
   const setRichTextRenderingEnabled = useSetAtom(richTextRenderingEnabledAtom)
   const setSessionHoverPreviewEnabled = useSetAtom(sessionHoverPreviewEnabledAtom)
+  const setProductivityTools = useSetAtom(productivityToolsAtom)
 
   useEffect(() => {
     initializeUiPreferences(
       setLongTextPasteAsAttachmentEnabled,
       setRichTextRenderingEnabled,
-      setSessionHoverPreviewEnabled
+      setSessionHoverPreviewEnabled,
+      setProductivityTools,
     )
-  }, [setLongTextPasteAsAttachmentEnabled, setRichTextRenderingEnabled, setSessionHoverPreviewEnabled])
+  }, [setLongTextPasteAsAttachmentEnabled, setProductivityTools, setRichTextRenderingEnabled, setSessionHoverPreviewEnabled])
 
   return null
 }

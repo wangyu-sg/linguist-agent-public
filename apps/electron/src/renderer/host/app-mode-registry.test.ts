@@ -19,10 +19,10 @@ test('Agent 模式不会恢复 Linguist 父会话的委派子会话', () => {
   )
 })
 
-test('展开右侧工作区时优先保留 320px Agent rail，空间不足则由工作区独占', () => {
+test('展开右侧工作区时隐藏 Agent 主区并占满剩余空间', () => {
   expect(getExpandedRightWorkspaceLayout(1440, 61)).toEqual({
-    mainAreaWidth: 320,
-    rightPanelWidth: 1059,
+    mainAreaWidth: 0,
+    rightPanelWidth: 1379,
   })
   expect(getExpandedRightWorkspaceLayout(720, 61)).toEqual({
     mainAreaWidth: 0,

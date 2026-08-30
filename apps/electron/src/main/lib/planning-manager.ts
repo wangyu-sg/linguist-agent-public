@@ -1898,7 +1898,6 @@ export function snoozePlanningReminder(id: string, minutes: number): PlanningRem
   })
   return copyReminder(findReminder(getPlanningState(), id)!)
 }
-
 function activeReminderFromState(state: PlanningState, reminder: PlanningReminder): ActivePlanningReminder | undefined {
   if (reminder.targetType === 'todo') {
     const target = findTodo(state, reminder.targetId)
@@ -1920,6 +1919,12 @@ function activeReminderFromState(state: PlanningState, reminder: PlanningReminde
     group: hydrated.group,
     tags: hydrated.tags,
   }
+}
+
+/** 读取提醒以在上层能力开关中核验其归属类型。 */
+export function getPlanningReminder(id: string): PlanningReminder | undefined {
+  const reminder = findReminder(getPlanningState(), id)
+  return reminder ? copyReminder(reminder) : undefined
 }
 
 export function listActivePlanningReminders(): ActivePlanningReminder[] {

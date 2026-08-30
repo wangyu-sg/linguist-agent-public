@@ -408,7 +408,7 @@ export function LinguistWorkbenchShell({
               aria-label="语言资产面板"
               data-workbench-slot="bottom-dock"
               className={cn(
-                'relative min-h-0 shrink-0 overflow-hidden bg-content-area/70 shadow-[0_-1px_0_hsl(var(--border)/0.45)] max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20 max-lg:shadow-xl',
+                'relative min-h-0 shrink-0 overflow-hidden bg-content-area shadow-[0_-1px_0_hsl(var(--border)/0.45)] max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20 max-lg:shadow-xl',
                 presentation === 'workspace' && 'absolute inset-x-0 bottom-0 z-20 shadow-xl',
               )}
               style={{ height: uiState.bottomDockHeight }}
