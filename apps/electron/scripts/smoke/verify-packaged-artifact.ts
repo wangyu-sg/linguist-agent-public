@@ -15,10 +15,10 @@ export const LEGAL_RESOURCES = [
 ] as const
 
 const ASAR_RUNTIME_PACKAGES = [
-  ['@earendil-works/pi-coding-agent', '0.84.2', 'dist/index.js'],
-  ['@earendil-works/pi-agent-core', '0.84.2', 'dist/index.js'],
-  ['@earendil-works/pi-ai', '0.84.2', 'dist/index.js'],
-  ['pdfjs-dist', '4.10.38', 'legacy/build/pdf.mjs'],
+  ['@earendil-works/pi-coding-agent', 'dist/index.js'],
+  ['@earendil-works/pi-agent-core', 'dist/index.js'],
+  ['@earendil-works/pi-ai', 'dist/index.js'],
+  ['pdfjs-dist', 'legacy/build/pdf.mjs'],
 ] as const
 
 const ASAR_WORKERS = [
@@ -41,9 +41,11 @@ function requireFile(file: string, label: string): void {
   if (!existsSync(file) || !statSync(file).isFile()) throw new Error(`打包产物缺少 ${label}：${file}`)
 }
 
-function requirePackageVersion(file: string, expected: string): void {
+function requirePackageVersion(file: string, expectedFile: string): void {
   requireFile(file, 'runtime package.json')
+  requireFile(expectedFile, 'source runtime package.json')
   const actual = JSON.parse(readFileSync(file, 'utf8')).version
+  const expected = JSON.parse(readFileSync(expectedFile, 'utf8')).version
   if (actual !== expected) throw new Error(`runtime 版本不匹配：${file}，期望 ${expected}，实际 ${actual ?? '<missing>'}`)
 }
 
@@ -94,9 +96,11 @@ function requireAsarFile(archive: string, relativePath: string): void {
   readAsarFile(archive, relativePath)
 }
 
-function requireAsarPackageVersion(archive: string, packageName: string, expected: string): void {
+function requireAsarPackageVersion(archive: string, packageName: string, expectedFile: string): void {
   const relativePath = `node_modules/${packageName}/package.json`
   const actual = JSON.parse(readAsarFile(archive, relativePath).toString('utf8')).version
+  requireFile(expectedFile, 'source runtime package.json')
+  const expected = JSON.parse(readFileSync(expectedFile, 'utf8')).version
   if (actual !== expected) {
     throw new Error(`runtime 版本不匹配：${relativePath}，期望 ${expected}，实际 ${actual ?? '<missing>'}`)
   }
@@ -105,6 +109,7 @@ function requireAsarPackageVersion(archive: string, packageName: string, expecte
 export function verifyPackagedArtifact(appPath: string, repoRoot: string): void {
   const resources = join(appPath, 'Contents', 'Resources')
   const asar = join(resources, 'app.asar')
+  const sourceNodeModules = join(repoRoot, 'apps', 'electron', 'node_modules')
   requireFile(asar, 'app.asar')
 
   for (const [sourceRelative, packagedName] of LEGAL_RESOURCES) {
@@ -116,13 +121,16 @@ export function verifyPackagedArtifact(appPath: string, repoRoot: string): void 
   }
 
   const unpacked = join(resources, 'app.asar.unpacked', 'node_modules')
-  requirePackageVersion(join(unpacked, 'sharp', 'package.json'), '0.35.3')
-  requirePackageVersion(join(unpacked, '@img', 'sharp-darwin-arm64', 'package.json'), '0.35.3')
-  requirePackageVersion(join(unpacked, '@img', 'sharp-libvips-darwin-arm64', 'package.json'), '1.3.2')
+  for (const packageName of ['sharp', '@img/sharp-darwin-arm64', '@img/sharp-libvips-darwin-arm64']) {
+    requirePackageVersion(
+      join(unpacked, packageName, 'package.json'),
+      join(sourceNodeModules, packageName, 'package.json'),
+    )
+  }
   requireFile(join(resources, 'agent-island', 'macos-agent-island-helper'), 'Agent Island native helper')
 
-  for (const [packageName, version, entry] of ASAR_RUNTIME_PACKAGES) {
-    requireAsarPackageVersion(asar, packageName, version)
+  for (const [packageName, entry] of ASAR_RUNTIME_PACKAGES) {
+    requireAsarPackageVersion(asar, packageName, join(sourceNodeModules, packageName, 'package.json'))
     requireAsarFile(asar, `node_modules/${packageName}/${entry}`)
   }
   for (const worker of ASAR_WORKERS) requireAsarFile(asar, worker)
