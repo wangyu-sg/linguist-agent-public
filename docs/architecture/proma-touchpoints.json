@@ -1,9 +1,9 @@
 {
   "schemaVersion": 3,
-  "baseline": "c261cbc5344a6d4a22d30de57e489efd0e56062d",
-  "formalMerge": "cf2832f3ebb07a65a7af30d5834858b6a8dfec5b",
-  "recomputedOn": "2026-08-30",
-  "comment": "Proma-core touchpoints tracked against v0.19.5; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "baseline": "9415c521d00024f067122cde8be7e89d5f055379",
+  "formalMerge": "db2d9bd9bb329a5e6a9c5cf5e7e5c4882070c022",
+  "recomputedOn": "2026-09-01",
+  "comment": "Proma-core touchpoints tracked against v0.19.16; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",

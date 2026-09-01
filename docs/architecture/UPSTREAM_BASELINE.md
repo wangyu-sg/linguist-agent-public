@@ -1,26 +1,26 @@
-# Upstream Baseline — Proma v0.19.5
+# Upstream Baseline — Proma v0.19.16
 
-> 更新日期：2026-08-30
+> 更新日期：2026-09-01
 > 机读真源：[proma-baseline.json](./proma-baseline.json)
 
 | 项目 | 值 |
 |---|---|
 | upstream | `https://github.com/proma-ai/Proma` |
-| tag / commit | `v0.19.5` / `c261cbc5344a6d4a22d30de57e489efd0e56062d` |
-| 本地起点 | `c11e0f6b3d5f33cda53f9a780a6f4d6bac2733ed` |
-| LA merge commit | `cf2832f3ebb07a65a7af30d5834858b6a8dfec5b` |
+| tag / commit | `v0.19.16` / `9415c521d00024f067122cde8be7e89d5f055379` |
+| 本地起点 | `b54122a35c5e720405cb5c26b1b9660339f9b7d1` |
+| LA merge commit | `db2d9bd9bb329a5e6a9c5cf5e7e5c4882070c022` |
 | 施工分支 | `main` |
 
 ## 运行时与产品版本
 
 | 项目 | 当前值 |
 |---|---|
-| Linguist Agent / upstream app | `0.17.65` / `0.19.5` |
+| Linguist Agent / upstream app | `0.17.67` / `0.19.16` |
 | Electron / Bun | `43.2.0` / `1.3.14` |
 | Pi Runtime | `0.84.4` |
-| Shared | `0.1.66` |
-| CAT Core / Formats / Store / Tools | `0.0.22 / 0.0.12 / 0.0.41 / 0.0.36` |
-| CAT schema | `18` |
+| Shared | `0.1.67` |
+| CAT Core / Formats / Store / Tools | `0.0.23 / 0.0.13 / 0.0.42 / 0.0.37` |
+| CAT schema | `19` |
 
 ## 保留差异
 

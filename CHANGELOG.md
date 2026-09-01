@@ -6,17 +6,19 @@
 
 ## [Unreleased]
 
-## [0.17.66] - 2026-09-01
+## [0.17.67] - 2026-09-01
 
 ### Added
 
 - TM Intelligence 2.0 的纯函数 Segment Matcher、强上下文匹配、TM 来源追踪、TMX 元数据与内联结构保存。
 - Workbench TM 面板显示匹配类别、差异、来源、来源数量、结构安全状态和译文变体。
+- [Proma v0.19.16](https://github.com/proma-ai/Proma/releases/tag/v0.19.16) 新增全量会话正文搜索、Markdown YAML Properties、表格与 LaTeX 编辑、长文目录导航和 Vault 滚动位置记忆。
 
 ### Changed
 
 - Workbench 与 Agent 共用同一 Matcher；Agent Fuzzy 默认阈值为 85%，最多注入 2 条，并过滤短句和结构不兼容结果。
 - TM 单元按具体 TU occurrence 保存，支持来源启用/禁用、优先级和语言对隔离的 Exact Hash。
+- Proma 基线由 v0.19.5 升级至 [v0.19.16](https://github.com/proma-ai/Proma/releases/tag/v0.19.16)，统一 Agent 运行代际，并将项目根检查与会话分叉文件复制改为异步执行。
 
 ### Removed
 
@@ -26,6 +28,7 @@
 
 - Schema 19 迁移前先创建带 `fromSchema`/`toSchema` 记录的真实项目备份。
 - 修复同源多译文未标记歧义、TMX `tuid`/属性/上下文/内联结构丢失以及迁移后 TM 来源不可追踪。
+- [Proma v0.19.16](https://github.com/proma-ai/Proma/releases/tag/v0.19.16) 修复工作区标签滚动、预览刷新、浏览器焦点与弹窗隔离、Windows ConPTY、macOS 终端配置回读、终端关闭快捷键和禁用场景音效仍播放等问题。
 
 ## [0.17.65] - 2026-08-30
 
@@ -228,8 +231,8 @@
 
 - 修复上游合并后的 CI 测试口径。
 
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.66...HEAD
-[0.17.66]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...v0.17.66
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.67...HEAD
+[0.17.67]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...v0.17.67
 [0.17.65]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.64...v0.17.65
 [0.17.64]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.63...v0.17.64
 [0.17.63]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.62...v0.17.63
