@@ -3455,7 +3455,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
               </TooltipTrigger>
               <TooltipContent side="right">更多工作区工具</TooltipContent>
             </Tooltip>
-            <DropdownMenuContent side="right" align="end" className="min-w-40">
+            <DropdownMenuContent side="right" align="end" className="z-[100] min-w-40 titlebar-no-drag">
               {productivityTools.todosEnabled && (
                 <DropdownMenuItem
                   aria-current={isWorkspaceComponentActive("todos") ? "page" : undefined}

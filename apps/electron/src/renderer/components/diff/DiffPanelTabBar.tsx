@@ -50,8 +50,6 @@ interface DiffPanelTabBarProps {
   onTabChange: (tab: AgentSidePanelTab) => void
   onCloseTab: (tab: AgentSidePanelTab) => void
   onOpenBrowser: () => void
-  /** 加号菜单是否展开；供原生浏览器视图临时避让。 */
-  onAddTabMenuOpenChange?: (open: boolean) => void
   onOpenFile: () => void
   onOpenTerminal?: () => void
   onOpenWorkspaceComponent?: (component: WorkspaceComponentTab) => void
@@ -77,7 +75,6 @@ export function DiffPanelTabBar({
   onTabChange,
   onCloseTab,
   onOpenBrowser,
-  onAddTabMenuOpenChange,
   onOpenFile,
   onOpenTerminal,
   onOpenWorkspaceComponent,
@@ -100,7 +97,6 @@ export function DiffPanelTabBar({
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
   const unseenChanges = unseenMap.get(currentSessionId ?? '') ?? false
   const isMac = React.useMemo(() => detectIsMac(), [])
-  const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
   const [isSplitTabGroupHovered, setIsSplitTabGroupHovered] = React.useState(false)
   // 仅鼠标在菜单外取消时抑制 Radix 的回焦；Esc 与键盘选择必须保留可见焦点。
   const suppressPointerDismissFocusRestoreRef = React.useRef(false)
@@ -113,17 +109,10 @@ export function DiffPanelTabBar({
   const suppressClickTabRef = React.useRef<AgentSidePanelTab | null>(null)
   const activeTabDragCancelRef = React.useRef<(() => void) | null>(null)
 
-  React.useEffect(() => () => onAddTabMenuOpenChange?.(false), [onAddTabMenuOpenChange])
   React.useEffect(() => () => activeTabDragCancelRef.current?.(), [])
   React.useEffect(() => {
     if (!visibleTabs?.left || !visibleTabs.right) setIsSplitTabGroupHovered(false)
   }, [visibleTabs?.left, visibleTabs?.right])
-
-  const handleAddTabMenuOpenChange = React.useCallback((open: boolean) => {
-    if (open) suppressPointerDismissFocusRestoreRef.current = false
-    setIsAddTabMenuOpen(open)
-    onAddTabMenuOpenChange?.(open)
-  }, [onAddTabMenuOpenChange])
 
   const syncScrollbarThumb = React.useCallback(() => {
     const tabList = tabListRef.current
@@ -433,7 +422,7 @@ export function DiffPanelTabBar({
             <TooltipContent side="bottom">退出并排，保留当前标签</TooltipContent>
           </Tooltip>
         )}
-        <DropdownMenu open={isAddTabMenuOpen} onOpenChange={handleAddTabMenuOpenChange}>
+        <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>

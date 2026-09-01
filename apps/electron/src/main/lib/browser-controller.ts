@@ -65,8 +65,6 @@ type BrowserTabRecord = {
   openedByAgent: boolean
   /** 此标签是页面 window.open / target=_blank 创建的真实 child window。 */
   openedByPopup: boolean
-  /** popup 的 opener tab，用于父标签关闭时递归回收子窗口。 */
-  openerTabId: string | null
   /** about:blank/blob/data 仅允许作为 popup 首次导航，不可被后续导航复用。 */
   popupInitialUrl: string | null
   popupInitialNavigationPending: boolean
@@ -83,7 +81,6 @@ type BrowserTabOptions = {
   isLocalPreview?: boolean
   claimAsAgent?: boolean
   openedByPopup?: boolean
-  openerTabId?: string
   popupInitialUrl?: string
   /** Electron setWindowOpenHandler 交给 createWindow 的完整 child 构造选项，必须原样使用。 */
   viewOptions?: Electron.WebContentsViewConstructorOptions
@@ -592,7 +589,7 @@ export class BrowserController {
     return record
   }
 
-  private createTab(browserSession: BrowserSessionRecord, isLocalPreview = false, claimAsAgent = false, popupOptions?: Pick<BrowserTabOptions, 'openedByPopup' | 'openerTabId' | 'popupInitialUrl' | 'viewOptions'>): BrowserTabRecord {
+  private createTab(browserSession: BrowserSessionRecord, isLocalPreview = false, claimAsAgent = false, popupOptions?: Pick<BrowserTabOptions, 'openedByPopup' | 'popupInitialUrl' | 'viewOptions'>): BrowserTabRecord {
     if (!this.owner || this.owner.isDestroyed()) throw new Error('主窗口尚未就绪，无法创建浏览器标签。')
     const tabId = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const view = new WebContentsView(popupOptions?.viewOptions ?? {
@@ -615,7 +612,6 @@ export class BrowserController {
       isLocalPreview,
       openedByAgent: claimAsAgent,
       openedByPopup: popupOptions?.openedByPopup ?? false,
-      openerTabId: popupOptions?.openerTabId ?? null,
       popupInitialUrl,
       popupInitialNavigationPending: popupInitialUrl !== null && isTransientBrowserPopupUrl(popupInitialUrl),
       lastActivityAt: Date.now(),
@@ -635,11 +631,11 @@ export class BrowserController {
       let popup: BrowserTabRecord | null = null
       return {
         action: 'allow',
-        outlivesOpener: false,
+        // Proma 将 window.open 呈现为同级浏览器 Tab；关闭来源页面不能级联关闭它。
+        outlivesOpener: true,
         createWindow: (options) => {
           popup = this.createTab(browserSession, false, false, {
             openedByPopup: true,
-            openerTabId: tab.tabId,
             popupInitialUrl: url,
             // 必须原样传入 Electron 给 createWindow 的完整 options，不能只抽取 webPreferences。
             viewOptions: options,
@@ -704,7 +700,6 @@ export class BrowserController {
     view.webContents.on('did-navigate-in-page', () => { tab.popupInitialNavigationPending = false; this.invalidateTabDocument(tab); this.updateNavigationState(browserSession, tab) })
     view.webContents.on('destroyed', () => {
       if (!browserSession.tabs.has(tab.tabId)) return
-      this.disposePopupChildren(browserSession, tab.tabId)
       browserSession.tabs.delete(tab.tabId)
       browserSession.lastLayoutRevisionByTab.delete(tab.tabId)
       this.removePresentation(browserSession.sessionId, tab.tabId)
@@ -1038,12 +1033,6 @@ export class BrowserController {
     this.emit(browserSession)
   }
 
-  private disposePopupChildren(browserSession: BrowserSessionRecord, openerTabId: string): void {
-    for (const child of [...browserSession.tabs.values()]) {
-      if (child.openerTabId === openerTabId) this.disposeTab(browserSession, child)
-    }
-  }
-
   private repairTabSelection(browserSession: BrowserSessionRecord, removedTabId: string): void {
     if (browserSession.activeTabId === removedTabId || !browserSession.tabs.has(browserSession.activeTabId)) {
       browserSession.activeTabId = browserSession.tabs.keys().next().value as string
@@ -1055,8 +1044,6 @@ export class BrowserController {
 
   private disposeTab(browserSession: BrowserSessionRecord, tab: BrowserTabRecord): void {
     if (!browserSession.tabs.has(tab.tabId)) return
-    // Child windows use Electron's opener lifetime and must not outlive a tab closed from Proma UI either.
-    this.disposePopupChildren(browserSession, tab.tabId)
     browserSession.tabs.delete(tab.tabId)
     browserSession.lastLayoutRevisionByTab.delete(tab.tabId)
     this.removePresentation(browserSession.sessionId, tab.tabId)

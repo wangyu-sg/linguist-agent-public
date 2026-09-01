@@ -1243,14 +1243,11 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   }, [activeBrowserTabId, browserState?.tabs, returnToPreviousTabAfterClose])
 
   const showBrowserActivity = Boolean(browserState?.activity && browserState.executionSource !== 'user')
-  // WebContentsView 是原生子视图，会盖住 renderer 的 portal。加号菜单打开时，
-  // BrowserPanel 为它保留一个固定避让区，而非 setVisible(false)。
   React.useEffect(() => {
     if (activeTab !== 'todos' && activeTab !== 'calendar' && activeTab !== 'vault') return
     if (!isWorkspaceComponentEnabled(activeTab)) onTabChange('files')
   }, [activeTab, isWorkspaceComponentEnabled, onTabChange])
 
-  const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
   const workspaceTabs = React.useMemo<WorkspacePanelTab[]>(() => [
     ...(hostWorkspace.tab ? [hostWorkspace.tab] : []),
     { id: 'files', label: '文件', icon: <FolderOpen className="size-3.5" /> },
@@ -1569,7 +1566,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
               sessionId={sessionId}
               tabId={paneBrowserTabId}
               state={browserState}
-              isAddTabMenuOpen={isAddTabMenuOpen}
             />
           </div>
         )
@@ -1766,7 +1762,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
             onTabChange={handleWorkspaceTabChange}
             onCloseTab={handleCloseWorkspaceTab}
             onOpenBrowser={() => void handleOpenBrowserTab()}
-            onAddTabMenuOpenChange={setIsAddTabMenuOpen}
             onOpenFile={() => handleWorkspaceTabChange('files')}
             onOpenTerminal={handleOpenTerminal}
             onOpenWorkspaceComponent={(component) => {

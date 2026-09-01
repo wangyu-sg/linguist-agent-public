@@ -414,6 +414,15 @@
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
+      "file": "apps/electron/src/main/lib/browser-controller.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "main-upstream",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-browser-tab-lifecycle",
+      "reason": "提前同步 Proma f2ddb623 的浏览器 Tab 生命周期修复，关闭来源页面时不再级联销毁同级 popup Tab。"
+    },
+    {
       "file": "apps/electron/src/main/lib/channel-manager.ts",
       "ticket": "LA-SYNC-003",
       "kind": "product-fork",
@@ -1080,6 +1089,14 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "single macOS titlebar safe-area derivation shared by the sidebar expanded/collapsed branches so traffic lights never overlap content; replaces per-branch magic numbers."
+    },
+    {
+      "file": "apps/electron/src/renderer/components/browser/BrowserPanel.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "右侧工作区加号菜单保持 overlay，打开菜单时不移动或压缩原生浏览器页面。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ChatHeader.tsx",

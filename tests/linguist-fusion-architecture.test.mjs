@@ -362,3 +362,43 @@ test('Linguist Runtime 同时装配 Proma Workspace 能力与 CAT overlay', () =
   assert.match(executionScope, /ensureWorkspaceSession\(workspace\.slug, session\.id\)/)
   assert.doesNotMatch(executionScope, /ensureLinguistSessionWorkspace/)
 })
+
+test('右侧工作区加号菜单不移动原生浏览器页面', () => {
+  const browserPanel = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/renderer/components/browser/BrowserPanel.tsx'),
+    'utf8',
+  )
+  const sidePanel = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/renderer/components/agent/SidePanel.tsx'),
+    'utf8',
+  )
+  const tabBar = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/renderer/components/diff/DiffPanelTabBar.tsx'),
+    'utf8',
+  )
+
+  assert.doesNotMatch(browserPanel, /ADD_TAB_MENU_CLEARANCE_PX|isAddTabMenuOpen/)
+  assert.doesNotMatch(sidePanel, /isAddTabMenuOpen/)
+  assert.doesNotMatch(tabBar, /onAddTabMenuOpenChange/)
+})
+
+test('关闭浏览器标签不会级联关闭其弹出标签', () => {
+  const controller = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/main/lib/browser-controller.ts'),
+    'utf8',
+  )
+
+  assert.match(controller, /outlivesOpener:\s*true/)
+  assert.doesNotMatch(controller, /disposePopupChildren/)
+})
+
+test('折叠侧栏的工作区工具菜单显示在应用主层之上', () => {
+  const sidebar = readFileSync(
+    join(REPO_ROOT, 'apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx'),
+    'utf8',
+  )
+  const trigger = sidebar.indexOf('aria-label="更多工作区工具"')
+  const content = sidebar.indexOf('<DropdownMenuContent', trigger)
+  assert.ok(trigger >= 0 && content > trigger)
+  assert.match(sidebar.slice(content, content + 180), /z-\[100\]/)
+})
