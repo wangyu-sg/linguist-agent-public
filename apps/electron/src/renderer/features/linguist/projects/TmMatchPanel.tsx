@@ -4,8 +4,8 @@ import { AlertTriangle, Loader2 } from 'lucide-react'
 import type {
   LinguistIpcError,
   LinguistSegmentInfo,
-  LinguistTmMatchInfo,
-  LinguistTmMatchType,
+  LinguistTmMatchClass,
+  LinguistTmPanelItem,
 } from '@proma/shared'
 import {
   linguistTargetEditorCapabilityAtomFamily,
@@ -25,29 +25,18 @@ type TmMatchState =
       status: 'ready'
       segmentId: string
       segment: LinguistSegmentInfo
-      matches: LinguistTmMatchInfo[]
+      matches: LinguistTmPanelItem[]
     }
 
 export type TmEditorAction = 'replace' | 'insert'
 export type TmEditorActionResult = 'applied' | 'unavailable' | 'rejected'
 
-const TM_MATCH_LABELS: Record<LinguistTmMatchType, string> = {
-  exact: 'Exact',
-  contains: 'Contains',
+const TM_MATCH_LABELS: Record<LinguistTmMatchClass, string> = {
+  'double-context': '102 Context',
+  context: '101 Context',
+  exact: '100 Exact',
+  'near-exact': 'Near Exact',
   fuzzy: 'Fuzzy',
-}
-
-export function tmMatchScore(score: number): number {
-  return Math.round(Math.min(1, Math.max(0, score)) * 100)
-}
-
-export function tmOriginLabel(origin?: string): string {
-  if (origin === undefined || origin.trim() === '') return 'Project'
-  const normalized = origin.trim().toLowerCase()
-  if (normalized === 'project') return 'Project'
-  if (normalized === 'client') return 'Client'
-  if (normalized === 'imported') return 'Imported'
-  return `Imported · ${origin}`
 }
 
 export function tmStateMatchesActiveSegment(
@@ -85,7 +74,7 @@ export function applyTmMatchToEditor({
   archived,
 }: {
   action: TmEditorAction
-  match: LinguistTmMatchInfo
+  match: LinguistTmPanelItem
   activeSegmentId: string
   capability?: LinguistTargetEditorCapability
   locked: boolean
@@ -171,7 +160,7 @@ export function TmMatchPanel({
         status: 'ready',
         segmentId: activeSegmentId,
         segment: result.data.segment,
-        matches: result.data.tmMatches,
+        matches: result.data.tm,
       })
     }).catch(() => {
       if (!cancelled) {
@@ -229,7 +218,7 @@ export function TmMatchView({
 }: {
   activeSegmentId: string
   segment: LinguistSegmentInfo
-  matches: readonly LinguistTmMatchInfo[]
+  matches: readonly LinguistTmPanelItem[]
   capability?: LinguistTargetEditorCapability
   archived: boolean
 }): React.ReactElement {
@@ -245,7 +234,7 @@ export function TmMatchView({
   })
   const reasonId = `tm-action-reason-${activeSegmentId}`
 
-  const apply = (action: TmEditorAction, match: LinguistTmMatchInfo): void => {
+  const apply = (action: TmEditorAction, match: LinguistTmPanelItem): void => {
     const result = applyTmMatchToEditor({
       action,
       match,
@@ -298,9 +287,9 @@ export function TmMatchView({
       )}
       <ul aria-label="当前片段 TM 匹配" className="space-y-2">
         {matches.map((match) => {
-          const score = tmMatchScore(match.score)
-          const origin = tmOriginLabel(match.origin)
-          const actionDescription = `${score}% ${origin} ${TM_MATCH_LABELS[match.matchType]} TM`
+          const score = Math.round(Math.min(102, Math.max(0, match.score)))
+          const origin = match.sourceLabel
+          const actionDescription = `${score}% ${origin} ${TM_MATCH_LABELS[match.matchClass]} TM`
           return (
             <li
               key={match.id}
@@ -311,16 +300,42 @@ export function TmMatchView({
                   {score}%
                 </span>
                 <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium text-foreground/65">
-                  {TM_MATCH_LABELS[match.matchType]}
+                  {TM_MATCH_LABELS[match.matchClass]}
                 </span>
                 <span className="w-full break-words text-[10px] text-muted-foreground">
                   {origin}
                 </span>
+                {match.provenanceCount > 1 && (
+                  <span className="w-full text-[10px] text-muted-foreground">
+                    {match.provenanceCount} 个来源
+                  </span>
+                )}
+                {match.variantCount > 1 && (
+                  <span className="w-full text-[10px] text-warning">
+                    {match.variantCount} 个译文变体
+                  </span>
+                )}
+                {match.safety === 'review' && (
+                  <span className="w-full text-[10px] text-warning">
+                    需人工审核
+                  </span>
+                )}
+                {(match.warnings.length > 0 || match.differences.length > 0) && (
+                  <span className="w-full break-words text-[10px] text-warning">
+                    {[...match.warnings, ...match.differences].join(' · ')}
+                  </span>
+                )}
+                {match.badges.length > 0 && (
+                  <details className="w-full text-[10px] text-muted-foreground">
+                    <summary className="cursor-pointer">匹配详情</summary>
+                    <p className="mt-1 break-words whitespace-pre-wrap">{match.badges.join('\n')}</p>
+                  </details>
+                )}
               </div>
               <div className="min-w-0 space-y-1 text-xs">
                 <p className="break-words text-foreground/55">
                   <span className="sr-only">Source：</span>
-                  {match.source}
+                  {match.matchedSource}
                 </p>
                 <p className="break-words font-medium text-foreground">
                   <span className="sr-only">Target：</span>

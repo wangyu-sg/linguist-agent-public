@@ -8,7 +8,8 @@ import type {
   LinguistTermConflictInfo,
   LinguistTermInfo,
   LinguistTermStatus,
-  LinguistTmInfo,
+  LinguistTmReferenceInfo,
+  LinguistTmSourceInfo,
 } from '@proma/shared'
 import { describeLinguistIpcError } from './project-utils'
 import { sendProjectAgentTask } from './project-agent-task'
@@ -55,7 +56,8 @@ interface PendingReferenceCandidate {
 export function ReferenceManager({ projectId, archived }: { projectId: string; archived: boolean }): React.ReactElement {
   const [tab, setTab] = React.useState<Tab>('tm')
   const [query, setQuery] = React.useState('')
-  const [tm, setTm] = React.useState<LinguistTmInfo[]>([])
+  const [tm, setTm] = React.useState<LinguistTmReferenceInfo[]>([])
+  const [tmSources, setTmSources] = React.useState<LinguistTmSourceInfo[]>([])
   const [terms, setTerms] = React.useState<LinguistTermInfo[]>([])
   const [termConflicts, setTermConflicts] = React.useState<LinguistTermConflictInfo[]>([])
   const [imports, setImports] = React.useState<LinguistReferenceImportInfo[]>([])
@@ -83,6 +85,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
         setTm(result.data.items)
         setTotal(result.data.total)
         setImports(result.data.imports ?? [])
+        setTmSources(result.data.sources ?? [])
       } else {
         const result = await window.electronAPI.linguistReferencesQueryTerms({
           projectId,
@@ -210,6 +213,18 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
       return
     }
     await Promise.all([refresh(), refreshTermConflicts()])
+  }
+  const updateTmSource = async (
+    sourceId: string,
+    patch: { enabled?: boolean; priority?: number },
+  ): Promise<void> => {
+    if (archived) return
+    const result = await window.electronAPI.linguistReferencesUpdateTmSource({ projectId, sourceId, ...patch })
+    if (!result.ok) {
+      toast.error('保存 TM 来源设置失败', { description: describeLinguistIpcError(result.error) })
+      return
+    }
+    setTmSources((current) => current.map((source) => source.id === result.data.id ? result.data : source))
   }
   const upsertTerm = async (draft: TermDraft, existing?: LinguistTermInfo): Promise<void> => {
     if (termBusy || archived) return
@@ -381,6 +396,47 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
           />
         )}
 
+        {tab === 'tm' && tmSources.length > 0 && (
+          <section aria-label="TM 来源" className="space-y-1.5 rounded-lg border border-border/35 bg-foreground/[0.02] px-2.5 py-2 text-[11px]">
+            <p className="font-medium text-foreground/65">TM 来源</p>
+            <ul className="space-y-1">
+              {tmSources.map((source) => (
+                <li key={source.id} className="flex items-center gap-2 rounded-md bg-background/60 px-2 py-1.5">
+                  <input
+                    type="checkbox"
+                    aria-label={`启用 ${source.displayName}`}
+                    checked={source.enabled}
+                    disabled={archived}
+                    onChange={(event) => void updateTmSource(source.id, { enabled: event.target.checked })}
+                  />
+                  <span className="min-w-0 flex-1 truncate" title={source.displayName}>{source.displayName}</span>
+                  <span className="shrink-0 text-foreground/45">{source.unitCount} 条</span>
+                  <label className="flex shrink-0 items-center gap-1 text-foreground/45">
+                    优先级
+                    <input
+                      key={`${source.id}:${source.priority}`}
+                      type="number"
+                      defaultValue={source.priority}
+                      disabled={archived}
+                      aria-label={`${source.displayName} 优先级`}
+                      className="h-6 w-14 rounded border border-border/50 bg-background px-1 text-right text-[11px] text-foreground"
+                      onBlur={(event) => {
+                        const priority = Number(event.currentTarget.value)
+                        if (!Number.isSafeInteger(priority)) {
+                          event.currentTarget.value = String(source.priority)
+                          toast.error('优先级必须是整数')
+                          return
+                        }
+                        if (priority !== source.priority) void updateTmSource(source.id, { priority })
+                      }}
+                    />
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {tab === 'terms' && termConflicts.length > 0 && (
           <section aria-label="术语冲突" className="rounded-lg bg-warning/10 px-2.5 py-2 text-[11px] text-foreground/70">
             <p className="font-medium">
@@ -449,7 +505,7 @@ export function ReferenceManager({ projectId, archived }: { projectId: string; a
                 ) : (
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 break-words">
-                      {tab === 'tm' ? <>{(item as LinguistTmInfo).source}<span className="ml-2 text-foreground/45">{(item as LinguistTmInfo).target}</span></> : <>{(item as LinguistTermInfo).term}<span className="ml-2 text-foreground/45">{(item as LinguistTermInfo).translation} · {TERM_STATUS_LABELS[(item as LinguistTermInfo).status]}</span></>}
+                      {tab === 'tm' ? <>{(item as LinguistTmReferenceInfo).source}<span className="ml-2 text-foreground/45">{(item as LinguistTmReferenceInfo).target}</span></> : <>{(item as LinguistTermInfo).term}<span className="ml-2 text-foreground/45">{(item as LinguistTermInfo).translation} · {TERM_STATUS_LABELS[(item as LinguistTermInfo).status]}</span></>}
                     </span>
                     {tab === 'terms' && (
                       <button type="button" disabled={archived || addingTerm} onClick={() => setEditingTermId(item.id)} aria-label="编辑术语" className="text-foreground/55 hover:text-foreground disabled:opacity-40"><Pencil size={12} /></button>

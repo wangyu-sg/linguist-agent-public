@@ -14,6 +14,8 @@ import {
   type TmUnitImportInput,
 } from '@linguist/cat-store'
 
+type ParsedTmUnitImportInput = Omit<TmUnitImportInput, 'sourceId'>
+
 function withTempFile<T>(bytes: Uint8Array, extension: string, read: (path: string) => T): T {
   const dir = mkdtempSync(join(tmpdir(), 'linguist-trados-'))
   const path = join(dir, `source${extension}`)
@@ -56,7 +58,7 @@ export function parseSdltmReference(
   filename: string,
   sourceLocale: string,
   targetLocale: string,
-): { entries: TmUnitImportInput[]; warnings: string[] } {
+): { entries: ParsedTmUnitImportInput[]; warnings: string[] } {
   return withTempFile(bytes, '.sdltm', (path) => {
     let db: SqliteDatabase | undefined
     try {
@@ -79,7 +81,7 @@ export function parseSdltmReference(
         sourceLocale: string
         targetLocale: string
       }>
-      const entries = rows.flatMap((row): TmUnitImportInput[] => {
+      const entries = rows.flatMap((row, index): ParsedTmUnitImportInput[] => {
         if (!localeMatches(row.sourceLocale, sourceLocale) || !localeMatches(row.targetLocale, targetLocale)) {
           return []
         }
@@ -90,7 +92,7 @@ export function parseSdltmReference(
           target,
           sourceLocale,
           targetLocale,
-          origin: 'imported',
+          occurrenceKey: String(index + 1),
         }]
       })
       if (entries.length === 0) {

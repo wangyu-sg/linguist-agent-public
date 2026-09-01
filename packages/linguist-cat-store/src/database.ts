@@ -17,7 +17,7 @@ import {
   StoreSchemaTooNewError,
   translateSqliteError,
 } from './errors'
-import { loadDatabaseSync, type SqliteDatabase } from './runtime'
+import { loadDatabaseSync, probeSqliteRuntime, type SqliteDatabase } from './runtime'
 import { MIGRATIONS, SCHEMA_VERSION } from './schema'
 
 /** SQLite header "LACA" (Linguist Agent CAT): 0x4c414341 / 1279345473, positive int32. */
@@ -134,14 +134,21 @@ export class CatDatabase {
     }
   }
 
-  /** Execute a raw write statement with error translation (internal use). */
-  execWrite(operation: string, sql: string): void {
-    this.assertWritable(operation)
-    try {
-      this.db.exec(sql)
-    } catch (err) {
-      translateSqliteError(err, operation)
+  /** Create a consistent SQLite snapshot without requiring a writable source handle. */
+  backupInto(destinationPath: string): 'vacuum_into' | 'backup_api' {
+    const probe = probeSqliteRuntime()
+    if (probe.hasBackupApi && this.db.backup) {
+      const result = this.db.backup(destinationPath)
+      if (result instanceof Promise) throw new Error('async DatabaseSync#backup is unsupported')
+      return 'backup_api'
     }
+    const quoted = `'${destinationPath.replace(/'/g, "''")}'`
+    try {
+      this.db.exec(`VACUUM INTO ${quoted}`)
+    } catch (err) {
+      translateSqliteError(err, `backup into ${destinationPath}`)
+    }
+    return 'vacuum_into'
   }
 
   close(): void {

@@ -15,6 +15,7 @@ import {
   createSeededEntropy,
   createStageEvidenceBaseline,
   deriveSegmentId,
+  tmSourceHash,
   SegmentLockedError,
   StaleProposalError,
   UnknownSegmentError,
@@ -1425,11 +1426,11 @@ test('cat_search_tm / cat_search_terms: seeded rows are found (search is real, p
   const fixture = setup()
   try {
     const insertTm = fixture.db.catDb.db.prepare(
-      'INSERT INTO tm_units (id, project_id, source, target, source_locale, target_locale, origin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO tm_units (id, project_id, source, target, source_locale, target_locale, origin, source_id, source_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    insertTm.run('tmu-1', fixture.project.id, 'Hello world', '你好，世界', 'en', 'zh-CN', 'import', '2026-01-01T00:00:00.000Z')
-    insertTm.run('tmu-2', fixture.project.id, 'Goodbye world', '再见，世界', 'en', 'zh-CN', null, '2026-01-01T00:00:01.000Z')
-    insertTm.run('tmu-3', 'prj-0000000000000000', 'Hello from another project', '另一个项目', 'en', 'zh-CN', null, '2026-01-01T00:00:02.000Z')
+    insertTm.run('tmu-1', fixture.project.id, 'Hello world', '你好，世界', 'en', 'zh-CN', 'import', 'tools-test', tmSourceHash('Hello world', 'en', 'zh-CN'), '2026-01-01T00:00:00.000Z')
+    insertTm.run('tmu-2', fixture.project.id, 'Goodbye world', '再见，世界', 'en', 'zh-CN', null, 'tools-test', tmSourceHash('Goodbye world', 'en', 'zh-CN'), '2026-01-01T00:00:01.000Z')
+    insertTm.run('tmu-3', 'prj-0000000000000000', 'Hello from another project', '另一个项目', 'en', 'zh-CN', null, 'tools-test', tmSourceHash('Hello from another project', 'en', 'zh-CN'), '2026-01-01T00:00:02.000Z')
     const insertTerm = fixture.db.catDb.db.prepare(
       'INSERT INTO term_entries (id, project_id, term, translation, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     )
@@ -1449,7 +1450,6 @@ test('cat_search_tm / cat_search_terms: seeded rows are found (search is real, p
       target: '你好，世界',
       sourceLocale: 'en',
       targetLocale: 'zh-CN',
-      origin: 'import',
     })
     assert.equal(tm.note, undefined)
     const tmTargetSide = (await invoke(toolByName(tools, 'cat_search_tm'), { query: '世界' })).details as {
@@ -1481,11 +1481,11 @@ test('cat_search_tm / cat_search_terms: seeded rows are found (search is real, p
       caseSensitive: false,
     })
 
-    const tmMatch = (await invoke(toolByName(tools, 'cat_search_tm'), { query: 'Hello world', mode: 'match' }))
+    const tmMatch = (await invoke(toolByName(tools, 'cat_search_tm'), { query: 'Hello world', mode: 'segment' }))
       .details as { mode: string; results: Array<Record<string, unknown>>; total: number }
-    assert.equal(tmMatch.mode, 'match')
+    assert.equal(tmMatch.mode, 'segment')
     assert.equal(tmMatch.total, 1)
-    assert.equal(tmMatch.results[0]?.matchType, 'exact')
+    assert.equal(tmMatch.results[0]?.matchClass, 'exact')
 
     await assertThrowsCode(invoke(toolByName(tools, 'cat_search_tm'), { query: '   ' }), 'INVALID_ARGUMENT')
   } finally {
@@ -1557,7 +1557,8 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
       target: 'TM 译文',
       sourceLocale: 'en',
       targetLocale: 'zh-CN',
-      origin: 'approved',
+      sourceId: 'tools-test',
+      occurrenceKey: fixture.segmentsA[2]!.id as string,
     }])
     fixture.db.termEntries.importMany([
       {
@@ -1587,6 +1588,7 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
         'SELECT * FROM segments WHERE id IN',
         'WITH requested',
         'SELECT * FROM tm_units WHERE project_id = ? AND source_locale',
+        'FROM tm_units AS u',
         'SELECT * FROM term_entries WHERE project_id = ?',
       ].some((needle) => sql.includes(needle))) return statement
       return new Proxy(statement, {
@@ -1617,7 +1619,7 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
         next: Array<{ segmentId: string }>
         requiredTerms: Array<{ id: string }>
         preferredTerms: Array<{ id: string }>
-        tmMatches: Array<{ id: string }>
+        tm: Array<{ unitId: string }>
         evidence: Array<{ id: string; kind: string }>
       }>
       truncated: boolean
@@ -1637,7 +1639,7 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
     ])
     assert.equal(dto.contexts[0]!.requiredTerms.length, 0)
     assert.equal(dto.contexts[0]!.preferredTerms.length, 2)
-    assert.equal(dto.contexts[0]!.tmMatches.length, 1)
+    assert.equal(dto.contexts[0]!.tm.length, 1)
     assert.ok(dto.contexts[0]!.evidence.some((item) => item.kind === 'segment-revision'))
     assert.ok(dto.contexts[0]!.evidence.some((item) => item.kind === 'term'))
     assert.ok(dto.contexts[0]!.evidence.some((item) => item.kind === 'tm'))
@@ -1899,6 +1901,8 @@ test('cat_get_translation_context: public human and TM/TB commits invalidate a p
         target: '阿尔法源文 1',
         sourceLocale: 'en',
         targetLocale: 'zh-CN',
+        sourceId: 'tools-test',
+        occurrenceKey: 'alpha-1',
       }])
     })
     await assertDriftAfter(() => {

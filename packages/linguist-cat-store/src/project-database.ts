@@ -38,6 +38,7 @@ import { StyleGuideRulesRepository } from './repositories/style-guide-rules'
 import { TechConstraintsRepository } from './repositories/tech-constraints'
 import { TermEntriesRepository } from './repositories/term-entries'
 import { TmUnitsRepository } from './repositories/tm-units'
+import { TmSourcesRepository } from './repositories/tm-sources'
 import { VoiceProfilesRepository } from './repositories/voice-profiles'
 import { RunHarnessRepository } from './run-harness'
 
@@ -59,6 +60,7 @@ export class ProjectDatabase {
   readonly qaFindings: QaFindingsRepository
   readonly exports: ExportsRepository
   readonly tmUnits: TmUnitsRepository
+  readonly tmSources: TmSourcesRepository
   readonly termEntries: TermEntriesRepository
   readonly referenceImports: ReferenceImportsRepository
   readonly legacyCriticArtifacts: LegacyCriticArtifactsReader
@@ -80,6 +82,7 @@ export class ProjectDatabase {
     this.proposals = new ProposalsRepository(catDb, this.termEntries)
     this.qaFindings = new QaFindingsRepository(catDb, now)
     this.exports = new ExportsRepository(catDb, projectId, now)
+    this.tmSources = new TmSourcesRepository(catDb, projectId, now)
     this.tmUnits = new TmUnitsRepository(catDb, projectId, now, this.runs)
     this.referenceImports = new ReferenceImportsRepository(catDb, projectId, now)
     this.legacyCriticArtifacts = new LegacyCriticArtifactsReader(catDb)

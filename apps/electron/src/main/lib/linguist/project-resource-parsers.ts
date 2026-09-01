@@ -19,6 +19,8 @@ import type {
 } from './project-service-types'
 import { parseSdltbReference, parseSdltmReference } from './trados-reference-parsers'
 
+type ParsedTmUnitImportInput = Omit<TmUnitImportInput, 'sourceId'>
+
 const CONTEXT_DOC_IMAGE_EXTENSIONS = new Set([
   '.png',
   '.jpg',
@@ -94,12 +96,12 @@ export function parseTmReference(
   input: ImportReferenceInput,
   sourceLocale: string,
   targetLocale: string,
-): Promise<{ entries: TmUnitImportInput[]; warnings: string[] }> {
+): Promise<{ entries: ParsedTmUnitImportInput[]; warnings: string[] }> {
   const lower = input.filename.toLowerCase()
   if (lower.endsWith('.tmx')) {
     const parsed = parseTmx(input.bytes, { sourceLocale, targetLocale, filename: input.filename })
     return Promise.resolve({
-      entries: parsed.entries.map((entry) => ({ ...entry, origin: 'imported' })),
+      entries: parsed.entries,
       warnings: parsed.warnings.map((item) => item.message),
     })
   }
@@ -127,7 +129,7 @@ export function parseTmReference(
     if (source === '' || target === '') {
       throw new FormatParseError('tm_csv', input.filename, `第 ${index + 2} 行的 source/target 不能为空`)
     }
-    return { source, target, sourceLocale, targetLocale, origin: 'imported' }
+    return { source, target, sourceLocale, targetLocale, occurrenceKey: String(index + 2) }
   })
   return Promise.resolve({ entries, warnings: [] })
 }
@@ -228,7 +230,7 @@ async function parseXlsxTmReference(
   input: ImportReferenceInput,
   sourceLocale: string,
   targetLocale: string,
-): Promise<{ entries: TmUnitImportInput[]; warnings: string[] }> {
+): Promise<{ entries: ParsedTmUnitImportInput[]; warnings: string[] }> {
   const parsed = await mappedXlsxRows(input)
   return {
     entries: parsed.rows.map((row) => ({
@@ -236,7 +238,7 @@ async function parseXlsxTmReference(
       target: row.target,
       sourceLocale,
       targetLocale,
-      origin: 'imported',
+      occurrenceKey: String(row.rowNo),
     })),
     warnings: parsed.warnings,
   }

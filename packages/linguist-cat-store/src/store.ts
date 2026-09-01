@@ -33,6 +33,7 @@ import {
   type RestoreBackupResult,
 } from './restore'
 import { LINGUIST_APPLICATION_ID } from './database'
+import { SCHEMA_VERSION } from './schema'
 import { ProjectDatabase } from './project-database'
 import {
   ProjectIndex,
@@ -134,6 +135,28 @@ export class CatStore {
       )
     }
     const dbPath = this.index.projectDbPath(project.id)
+    if (options.readOnly !== true && existsSync(dbPath)) {
+      const inspected = ProjectDatabase.open(dbPath, {
+        projectId: project.id,
+        trustedManifest,
+        readOnly: true,
+        now: this.now,
+      })
+      try {
+        if (inspected.schemaVersion < SCHEMA_VERSION) {
+          // The backup is intentionally made from the read-only handle before
+          // the writable open below is allowed to run migrations.
+          createProjectBackup(
+            inspected.catDb,
+            this.index.projectDir(project.id),
+            this.now(),
+            { fromSchema: inspected.schemaVersion, toSchema: SCHEMA_VERSION },
+          )
+        }
+      } finally {
+        inspected.close()
+      }
+    }
     const handle = ProjectDatabase.open(dbPath, {
       projectId: project.id,
       trustedManifest,

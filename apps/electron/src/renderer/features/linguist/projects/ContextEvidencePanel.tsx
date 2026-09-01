@@ -304,12 +304,12 @@ export function ContextEvidenceView({
         <SourceSummary
           id={sourceId('tm')}
           label="TM"
-          total={context.tmMatches.length}
+          total={context.tm.length}
           empty="当前片段无 TM 匹配"
-          items={context.tmMatches.map((match) => ({
+          items={context.tm.map((match) => ({
             id: match.id,
-            title: match.origin ?? '项目 TM',
-            detail: `${match.matchType} · ${Math.round(match.score * 100)}%`,
+            title: match.sourceLabel,
+            detail: `${match.matchClass} · ${match.score}%`,
           }))}
         />
         {linkedImages}

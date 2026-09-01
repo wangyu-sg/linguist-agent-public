@@ -1,4 +1,4 @@
-import { deriveStableIdV2 } from '@linguist/cat-core'
+import { deriveStableIdV2, tmSourceHash, type TmMatchCandidate } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
 import type { RunHarnessRepository } from '../run-harness'
@@ -9,7 +9,13 @@ export interface TmUnit {
   target: string
   sourceLocale: string
   targetLocale: string
-  origin?: string
+}
+
+export interface TmStoredMatchCandidate extends TmMatchCandidate {
+  originalTuid?: string
+  metadata?: Record<string, string | string[]>
+  sourceInline?: string
+  targetInline?: string
 }
 
 export interface ApprovedExemplar {
@@ -41,7 +47,15 @@ export interface TmUnitImportInput {
   target: string
   sourceLocale: string
   targetLocale: string
-  origin?: string
+  sourceId: string
+  occurrenceKey: string
+  originalTuid?: string
+  contextKey?: string
+  previousSource?: string
+  nextSource?: string
+  metadata?: Record<string, string | string[]>
+  sourceInline?: string
+  targetInline?: string
 }
 
 export interface ReferenceImportResult {
@@ -58,25 +72,6 @@ export interface TmUnitSearch {
   offset?: number
 }
 
-export interface TmMatchOptions {
-  source: string
-  sourceLocale: string
-  targetLocale?: string
-  threshold?: number
-  limit?: number
-}
-
-export interface TmMatchManyOptions extends Omit<TmMatchOptions, 'source'> {
-  sources: readonly string[]
-}
-
-export type TmMatchType = 'exact' | 'contains' | 'fuzzy'
-
-export interface TmUnitMatch extends TmUnit {
-  score: number
-  matchType: TmMatchType
-}
-
 interface TmUnitRow {
   id: string
   project_id: string
@@ -84,11 +79,18 @@ interface TmUnitRow {
   target: string
   source_locale: string
   target_locale: string
-  origin: string | null
-  created_at: string
+  source_id: string | null
+  source_hash: string | null
+  original_tuid: string | null
+  context_key: string | null
+  previous_source_hash: string | null
+  next_source_hash: string | null
+  metadata_json: string | null
+  source_inline_xml: string | null
+  target_inline_xml: string | null
+  source_label?: string | null
+  source_priority?: number | null
 }
-
-const APPROVED_EXEMPLAR_ORIGIN_PREFIX = 'approved-exemplar:'
 
 type ApprovedExemplarMetadata = Omit<
   ApprovedExemplar,
@@ -96,44 +98,33 @@ type ApprovedExemplarMetadata = Omit<
 >
 
 function parseApprovedExemplar(row: TmUnitRow): ApprovedExemplar | undefined {
-  if (!row.origin?.startsWith(APPROVED_EXEMPLAR_ORIGIN_PREFIX)) return undefined
-  try {
-    const meta = JSON.parse(row.origin.slice(APPROVED_EXEMPLAR_ORIGIN_PREFIX.length)) as Partial<ApprovedExemplarMetadata>
-    if (
-      typeof meta.speaker !== 'string'
-      || typeof meta.textType !== 'string'
-      || typeof meta.assetId !== 'string'
-      || typeof meta.segmentId !== 'string'
-      || typeof meta.approvedAt !== 'string'
-    ) return undefined
-    return {
-      id: row.id,
-      source: row.source,
-      target: row.target,
-      sourceLocale: row.source_locale,
-      targetLocale: row.target_locale,
-      speaker: meta.speaker,
-      textType: meta.textType,
-      ...(typeof meta.module === 'string' ? { module: meta.module } : {}),
-      assetId: meta.assetId,
-      segmentId: meta.segmentId,
-      ...(typeof meta.note === 'string' ? { note: meta.note } : {}),
-      approvedAt: meta.approvedAt,
-    }
-  } catch {
-    return undefined
+  if (row.metadata_json === null) return undefined
+  const meta = JSON.parse(row.metadata_json) as Partial<ApprovedExemplarMetadata>
+  if (
+    typeof meta.speaker !== 'string'
+    || typeof meta.textType !== 'string'
+    || typeof meta.assetId !== 'string'
+    || typeof meta.segmentId !== 'string'
+    || typeof meta.approvedAt !== 'string'
+  ) return undefined
+  return {
+    id: row.id,
+    source: row.source,
+    target: row.target,
+    sourceLocale: row.source_locale,
+    targetLocale: row.target_locale,
+    speaker: meta.speaker,
+    textType: meta.textType,
+    ...(typeof meta.module === 'string' ? { module: meta.module } : {}),
+    assetId: meta.assetId,
+    segmentId: meta.segmentId,
+    ...(typeof meta.note === 'string' ? { note: meta.note } : {}),
+    approvedAt: meta.approvedAt,
   }
 }
 
 function stableId(projectId: string, input: TmUnitImportInput): string {
-  return deriveStableIdV2('tmu', [
-    projectId,
-    input.source,
-    input.target,
-    input.sourceLocale,
-    input.targetLocale,
-    input.origin ?? null,
-  ])
+  return deriveStableIdV2('tmuo', [projectId, input.sourceId, input.occurrenceKey])
 }
 
 /** Escape LIKE wildcards so query is a literal substring match. */
@@ -148,9 +139,29 @@ function tmUnitFromRow(row: TmUnitRow): TmUnit {
     target: row.target,
     sourceLocale: row.source_locale,
     targetLocale: row.target_locale,
-    ...(row.origin !== null
-      ? { origin: row.origin.startsWith(APPROVED_EXEMPLAR_ORIGIN_PREFIX) ? 'approved-exemplar' : row.origin }
-      : {}),
+  }
+}
+
+function tmMatchCandidateFromRow(row: TmUnitRow): TmStoredMatchCandidate {
+  return {
+    unitId: row.id,
+    source: row.source,
+    target: row.target,
+    ...(row.source_label === null || row.source_label === undefined ? {} : { sourceLabel: row.source_label }),
+    ...(row.source_priority === null || row.source_priority === undefined ? {} : { sourcePriority: row.source_priority }),
+    ...(row.context_key === null ? {} : { contextKey: row.context_key }),
+    ...(row.previous_source_hash === null ? {} : { previousSourceHash: row.previous_source_hash }),
+    ...(row.next_source_hash === null ? {} : { nextSourceHash: row.next_source_hash }),
+    ...(row.original_tuid === null ? {} : { originalTuid: row.original_tuid }),
+    ...(row.metadata_json === null
+      ? {}
+      : { metadata: JSON.parse(row.metadata_json) as Record<string, string | string[]> }),
+    ...(row.source_inline_xml === null
+      ? {}
+      : { sourceInline: row.source_inline_xml }),
+    ...(row.target_inline_xml === null
+      ? {}
+      : { targetInline: row.target_inline_xml }),
   }
 }
 
@@ -160,7 +171,15 @@ function sameContent(row: TmUnitRow, projectId: string, input: TmUnitImportInput
     && row.target === input.target
     && row.source_locale === input.sourceLocale
     && row.target_locale === input.targetLocale
-    && row.origin === (input.origin ?? null)
+    && row.source_id === input.sourceId
+    && row.source_hash === tmSourceHash(input.source, input.sourceLocale, input.targetLocale)
+    && row.original_tuid === (input.originalTuid ?? null)
+    && row.context_key === (input.contextKey ?? null)
+    && row.previous_source_hash === (input.previousSource === undefined ? null : tmSourceHash(input.previousSource))
+    && row.next_source_hash === (input.nextSource === undefined ? null : tmSourceHash(input.nextSource))
+    && row.metadata_json === (input.metadata === undefined ? null : JSON.stringify(input.metadata))
+    && row.source_inline_xml === (input.sourceInline ?? null)
+    && row.target_inline_xml === (input.targetInline ?? null)
 }
 
 function buildWhere(projectId: string, filter: TmUnitSearch): { where: string; params: unknown[] } {
@@ -181,58 +200,6 @@ function buildWhere(projectId: string, filter: TmUnitSearch): { where: string; p
   return { where: `WHERE ${clauses.join(' AND ')}`, params }
 }
 
-function normalizeText(value: string): string {
-  return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLowerCase()
-}
-
-function bigrams(value: string): string[] {
-  const characters = Array.from(value)
-  const result: string[] = []
-  for (let index = 0; index + 1 < characters.length; index++) {
-    result.push(characters[index]! + characters[index + 1]!)
-  }
-  return result
-}
-
-function dice(left: string, right: string): number {
-  const leftBigrams = bigrams(left)
-  const rightBigrams = bigrams(right)
-  if (leftBigrams.length === 0 || rightBigrams.length === 0) return 0
-  const counts = new Map<string, number>()
-  for (const item of leftBigrams) counts.set(item, (counts.get(item) ?? 0) + 1)
-  let overlap = 0
-  for (const item of rightBigrams) {
-    const remaining = counts.get(item) ?? 0
-    if (remaining > 0) {
-      overlap++
-      counts.set(item, remaining - 1)
-    }
-  }
-  return (2 * overlap) / (leftBigrams.length + rightBigrams.length)
-}
-
-function tokenJaccard(left: string, right: string): number {
-  const leftTokens = new Set(left.split(' ').filter(Boolean))
-  const rightTokens = new Set(right.split(' ').filter(Boolean))
-  const union = new Set([...leftTokens, ...rightTokens])
-  if (union.size === 0) return 0
-  let intersection = 0
-  for (const token of leftTokens) {
-    if (rightTokens.has(token)) intersection++
-  }
-  return intersection / union.size
-}
-
-function lengthRatio(left: string, right: string): number {
-  const leftLength = Array.from(left).length
-  const rightLength = Array.from(right).length
-  return Math.min(leftLength, rightLength) / Math.max(leftLength, rightLength)
-}
-
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0
-}
-
 export class TmUnitsRepository {
   constructor(
     private readonly db: CatDatabase,
@@ -246,12 +213,28 @@ export class TmUnitsRepository {
       const find = this.db.db.prepare('SELECT * FROM tm_units WHERE id = ?')
       const insert = this.db.db.prepare(
         `INSERT INTO tm_units
-         (id, project_id, source, target, source_locale, target_locale, origin, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, project_id, source, target, source_locale, target_locale, origin,
+          source_id, source_hash, original_tuid, context_key, previous_source_hash,
+          next_source_hash, metadata_json, source_inline_xml, target_inline_xml, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
+      const ensureSource = this.db.db.prepare(`
+        INSERT OR IGNORE INTO tm_sources
+          (id, project_id, kind, display_name, enabled, priority, created_at)
+        VALUES (?, ?, ?, ?, 1, 0, ?)
+      `)
       let imported = 0
       let unchanged = 0
       for (const input of inputs) {
+        const sourceId = input.sourceId
+        const approved = sourceId === `approved:${this.projectId}`
+        ensureSource.run(
+          sourceId,
+          this.projectId,
+          approved ? 'approved' : 'legacy',
+          approved ? 'Approved exemplars' : 'Legacy TM',
+          this.now(),
+        )
         const id = stableId(this.projectId, input)
         const existing = find.get(id) as TmUnitRow | undefined
         if (existing !== undefined) {
@@ -268,7 +251,15 @@ export class TmUnitsRepository {
           input.target,
           input.sourceLocale,
           input.targetLocale,
-          input.origin ?? null,
+          sourceId,
+          tmSourceHash(input.source, input.sourceLocale, input.targetLocale),
+          input.originalTuid ?? null,
+          input.contextKey ?? null,
+          input.previousSource === undefined ? null : tmSourceHash(input.previousSource),
+          input.nextSource === undefined ? null : tmSourceHash(input.nextSource),
+          input.metadata === undefined ? null : JSON.stringify(input.metadata),
+          input.sourceInline ?? null,
+          input.targetInline ?? null,
           this.now(),
         )
         imported++
@@ -312,21 +303,18 @@ export class TmUnitsRepository {
         ...(note === undefined ? {} : { note }),
         approvedAt,
       }
-      const origin = `${APPROVED_EXEMPLAR_ORIGIN_PREFIX}${JSON.stringify(metadata)}`
-      this.importMany([{
+      const sourceId = `approved:${this.projectId}`
+      const importInput: TmUnitImportInput = {
         source: input.source,
         target: input.target,
         sourceLocale: input.sourceLocale,
         targetLocale: input.targetLocale,
-        origin,
-      }])
-      const id = stableId(this.projectId, {
-        source: input.source,
-        target: input.target,
-        sourceLocale: input.sourceLocale,
-        targetLocale: input.targetLocale,
-        origin,
-      })
+        sourceId,
+        occurrenceKey: input.segmentId,
+        metadata: metadata as Record<string, string | string[]>,
+      }
+      this.importMany([importInput])
+      const id = stableId(this.projectId, importInput)
       return parseApprovedExemplar(this.db.db
         .prepare('SELECT * FROM tm_units WHERE id = ? AND project_id = ?')
         .get(id, this.projectId) as TmUnitRow)!
@@ -336,8 +324,10 @@ export class TmUnitsRepository {
   listApprovedExemplars(filter: ApprovedExemplarSearch = {}): ApprovedExemplar[] {
     // ponytail: personal Alpha 线性扫 approved-exemplar 行；超过 10k 条时再加专用索引列。
     const rows = this.db.db
-      .prepare(`SELECT * FROM tm_units WHERE project_id = ? AND origin LIKE ? ORDER BY created_at DESC, id DESC`)
-      .all(this.projectId, `${APPROVED_EXEMPLAR_ORIGIN_PREFIX}%`) as TmUnitRow[]
+      .prepare(`SELECT * FROM tm_units
+        WHERE project_id = ? AND source_id = ?
+        ORDER BY created_at DESC, id DESC`)
+      .all(this.projectId, `approved:${this.projectId}`) as TmUnitRow[]
     const speaker = filter.speaker?.toLocaleLowerCase()
     return rows
       .map(parseApprovedExemplar)
@@ -363,11 +353,6 @@ export class TmUnitsRepository {
     return rows.map(tmUnitFromRow)
   }
 
-  /** Backward-compatible alias used by existing read tools. */
-  search(filter: TmUnitSearch = {}): TmUnit[] {
-    return this.list(filter)
-  }
-
   count(filter: Omit<TmUnitSearch, 'limit' | 'offset'> = {}): number {
     const { where, params } = buildWhere(this.projectId, filter)
     const row = this.db.db
@@ -386,71 +371,29 @@ export class TmUnitsRepository {
     })
   }
 
-  findMatches(options: TmMatchOptions): TmUnitMatch[] {
-    return this.matchRows(
-      this.matchRowsForLocales(options.sourceLocale, options.targetLocale),
-      options.source,
-      options.threshold ?? 0.6,
-      options.limit ?? 20,
-    )
-  }
-
-  findMatchesMany(options: TmMatchManyOptions): ReadonlyMap<string, TmUnitMatch[]> {
-    const rows = this.matchRowsForLocales(options.sourceLocale, options.targetLocale)
-    return new Map(options.sources.map((source) => [
-      source,
-      this.matchRows(rows, source, options.threshold ?? 0.6, options.limit ?? 20),
-    ]))
-  }
-
-  private matchRowsForLocales(
+  /** Candidate retrieval only; scoring/classification stays in cat-core. */
+  listCandidates(
     sourceLocale: string,
-    targetLocale?: string,
-  ): TmUnitRow[] {
-    const params: unknown[] = [this.projectId, sourceLocale]
-    let targetClause = ''
-    if (targetLocale !== undefined) {
-      targetClause = ' AND target_locale = ?'
-      params.push(targetLocale)
-    }
-    // ponytail: 当前按项目与 locale 做 O(n) 扫描；数据量实测成为瓶颈时再换 FTS/倒排索引。
-    return this.db.db
-      .prepare(`SELECT * FROM tm_units WHERE project_id = ? AND source_locale = ?${targetClause}`)
-      .all(...params) as TmUnitRow[]
-  }
-
-  private matchRows(
-    rows: readonly TmUnitRow[],
-    source: string,
-    threshold: number,
-    limit: number,
-  ): TmUnitMatch[] {
-    const query = normalizeText(source)
-    const matches: TmUnitMatch[] = []
-    for (const row of rows) {
-      const candidate = normalizeText(row.source)
-      let matchType: TmMatchType
-      let score: number
-      if (candidate === query) {
-        matchType = 'exact'
-        score = 1
-      } else if (candidate.includes(query) || query.includes(candidate)) {
-        matchType = 'contains'
-        score = Math.max(0.72, lengthRatio(query, candidate))
-      } else {
-        score = Math.max(dice(query, candidate), tokenJaccard(query, candidate))
-        matchType = 'fuzzy'
-      }
-      if (score >= threshold) matches.push({ ...tmUnitFromRow(row), score, matchType })
-    }
-    const rank: Record<TmMatchType, number> = { exact: 0, contains: 1, fuzzy: 2 }
-    matches.sort((left, right) =>
-      right.score - left.score
-      || rank[left.matchType] - rank[right.matchType]
-      || compareText(normalizeText(left.source), normalizeText(right.source))
-      || compareText(normalizeText(left.target), normalizeText(right.target))
-      || compareText(left.id, right.id),
-    )
-    return matches.slice(0, limit)
+    targetLocale: string,
+    exactSource?: string,
+  ): TmStoredMatchCandidate[] {
+    const exactHash = exactSource === undefined
+      ? undefined
+      : tmSourceHash(exactSource, sourceLocale, targetLocale)
+    const rows = this.db.db.prepare(`
+      SELECT u.*, s.display_name AS source_label, s.priority AS source_priority
+      FROM tm_units AS u
+      LEFT JOIN tm_sources AS s ON s.id = u.source_id AND s.project_id = u.project_id
+      WHERE u.project_id = ? AND u.source_locale = ? AND u.target_locale = ?
+        ${exactHash === undefined ? '' : 'AND u.source_hash = ?'}
+        AND (s.id IS NULL OR s.enabled = 1)
+      ORDER BY COALESCE(s.priority, 0) DESC, u.created_at, u.id
+    `).all(
+      this.projectId,
+      sourceLocale,
+      targetLocale,
+      ...(exactHash === undefined ? [] : [exactHash]),
+    ) as TmUnitRow[]
+    return rows.map(tmMatchCandidateFromRow)
   }
 }

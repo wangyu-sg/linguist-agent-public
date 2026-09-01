@@ -262,6 +262,7 @@ export interface LinguistRunUndoResult {
 export const LINGUIST_REFERENCE_IPC_CHANNELS = {
   QUERY_TM: 'linguist.references.queryTm',
   QUERY_TERMS: 'linguist.references.queryTerms',
+  UPDATE_TM_SOURCE: 'linguist.references.updateTmSource',
   /** 原生选择器解析为短生命周期候选；不写 TM/TB 权威表。 */
   IMPORT: 'linguist.references.import',
   /** 人工确认候选后才写入 TM/TB 权威表。 */
@@ -1379,27 +1380,42 @@ export interface LinguistCatContextResult {
   segment: LinguistSegmentInfo
   pendingProposal?: LinguistProposalInfo
   qaFindings: LinguistQaFindingInfo[]
-  tmMatches: LinguistTmMatchInfo[]
+  tm: LinguistTmPanelItem[]
   termMatches: LinguistTermMatchInfo[]
   approvedExemplars: LinguistApprovedExemplarInfo[]
   stageEvents?: LinguistWorkflowStageEventInfo[]
 }
 
-export type LinguistTmMatchType = 'exact' | 'contains' | 'fuzzy'
+export type LinguistTmMatchClass =
+  | 'double-context'
+  | 'context'
+  | 'exact'
+  | 'near-exact'
+  | 'fuzzy'
 
-/** 项目 TM 的匹配结果；score 只表示确定性文字相似度，不是模型置信度。 */
-export interface LinguistTmInfo {
+export type LinguistTmReuseSafety = 'compatible' | 'review'
+
+/** Workbench 专用 TM 展示 DTO；不暴露 Matcher 权重或内部 rank。 */
+export interface LinguistTmPanelItem {
+  id: string
+  matchClass: LinguistTmMatchClass
+  score: number
+  matchedSource: string
+  target: string
+  sourceLabel: string
+  provenanceCount: number
+  badges: string[]
+  safety: LinguistTmReuseSafety
+  warnings: string[]
+  differences: string[]
+  variantCount: number
+}
+
+/** TM 语言资产列表 DTO；不暴露受管项目目录或原始文件路径。 */
+export interface LinguistTmReferenceInfo {
   id: string
   source: string
   target: string
-  sourceLocale: string
-  targetLocale: string
-  origin?: string
-}
-
-export interface LinguistTmMatchInfo extends LinguistTmInfo {
-  score: number
-  matchType: LinguistTmMatchType
 }
 
 export type LinguistTermStatus = 'allowed' | 'preferred' | 'required' | 'forbidden' | 'deprecated'
@@ -1443,6 +1459,17 @@ export interface LinguistReferenceQueryResult<T> {
   hasMore: boolean
   /** 当前 TM/TB 类别的文件导入来源；仅含安全展示元数据。 */
   imports?: LinguistReferenceImportInfo[]
+  /** TM 来源管理摘要；术语库和项目资产查询不填写。 */
+  sources?: LinguistTmSourceInfo[]
+}
+
+/** TM 来源的可见管理字段；不暴露受管目录路径或原始 Blob。 */
+export interface LinguistTmSourceInfo {
+  id: string
+  displayName: string
+  enabled: boolean
+  priority: number
+  unitCount: number
 }
 
 /** 文件导入型 TM/TB 的安全 provenance；没有本机路径或 blob 相对路径。 */
@@ -1458,6 +1485,15 @@ export interface LinguistReferenceImportRequest {
   projectId: string
   kind: 'tm' | 'terms'
 }
+
+export interface LinguistTmSourceUpdateRequest {
+  projectId: string
+  sourceId: string
+  enabled?: boolean
+  priority?: number
+}
+
+export type LinguistTmSourceUpdateResult = LinguistTmSourceInfo
 
 /** 有界 TM 候选样本；长文本在主进程截断，完整原件另走 Preview Tab。 */
 export interface LinguistTmReferenceCandidateSample {

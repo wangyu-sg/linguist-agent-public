@@ -1,5 +1,6 @@
 import {
   InvalidStateTransitionError,
+  matchTmCandidates,
   normalizeQaProfile,
   UnknownSegmentError,
   type QaFindingDisposition,
@@ -82,15 +83,48 @@ export class ProjectQuality {
       const pendingProposal = db.proposals
         .listBySegment(segmentId, 'pending')
         .at(-1)
+      const neighbors = db.segments.neighbors(segmentId, 1)
+      const tmCandidates = db.tmUnits.listCandidates(segment.sourceLocale, segment.targetLocale)
+      const tmCandidatesById = new Map(tmCandidates.map((candidate) => [candidate.unitId, candidate]))
+      const tmDiagnostics = matchTmCandidates(
+        segment.source,
+        tmCandidates,
+        {
+          context: {
+            ...(segment.key === undefined ? {} : { contextKey: segment.key }),
+            ...(neighbors.previous.at(-1) === undefined ? {} : { previousSource: neighbors.previous.at(-1)!.source }),
+            ...(neighbors.next[0] === undefined ? {} : { nextSource: neighbors.next[0]!.source }),
+          },
+          minimumScore: 75,
+        },
+      )
       return {
         segment,
         ...(pendingProposal !== undefined ? { pendingProposal } : {}),
-        tmMatches: db.tmUnits.findMatches({
-          source: segment.source,
-          sourceLocale: segment.sourceLocale,
-          targetLocale: segment.targetLocale,
-          threshold: 0.6,
-          limit: 5,
+        tm: tmDiagnostics.slice(0, 10).map((match) => {
+          const candidate = tmCandidatesById.get(match.unitId)
+          return {
+            id: match.unitId,
+            matchClass: match.matchClass,
+            score: Math.round(match.displayScore),
+            matchedSource: match.matchedSource,
+            target: match.target,
+            sourceLabel: match.sourceLabel,
+            provenanceCount: match.provenanceCount,
+            badges: [
+              ...(match.context.structural === 'match' ? ['结构上下文一致'] : []),
+              ...(match.context.textFlow === 'match' ? ['文本流上下文一致'] : []),
+              ...(match.sourcePriority > 0 ? [`来源优先级 ${match.sourcePriority}`] : []),
+              ...(candidate?.originalTuid === undefined ? [] : [`TMX TU ID：${candidate.originalTuid}`]),
+              ...(candidate?.metadata === undefined ? [] : [`TMX 属性：${JSON.stringify(candidate.metadata)}`]),
+              ...(candidate?.sourceInline === undefined ? [] : [`源文内联结构：${candidate.sourceInline}`]),
+              ...(candidate?.targetInline === undefined ? [] : [`译文内联结构：${candidate.targetInline}`]),
+            ],
+            safety: match.structure.safety,
+            warnings: [...match.structure.reasons],
+            differences: match.differences,
+            variantCount: match.variantCount,
+          }
         }),
         termMatches: db.termEntries.evaluateSegment(segment).matches
           .slice(0, 10)

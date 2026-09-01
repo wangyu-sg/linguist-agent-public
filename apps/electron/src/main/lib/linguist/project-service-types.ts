@@ -42,8 +42,10 @@ import type {
   TermEntry,
   TermEntryStatus,
   TmUnit,
+  TmSource,
   VoiceProfile,
 } from '@linguist/cat-store'
+import type { LinguistTmPanelItem } from '@proma/shared'
 
 /**
  * LinguistProjectService 的稳定调用合同。
@@ -266,12 +268,11 @@ export interface ImportReferenceResult {
 
 export interface TmReferenceInfo extends TmUnit {}
 
+export type TmReferenceSourceInfo = TmSource
+
 export interface TermReferenceInfo extends TermEntry {}
 
-export interface TmReferenceMatch extends TmUnit {
-  score: number
-  matchType: 'exact' | 'contains' | 'fuzzy'
-}
+export type TmReferenceMatch = LinguistTmPanelItem
 
 export interface TermReferenceMatch extends TermEntry {
   matchType: 'exact' | 'contains'
@@ -300,6 +301,8 @@ export interface ReferenceQueryPage<T> {
 export interface ReferenceImportQueryPage<T> extends ReferenceQueryPage<T> {
   /** 当前 TM/TB 类别的文件导入来源，供管理器打开 Proma Preview Tab。 */
   imports: ReferenceImport[]
+  /** TM 来源管理摘要；术语库查询为空。 */
+  tmSources?: TmSource[]
 }
 
 export type LinguistProjectAssetKind =
@@ -352,7 +355,7 @@ export interface CatSegmentContext {
   segment: Segment
   pendingProposal?: TranslationProposal
   qaFindings: CatQaFinding[]
-  tmMatches: TmReferenceMatch[]
+  tm: TmReferenceMatch[]
   termMatches: TermReferenceMatch[]
   approvedExemplars: ApprovedExemplar[]
   stageEvents: WorkflowStageEvent[]

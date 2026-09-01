@@ -39,6 +39,8 @@ import type {
   UnknownTagPatternResult,
   WorkbookMappingColumns,
   LinguistWorkbookMappingProfile,
+  TmAgentEvidence,
+  TmMatchDiagnostics,
 } from '@linguist/cat-core'
 import type {
   ContextDocKind,
@@ -48,7 +50,6 @@ import type {
   TermEntry,
   TermEntryMatch,
   TmUnit,
-  TmUnitMatch,
   VoiceProfile,
 } from '@linguist/cat-store'
 import type { LinguistCatToolError } from './errors'
@@ -519,7 +520,7 @@ export interface SegmentTranslationContext {
   forbiddenTerms: TermEntryMatch[]
   preferredTerms: TermEntryMatch[]
   conflicts: TermEntryMatch[]
-  tmMatches: TmUnitMatch[]
+  tm: TmAgentEvidence[]
   /** 已自动进入本次工具结果的小型强关联 Context 正文。 */
   linkedContext: CatLinkedContextEvidence[]
   warnings: string[]
@@ -611,9 +612,9 @@ export interface CatSearchResult<TItem> {
   note?: string
 }
 
-export interface CatSearchTmResult extends CatSearchResult<TmUnit | TmUnitMatch> {
-  /** concordance 保持旧的 source/target substring；match 是 source exact/fuzzy。 */
-  mode: 'concordance' | 'match'
+export interface CatSearchTmResult extends CatSearchResult<TmUnit | TmMatchDiagnostics> {
+  /** concordance 是显式字面搜索；segment 使用完整 Segment Matcher。 */
+  mode: 'concordance' | 'segment'
 }
 /** PB-095：TermEntry 带 module/category/imageRef 标注列（可空，缺省不出现）。 */
 export type CatSearchTermsResult = CatSearchResult<TermEntry>

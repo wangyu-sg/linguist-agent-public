@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CatDatabase, LINGUIST_APPLICATION_ID } from './database'
+import { tmSourceHash } from '@linguist/cat-core'
 import {
   StoreDatabaseIdentityError,
   StoreNotFoundError,
@@ -20,6 +21,7 @@ const PLAN_TABLES = [
   'segment_revisions',
   'term_entries',
   'tm_units',
+  'tm_sources',
   'proposals',
   'proposal_issuances',
   'qa_findings',
@@ -700,7 +702,7 @@ test('migration 17: existing v16 Context links migrate into typed Evidence links
 
   const migrated = CatDatabase.open(path)
   try {
-    assert.equal(migrated.schemaVersion, 18)
+    assert.equal(migrated.schemaVersion, SCHEMA_VERSION)
     const tables = new Set((migrated.db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
       .all() as Array<{ name: string }>).map((row) => row.name))
@@ -771,13 +773,95 @@ test('migration 18: accepted proposals reopen only when the new revision was not
 
   const migrated = CatDatabase.open(path)
   try {
-    assert.equal(migrated.schemaVersion, 18)
+    assert.equal(migrated.schemaVersion, SCHEMA_VERSION)
     const rows = migrated.db.prepare(
       "SELECT id, current_stage_state FROM segments WHERE id IN ('reopen', 'keep') ORDER BY id",
     ).all() as Array<{ id: string; current_stage_state: string }>
     assert.deepEqual(rows.map((row) => ({ ...row })), [
       { id: 'keep', current_stage_state: 'confirmed' },
       { id: 'reopen', current_stage_state: 'draft' },
+    ])
+  } finally {
+    migrated.close()
+  }
+})
+
+test('migration 19: backfills TM source provenance, locale-aware hashes, and occurrence metadata', () => {
+  const path = join(makeTempDir(), 'cat.db')
+  const LegacyDatabase = loadDatabaseSync()
+  const legacy = new LegacyDatabase(path)
+  legacy.exec(`
+    CREATE TABLE schema_migrations (
+      version INTEGER PRIMARY KEY,
+      applied_at TEXT NOT NULL,
+      description TEXT NOT NULL
+    )
+  `)
+  const record = legacy.prepare(
+    'INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)',
+  )
+  for (const migration of MIGRATIONS.filter((item) => item.version <= 18)) {
+    legacy.exec(migration.sql)
+    migration.backfill?.(legacy)
+    record.run(migration.version, '2026-01-01T00:00:00.000Z', migration.description)
+  }
+  legacy.exec(`
+    INSERT INTO tm_units
+      (id, project_id, source, target, source_locale, target_locale, origin, created_at)
+    VALUES
+      ('legacy-unit', 'project-v19', 'Save', '保存', 'en-US', 'zh-CN', 'imported', '2026-01-01T00:00:00.000Z'),
+      ('approved-unit', 'project-v19', 'Charge', '充能', 'en-US', 'zh-CN',
+       'approved-exemplar:{"speaker":"system","textType":"menu","assetId":"asset-v19","segmentId":"segment-v19","approvedAt":"2026-01-01T00:00:00.000Z"}',
+       '2026-01-01T00:00:01.000Z');
+    PRAGMA application_id = ${LINGUIST_APPLICATION_ID};
+    PRAGMA user_version = 18;
+  `)
+  legacy.close()
+
+  const migrated = CatDatabase.open(path)
+  try {
+    assert.equal(migrated.schemaVersion, SCHEMA_VERSION)
+    const columns = new Set((migrated.db
+      .prepare('PRAGMA table_info(tm_units)')
+      .all() as Array<{ name: string }>).map((column) => column.name))
+    for (const column of [
+      'source_id',
+      'source_hash',
+      'original_tuid',
+      'context_key',
+      'previous_source_hash',
+      'next_source_hash',
+      'metadata_json',
+      'source_inline_xml',
+      'target_inline_xml',
+    ]) assert.ok(columns.has(column), `missing tm_units column ${column}`)
+    const units = migrated.db.prepare(`
+      SELECT id, source_id, source_hash
+      FROM tm_units
+      WHERE project_id = 'project-v19'
+      ORDER BY id
+    `).all() as Array<{ id: string; source_id: string; source_hash: string }>
+    assert.deepEqual(units.map((unit) => ({ ...unit })), [
+      {
+        id: 'approved-unit',
+        source_id: 'approved:project-v19',
+        source_hash: tmSourceHash('Charge', 'en-US', 'zh-CN'),
+      },
+      {
+        id: 'legacy-unit',
+        source_id: 'legacy:project-v19',
+        source_hash: tmSourceHash('Save', 'en-US', 'zh-CN'),
+      },
+    ])
+    const sources = migrated.db.prepare(`
+      SELECT id, kind, display_name
+      FROM tm_sources
+      WHERE project_id = 'project-v19'
+      ORDER BY id
+    `).all() as Array<{ id: string; kind: string; display_name: string }>
+    assert.deepEqual(sources.map((source) => ({ ...source })), [
+      { id: 'approved:project-v19', kind: 'approved', display_name: 'Approved exemplars (migrated)' },
+      { id: 'legacy:project-v19', kind: 'legacy', display_name: 'Legacy TM (migrated)' },
     ])
   } finally {
     migrated.close()
@@ -848,10 +932,6 @@ test('read-only open: writes are rejected with a typed error at every layer', ()
     assert.throws(() => catDb.transaction('write attempt', () => {}), (err: unknown) => {
       assert.ok(err instanceof StoreReadOnlyError)
       assert.equal(err.code, 'STORE_READ_ONLY')
-      return true
-    })
-    assert.throws(() => catDb.execWrite('raw write', "INSERT INTO term_entries (id, project_id, term, translation, note, created_at) VALUES ('t2', 'p1', 'a', 'b', NULL, 'now')"), (err: unknown) => {
-      assert.ok(err instanceof StoreReadOnlyError)
       return true
     })
     // sqlite itself is read-only too (defense in depth)

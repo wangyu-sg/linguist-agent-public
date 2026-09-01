@@ -276,14 +276,15 @@ export function mapLegacyBatch(
 
 // ---------------------------------------------------------------------------
 // §decision 3 — tm.json TmEntry -> tm_units import input.
-// source/target/srcLang/tgtLang/origin carry over; every other legacy field
-// has no column and is dropped + counted.
+// source/target/srcLang/tgtLang map to the new occurrence model; every other
+// legacy field has no column and is dropped + counted.
 
 const TM_DROPPED_FIELDS = ['id', 'quality', 'project', 'note', 'sourceKind', 'sourceBatchId', 'sourceSegmentId', 'createdAt', 'updatedAt'] as const
 
 export function mapTmEntry(
   raw: Record<string, unknown>,
   fallbackLocales: { sourceLocale: string; targetLocale: string },
+  occurrenceKey: string,
   dropped: FieldCounter,
   coercions: FieldCounter,
 ): TmUnitImportInput | null {
@@ -295,7 +296,6 @@ export function mapTmEntry(
   }
   const sourceLocale = asString(raw.srcLang) ?? (bump(coercions, 'tm.srcLang:missing->project-locale'), fallbackLocales.sourceLocale)
   const targetLocale = asString(raw.tgtLang) ?? (bump(coercions, 'tm.tgtLang:missing->project-locale'), fallbackLocales.targetLocale)
-  const origin = asString(raw.origin)
   for (const field of TM_DROPPED_FIELDS) {
     if (raw[field] !== undefined) bump(dropped, `tm.${field}`)
   }
@@ -303,7 +303,14 @@ export function mapTmEntry(
   for (const keyName of Object.keys(raw)) {
     if (!handled.has(keyName)) bump(dropped, `tm.unknown:${keyName}`)
   }
-  return { source, target, sourceLocale, targetLocale, ...(origin !== null ? { origin } : {}) }
+  return {
+    source,
+    target,
+    sourceLocale,
+    targetLocale,
+    sourceId: 'legacy-import',
+    occurrenceKey,
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -37,7 +37,7 @@
     },
     "apps/electron": {
       "name": "@proma/electron",
-      "version": "0.17.65",
+      "version": "0.17.66",
       "dependencies": {
         "@codemirror/language": "^6.12.4",
         "@codemirror/state": "^6.7.1",
@@ -188,7 +188,7 @@
     },
     "packages/linguist-cat-core": {
       "name": "@linguist/cat-core",
-      "version": "0.0.22",
+      "version": "0.0.23",
       "dependencies": {
         "@formatjs/icu-messageformat-parser": "3.5.15",
       },
@@ -198,7 +198,7 @@
     },
     "packages/linguist-cat-formats": {
       "name": "@linguist/cat-formats",
-      "version": "0.0.12",
+      "version": "0.0.13",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@xmldom/xmldom": "^0.8.11",
@@ -210,7 +210,7 @@
     },
     "packages/linguist-cat-store": {
       "name": "@linguist/cat-store",
-      "version": "0.0.41",
+      "version": "0.0.42",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-formats": "workspace:*",
@@ -221,7 +221,7 @@
     },
     "packages/linguist-cat-tools": {
       "name": "@linguist/cat-tools",
-      "version": "0.0.36",
+      "version": "0.0.37",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-store": "workspace:*",

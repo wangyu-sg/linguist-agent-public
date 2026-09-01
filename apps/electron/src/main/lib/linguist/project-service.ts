@@ -159,6 +159,7 @@ import type {
   StageMutationItem,
   TermReferenceInfo,
   TmReferenceInfo,
+  TmReferenceSourceInfo,
   UndoImportAssetResult,
 } from './project-service-types'
 import {
@@ -935,6 +936,14 @@ export class LinguistProjectService {
     query: ReferenceQuery,
   ): ReferenceImportQueryPage<TmReferenceInfo> {
     return this.resources.queryTmReferences(projectId, query)
+  }
+
+  updateTmSource(
+    projectId: string,
+    sourceId: string,
+    patch: { enabled?: boolean; priority?: number },
+  ): TmReferenceSourceInfo {
+    return this.resources.updateTmSource(projectId, sourceId, patch)
   }
 
   queryTermReferences(

@@ -21,6 +21,7 @@ import {
   type TermMatchOptions,
   type TermValidationResult,
   type TmUnitImportInput,
+  type TmSource,
   type VoiceProfile,
   type VoiceProfileUpsertInput,
 } from '@linguist/cat-store'
@@ -46,6 +47,8 @@ import type {
   TermReferenceInfo,
   TmReferenceInfo,
 } from './project-service-types'
+
+type ParsedTmUnitImportInput = Omit<TmUnitImportInput, 'sourceId'>
 
 /** 解析项目 blobs/ 下的受管文件；符号链接/路径穿越一律拒绝。 */
 function resolveManagedBlobPath(blobsDir: string, blobRelpath: string): string | undefined {
@@ -87,6 +90,7 @@ export class ProjectResources {
         offset: query.offset,
         hasMore: query.offset + items.length < total,
         imports: db.referenceImports.list('tm'),
+        tmSources: db.tmSources.list(),
       }
     }, projectId)
   }
@@ -135,17 +139,24 @@ export class ProjectResources {
       let source: ReferenceImport
       let result: { imported: number; unchanged: number }
       try {
-        ({ source, result } = db.catDb.transaction(`import ${kind} reference source`, () => ({
-          source: db.referenceImports.insert({
+        ({ source, result } = db.catDb.transaction(`import ${kind} reference source`, () => {
+          const reference = db.referenceImports.insert({
             kind,
             originalFilename: input.filename,
             sourceSha256,
             blobRelpath,
-          }),
-          result: kind === 'tm'
-            ? db.tmUnits.importMany(parsed.entries as TmUnitImportInput[])
-            : db.termEntries.importMany(parsed.entries as TermEntryImportInput[]),
-        })))
+          })
+          const tmSource = kind === 'tm' ? db.tmSources.ensureImported(reference) : undefined
+          return {
+            source: reference,
+            result: kind === 'tm'
+              ? db.tmUnits.importMany((parsed.entries as ParsedTmUnitImportInput[]).map((entry) => ({
+                ...entry,
+                sourceId: tmSource!.id,
+              })))
+              : db.termEntries.importMany(parsed.entries as TermEntryImportInput[]),
+          }
+        }))
       } catch (error) {
         // 只清理本次新建的 blob；既有同 hash blob 可能仍被另一来源引用。
         if (!blobExisted) removeProjectBlob(db.blobsDir, blobName)
@@ -165,6 +176,16 @@ export class ProjectResources {
     this.context.assertProjectWritable(projectId)
     const db = this.context.openProject(projectId)
     return this.context.call(() => db.termEntries.upsert(input), projectId)
+  }
+
+  updateTmSource(
+    projectId: string,
+    sourceId: string,
+    patch: { enabled?: boolean; priority?: number },
+  ): TmSource {
+    this.context.assertProjectWritable(projectId)
+    const db = this.context.openProject(projectId)
+    return this.context.call(() => db.tmSources.update(sourceId, patch), projectId)
   }
 
   upsertTermReferences(projectId: string, inputs: readonly TermEntryUpsertInput[]): TermReferenceInfo[] {

@@ -18,6 +18,8 @@ import {
   type LinguistReferenceImportInfo,
   type LinguistReferenceImportResult,
   type LinguistReferenceQueryResult,
+  type LinguistTmSourceInfo,
+  type LinguistTmSourceUpdateResult,
   type LinguistTermInfo,
   type LinguistTermConflictsResult,
   type LinguistTermStatus,
@@ -25,7 +27,7 @@ import {
   type LinguistTermUpsertResult,
   type LinguistTermsUpsertResult,
   type LinguistTermsValidateResult,
-  type LinguistTmInfo,
+  type LinguistTmReferenceInfo,
 } from '@proma/shared'
 import { assertRecord, invalid, readProjectId, wrap } from './ipc-envelope'
 import { PendingImportFileStore, type PendingImportFileScope } from './pending-import-files'
@@ -33,10 +35,13 @@ import { readPickedFileWithinLimit } from './project-file-intake'
 import type { LinguistProjectService } from './project-service'
 import type {
   ReferenceImport,
+  TmSource,
   TermEntryImportInput,
   TmUnitImportInput,
 } from '@linguist/cat-store'
 import { parseTermReference, parseTmReference } from './project-resource-parsers'
+
+type ParsedTmUnitImportInput = Omit<TmUnitImportInput, 'sourceId'>
 
 const TERM_STATUSES = new Set<LinguistTermStatus>([
   'allowed',
@@ -65,6 +70,16 @@ function toReferenceImportInfo(source: ReferenceImport): LinguistReferenceImport
     filename: source.originalFilename,
     sourceSha256: source.sourceSha256,
     createdAt: source.createdAt,
+  }
+}
+
+function toTmSourceInfo(source: TmSource): LinguistTmSourceInfo {
+  return {
+    id: source.id,
+    displayName: source.displayName,
+    enabled: source.enabled,
+    priority: source.priority,
+    unitCount: source.unitCount,
   }
 }
 
@@ -143,13 +158,13 @@ function truncateCandidateValue(value: string): { value: string; truncated: bool
 
 function candidateSummary(
   kind: 'tm' | 'terms',
-  entries: readonly (TmUnitImportInput | TermEntryImportInput)[],
+  entries: readonly (ParsedTmUnitImportInput | TermEntryImportInput)[],
   inputWarnings: readonly string[],
 ): LinguistReferenceCandidateSummary {
   let valuesTruncated = false
   const samples = entries.slice(0, CANDIDATE_SAMPLE_LIMIT).map((entry) => {
     if (kind === 'tm') {
-      const tm = entry as TmUnitImportInput
+      const tm = entry as ParsedTmUnitImportInput
       const source = truncateCandidateValue(tm.source)
       const target = truncateCandidateValue(tm.target)
       valuesTruncated ||= source.truncated || target.truncated
@@ -199,6 +214,34 @@ function readPage(record: Record<string, unknown>): { query?: string; limit: num
     ...(typeof query === 'string' && query.trim() !== '' ? { query: query.trim() } : {}),
     limit: limit as number,
     offset: offset as number,
+  }
+}
+
+function readTmSourceUpdate(input: unknown): {
+  projectId: string
+  sourceId: string
+  patch: { enabled?: boolean; priority?: number }
+} {
+  const record = assertRecord(input)
+  const projectId = readProjectId(record)
+  const sourceId = record.sourceId
+  if (typeof sourceId !== 'string' || sourceId.length > 200 || sourceId.trim() === '' || sourceId.includes('/') || sourceId.includes('\\')) {
+    invalid('sourceId must be a non-blank opaque source id')
+  }
+  const enabled = record.enabled
+  if (enabled !== undefined && typeof enabled !== 'boolean') invalid('enabled must be a boolean')
+  const priority = record.priority
+  if (priority !== undefined && (!Number.isSafeInteger(priority) || (priority as number) < -1_000_000 || (priority as number) > 1_000_000)) {
+    invalid('priority must be a safe integer between -1000000 and 1000000')
+  }
+  if (enabled === undefined && priority === undefined) invalid('source update requires enabled or priority')
+  return {
+    projectId,
+    sourceId,
+    patch: {
+      ...(enabled === undefined ? {} : { enabled }),
+      ...(priority === undefined ? {} : { priority: priority as number }),
+    },
   }
 }
 
@@ -291,14 +334,27 @@ export function createLinguistReferenceIpc(deps: LinguistReferenceIpcDeps) {
   const pendingFiles = deps.pendingFiles ?? new PendingImportFileStore()
 
   return {
-    queryTm(input: unknown): Promise<LinguistIpcResult<LinguistReferenceQueryResult<LinguistTmInfo>>> {
+    queryTm(input: unknown): Promise<LinguistIpcResult<LinguistReferenceQueryResult<LinguistTmReferenceInfo>>> {
       return wrap(() => {
         const record = assertRecord(input)
         const page = getService().queryTmReferences(readProjectId(record), readPage(record))
         return {
           ...page,
+          items: page.items.map((item) => ({
+            id: item.id,
+            source: item.source,
+            target: item.target,
+          })),
           imports: page.imports.map(toReferenceImportInfo),
+          sources: (page.tmSources ?? []).map(toTmSourceInfo),
         }
+      })
+    },
+
+    updateTmSource(input: unknown): Promise<LinguistIpcResult<LinguistTmSourceUpdateResult>> {
+      return wrap(() => {
+        const request = readTmSourceUpdate(input)
+        return toTmSourceInfo(getService().updateTmSource(request.projectId, request.sourceId, request.patch))
       })
     },
 

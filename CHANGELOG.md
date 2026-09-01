@@ -6,6 +6,27 @@
 
 ## [Unreleased]
 
+## [0.17.66] - 2026-09-01
+
+### Added
+
+- TM Intelligence 2.0 的纯函数 Segment Matcher、强上下文匹配、TM 来源追踪、TMX 元数据与内联结构保存。
+- Workbench TM 面板显示匹配类别、差异、来源、来源数量、结构安全状态和译文变体。
+
+### Changed
+
+- Workbench 与 Agent 共用同一 Matcher；Agent Fuzzy 默认阈值为 85%，最多注入 2 条，并过滤短句和结构不兼容结果。
+- TM 单元按具体 TU occurrence 保存，支持来源启用/禁用、优先级和语言对隔离的 Exact Hash。
+
+### Removed
+
+- 移除旧的 Segment Match `contains` 类型、72% 子串保底和旧 Matcher 调用路径。
+
+### Fixed
+
+- Schema 19 迁移前先创建带 `fromSchema`/`toSchema` 记录的真实项目备份。
+- 修复同源多译文未标记歧义、TMX `tuid`/属性/上下文/内联结构丢失以及迁移后 TM 来源不可追踪。
+
 ## [0.17.65] - 2026-08-30
 
 ### Added
@@ -207,7 +228,8 @@
 
 - 修复上游合并后的 CI 测试口径。
 
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.66...HEAD
+[0.17.66]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...v0.17.66
 [0.17.65]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.64...v0.17.65
 [0.17.64]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.63...v0.17.64
 [0.17.63]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.62...v0.17.63

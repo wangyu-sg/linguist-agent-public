@@ -15,7 +15,7 @@
  * 静态表回填）lands in schema v7 (PB-096).
  */
 
-import { createProposalIssuance } from '@linguist/cat-core'
+import { createProposalIssuance, tmSourceHash } from '@linguist/cat-core'
 import type { SqliteDatabase } from './runtime'
 import {
   proposalFromRow,
@@ -38,7 +38,7 @@ export interface SchemaMigration {
 }
 
 /** Current schema version this build understands. */
-export const SCHEMA_VERSION = 18
+export const SCHEMA_VERSION = 19
 
 const MIGRATION_1_SQL = `
 CREATE TABLE assets (
@@ -752,6 +752,72 @@ WHERE current_stage_state = 'confirmed'
   );
 `
 
+const MIGRATION_19_SQL = `
+CREATE TABLE tm_sources (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('imported', 'approved', 'legacy')),
+  display_name TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+  priority INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+ALTER TABLE tm_units ADD COLUMN source_id TEXT;
+ALTER TABLE tm_units ADD COLUMN source_hash TEXT;
+ALTER TABLE tm_units ADD COLUMN original_tuid TEXT;
+ALTER TABLE tm_units ADD COLUMN context_key TEXT;
+ALTER TABLE tm_units ADD COLUMN previous_source_hash TEXT;
+ALTER TABLE tm_units ADD COLUMN next_source_hash TEXT;
+ALTER TABLE tm_units ADD COLUMN metadata_json TEXT;
+ALTER TABLE tm_units ADD COLUMN source_inline_xml TEXT;
+ALTER TABLE tm_units ADD COLUMN target_inline_xml TEXT;
+-- TMV2-033 requires locale-pair exact lookup as a persisted Schema 19 contract.
+CREATE INDEX idx_tm_units_exact_hash
+  ON tm_units(project_id, source_locale, target_locale, source_hash);
+CREATE INDEX idx_tm_units_source
+  ON tm_units(project_id, source_id, created_at, id);
+`
+
+function backfillTmSourceMetadata(db: SqliteDatabase): void {
+  const rows = db.prepare(`
+    SELECT id, project_id, source, source_locale, target_locale, origin
+    FROM tm_units
+    ORDER BY created_at, id
+  `).all() as Array<{
+    id: string
+    project_id: string
+    source: string
+    source_locale: string
+    target_locale: string
+    origin: string | null
+  }>
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO tm_sources
+      (id, project_id, kind, display_name, enabled, priority, created_at)
+    VALUES (?, ?, ?, ?, 1, 0, ?)
+  `)
+  const update = db.prepare(`
+    UPDATE tm_units
+    SET source_id = ?, source_hash = ?, metadata_json = COALESCE(metadata_json, ?)
+    WHERE id = ?
+  `)
+  for (const row of rows) {
+    const approved = row.origin?.startsWith('approved-exemplar:') === true
+    const sourceId = `${approved ? 'approved' : 'legacy'}:${row.project_id}`
+    const metadataJson = approved ? row.origin!.slice('approved-exemplar:'.length) : null
+    if (metadataJson !== null) JSON.parse(metadataJson)
+    insert.run(
+      sourceId,
+      row.project_id,
+      approved ? 'approved' : 'legacy',
+      approved ? 'Approved exemplars (migrated)' : 'Legacy TM (migrated)',
+      new Date().toISOString(),
+    )
+    update.run(sourceId, tmSourceHash(row.source, row.source_locale, row.target_locale), metadataJson, row.id)
+  }
+}
+
 export const MIGRATIONS: readonly SchemaMigration[] = [
   { version: 1, description: 'initial CAT schema (plan 5.4)', sql: MIGRATION_1_SQL },
   { version: 2, description: 'idempotent human proposal mutations (PB-053)', sql: MIGRATION_2_SQL },
@@ -836,5 +902,19 @@ export const MIGRATIONS: readonly SchemaMigration[] = [
     version: 18,
     description: 'reopen accepted proposals that were not reconfirmed',
     sql: MIGRATION_18_SQL,
+  },
+  {
+    version: 19,
+    description: 'TM source provenance, occurrence metadata, and exact hash index',
+    sql: MIGRATION_19_SQL,
+    backfill: backfillTmSourceMetadata,
+    validations: [
+      {
+        sql: `SELECT COUNT(*) AS violations
+              FROM tm_units
+              WHERE source_id IS NULL OR source_hash IS NULL`,
+        expected: 0,
+      },
+    ],
   },
 ]

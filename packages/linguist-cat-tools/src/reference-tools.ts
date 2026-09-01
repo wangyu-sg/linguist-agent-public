@@ -1,13 +1,17 @@
 import {
   fnv1a64,
+  matchTmCandidates,
   scanTagTokens,
+  selectTmAgentEvidence,
   type Segment,
   type SegmentTermPolicyEvaluation,
+  type TmAgentEvidence,
+  type TmMatchDiagnostics,
 } from '@linguist/cat-core'
 import {
   StoreNotFoundError,
   type TermEntryMatch,
-  type TmUnitMatch,
+  type TmUnit,
 } from '@linguist/cat-store'
 import { Type } from 'typebox'
 import { LinguistCatContextDriftError, LinguistCatInvalidArgumentError } from './errors'
@@ -259,7 +263,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           })
         }
       }
-      const tmMatchesBySegment = new Map<string, TmUnitMatch[]>()
+      const tmMatchesBySegment = new Map<string, TmAgentEvidence[]>()
       if (tmLimit > 0) {
         const localeGroups = new Map<string, typeof remainingSegments>()
         for (const segment of remainingSegments) {
@@ -269,15 +273,23 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           localeGroups.set(key, group)
         }
         for (const group of localeGroups.values()) {
-          const matches = db.tmUnits.findMatchesMany({
-            sources: group.map((segment) => segment.source),
-            sourceLocale: group[0]!.sourceLocale,
-            targetLocale: group[0]!.targetLocale,
-            threshold: 0.6,
-            limit: tmLimit,
-          })
+          const candidates = db.tmUnits.listCandidates(
+            group[0]!.sourceLocale,
+            group[0]!.targetLocale,
+          )
           for (const segment of group) {
-            tmMatchesBySegment.set(segment.id as string, matches.get(segment.source) ?? [])
+            const neighbors = neighborsBySegment.get(segment.id as string) ?? { previous: [], next: [] }
+            const diagnostics = matchTmCandidates(segment.source, candidates, {
+              context: {
+                ...(segment.key === undefined ? {} : { contextKey: segment.key }),
+                ...(neighbors.previous.at(-1) === undefined ? {} : { previousSource: neighbors.previous.at(-1)!.source }),
+                ...(neighbors.next[0] === undefined ? {} : { nextSource: neighbors.next[0]!.source }),
+              },
+            })
+            tmMatchesBySegment.set(
+              segment.id as string,
+              selectTmAgentEvidence(diagnostics, tmLimit),
+            )
           }
         }
       }
@@ -294,7 +306,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         })
         const termPolicy = termPolicyBySegment.get(segment.id as string)?.matches ?? []
         const termMatches = termPolicy.map((item) => item.match)
-        const tmMatches = tmMatchesBySegment.get(segment.id as string) ?? []
+        const tm = tmMatchesBySegment.get(segment.id as string) ?? []
         const tags = scanTagTokens(segment.source, {
           targetLocale: segment.targetLocale,
           ...(project.tagProfile !== undefined ? { profile: project.tagProfile } : {}),
@@ -310,7 +322,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
             kind: 'neighbor' as const,
           })),
           ...termMatches.map((item) => ({ id: item.id, kind: 'term' as const })),
-          ...tmMatches.map((item) => ({ id: item.id, kind: 'tm' as const })),
+          ...tm.map((item) => ({ id: item.unitId, kind: 'tm' as const })),
         ]
         contexts.push({
           segmentId: segment.id as string,
@@ -340,7 +352,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
             .filter((item) => item.enforcement === 'advisory')
             .map((item) => item.match),
           conflicts: termMatches.filter((term) => term.conflict),
-          tmMatches,
+          tm,
           linkedContext: linkedContextBySegment.get(segment.id as string) ?? [],
           warnings: [
             ...(segment.locked ? ['Segment is locked.'] : []),
@@ -466,7 +478,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         forbiddenTerms: [],
         preferredTerms: [],
         conflicts: [],
-        tmMatches: [],
+        tm: [],
         linkedContext: [],
         warnings: [
           ...(context.locked ? ['Segment is locked.'] : []),
@@ -547,13 +559,13 @@ export function createReferenceTools(runtime: CatToolRuntime) {
     label: 'CAT search TM',
     description:
       'Search the translation memory of the bound CAT project. concordance mode is a case-insensitive literal substring ' +
-      'over TM source or target; match mode ranks source exact/contains/fuzzy matches deterministically. Returns at most ' +
+      'over TM source or target; segment mode ranks complete-source matches deterministically. Returns at most ' +
       `${CAT_TOOL_PAGE_LIMITS.searchTm.maxLimit} units per call (default ${CAT_TOOL_PAGE_LIMITS.searchTm.defaultLimit}). ` +
       'An empty result carries a note and is not an error.',
     promptSnippet: 'Search the bound project translation memory',
     parameters: Type.Object({
       query: Type.String({ minLength: 1 }),
-      mode: Type.Optional(Type.Union([Type.Literal('concordance'), Type.Literal('match')])),
+      mode: Type.Optional(Type.Union([Type.Literal('concordance'), Type.Literal('segment')])),
       limit: Type.Optional(Type.Integer({ minimum: 1 })),
     }),
     async execute(toolCallId, params) {
@@ -564,15 +576,22 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       const mode = params.mode ?? 'concordance'
       const { project, db } = resolveBoundProject('cat_search_tm', toolCallId)
       const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.searchTm)
-      const results = mode === 'match'
-        ? db.tmUnits.findMatches({
-          source: query,
-          sourceLocale: project.sourceLocale,
-          targetLocale: project.targetLocale,
-          limit: page.limit,
-        })
-        : db.tmUnits.search({ query, limit: page.limit })
-      const total = mode === 'match' ? results.length : db.tmUnits.count({ query })
+      let segmentMatches: TmMatchDiagnostics[] = []
+      if (mode === 'segment') {
+        const exactCandidates = db.tmUnits.listCandidates(
+          project.sourceLocale,
+          project.targetLocale,
+          query,
+        )
+        const candidates = exactCandidates.length > 0
+          ? exactCandidates
+          : db.tmUnits.listCandidates(project.sourceLocale, project.targetLocale)
+        segmentMatches = matchTmCandidates(query, candidates, { minimumScore: 75 })
+      }
+      const results: TmUnit[] | TmMatchDiagnostics[] = mode === 'segment'
+        ? segmentMatches.slice(0, page.limit)
+        : db.tmUnits.list({ query, limit: page.limit })
+      const total = mode === 'segment' ? segmentMatches.length : db.tmUnits.count({ query })
       const dto: CatSearchTmResult = {
         query,
         results,

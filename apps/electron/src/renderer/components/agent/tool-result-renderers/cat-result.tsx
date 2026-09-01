@@ -221,7 +221,7 @@ function summarizeCatResult(
     case 'cat_get_segments':
       return pagedSummary(payload, '项目片段', '片段')
     case 'cat_search_tm':
-      return payload.mode === 'match' || payload.mode === 'concordance'
+      return payload.mode === 'segment' || payload.mode === 'concordance'
         ? searchSummary(payload, '翻译记忆', '匹配')
         : null
     case 'cat_search_terms':

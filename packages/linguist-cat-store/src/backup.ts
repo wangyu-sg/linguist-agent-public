@@ -27,14 +27,10 @@ import {
   readProjectManifestFile,
   type ProjectManifest,
 } from './project-index'
-import { probeSqliteRuntime } from './runtime'
 
 export const BACKUP_DIR_NAME_PATTERN = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/
 export const LEGACY_BACKUP_FILE_PATTERN = /^cat-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.db$/
 export const PRE_RESTORE_PREFIX = 'pre-restore-'
-
-export type BackupFaultPoint = 'before-copy' | 'before-manifest' | 'before-publish'
-export type BackupFaultInjector = (point: BackupFaultPoint, relativePath?: string) => void
 
 export interface BackupManifestFile {
   path: string
@@ -49,6 +45,7 @@ export interface BackupManifest {
   createdAt: string
   schemaVersion: number
   method: 'vacuum_into' | 'backup_api'
+  migration?: { fromSchema: number; toSchema: number }
   files: BackupManifestFile[]
 }
 
@@ -76,10 +73,6 @@ export interface ProjectBackupEntry {
 }
 
 let stagingCounter = 0
-
-function sqlQuote(path: string): string {
-  return `'${path.replace(/'/g, "''")}'`
-}
 
 function safeTimestamp(now: string): string {
   return now.replace(/[:.]/g, '-')
@@ -109,12 +102,10 @@ function copyRegularFile(
   source: string,
   destination: string,
   relativePath: string,
-  fault?: BackupFaultInjector,
 ): void {
   const stat = lstatSync(source)
   if (stat.isSymbolicLink()) throw new Error(`backup source cannot contain a symbolic link: ${relativePath}`)
   if (!stat.isFile()) throw new Error(`backup source must be a regular file: ${relativePath}`)
-  fault?.('before-copy', relativePath)
   mkdirSync(dirname(destination), { recursive: true })
   copyFileSync(source, destination)
 }
@@ -123,7 +114,6 @@ function copyTreeIfPresent(
   source: string,
   destination: string,
   prefix: string,
-  fault?: BackupFaultInjector,
 ): void {
   const stat = lstatSync(source, { throwIfNoEntry: false })
   if (stat === undefined) return
@@ -136,8 +126,8 @@ function copyTreeIfPresent(
     const rel = `${prefix}/${name}`
     const item = lstatSync(sourcePath)
     if (item.isSymbolicLink()) throw new Error(`backup source cannot contain a symbolic link: ${rel}`)
-    if (item.isDirectory()) copyTreeIfPresent(sourcePath, destinationPath, rel, fault)
-    else if (item.isFile()) copyRegularFile(sourcePath, destinationPath, rel, fault)
+    if (item.isDirectory()) copyTreeIfPresent(sourcePath, destinationPath, rel)
+    else if (item.isFile()) copyRegularFile(sourcePath, destinationPath, rel)
     else throw new Error(`backup source must contain only regular files: ${rel}`)
   }
 }
@@ -188,7 +178,7 @@ export function createProjectBackup(
   catDb: CatDatabase,
   projectDir: string,
   now: string,
-  fault?: BackupFaultInjector,
+  migration?: BackupManifest['migration'],
 ): ProjectBackupResult {
   const backupsDir = join(projectDir, 'backups')
   assertDirectoryNotSymlink(backupsDir, 'backups')
@@ -205,27 +195,15 @@ export function createProjectBackup(
 
   try {
     const backupDbPath = join(stagingDir, 'cat.db')
-    const probe = probeSqliteRuntime()
-    let method: ProjectBackupResult['method']
-    if (probe.hasBackupApi && catDb.db.backup) {
-      const backup = catDb.db.backup(backupDbPath)
-      if (backup instanceof Promise) {
-        throw new Error('async DatabaseSync#backup is unsupported')
-      }
-      method = 'backup_api'
-    } else {
-      catDb.execWrite(`backup into ${backupDbPath}`, `VACUUM INTO ${sqlQuote(backupDbPath)}`)
-      method = 'vacuum_into'
-    }
+    const method = catDb.backupInto(backupDbPath)
 
     copyRegularFile(
       join(projectDir, 'project.json'),
       join(stagingDir, 'project.json'),
       'project.json',
-      fault,
     )
-    copyTreeIfPresent(join(projectDir, 'source'), join(stagingDir, 'source'), 'source', fault)
-    copyTreeIfPresent(join(projectDir, 'blobs'), join(stagingDir, 'blobs'), 'blobs', fault)
+    copyTreeIfPresent(join(projectDir, 'source'), join(stagingDir, 'source'), 'source')
+    copyTreeIfPresent(join(projectDir, 'blobs'), join(stagingDir, 'blobs'), 'blobs')
     const projectManifest = readValidatedProjectManifest(join(stagingDir, 'project.json'))
     if (
       projectManifest === undefined
@@ -242,6 +220,7 @@ export function createProjectBackup(
       createdAt: now,
       schemaVersion: catDb.schemaVersion,
       method,
+      ...(migration === undefined ? {} : { migration }),
       files: walkRegularFiles(stagingDir)
         .sort()
         .map((rel) => {
@@ -249,7 +228,6 @@ export function createProjectBackup(
           return { path: rel, sha256: sha256File(path), sizeBytes: statSync(path).size }
         }),
     }
-    fault?.('before-manifest')
     writeFileSync(
       join(stagingDir, 'manifest.json'),
       `${JSON.stringify(manifest, null, 2)}\n`,
@@ -260,7 +238,6 @@ export function createProjectBackup(
     if (!verification.ok) {
       throw new StoreBackupCorruptError(backupName, verification.problems)
     }
-    fault?.('before-publish')
     renameSync(stagingDir, backupDir)
     return { backupDir, backupName, manifest, method }
   } catch (error) {
@@ -285,6 +262,14 @@ export function readBackupManifest(backupDir: string): BackupManifest | undefine
       || !Number.isSafeInteger(parsed.schemaVersion)
       || (parsed.method !== 'vacuum_into' && parsed.method !== 'backup_api')
       || !Array.isArray(parsed.files)
+      || (parsed.migration !== undefined && (
+        typeof parsed.migration !== 'object'
+        || parsed.migration === null
+        || typeof parsed.migration.fromSchema !== 'number'
+        || typeof parsed.migration.toSchema !== 'number'
+        || !Number.isSafeInteger(parsed.migration.fromSchema)
+        || !Number.isSafeInteger(parsed.migration.toSchema)
+      ))
       || parsed.files.some((file) =>
         typeof file !== 'object'
         || file === null

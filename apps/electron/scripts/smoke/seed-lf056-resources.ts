@@ -32,7 +32,8 @@ try {
     target: '欢迎回来，{player}！',
     sourceLocale: 'en-US',
     targetLocale: 'zh-CN',
-    origin: 'client',
+    sourceId: 'lf056-packaged-probe',
+    occurrenceKey: segment.id,
   }])
   const tm = db.tmUnits.list({ query: segment.source }).find(
     (entry) => entry.target === '欢迎回来，{player}！',

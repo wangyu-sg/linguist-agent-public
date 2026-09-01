@@ -676,13 +676,13 @@ export function importLegacyProject(options: ImportLegacyOptions): ImportReport 
   const fallbackLocales = { sourceLocale, targetLocale }
   const tmInputs = []
   let tmInvalid = 0
-  for (const entry of extraction.tm.entries) {
+  for (const [index, entry] of extraction.tm.entries.entries()) {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
       tmInvalid++
       bump(dropped, 'tm.entry-not-an-object')
       continue
     }
-    const mapped = mapTmEntry(entry as Record<string, unknown>, fallbackLocales, dropped, coercions)
+    const mapped = mapTmEntry(entry as Record<string, unknown>, fallbackLocales, String(index + 1), dropped, coercions)
     if (mapped !== null) tmInputs.push(mapped)
   }
   const termInputs = []

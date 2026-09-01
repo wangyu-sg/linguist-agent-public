@@ -353,6 +353,8 @@ export function registerLinguistIpc(): void {
   })
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.QUERY_TM, async (_, input: unknown) =>
     linguistReferenceIpc.queryTm(input))
+  ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.UPDATE_TM_SOURCE, async (_, input: unknown) =>
+    linguistReferenceIpc.updateTmSource(input))
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.QUERY_TERMS, async (_, input: unknown) =>
     linguistReferenceIpc.queryTerms(input))
   ipcMain.handle(LINGUIST_REFERENCE_IPC_CHANNELS.IMPORT, async (event, input: unknown) => {

@@ -145,6 +145,8 @@ import type {
   LinguistReferenceImportResult,
   LinguistReferenceQueryRequest,
   LinguistReferenceQueryResult,
+  LinguistTmSourceUpdateRequest,
+  LinguistTmSourceUpdateResult,
   LinguistTermInfo,
   LinguistTermConflictsRequest,
   LinguistTermConflictsResult,
@@ -156,8 +158,7 @@ import type {
   LinguistTermUpsertResult,
   LinguistTermsValidateRequest,
   LinguistTermsValidateResult,
-  LinguistTmInfo,
-  LinguistTmMatchInfo,
+  LinguistTmReferenceInfo,
   LinguistAssetPreviewRequest,
   LinguistAssetPreviewResult,
   LinguistReferenceImportPreviewRequest,
@@ -378,7 +379,10 @@ export interface LinguistApi {
   /** TM / 术语库均由主进程选择文件与读盘，renderer 不传路径或 bytes。 */
   linguistReferencesQueryTm: (
     input: LinguistReferenceQueryRequest,
-  ) => Promise<LinguistIpcResult<LinguistReferenceQueryResult<LinguistTmInfo>>>
+  ) => Promise<LinguistIpcResult<LinguistReferenceQueryResult<LinguistTmReferenceInfo>>>
+  linguistReferencesUpdateTmSource: (
+    input: LinguistTmSourceUpdateRequest,
+  ) => Promise<LinguistIpcResult<LinguistTmSourceUpdateResult>>
   linguistReferencesQueryTerms: (
     input: LinguistReferenceQueryRequest,
   ) => Promise<LinguistIpcResult<LinguistReferenceQueryResult<LinguistTermInfo>>>
@@ -626,6 +630,8 @@ export function exposeLinguistApi(): LinguistApi {
     },
     linguistReferencesQueryTm: (input: LinguistReferenceQueryRequest) =>
       ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.QUERY_TM, input),
+    linguistReferencesUpdateTmSource: (input: LinguistTmSourceUpdateRequest) =>
+      ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.UPDATE_TM_SOURCE, input),
     linguistReferencesQueryTerms: (input: LinguistReferenceQueryRequest) =>
       ipcRenderer.invoke(LINGUIST_REFERENCE_IPC_CHANNELS.QUERY_TERMS, input),
     linguistReferencesImport: (input: LinguistReferenceImportRequest) =>

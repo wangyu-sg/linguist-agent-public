@@ -20,6 +20,15 @@ export {
 export { sha256Hex, type HashFn } from './hash'
 
 export {
+  matchTmCandidates,
+  selectTmAgentEvidence,
+  tmSourceHash,
+  type TmAgentEvidence,
+  type TmMatchCandidate,
+  type TmMatchDiagnostics,
+} from './tm-matching'
+
+export {
   ID_PATTERN,
   asAssetId,
   asProjectId,

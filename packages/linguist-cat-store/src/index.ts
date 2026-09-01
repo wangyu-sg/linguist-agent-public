@@ -121,17 +121,19 @@ export { ExportsRepository, type ExportRecord, type RecordExportInput } from './
 export {
   TmUnitsRepository,
   type ReferenceImportResult,
-  type TmMatchManyOptions,
-  type TmMatchOptions,
-  type TmMatchType,
   type TmUnit,
+  type TmStoredMatchCandidate,
   type ApprovedExemplar,
   type ApprovedExemplarInput,
   type ApprovedExemplarSearch,
   type TmUnitImportInput,
-  type TmUnitMatch,
   type TmUnitSearch,
 } from './repositories/tm-units'
+export {
+  TmSourcesRepository,
+  type TmSource,
+  type TmSourceKind,
+} from './repositories/tm-sources'
 export {
   TermEntriesRepository,
   type TermEntry,
@@ -227,8 +229,6 @@ export {
   verifyBackup,
   type BackupManifest,
   type BackupManifestFile,
-  type BackupFaultInjector,
-  type BackupFaultPoint,
   type BackupVerification,
   type ProjectBackupEntry,
   type ProjectBackupResult,
