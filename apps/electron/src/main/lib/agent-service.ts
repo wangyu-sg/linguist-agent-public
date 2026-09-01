@@ -11,7 +11,8 @@
  */
 
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
-import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdir as mkdirAsync, writeFile as writeFileAsync } from 'node:fs/promises'
 import { BrowserWindow } from 'electron'
 import type { WebContents } from 'electron'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
@@ -33,6 +34,7 @@ import type {
   PromaPermissionMode,
   AgentExternalRunSource,
   AgentActiveSessionSnapshot,
+  AgentQueuedMessageSnapshot,
   AgentMessage,
   LinguistProjectMutationEvent,
 } from '@proma/shared'
@@ -40,7 +42,9 @@ import { PiAgentAdapter } from './adapters/pi-agent-adapter'
 import { PiUtilityAdapter } from './adapters/pi-utility-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
-import { getAgentWorkspaceBySlug, getLocalProjectRootStatus, getProjectFilesPath } from './agent-workspace-manager'
+import { getAgentSessionWorkspacePath } from './config-paths'
+import { getAgentWorkspaceBySlug, getProjectFilesPath } from './agent-workspace-manager'
+import { getLocalProjectRootStatus } from './project-root-health'
 import { getAgentSessionMeta, updateAgentSessionMeta } from './agent-session-manager'
 import { setAgentStopper, setHeadlessAgentRunner } from './agent-headless-runner-registry'
 import { getHeadlessAgentRunTarget } from './agent-headless-run-target'
@@ -122,6 +126,7 @@ function rebindWebContents(sessionId: string, wc: WebContents) {
   if (previousWebContents && previousWebContents !== wc) streamForwarder.clear(sessionId)
   const route = streamRoutes.rebind(sessionId, wc)
   attachWebContentsCleanup(wc)
+  agentQueueCoordinator.onTargetAvailable(sessionId)
   return route
 }
 
@@ -176,6 +181,7 @@ const agentQueueCoordinator = new AgentQueueCoordinator({
   sendStarted: (webContents, status) => {
     if (!webContents.isDestroyed()) webContents.send(AGENT_IPC_CHANNELS.QUEUED_MESSAGE_STATUS, status)
   },
+  reserveRunGeneration: (sessionId) => orchestrator.reserveRunGeneration(sessionId),
 })
 
 /**
@@ -202,6 +208,7 @@ function publishRunStopped(
   sessionId: string,
   stoppedByUser: boolean | undefined,
   startedAt: number | undefined,
+  runGeneration: number | undefined,
 ): void {
   if (!stoppedByUser) return
   eventBus.emit(sessionId, {
@@ -209,6 +216,7 @@ function publishRunStopped(
     event: {
       type: 'run_stopped',
       ...(startedAt != null ? { startedAt } : {}),
+      ...(runGeneration != null ? { runGeneration } : {}),
     },
   })
 }
@@ -260,6 +268,8 @@ export function setVisibleAgentSession(webContents: WebContents, sessionId: stri
 // ===== IPC 薄包装函数 =====
 
 /** 仅主进程内部使用的单次运行扩展，绝不经 IPC 序列化。 */
+type AgentRunInput = AgentSendInput & { runGeneration?: number }
+
 export interface AgentRunExtensions {
   piCustomTools?: ToolDefinition[]
 }
@@ -270,7 +280,7 @@ export interface AgentRunExtensions {
  * 注册 webContents 到 EventBus 映射，委托给 Orchestrator。
  */
 export async function runAgent(
-  input: AgentSendInput,
+  input: AgentRunInput,
   webContents: WebContents,
 ): Promise<void> {
   const route = registerWebContents(input.sessionId, webContents)
@@ -298,23 +308,25 @@ export async function runAgent(
   }
   try {
     await orchestrator.sendMessage(input, {
-      onError: (error) => {
+      onError: (error, opts) => {
         const target = streamRoutes.getTargetIfOwner(input.sessionId, route.ownerId)
         if (target) {
           target.send(AGENT_IPC_CHANNELS.STREAM_ERROR, {
             sessionId: input.sessionId,
             error,
+            ...(opts?.runGeneration != null ? { runGeneration: opts.runGeneration } : input.runGeneration != null ? { runGeneration: input.runGeneration } : {}),
           })
         }
       },
       onComplete: (messages, opts) => {
-        publishRunStopped(input.sessionId, opts?.stoppedByUser, opts?.startedAt)
+        publishRunStopped(input.sessionId, opts?.stoppedByUser, opts?.startedAt, opts?.runGeneration)
         const target = streamRoutes.getTargetIfOwner(input.sessionId, route.ownerId)
         if (target) {
           sendAgentStreamComplete(target, input, {
             messages,
             stoppedByUser: opts?.stoppedByUser ?? false,
             startedAt: opts?.startedAt,
+            runGeneration: opts?.runGeneration,
             resultSubtype: opts?.resultSubtype,
             resultErrors: opts?.resultErrors,
             backgroundTasksPending: opts?.backgroundTasksPending,
@@ -329,10 +341,10 @@ export async function runAgent(
           opts?.stoppedByUser === true,
         )
       },
-      onRunStarted: ({ startedAt }) => {
+      onRunStarted: ({ startedAt, runGeneration }) => {
         eventBus.emit(input.sessionId, {
           kind: 'proma_event',
-          event: { type: 'run_started', startedAt },
+          event: { type: 'run_started', startedAt, runGeneration },
         })
       },
       onTitleUpdated: (title) => {
@@ -360,10 +372,13 @@ export async function runAgent(
       target.send(AGENT_IPC_CHANNELS.STREAM_ERROR, {
         sessionId: input.sessionId,
         error: errorMessage,
+        ...(input.runGeneration != null ? { runGeneration: input.runGeneration } : {}),
       })
       sendAgentStreamComplete(target, input, {
         messages: [],
         stoppedByUser: false,
+        startedAt: input.startedAt,
+        runGeneration: input.runGeneration,
       })
     }
     agentQueueCoordinator.onRunComplete(input.sessionId, queueMessageId, false, false)
@@ -401,8 +416,10 @@ export async function runAgentHeadless(
   // treat an omitted source as an interactive desktop-user run: custom tools may grant
   // local side effects that cannot be visibly supervised by an external sender.
   const inferredTriggeredBy = callbacks.source === 'delegation' ? 'delegation' : 'external'
-  const runInput: AgentSendInput = {
-    ...input,
+  // Headless callers are public service clients too; discard any forged runtime identity.
+  const { runGeneration: _ignoredRunGeneration, ...publicInput } = input as AgentSendInput & { runGeneration?: unknown }
+  const runInput: AgentRunInput = {
+    ...publicInput,
     ...(input.triggeredBy ? {} : { triggeredBy: inferredTriggeredBy }),
     ...(input.startedAt != null ? {} : { startedAt: Date.now() }),
   }
@@ -411,7 +428,7 @@ export async function runAgentHeadless(
 
   try {
     await orchestrator.sendMessage(runInput, {
-      onError: (error) => {
+      onError: (error, opts) => {
         callbacks.onError(error)
         const target = route
           ? streamRoutes.getTargetIfOwner(runInput.sessionId, route.ownerId)
@@ -420,12 +437,13 @@ export async function runAgentHeadless(
           target.send(AGENT_IPC_CHANNELS.STREAM_ERROR, {
             sessionId: runInput.sessionId,
             error,
+            ...(opts?.runGeneration != null ? { runGeneration: opts.runGeneration } : runInput.runGeneration != null ? { runGeneration: runInput.runGeneration } : {}),
           })
         }
       },
       onComplete: (messages, opts) => {
         callbacks.onComplete(messages)
-        publishRunStopped(runInput.sessionId, opts?.stoppedByUser, opts?.startedAt)
+        publishRunStopped(runInput.sessionId, opts?.stoppedByUser, opts?.startedAt, opts?.runGeneration)
         const target = route
           ? streamRoutes.getTargetIfOwner(runInput.sessionId, route.ownerId)
           : undefined
@@ -434,6 +452,7 @@ export async function runAgentHeadless(
             messages,
             stoppedByUser: opts?.stoppedByUser ?? false,
             startedAt: opts?.startedAt,
+            runGeneration: opts?.runGeneration,
             resultSubtype: opts?.resultSubtype,
             resultErrors: opts?.resultErrors,
             backgroundTasksPending: opts?.backgroundTasksPending,
@@ -464,7 +483,7 @@ export async function runAgentHeadless(
           })
         }
       },
-      onRunStarted: ({ startedAt: persistedStartedAt }) => {
+      onRunStarted: ({ startedAt: persistedStartedAt, runGeneration }) => {
         const session = getAgentSessionMeta(runInput.sessionId)
         eventBus.emit(runInput.sessionId, {
           kind: 'proma_event',
@@ -476,6 +495,7 @@ export async function runAgentHeadless(
             workspaceId: session?.workspaceId ?? runInput.workspaceId,
             modelId: runInput.modelId,
             startedAt: persistedStartedAt,
+            runGeneration,
             ...(session ? { session } : {}),
           },
         })
@@ -493,11 +513,16 @@ export async function runAgentHeadless(
       ? streamRoutes.getTargetIfOwner(runInput.sessionId, route.ownerId)
       : undefined
     if (target) {
-      target.send(AGENT_IPC_CHANNELS.STREAM_ERROR, { sessionId: runInput.sessionId, error: errorMessage })
+      target.send(AGENT_IPC_CHANNELS.STREAM_ERROR, {
+        sessionId: runInput.sessionId,
+        error: errorMessage,
+        ...(runInput.runGeneration != null ? { runGeneration: runInput.runGeneration } : {}),
+      })
       sendAgentStreamComplete(target, runInput, {
         messages: [],
         stoppedByUser: false,
         startedAt,
+        runGeneration: runInput.runGeneration,
       })
     }
     agentQueueCoordinator.onRunComplete(runInput.sessionId, undefined, false, false)
@@ -558,6 +583,10 @@ export function hasActiveAgentSessions(): boolean {
 
 export function listActiveAgentSessionSnapshots(): AgentActiveSessionSnapshot[] {
   return orchestrator.listActiveSessionSnapshots()
+}
+
+export function listQueuedAgentMessages(sessionId: string): AgentQueuedMessageSnapshot[] {
+  return agentQueueCoordinator.snapshot(sessionId)
 }
 
 /** 中止所有活跃的 Agent 会话（应用退出时调用） */
@@ -636,8 +665,8 @@ export async function submitOrEnqueueAgentMessage(
     }
   }
 
-  agentQueueCoordinator.enqueue(input)
-  return { disposition: 'queued' }
+  const disposition = agentQueueCoordinator.enqueue(input)
+  return { disposition: disposition === 'started' ? 'started' : 'queued' }
 }
 
 /** 兼容旧调用：仅将消息追加到主进程 deferred queue。 */
@@ -719,21 +748,50 @@ function resolveSafeWorkspaceFilePath(workspaceRoot: string, filename: string): 
  *
  * 空白项目写入 Proma 托管的 workspace-files/；本地目录项目直接写入用户选择的原始目录。
  */
-export function saveFilesToWorkspaceFiles(input: AgentSaveWorkspaceFilesInput): AgentSavedFile[] {
+function isFileAlreadyExistsError(error: unknown): boolean {
+  return !!error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'
+}
+
+async function writeUniqueWorkspaceFile(
+  workspaceFilesDir: string,
+  initialTargetPath: string,
+  buffer: Buffer,
+  usedPaths: Set<string>,
+): Promise<string> {
+  const relativeFilename = relative(workspaceFilesDir, initialTargetPath)
+  const dotIdx = relativeFilename.lastIndexOf('.')
+  const baseName = dotIdx > 0 ? relativeFilename.slice(0, dotIdx) : relativeFilename
+  const ext = dotIdx > 0 ? relativeFilename.slice(dotIdx) : ''
+
+  for (let counter = 0; ; counter++) {
+    const filename = counter === 0 ? relativeFilename : `${baseName}-${counter}${ext}`
+    const targetPath = resolveSafeWorkspaceFilePath(workspaceFilesDir, filename)
+    if (usedPaths.has(targetPath)) continue
+
+    await mkdirAsync(dirname(targetPath), { recursive: true })
+    try {
+      // `wx` 确保另一条 IPC 请求不会在碰撞检查与写入之间覆盖文件；
+      // 若目标已存在，则尝试下一个编号后缀。
+      await writeFileAsync(targetPath, buffer, { flag: 'wx' })
+      usedPaths.add(targetPath)
+      return targetPath
+    } catch (error) {
+      if (isFileAlreadyExistsError(error)) continue
+      throw error
+    }
+  }
+}
+
+export async function saveFilesToWorkspaceFiles(input: AgentSaveWorkspaceFilesInput): Promise<AgentSavedFile[]> {
   const workspace = getAgentWorkspaceBySlug(input.workspaceSlug)
   if (!workspace) {
     throw new Error(`指定的 Agent 项目不存在或已删除: ${input.workspaceSlug}`)
   }
 
   if (workspace.projectRootPath) {
-    const status = getLocalProjectRootStatus(workspace.projectRootPath)
+    const status = await getLocalProjectRootStatus(workspace.projectRootPath)
     if (status !== 'available') {
       throw createLocalProjectRootUnavailableError(workspace.projectRootPath, status)
-    }
-    try {
-      accessSync(workspace.projectRootPath, constants.R_OK | constants.W_OK | constants.X_OK)
-    } catch {
-      throw createLocalProjectRootUnavailableError(workspace.projectRootPath, 'unavailable')
     }
   }
 
@@ -752,28 +810,8 @@ export function saveFilesToWorkspaceFiles(input: AgentSaveWorkspaceFilesInput): 
   const results: AgentSavedFile[] = []
   const usedPaths = new Set<string>()
 
-  for (const { file, initialTargetPath, buffer } of decodedFiles) {
-    let targetPath = initialTargetPath
-
-    // 防止同名文件覆盖
-    if (usedPaths.has(targetPath) || existsSync(targetPath)) {
-      const relativeFilename = relative(wsFilesDir, targetPath)
-      const dotIdx = relativeFilename.lastIndexOf('.')
-      const baseName = dotIdx > 0 ? relativeFilename.slice(0, dotIdx) : relativeFilename
-      const ext = dotIdx > 0 ? relativeFilename.slice(dotIdx) : ''
-      let counter = 1
-      let candidate = resolveSafeWorkspaceFilePath(wsFilesDir, `${baseName}-${counter}${ext}`)
-      while (usedPaths.has(candidate) || existsSync(candidate)) {
-        counter++
-        candidate = resolveSafeWorkspaceFilePath(wsFilesDir, `${baseName}-${counter}${ext}`)
-      }
-      targetPath = candidate
-    }
-    usedPaths.add(targetPath)
-
-    mkdirSync(dirname(targetPath), { recursive: true })
-    writeFileSync(targetPath, buffer)
-
+  for (const { initialTargetPath, buffer } of decodedFiles) {
+    const targetPath = await writeUniqueWorkspaceFile(wsFilesDir, initialTargetPath, buffer, usedPaths)
     const actualFilename = relative(wsFilesDir, targetPath)
     results.push({ filename: actualFilename, targetPath })
     console.log(`[Agent 服务] 工作区文件已保存: ${targetPath} (${buffer.length} bytes)`)

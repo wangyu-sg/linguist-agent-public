@@ -97,10 +97,10 @@ export function getLinguistSessionBinding(
  * 渠道/模型继承并冻结创建时的 Proma 默认
  * （与 ipc.ts 普通会话创建路径同一 getSettings() 来源）。
  */
-export function createLinguistProjectChatSession(
+export async function createLinguistProjectChatSession(
   service: LinguistProjectService,
   input: { projectId: string; title?: string; role?: LinguistRole },
-): AgentSessionMeta {
+): Promise<AgentSessionMeta> {
   const project = service.getProject(input.projectId)
   if (project.archivedAt !== undefined) {
     throw new LinguistProjectArchivedError(input.projectId)
@@ -108,7 +108,7 @@ export function createLinguistProjectChatSession(
   // 不传标题时保留 Proma 默认标题，让上游首轮自动标题管线真正触发；项目名已独立存入快照。
   const title = input.title?.trim() || undefined
   const settings = getSettings()
-  const workspaceId = service.ensureProjectWorkspace(project.id)
+  const workspaceId = await service.ensureProjectWorkspace(project.id)
   return createAgentSession(
     title,
     settings.agentChannelId,

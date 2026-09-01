@@ -217,7 +217,7 @@ export async function copyLinguistSessionToProject(
 
   const service = deps.getService()
   const target = requireHealthyTarget(service, input.targetProjectId)
-  const targetWorkspaceId = service.ensureProjectWorkspace(target.id)
+  const targetWorkspaceId = await service.ensureProjectWorkspace(target.id)
 
   const title = `${source.title}（副本）`
   const linguistBinding: AgentSessionLinguistBinding = {

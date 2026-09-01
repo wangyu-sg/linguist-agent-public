@@ -1150,7 +1150,7 @@ async function forkPiAgentSession(
     Object.assign(newMeta, sourceMetadata, explorationMeta, inherited)
 
     if ((!options || options.copyWorkspaceFiles) && sourceWorkbenchDir && destWorkbenchDir) {
-      copyForkWorkspaceFiles(sourceWorkbenchDir, destWorkbenchDir)
+      await copyForkWorkspaceFiles(sourceWorkbenchDir, destWorkbenchDir)
     }
     await copyForkStoredSDKMessages({
       sourceSessionId: sourceMeta.id,

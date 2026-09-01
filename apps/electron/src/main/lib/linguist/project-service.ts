@@ -180,7 +180,7 @@ export class LinguistProjectService {
   private readonly entropy?: EntropySource
   private readonly now: () => string
   private readonly applicationVersion: string
-  private readonly workspaceCreator: (projectName: string) => string
+  private readonly workspaceCreator: (projectName: string) => Promise<string>
   private readonly workspaceResolver: (workspaceId: string) => boolean
   private readonly registry: CatFormatRegistry
   private storeInstance?: CatStore
@@ -196,7 +196,7 @@ export class LinguistProjectService {
     this.applicationVersion = options.applicationVersion ?? getPromaVersion()
     if (options.entropy !== undefined) this.entropy = options.entropy
     this.workspaceCreator = options.workspaceCreator
-      ?? ((projectName) => createAgentWorkspace(projectName).id)
+      ?? (async (projectName) => (await createAgentWorkspace(projectName)).id)
     this.workspaceResolver = options.workspaceResolver
       ?? ((workspaceId) => getAgentWorkspace(workspaceId) !== undefined)
     this.registry = options.registry ?? createDefaultCatFormatRegistry()
@@ -259,8 +259,8 @@ export class LinguistProjectService {
     return this.call(() => this.store.getProject(projectId), projectId)
   }
 
-  createProject(input: CreateLinguistProjectInput): LinguistProject {
-    const promaWorkspaceId = input.promaWorkspaceId ?? this.workspaceCreator(input.name)
+  async createProject(input: CreateLinguistProjectInput): Promise<LinguistProject> {
+    const promaWorkspaceId = input.promaWorkspaceId ?? await this.workspaceCreator(input.name)
     if (input.promaWorkspaceId !== undefined && !this.workspaceResolver(promaWorkspaceId)) {
       throw new Error(`Proma 工作区不存在: ${promaWorkspaceId}`)
     }
@@ -295,10 +295,10 @@ export class LinguistProjectService {
   }
 
   /** 历史项目的 workspace 缺失时惰性重建，并原子回写项目索引。 */
-  ensureProjectWorkspace(projectId: string): string {
+  async ensureProjectWorkspace(projectId: string): Promise<string> {
     const project = this.getProject(projectId)
     if (this.workspaceResolver(project.promaWorkspaceId)) return project.promaWorkspaceId
-    const workspaceId = this.workspaceCreator(project.name)
+    const workspaceId = await this.workspaceCreator(project.name)
     return this.call(
       () => this.store.updateProject(projectId, { promaWorkspaceId: workspaceId }),
       projectId,

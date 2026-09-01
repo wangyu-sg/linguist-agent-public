@@ -498,7 +498,7 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
 
     /** linguist.projects.create — 创建项目（name/locale 严格校验）。 */
     create(input: unknown): Promise<LinguistIpcResult<LinguistProjectCreateResult>> {
-      return wrap(() => {
+      return wrap(async () => {
         const record = assertRecord(input)
         const name = readProjectName(record)
         const sourceLocale = readLocale(record, 'sourceLocale')
@@ -506,7 +506,7 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         const workflowStage = readWorkflowStage(record, true)
         const qaProfile = readQaProfile(record, true)
         const outputStatusPolicy = readOutputStatusPolicy(record, false)
-        return toProjectInfo(getService().createProject({
+        return toProjectInfo(await getService().createProject({
           name,
           sourceLocale,
           targetLocale,
