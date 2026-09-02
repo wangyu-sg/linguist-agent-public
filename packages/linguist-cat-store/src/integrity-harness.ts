@@ -26,7 +26,7 @@ const JOB_TRANSITIONS: Readonly<Record<string, ReadonlySet<string>>> = {
   failed: new Set(['running', 'cancelled']),
   cancelled: new Set(),
 }
-const RUN_ENTITY_TYPES = new Set(['proposal', 'qa-finding', 'critic-artifact', 'file'])
+const RUN_ENTITY_TYPES = new Set(['segment', 'proposal', 'qa-finding', 'critic-artifact', 'file'])
 const RUN_CHANGE_KINDS = new Set(['created', 'updated', 'deleted', 'touched'])
 
 function isNonBlankString(value: unknown): value is string {
@@ -500,6 +500,7 @@ export function checkRunLineage(db: CatDatabase): ProjectIntegrityCheck {
       }>).map((row) => `${row.segment_id}\0${Number(row.revision)}`),
     )
     const entityIds = {
+      segment: new Set(segments.keys()),
       proposal: new Set(
         (db.db.prepare('SELECT id FROM proposals').all() as Array<{ id: string }>).map((row) => row.id),
       ),

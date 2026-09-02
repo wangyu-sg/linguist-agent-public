@@ -17,6 +17,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { ModeSwitcher } from './ModeSwitcher'
 import { MAC_TITLEBAR_SAFE_AREA_HEIGHT } from './titlebar-safe-area'
 import { ProjectCreateDialog } from '@/features/linguist/projects/ProjectCreateDialog'
+import { projectCreateDialogOpenAtom } from '@/features/linguist/projects/projects-atoms'
 import {
   linguistProjectListStateAtom,
   refreshLinguistProjectListAtom,
@@ -121,7 +122,10 @@ import { useOpenSession } from '@/hooks/useOpenSession'
 import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { productivityToolsAtom, sessionHoverPreviewEnabledAtom } from '@/atoms/ui-preferences'
-import { CollapsedWorkspacePopover } from '@/components/agent/CollapsedWorkspacePopover'
+import {
+  CollapsedProjectPopover,
+  CollapsedWorkspacePopover,
+} from '@/components/agent/CollapsedWorkspacePopover'
 import { ObsidianIcon } from '@/components/obsidian/obsidian-brand'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
@@ -801,6 +805,20 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
   const activeLinguistProjectId = resolveActiveLinguistProjectId(activeTab, agentSessions)
   // K1：同一 LA 项目在 Agent 侧栏只显示为一个带 Linguist 标记的 Workspace
   const linguistProjectListState = useAtomValue(linguistProjectListStateAtom)
+  const setProjectCreateDialogOpen = useSetAtom(projectCreateDialogOpenAtom)
+  const collapsedLinguistProjects = linguistProjectListState.status === 'ready'
+    ? linguistProjectListState.projects
+      .filter((project) => project.archivedAt === undefined)
+      .map((project) => ({
+        id: project.id,
+        name: project.name,
+        trailing: (
+          <span className="max-w-20 truncate text-[10px] text-foreground/35">
+            {project.sourceLocale} → {project.targetLocale}
+          </span>
+        ),
+      }))
+    : []
   const linguistWorkspaceMap = React.useMemo(
     () => buildLinguistWorkspaceMap(linguistProjectListState),
     [linguistProjectListState],
@@ -3342,28 +3360,36 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
             </TooltipTrigger>
             <TooltipContent side="right">Chat 模式</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="切换到 Linguist 模式"
-                onClick={() => handleRailModeSwitch('linguist')}
-                className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag"
+          <CollapsedProjectPopover
+            title="本地化模式 · 项目"
+            items={collapsedLinguistProjects}
+            currentProjectId={activeLinguistProjectId}
+            emptyLabel={linguistProjectListState.status === 'loading'
+              ? '正在加载项目…'
+              : linguistProjectListState.status === 'error'
+                ? '项目列表加载失败'
+                : '暂无本地化项目'}
+            onSelect={handleOpenLinguistProject}
+            onCreateRequested={() => setProjectCreateDialogOpen(true)}
+          >
+            <button
+              type="button"
+              aria-label="切换到 Linguist 模式（悬停查看项目）"
+              onClick={() => handleRailModeSwitch('linguist')}
+              className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag"
+            >
+              <span
+                className={cn(
+                  'flex size-8 items-center justify-center rounded-[10px] transition-[background-color,color,box-shadow] duration-150',
+                  mode === 'linguist'
+                    ? 'bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+                    : 'text-foreground/45 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75',
+                )}
               >
-                <span
-                  className={cn(
-                    'flex size-8 items-center justify-center rounded-[10px] transition-[background-color,color,box-shadow] duration-150',
-                    mode === 'linguist'
-                      ? 'bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
-                      : 'text-foreground/45 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75',
-                  )}
-                >
-                  <Languages size={17} />
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">本地化模式</TooltipContent>
-          </Tooltip>
+                <Languages size={17} />
+              </span>
+            </button>
+          </CollapsedProjectPopover>
 
           <div className="my-1 h-px w-6 bg-border/70" />
 

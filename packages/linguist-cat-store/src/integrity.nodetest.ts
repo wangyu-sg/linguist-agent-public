@@ -267,14 +267,23 @@ test('Full Integrity Scrub checks Harness event sequence, job checkpoint, and ru
       })
       return {
         result: { proposalId: proposal.id as string },
-        changes: [{
-          entityType: 'proposal' as const,
-          entityId: proposal.id as string,
-          changeKind: 'created' as const,
-          segmentId: segment.id as string,
-          expectedRevision: segment.revision,
-          after: proposal,
-        }],
+        changes: [
+          {
+            entityType: 'proposal' as const,
+            entityId: proposal.id as string,
+            changeKind: 'created' as const,
+            segmentId: segment.id as string,
+            expectedRevision: segment.revision,
+            after: proposal,
+          },
+          {
+            entityType: 'segment' as const,
+            entityId: segment.id as string,
+            changeKind: 'touched' as const,
+            segmentId: segment.id as string,
+            expectedRevision: segment.revision,
+          },
+        ],
         event: {
           kind: 'proposal-created' as const,
           segmentIds: [segment.id as string],
