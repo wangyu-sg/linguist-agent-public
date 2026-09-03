@@ -1,6 +1,6 @@
 /**
  * 左侧 Agent 会话行拖入输入框时使用的内部拖放协议。
- * 自定义 MIME 用于可靠识别来源，text/plain 仅作为宿主兼容兜底。
+ * 自定义 MIME 用于可靠识别来源。
  */
 
 export const SESSION_REFERENCE_DRAG_MIME = 'application/x-proma-session-reference'
@@ -15,10 +15,6 @@ export function setSessionReferenceDragData(
   item: SessionReferenceDragItem,
 ): void {
   dataTransfer.setData(SESSION_REFERENCE_DRAG_MIME, JSON.stringify(item))
-  dataTransfer.setData(
-    'text/plain',
-    `&session:${item.sessionId}::${encodeURIComponent(item.title)}`,
-  )
   dataTransfer.effectAllowed = 'copy'
 }
 

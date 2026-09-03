@@ -6,6 +6,22 @@
 
 ## [Unreleased]
 
+## [0.17.68] - 2026-09-03
+
+### Added
+
+- [Proma v0.19.23](https://github.com/proma-ai/Proma/releases/tag/v0.19.23) 支持将会话拖入输入框生成引用、单一委派观察 Tab 与未查看完成状态，以及可折叠的 Vault 文件侧栏。
+
+### Changed
+
+- 折叠侧栏中的 Linguist 项目切换复用 Proma 原生项目预览弹层。
+- Proma 基线由 [v0.19.16](https://github.com/proma-ai/Proma/releases/tag/v0.19.16) 升级至 [v0.19.23](https://github.com/proma-ai/Proma/releases/tag/v0.19.23)。
+
+### Fixed
+
+- 修复 HOK 翻译项目因 Segment 运行变更被完整性校验误判而无法打开的问题。
+- [Proma v0.19.23](https://github.com/proma-ai/Proma/releases/tag/v0.19.23) 修复 Markdown 目录跳转空白与滚动恢复竞态、重复打开 Vault 笔记导致重挂载、已删除文件残留在改动列表、解析后路径无法定位预览，以及 Fable 5.1 推理兼容性问题。
+
 ## [0.17.67] - 2026-09-01
 
 ### Added
@@ -231,7 +247,8 @@
 
 - 修复上游合并后的 CI 测试口径。
 
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.67...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.68...HEAD
+[0.17.68]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.67...v0.17.68
 [0.17.67]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...v0.17.67
 [0.17.65]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.64...v0.17.65
 [0.17.64]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.63...v0.17.64

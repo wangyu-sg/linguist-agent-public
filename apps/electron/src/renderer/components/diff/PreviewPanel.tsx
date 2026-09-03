@@ -27,7 +27,6 @@ function PreviewPanelContent({ sessionId, file, onClose }: PreviewPanelProps): R
         ) : (
         <ContentErrorBoundary key={`${sessionId}:${file.filePath}`}>
           <DiffTabContent
-            key={`${sessionId}:${file.filePath}`}
             filePath={file.filePath}
             dirPath={file.dirPath || sessionPath}
             sessionId={sessionId}

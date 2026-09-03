@@ -309,10 +309,12 @@
   },
   "@img/sharp-darwin-arm64@0.35.4": {
     "licenses": "Apache-2.0",
+    "repository": "https://github.com/lovell/sharp",
     "optional": true
   },
   "@img/sharp-libvips-darwin-arm64@1.3.3": {
     "licenses": "LGPL-3.0-or-later",
+    "repository": "https://github.com/lovell/sharp-libvips",
     "optional": true
   },
   "@lezer/common@1.5.2": {
@@ -389,14 +391,17 @@
   },
   "@mariozechner/clipboard-darwin-arm64@0.3.9": {
     "licenses": "MIT",
+    "repository": "https://github.com/badlogic/clipboard",
     "optional": true
   },
   "@mariozechner/clipboard-darwin-universal@0.3.9": {
     "licenses": "MIT",
+    "repository": "https://github.com/badlogic/clipboard",
     "optional": true
   },
   "@mariozechner/clipboard@0.3.9": {
     "licenses": "MIT",
+    "repository": "https://github.com/badlogic/clipboard",
     "optional": true
   },
   "@mermaid-js/parser@1.2.1": {
@@ -409,10 +414,12 @@
   },
   "@napi-rs/canvas-darwin-arm64@0.1.100": {
     "licenses": "MIT",
+    "repository": "https://github.com/Brooooooklyn/canvas",
     "optional": true
   },
   "@napi-rs/canvas@0.1.100": {
     "licenses": "MIT",
+    "repository": "https://github.com/Brooooooklyn/canvas",
     "optional": true
   },
   "@pierre/diffs@1.3.6": {
@@ -1108,7 +1115,7 @@
     "licenses": "MIT",
     "repository": "https://github.com/jonathanong/ee-first"
   },
-  "electron@43.4.1": {
+  "electron@43.2.0": {
     "licenses": "MIT",
     "repository": "https://github.com/electron/electron"
   },

@@ -133,7 +133,6 @@ export function PreviewTabContent({ sessionId }: PreviewTabContentProps): React.
       <div className="min-h-0 flex-1 overflow-hidden">
         <ContentErrorBoundary key={`${sessionId}:${currentFile.filePath}`}>
           <DiffTabContent
-            key={`${sessionId}:${currentFile.filePath}`}
             filePath={currentFile.filePath}
             dirPath={dirPath}
             sessionId={sessionId}

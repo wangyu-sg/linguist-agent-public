@@ -580,7 +580,6 @@ function VaultMarkdownPane({
         retryLabel="重试渲染"
       >
         <VaultMarkdownEditor
-          key={getVaultEditorKey(readResult.relativePath, reopenVersion)}
           readResult={readResult}
           vaultId={vaultId}
           sessionId={sessionId}

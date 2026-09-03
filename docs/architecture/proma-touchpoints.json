@@ -1,9 +1,9 @@
 {
   "schemaVersion": 3,
-  "baseline": "9415c521d00024f067122cde8be7e89d5f055379",
-  "formalMerge": "db2d9bd9bb329a5e6a9c5cf5e7e5c4882070c022",
-  "recomputedOn": "2026-09-01",
-  "comment": "Proma-core touchpoints tracked against v0.19.16; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "baseline": "1ab22a17effd344c3f376538318efbf1628150ea",
+  "formalMerge": "8ff00976ea91b83242f4c46a66d70d4dae129bac",
+  "recomputedOn": "2026-09-03",
+  "comment": "Proma-core touchpoints tracked against v0.19.23; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -1761,6 +1761,126 @@
       "owner": "product-build",
       "mergePolicy": "keep-la",
       "reason": "让共享 UI 组件使用 Linguist Agent 的语义样式与交互合同。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/ai-elements/file-path-chip-utils.ts",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "删除文件路径 chip 的第二套解析模块，保留组件内单一路径解析。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/ai-elements/file-path-chip.tsx",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "保留 v0.19.23 完整路径提示与定位行为，并复用组件现有状态。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/DetachedPreviewApp.tsx",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "Preview 与 Vault 复用同一内容错误边界。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/DiffChangesList.tsx",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "文件删除清理复用现有批量状态查询，不保留第二套 helper。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/DiffTabContent.tsx",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "保留 v0.19.23 预览修复，并将滚动恢复收敛为单一生命周期。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/PreviewContentErrorBoundary.tsx",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "删除 Preview 专用错误边界，改用共享内容错误边界。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/diff/markdown-scroll-restore.ts",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "删除独立滚动恢复状态机，改用预览组件的单一生命周期。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/ui/content-error-boundary.tsx",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "为 Preview 与 Vault 提供同一个最小内容错误边界。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/vault/VaultContentErrorBoundary.tsx",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "删除 Vault 专用错误边界，改用共享内容错误边界。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/vault/VaultView.tsx",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "保留 v0.19.23 可折叠侧栏，并复用现有 Vault 状态与布局。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/vault/vault-editor-lifecycle.ts",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "删除未被消费的 Vault 编辑器生命周期 helper。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/vault/vault-sidebar-layout.ts",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "删除单一调用方的 Vault 侧栏布局 helper。"
+    },
+    {
+      "file": "apps/electron/src/renderer/lib/session-file-changes.ts",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "文件变更清理复用现有批量并发查询，不新增第二套 helper。"
+    },
+    {
+      "file": "apps/electron/src/renderer/lib/session-reference-drag.ts",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "保留会话拖拽引用行为，并复用原生 DataTransfer 与现有 mention 插入路径。"
+    },
+    {
+      "file": "apps/electron/src/renderer/lib/stop-generation-target.ts",
+      "ticket": "LA-SYNC-020",
+      "kind": "product-fork",
+      "owner": "upstream-integration",
+      "mergePolicy": "keep-la",
+      "reason": "停止快捷键沿用单一活动会话解析路径。"
     }
   ]
 }
