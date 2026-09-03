@@ -21,7 +21,7 @@ import { getLinguistPreviewTargetId, previewFileMapAtom } from '@/atoms/preview-
 import { tearOffPreviewToSplit } from './preview-opener'
 import { DefaultAppOpenButton } from './DefaultAppOpenButton'
 import { DiffTabContent } from './DiffTabContent'
-import { PreviewContentErrorBoundary } from './PreviewContentErrorBoundary'
+import { ContentErrorBoundary } from '@/components/ui/content-error-boundary'
 import { getDefaultAppTargetPath, getPreviewFileAccess } from './preview-open-path'
 import { LinguistPreviewBody } from '@/features/linguist/projects/LinguistPreviewBody'
 
@@ -131,7 +131,7 @@ export function PreviewTabContent({ sessionId }: PreviewTabContentProps): React.
   return (
     <div className="flex h-full flex-col overflow-hidden bg-content-area">
       <div className="min-h-0 flex-1 overflow-hidden">
-        <PreviewContentErrorBoundary resetKey={`${sessionId}:${currentFile.filePath}`}>
+        <ContentErrorBoundary key={`${sessionId}:${currentFile.filePath}`}>
           <DiffTabContent
             key={`${sessionId}:${currentFile.filePath}`}
             filePath={currentFile.filePath}
@@ -146,7 +146,7 @@ export function PreviewTabContent({ sessionId }: PreviewTabContentProps): React.
             baseRef={currentFile.baseRef}
             toolbarActions={toolbarActions}
           />
-        </PreviewContentErrorBoundary>
+        </ContentErrorBoundary>
       </div>
     </div>
   )

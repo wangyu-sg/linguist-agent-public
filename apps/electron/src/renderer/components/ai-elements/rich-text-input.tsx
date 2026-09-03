@@ -52,6 +52,10 @@ import { richTextRenderingEnabledAtom } from '@/atoms/ui-preferences'
 import { createFileMentionSuggestion } from '@/components/file-browser/file-mention-suggestion'
 import { getFilePanelDragData, type FilePanelDragItem } from '@/lib/file-panel-drag'
 import {
+  getSessionReferenceDragData,
+  type SessionReferenceDragItem,
+} from '@/lib/session-reference-drag'
+import {
   createMcpMentionSuggestion,
   createPlanningMentionSuggestion,
   createSessionMentionSuggestion,
@@ -192,6 +196,8 @@ export interface RichTextInputHandle {
   getMarkdown: () => string
   /** 在光标处插入文件引用（右侧文件面板拖入时调用） */
   insertFileMentions: (items: FilePanelDragItem[]) => void
+  /** 在光标处插入会话引用（左侧会话行拖入时调用）。 */
+  insertSessionMention: (item: SessionReferenceDragItem) => boolean
   /** 在光标处插入可定位的 Agent 历史引用 chip。 */
   insertAgentHistoryQuoteMention: (quote: QuotedSelection) => boolean
   /** 在光标处插入文件或 Vault 的选区引用 chip；可重复插入、多条并存。 */
@@ -677,10 +683,16 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
     content: value || '',
     editable: !disabled,
     editorProps: {
-      // 右侧文件面板拖拽载荷（自定义 MIME）交给外层容器 onDrop 处理，
-      // 阻止 ProseMirror 把 text/plain 路径文本当作普通文本插入。
+      // 文件面板和左侧会话行的自定义 MIME 载荷交给外层容器 onDrop 处理，
+      // 阻止 ProseMirror 把 text/plain 兜底载荷当作普通文本插入。
       handleDrop: (_view, event) => {
-        if (event.dataTransfer && getFilePanelDragData(event.dataTransfer)) {
+        if (
+          event.dataTransfer
+          && (
+            getFilePanelDragData(event.dataTransfer)
+            || getSessionReferenceDragData(event.dataTransfer)
+          )
+        ) {
           event.preventDefault()
           return true
         }
@@ -1053,75 +1065,67 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   // 对外暴露命令接口：右侧文件面板拖入时，在光标处插入 @file 引用 mention。
   // mention 节点沿用 TipTap Mention 扩展的 attrs（id=路径，label=文件名），
   // 发送时由 htmlToMarkdown 序列化为 @file:{path}，与键盘 @ 引用行为完全一致。
-  useImperativeHandle(ref, () => ({
-    getMarkdown(): string {
-      return flushPendingDraftSync(editor ?? undefined)
-    },
-    insertFileMentions(items: FilePanelDragItem[]): void {
-      if (!editor || items.length === 0) return
-      let chain = editor.chain().focus()
-      for (const item of items) {
-        chain = chain
-          .insertContent({
-            type: 'mention',
-            attrs: {
-              id: item.path,
-              label: item.name,
-              mentionSuggestionChar: '@',
-              isDirectory: item.isDirectory ?? false,
-            },
-          })
-          .insertContent(' ')
-      }
-      chain.run()
-    },
-    insertAgentHistoryQuoteMention(quote: QuotedSelection): boolean {
-      if (!editor) return false
-      const marker = serializeAgentHistoryQuoteMention(quote)
-      if (!marker) return false
-
-      const payload = marker.slice('&quote:'.length)
-      const label = buildAgentHistoryQuoteLabel(quote)
-      const id = `${quote.messageId ?? ''}:${quote.selectionStart ?? ''}:${quote.selectionEnd ?? ''}`
-      editor.chain().focus()
-        .insertContent({
-          type: 'mention',
-          attrs: {
-            id,
-            label,
-            mentionSuggestionChar: '&',
-            agentHistoryQuote: payload,
-          },
-        })
-        .insertContent(' ')
-        .run()
+  useImperativeHandle(ref, () => {
+    const insertMention = (attrs: {
+      id: string
+      label: string
+      mentionSuggestionChar: '&'
+      agentHistoryQuote?: string
+    }): boolean => {
+      if (!editor || !editor.isEditable) return false
+      editor.chain().focus().insertContent({ type: 'mention', attrs }).insertContent(' ').run()
       return true
-    },
-    insertQuotedSelectionMention(quote: QuotedSelection): boolean {
-      if (!editor) return false
-      const marker = serializeQuotedSelectionMention(quote)
-      if (!marker) return false
+    }
 
-      const payload = marker.slice('&quote:'.length)
-      const label = buildQuotedSelectionLabel(quote)
-      const id = quote.sourceType === 'agent-history'
-        ? `${quote.messageId ?? ''}:${quote.selectionStart ?? ''}:${quote.selectionEnd ?? ''}`
-        : `${quote.filePath}:${quote.capturedAt}`
-      editor.chain().focus()
-        .insertContent({
-          type: 'mention',
-          attrs: {
-            id,
-            label,
-            mentionSuggestionChar: '&',
-            agentHistoryQuote: payload,
-          },
-        })
-        .insertContent(' ')
-        .run()
-      return true
-    },
-  }), [editor, flushPendingDraftSync])
+    return {
+      getMarkdown(): string {
+        return flushPendingDraftSync(editor ?? undefined)
+      },
+      insertFileMentions(items: FilePanelDragItem[]): void {
+        if (!editor || items.length === 0) return
+        let chain = editor.chain().focus()
+        for (const item of items) {
+          chain = chain
+            .insertContent({
+              type: 'mention',
+              attrs: {
+                id: item.path,
+                label: item.name,
+                mentionSuggestionChar: '@',
+                isDirectory: item.isDirectory ?? false,
+              },
+            })
+            .insertContent(' ')
+        }
+        chain.run()
+      },
+      insertSessionMention(item: SessionReferenceDragItem): boolean {
+        return insertMention({ id: item.sessionId, label: item.title, mentionSuggestionChar: '&' })
+      },
+      insertAgentHistoryQuoteMention(quote: QuotedSelection): boolean {
+        if (!editor) return false
+        const marker = serializeAgentHistoryQuoteMention(quote)
+        if (!marker) return false
+
+        const payload = marker.slice('&quote:'.length)
+        const label = buildAgentHistoryQuoteLabel(quote)
+        const id = `${quote.messageId ?? ''}:${quote.selectionStart ?? ''}:${quote.selectionEnd ?? ''}`
+        return insertMention({ id, label, mentionSuggestionChar: '&', agentHistoryQuote: payload })
+      },
+      insertQuotedSelectionMention(quote: QuotedSelection): boolean {
+        if (!editor) return false
+        const marker = serializeQuotedSelectionMention(quote)
+        if (!marker) return false
+
+        const payload = marker.slice('&quote:'.length)
+        const label = buildQuotedSelectionLabel(quote)
+        const id = quote.sourceType === 'agent-history'
+          ? `${quote.messageId ?? ''}:${quote.selectionStart ?? ''}:${quote.selectionEnd ?? ''}`
+          : `${quote.filePath}:${quote.capturedAt}`
+        return insertMention({ id, label, mentionSuggestionChar: '&', agentHistoryQuote: payload })
+      },
+    }
+  }, [editor, flushPendingDraftSync])
 
   // 将预览范围映射到每次用户编辑后的文档位置，避免流式更新覆盖邻近输入。
   useEffect(() => {

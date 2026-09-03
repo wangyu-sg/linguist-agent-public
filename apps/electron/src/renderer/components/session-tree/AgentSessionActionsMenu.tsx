@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, ArrowRightLeft, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowRightLeft, MessageSquare, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
 import type { AgentSessionMeta } from '@proma/shared'
 import {
   ContextMenuItem,
@@ -17,6 +17,7 @@ interface AgentSessionActionsMenuProps {
   transferLabel?: string
   transferDisabledReason?: string
   historyOnly?: boolean
+  onReference: () => void
   onTogglePin: (cascade: boolean) => void
   onMove?: () => void
   onRename: () => void
@@ -63,6 +64,7 @@ export function AgentSessionActionsMenu({
   transferLabel,
   transferDisabledReason,
   historyOnly = false,
+  onReference,
   onTogglePin,
   onMove,
   onRename,
@@ -81,6 +83,11 @@ export function AgentSessionActionsMenu({
 
   return (
     <>
+      <Item className="py-1 text-xs [&>svg]:size-3.5" onSelect={onReference}>
+        <MessageSquare size={14} />
+        引用此会话
+      </Item>
+      <Separator className="my-0.5" />
       {!historyOnly && (childCount > 0 ? (
         <>
           <Item className="py-1 text-xs [&>svg]:size-3.5" onSelect={() => onTogglePin(false)}>

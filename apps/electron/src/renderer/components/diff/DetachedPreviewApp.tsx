@@ -11,7 +11,7 @@ import type { DetachedPreviewWindowData } from '@proma/shared'
 import { agentDiffRefreshVersionAtom } from '@/atoms/agent-atoms'
 import { cn } from '@/lib/utils'
 import { DiffTabContent } from './DiffTabContent'
-import { PreviewContentErrorBoundary } from './PreviewContentErrorBoundary'
+import { ContentErrorBoundary } from '@/components/ui/content-error-boundary'
 import { DefaultAppOpenButton } from './DefaultAppOpenButton'
 import { getDefaultAppTargetPath, getPreviewFileAccess } from './preview-open-path'
 
@@ -111,7 +111,7 @@ export function DetachedPreviewApp(): React.ReactElement {
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        <PreviewContentErrorBoundary resetKey={`${data.sessionId}:${data.filePath}`}>
+        <ContentErrorBoundary key={`${data.sessionId}:${data.filePath}`}>
           <DiffTabContent
             filePath={data.filePath}
             dirPath={data.dirPath}
@@ -123,7 +123,7 @@ export function DetachedPreviewApp(): React.ReactElement {
             workspaceSkillSlug={data.workspaceSkillSlug}
             legacySkillFilePath={data.legacySkillFilePath}
           />
-        </PreviewContentErrorBoundary>
+        </ContentErrorBoundary>
       </div>
     </div>
   )

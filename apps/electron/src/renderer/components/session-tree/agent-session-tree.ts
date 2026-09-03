@@ -1,6 +1,9 @@
 import type { AgentSessionMeta } from '@proma/shared'
 import type { SessionIndicatorStatus } from '@/atoms/agent-atoms'
-import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
+import {
+  getAgentSessionLinguistProjectId,
+  getDelegatedChildSessionStatus,
+} from '@/lib/agent-session-list'
 
 export interface AgentSessionTreeNode {
   session: AgentSessionMeta
@@ -29,6 +32,7 @@ export function isDelegatedChildSession(session: AgentSessionMeta): boolean {
 
 export function buildAgentSessionTrees(
   sessions: readonly AgentSessionMeta[],
+  indicatorMap?: ReadonlyMap<string, SessionIndicatorStatus>,
 ): AgentSessionTreeNode[] {
   const sessionIds = new Set(sessions.map((session) => session.id))
   const childrenByParentId = new Map<string, AgentSessionMeta[]>()
@@ -50,16 +54,19 @@ export function buildAgentSessionTrees(
 
   return roots.map((session) => ({
     session,
-    childSessions: childrenByParentId.get(session.id) ?? [],
+    childSessions: sortDelegatedChildSessions(childrenByParentId.get(session.id) ?? [], indicatorMap),
   }))
 }
 
-export function getDelegatedChildStatus(
-  session: AgentSessionMeta,
-  indicatorMap: ReadonlyMap<string, SessionIndicatorStatus>,
-): SessionIndicatorStatus {
-  return indicatorMap.get(session.id)
-    ?? (session.delegationStatus === 'running' ? 'running' : 'idle')
+export function sortDelegatedChildSessions(
+  sessions: readonly AgentSessionMeta[],
+  indicatorMap?: ReadonlyMap<string, SessionIndicatorStatus>,
+): AgentSessionMeta[] {
+  return [...sessions].sort((left, right) => {
+    const leftActive = indicatorMap && ACTIVE_SESSION_STATUSES.has(getDelegatedChildSessionStatus(left, indicatorMap)) ? 1 : 0
+    const rightActive = indicatorMap && ACTIVE_SESSION_STATUSES.has(getDelegatedChildSessionStatus(right, indicatorMap)) ? 1 : 0
+    return rightActive - leftActive || right.updatedAt - left.updatedAt
+  })
 }
 
 export function getSessionTreeStatus(
@@ -68,7 +75,7 @@ export function getSessionTreeStatus(
 ): SessionIndicatorStatus {
   const statuses = [
     indicatorMap.get(item.session.id) ?? 'idle',
-    ...item.childSessions.map((session) => getDelegatedChildStatus(session, indicatorMap)),
+    ...item.childSessions.map((session) => getDelegatedChildSessionStatus(session, indicatorMap)),
   ]
   if (statuses.includes('blocked')) return 'blocked'
   if (statuses.includes('running')) return 'running'

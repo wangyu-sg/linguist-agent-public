@@ -91,10 +91,6 @@ function getPreviewTargetPath(filePath: string, dirPath: string): string {
   return isAbsoluteFilePath(filePath) ? filePath : `${dirPath.replace(/[\\/]+$/, '')}/${filePath}`
 }
 
-function getParentFolderPath(filePath: string): string {
-  const separator = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
-  return separator > 0 ? filePath.slice(0, separator) : filePath
-}
 const FILE_FIND_SHORTCUT_OPTIONS = { exclusive: true }
 
 /**
@@ -1027,60 +1023,56 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   // cached mount → restore; scroll → save.
   const prevRefreshVersionRef = React.useRef(refreshVersion)
   const restoreScrollRef = React.useRef(false)
-  const restoreRafRef = React.useRef(0)
-  const scrollNavigationEpochRef = React.useRef(0)
-
-  const cancelPendingPreviewScrollRestore = React.useCallback(() => {
-    // A user-initiated TOC jump supersedes a restore captured before this click.
-    // Otherwise the restore rAF may write the old (often zero) position after
-    // CodeMirror has already moved the document to the requested heading.
-    scrollNavigationEpochRef.current += 1
-    restoreScrollRef.current = false
-    if (restoreRafRef.current) {
-      cancelAnimationFrame(restoreRafRef.current)
-      restoreRafRef.current = 0
-    }
-  }, [])
+  const restoreGenerationRef = React.useRef(0)
 
   // 等待异步 Markdown 渲染稳定期间保留布局但隐藏正文，避免切回标签时
   // 先暴露文档顶部、再跳回保存位置。
   const [liveMarkdownReadyKey, setLiveMarkdownReadyKey] = React.useState<string | null>(null)
   const [restoredScrollKey, setRestoredScrollKey] = React.useState<string | null>(null)
-  const restoreGenerationRef = React.useRef(0)
   const cachedScrollPosition = scrollPositionCache.get(scrollKey)
   const shouldMaskMarkdownForScrollRestore = Boolean(
     isMarkdown
-    && !loading
-    && cachedScrollPosition
-    && (cachedScrollPosition.top > 0 || cachedScrollPosition.left > 0)
-    && restoredScrollKey !== scrollKey,
+      && !loading
+      && cachedScrollPosition
+      && (cachedScrollPosition.top > 0 || cachedScrollPosition.left > 0)
+      && restoredScrollKey !== scrollKey,
   )
 
+  const cancelPendingPreviewScrollRestore = React.useCallback(() => {
+    // A user-initiated TOC jump supersedes a restore captured before this click.
+    // Otherwise the restore rAF may write the old (often zero) position after
+    // CodeMirror has already moved the document to the requested heading.
+    restoreGenerationRef.current += 1
+    restoreScrollRef.current = false
+    // 目录跳转成为当前阅读意图：结束旧恢复并同时释放它临时添加的遮罩。
+    // 否则 LiveMarkdown 就绪后取消其 rAF，会使正文一直处于隐藏状态。
+    setRestoredScrollKey(scrollKey)
+  }, [scrollKey])
+
   React.useLayoutEffect(() => {
-    // 同一预览组件复用打开另一文件时，旧编辑器的 ready / restore 结果不能解开新文件遮罩。
-    if (liveMarkdownReadyKey && liveMarkdownReadyKey !== scrollKey) setLiveMarkdownReadyKey(null)
-    if (restoredScrollKey && restoredScrollKey !== scrollKey) setRestoredScrollKey(null)
-  }, [liveMarkdownReadyKey, restoredScrollKey, scrollKey])
+    restoreGenerationRef.current += 1
+    setLiveMarkdownReadyKey((current) => current === scrollKey ? current : null)
+    setRestoredScrollKey((current) => current === scrollKey ? current : null)
+    return () => { restoreGenerationRef.current += 1 }
+  }, [scrollKey])
 
   React.useEffect(() => {
     // 异常 widget 或极端资源压力不能让阅读区永久空白；超时后 best-effort 恢复。
     if (!shouldMaskMarkdownForScrollRestore || liveMarkdownReadyKey === scrollKey) return
+    const generation = restoreGenerationRef.current
+    const restoreKey = scrollKey
     const timer = window.setTimeout(() => {
+      if (generation !== restoreGenerationRef.current) return
       restoreScrollRef.current = false
-      restoreGenerationRef.current++
-      if (restoreRafRef.current) {
-        cancelAnimationFrame(restoreRafRef.current)
-        restoreRafRef.current = 0
-      }
-      const position = scrollPositionCache.get(scrollKey)
+      const position = scrollPositionCache.get(restoreKey)
       const container = scrollContainerRef.current
       if (position && container) {
         container.scrollTop = position.top
         container.scrollLeft = position.left
       }
-      setRestoredScrollKey(scrollKey)
+      setRestoredScrollKey(restoreKey)
     }, 500)
-    return () => window.clearTimeout(timer)
+    return () => clearTimeout(timer)
   }, [liveMarkdownReadyKey, scrollKey, shouldMaskMarkdownForScrollRestore])
 
   const handleLiveMarkdownReady = React.useCallback(() => {
@@ -1130,9 +1122,9 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
       return
     }
 
-    const generation = ++restoreGenerationRef.current
+    const generation = restoreGenerationRef.current
     const el = scrollContainerRef.current
-    const restoreEpoch = scrollNavigationEpochRef.current
+    const restoreKey = scrollKey
     const maxFrames = 30
     let frameCount = 0
     let prevHeight = el.scrollHeight
@@ -1140,28 +1132,27 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
 
     const canRestore = (): boolean => (
       restoreGenerationRef.current === generation
-      && restoreEpoch === scrollNavigationEpochRef.current
       && restoreScrollRef.current
     )
+
+    let frame = 0
 
     const completeRestore = (): void => {
       if (!canRestore()) return
       // 首帧与下一帧各写入一次，覆盖 CodeMirror / widget 延迟测量导致的钳制。
       el.scrollTop = pos.top
       el.scrollLeft = pos.left
-      restoreRafRef.current = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
         if (!canRestore()) return
         el.scrollTop = pos.top
         el.scrollLeft = pos.left
         restoreScrollRef.current = false
-        setRestoredScrollKey(scrollKey)
-        restoreRafRef.current = 0
+        setRestoredScrollKey(restoreKey)
       })
     }
 
     const check = () => {
       if (!canRestore()) {
-        restoreRafRef.current = 0
         return
       }
       frameCount++
@@ -1176,17 +1167,14 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
         completeRestore()
         return
       }
-      restoreRafRef.current = requestAnimationFrame(check)
+      frame = requestAnimationFrame(check)
     }
 
-    restoreRafRef.current = requestAnimationFrame(check)
+    frame = requestAnimationFrame(check)
 
     return () => {
-      if (restoreGenerationRef.current === generation) restoreGenerationRef.current++
-      if (restoreRafRef.current) {
-        cancelAnimationFrame(restoreRafRef.current)
-        restoreRafRef.current = 0
-      }
+      if (frame) cancelAnimationFrame(frame)
+      if (restoreGenerationRef.current === generation) restoreGenerationRef.current += 1
     }
   }, [isMarkdown, liveMarkdownReadyKey, loading, previewScrollRestoreVersion, scrollKey])
 
@@ -1217,7 +1205,6 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   React.useEffect(() => {
     return () => {
       if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
-      if (restoreRafRef.current) cancelAnimationFrame(restoreRafRef.current)
     }
   }, [])
 
@@ -1591,12 +1578,18 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   }, [filePath, fileAccess, isEditableText, markdownEditorCacheKey, readOnly, sessionId])
 
   const previewTargetPath = getPreviewTargetPath(filePath, dirPath)
-  const handleOpenCurrentFolder = React.useCallback(() => {
-    window.electronAPI.systemOpenFile(getParentFolderPath(previewTargetPath), undefined, fileAccess).catch((error) => {
-      console.error('[DiffTabContent] 打开当前文件夹失败:', error)
-      toast.error('无法打开当前文件夹')
-    })
-  }, [fileAccess, previewTargetPath])
+  const handleRevealInFolder = React.useCallback(() => {
+    // 必须沿用预览加载时的候选根目录解析相对路径；手工拼接 dirPath 会与实际
+    // 解析到的附件/外部目录脱节，导致预览正常而无法在 Finder/Explorer 中定位。
+    window.electronAPI.showItemInFolder(filePath, fileAccess.candidateBasePaths)
+      .then((found) => {
+        if (!found) toast.error('未找到文件，无法在文件夹中显示')
+      })
+      .catch((error) => {
+        console.error('[DiffTabContent] 在文件夹中显示失败:', error)
+        toast.error('无法在文件夹中显示')
+      })
+  }, [fileAccess.candidateBasePaths, filePath])
 
   return (
     <div className="flex flex-col h-full">
@@ -1616,14 +1609,14 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={handleOpenCurrentFolder}
+                  onClick={handleRevealInFolder}
                   className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                  aria-label="打开当前文件夹"
+                  aria-label="在文件夹中显示"
                 >
                   <FolderOpen className="size-3.5" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">打开当前文件夹</TooltipContent>
+              <TooltipContent side="bottom">在文件夹中显示</TooltipContent>
             </Tooltip>
           </>
         )}
@@ -1786,6 +1779,7 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
           containerRef={scrollContainerRef}
           content={tocContent}
           editorRef={markdownEditorRef}
+          editorReady={liveMarkdownReadyKey === scrollKey}
           enabled={Boolean(isMarkdown && tocOpen)}
           onBeforeNavigate={cancelPendingPreviewScrollRestore}
           onOpenChange={setTocOpen}

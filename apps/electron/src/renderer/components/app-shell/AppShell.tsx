@@ -64,7 +64,7 @@ function isExpandedWorkspaceTab(tab: string | undefined): boolean {
       || tab.startsWith('preview:')
       || tab.startsWith('terminal:')
       || tab.startsWith('exploration:')
-      || tab.startsWith('delegation:')
+      || tab === 'delegation'
     ),
   )
 }

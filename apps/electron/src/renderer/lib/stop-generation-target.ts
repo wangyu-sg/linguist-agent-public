@@ -36,12 +36,13 @@ export function clearStopGenerationTarget(target: StopGenerationTarget): void {
 export function resolveStopGenerationTarget(
   activeTab: SessionTabLike | null,
   activeAgentSidePanelTab: string | undefined,
+  activeDelegationSessionId: string | null = null,
 ): StopGenerationTarget | null {
   if (!activeTab) return null
 
   if (activeTab.type === 'agent') {
-    const delegatedChildSessionId = activeAgentSidePanelTab?.startsWith('delegation:')
-      ? activeAgentSidePanelTab.slice('delegation:'.length)
+    const delegatedChildSessionId = activeAgentSidePanelTab === 'delegation'
+      ? activeDelegationSessionId
       : null
 
     return {

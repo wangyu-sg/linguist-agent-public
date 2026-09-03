@@ -92,6 +92,32 @@ export function upsertSessionFileChange(
   );
 }
 
+/**
+ * Returns tracked file paths touched by a watcher event for sessions that are
+ * no longer running. Running sessions are handled by the normal watcher path,
+ * while stopped sessions need their stale records pruned explicitly.
+ */
+export function getInactiveSessionFileChangePaths(
+  changesBySession: ReadonlyMap<string, readonly SessionFileChange[]>,
+  changedPaths: readonly string[],
+  activeSessionIds: ReadonlySet<string>,
+  caseInsensitive = false,
+): string[] {
+  const matching: string[] = []
+  for (const [sessionId, changes] of changesBySession) {
+    if (activeSessionIds.has(sessionId)) continue
+    for (const change of changes) {
+      if (
+        changedPaths.some((changedPath) => arePathsEqual(change.path, changedPath, caseInsensitive))
+        && !matching.some((path) => arePathsEqual(path, change.path, caseInsensitive))
+      ) {
+        matching.push(change.path)
+      }
+    }
+  }
+  return matching
+}
+
 export function groupSessionFileChanges(
   changes: readonly SessionFileChange[],
   currentRunId: string | undefined,

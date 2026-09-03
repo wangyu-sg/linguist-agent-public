@@ -296,6 +296,8 @@ export interface ElectronAPI extends LinguistApi {
   windowClose: () => Promise<void>
   /** 窗口是否处于最大化状态 */
   windowIsMaximized: () => Promise<boolean>
+  /** 宿主 BrowserWindow 是否处于前台（焦点可位于原生 WebContentsView） */
+  windowIsFocused: () => Promise<boolean>
   /** 订阅窗口最大化/还原事件 */
   onWindowResize: (callback: () => void) => () => void
 
@@ -982,11 +984,14 @@ export interface ElectronAPI extends LinguistApi {
   /** 解析文件路径并读取内容（供内联预览使用） */
   resolveAndReadFile: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<import('@proma/shared').FilePreviewReadResult | null>
 
+  /** 批量检查文件是否仍存在（用于清理已删除的会话文件变更记录） */
+  filterExistingFilePaths: (filePaths: string[]) => Promise<string[]>
+
   /** 写入文本文件（供 Markdown 内联编辑使用） */
   writeTextFile: (filePath: string, content: string, access?: import('@proma/shared').FileAccessOptions) => Promise<boolean>
 
   // 仅解析文件路径（供 PDF/图片等用 proma-file:// 加载）
-  resolveFilePath: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<import('@proma/shared').ResolvedFileUrl | null>
+  resolveFilePath: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => Promise<(import('@proma/shared').ResolvedFileUrl & { resolvedPath: string }) | null>
 
   /** 解析当前 Markdown 同目录内的相对媒体文件（仅供 LiveMarkdown 图片使用） */
   resolveMarkdownMedia: (markdownFilePath: string, src: string, access?: import('@proma/shared').FileAccessOptions) => Promise<import('@proma/shared').ResolvedFileUrl | null>
@@ -1504,6 +1509,10 @@ const electronAPI: ElectronAPI = {
 
   windowIsMaximized: () => {
     return ipcRenderer.invoke(IPC_CHANNELS.WINDOW_IS_MAXIMIZED)
+  },
+
+  windowIsFocused: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.WINDOW_IS_FOCUSED)
   },
 
   onWindowResize: (callback: () => void) => {
@@ -2475,12 +2484,16 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke('file:resolve-and-read', filePath, access) as Promise<import('@proma/shared').FilePreviewReadResult | null>
   },
 
+  filterExistingFilePaths: (filePaths: string[]) => {
+    return ipcRenderer.invoke('file:exists-batch', filePaths) as Promise<string[]>
+  },
+
   writeTextFile: (filePath: string, content: string, access?: import('@proma/shared').FileAccessOptions) => {
     return ipcRenderer.invoke('file:write-text', filePath, content, access) as Promise<boolean>
   },
 
   resolveFilePath: (filePath: string, access?: import('@proma/shared').FileAccessOptions) => {
-    return ipcRenderer.invoke('file:resolve-path', filePath, access) as Promise<import('@proma/shared').ResolvedFileUrl | null>
+    return ipcRenderer.invoke('file:resolve-path', filePath, access) as Promise<(import('@proma/shared').ResolvedFileUrl & { resolvedPath: string }) | null>
   },
 
   resolveMarkdownMedia: (markdownFilePath: string, src: string, access?: import('@proma/shared').FileAccessOptions) => {

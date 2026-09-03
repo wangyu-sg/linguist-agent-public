@@ -5,7 +5,7 @@ import { useAtomValue } from 'jotai'
 import { getLinguistPreviewTargetId, type PreviewFile } from '@/atoms/preview-atoms'
 import { agentSessionPathMapAtom } from '@/atoms/agent-atoms'
 import { DiffTabContent } from './DiffTabContent'
-import { PreviewContentErrorBoundary } from './PreviewContentErrorBoundary'
+import { ContentErrorBoundary } from '@/components/ui/content-error-boundary'
 import { LinguistPreviewBody } from '@/features/linguist/projects/LinguistPreviewBody'
 
 interface PreviewPanelProps {
@@ -25,7 +25,7 @@ function PreviewPanelContent({ sessionId, file, onClose }: PreviewPanelProps): R
             target={file.linguist}
           />
         ) : (
-        <PreviewContentErrorBoundary resetKey={`${sessionId}:${file.filePath}`}>
+        <ContentErrorBoundary key={`${sessionId}:${file.filePath}`}>
           <DiffTabContent
             key={`${sessionId}:${file.filePath}`}
             filePath={file.filePath}
@@ -40,7 +40,7 @@ function PreviewPanelContent({ sessionId, file, onClose }: PreviewPanelProps): R
             baseRef={file.baseRef}
             onEmptyDiff={onClose}
           />
-        </PreviewContentErrorBoundary>
+        </ContentErrorBoundary>
         )}
       </div>
     </div>
