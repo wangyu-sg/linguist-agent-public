@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { AgentSessionMeta } from '@proma/shared'
 import {
+  findLatestMainAgentSession,
   getDelegatedChildSessionStatus,
   getAgentSessionLinguistProjectId,
   getAgentSessionLinguistProjectName,
@@ -43,4 +44,16 @@ test('委派子会话实时状态优先于持久化状态', () => {
 
   expect(getDelegatedChildSessionStatus(child, new Map())).toBe('running')
   expect(getDelegatedChildSessionStatus(child, new Map([['child', 'completed']]))).toBe('completed')
+})
+
+test('项目快捷切换选择最近的普通主会话', () => {
+  const sessions = [
+    session({ id: 'older', workspaceId: 'target', updatedAt: 1 }),
+    session({ id: 'latest', workspaceId: 'target', updatedAt: 5 }),
+    session({ id: 'delegated', workspaceId: 'target', updatedAt: 9, sourceDelegationId: 'delegation' }),
+    session({ id: 'linguist', workspaceId: 'target', updatedAt: 8, linguistProjectId: 'project' }),
+    session({ id: 'other', workspaceId: 'other', updatedAt: 10 }),
+  ]
+
+  expect(findLatestMainAgentSession(sessions, 'target')?.id).toBe('latest')
 })

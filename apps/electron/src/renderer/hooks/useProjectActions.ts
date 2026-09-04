@@ -17,6 +17,7 @@ import {
 } from '@/atoms/agent-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { useOpenSession } from './useOpenSession'
+import { findLatestMainAgentSession } from '@/lib/agent-session-list'
 import type { AgentWorkspace, CreateAgentWorkspaceInput } from '@proma/shared'
 
 interface UseProjectActionsResult {
@@ -33,6 +34,7 @@ interface UseProjectActionsResult {
 export function useProjectActions(): UseProjectActionsResult {
   const [workspaces, setWorkspaces] = useAtom(agentWorkspacesAtom)
   const [currentWorkspaceId, setCurrentWorkspaceId] = useAtom(currentAgentWorkspaceIdAtom)
+  const agentSessions = useAtomValue(agentSessionsAtom)
   const setAgentSessions = useSetAtom(agentSessionsAtom)
   const agentChannelId = useAtomValue(agentChannelIdAtom)
   const agentModelId = useAtomValue(agentModelIdAtom)
@@ -43,11 +45,18 @@ export function useProjectActions(): UseProjectActionsResult {
   const selectProject = React.useCallback(
     (workspaceId: string, opts?: { resetView?: boolean }): void => {
       if (workspaceId === currentWorkspaceId) return
+      if (opts?.resetView !== false) {
+        const session = findLatestMainAgentSession(agentSessions, workspaceId)
+        if (session) {
+          openSession('agent', session.id, session.title)
+          return
+        }
+      }
       setCurrentWorkspaceId(workspaceId)
       if (opts?.resetView !== false) setActiveView('conversations')
       window.electronAPI.updateSettings({ agentWorkspaceId: workspaceId }).catch(console.error)
     },
-    [currentWorkspaceId, setCurrentWorkspaceId, setActiveView],
+    [agentSessions, currentWorkspaceId, openSession, setCurrentWorkspaceId, setActiveView],
   )
 
   const createProject = React.useCallback(

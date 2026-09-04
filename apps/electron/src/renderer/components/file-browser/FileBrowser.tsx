@@ -58,10 +58,13 @@ import {
   canBeSticky,
 } from './tree-row-layout'
 import { setFilePanelDragData, dispatchInsertFileMention } from '@/lib/file-panel-drag'
-import { getFileBrowserRootsFromKey, getFileBrowserRootsKey } from './file-browser-roots'
-import type { FileBrowserRoot, FileScope } from './file-browser-roots'
 
-export type { FileBrowserRoot, FileScope } from './file-browser-roots'
+export type FileScope = 'project' | 'session'
+
+export interface FileBrowserRoot {
+  path: string
+  scope: FileScope
+}
 
 /** 计算目标路径相对 rootPath 的祖先目录集合（不含 rootPath 自身、含目标的所有上级） */
 export function computeRevealAncestors(rootPath: string, targetPath: string): Set<string> {
@@ -98,10 +101,8 @@ interface ScopedFileEntry extends FileEntry {
 }
 
 interface FileBrowserProps {
-  /** 单根兼容入口。新代码应优先使用 roots。 */
-  rootPath?: string
   /** 同一项目会话中可见的所有物理根，会合并为一个连续文件树。 */
-  roots?: FileBrowserRoot[]
+  roots: FileBrowserRoot[]
   /** 隐藏内置顶部工具栏（面包屑 + 按钮），由外部自行渲染 */
   hideToolbar?: boolean
   /** 嵌入模式：不使用内部 ScrollArea 和 h-full，由外部容器控制布局和滚动 */
@@ -137,15 +138,19 @@ function getFileBrowserStateKey(sessionId: string | null, roots: readonly FileBr
   return `${sessionId ?? 'standalone'}\u0002${rootKey}`
 }
 
-export function FileBrowser({ rootPath, roots, hideToolbar, embedded, hideEmpty, access, projectRootPath, showSessionBadge = true, onAddToChat, onFilePreview, onOpenDirectoryTerminal }: FileBrowserProps): React.ReactElement {
-  const rootsKey = getFileBrowserRootsKey(roots)
+export function FileBrowser({ roots, hideToolbar, embedded, hideEmpty, access, projectRootPath, showSessionBadge = true, onAddToChat, onFilePreview, onOpenDirectoryTerminal }: FileBrowserProps): React.ReactElement {
+  const rootsKey = JSON.stringify(roots.filter((root) => root.path).map(({ scope, path }) => [scope, path]))
   const browserRoots = React.useMemo<FileBrowserRoot[]>(
-    () => getFileBrowserRootsFromKey(rootsKey, rootPath),
-    [rootPath, rootsKey],
+    () => (JSON.parse(rootsKey) as Array<[FileScope, string]>).map(([scope, path]) => ({ scope, path })),
+    [rootsKey],
   )
-  const [entries, setEntries] = React.useState<ScopedFileEntry[]>([])
   const [loading, setLoading] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
+  const [loadResult, setLoadResult] = React.useState<{
+    rootsKey: string | null
+    entries: ScopedFileEntry[]
+    error: string | null
+  }>({ rootsKey: null, entries: [], error: null })
+  const loadRequestIdRef = React.useRef(0)
   const filesVersion = useAtomValue(workspaceFilesVersionAtom)
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
   const expandedStateKey = React.useMemo(
@@ -208,29 +213,42 @@ export function FileBrowser({ rootPath, roots, hideToolbar, embedded, hideEmpty,
 
   /** 加载并合并所有可见根目录。 */
   const loadRoot = React.useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current
+    const requestRootsKey = rootsKey
+    const isCurrentRequest = (): boolean => requestId === loadRequestIdRef.current
+
     if (browserRoots.length === 0) {
-      setEntries([])
+      if (!isCurrentRequest()) return
+      setLoadResult({ rootsKey: null, entries: [], error: null })
+      setLoading(false)
       return
     }
+
     setLoading(true)
-    setError(null)
     try {
       const groups = await Promise.all(browserRoots.map(async (root) => {
         const items = await window.electronAPI.listDirectory(root.path, access)
         return items.map((entry): ScopedFileEntry => ({ ...entry, scope: root.scope, rootPath: root.path }))
       }))
-      setEntries(sortEntries(groups.flat()))
+      if (!isCurrentRequest()) return
+      setLoadResult({ rootsKey: requestRootsKey, entries: sortEntries(groups.flat()), error: null })
     } catch (err) {
+      if (!isCurrentRequest()) return
       const msg = err instanceof Error ? err.message : '加载失败'
-      setError(msg)
-      setEntries([])
+      setLoadResult({ rootsKey: requestRootsKey, entries: [], error: msg })
     } finally {
-      setLoading(false)
+      if (isCurrentRequest()) {
+        setLoading(false)
+      }
     }
-  }, [browserRoots, access])
+  }, [access, browserRoots, rootsKey])
 
   React.useEffect(() => {
-    loadRoot()
+    void loadRoot()
+    return () => {
+      // IPC 请求无法取消；卸载或根目录切换时让其结果失效。
+      loadRequestIdRef.current += 1
+    }
   }, [loadRoot, filesVersion])
 
   /** 选中项 */
@@ -382,17 +400,20 @@ export function FileBrowser({ rootPath, roots, hideToolbar, embedded, hideEmpty,
     return parts.length > 2 ? `.../${parts.slice(-2).join('/')}` : primaryRoot
   }, [browserRoots])
 
+  const visibleEntries = loadResult.rootsKey === rootsKey ? loadResult.entries : []
+  const visibleError = loadResult.rootsKey === rootsKey ? loadResult.error : null
+
   const fileTree = (
     <div className={cn('file-tree-guide-scope', embedded ? 'py-0' : 'py-1')} onClick={handleBackgroundClick}>
-      {error && (
-        <div className="px-3 py-2 text-xs text-destructive">{error}</div>
+      {visibleError && (
+        <div className="px-3 py-2 text-xs text-destructive">{visibleError}</div>
       )}
-      {!error && entries.length === 0 && !loading && !hideEmpty && (
+      {!visibleError && !hideEmpty && visibleEntries.length === 0 && loadResult.rootsKey === rootsKey && (
         <div className="px-3 py-4 text-xs text-muted-foreground text-center">
           目录为空
         </div>
       )}
-      {entries.map((entry) => (
+      {visibleEntries.map((entry) => (
         <FileTreeItem
           key={entry.path}
           entry={entry}

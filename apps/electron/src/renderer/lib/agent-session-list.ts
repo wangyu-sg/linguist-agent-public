@@ -55,6 +55,21 @@ export function sortAgentSessionsByUpdatedAtDesc(
   return [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+/** 项目快捷切换进入最近的普通主会话；自动任务与委派子会话有各自入口。 */
+export function findLatestMainAgentSession(
+  sessions: readonly AgentSessionMeta[],
+  workspaceId: string,
+): AgentSessionMeta | undefined {
+  return sortAgentSessionsByUpdatedAtDesc(sessions).find((session) => (
+    session.workspaceId === workspaceId
+    && !session.archived
+    && !session.isDraft
+    && !session.sourceAutomationId
+    && !session.sourceDelegationId
+    && getAgentSessionLinguistProjectId(session, sessions) === undefined
+  ))
+}
+
 /** Agent 归档会话的顶层项目分组。 */
 export interface ArchivedAgentSessionProjectGroup {
   /** 稳定的虚拟列表 key；不对应真实项目的分组使用保留 ID。 */

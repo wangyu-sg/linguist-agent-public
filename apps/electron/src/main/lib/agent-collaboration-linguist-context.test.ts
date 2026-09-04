@@ -83,20 +83,6 @@ mock.module('./agent-headless-runner-registry', () => ({
 mock.module('./agent-model-selection', () => ({
   assertEnabledModelForChannel: ({ modelId }: { modelId: string }) => modelId,
   listEnabledAgentModels: () => [],
-  listEnabledAgentModelsForChannel: () => ({
-    channelId: 'channel-deepseek',
-    channelName: 'DeepSeek',
-    provider: 'deepseek',
-    models: [],
-  }),
-}))
-
-mock.module('./adapters/pi-model-registry', () => ({
-  resolvePiReasoningCapability: () => Promise.resolve({
-    source: 'profile',
-    levels: ['off', 'low', 'high', 'max'],
-    defaultLevel: 'high',
-  }),
 }))
 
 mock.module('./linguist/project-service', () => ({
@@ -140,7 +126,7 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
     task: '审校当前资产',
     channelId: 'channel-deepseek',
     modelId: 'deepseek-v4-pro',
-    reasoningEffort: 'max',
+    thinkingLevel: 'max',
     linguistRole: 'reviewer',
     linguistScope: { assetIds: [parentContext.assetId] },
   }) as { details: Record<string, unknown> }
@@ -160,7 +146,7 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
   expect(result.details).toMatchObject({
     effectiveChannelId: 'channel-deepseek',
     effectiveModelId: 'deepseek-v4-pro',
-    effectiveReasoningEffort: 'max',
+    delegation: { thinkingLevel: 'max' },
   })
 
   await delegate.execute('tool-call-2', { task: '普通协作任务' })

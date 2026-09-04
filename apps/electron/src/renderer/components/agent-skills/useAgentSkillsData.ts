@@ -242,15 +242,16 @@ export function useAgentSkillsData(workspaceId?: string): AgentSkillsData {
 
   const toggleMcp = React.useCallback(async (name: string, enabled: boolean): Promise<{ success: boolean; message: string }> => {
     try {
-      // Main owns the save → validation → conditional writeback lifecycle, so a
-      // slow handshake cannot restore this renderer's stale configuration.
       const result = await window.electronAPI.setMcpEnabledAndValidate(workspaceSlug, name, enabled)
       setMcpConfig(result.config)
       bumpCapabilitiesVersion((v) => v + 1)
+      if (!result.verification.success && enabled) {
+        toast.error(`${name} 启用失败`, { description: result.verification.message })
+      }
       return result.verification
     } catch (error) {
-      console.error('[Agent 技能] 切换 MCP 服务器状态失败:', error)
       toast.error('切换 MCP 状态失败')
+      console.error('[Agent 技能] 切换 MCP 服务器状态失败:', error)
       return { success: false, message: error instanceof Error ? error.message : '切换 MCP 状态失败' }
     }
   }, [workspaceSlug, bumpCapabilitiesVersion])

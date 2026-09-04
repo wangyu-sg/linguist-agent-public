@@ -26,11 +26,7 @@ export { projectCurrentAgentSessionIdMapAtom } from './project-agent-session-ato
 // ===== 类型定义 =====
 
 /** 标签页类型（Settings 不作为 Tab，保留独立视图） */
-export type TabType = 'chat' | 'agent' | 'preview' | 'tutorial' | 'linguist-project'
-
-/** 教程 Tab 固定 ID */
-export const TUTORIAL_TAB_ID = '__tutorial__'
-export const TUTORIAL_TAB_TITLE = 'Linguist Agent 使用教程'
+export type TabType = 'chat' | 'agent' | 'preview' | 'linguist-project'
 
 /** 会话预览 Tab 的 ID 前缀：运行时临时入口，不参与持久化 */
 const PREVIEW_TAB_PREFIX = '__preview__:'
@@ -46,13 +42,6 @@ export interface PreviewTab {
   id: string
   type: 'preview'
   sessionId: string
-  title: string
-}
-
-export interface TutorialTab {
-  id: typeof TUTORIAL_TAB_ID
-  type: 'tutorial'
-  sessionId: typeof TUTORIAL_TAB_ID
   title: string
 }
 
@@ -72,7 +61,6 @@ export interface LocalizationProjectTab {
 export type TabItem =
   | SessionTab
   | PreviewTab
-  | TutorialTab
   | LocalizationProjectTab
 
 /** Tab 持久化数据（保存到 settings.json） */
@@ -309,8 +297,7 @@ export function openLocalizationProjectTab(
 
 function getPersistentTabs(tabs: TabItem[]): TabItem[] {
   return tabs.filter((tab) => (
-    tab.id !== TUTORIAL_TAB_ID
-    && !isPreviewTab(tab)
+    !isPreviewTab(tab)
     && tab.type !== 'linguist-project'
   ))
 }
@@ -469,19 +456,6 @@ export function openTab(
   const projectTabs = tabs.filter(
     (tab): tab is LocalizationProjectTab => tab.type === 'linguist-project',
   )
-
-  if (item.type === 'tutorial') {
-    const tutorialTab: TabItem = tabs.find((t) => t.id === TUTORIAL_TAB_ID) ?? {
-      id: TUTORIAL_TAB_ID,
-      type: 'tutorial',
-      sessionId: TUTORIAL_TAB_ID,
-      title: TUTORIAL_TAB_TITLE,
-    }
-    return {
-      tabs: [...projectTabs, tutorialTab],
-      activeTabId: TUTORIAL_TAB_ID,
-    }
-  }
 
   if (item.type === 'preview') {
     const ownerAgentTab = tabs.find((t) => t.type === 'agent' && t.sessionId === item.sessionId) ?? {

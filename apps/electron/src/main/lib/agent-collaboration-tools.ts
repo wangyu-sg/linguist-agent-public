@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { Type } from 'typebox'
-import { createLinguistTurnContextV1, normalizeReasoningCapabilityLevel } from '@proma/shared'
+import { createLinguistTurnContextV1 } from '@proma/shared'
 import type {
   AgentDelegationRole,
   AgentDelegationStatus,
@@ -42,8 +42,7 @@ import {
   createToolCallIdempotencyCache,
   resolveDelegationPermissionMode,
 } from './agent-collaboration-utils'
-import { assertEnabledModelForChannel, listEnabledAgentModels, listEnabledAgentModelsForChannel } from './agent-model-selection'
-import { resolvePiReasoningCapability } from './adapters/pi-model-registry'
+import { assertEnabledModelForChannel, listEnabledAgentModels } from './agent-model-selection'
 import { resolveLinguistDelegationMetadata, resolveLinguistDelegationOutcome, type LinguistDelegationRequest } from './linguist/delegation-host-extension'
 
 interface CollaborationToolContext {
@@ -240,7 +239,8 @@ interface DelegateAgentArgs extends LinguistDelegationRequest {
   permissionMode?: PromaPermissionMode
   channelId?: string
   modelId?: string
-  reasoningEffort?: AgentThinkingLevel
+  /** 子会话的目标思考强度；未传入时保持新会话默认值。 */
+  thinkingLevel?: AgentThinkingLevel
 }
 
 interface StartDelegationResult {
@@ -248,7 +248,6 @@ interface StartDelegationResult {
   effectivePermissionMode: PromaPermissionMode
   effectiveChannelId: string
   effectiveModelId?: string
-  effectiveReasoningEffort?: AgentThinkingLevel
 }
 
 interface PiDelegationToolResult {
@@ -256,7 +255,6 @@ interface PiDelegationToolResult {
   effectivePermissionMode: PromaPermissionMode
   effectiveChannelId: string
   effectiveModelId?: string
-  effectiveReasoningEffort?: AgentThinkingLevel
 }
 
 interface PiBatchDelegationResult {
@@ -357,15 +355,15 @@ function markDelegationFinished(
 }
 
 function getDelegationSummary(record: DelegationRecord): Record<string, unknown> {
-  const linguistOutcome = resolveLinguistDelegationOutcome(
-    getAgentSessionMeta(record.childSessionId),
-  )
+  const session = getAgentSessionMeta(record.childSessionId)
+  const linguistOutcome = resolveLinguistDelegationOutcome(session)
   return {
     delegationId: record.delegationId,
     parentSessionId: record.parentSessionId,
     childSessionId: record.childSessionId,
     channelId: record.channelId,
     modelId: record.modelId,
+    thinkingLevel: session?.reasoningLevel,
     title: record.title,
     role: record.role,
     goal: record.goal,
@@ -396,6 +394,7 @@ function listKnownDelegations(parentSessionId: string): Array<Record<string, unk
         childSessionId: session.id,
         channelId: session.channelId,
         modelId: session.modelId,
+        thinkingLevel: session.reasoningLevel,
         title: session.title,
         role: session.delegationRole,
         goal: session.delegationGoal,
@@ -435,6 +434,7 @@ function getDelegationResult(parentSessionId: string, delegationId: string): Rec
     childSessionId: session.id,
     channelId: session.channelId,
     modelId: session.modelId,
+    thinkingLevel: session.reasoningLevel,
     title: session.title,
     role: session.delegationRole,
     goal: session.delegationGoal,
@@ -459,7 +459,7 @@ function getPersistedDelegationSession(parentSessionId: string, delegationId: st
 
   // 应用重启、恢复或旧数据修复后，父会话上下文可能暂时不完整。
   // delegationId 本身是 UUID；当全局只有唯一命中时，允许用它恢复，避免误报“当前会话下未找到”。
-  // 但只有该会话未记录父会话、或父会话与当前一致时才接受，避免凭 UUID 跨父会话误恢复他人的委派。
+  // 写操作必须显式关闭该兼容回退，严格要求持久化 parentSessionId 与当前父会话一致。
   if (sessions.length !== 1) return undefined
   const unique = sessions[0]
   if (!unique) return undefined
@@ -683,14 +683,6 @@ async function startDelegation(
         purpose: '创建协作子会话',
       })
     : undefined
-  let effectiveReasoningEffort: AgentThinkingLevel | undefined
-  if (args.reasoningEffort !== undefined) {
-    if (!effectiveModelId) throw new Error('指定 reasoningEffort 时必须同时指定 modelId')
-    const channel = listEnabledAgentModelsForChannel(effectiveChannelId, '设置协作子会话推理档')
-    const capability = await resolvePiReasoningCapability(channel.provider, effectiveModelId)
-    if (!capability) throw new Error(`模型不支持可配置推理档: ${effectiveModelId}`)
-    effectiveReasoningEffort = normalizeReasoningCapabilityLevel(capability, args.reasoningEffort)
-  }
 
   const { completion, resolveCompletion } = createDelegationCompletion()
 
@@ -721,7 +713,7 @@ async function startDelegation(
     delegationDepth: (parent?.delegationDepth ?? 0) + 1,
     delegationGoal: goal,
     permissionMode,
-    ...(effectiveReasoningEffort === undefined ? {} : { reasoningLevel: effectiveReasoningEffort }),
+    ...(args.thinkingLevel ? { reasoningLevel: args.thinkingLevel } : {}),
   })
 
   const record: DelegationRecord = {
@@ -796,7 +788,6 @@ async function startDelegation(
     effectivePermissionMode: permissionMode,
     effectiveChannelId,
     effectiveModelId,
-    effectiveReasoningEffort,
   }
 }
 
@@ -829,7 +820,7 @@ export function buildPiCollaborationTools(
     assetIds: Type.Optional(Type.Array(Type.String(), { description: '指定 Asset ID 列表' })),
     segmentIds: Type.Optional(Type.Array(Type.String(), { description: '指定 Segment ID 列表' })),
   }))
-  const reasoningEffortType = Type.Optional(Type.Union([
+  const thinkingLevelType = Type.Union([
     Type.Literal('off'),
     Type.Literal('minimal'),
     Type.Literal('low'),
@@ -837,7 +828,7 @@ export function buildPiCollaborationTools(
     Type.Literal('high'),
     Type.Literal('xhigh'),
     Type.Literal('max'),
-  ], { description: '可选推理档；max 会映射到目标模型支持的最高档' }))
+  ], { description: '子会话思考强度' })
 
   const delegateItemType = Type.Object({
     title: Type.Optional(Type.String({ description: '子会话标题' })),
@@ -846,9 +837,9 @@ export function buildPiCollaborationTools(
     expectedOutput: Type.Optional(Type.String({ description: '希望子 Agent 最终返回的格式或要点' })),
     channelId: Type.Optional(Type.String({ description: '可选目标渠道 ID' })),
     modelId: Type.Optional(Type.String({ description: '可选目标模型 ID' })),
-    reasoningEffort: reasoningEffortType,
     linguistRole: linguistRoleType,
     linguistScope: linguistScopeType,
+    thinkingLevel: Type.Optional(thinkingLevelType),
   })
 
   function piJsonResult(payload: unknown): { content: Array<{ type: 'text'; text: string }>; details: unknown } {
@@ -871,7 +862,7 @@ export function buildPiCollaborationTools(
     sdk.defineTool({
       name: 'mcp__collaboration__delegate_agent',
       label: '委派子 Agent',
-      description: '创建一个真实可见的 Proma 协作子 Agent 会话来并行处理独立子任务。只用于长耗时、可并行、需要追踪的任务。委派只表示子会话已启动，不表示任务完成或结果已回传：若本轮回复、下一步决策或交付依赖该子任务，主会话必须在回复前用返回的 delegationId 调用 wait_for_delegations 收敛结果；只有仍有完全独立的工作时才可先继续推进。',
+      description: '创建一个真实可见的 Proma 协作子 Agent 会话来并行处理独立子任务。可选 thinkingLevel 指定子会话首轮思考强度；模型不支持时运行时会安全归一化。委派只表示子会话已启动。',
       parameters: Type.Object({
         title: Type.Optional(Type.String({ description: '子会话标题' })),
         role: roleType,
@@ -879,9 +870,9 @@ export function buildPiCollaborationTools(
         expectedOutput: Type.Optional(Type.String({ description: '希望子 Agent 最终返回的格式或要点' })),
         channelId: Type.Optional(Type.String({ description: '可选目标渠道 ID' })),
         modelId: Type.Optional(Type.String({ description: '可选目标模型 ID' })),
-        reasoningEffort: reasoningEffortType,
         linguistRole: linguistRoleType,
         linguistScope: linguistScopeType,
+        thinkingLevel: Type.Optional(thinkingLevelType),
       }),
       async execute(toolCallId: string, params: unknown) {
         const args = params as DelegateAgentArgs
@@ -893,7 +884,6 @@ export function buildPiCollaborationTools(
             effectivePermissionMode: created.effectivePermissionMode,
             effectiveChannelId: created.effectiveChannelId,
             effectiveModelId: created.effectiveModelId,
-            effectiveReasoningEffort: created.effectiveReasoningEffort,
           }
         })
         return piJsonResult({
@@ -901,7 +891,6 @@ export function buildPiCollaborationTools(
           effectivePermissionMode: result.effectivePermissionMode,
           effectiveChannelId: result.effectiveChannelId,
           effectiveModelId: result.effectiveModelId,
-          effectiveReasoningEffort: result.effectiveReasoningEffort,
           note: '子会话已启动，尚未完成或回传结果。记录 delegationId；如果本轮回复、决策或交付依赖它，必须在回复前调用 wait_for_delegations 收敛。仅在父会话还有完全独立的工作时才继续推进。',
         })
       },
@@ -909,7 +898,7 @@ export function buildPiCollaborationTools(
     sdk.defineTool({
       name: 'mcp__collaboration__delegate_agents',
       label: '批量委派子 Agent',
-      description: '批量创建多个真实可见的 Proma 协作子 Agent 会话。适合把同一大任务拆成多片并行处理。创建成功只表示各子会话已启动，不表示批次已完成：若本轮需要基于任一或全部子任务交付、判断或回复，主会话必须在回复前用返回的 delegationIds 调用 wait_for_delegations（需要完整结论时用 mode=all）；仅可在等待前推进完全独立的主线。',
+      description: '批量创建多个真实可见的 Proma 协作子 Agent 会话。每个 item 可独立指定首轮 thinkingLevel；模型不支持时运行时会安全归一化。',
       parameters: Type.Object({
         sharedContext: Type.Optional(Type.String({ description: '批量子任务共用背景' })),
         items: Type.Array(delegateItemType, { description: '要创建的子会话列表，最多 50 个' }),
@@ -934,7 +923,6 @@ export function buildPiCollaborationTools(
                 effectivePermissionMode: started.effectivePermissionMode,
                 effectiveChannelId: started.effectiveChannelId,
                 effectiveModelId: started.effectiveModelId,
-                effectiveReasoningEffort: started.effectiveReasoningEffort,
               })
             } catch (error) {
               failures.push({
@@ -956,7 +944,6 @@ export function buildPiCollaborationTools(
             delegationId: item.delegationId,
             channelId: item.effectiveChannelId,
             modelId: item.effectiveModelId,
-            reasoningEffort: item.effectiveReasoningEffort,
           })),
           failures: batch.failures,
           createdCount: batch.created.length,
@@ -1011,7 +998,7 @@ export function buildPiCollaborationTools(
     sdk.defineTool({
       name: 'mcp__collaboration__list_delegations',
       label: '列出协作子会话',
-      description: '列出当前父会话创建的 Proma 协作子会话及状态。',
+      description: '列出当前父会话创建的 Proma 协作子会话及状态。返回中的 thinkingLevel 表示配置/请求值，不代表模型 capability normalization 后的实际运行档位。',
       parameters: Type.Object({
         includeCompleted: Type.Optional(Type.Boolean({ description: '是否包含已完成委派，默认 true' })),
       }),
@@ -1031,7 +1018,7 @@ export function buildPiCollaborationTools(
     sdk.defineTool({
       name: 'mcp__collaboration__get_delegation_results',
       label: '读取子会话结果',
-      description: '按委派 ID 读取一个或多个 Proma 协作子会话的结果摘要。',
+      description: '按委派 ID 读取一个或多个 Proma 协作子会话的结果摘要。返回中的 thinkingLevel 表示配置/请求值，不代表模型 capability normalization 后的实际运行档位。',
       parameters: Type.Object({
         delegationIds: Type.Array(Type.String(), { description: '要读取结果的委派 ID 列表' }),
       }),
@@ -1039,6 +1026,31 @@ export function buildPiCollaborationTools(
         const args = params as { delegationIds: string[] }
         return piJsonResult({
           delegations: args.delegationIds.map((delegationId) => getDelegationResult(ctx.sessionId, delegationId)),
+        })
+      },
+    }),
+    sdk.defineTool({
+      name: 'mcp__collaboration__set_delegation_thinking_level',
+      label: '设置子会话思考强度',
+      description: '父 Agent 修改自己创建的协作子会话思考强度。当前已运行的 turn 不会中途切换，新强度从下一轮或续跑开始生效。',
+      parameters: Type.Object({
+        delegationId: Type.String({ description: '要修改的委派 ID' }),
+        thinkingLevel: thinkingLevelType,
+      }),
+      async execute(_toolCallId: string, params: unknown) {
+        const args = params as { delegationId: string; thinkingLevel: AgentThinkingLevel }
+        const session = findPersistedDelegationSessions(args.delegationId)
+          .find((item) => item.parentSessionId === ctx.sessionId)
+        if (!session) throw new Error(`未找到当前会话下的委派: ${args.delegationId}`)
+        const updated = updateAgentSessionMeta(session.id, { reasoningLevel: args.thinkingLevel })
+        const live = delegations.get(args.delegationId)
+        return piJsonResult({
+          delegationId: args.delegationId,
+          childSessionId: session.id,
+          modelId: session.modelId,
+          status: live?.status ?? session.delegationStatus,
+          thinkingLevel: updated.reasoningLevel,
+          effectiveTiming: 'next_turn',
         })
       },
     }),

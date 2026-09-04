@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import type { BrowserViewState } from '@proma/shared'
-import { ChevronLeft, ChevronRight, LoaderCircle, RotateCw, ShieldAlert, Square } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Globe, LoaderCircle, RotateCw, ShieldAlert, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -56,6 +56,10 @@ export function BrowserPanel({ sessionId, tabId, state }: BrowserPanelProps): Re
     try { await navigateBrowser({ sessionId, tabId, url: value }) } catch (error) { console.error('[受管浏览器] 导航失败:', error) }
   }, [sessionId, tabId, url])
 
+  const parsedExternalUrl = URL.parse(url.trim())
+  const externalBrowserUrl = parsedExternalUrl && (parsedExternalUrl.protocol === 'http:' || parsedExternalUrl.protocol === 'https:')
+    ? parsedExternalUrl.toString()
+    : null
   const closeBrowser = React.useCallback(async () => {
     try {
       await window.electronAPI.closeAgentBrowser(sessionId)
@@ -121,6 +125,24 @@ export function BrowserPanel({ sessionId, tabId, state }: BrowserPanelProps): Re
         <form className="flex-1 min-w-0" onSubmit={(event) => { event.preventDefault(); if (!riskBlocked) void navigate() }}>
           <Input disabled={riskBlocked || !isControllerTabActive} value={url} onChange={(event) => setUrl(event.target.value)} placeholder="输入网址或搜索内容" className="h-7 bg-background/70 text-xs text-muted-foreground/70" aria-label="浏览器地址" />
         </form>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0 rounded-lg text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
+              disabled={riskBlocked || !isControllerTabActive || !externalBrowserUrl}
+              onClick={() => {
+                if (externalBrowserUrl) void window.electronAPI.openExternal(externalBrowserUrl).catch((error) => console.error('[受管浏览器] 在默认浏览器中打开失败:', error))
+              }}
+              aria-label="通过默认浏览器打开"
+            >
+              <Globe className="size-[18px]" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>通过默认浏览器打开</TooltipContent>
+        </Tooltip>
         {state?.loading && <LoaderCircle className="size-3.5 text-muted-foreground animate-spin" />}
         {isBackgroundRun && (
           <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="size-7 text-amber-600 hover:text-amber-700" onClick={() => void stopBackgroundRun()} aria-label="停止当前后台 Agent"><Square className="size-3.5 fill-current" /></Button></TooltipTrigger><TooltipContent>停止当前{state?.executionSource === 'automation' ? '自动任务' : '委派'}运行</TooltipContent></Tooltip>

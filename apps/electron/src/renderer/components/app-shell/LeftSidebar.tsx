@@ -4487,7 +4487,6 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
           }}
           className={cn(
             'session-quick-switch-row group relative w-full flex items-center gap-1.5 rounded-md py-1.5 pl-2.5 pr-1.5 transition-colors duration-100 titlebar-no-drag text-left',
-            'group-hover:pl-6',
             active && 'agent-session-item-active',
             leftAccent
               ? SESSION_ACCENT_ROW_CLASS[leftAccent]
@@ -4525,23 +4524,6 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
             inputClassName="px-0 py-0 text-[13px] leading-5 text-foreground"
             beforeTitle={(
               <>
-                <Tooltip delayDuration={2000}>
-                  <TooltipTrigger asChild>
-                    <span
-                      aria-label="拖拽会话引用"
-                      className={cn(
-                        'absolute left-1 top-1/2 z-10 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded text-foreground/35 opacity-0 transition-opacity duration-150 group-hover:opacity-100',
-                        leftAccent && 'left-1.5',
-                      )}
-                      onMouseEnter={preview.closeNow}
-                    >
-                      <GripVertical size={12} />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="max-w-64">
-                    支持直接拖拽会话到当前输入框，实现对会话的引用。
-                  </TooltipContent>
-                </Tooltip>
                 {showPinIcon && (
                   <Pin size={11} className="flex-shrink-0 text-primary/60" />
                 )}

@@ -32,16 +32,12 @@ import {
   settingsTabAtom,
   channelFormDirtyAtom,
   settingsCloseRequestedAtom,
-  settingsOpenAtom,
   settingsPendingSessionNavigationAtom,
   type SettingsSessionNavigation,
 } from "@/atoms/settings-tab";
 import type { SettingsTab } from "@/atoms/settings-tab";
-import { appModeAtom } from "@/atoms/app-mode";
-import { activeViewAtom } from "@/atoms/active-view";
-import { automationFormAtom } from "@/atoms/automation-atoms";
 import { hasUpdateAtom } from "@/atoms/updater";
-import { tabsAtom, activeTabIdAtom, openTab, TUTORIAL_TAB_ID, TUTORIAL_TAB_TITLE } from "@/atoms/tab-atoms";
+import { appModeAtom } from '@/atoms/app-mode'
 import { hasEnvironmentIssuesAtom } from "@/atoms/environment";
 import {
   AlertDialog,
@@ -97,11 +93,6 @@ const BOTS_TAB: TabItem = {
   id: "bots",
   label: "远程连接",
   icon: <Bot size={16} />,
-};
-const TUTORIAL_TAB: TabItem = {
-  id: "tutorial",
-  label: "使用教程",
-  icon: <GraduationCap size={16} />,
 };
 const SHORTCUTS_TAB: TabItem = {
   id: "shortcuts",
@@ -163,7 +154,6 @@ function renderBuiltInTabContent(tab: SettingsTab): React.ReactElement {
     case "onboarding":
       return <OnboardingSettings />;
     default:
-      // tutorial 等特殊 tab 由 handleTabChange 拦截打开主区 Tab，不会在此渲染
       return <GeneralSettings />;
   }
 }
@@ -176,18 +166,13 @@ export function SettingsPanel({
   onClose,
 }: SettingsPanelProps): React.ReactElement {
   const isWindows = React.useMemo(() => detectIsWindows(), [])
+  const appMode = useAtomValue(appModeAtom)
   const [activeTab, setActiveTab] = useAtom(settingsTabAtom);
   const channelFormDirty = useAtomValue(channelFormDirtyAtom);
   const [closeRequested, setCloseRequested] = useAtom(settingsCloseRequestedAtom);
   const [pendingSessionNavigation, setPendingSessionNavigation] = useAtom(settingsPendingSessionNavigationAtom);
-  const setSettingsOpen = useSetAtom(settingsOpenAtom);
-  const setActiveView = useSetAtom(activeViewAtom);
-  const setAutomationForm = useSetAtom(automationFormAtom);
-  const appMode = useAtomValue(appModeAtom);
   const hasUpdate = useAtomValue(hasUpdateAtom);
   const hasEnvironmentIssues = useAtomValue(hasEnvironmentIssuesAtom);
-  const [mainTabs, setMainTabs] = useAtom(tabsAtom);
-  const setMainActiveTabId = useSetAtom(activeTabIdAtom);
   const openSession = useOpenSession()
   /** 统一的退出拦截对话框状态 */
   type PendingAction =
@@ -221,18 +206,8 @@ export function SettingsPanel({
     setPendingAction(null)
   }
 
-  /** 切换标签页时检测是否有未保存内容，tutorial 特殊处理：打开 New Tab 并关闭设置 */
+  /** 切换标签页时检测是否有未保存内容 */
   const handleTabChange = (tabId: SettingsTab): void => {
-    if (tabId === 'tutorial') {
-      const result = openTab(mainTabs, { type: 'tutorial', sessionId: TUTORIAL_TAB_ID, title: TUTORIAL_TAB_TITLE })
-      setMainTabs(result.tabs)
-      setMainActiveTabId(result.activeTabId)
-      // Skills/Automations 会全屏覆盖 TabContent；打开教程时先清理表单并回到会话视图。
-      setAutomationForm({ open: false, draft: null })
-      setActiveView('conversations')
-      setSettingsOpen(false)
-      return
-    }
     if (tabId === activeTab) return
     if (activeTab === 'channels' && channelFormDirty) {
       setPendingAction({ type: 'tab', tabId })
@@ -284,7 +259,6 @@ export function SettingsPanel({
       TOOLS_TAB,
       VOICE_INPUT_TAB,
       BOTS_TAB,
-      TUTORIAL_TAB,
       SHORTCUTS_TAB,
     ];
     return resolveSettingsSections([

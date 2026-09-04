@@ -1,9 +1,9 @@
 {
   "schemaVersion": 3,
-  "baseline": "1ab22a17effd344c3f376538318efbf1628150ea",
-  "formalMerge": "8ff00976ea91b83242f4c46a66d70d4dae129bac",
-  "recomputedOn": "2026-09-03",
-  "comment": "Proma-core touchpoints tracked against v0.19.23; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "baseline": "bbf577a8eb768225fdf1ac49ab9ef07a11413b24",
+  "formalMerge": "bbf577a8eb768225fdf1ac49ab9ef07a11413b24",
+  "recomputedOn": "2026-09-04",
+  "comment": "Proma-core touchpoints tracked against v0.19.26; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -225,14 +225,6 @@
       "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
     },
     {
-      "file": "apps/electron/resources/tutorial.md",
-      "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "product-build",
-      "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
-    },
-    {
       "file": "apps/electron/scripts/generate-la-icon.mjs",
       "ticket": "LA-SYNC-005",
       "kind": "product-fork",
@@ -306,6 +298,14 @@
       "mergePolicy": "host-seam",
       "hook": "linguist-delegation",
       "reason": "把当前已验证的 Linguist turn context 交给 Proma Collaboration，供绑定项目的子会话复用同一宿主快照。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/adapters/pi-mcp-tools.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "保留 required MCP 失败冷却，直接记录失败时间。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-collaboration-tools.ts",
@@ -527,6 +527,14 @@
       "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
     },
     {
+      "file": "apps/electron/src/main/lib/mcp-oauth-service.ts",
+      "ticket": "LA-SYNC-003",
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "复用共享 SaveMcpApiKeyInput 合同，避免主进程重复声明同一输入结构。"
+    },
+    {
       "file": "apps/electron/src/main/lib/planning-manager.ts",
       "ticket": "LA-SYNC-003",
       "kind": "product-fork",
@@ -607,14 +615,6 @@
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
     },
     {
-      "file": "apps/electron/src/main/lib/tutorial-service.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
-    },
-    {
       "file": "apps/electron/src/main/lib/updater/auto-updater.ts",
       "ticket": "LA-SYNC-005",
       "kind": "product-fork",
@@ -629,6 +629,14 @@
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/vault-service.ts",
+      "ticket": "LA-SYNC-003",
+      "kind": "product-fork",
+      "owner": "main-product",
+      "mergePolicy": "keep-la",
+      "reason": "Vault 文件夹创建直接使用 mkdirSync 的原子失败语义。"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-output-result.ts",
@@ -694,14 +702,6 @@
       "mergePolicy": "host-seam",
       "hook": "linguist-preload",
       "reason": "在 Proma preload API 中组合一次 typed Linguist API。"
-    },
-    {
-      "file": "apps/electron/src/renderer/App.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/active-view.ts",
@@ -792,6 +792,14 @@
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
     },
     {
+      "file": "apps/electron/src/renderer/components/agent-skills/IntegrationCatalog.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "目录卡片仅按现有 priority 与 placement 排序。"
+    },
+    {
       "file": "apps/electron/src/renderer/components/agent-skills/BuiltinMcpDetailSheet.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -806,6 +814,22 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent-skills/integration-catalog.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "目录排序只保留实际生效的 priority 与 placement。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent-skills/useAgentSkillsData.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "MCP 开关以主进程验证结果为准。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentHeader.tsx",
@@ -1099,6 +1123,14 @@
       "reason": "右侧工作区加号菜单保持 overlay，打开菜单时不移动或压缩原生浏览器页面。"
     },
     {
+      "file": "apps/electron/src/renderer/components/browser/browser-external-url.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "删除单调用方地址解析模块，由 BrowserPanel 单次解析并复用结果。"
+    },
+    {
       "file": "apps/electron/src/renderer/components/chat/ChatHeader.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1201,6 +1233,30 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "提高 Agent 与 Linguist 共用右侧文件工作区操作标签的对比度。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/file-browser/FileBrowser.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "在唯一调用处直接判断文件加载代次和空态。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/file-browser/file-browser-roots.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "删除已无调用方的单根兼容恢复函数。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/file-browser/file-browser-load-state.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "删除只包装两处简单布尔判断的一次性模块。"
     },
     {
       "file": "apps/electron/src/renderer/components/planning/PlanningReminderRail.tsx",
@@ -1459,14 +1515,6 @@
       "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
     },
     {
-      "file": "apps/electron/src/renderer/components/tutorial/TutorialBanner.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/ui/confirm-dialog.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",
@@ -1521,6 +1569,14 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+    },
+    {
+      "file": "apps/electron/src/renderer/hooks/useProjectActions.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "product-fork",
+      "owner": "renderer-product",
+      "mergePolicy": "keep-la",
+      "reason": "项目快捷切换时打开该项目最近的普通主会话，避免项目高亮与中央会话脱节。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useGlobalAgentListeners.ts",

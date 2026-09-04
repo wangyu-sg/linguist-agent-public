@@ -115,11 +115,6 @@ export function useOpenSession(): OpenSessionFn {
             agentWorkspaceId: session.workspaceId,
           }).catch(console.error)
         }
-      } else {
-        // 教程等非会话 Tab 不创建或选择会话。
-        setAppMode('agent')
-        setCurrentConversationId(null)
-        setCurrentAgentSessionId(null)
       }
     },
     [tabs, setTabs, setActiveTabId, setAutomationForm, setActiveView, setAppMode, setCurrentConversationId, setCurrentAgentSessionId, agentSessions, setCurrentAgentWorkspaceId, setUnviewedCompleted, settingsOpen, channelFormDirty, setSettingsOpen, setPendingSessionNavigation, currentAgentSessionId],
