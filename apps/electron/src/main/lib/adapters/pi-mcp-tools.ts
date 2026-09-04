@@ -29,11 +29,21 @@ const OPTIONAL_MCP_BOOTSTRAP_TIMEOUT_MS = 500
  * 握手超时（默认 30s connect + 60s listTools）。
  */
 const REQUIRED_MCP_FAILURE_COOLDOWN_MS = 2 * 60_000
+/** 失败冷却表的防御性上限；超出时淘汰最旧记录，避免配置频繁变更导致无限增长。 */
+const REQUIRED_MCP_FAILURE_CACHE_LIMIT = 64
 const HTTP_SESSION_REJECTION_PATTERN = /missing session id|no valid session id provided|mcp-session-id header is required/i
 const transportProxyFetches = new WeakMap<Transport, ManagedProxyFetch>()
 
 /** required MCP 最近一次工具发现失败的时间（key: serverName + 配置摘要）。 */
 const requiredMcpFailureTimestamps = new Map<string, number>()
+
+function markRequiredMcpFailure(key: string): void {
+  if (requiredMcpFailureTimestamps.size >= REQUIRED_MCP_FAILURE_CACHE_LIMIT) {
+    const oldestKey = requiredMcpFailureTimestamps.keys().next().value
+    if (oldestKey !== undefined) requiredMcpFailureTimestamps.delete(oldestKey)
+  }
+  requiredMcpFailureTimestamps.set(key, Date.now())
+}
 
 interface PiMcpServerConfig {
   type?: unknown
@@ -292,7 +302,7 @@ async function listRequiredMcpTools(
     requiredMcpFailureTimestamps.delete(failureKey)
     return tools
   } catch (error) {
-    requiredMcpFailureTimestamps.set(failureKey, Date.now())
+    markRequiredMcpFailure(failureKey)
     console.warn(
       `[Pi MCP] required MCP 服务器 ${serverName} 连接失败，${REQUIRED_MCP_FAILURE_COOLDOWN_MS / 1000}s 冷却期内将按可选服务器处理`,
       error,

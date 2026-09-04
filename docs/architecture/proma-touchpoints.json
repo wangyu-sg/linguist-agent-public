@@ -300,14 +300,6 @@
       "reason": "把当前已验证的 Linguist turn context 交给 Proma Collaboration，供绑定项目的子会话复用同一宿主快照。"
     },
     {
-      "file": "apps/electron/src/main/lib/adapters/pi-mcp-tools.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "保留 required MCP 失败冷却，直接记录失败时间。"
-    },
-    {
       "file": "apps/electron/src/main/lib/agent-collaboration-tools.ts",
       "ticket": "LA-HOST-002",
       "kind": "host-seam",

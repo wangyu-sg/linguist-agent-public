@@ -35,6 +35,7 @@
         "packages/ui/package.json",
         "packages/shared/src/types/feishu.ts",
         "apps/electron/src/main/lib/chat-tool-config.ts",
+        "apps/electron/src/main/lib/adapters/pi-mcp-tools.ts",
         "apps/electron/src/renderer/components/agent/AgentPlaceholder.tsx"
       ],
       "policy": "take-upstream"

@@ -2,6 +2,16 @@
 
 更新时间：2026-09-04
 
+## 0.17.70 分阶段执行：A1
+
+- 本轮只完成方案 §3.2：`pi-mcp-tools.ts` 与固定 `bbf577a8` 基线完整一致。完整文件差异仅为有界失败缓存及其写入 helper；调用方仍由 Agent orchestrator 构建工具、app quit 释放连接，没有 LA 语义需要保留。
+- 删除该文件的 product-fork，改为 take-upstream 同步策略；当前数量以 `docs/architecture/proma-touchpoints.json` 为准。
+- 真实 loopback HTTP MCP 回归覆盖顺序 65 次失败、最旧项淘汰、保留项冷却、后台恢复、工具执行和 dispose 清理。运行：`bun test tests/pi-mcp-cooldown.test.ts`，需允许本地监听端口；不使用用户数据根或真实 Provider。
+- 全仓 typecheck、根 test、MCP baseline、boundary、fusion、Host Seam、sync replay 与 electron:build 通过；构建使用临时 Clang/Swift 缓存避开默认缓存的沙箱写入限制。此证据不代表 packaged app 或真实 Provider 四岗位链通过。
+- 下一轮执行 A2：完整 Fork 留／还／暂存审计，逐项比较 LA、固定基线与运行合同。工作流 A 尚未全部完成；B–E 未开始，产品版本与 CAT Schema 未变。
+
+以下为此前 0.17.69 交接记录，验证结论属于此前轮次。
+
 ## 当前状态
 
 - 分支：`main`。
