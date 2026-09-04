@@ -94,11 +94,11 @@ interface LaunchedApp {
   page: Page
 }
 
-interface PersistedLocalizationProjectTab {
+interface PersistedLinguistAgentTab {
   id: string
   type: string
-  projectId: string
-  sessionId?: unknown
+  title: string
+  sessionId: string
 }
 
 interface PersistedLinguistLocation {
@@ -110,10 +110,11 @@ interface PersistedLinguistLocation {
 }
 
 interface PersistedLinguistState {
-  tab: PersistedLocalizationProjectTab | undefined
+  tab: PersistedLinguistAgentTab | undefined
   activeTabId: string | undefined
   location: PersistedLinguistLocation | undefined
   projectSessionId: string | undefined
+  boundProjectId: string | undefined
 }
 
 interface PackagedSegmentState {
@@ -319,6 +320,7 @@ async function launchApp(tmpHome: string, logStream: WriteStream): Promise<Launc
     undefined,
     { timeout: 60_000 },
   )
+  await page.waitForLoadState('load')
   return { app, page }
 }
 
@@ -489,7 +491,7 @@ async function seedChannel(page: Page, server: FakeModelServer): Promise<string>
 }
 
 async function createProjectViaUi(page: Page): Promise<string> {
-  await page.getByRole('tab', { name: '本地化', exact: true }).click()
+  await page.getByRole('tab', { name: 'Linguist', exact: true }).click()
   await page.getByRole('button', { name: '新建项目' }).filter({ hasText: '新建项目' }).first().click()
   const dialog = page.getByRole('dialog', { name: '新建项目', exact: true })
   await dialog.locator('#project-create-name').fill(PROJECT_NAME)
@@ -527,7 +529,7 @@ async function createProjectViaUi(page: Page): Promise<string> {
 
 async function selectPrimaryMode(
   page: Page,
-  label: 'Agent' | 'Chat' | '本地化',
+  label: 'Agent' | 'Chat' | 'Linguist',
 ): Promise<void> {
   const tab = page.getByRole('tablist', { name: '主工作模式' })
     .getByRole('tab', { name: label, exact: true })
@@ -597,19 +599,22 @@ async function readPersistedLinguistState(
     const settings = await (window as unknown as {
       electronAPI: { getSettings: () => Promise<Record<string, unknown>> }
     }).electronAPI.getSettings()
+    const projectSessionIds = settings.linguistProjectAgentSessionIds as Record<string, unknown> | undefined
+    const sessions = await window.electronAPI.listAgentSessions()
+    const binding = sessions.find(session => session.id === projectSessionIds?.[id])
     const tabState = settings.tabState as { tabs?: unknown[]; activeTabId?: unknown } | undefined
-    const tab = tabState?.tabs?.find((candidate): candidate is PersistedLocalizationProjectTab => {
+    const tab = tabState?.tabs?.find((candidate): candidate is PersistedLinguistAgentTab => {
       if (!candidate || typeof candidate !== 'object') return false
       const value = candidate as Record<string, unknown>
-      return value.type === 'linguist-project' && value.projectId === id && typeof value.id === 'string'
+      return value.type === 'agent' && value.sessionId === binding?.id && typeof value.id === 'string'
     })
     const locations = settings.linguistProjectWorkbenchLocations as Record<string, unknown> | undefined
     const rawLocation = locations?.[id]
     const location = rawLocation && typeof rawLocation === 'object'
       ? rawLocation as PersistedLinguistLocation
       : undefined
-    const projectSessionIds = settings.linguistProjectAgentSessionIds as Record<string, unknown> | undefined
     return {
+      boundProjectId: binding?.linguistProjectId,
       tab,
       activeTabId: typeof tabState?.activeTabId === 'string' ? tabState.activeTabId : undefined,
       location,
@@ -626,11 +631,10 @@ async function isPersistedLinguistState(
   sessionId?: string,
 ): Promise<boolean> {
   const state = await readPersistedLinguistState(page, projectId)
-  return state.tab?.id === `linguist-project:${projectId}`
-    && state.activeTabId === `linguist-project:${projectId}`
-    && state.tab.type === 'linguist-project'
-    && state.tab.projectId === projectId
-    && state.tab.sessionId === undefined
+  return state.tab?.type === 'agent'
+    && state.activeTabId === state.tab.id
+    && state.boundProjectId === projectId
+    && state.tab.sessionId === state.projectSessionId
     && state.location?.activeAssetId === assetId
     && state.location?.activeSegmentId === segmentId
     && (sessionId === undefined || state.projectSessionId === sessionId)
@@ -652,20 +656,17 @@ async function createAndOpenProjectSessionViaSidebar(
     'button',
     { name: `打开项目 ${PROJECT_NAME}`, exact: true },
   )
-  await page.getByRole(
-    'button',
-    { name: `打开标签页：${PROJECT_NAME}`, exact: true },
-  ).click()
+  await projectButton.click()
   const workspace = page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
   await workspace.waitFor({ timeout: 30_000 })
   const before = await listProjectSessionIds(page, projectId)
-  if (before.length !== 0) throw new Error(`打开项目不应创建 Session，实际已有 ${before.length} 个`)
+  if (before.length !== 1) throw new Error(`打开项目应确保一个绑定 Session，实际 ${before.length} 个`)
 
   await page.getByRole('button', { name: `在项目 ${PROJECT_NAME} 中新建会话`, exact: true }).click()
   await page.getByRole('menuitem', { name: /通用项目 Agent/u }).click()
   let createdSessionIds: string[] = []
   const created = await waitFor(async () => {
-    createdSessionIds = await listProjectSessionIds(page, projectId)
+    createdSessionIds = (await listProjectSessionIds(page, projectId)).filter(id => !before.includes(id))
     return createdSessionIds.length === 1
   }, 30_000)
   if (!created) throw new Error(`项目 Session 创建异常: ${createdSessionIds.length}`)
@@ -692,20 +693,20 @@ async function openLinguistWorkbenchAndSelectLocation(
   projectActionsMenuPainted: boolean
   projectActionsMenuEvidence: string
   sidebarCurrentCorrect: boolean
-  projectTabVisible: boolean
+  boundAgentTabVisible: boolean
   locationVisible: boolean
 }> {
   const modeTabs = page.getByRole('tablist', { name: '主工作模式' })
   const agentMode = modeTabs.getByRole('tab', { name: 'Agent', exact: true })
   const chatMode = modeTabs.getByRole('tab', { name: 'Chat', exact: true })
-  const linguistMode = modeTabs.getByRole('tab', { name: '本地化', exact: true })
+  const linguistMode = modeTabs.getByRole('tab', { name: 'Linguist', exact: true })
   const modesDiscoverable = await agentMode.isVisible()
     && await chatMode.isVisible()
     && await linguistMode.isVisible()
 
   await selectPrimaryMode(page, 'Agent')
   await selectPrimaryMode(page, 'Chat')
-  await selectPrimaryMode(page, '本地化')
+  await selectPrimaryMode(page, 'Linguist')
   const resolvedProjectList = await resolveVisibleLinguistProjectList(page)
   const projectList = resolvedProjectList.list
   const projectRows = projectList.getByRole('button', { name: /^打开项目 /u })
@@ -754,37 +755,35 @@ async function openLinguistWorkbenchAndSelectLocation(
   await projectButton.click()
   const workspace = page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
   await workspace.waitFor({ timeout: 30_000 })
-  const projectTabVisible = await waitFor(async () => {
+  const boundAgentTabVisible = await waitFor(async () => {
     const state = await readPersistedLinguistState(page, projectId)
-    const tabVisible = await page.getByRole(
-      'button',
-      { name: `打开标签页：${PROJECT_NAME}`, exact: true },
-    ).isVisible()
+    const tabVisible = await page.locator('button.app-tab-active').getAttribute('aria-label') === `打开标签页：${state.tab?.title}`
     return tabVisible
-      && state.tab?.id === `linguist-project:${projectId}`
-      && state.activeTabId === `linguist-project:${projectId}`
-      && state.tab.type === 'linguist-project'
-      && state.tab.projectId === projectId
-      && state.tab.sessionId === undefined
+      && state.tab?.type === 'agent'
+      && state.activeTabId === state.tab.id
+      && state.boundProjectId === projectId
+      && state.tab.sessionId === state.projectSessionId
   }, 10_000)
   const sidebarCurrentCorrect = await projectButton.getAttribute('aria-current') === 'page'
 
   const asset = workspace.locator(`[data-asset-id="${assetId}"]`)
   await asset.click()
+  const batches = workspace.locator('header[aria-label="本地化工作台工具栏"]').getByRole('button', { name: '批次', exact: true })
+  if (await batches.getAttribute('aria-pressed') === 'true') await batches.click()
   const row = workspace.locator(`[role="row"][data-segment-id="${segmentId}"]`)
   await row.waitFor({ timeout: 30_000 })
   await row.getByRole('button', { name: /查看原始行 \d+ 上下文/u }).click()
   const status = workspace.locator('footer[aria-label="本地化工作台状态栏"]')
-  const locationVisible = await asset.getAttribute('aria-current') === 'page'
+  const locationVisible = await waitFor(() => isPersistedLinguistState(page, projectId, assetId, segmentId), 10_000)
     && await workspace.locator('header[aria-label="本地化工作台工具栏"]')
       .getByText('mini_game_ui.xliff', { exact: true }).isVisible()
     && await isSegmentStatusVisible(status, segmentId)
 
-  for (const mode of ['Agent', '本地化', 'Chat', '本地化'] as const) {
+  for (const mode of ['Agent', 'Linguist', 'Chat', 'Linguist'] as const) {
     await selectPrimaryMode(page, mode)
-    if (mode === '本地化') await workspace.waitFor({ timeout: 30_000 })
+    if (mode === 'Linguist') await workspace.waitFor({ timeout: 30_000 })
   }
-  const roundtripLocationVisible = await asset.getAttribute('aria-current') === 'page'
+  const roundtripLocationVisible = await waitFor(() => isPersistedLinguistState(page, projectId, assetId, segmentId), 10_000)
     && await isSegmentStatusVisible(status, segmentId)
   return {
     modesDiscoverable,
@@ -794,7 +793,7 @@ async function openLinguistWorkbenchAndSelectLocation(
     projectActionsMenuPainted,
     projectActionsMenuEvidence,
     sidebarCurrentCorrect,
-    projectTabVisible,
+    boundAgentTabVisible,
     locationVisible: locationVisible && roundtripLocationVisible,
   }
 }
@@ -812,29 +811,24 @@ async function readRecoveredLinguistLocation(
   segmentId: string,
 ): Promise<{
   modeSelected: boolean
-  projectTabVisible: boolean
+  boundAgentTabVisible: boolean
   locationVisible: boolean
 }> {
   const mode = page.getByRole('tablist', { name: '主工作模式' })
-    .getByRole('tab', { name: '本地化', exact: true })
+    .getByRole('tab', { name: 'Linguist', exact: true })
   const workspace = page.locator(`section[aria-label="${PROJECT_NAME} 本地化工作台"]`)
   await workspace.waitFor({ timeout: 30_000 })
-  const asset = workspace.locator(`[data-asset-id="${assetId}"]`)
   const status = workspace.locator('footer[aria-label="本地化工作台状态栏"]')
   const persisted = await readPersistedLinguistState(page, projectId)
-  const tabVisible = await page.getByRole(
-    'button',
-    { name: `打开标签页：${PROJECT_NAME}`, exact: true },
-  ).isVisible()
+  const tabVisible = await page.locator('button.app-tab-active').getAttribute('aria-label') === `打开标签页：${persisted.tab?.title}`
   return {
     modeSelected: await mode.getAttribute('aria-selected') === 'true',
-    projectTabVisible: tabVisible
-      && persisted.tab?.id === `linguist-project:${projectId}`
-      && persisted.activeTabId === `linguist-project:${projectId}`
-      && persisted.tab.type === 'linguist-project'
-      && persisted.tab.projectId === projectId
-      && persisted.tab.sessionId === undefined,
-    locationVisible: await asset.getAttribute('aria-current') === 'page'
+    boundAgentTabVisible: tabVisible
+      && persisted.tab?.type === 'agent'
+      && persisted.activeTabId === persisted.tab.id
+      && persisted.boundProjectId === projectId
+      && persisted.tab.sessionId === persisted.projectSessionId,
+    locationVisible: persisted.location?.activeAssetId === assetId
       && await workspace.locator('header[aria-label="本地化工作台工具栏"]')
         .getByText('mini_game_ui.xliff', { exact: true }).isVisible()
       && await isSegmentStatusVisible(status, segmentId),
@@ -843,8 +837,7 @@ async function readRecoveredLinguistLocation(
 
 
 async function openQaFindings(workspace: Locator): Promise<Locator> {
-  const toolbar = workspace.locator('header[aria-label="本地化工作台工具栏"]')
-  const resourcesButton = toolbar.getByRole('button', { name: '语言资产', exact: true })
+  const resourcesButton = workspace.locator('footer[aria-label="本地化工作台状态栏"]').getByRole('button', { name: '语言资产', exact: true })
   if (await resourcesButton.getAttribute('aria-pressed') !== 'true') {
     await resourcesButton.click()
   }
@@ -963,8 +956,7 @@ async function runLanguageResourceDockGate(
   sourceBlobPath: string,
   sourceHashBefore: string,
 ): Promise<void> {
-  const toolbar = workspace.locator('header[aria-label="本地化工作台工具栏"]')
-  const resourcesButton = toolbar.getByRole('button', { name: '语言资产', exact: true })
+  const resourcesButton = workspace.locator('footer[aria-label="本地化工作台状态栏"]').getByRole('button', { name: '语言资产', exact: true })
   if (await resourcesButton.getAttribute('aria-pressed') !== 'true') {
     await resourcesButton.click()
   }
@@ -1191,9 +1183,7 @@ async function runLanguageResourceDockGate(
     `editable=${editablePreviewCount}，source sha256=${sourceHashAfter.slice(0, 12)}…`,
   )
 
-  await page
-    .getByRole('button', { name: `打开标签页：${PROJECT_NAME}`, exact: true })
-    .click()
+  await openSidebarProject(page, PROJECT_NAME)
   await workspace.waitFor({ timeout: 30_000 })
   await resourcesButton.click()
   await dock.waitFor({ state: 'hidden', timeout: 30_000 })
@@ -1249,7 +1239,7 @@ async function runLanguageResourceDockGate(
 
   const distractorWorkspace = await openSidebarProject(page, DISTRACTOR_PROJECT_NAME)
   const distractorResourcesButton = distractorWorkspace
-    .locator('header[aria-label="本地化工作台工具栏"]')
+    .locator('footer[aria-label="本地化工作台状态栏"]')
     .getByRole('button', { name: '语言资产', exact: true })
   if (await distractorResourcesButton.getAttribute('aria-pressed') !== 'true') {
     await distractorResourcesButton.click()
@@ -1734,7 +1724,7 @@ async function main(): Promise<void> {
         && navigation.multipleProjectsDiscoverable
         && navigation.projectActionsMenuPainted
         && navigation.sidebarCurrentCorrect
-        && navigation.projectTabVisible
+        && navigation.boundAgentTabVisible
         && navigation.locationVisible,
       `三模式=${navigation.modesDiscoverable}，旧管理入口已移除=${navigation.legacyManagementRemoved}` +
       `，两个项目身份明确=${navigation.multipleProjectsDiscoverable}` +
@@ -1742,7 +1732,7 @@ async function main(): Promise<void> {
       `，项目菜单已绘制=${navigation.projectActionsMenuPainted}` +
       `（${navigation.projectActionsMenuEvidence}）` +
       `，侧栏 aria-current=${navigation.sidebarCurrentCorrect}` +
-      `，Project Tab=${navigation.projectTabVisible}，Asset/Segment=${navigation.locationVisible}`,
+      `，Bound Agent Tab=${navigation.boundAgentTabVisible}，Asset/Segment=${navigation.locationVisible}`,
     )
     await captureLinguistUiEvidence(launched.page)
     if (!LF026_ONLY && !LF056_ONLY) {
@@ -1796,9 +1786,9 @@ async function main(): Promise<void> {
     check(
       'lf026-restart-recovers-project-location',
       recoveredNavigation.modeSelected
-        && recoveredNavigation.projectTabVisible
+        && recoveredNavigation.boundAgentTabVisible
         && recoveredNavigation.locationVisible,
-      `Linguist=${recoveredNavigation.modeSelected}，Project Tab=${recoveredNavigation.projectTabVisible}` +
+      `Linguist=${recoveredNavigation.modeSelected}，Bound Agent Tab=${recoveredNavigation.boundAgentTabVisible}` +
       `，Asset/Segment=${recoveredNavigation.locationVisible}`,
     )
     if (LF056_ONLY) {
@@ -1849,15 +1839,11 @@ async function main(): Promise<void> {
           modelId: typeof settings.agentModelId === 'string' ? settings.agentModelId : undefined,
         }
       })
-      const agentPanelButton = workspace
-        .locator('header[aria-label="本地化工作台工具栏"]')
-        .getByRole('button', { name: 'Agent', exact: true })
       const row = workspace.locator(`[role="row"][data-segment-id="${segmentId}"]`)
       await row.waitFor({ timeout: 30_000 })
       const segmentCheckbox = row.getByRole('checkbox')
       await segmentCheckbox.check()
       const segmentSelected = await segmentCheckbox.isChecked()
-      await agentPanelButton.click()
       const fullAgent = launched.page.locator('[data-agent-presentation="full"]')
       await fullAgent.waitFor({ timeout: 30_000 })
       const composer = fullAgent.locator('[contenteditable="true"], textarea').first()
@@ -1917,10 +1903,7 @@ async function main(): Promise<void> {
           : sessionErrors.map((event) => event.error).join(' | ')}`,
       )
 
-      await launched.page.getByRole(
-        'button',
-        { name: `打开标签页：${PROJECT_NAME}`, exact: true },
-      ).click()
+      await openSidebarProject(launched.page, PROJECT_NAME)
       await workspace.waitFor({ timeout: 30_000 })
       await row.getByRole('button', { name: /查看原始行 \d+ 上下文/u }).click()
       const proposalReview = row.locator('section[aria-label="当前行翻译建议"]')
@@ -2178,7 +2161,7 @@ async function main(): Promise<void> {
           && recovered.waiverReason === WAIVER_REASON
           && recovered.sessionRecovered
           && finalRecoveredNavigation.modeSelected
-          && finalRecoveredNavigation.projectTabVisible
+          && finalRecoveredNavigation.boundAgentTabVisible
           && finalRecoveredNavigation.locationVisible
           && finalPersisted
           && existsSync(exportPath),

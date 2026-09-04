@@ -26,6 +26,9 @@ describe('LF-003 Packaged Vertical Smoke 合同', () => {
 
     expect(runner).toContain("args: ['run', 'smoke:pack']")
     expect(runner).toContain("if (bun !== 'bun') process.env.PATH = [dirname(bun), process.env.PATH].filter(Boolean).join(delimiter)")
+    expect(runner).toContain("args: ['install', '--frozen-lockfile']")
+    expect(runner.indexOf("id: 'workspace-deps'", runner.indexOf('const steps:'))).toBeLessThan(runner.indexOf("id: 'agent'", runner.indexOf('const steps:')))
+    expect(runner).toContain("args: ['scripts/smoke/probe-project-switch.ts']")
     expect(runner).toContain("args: ['scripts/smoke/probe-pi-stream.ts']")
     expect(runner).toContain("args: ['scripts/smoke/run-g0-smoke.ts']")
     expect(runner).toContain("args: ['scripts/smoke/probe-pb074-e2e.ts']")

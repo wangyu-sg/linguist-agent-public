@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 type StepStatus = 'passed' | 'failed' | 'not_reached'
 
 interface StepDefinition {
-  id: 'package' | 'agent' | 'chat' | 'linguist-current'
+  id: 'package' | 'workspace-deps' | 'agent' | 'chat' | 'project-switch' | 'linguist-current'
   title: string
   executable: string
   args: string[]
@@ -222,6 +222,13 @@ async function main(): Promise<void> {
       coverage: '从当前工作区构建未签名 packaged Electron。',
     },
     {
+      id: 'workspace-deps',
+      title: '恢复探针工作区依赖',
+      executable: bun,
+      args: ['install', '--frozen-lockfile'],
+      coverage: '打包同步会替换应用 node_modules；按锁文件恢复开发依赖，已生成的 app.asar 保持不变。',
+    },
+    {
       id: 'agent',
       title: 'Agent packaged vertical',
       executable: process.execPath,
@@ -236,11 +243,18 @@ async function main(): Promise<void> {
       coverage: 'Chat 创建、Streaming、Thinking、Tool、Retry、Stop、重启恢复与 Chat→Agent→Chat 模式往返状态保持。',
     },
     {
+      id: 'project-switch',
+      title: '真实窗口项目快速切换',
+      executable: process.execPath,
+      args: ['scripts/smoke/probe-project-switch.ts'],
+      coverage: '折叠侧栏选择、权威会话、无会话创建、活动 Tab、中央 AgentView 与持久化 Workspace 一致。',
+    },
+    {
       id: 'linguist-current',
       title: 'Linguist 当前 packaged vertical',
       executable: process.execPath,
       args: ['scripts/smoke/probe-pb074-e2e.ts'],
-      coverage: 'Linguist Mode、Project Tab、Workbench、Agent-CAT、Proposal、QA、CAT backup/restore、node:sqlite、Integrity Worker、导出验证与重启恢复。',
+      coverage: 'Linguist Mode、绑定 Agent Tab、Workbench、Agent-CAT、Proposal、QA、CAT backup/restore、node:sqlite、Integrity Worker、导出验证与重启恢复。',
     },
   ]
 
