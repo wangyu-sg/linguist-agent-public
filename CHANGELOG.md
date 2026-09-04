@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+## [0.17.70] - 2026-09-04
+
+> 发布准备；真实 Provider 四岗位迷你全链仍缺独立测试配置与运行证据。
+
 ### Changed
 
 - 聚焦门禁覆盖产品身份、文档事实、项目切换与真实 MCP 冷却；打包垂直探针恢复冻结工作区依赖后执行，并核对实际窗口导航状态链。
@@ -17,6 +21,8 @@
 - 审计全部现存产品触点，将 51 个通用构建、安全、可访问性与界面状态修复改记可退役临时偏差；保留尚无固定基线等价证据的实现，并准备原生生命周期与安全补丁。
 
 ### Fixed
+
+- 重启后恢复 Linguist 绑定会话的右侧 CAT 面板及项目位置。
 
 - 项目快捷切换先刷新权威会话、为无主会话的项目创建会话，再同步提交 Workspace、Agent Tab、模式与设置；迟到结果和创建/保存失败不会留下跨项目混合状态。
 
@@ -282,7 +288,8 @@
 
 - 修复上游合并后的 CI 测试口径。
 
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.69...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.70...HEAD
+[0.17.70]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.69...v0.17.70
 [0.17.69]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.68...v0.17.69
 [0.17.68]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.67...v0.17.68
 [0.17.67]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...v0.17.67
