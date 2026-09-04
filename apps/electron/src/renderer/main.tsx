@@ -79,6 +79,7 @@ import {
 import { CatToolResultNavigationInitializer } from './features/linguist/projects/CatToolResultNavigationInitializer'
 import { openLinguistAgentSession } from './features/linguist/projects/open-linguist-session'
 import { getAgentSessionLinguistProjectId } from './lib/agent-session-list'
+import { restoreLastLocalizationProject } from './lib/linguist-navigation'
 import { chatToolsAtom } from './atoms/chat-tool-atoms'
 import { feishuBotStatesAtom } from './atoms/feishu-atoms'
 import { dingtalkBotStatesAtom } from './atoms/dingtalk-atoms'
@@ -962,6 +963,9 @@ function TabStatePersistenceInitializer(): null {
               : 'agent',
           )
           store.set(currentAgentSessionIdAtom, activeTab.sessionId)
+          if (session && getAgentSessionLinguistProjectId(session, agentSessions)) {
+            restoreLastLocalizationProject(store)
+          }
         } else if (activeTab.type === 'linguist-project') {
           store.set(appModeAtom, 'linguist')
           store.set(currentConversationIdAtom, null)
