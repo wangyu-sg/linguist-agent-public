@@ -19,7 +19,7 @@
     "pi": "0.84.4"
   },
   "product": {
-    "linguistAgentVersion": "0.17.68",
+    "linguistAgentVersion": "0.17.69",
     "sharedVersion": "0.1.69",
     "catCoreVersion": "0.0.23",
     "catFormatsVersion": "0.0.13",

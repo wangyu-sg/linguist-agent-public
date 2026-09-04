@@ -1,8 +1,8 @@
 # TODO
 
-更新时间：2026-08-29
+更新时间：2026-09-04
 
-> Proma v0.19.1 同步、自动回归、打包与 Fake Model vertical 已完成；以下项目仍需要真实 Provider、平台或人工证据。
+> Proma v0.19.26 同步与自动回归已完成；以下项目仍需要真实 Provider、平台或人工证据。
 
 - [ ] VALID-002：在当前 packaged app 中用真实 Provider 和 3–5 个匿名 Segment 完成 General → Translator → Reviewer → Proofreader，核对结构化 `linguistOutcome` 与 `verified` 交付。
 - [ ] VALID-001：同一模型、同一 reasoning、同一真实语言任务，对比 Web Chat、旧 LA 与当前 LA。

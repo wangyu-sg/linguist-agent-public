@@ -6,6 +6,25 @@
 
 ## [Unreleased]
 
+## [0.17.69] - 2026-09-04
+
+### Added
+
+- [Proma v0.19.26](https://github.com/proma-ai/Proma/releases/tag/v0.19.26) 新增 Brave 与 Tavily MCP 预设、系统浏览器打开入口，以及 Fable 5.1 与子会话思考强度控制。
+
+### Changed
+
+- Proma 基线由 [v0.19.23](https://github.com/proma-ai/Proma/releases/tag/v0.19.23) 升级至 [v0.19.26](https://github.com/proma-ai/Proma/releases/tag/v0.19.26)。
+
+### Removed
+
+- [Proma v0.19.26](https://github.com/proma-ai/Proma/releases/tag/v0.19.26) 移除旧教程链路与会话拖拽三点提示。
+
+### Fixed
+
+- 修复普通 Agent 模式折叠侧栏中的项目预览无法快捷切换项目的问题。
+- [Proma v0.19.26](https://github.com/proma-ai/Proma/releases/tag/v0.19.26) 修复文件面板首次加载不稳定，以及新建文件夹未立即显示的问题。
+
 ## [0.17.68] - 2026-09-03
 
 ### Added
@@ -247,7 +266,8 @@
 
 - 修复上游合并后的 CI 测试口径。
 
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.68...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.69...HEAD
+[0.17.69]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.68...v0.17.69
 [0.17.68]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.67...v0.17.68
 [0.17.67]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.65...v0.17.67
 [0.17.65]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.64...v0.17.65

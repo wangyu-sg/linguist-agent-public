@@ -86,7 +86,7 @@
 
 ### sharp 预编译 libvips 平台包
 
-- 当前 macOS arm64 包：`@img/sharp-libvips-darwin-arm64` 1.3.2。
+- 当前 macOS arm64 包：`@img/sharp-libvips-darwin-arm64` 1.3.3。
 - 许可：LGPL-3.0-or-later；包内还列明其捆绑库各自的 MPL、MIT、BSD、
   LGPL、Zlib 等许可。
 - 来源：npm `@img/sharp-libvips-*`，随 `sharp` 0.35.3 按目标平台安装；
@@ -98,7 +98,7 @@
 
 ### 其余开源依赖
 
-除上述已单列组件外，其余第三方依赖（当前生产闭包共 433 个，含传递依赖）
+除上述已单列组件外，其余第三方依赖（当前生产闭包共 489 个，含传递依赖）
 均为宽松许可
 （MIT / Apache-2.0 / BSD / ISC / BlueOak-1.0.0 / 0BSD / Unlicense /
 CC-BY-4.0 / EPL-2.0 / Zlib 等），逐包清单与许可见
