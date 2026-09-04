@@ -8,9 +8,9 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
 [English README](./README.en.md)
 
-## 当前状态
+## 产品定位
 
-当前是作者本人使用的 **个人 Alpha**，没有公众发布计划。稳定基线是 Proma `v0.19.26@bbf577a8`；Electron App `0.17.69`、Electron `43.2.0`、`@proma/shared 0.1.69`、Pi `0.84.4`、CAT Core / Formats / Store / Tools `0.0.23 / 0.0.13 / 0.0.42 / 0.0.37`、CAT schema `19`，仓库使用 Bun `1.3.14`。
+当前是 **个人 Alpha**。发布产物主要用于作者本人安装与自动更新；不承诺公众支持、兼容周期、签名公证或跨平台资格。当前版本和验证证据见 [CURRENT_FACTS_SIMPLE.md](./CURRENT_FACTS_SIMPLE.md)，核心改动见 [Touchpoint 账本](./docs/architecture/proma-touchpoints.json)。
 
 应用有三个并列模式：
 
@@ -22,7 +22,7 @@ Agent 统一使用 **Pi Runtime**。Claude 模型仍可通过 Anthropic 协议 P
 
 ## 四种岗位
 
-项目会话可在创建时选择岗位，也可在同一会话中随时切换：
+空白项目会话可切换岗位；已有持久化用户消息后岗位身份固定，需要不同岗位时新建项目会话；委派子会话岗位固定。岗位 Prompt 唯一真源在 [resources/linguist-roles](./resources/linguist-roles)。
 
 | 岗位 | 默认职责 |
 |---|---|
@@ -41,7 +41,7 @@ Proposal 是可见、可接受、可撤销的修改载体，承载 Agent 当前�
 Proma Pi Agent Runtime
 ├── Workspace / Skills / MCP / AGENTS.md / Memory / Files / Planning / Collaboration
 └── Linguist Project Binding
-    ├── 四岗位共享的 31 个 CAT Tools
+    ├── 四岗位共享的 CAT Tools
     ├── 内置 Common Quality Contract + 当前岗位 Markdown
     ├── Project Digest / Turn Context
     └── Linguist Domain Services
@@ -122,9 +122,9 @@ bun run smoke:vertical
 
 测试与 smoke 必须使用任务专用临时 user-data-dir，不得读写真实用户根。
 
-## 尚缺的真实证据
+## 验证证据
 
-实现和自动回归不等于真实语言质量或产品资格。仍需完成同模型 Proma/Codex 对照、真实 Provider 四岗位全链、真实 Phrase/memoQ 互操作、Native Open/Save、IME、VoiceOver、键盘人工检查和从可用构建开始累计的 14 天日用。当前准确状态见 [SIMPLE_IMPLEMENTATION_STATUS.md](./docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md)、[HANDOFF.md](./docs/HANDOFF.md) 和 [TODO.md](./TODO.md)。
+实现、自动回归、打包验证、真实 Provider 验证与产品资格是不同证据等级。当前结论见 [当前事实](./CURRENT_FACTS_SIMPLE.md)、[已知限制](./docs/release/KNOWN_LIMITATIONS.md) 和 [未完成工作](./TODO.md)。
 
 ## 许可
 

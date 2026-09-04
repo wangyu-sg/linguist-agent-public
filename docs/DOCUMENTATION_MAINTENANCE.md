@@ -8,8 +8,7 @@
 
 ```text
 代码 / package.json / 锁文件 / 测试 / 真实运行输出
-> CURRENT_FACTS_SIMPLE.md / SIMPLE_IMPLEMENTATION_STATUS.md
-> LINGUIST_FUSION_CURRENT_REALITY.md
+> CURRENT_FACTS_SIMPLE.md
 > README / AGENTS / HANDOFF / TODO
 > 历史 Gate、Release 与审计报告
 ```
@@ -21,17 +20,17 @@
 | 文件 | 只记录什么 |
 |---|---|
 | `README.md` / `README.en.md` | 当前产品身份、架构、使用与开发入口 |
-| `AGENTS.md` | 当前仓库执行约束、技术事实和安全边界 |
+| `AGENTS.md` | 稳定工程规则和安全边界 |
 | `docs/HANDOFF.md` | 下一会话无需聊天历史即可继续的当前交接 |
 | `TODO.md` | 仍未完成且可行动的事项 |
 | `docs/DOCS_INDEX.md` | 文档地图与真源 |
 | `CURRENT_FACTS_SIMPLE.md` | 当前 Git、版本、实现、验证、产物与安装事实 |
 | `docs/architecture/proma-baseline.json` | Proma upstream、正式 merge、Runtime 与产品版本的机读真源 |
-| `LINGUIST_FUSION_CURRENT_REALITY.md` | 可验证的当前代码/工作区事实 |
-| `SIMPLE_IMPLEMENTATION_STATUS.md` | 当前简化方案 Ticket 状态；不伪造真实使用证据 |
+| `LINGUIST_FUSION_CURRENT_REALITY.md` | 指向当前事实的短入口 |
+| `SIMPLE_IMPLEMENTATION_STATUS.md` | 已退役的当前事实 / TODO 指针 |
 | `docs/roadmap/*_REPORT.md` | 历史或专项证据 |
 
-不要在 README、AGENTS 或 HANDOFF 中复制整份执行账本；应链接真源。
+不要在 README、AGENTS 或 HANDOFF 中复制当前版本矩阵或测试总数；应链接真源。岗位 Prompt 只在 resources/linguist-roles 维护，其他页面只概述职责与会话身份限制。
 
 ## 何时同步
 

@@ -1,63 +1,42 @@
 # Linguist Agent 当前事实
 
-核验日期：2026-09-04（Asia/Shanghai）
+核验日期：2026-09-04。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
 
-本文只记录可由代码、manifest、测试或真实运行输出确认的事实。历史报告不得覆盖本文。
+## 机器真源与当前值
 
-## Git 与基线
+依赖版本取自 manifest / bun.lock；Proma 与 Runtime 基线见 [proma-baseline.json](./docs/architecture/proma-baseline.json)。
 
-- 当前交付分支：`main`。
-- Proma 基线：`v0.19.26@bbf577a8eb768225fdf1ac49ab9ef07a11413b24`。
-- LA 起点：`7bbb743fb78803cf68fa53bedddc43ea7b7e3f02`。
-- 正式 merge：`98f0ed125c4e619d0496e10279755e69643341f5`。
-- 正式 merge 之后另含基线账本与 `0.17.69` 发布文档收口。
-
-## 版本
-
-| 层 | 当前值 |
+| 项目 | 当前值 |
 |---|---|
-| Bun | `1.3.14` |
-| Electron App / Electron | `0.17.69` / `43.2.0` |
+| App | `0.17.69` |
+| Proma | `v0.19.26` |
+| Proma commit | `bbf577a8eb768225fdf1ac49ab9ef07a11413b24` |
+| Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.84.4` |
 | React / Jotai / Vite | `18.3.1` / `2.20.2` / `6.4.3` |
 | Shared | `0.1.69` |
-| Agent Runtime | Pi `0.84.4`；不包含 Claude Agent SDK / Nowledge Runtime |
-| CAT Core / Formats / Store / Tools | `0.0.23 / 0.0.13 / 0.0.42 / 0.0.37` |
-| CAT schema / Tool count | `19` / `31` |
+| CAT Core / Formats / Store / Tools | `0.0.23` / `0.0.13` / `0.0.42` / `0.0.37` |
+| CAT Schema | `19` |
+| CAT Tool Count | `32` |
 
-## 当前实现事实
+工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
 
-- 产品仍是完整 Proma Agent + Chat，加 Linguist Vertical Agent Profile / CAT Core / Store / Tools / Workbench；没有第二套 Agent、Chat、Session、权限、Planning、Preview 或 Collaboration。
-- 本轮一次 merge Proma v0.19.26；Brave / Tavily MCP 预设、系统浏览器打开入口、Fable 5.1 与子会话思考强度控制，以及文件面板修复直接继承上游。
-- 普通 Agent 折叠侧栏中的项目预览恢复快捷切换：选择项目后打开该 Workspace 最近的普通主会话。
-- `submitOrEnqueueAgentMessage` 的即时提交路径继续携带冻结的 `linguistContext`；普通 Agent 与 Linguist rail/full 仍共用原生 `AgentView`、队列和工具生命周期。
-- Renderer 只通过 `agent-host-extension.tsx` 与 `app-mode-registry.ts` 两个锚点组合 Linguist；`AgentView` 沿用上游 `sessionId + embedded` 合同，AppShell / ModeSwitcher 不直接 import Linguist feature。
-- QA 默认项目级列表并支持跨批次定位；窄视口 Agent rail 使用可关闭浮层，极窄视口左栏固定为图标栏且不改写用户偏好。
-- 上游已删除的 `AgentPlaceholder` 与旧 Provider/AppShell 包装路径保持删除；相关 touchpoint 与静态测试清单同步清理。
-- Linguist Session 继续由 `workspaceId + linguistProjectId` 绑定项目；Workspace 的 Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration 与 CAT Tools 在同一 runtime 组合。
-- General 仍可选择性委派 Translator、Reviewer 或 Proofreader；子会话冻结 Segment 范围并共享 CAT Store，`linguistOutcome` 与子会话运行状态分开记录。
-- CAT 写入继续经过 Session authority、revision CAS、locked 与结构规则；读取、QA 与 consistency repair 不获得直接提交权。
-- CLI 构建脚本使用当前 Bun 的 `process.execPath` 启动 `bun build --compile`，不再依赖调用进程的 PATH 查找 Bun。
-- v0.19.26 Proma Core ledger 为 `236` 个生产触点：Product Fork `224`、Generated `2`、Host Seam `8`、Temporary Deviation `2`。
-- Host Seam 验证器覆盖 `9` 个锚点；固定 v0.17.59 历史冲突 `9/9` 均能分类，并有一条 merge → resolver → overlay → verifier 集成回归。
-- Proma 自动同步保留策略解析、manifest overlay 与历史冲突回放；CI checkout 拉取完整历史。
-- 内部启动初始化失败直接终止，不再吞错后创建半初始化窗口；会话绑定 IPC 失败显式进入 unavailable 状态。
-- 发布门禁继续显式列出关键回归，不保留独立的全量库存测试。
+触点分类、具体理由、上游来源与退役条件只在 [proma-touchpoints.json](./docs/architecture/proma-touchpoints.json) 维护，不在本页复制计数。
 
-## 本轮验证事实
+## 当前实现
 
-- 全仓 typecheck 通过；全仓测试 `282/282` 通过。
-- upstream boundary `4/4`、fusion architecture `14/14`、Host Seam `9/9`、历史冲突分类 `9/9` 通过。
-- 许可门禁通过，darwin-arm64 SBOM 与当前 `489` 个第三方生产依赖一致。
-- `bun run electron:build` 通过；Electron main、CAT workers、Agent runtime、preload、renderer、CLI、Agent Island native、EventKit native 与 resources 均完成真实构建。
-- 上一轮 `smoke:pack` 与 packaged artifact 完整性通过。
-- 上一轮完整 `smoke:vertical` 运行通过：Pi Agent `15/15`、Chat `19/19`、Linguist `21/21`；报告 `runStatus=passed`、`coverageStatus=partial`，唯一自动化缺口为原生 Open/Save 对话框人工证据。
-- `v0.17.69` GitHub Release 三平台构建与发布成功；macOS 更新元数据同时包含 arm64 / x64 ZIP 及校验值。本机安装版未替换，尚未记录安装后版本或哈希。
-- `git diff --check`、baseline/deviations/touchpoints JSON 解析通过；公开身份与镜像清洁测试通过。
+- 完整 Proma Agent / Chat + Linguist 第三模式，Pi-only；四岗位 Prompt 真源为 [resources/linguist-roles](./resources/linguist-roles)。岗位身份在已有持久化用户消息后固定，委派子会话固定岗位。
+- MCP 桥接与固定 Proma 文件逐字一致；未获得等价证据的原生生命周期、安全和浏览器修复继续保留为临时偏差。
+- 项目快捷切换刷新主进程权威列表，无主会话时创建，旧请求不能提交可见状态；同步设置落盘成功后一起切换 Workspace / Session / Agent Tab / 模式。`resetView:false` 保留内部工具页合同。
+- Agent Host Extension 与 App Mode Registry 是主要宿主组合入口；其他产品级 Renderer 触点必须逐项登记。
+- 产品启动、加载、欢迎页读取同一身份配置，第一章介绍 Agent / Chat / Linguist；FAQ 对照持久化岗位与导出规则。
+- CAT 双绑定、冻结范围、CAS、locked、结构门禁与 Store 合同未变；普通 Agent 不获得 CAT 写权限。
 
-## 仍未取得的证据
+## 本轮验证与发布证据
 
-- packaged app 中使用真实 Provider 完成 3–5 个匿名 Segment 的 General → Translator → Reviewer → Proofreader 全链。
-- 同模型、同 reasoning 的真实语言任务对照。
-- 真实 Phrase / memoQ 平台互操作、Native Open/Save、IME、VoiceOver、完整键盘与 14 天日用。
+- 已运行的本地关键测试与类型检查通过，0 failure；包括根 `test`、MCP loopback、项目切换 Store 回归、身份合同、boundary、fusion、Host Seam、sync replay。未将本地结果写成当前远程 CI 结论，精确数量以运行日志为准。
+- 目录包 `smoke:pack` 与 artifact 完整性检查通过；隔离实际应用的欢迎页、三模式首章与教程截图已检查。最终完整 `smoke:vertical` 与真实窗口项目切换链尚待本周期 E 验证。
+- 首次临时 HOME 启动出现 Keychain 阻塞；无真实凭据截图使用仓库已有 smoke 配置，不证明真实密钥存储通过。
+- 已通过 GitHub API 核实 [v0.17.69 公开 Release](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.69) 非 draft，含安装包和更新元数据。未修改本机安装版，未验证其当前哈希或自动升级链。
+- 本周期新版本尚未发布；发布产物主要用于作者本人安装与自动更新，不承诺公众支持或跨平台资格。
 
-这些项目保持 pending，不得由单元测试、Fake Model、未打包的 build 或旧安装版本冒充完成。
+真实 Provider 四岗位迷你全链尚未取得测试配置与运行证据。语言质量对照、真实平台互操作和人工可用性见 [TODO](./TODO.md) 与 [已知限制](./docs/release/KNOWN_LIMITATIONS.md)；不得用自动探针补记。

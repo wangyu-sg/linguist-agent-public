@@ -10,7 +10,7 @@
 4. [HANDOFF.md](./HANDOFF.md) — 当前交付与下一步。
 5. [TODO.md](../TODO.md) — 只列真实未完成项。
 
-旧 Fusion queue 已退役，只在 [docs/archive/](./archive/) 保留历史快照；当前状态由上述事实文件与状态表维护。
+旧 Fusion queue 已退役，只在 [docs/archive/](./archive/) 保留历史快照；当前动态事实由 CURRENT_FACTS_SIMPLE.md 维护，状态入口页只提供链接。
 
 ## 状态与架构
 

@@ -18,7 +18,7 @@
 2. XLSX 批次和 TM/TB 仍需要显式 Sheet/列映射；目录导入遇到这类文件会返回 `needsInput`，不会猜测后静默写入。
 3. Tag 编辑器采用原生 textarea + chip overlay。硬 Tag 改动会阻止保存，但它不是 contenteditable 的原子不可拆 token 控件。
 4. Phrase 内容配对和 mapping 已通过一组真实私有副本验证，但未见过的客户生成器变体仍需逐样本验证；过期或不完整 mapping 会阻止 `verified` 交付。
-5. `as-is` 导出有意允许未完成内容，不代表可交付；`verified` 才执行完整 QA/阶段预检与结构硬规则。
+5. `as-is` 导出有意允许未完成内容，不代表可交付；`verified` 才执行完整 QA/阶段预检；两种模式都保留结构检查与重新导入验证。
 6. memoQ MQXLIFF 专用 Adapter 已通过合成 fixture round-trip，但尚未用真实客户样本验证生成器变体、确认级别与批注互操作。
 7. 通用文件撤销使用 Proma File Rewind；Run Undo 只结构化撤销仍满足 revision/状态前提的 CAT 变更。外部 MCP/程序副作用只记录。
 8. 旧数据迁移不读取治理 SQLite 的 proposals/ledger/checklist 投影；超大项目迁移仍可能同步占用主进程。
@@ -31,15 +31,11 @@
 3. CJS bundle 对 `import.meta` 有既有 esbuild warning；packaged smoke 只能证明当前宿主路径。
 4. serious/critical Axe 自动回归不能替代真实屏幕阅读器和完整键盘操作。
 5. Full Integrity Scrub、Backup/Restore 有自动故障注入；真实磁盘耗尽、只读卷、断电和硬件损坏不是本轮 real-machine 证据。
-6. `0.17.69` GitHub Release 三平台构建已通过，但尚未替换并核对本机安装版；这些自动证据不能替代真实 Provider、Native Open/Save、IME 或辅助技术人工证据。
+6. 公开 Release 的存在不能证明本机安装版已更新；产物和安装验证状态见 [当前事实](../../CURRENT_FACTS_SIMPLE.md)。
 
-## D. 公众发行（不在当前范围）
+## D. 发布定位与平台资格
 
-- Developer ID 签名与 Apple Notarization；
-- Gatekeeper/签名 DMG；
-- 自动更新通道和签名版本升级/回滚；
-- 跨平台构建与最终法律/再分发复核；
-- 公众 release notes 与安装包发布。
+发布产物主要用于作者本人安装与自动更新；不承诺公众支持、兼容周期、Developer ID 签名、Apple Notarization 或跨平台真机资格。公开安装包和更新元数据的存在不等于安装、升级与回滚全链均已验证。
 
 ## E. 已确认边界
 

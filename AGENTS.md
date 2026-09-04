@@ -34,29 +34,11 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 
 必须保留 Proma 的 Agent、Chat、Provider、Skills、MCP、Automations、远程桥、Preview、权限、Thinking、Queue / Steer、Planning、Workspace Memory、Files 和 Collaboration。Linguist 是第三个并列模式，不得复制或替换原生 Agent / Chat。
 
-当前目标是作者本人使用的个人 Alpha；没有公开发布计划。签名、公证、跨平台发行和公开更新渠道不是默认阻断项，但安全和数据完整性仍必须 fail closed。
+发布产物主要用于作者本人安装与自动更新；不承诺公众支持、兼容周期、签名公证或跨平台资格。安全和数据完整性必须 fail closed。
 
-## 当前版本与技术栈
+## 版本与事实来源
 
-稳定上游基线是 Proma `v0.19.26@bbf577a8eb768225fdf1ac49ab9ef07a11413b24`。
-
-| 层 | 当前事实 |
-|---|---|
-| Bun | `1.3.14`（根 `packageManager` 与 CI 固定） |
-| Electron App | `@proma/electron 0.17.69` |
-| Electron | `43.2.0` |
-| React | `18.3.1` |
-| Jotai | `2.20.2`（manifest range `^2.17.1`） |
-| Vite | `6.4.3`（manifest range `^6.0.3`） |
-| Shared | `@proma/shared 0.1.69` |
-| Agent Runtime | 仅 `@earendil-works/pi-* 0.84.4` |
-| CAT Core | `@linguist/cat-core 0.0.23` |
-| CAT Formats | `@linguist/cat-formats 0.0.13` |
-| CAT Store | `@linguist/cat-store 0.0.42` |
-| CAT Tools | `@linguist/cat-tools 0.0.37` |
-| CAT schema | `19` |
-
-不要从旧报告或 README 复制版本；以各 `package.json` 和 `bun.lock` 为准。
+固定 Proma 基线与 Runtime / 产品版本见 `docs/architecture/proma-baseline.json`；依赖以各 `package.json` 和 `bun.lock` 为准，动态事实唯一人工入口为 `CURRENT_FACTS_SIMPLE.md`。不得从旧报告复制版本或测试总数；上游升级必须作为独立工作流。
 
 ## Monorepo
 
@@ -122,7 +104,7 @@ bun run smoke:vertical
 - Linguist 使用一等 `LocalizationProjectTab` 和 project-scoped Jotai 状态。
 - Workbench 内嵌同一个 `AgentView` 的 rail presentation；Full `AgentView` 保留 Proma Files / Changes 面板，rail 只承载对话。
 - Agent 会话树排除带 `linguistProjectId` 的会话；Linguist 侧栏只展示项目绑定会话，并复用 Proma 的侧栏、搜索、项目头、会话行和树行为。
-- Linguist 会话必须直接继承 Proma v0.17.1 的 Workspace、Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration，不新增第二套宿主能力。
+- Linguist 会话必须直接继承固定 Proma 基线的 Workspace、Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration，不新增第二套宿主能力。
 - 点击项目进入 Workbench，点击会话进入 Full `AgentView`。项目归档、缺失或暂不可用时对话仍可继续，CAT mutation 由项目 Store 状态 fail closed。
 - 禁止新增 `LinguistAgentView`、`LinguistComposer`、`LinguistThinkingBlock`、`LinguistToolCard`、`LinguistApprovalCard`、第二套 Agent Session Store 或第二套 Session tree 行为。
 - CAT 编辑、Proposal、QA、TM/TB、Context、Preview 和设置位于 `renderer/features/linguist/**`。
@@ -204,7 +186,7 @@ CAT 写入规则：
 - 导出必须从受管 source blob 生成，先过 QA / 阶段预检并重新导入验证。
 - 输出给模型和 renderer 的 DTO 不暴露绝对本机路径。
 
-`LinguistProjectService` 是现有门面，内部按 lifecycle、resources、quality、delivery 和稳定类型合同分层。CAT Tool 工厂位于 `packages/linguist-cat-tools/src/factory.ts`；31 个工具按项目、参考、QA、Proposal、阶段确认、导入、交付、Tag、术语、Workbook 和 Voice 拆分，四岗位共享同一完整 Toolset。主进程必须重新校验 Session binding、文件可读性、交付模式与摘要，模型不得提交 `projectId`。
+`LinguistProjectService` 是现有门面，内部按 lifecycle、resources、quality、delivery 和稳定类型合同分层。CAT Tool 工厂位于 `packages/linguist-cat-tools/src/factory.ts`；工具按项目、参考、QA、Proposal、阶段确认、导入、交付、Tag、术语、Workbook 和 Voice 拆分，四岗位共享同一完整 Toolset。主进程必须重新校验 Session binding、文件可读性、交付模式与摘要，模型不得提交 `projectId`。
 
 同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须确认 Sheet / 列 mapping；复用 mapping 时歧义必须 fail closed，`locked` 列贯穿预览、保存和导入。只有已确认当前阶段的 Segment 可设为 approved exemplar。原生 SDLTM / SDLTB 可导入；批次源文件与保留原件的语言资产复用 Proma Preview Tab。受管 Context 图片通过现有读取工具作为 Pi 视觉内容提供，不新增 OCR 平台或图片数据库。
 

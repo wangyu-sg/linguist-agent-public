@@ -8,9 +8,9 @@ This AGPL-3.0 project derives from [Proma](https://github.com/proma-ai/Proma). S
 
 [中文 README](./README.md)
 
-## Current status
+## Product
 
-This is a **personal-use Alpha** with no public-release plan. The stable baseline is Proma `v0.19.26@bbf577a8`; Electron App `0.17.69`, Electron `43.2.0`, `@proma/shared 0.1.69`, Pi `0.84.4`, CAT Core / Formats / Store / Tools `0.0.23 / 0.0.13 / 0.0.42 / 0.0.37`, CAT schema `19`, and Bun `1.3.14`.
+This is a **personal-use Alpha** derived from Proma. Published artifacts primarily serve the author’s own installation and automatic updates; no public support, compatibility period, signing, notarization, or cross-platform qualification is promised. Current versions and verification evidence live in [CURRENT_FACTS_SIMPLE.md](./CURRENT_FACTS_SIMPLE.md); core modifications are tracked in the [Touchpoint ledger](./docs/architecture/proma-touchpoints.json).
 
 The app has three peer modes:
 
@@ -22,7 +22,7 @@ Agent uses a single **Pi Runtime**. Claude models remain available through Anthr
 
 ## Four professional roles
 
-Project sessions choose a role at creation and can switch roles in place:
+A blank project session can switch roles. After a persisted user message, its role identity is fixed; create a new project session for another role. Delegated child sessions have fixed roles. The canonical role prompts live in [resources/linguist-roles](./resources/linguist-roles).
 
 | Role | Default responsibility |
 |---|---|
@@ -31,7 +31,7 @@ Project sessions choose a role at creation and can switch roles in place:
 | Reviewer | Full bilingual review of Source + current Target, fixing substantive issues and preserving correct text |
 | Proofreader | Target-language proofreading and polish, consulting Source whenever meaning is at risk |
 
-A role changes only the default prompt. It does not change tools, MCP, files, model, runtime, or the user's Proma permission mode. Explicit user instructions may override the default role without changing sessions.
+A role changes only the default prompt. It does not change tools, MCP, files, model, runtime, or the user's Proma permission mode. Explicit user tasks may extend the default responsibilities; they do not change the persisted role identity.
 
 A Proposal is a visible, reviewable, reversible mutation carrying the Agent's current best formal recommendation. It is not a low-quality draft or a prerequisite for Reviewer work. Proposal Critic, Auditor, Execution Policy, and Translation Scope are no longer active product flows.
 
@@ -41,7 +41,7 @@ A Proposal is a visible, reviewable, reversible mutation carrying the Agent's cu
 Proma Pi Agent Runtime
 ├── Workspace / Skills / MCP / AGENTS.md / Memory / Files / Planning / Collaboration
 └── Linguist Project Binding
-    ├── one shared set of 31 CAT tools
+    ├── one shared set of CAT tools
     ├── built-in Common Quality Contract + current Role Markdown
     ├── Project Digest / Turn Context
     └── Linguist Domain Services
@@ -122,9 +122,9 @@ bun run smoke:vertical
 
 Tests and smoke checks must use a task-specific temporary user-data directory and must not touch real user data.
 
-## Evidence still required
+## Verification evidence
 
-Implementation and automated regression do not prove language quality or product qualification. Same-model Proma/Codex comparison, a real-provider four-role workflow, Native Open/Save, IME, VoiceOver, keyboard checks, and 14 days of real daily use still require elapsed human evidence. See [SIMPLE_IMPLEMENTATION_STATUS.md](./docs/roadmap/SIMPLE_IMPLEMENTATION_STATUS.md), [HANDOFF.md](./docs/HANDOFF.md), and [TODO.md](./TODO.md).
+Implementation, automated regression, packaged checks, real-provider checks, and product qualification are separate evidence levels. See [current facts](./CURRENT_FACTS_SIMPLE.md), [known limitations](./docs/release/KNOWN_LIMITATIONS.md), and [remaining work](./TODO.md).
 
 ## License
 
