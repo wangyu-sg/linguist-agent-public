@@ -59,6 +59,7 @@ export function sortAgentSessionsByUpdatedAtDesc(
 export function findLatestMainAgentSession(
   sessions: readonly AgentSessionMeta[],
   workspaceId: string,
+  isEligible: (session: AgentSessionMeta) => boolean,
 ): AgentSessionMeta | undefined {
   return sortAgentSessionsByUpdatedAtDesc(sessions).find((session) => (
     session.workspaceId === workspaceId
@@ -66,7 +67,7 @@ export function findLatestMainAgentSession(
     && !session.isDraft
     && !session.sourceAutomationId
     && !session.sourceDelegationId
-    && getAgentSessionLinguistProjectId(session, sessions) === undefined
+    && isEligible(session)
   ))
 }
 

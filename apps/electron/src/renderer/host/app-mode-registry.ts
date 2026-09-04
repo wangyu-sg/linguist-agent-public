@@ -98,6 +98,11 @@ interface RestorableSession {
   sourceDelegationId?: string
 }
 
+/** 项目归属只由模式组合入口裁决。 */
+export function resolveSessionAppMode(session: RestorableSession, sessions: readonly RestorableSession[]): 'agent' | 'linguist' {
+  return getAgentSessionLinguistProjectId(session, sessions) ? 'linguist' : 'agent'
+}
+
 interface RestorableTab {
   id?: string
   type: string

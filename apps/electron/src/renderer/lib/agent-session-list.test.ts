@@ -1,3 +1,4 @@
+import { resolveSessionAppMode } from '../host/app-mode-registry'
 import { expect, test } from 'bun:test'
 import type { AgentSessionMeta } from '@proma/shared'
 import {
@@ -55,5 +56,5 @@ test('项目快捷切换选择最近的普通主会话', () => {
     session({ id: 'other', workspaceId: 'other', updatedAt: 10 }),
   ]
 
-  expect(findLatestMainAgentSession(sessions, 'target')?.id).toBe('latest')
+  expect(findLatestMainAgentSession(sessions, 'target', candidate => resolveSessionAppMode(candidate, sessions) === 'agent')?.id).toBe('latest')
 })

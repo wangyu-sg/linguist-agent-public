@@ -17,14 +17,14 @@ import {
 } from '@/atoms/agent-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { useOpenSession } from './useOpenSession'
-import { findLatestMainAgentSession } from '@/lib/agent-session-list'
+import { selectProjectAtom } from '@/host/project-switch'
 import type { AgentWorkspace, CreateAgentWorkspaceInput } from '@proma/shared'
 
 interface UseProjectActionsResult {
   workspaces: AgentWorkspace[]
   currentWorkspaceId: string | null
-  /** 切换到指定项目；已是当前项目时无副作用。默认切回对话视图，resetView:false 可保持当前视图（如停留在 Agent 技能） */
-  selectProject: (workspaceId: string, opts?: { resetView?: boolean }) => void
+  /** 切换到指定项目；权威刷新后原子提交导航。默认切回对话视图，resetView:false 可保持当前视图（如停留在 Agent 技能） */
+  selectProject: (workspaceId: string, opts?: { resetView?: boolean }) => Promise<void>
   /** 创建并切到新项目；成功返回新项目，失败已 toast 并返回 null */
   createProject: (name: string, options?: Pick<CreateAgentWorkspaceInput, 'projectRootPath'>) => Promise<AgentWorkspace | null>
   /** 选择本地文件夹，并以它作为项目文件根创建项目。 */
@@ -34,7 +34,7 @@ interface UseProjectActionsResult {
 export function useProjectActions(): UseProjectActionsResult {
   const [workspaces, setWorkspaces] = useAtom(agentWorkspacesAtom)
   const [currentWorkspaceId, setCurrentWorkspaceId] = useAtom(currentAgentWorkspaceIdAtom)
-  const agentSessions = useAtomValue(agentSessionsAtom)
+  const switchProject = useSetAtom(selectProjectAtom)
   const setAgentSessions = useSetAtom(agentSessionsAtom)
   const agentChannelId = useAtomValue(agentChannelIdAtom)
   const agentModelId = useAtomValue(agentModelIdAtom)
@@ -43,20 +43,14 @@ export function useProjectActions(): UseProjectActionsResult {
   const createInFlightRef = React.useRef(false)
 
   const selectProject = React.useCallback(
-    (workspaceId: string, opts?: { resetView?: boolean }): void => {
-      if (workspaceId === currentWorkspaceId) return
-      if (opts?.resetView !== false) {
-        const session = findLatestMainAgentSession(agentSessions, workspaceId)
-        if (session) {
-          openSession('agent', session.id, session.title)
-          return
-        }
+    async (workspaceId: string, opts?: { resetView?: boolean }): Promise<void> => {
+      try {
+        await switchProject({ workspaceId, ...opts })
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '切换项目失败')
       }
-      setCurrentWorkspaceId(workspaceId)
-      if (opts?.resetView !== false) setActiveView('conversations')
-      window.electronAPI.updateSettings({ agentWorkspaceId: workspaceId }).catch(console.error)
     },
-    [agentSessions, currentWorkspaceId, openSession, setCurrentWorkspaceId, setActiveView],
+    [switchProject],
   )
 
   const createProject = React.useCallback(

@@ -1602,7 +1602,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "普通项目快捷切换选择目标工作区主会话；需在 D 验证权威刷新与竞态。"
+      "reason": "项目选择委托共享 Jotai 动作，权威刷新、空项目建会话与代际保护；Linguist 内部工具页保留 resetView:false。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useGlobalAgentListeners.ts",
@@ -1666,7 +1666,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "共享会话列表解析 Linguist 归属并隔离普通主会话。"
+      "reason": "共享列表保留 Linguist 归属解析；普通主会话选择只消费模式入口提供的 isEligible，不在选择算法中裁决 CAT 归属。"
     },
     {
       "file": "apps/electron/src/renderer/lib/linguist-navigation.ts",
