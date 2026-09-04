@@ -10,7 +10,7 @@ export function resolveVoiceDictationPromaOutput(
   copyToClipboard: (text: string) => void,
 ): VoiceDictationCommitResult {
   if (handled) {
-    return { mode: 'proma-input', success: true, message: '已写入 Proma 输入框' }
+    return { mode: 'proma-input', success: true, message: '已写入 Linguist Agent 输入框' }
   }
 
   try {
@@ -18,14 +18,14 @@ export function resolveVoiceDictationPromaOutput(
     return {
       mode: 'clipboard',
       success: true,
-      message: '未找到可写入的 Proma 输入框，已复制到剪贴板',
+      message: '未找到可写入的 Linguist Agent 输入框，已复制到剪贴板',
     }
   } catch (error) {
     console.error('[语音输入] 复制回退失败:', error)
     return {
       mode: 'clipboard',
       success: false,
-      message: '未找到可写入的 Proma 输入框，且复制到剪贴板失败',
+      message: '未找到可写入的 Linguist Agent 输入框，且复制到剪贴板失败',
     }
   }
 }

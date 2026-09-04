@@ -884,7 +884,7 @@ function buildWindowsShellInstallerTools(sdk: PiSdk, ctx: PiBuiltinToolsContext)
           installer: 'git-for-windows',
           version: source.version,
           filePath: result.filePath,
-          message: '已下载并打开 Git for Windows 安装程序。请完成安装后重试原任务；Proma 会在下次运行时自动检测 Git Bash。',
+          message: '已下载并打开 Git for Windows 安装程序。请完成安装后重试原任务；Linguist Agent 会在下次运行时自动检测 Git Bash。',
         })
       },
     }),

@@ -1,0 +1,9 @@
+{
+  "productName": "Linguist Agent",
+  "shortName": "Linguist",
+  "taglineZh": "为本地化工作而生的桌面 Agent",
+  "taglineEn": "A desktop agent for localization work",
+  "upstreamName": "Proma",
+  "appId": "com.linguistagent.app",
+  "artifactPrefix": "Linguist-Agent"
+}

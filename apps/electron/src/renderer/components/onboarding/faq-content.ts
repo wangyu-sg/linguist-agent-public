@@ -15,6 +15,19 @@ export interface FaqGroup {
 
 export const FAQ_GROUPS: FaqGroup[] = [
   {
+    topic: 'Linguist',
+    items: [
+      { q: 'Linguist 与普通 Agent 有什么区别？', a: 'Agent 处理通用任务；Linguist 会话绑定本地化项目，在同一 Agent 中使用 CAT 工具、翻译记忆、术语、Context、QA 与交付能力。' },
+      { q: '项目、Workspace 与会话是什么关系？', a: '本地化项目管理批次和语言资产；绑定 Workspace 提供 Skills、MCP、文件与记忆。同一项目可以有多个岗位会话，会话继承相同项目与 Workspace。' },
+      { q: '四个岗位分别做什么？', a: 'General 负责理解任务与协调；Translator 翻译；Reviewer 审校；Proofreader 校对。General 可按需要委派，四岗位不是强制流水线。' },
+      { q: '岗位能否中途切换？', a: '空白项目会话可调整岗位；一旦已有持久化用户消息，应新建对应岗位会话；委派子会话的岗位固定。' },
+      { q: 'verified 与 as-is 导出有什么区别？', a: 'verified 需要通过当前阶段与 QA 预检；as-is 允许保留未完成项，需明确确认。两者仍执行结构检查与重新导入验证，不能绕过数据完整性门禁。' },
+      { q: 'CAT 数据保存在哪里？', a: '正式版保存在 ~/.linguist-agent/linguist/projects/ 下的每项目 cat.db 与受管 blobs；开发版使用 ~/.linguist-agent-dev/。' },
+      { q: 'Reviewer 为什么必须覆盖全部冻结范围？', a: '读取一页或抽样不代表完成审校。Reviewer 和 Proofreader 需对冻结范围逐段确认 unchanged、corrected 或 blocked，阶段结果与子会话运行是否结束分别记录。' },
+    ],
+  },
+
+  {
     topic: 'Agent / Chat',
     items: [
       {
@@ -40,11 +53,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: 'A 模型切换到 B 模型会不会重建上下文？',
-        a: '新的 B 模型会知道你的上下文，这个意义上不会重建以保证使用的顺滑程度。但是切换后的第一轮 Proma 会把系统提示词 + 全部历史消息重新发给 B 模型，全部历史将按新模型的输入费率重新计算。',
-      },
-      {
-        q: '如何使用 Proma 商业版的生图功能？',
-        a: '在 Agent 或 Chat 会话中直接自然语言描述你要的图片和想要使用的生图模型即可，Proma 内置的生图能力会生成（需要花费积分）。',
+        a: '切换后继续使用当前会话上下文；下一轮会按新模型的上下文窗口与 Provider 能力构建请求。具体费用以你的 Provider 账单为准。',
       },
       {
         q: '会话文件和项目文件的区别是什么？',
@@ -55,8 +64,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: '建议在上下文使用率达到 70%-80% 时主动压缩，避免接近上限后新消息被截断；压缩后关键结论和记忆会保留。',
       },
       {
-        q: '我怎么在手机端远程使用 Proma？',
-        a: '推荐配置 Proma 的飞书远程连接，飞书上有对于 Agent 会话完善的渲染和接口支持，在电脑端 Proma 打开的情况下可以顺滑的在飞书完成手机端的使用。',
+        q: '我怎么在手机端远程使用 Linguist Agent？',
+        a: '推荐配置 Linguist Agent 的飞书远程连接，飞书上有对于 Agent 会话完善的渲染和接口支持，在电脑端 Linguist Agent 打开的情况下可以顺滑的在飞书完成手机端的使用。',
       },
     ],
   },
@@ -81,8 +90,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
     topic: '自动任务',
     items: [
       {
-        q: '自动任务需要一直开着 Proma 吗？',
-        a: '需要 Proma 在运行才会执行。你可以设置触发时间，到时应用会自动运行任务并通知结果。',
+        q: '自动任务需要一直开着 Linguist Agent 吗？',
+        a: '需要 Linguist Agent 在运行才会执行。你可以设置触发时间，到时应用会自动运行任务并通知结果。',
       },
       {
         q: '任务结果在哪里看？',
@@ -95,7 +104,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: '记忆会保存什么？',
-        a: '项目规则、架构和命令留在项目根与 Proma 工作区的 AGENTS.md；记忆只沉淀稳定协作偏好、纠错和已经确认的经验。',
+        a: '项目规则、架构和命令留在项目根与 Linguist Agent 工作区的 AGENTS.md；记忆只沉淀稳定协作偏好、纠错和已经确认的经验。',
       },
       {
         q: '记忆系统应该怎么用起来？',
@@ -108,7 +117,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: 'Pi 是什么？',
-        a: 'Pi 是 Proma 支持的一种 Agent runtime。它可以结合你选定的模型、工具和工作区来完成多步任务，适合需要规划、读写文件或调用工具的工作。',
+        a: 'Pi 是 Linguist Agent 使用的 Agent runtime。它可以结合你选定的模型、工具和工作区来完成多步任务，适合需要规划、读写文件或调用工具的工作。',
       },
     ],
   },
@@ -138,7 +147,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: '子会话结果会占用父会话上下文吗？',
-        a: '基本不占。子会话拥有独立上下文，各自研究后再把结论汇总回父会话，节省父会话空间。',
+        a: '子会话拥有独立上下文，但返回给父会话的结果仍占用父会话上下文。',
       },
       {
         q: '一个会话下面的子会话是可以开很多个的吗？',
@@ -146,7 +155,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: '子会话意外中断怎么办？',
-        a: '中断不会丢失已完成的子会话结果。你可以让子会话 Agent 重新启动中断的会话继续研究，或告诉父会话让他直接汇总已完成的部分。假如父会话说读取不到，就让父会话直接去读该子会话的JSONL文件就好',
+        a: '中断不会丢失已完成的子会话结果。你可以让子会话 Agent 重新启动中断的会话继续研究，或告诉父会话让他直接汇总已完成的部分。可以通过协作工具读取已保存的结果；项目绑定和冻结范围仍须保持。',
       },
     ],
   },
@@ -154,16 +163,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
     topic: '其他问题',
     items: [
       {
-        q: '为什么有时候用的是我自己配的模型 API，但是还是会扣 Proma 的积分？',
-        a: '部分内置能力（如生图、特定模型调用、云服务）走 Proma 的云渠道，即使主对话用你自己的 API，这些功能仍可能消耗积分；也可以检查是否有内置 MCP 或 Skill 走了云通道。',
+        q: '我对于 Linguist Agent 的使用有一些问题，我应该怎么做？',
+        a: '可以查看设置中的帮助与文档，或让 Agent 协助排查。记录复现步骤和错误信息；当前发布主要用于作者本人安装与自动更新，不承诺公众支持。',
       },
       {
-        q: '我对于 Proma 的使用有一些问题，我应该怎么做？',
-        a: '可以随时在 agent 模式下直接提问 Proma"你可以完成 XXX 吗？/ XXX 出问题了，帮我排查一下问题"，或查看设置中的帮助与文档；如果遇到无法解决的问题，可以在群里附上复现步骤/你遇见的具体问题和你做过的尝试，开发者或热心群友有空时会来帮忙解答。',
-      },
-      {
-        q: '为什么 Proma 的 DeepSeek 模型可以读图？',
-        a: 'Proma 接入 DeepSeek 时，图片会单独传给其他有视觉能力的模型理解；这也是 Proma 对模型能力的增强之一。可以在设置-视觉助手里调整具体设置。',
+        q: '为什么 Linguist Agent 的 DeepSeek 模型可以读图？',
+        a: 'Linguist Agent 接入 DeepSeek 时，图片会单独传给其他有视觉能力的模型理解；这也是 Linguist Agent 对模型能力的增强之一。可以在设置-视觉助手里调整具体设置。',
       },
     ],
   },

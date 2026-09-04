@@ -113,12 +113,12 @@ function buildTrayMenu(actions: TrayActions): Menu {
     },
     { type: 'separator' },
     {
-      label: '打开 Proma',
+      label: '打开 Linguist Agent',
       click: () => actions.showMainWindow(),
     },
     { type: 'separator' },
     {
-      label: '退出 Proma',
+      label: '退出 Linguist Agent',
       click: () => {
         app.quit()
       },

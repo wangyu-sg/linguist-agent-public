@@ -1,0 +1,8 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- macOS Template 图标：提炼自主图标的放大镜与翻译条目。 -->
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
+    <circle cx="420" cy="400" r="270" stroke-width="112"/>
+    <path d="M 612 592 L 844 824" stroke-width="124"/>
+    <path d="M 300 310 H 530 M 300 400 H 530 M 300 490 H 530" stroke-width="64"/>
+  </g>
+</svg>

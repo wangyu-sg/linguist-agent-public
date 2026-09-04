@@ -1,3 +1,4 @@
+import identity from '../../../../../../config/product-identity.json'
 /**
  * Onboarding 视图组件
  *
@@ -21,13 +22,14 @@ import { Button } from '@/components/ui/button'
 import { CURRENT_ONBOARDING_VERSION } from '../../../types'
 import hopperSeasideWhiteHouse from '@/assets/onboarding/hopper-seaside-white-house.png'
 import guideVisual from '@/assets/onboarding/guide-visual.png'
+import guideLinguist from '@/assets/onboarding/guide-linguist.png'
 import guideAgentExample from '@/assets/onboarding/guide-agent-example.png'
 import guideChatExample from '@/assets/onboarding/guide-chat-example.png'
 import guideAutomation from '@/assets/onboarding/guide-automation.png'
 import guideMemory from '@/assets/onboarding/guide-memory.png'
-import guideSideAnswer from '@/assets/onboarding/guide-side-answer.png'
-import guideSubagent from '@/assets/onboarding/guide-subagent.png'
-import promaMarkWhite from '@/assets/onboarding/proma-mark-white.svg'
+import guideSideAnswer from '@/assets/onboarding/guide-chat-example.png'
+import guideSubagent from '@/assets/onboarding/guide-visual.png'
+import linguistMarkWhite from '@/assets/onboarding/linguist-mark-white.svg'
 import { AutomationGuideExamples } from './AutomationGuideExamples'
 import { FileGuideExamples } from './FileGuideExamples'
 import { MemoryGuideExamples } from './MemoryGuideExamples'
@@ -261,7 +263,7 @@ function GuideFeatureStep({ anchor, title, highlight, paragraphs, nextLabel, onN
         <img
           ref={imgRef}
           src={imageSrc}
-          alt="Proma 界面"
+          alt="Linguist Agent 界面"
           className="max-h-full max-w-full rounded-lg border border-[#d7ddd5] bg-[#f6f8f3] object-contain shadow-[0_14px_30px_rgba(27,63,45,0.12)]"
           style={imageRightCrop > 0 ? { clipPath: `inset(0 ${imageRightCrop}px 0 0)` } : undefined}
         />
@@ -426,21 +428,22 @@ function AgentChatGuidePage({ onNext, onBack }: { onNext: () => void; onBack: ()
       showScrollHint
       intro={{
         anchor: { x: 0.073, y: 0.049 },
-        arrowMode: 'magnifier',
+        arrowMode: 'none',
         magnifierOffsetX: 70,
         magnifierImageOffset: { x: 0.09, y: 0.33 },
         highlight: '入门篇 · 第 1 步',
-        title: 'Agent 和 Chat 模式的区别',
+        title: 'Agent、Chat 与 Linguist',
         paragraphs: [
-          <>左边栏顶部是 Proma 的<b className="font-medium text-neutral-900">模式切换</b>：Agent 与 Chat。</>,
+          <>左边栏顶部是 Linguist Agent 的<b className="font-medium text-neutral-900">模式切换</b>：Agent / Chat / Linguist。</>,
           <>
             <b className="font-medium text-neutral-900">Chat</b> 是一问一答的对话——快速提问、不涉及任何对电脑的操作，
             核心偏向满足好奇心和完成简单的文字工作。
           </>,
           <>
             <b className="font-medium text-neutral-900">Agent</b> 则能自主规划做调研、操作电脑、写代码、PPT 和文档，
-            为你的想法赋形。
+            使用工具、文件、MCP、Skills、规划与协作完成任务。
           </>,
+          <><b className="font-medium text-neutral-900">Linguist</b> 面向项目绑定的翻译、审校、校对，提供 TM/TB、Context、QA 与导入导出。</>,
         ],
       }}
       nextLabel="下一个"
@@ -451,13 +454,13 @@ function AgentChatGuidePage({ onNext, onBack }: { onNext: () => void; onBack: ()
         <div className="space-y-16 md:space-y-20">
           <article className="grid gap-10 border-t border-[#1b3f2d]/15 pt-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center">
             <figure className="overflow-hidden rounded-lg bg-[#f6f8f3] shadow-[0_14px_30px_rgba(27,63,45,0.12)]">
-              <img src={guideChatExample} alt="Chat 解释 RAG 搜索原理的示例" className="block h-auto w-full" />
+              <img src={guideChatExample} alt="Chat 模式入口" className="block h-auto w-full" />
             </figure>
             <div>
               <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#1b3f2d]">示例 01 · Chat</div>
               <h3 className="mt-3 text-2xl font-medium text-neutral-900 md:text-3xl">快速厘清一个概念用 Chat</h3>
               <p className="mt-4 text-base leading-[1.7] text-neutral-600 md:text-lg">
-                AI 最常见的场景，随意询问一件事，得到简单快速的解释。Chat 专注对话和文字回答，不会有任何产出。
+                AI 最常见的场景，随意询问一件事，得到简单快速的解释。Chat 适合快速问答和文字交流。
               </p>
               <div className="mt-5 border-l-2 border-[#1b3f2d]/35 pl-4">
                 <div className="text-base font-medium leading-7 text-[#1b3f2d]">你可以这样说</div>
@@ -481,8 +484,15 @@ function AgentChatGuidePage({ onNext, onBack }: { onNext: () => void; onBack: ()
               </div>
             </div>
             <figure className="overflow-hidden rounded-lg bg-[#f6f8f3] shadow-[0_14px_30px_rgba(27,63,45,0.12)] lg:order-2">
-              <img src={guideAgentExample} alt="Agent 研究 RAG 并写入会话文件的示例" className="block h-auto w-full" />
+              <img src={guideAgentExample} alt="Agent 模式与文件工作区入口" className="block h-auto w-full" />
             </figure>
+          </article>
+          <article className="grid gap-10 border-t border-[#1b3f2d]/15 pt-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center">
+            <img src={guideLinguist} alt="Linguist 项目入口" className="w-full rounded-lg border border-border" />
+            <div>
+              <h3 className="text-2xl font-medium text-neutral-900">本地化项目用 Linguist</h3>
+              <p className="mt-4 text-base leading-7 text-neutral-600">创建项目并导入批次，配置 TM/TB 与 Context，再按需要使用 General、Translator、Reviewer、Proofreader。QA 与 verified / as-is 导出在同一项目中完成。</p>
+            </div>
           </article>
         </div>
       </section>
@@ -586,7 +596,7 @@ function FaqPage({ nextLabel, onNext, onBack, highlight }: { nextLabel: string; 
 
 /** 引导步骤标题（欢迎页独立，不在地图中显示） */
 const STEP_LABELS: Array<{ step: Exclude<OnboardingStep, 'welcome'>; label: string }> = [
-  { step: 'guide', label: 'Agent / Chat' },
+  { step: 'guide', label: 'Agent / Chat / Linguist' },
   { step: 'project', label: '项目' },
   { step: 'files', label: '文件' },
   { step: 'subagent', label: '子会话' },
@@ -734,20 +744,20 @@ export function OnboardingView({ onComplete, initialStep = 'welcome' }: Onboardi
           {/* 左上角品牌 */}
           <div className="absolute left-6 top-6 flex items-center gap-3 md:left-10 md:top-8">
             <img
-              src={promaMarkWhite}
-              alt="Proma"
+              src={linguistMarkWhite}
+              alt="Linguist Agent"
               className="h-8 w-8 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
             />
-            <span className="text-lg font-light tracking-wide text-white">Proma</span>
+            <span className="text-lg font-light tracking-wide text-white">{identity.productName}</span>
           </div>
 
           {/* 左下角标语（呼应画作气质） */}
           <div className="absolute bottom-6 left-6 right-6 md:bottom-10 md:left-10 md:right-10">
             <p className="text-lg font-light leading-snug text-white md:text-2xl">
-              让协作自然发生，让想法流动成形。
+              {identity.taglineZh}
             </p>
             <p className="mt-2 text-[11px] uppercase tracking-[0.3em] text-white/70 md:text-xs">
-              FOR PROFESSIONALS
+              {identity.taglineEn}
             </p>
           </div>
 
@@ -778,10 +788,10 @@ export function OnboardingView({ onComplete, initialStep = 'welcome' }: Onboardi
             </div>
 
             <h1 className="text-3xl font-light tracking-tight text-neutral-900 md:text-4xl">
-              欢迎使用 Proma
+              欢迎使用 {identity.productName}
             </h1>
             <p className="mt-3 text-base leading-relaxed text-neutral-500 md:text-lg">
-              为专业用户打造的通用 Agent
+              {identity.taglineZh}
             </p>
 
             {/* 主操作 */}
@@ -808,7 +818,7 @@ export function OnboardingView({ onComplete, initialStep = 'welcome' }: Onboardi
           <GuideExamplesPage
             intro={{
               anchor: { x: 0.91, y: 0.07 },
-              arrowMode: 'magnifier',
+              arrowMode: 'none',
               magnifierOffsetX: -40,
               highlight: '入门篇 · 第 3 步',
               title: '会话文件和项目文件',
@@ -836,7 +846,7 @@ export function OnboardingView({ onComplete, initialStep = 'welcome' }: Onboardi
         {step === 'project' && (
           <GuideFeatureStep
             anchor={{ x: 0.012, y: 0.22 }}
-            arrowMode="magnifier"
+            arrowMode="none"
             magnifierOffsetX={130}
             magnifierImageOffset={{ x: 0.08, y: 0.05 }}
             highlight="入门篇 · 第 2 步"
@@ -848,7 +858,7 @@ export function OnboardingView({ onComplete, initialStep = 'welcome' }: Onboardi
                 <b className="font-medium text-neutral-900">上下文、Skills/MCP 与记忆</b>，互不干扰。
               </>,
               <>
-                比如图中的「广告投放项目」「代码分析」，都各是一个独立的项目工作区，用于做完全不同的事。
+                例如，你可以分别建立「广告投放」和「代码分析」项目，用独立工作区处理不同的任务。
               </>,
             ]}
             nextLabel="下一个"
@@ -861,7 +871,7 @@ export function OnboardingView({ onComplete, initialStep = 'welcome' }: Onboardi
           <GuideExamplesPage
             intro={{
               anchor: { x: 0.075, y: 0.38 },
-              arrowMode: 'magnifier',
+              arrowMode: 'none',
               magnifierOffsetX: 80,
               magnifierImageOffset: { x: 0.075 },
               imageSrc: guideSubagent,
@@ -901,7 +911,7 @@ export function OnboardingView({ onComplete, initialStep = 'welcome' }: Onboardi
               title: '自动任务功能',
               paragraphs: [
                 <>
-                  打开<b className="font-medium text-neutral-900">自动任务</b>，你可以让 Proma 定时自动执行一件事。
+                  打开<b className="font-medium text-neutral-900">自动任务</b>，你可以让 Linguist Agent 定时自动执行一件事。
                   在任务描述里用自然语言写清楚「做什么、什么时候做」，再配置频率与模型，
                   <b className="font-medium text-neutral-900">无人值守</b>也能完成。
                   你也可以用自然语言直接让 Agent 帮你创建自动任务。

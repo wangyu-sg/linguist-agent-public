@@ -30,7 +30,7 @@ export function buildAgentReplyCard(result: FormattedAgentResult, subtitle?: str
   return {
     config: { wide_screen_mode: true },
     header: {
-      title: { tag: 'plain_text', content: 'Proma Agent' },
+      title: { tag: 'plain_text', content: 'Linguist Agent' },
       ...(subtitle ? { subtitle: { tag: 'plain_text', content: subtitle } } : {}),
       template: 'blue',
     },
@@ -54,7 +54,7 @@ export function buildErrorCard(errorMessage: string): Record<string, unknown> {
   return {
     config: { wide_screen_mode: true },
     header: {
-      title: { tag: 'plain_text', content: 'Proma 错误' },
+      title: { tag: 'plain_text', content: 'Linguist Agent 错误' },
       template: 'red',
     },
     elements: [
@@ -217,7 +217,7 @@ export function buildHelpCard(): Record<string, unknown> {
   return {
     config: { wide_screen_mode: true },
     header: {
-      title: { tag: 'plain_text', content: 'Proma Bot 命令' },
+      title: { tag: 'plain_text', content: 'Linguist Agent Bot 命令' },
       template: 'blue',
     },
     elements: [

@@ -57,7 +57,7 @@ export const linguistExtension: PromaExtension = {
   appModes: [{
     id: 'linguist-sidebar',
     mode: 'linguist',
-    label: '本地化',
+    label: 'Linguist',
     icon: <Languages size={16} />,
     renderSidebar: renderLinguistSidebar,
   }],

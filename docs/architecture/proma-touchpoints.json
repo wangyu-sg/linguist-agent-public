@@ -649,11 +649,10 @@
     {
       "file": "apps/electron/src/main/lib/voice-dictation-output-result.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "temporary-deviation",
+      "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "语音提交以 Renderer 消费确认决定结果。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
-      "hook": "upstream-voice-dictation-output-result"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：语音提交以 Renderer 消费确认决定结果。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-window.ts",
@@ -675,11 +674,10 @@
     {
       "file": "apps/electron/src/main/lib/workspace-memory-window.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "temporary-deviation",
+      "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Memory 窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 a8b1ef35。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
-      "hook": "upstream-workspace-memory-window"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：Memory 窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 a8b1ef35。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
     },
     {
       "file": "apps/electron/src/main/lib/workspace-watcher.ts",
@@ -830,11 +828,10 @@
     {
       "file": "apps/electron/src/renderer/components/agent-skills/integration-catalog.ts",
       "ticket": "LA-SYNC-004",
-      "kind": "temporary-deviation",
+      "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "目录排序只消费 priority 与 placement，凭据地址取实际配置。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
-      "hook": "upstream-integration-catalog"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：目录排序只消费 priority 与 placement，凭据地址取实际配置。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/useAgentSkillsData.ts",
@@ -1930,11 +1927,10 @@
     {
       "file": "apps/electron/src/renderer/components/vault/VaultView.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "temporary-deviation",
+      "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Vault 编辑与侧栏复用既有状态及共享错误边界。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
-      "hook": "upstream-vaultview"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：Vault 编辑与侧栏复用既有状态及共享错误边界。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
     },
     {
       "file": "apps/electron/src/renderer/components/vault/vault-editor-lifecycle.ts",
@@ -1980,6 +1976,358 @@
       "mergePolicy": "keep-la",
       "reason": "停止快捷键只接受当前活动子会话 ID。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-stop-generation-target"
+    },
+    {
+      "file": "apps/electron/resources/startup-splash/index.html",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/resources/startup-splash/proma-mark-white.svg",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/agent-error-utils.ts",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/feishu-message.ts",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/text-output-service.ts",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/App.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-agent-example.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-automation-calendar.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-automation-daily-code-quality.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-automation-yesterday-commit-review.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-automation.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-chat-example.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-memory-generate.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-memory.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-project-files-example.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-session-files-example.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-side-answer.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-subagent-delegation.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-subagent-summary.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-subagent-workspace.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-subagent.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-visual.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/proma-mark-white.svg",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent-skills/CredentialDialog.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent-skills/WorkspaceMemoryTab.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent-skills/WorkspaceMemoryWindowApp.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent-skills/workspaceMemoryInitPrompt.ts",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/automation/AutomationFormView.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/automation/AutomationsListView.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/environment/EnvironmentCheckDialog.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/obsidian/obsidian-brand.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/onboarding/AutomationGuideExamples.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/onboarding/FileGuideExamples.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/onboarding/MemoryGuideExamples.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/onboarding/OnboardingView.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/onboarding/SubagentGuideExamples.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/onboarding/faq-content.ts",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/planning/PlanningNativeSyncControl.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/settings/OnboardingSettings.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/settings/PromaLogoSettings.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/settings/VisionRelaySettings.tsx",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/resources/startup-splash/linguist-mark-white.svg",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/guide-linguist.png",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/assets/onboarding/linguist-mark-white.svg",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
     }
   ]
 }

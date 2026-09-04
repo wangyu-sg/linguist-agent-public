@@ -2629,7 +2629,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
         <AlertDialogHeader>
           <AlertDialogTitle>确认删除项目</AlertDialogTitle>
           <AlertDialogDescription>
-            将删除「{pendingDeleteWorkspace?.name ?? '该项目'}」在 Proma 中保存的会话、自动任务、MCP、Skills 与 Proma 工作区配置；空白项目的 Proma 托管项目文件也会被删除。本地项目根目录、附加目录和附加文件只会移除关联，不会删除原始文件。删除后无法恢复。
+            将删除「{pendingDeleteWorkspace?.name ?? '该项目'}」在 Linguist Agent 中保存的会话、自动任务、MCP、Skills 与 Linguist Agent 工作区配置；空白项目的 Linguist Agent 托管项目文件也会被删除。本地项目根目录、附加目录和附加文件只会移除关联，不会删除原始文件。删除后无法恢复。
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

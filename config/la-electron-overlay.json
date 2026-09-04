@@ -24,7 +24,7 @@
     {
       "path": ["scripts", "build:resources"],
       "expected": "cp -r resources dist/ 2>/dev/null || true",
-      "value": "bun -e \"import { cpSync } from 'node:fs'; cpSync('resources', 'dist/resources', { recursive: true })\""
+      "value": "bun ../../scripts/verify-product-identity.mjs && bun -e \"import { cpSync } from 'node:fs'; cpSync('resources', 'dist/resources', { recursive: true })\""
     },
     { "path": ["scripts", "pack"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --dir", "value": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && bun run scripts/run-electron-builder.ts --dir" },
     { "path": ["scripts", "dist"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder", "value": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && bun run scripts/run-electron-builder.ts" },

@@ -1,3 +1,4 @@
+import identity from '../../../../config/product-identity.json'
 import * as React from 'react'
 import { useAtom, useStore } from 'jotai'
 import { AppShell } from './components/app-shell/AppShell'
@@ -16,7 +17,7 @@ import { onboardingReplayRequestedAtom } from './atoms/onboarding'
 import { settingsOpenAtom, settingsTabAtom } from './atoms/settings-tab'
 import { hasCompletedCurrentOnboarding } from '../types'
 import hopperSeasideWhiteHouse from './assets/onboarding/hopper-seaside-white-house.png'
-import promaMarkWhite from './assets/onboarding/proma-mark-white.svg'
+import linguistMarkWhite from './assets/onboarding/linguist-mark-white.svg'
 
 export default function App(): React.ReactElement {
   // 应用级初始化状态。
@@ -121,25 +122,25 @@ function StartupLoadingScreen(): React.ReactElement {
       <div className="relative flex w-full max-w-sm flex-col items-center px-8 text-center">
         <div className="flex items-center gap-3">
           <img
-            src={promaMarkWhite}
+            src={linguistMarkWhite}
             alt=""
             className="h-9 w-9 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
           />
-          <span className="text-xl font-light tracking-wide">Proma</span>
+          <span className="text-xl font-light tracking-wide">{identity.productName}</span>
         </div>
 
         <p className="mt-6 max-w-xs text-balance text-lg font-light leading-relaxed tracking-[0.04em] text-white/95">
-          让协作自然发生，让想法流动成形
+          {identity.taglineZh}
         </p>
 
         <div className="mt-7 h-px w-24 overflow-hidden bg-white/35">
           <div className="h-full w-2/5 animate-pulse bg-white/90" />
         </div>
-        <p className="mt-4 text-sm font-medium tracking-[0.08em] text-white/95">正在启动 Proma</p>
+        <p className="mt-4 text-sm font-medium tracking-[0.08em] text-white/95">正在启动 {identity.productName}</p>
       </div>
 
       <p className="absolute bottom-8 px-6 text-center text-[11px] uppercase tracking-[0.3em] text-white/65">
-        Local-first AI Agent
+        {identity.taglineEn}
       </p>
     </main>
   )
