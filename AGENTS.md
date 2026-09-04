@@ -101,11 +101,11 @@ bun run smoke:vertical
 ```
 
 - Agent / Chat 必须保持原生 Proma 行为和界面。
-- Linguist 使用一等 `LocalizationProjectTab` 和 project-scoped Jotai 状态。
-- Workbench 内嵌同一个 `AgentView` 的 rail presentation；Full `AgentView` 保留 Proma Files / Changes 面板，rail 只承载对话。
+- Linguist 以项目绑定的原生 Agent Tab 为入口，右侧现有工作区承载 CAT，领域状态使用 project-scoped Jotai。
+- 展开 CAT 时复用同一个 `AgentView` 的 rail presentation；Full `AgentView` 保留 Proma Files / Changes 面板，rail 只承载对话。
 - Agent 会话树排除带 `linguistProjectId` 的会话；Linguist 侧栏只展示项目绑定会话，并复用 Proma 的侧栏、搜索、项目头、会话行和树行为。
 - Linguist 会话必须直接继承固定 Proma 基线的 Workspace、Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration，不新增第二套宿主能力。
-- 点击项目进入 Workbench，点击会话进入 Full `AgentView`。项目归档、缺失或暂不可用时对话仍可继续，CAT mutation 由项目 Store 状态 fail closed。
+- 点击项目确保绑定会话并打开原生 Agent Tab 与右侧 CAT；点击项目会话复用同一入口。项目归档、缺失或暂不可用时对话仍可继续，CAT mutation 由项目 Store 状态 fail closed。
 - 禁止新增 `LinguistAgentView`、`LinguistComposer`、`LinguistThinkingBlock`、`LinguistToolCard`、`LinguistApprovalCard`、第二套 Agent Session Store 或第二套 Session tree 行为。
 - CAT 编辑、Proposal、QA、TM/TB、Context、Preview 和设置位于 `renderer/features/linguist/**`。
 
@@ -128,7 +128,7 @@ bun run smoke:vertical
 → renderer Jotai/action
 ```
 
-Renderer 不得向 CAT 服务提交任意文件系统路径或任意 `projectId` authority。项目身份来自当前 Session binding 或主进程验证后的 Project Tab context。
+Renderer 不得向 CAT 服务提交任意文件系统路径或任意 `projectId` authority。项目身份来自当前 Session binding 或主进程验证后的 Project context。
 
 项目重命名、活跃项目排序与 Linguist 会话复制都由主进程重新校验。排序请求必须是当前活跃项目 ID 的完整无重复排列；复制目标必须是其他活跃且健康的项目。Renderer 不得提交目标 binding、原生分叉 ID 或路径，复制失败必须回滚半成品且不得改变源会话。
 
