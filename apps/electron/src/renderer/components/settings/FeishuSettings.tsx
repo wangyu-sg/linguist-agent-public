@@ -333,10 +333,10 @@ const FEISHU_CLI_PROMPT = `请帮我配置飞书 CLI 开发环境，按以下步
 1. 安装飞书 CLI 到全局
 npm install -g @larksuite/cli
 
-2. 将 SKILL 安装到当前项目的 Proma 工作区 Skills 目录。先下载，再按系统提示给出的 Skills 目录将下载内容移动过去；不要使用全局安装，以免在无关项目预置上下文。
+2. 将 SKILL 安装到当前项目的 Linguist Agent 工作区 Skills 目录。先下载，再按系统提示给出的 Skills 目录将下载内容移动过去；不要使用全局安装，以免在无关项目预置上下文。
 npx skills add https://github.com/larksuite/cli -y
 
-3. 初始化 CLI 配置（创建一个全新的飞书 CLI 应用，与 Proma 飞书 Bot 互不影响）
+3. 初始化 CLI 配置（创建一个全新的飞书 CLI 应用，与 Linguist Agent 飞书 Bot 互不影响）
 lark-cli config init --new
 
 4. 一键申请全部领域的所有权限（文档/表格/日历/任务/邮件/通讯录/会议/审批/OKR/Wiki/多维表格/幻灯片/考勤/项目板等都包含在内）

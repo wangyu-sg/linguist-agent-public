@@ -23,4 +23,5 @@ for (const [file, text] of [
   ['apps/electron/src/main/tray.ts', "label: '打开 Linguist Agent'"],
   ['apps/electron/src/renderer/components/settings/OnboardingSettings.tsx', 'Agent、Chat 与 Linguist'],
 ]) assert.ok(read(file).includes(text), `${file} 产品文案漂移`)
+assert.ok(!read('apps/electron/src/renderer/components/settings/FeishuSettings.tsx').includes('Proma 工作区'))
 console.log('产品身份合同通过')
