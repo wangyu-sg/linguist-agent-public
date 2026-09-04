@@ -51,6 +51,7 @@
 - `bun run electron:build` 通过；Electron main、CAT workers、Agent runtime、preload、renderer、CLI、Agent Island native、EventKit native 与 resources 均完成真实构建。
 - 上一轮 `smoke:pack` 与 packaged artifact 完整性通过。
 - 上一轮完整 `smoke:vertical` 运行通过：Pi Agent `15/15`、Chat `19/19`、Linguist `21/21`；报告 `runStatus=passed`、`coverageStatus=partial`，唯一自动化缺口为原生 Open/Save 对话框人工证据。
+- `v0.17.69` GitHub Release 三平台构建与发布成功；macOS 更新元数据同时包含 arm64 / x64 ZIP 及校验值。本机安装版未替换，尚未记录安装后版本或哈希。
 - `git diff --check`、baseline/deviations/touchpoints JSON 解析通过；公开身份与镜像清洁测试通过。
 
 ## 仍未取得的证据

@@ -31,7 +31,7 @@
 3. CJS bundle 对 `import.meta` 有既有 esbuild warning；packaged smoke 只能证明当前宿主路径。
 4. serious/critical Axe 自动回归不能替代真实屏幕阅读器和完整键盘操作。
 5. Full Integrity Scrub、Backup/Restore 有自动故障注入；真实磁盘耗尽、只读卷、断电和硬件损坏不是本轮 real-machine 证据。
-6. 最近一次已完成的 packaged smoke 通过；待发布的 `0.17.69` 仍须以 GitHub Release 构建结果确认，自动证据不能替代真实 Provider、Native Open/Save、IME 或辅助技术人工证据。
+6. `0.17.69` GitHub Release 三平台构建已通过，但尚未替换并核对本机安装版；这些自动证据不能替代真实 Provider、Native Open/Save、IME 或辅助技术人工证据。
 
 ## D. 公众发行（不在当前范围）
 
