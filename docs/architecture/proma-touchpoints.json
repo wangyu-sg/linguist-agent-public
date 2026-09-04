@@ -45,7 +45,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
+      "reason": "LA 独立 Release 仓库、平台矩阵、署名扫描及受管打包资源；不适用于 Proma 发布流程。"
     },
     {
       "file": "CHANGELOG.md",
@@ -61,7 +61,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
+      "reason": "LA 内嵌 CLI 的独立版本记录，内部 proma 命令名保持不变。"
     },
     {
       "file": "apps/cli/src/index.ts",
@@ -69,7 +69,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/cli/src/paths.ts",
@@ -77,7 +77,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 相对 Proma 的公开产品合同。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/default-skills/agent-collaboration/SKILL.md",
@@ -85,7 +85,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "默认 Skill 使用 Linguist Agent 的真实数据根与桌面产品上下文。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/default-skills/session-cleaner/SKILL.md",
@@ -93,7 +93,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "默认 Skill 使用 Linguist Agent 的真实数据根与桌面产品上下文。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/default-skills/session-cleaner/references/cli-usage.md",
@@ -101,7 +101,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "默认 Skill 使用 Linguist Agent 的真实数据根与桌面产品上下文。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/default-skills/tool-builder/SKILL.md",
@@ -109,7 +109,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "默认 Skill 使用 Linguist Agent 的真实数据根与桌面产品上下文。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/electron-builder.yml",
@@ -117,7 +117,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/resources/macos-install-help.txt",
@@ -125,15 +125,16 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "include the one-time quarantine removal command in the self-use macOS DMG while retaining automatic updates through a fixed signing identity."
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/native/eventkit/macos-eventkit-addon.mm",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "product-build",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+      "reason": "EventKit 在 env 有效时释放 TSFN，env teardown 仅断开原生订阅。固定上游 bbf577a8 尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-macos-eventkit-addon"
     },
     {
       "file": "apps/electron/package.json",
@@ -150,7 +151,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/icon-source.png",
@@ -158,7 +159,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/icon.icns",
@@ -166,7 +167,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/icon.ico",
@@ -174,7 +175,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/icon.png",
@@ -182,7 +183,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/icon.svg",
@@ -190,7 +191,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/proma-logos/icon.svg",
@@ -198,7 +199,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/proma-logos/iconTemplate.png",
@@ -206,7 +207,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/proma-logos/iconTemplate@2x.png",
@@ -214,7 +215,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/resources/proma-logos/iconTemplate@3x.png",
@@ -222,7 +223,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/scripts/generate-la-icon.mjs",
@@ -230,39 +231,43 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "LA 应用图标、托盘素材或安装资源的产品身份，不是 Proma 品牌资源。"
     },
     {
       "file": "apps/electron/scripts/build-cli.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "product-build",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "remove stale Claude SDK packaging language after adopting the upstream Pi-only runtime."
+      "reason": "CLI 编译使用正在执行脚本的 Bun，避免 PATH 解析失败。固定上游 bbf577a8 尚无等价实现；本地来源 ae9599c7。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-build-cli"
     },
     {
       "file": "apps/electron/scripts/build-eventkit-native.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "product-build",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "从 Electron workspace 自身的 node_modules 解析原生构建依赖，兼容 Bun 的隔离式 workspace 安装。"
+      "reason": "原生头文件与 Electron 从 workspace 安装位置解析。固定上游 bbf577a8 尚无等价实现；本地来源 fa224430。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-build-eventkit-native"
     },
     {
       "file": "apps/electron/scripts/run-electron-builder.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "product-build",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "remove Bun's lifecycle node shim before launching Electron Builder and keep the packaging gate on the real Node runtime."
+      "reason": "Electron Builder 使用真实 Node，剔除 Bun lifecycle shim。固定上游 bbf577a8 尚无等价实现；本地来源 e91a1518。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-run-electron-builder"
     },
     {
       "file": "apps/electron/src/main/agent-status-hover-window.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "enforce the product-wide BrowserWindow sandbox and web-security policy on the upstream Windows status surface."
+      "reason": "状态窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 707d6478。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-agent-status-hover-window"
     },
     {
       "file": "apps/electron/src/main/index.ts",
@@ -270,7 +275,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "LA 独立 Electron 数据根、项目服务启动与退出清理及窗口产品身份。"
     },
     {
       "file": "apps/electron/src/main/ipc.ts",
@@ -311,18 +316,20 @@
     {
       "file": "apps/electron/src/main/lib/agent-island-navigation-policy.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "Agent Island 顶层导航仅接受内部受信源。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-agent-island-navigation-policy"
     },
     {
       "file": "apps/electron/src/main/lib/agent-model-selection.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma Collaboration 从全部已启用渠道选择目标 Agent 模型。"
+      "reason": "协作模型列表覆盖全部已启用渠道。固定上游 bbf577a8 尚无等价实现；本地来源 291e7e6b。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-agent-model-selection"
     },
     {
       "file": "apps/electron/src/main/lib/agent-orchestrator.ts",
@@ -339,7 +346,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
+      "reason": "Linguist 项目 mutation 广播与受管会话附件写入。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-context-prompt.ts",
@@ -347,7 +354,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
+      "reason": "引用历史只允许同一 Linguist 项目，普通 Agent 排除项目私有历史。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-file-storage.ts",
@@ -355,7 +362,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
+      "reason": "按可信 Agent workspace 或 Linguist 项目执行范围保存附件。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-manager.ts",
@@ -363,7 +370,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
+      "reason": "Linguist 项目双绑定、冻结岗位和项目会话元数据持久化。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-session-usage.ts",
@@ -371,7 +378,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "在 Proma 原生会话生命周期中持久化并校验可选 Linguist project binding。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-workspace-manager.ts",
@@ -379,7 +386,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/attachment-service.ts",
@@ -387,7 +394,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/automation-manager.ts",
@@ -395,7 +402,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/bridge-attachment-utils.ts",
@@ -403,7 +410,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/browser-controller.ts",
@@ -412,7 +419,7 @@
       "owner": "main-upstream",
       "mergePolicy": "keep-la",
       "hook": "upstream-browser-tab-lifecycle",
-      "reason": "提前同步 Proma f2ddb623 的浏览器 Tab 生命周期修复，关闭来源页面时不再级联销毁同级 popup Tab。"
+      "reason": "提前同步 Proma f2ddb623191bee246a1c74c2f2d0e4ed64877c4c 的 popup Tab 生命周期修复；固定 bbf577a8 仍保留 opener 字段。保留本地差异，固定稳定基线包含相同生命周期且关闭/切换真实 Tab 验证通过后退役。"
     },
     {
       "file": "apps/electron/src/main/lib/channel-manager.ts",
@@ -420,7 +427,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
+      "reason": "用户显式 Provider-only 导入旧 Proma 配置，提交前验证且加密。"
     },
     {
       "file": "apps/electron/src/main/lib/chat-tools-watcher.ts",
@@ -428,7 +435,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/chat-tools/nano-banana-tool.ts",
@@ -436,7 +443,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/chat-tools/web-search-tool.ts",
@@ -444,7 +451,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/config-paths.ts",
@@ -452,7 +459,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
+      "reason": "LA 正式/开发数据根与可信会话路径 authority；旧 Proma 仅供显式 Provider 导入。"
     },
     {
       "file": "apps/electron/src/main/lib/conversation-manager.ts",
@@ -460,15 +467,16 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/detached-preview-window.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "独立预览窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-detached-preview-window"
     },
     {
       "file": "apps/electron/src/main/lib/dingtalk-config.ts",
@@ -476,7 +484,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/electron-user-data-path.ts",
@@ -484,7 +492,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "LA Chromium userData 与 Proma 隔离，精确 --user-data-dir 优先。"
     },
     {
       "file": "apps/electron/src/main/lib/feishu-bridge.ts",
@@ -492,7 +500,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/feishu-config.ts",
@@ -500,7 +508,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/github-release-service.ts",
@@ -508,23 +516,25 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "从 LA 独立公开仓库读取 Release 与版本信息。"
     },
     {
       "file": "apps/electron/src/main/lib/mac-eventkit-native-addon.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+      "reason": "向 JS 暴露 EventKit disposeChanges 生命周期。固定上游 bbf577a8 尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-mac-eventkit-native-addon"
     },
     {
       "file": "apps/electron/src/main/lib/mcp-oauth-service.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "复用共享 SaveMcpApiKeyInput 合同，避免主进程重复声明同一输入结构。"
+      "reason": "MCP 凭据复用共享输入类型且强制校验 stdio 命令绑定。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-mcp-oauth-service"
     },
     {
       "file": "apps/electron/src/main/lib/planning-manager.ts",
@@ -532,23 +542,25 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "LA 通用 Planning 使用原子 JSON 持久化，不能直接换为上游 planning.db。"
     },
     {
       "file": "apps/electron/src/main/lib/planning-native-sync-coordinator.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+      "reason": "停止 Planning coordinator 时释放原生订阅。固定上游 bbf577a8 尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-planning-native-sync-coordinator"
     },
     {
       "file": "apps/electron/src/main/lib/planning-native-sync-service.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "keep the packaged macOS EventKit lifecycle compatible with the locked node-addon-api and release native subscriptions before N-API environment teardown."
+      "reason": "Planning 服务把释放请求交给 EventKit addon。固定上游 bbf577a8 尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-planning-native-sync-service"
     },
     {
       "file": "apps/electron/src/main/lib/proxy-settings-service.ts",
@@ -556,15 +568,16 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/quick-task-window.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "快捷任务窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-quick-task-window"
     },
     {
       "file": "apps/electron/src/main/lib/settings-service.ts",
@@ -572,7 +585,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/system-prompt-manager.ts",
@@ -580,15 +593,16 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/test/electron-mock.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "主进程测试共享 Electron mock 导出及加密故障注入。固定上游 bbf577a8 尚无等价实现；本地来源 c9a802cf。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-electron-mock"
     },
     {
       "file": "apps/electron/src/main/lib/title-generation.ts",
@@ -596,15 +610,16 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "Linguist 隐藏任务上下文参与标题生成，阻止本机路径进入项目标题。"
     },
     {
       "file": "apps/electron/src/main/lib/todo-agent-start.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "Todo CAS 失败清理新会话，清理失败保留恢复信息。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-todo-agent-start"
     },
     {
       "file": "apps/electron/src/main/lib/updater/auto-updater.ts",
@@ -612,7 +627,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "install downloaded Linguist Agent releases on normal app quit while preserving the existing immediate and idle install paths."
+      "reason": "LA Release 仅提供完整包，禁止请求不存在的 blockmap。"
     },
     {
       "file": "apps/electron/src/main/lib/user-profile-service.ts",
@@ -620,31 +635,34 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/vault-service.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Vault 文件夹创建直接使用 mkdirSync 的原子失败语义。"
+      "reason": "Vault 建目录使用 mkdir 原子失败语义。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-vault-service"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-output-result.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "语音提交以 Renderer 消费确认决定结果。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-voice-dictation-output-result"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-window.ts",
       "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "语音窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 34921b0c。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-voice-dictation-window"
     },
     {
       "file": "apps/electron/src/main/lib/wechat-config.ts",
@@ -652,15 +670,16 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/lib/workspace-memory-window.ts",
       "ticket": "LA-SYNC-005",
-      "kind": "product-fork",
-      "owner": "main-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "every BrowserWindow explicitly keeps context isolation, sandboxing, disabled Node integration, and web security."
+      "reason": "Memory 窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 a8b1ef35。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-workspace-memory-window"
     },
     {
       "file": "apps/electron/src/main/lib/workspace-watcher.ts",
@@ -668,7 +687,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/main/menu.ts",
@@ -676,7 +695,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "macOS 应用菜单和 About 显示 Linguist Agent 产品名。"
     },
     {
       "file": "apps/electron/src/main/tray.ts",
@@ -684,7 +703,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 主进程服务接受 typed Linguist 会话上下文并保持原生运行路径。"
+      "reason": "托盘 tooltip 显示 Linguist Agent 产品名。"
     },
     {
       "file": "apps/electron/src/preload/index.ts",
@@ -701,7 +720,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "Linguist 项目列表作为主视图。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/agent-atoms.ts",
@@ -709,7 +728,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "Linguist turn context、项目事件与外部会话导航注入共享 Jotai。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/app-mode.ts",
@@ -717,7 +736,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "Agent、Chat、Linguist 三种并列模式类型。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/cat-result-navigation-atoms.ts",
@@ -725,7 +744,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "CAT 工具结果通过项目与片段 ID 导航到 Workbench。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/markdown-font-size.ts",
@@ -733,7 +752,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/preview-atoms.ts",
@@ -741,7 +760,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "PreviewFile carries an opaque linguist target so the native Preview Tab can mount Linguist batch/context-doc previews without Proma knowing CAT details."
+      "reason": "原生 Preview Tab 携带不透明 Linguist 预览目标。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/project-agent-session-atoms.ts",
@@ -749,7 +768,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "项目维度持久化当前原生 Agent 会话 ID。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/settings-tab.ts",
@@ -757,7 +776,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "工具页设置排除独立 Linguist Project Tab。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/tab-atoms.ts",
@@ -765,7 +784,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "Tab 生命周期同步 Linguist 项目会话与最近使用状态。"
     },
     {
       "file": "apps/electron/src/renderer/atoms/theme.ts",
@@ -773,7 +792,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在共享 Jotai 状态中表示 Linguist 第三模式、项目会话或 CAT 导航状态。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/AgentSkillsView.tsx",
@@ -781,15 +800,16 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "AgentSkillsView.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/IntegrationCatalog.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "目录卡片仅按现有 priority 与 placement 排序。"
+      "reason": "集成目录删除无效状态排序输入。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-integrationcatalog"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/BuiltinMcpDetailSheet.tsx",
@@ -797,7 +817,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "BuiltinMcpDetailSheet.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/SkillCard.tsx",
@@ -805,23 +825,25 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "SkillCard.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/integration-catalog.ts",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "目录排序只保留实际生效的 priority 与 placement。"
+      "reason": "目录排序只消费 priority 与 placement，凭据地址取实际配置。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-integration-catalog"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/useAgentSkillsData.ts",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "MCP 开关以主进程验证结果为准。"
+      "reason": "MCP 开关采用主进程验证结果而非本地乐观覆盖。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-useagentskillsdata"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentHeader.tsx",
@@ -829,7 +851,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "原生 Agent Header 显示项目岗位和项目会话控制。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentHistorySelectionLayer.tsx",
@@ -837,7 +859,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "expose selection actions only when the current Agent host capability manifest permits them."
+      "reason": "rail 根据宿主 capabilities 决定历史选择动作。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentMessageQueue.tsx",
@@ -845,7 +867,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "AgentMessageQueue.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentMessages.tsx",
@@ -853,7 +875,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "唯一 Agent 消息流接受 rail 能力并呈现项目结果。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentView.tsx",
@@ -870,7 +892,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "AskUserBanner.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/CollapsedWorkspacePopover.tsx",
@@ -878,7 +900,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让折叠侧栏的项目弹层保持原生交互，并使用合法的 Popover anchor 语义。"
+      "reason": "Agent 与 Linguist 共享折叠项目预览弹层及焦点操作。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/ContentBlock.tsx",
@@ -886,7 +908,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "CAT details 序列化进入唯一工具结果渲染器。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/ContextUsageBadge.tsx",
@@ -894,7 +916,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "ContextUsageBadge.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/ExitPlanModeBanner.tsx",
@@ -902,7 +924,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "规划确认在 rail 中可折叠展示并复用 LA 可读字号。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/PermissionBanner.tsx",
@@ -910,7 +932,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "权限卡片用文字明确范围和风险，并采用 LA 状态色。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/SDKMessageRenderer.tsx",
@@ -918,7 +940,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "SDKMessageRenderer.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/TaskProgressCard.tsx",
@@ -926,7 +948,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "TaskProgressCard.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/TaskProgressOverlay.tsx",
@@ -934,7 +956,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "rail 压缩进度支持显式重试并采用 LA 状态色。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/agent-attachment-gate.ts",
@@ -950,7 +972,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "expose the concrete permission scope and risk without relying on color alone."
+      "reason": "权限范围文字与 PermissionBanner 共同构成 LA 可访问产品合同。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-phrase.ts",
@@ -958,7 +980,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "CAT 工具显示本地化操作短语。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/bash-result.tsx",
@@ -966,7 +988,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "bash-result.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/cat-result.tsx",
@@ -974,7 +996,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "CAT Proposal/QA 结果渲染及可信 ID 导航。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx",
@@ -982,7 +1004,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "Linguist 冻结范围的阶段结果与子会话运行状态分别呈现。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/index.tsx",
@@ -990,7 +1012,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "唯一工具渲染入口分发 CAT 与 Linguist 委派结果。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/task-get-result.tsx",
@@ -998,7 +1020,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "task-get-result.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-result-renderers/task-list-result.tsx",
@@ -1006,7 +1028,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "task-list-result.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/tool-utils.ts",
@@ -1014,15 +1036,16 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "在唯一 Agent UI 中呈现 Linguist 项目会话、CAT 工具结果或 rail presentation。"
+      "reason": "CAT 工具名称映射到本地化显示文案。"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/conversation.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "滚动到底部按钮提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-conversation"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/message.tsx",
@@ -1030,7 +1053,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "message.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/rich-text-input.tsx",
@@ -1038,7 +1061,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "为 Agent 与 Linguist 共用的消息编辑器提供明确的 textbox 无障碍语义。"
+      "reason": "LA 消息框无障碍语义与文件/会话引用插入共用现有编辑器。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/SidePanel.tsx",
@@ -1064,7 +1087,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "复用 Proma 右侧工作区布局，并支持用户显式展开工作区时保留窄 Agent 主区。"
+      "reason": "Workbench 扩展右侧区域使用剩余主窗口空间。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/RightSidePanel.tsx",
@@ -1072,7 +1095,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生右侧工作区按显式 Agent Session 承载 Agent 与 Linguist 全屏会话。"
+      "reason": "右侧面板由宿主传入会话，供 Agent 与 Linguist full presentation 共用。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx",
@@ -1080,7 +1103,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "reason": "Linguist 项目侧栏复用原生树、搜索及项目快捷操作。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/ModeSwitcher.tsx",
@@ -1088,7 +1111,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "reason": "第三模式入口与 registry 导航决策。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/SearchDialog.tsx",
@@ -1096,7 +1119,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "reason": "统一搜索隔离并打开 Linguist 项目会话。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/titlebar-safe-area.ts",
@@ -1104,7 +1127,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "single macOS titlebar safe-area derivation shared by the sidebar expanded/collapsed branches so traffic lights never overlap content; replaces per-branch magic numbers."
+      "reason": "LA 侧栏在 macOS 原生标题栏下保留安全区域。"
     },
     {
       "file": "apps/electron/src/renderer/components/browser/BrowserPanel.tsx",
@@ -1112,7 +1135,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "右侧工作区加号菜单保持 overlay，打开菜单时不移动或压缩原生浏览器页面。"
+      "reason": "LA 右侧统一菜单布局与浏览器原生 surface 组合；URL 限 HTTP(S)。"
     },
     {
       "file": "apps/electron/src/renderer/components/browser/browser-external-url.ts",
@@ -1120,23 +1143,25 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "删除单调用方地址解析模块，由 BrowserPanel 单次解析并复用结果。"
+      "reason": "URL 解析已并入 BrowserPanel；需连同右侧宿主布局审查，暂不单独恢复 helper。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ChatHeader.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Chat 标题编辑按钮提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 fc8e8f3d。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-chatheader"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ChatInput.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Chat 思考按钮暴露名称与 pressed 状态。固定上游 bbf577a8 尚无等价实现；本地来源 cf2832f3。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-chatinput"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ChatMessageItem.tsx",
@@ -1144,31 +1169,34 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "ChatMessageItem.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ContextSettingsPopover.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "上下文设置按钮提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-contextsettingspopover"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ModelSelector.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "模型搜索输入提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 cf2832f3。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-modelselector"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/PromptEditorSidebar.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "提示词编辑输入关联 label。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-prompteditorsidebar"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/SystemPromptSelector.tsx",
@@ -1176,15 +1204,16 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "LA 提示词菜单用 Radix 键盘操作并统一主题状态色。"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ToolSelectorPopover.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "工具弹层提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-toolselectorpopover"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/PreviewPanel.tsx",
@@ -1192,7 +1221,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "the native split preview panel mounts LinguistPreviewBody for linguist targets and hides the default-app open action that requires a host path."
+      "reason": "原生 PreviewPanel 接受 Linguist 受管预览目标并共用错误边界。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/preview-opener.ts",
@@ -1200,7 +1229,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让显式 mode: tab 真正打开 Proma 主预览标签；默认调用继续使用右侧预览工作区。"
+      "reason": "项目源文件沿原生 Preview Tab 打开。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/DiffPanelTabBar.tsx",
@@ -1208,7 +1237,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "为 Proma 原生右侧工作区提供显式展开与还原操作。"
+      "reason": "右侧顶栏承载 Linguist full/rail 组合后的共享工作区 tabs。"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/PreviewTabContent.tsx",
@@ -1216,7 +1245,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "the native Preview Tab branches previewFile.linguist targets to LinguistPreviewBody instead of the DiffTabContent file-reading chain."
+      "reason": "Preview Tab 装载不透明 Linguist 批次或 Context 文档。"
     },
     {
       "file": "apps/electron/src/renderer/components/file-browser/FileDropZone.tsx",
@@ -1229,26 +1258,29 @@
     {
       "file": "apps/electron/src/renderer/components/file-browser/FileBrowser.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "在唯一调用处直接判断文件加载代次和空态。"
+      "reason": "FileBrowser 用 roots 与单一加载结果隔离异步目录状态。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-filebrowser"
     },
     {
       "file": "apps/electron/src/renderer/components/file-browser/file-browser-roots.ts",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除已无调用方的单根兼容恢复函数。"
+      "reason": "文件树 roots 逻辑并入唯一调用方。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-file-browser-roots"
     },
     {
       "file": "apps/electron/src/renderer/components/file-browser/file-browser-load-state.ts",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除只包装两处简单布尔判断的一次性模块。"
+      "reason": "文件树加载状态并入唯一调用方。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-file-browser-load-state"
     },
     {
       "file": "apps/electron/src/renderer/components/planning/PlanningReminderRail.tsx",
@@ -1256,7 +1288,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Planning 提醒导航复用三模式会话打开入口。"
     },
     {
       "file": "apps/electron/src/renderer/components/quick-task/QuickTaskApp.tsx",
@@ -1264,7 +1296,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "快捷任务使用 Linguist Agent 产品名称。"
     },
     {
       "file": "apps/electron/src/renderer/components/selection/SelectionActionPopover.tsx",
@@ -1272,7 +1304,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "omit selection actions that the current Agent host cannot fulfill."
+      "reason": "rail 宿主可禁用将历史引用加入 Agent 的动作。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-preview/SessionMiniMapPopover.tsx",
@@ -1280,7 +1312,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "SessionMiniMapPopover.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/AgentSessionActionsMenu.tsx",
@@ -1288,7 +1320,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Linguist 会话复用原生会话菜单并支持项目间复制。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/AgentSessionTreeItem.tsx",
@@ -1296,7 +1328,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "项目会话复用原生树行与岗位信息。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/ProjectSessionTreeGroupHeader.tsx",
@@ -1304,7 +1336,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Linguist 项目头复用原生分组折叠排序。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/agent-session-tree.ts",
@@ -1312,7 +1344,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "普通与项目会话共享树构建规则。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/session-actions.ts",
@@ -1320,7 +1352,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "统一删除入口区分 Chat 与 Agent 项目会话。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/AboutSettings.tsx",
@@ -1328,7 +1360,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "About 显示 LA Release 与 Proma 基线归属。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/AppearanceSettings.tsx",
@@ -1336,7 +1368,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "外观设置仅提供 LA 已打包图标。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/BotHubSettings.tsx",
@@ -1344,7 +1376,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "远程 Bot 连接状态复用 LA success、warning 与 destructive 主题 token。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ChannelForm.tsx",
@@ -1352,7 +1384,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "ChannelForm.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ChannelSettings.tsx",
@@ -1360,7 +1392,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "模型设置提供显式旧 Proma Provider-only 导入。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/DingTalkSettings.tsx",
@@ -1368,7 +1400,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "DingTalkSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/FeishuSettings.tsx",
@@ -1376,7 +1408,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "FeishuSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/GeneralSettings.tsx",
@@ -1384,7 +1416,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "LA Git/PR 产品署名与当前 Agent Island 文案。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/MigrationSettings.tsx",
@@ -1392,7 +1424,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "LA 数据迁移界面与独立数据根。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/PromptSettings.tsx",
@@ -1400,7 +1432,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "PromptSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ProxySettings.tsx",
@@ -1408,7 +1440,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "ProxySettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/SettingsPanel.tsx",
@@ -1416,7 +1448,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "设置根据 Linguist 模式组合领域设置入口。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/StorageSettings.tsx",
@@ -1424,7 +1456,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "keep the shared storage result state on the Linguist Agent semantic color tokens."
+      "reason": "StorageSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/ToolSettings.tsx",
@@ -1432,7 +1464,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "ToolSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/VoiceInputSettings.tsx",
@@ -1440,7 +1472,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "VoiceInputSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/WeChatSettings.tsx",
@@ -1448,7 +1480,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让共享设置界面使用 Linguist Agent 的产品身份与独立配置根。"
+      "reason": "WeChatSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/shortcuts/GlobalShortcuts.tsx",
@@ -1456,7 +1488,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "快捷键复用三模式宿主导航并传递冻结项目上下文。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/MainArea.tsx",
@@ -1464,7 +1496,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "reason": "主内容区根据 registry 解析三模式活动视图。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabBar.tsx",
@@ -1472,7 +1504,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "reason": "TabBar 同步项目岗位与宿主活动 Tab 副作用。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabBarItem.tsx",
@@ -1480,15 +1512,16 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "reason": "Project Tab 图标、显示名称与岗位标识。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/tab-bar-action-layout.ts",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "为顶栏固定操作按钮预留实际宽度，避免遮住可滚动会话 Tab。"
+      "reason": "Tab 滚动区域给操作按钮留出不可滚动边距。固定上游 bbf577a8 尚无等价实现；本地来源 8a026fa5。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-tab-bar-action-layout"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabContent.tsx",
@@ -1496,7 +1529,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "reason": "一等 LocalizationProjectTab 装载 Workbench，Agent Tab 保持原生。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabSwitcher.tsx",
@@ -1504,7 +1537,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "把 Linguist 作为第三模式接入 Proma 原生 shell、tab 与侧栏导航。"
+      "reason": "快速 Tab 切换器识别 Linguist Project Tab。"
     },
     {
       "file": "apps/electron/src/renderer/components/ui/confirm-dialog.tsx",
@@ -1512,15 +1545,16 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Linguist 导出确认对话框可在未满足确认条件时禁用提交。"
     },
     {
       "file": "apps/electron/src/renderer/components/ui/sheet.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Sheet 关闭按钮退出标题栏拖拽区。固定上游 bbf577a8 尚无等价实现；本地来源 fc8e8f3d。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-sheet"
     },
     {
       "file": "apps/electron/src/renderer/components/ui/spinner.tsx",
@@ -1528,7 +1562,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "spinner.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/voice-dictation/VoiceDictationApp.tsx",
@@ -1536,7 +1570,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Linguist Agent 语音窗口产品名称与权限说明。"
     },
     {
       "file": "apps/electron/src/renderer/components/welcome/WelcomeEmptyState.tsx",
@@ -1544,7 +1578,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "欢迎空态展示 Linguist 工作入口。"
     },
     {
       "file": "apps/electron/src/renderer/components/welcome/WelcomeView.tsx",
@@ -1552,7 +1586,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "欢迎页恢复上次 LocalizationProject。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useOpenSession.ts",
@@ -1560,7 +1594,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "普通与项目会话共用宿主打开入口。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useProjectActions.ts",
@@ -1568,7 +1602,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "项目快捷切换时打开该项目最近的普通主会话，避免项目高亮与中央会话脱节。"
+      "reason": "普通项目快捷切换选择目标工作区主会话；需在 D 验证权威刷新与竞态。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useGlobalAgentListeners.ts",
@@ -1576,7 +1610,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让绑定 Linguist 项目的 Agent 通知打开其原生 Agent Tab，并保持 Linguist 模式归属。"
+      "reason": "全局 Agent 事件沿宿主入口打开 Linguist 会话并更新共享文件状态。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useFocusAgentSessionInput.ts",
@@ -1584,7 +1618,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "复用统一 Tab 导航副作用，让项目绑定会话保持 Linguist 模式并继续使用原生 AgentView。"
+      "reason": "聚焦输入前同步宿主活动 Tab。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useSwitchAppMode.ts",
@@ -1592,7 +1626,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "三模式切换统一导航决策。"
     },
     {
       "file": "apps/electron/src/renderer/hooks/useSyncActiveTabSideEffects.ts",
@@ -1600,7 +1634,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "活动 Tab 副作用同步 Linguist 项目绑定。"
     },
     {
       "file": "apps/electron/src/renderer/index.html",
@@ -1608,7 +1642,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "窗口 HTML title 为 Linguist Agent。"
     },
     {
       "file": "apps/electron/src/renderer/lib/agent-message-queue.ts",
@@ -1616,7 +1650,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "消息队列保存不可变 Linguist turn context。"
     },
     {
       "file": "apps/electron/src/renderer/lib/external-agent-session-opener.ts",
@@ -1624,7 +1658,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "外部打开会话依据项目绑定选择宿主入口。"
     },
     {
       "file": "apps/electron/src/renderer/lib/agent-session-list.ts",
@@ -1632,7 +1666,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让协作子会话的项目归属和项目徽标跟随父会话，避免同一会话树跨 Agent 与 Linguist 重复显示。"
+      "reason": "共享会话列表解析 Linguist 归属并隔离普通主会话。"
     },
     {
       "file": "apps/electron/src/renderer/lib/linguist-navigation.ts",
@@ -1640,7 +1674,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Linguist Project Tab 与原生 Agent 会话导航组合。"
     },
     {
       "file": "apps/electron/src/renderer/lib/mode-contributions.ts",
@@ -1648,15 +1682,16 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "从宿主 registry 重新导出三模式贡献合同。"
     },
     {
       "file": "apps/electron/src/renderer/lib/window-titlebar-layout.ts",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "在 macOS 折叠侧栏时按原生红绿灯安全右缘计算顶栏横向留白，避免首个 Tab 进入系统按钮区域。"
+      "reason": "macOS 标题栏避让原生红绿灯。固定上游 bbf577a8 尚无等价实现；本地来源 aaf24752。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-window-titlebar-layout"
     },
     {
       "file": "apps/electron/src/renderer/main.tsx",
@@ -1664,7 +1699,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "Renderer 启动组合 Linguist context capture、listeners 与导航。"
     },
     {
       "file": "apps/electron/src/renderer/styles/globals.css",
@@ -1672,7 +1707,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "让 Proma 原生 Renderer 消费 Linguist 第三模式状态，同时保持共享 UI 实现。"
+      "reason": "LA 全局字号、可访问状态色与动效 token。"
     },
     {
       "file": "apps/electron/src/types/settings.ts",
@@ -1680,7 +1715,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "设置只持久化 Linguist 编辑位置和项目会话 ID。"
     },
     {
       "file": "apps/electron/tailwind.config.js",
@@ -1688,7 +1723,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "Tailwind 映射 LA 主题状态色与层级 token。"
     },
     {
       "file": "bun.lock",
@@ -1704,7 +1739,7 @@
       "kind": "product-fork",
       "owner": "product-build",
       "mergePolicy": "keep-la",
-      "reason": "保留 Linguist Agent 的产品身份、受管资源与打包运行合同。"
+      "reason": "Bun 固定版本、CAT 工作区测试与边界门禁。"
     },
     {
       "file": "packages/shared/src/types/agent-profile.ts",
@@ -1712,7 +1747,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "共享 Agent profile 表达 Linguist 项目岗位。"
     },
     {
       "file": "packages/shared/src/types/agent.ts",
@@ -1720,7 +1755,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "共享 Agent 类型定义双绑定、四岗位与冻结范围。"
     },
     {
       "file": "packages/shared/src/types/channel.ts",
@@ -1728,7 +1763,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "共享渠道类型公开 LA Provider-only 导入合同。"
     },
     {
       "file": "packages/shared/src/types/chat-tool.ts",
@@ -1736,7 +1771,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "让共享配置服务从 Linguist Agent 的独立数据根读取受管配置。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "packages/shared/src/types/chat.ts",
@@ -1744,7 +1779,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "packages/shared/src/types/dingtalk.ts",
@@ -1752,7 +1787,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "packages/shared/src/types/index.ts",
@@ -1760,7 +1795,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "共享类型入口导出 Linguist 项目与 turn context。"
     },
     {
       "file": "packages/shared/src/types/linguist-turn-context.ts",
@@ -1768,7 +1803,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "每 Turn 不可变 Linguist UI 上下文边界校验。"
     },
     {
       "file": "packages/shared/src/types/linguist.ts",
@@ -1776,7 +1811,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "Linguist 项目 IPC、DTO 与错误码合同。"
     },
     {
       "file": "packages/shared/src/types/proxy.ts",
@@ -1784,7 +1819,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "packages/shared/src/types/system-prompt.ts",
@@ -1792,7 +1827,7 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "packages/shared/src/types/wechat.ts",
@@ -1800,135 +1835,151 @@
       "kind": "product-fork",
       "owner": "shared-contract",
       "mergePolicy": "keep-la",
-      "reason": "通过 @proma/shared 暴露 Linguist 第三模式所需的 typed IPC、session 与 project contracts。"
+      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
       "file": "packages/ui/src/code-block/CodeBlock.tsx",
       "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "product-build",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "让共享 UI 组件使用 Linguist Agent 的语义样式与交互合同。"
+      "reason": "代码块支持键盘聚焦和横向滚动。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-codeblock"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/file-path-chip-utils.ts",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除文件路径 chip 的第二套解析模块，保留组件内单一路径解析。"
+      "reason": "路径识别 helper 并入路径 chip。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-file-path-chip-utils"
     },
     {
       "file": "apps/electron/src/renderer/components/ai-elements/file-path-chip.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "保留 v0.19.23 完整路径提示与定位行为，并复用组件现有状态。"
+      "reason": "路径 chip 复用现有解析与导航状态。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-file-path-chip"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/DetachedPreviewApp.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Preview 与 Vault 复用同一内容错误边界。"
+      "reason": "独立预览复用共享内容错误边界。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-detachedpreviewapp"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/DiffChangesList.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "文件删除清理复用现有批量状态查询，不保留第二套 helper。"
+      "reason": "文件删除清理复用已有批量查询。固定上游 bbf577a8 尚无等价实现；本地来源 6025d2e2。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-diffchangeslist"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/DiffTabContent.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "保留 v0.19.23 预览修复，并将滚动恢复收敛为单一生命周期。"
+      "reason": "Markdown 滚动恢复使用单一代际生命周期。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-difftabcontent"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/PreviewContentErrorBoundary.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除 Preview 专用错误边界，改用共享内容错误边界。"
+      "reason": "预览专用错误边界由共享边界替代。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-previewcontenterrorboundary"
     },
     {
       "file": "apps/electron/src/renderer/components/diff/markdown-scroll-restore.ts",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除独立滚动恢复状态机，改用预览组件的单一生命周期。"
+      "reason": "滚动恢复 helper 并入组件。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-markdown-scroll-restore"
     },
     {
       "file": "apps/electron/src/renderer/components/ui/content-error-boundary.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "为 Preview 与 Vault 提供同一个最小内容错误边界。"
+      "reason": "Preview 与 Vault 共用内容错误边界。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-content-error-boundary"
     },
     {
       "file": "apps/electron/src/renderer/components/vault/VaultContentErrorBoundary.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除 Vault 专用错误边界，改用共享内容错误边界。"
+      "reason": "Vault 专用错误边界由共享边界替代。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-vaultcontenterrorboundary"
     },
     {
       "file": "apps/electron/src/renderer/components/vault/VaultView.tsx",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "保留 v0.19.23 可折叠侧栏，并复用现有 Vault 状态与布局。"
+      "reason": "Vault 编辑与侧栏复用既有状态及共享错误边界。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-vaultview"
     },
     {
       "file": "apps/electron/src/renderer/components/vault/vault-editor-lifecycle.ts",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除未被消费的 Vault 编辑器生命周期 helper。"
+      "reason": "删除未消费的 Vault 生命周期 helper。固定上游 bbf577a8 尚无等价实现；本地来源 7f977074。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-vault-editor-lifecycle"
     },
     {
       "file": "apps/electron/src/renderer/components/vault/vault-sidebar-layout.ts",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除单一调用方的 Vault 侧栏布局 helper。"
+      "reason": "侧栏布局 helper 并入唯一调用方。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-vault-sidebar-layout"
     },
     {
       "file": "apps/electron/src/renderer/lib/session-file-changes.ts",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "文件变更清理复用现有批量并发查询，不新增第二套 helper。"
+      "reason": "删除未消费的单文件清理 helper。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-session-file-changes"
     },
     {
       "file": "apps/electron/src/renderer/lib/session-reference-drag.ts",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "保留会话拖拽引用行为，并复用原生 DataTransfer 与现有 mention 插入路径。"
+      "reason": "会话引用拖拽使用原生 DataTransfer。固定上游 bbf577a8 尚无等价实现；本地来源 7bbb743f。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-session-reference-drag"
     },
     {
       "file": "apps/electron/src/renderer/lib/stop-generation-target.ts",
       "ticket": "LA-SYNC-020",
-      "kind": "product-fork",
-      "owner": "upstream-integration",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "停止快捷键沿用单一活动会话解析路径。"
+      "reason": "停止快捷键只接受当前活动子会话 ID。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "hook": "upstream-stop-generation-target"
     }
   ]
 }

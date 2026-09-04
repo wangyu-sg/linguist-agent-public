@@ -2,6 +2,13 @@
 
 更新时间：2026-09-04
 
+## 0.17.70 分阶段执行：A2
+
+- 审计 A1 后全部 223 个 product-fork：172 项保留、51 项转 temporary-deviation，本轮无生产代码删除。精确理由、来源提交与退役条件回写唯一 JSON 账本。品牌/数据根注释、主题 token、项目双绑定与 CAT 合同继续保留。
+- 固定 bbf577a8 没有 EventKit before-quit 释放、显式窗口安全配置及强制 MCP stdio 凭据绑定的等价实现；调用链为 app before-quit → coordinator → service → addon disposeChanges，MCP validator/orchestrator 均传真实 entry。不能因通用性而删除。
+- `docs/architecture/upstream-native-security.patch` 是基于固定上游的独立候选补丁（无 LA 产品身份），尚未发送 PR；其他通用改动按来源提交保留，待上游接收与真实合同复验。未向外部发送任何消息。
+- 浏览器 f2ddb623 修复仍不在固定基线，保持 temporary-deviation。混合产品主题/宿主导航的文件不做拆分重构；具体差异与保留合同逐项登记。
+
 ## 0.17.70 分阶段执行：A1
 
 - 本轮只完成方案 §3.2：`pi-mcp-tools.ts` 与固定 `bbf577a8` 基线完整一致。完整文件差异仅为有界失败缓存及其写入 helper；调用方仍由 Agent orchestrator 构建工具、app quit 释放连接，没有 LA 语义需要保留。

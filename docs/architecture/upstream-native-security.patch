@@ -1,0 +1,275 @@
+diff --git a/apps/electron/native/eventkit/macos-eventkit-addon.mm b/apps/electron/native/eventkit/macos-eventkit-addon.mm
+index 0aa7d78a..6ece9eac 100644
+--- a/apps/electron/native/eventkit/macos-eventkit-addon.mm
++++ b/apps/electron/native/eventkit/macos-eventkit-addon.mm
+@@ -147,9 +147,23 @@ static void execute(NSString *command, NSString *entity, NSDictionary *payload,
+   }
+ }
+ 
+-static void cleanupChanges() {
++static void removeChangeObserver() {
+   if (eventStoreChangeObserver) { [[NSNotificationCenter defaultCenter] removeObserver:eventStoreChangeObserver]; eventStoreChangeObserver = nil; }
++}
++
++// env cleanup 时 Node 已可能开始销毁 TSFN；此处只断开原生通知并丢弃 C++ wrapper，
++// 正常退出由 JS before-quit 先调用 disposeChanges，在 env 有效时显式 Release。
++static void cleanupChanges(void *) {
++  removeChangeObserver();
++  eventStoreChangeListener.reset();
++  store = nil;
++}
++
++static Napi::Value disposeChanges(const Napi::CallbackInfo &info) {
++  removeChangeObserver();
+   if (eventStoreChangeListener) { eventStoreChangeListener->Release(); eventStoreChangeListener.reset(); }
++  store = nil;
++  return info.Env().Undefined();
+ }
+ 
+ static Napi::Value subscribeChanges(const Napi::CallbackInfo &info) {
+@@ -171,5 +185,5 @@ static void cleanupChanges() {
+   NSError *error = nil; NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[payloadText dataUsingEncoding:NSUTF8StringEncoding] options:0 error:&error]; if (!payload || ![payload isKindOfClass:[NSDictionary class]]) payload = @{};
+   auto *ctx = new CommandContext(env); NSLog(@"[PromaEventKit] scheduling %@ for %@ on main queue", name, entity); dispatch_async(dispatch_get_main_queue(), ^{ execute(name, entity, payload, ctx); }); return ctx->deferred->Promise();
+ }
+-Napi::Object Init(Napi::Env env, Napi::Object exports) { NSLog(@"[PromaEventKit] N-API addon loaded"); env.AddCleanupHook(cleanupChanges); exports.Set("command", Napi::Function::New(env, command)); exports.Set("subscribeChanges", Napi::Function::New(env, subscribeChanges)); return exports; }
++Napi::Object Init(Napi::Env env, Napi::Object exports) { NSLog(@"[PromaEventKit] N-API addon loaded"); if (napi_add_env_cleanup_hook(env, cleanupChanges, nullptr) != napi_ok) throw Napi::Error::New(env, "failed to register EventKit cleanup hook"); exports.Set("command", Napi::Function::New(env, command)); exports.Set("subscribeChanges", Napi::Function::New(env, subscribeChanges)); exports.Set("disposeChanges", Napi::Function::New(env, disposeChanges)); return exports; }
+ NODE_API_MODULE(proma_eventkit, Init)
+diff --git a/apps/electron/scripts/build-cli.ts b/apps/electron/scripts/build-cli.ts
+index a0f72a67..b1a73913 100644
+--- a/apps/electron/scripts/build-cli.ts
++++ b/apps/electron/scripts/build-cli.ts
+@@ -9,8 +9,7 @@
+  * - 输出到 apps/electron/resources/bin/，由 electron-builder 经 extraResources
+  *   打进 process.resourcesPath/bin/，运行时由主进程注入 PROMA_CLI 暴露给 skill。
+  * - 本机架构编译：CI 每个 runner 即目标平台（mac arm64/x64、win x64、linux），
+- *   各自产出宿主架构二进制，与 @anthropic-ai SDK native binary 的分发策略一致，
+- *   无需交叉编译。
++ *   各自产出宿主架构二进制，无需交叉编译。
+  *
+  * 在 electron app 的 build 链中调用（见 package.json build:cli）。
+  */
+@@ -77,7 +76,7 @@ if (isWindows) {
+ const started = Date.now()
+ try {
+   const result = spawnSync(
+-    'bun',
++    process.execPath,
+     compileArgs,
+     { cwd: join(repoRoot, 'apps/cli'), stdio: 'inherit' },
+   )
+diff --git a/apps/electron/scripts/build-eventkit-native.ts b/apps/electron/scripts/build-eventkit-native.ts
+index f2d6a0d7..1fb9dd5d 100644
+--- a/apps/electron/scripts/build-eventkit-native.ts
++++ b/apps/electron/scripts/build-eventkit-native.ts
+@@ -11,11 +11,11 @@ const scriptDir = dirname(fileURLToPath(import.meta.url))
+ const appDir = resolve(scriptDir, '..')
+ const source = resolve(appDir, 'native/eventkit/macos-eventkit-addon.mm')
+ const output = resolve(appDir, 'resources/eventkit/macos-eventkit.node')
+-const napiHeaders = resolve(appDir, '../../node_modules/node-addon-api')
++const napiHeaders = resolve(appDir, 'node_modules/node-addon-api')
+ // Electron uses stable Node-API; use the locally installed Node headers only for declarations.
+ const nodeVersion = execFileSync('node', ['-p', 'process.versions.node'], { encoding: 'utf8' }).trim()
+ const nodeApiHeaders = resolve(homedir(), 'Library/Caches/node-gyp', nodeVersion, 'include/node')
+-const devElectronApp = resolve(appDir, '../../node_modules/electron/dist/Electron.app')
++const devElectronApp = resolve(appDir, 'node_modules/electron/dist/Electron.app')
+ const devElectronInfo = resolve(devElectronApp, 'Contents/Info.plist')
+ const entitlements = resolve(appDir, 'resources/entitlements.mac.plist')
+ 
+diff --git a/apps/electron/src/main/agent-status-hover-window.ts b/apps/electron/src/main/agent-status-hover-window.ts
+index 4c4958f4..4c57d461 100644
+--- a/apps/electron/src/main/agent-status-hover-window.ts
++++ b/apps/electron/src/main/agent-status-hover-window.ts
+@@ -54,6 +54,8 @@ export class AgentStatusHoverWindow {
+         preload: join(__dirname, 'preload.cjs'),
+         contextIsolation: true,
+         nodeIntegration: false,
++        sandbox: true,
++        webSecurity: true,
+       },
+     })
+ 
+diff --git a/apps/electron/src/main/lib/detached-preview-window.ts b/apps/electron/src/main/lib/detached-preview-window.ts
+index 7a9aa801..a642d0f9 100644
+--- a/apps/electron/src/main/lib/detached-preview-window.ts
++++ b/apps/electron/src/main/lib/detached-preview-window.ts
+@@ -110,6 +110,8 @@ export function openDetachedPreviewWindow(
+       preload: join(__dirname, 'preload.cjs'),
+       contextIsolation: true,
+       nodeIntegration: false,
++      sandbox: true,
++      webSecurity: true,
+     },
+   })
+ 
+diff --git a/apps/electron/src/main/lib/mac-eventkit-native-addon.ts b/apps/electron/src/main/lib/mac-eventkit-native-addon.ts
+index 1e776c1a..e8e659d7 100644
+--- a/apps/electron/src/main/lib/mac-eventkit-native-addon.ts
++++ b/apps/electron/src/main/lib/mac-eventkit-native-addon.ts
+@@ -4,7 +4,7 @@ import { app } from 'electron'
+ 
+ export type EventKitEntity = 'calendar' | 'reminder'
+ type EventKitCommand = 'authorizationStatus' | 'requestAccess' | 'listWritableTargets' | 'listTargets' | 'listItems' | 'upsert' | 'remove'
+-type Addon = { command: (command: EventKitCommand, entity: EventKitEntity, payloadJson: string) => Promise<string>; subscribeChanges?: (listener: () => void) => void }
++type Addon = { command: (command: EventKitCommand, entity: EventKitEntity, payloadJson: string) => Promise<string>; subscribeChanges?: (listener: () => void) => void; disposeChanges?: () => void }
+ 
+ // 主进程由 esbuild 输出为 CJS，使用 __filename 保持开发和打包路径一致。
+ const require = createRequire(__filename)
+@@ -31,6 +31,11 @@ export function subscribeMacEventKitNativeChanges(listener: () => void): boolean
+   return true
+ }
+ 
++/** before-quit 时在 N-API env 仍有效的阶段释放 EventKit 通知与 TSFN。 */
++export function disposeMacEventKitNativeChanges(): void {
++  addon?.disposeChanges?.()
++}
++
+ export async function callMacEventKitNativeAddon<T>(command: EventKitCommand, entity: EventKitEntity, payload: object = {}): Promise<T> {
+   const result = await nativeAddon().command(command, entity, JSON.stringify(payload))
+   return JSON.parse(result) as T
+diff --git a/apps/electron/src/main/lib/mcp-oauth-service.ts b/apps/electron/src/main/lib/mcp-oauth-service.ts
+index 8338abef..7cf9b2b3 100644
+--- a/apps/electron/src/main/lib/mcp-oauth-service.ts
++++ b/apps/electron/src/main/lib/mcp-oauth-service.ts
+@@ -9,7 +9,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+ import { createServer, type Server } from 'node:http'
+ import { existsSync, readFileSync } from 'node:fs'
+ import { safeStorage, shell } from 'electron'
+-import type { McpOAuthProvider, McpOAuthStartResult, StartMcpOAuthInput } from '@proma/shared'
++import type { McpOAuthProvider, McpOAuthStartResult, SaveMcpApiKeyInput, StartMcpOAuthInput } from '@proma/shared'
+ import { getMcpOAuthCredentialsPath } from './config-paths'
+ import { writeJsonFileAtomic } from './safe-file'
+ import { runWithOAuthProxyScope } from './oauth-proxy-scope'
+@@ -423,15 +423,7 @@ export async function startMcpOAuth(input: StartMcpOAuthInput): Promise<McpOAuth
+   }
+ }
+ 
+-export function saveMcpApiKey(input: {
+-  workspaceSlug: string
+-  serverName: string
+-  serverUrl: string
+-  headerName: string
+-  value: string
+-  envName?: string
+-  stdioBinding?: { command: string; args: string[] }
+-}): void {
++export function saveMcpApiKey(input: SaveMcpApiKeyInput): void {
+   if (!input.value.trim()) throw new Error('请输入 API Key')
+   if (!input.headerName.trim() && !input.envName?.trim()) throw new Error('凭据请求头或环境变量名不能为空')
+   const stdioBinding = input.stdioBinding && input.stdioBinding.command.trim()
+@@ -454,13 +446,13 @@ export function saveMcpApiKey(input: {
+ export function getMcpApiKeyEnvironment(
+   workspaceSlug: string,
+   serverName: string,
+-  entry?: { command?: string; args?: string[] },
++  entry: { command?: string; args?: string[] },
+ ): Record<string, string> | undefined {
+   const credential = readCredential(workspaceSlug, serverName)
+   if (!credential || !isMcpApiKeyCredential(credential) || !credential.envName) return undefined
+   // 保存时绑定了启动命令的凭据，只在当前配置与绑定完全一致时才注入，
+   // 防止同名 server 的 command/args 被改（含直接编辑 mcp.json）后密钥流入任意命令。
+-  if (credential.stdioBinding && entry) {
++  if (credential.stdioBinding) {
+     const currentArgs = Array.isArray(entry.args) ? entry.args.filter((arg): arg is string => typeof arg === 'string') : []
+     const binding = credential.stdioBinding
+     if (
+diff --git a/apps/electron/src/main/lib/planning-native-sync-coordinator.ts b/apps/electron/src/main/lib/planning-native-sync-coordinator.ts
+index 52751306..e7596322 100644
+--- a/apps/electron/src/main/lib/planning-native-sync-coordinator.ts
++++ b/apps/electron/src/main/lib/planning-native-sync-coordinator.ts
+@@ -1,6 +1,6 @@
+ import { applyManagedCalendarProfileItems, applyPlanningNativeConnectionItems, getCalendarEvent, getTodo, completePlanningNativeOutbox, completePlanningSyncCleanup, completePlanningSyncOutbox, failPlanningNativeOutbox, failPlanningSyncCleanup, failPlanningSyncOutbox, hideMissingManagedCalendarProfileItems, hideMissingPlanningNativeConnectionItems, listDuePlanningNativeOutbox, listDuePlanningSyncCleanup, listDuePlanningSyncOutbox, listEnabledManagedCalendarProfiles, listPlanningNativeBindingIdentifiers, listPlanningNativeConnections, listPlanningSyncBindingIdentifiers, planningNativeCalendarHash, type PlanningNativeOutboxItem, type PlanningSyncCleanupItem, type PlanningSyncOutboxItem } from './planning-manager'
+ import { broadcastPlanningChanged, onPlanningChanged } from './planning-events'
+-import { getPlanningNativeSyncStatus, listPlanningNativeConnectionItems, listPlanningNativeConnectionItemsByIdentifier, removePlanningNativeSyncItem, subscribePlanningNativeSyncChanges, upsertPlanningNativeSyncItem } from './planning-native-sync-service'
++import { disposePlanningNativeSyncChanges, getPlanningNativeSyncStatus, listPlanningNativeConnectionItems, listPlanningNativeConnectionItemsByIdentifier, removePlanningNativeSyncItem, subscribePlanningNativeSyncChanges, upsertPlanningNativeSyncItem } from './planning-native-sync-service'
+ 
+ const POLL_INTERVAL_MS = 30_000
+ let timer: ReturnType<typeof setInterval> | null = null
+@@ -209,4 +209,5 @@ export function stopPlanningNativeSyncCoordinator(): void {
+   disposePlanningListener = null
+   if (nativeChangeDebounce) clearTimeout(nativeChangeDebounce)
+   nativeChangeDebounce = null
++  disposePlanningNativeSyncChanges()
+ }
+diff --git a/apps/electron/src/main/lib/planning-native-sync-service.ts b/apps/electron/src/main/lib/planning-native-sync-service.ts
+index ad166587..0ebc52ee 100644
+--- a/apps/electron/src/main/lib/planning-native-sync-service.ts
++++ b/apps/electron/src/main/lib/planning-native-sync-service.ts
+@@ -4,7 +4,7 @@ import type {
+   PlanningNativeSyncStatus,
+   PlanningNativeSyncTarget,
+ } from '@proma/shared'
+-import { callMacEventKitNativeAddon, subscribeMacEventKitNativeChanges } from './mac-eventkit-native-addon'
++import { callMacEventKitNativeAddon, disposeMacEventKitNativeChanges, subscribeMacEventKitNativeChanges } from './mac-eventkit-native-addon'
+ 
+ type NativePermissionResponse = {
+   entity: PlanningNativeSyncEntity
+@@ -155,6 +155,10 @@ export function subscribePlanningNativeSyncChanges(listener: () => void): boolea
+   try { return subscribeMacEventKitNativeChanges(listener) } catch { return false }
+ }
+ 
++export function disposePlanningNativeSyncChanges(): void {
++  disposeMacEventKitNativeChanges()
++}
++
+ export async function upsertPlanningNativeSyncItem(entity: PlanningNativeSyncEntity, item: PlanningNativeSyncItem): Promise<PlanningNativeSyncIdentifiers> {
+   if (!eventKitSupported()) throw new Error('macOS 14 或更高版本才支持系统日历与提醒事项同步')
+   return callMacEventKitNativeAddon<PlanningNativeSyncIdentifiers>('upsert', entity, item)
+diff --git a/apps/electron/src/main/lib/quick-task-window.ts b/apps/electron/src/main/lib/quick-task-window.ts
+index 516bdfed..db1ef3cf 100644
+--- a/apps/electron/src/main/lib/quick-task-window.ts
++++ b/apps/electron/src/main/lib/quick-task-window.ts
+@@ -42,6 +42,8 @@ export function createQuickTaskWindow(): void {
+       preload: join(__dirname, 'preload.cjs'),
+       contextIsolation: true,
+       nodeIntegration: false,
++      sandbox: true,
++      webSecurity: true,
+     },
+   })
+ 
+diff --git a/apps/electron/src/main/lib/vault-service.ts b/apps/electron/src/main/lib/vault-service.ts
+index 796a049d..ea840133 100644
+--- a/apps/electron/src/main/lib/vault-service.ts
++++ b/apps/electron/src/main/lib/vault-service.ts
+@@ -447,14 +447,7 @@ export function createVaultFileSystem(rootPath: string): VaultFileSystem {
+       throw new Error('目标 Vault 父文件夹不存在')
+     }
+     const revalidated = getSafeVaultFolderTarget(root, target.relativePath)
+-    try {
+-      mkdirSync(revalidated.absolutePath)
+-    } catch (error) {
+-      if (error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST') {
+-        throw new Error('同名文件或文件夹已存在')
+-      }
+-      throw error
+-    }
++    mkdirSync(revalidated.absolutePath)
+   }
+ 
+   const renameFile = (input: VaultRenameInput): VaultReadResult => {
+diff --git a/apps/electron/src/main/lib/voice-dictation-window.ts b/apps/electron/src/main/lib/voice-dictation-window.ts
+index 7e0d1b85..ebfbb1ba 100644
+--- a/apps/electron/src/main/lib/voice-dictation-window.ts
++++ b/apps/electron/src/main/lib/voice-dictation-window.ts
+@@ -175,6 +175,8 @@ function getOrCreateVoiceIndicatorWindow(): BrowserWindow {
+       preload: join(__dirname, 'preload.cjs'),
+       contextIsolation: true,
+       nodeIntegration: false,
++      sandbox: true,
++      webSecurity: true,
+       partition: 'voice-dictation-indicator',
+     },
+   }
+diff --git a/apps/electron/src/main/lib/workspace-memory-window.ts b/apps/electron/src/main/lib/workspace-memory-window.ts
+index bbf8c08a..7441d188 100644
+--- a/apps/electron/src/main/lib/workspace-memory-window.ts
++++ b/apps/electron/src/main/lib/workspace-memory-window.ts
+@@ -69,6 +69,8 @@ function createWorkspaceMemoryWindow(workspaceSlug: string, relativePath?: strin
+       preload: join(__dirname, 'preload.cjs'),
+       contextIsolation: true,
+       nodeIntegration: false,
++      sandbox: true,
++      webSecurity: true,
+     },
+     ...titleBarOptions,
+   })
