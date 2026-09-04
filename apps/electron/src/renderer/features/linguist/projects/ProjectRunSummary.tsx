@@ -107,7 +107,7 @@ export function describeRunUndoRefusal(reason: string): string {
     return '建议已不存在，未撤销'
   }
   if (reason === 'file effects are recorded but not structurally reversible') {
-    return '文件变更仅记录；请使用 Proma File Rewind'
+    return '文件变更仅记录；请使用 File Rewind'
   }
   if (reason.startsWith('unsupported structured change')) {
     return '该 CAT 记录不支持结构化撤销'
@@ -271,7 +271,7 @@ export function ProjectRunSummary({
       </div>
 
       <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
-        仅撤销仍未变化的待查看建议；通用文件请使用 Proma File Rewind，外部 MCP / 程序副作用仅记录。
+        仅撤销仍未变化的待查看建议；通用文件请使用 File Rewind，外部 MCP / 程序副作用仅记录。
       </p>
 
       {state.error !== undefined && (

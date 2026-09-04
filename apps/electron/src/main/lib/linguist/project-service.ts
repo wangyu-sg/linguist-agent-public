@@ -262,7 +262,7 @@ export class LinguistProjectService {
   async createProject(input: CreateLinguistProjectInput): Promise<LinguistProject> {
     const promaWorkspaceId = input.promaWorkspaceId ?? await this.workspaceCreator(input.name)
     if (input.promaWorkspaceId !== undefined && !this.workspaceResolver(promaWorkspaceId)) {
-      throw new Error(`Proma 工作区不存在: ${promaWorkspaceId}`)
+      throw new Error(`Agent 工作区不存在: ${promaWorkspaceId}`)
     }
     const project = this.call(() =>
       this.store.createProject({

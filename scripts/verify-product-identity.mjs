@@ -25,4 +25,11 @@ for (const [file, text] of [
 ]) assert.ok(read(file).includes(text), `${file} 产品文案漂移`)
 assert.ok(!read('apps/electron/src/renderer/components/settings/FeishuSettings.tsx').includes('Proma 工作区'))
 assert.ok(!read('apps/electron/src/renderer/main.tsx').includes('alt="Proma"'))
+assert.ok(read('apps/electron/src/renderer/main.tsx').includes("import linguistIcon from '../../resources/icon.png'"))
+for (const [file, oldText] of [
+  ['apps/electron/src/renderer/lib/shortcut-defaults.ts', 'Proma 界面'],
+  ['apps/electron/src/renderer/components/planning/PlanningNativeSyncControl.tsx', '在 Proma 修改'],
+  ['apps/electron/src/renderer/components/agent-skills/integration-catalog.ts', '当前 Proma 环境'],
+  ['apps/electron/src/main/lib/text-insertion-service.ts', '允许 Proma 使用辅助功能'],
+]) assert.ok(!read(file).includes(oldText), `${file} 存在旧产品说明`)
 console.log('产品身份合同通过')

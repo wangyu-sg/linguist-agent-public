@@ -38,7 +38,7 @@ export function bindingNoticeCopy(
     case 'archived':
       return {
         title: '项目已归档',
-        body: `会话仍可使用全部 Proma 能力；CAT 写入会按项目只读规则拒绝。`,
+        body: `会话仍可使用全部 Agent 能力；CAT 写入会按项目只读规则拒绝。`,
         tone: 'amber',
       }
     case 'missing':

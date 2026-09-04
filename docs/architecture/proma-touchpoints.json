@@ -2328,6 +2328,22 @@
       "owner": "product-identity",
       "mergePolicy": "keep-la",
       "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+    },
+    {
+      "file": "apps/electron/src/renderer/lib/shortcut-defaults.ts",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的快捷键说明或辅助功能权限错误必须指向 Linguist Agent 产品身份，保留原有行为与配置键。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/text-insertion-service.ts",
+      "ticket": "LA-SYNC-006",
+      "kind": "product-fork",
+      "owner": "product-identity",
+      "mergePolicy": "keep-la",
+      "reason": "用户可见的快捷键说明或辅助功能权限错误必须指向 Linguist Agent 产品身份，保留原有行为与配置键。"
     }
   ]
 }

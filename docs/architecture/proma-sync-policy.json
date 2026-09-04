@@ -53,6 +53,8 @@
         "apps/electron/src/main/lib/linguist/**",
         "apps/electron/src/renderer/host/**",
         "apps/electron/src/renderer/features/linguist/**",
+        "apps/electron/src/renderer/lib/shortcut-defaults.ts",
+        "apps/electron/src/main/lib/text-insertion-service.ts",
         "apps/electron/default-skills/cultural-lqa/**",
         "apps/electron/default-skills/localization-readiness/**",
         "apps/electron/default-skills/release-lqa/**",

@@ -5505,7 +5505,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('migration:open-data-folder', async (): Promise<void> => {
     const dataDir = getConfigDir()
     const error = await shell.openPath(dataDir)
-    if (error) throw new Error(`无法打开 Proma 数据文件夹：${error}`)
+    if (error) throw new Error(`无法打开 Linguist Agent 数据文件夹：${error}`)
   })
 
   // ===== 窗口控制（Windows 自定义标题栏按钮）=====

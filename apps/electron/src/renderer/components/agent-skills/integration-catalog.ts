@@ -183,14 +183,14 @@ MCP URL：${mcpUrl}
 
 const tongdaxinVipPrompt = `请帮我配置和使用「通达信」。
 
-第一步：使用 Proma 内置浏览器打开 https://vip.tdx.com.cn/site/app/pc-mall/main.html#/page_product_mcp；不要打开手动 MCP 编辑弹窗，也不要切换到外部浏览器。
+第一步：使用 Linguist Agent 内置浏览器打开 https://vip.tdx.com.cn/site/app/pc-mall/main.html#/page_product_mcp；不要打开手动 MCP 编辑弹窗，也不要切换到外部浏览器。
 
 用户操作：请引导我在该网站完成注册或登录。登录完成后，基于页面和官方公开文档继续指导我找到可用的正式产品、授权入口或 MCP/Agent 接入方式。
 
 执行要求：
 1. 不要尝试读取、导出或要求我粘贴 Cookie、密码、验证码、token 或其他登录态。
 2. 先核验是否存在通达信官方 MCP、CLI 或 API 契约，以及对应的权限、套餐和账户要求；不要猜测 endpoint 或安装命令。
-3. 能在当前 Proma 环境完成的非敏感步骤直接执行；需要我的确认、付费订阅、实名或额外授权时清楚说明并停下。
+3. 能在当前 Linguist Agent 环境完成的非敏感步骤直接执行；需要我的确认、付费订阅、实名或额外授权时清楚说明并停下。
 4. 不要把敏感信息写入 mcp.json、AGENTS.md、日志或普通项目文件。
 5. 完成后说明已验证的接入状态、可使用能力与后续操作。${MCP_CREDENTIAL_SETUP_INSTRUCTION}${GUIDED_CONNECTION_ACCEPTANCE_INSTRUCTION}`
 
