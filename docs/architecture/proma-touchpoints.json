@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "baseline": "bbf577a8eb768225fdf1ac49ab9ef07a11413b24",
-  "formalMerge": "bbf577a8eb768225fdf1ac49ab9ef07a11413b24",
+  "formalMerge": "98f0ed125c4e619d0496e10279755e69643341f5",
   "recomputedOn": "2026-09-04",
   "comment": "Proma-core touchpoints tracked against v0.19.26; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [

@@ -7,8 +7,8 @@
 |---|---|
 | upstream | `https://github.com/proma-ai/Proma` |
 | tag / commit | `v0.19.26` / `bbf577a8eb768225fdf1ac49ab9ef07a11413b24` |
-| 本地起点 | `7bbb743f43dc81f73ea580732632172144f0b47c` |
-| LA merge commit | `bbf577a8eb768225fdf1ac49ab9ef07a11413b24` |
+| 本地起点 | `7bbb743fb78803cf68fa53bedddc43ea7b7e3f02` |
+| LA merge commit | `98f0ed125c4e619d0496e10279755e69643341f5` |
 | 施工分支 | `main` |
 
 ## 运行时与产品版本

@@ -7,8 +7,8 @@
     "electronAppVersion": "0.19.26"
   },
   "formalMerge": {
-    "commit": "bbf577a8eb768225fdf1ac49ab9ef07a11413b24",
-    "localParent": "7bbb743f43dc81f73ea580732632172144f0b47c",
+    "commit": "98f0ed125c4e619d0496e10279755e69643341f5",
+    "localParent": "7bbb743fb78803cf68fa53bedddc43ea7b7e3f02",
     "upstreamParent": "bbf577a8eb768225fdf1ac49ab9ef07a11413b24",
     "branch": "main",
     "date": "2026-09-04"
