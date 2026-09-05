@@ -5,6 +5,7 @@ import {
   scanTagTokens,
   selectTmAgentEvidence,
   type Segment,
+  type StageEvidenceReceipt,
   type SegmentTermPolicyEvaluation,
   type TmAgentEvidence,
   type TmMatchDiagnostics,
@@ -72,44 +73,23 @@ function translationContextCursorKey(
   ]))
 }
 
-/**
- * LA-CONTEXT-001：v2 cursor 绑定请求形状 + 项目事件快照 + 偏移，
- * 格式 `ctx2-<requestHash>-<eventSeq>-<offset>`。
- */
-function translationContextCursor(key: string, eventSequence: number, offset: number): string {
-  return `ctx2-${key}-${eventSequence}-${offset}`
-}
-
-const CONTEXT_CURSOR_V2_PATTERN = /^ctx2-([0-9a-f]{16})-(\d+)-(\d+)$/
-
-/**
- * 解析 v2 cursor。旧格式或其他请求的 cursor 一律 INVALID_ARGUMENT；
- * 事件序列已前进（分页期间发生了产生 project event 的 mutation）抛 CONTEXT_DRIFT。
- */
+/** v3 绑定尚未提供的真实上下文；已有有效 v2 游标继续按其原快照校验。 */
 function translationContextCursorOffset(
   cursor: string | undefined,
   key: string,
   total: number,
   latestEventSequence: number,
-): { offset: number; eventSequence: number } {
-  if (cursor === undefined) return { offset: 0, eventSequence: latestEventSequence }
-  const match = CONTEXT_CURSOR_V2_PATTERN.exec(cursor)
-  if (match === null || match[1] !== key) {
-    throw new LinguistCatInvalidArgumentError(
-      'cursor',
-      'does not belong to this translation-context request',
-    )
+): { offset: number; snapshot?: string } {
+  if (cursor === undefined) return { offset: 0 }
+  const match = /^ctx([23])-([0-9a-f]{16})-([0-9a-f]+)-(\d+)$/.exec(cursor)
+  if (match === null || match[2] !== key || Number(match[4]) > total) {
+    throw new LinguistCatInvalidArgumentError('cursor', 'does not belong to this translation-context request')
   }
-  const eventSequence = Number(match[2])
-  if (eventSequence !== latestEventSequence) throw new LinguistCatContextDriftError()
-  const offset = Number(match[3])
-  if (offset > total) {
-    throw new LinguistCatInvalidArgumentError(
-      'cursor',
-      'does not belong to this translation-context request',
-    )
+  if (match[1] === '2') {
+    if (!/^\d+$/.test(match[3]!) || Number(match[3]) !== latestEventSequence) throw new LinguistCatContextDriftError()
+    return { offset: Number(match[4]) }
   }
-  return { offset, eventSequence }
+  return { offset: Number(match[4]), snapshot: match[3] }
 }
 
 /** TM、术语、句式库和 Context 文档的只读检索工具。 */
@@ -122,10 +102,10 @@ export function createReferenceTools(runtime: CatToolRuntime) {
     description:
       'Read translation context for 1-50 segment ids from the bound project in input order. ' +
       'Returns revision snapshots, neighbors, TM/TB matches, project rules, linked Context excerpts, ' +
-      'required Evidence pending fetches, and host-signed Stage Evidence coverage. ' +
-      'This tool does not mutate linguistic content; the host may append Evidence Receipts for content actually presented. ' +
+      'required Evidence pending fetches, and submitted Stage Evidence coverage. ' +
+      'This tool prepares evidence; only a confirmed Provider submission contributes to coverage. ' +
       'Results may be truncated by maxBytes and continued with a cursor that ' +
-      'binds the project snapshot — after a project mutation the next page fails with CONTEXT_DRIFT.',
+      'binds the remaining requested context — relevant content changes produce CONTEXT_DRIFT.',
     promptSnippet: 'Read bounded batch translation context from the bound CAT project',
     promptGuidelines: [
       'Use one batch call for related segments instead of repeating TM/TB searches per segment.',
@@ -170,15 +150,15 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         tmLimit,
         termLimit,
       )
-      const { offset: cursorOffset, eventSequence } = translationContextCursorOffset(
+      const { offset: cursorOffset, snapshot } = translationContextCursorOffset(
         params.cursor,
         cursorKey,
         params.segmentIds.length,
         db.runs.latestEventSequence,
       )
-      // 规则快照只注入第一页（offset=0），条数有界；后续页靠 cursor 内事件序列判漂移。
+      const allRules = db.styleGuideRules.list({ limit: db.styleGuideRules.count() })
       const projectRules: CatProjectRuleItem[] = cursorOffset === 0
-        ? db.styleGuideRules.list({ limit: PROJECT_RULES_LIMIT, offset: 0 }).map((rule) => ({
+        ? allRules.slice(0, PROJECT_RULES_LIMIT).map((rule) => ({
           ruleId: rule.id,
           ...(rule.groupKey !== undefined ? { groupKey: rule.groupKey } : {}),
           ruleText: rule.ruleText,
@@ -197,11 +177,15 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       const linkedContextBySegment = new Map<string, CatLinkedContextEvidence[]>()
       const pendingEvidenceBySegment = new Map<string, CatRequiredEvidencePending[]>()
       const contextDocs = db.contextDocs.list({ limit: db.contextDocs.count() })
-      const contextEvidence = contextDocs.map((doc) => ({
-        doc,
-        anchors: new Map(db.contextDocs.listAnchors(doc.id).map((anchor) => [anchor.id, anchor])),
-        links: db.contextDocs.listEvidenceLinks(doc.id),
-      }))
+      const requestedIds = new Set(remainingSegments.map(segment => segment.id as string))
+      const requestedAssets = new Set(remainingSegments.map(segment => segment.assetId as string))
+      const contextEvidence = contextDocs.flatMap(doc => {
+        const links = db.contextDocs.listEvidenceLinks(doc.id).filter(link => link.relation.kind === 'segment'
+          ? requestedIds.has(link.relation.segmentId) : requestedAssets.has(link.relation.assetId))
+        if (links.length === 0) return []
+        const anchors = new Map(db.contextDocs.listAnchors(doc.id).map(anchor => [anchor.id, anchor]))
+        return [{ doc, anchors, links, version: fnv1a64(JSON.stringify([doc.sha256, doc.textExtract, [...anchors.values()]])) }]
+      })
       for (const segment of remainingSegments) {
         const linkedContext: CatLinkedContextEvidence[] = []
         const pending: CatRequiredEvidencePending[] = []
@@ -221,7 +205,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           for (const [anchorId, requiredness] of grouped) {
             const anchor = anchorId === '' ? undefined : anchors.get(anchorId)
             const text = anchor?.text ?? (anchor === undefined ? doc.textExtract : undefined)
-            if (text !== undefined && text.length <= INLINE_CONTEXT_TEXT_MAX_CHARS) {
+            if (doc.kind !== 'image' && anchor?.mediaContextDocId === undefined && text !== undefined && text.length <= INLINE_CONTEXT_TEXT_MAX_CHARS) {
               linkedContext.push({
                 docId: doc.id,
                 filename: doc.originalFilename,
@@ -370,6 +354,16 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           evidence,
         })
       }
+      const snapshotFor = (items: readonly SegmentTranslationContext[]): string => {
+        const ids = new Set(items.map(item => item.segmentId))
+        const assets = new Set(items.map(item => item.assetId))
+        const documents = contextEvidence.flatMap(({ doc, version, links }) => {
+          const relevant = links.filter(link => link.relation.kind === 'segment' ? ids.has(link.relation.segmentId) : assets.has(link.relation.assetId))
+          return relevant.length === 0 ? [] : [{ docId: doc.id, version, links: relevant }]
+        })
+        return fnv1a64(JSON.stringify({ contexts: items, rules: allRules, documents }))
+      }
+      if (snapshot !== undefined && snapshot !== snapshotFor(contexts)) throw new LinguistCatContextDriftError()
       const measured = (value: CatGetTranslationContextResult): number => {
         const details = deps.resultProjectId === undefined
           ? value
@@ -444,7 +438,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           // LA-CONTEXT-002：预算不足的空页不得推进 cursor，也不给续页建议。
           ...(truncated && items.length > 0
             ? {
-                nextCursor: translationContextCursor(cursorKey, eventSequence, nextIndex),
+                nextCursor: `ctx3-${cursorKey}-${snapshotFor(contexts.slice(items.length))}-${nextIndex}`,
                 suggestedSegmentIds: params.segmentIds.slice(nextIndex),
               }
             : {}),
@@ -514,37 +508,25 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           'budget cannot hold the minimum context envelope',
         )
       }
-      const presented = new Map<string, { ref: { kind: 'asset' | 'context-doc' | 'style-rule'; id: string }; anchorIds: Set<string> }>()
-      const addPresented = (
-        ref: { kind: 'asset' | 'context-doc' | 'style-rule'; id: string },
-        anchorIds: readonly string[],
-      ): void => {
-        const key = `${ref.kind}\u0000${ref.id}`
-        const current = presented.get(key) ?? { ref, anchorIds: new Set<string>() }
-        anchorIds.forEach((anchorId) => current.anchorIds.add(anchorId))
-        presented.set(key, current)
-      }
+      const presented: StageEvidenceReceipt['evidence'] = []
       for (const context of dto.contexts) {
-        addPresented({ kind: 'asset', id: context.assetId }, [])
+        presented.push({ ref: { kind: 'asset', id: context.assetId }, anchorIds: [] })
         for (const evidence of context.linkedContext) {
-          addPresented(
-            { kind: 'context-doc', id: evidence.docId },
-            evidence.anchorId === undefined ? [] : [evidence.anchorId],
-          )
+          const source = contextEvidence.find(item => item.doc.id === evidence.docId)
+          const anchor = evidence.anchorId === undefined ? undefined : source?.anchors.get(evidence.anchorId)
+          const textRange = anchor?.locator.textRange ?? (evidence.anchorId === undefined && source?.doc.textExtract === evidence.text
+            ? { start: 0, end: evidence.text.length } : undefined)
+          presented.push({ ref: { kind: 'context-doc', id: evidence.docId }, anchorIds: evidence.anchorId === undefined ? [] : [evidence.anchorId],
+            ...(textRange === undefined ? {} : { textRange }) })
         }
       }
-      for (const rule of dto.projectRules ?? []) {
-        addPresented({ kind: 'style-rule', id: rule.ruleId }, [])
-      }
+      for (const rule of dto.projectRules ?? []) presented.push({ ref: { kind: 'style-rule', id: rule.ruleId }, anchorIds: [] })
       const result = toolResult(dto, deps.resultProjectId, dto.contexts.map((context) => context.segmentId))
       runtime.prepareEvidencePresentation(
         db,
         toolCallId,
         dto.contexts.map((context) => context.segmentId),
-        [...presented.values()].map((item) => ({
-          ref: item.ref,
-          anchorIds: [...item.anchorIds].sort(),
-        })),
+        presented,
         result.content,
       )
       return result
@@ -692,127 +674,102 @@ export function createReferenceTools(runtime: CatToolRuntime) {
   const readContextDocTool = defineTool({
     name: 'cat_read_context_doc',
     label: 'CAT read context doc',
-    description:
-      'Read the plain-text extract of a context document of the bound CAT project, paged by characters ' +
-      `(default ${CAT_TOOL_PAGE_LIMITS.readContextDoc.defaultLimit}, hard max ${CAT_TOOL_PAGE_LIMITS.readContextDoc.maxLimit} per call; ` +
-      'use offset to continue). Image documents attach visual content from the managed project blob. docId comes from the ' +
-      'context catalog in the system context or the project UI. Contains no filesystem paths.',
-    promptSnippet: 'Read a context document of the bound CAT project (paged)',
+    description: 'Read bound project Context text by UTF-16 offset, or attach its image. Follow nextOffset for text and nextMetadataOffset at the same offset and returned limit for remaining anchors/warnings. maxBytes covers the final text envelope; image bytes remain separate. Reading only prepares evidence until a Provider response confirms submission.',
+    promptSnippet: 'Read a bounded Context page or managed image',
     parameters: Type.Object({
-      docId: Type.String({ minLength: 1, description: 'Context doc id from the injected context catalog.' }),
+      docId: Type.String({ minLength: 1 }),
       offset: Type.Optional(Type.Integer({ minimum: 0 })),
       limit: Type.Optional(Type.Integer({ minimum: 1 })),
+      metadataOffset: Type.Optional(Type.Integer({ minimum: 0 })),
+      maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144 })),
     }),
     async execute(toolCallId, params) {
       const { db } = resolveBoundProject('cat_read_context_doc', toolCallId)
       const doc = db.contextDocs.get(params.docId)
       if (doc === undefined) throw new StoreNotFoundError('context doc', params.docId)
-      const evidenceDocId = doc.parentContextDocId ?? doc.id
-      const evidenceAnchors = doc.parentContextDocId === undefined
-        ? db.contextDocs.listAnchors(doc.id)
-        : db.contextDocs.listAnchors(doc.parentContextDocId)
-          .filter((anchor) => anchor.mediaContextDocId === doc.id)
-      const evidenceRequirement = deps.stageEvidenceRunId === undefined
-        ? undefined
-        : db.stageEvidence.get(deps.stageEvidenceRunId)?.plan.requirements
-          .find((item) => item.evidence.ref.kind === 'context-doc' && item.evidence.ref.id === evidenceDocId)
-      const evidenceSegmentIds = evidenceRequirement?.scope.kind === 'segments'
-        ? evidenceRequirement.scope.segmentIds
-        : []
-      const preparePresentation = (anchorIds: string[], content: AgentToolResult<unknown>['content'], visual = false): void => runtime.prepareEvidencePresentation(
-        db,
-        toolCallId,
-        evidenceSegmentIds,
-        [{ ref: { kind: 'context-doc', id: evidenceDocId }, anchorIds, ...(visual ? { visual } : {}) }],
-        content,
-      )
       const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.readContextDoc)
+      const maxBytes = params.maxBytes ?? 65_536
+      const metadataOffset = params.metadataOffset ?? 0
+      if (!Number.isInteger(maxBytes) || maxBytes < 1_024 || maxBytes > 262_144
+        || !Number.isInteger(metadataOffset) || metadataOffset < 0) {
+        throw new LinguistCatInvalidArgumentError('maxBytes/metadataOffset', 'invalid page budget or metadata position')
+      }
+      const extract = doc.textExtract ?? ''
+      if (page.offset > extract.length) throw new LinguistCatInvalidArgumentError('offset', 'outside Context text')
       const anchors = db.contextDocs.listAnchors(doc.id)
-      const extractedMedia = new Map<string, { docId: string; filename: string; anchorIds: string[] }>()
-      for (const anchor of anchors) {
-        if (anchor.mediaContextDocId === undefined) continue
-        const mediaDoc = db.contextDocs.get(anchor.mediaContextDocId)
-        if (mediaDoc === undefined) continue
-        const current = extractedMedia.get(mediaDoc.id)
-        if (current === undefined) {
-          extractedMedia.set(mediaDoc.id, {
-            docId: mediaDoc.id,
-            filename: mediaDoc.originalFilename,
-            anchorIds: [anchor.id],
-          })
-        } else {
-          current.anchorIds.push(anchor.id)
-        }
-      }
-      const base = {
-        docId: doc.id,
-        kind: doc.kind,
-        filename: doc.originalFilename,
-        createdAt: doc.createdAt,
-        ...(doc.sha256 !== undefined ? { sha256: doc.sha256 } : {}),
-        ...(doc.note !== undefined ? { docNote: doc.note } : {}),
-        ...(anchors.length === 0 ? {} : { anchors }),
-        ...(extractedMedia.size === 0 ? {} : { extractedMedia: [...extractedMedia.values()] }),
-        ...(doc.extractionWarnings.length === 0 ? {} : { extractionWarnings: doc.extractionWarnings }),
-      }
-      if (doc.kind === 'image') {
-        const dto: CatReadContextDocResult = {
-          ...base,
-          offset: 0,
-          limit: page.limit,
-          totalChars: 0,
-          hasMore: false,
-          note: IMAGE_DOC_NOTE,
-        }
-        const result = toolResult(dto, deps.resultProjectId)
-        if (deps.readContextImage === undefined) return result
-        const image = await deps.readContextImage(doc.id)
-        const withImage = {
-          ...result,
-          content: [
-            ...result.content,
-            { type: 'image' as const, data: image.data, mimeType: image.mimeType },
-          ],
-        }
-        preparePresentation(evidenceAnchors.map((anchor) => anchor.id), withImage.content.filter(block => block.type === 'image'), true)
-        return withImage
-      }
-      const extract = doc.textExtract
-      if (extract === undefined) {
-        const dto: CatReadContextDocResult = {
-          ...base,
-          offset: 0,
-          limit: page.limit,
-          totalChars: 0,
-          hasMore: false,
-          note: NO_EXTRACT_NOTE,
-        }
-        return toolResult(dto, deps.resultProjectId)
-      }
-      const text = extract.slice(page.offset, page.offset + page.limit)
-      const dto: CatReadContextDocResult = {
-        ...base,
-        offset: page.offset,
-        limit: page.limit,
-        totalChars: extract.length,
-        hasMore: pageHasMore(extract.length, page.offset, text.length),
-        text,
-        ...(page.note !== undefined ? { note: page.note } : {}),
-      }
-      const pageEnd = page.offset + text.length
-      const presentedAnchorIds = evidenceAnchors
-        .filter((anchor) => {
-          const start = extract.indexOf(`[anchor=${anchor.id}`)
-          if (start < page.offset) return false
-          const next = extract.indexOf('\n[anchor=', start + 1)
-          const end = next < 0 ? extract.length : next
-          return end <= pageEnd
+      let textLength = Math.min(page.limit, extract.length - page.offset)
+      let metadataLimit = 20
+      const makePage = (): CatReadContextDocResult => {
+        const end = page.offset + textLength
+        const related = anchors.filter(anchor => anchor.locator.textRange
+          ? anchor.locator.textRange.start < end && anchor.locator.textRange.end > page.offset
+          : page.offset === 0)
+        const selected = related.slice(metadataOffset, metadataOffset + metadataLimit)
+        const warnings = doc.extractionWarnings.slice(metadataOffset, metadataOffset + metadataLimit)
+        const media = selected.flatMap(anchor => {
+          if (anchor.mediaContextDocId === undefined) return []
+          const mediaDoc = db.contextDocs.get(anchor.mediaContextDocId)
+          return mediaDoc === undefined ? [] : [{ docId: mediaDoc.id, filename: mediaDoc.originalFilename, anchorIds: [anchor.id] }]
         })
-        .map((anchor) => anchor.id)
-      const result = toolResult(dto, deps.resultProjectId)
-      if (presentedAnchorIds.length > 0 || (evidenceAnchors.length === 0 && page.offset === 0 && !dto.hasMore)) {
-        preparePresentation(presentedAnchorIds, result.content)
+        const dto: CatReadContextDocResult = {
+          docId: doc.id, kind: doc.kind, filename: doc.originalFilename, createdAt: doc.createdAt,
+          ...(doc.sha256 === undefined ? {} : { sha256: doc.sha256 }),
+          ...(doc.note === undefined ? {} : { docNote: doc.note }),
+          offset: page.offset, limit: textLength || page.limit, totalChars: extract.length,
+          hasMore: end < extract.length,
+          ...(end < extract.length ? { nextOffset: end } : {}),
+          ...(doc.textExtract === undefined ? {} : { text: extract.slice(page.offset, end) }),
+          // 正文仅在 text 中；目录不再重复整段 anchor.text。
+          anchors: selected.map(({ text: _text, ...anchor }) => anchor),
+          extractedMedia: media,
+          extractionWarnings: warnings,
+          metadataOffset, anchorCount: related.length, warningCount: doc.extractionWarnings.length,
+          ...(metadataOffset + metadataLimit < Math.max(related.length, doc.extractionWarnings.length)
+            ? { nextMetadataOffset: metadataOffset + metadataLimit } : {}),
+          ...(doc.kind === 'image' ? { note: IMAGE_DOC_NOTE }
+            : doc.textExtract === undefined ? { note: NO_EXTRACT_NOTE }
+              : page.note === undefined ? {} : { note: page.note }),
+          maxBytes, usedBytes: 0,
+        }
+        for (let index = 0; index < 4; index += 1) {
+          const bytes = Buffer.byteLength(JSON.stringify(toolResult(dto, deps.resultProjectId).details), 'utf8')
+          if (bytes === dto.usedBytes) break
+          dto.usedBytes = bytes
+        }
+        return dto
       }
+      let dto = makePage()
+      while (dto.usedBytes! > maxBytes && (textLength > 1 || metadataLimit > 1)) {
+        if (textLength > 1) textLength = Math.max(1, Math.floor(textLength / 2))
+        else metadataLimit = Math.max(1, Math.floor(metadataLimit / 2))
+        dto = makePage()
+      }
+      if (dto.usedBytes! > maxBytes) {
+        const insufficient: CatReadContextDocResult = {
+          docId: doc.id, kind: doc.kind, filename: doc.originalFilename, createdAt: doc.createdAt,
+          offset: page.offset, limit: page.limit, totalChars: extract.length, hasMore: page.offset < extract.length,
+          metadataOffset, minimumRequiredBytes: dto.usedBytes, maxBytes,
+          note: 'Budget cannot hold one text unit and one metadata item; increase maxBytes.',
+        }
+        return toolResult(insufficient, deps.resultProjectId)
+      }
+      const result = toolResult(dto, deps.resultProjectId)
+      if (doc.kind === 'image' && deps.readContextImage !== undefined) {
+        const image = await deps.readContextImage(doc.id)
+        result.content.push({ type: 'image', data: image.data, mimeType: image.mimeType })
+      }
+      const evidenceDocId = doc.parentContextDocId ?? doc.id
+      const evidenceAnchors = doc.parentContextDocId === undefined ? anchors
+        : db.contextDocs.listAnchors(evidenceDocId).filter(anchor => anchor.mediaContextDocId === doc.id)
+      const requirement = deps.stageEvidenceRunId === undefined ? undefined
+        : db.stageEvidence.get(deps.stageEvidenceRunId)?.plan.requirements.find(item => item.evidence.ref.kind === 'context-doc' && item.evidence.ref.id === evidenceDocId)
+      const visual = result.content.filter(block => block.type === 'image')
+      if (textLength > 0 || visual.length > 0) runtime.prepareEvidencePresentation(
+        db, toolCallId, requirement?.scope.kind === 'segments' ? requirement.scope.segmentIds : [],
+        [{ ref: { kind: 'context-doc', id: evidenceDocId }, anchorIds: visual.length > 0 ? evidenceAnchors.map(anchor => anchor.id) : [],
+          ...(visual.length > 0 ? { visual: true } : { textRange: { start: page.offset, end: page.offset + textLength } }) }],
+        visual.length > 0 ? visual : result.content,
+      )
       return result
     },
   })

@@ -9,15 +9,16 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel, streamSimple } from '@earendil-works/pi-ai/compat'
 import type { AgentToolResult, ExtensionContext } from '@earendil-works/pi-coding-agent'
 import { convertToLlm, SessionManager } from '@earendil-works/pi-coding-agent'
-import { createSeededEntropy } from '@linguist/cat-core'
+import { createSeededEntropy, type ContextExtraction, type ContextAnchor } from '@linguist/cat-core'
 import { CatStore } from '@linguist/cat-store'
-import { createLinguistCatTools } from '@linguist/cat-tools'
+import { createLinguistCatTools, type CatReadContextDocResult } from '@linguist/cat-tools'
 import type { ProjectDiscoveryScope } from './project-discovery-scope'
 import { ensureStageEvidenceForSession } from './stage-evidence-host'
 import { toolResult } from '../../../../../../packages/linguist-cat-tools/src/tool-runtime'
 import { normalizeLegacyCatSessionFile } from './legacy-cat-session'
 import { sanitizePiMessageImageContent } from '../image-content-validation'
 import { createEvidenceSubmissionObserver } from './evidence-submission'
+import { formatContextExtractionText } from './context-extractor'
 
 test('CAT 自含正文与合法图片经过真实 Pi 转换后仍进入模型内容', () => {
   const result = toolResult({ text: '必须实际提供的参考正文' })
@@ -87,6 +88,82 @@ function toolByName(tools: LinguistCatTool[], name: string): LinguistCatTool {
 function invoke(tool: LinguistCatTool, toolCallId: string, params: unknown): Promise<AgentToolResult<unknown>> {
   return tool.execute(toolCallId, params as never, undefined, undefined, EXTENSION_CONTEXT)
 }
+
+test('Context 跨页区间有间隙不完成，连续覆盖支持旧无 anchor 文本且最终输出有界', async () => {
+  const store = new CatStore({ rootDir: mkdtempSync(join(tmpdir(), 'evidence-pages-')), entropy: createSeededEntropy('pages') })
+  const project = store.createProject({ name: 'Pages', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'workspace' })
+  const db = store.openProject(project.id)
+  try {
+    const asset = db.assets.insertImported({ asset: { formatId: 'fixture', originalFilename: 'batch.xlf', sourceSha256: 'a'.repeat(64), segmentCount: 1 },
+      segments: [{ ordinal: 0, key: 'one', source: 'source', target: '译文', sourceLocale: 'en', targetLocale: 'zh-CN', status: 'translated', locked: false, revision: 0, sourceHash: 'source' }], warnings: [], originalBytes: new Uint8Array([1]) })
+    for (const legacy of [false, true]) {
+      const body = '中😀文\n[anchor=fake] 客户原文\n'.repeat(130)
+      const extraction: ContextExtraction = { textSections: [{ id: 'text', anchorId: 'real', text: body }],
+        anchors: [{ id: 'real', locator: { kind: 'paragraph', index: 0 }, textSectionId: 'text' }], media: [], warnings: [] }
+      const text = legacy ? body : formatContextExtractionText(extraction)!
+      const doc = db.contextDocs.insert({ kind: 'doc', originalFilename: `${legacy}.txt`, blobRelpath: `blobs/${legacy}.txt`, sha256: (legacy ? 'c' : 'b').repeat(64), textExtract: text })
+      if (!legacy) db.contextDocs.replaceExtraction(doc.id, [{ id: 'real', locator: extraction.anchors[0]!.locator, text: body }])
+      const segmentId = asset.segments[0]!.id
+      db.contextDocs.setEvidenceLink({ contextDocId: doc.id, ...(legacy ? {} : { anchorId: 'real' }), relation: { kind: 'segment', segmentId }, requiredness: 'required', mappingRevision: '1' })
+      const state = ensureStageEvidenceForSession({ session: { id: doc.id, linguistRole: 'reviewer' }, db, fallbackSegmentIds: [segmentId],
+        discoveryScope: { roots: [], files: [], unavailable: [], hash: doc.id, managedEvidence: [{ ref: { kind: 'asset', id: asset.asset.id }, version: asset.asset.sourceSha256 }, { ref: { kind: 'context-doc', id: doc.id }, version: doc.sha256! }] } })!
+      const observer = createEvidenceSubmissionObserver(receipt => { db.stageEvidence.recordReceipt(receipt) }, error => { throw error })
+      const tools = createLinguistCatTools({ resolveProject: () => ({ project, db }), resultProjectId: project.id, sessionId: doc.id, stageEvidenceRunId: state.stageRunId, onEvidencePrepared: observer.prepare })
+      const tool = toolByName(tools, 'cat_read_context_doc')
+      const pages: Array<{ offset: number; result: AgentToolResult<unknown> }> = []
+      let offset = 0
+      do {
+        const result = await invoke(tool, `${doc.id}:${offset}`, { docId: doc.id, offset, limit: 1_000, maxBytes: 1_800 })
+        const dto = result.details as { text: string; nextOffset?: number; usedBytes: number }
+        assert.ok(Buffer.byteLength(result.content.filter(block => block.type === 'text').map(block => block.text).join(''), 'utf8') <= 1_800)
+        assert.ok(dto.text.length > 0)
+        pages.push({ offset, result })
+        offset = dto.nextOffset ?? text.length
+      } while (offset < text.length)
+      assert.equal(pages.map(page => (page.result.details as { text: string }).text).join(''), text)
+      for (const page of pages.slice(1)) {
+        observer.onPayload({ content: page.result.content })
+        observer.onResponse({ status: 200 })
+      }
+      assert.ok(db.stageEvidence.getPresentationCoverage(state.stageRunId).pending.some(item => item.evidence.id === doc.id), '第一页缺失不能伪报已完整阅读')
+      observer.onPayload({ content: pages[0]!.result.content })
+      observer.onResponse({ status: 200 })
+      assert.ok(!db.stageEvidence.getPresentationCoverage(state.stageRunId).pending.some(item => item.evidence.id === doc.id))
+      const count = db.stageEvidence.listReceipts(state.stageRunId).length
+      observer.onPayload({ content: pages[0]!.result.content })
+      observer.onResponse({ status: 200 })
+      assert.equal(db.stageEvidence.listReceipts(state.stageRunId).length, count)
+    }
+    const large = db.contextDocs.insert({ kind: 'doc', originalFilename: 'catalog.txt', blobRelpath: 'blobs/catalog.txt', textExtract: '目录正文',
+      extractionWarnings: Array.from({ length: 37 }, (_, index) => ({ code: `warning-${index}`, message: '必须披露的抽取问题'.repeat(10) })) })
+    const anchors: Array<Omit<ContextAnchor, 'contextDocId'>> = []
+    for (let index = 0; index < 60; index++) {
+      const image = db.contextDocs.insert({ kind: 'image', originalFilename: `${index}.gif`, blobRelpath: `blobs/${index}.gif`, parentContextDocId: large.id })
+      anchors.push({ id: `media-${index}`, locator: { kind: 'image', mediaId: image.id }, mediaContextDocId: image.id, label: '目录标签'.repeat(35) })
+    }
+    db.contextDocs.replaceExtraction(large.id, anchors)
+    const reader = toolByName(createLinguistCatTools({ resolveProject: () => ({ project, db }), resultProjectId: project.id }), 'cat_read_context_doc')
+    let metadataOffset = 0
+    const seen = new Set<string>()
+    const warnings = new Set<string>()
+    do {
+      const result = await invoke(reader, `catalog-${metadataOffset}`, { docId: large.id, metadataOffset, maxBytes: 3_200 })
+      const dto = result.details as CatReadContextDocResult
+      assert.ok(Buffer.byteLength(JSON.stringify(result.details), 'utf8') <= 3_200)
+      dto.anchors?.forEach(anchor => seen.add(anchor.id))
+      dto.extractionWarnings?.forEach(warning => warnings.add(warning.code))
+      if (dto.nextMetadataOffset === undefined) break
+      assert.ok(dto.nextMetadataOffset > metadataOffset)
+      metadataOffset = dto.nextMetadataOffset
+    } while (true)
+    assert.equal(seen.size, 60)
+    assert.equal(warnings.size, 37)
+    db.contextDocs.updateNote(large.id, '长备注'.repeat(1_000))
+    const insufficient = (await invoke(reader, 'small-budget', { docId: large.id, maxBytes: 1_024 })).details as CatReadContextDocResult
+    assert.ok(insufficient.minimumRequiredBytes! > 1_024)
+    assert.equal(insufficient.nextOffset, undefined)
+  } finally { db.close() }
+})
 
 test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分别完成 Full Review', async () => {
   const store = new CatStore({

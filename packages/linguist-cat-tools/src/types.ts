@@ -649,6 +649,15 @@ export interface CatReadContextDocResult {
   /** text_extract 全文字符数（无抽取时为 0）。 */
   totalChars: number
   hasMore: boolean
+  /** 下一页实际 UTF-16 位置；与 limit 的请求值无关。 */
+  nextOffset?: number
+  metadataOffset?: number
+  nextMetadataOffset?: number
+  anchorCount?: number
+  warningCount?: number
+  maxBytes?: number
+  usedBytes?: number
+  minimumRequiredBytes?: number
   text?: string
   /** 可定位的页、段落、单元格或图片锚点；不含媒体字节。 */
   anchors?: ContextAnchor[]

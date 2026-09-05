@@ -20,6 +20,15 @@
 - 验证：真实 CatStore → CAT tool → Pi Agent → SDK OpenAI Completions 序列化 → 127.0.0.1 合成 SSE Provider → 2xx 回调 → Receipt → 三岗位确认。实际 HTTP 包含正文和合法 GIF；非视觉模型与 sanitizer 删除的图片不签收；空 payload/503 不签收；记账故障不使模型调用失败，后续只重试记账；重复请求不重复记录。Evidence 3/3、Tools 44/44、Store 57/57、Delivery 2/2、全仓 typecheck、host seams 9/9 通过。
 - 边界：2xx 证明实际请求获得 HTTP 响应，不证明流完整、模型理解或语言质量。尚未确认的准备信息只在当前 runtime turn 内保留；进程/turn 结束前未记账的内容保持未验证，需要再次读取，不能借历史图片目录补签。未知图像协议或未发出 SDK 响应通知的 Provider 保守少计；真实收费 Provider 未验证。
 
+## B3：区间覆盖、分页预算与资料快照
+
+- 修改：Context 提取格式化时把正文 UTF-16 `[start,end)` 定位写入既有 `locator_json`；Receipt 的既有 JSON 记录提交区间，Store 合并连续/重叠范围派生覆盖。视觉 anchor 只能由视觉记录满足；旧无定位资料保守要求全文。
+- `cat_read_context_doc` 删除标记字符串反查及每页全量目录，返回实际 `nextOffset` 和独立 `nextMetadataOffset`。正文、当前目录、warnings、导航字段和封装共同计入最终文本预算；不足时给出 `minimumRequiredBytes`，不推进空游标。
+- Translation Context 新游标 `ctx3` 比较剩余句段的实际 Source/Target、匹配、规则与关联资料事实；已提供的正常批次写回、Proposal、无关批次不使剩余页失效。有效旧 `ctx2` 保持原事件快照校验。相关资料摘要只在单次调用计算，不增加缓存服务。
+- Touchpoint：未增删 Proma 触点；修改均在已有 Linguist 路径和 CAT 包。无新表、无 schema 修改。
+- 验证：生产 tool/Store 先复现完整翻页仍 pending，修复后缺页 pending、补齐 complete、重复页不增加覆盖；中文/emoji/伪 anchor 标记原文逐页重组一致；60 个图片目录和 37 条 warning 均可分页取全，完整文本结果不超过 3,200 字节，长文页不超过 1,800 字节；不足预算不推进。Evidence 4/4、Tools 44/44、Store 57/57、extractor 2/2、全仓 typecheck、host seams 9/9 通过。组合分页 fixture 约 85 ms（单次测试观察，不作性能保证）。
+- 限制：Stage 生命周期和决定归属由 C 修复；规则首页限额与预算清空必要术语由 D 修复。当前通过不代表这些后续合同已完成。
+
 ## 发布与数据边界
 
 本轮仅本地提交，不推送、创建 PR/Tag/Release 或替换安装版。不使用客户文件、生产数据库或未授权凭据。README / AGENTS 本轮不改；需要同步的准确事实在最终记录列出。单元、生产链模拟、目录包与真实 Provider 资格分别记录。

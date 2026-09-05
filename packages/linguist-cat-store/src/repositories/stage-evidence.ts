@@ -1,6 +1,7 @@
 import type {
   EvidenceGap,
   EvidenceGapCode,
+  ContextAnchorLocator,
   StageEvidenceRef,
   StageEvidenceReceipt,
   StageEvidenceBaseline,
@@ -353,22 +354,56 @@ export class StageEvidenceRepository {
     const state = this.get(stageRunId)
     if (state === undefined) throw new StoreNotFoundError('stage evidence state', stageRunId)
     const presented = new Map<string, Set<string>>()
+    const visual = new Map<string, Set<string>>()
+    const ranges = new Map<string, Array<{ start: number; end: number }>>()
     for (const receipt of this.listReceipts(stageRunId)) {
       if (receipt.baselineHash !== state.baseline.baselineHash) continue
       for (const item of receipt.evidence) {
-        const planned = state.plan.requirements.find(requirement => evidenceRefKey(requirement.evidence.ref) === evidenceRefKey(item.ref))
+        const key = evidenceRefKey(item.ref)
+        const planned = state.plan.requirements.find(requirement => evidenceRefKey(requirement.evidence.ref) === key)
         if (item.submission !== 'provider-response-v1' || item.version !== planned?.evidence.version) continue
-        const anchors = presented.get(evidenceRefKey(item.ref)) ?? new Set<string>()
-        item.anchorIds.forEach((anchorId) => anchors.add(anchorId))
-        presented.set(evidenceRefKey(item.ref), anchors)
+        if (item.textRange) ranges.set(key, [...(ranges.get(key) ?? []), item.textRange])
+        const map = item.visual ? visual : presented
+        const anchors = map.get(key) ?? new Set<string>()
+        item.anchorIds.forEach(anchorId => anchors.add(anchorId))
+        map.set(key, anchors)
       }
     }
-    const required = state.plan.requirements.filter((item) => item.requiredness === 'required')
-    const pending = required.flatMap((item) => {
-      const anchors = presented.get(evidenceRefKey(item.evidence.ref))
-      const missingAnchors = item.anchorIds.filter((anchorId) => !anchors?.has(anchorId))
-      const covered = item.anchorIds.length === 0 ? anchors !== undefined : missingAnchors.length === 0
-      return covered ? [] : [{ evidence: item.evidence.ref, anchorIds: missingAnchors }]
+    for (const parts of ranges.values()) parts.sort((a, b) => a.start - b.start)
+    const required = state.plan.requirements.filter(item => item.requiredness === 'required')
+    const pending = required.flatMap<StageEvidencePresentationCoverage['pending'][number]>(item => {
+      const key = evidenceRefKey(item.evidence.ref)
+      if (item.evidence.ref.kind !== 'context-doc') {
+        const anchors = presented.get(key)
+        const missing = item.anchorIds.filter(id => !anchors?.has(id))
+        return anchors !== undefined && missing.length === 0 ? [] : [{ evidence: item.evidence.ref, anchorIds: missing }]
+      }
+      const doc = this.db.db.prepare('SELECT kind, text_extract FROM context_docs WHERE id = ? AND project_id = ?')
+        .get(item.evidence.ref.id, this.projectId) as { kind: string; text_extract: string | null } | undefined
+      const completeRange = (range: { start: number; end: number }): boolean => {
+        let end = range.start
+        for (const part of ranges.get(key) ?? []) {
+          if (part.start > end) break
+          end = Math.max(end, part.end)
+          if (end >= range.end) return true
+        }
+        return false
+      }
+      const fullText = doc?.text_extract !== null && doc?.text_extract !== undefined && doc.text_extract.length > 0
+        && completeRange({ start: 0, end: doc.text_extract.length })
+      const anchors = this.db.db.prepare('SELECT id, locator_json, media_context_doc_id FROM context_anchors WHERE context_doc_id = ?')
+        .all(item.evidence.ref.id) as Array<{ id: string; locator_json: string; media_context_doc_id: string | null }>
+      const ids = item.anchorIds.length > 0 ? item.anchorIds : anchors.map(anchor => anchor.id)
+      const missing = ids.filter(id => {
+        const anchor = anchors.find(candidate => candidate.id === id)
+        if (anchor === undefined) return true
+        const locator = JSON.parse(anchor.locator_json) as ContextAnchorLocator
+        if (anchor.media_context_doc_id !== null || locator.kind === 'image') return !visual.get(key)?.has(id)
+        return !(locator.textRange ? completeRange(locator.textRange) : fullText)
+      })
+      const covered = ids.length > 0 ? missing.length === 0
+        : doc?.kind === 'image' ? visual.has(key) : fullText
+      return covered ? [] : [{ evidence: item.evidence.ref, anchorIds: missing }]
     })
     return { required: required.length, presented: required.length - pending.length, pending }
   }

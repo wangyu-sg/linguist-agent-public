@@ -154,9 +154,14 @@ function textExtraction(
 export function formatContextExtractionText(extraction: ContextExtraction): string | undefined {
   if (extraction.textSections.length === 0) return undefined
   const anchors = new Map(extraction.anchors.map((anchor) => [anchor.id, anchor]))
+  let offset = 0
   return extraction.textSections.map((section) => {
     const anchor = anchors.get(section.anchorId)
-    return `[anchor=${section.anchorId}${anchor?.label === undefined ? '' : ` label=${JSON.stringify(anchor.label)}`}] ${section.text}`
+    const prefix = `[anchor=${section.anchorId}${anchor?.label === undefined ? '' : ` label=${JSON.stringify(anchor.label)}`}] `
+    const text = prefix + section.text
+    if (anchor) anchor.locator = { ...anchor.locator, textRange: { start: offset + prefix.length, end: offset + text.length } }
+    offset += text.length + 1
+    return text
   }).join('\n')
 }
 

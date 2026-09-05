@@ -94,11 +94,15 @@ export interface EvidenceGap {
   resolvedBy?: 'system' | 'agent' | 'user'
 }
 
-export type ContextAnchorLocator =
+export type ContextAnchorLocator = (
   | { kind: 'sheet'; sheet: string; row?: number; cell?: string; rowKind?: 'header' | 'data' | 'skipped' }
   | { kind: 'page'; page: number }
   | { kind: 'paragraph'; index: number }
   | { kind: 'image'; mediaId: string; sheet?: string; row?: number; cell?: string; page?: number }
+) & {
+  /** text_extract 中正文的 UTF-16 半开区间，不包含系统定位前缀。 */
+  textRange?: { start: number; end: number }
+}
 
 export interface StageEvidenceReceipt {
   id: string
@@ -115,6 +119,8 @@ export interface StageEvidenceReceipt {
     submission?: 'provider-response-v1'
     version?: string
     visual?: boolean
+    /** 实际提交的 UTF-16 半开区间，可跨页合并。 */
+    textRange?: { start: number; end: number }
   }>
   presentedAt: string
 }

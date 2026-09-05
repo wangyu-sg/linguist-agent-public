@@ -1687,8 +1687,8 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
     assert.equal(firstPage.cursor, null)
     assert.equal(firstPage.truncated, true)
     assert.ok(firstPage.contexts.length > 0 && firstPage.contexts.length < segmentIds.length)
-    // LA-CONTEXT-001：v2 cursor 绑定请求形状 + 事件快照（无事件时为 0）+ 偏移
-    assert.match(firstPage.nextCursor ?? '', /^ctx2-[0-9a-f]{16}-0-\d+$/)
+    // v3 cursor 绑定请求形状、尚未提供的内容及偏移
+    assert.match(firstPage.nextCursor ?? '', /^ctx3-[0-9a-f]{16}-[0-9a-f]{16}-\d+$/)
     assert.deepEqual(
       firstPage.suggestedSegmentIds,
       segmentIds.slice(firstPage.contexts.length),
@@ -1798,7 +1798,7 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
   }
 })
 
-test('cat_get_translation_context: cursor binds the project event snapshot (LA-CONTEXT-001)', async () => {
+test('cat_get_translation_context: 资料分页不因 Proposal、已处理批次或无关写入失效', async () => {
   const fixture = setup()
   try {
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
@@ -1830,25 +1830,22 @@ test('cat_get_translation_context: cursor binds the project event snapshot (LA-C
       invoke(contextTool, { ...pageParams, cursor: `ctx-${hash}-${offset}` }),
       'INVALID_ARGUMENT',
     )
-    // 产生 project event 的 mutation（proposal-created）后，旧 cursor 报 CONTEXT_DRIFT
-    // 译文须保留 source 的数字签名（hard rules）
+    // Proposal 不改变当前双语正文，正常写回已提供的批次也不污染剩余页。
     await invoke(toolByName(tools, 'cat_propose_translations'), {
-      segmentProposals: [{
-        segmentId: fixture.segmentsA[0]!.id,
-        baseRevision: 0,
-        proposedTarget: '漂移译文 0',
-      }],
+      segmentProposals: [{ segmentId: fixture.segmentsA[0]!.id, baseRevision: 0, proposedTarget: '漂移译文 0' }],
     })
-    assert.equal(fixture.db.runs.latestEventSequence, 1)
-    await assertThrowsCode(
-      invoke(contextTool, { ...pageParams, maxBytes: 32_000, cursor: first.nextCursor }),
-      'CONTEXT_DRIFT',
-    )
-    // 从第一页重拉：新 cursor 绑定新事件快照，可继续翻页
+    fixture.db.segments.applyTargetEdit(fixture.segmentsA[0]!.id, '当前批次写回 0', 0)
+    fixture.db.segments.applyTargetEdit(fixture.segmentsB[0]!.id, '无关批次写回 0', 0)
+    const continued = (await invoke(contextTool, { ...pageParams, maxBytes: 32_000, cursor: first.nextCursor })).details as { contexts: unknown[] }
+    assert.ok(continued.contexts.length > 0)
+    // 原 v2 有效游标仍能恢复；它没有新内容指纹，沿用原事件快照合同。
+    const legacyCursor = `ctx2-${hash}-${fixture.db.runs.latestEventSequence}-${offset}`
+    assert.ok((await invoke(contextTool, { ...pageParams, maxBytes: 32_000, cursor: legacyCursor })).details)
+    // 从第一页重拉：生成新内容快照，可继续翻页
     const restarted = (await invoke(contextTool, pageParams)).details as {
       nextCursor?: string
     }
-    assert.match(restarted.nextCursor ?? '', /^ctx2-[0-9a-f]{16}-1-\d+$/)
+    assert.match(restarted.nextCursor ?? '', /^ctx3-[0-9a-f]{16}-[0-9a-f]{16}-\d+$/)
     const resumed = (await invoke(contextTool, {
       ...pageParams,
       maxBytes: 32_000,
@@ -1860,7 +1857,7 @@ test('cat_get_translation_context: cursor binds the project event snapshot (LA-C
   }
 })
 
-test('cat_get_translation_context: public human and TM/TB commits invalidate a paged cursor (LA-CONTEXT-001)', async () => {
+test('cat_get_translation_context: 剩余 Source/Target、适用 TM/TB 与规则改变使快照漂移', async () => {
   const fixture = setup()
   try {
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
@@ -1868,8 +1865,8 @@ test('cat_get_translation_context: public human and TM/TB commits invalidate a p
     const pageParams = {
       segmentIds: fixture.segmentsA.map((segment) => segment.id as string),
       includeNeighbors: false,
-      tmLimitPerSegment: 0,
-      termLimitPerSegment: 0,
+      tmLimitPerSegment: 5,
+      termLimitPerSegment: 10,
       maxBytes: 1_800,
     }
     const firstCursor = async (): Promise<string> => {
@@ -1889,7 +1886,7 @@ test('cat_get_translation_context: public human and TM/TB commits invalidate a p
     }
 
     await assertDriftAfter(() => fixture.db.segments.applyTargetEdit(
-      fixture.segmentsA[0]!.id,
+      fixture.segmentsA.at(-1)!.id,
       '人工提交译文',
       0,
     ))
@@ -1916,7 +1913,7 @@ test('cat_get_translation_context: public human and TM/TB commits invalidate a p
     await assertDriftAfter(() => fixture.db.tmUnits.delete(tm.id))
 
     const term = fixture.db.termEntries.upsert({
-      term: 'Beta',
+      term: 'Alpha',
       translation: '贝塔',
       status: 'allowed',
       caseSensitive: false,
