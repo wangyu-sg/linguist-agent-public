@@ -311,7 +311,7 @@
       "owner": "codex-main-host",
       "mergePolicy": "host-seam",
       "hook": "linguist-delegation",
-      "reason": "在 Proma Collaboration 中注入受信的 Linguist role、project binding、冻结范围与 outcome binding。"
+      "reason": "在 Proma Collaboration 中注入受信 Linguist role、project binding、专业岗位冻结范围与 outcome；通用协作只继承项目身份。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-island-navigation-policy.ts",

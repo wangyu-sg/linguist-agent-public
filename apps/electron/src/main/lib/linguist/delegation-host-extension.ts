@@ -19,7 +19,7 @@ export interface LinguistDelegationMetadata {
   role: LinguistRole
   projectId: string
   projectName: string
-  scope: LinguistDelegatedScope
+  scope?: LinguistDelegatedScope
 }
 
 const ROLE_STAGE: Record<
@@ -72,7 +72,7 @@ export function resolveLinguistDelegationMetadata(
     role: request.linguistRole ?? 'general',
     projectId: parent.linguistProjectId,
     projectName: parent.linguistProjectName ?? parent.linguistProjectId,
-    scope: freezeScope(parent as AgentSessionMeta & { linguistProjectId: string }, request.linguistScope),
+    ...(request.linguistRole || request.linguistScope ? { scope: freezeScope(parent as AgentSessionMeta & { linguistProjectId: string }, request.linguistScope) } : {}),
   }
 }
 

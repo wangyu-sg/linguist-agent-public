@@ -94,7 +94,7 @@ mock.module('./linguist/project-service', () => ({
         getByIds: (ids: readonly string[]) => ids.map((id) => ({ id })),
         getStageDecisionCoverage: (_stage: string, ids: readonly string[]) => ({ total: ids.length, pending: ids.length }),
       },
-      stageEvidence: { get: () => undefined },
+      stageEvidence: { list: () => [] },
     }),
   }),
 }))
@@ -152,7 +152,7 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
   await delegate.execute('tool-call-2', { task: '普通协作任务' })
   expect(capturedRunInput?.linguistContext).toMatchObject({
     projectId: parentContext.projectId,
-    selectedSegmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
+    selectedSegmentIds: [],
   })
   expect(sessions.get('child-session')).toMatchObject({
     linguistProjectId: parentContext.projectId,

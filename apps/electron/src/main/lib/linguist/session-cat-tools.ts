@@ -6,11 +6,11 @@
  */
 
 import type { AgentSessionMeta, LinguistProjectMutationEvent } from '@proma/shared'
+import type { StageEvidenceState } from '@linguist/cat-store'
 import type { LinguistGenerationProvenance } from '@linguist/cat-core'
 import {
   createLinguistCatTools,
   LinguistCatInvalidArgumentError,
-  LinguistCatProjectMissingError,
   type ResolveLinguistCatProject,
   type LinguistCatToolsDeps,
 } from '@linguist/cat-tools'
@@ -21,7 +21,7 @@ import {
   runLinguistConsistencyWorker,
   runLinguistQaWorker,
 } from './cat-job-worker-client'
-import { resolveLinguistBindingStatus, type LinguistServiceResolver } from './session-binding'
+import type { LinguistServiceResolver } from './session-binding'
 import { ensureStageEvidenceForSession } from './stage-evidence-host'
 
 export type LinguistProjectMutationSink = (event: LinguistProjectMutationEvent) => void
@@ -69,15 +69,14 @@ export function resolveLinguistSessionCatTools(
 ) {
   const projectId = session?.linguistProjectId
   if (!projectId) return []
+  let stageEvidence: StageEvidenceState | undefined
   const resolveProject: ResolveLinguistCatProject = () => {
+    const current = currentBoundSession(session.id, projectId, 'sessionId')
     const service = getService()
-    if (resolveLinguistBindingStatus(projectId, service) === 'missing') {
-      return new LinguistCatProjectMissingError(projectId)
-    }
-    return { project: service.getProject(projectId), db: service.openProject(projectId) }
+    const db = service.openProject(projectId)
+    stageEvidence = db.stageEvidence.list().find(state => state.sessionId === current.id && state.role === current.linguistRole)
+    return { project: service.getProject(projectId), db }
   }
-  const db = getService().openProject(projectId)
-  let stageEvidence = db.stageEvidence.list().find(state => state.sessionId === session.id && state.role === session.linguistRole)
   return createLinguistCatTools({
     resolveProject,
     resultProjectId: projectId,
@@ -87,6 +86,7 @@ export function resolveLinguistSessionCatTools(
     get stageEvidenceRunId() { return stageEvidence?.stageRunId },
     get reviewScopeSegmentIds() { return session.linguistDelegatedScope?.segmentIds ?? stageEvidence?.plan.segmentIds },
     prepareContextDoc(contextDocId) {
+      const db = getService().openProject(projectId)
       if (stageEvidence === undefined || db.readOnly) return
       const current = currentBoundSession(session.id, projectId, 'docId')
       stageEvidence = ensureStageEvidenceForSession({ session: current, db,
@@ -94,7 +94,8 @@ export function resolveLinguistSessionCatTools(
     },
     prepareStage(segmentIds, task) {
       const current = currentBoundSession(session.id, projectId, 'sessionId')
-      if (current.linguistRole === 'general' || db.readOnly) return
+      const db = getService().openProject(projectId)
+      if (current.linguistRole === undefined || current.linguistRole === 'general' || db.readOnly) return
       const segments = db.segments.getByIds(segmentIds)
       if (segments.length !== new Set(segmentIds).size) throw new LinguistCatInvalidArgumentError('segmentIds', 'task contains missing segments')
       if (task === undefined && stageEvidence && segmentIds.some(id => !stageEvidence!.plan.segmentIds.includes(id))) {

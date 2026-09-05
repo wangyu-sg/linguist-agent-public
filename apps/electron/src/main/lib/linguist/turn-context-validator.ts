@@ -1,11 +1,13 @@
 import {
   parseLinguistTurnContextV1,
+  createLinguistTurnContextV1,
   serializeLinguistTurnContextV1,
   type AgentSessionMeta,
   type LinguistTurnContextParseResult,
   type LinguistTurnContextV1,
 } from '@proma/shared'
 import type { LinguistProjectService } from './project-service'
+import { LinguistProjectNotFoundError, LinguistProjectUnhealthyError } from './errors'
 
 export class LinguistTurnContextOwnershipError extends Error {
   override readonly name = 'LinguistTurnContextOwnershipError'
@@ -73,8 +75,15 @@ export function validateLinguistTurnContextForAgentTurn(
 ): LinguistTurnContextParseResult | undefined {
   const parsed = parseLinguistTurnContextForAgentTurn(value, session)
   if (!parsed) return undefined
-  validateLinguistTurnContextForSession(parsed.context, session, getService())
-  return parsed
+  try {
+    validateLinguistTurnContextForSession(parsed.context, session, getService())
+    return parsed
+  } catch (error) {
+    if (!(error instanceof LinguistProjectNotFoundError || error instanceof LinguistProjectUnhealthyError)) throw error
+    // 绑定已经验证；实体暂不可读时只传项目身份，不注入未经验证的 UI IDs。
+    return createLinguistTurnContextV1({ projectId: parsed.context.projectId, selectedSegmentIds: [],
+      capturedAt: parsed.context.capturedAt, uiRevision: parsed.context.uiRevision })
+  }
 }
 
 /** 不访问项目服务的 wire/binding 预检；实体归属仍由上方 authority seam 完成。 */

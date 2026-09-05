@@ -92,6 +92,7 @@ import type {
 import {
   errorCodeOf,
   LinguistProjectArchivedError,
+  LinguistProjectUnhealthyError,
   LinguistProjectDeleteConfirmationMismatchError,
   LinguistProjectDeleteRequiresArchiveError,
   LinguistProjectLocaleChangeBlockedError,
@@ -185,7 +186,7 @@ export class LinguistProjectService {
   private readonly registry: CatFormatRegistry
   private storeInstance?: CatStore
   private probe?: SqliteRuntimeProbe
-  private readonly handles = new Map<string, ProjectDatabase>()
+  private readonly handles = new Map<string, { db: ProjectDatabase; ino: number; dev: number }>()
   private readonly resources: ProjectResources
   private readonly quality: ProjectQuality
   private readonly delivery: ProjectDelivery
@@ -452,21 +453,27 @@ export class LinguistProjectService {
     const project = this.getProject(projectId)
     const readOnly = (options.readOnly ?? false) || project.archivedAt !== undefined
     const cached = this.handles.get(projectId)
+    const { catDbPath, projectJsonPath } = this.getProjectPaths(projectId)
+    const file = lstatSync(catDbPath, { throwIfNoEntry: false })
     if (cached !== undefined) {
-      if (cached.readOnly === readOnly) return cached
-      cached.close()
-      this.handles.delete(projectId)
+      if (cached.db.readOnly === readOnly && file?.ino === cached.ino && file.dev === cached.dev && existsSync(projectJsonPath)) return cached.db
+      this.closeProject(projectId)
     }
-    const handle = this.call(() => this.store.openProject(projectId, { readOnly }), projectId)
-    this.handles.set(projectId, handle)
-    return handle
+    try {
+      const db = this.store.openProject(projectId, { readOnly })
+      const opened = lstatSync(catDbPath)
+      this.handles.set(projectId, { db, ino: opened.ino, dev: opened.dev })
+      return db
+    } catch (error) {
+      throw new LinguistProjectUnhealthyError(projectId, errorCodeOf(error))
+    }
   }
 
   /** 关闭并移除缓存句柄；未缓存时为空操作。 */
   closeProject(projectId: string): void {
     const handle = this.handles.get(projectId)
     if (handle !== undefined) {
-      handle.close()
+      handle.db.close()
       this.handles.delete(projectId)
     }
   }
@@ -475,7 +482,7 @@ export class LinguistProjectService {
   closeAll(): void {
     for (const handle of this.handles.values()) {
       try {
-        handle.close()
+        handle.db.close()
       } catch (err) {
         console.warn('[Linguist] 关闭项目句柄失败（已忽略）:', errorCodeOf(err))
       }
@@ -1413,7 +1420,7 @@ export function initLinguistProjectService(
 
 export function getLinguistProjectService(): LinguistProjectService {
   if (instance === undefined) {
-    throw new Error('[Linguist] LinguistProjectService 尚未初始化（initLinguistProjectService 未运行）')
+    throw new LinguistProjectUnhealthyError('service', 'NOT_INITIALIZED')
   }
   return instance
 }

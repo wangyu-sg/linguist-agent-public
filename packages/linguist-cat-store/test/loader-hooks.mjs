@@ -5,6 +5,9 @@ export async function resolve(specifier, context, nextResolve) {
   try {
     return await nextResolve(specifier, context)
   } catch (err) {
+    if (err && err.code === 'ERR_UNSUPPORTED_DIR_IMPORT' && specifier.startsWith('.')) {
+      return nextResolve(`${specifier}/index.ts`, context)
+    }
     if (err && err.code === 'ERR_MODULE_NOT_FOUND' && specifier.startsWith('.')) {
       return nextResolve(`${specifier}.ts`, context)
     }

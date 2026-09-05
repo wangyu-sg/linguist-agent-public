@@ -39,6 +39,15 @@
 - 验证：Stage host 1/1（包含 A→B→A、显式重启与重放、不同 actor、旧查询顺序、mapping/optional 变化）；Evidence 4/4（真实本地 HTTP Provider 链）；Delivery 3/3（窄范围覆盖和旧 stale 替代）；Store 57/57、Tools 44/44、全仓 typecheck、boundaries 4/4、host seams 9/9 通过。
 - 风险：本轮职业阶段资格不能从旧记录推断，恢复后需重新读取并确认。纯查询派生状态不等同语言质量。CAT 装配可用性和规则截断仍由 C2/D 继续处理；真实 Provider 与候选包尚未验证。
 
+## C2：CAT 可用性与宿主解耦
+
+- 真实失败：删除合成项目 cat.db 后，`resolveLinguistSessionCatTools` 在定义工具时抛 STORE_NOT_FOUND，尚未进入 Agent 请求。修复后工具定义不打开 DB，每次执行重新验证 Session 绑定、取得当前 DB 和 Stage。
+- 修改：Session CAT tools、Turn Context validator、Project Service、delegation host、原生 Collaboration 既有接入、相关测试与 Node loader。Project Service 在 DB 文件被替换/移除时撤销缓存句柄；开库失败返回带底层 code 的 PROJECT_UNHEALTHY。Turn Context 先拒绝跨项目身份；资料不可读时只注入已验证项目身份，不注入未验证 UI 实体 IDs。既有 Prompt Digest 的可用性提示继续生效。
+- General 普通协作继承项目身份与宿主能力，不创建非空专业 scope；专业岗位与显式 CAT 范围仍冻结并校验。修正普通协作默认 role 和提示中的不存在 scope。
+- Touchpoint：原有 `agent-collaboration-tools.ts` 接入原因更新；无新增/删除文件级触点。CAT Schema 不变。
+- 验证：独立 Node 进程、临时数据根、Electron 外壳 mock，实际 Project Service/SQLite/会话索引/Host/Tool 状态链 1/1：缺失→损坏→恢复→缓存文件原子替换→metadata 缺失恢复→归档只读→解绑拒绝；32 个工具保持可装配，未重建缺失 DB。原生 Collaboration 4/4、全仓 typecheck、boundaries 4/4、host seams 9/9、fusion 14/14 通过。
+- 风险：本包验证实际宿主装配和 CAT 调用，不把 Electron mock 等同真实窗口或 Provider；这些由 F 的隔离应用验证补充。文件原地破坏与外部非原子改写不提供自动数据修复，应使用已有备份恢复。
+
 ## 发布与数据边界
 
 本轮仅本地提交，不推送、创建 PR/Tag/Release 或替换安装版。不使用客户文件、生产数据库或未授权凭据。README / AGENTS 本轮不改；需要同步的准确事实在最终记录列出。单元、生产链模拟、目录包与真实 Provider 资格分别记录。

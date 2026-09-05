@@ -648,10 +648,10 @@ function createDelegatedLinguistContext(
   startedAt: number,
   uiRevision: number,
 ): Readonly<LinguistTurnContextV1> | undefined {
-  if (!session.linguistProjectId || !session.linguistDelegatedScope) return undefined
+  if (!session.linguistProjectId) return undefined
   return createLinguistTurnContextV1({
     projectId: session.linguistProjectId,
-    selectedSegmentIds: session.linguistDelegatedScope.segmentIds,
+    selectedSegmentIds: session.linguistDelegatedScope?.segmentIds ?? [],
     capturedAt: new Date(startedAt).toISOString(),
     uiRevision,
   }).context
@@ -666,7 +666,7 @@ async function startDelegation(
   const delegationId = randomUUID()
   // LA-HOST-SEAM: linguist-delegation
   const linguist = resolveLinguistDelegationMetadata(parent, args)
-  const role = args.role ?? (linguist?.role === 'translator' ? 'implement' : linguist ? 'review' : 'custom')
+  const role = args.role ?? (linguist?.role === 'translator' ? 'implement' : linguist?.role === 'reviewer' || linguist?.role === 'proofreader' ? 'review' : 'custom')
   const title = normalizeTitle(args.title, `协作：${task}`)
   const goal = truncateText(task, DELEGATION_GOAL_CHAR_LIMIT)
   const parentPermissionMode = getCurrentParentPermissionMode(parent, ctx.permissionMode)
@@ -744,7 +744,7 @@ async function startDelegation(
     parentSessionId: ctx.sessionId,
     delegationId,
     role,
-    task: linguist === undefined
+    task: linguist?.scope === undefined
       ? task
       : `${task}\n\n冻结 CAT 范围：${JSON.stringify(linguist.scope)}。以共享 CAT Store 的当前 Source/Target 为准。`,
     expectedOutput: args.expectedOutput,
