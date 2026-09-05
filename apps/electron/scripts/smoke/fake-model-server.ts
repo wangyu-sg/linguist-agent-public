@@ -73,6 +73,7 @@ export const FAKE_MODEL_IDS = [
   'fake-cat-proposal',
   'fake-cat-qa',
   'fake-cat-pb074',
+  'fake-cat-context',
 ] as const
 
 export interface FakeRequestLogEntry {
@@ -489,6 +490,7 @@ export async function startFakeModelServer(port = 0, options: FakeModelServerOpt
           return
         }
 
+        case 'cat-context':
         case 'cat-proposal': {
           const latestUser = (body.messages ?? []).filter((message) => message.role === 'user').at(-1)
           const userText = typeof latestUser?.content === 'string'
@@ -502,7 +504,7 @@ export async function startFakeModelServer(port = 0, options: FakeModelServerOpt
             writeError(res, 400, { error: { message: 'fake-cat-proposal requires segmentId' } })
             return
           }
-          const args = JSON.stringify({
+          const args = JSON.stringify(scenario === 'cat-context' ? { segmentIds: [segmentId] } : {
             segmentProposals: [
               { segmentId, baseRevision: 0, proposedTarget: G5_PROPOSAL_TARGET },
             ],
@@ -519,7 +521,7 @@ export async function startFakeModelServer(port = 0, options: FakeModelServerOpt
                     index: 0,
                     id: 'call_cat_propose_translations_1',
                     type: 'function',
-                    function: { name: FAKE_CAT_PROPOSAL_TOOL_NAME, arguments: args },
+                    function: { name: scenario === 'cat-context' ? 'cat_get_translation_context' : FAKE_CAT_PROPOSAL_TOOL_NAME, arguments: args },
                   },
                 ],
               }),

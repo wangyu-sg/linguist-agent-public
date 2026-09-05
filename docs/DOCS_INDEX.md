@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-09-04
+更新时间：2026-09-05
 
 ## 当前真源
 
@@ -27,6 +27,8 @@
 - [RUNTIME_POLICY.md](./architecture/RUNTIME_POLICY.md)
 
 ## 发布与历史
+
+- [2026-09-05 优化实施记录](./release/IMPLEMENTATION_2026_09_05.md) — 本轮修改、实际验证与尚缺资格。
 
 - [SBOM.md](./release/SBOM.md) / [sbom-full.json](./release/sbom-full.json)
 - [KNOWN_LIMITATIONS.md](./release/KNOWN_LIMITATIONS.md)

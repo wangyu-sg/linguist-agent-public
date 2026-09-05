@@ -40,7 +40,7 @@ test('CAT 自含正文与合法图片经过真实 Pi 转换后仍进入模型内
   assert.equal(mixed[0].content.filter(block => block.type === 'image').length, 1)
 })
 
-test('旧 CAT 会话备份迁移后保留正文、图片和 Pi 树身份，重复恢复不再写入', () => {
+test('旧 CAT 会话备份迁移后保留正文、图片和 Pi 树身份，重复恢复不再写入', async () => {
   const root = mkdtempSync(join(tmpdir(), 'cat-legacy-session-'))
   const file = join(root, 'session.jsonl')
   const rows = [
@@ -55,7 +55,7 @@ test('旧 CAT 会话备份迁移后保留正文、图片和 Pi 树身份，重�
   ]
   const original = rows.map(row => JSON.stringify(row)).join('\n') + '\n'
   writeFileSync(file, original)
-  normalizeLegacyCatSessionFile(file)
+  await normalizeLegacyCatSessionFile(file)
   assert.equal(readFileSync(`${file}.before-cat-content-v1`, 'utf8'), original)
   const session = SessionManager.open(file, root, root)
   assert.equal(session.getLeafId(), 'result')
@@ -64,7 +64,7 @@ test('旧 CAT 会话备份迁移后保留正文、图片和 Pi 树身份，重�
   assert.ok(JSON.stringify(messages).includes('历史正文'))
   assert.ok(JSON.stringify(messages).includes('image/gif'))
   const migrated = readFileSync(file, 'utf8')
-  normalizeLegacyCatSessionFile(file)
+  await normalizeLegacyCatSessionFile(file)
   assert.equal(readFileSync(file, 'utf8'), migrated)
   session.appendCompaction('旧任务摘要', 'result', 200)
   session.appendMessage({ role: 'user', content: '继续', timestamp: 3 })

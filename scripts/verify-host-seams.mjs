@@ -156,4 +156,17 @@ if (
   fail('HOST_SEAM_CONTRACT_CHANGED', 'AppShell 不再只通过 App Mode Registry 接入 Linguist')
 }
 
-console.log('host seams verified: 9')
+for (const [file, required] of [
+  ['apps/electron/src/main/lib/adapters/pi-utility-adapter.ts', ['hasSessionPreparation', 'hasProviderObserver', "case 'provider_payload':", "case 'provider_response':"]],
+  ['apps/electron/src/utility/agent-runtime.ts', ['CAPABILITY_PREPARE_SESSION', "sendCallback(active, 'provider_payload'", "sendCallback(active, 'provider_response'"]],
+  ['packages/shared/src/types/agent-runtime.ts', ['CAPABILITY_PREPARE_SESSION']],
+]) {
+  const source = readSource(root, file)
+  if (source.split('// LA-HOST-SEAM: evidence-runtime').length !== 2
+    || required.some(value => !source.includes(value))
+    || /from ['"][^'"]*(?:linguist|cat-store|cat-tools)/.test(source)) {
+    fail('HOST_SEAM_CONTRACT_CHANGED', `${file} 的通用恢复/请求观察跨进程合同改变`)
+  }
+}
+
+console.log('host seams verified: 12')

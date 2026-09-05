@@ -188,7 +188,7 @@
     },
     "packages/linguist-cat-core": {
       "name": "@linguist/cat-core",
-      "version": "0.0.23",
+      "version": "0.0.24",
       "dependencies": {
         "@formatjs/icu-messageformat-parser": "3.5.15",
       },
@@ -210,7 +210,7 @@
     },
     "packages/linguist-cat-store": {
       "name": "@linguist/cat-store",
-      "version": "0.0.42",
+      "version": "0.0.43",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-formats": "workspace:*",
@@ -221,7 +221,7 @@
     },
     "packages/linguist-cat-tools": {
       "name": "@linguist/cat-tools",
-      "version": "0.0.37",
+      "version": "0.0.38",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-store": "workspace:*",

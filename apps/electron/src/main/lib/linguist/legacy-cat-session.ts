@@ -1,9 +1,9 @@
 import { constants, copyFileSync, existsSync, readFileSync } from 'node:fs'
-import { parseSessionEntries } from '@earendil-works/pi-coding-agent'
 import { writeTextFileAtomic } from '../safe-file'
 
 /** 只迁移当前恢复的旧摘要结果；SDK 解析树结构，保留所有 entry/parent ID。 */
-export function normalizeLegacyCatSessionFile(sessionFile: string): void {
+export async function normalizeLegacyCatSessionFile(sessionFile: string): Promise<void> {
+  const { parseSessionEntries } = await import('@earendil-works/pi-coding-agent')
   const source = readFileSync(sessionFile, 'utf8')
   const entries = parseSessionEntries(source)
   if (entries.length !== source.split('\n').filter(line => line.trim() !== '').length) {

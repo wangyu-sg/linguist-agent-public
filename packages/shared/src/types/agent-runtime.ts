@@ -82,6 +82,8 @@ export const AGENT_RUNTIME_METHODS = {
   CAPABILITY_CAN_USE_TOOL: 'agent.capability.canUseTool',
   CAPABILITY_CANCEL: 'agent.capability.cancel',
   CAPABILITY_CUSTOM_TOOL: 'agent.capability.customTool',
+  // LA-HOST-SEAM: evidence-runtime
+  CAPABILITY_PREPARE_SESSION: 'agent.capability.prepareSession',
   CAPABILITY_CODEX_OAUTH_REFRESHED: 'agent.capability.codex_oauth_refreshed',
   CAPABILITY_XAI_OAUTH_REFRESHED: 'agent.capability.xai_oauth_refreshed',
   EVENT_STATE: 'runtime.state',

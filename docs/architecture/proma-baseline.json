@@ -21,15 +21,15 @@
   "product": {
     "linguistAgentVersion": "0.17.70",
     "sharedVersion": "0.1.69",
-    "catCoreVersion": "0.0.23",
+    "catCoreVersion": "0.0.24",
     "catFormatsVersion": "0.0.13",
-    "catStoreVersion": "0.0.42",
-    "catToolsVersion": "0.0.37",
+    "catStoreVersion": "0.0.43",
+    "catToolsVersion": "0.0.38",
     "catSchema": 19
   },
   "contracts": {
     "prompt": {
-      "linguistPromptVersion": "3.1.2",
+      "linguistPromptVersion": "3.1.3",
       "source": "linguist-prompt-builder.ts + resources/linguist-roles"
     },
     "host": {

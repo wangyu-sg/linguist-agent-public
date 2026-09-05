@@ -175,6 +175,18 @@ function handleQueryStart(request: RuntimeRequest): void {
 
   const utilityInput = {
     ...queryInput,
+    // LA-HOST-SEAM: evidence-runtime
+    ...(queryInput.hasSessionPreparation ? {
+      prepareSessionFile: async (sessionFile: string) => {
+        await requestParent(AGENT_RUNTIME_METHODS.CAPABILITY_PREPARE_SESSION, { queryId, sessionId, sessionFile })
+      },
+    } : {}),
+    ...(queryInput.hasProviderObserver ? {
+      providerObserver: {
+        onPayload: (value: unknown) => sendCallback(active, 'provider_payload', { value }),
+        onResponse: (response: { status: number }) => sendCallback(active, 'provider_response', { status: response.status }),
+      },
+    } : {}),
     canUseTool: (toolName: string, toolInput: Record<string, unknown>, options: Record<string, unknown>) => requestParent(
       AGENT_RUNTIME_METHODS.CAPABILITY_CAN_USE_TOOL,
       { queryId, sessionId, toolName, input: toolInput, options: serializeCanUseToolOptions(options) },

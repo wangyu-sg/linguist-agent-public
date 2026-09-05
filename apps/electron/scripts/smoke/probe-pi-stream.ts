@@ -41,10 +41,11 @@
  */
 
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core'
-import { mkdtempSync, existsSync, createWriteStream, readdirSync, rmSync, type WriteStream } from 'node:fs'
+import { mkdtempSync, existsSync, createWriteStream, readdirSync, renameSync, writeFileSync, rmSync, type WriteStream } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execFileSync } from 'node:child_process'
 import {
   startFakeModelServer,
   MARKERS,
@@ -52,6 +53,7 @@ import {
   type FakeModelServer,
 } from './fake-model-server.ts'
 import { CURRENT_ONBOARDING_VERSION } from '../../src/types/settings.ts'
+import type { LinguistApi } from '../../src/preload/linguist-api.ts'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const APP_DIR = resolve(SCRIPT_DIR, '..', '..')
@@ -298,7 +300,7 @@ async function createPiSession(
 
 async function sendPiMessage(
   page: Page,
-  input: { sessionId: string; userMessage: string; channelId: string; modelId: string; workspaceId: string },
+  input: { sessionId: string; userMessage: string; channelId: string; modelId: string; workspaceId: string; projectId?: string },
   wait = true,
 ): Promise<void> {
   await page.evaluate(async ({ args, wait }) => {
@@ -312,6 +314,7 @@ async function sendPiMessage(
       modelId: args.modelId,
       workspaceId: args.workspaceId,
       startedAt: Date.now(),
+      ...(args.projectId ? { linguistContext: { schemaVersion: 1, projectId: args.projectId, selectedSegmentIds: [], capturedAt: new Date().toISOString(), uiRevision: 1 } } : {}),
     })
     if (wait) await sending
     else void sending.catch((error) => console.error('[G1探针] 后台 sendAgentMessage 失败:', error))
@@ -342,7 +345,7 @@ async function main(): Promise<void> {
 
   try {
     // 1. 启动 Fake Model Server
-    server = await startFakeModelServer(0)
+    server = await startFakeModelServer(0, { captureTools: true })
     console.log(` fake model server: ${server.baseUrl}`)
     check('fake-server-started', true, server.baseUrl)
 
@@ -538,6 +541,54 @@ async function main(): Promise<void> {
       const retryErrors = evRetry.errors.filter((e) => e.sessionId === stopSession.sessionId)
       check('pi-agent-retry-final', retryCompleted && retryFinalSeen && retryCompletes.length === 1 && !retryStopped && retryErrors.length === 0,
         `同模型同会话重发后最终文本含 ${MARKERS.text}=${retryFinalSeen}，STREAM_COMPLETE 次数=${retryCompletes.length}（stoppedByUser=${retryStopped}），STREAM_ERROR=${retryErrors.length}`)
+    }
+
+    // 实际绑定会话经历 CAT 缺失、损坏与恢复，仍进入原生 Pi 请求并保留通用工具。
+    {
+      const bound = await page.evaluate(async () => {
+        const api = (window as unknown as { electronAPI: LinguistApi }).electronAPI
+        const project = await api.linguistProjectsCreate({ name: 'CAT availability', sourceLocale: 'en', targetLocale: 'zh-CN' })
+        if (!project.ok) throw new Error(project.error.message)
+        const session = await api.linguistSessionsCreateForProject({ projectId: project.data.id, role: 'general' })
+        if (!session.ok) throw new Error(session.error.message)
+        return { projectId: project.data.id, sessionId: session.data.id, workspaceId: session.data.workspaceId! }
+      })
+      const catDb = join(tmpHome, '.linguist-agent', 'linguist', 'projects', bound.projectId, 'cat.db')
+      renameSync(catDb, `${catDb}.fixture-backup`)
+      for (const state of ['missing', 'corrupt', 'restored'] as const) {
+        if (state === 'corrupt') writeFileSync(catDb, 'synthetic corrupt CAT database')
+        if (state === 'restored') renameSync(`${catDb}.fixture-backup`, catDb)
+        await installEventCollectors(page)
+        const before = server.logs.length
+        await sendPiMessage(page, { ...bound, userMessage: '继续普通对话', channelId: seeded.channelId, modelId: 'fake-text' })
+        const completed = await waitFor(async () => (await getEvents(page)).complete.some(event => event.sessionId === bound.sessionId), 60_000)
+        const events = await getEvents(page)
+        const request = server.logs.slice(before).find(entry => entry.model === 'fake-text' && entry.stream === true)
+        const summary = await page.evaluate(async projectId => (window as unknown as { electronAPI: LinguistApi }).electronAPI.linguistProjectsGetSummary({ projectId }), bound.projectId)
+        check(`pi-bound-cat-${state}`, completed && events.errors.every(event => event.sessionId !== bound.sessionId)
+          && events.assistants.some(event => event.sessionId === bound.sessionId && event.texts.join('').includes(MARKERS.text))
+          && request?.respondedStatus === 200 && request.toolNames?.includes('read') === true && request.toolNames.includes('bash')
+          && summary.ok === (state === 'restored') && (state !== 'missing' || !existsSync(catDb)),
+        `同一会话 complete-event=${completed}，HTTP=${request?.respondedStatus}，read/bash=${request?.toolNames?.includes('read')}/${request?.toolNames?.includes('bash')}，CAT=${summary.ok ? 'readable' : summary.error.code}，errors=${JSON.stringify(events.errors)}`)
+      }
+      const fixture = join(tmpHome, 'evidence.xlf')
+      writeFileSync(fixture, '<xliff version="1.2"><file source-language="en" target-language="zh-CN" datatype="plaintext" original="evidence"><body><trans-unit id="one"><source>Anonymous source</source><target>合成译文</target></trans-unit></body></file></xliff>')
+      execFileSync(process.execPath, ['--experimental-transform-types', '--import', './test/register-ts-loader.mjs', 'src/cli.ts', 'import', '--root', join(tmpHome, '.linguist-agent', 'linguist'), '--project', bound.projectId, '--file', fixture], { cwd: resolve(APP_DIR, '../../packages/linguist-cat-store'), stdio: 'pipe' })
+      const segmentId = execFileSync(process.execPath, ['--input-type=module', '-e', 'import {DatabaseSync} from "node:sqlite";const db=new DatabaseSync(process.argv[1],{readOnly:true});console.log(db.prepare("SELECT id FROM segments").get().id);db.close()', catDb], { encoding: 'utf8' }).trim()
+      const reviewer = await page.evaluate(async projectId => {
+        const result = await (window as unknown as { electronAPI: LinguistApi }).electronAPI.linguistSessionsCreateForProject({ projectId, role: 'reviewer' })
+        if (!result.ok) throw new Error(result.error.message)
+        return result.data
+      }, bound.projectId)
+      await installEventCollectors(page)
+      await sendPiMessage(page, { ...bound, sessionId: reviewer.id, userMessage: `读取当前范围 segmentId=${segmentId}`, channelId: seeded.channelId, modelId: 'fake-cat-context' })
+      const evidenceComplete = await waitFor(async () => (await getEvents(page)).complete.some(event => event.sessionId === reviewer.id), 60_000)
+      const receipts = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', 'import {DatabaseSync} from "node:sqlite";const db=new DatabaseSync(process.argv[1],{readOnly:true});console.log(JSON.stringify(db.prepare("SELECT evidence_json FROM stage_evidence_receipts WHERE session_id = ?").all(process.argv[2])));db.close()', catDb, reviewer.id], { encoding: 'utf8' })) as Array<{ evidence_json: string }>
+      const contextRequests = server.logs.filter(entry => entry.model === 'fake-cat-context' && entry.stream === true)
+      check('pi-utility-provider-evidence-receipt', evidenceComplete && contextRequests.length === 2
+        && contextRequests[1]?.toolResultText?.includes('Anonymous source') === true
+        && receipts.length === 1 && receipts[0]!.evidence_json.includes('provider-response-v1'),
+      `真实 utility→HTTP→主进程 Receipt：requests=${contextRequests.length}，receipts=${receipts.length}，submitted=${receipts[0]?.evidence_json.includes('provider-response-v1')}`)
     }
 
     // ===== fake server 侧证据：Pi 路径的请求确实到达（stream=true）=====

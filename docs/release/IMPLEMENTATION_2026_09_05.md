@@ -78,6 +78,127 @@
 - 验证：完整 `bun run test` 退出 0：Bun 主集合 255 + MCP 1 + 切换 1 + 协作 4；Store 57、Tools 44、Stage 1、Delivery 3、Evidence 4、Host 生命周期 2，总计 372 通过。真实本地 HTTP、SQLite 和 Worker 事件均进入默认链。全仓 typecheck 通过；未运行远程 CI（本轮不推送）。
 - 风险：默认测试不是本机安装/原生对话框/真实模型资格；F 继续验证候选包和存量闭环。
 
+## F：存量闭环与实际 utility 集成
+
+- 合成旧格式副本使用 Schema 19、旧 Plan（无决定边界）、旧工具级 Receipt 和旧摘要 Pi JSONL；不冒充客户库或旧 Schema 自动升级。真实 Project Service 打开后保留原译文/参考和原 Session ID，旧资格不提升；备份、重复会话规范化、新轮写回、CAS 拒绝旧 revision、verified 导出和重导通过。Source 原字节、占位符、句段 key/数量正确；损坏备份被拒绝且当前译文不变，有效备份可恢复原译文/参考/旧 Receipt。
+- 原生候选揭示两项进程内用例未覆盖的本轮集成回归：静态 SDK import 在 CJS 主进程触发 `ERR_PACKAGE_PATH_NOT_EXPORTED`；新增函数回调穿过 utility 序列化导致 `An object could not be cloned`。恢复模块改为 ESM 动态加载；adapter 等待恢复。沿用既有 capability RPC 等待主进程规范化，沿用有序 query callbacks 传递最终 payload/HTTP status，函数保留在所属进程，CAT 记账仍留在主进程。未增加事件总线、HTTP 代理或第二套会话系统。
+- 更正 B1/B2 的证据范围：此前通过的是直接 Pi SDK/adapter 层的生产链，不能证明 packaged utility 路径可用；上述两项修复后才补齐实际应用链。失败记录保留在本节，不以先前测试通过掩盖。
+- 原生探针在同一个绑定 General Session 上移走 cat.db、写入损坏 DB、恢复原件；三种状态都收到实际 HTTP 200 与 final，通用 read/bash 仍提交给模型，CAT 缺失不重建，错误保持 PROJECT_UNHEALTHY。另一个 Reviewer Session 真实调用 `cat_get_translation_context`，两次 Agent 流式请求后收到正文并在主进程得到一条 `provider-response-v1` Receipt。该链跨越原生 Electron → utility → Pi SDK → 本地 HTTP → main → SQLite。
+- 探针自身曾漏传绑定会话 Context 快照，并误把自动标题请求计入 Agent 流；补齐实际 Context 合同，只筛选 stream=true 的 Agent 请求。未删除正文、工具、错误、覆盖或 Receipt 断言。同步演练 fixture 补齐三个接缝文件，原有验证不放宽。
+- Core/Store/Tools 的公开字段、方法和工具参数已改变，分别递增一个 patch；版本只在 manifest、锁文件与机器基线维护。App 和 Proma 基线不变，未升级外部依赖、增加工具或改变 Schema。
+- Touchpoint：本包新增 `pi-utility-adapter.ts`、`src/utility/agent-runtime.ts`、`shared/src/types/agent-runtime.ts` 三个 host-seam。固定上游缺少恢复/最终请求观察的等价接入，不能删除。均登记精确 policy 与 hook，仍要求冲突复核。
+
+## 本轮真实差异与退役边界
+
+同一固定上游 `bbf577a8`，比较 `git diff --numstat <upstream> <tree> -- apps packages scripts config`；开始树是 `8fe9fe2e`，结束树是包含本节的最终 F 提交。下表为双树差异，不是三点 merge-base，也不是触点账本计数。`src` 集合包含源码目录内资源；测试集合按 test/spec/fixture/smoke 路径单列，二进制不计文本行。
+
+| 集合 | 起点：文件 / +行 / -行 | 结束：文件 / +行 / -行 |
+|---|---:|---:|
+| 全部不同路径 | 683 | 687 |
+| 上游已有 src 路径 | 222 / 6467 / 5325 | 224 / 6517 / 5319 |
+| LA 新增 src 路径 | 281 / 75800 / 0 | 282 / 76006 / 0 |
+| tests / fixtures / probes | 121 / 16754 / 4650 | 122 / 17320 / 4650 |
+| 其他配置与脚本 | 59 / 2731 / 275 | 59 / 2744 / 275 |
+
+三类含二进制文件的数量前后相同：上游 src 16、LA src 1、其他 7。
+
+| 高风险文件 | 起点 +行/-行/hunks | 结束 +行/-行/hunks |
+|---|---:|---:|
+| pi-agent-adapter.ts | 23/1/5 | 41/1/6 |
+| agent-orchestrator.ts | 87/16/29 | 89/16/30 |
+| agent-session-manager.ts | 321/40/52 | 321/40/52 |
+| agent-collaboration-tools.ts | 159/141/73 | 159/141/73 |
+| AgentView.tsx | 70/51/40 | 70/51/40 |
+| AppShell.tsx | 86/19/18 | 86/19/18 |
+| browser-controller.ts | 1/6/5 | 0/0/0 |
+| pi-utility-adapter.ts | 0/0/0 | 17/0/4 |
+| utility/agent-runtime.ts | 0/0/0 | 12/0/1 |
+| shared/types/agent-runtime.ts | 0/0/0 | 2/0/1 |
+
+账本起点为 222 product + 49 temporary + 8 host + 2 generated = **281**；结束为 222 + 48 + 11 + 2 = **283**。删除一处无须本地维护的 popup 偏差，新增三个必要跨进程接缝，净增二处。删除 CAT 专用请求投影和重复 loader 是实际减法，但本轮首先修正运行合同，不能宣称总代码或触点下降。必要恢复与请求观察的通用能力被固定上游等价覆盖后，才可退役相应接缝；其余临时偏差保留原逐项条件。
+
+## 小样本测量
+
+临时脚本直接调用当前 Store/Tool，无生产 trace/caching 平台：50 个合成句段、25 条规则、空 TM/TB，预算 8,192 字节。50 段在 19 页取完，每页 1–7 段、4,527–8,181 字节；单次总耗时约 100 ms，其中匹配约 3 ms。getByIds 20 次（包含后续规则页）、术语评价 648 次、TM 候选查询 19 次；另一个 rulesOnly 页取余下 5 条，1,119 字节、约 0.54 ms。每个句段只入页一次，但重复规则为 66,780 字节，约占文本输出 44.9%。
+
+这个刻意低预算样本说明分页仍有重复计算/规则输出开销，不证明大库性能或模型费用；当前匹配耗时不足以支持新增缓存基础设施。可用现有 rulesOffset/rulesOnly 显式继续规则，并选择合适预算。没有真实 Provider usage，不推算精确成本或语言质量收益。
+
+## 迁移、回滚和未验证资格
+
+- 新结果只走自含 content；旧摘要识别集中在恢复边界。首次迁移保存 `.before-cat-content-v1`；历史未存储的图片需要重新读取。不开库即装配 CAT 工具，不重建缺失项目。
+- Schema 保持 19，但新旧完成语义不同。回退代码不能恢复旧数据语义；如需回滚本轮项目操作，关闭相关会话后用操作前项目备份恢复；需要回滚 Pi 文件时另保留并恢复其迁移前副本。已导出的用户文件不因代码回退消失。
+- 2xx 证明实际请求获得 HTTP 响应，不证明流完整、模型理解或语言质量。未确认记录只有当前 turn 内的记账重试；进程/turn 结束后仍未确认的内容保持 pending，重新读取后才能满足新覆盖。未识别的图片协议保守少计。
+- 本轮没有授权的真实 Provider 配置。下一步使用独立临时配置和匿名 3–5 段、必读图片、跨页正文、25 条规则、术语冲突、locked 和预埋误译，显式跑 General → 三专业岗位 → QA → verified export → re-import；检查误译发现、正确译文是否被无益改写、图片事实和末页规则是否被引用，并记录实际 calls/usage/耗时。质量判断由人工复核，不使用模型自评替代。
+- Native Open/Save、真实 Keychain、IME、VoiceOver、keyboard-only、视口及 14 天日用仍未取得本轮资格；不把自动窗口操作写成这些项目通过。真实 Phrase/memoQ 互操作仍见 TODO。
+
+## 受保护文档待修订内容
+
+本轮未改 README.md、README.en.md 或 AGENTS.md。获得对应授权后，必要修订为：
+
+1. README 中文“General 可按任务选择性委派”段与英文对应段，以及 AGENTS 的 CAT 委派规则：明确专业岗位/显式 CAT 范围才冻结 Segment；通用 General 协作只继承项目和 Workspace，不要求非空 CAT 范围。
+2. README 中文 `cat_confirm_segments` 段与英文对应段、AGENTS 的确认规则：完整完成同时要求“当前轮、当前 revision、本人有效决定、必要提交证据满足、pending/blocked 为零”；覆盖句段数量本身不构成 Full Review。
+3. 在两份 README 的 CAT 说明中补充“必要规则/Context 可分页续读；旧回执不提升新资格；CAT 不可读时通用对话可继续”的用户行为。动态版本继续链接当前事实，不复制版本表。
+
+## F 最终验证与提交文件
+
+| 层级 | 实际结果 |
+|---|---|
+| 默认 `bun run test` | 373 通过，0 失败；Bun 255 + MCP 1 + 切换 1 + 协作 4；Store 57、Tools 44、Stage 1、Delivery 3、Evidence 4、Host/旧数据 3 |
+| `bun run typecheck` | 全部 11 个包退出 0 |
+| 边界与同步 | boundaries 4、fusion 14、Host Seams 12 通过；真实临时 Git 同步 replay 通过，未使用空 diff 代替验证 |
+| `bun run smoke:vertical` | 退出 0；内含完整 Electron build、runtime deps、`smoke:pack`、artifact 验证、frozen-lockfile 恢复和原生探针，无需重复独立 build/pack |
+| 原生 Agent / Chat | 分别 19/19；Agent 覆盖实际 utility Receipt、绑定会话故障恢复与 resume，Chat 覆盖流式/思考/工具/重试/Stop/重启 |
+| 原生项目切换 | 通过：侧栏→权威 Session→持久化 Workspace/Tab→AgentView，含空项目创建与 A→B→A |
+| 原生 CAT | 21 通过，0 失败，2 MANUAL；右侧 CAT、快捷确认、Proposal、QA、Backup/Restore、Worker、导出重导与重启 |
+| 真实 Provider / 人工资格 | 未验证；自动执行 passed，完整产品合同仍为 partial，Native Open/Save 一项汇总 BLOCKED |
+
+最终候选为 `apps/electron/out/mac-arm64/Linguist Agent.app`；ASAR SHA-256：`94f661ae1fdfe4b63e58b84aa1ab5705b128d320c176bca646f6641b0a02fcba`。生成记录：`apps/electron/out/smoke/vertical/vertical-smoke-report.json`，结束时间 `2026-09-05T05:54:20.437Z`。打包时 sourceHead 是 `2d526e2f`，workingTreeDirty=true，含本 F 实现；随后仅收口文档并提交同一产品代码，没有冒充干净 HEAD 打包。所有探针只运行临时 HOME/user-data-dir 和假凭据配置；产物验证不代表已安装或已发布。
+
+本包修改 25 个文件：
+
+```text
+CURRENT_FACTS_SIMPLE.md
+apps/electron/scripts/smoke/fake-model-server.ts
+apps/electron/scripts/smoke/probe-pi-stream.ts
+apps/electron/src/main/lib/adapters/pi-agent-adapter.ts
+apps/electron/src/main/lib/adapters/pi-utility-adapter.ts
+apps/electron/src/main/lib/linguist/agent-host-extension.ts
+apps/electron/src/main/lib/linguist/evidence-workflow-v1.nodetest.ts
+apps/electron/src/main/lib/linguist/legacy-cat-session.ts
+apps/electron/src/main/lib/linguist/session-availability.nodetest.ts
+apps/electron/src/utility/agent-runtime.ts
+bun.lock
+docs/DOCS_INDEX.md
+docs/HANDOFF.md
+docs/architecture/PROMA_CORE_TOUCHPOINTS.md
+docs/architecture/proma-baseline.json
+docs/architecture/proma-sync-policy.json
+docs/architecture/proma-touchpoints.json
+docs/release/IMPLEMENTATION_2026_09_05.md
+docs/release/KNOWN_LIMITATIONS.md
+packages/linguist-cat-core/package.json
+packages/linguist-cat-store/package.json
+packages/linguist-cat-tools/package.json
+packages/shared/src/types/agent-runtime.ts
+scripts/verify-host-seams.mjs
+tests/proma-sync-policy.test.ts
+```
+
+前序独立本地提交：
+
+```text
+cc63cbc2 修复 CAT 自含多模态结果与旧会话恢复
+656474c3 在真实 Provider 响应后确认 CAT 证据提交
+76a81836 修复 Context 跨页证据、最终预算与资料快照
+4c17049f 隔离 CAT Stage 轮次、决定归属与交付覆盖
+82a9f92d 保留 CAT 不可用时的 Agent 宿主与通用协作能力
+ffc9b285 统一项目规则续读与专业任务完成语义
+6799a9f5 归还固定 Proma 已覆盖的浏览器 popup 生命周期
+2d526e2f 接入完整证据回归并修复 Worker 无结果退出
+```
+
+最后 F 提交包含本节、实际跨 utility 修复和收口事实；最终 SHA 随交付回复给出。本轮总计九个本地提交，没有 push、PR、Tag、Release 或安装替换。每次提交前均审查当次 diff 并通过 ponytail-review；远程 CI 没有因本轮触发。
+
 ## 发布与数据边界
 
 本轮仅本地提交，不推送、创建 PR/Tag/Release 或替换安装版。不使用客户文件、生产数据库或未授权凭据。README / AGENTS 本轮不改；需要同步的准确事实在最终记录列出。单元、生产链模拟、目录包与真实 Provider 资格分别记录。

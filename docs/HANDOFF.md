@@ -1,15 +1,11 @@
 # Linguist Agent 当前交接
 
-当前周期按优化方案分工作流收口，每项独立提交。版本、基线、验证状态只维护在 [当前事实](../CURRENT_FACTS_SIMPLE.md)；未完成项见 [TODO](../TODO.md)。
+本轮执行 2026-09-05 新优化方案，开始提交 `8fe9fe2e`；按工作流本地提交，不推送、打 Tag、Release 或替换安装版。当前版本和实现只在 [当前事实](../CURRENT_FACTS_SIMPLE.md) 维护。
 
-已完成：
+B–E 已修复自含多模态、最终请求回执、分页预算、独立 Stage、项目降级和规则覆盖；删除 CAT request projection、重复测试 loader，并把已有等价证据的 popup 文件归还固定上游。F 补齐旧项目闭环、ESM/utility 实际接入、候选包验证与风险记录。
 
-- A1 `2f3b598e`：MCP 桥接完整采用固定上游；真实 loopback 连接验证失败冷却、缓存淘汰和恢复。
-- A2 `4365d7af`：逐项审计产品触点，通用差异转临时偏差；原生生命周期与安全候选补丁保存在 `architecture/upstream-native-security.patch`，未向外部提交。
-- D `aa5290da`：项目切换权威刷新、创建空项目会话、代际判定和同步持久化；Store 与实际窗口状态链通过；启动恢复补修复用已有项目恢复入口。
-- B `e047c71b`：统一产品身份、三模式首章、FAQ 与截图；目录包和隔离应用欢迎页已检查。
-- C：README 与工程规则保留稳定职责，动态事实与未完成清单收敛；合同测试从实际工具常量读取数量，纠正此前漏记的工具。
+全部提交、修改文件、触点增删、失败及修正、真实运行状态、迁移与回滚边界见 [本轮实施记录](./release/IMPLEMENTATION_2026_09_05.md)。历史 [此前验证记录](./release/VALIDATION_0_17_70.md) 描述本轮之前的候选，不能覆盖新证据。
 
-自动门禁与目录包发布准备已完成；精确文件、触点增删、行为、运行验证和风险见 [本周期记录](./release/VALIDATION_0_17_70.md)。下一步补齐真实 Provider 四岗位链。真实 Provider 测试需要独立临时配置，目前尚未提供；不得读取真实用户数据根运行 smoke。Keychain 会阻塞无登录钥匙串的临时 HOME；现有无真实凭据 smoke 配置只用于自动探针，不能代表真实密钥存储验证。
+下一步是独立授权的真实 Provider 四岗位匿名小任务及人工资格，执行步骤在实施记录；不要搜集用户凭据或用客户文件替代 fixture。README / AGENTS 的必要修订列在实施记录，尚未修改。
 
-当前规范和证据入口：[文档索引](./DOCS_INDEX.md)、[基线](./architecture/proma-baseline.json)、[触点](./architecture/proma-touchpoints.json)、[限制](./release/KNOWN_LIMITATIONS.md)。
+当前规范入口：[文档索引](./DOCS_INDEX.md)、[基线](./architecture/proma-baseline.json)、[触点](./architecture/proma-touchpoints.json)、[限制](./release/KNOWN_LIMITATIONS.md)、[TODO](../TODO.md)。

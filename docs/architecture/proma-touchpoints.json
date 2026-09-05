@@ -2335,6 +2335,33 @@
       "owner": "product-identity",
       "mergePolicy": "keep-la",
       "reason": "用户可见的快捷键说明或辅助功能权限错误必须指向 Linguist Agent 产品身份，保留原有行为与配置键。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/adapters/pi-utility-adapter.ts",
+      "ticket": "LA-HOST-003",
+      "kind": "host-seam",
+      "owner": "codex-main-host",
+      "mergePolicy": "host-seam",
+      "hook": "evidence-runtime",
+      "reason": "通过既有 utility capability RPC 等待会话恢复，并以有序回调传递最终请求/响应观察；只传可克隆数据，业务记账留在主进程。固定上游无等价 hook；上游覆盖同一恢复顺序和请求证据合同后可归还。"
+    },
+    {
+      "file": "apps/electron/src/utility/agent-runtime.ts",
+      "ticket": "LA-HOST-003",
+      "kind": "host-seam",
+      "owner": "codex-main-host",
+      "mergePolicy": "host-seam",
+      "hook": "evidence-runtime",
+      "reason": "通过既有 utility capability RPC 等待会话恢复，并以有序回调传递最终请求/响应观察；只传可克隆数据，业务记账留在主进程。固定上游无等价 hook；上游覆盖同一恢复顺序和请求证据合同后可归还。"
+    },
+    {
+      "file": "packages/shared/src/types/agent-runtime.ts",
+      "ticket": "LA-HOST-003",
+      "kind": "host-seam",
+      "owner": "codex-main-host",
+      "mergePolicy": "host-seam",
+      "hook": "evidence-runtime",
+      "reason": "通过既有 utility capability RPC 等待会话恢复，并以有序回调传递最终请求/响应观察；只传可克隆数据，业务记账留在主进程。固定上游无等价 hook；上游覆盖同一恢复顺序和请求证据合同后可归还。"
     }
   ]
 }

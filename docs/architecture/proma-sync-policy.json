@@ -22,7 +22,10 @@
         "apps/electron/src/preload/index.ts",
         "apps/electron/src/main/lib/agent-collaboration-tools.ts",
         "apps/electron/src/main/lib/adapters/pi-builtin-tools.ts",
-        "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts"
+        "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts",
+        "apps/electron/src/main/lib/adapters/pi-utility-adapter.ts",
+        "apps/electron/src/utility/agent-runtime.ts",
+        "packages/shared/src/types/agent-runtime.ts"
       ],
       "policy": "host-seam",
       "owner": "codex-main-host"

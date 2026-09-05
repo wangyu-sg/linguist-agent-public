@@ -185,6 +185,13 @@ export class PiUtilityAdapter {
 
     if (!pending) throw new Error(`No active Agent query: ${queryId ?? 'unknown'}`)
 
+    // LA-HOST-SEAM: evidence-runtime
+    if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_PREPARE_SESSION) {
+      if (!pending.input.prepareSessionFile) throw new Error(`No session preparation handler: ${pending.sessionId}`)
+      await pending.input.prepareSessionFile(String(payload?.sessionFile))
+      return { accepted: true }
+    }
+
     if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_CAN_USE_TOOL) {
       if (!pending.input.canUseTool) throw new Error(`No canUseTool handler: ${pending.sessionId}`)
       const controller = new AbortController()
@@ -278,6 +285,12 @@ export class PiUtilityAdapter {
     const callback = payload?.callback
     const callbackPayload = payload?.payload as Record<string, unknown> | undefined
     switch (callback) {
+      case 'provider_payload':
+        pending.input.providerObserver?.onPayload(callbackPayload?.value)
+        break
+      case 'provider_response':
+        pending.input.providerObserver?.onResponse({ status: Number(callbackPayload?.status) })
+        break
       case 'session_id':
         pending.input.onSessionId?.(String(callbackPayload?.sdkSessionId ?? ''), callbackPayload?.sessionFile as string | undefined)
         break
@@ -316,6 +329,8 @@ function serializeQueryInput(input: PiAgentQueryOptions): Record<string, unknown
     onSkillActivated: _onSkillActivated,
     onCodexOAuthCredentialsRefreshed: _onCodexOAuthCredentialsRefreshed,
     onXaiOAuthCredentialsRefreshed: _onXaiOAuthCredentialsRefreshed,
+    prepareSessionFile,
+    providerObserver,
     ...serializable
   } = input
   const serializedCustomTools = (customTools ?? []).map((tool) => {
@@ -324,6 +339,8 @@ function serializeQueryInput(input: PiAgentQueryOptions): Record<string, unknown
   })
   return {
     ...serializable,
+    ...(prepareSessionFile ? { hasSessionPreparation: true } : {}),
+    ...(providerObserver ? { hasProviderObserver: true } : {}),
     ...(serializedCustomTools.length > 0 ? { customTools: serializedCustomTools } : {}),
   }
 }

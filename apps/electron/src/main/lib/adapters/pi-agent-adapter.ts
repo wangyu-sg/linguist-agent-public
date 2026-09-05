@@ -133,7 +133,7 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   piSessionDir: string
   customTools?: ToolDefinition[]
   /** 在 SDK 恢复之前执行宿主提供的持久化格式迁移。 */
-  prepareSessionFile?: (sessionFile: string) => void
+  prepareSessionFile?: (sessionFile: string) => Promise<void>
   /** SDK 扩展修改之后的最终请求与实际响应通知；观察者不得修改请求。 */
   providerObserver?: {
     onPayload: (payload: unknown) => void
@@ -1427,7 +1427,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       if (input.resumeSessionId && !sessionFile) {
         throw new Error(`No conversation found with session ID ${input.resumeSessionId}`)
       }
-      if (sessionFile) input.prepareSessionFile?.(sessionFile)
+      if (sessionFile) await input.prepareSessionFile?.(sessionFile)
       const sessionManager = sessionFile
         ? sdk.SessionManager.open(sessionFile, input.piSessionDir, cwd)
         : sdk.SessionManager.create(cwd, input.piSessionDir)

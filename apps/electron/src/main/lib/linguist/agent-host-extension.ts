@@ -35,7 +35,7 @@ interface ComposedHostTools {
 }
 
 export interface LinguistAgentHostExtension {
-  prepareSessionFile?: (sessionFile: string) => void
+  prepareSessionFile?: (sessionFile: string) => Promise<void>
   providerObserver?: ReturnType<typeof createEvidenceSubmissionObserver>
   executionScope: AgentExecutionScope
   promptOverlay: string
