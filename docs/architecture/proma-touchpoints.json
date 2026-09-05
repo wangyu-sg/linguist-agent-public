@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "baseline": "bbf577a8eb768225fdf1ac49ab9ef07a11413b24",
   "formalMerge": "98f0ed125c4e619d0496e10279755e69643341f5",
-  "recomputedOn": "2026-09-04",
+  "recomputedOn": "2026-09-05",
   "comment": "Proma-core touchpoints tracked against v0.19.26; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
@@ -411,15 +411,6 @@
       "owner": "main-product",
       "mergePolicy": "keep-la",
       "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/browser-controller.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "temporary-deviation",
-      "owner": "main-upstream",
-      "mergePolicy": "keep-la",
-      "hook": "upstream-browser-tab-lifecycle",
-      "reason": "提前同步 Proma f2ddb623191bee246a1c74c2f2d0e4ed64877c4c 的 popup Tab 生命周期修复；固定 bbf577a8 仍保留 opener 字段。保留本地差异，固定稳定基线包含相同生命周期且关闭/切换真实 Tab 验证通过后退役。"
     },
     {
       "file": "apps/electron/src/main/lib/channel-manager.ts",

@@ -59,6 +59,15 @@
 - 验证：Tools 44/44（26 条适用规则经 2,000 字节规则页取全、其他资产约束排除、超长规则不空转、termLimit=0 仍保留 hard terms）；真实 Pi→本地 HTTP 的三岗位链：25 条规则中余下 5 条未提交时逐段确认仍 blocked，实际提交后 complete。Evidence 4/4、Store 57/57、Stage host 1/1、Delivery 3/3、Prompt 3/3、全仓 typecheck、boundaries 4/4 通过。
 - 风险：规则覆盖证明本轮提交事实，不证明语言质量或任意自然语言约束被机器执行。未判定的自由文本 scope 保守保留；真实 Provider 专业效果仍未验证。
 
+## E1：退役已由固定上游覆盖的 popup 偏差
+
+- 当前上游 main 已核对至 `66b888268b38fcd13d85f71021e97ebacea28596`（新增 Slack bridge）；本轮仍固定 bbf577a8，不引入 Slack、Rail、新搜索布局或 Google 超时变更。
+- 三方证据：当前 LA 和固定基线都已有 `outlivesOpener: true`，都没有父标签递归销毁子标签；`f2ddb623` 是固定基线的祖先。唯一剩余差异是 LA 删除了未使用的 opener 字段及传递，不能据此声称上游缺少生命周期修复。
+- 修改：`browser-controller.ts` 恢复为固定基线逐字一致；删除其 temporary-deviation 登记，执行 policy 改为 take-upstream；同步现有账本摘要，新增小型原生 popup probe。共享 Host Seam 的冲突继续要求具体复核，未设置整文件 ours/theirs。
+- Touchpoint：删除 1 个 temporary-deviation，49→48；总数 281→280，其余 222 product + 8 host + 2 generated 不变。恢复上游未使用字段增加 6 行本地代码，但移除了整文件维护责任。
+- 验证：同一个源码级 probe 分别编译当前 LA 和恢复后的固定上游，使用真实 Electron 43.2.0 WebContents/受管 BrowserController、专用临时配置及 user-data-dir，执行 popup→切换→关闭父标签→切换/关闭另一标签→子页面正文仍可读→关闭子标签，两版均通过。日志 `/tmp/la-new-popup-current.log`、`/tmp/la-new-popup-upstream.log`。固定基线文件 diff 为零；boundaries 4/4、policy、fusion 14/14、host seams 9/9 通过。
+- 风险：此次只证明该生命周期合同等价；未把最新上游的其他新行为当作 LA 已实现。其余临时偏差没有充分等价证据，保留。
+
 ## 发布与数据边界
 
 本轮仅本地提交，不推送、创建 PR/Tag/Release 或替换安装版。不使用客户文件、生产数据库或未授权凭据。README / AGENTS 本轮不改；需要同步的准确事实在最终记录列出。单元、生产链模拟、目录包与真实 Provider 资格分别记录。

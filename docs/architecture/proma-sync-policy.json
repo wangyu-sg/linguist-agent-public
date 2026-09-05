@@ -36,7 +36,8 @@
         "packages/shared/src/types/feishu.ts",
         "apps/electron/src/main/lib/chat-tool-config.ts",
         "apps/electron/src/main/lib/adapters/pi-mcp-tools.ts",
-        "apps/electron/src/renderer/components/agent/AgentPlaceholder.tsx"
+        "apps/electron/src/renderer/components/agent/AgentPlaceholder.tsx",
+        "apps/electron/src/main/lib/browser-controller.ts"
       ],
       "policy": "take-upstream"
     },
@@ -98,7 +99,6 @@
         "apps/electron/src/main/agent-status-hover-window.ts",
         "apps/electron/src/main/lib/agent-island-navigation-policy.ts",
         "apps/electron/src/main/lib/agent-model-selection.ts",
-        "apps/electron/src/main/lib/browser-controller.ts",
         "apps/electron/src/main/lib/detached-preview-window.ts",
         "apps/electron/src/main/lib/mac-eventkit-native-addon.ts",
         "apps/electron/src/main/lib/mcp-oauth-service.ts",
