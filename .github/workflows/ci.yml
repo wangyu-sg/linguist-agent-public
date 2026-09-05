@@ -41,7 +41,7 @@ jobs:
       - name: TypeScript 类型检查
         run: bun run typecheck
 
-      - name: 关键回归（目标 200–300 条）
+      - name: 关键生产链与边界回归
         run: bun run test
 
       - name: Proma 同步合同

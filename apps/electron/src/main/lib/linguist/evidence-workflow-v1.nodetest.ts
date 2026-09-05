@@ -111,7 +111,7 @@ test('Context 跨页区间有间隙不完成，连续覆盖支持旧无 anchor �
       const segmentId = asset.segments[0]!.id
       db.contextDocs.setEvidenceLink({ contextDocId: doc.id, ...(legacy ? {} : { anchorId: 'real' }), relation: { kind: 'segment', segmentId }, requiredness: 'required', mappingRevision: '1' })
       const state = ensureStageEvidenceForSession({ session: { id: doc.id, linguistRole: 'reviewer' }, db, fallbackSegmentIds: [segmentId],
-        discoveryScope: { roots: [], files: [], unavailable: [], hash: doc.id, managedEvidence: [{ ref: { kind: 'asset', id: asset.asset.id }, version: asset.asset.sourceSha256 }, { ref: { kind: 'context-doc', id: doc.id }, version: doc.sha256! }] } })!
+        discoveryScope: { roots: [], files: [], unavailable: [], hash: doc.id, managedEvidence: [{ ref: { kind: 'asset', id: asset.asset.id }, version: asset.asset.sourceSha256 }, ...db.contextDocs.list().map(item => ({ ref: { kind: 'context-doc' as const, id: item.id }, version: item.sha256! }))] } })!
       const observer = createEvidenceSubmissionObserver(receipt => { db.stageEvidence.recordReceipt(receipt) }, error => { throw error })
       const tools = createLinguistCatTools({ resolveProject: () => ({ project, db }), resultProjectId: project.id, sessionId: doc.id, stageEvidenceRunId: state.stageRunId, onEvidencePrepared: observer.prepare })
       const tool = toolByName(tools, 'cat_read_context_doc')

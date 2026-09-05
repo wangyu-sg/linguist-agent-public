@@ -12,7 +12,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --import ./test/register-ts-loader.mjs --test src/tools.nodetest.ts"
+    "test": "node --experimental-transform-types --import ../linguist-cat-store/test/register-ts-loader.mjs --test src/tools.nodetest.ts"
   },
   "dependencies": {
     "@linguist/cat-core": "workspace:*",

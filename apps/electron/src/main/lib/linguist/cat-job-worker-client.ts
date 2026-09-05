@@ -59,6 +59,7 @@ function runWorker<TResult>(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
     worker.on('message', (message: WorkerMessage<TResult>) => {
+      if (settled) return
       if (message.type === 'progress') {
         try {
           onProgress?.(message.phase)
@@ -82,9 +83,7 @@ function runWorker<TResult>(
     })
     worker.on('error', (error) => settle(() => reject(error)))
     worker.on('exit', (code) => {
-      if (code !== 0) {
-        settle(() => reject(new Error(`CAT ${label} worker exited with code ${code}`)))
-      }
+      settle(() => reject(new Error(`CAT ${label} worker exited without a result (code ${code})`)))
     })
   })
 }

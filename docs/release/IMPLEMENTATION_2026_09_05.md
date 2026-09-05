@@ -68,6 +68,16 @@
 - 验证：同一个源码级 probe 分别编译当前 LA 和恢复后的固定上游，使用真实 Electron 43.2.0 WebContents/受管 BrowserController、专用临时配置及 user-data-dir，执行 popup→切换→关闭父标签→切换/关闭另一标签→子页面正文仍可读→关闭子标签，两版均通过。日志 `/tmp/la-new-popup-current.log`、`/tmp/la-new-popup-upstream.log`。固定基线文件 diff 为零；boundaries 4/4、policy、fusion 14/14、host seams 9/9 通过。
 - 风险：此次只证明该生命周期合同等价；未把最新上游的其他新行为当作 LA 已实现。其余临时偏差没有充分等价证据，保留。
 
+## E2：默认验证链与 Worker 结算
+
+- 真实失败：合成 Worker 在未返回结果时 exit(0)，原生产 helper 的 Promise 仍 pending，Node 测试以“事件循环已结束但 Promise 未解决”失败。
+- 修改：`cat-job-worker-client.ts` 对任何未结算退出明确 reject，并忽略结算后的消息；一个使用真实 worker_threads 的生命周期用例验证 exit 0/7、abort、结果后异常和迟到消息。没有 worker pool、重试或新调度平台。
+- 根 test 顺序接入既有 Stage/Delivery/Evidence 三个脚本及一处 host-lifecycle 集合；Store/Tools 各执行一次。Tools 复用 Store Node loader，删除两个重复文件。CI 标题移除“目标 200–300 条”。
+- 默认链也揭示分页 fixture 的 discovery 清单只列当次文档，遗漏同项目已关联资料；改为实际全集，保留原有正文/图片/范围断言。
+- Touchpoint：无新增/删除；根 manifest 和 CI 仍使用原有入口及登记。
+- 验证：完整 `bun run test` 退出 0：Bun 主集合 255 + MCP 1 + 切换 1 + 协作 4；Store 57、Tools 44、Stage 1、Delivery 3、Evidence 4、Host 生命周期 2，总计 372 通过。真实本地 HTTP、SQLite 和 Worker 事件均进入默认链。全仓 typecheck 通过；未运行远程 CI（本轮不推送）。
+- 风险：默认测试不是本机安装/原生对话框/真实模型资格；F 继续验证候选包和存量闭环。
+
 ## 发布与数据边界
 
 本轮仅本地提交，不推送、创建 PR/Tag/Release 或替换安装版。不使用客户文件、生产数据库或未授权凭据。README / AGENTS 本轮不改；需要同步的准确事实在最终记录列出。单元、生产链模拟、目录包与真实 Provider 资格分别记录。
