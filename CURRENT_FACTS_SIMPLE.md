@@ -38,7 +38,7 @@
 
 ## 本轮验证与发布证据
 
-- 本轮基于 Proma 主线 `20a5aa8f` 合并，App 版本保持 `0.17.70`；推送、Tag、Release、生产数据迁移和安装替换尚未完成。此前发布准备见历史 [0.17.70 验证记录](./docs/release/VALIDATION_0_17_70.md)，不得把该包哈希当作本轮结果。
+- 本轮已将 Proma 主线 `20a5aa8f` 合并为 `ed8aedd60577ab88d1cca1f092ac5645c1da2d8f`，App 版本保持 `0.17.70`；推送、Tag、Release、生产数据迁移和安装替换尚未完成。此前发布准备见历史 [0.17.70 验证记录](./docs/release/VALIDATION_0_17_70.md)，不得把该包哈希当作本轮结果。
 - 默认集合覆盖真实 SQLite、Worker、SDK 转换和本地 HTTP；旧格式合成项目与 Pi 会话通过原译文/参考读取、备份、会话恢复、新轮写回、verified 导出、重导和损坏备份拒绝。具体命令、数量与边界见 [本轮实施记录](./docs/release/IMPLEMENTATION_2026_09_05.md)。
 - 最初原生候选暴露 ESM 加载和 utility 回调克隆两项集成回归，已修正。本轮 `electron:build` 与 `smoke:pack` 通过；`smoke:vertical` 的真实 HTTP 探针因沙箱禁止监听 `127.0.0.1`，窗口探针因沙箱限制无法启动，证据保持 partial，不能把旧候选结果挪作本轮结果。
 - 模型请求均使用合成资料和本地 Fake Provider；没有测试真实收费 Provider、真实 Keychain、原生 Open/Save 或语言质量。用户安装版保持原状，本轮未检查其哈希。
