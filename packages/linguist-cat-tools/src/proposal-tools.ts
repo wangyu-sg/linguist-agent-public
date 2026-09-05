@@ -94,6 +94,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
         throw new LinguistCatInvalidArgumentError('edits', 'expected 1-200 items')
       }
       const { project, db } = resolveBoundProject('cat_apply_translations', toolCallId)
+      runtime.prepareStage(params.edits.map(edit => edit.segmentId))
       const provenance = proposalProvenance(toolCallId)
       const runId = provenance.runId
       const createdAt = deps.now?.()
@@ -207,6 +208,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
         throw new LinguistCatInvalidArgumentError('segmentProposals', 'expected 1-50 items')
       }
       const { project, db } = resolveBoundProject('cat_propose_translations', toolCallId)
+      runtime.prepareStage(params.segmentProposals.map(proposal => proposal.segmentId))
       for (const input of params.segmentProposals) {
         if (input.proposedTarget.trim() === '') {
           throw new LinguistCatInvalidArgumentError('proposedTarget', 'expected a non-empty translation')
@@ -323,6 +325,11 @@ export function createProposalTools(runtime: CatToolRuntime) {
     }),
     async execute(toolCallId, params) {
       const { project, db } = resolveBoundProject('cat_accept_proposals', toolCallId)
+      runtime.prepareStage(params.proposals.map(item => {
+        const proposal = db.proposals.getById(item.proposalId)
+        if (proposal === undefined) throw new StoreNotFoundError('proposal', item.proposalId)
+        return proposal.segmentId
+      }))
       const mutation = db.proposals.acceptSelected(
         params.proposals,
         `cat_accept_proposals:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`,

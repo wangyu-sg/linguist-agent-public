@@ -12,6 +12,8 @@ import type {
 import { createStageEvidenceBaseline, deriveStableIdV2 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
+import type { SegmentsRepository } from './segments'
+import type { ContextDocsRepository } from './context-docs'
 
 export type StageEvidenceStateStatus =
   | 'planning'
@@ -185,6 +187,8 @@ export class StageEvidenceRepository {
     private readonly db: CatDatabase,
     private readonly projectId: string,
     private readonly now: () => string,
+    private readonly segments: SegmentsRepository,
+    private readonly contextDocs: ContextDocsRepository,
   ) {}
 
   create(input: CreateStageEvidenceStateInput): StageEvidenceState {
@@ -256,7 +260,7 @@ export class StageEvidenceRepository {
         input.sessionId,
         input.plan.role,
         input.plan.stage,
-        JSON.stringify(input.plan),
+        JSON.stringify({ ...input.plan, decisionEventBoundary: (this.db.db.prepare('SELECT COALESCE(MAX(event_id), 0) AS boundary FROM segment_stage_events').get() as { boundary: number }).boundary }),
         JSON.stringify(input.baseline),
         hasOpenProjectGaps ? 'ready-with-gaps' : 'ready',
         at,
@@ -278,11 +282,11 @@ export class StageEvidenceRepository {
     const rows = stage === undefined
       ? this.db.db.prepare(`
           SELECT * FROM stage_evidence_states
-          WHERE project_id = ? ORDER BY updated_at DESC, stage_run_id
+          WHERE project_id = ? ORDER BY created_at DESC, rowid DESC
         `).all(this.projectId)
       : this.db.db.prepare(`
           SELECT * FROM stage_evidence_states
-          WHERE project_id = ? AND stage = ? ORDER BY updated_at DESC, stage_run_id
+          WHERE project_id = ? AND stage = ? ORDER BY created_at DESC, rowid DESC
         `).all(this.projectId, stage)
     return (rows as StageEvidenceStateRow[]).map(stateFromRow)
   }
@@ -303,10 +307,11 @@ export class StageEvidenceRepository {
   recordReceipt(input: RecordStageEvidenceReceiptInput): StageEvidenceReceipt {
     const state = this.get(input.stageRunId)
     if (state === undefined) throw new StoreNotFoundError('stage evidence state', input.stageRunId)
+    if (state.status === 'stale' || this.evidenceChanged(state)) throw new TypeError('Stage Evidence changed before submission was confirmed')
     if (state.baseline.baselineHash !== input.baselineHash) {
       throw new TypeError('Stage Evidence receipt baseline does not match the frozen Stage')
     }
-    if (input.sessionId.trim() === '' || input.generationRunId.trim() === '' || input.evidence.length === 0) {
+    if (input.sessionId !== state.sessionId || input.generationRunId.trim() === '' || input.evidence.length === 0) {
       throw new TypeError('Stage Evidence receipt requires session, generation, and evidence')
     }
     const planned = new Set(state.plan.requirements.map((item) => evidenceRefKey(item.evidence.ref)))
@@ -350,10 +355,12 @@ export class StageEvidenceRepository {
     `).all(stageRunId) as StageEvidenceReceiptRow[]).map(receiptFromRow)
   }
 
-  getPresentationCoverage(stageRunId: string): StageEvidencePresentationCoverage {
+  getPresentationCoverage(stageRunId: string, segmentIds?: readonly string[]): StageEvidencePresentationCoverage {
     const state = this.get(stageRunId)
     if (state === undefined) throw new StoreNotFoundError('stage evidence state', stageRunId)
+    const segments = this.segments.getByIds(segmentIds ?? state.plan.segmentIds)
     const presented = new Map<string, Set<string>>()
+    const sourceSegments = new Map<string, Set<string>>()
     const visual = new Map<string, Set<string>>()
     const ranges = new Map<string, Array<{ start: number; end: number }>>()
     for (const receipt of this.listReceipts(stageRunId)) {
@@ -362,6 +369,11 @@ export class StageEvidenceRepository {
         const key = evidenceRefKey(item.ref)
         const planned = state.plan.requirements.find(requirement => evidenceRefKey(requirement.evidence.ref) === key)
         if (item.submission !== 'provider-response-v1' || item.version !== planned?.evidence.version) continue
+        if (item.ref.kind === 'asset') {
+          const ids = sourceSegments.get(key) ?? new Set<string>()
+          receipt.segmentIds.forEach(id => ids.add(id))
+          sourceSegments.set(key, ids)
+        }
         if (item.textRange) ranges.set(key, [...(ranges.get(key) ?? []), item.textRange])
         const map = item.visual ? visual : presented
         const anchors = map.get(key) ?? new Set<string>()
@@ -370,13 +382,17 @@ export class StageEvidenceRepository {
       }
     }
     for (const parts of ranges.values()) parts.sort((a, b) => a.start - b.start)
-    const required = state.plan.requirements.filter(item => item.requiredness === 'required')
+    const required = state.plan.requirements.filter(item => item.requiredness === 'required' && (item.scope.kind === 'stage'
+      || (item.scope.kind === 'segments' ? item.scope.segmentIds.some(id => segments.some(segment => segment.id === id))
+        : item.scope.assetIds.some(id => segments.some(segment => segment.assetId === id)))))
     const pending = required.flatMap<StageEvidencePresentationCoverage['pending'][number]>(item => {
       const key = evidenceRefKey(item.evidence.ref)
       if (item.evidence.ref.kind !== 'context-doc') {
         const anchors = presented.get(key)
         const missing = item.anchorIds.filter(id => !anchors?.has(id))
-        return anchors !== undefined && missing.length === 0 ? [] : [{ evidence: item.evidence.ref, anchorIds: missing }]
+        const sourceCovered = item.evidence.ref.kind !== 'asset' || segments
+          .filter(segment => segment.assetId === item.evidence.ref.id).every(segment => sourceSegments.get(key)?.has(segment.id))
+        return sourceCovered && anchors !== undefined && missing.length === 0 ? [] : [{ evidence: item.evidence.ref, anchorIds: missing }]
       }
       const doc = this.db.db.prepare('SELECT kind, text_extract FROM context_docs WHERE id = ? AND project_id = ?')
         .get(item.evidence.ref.id, this.projectId) as { kind: string; text_extract: string | null } | undefined
@@ -408,35 +424,44 @@ export class StageEvidenceRepository {
     return { required: required.length, presented: required.length - pending.length, pending }
   }
 
-  refreshCompletion(
-    stageRunId: string,
-    decisions: StageEvidenceCompletion['decisions'],
-  ): StageEvidenceCompletion {
+  getCompletion(stageRunId: string, segmentIds?: readonly string[]): StageEvidenceCompletion {
     const state = this.get(stageRunId)
     if (state === undefined) throw new StoreNotFoundError('stage evidence state', stageRunId)
-    const presentation = this.getPresentationCoverage(stageRunId)
+    const ids = segmentIds ?? state.plan.segmentIds
+    if (ids.some(id => !state.plan.segmentIds.includes(id))) throw new TypeError('Completion scope is outside the frozen Stage')
+    const decisions = this.segments.getStageDecisionCoverage(state.stage, ids, {
+      actor: state.sessionId, afterEventId: state.plan.decisionEventBoundary ?? Number.MAX_SAFE_INTEGER,
+    })
+    const presentation = this.getPresentationCoverage(stageRunId, ids)
     const gaps = this.listOpenGaps(stageRunId)
     const blockingGaps = gaps.filter((gap) => gap.severity === 'blocking')
     const warnings = gaps.filter((gap) => gap.severity === 'warning')
-    const status: StageEvidenceCompletion['status'] = state.status === 'stale'
+    const status: StageEvidenceCompletion['status'] = state.status === 'stale' || this.evidenceChanged(state)
       ? 'stale'
       : decisions.pending > 0
         ? 'in_progress'
         : decisions.blocked > 0 || presentation.pending.length > 0 || blockingGaps.length > 0
           ? 'blocked'
           : 'complete'
-    if (status === 'complete' && state.status !== 'complete') {
-      this.db.db.prepare(`
-        UPDATE stage_evidence_states SET status = 'complete', stale_reason = NULL, updated_at = ?
-        WHERE stage_run_id = ? AND project_id = ?
-      `).run(this.now(), stageRunId, this.projectId)
-    } else if (status !== 'complete' && status !== 'stale' && state.status === 'complete') {
-      this.db.db.prepare(`
-        UPDATE stage_evidence_states SET status = ?, updated_at = ?
-        WHERE stage_run_id = ? AND project_id = ?
-      `).run(gaps.length > 0 ? 'ready-with-gaps' : 'ready', this.now(), stageRunId, this.projectId)
-    }
     return { status, decisions, presentation, blockingGaps, warnings }
+  }
+
+  private evidenceChanged(state: StageEvidenceState): boolean {
+    return state.plan.requirements.some(item => {
+      const ref = item.evidence.ref
+      if (ref.kind === 'context-doc') return item.evidence.version !== this.contextDocs.evidenceVersion(ref.id, state.plan.segmentIds, state.plan.assetIds)
+      if (ref.kind === 'workspace-attachment') return true
+      const source = {
+        asset: ['assets', 'source_sha256'],
+        'reference-import': ['reference_imports', 'source_sha256'],
+        'style-rule': ['style_guide_rules', 'updated_at'],
+        'tech-constraint': ['tech_constraints', 'updated_at'],
+        'voice-profile': ['voice_profiles', 'updated_at'],
+      }[ref.kind]
+      const row = this.db.db.prepare(`SELECT ${source[1]} AS version FROM ${source[0]} WHERE id = ? AND project_id = ?`)
+        .get(ref.id, this.projectId) as { version: string } | undefined
+      return row?.version !== item.evidence.version
+    })
   }
 
   replaceProjectInventoryGaps(inputs: readonly ProjectInventoryGapInput[]): EvidenceGap[] {

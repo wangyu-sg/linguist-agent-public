@@ -509,15 +509,15 @@ export class SegmentsRepository {
     )
   }
 
-  listStageEvents(segmentId: SegmentId | string): WorkflowStageEvent[] {
+  listStageEvents(segmentId: SegmentId | string, scope?: { actor: string; afterEventId: number }): WorkflowStageEvent[] {
     const rows = this.db.db
       .prepare(
         `SELECT stage, action, segment_revision, actor, created_at
          FROM segment_stage_events
-         WHERE segment_id = ?
+         WHERE segment_id = ? ${scope === undefined ? '' : "AND (actor = ? OR action = 'unconfirmed') AND event_id > ?"}
          ORDER BY event_id`,
       )
-      .all(segmentId) as WorkflowStageEventRow[]
+      .all(segmentId, ...(scope === undefined ? [] : [scope.actor, scope.afterEventId])) as WorkflowStageEventRow[]
     return rows.map((row) => ({
       stage: row.stage as WorkflowStage,
       action: row.action as WorkflowStageEventAction,
@@ -534,13 +534,14 @@ export class SegmentsRepository {
   getStageDecisionCoverage(
     stage: WorkflowStage,
     segmentIds: readonly (SegmentId | string)[],
+    scope?: { actor: string; afterEventId: number },
   ): StageDecisionCoverage {
     const uniqueIds = [...new Set(segmentIds)]
     const segments = this.getByIds(uniqueIds)
     const counts = { confirmed: 0, unchanged: 0, corrected: 0, blocked: 0 }
     // ponytail: 明确 scope 逐段读审计流；大规模审校实测成瓶颈后再换 SQL window query。
     for (const segment of segments) {
-      const latest = this.listStageEvents(segment.id)
+      const latest = this.listStageEvents(segment.id, scope)
         .filter((event) => event.stage === stage)
         .at(-1)
       if (

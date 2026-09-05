@@ -7,6 +7,38 @@ import { createSeededEntropy, createStageEvidenceBaseline, type ProjectId, type 
 import { CatStore } from '@linguist/cat-store'
 import { summarizeDeliveryEvidence } from './project-delivery'
 import { readLinguistExportManifests, recordLinguistExportManifest } from './export-manifest'
+import { makeImportedAsset } from '../../../../../../packages/linguist-cat-store/src/testkit'
+
+test('交付按句段选择当前任务；小范围不能掩盖旧缺口，完整替代后旧 stale 不再污染', () => {
+  const store = new CatStore({ rootDir: mkdtempSync(join(tmpdir(), 'delivery-scopes-')), entropy: createSeededEntropy('delivery-scopes') })
+  const project = store.createProject({ name: 'Scopes', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'workspace' })
+  const db = store.openProject(project.id)
+  try {
+    const imported = db.assets.insertImported(makeImportedAsset({ segmentCount: 2, fillEvery: 1 }))
+    const ids = imported.segments.map(segment => segment.id)
+    const start = (id: string, scope: string[], complete: boolean): void => {
+      const evidence = { ref: { kind: 'asset' as const, id: imported.asset.id }, version: imported.asset.sourceSha256 }
+      const plan: StageEvidencePlan = { stageRunId: id, role: 'reviewer', stage: 'editing', assetIds: [imported.asset.id], segmentIds: scope,
+        requirements: [{ evidence, purpose: 'source-authority', requiredness: 'required', scope: { kind: 'segments', segmentIds: scope }, anchorIds: [], rationale: 'source' }] }
+      const baseline = createStageEvidenceBaseline({ stageRunId: id, discoveryScopeHash: 'scope', mappingRevision: '1', ruleSetRevision: '1', segmentIds: scope, evidence: [evidence] })
+      db.stageEvidence.create({ stageRunId: id, sessionId: 'reviewer', plan, baseline })
+      if (!complete) return
+      for (const segmentId of scope) db.segments.recordCurrentStageDecision(segmentId, 'editing', 0, 'unchanged', { actor: 'reviewer' })
+      db.stageEvidence.recordReceipt({ stageRunId: id, baselineHash: baseline.baselineHash, sessionId: 'reviewer', generationRunId: id, segmentIds: scope,
+        evidence: [{ ref: evidence.ref, version: evidence.version, anchorIds: [], submission: 'provider-response-v1' }] })
+    }
+    start('old', ids, false)
+    db.stageEvidence.markStale('old', '参考版本变化')
+    start('new-first', [ids[0]!], true)
+    assert.equal(summarizeDeliveryEvidence(db, imported.asset.id, 'editing').status, 'stale')
+    start('new-second', [ids[1]!], true)
+    assert.equal(summarizeDeliveryEvidence(db, imported.asset.id, 'editing').status, 'complete')
+    db.stageEvidence.getCompletion('old')
+    assert.equal(summarizeDeliveryEvidence(db, imported.asset.id, 'editing').status, 'complete')
+    start('restart-first', [ids[0]!], false)
+    assert.equal(summarizeDeliveryEvidence(db, imported.asset.id, 'editing').status, 'in-progress')
+  } finally { db.close() }
+})
 
 test('交付证据汇总只阻断显式 blocking Gap，未映射 warning 仅随清单提醒', () => {
   const store = new CatStore({
@@ -70,7 +102,7 @@ test('交付证据汇总只阻断显式 blocking Gap，未映射 warning 仅随�
       evidence: [requirement.evidence],
     })
     db.stageEvidence.create({ stageRunId, sessionId: 'reviewer', plan, baseline })
-    db.segments.recordCurrentStageDecision(segmentId, 'editing', 0, 'unchanged')
+    db.segments.recordCurrentStageDecision(segmentId, 'editing', 0, 'unchanged', { actor: 'reviewer' })
     db.stageEvidence.recordReceipt({
       stageRunId,
       baselineHash: baseline.baselineHash,

@@ -65,18 +65,20 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
     const legacy = db.stageEvidence.recordReceipt({
       stageRunId,
       baselineHash: baseline.baselineHash,
-      sessionId: 'child-session-1',
+      sessionId: 'session-1',
       generationRunId: 'generation-1',
       toolCallId: 'tool-1',
       segmentIds: [imported.segments[0]!.id],
       evidence: [{ ref: plan.requirements[0]!.evidence.ref, anchorIds: [] }],
     })
     assert.equal(db.stageEvidence.getPresentationCoverage(stageRunId).presented, 0, '旧工具级回执保留但不得升级为已提交')
-    const receipt = db.stageEvidence.recordReceipt({
+    const partial = db.stageEvidence.recordReceipt({
       ...legacy,
       evidence: legacy.evidence.map(item => ({ ...item, version: imported.asset.sourceSha256, submission: 'provider-response-v1' })),
     })
-    assert.equal(receipt.sessionId, 'child-session-1')
+    assert.equal(db.stageEvidence.getPresentationCoverage(stageRunId).presented, 0, '同批次只读一句不能覆盖整个冻结范围')
+    const receipt = db.stageEvidence.recordReceipt({ ...partial, segmentIds: plan.segmentIds })
+    assert.equal(receipt.sessionId, 'session-1')
     assert.deepEqual(db.stageEvidence.getPresentationCoverage(stageRunId), {
       required: 1,
       presented: 1,
@@ -86,18 +88,18 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
       db.stageEvidence.recordReceipt({
         stageRunId,
         baselineHash: baseline.baselineHash,
-        sessionId: 'child-session-1',
+        sessionId: 'session-1',
         generationRunId: 'generation-1',
         toolCallId: 'tool-1',
-        segmentIds: [imported.segments[0]!.id],
+        segmentIds: plan.segmentIds,
         evidence: [{ ref: plan.requirements[0]!.evidence.ref, anchorIds: [], version: imported.asset.sourceSha256, submission: 'provider-response-v1' }],
       }).id,
       receipt.id,
     )
-    assert.equal(db.stageEvidence.listReceipts(stageRunId).length, 2)
+    assert.equal(db.stageEvidence.listReceipts(stageRunId).length, 3)
 
-    db.segments.recordCurrentStageDecision(imported.segments[0]!.id, 'editing', 1, 'unchanged')
-    db.segments.recordCurrentStageDecision(imported.segments[1]!.id, 'editing', 1, 'unchanged')
+    db.segments.recordCurrentStageDecision(imported.segments[0]!.id, 'editing', 1, 'unchanged', { actor: 'session-1' })
+    db.segments.recordCurrentStageDecision(imported.segments[1]!.id, 'editing', 1, 'unchanged', { actor: 'session-1' })
     db.stageEvidence.replaceStageGaps(stageRunId, [{
       id: 'gap-required',
       code: 'REQUIRED_RESOURCE_MISSING',
@@ -105,10 +107,7 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
       summary: '用户已声明的必需资料缺失',
       suggestedAction: '补充资料或由用户显式豁免',
     }])
-    assert.equal(db.stageEvidence.refreshCompletion(
-      stageRunId,
-      db.segments.getStageDecisionCoverage('editing', plan.segmentIds),
-    ).status, 'blocked')
+    assert.equal(db.stageEvidence.getCompletion(stageRunId).status, 'blocked')
 
     db.stageEvidence.replaceStageGaps(stageRunId, [{
       id: 'gap-pm-confirm',
@@ -117,13 +116,10 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
       summary: '伴生表有一行未映射',
       suggestedAction: '向 PM 确认，不自行修改 CAT 主文件',
     }])
-    const completed = db.stageEvidence.refreshCompletion(
-      stageRunId,
-      db.segments.getStageDecisionCoverage('editing', plan.segmentIds),
-    )
+    const completed = db.stageEvidence.getCompletion(stageRunId)
     assert.equal(completed.status, 'complete')
     assert.equal(completed.warnings.length, 1)
-    assert.equal(db.stageEvidence.get(stageRunId)?.status, 'complete')
+    assert.equal(db.stageEvidence.getCompletion(stageRunId).status, 'complete')
 
     assert.equal(db.stageEvidence.markStale(stageRunId, '参考资料已变化').status, 'stale')
   } finally {

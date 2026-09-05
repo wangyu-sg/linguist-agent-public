@@ -89,16 +89,11 @@ export function resolveLinguistDelegationOutcome(
   try {
     const stage = ROLE_STAGE[role]
     const db = getLinguistProjectService().openProject(projectId)
-    const coverage = db.segments.getStageDecisionCoverage(stage, segmentIds)
-    const evidenceState = session.sourceDelegationId === undefined
-      ? undefined
-      : db.stageEvidence.get(`stage:${session.sourceDelegationId}`)
-    const evidence = evidenceState === undefined
-      ? undefined
-      : db.stageEvidence.refreshCompletion(
-          evidenceState.stageRunId,
-          db.segments.getStageDecisionCoverage(stage, evidenceState.plan.segmentIds),
-        )
+    const evidenceState = db.stageEvidence.list(stage).find(state => state.sessionId === session.id)
+    const evidence = evidenceState === undefined ? undefined : db.stageEvidence.getCompletion(evidenceState.stageRunId)
+    const coverage = evidence?.decisions ?? db.segments.getStageDecisionCoverage(stage, segmentIds, {
+      actor: session.id, afterEventId: Number.MAX_SAFE_INTEGER,
+    })
     const status = evidence === undefined || evidence.status === 'complete'
       ? coverage.status
       : evidence.status === 'in_progress'

@@ -103,6 +103,11 @@ test('Context 跨页区间有间隙不完成，连续覆盖支持旧无 anchor �
       const text = legacy ? body : formatContextExtractionText(extraction)!
       const doc = db.contextDocs.insert({ kind: 'doc', originalFilename: `${legacy}.txt`, blobRelpath: `blobs/${legacy}.txt`, sha256: (legacy ? 'c' : 'b').repeat(64), textExtract: text })
       if (!legacy) db.contextDocs.replaceExtraction(doc.id, [{ id: 'real', locator: extraction.anchors[0]!.locator, text: body }])
+      if (!legacy) {
+        const preserved = db.contextDocs.listAnchors(doc.id)
+        assert.throws(() => db.contextDocs.replaceExtraction(doc.id, [{ id: 'bad', locator: { kind: 'paragraph', index: 0, textRange: { start: 0, end: text.length + 1 } }, text }]), /offsets do not match/)
+        assert.deepEqual(db.contextDocs.listAnchors(doc.id), preserved)
+      }
       const segmentId = asset.segments[0]!.id
       db.contextDocs.setEvidenceLink({ contextDocId: doc.id, ...(legacy ? {} : { anchorId: 'real' }), relation: { kind: 'segment', segmentId }, requiredness: 'required', mappingRevision: '1' })
       const state = ensureStageEvidenceForSession({ session: { id: doc.id, linguistRole: 'reviewer' }, db, fallbackSegmentIds: [segmentId],

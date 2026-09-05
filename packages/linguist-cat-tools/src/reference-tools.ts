@@ -109,6 +109,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
     promptSnippet: 'Read bounded batch translation context from the bound CAT project',
     promptGuidelines: [
       'Use one batch call for related segments instead of repeating TM/TB searches per segment.',
+      'On the first professional task read, use stageScope=segments/assets/project to match the user request. UI selection never overrides that scope. Use restartStage=true only for an explicitly requested new review round; omit it on continuation pages.',
       'Treat every revision as a snapshot; proposals must still use the returned current revision.',
       'Reviewer and Proofreader context always retains the complete current target; reduce the segment batch or raise maxBytes when the minimum core does not fit.',
       'Fetch every requiredEvidencePending item with cat_read_context_doc before confirming the Stage.',
@@ -122,6 +123,8 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       termLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10 })),
       maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144 })),
       cursor: Type.Optional(Type.String()),
+      stageScope: Type.Optional(Type.Union([Type.Literal('segments'), Type.Literal('assets'), Type.Literal('project')])),
+      restartStage: Type.Optional(Type.Boolean()),
     }),
     async execute(toolCallId, params) {
       if (params.segmentIds.length < 1 || params.segmentIds.length > 50) {
@@ -144,6 +147,8 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         throw new LinguistCatInvalidArgumentError('maxBytes', 'expected an integer from 1024 to 262144')
       }
       const { project, db } = resolveBoundProject('cat_get_translation_context', toolCallId)
+      if (params.cursor !== undefined && params.restartStage) throw new LinguistCatInvalidArgumentError('restartStage', 'restart from a fresh context request without cursor')
+      runtime.prepareStage(params.segmentIds, { scope: params.stageScope, restart: params.restartStage, toolCallId })
       const cursorKey = translationContextCursorKey(
         params.segmentIds,
         neighborCount,
@@ -413,15 +418,20 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         if (deps.stageEvidenceRunId === undefined) return undefined
         const state = db.stageEvidence.get(deps.stageEvidenceRunId)
         if (state === undefined) throw new Error('Host Stage Evidence state is missing')
-        const coverage = db.stageEvidence.getPresentationCoverage(state.stageRunId)
+        const completion = db.stageEvidence.getCompletion(state.stageRunId)
+        const coverage = completion.presentation
         return {
           stageRunId: state.stageRunId,
-          status: state.status,
+          status: completion.status,
+          scopeSegments: completion.decisions.total,
+          pendingSegments: completion.decisions.pending,
+          blockedSegments: completion.decisions.blocked,
           required: coverage.required,
           presented: coverage.presented,
           pending: coverage.pending.length,
         }
       }
+      const evidenceSummary = stageSummary()
       const page = (
         items: SegmentTranslationContext[],
         minimumRequiredBytes?: number,
@@ -429,7 +439,6 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         const nextIndex = cursorOffset + items.length
         const truncated = nextIndex < params.segmentIds.length
         const requiredEvidencePending = requiredPendingFor(items)
-        const evidenceSummary = stageSummary()
         const result: CatGetTranslationContextResult = {
           contexts: items,
           totalRequested: params.segmentIds.length,
@@ -687,6 +696,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       const { db } = resolveBoundProject('cat_read_context_doc', toolCallId)
       const doc = db.contextDocs.get(params.docId)
       if (doc === undefined) throw new StoreNotFoundError('context doc', params.docId)
+      deps.prepareContextDoc?.(doc.parentContextDocId ?? doc.id)
       const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.readContextDoc)
       const maxBytes = params.maxBytes ?? 65_536
       const metadataOffset = params.metadataOffset ?? 0

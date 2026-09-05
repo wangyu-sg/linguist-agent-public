@@ -10,6 +10,7 @@ import type {
 } from '@linguist/cat-core'
 import type { ProjectDatabase } from '@linguist/cat-store'
 import type { TSchema } from 'typebox'
+import { LinguistCatInvalidArgumentError } from './errors'
 import type {
   CatSegmentListItem,
   LinguistCatToolMutation,
@@ -67,6 +68,7 @@ export function toSegmentItem(segment: Segment): CatSegmentListItem {
 }
 
 export interface CatToolRuntime {
+  prepareStage: NonNullable<LinguistCatToolsDeps['prepareStage']>
   deps: LinguistCatToolsDeps
   resolveBoundProject: (
     toolName: LinguistCatToolName,
@@ -111,6 +113,13 @@ export function createCatToolRuntime(
   }
   return {
     deps,
+    prepareStage(segmentIds, task) {
+      deps.prepareStage?.(segmentIds, task)
+      const scope = deps.reviewScopeSegmentIds
+      if (scope !== undefined && segmentIds.some(id => !scope.includes(id))) {
+        throw new LinguistCatInvalidArgumentError('segmentIds', 'outside the frozen task scope')
+      }
+    },
     resolveBoundProject(toolName, toolCallId) {
       const resolved = deps.resolveProject({ toolName, toolCallId })
       if (resolved instanceof Error) throw resolved

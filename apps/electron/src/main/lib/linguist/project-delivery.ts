@@ -88,19 +88,18 @@ export function summarizeDeliveryEvidence(
   assetId: string,
   stage: WorkflowStage,
 ): LinguistDeliveryEvidenceSummary {
-  const latestByScope = new Map<string, ReturnType<ProjectDatabase['stageEvidence']['list']>[number]>()
+  const assetSegments = new Set(db.segments.queryIds({ assetId }))
+  const claimed = new Set<string>()
+  const completions = []
   for (const state of db.stageEvidence.list(stage)) {
-    if (!state.plan.assetIds.includes(assetId) || latestByScope.has(state.baseline.segmentScopeHash)) continue
-    latestByScope.set(state.baseline.segmentScopeHash, state)
+    const ids = state.plan.segmentIds.filter(id => assetSegments.has(id) && !claimed.has(id))
+    if (ids.length === 0) continue
+    ids.forEach(id => claimed.add(id))
+    completions.push(db.stageEvidence.getCompletion(state.stageRunId, ids))
   }
-  const states = [...latestByScope.values()]
-  if (states.length === 0) {
+  if (completions.length === 0) {
     return { status: 'not-applicable', stageRuns: 0, required: 0, presented: 0, pending: 0, gaps: [] }
   }
-  const completions = states.map((state) => db.stageEvidence.refreshCompletion(
-    state.stageRunId,
-    db.segments.getStageDecisionCoverage(state.stage, state.plan.segmentIds),
-  ))
   const gaps = new Map<string, LinguistDeliveryEvidenceSummary['gaps'][number]>()
   for (const completion of completions) {
     for (const gap of [...completion.blockingGaps, ...completion.warnings]) {
@@ -121,7 +120,7 @@ export function summarizeDeliveryEvidence(
         : statuses.includes('in_progress')
           ? 'in-progress'
           : 'complete',
-    stageRuns: states.length,
+    stageRuns: completions.length,
     required: completions.reduce((sum, item) => sum + item.presentation.required, 0),
     presented: completions.reduce((sum, item) => sum + item.presentation.presented, 0),
     pending: completions.reduce((sum, item) => sum + item.presentation.pending.length, 0),

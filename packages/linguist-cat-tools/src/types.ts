@@ -176,6 +176,9 @@ export interface LinguistCatToolsDeps {
   linguistRole?: 'general' | 'translator' | 'reviewer' | 'proofreader'
   /** 宿主创建或恢复的冻结 Stage Evidence 执行；模型无对应入参。 */
   stageEvidenceRunId?: string
+  /** 仅专业动作创建/恢复任务；scope/restart 来自现有读取工具的明确参数。 */
+  prepareStage?: (segmentIds: readonly string[], task?: { scope?: 'segments' | 'assets' | 'project'; restart?: boolean; toolCallId: string }) => void
+  prepareContextDoc?: (docId: string) => void
   /** 仅通知准备完成；宿主在最终 Provider 调用确认后才写 Receipt。 */
   onEvidencePrepared?: (receipt: RecordStageEvidenceReceiptInput, content: AgentToolResult<unknown>['content']) => void
   /** 委派时冻结的 Segment 范围；模型无对应入参。 */
@@ -555,7 +558,10 @@ export interface CatGetTranslationContextResult {
   /** 宿主签发的 Stage Evidence 覆盖；Agent 文本不能改写。 */
   stageEvidence?: {
     stageRunId: string
-    status: 'planning' | 'ready' | 'ready-with-gaps' | 'stale' | 'complete'
+    status: 'in_progress' | 'blocked' | 'stale' | 'complete'
+    scopeSegments: number
+    pendingSegments: number
+    blockedSegments: number
     required: number
     presented: number
     pending: number

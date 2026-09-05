@@ -29,6 +29,16 @@
 - 验证：生产 tool/Store 先复现完整翻页仍 pending，修复后缺页 pending、补齐 complete、重复页不增加覆盖；中文/emoji/伪 anchor 标记原文逐页重组一致；60 个图片目录和 37 条 warning 均可分页取全，完整文本结果不超过 3,200 字节，长文页不超过 1,800 字节；不足预算不推进。Evidence 4/4、Tools 44/44、Store 57/57、extractor 2/2、全仓 typecheck、host seams 9/9 通过。组合分页 fixture 约 85 ms（单次测试观察，不作性能保证）。
 - 限制：Stage 生命周期和决定归属由 C 修复；规则首页限额与预算清空必要术语由 D 修复。当前通过不代表这些后续合同已完成。
 
+## C1：独立任务、决定归属与交付覆盖
+
+- 修改：Stage 使用独立 UUID；通过既有 `cat_get_translation_context` 的 scope/restart 参数创建任务。Resume 复用当前任务；新范围、新轮次或相关资料变化产生新任务。Session 装配不再从 UI 当前批次冻结范围。
+- 在既有 Plan JSON 内记录创建时的决定事件边界；完成计算只接受边界之后、同一 Session actor、当前 revision 的决定。旧 Plan 缺少边界时保持 pending，不能借用历史资格。Source authority 必须覆盖冻结范围内的每个句段。
+- 完成查询不再写状态或 updatedAt；交付按每个句段选择最新任务，窄范围不能掩盖旧缺口，完全替代后的旧 stale 不再污染当前交付。人工工作流仍可在没有 Agent Stage 时导出。
+- Context 正文、定位、相关 mapping 和实际使用的 optional 资料进入版本；无关 optional 新增不改变任务。闲置期间的变化在 Receipt/交付查询时也校验；错误提取偏移会回滚，不覆盖已有定位。
+- 文件：20 个实现/回归文件（host extension、Stage host、Session CAT tools、delegation/delivery、Core Plan、Store repositories、Tools），另更新本实施记录。Proma Touchpoint 无增删；Schema 仍为 19。
+- 验证：Stage host 1/1（包含 A→B→A、显式重启与重放、不同 actor、旧查询顺序、mapping/optional 变化）；Evidence 4/4（真实本地 HTTP Provider 链）；Delivery 3/3（窄范围覆盖和旧 stale 替代）；Store 57/57、Tools 44/44、全仓 typecheck、boundaries 4/4、host seams 9/9 通过。
+- 风险：本轮职业阶段资格不能从旧记录推断，恢复后需重新读取并确认。纯查询派生状态不等同语言质量。CAT 装配可用性和规则截断仍由 C2/D 继续处理；真实 Provider 与候选包尚未验证。
+
 ## 发布与数据边界
 
 本轮仅本地提交，不推送、创建 PR/Tag/Release 或替换安装版。不使用客户文件、生产数据库或未授权凭据。README / AGENTS 本轮不改；需要同步的准确事实在最终记录列出。单元、生产链模拟、目录包与真实 Provider 资格分别记录。

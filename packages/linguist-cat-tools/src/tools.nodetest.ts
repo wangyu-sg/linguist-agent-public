@@ -2634,7 +2634,7 @@ test('Stage Evidence 工具只准备正文与图片描述，不提前记录提�
     }, {
       evidence: {
         ref: { kind: 'context-doc' as const, id: parent.id },
-        version: parent.sha256!,
+        version: fixture.db.contextDocs.evidenceVersion(parent.id, [segment.id], [fixture.assetA.id])!,
       },
       purpose: 'visual-fact' as const,
       requiredness: 'required' as const,
@@ -2692,7 +2692,10 @@ test('Stage Evidence 工具只准备正文与图片描述，不提前记录提�
     }])
     assert.deepEqual(contextResult.stageEvidence, {
       stageRunId,
-      status: 'ready',
+      status: 'in_progress',
+      scopeSegments: 1,
+      pendingSegments: 1,
+      blockedSegments: 0,
       required: 2,
       presented: 0,
       pending: 2,

@@ -113,7 +113,6 @@ export function resolveLinguistAgentHostExtension(input: {
                 }),
             ...(toolsetHash === undefined ? {} : { toolsetHash }),
           }),
-          turnContext,
           providerObserver?.prepare,
         ) as unknown as ToolDefinition[]
         : []

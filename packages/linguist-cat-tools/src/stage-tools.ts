@@ -64,20 +64,11 @@ export function createStageTools(runtime: CatToolRuntime) {
         )
       }
       const itemIds = params.items.map((item) => item.segmentId)
+      runtime.prepareStage(itemIds)
       if (new Set(itemIds).size !== itemIds.length) {
         throw new LinguistCatInvalidArgumentError('items', 'segmentId values must be unique')
       }
       const delegatedScope = deps.reviewScopeSegmentIds
-      if (delegatedScope !== undefined) {
-        const allowed = new Set(delegatedScope)
-        const outside = itemIds.find((segmentId) => !allowed.has(segmentId))
-        if (outside !== undefined) {
-          throw new LinguistCatInvalidArgumentError(
-            'segmentId',
-            `${outside} is outside the delegated review scope`,
-          )
-        }
-      }
       const runId = deps.sessionId === undefined
         ? `tool:${toolCallId}`
         : `run:${deps.sessionId}:${toolCallId}`
@@ -86,7 +77,7 @@ export function createStageTools(runtime: CatToolRuntime) {
         identity: {
           runId,
           toolCallId,
-          idempotencyKey: `cat_confirm_segments:${runId}:${toolCallId}`,
+          idempotencyKey: `cat_confirm_segments:${deps.stageEvidenceRunId ?? 'unscoped'}:${runId}:${toolCallId}`,
         },
         operation: 'cat_confirm_segments',
         payload: params,
@@ -119,7 +110,6 @@ export function createStageTools(runtime: CatToolRuntime) {
         },
       })
       const coverageIds = delegatedScope ?? itemIds
-      const coverage = db.segments.getStageDecisionCoverage(stage, coverageIds)
       const evidenceState = deps.stageEvidenceRunId === undefined
         ? undefined
         : db.stageEvidence.get(deps.stageEvidenceRunId)
@@ -128,10 +118,8 @@ export function createStageTools(runtime: CatToolRuntime) {
       }
       const completion = evidenceState === undefined
         ? undefined
-        : db.stageEvidence.refreshCompletion(
-            evidenceState.stageRunId,
-            db.segments.getStageDecisionCoverage(stage, evidenceState.plan.segmentIds),
-          )
+        : db.stageEvidence.getCompletion(evidenceState.stageRunId)
+      const coverage = completion?.decisions ?? db.segments.getStageDecisionCoverage(stage, coverageIds)
       const dto: CatConfirmSegmentsResult = {
         stage,
         decisions: mutation.result.decisions,

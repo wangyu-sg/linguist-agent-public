@@ -5,7 +5,7 @@
  * Phrase 配对和导出业务都在项目服务子模块中。
  */
 
-import type { AgentSessionMeta, LinguistProjectMutationEvent, LinguistTurnContextV1 } from '@proma/shared'
+import type { AgentSessionMeta, LinguistProjectMutationEvent } from '@proma/shared'
 import type { LinguistGenerationProvenance } from '@linguist/cat-core'
 import {
   createLinguistCatTools,
@@ -65,7 +65,6 @@ export function resolveLinguistSessionCatTools(
   getService: LinguistServiceResolver,
   onProjectMutation?: LinguistProjectMutationSink,
   generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance,
-  turnContext?: Pick<LinguistTurnContextV1, 'assetId'>,
   onEvidencePrepared?: LinguistCatToolsDeps['onEvidencePrepared'],
 ) {
   const projectId = session?.linguistProjectId
@@ -77,28 +76,39 @@ export function resolveLinguistSessionCatTools(
     }
     return { project: service.getProject(projectId), db: service.openProject(projectId) }
   }
-  const current = currentBoundSession(session.id, projectId, 'sessionId')
   const db = getService().openProject(projectId)
-  const reviewScopeSegmentIds = session.linguistDelegatedScope?.segmentIds
-    ?? (turnContext?.assetId === undefined
-      ? db.segments.queryIds()
-      : db.segments.queryIds({ assetId: turnContext.assetId }))
-  const stageEvidence = db.readOnly
-    ? undefined
-    : ensureStageEvidenceForSession({
-        session: current,
-        db,
-        discoveryScope: resolveProjectDiscoveryScope({ session: current }),
-        fallbackSegmentIds: reviewScopeSegmentIds,
-      })
+  let stageEvidence = db.stageEvidence.list().find(state => state.sessionId === session.id && state.role === session.linguistRole)
   return createLinguistCatTools({
     resolveProject,
     resultProjectId: projectId,
     sessionId: session.id,
     onEvidencePrepared,
     ...(session.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
-    ...(stageEvidence === undefined ? {} : { stageEvidenceRunId: stageEvidence.stageRunId }),
-    ...(session.linguistRole === 'general' ? {} : { reviewScopeSegmentIds }),
+    get stageEvidenceRunId() { return stageEvidence?.stageRunId },
+    get reviewScopeSegmentIds() { return session.linguistDelegatedScope?.segmentIds ?? stageEvidence?.plan.segmentIds },
+    prepareContextDoc(contextDocId) {
+      if (stageEvidence === undefined || db.readOnly) return
+      const current = currentBoundSession(session.id, projectId, 'docId')
+      stageEvidence = ensureStageEvidenceForSession({ session: current, db,
+        discoveryScope: resolveProjectDiscoveryScope({ session: current }), fallbackSegmentIds: stageEvidence.plan.segmentIds, contextDocId })
+    },
+    prepareStage(segmentIds, task) {
+      const current = currentBoundSession(session.id, projectId, 'sessionId')
+      if (current.linguistRole === 'general' || db.readOnly) return
+      const segments = db.segments.getByIds(segmentIds)
+      if (segments.length !== new Set(segmentIds).size) throw new LinguistCatInvalidArgumentError('segmentIds', 'task contains missing segments')
+      if (task === undefined && stageEvidence && segmentIds.some(id => !stageEvidence!.plan.segmentIds.includes(id))) {
+        throw new LinguistCatInvalidArgumentError('segmentIds', 'write is outside the frozen task; start a new task with cat_get_translation_context')
+      }
+      const existingScope = stageEvidence?.plan.segmentIds
+      const scope = current.linguistDelegatedScope?.segmentIds
+        ?? (task?.scope === 'project' ? db.segments.queryIds()
+          : task?.scope === 'assets' ? [...new Set(segments.flatMap(segment => db.segments.queryIds({ assetId: segment.assetId })))]
+            : task?.scope === 'segments' ? segmentIds
+              : existingScope && segmentIds.every(id => existingScope.includes(id)) ? existingScope : segmentIds)
+      stageEvidence = ensureStageEvidenceForSession({ session: current, db,
+        discoveryScope: resolveProjectDiscoveryScope({ session: current }), fallbackSegmentIds: scope, restart: task?.restart, toolCallId: task?.toolCallId })
+    },
     readContextImage: async (docId) => {
       currentBoundSession(session.id, projectId, 'docId')
       try {

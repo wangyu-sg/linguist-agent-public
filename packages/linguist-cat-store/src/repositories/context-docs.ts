@@ -157,6 +157,16 @@ export class ContextDocsRepository {
     return row === undefined ? undefined : contextDocFromRow(row)
   }
 
+  /** 本轮真实正文、定位和相关映射的版本；不依赖项目全局事件。 */
+  evidenceVersion(id: string, segmentIds: readonly string[], assetIds: readonly string[]): string | undefined {
+    const doc = this.get(id)
+    if (doc === undefined) return undefined
+    const links = this.listEvidenceLinks(id).filter(link => link.relation.kind === 'segment'
+      ? segmentIds.includes(link.relation.segmentId) : assetIds.includes(link.relation.assetId))
+    return deriveStableIdV2('ctxv', [doc.sha256 ?? doc.createdAt, doc.textExtract ?? null,
+      JSON.stringify(this.listAnchors(id)), JSON.stringify(links)])
+  }
+
   updateNote(id: string, note?: string): ContextDoc {
     return this.db.transaction(`update context doc note ${id}`, () => {
       const result = this.db.db
@@ -202,7 +212,8 @@ export class ContextDocsRepository {
     anchors: ReadonlyArray<Omit<ContextAnchor, 'contextDocId'>>,
   ): ContextAnchor[] {
     return this.db.transaction(`replace Context extraction ${contextDocId}`, () => {
-      if (this.get(contextDocId) === undefined) throw new StoreNotFoundError('context doc', contextDocId)
+      const doc = this.get(contextDocId)
+      if (doc === undefined) throw new StoreNotFoundError('context doc', contextDocId)
       if (new Set(anchors.map((anchor) => anchor.id)).size !== anchors.length) {
         throw new TypeError('Context anchor ids must be unique')
       }
@@ -214,6 +225,12 @@ export class ContextDocsRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `)
       for (const anchor of anchors) {
+        const range = anchor.locator.textRange
+        if (range && (!Number.isInteger(range.start) || !Number.isInteger(range.end) || range.start < 0 || range.end < range.start
+          || doc.textExtract === undefined || anchor.text === undefined || range.end > doc.textExtract.length
+          || doc.textExtract.slice(range.start, range.end) !== anchor.text)) {
+          throw new TypeError('Context anchor offsets do not match the preserved extract; existing extraction was not changed')
+        }
         if (anchor.mediaContextDocId !== undefined) {
           const media = this.get(anchor.mediaContextDocId)
           if (

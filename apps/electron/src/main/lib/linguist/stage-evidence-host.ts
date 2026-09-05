@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   createStageEvidenceBaseline,
   type ContextEvidenceLink,
@@ -17,7 +17,7 @@ import type { ProjectDiscoveryScope } from './project-discovery-scope'
 
 type StageSession = Pick<
   AgentSessionMeta,
-  'id' | 'linguistRole' | 'linguistDelegatedScope' | 'sourceDelegationId'
+  'id' | 'linguistRole' | 'linguistDelegatedScope'
 >
 
 const ROLE_STAGE = {
@@ -51,6 +51,9 @@ export function ensureStageEvidenceForSession(input: {
   db: ProjectDatabase
   discoveryScope: ProjectDiscoveryScope
   fallbackSegmentIds: readonly string[]
+  restart?: boolean
+  toolCallId?: string
+  contextDocId?: string
 }): StageEvidenceState | undefined {
   const role = input.session.linguistRole
   if (role !== 'translator' && role !== 'reviewer' && role !== 'proofreader') return undefined
@@ -61,7 +64,9 @@ export function ensureStageEvidenceForSession(input: {
   const segments = input.db.segments.getByIds(segmentIds)
   if (segments.length !== segmentIds.length) throw new Error('Stage Evidence scope contains a missing Segment')
   const assetIds = [...new Set(segments.map((segment) => segment.assetId as string))]
-  const stageRunId = `stage:${input.session.sourceDelegationId ?? `${input.session.id}:${role}`}`
+  const existing = input.db.stageEvidence.list(ROLE_STAGE[role]).find(state => state.sessionId === input.session.id)
+  const sameScope = existing?.plan.segmentIds.length === segmentIds.length && segmentIds.every(id => existing.plan.segmentIds.includes(id))
+  let stageRunId = existing?.stageRunId ?? `stage:${randomUUID()}`
   const segmentIdSet = new Set(segmentIds)
   const assetIdSet = new Set(assetIds)
   const evidenceByRef = new Map(input.discoveryScope.managedEvidence.map((item) => [refKey(item), item]))
@@ -87,6 +92,8 @@ export function ensureStageEvidenceForSession(input: {
     if (evidence === undefined) continue
     const links = input.db.contextDocs.listEvidenceLinks(doc.id)
       .filter((link) => relevantLink(link, assetIdSet, segmentIdSet))
+    const previouslyUsed = sameScope && existing?.plan.requirements.some(item => item.evidence.ref.kind === 'context-doc' && item.evidence.ref.id === doc.id)
+    if (links.length === 0 && doc.id !== input.contextDocId && !previouslyUsed) continue
     mappingRevisions.push(...links.map((link) => JSON.stringify({
       contextDocId: doc.id,
       anchorId: link.anchorId ?? null,
@@ -140,7 +147,7 @@ export function ensureStageEvidenceForSession(input: {
       }
     }
     requirements.push({
-      evidence,
+      evidence: { ...evidence, version: input.db.contextDocs.evidenceVersion(doc.id, segmentIds, assetIds)! },
       purpose: anchors.some((anchor) => anchorIds.includes(anchor.id) && anchor.mediaContextDocId !== undefined)
         ? 'visual-fact'
         : 'client-feedback',
@@ -202,25 +209,30 @@ export function ensureStageEvidenceForSession(input: {
     assetIds,
     segmentIds,
     requirements,
+    ...(input.toolCallId === undefined ? {} : { startToolCallId: input.toolCallId }),
   }
   const ruleVersions = requirements
     .filter((item) => item.evidence.ref.kind === 'style-rule' || item.evidence.ref.kind === 'tech-constraint')
     .map((item) => `${refKey(item.evidence)}\u0000${item.evidence.version}`)
-  const baseline = createStageEvidenceBaseline({
+  let baseline = createStageEvidenceBaseline({
     stageRunId,
-    discoveryScopeHash: input.discoveryScope.hash,
+    discoveryScopeHash: hash(requirements.map(item => `${refKey(item.evidence)}:${item.evidence.version}`)),
     mappingRevision: hash(mappingRevisions),
     ruleSetRevision: hash(ruleVersions),
     segmentIds,
     evidence: requirements.map((item) => item.evidence),
   })
-  const existing = input.db.stageEvidence.get(stageRunId)
   if (existing !== undefined) {
-    const state = existing.baseline.baselineHash === baseline.baselineHash
-      ? existing
-      : input.db.stageEvidence.markStale(stageRunId, 'Evidence、mapping、规则或授权扫描范围已变化')
-    input.db.stageEvidence.replaceStageGaps(stageRunId, stageGaps)
-    return state
+    const sameBaseline = existing.baseline.baselineHash === baseline.baselineHash
+    const restart = input.restart && (input.toolCallId === undefined || input.toolCallId !== existing.plan.startToolCallId)
+    if (!restart && sameBaseline && existing.status !== 'stale' && existing.plan.decisionEventBoundary !== undefined) return existing
+    if (sameScope && !sameBaseline && existing.status !== 'stale') {
+      input.db.stageEvidence.markStale(existing.stageRunId, '本轮相关 Evidence、mapping 或规则已变化；需在新轮次重读并确认')
+    }
+    stageRunId = `stage:${randomUUID()}`
+    plan.stageRunId = stageRunId
+    baseline = createStageEvidenceBaseline({ ...baseline, stageRunId, segmentIds, evidence: requirements.map(item => item.evidence) })
+    for (const gap of stageGaps) gap.id = `gap_${hash([stageRunId, gap.id]).slice(0, 24)}`
   }
   const state = input.db.stageEvidence.create({
     stageRunId,

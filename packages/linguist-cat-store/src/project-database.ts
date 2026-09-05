@@ -89,7 +89,7 @@ export class ProjectDatabase {
     this.styleGuideRules = new StyleGuideRulesRepository(catDb, projectId, now, this.runs)
     this.sentencePatterns = new SentencePatternsRepository(catDb, projectId, now)
     this.contextDocs = new ContextDocsRepository(catDb, projectId, now)
-    this.stageEvidence = new StageEvidenceRepository(catDb, projectId, now)
+    this.stageEvidence = new StageEvidenceRepository(catDb, projectId, now, this.segments, this.contextDocs)
     this.techConstraints = new TechConstraintsRepository(catDb, projectId, now)
     this.voiceProfiles = new VoiceProfilesRepository(catDb, projectId, now)
   }
