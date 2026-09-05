@@ -76,11 +76,12 @@ export interface CatToolRuntime {
   proposalProvenance: (
     toolCallId: string,
   ) => ProposalIssuanceInput & { toolCallId: string; runId: string }
-  recordEvidencePresentation: (
+  prepareEvidencePresentation: (
     db: ProjectDatabase,
     toolCallId: string,
     segmentIds: readonly string[],
     evidence: StageEvidenceReceipt['evidence'],
+    content: AgentToolResult<unknown>['content'],
   ) => void
 }
 
@@ -123,22 +124,28 @@ export function createCatToolRuntime(
       }
     },
     proposalProvenance,
-    recordEvidencePresentation(db, toolCallId, segmentIds, evidence) {
-      if (deps.stageEvidenceRunId === undefined || evidence.length === 0) return
+    prepareEvidencePresentation(db, toolCallId, segmentIds, evidence, content) {
+      if (db.readOnly || deps.stageEvidenceRunId === undefined || deps.onEvidencePrepared === undefined) return
       const state = db.stageEvidence.get(deps.stageEvidenceRunId)
       if (state === undefined) throw new Error('Host Stage Evidence state is missing')
       const provenance = proposalProvenance(toolCallId)
       const sessionId = provenance.sessionId ?? deps.sessionId
       if (sessionId === undefined) throw new Error('Host Stage Evidence session is missing')
-      db.stageEvidence.recordReceipt({
+      const planned = evidence.flatMap(item => {
+        const requirement = state.plan.requirements.find(candidate => candidate.evidence.ref.kind === item.ref.kind
+          && candidate.evidence.ref.id === item.ref.id)
+        return requirement === undefined ? [] : [{ ...item, version: requirement.evidence.version }]
+      })
+      if (planned.length === 0) return
+      deps.onEvidencePrepared({
         stageRunId: state.stageRunId,
         baselineHash: state.baseline.baselineHash,
         sessionId,
         generationRunId: provenance.runId,
         toolCallId,
         segmentIds: [...new Set(segmentIds)],
-        evidence,
-      })
+        evidence: planned,
+      }, content)
     },
   }
 }

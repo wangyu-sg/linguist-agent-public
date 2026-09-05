@@ -11,6 +11,8 @@ import { composeAgentTools, hashAgentToolComposition } from './agent-tool-compos
 import { resolveAgentExecutionScope, type AgentExecutionScope } from './agent-execution-scope'
 import { buildLinguistPrompt } from './linguist-prompt-builder'
 import { normalizeLegacyCatSessionFile } from './legacy-cat-session'
+import { createEvidenceSubmissionObserver } from './evidence-submission'
+import { getAgentSessionMeta } from '../agent-session-manager'
 import { getLinguistProjectService } from './project-service'
 import { recordLinguistRuntimeObservation } from './runtime-diagnostics'
 import { resolveLinguistSessionCatTools } from './session-cat-tools'
@@ -34,6 +36,7 @@ interface ComposedHostTools {
 
 export interface LinguistAgentHostExtension {
   prepareSessionFile?: (sessionFile: string) => void
+  providerObserver?: ReturnType<typeof createEvidenceSubmissionObserver>
   executionScope: AgentExecutionScope
   promptOverlay: string
   turnContext?: Readonly<LinguistTurnContextV1>
@@ -68,9 +71,19 @@ export function resolveLinguistAgentHostExtension(input: {
   const runId = profile.kind === 'linguist'
     ? `agent-turn:${input.session.id}:${randomUUID()}`
     : undefined
+  const providerObserver = profile.kind === 'linguist'
+    ? createEvidenceSubmissionObserver(receipt => {
+      const current = getAgentSessionMeta(input.session.id)
+      if (current === undefined || current.linguistProjectId !== input.session.linguistProjectId) throw new Error('CAT Evidence session binding changed')
+      const db = getLinguistProjectService().openProject(current.linguistProjectId!)
+      if (db.readOnly) throw new Error('CAT Evidence project is read-only')
+      db.stageEvidence.recordReceipt(receipt)
+    }, () => console.warn('[Linguist] 参考提交回执未保存，覆盖仍未验证；后续只重试记账。'))
+    : undefined
 
   return {
     ...(profile.kind === 'linguist' ? { prepareSessionFile: normalizeLegacyCatSessionFile } : {}),
+    providerObserver,
     executionScope: resolveAgentExecutionScope(input.session),
     promptOverlay: promptBuild?.prompt ?? '',
     ...(turnContext === undefined ? {} : { turnContext }),
@@ -101,6 +114,7 @@ export function resolveLinguistAgentHostExtension(input: {
             ...(toolsetHash === undefined ? {} : { toolsetHash }),
           }),
           turnContext,
+          providerObserver?.prepare,
         ) as unknown as ToolDefinition[]
         : []
       const composition = composeAgentTools(profile, baseTools, () => catTools)

@@ -12,6 +12,7 @@ import {
   LinguistCatInvalidArgumentError,
   LinguistCatProjectMissingError,
   type ResolveLinguistCatProject,
+  type LinguistCatToolsDeps,
 } from '@linguist/cat-tools'
 import { getAgentSessionMeta } from '../agent-session-manager'
 import { resolveAgentExecutionScope } from './agent-execution-scope'
@@ -65,6 +66,7 @@ export function resolveLinguistSessionCatTools(
   onProjectMutation?: LinguistProjectMutationSink,
   generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance,
   turnContext?: Pick<LinguistTurnContextV1, 'assetId'>,
+  onEvidencePrepared?: LinguistCatToolsDeps['onEvidencePrepared'],
 ) {
   const projectId = session?.linguistProjectId
   if (!projectId) return []
@@ -93,6 +95,7 @@ export function resolveLinguistSessionCatTools(
     resolveProject,
     resultProjectId: projectId,
     sessionId: session.id,
+    onEvidencePrepared,
     ...(session.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
     ...(stageEvidence === undefined ? {} : { stageEvidenceRunId: stageEvidence.stageRunId }),
     ...(session.linguistRole === 'general' ? {} : { reviewScopeSegmentIds }),

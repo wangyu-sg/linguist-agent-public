@@ -62,7 +62,7 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
     assert.deepEqual(persisted?.baseline, baseline)
     assert.deepEqual(persisted?.plan.segmentIds, plan.segmentIds)
 
-    const receipt = db.stageEvidence.recordReceipt({
+    const legacy = db.stageEvidence.recordReceipt({
       stageRunId,
       baselineHash: baseline.baselineHash,
       sessionId: 'child-session-1',
@@ -70,6 +70,11 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
       toolCallId: 'tool-1',
       segmentIds: [imported.segments[0]!.id],
       evidence: [{ ref: plan.requirements[0]!.evidence.ref, anchorIds: [] }],
+    })
+    assert.equal(db.stageEvidence.getPresentationCoverage(stageRunId).presented, 0, '旧工具级回执保留但不得升级为已提交')
+    const receipt = db.stageEvidence.recordReceipt({
+      ...legacy,
+      evidence: legacy.evidence.map(item => ({ ...item, version: imported.asset.sourceSha256, submission: 'provider-response-v1' })),
     })
     assert.equal(receipt.sessionId, 'child-session-1')
     assert.deepEqual(db.stageEvidence.getPresentationCoverage(stageRunId), {
@@ -85,11 +90,11 @@ test('Stage Evidence state freezes evidence facts and scope without becoming sta
         generationRunId: 'generation-1',
         toolCallId: 'tool-1',
         segmentIds: [imported.segments[0]!.id],
-        evidence: [{ ref: plan.requirements[0]!.evidence.ref, anchorIds: [] }],
+        evidence: [{ ref: plan.requirements[0]!.evidence.ref, anchorIds: [], version: imported.asset.sourceSha256, submission: 'provider-response-v1' }],
       }).id,
       receipt.id,
     )
-    assert.equal(db.stageEvidence.listReceipts(stageRunId).length, 1)
+    assert.equal(db.stageEvidence.listReceipts(stageRunId).length, 2)
 
     db.segments.recordCurrentStageDecision(imported.segments[0]!.id, 'editing', 1, 'unchanged')
     db.segments.recordCurrentStageDecision(imported.segments[1]!.id, 'editing', 1, 'unchanged')

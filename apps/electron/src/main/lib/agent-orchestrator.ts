@@ -1631,6 +1631,7 @@ export class AgentOrchestrator {
           },
         }),
         prepareSessionFile: linguistExtension.prepareSessionFile,
+        providerObserver: linguistExtension.providerObserver,
         resumeSessionId: existingSdkSessionId,
         initialUserMessageUuid,
         piAgentDir: getSdkConfigDir(),

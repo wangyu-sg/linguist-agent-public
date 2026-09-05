@@ -77,7 +77,7 @@ test('交付证据汇总只阻断显式 blocking Gap，未映射 warning 仅随�
       sessionId: 'reviewer',
       generationRunId: 'generation',
       segmentIds: [segmentId],
-      evidence: [{ ref: requirement.evidence.ref, anchorIds: [] }],
+      evidence: [{ ref: requirement.evidence.ref, anchorIds: [], version: requirement.evidence.version, submission: 'provider-response-v1' }],
     })
     db.stageEvidence.replaceStageGaps(stageRunId, [{
       id: 'gap-pm-confirm',

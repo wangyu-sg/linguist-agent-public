@@ -293,7 +293,7 @@
       "owner": "codex-main-host",
       "mergePolicy": "host-seam",
       "hook": "pi-compaction-temporary-deviation",
-      "reason": "Pi 压缩续跑时重新注入已验证的 Linguist turn context；可选 prepareSessionFile 在 SDK 恢复前执行宿主数据迁移。CAT request projection 已删除；上游提供等价 hook 后退役相应偏差。"
+      "reason": "Pi 压缩续跑时重新注入已验证的 Linguist turn context；prepareSessionFile 在 SDK 恢复前执行宿主数据迁移，providerObserver 只通知最终 payload 与 Provider 响应。CAT request projection 已删除，CAT 判定与存储留在 Linguist；上游提供等价 hook 后退役相应偏差。"
     },
     {
       "file": "apps/electron/src/main/lib/adapters/pi-builtin-tools.ts",

@@ -134,6 +134,11 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   customTools?: ToolDefinition[]
   /** 在 SDK 恢复之前执行宿主提供的持久化格式迁移。 */
   prepareSessionFile?: (sessionFile: string) => void
+  /** SDK 扩展修改之后的最终请求与实际响应通知；观察者不得修改请求。 */
+  providerObserver?: {
+    onPayload: (payload: unknown) => void
+    onResponse: (response: { status: number }) => void
+  }
   onSessionId?: (sdkSessionId: string, sessionFile?: string) => void
   /** Pi final assistant UI UUID → 持久树状 session entry ID。 */
   onPiEntryBindings?: (bindings: Record<string, string>) => void
@@ -1536,6 +1541,20 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         customTools,
       })
       session.agent.toolExecution = 'sequential'
+      if (input.providerObserver) {
+        const observer = input.providerObserver
+        const previousPayload = session.agent.onPayload
+        const previousResponse = session.agent.onResponse
+        session.agent.onPayload = async (payload, model) => {
+          const replacement = await previousPayload?.(payload, model)
+          observer.onPayload(replacement ?? payload)
+          return replacement
+        }
+        session.agent.onResponse = async (response, model) => {
+          await previousResponse?.(response, model)
+          observer.onResponse(response)
+        }
+      }
       // Pi session artifact 可以来自旧版本，不能假设其历史 tool_result 已通过当前校验。
       // transformContext 在每个 provider 请求前执行，能隔离 resume 的坏图片而不篡改原 artifact。
       const previousTransformContext = session.agent.transformContext

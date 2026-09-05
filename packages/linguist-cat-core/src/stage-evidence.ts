@@ -111,6 +111,10 @@ export interface StageEvidenceReceipt {
   evidence: Array<{
     ref: StageEvidenceRef
     anchorIds: string[]
+    /** 旧工具级记录没有此标记，不计入模型提交覆盖。 */
+    submission?: 'provider-response-v1'
+    version?: string
+    visual?: boolean
   }>
   presentedAt: string
 }

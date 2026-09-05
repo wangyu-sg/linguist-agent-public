@@ -1,3 +1,4 @@
+import type { AgentToolResult } from '@earendil-works/pi-coding-agent'
 import {
   fnv1a64,
   matchTmCandidates,
@@ -43,7 +44,7 @@ const EMPTY_TB_NOTE =
 const EMPTY_PATTERNS_NOTE =
   'No sentence patterns matched. Import a CSV or add sentence patterns via the project UI to build the pattern library.'
 const IMAGE_DOC_NOTE =
-  'This context doc is an image. When the host can read the managed blob, the image is attached to this tool result for visual inspection.'
+  'This context doc is an image. The managed image requires a vision-capable model; a filename or text-only model does not satisfy visual evidence. Do not switch Provider without user authorization.'
 const NO_EXTRACT_NOTE =
   'This context doc has no plain-text extract (only binary/source bytes are stored). Ask the user for the relevant content if you need it.'
 const SENTENCE_PATTERN_STATUSES = [
@@ -535,7 +536,8 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       for (const rule of dto.projectRules ?? []) {
         addPresented({ kind: 'style-rule', id: rule.ruleId }, [])
       }
-      runtime.recordEvidencePresentation(
+      const result = toolResult(dto, deps.resultProjectId, dto.contexts.map((context) => context.segmentId))
+      runtime.prepareEvidencePresentation(
         db,
         toolCallId,
         dto.contexts.map((context) => context.segmentId),
@@ -543,14 +545,9 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           ref: item.ref,
           anchorIds: [...item.anchorIds].sort(),
         })),
+        result.content,
       )
-      if (dto.stageEvidence !== undefined) dto.stageEvidence = stageSummary()!
-      for (let index = 0; index < 4; index += 1) {
-        const size = measured(dto)
-        if (size === dto.usedBytes) break
-        dto.usedBytes = size
-      }
-      return toolResult(dto, deps.resultProjectId, dto.contexts.map((context) => context.segmentId))
+      return result
     },
   })
 
@@ -722,11 +719,12 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       const evidenceSegmentIds = evidenceRequirement?.scope.kind === 'segments'
         ? evidenceRequirement.scope.segmentIds
         : []
-      const recordPresentation = (anchorIds: string[]): void => runtime.recordEvidencePresentation(
+      const preparePresentation = (anchorIds: string[], content: AgentToolResult<unknown>['content'], visual = false): void => runtime.prepareEvidencePresentation(
         db,
         toolCallId,
         evidenceSegmentIds,
-        [{ ref: { kind: 'context-doc', id: evidenceDocId }, anchorIds }],
+        [{ ref: { kind: 'context-doc', id: evidenceDocId }, anchorIds, ...(visual ? { visual } : {}) }],
+        content,
       )
       const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.readContextDoc)
       const anchors = db.contextDocs.listAnchors(doc.id)
@@ -776,7 +774,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
             { type: 'image' as const, data: image.data, mimeType: image.mimeType },
           ],
         }
-        recordPresentation(evidenceAnchors.map((anchor) => anchor.id))
+        preparePresentation(evidenceAnchors.map((anchor) => anchor.id), withImage.content.filter(block => block.type === 'image'), true)
         return withImage
       }
       const extract = doc.textExtract
@@ -811,10 +809,11 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           return end <= pageEnd
         })
         .map((anchor) => anchor.id)
+      const result = toolResult(dto, deps.resultProjectId)
       if (presentedAnchorIds.length > 0 || (evidenceAnchors.length === 0 && page.offset === 0 && !dto.hasMore)) {
-        recordPresentation(presentedAnchorIds)
+        preparePresentation(presentedAnchorIds, result.content)
       }
-      return toolResult(dto, deps.resultProjectId)
+      return result
     },
   })
 

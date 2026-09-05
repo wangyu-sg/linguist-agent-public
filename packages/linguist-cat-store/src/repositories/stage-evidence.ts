@@ -356,6 +356,8 @@ export class StageEvidenceRepository {
     for (const receipt of this.listReceipts(stageRunId)) {
       if (receipt.baselineHash !== state.baseline.baselineHash) continue
       for (const item of receipt.evidence) {
+        const planned = state.plan.requirements.find(requirement => evidenceRefKey(requirement.evidence.ref) === evidenceRefKey(item.ref))
+        if (item.submission !== 'provider-response-v1' || item.version !== planned?.evidence.version) continue
         const anchors = presented.get(evidenceRefKey(item.ref)) ?? new Set<string>()
         item.anchorIds.forEach((anchorId) => anchors.add(anchorId))
         presented.set(evidenceRefKey(item.ref), anchors)

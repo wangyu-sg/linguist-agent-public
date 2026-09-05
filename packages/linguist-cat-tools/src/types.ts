@@ -50,8 +50,10 @@ import type {
   TermEntry,
   TermEntryMatch,
   TmUnit,
+  RecordStageEvidenceReceiptInput,
   VoiceProfile,
 } from '@linguist/cat-store'
+import type { AgentToolResult } from '@earendil-works/pi-coding-agent'
 import type { LinguistCatToolError } from './errors'
 
 /** CAT tool names currently exposed to project sessions. */
@@ -174,6 +176,8 @@ export interface LinguistCatToolsDeps {
   linguistRole?: 'general' | 'translator' | 'reviewer' | 'proofreader'
   /** 宿主创建或恢复的冻结 Stage Evidence 执行；模型无对应入参。 */
   stageEvidenceRunId?: string
+  /** 仅通知准备完成；宿主在最终 Provider 调用确认后才写 Receipt。 */
+  onEvidencePrepared?: (receipt: RecordStageEvidenceReceiptInput, content: AgentToolResult<unknown>['content']) => void
   /** 委派时冻结的 Segment 范围；模型无对应入参。 */
   reviewScopeSegmentIds?: readonly string[]
   /** Current-turn host provenance; resolved locally per tool call. */

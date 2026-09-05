@@ -32,6 +32,7 @@ import {
   StoreReadOnlyError,
   StoreSqliteUnavailableError,
   type ProjectDatabase,
+  type RecordStageEvidenceReceiptInput,
 } from '@linguist/cat-store'
 import { createLinguistCatTools } from './factory'
 import {
@@ -342,7 +343,7 @@ test('cat_confirm_segments: Reviewer 的 101 段冻结范围跨两批后才 comp
       sessionId: 'review-session',
       generationRunId: 'generation-after-read',
       segmentIds: scope,
-      evidence: [{ ref: requirement.evidence.ref, anchorIds: [] }],
+      evidence: [{ ref: requirement.evidence.ref, anchorIds: [], version: requirement.evidence.version, submission: 'provider-response-v1' }],
     })
     const completed = (await invoke(tool, {
       items: [{
@@ -2586,7 +2587,7 @@ test('cat_read_context_doc: paged extract read + image fallback metadata + not-f
   }
 })
 
-test('Stage Evidence receipts are host-written only for Context text and images actually presented', async () => {
+test('Stage Evidence 工具只准备正文与图片描述，不提前记录提交回执', async () => {
   const fixture = setup()
   try {
     const segment = fixture.segmentsA[0]!
@@ -2665,10 +2666,12 @@ test('Stage Evidence receipts are host-written only for Context text and images 
       },
       baseline,
     })
+    const prepared: RecordStageEvidenceReceiptInput[] = []
     const tools = createLinguistCatTools({
       resolveProject: makeOkResolver(fixture),
       sessionId: 'review-session',
       stageEvidenceRunId: stageRunId,
+      onEvidencePrepared: receipt => { prepared.push(receipt) },
       generationProvenance: (toolCallId) => ({ runId: `generation:${toolCallId}` }),
       readContextImage: async () => ({ data: 'iVBORw0KGgo=', mimeType: 'image/png' }),
     })
@@ -2694,18 +2697,16 @@ test('Stage Evidence receipts are host-written only for Context text and images 
       stageRunId,
       status: 'ready',
       required: 2,
-      presented: 1,
-      pending: 1,
+      presented: 0,
+      pending: 2,
     })
 
     const imageResult = await invoke(toolByName(tools, 'cat_read_context_doc'), { docId: image.id }, 'image-call')
     assert.equal(imageResult.content.some((block) => block.type === 'image'), true)
-    assert.deepEqual(fixture.db.stageEvidence.getPresentationCoverage(stageRunId), {
-      required: 2,
-      presented: 2,
-      pending: [],
-    })
-    assert.equal(fixture.db.stageEvidence.listReceipts(stageRunId).length, 2)
+    assert.equal(fixture.db.stageEvidence.getPresentationCoverage(stageRunId).presented, 0)
+    assert.equal(fixture.db.stageEvidence.listReceipts(stageRunId).length, 0)
+    assert.equal(prepared.length, 2)
+    assert.ok(prepared[1]?.evidence.every(item => item.visual && item.submission === undefined))
   } finally {
     fixture.db.close()
   }

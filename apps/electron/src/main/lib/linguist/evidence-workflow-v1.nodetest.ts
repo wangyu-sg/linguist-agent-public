@@ -3,6 +3,10 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createServer } from 'node:http'
+import { once } from 'node:events'
+import { Agent } from '@earendil-works/pi-agent-core'
+import { getModel, streamSimple } from '@earendil-works/pi-ai/compat'
 import type { AgentToolResult, ExtensionContext } from '@earendil-works/pi-coding-agent'
 import { convertToLlm, SessionManager } from '@earendil-works/pi-coding-agent'
 import { createSeededEntropy } from '@linguist/cat-core'
@@ -13,6 +17,7 @@ import { ensureStageEvidenceForSession } from './stage-evidence-host'
 import { toolResult } from '../../../../../../packages/linguist-cat-tools/src/tool-runtime'
 import { normalizeLegacyCatSessionFile } from './legacy-cat-session'
 import { sanitizePiMessageImageContent } from '../image-content-validation'
+import { createEvidenceSubmissionObserver } from './evidence-submission'
 
 test('CAT 自含正文与合法图片经过真实 Pi 转换后仍进入模型内容', () => {
   const result = toolResult({ text: '必须实际提供的参考正文' })
@@ -95,6 +100,19 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
     promaWorkspaceId: 'workspace-1',
   })
   const db = store.openProject(project.id)
+  const requests: string[] = []
+  const provider = createServer(async (request, response) => {
+    let body = ''
+    for await (const chunk of request) body += String(chunk)
+    requests.push(body)
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' })
+    response.end(`data: ${JSON.stringify({ id: 'fake', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { content: '已收到资料' }, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ id: 'fake', object: 'chat.completion.chunk', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`)
+  })
+  provider.listen(0, '127.0.0.1')
+  await once(provider, 'listening')
+  const address = provider.address()
+  assert.ok(address && typeof address !== 'string')
+  const model = { ...getModel('openai', 'gpt-4o-mini'), api: 'openai-completions' as const, baseUrl: `http://127.0.0.1:${address.port}/v1` }
   try {
     const imported = db.assets.insertImported({
       asset: {
@@ -119,6 +137,9 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
       originalBytes: new Uint8Array([1]),
     })
     const segmentId = imported.segments[0]!.id as string
+    const imageDoc = db.contextDocs.insert({ kind: 'image', originalFilename: 'reference.gif', blobRelpath: 'blobs/reference.gif', sha256: 'b'.repeat(64) })
+    db.contextDocs.setEvidenceLink({ contextDocId: imageDoc.id, relation: { kind: 'segment', segmentId }, requiredness: 'required', mappingRevision: '1' })
+    const image = { type: 'image' as const, mimeType: 'image/gif', data: Buffer.from('474946383961010001000000003b', 'hex').toString('base64') }
     const scope: ProjectDiscoveryScope = {
       roots: [],
       files: [],
@@ -126,7 +147,7 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
       managedEvidence: [{
         ref: { kind: 'asset', id: imported.asset.id },
         version: imported.asset.sourceSha256,
-      }],
+      }, { ref: { kind: 'context-doc', id: imageDoc.id }, version: imageDoc.sha256! }],
       hash: 'simple-scope',
     }
 
@@ -139,21 +160,68 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
         fallbackSegmentIds: [segmentId],
       })
       assert.ok(state)
+      let failBookkeeping = true
+      const unverified: unknown[] = []
+      const observer = createEvidenceSubmissionObserver(receipt => {
+        if (failBookkeeping) throw new Error('synthetic receipt write failure')
+        db.stageEvidence.recordReceipt(receipt)
+      }, error => { unverified.push(error) })
       const tools = createLinguistCatTools({
         resolveProject: () => ({ project, db }),
         sessionId,
         linguistRole: role,
         stageEvidenceRunId: state.stageRunId,
+        onEvidencePrepared: observer.prepare,
+        readContextImage: async () => image,
         reviewScopeSegmentIds: [segmentId],
         generationProvenance: (toolCallId) => ({ runId: `${sessionId}:${toolCallId}` }),
       })
       const contextTool = toolByName(tools, 'cat_get_translation_context')
       const confirmTool = toolByName(tools, 'cat_confirm_segments')
-      await invoke(
+      const prepared = await invoke(
         contextTool,
         `${role}-context`,
         { segmentIds: [segmentId], includeNeighbors: false },
       )
+      assert.equal(db.stageEvidence.listReceipts(state.stageRunId).length, 0, '工具返回但没有下一次模型请求，不得签收')
+      observer.onPayload({ messages: [] })
+      observer.onResponse({ status: 200 })
+      assert.equal(db.stageEvidence.listReceipts(state.stageRunId).length, 0, '压缩删除的内容不得签收')
+      const agent = new Agent({
+        initialState: { model, messages: [{ role: 'toolResult', toolCallId: `${role}-context`, toolName: contextTool.name, ...prepared, isError: false, timestamp: 0 }] },
+        convertToLlm,
+        transformContext: async messages => sanitizePiMessageImageContent(messages),
+        streamFn: streamSimple,
+        getApiKey: () => 'synthetic-test-key',
+        onPayload: observer.onPayload,
+        onResponse: observer.onResponse,
+      })
+      await agent.prompt('继续当前任务')
+      assert.equal(agent.state.errorMessage, undefined)
+      assert.ok(requests.at(-1)?.includes('pull down'), '真实本地 HTTP 请求必须包含译文')
+      assert.equal(db.stageEvidence.listReceipts(state.stageRunId).length, 0)
+      assert.equal(unverified.length, 1, '记账失败不能把已发生的模型请求变成失败')
+      failBookkeeping = false
+      await agent.prompt('继续')
+      assert.equal(db.stageEvidence.listReceipts(state.stageRunId).length, 1, '重试不得重复记账')
+      const visual = await invoke(toolByName(tools, 'cat_read_context_doc'), `${role}-image`, { docId: imageDoc.id })
+      observer.onPayload({ content: visual.content })
+      observer.onResponse({ status: 503 })
+      assert.equal(db.stageEvidence.getPresentationCoverage(state.stageRunId).presented, 1, '失败响应不确认图片')
+      for (const mode of ['text-only', 'invalid-image', 'visual'] as const) {
+        const content = mode === 'invalid-image' ? visual.content.map(block => block.type === 'image' ? { ...block, data: 'invalid' } : block) : visual.content
+        const visualAgent = new Agent({
+          initialState: { model: mode === 'text-only' ? { ...model, input: ['text'] } : model,
+            messages: [{ role: 'toolResult', toolCallId: `${role}-image`, toolName: 'cat_read_context_doc', content, isError: false, timestamp: 0 }] },
+          convertToLlm, transformContext: async messages => sanitizePiMessageImageContent(messages),
+          streamFn: streamSimple, getApiKey: () => 'synthetic-test-key',
+          onPayload: observer.onPayload, onResponse: observer.onResponse,
+        })
+        await visualAgent.prompt('继续')
+        assert.equal(visualAgent.state.errorMessage, undefined)
+        assert.equal(requests.at(-1)?.includes(image.data), mode === 'visual')
+        assert.equal(db.stageEvidence.getPresentationCoverage(state.stageRunId).presented, mode === 'visual' ? 2 : 1)
+      }
       const result = await invoke(
         confirmTool,
         `${role}-confirm`,
@@ -162,6 +230,8 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
       assert.equal(result.details?.fullReview?.status, 'complete')
     }
   } finally {
+    provider.closeAllConnections()
+    await new Promise<void>((resolve, reject) => provider.close(error => error ? reject(error) : resolve()))
     db.close()
   }
 })
