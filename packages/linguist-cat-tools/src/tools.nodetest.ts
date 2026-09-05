@@ -819,9 +819,7 @@ test('cat_project_summary: locales, counts, JSON round-trip; resolver receives c
     assert.equal(dto.totalSegments, 12)
     assert.deepEqual(dto.segmentCounts, { untranslated: 8, draft: 0, translated: 4, reviewed: 0 })
     assert.equal(dto.note, undefined)
-    assert.ok(resultText(result).includes('Structured data is available in details.'))
-    assert.notEqual(resultText(result), JSON.stringify(dto, null, 2))
-    assert.deepEqual(JSON.parse(JSON.stringify(result.details)), dto)
+    assert.deepEqual(JSON.parse(resultText(result)), dto)
     // resolver saw the tool identity, never a project id from model input
     assert.deepEqual(calls, [{ toolName: 'cat_project_summary', toolCallId: 'call-1' }])
     assertNoAbsolutePaths(result, fixture.rootDir)
@@ -1702,8 +1700,7 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
     }
     assert.ok(firstPage.usedBytes <= firstPage.maxBytes)
     assert.ok(Buffer.byteLength(JSON.stringify(firstPage), 'utf8') <= firstPage.maxBytes)
-    assert.ok(resultText(first).length < 500)
-    assert.notEqual(resultText(first), JSON.stringify(firstPage, null, 2))
+    assert.deepEqual(JSON.parse(resultText(first)), first.details)
 
     const second = (await invoke(tool, {
       segmentIds,
@@ -2127,9 +2124,7 @@ test('output discipline: recursive no-absolute-path scan, JSON round-trip, zero 
       for (const [name, params] of calls) {
         const result = await invoke(toolByName(tools, name), params)
         assertNoAbsolutePaths(result, fixture.rootDir)
-        assert.deepEqual(JSON.parse(JSON.stringify(result.details)), result.details)
-        assert.ok(resultText(result).length < 500)
-        assert.notEqual(resultText(result), JSON.stringify(result.details, null, 2))
+        assert.deepEqual(JSON.parse(resultText(result)), result.details)
       }
     } finally {
       console.log = original.log

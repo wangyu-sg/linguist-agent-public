@@ -85,7 +85,6 @@ import {
   installPiRequestProxyFetch,
   runWithPiRequestProxy,
 } from './pi-request-proxy'
-import { projectCatToolResultsForModel } from '../linguist/cat-tool-result-projection'
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent')
 type BashOperations = import('@earendil-works/pi-coding-agent').BashOperations
@@ -133,6 +132,8 @@ export interface PiAgentQueryOptions extends AgentQueryInput {
   piAgentDir: string
   piSessionDir: string
   customTools?: ToolDefinition[]
+  /** 在 SDK 恢复之前执行宿主提供的持久化格式迁移。 */
+  prepareSessionFile?: (sessionFile: string) => void
   onSessionId?: (sdkSessionId: string, sessionFile?: string) => void
   /** Pi final assistant UI UUID → 持久树状 session entry ID。 */
   onPiEntryBindings?: (bindings: Record<string, string>) => void
@@ -1421,6 +1422,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       if (input.resumeSessionId && !sessionFile) {
         throw new Error(`No conversation found with session ID ${input.resumeSessionId}`)
       }
+      if (sessionFile) input.prepareSessionFile?.(sessionFile)
       const sessionManager = sessionFile
         ? sdk.SessionManager.open(sessionFile, input.piSessionDir, cwd)
         : sdk.SessionManager.create(cwd, input.piSessionDir)
@@ -1534,9 +1536,6 @@ export class PiAgentAdapter implements AgentProviderAdapter {
         customTools,
       })
       session.agent.toolExecution = 'sequential'
-      const convertToLlm = session.agent.convertToLlm.bind(session.agent)
-      session.agent.convertToLlm = (messages) =>
-        convertToLlm(projectCatToolResultsForModel(messages))
       // Pi session artifact 可以来自旧版本，不能假设其历史 tool_result 已通过当前校验。
       // transformContext 在每个 provider 请求前执行，能隔离 resume 的坏图片而不篡改原 artifact。
       const previousTransformContext = session.agent.transformContext

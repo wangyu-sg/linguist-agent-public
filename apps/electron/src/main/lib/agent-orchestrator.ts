@@ -1630,6 +1630,7 @@ export class AgentOrchestrator {
             initialSources: projectInstructions.sources,
           },
         }),
+        prepareSessionFile: linguistExtension.prepareSessionFile,
         resumeSessionId: existingSdkSessionId,
         initialUserMessageUuid,
         piAgentDir: getSdkConfigDir(),

@@ -1,14 +1,74 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentToolResult, ExtensionContext } from '@earendil-works/pi-coding-agent'
+import { convertToLlm, SessionManager } from '@earendil-works/pi-coding-agent'
 import { createSeededEntropy } from '@linguist/cat-core'
 import { CatStore } from '@linguist/cat-store'
 import { createLinguistCatTools } from '@linguist/cat-tools'
 import type { ProjectDiscoveryScope } from './project-discovery-scope'
 import { ensureStageEvidenceForSession } from './stage-evidence-host'
+import { toolResult } from '../../../../../../packages/linguist-cat-tools/src/tool-runtime'
+import { normalizeLegacyCatSessionFile } from './legacy-cat-session'
+import { sanitizePiMessageImageContent } from '../image-content-validation'
+
+test('CAT 自含正文与合法图片经过真实 Pi 转换后仍进入模型内容', () => {
+  const result = toolResult({ text: '必须实际提供的参考正文' })
+  const image = { type: 'image' as const, mimeType: 'image/gif', data: Buffer.from('474946383961010001000000003b', 'hex').toString('base64') }
+  const messages = convertToLlm(sanitizePiMessageImageContent([{
+    role: 'toolResult' as const, toolCallId: 'context-image', toolName: 'cat_read_context_doc',
+    content: [...result.content, image], details: result.details, isError: false, timestamp: 0,
+  }]))
+  assert.ok(messages[0]?.role === 'toolResult')
+  assert.equal(messages[0].content.filter(block => block.type === 'image').length, 1)
+  assert.ok(result.content.some(block => block.type === 'text' && block.text.includes('必须实际提供的参考正文')))
+  const mixed = convertToLlm(sanitizePiMessageImageContent([{
+    role: 'toolResult' as const, toolCallId: 'mcp-image', toolName: 'mcp_reference',
+    content: [{ type: 'text' as const, text: '前' }, image, { type: 'text' as const, text: '后' },
+      { ...image, data: 'invalid' }], isError: false, timestamp: 0,
+  }]))
+  assert.ok(mixed[0]?.role === 'toolResult')
+  assert.deepEqual(mixed[0].content.slice(0, 3), [{ type: 'text', text: '前' }, image, { type: 'text', text: '后' }])
+  assert.equal(mixed[0].content.filter(block => block.type === 'image').length, 1)
+})
+
+test('旧 CAT 会话备份迁移后保留正文、图片和 Pi 树身份，重复恢复不再写入', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cat-legacy-session-'))
+  const file = join(root, 'session.jsonl')
+  const rows = [
+    { type: 'session', version: 3, id: 'legacy', timestamp: new Date(0).toISOString(), cwd: root },
+    { type: 'message', id: 'user', parentId: null, timestamp: new Date(1).toISOString(), message: { role: 'user', content: '读取参考', timestamp: 1 } },
+    { type: 'message', id: 'result', parentId: 'user', timestamp: new Date(2).toISOString(), message: {
+      role: 'toolResult', toolName: 'cat_read_context_doc', toolCallId: 'old-call', isError: false, timestamp: 2,
+      content: [{ type: 'text', text: 'CAT tool result. Structured data is available in details.' },
+        { type: 'image', mimeType: 'image/gif', data: Buffer.from('474946383961010001000000003b', 'hex').toString('base64') }],
+      details: { docId: 'anonymous', text: '历史正文' },
+    } },
+  ]
+  const original = rows.map(row => JSON.stringify(row)).join('\n') + '\n'
+  writeFileSync(file, original)
+  normalizeLegacyCatSessionFile(file)
+  assert.equal(readFileSync(`${file}.before-cat-content-v1`, 'utf8'), original)
+  const session = SessionManager.open(file, root, root)
+  assert.equal(session.getLeafId(), 'result')
+  assert.equal(session.getEntry('result')?.parentId, 'user')
+  const messages = convertToLlm(session.buildSessionContext().messages)
+  assert.ok(JSON.stringify(messages).includes('历史正文'))
+  assert.ok(JSON.stringify(messages).includes('image/gif'))
+  const migrated = readFileSync(file, 'utf8')
+  normalizeLegacyCatSessionFile(file)
+  assert.equal(readFileSync(file, 'utf8'), migrated)
+  session.appendCompaction('旧任务摘要', 'result', 200)
+  session.appendMessage({ role: 'user', content: '继续', timestamp: 3 })
+  const resumed = SessionManager.open(file, root, root)
+  const retained = convertToLlm(resumed.buildSessionContext().messages)
+  assert.ok(JSON.stringify(retained).includes('历史正文'))
+  assert.ok(JSON.stringify(retained).includes('image/gif'))
+  resumed.branch('result')
+  assert.equal(resumed.getLeafId(), 'result')
+})
 
 const EXTENSION_CONTEXT = {} as ExtensionContext
 type LinguistCatTool = ReturnType<typeof createLinguistCatTools>[number]

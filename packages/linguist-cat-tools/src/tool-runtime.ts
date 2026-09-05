@@ -26,16 +26,7 @@ export const defineTool = <
   tool: ToolDefinition<TParams, TDetails, TState>,
 ) => tool
 
-function summarizeToolResult(details: object): string {
-  const fields = Object.entries(details).flatMap(([key, value]) => {
-    if (typeof value === 'number' || typeof value === 'boolean') return [`${key}=${String(value)}`]
-    if (Array.isArray(value)) return [`${key}=${value.length}`]
-    return []
-  })
-  return `CAT tool result${fields.length > 0 ? `: ${fields.join(', ')}` : ''}. Structured data is available in details.`
-}
-
-/** 导航元数据只携带首个句段锚点；content 保持短摘要，不复制 details。 */
+/** 导航元数据只携带首个句段锚点；content 自含模型所需正文，details 保留 UI 导航合同。 */
 export function toolResult<TDetails extends object>(
   dto: TDetails,
   projectId?: string,
@@ -53,7 +44,7 @@ export function toolResult<TDetails extends object>(
   return {
     content: [{
       type: 'text',
-      text: summarizeToolResult(details),
+      text: JSON.stringify(details),
     }],
     details,
   }

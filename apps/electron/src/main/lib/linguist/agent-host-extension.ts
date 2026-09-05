@@ -10,6 +10,7 @@ import {
 import { composeAgentTools, hashAgentToolComposition } from './agent-tool-composition'
 import { resolveAgentExecutionScope, type AgentExecutionScope } from './agent-execution-scope'
 import { buildLinguistPrompt } from './linguist-prompt-builder'
+import { normalizeLegacyCatSessionFile } from './legacy-cat-session'
 import { getLinguistProjectService } from './project-service'
 import { recordLinguistRuntimeObservation } from './runtime-diagnostics'
 import { resolveLinguistSessionCatTools } from './session-cat-tools'
@@ -32,6 +33,7 @@ interface ComposedHostTools {
 }
 
 export interface LinguistAgentHostExtension {
+  prepareSessionFile?: (sessionFile: string) => void
   executionScope: AgentExecutionScope
   promptOverlay: string
   turnContext?: Readonly<LinguistTurnContextV1>
@@ -68,6 +70,7 @@ export function resolveLinguistAgentHostExtension(input: {
     : undefined
 
   return {
+    ...(profile.kind === 'linguist' ? { prepareSessionFile: normalizeLegacyCatSessionFile } : {}),
     executionScope: resolveAgentExecutionScope(input.session),
     promptOverlay: promptBuild?.prompt ?? '',
     ...(turnContext === undefined ? {} : { turnContext }),
