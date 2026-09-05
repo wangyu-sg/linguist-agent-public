@@ -54,7 +54,7 @@ const SENTENCE_PATTERN_STATUSES = [
   'rejected',
 ] as const
 
-/** LA-CONTEXT-001：首页自动注入的规则条数硬上限。 */
+/** 每页规则上限；余项通过同一工具续读。 */
 const PROJECT_RULES_LIMIT = 20
 const INLINE_CONTEXT_TEXT_MAX_CHARS = 2_000
 const REQUIREDNESS_RANK = { optional: 0, conditional: 1, required: 2 } as const
@@ -112,6 +112,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       'On the first professional task read, use stageScope=segments/assets/project to match the user request. UI selection never overrides that scope. Use restartStage=true only for an explicitly requested new review round; omit it on continuation pages.',
       'Treat every revision as a snapshot; proposals must still use the returned current revision.',
       'Reviewer and Proofreader context always retains the complete current target; reduce the segment batch or raise maxBytes when the minimum core does not fit.',
+      'Read ruleCoverage remaining rules with rulesOnly=true and rulesOffset=nextOffset (same segmentIds); do not treat a digest as the full rule set.',
       'Fetch every requiredEvidencePending item with cat_read_context_doc before confirming the Stage.',
       'On CONTEXT_DRIFT discard the cursor and restart from the first page; on an empty page with minimumRequiredBytes retry with a larger maxBytes.',
     ],
@@ -120,11 +121,13 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       includeNeighbors: Type.Optional(Type.Boolean()),
       neighborCount: Type.Optional(Type.Integer({ minimum: 0, maximum: 5 })),
       tmLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10 })),
-      termLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10 })),
+      termLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, description: 'Advisory match limit; required/forbidden authority and conflicts are always retained.' })),
       maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144 })),
       cursor: Type.Optional(Type.String()),
       stageScope: Type.Optional(Type.Union([Type.Literal('segments'), Type.Literal('assets'), Type.Literal('project')])),
       restartStage: Type.Optional(Type.Boolean()),
+      rulesOnly: Type.Optional(Type.Boolean()),
+      rulesOffset: Type.Optional(Type.Integer({ minimum: 0 })),
     }),
     async execute(toolCallId, params) {
       if (params.segmentIds.length < 1 || params.segmentIds.length > 50) {
@@ -161,15 +164,6 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         params.segmentIds.length,
         db.runs.latestEventSequence,
       )
-      const allRules = db.styleGuideRules.list({ limit: db.styleGuideRules.count() })
-      const projectRules: CatProjectRuleItem[] = cursorOffset === 0
-        ? allRules.slice(0, PROJECT_RULES_LIMIT).map((rule) => ({
-          ruleId: rule.id,
-          ...(rule.groupKey !== undefined ? { groupKey: rule.groupKey } : {}),
-          ruleText: rule.ruleText,
-          ...(rule.screenshotRef !== undefined ? { referenceId: rule.screenshotRef } : {}),
-        }))
-        : []
       const segments = db.segments.getByIds(params.segmentIds)
       if (segments.length !== params.segmentIds.length) {
         const found = new Set(segments.map((segment) => segment.id as string))
@@ -178,10 +172,14 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           params.segmentIds.find((segmentId) => !found.has(segmentId))!,
         )
       }
-      const remainingSegments = segments.slice(cursorOffset)
+      const allRules = db.getProjectRules(segments)
+      const rulesOffset = params.rulesOffset ?? 0
+      if (!Number.isInteger(rulesOffset) || rulesOffset < 0 || rulesOffset > allRules.length) throw new LinguistCatInvalidArgumentError('rulesOffset', 'outside current rule set')
+      let projectRules: CatProjectRuleItem[] = allRules.slice(rulesOffset, rulesOffset + PROJECT_RULES_LIMIT)
+      const remainingSegments = params.rulesOnly ? [] : segments.slice(cursorOffset)
       const linkedContextBySegment = new Map<string, CatLinkedContextEvidence[]>()
       const pendingEvidenceBySegment = new Map<string, CatRequiredEvidencePending[]>()
-      const contextDocs = db.contextDocs.list({ limit: db.contextDocs.count() })
+      const contextDocs = params.rulesOnly ? [] : db.contextDocs.list({ limit: db.contextDocs.count() })
       const requestedIds = new Set(remainingSegments.map(segment => segment.id as string))
       const requestedAssets = new Set(remainingSegments.map(segment => segment.assetId as string))
       const contextEvidence = contextDocs.flatMap(doc => {
@@ -245,13 +243,12 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         ? new Map()
         : db.segments.neighborsMany(remainingSegments, neighborCount)
       const termPolicyBySegment = new Map<string, SegmentTermPolicyEvaluation<TermEntryMatch>>()
-      if (termLimit > 0) {
-        for (const segment of remainingSegments) {
-          const evaluated = db.termEntries.evaluateSegment(segment)
-          termPolicyBySegment.set(segment.id as string, {
-            matches: evaluated.matches.slice(0, termLimit),
-          })
-        }
+      for (const segment of remainingSegments) {
+        const evaluated = db.termEntries.evaluateSegment(segment)
+        termPolicyBySegment.set(segment.id as string, {
+          matches: [...evaluated.matches.filter(item => item.enforcement === 'hard' || item.match.conflict),
+            ...evaluated.matches.filter(item => item.enforcement !== 'hard' && !item.match.conflict).slice(0, termLimit)],
+        })
       }
       const tmMatchesBySegment = new Map<string, TmAgentEvidence[]>()
       if (tmLimit > 0) {
@@ -283,6 +280,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           }
         }
       }
+      const voices = remainingSegments.some(segment => segment.context?.meta?.speaker !== undefined) ? db.voiceProfiles.list({ limit: db.voiceProfiles.count() }) : []
       const contexts: SegmentTranslationContext[] = []
       for (const segment of remainingSegments) {
         const neighbors = neighborCount === 0
@@ -321,6 +319,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           source: segment.source,
           currentTarget: segment.target,
           locked: segment.locked,
+          ...(segment.context?.meta?.speaker === undefined ? {} : { voiceProfiles: voices.filter(profile => profile.speaker === segment.context?.meta?.speaker) }),
           ...(segment.context?.meta?.speaker !== undefined
             ? { speaker: segment.context.meta.speaker }
             : {}),
@@ -437,7 +436,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         minimumRequiredBytes?: number,
       ): CatGetTranslationContextResult => {
         const nextIndex = cursorOffset + items.length
-        const truncated = nextIndex < params.segmentIds.length
+        const truncated = !params.rulesOnly && nextIndex < params.segmentIds.length
         const requiredEvidencePending = requiredPendingFor(items)
         const result: CatGetTranslationContextResult = {
           contexts: items,
@@ -452,6 +451,9 @@ export function createReferenceTools(runtime: CatToolRuntime) {
               }
             : {}),
           ...(projectRules.length > 0 ? { projectRules } : {}),
+          ruleCoverage: { total: allRules.length, offset: rulesOffset, provided: projectRules.length,
+            remaining: allRules.length - rulesOffset - projectRules.length,
+            ...(rulesOffset + projectRules.length < allRules.length && (!params.rulesOnly || projectRules.length > 0) ? { nextOffset: rulesOffset + projectRules.length } : {}) },
           ...(requiredEvidencePending.length > 0 ? { requiredEvidencePending } : {}),
           ...(evidenceSummary === undefined ? {} : { stageEvidence: evidenceSummary }),
           ...(minimumRequiredBytes !== undefined ? { minimumRequiredBytes } : {}),
@@ -478,11 +480,12 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         next: [],
         tags: [],
         placeholderSignature: context.placeholderSignature,
-        requiredTerms: [],
-        forbiddenTerms: [],
+        requiredTerms: context.requiredTerms,
+        forbiddenTerms: context.forbiddenTerms,
         preferredTerms: [],
-        conflicts: [],
-        tm: [],
+        conflicts: context.conflicts,
+        tm: context.tm,
+        ...(context.speaker === undefined ? {} : { speaker: context.speaker, voiceProfiles: context.voiceProfiles }),
         linkedContext: [],
         warnings: [
           ...(context.locked ? ['Segment is locked.'] : []),
@@ -490,10 +493,18 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         ],
         evidence: [],
       })
+      // 规则有独立续读；普通上下文先给必要句段，规则页则只受自身预算限制。
+      while (projectRules.length > 0 && measured(page(params.rulesOnly || contexts[0] === undefined ? [] : [minimalCore(contexts[0])])) > maxBytes) projectRules = projectRules.slice(0, -1)
+      if (params.rulesOnly && projectRules.length === 0 && rulesOffset < allRules.length) {
+        projectRules = [allRules[rulesOffset]!]
+        const minimum = measured(page([]))
+        projectRules = []
+        return toolResult(page([], minimum), deps.resultProjectId)
+      }
       // 逐段装页：优先全量段；全量放不下先核最小核心；核心也超预算即停止装页。
       let selected: SegmentTranslationContext[] = []
       let minimumRequiredBytes: number | undefined
-      for (const context of contexts) {
+      for (const context of params.rulesOnly ? [] : contexts) {
         const candidate = [...selected, context]
         if (measured(page(candidate)) <= maxBytes) {
           selected = candidate
@@ -529,7 +540,8 @@ export function createReferenceTools(runtime: CatToolRuntime) {
             ...(textRange === undefined ? {} : { textRange }) })
         }
       }
-      for (const rule of dto.projectRules ?? []) presented.push({ ref: { kind: 'style-rule', id: rule.ruleId }, anchorIds: [] })
+      for (const rule of dto.projectRules ?? []) presented.push({ ref: { kind: rule.kind, id: rule.ruleId }, anchorIds: [] })
+      for (const context of dto.contexts) for (const profile of context.voiceProfiles ?? []) presented.push({ ref: { kind: 'voice-profile', id: profile.id }, anchorIds: [] })
       const result = toolResult(dto, deps.resultProjectId, dto.contexts.map((context) => context.segmentId))
       runtime.prepareEvidencePresentation(
         db,

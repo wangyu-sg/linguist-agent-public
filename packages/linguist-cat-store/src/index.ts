@@ -60,7 +60,7 @@ export {
 
 export { assetSourceFileName } from './asset-source'
 
-export { ProjectDatabase, type ProjectDatabaseOptions } from './project-database'
+export { ProjectDatabase, type ProjectDatabaseOptions, type ProjectRule } from './project-database'
 
 export {
   RunHarnessRepository,

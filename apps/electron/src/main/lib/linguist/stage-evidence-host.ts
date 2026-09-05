@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
   createStageEvidenceBaseline,
+  fnv1a64,
   type ContextEvidenceLink,
   type StageEvidencePlan,
   type StageEvidenceRequirement,
@@ -162,26 +163,15 @@ export function ensureStageEvidenceForSession(input: {
     })
   }
 
+  const rules = input.db.getProjectRules(segments)
+  for (const rule of rules) requirements.push({
+    evidence: { ref: { kind: rule.kind, id: rule.ruleId }, version: rule.version },
+    purpose: rule.kind === 'style-rule' ? 'style' : 'technical-constraint', requiredness: 'required',
+    scope: { kind: 'stage' }, anchorIds: [], rationale: '当前范围适用的项目语言要求，通过上下文工具分页读取',
+  })
+  const voices = new Set(input.db.voiceProfiles.list({ limit: input.db.voiceProfiles.count() }).filter(profile => segments.some(segment => segment.context?.meta?.speaker === profile.speaker)).map(profile => profile.id))
   for (const evidence of input.discoveryScope.managedEvidence) {
-    if (evidence.ref.kind === 'style-rule') {
-      requirements.push({
-        evidence,
-        purpose: 'style',
-        requiredness: 'conditional',
-        scope: { kind: 'stage' },
-        anchorIds: [],
-        rationale: '项目 Style Guide 由 translation context 自动提供',
-      })
-    } else if (evidence.ref.kind === 'tech-constraint') {
-      requirements.push({
-        evidence,
-        purpose: 'technical-constraint',
-        requiredness: 'conditional',
-        scope: { kind: 'stage' },
-        anchorIds: [],
-        rationale: '项目技术约束由既有 QA 与交付门禁共同执行',
-      })
-    } else if (evidence.ref.kind === 'reference-import') {
+    if (evidence.ref.kind === 'reference-import') {
       requirements.push({
         evidence,
         purpose: 'terminology',
@@ -190,7 +180,7 @@ export function ensureStageEvidenceForSession(input: {
         anchorIds: [],
         rationale: 'TM/TB 在 Segment 匹配时按需提供',
       })
-    } else if (evidence.ref.kind === 'voice-profile') {
+    } else if (evidence.ref.kind === 'voice-profile' && voices.has(evidence.ref.id)) {
       requirements.push({
         evidence,
         purpose: 'character-voice',
@@ -209,6 +199,7 @@ export function ensureStageEvidenceForSession(input: {
     assetIds,
     segmentIds,
     requirements,
+    ruleSetSnapshot: fnv1a64(JSON.stringify(rules)),
     ...(input.toolCallId === undefined ? {} : { startToolCallId: input.toolCallId }),
   }
   const ruleVersions = requirements

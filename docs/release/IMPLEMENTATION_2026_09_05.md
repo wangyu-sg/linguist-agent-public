@@ -48,6 +48,17 @@
 - 验证：独立 Node 进程、临时数据根、Electron 外壳 mock，实际 Project Service/SQLite/会话索引/Host/Tool 状态链 1/1：缺失→损坏→恢复→缓存文件原子替换→metadata 缺失恢复→归档只读→解绑拒绝；32 个工具保持可装配，未重建缺失 DB。原生 Collaboration 4/4、全仓 typecheck、boundaries 4/4、host seams 9/9、fusion 14/14 通过。
 - 风险：本包验证实际宿主装配和 CAT 调用，不把 Electron mock 等同真实窗口或 Provider；这些由 F 的隔离应用验证补充。文件原地破坏与外部非原子改写不提供自动数据修复，应使用已有备份恢复。
 
+## D：同源规则、完整必要事实与岗位语义
+
+- 修改：Prompt builder/General/Reviewer 资源，Store 的既有 ProjectDatabase/Stage repository，Tools 上下文与 DTO，以及对应生产回归。删除不可达的三岗位 fallback 和 Digest 的第二套技术约束摘要转换；保留已有专业资源缺失报错。Prompt 版本为 3.1.3。
+- Digest、Stage 与上下文复用 `getProjectRules`。保留完整 Style Guide 示例和技术声明，优先技术/必要规则，排除明确指向其他资产的约束；自由文本 scope 无法确认时保留原声明，不猜测排除。规则全集的新增/修改使当前任务 stale，并要求新轮重读。
+- 现有 `cat_get_translation_context` 增加 rulesOnly/rulesOffset 和规则总量/本页/剩余/下一偏移；规则页只读取规则，不重复构建 TM/TB/Context。长规则放不下返回 minimumRequiredBytes，不推进空游标。未增加工具，仍 32 个。
+- 必要/禁止术语及冲突不受可选术语限额影响；最小预算核心保留这些事实、TM 强弱/来源/冲突信息和相关 speaker/voice。放不下应缩小批次或提高预算，不能用空数组冒充不存在。
+- General 先解决可确定 Gap，warning 不自动暂停；通用专业合同统一要求报告本轮 pending/blocked/stale/complete，逐段数量齐全不能代替完整任务资格。
+- Touchpoint：无增删；新增合同位于已有 CAT 包。无新表，Schema 仍 19。
+- 验证：Tools 44/44（26 条适用规则经 2,000 字节规则页取全、其他资产约束排除、超长规则不空转、termLimit=0 仍保留 hard terms）；真实 Pi→本地 HTTP 的三岗位链：25 条规则中余下 5 条未提交时逐段确认仍 blocked，实际提交后 complete。Evidence 4/4、Store 57/57、Stage host 1/1、Delivery 3/3、Prompt 3/3、全仓 typecheck、boundaries 4/4 通过。
+- 风险：规则覆盖证明本轮提交事实，不证明语言质量或任意自然语言约束被机器执行。未判定的自由文本 scope 保守保留；真实 Provider 专业效果仍未验证。
+
 ## 发布与数据边界
 
 本轮仅本地提交，不推送、创建 PR/Tag/Release 或替换安装版。不使用客户文件、生产数据库或未授权凭据。README / AGENTS 本轮不改；需要同步的准确事实在最终记录列出。单元、生产链模拟、目录包与真实 Provider 资格分别记录。

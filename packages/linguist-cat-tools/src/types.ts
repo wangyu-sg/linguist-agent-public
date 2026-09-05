@@ -52,6 +52,7 @@ import type {
   TmUnit,
   RecordStageEvidenceReceiptInput,
   VoiceProfile,
+  ProjectRule,
 } from '@linguist/cat-store'
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent'
 import type { LinguistCatToolError } from './errors'
@@ -517,6 +518,7 @@ export interface SegmentTranslationContext {
   currentTarget: string
   locked: boolean
   speaker?: string
+  voiceProfiles?: VoiceProfile[]
   notes?: string
   previous: CatSegmentBrief[]
   next: CatSegmentBrief[]
@@ -534,14 +536,8 @@ export interface SegmentTranslationContext {
   evidence: CatEvidenceRef[]
 }
 
-/** LA-CONTEXT-001：第一页自动注入的项目规则快照条目。 */
-export interface CatProjectRuleItem {
-  ruleId: string
-  groupKey?: string
-  ruleText: string
-  /** 规则关联的受管引用（StyleGuideRule.screenshotRef）；无引用时缺省。 */
-  referenceId?: string
-}
+/** 与 Store 共用的项目规则条目。 */
+export type CatProjectRuleItem = ProjectRule
 
 export interface CatGetTranslationContextResult {
   contexts: SegmentTranslationContext[]
@@ -551,8 +547,9 @@ export interface CatGetTranslationContextResult {
   truncated: boolean
   nextCursor?: string
   suggestedSegmentIds?: string[]
-  /** 仅第一页（offset=0）自动注入；条数有界。 */
+  /** 当前规则页；通过相同工具的 rulesOnly/rulesOffset 续读。 */
   projectRules?: CatProjectRuleItem[]
+  ruleCoverage: { total: number; offset: number; provided: number; remaining: number; nextOffset?: number }
   /** 必需但尚未进入模型请求的大型文档或视觉证据。 */
   requiredEvidencePending?: CatRequiredEvidencePending[]
   /** 宿主签发的 Stage Evidence 覆盖；Agent 文本不能改写。 */

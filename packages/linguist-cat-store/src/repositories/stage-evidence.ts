@@ -9,9 +9,10 @@ import type {
   StageEvidenceRole,
   WorkflowStage,
 } from '@linguist/cat-core'
-import { createStageEvidenceBaseline, deriveStableIdV2 } from '@linguist/cat-core'
+import { createStageEvidenceBaseline, deriveStableIdV2, fnv1a64 } from '@linguist/cat-core'
 import type { CatDatabase } from '../database'
 import { StoreNotFoundError } from '../errors'
+import type { ProjectRule } from '../project-database'
 import type { SegmentsRepository } from './segments'
 import type { ContextDocsRepository } from './context-docs'
 
@@ -189,6 +190,7 @@ export class StageEvidenceRepository {
     private readonly now: () => string,
     private readonly segments: SegmentsRepository,
     private readonly contextDocs: ContextDocsRepository,
+    private readonly getRules: (segmentIds: readonly string[]) => ProjectRule[],
   ) {}
 
   create(input: CreateStageEvidenceStateInput): StageEvidenceState {
@@ -447,10 +449,18 @@ export class StageEvidenceRepository {
   }
 
   private evidenceChanged(state: StageEvidenceState): boolean {
+    const plannedRefs = new Set(state.plan.requirements.map(item => evidenceRefKey(item.evidence.ref)))
+    const newlyLinked = this.contextDocs.list({ limit: this.contextDocs.count() }).some(doc => !plannedRefs.has(`context-doc\u0000${doc.id}`)
+      && this.contextDocs.listEvidenceLinks(doc.id).some(link => link.relation.kind === 'segment'
+        ? state.plan.segmentIds.includes(link.relation.segmentId) : state.plan.assetIds.includes(link.relation.assetId)))
+    if (newlyLinked) return true
+    const rules = this.getRules(state.plan.segmentIds)
+    if (state.plan.ruleSetSnapshot !== undefined && state.plan.ruleSetSnapshot !== fnv1a64(JSON.stringify(rules))) return true
     return state.plan.requirements.some(item => {
       const ref = item.evidence.ref
       if (ref.kind === 'context-doc') return item.evidence.version !== this.contextDocs.evidenceVersion(ref.id, state.plan.segmentIds, state.plan.assetIds)
       if (ref.kind === 'workspace-attachment') return true
+      if (state.plan.ruleSetSnapshot !== undefined && (ref.kind === 'style-rule' || ref.kind === 'tech-constraint')) return rules.find(rule => rule.ruleId === ref.id)?.version !== item.evidence.version
       const source = {
         asset: ['assets', 'source_sha256'],
         'reference-import': ['reference_imports', 'source_sha256'],

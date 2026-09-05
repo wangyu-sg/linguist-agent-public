@@ -1935,63 +1935,47 @@ test('cat_get_translation_context: 剩余 Source/Target、适用 TM/TB 与规则
   }
 })
 
-test('cat_get_translation_context: automatically injects bounded rules on the first page only (LA-CONTEXT-001)', async () => {
+test('cat_get_translation_context: 规则全集可续读，预算不足不推进规则页，必要术语不受可选限额影响', async () => {
   const fixture = setup()
   try {
-    for (let index = 0; index < 25; index += 1) {
-      fixture.db.styleGuideRules.upsert({
-        groupKey: index % 2 === 0 ? '标点' : '用词',
-        ruleText: `规则 ${index}：示例文本`,
-      })
-    }
-    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
-    const tool = toolByName(tools, 'cat_get_translation_context')
-    const segmentIds = fixture.segmentsA.map((segment) => segment.id as string)
-    const params = {
-      segmentIds,
-      includeNeighbors: false,
-      tmLimitPerSegment: 0,
-      termLimitPerSegment: 0,
-    }
-    const first = (await invoke(tool, { ...params, maxBytes: 6_000 })).details as {
-      contexts: Array<{ segmentId: string; source: string }>
-      truncated: boolean
-      nextCursor?: string
-      projectRules?: Array<{ ruleId: string; groupKey?: string; ruleText: string }>
-    }
-    // 有界注入：25 条规则只返回上限 20 条，且为结构化条目
+    for (let index = 0; index < 25; index++) fixture.db.styleGuideRules.upsert({ groupKey: index === 24 ? '必须' : '标点', ruleText: `规则 ${index}：示例文本` })
+    fixture.db.techConstraints.upsert({ kind: 'length', valueJson: '{"maximum":100}', scope: fixture.assetA.id })
+    fixture.db.techConstraints.upsert({ kind: 'length', valueJson: '{"maximum":20}', scope: fixture.assetB.id })
+    const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture) }), 'cat_get_translation_context')
+    const params = { segmentIds: [fixture.segmentsA[0]!.id], includeNeighbors: false, tmLimitPerSegment: 0, termLimitPerSegment: 0 }
+    const seen = new Set<string>()
+    let offset = 0
+    do {
+      const page = (await invoke(tool, { ...params, rulesOnly: true, rulesOffset: offset, maxBytes: 2_000 })).details as import('./types').CatGetTranslationContextResult
+      assert.equal(page.ruleCoverage.total, 26)
+      assert.ok(page.projectRules!.length > 0)
+      assert.ok(Buffer.byteLength(JSON.stringify(page)) <= 2_000)
+      page.projectRules!.forEach(rule => seen.add(rule.ruleId))
+      if (page.ruleCoverage.remaining === 0) break
+      assert.ok(page.ruleCoverage.nextOffset! > offset)
+      offset = page.ruleCoverage.nextOffset!
+    } while (true)
+    assert.equal(seen.size, 26)
+    const first = (await invoke(tool, { ...params, maxBytes: 32_000 })).details as import('./types').CatGetTranslationContextResult
     assert.equal(first.projectRules?.length, 20)
-    for (const rule of first.projectRules ?? []) {
-      assert.ok(rule.ruleId.startsWith('sgr_v2_'))
-      assert.ok(rule.ruleText.length > 0)
-    }
-    assert.ok(first.projectRules!.some((rule) => rule.groupKey === '标点'))
-    assert.equal(first.truncated, true)
-    assert.ok(first.nextCursor !== undefined)
-    assert.ok(first.contexts.length > 0)
-    for (const context of first.contexts) {
-      assert.ok(context.source.length > 0, 'returned page sources must never be empty')
-    }
-    // 第二页不再携带规则
-    const second = (await invoke(tool, {
-      ...params,
-      maxBytes: 32_000,
-      cursor: first.nextCursor,
-    })).details as { contexts: unknown[]; projectRules?: unknown[] }
-    assert.equal(second.projectRules, undefined)
-    assert.ok(second.contexts.length > 0)
-    // 新请求首页无需模型开关，仍自动带规则。
-    const automaticRules = (await invoke(tool, {
-      segmentIds: segmentIds.slice(0, 1),
-      includeNeighbors: false,
-      tmLimitPerSegment: 0,
-      termLimitPerSegment: 0,
-      maxBytes: 32_000,
-    })).details as { projectRules?: unknown[] }
-    assert.equal(automaticRules.projectRules?.length, 20)
-  } finally {
-    fixture.db.close()
-  }
+    assert.ok(first.projectRules!.slice(0, 2).some(rule => rule.groupKey === '必须'))
+    assert.equal(first.ruleCoverage.remaining, 6)
+    const huge = fixture.db.styleGuideRules.upsert({ groupKey: '必须', ruleText: '必要规则'.repeat(2_000) })
+    const hugeOffset = fixture.db.getProjectRules([fixture.segmentsA[0]!]).findIndex(rule => rule.ruleId === huge.id)
+    const insufficient = (await invoke(tool, { ...params, rulesOnly: true, rulesOffset: hugeOffset, maxBytes: 1_024 })).details as import('./types').CatGetTranslationContextResult
+    assert.ok(insufficient.minimumRequiredBytes! > 1_024)
+    assert.equal(insufficient.ruleCoverage.nextOffset, undefined)
+    fixture.db.styleGuideRules.delete(huge.id)
+    for (const rule of fixture.db.styleGuideRules.list()) fixture.db.styleGuideRules.delete(rule.id)
+    for (const rule of fixture.db.techConstraints.list()) fixture.db.techConstraints.delete(rule.id)
+    fixture.db.termEntries.upsert({ term: 'Alpha', translation: '阿尔法', status: 'required', caseSensitive: false })
+    fixture.db.termEntries.upsert({ term: 'source', translation: '阿法', status: 'forbidden', caseSensitive: false })
+    fixture.db.catDb.db.prepare('UPDATE segments SET context_json = ? WHERE id = ?').run(JSON.stringify({ note: '冗长备注'.repeat(2_000) }), params.segmentIds[0])
+    const terms = (await invoke(tool, { ...params, maxBytes: 4_000 })).details as import('./types').CatGetTranslationContextResult
+    assert.equal(terms.contexts[0]!.requiredTerms.length, 1)
+    assert.equal(terms.contexts[0]!.forbiddenTerms.length, 1)
+    assert.equal(terms.contexts[0]!.notes, undefined)
+  } finally { fixture.db.close() }
 })
 
 test('binding errors: unbound session, missing project, resolver that throws typed errors', async () => {

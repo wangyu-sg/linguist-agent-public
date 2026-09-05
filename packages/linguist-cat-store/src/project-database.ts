@@ -6,7 +6,7 @@
 
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { Asset, ProjectId } from '@linguist/cat-core'
+import { fnv1a64, type Asset, type ProjectId, type Segment } from '@linguist/cat-core'
 import { sha256Hex } from '@linguist/cat-formats'
 import {
   assetSourceFileName,
@@ -51,6 +51,15 @@ export interface ProjectDatabaseOptions extends Omit<
   trustedManifest?: ProjectManifest
 }
 
+export interface ProjectRule {
+  ruleId: string
+  kind: 'style-rule' | 'tech-constraint'
+  ruleText: string
+  groupKey?: string
+  referenceId?: string
+  version: string
+}
+
 export class ProjectDatabase {
   readonly catDb: CatDatabase
   readonly projectId: ProjectId
@@ -89,9 +98,27 @@ export class ProjectDatabase {
     this.styleGuideRules = new StyleGuideRulesRepository(catDb, projectId, now, this.runs)
     this.sentencePatterns = new SentencePatternsRepository(catDb, projectId, now)
     this.contextDocs = new ContextDocsRepository(catDb, projectId, now)
-    this.stageEvidence = new StageEvidenceRepository(catDb, projectId, now, this.segments, this.contextDocs)
+    this.stageEvidence = new StageEvidenceRepository(catDb, projectId, now, this.segments, this.contextDocs, ids => this.getProjectRules(this.segments.getByIds(ids)))
     this.techConstraints = new TechConstraintsRepository(catDb, projectId, now)
     this.voiceProfiles = new VoiceProfilesRepository(catDb, projectId, now)
+  }
+
+  /** Style Guide 全项目适用；技术约束只排除明确的其他资产，未判定文本类型保留原 scope。 */
+  getProjectRules(segments?: readonly Segment[]): ProjectRule[] {
+    const styles: ProjectRule[] = this.styleGuideRules.list({ limit: this.styleGuideRules.count() }).map(rule => ({
+      ruleId: rule.id, kind: 'style-rule', version: fnv1a64(JSON.stringify(rule)),
+      ruleText: [rule.ruleText, rule.sourceExample && `Source: ${rule.sourceExample}`, rule.goodExample && `✅ ${rule.goodExample}`, rule.badExample && `❌ ${rule.badExample}`].filter(Boolean).join('\n'),
+      ...(rule.groupKey === undefined ? {} : { groupKey: rule.groupKey }),
+      ...(rule.screenshotRef === undefined ? {} : { referenceId: rule.screenshotRef }),
+    }))
+    styles.sort((a, b) => Number(/mandatory|important|必须|重要/iu.test(b.groupKey ?? '')) - Number(/mandatory|important|必须|重要/iu.test(a.groupKey ?? '')))
+    const technical: ProjectRule[] = this.techConstraints.list({ limit: this.techConstraints.count() }).filter(rule => {
+      if (!rule.scope || !segments) return true
+      if (/^ast(?:_|-)/u.test(rule.scope)) return segments.some(segment => segment.assetId === rule.scope)
+      return true
+    }).map(rule => ({ ruleId: rule.id, kind: 'tech-constraint', version: fnv1a64(JSON.stringify(rule)),
+      ruleText: `${rule.kind}${rule.scope ? ` / scope=${rule.scope}` : ''}: ${rule.valueJson}${rule.note ? `\n${rule.note}` : ''}`, groupKey: '技术约束' }))
+    return [...technical, ...styles]
   }
 
   static open(dbPath: string, options: ProjectDatabaseOptions): ProjectDatabase {

@@ -8,4 +8,4 @@
 
 检查单条建议只是用户可能提出的临时任务，不是本岗位的默认范围。
 
-必须用 `cat_confirm_segments` 为范围内每个 Segment 记录 `unchanged`、`corrected` 或 `blocked`；只有覆盖率达到 100% 才能报告审校完成，不能把读过一页或抽样检查当作全量完成。
+必须用 `cat_confirm_segments` 为范围内每个 Segment 记录 `unchanged`、`corrected` 或 `blocked`；以工具返回的本轮完整状态报告结果，不能把决定数量齐全、读过一页或抽样检查当作全量完成。

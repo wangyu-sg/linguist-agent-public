@@ -181,8 +181,17 @@ test('宿主冻结独立 Stage Plan，恢复本轮状态，并把未映射数据
     const used = ensureStageEvidenceForSession({ ...input, discoveryScope: unrelatedScope, contextDocId: optional.id })!
     assert.notEqual(used.stageRunId, taskA.stageRunId, '本轮明确读取的 optional 资料进入新基线')
     assert.equal(ensureStageEvidenceForSession({ ...input, discoveryScope: unrelatedScope })!.stageRunId, used.stageRunId)
+    db.styleGuideRules.upsert({ groupKey: '必须', ruleText: '新客户语言规则' })
+    assert.equal(db.stageEvidence.getCompletion(used.stageRunId).status, 'stale', '新增适用规则必须在交付查询时识别')
+    const newRules = ensureStageEvidenceForSession({ ...input, discoveryScope: unrelatedScope })!
+    assert.notEqual(newRules.stageRunId, used.stageRunId)
+    assert.ok(newRules.plan.requirements.some(item => item.evidence.ref.kind === 'style-rule' && item.requiredness === 'required'))
     db.contextDocs.replaceExtraction(optional.id, [{ id: 'new-extraction', locator: { kind: 'paragraph', index: 0 }, text: '已经使用的资料发生实质变化' }])
-    assert.equal(db.stageEvidence.getCompletion(used.stageRunId).status, 'stale', '闲置期间的资料变化在交付查询时也须识别')
+    assert.equal(db.stageEvidence.getCompletion(newRules.stageRunId).status, 'stale', '闲置期间的资料变化在交付查询时也须识别')
+    const latest = ensureStageEvidenceForSession({ ...input, discoveryScope: unrelatedScope })!
+    const late = db.contextDocs.insert({ kind: 'doc', originalFilename: 'late.txt', blobRelpath: 'blobs/late.txt', textExtract: '新增客户必要要求' })
+    db.contextDocs.setEvidenceLink({ contextDocId: late.id, relation: { kind: 'segment', segmentId: imported.segments[0]!.id }, requiredness: 'required', mappingRevision: '1' })
+    assert.equal(db.stageEvidence.getCompletion(latest.stageRunId).status, 'stale', '新增关联资料不能因原计划尚无此 id 而漏检')
   } finally {
     db.close()
   }

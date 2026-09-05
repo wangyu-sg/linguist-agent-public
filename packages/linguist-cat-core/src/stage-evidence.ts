@@ -71,6 +71,7 @@ export interface StageEvidencePlan {
   /** 新轮次只接受此事件边界之后、同一 actor 的决定；旧记录缺省时不继承。 */
   decisionEventBoundary?: number
   startToolCallId?: string
+  ruleSetSnapshot?: string
 }
 
 export type EvidenceGapCode =

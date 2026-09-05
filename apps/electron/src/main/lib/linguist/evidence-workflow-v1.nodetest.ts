@@ -233,6 +233,7 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
       hash: 'simple-scope',
     }
 
+    for (let index = 0; index < 25; index++) db.styleGuideRules.upsert({ ruleText: `语言规则 ${index}：保留客户要求` })
     for (const role of ['translator', 'reviewer', 'proofreader'] as const) {
       const sessionId = `session-${role}`
       const state = ensureStageEvidenceForSession({
@@ -289,7 +290,7 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
       const visual = await invoke(toolByName(tools, 'cat_read_context_doc'), `${role}-image`, { docId: imageDoc.id })
       observer.onPayload({ content: visual.content })
       observer.onResponse({ status: 503 })
-      assert.equal(db.stageEvidence.getPresentationCoverage(state.stageRunId).presented, 1, '失败响应不确认图片')
+      assert.equal(db.stageEvidence.getPresentationCoverage(state.stageRunId).presented, 21, '失败响应不确认图片')
       for (const mode of ['text-only', 'invalid-image', 'visual'] as const) {
         const content = mode === 'invalid-image' ? visual.content.map(block => block.type === 'image' ? { ...block, data: 'invalid' } : block) : visual.content
         const visualAgent = new Agent({
@@ -302,8 +303,15 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
         await visualAgent.prompt('继续')
         assert.equal(visualAgent.state.errorMessage, undefined)
         assert.equal(requests.at(-1)?.includes(image.data), mode === 'visual')
-        assert.equal(db.stageEvidence.getPresentationCoverage(state.stageRunId).presented, mode === 'visual' ? 2 : 1)
+        assert.equal(db.stageEvidence.getPresentationCoverage(state.stageRunId).presented, mode === 'visual' ? 22 : 21)
       }
+      const pendingRules = await invoke(confirmTool, `${role}-before-rules`, { items: [{ segmentId, expectedRevision: 0, decision: 'unchanged' }] }) as AgentToolResult<{ fullReview: { status: string } }>
+      assert.equal(pendingRules.details.fullReview.status, 'blocked', '逐段决定齐全也不能跳过剩余项目规则')
+      const rules = await invoke(contextTool, `${role}-remaining-rules`, { segmentIds: [segmentId], rulesOnly: true, rulesOffset: 20 })
+      agent.state.messages = [...agent.state.messages, { role: 'toolResult', toolName: contextTool.name, toolCallId: `${role}-remaining-rules`, ...rules, isError: false, timestamp: 1 }]
+      await agent.prompt('已补充余下项目规则，继续确认')
+      assert.equal(agent.state.errorMessage, undefined)
+      assert.equal(db.stageEvidence.getPresentationCoverage(state.stageRunId).pending.length, 0)
       const result = await invoke(
         confirmTool,
         `${role}-confirm`,
