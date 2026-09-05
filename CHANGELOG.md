@@ -6,9 +6,13 @@
 
 ## [Unreleased]
 
-## [0.17.70] - 2026-09-04
+## [0.17.70] - 2026-09-05
 
-> 发布准备；真实 Provider 四岗位迷你全链仍缺独立测试配置与运行证据。
+> 基于 Proma 主线 `20a5aa8f` 构建；真实 Provider 四岗位迷你全链仍缺独立测试配置与运行证据。
+
+### Added
+
+- 同步 Proma 主线至 `20a5aa8f`：Pi Runtime 0.85.0、Slack Bridge、GPT-6 Astra、Gemini 3 思考级别、折叠会话 Rail 与附加目录展开状态保留。
 
 ### Changed
 
@@ -27,6 +31,10 @@
 - 项目快捷切换先刷新权威会话、为无主会话的项目创建会话，再同步提交 Workspace、Agent Tab、模式与设置；迟到结果和创建/保存失败不会留下跨项目混合状态。
 
 - 采用固定 Proma v0.19.26 的完整 Pi MCP 桥接实现，required MCP 失败冷却缓存限制为 64 项并淘汰最旧记录；退役该文件的本地产品分叉。
+
+- Proma 主线同步保留 Linguist Agent 的 CAT、三模式、项目数据隔离和宿主运行时接缝；同步后的上游文件未改变 CAT Schema 或 CAT Tool 数量。
+
+- 保留 Chat 附件、停止和发送图标按钮的显式无障碍名称；上游思考设置改用带名称与开关状态的 ChatThinkingPopover。
 
 ## [0.17.69] - 2026-09-04
 

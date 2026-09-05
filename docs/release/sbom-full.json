@@ -3,7 +3,7 @@
     "licenses": "MIT",
     "repository": "https://github.com/antfu/install-pkg"
   },
-  "@anthropic-ai/sdk@0.91.1": {
+  "@anthropic-ai/sdk@0.123.0": {
     "licenses": "MIT",
     "repository": "https://github.com/anthropics/anthropic-sdk-typescript"
   },
@@ -239,31 +239,39 @@
     "licenses": "MIT",
     "repository": "git+https://code.haverbeke.berlin/codemirror/view"
   },
-  "@earendil-works/pi-agent-core@0.84.4": {
+  "@earendil-works/chord@0.85.0": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-ai@0.84.4": {
+  "@earendil-works/pi-agent-core@0.85.0": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-client@0.84.4": {
+  "@earendil-works/pi-ai@0.85.0": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-coding-agent@0.84.4": {
+  "@earendil-works/pi-client@0.85.0": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-protocol@0.84.4": {
+  "@earendil-works/pi-coding-agent@0.85.0": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-telemetry@0.84.4": {
+  "@earendil-works/pi-protocol@0.85.0": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-tui@0.84.4": {
+  "@earendil-works/pi-server@0.85.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/earendil-works/pi"
+  },
+  "@earendil-works/pi-telemetry@0.85.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/earendil-works/pi"
+  },
+  "@earendil-works/pi-tui@0.85.0": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
@@ -274,6 +282,11 @@
   "@electron/get@5.1.0": {
     "licenses": "MIT",
     "repository": "https://github.com/electron/get"
+  },
+  "@esbuild/darwin-arm64@0.28.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/evanw/esbuild",
+    "optional": true
   },
   "@fontsource-variable/inter@5.2.8": {
     "licenses": "OFL-1.1",
@@ -524,6 +537,30 @@
     "licenses": "Apache-2.0",
     "repository": "https://github.com/silvia-odwyer/photon"
   },
+  "@slack/bolt@5.1.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/slackapi/bolt-js"
+  },
+  "@slack/logger@5.0.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/slackapi/node-slack-sdk"
+  },
+  "@slack/oauth@4.0.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/slackapi/node-slack-sdk"
+  },
+  "@slack/socket-mode@3.0.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/slackapi/node-slack-sdk"
+  },
+  "@slack/types@3.1.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/slackapi/node-slack-sdk"
+  },
+  "@slack/web-api@8.1.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/slackapi/node-slack-sdk"
+  },
   "@smithy/core@3.33.3": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/smithy-lang/smithy-typescript"
@@ -563,6 +600,10 @@
   "@smithy/util-utf8@2.3.0": {
     "licenses": "Apache-2.0",
     "repository": "https://github.com/awslabs/smithy-typescript"
+  },
+  "@stablelib/base64@1.0.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/StableLib/stablelib"
   },
   "@tanstack/react-virtual@3.14.9": {
     "licenses": "MIT",
@@ -704,7 +745,15 @@
     "licenses": "MIT",
     "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped"
   },
+  "@types/jsonwebtoken@9.0.10": {
+    "licenses": "MIT",
+    "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+  },
   "@types/mdast@4.0.4": {
+    "licenses": "MIT",
+    "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+  },
+  "@types/ms@2.1.0": {
     "licenses": "MIT",
     "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped"
   },
@@ -713,6 +762,10 @@
     "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped"
   },
   "@types/retry@0.12.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+  },
+  "@types/retry@0.12.5": {
     "licenses": "MIT",
     "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped"
   },
@@ -1151,6 +1204,10 @@
     "licenses": "MIT",
     "repository": "https://github.com/toss/es-toolkit"
   },
+  "esbuild@0.28.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/evanw/esbuild"
+  },
   "escape-html@1.0.3": {
     "licenses": "MIT",
     "repository": "https://github.com/component/escape-html"
@@ -1158,6 +1215,14 @@
   "etag@1.8.1": {
     "licenses": "MIT",
     "repository": "https://github.com/jshttp/etag"
+  },
+  "eventemitter3@4.0.7": {
+    "licenses": "MIT",
+    "repository": "https://github.com/primus/eventemitter3"
+  },
+  "eventemitter3@5.0.4": {
+    "licenses": "MIT",
+    "repository": "https://github.com/primus/eventemitter3"
   },
   "eventsource-parser@3.1.1": {
     "licenses": "MIT",
@@ -1182,6 +1247,10 @@
   "fast-deep-equal@3.1.3": {
     "licenses": "MIT",
     "repository": "https://github.com/epoberezkin/fast-deep-equal"
+  },
+  "fast-sha256@1.3.0": {
+    "licenses": "Unlicense",
+    "repository": "https://github.com/dchest/fast-sha256-js"
   },
   "fast-uri@3.1.6": {
     "licenses": "BSD-3-Clause",
@@ -1363,6 +1432,10 @@
     "licenses": "MIT",
     "repository": "https://github.com/panva/jose"
   },
+  "jotai-family@1.1.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/jotaijs/jotai-family"
+  },
   "jotai@2.20.3": {
     "licenses": "MIT",
     "repository": "https://github.com/pmndrs/jotai"
@@ -1386,6 +1459,10 @@
   "json-schema-typed@8.0.2": {
     "licenses": "BSD-2-Clause",
     "repository": "https://github.com/RemyRylan/json-schema-typed"
+  },
+  "jsonwebtoken@9.0.3": {
+    "licenses": "MIT",
+    "repository": "https://github.com/auth0/node-jsonwebtoken"
   },
   "jszip@3.10.1": {
     "licenses": "(MIT OR GPL-3.0-or-later)",
@@ -1420,6 +1497,34 @@
     "repository": "https://github.com/calvinmetcalf/lie"
   },
   "lodash-es@4.18.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/lodash/lodash"
+  },
+  "lodash.includes@4.3.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/lodash/lodash"
+  },
+  "lodash.isboolean@3.0.3": {
+    "licenses": "MIT",
+    "repository": "https://github.com/lodash/lodash"
+  },
+  "lodash.isinteger@4.0.4": {
+    "licenses": "MIT",
+    "repository": "https://github.com/lodash/lodash"
+  },
+  "lodash.isnumber@3.0.3": {
+    "licenses": "MIT",
+    "repository": "https://github.com/lodash/lodash"
+  },
+  "lodash.isplainobject@4.0.6": {
+    "licenses": "MIT",
+    "repository": "https://github.com/lodash/lodash"
+  },
+  "lodash.isstring@4.0.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/lodash/lodash"
+  },
+  "lodash.once@4.1.1": {
     "licenses": "MIT",
     "repository": "https://github.com/lodash/lodash"
   },
@@ -1563,9 +1668,21 @@
     "licenses": "BSD-2-Clause",
     "repository": "https://github.com/mwilliamson/node-options"
   },
+  "p-finally@1.0.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/sindresorhus/p-finally"
+  },
+  "p-queue@6.6.2": {
+    "licenses": "MIT",
+    "repository": "https://github.com/sindresorhus/p-queue"
+  },
   "p-retry@4.6.2": {
     "licenses": "MIT",
     "repository": "https://github.com/sindresorhus/p-retry"
+  },
+  "p-timeout@3.2.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/sindresorhus/p-timeout"
   },
   "package-manager-detector@1.8.0": {
     "licenses": "MIT",
@@ -1799,6 +1916,10 @@
     "licenses": "BSD-3-Clause",
     "repository": "https://github.com/alexei/sprintf.js"
   },
+  "standardwebhooks@1.1.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/standard-webhooks/standard-webhooks"
+  },
   "statuses@2.0.2": {
     "licenses": "MIT",
     "repository": "https://github.com/jshttp/statuses"
@@ -1846,6 +1967,10 @@
   "tslib@2.8.1": {
     "licenses": "0BSD",
     "repository": "https://github.com/Microsoft/tslib"
+  },
+  "tsscmp@1.0.6": {
+    "licenses": "MIT",
+    "repository": "https://github.com/suryagh/tsscmp"
   },
   "type-is@2.1.0": {
     "licenses": "MIT",

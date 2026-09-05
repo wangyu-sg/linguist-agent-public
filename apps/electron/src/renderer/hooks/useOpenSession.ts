@@ -36,6 +36,8 @@ import { openHostedAgentSession } from '@/host/agent-host-extension'
 
 interface OpenSessionOptions {
   bypassSettingsGuard?: boolean
+  /** 仅在导航实际执行后调用；设置 Guard 取消时不会调用。 */
+  onOpened?: () => void
 }
 
 type OpenSessionTarget = Exclude<TabType, 'linguist-project'>
@@ -62,7 +64,7 @@ export function useOpenSession(): OpenSessionFn {
   return React.useCallback(
     (type: OpenSessionTarget, sessionId: string, title: string, options?: OpenSessionOptions): void => {
       if (!options?.bypassSettingsGuard && settingsOpen && channelFormDirty) {
-        setPendingSessionNavigation({ type, sessionId, title })
+        setPendingSessionNavigation({ type, sessionId, title, onOpened: options?.onOpened })
         return
       }
       setSettingsOpen(false)
@@ -116,6 +118,8 @@ export function useOpenSession(): OpenSessionFn {
           }).catch(console.error)
         }
       }
+
+      options?.onOpened?.()
     },
     [tabs, setTabs, setActiveTabId, setAutomationForm, setActiveView, setAppMode, setCurrentConversationId, setCurrentAgentSessionId, agentSessions, setCurrentAgentWorkspaceId, setUnviewedCompleted, settingsOpen, channelFormDirty, setSettingsOpen, setPendingSessionNavigation, currentAgentSessionId],
   )

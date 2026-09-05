@@ -125,7 +125,6 @@
         "apps/electron/src/renderer/components/chat/PromptEditorSidebar.tsx",
         "apps/electron/src/renderer/components/chat/ToolSelectorPopover.tsx",
         "apps/electron/src/renderer/components/file-browser/FileBrowser.tsx",
-        "apps/electron/src/renderer/components/file-browser/file-browser-roots.ts",
         "apps/electron/src/renderer/components/file-browser/file-browser-load-state.ts",
         "apps/electron/src/renderer/components/tabs/tab-bar-action-layout.ts",
         "apps/electron/src/renderer/components/ui/sheet.tsx",

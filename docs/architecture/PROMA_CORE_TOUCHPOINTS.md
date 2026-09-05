@@ -1,6 +1,6 @@
 # Proma Core Touchpoints — v0.19.26
 
-> 基线：`v0.19.26@bbf577a8eb768225fdf1ac49ab9ef07a11413b24`
+> 基线：`v0.19.26@20a5aa8f7c19b8e91949b5fd74b9eee40d767078`（v0.19.26 之后的最新主线提交）
 > 正式 merge：`98f0ed125c4e619d0496e10279755e69643341f5`
 > 机读真源：[proma-touchpoints.json](./proma-touchpoints.json)
 
@@ -10,8 +10,8 @@
 | Generated / Overlay | 2 |
 | Main Host Seam | 8 |
 | Renderer Host Seam | 3 |
-| Temporary Deviation | 48 |
-| 当前精确 ledger | 283 |
+| Temporary Deviation | 47 |
+| 当前精确 ledger | 282 |
 
 账本使用 schema v3；每个条目都记录 `kind`、`owner`、`mergePolicy`、具体理由，以及 Host Seam 的稳定 `hook`。Linguist Extension 位于允许根，不计入 Proma Core Touchpoint。精确文件只维护在 JSON，避免双写漂移。
 

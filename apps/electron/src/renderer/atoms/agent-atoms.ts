@@ -653,6 +653,36 @@ export function updateFileBrowserExpandedPath(
   return next
 }
 
+/** 目录重命名或移动后迁移该目录及后代的展开记录，并清掉目标位置的旧记录。 */
+export function relocateFileBrowserExpandedPath(
+  state: Map<string, Map<string, boolean>>,
+  stateKey: string,
+  oldPath: string,
+  newPath: string,
+): Map<string, Map<string, boolean>> {
+  const current = state.get(stateKey)
+  if (!current || oldPath === newPath) return state
+  const isWithin = (path: string, parent: string): boolean => {
+    const isWindowsPath = /^[a-z]:[/\\]/i.test(parent) || parent.startsWith('\\\\')
+    return path === parent || path.startsWith(`${parent}/`) || (isWindowsPath && path.startsWith(`${parent}\\`))
+  }
+  const nextPaths = new Map(current)
+  let changed = false
+  for (const path of current.keys()) {
+    if (isWithin(path, oldPath) || isWithin(path, newPath)) {
+      nextPaths.delete(path)
+      changed = true
+    }
+  }
+  if (!changed) return state
+  for (const [path, expanded] of current) {
+    if (isWithin(path, oldPath)) nextPaths.set(newPath + path.slice(oldPath.length), expanded)
+  }
+  const next = new Map(state)
+  next.set(stateKey, nextPaths)
+  return next
+}
+
 /** Files Tab 各滚动视图的 scrollTop，按会话和文件视图隔离。 */
 export const fileBrowserScrollTopMapAtom = atom<Map<string, number>>(new Map())
 

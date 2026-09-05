@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "baseline": "bbf577a8eb768225fdf1ac49ab9ef07a11413b24",
+  "baseline": "20a5aa8f7c19b8e91949b5fd74b9eee40d767078",
   "formalMerge": "98f0ed125c4e619d0496e10279755e69643341f5",
   "recomputedOn": "2026-09-05",
   "comment": "Proma-core touchpoints tracked against v0.19.26; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
@@ -1148,8 +1148,8 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Chat 思考按钮暴露名称与 pressed 状态。固定上游 bbf577a8 尚无等价实现；本地来源 cf2832f3。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
-      "hook": "upstream-chatinput"
+      "reason": "Chat 附件、停止和发送按钮保留显式无障碍名称；最新上游同步移除了这些 aria-label，Tooltip 文案不能替代图标按钮名称。固定上游重新提供等价名称并通过键盘/辅助技术回归后退役。",
+      "hook": "upstream-chatinput-a11y"
     },
     {
       "file": "apps/electron/src/renderer/components/chat/ChatMessageItem.tsx",
@@ -1251,15 +1251,6 @@
       "mergePolicy": "keep-la",
       "reason": "FileBrowser 用 roots 与单一加载结果隔离异步目录状态。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-filebrowser"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/file-browser/file-browser-roots.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "temporary-deviation",
-      "owner": "upstream-maintenance",
-      "mergePolicy": "keep-la",
-      "reason": "文件树 roots 逻辑并入唯一调用方。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
-      "hook": "upstream-file-browser-roots"
     },
     {
       "file": "apps/electron/src/renderer/components/file-browser/file-browser-load-state.ts",

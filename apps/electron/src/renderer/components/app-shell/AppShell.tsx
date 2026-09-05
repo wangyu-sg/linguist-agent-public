@@ -97,6 +97,12 @@ export function AppShell(): React.ReactElement {
   const automationForm = useAtomValue(automationFormAtom)
   const settingsOpen = useAtomValue(settingsOpenAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
+  const appContentRef = React.useRef<HTMLDivElement>(null)
+
+  // 设置覆盖层打开时移除后台焦点目标，避免 aria-hidden 隐藏仍持有焦点的节点。
+  React.useLayoutEffect(() => {
+    appContentRef.current?.toggleAttribute('inert', settingsOpen)
+  }, [settingsOpen])
   // 定时任务表单打开时隐藏右侧文件面板，让中间区域扩展到全宽（表单内含自己的右栏配置）
   const [rawActiveView, setActiveView] = useAtom(activeViewAtom)
   const activeView = resolveActiveViewForMode(rawActiveView, appMode)
@@ -399,9 +405,9 @@ export function AppShell(): React.ReactElement {
 
       <div className="shell-bg relative h-screen w-screen overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900">
         <div
+          ref={appContentRef}
           className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
           style={{ '--mac-titlebar-leading-inset': `${macTitlebarLeadingInsetPx}px` } as React.CSSProperties}
-          aria-hidden={settingsOpen}
         >
             {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
             <div className="relative z-[60] crt-sidebar">

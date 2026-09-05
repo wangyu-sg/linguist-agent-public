@@ -3,7 +3,7 @@
   "operations": [
     {
       "path": ["description"],
-      "expected": "Proma，为专业用户设计的 Agent - Electron App",
+      "expected": "Proma，为专业用户设计的 Agent",
       "value": "Linguist Agent - desktop localization agent, built on Proma (AGPL-3.0) - Electron App"
     },
     {
@@ -26,11 +26,11 @@
       "expected": "cp -r resources dist/ 2>/dev/null || true",
       "value": "bun ../../scripts/verify-product-identity.mjs && bun -e \"import { cpSync } from 'node:fs'; cpSync('resources', 'dist/resources', { recursive: true })\""
     },
-    { "path": ["scripts", "pack"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --dir", "value": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && bun run scripts/run-electron-builder.ts --dir" },
-    { "path": ["scripts", "dist"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder", "value": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && bun run scripts/run-electron-builder.ts" },
-    { "path": ["scripts", "dist:mac"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --mac", "value": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && bun run scripts/run-electron-builder.ts --mac" },
-    { "path": ["scripts", "dist:win"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --win", "value": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && bun run scripts/run-electron-builder.ts --win" },
-    { "path": ["scripts", "dist:linux"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --linux", "value": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && bun run scripts/run-electron-builder.ts --linux" },
+    { "path": ["scripts", "pack"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --dir", "value": "bun run build && bun run rebuild:node-pty && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts --dir" },
+    { "path": ["scripts", "dist"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder", "value": "bun run build && bun run rebuild:node-pty && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts" },
+    { "path": ["scripts", "dist:mac"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --mac", "value": "bun run build && bun run rebuild:node-pty && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts --mac" },
+    { "path": ["scripts", "dist:win"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --win", "value": "bun run build && bun run rebuild:node-pty && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts --win" },
+    { "path": ["scripts", "dist:linux"], "expected": "bun run build && bun run sync:runtime-deps && bun run rebuild:node-pty && electron-builder --linux", "value": "bun run build && bun run rebuild:node-pty && bun run sync:runtime-deps && bun run scripts/run-electron-builder.ts --linux" },
     { "path": ["scripts", "build:cat-job-worker"], "value": "esbuild src/main/lib/linguist/cat-job-worker.ts --bundle --platform=node --format=cjs --outfile=dist/cat-job-worker.cjs" },
     { "path": ["scripts", "build:integrity-scrub-worker"], "value": "esbuild src/main/lib/linguist/integrity-scrub-worker.ts --bundle --platform=node --format=cjs --outfile=dist/linguist-integrity-scrub-worker.cjs" },
     { "path": ["scripts", "watch:cat-job-worker"], "value": "esbuild src/main/lib/linguist/cat-job-worker.ts --bundle --platform=node --format=cjs --outfile=dist/cat-job-worker.cjs --watch=forever" },
