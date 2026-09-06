@@ -49,6 +49,19 @@ export function createProposalTools(runtime: CatToolRuntime) {
     resolveBoundProject,
   } = runtime
 
+  function assertDelegatedProposalScope(segmentIds: readonly string[]): void {
+    const scope = deps.delegatedScopeSegmentIds
+    if (scope === undefined) return
+    const allowed = new Set(scope)
+    const outside = segmentIds.find(id => !allowed.has(id))
+    if (outside !== undefined) {
+      throw new LinguistCatInvalidArgumentError(
+        'segmentId',
+        `${outside} is outside the delegated task scope`,
+      )
+    }
+  }
+
   const getProposalSnapshotTool = defineTool({
     name: 'cat_get_proposal_snapshot',
     label: 'CAT get proposal snapshot',
@@ -76,9 +89,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
   const applyTranslationsTool = defineTool({
     name: 'cat_apply_translations',
     label: 'CAT apply translations',
-    description:
-      'Write translations to segments in the bound project. Directly apply by default; use proposal mode when the user asks to review suggestions first. ' +
-      'Each call accepts 1-200 edits and reports stale, locked, or failed segments without discarding unrelated successful edits.',
+    description: 'Write 1-200 edits in the bound project using current baseRevision and the existing lock/structure checks. Default mode=apply commits successful translations and reports individual stale/locked/failed edits. mode=proposal only creates pending proposals: do not accept or confirm them unless separately authorized. Proposal creation does not start/replace a professional Stage; the trusted delegated scope still applies. Use neither mode for a report-only or chat-only request. On execution tasks, establish the full professional scope through cat_get_translation_context before batch writes. Confirm corrected only after a successful write and a fresh revision; do not infer all edits succeeded from a successful tool call.',
     promptSnippet: 'Write the translations currently judged correct; use proposal mode only when review was requested',
     parameters: Type.Object({
       edits: Type.Array(Type.Object({
@@ -87,14 +98,19 @@ export function createProposalTools(runtime: CatToolRuntime) {
         target: Type.String({ minLength: 1 }),
         note: Type.Optional(Type.String({ maxLength: 2_000 })),
       }), { minItems: 1, maxItems: 200 }),
-      mode: Type.Optional(Type.Union([Type.Literal('apply'), Type.Literal('proposal')])),
+      mode: Type.Optional(Type.Union([Type.Literal('apply'), Type.Literal('proposal')], { description: 'apply commits successful edits (default). proposal creates pending suggestions only, without accepting them or starting a professional Stage. Neither mode is appropriate for a chat-only/report-only request that disallows project writes.' })),
     }),
     async execute(toolCallId, params) {
       if (params.edits.length < 1 || params.edits.length > 200) {
         throw new LinguistCatInvalidArgumentError('edits', 'expected 1-200 items')
       }
       const { project, db } = resolveBoundProject('cat_apply_translations', toolCallId)
-      runtime.prepareStage(params.edits.map(edit => edit.segmentId))
+      const mode = params.mode ?? 'apply'
+      if (mode === 'apply') {
+        runtime.prepareStage(params.edits.map(edit => edit.segmentId))
+      } else {
+        assertDelegatedProposalScope(params.edits.map(edit => edit.segmentId))
+      }
       const provenance = proposalProvenance(toolCallId)
       const runId = provenance.runId
       const createdAt = deps.now?.()
@@ -112,7 +128,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
               .map((segment) => [segment.id as string, segment]),
           )
           const dto: CatApplyTranslationsResult = db.proposals.applyTranslations(params.edits, {
-            mode: params.mode ?? 'apply',
+            mode,
             ...(project.tagProfile === undefined ? {} : { tagProfile: project.tagProfile }),
             ...(provenance.modelId === undefined ? {} : { modelId: provenance.modelId }),
             ...(provenance.sessionId === undefined ? {} : { sessionId: provenance.sessionId }),
@@ -158,7 +174,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
             changes,
             ...(changes.length === 0 ? {} : {
               event: {
-                kind: params.mode === 'proposal' ? 'proposal-created' as const : 'project-updated' as const,
+                kind: mode === 'proposal' ? 'proposal-created' as const : 'project-updated' as const,
                 segmentIds: proposals.map((proposal) => proposal.segmentId as string),
                 proposalIds: dto.proposalIds,
               },
@@ -168,7 +184,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
       })
       if (!mutation.replayed && mutation.event !== undefined) {
         notifyMutation({
-          kind: params.mode === 'proposal' ? 'proposal-created' : 'project-updated',
+          kind: mode === 'proposal' ? 'proposal-created' : 'project-updated',
           sequence: mutation.event.sequence,
           segmentIds: mutation.event.segmentIds,
           proposalIds: mutation.event.proposalIds,
@@ -181,15 +197,8 @@ export function createProposalTools(runtime: CatToolRuntime) {
   const proposeTranslationsTool = defineTool({
     name: 'cat_propose_translations',
     label: 'CAT propose translations',
-    description:
-      'Create reviewable translation proposals for segments in the bound project. This writes Proposal rows only: ' +
-      'it never changes Segment targets or revisions. Submit 1-50 proposals; segment ids must come from cat_get_segments, ' +
-      'baseRevision must still be current, and locked or unknown segments are rejected atomically.',
+    description: 'Create pending translation proposals without accepting them, changing Target, or confirming segments. Use only when the user requested stored suggestions; use chat output instead for a report-only/chat-only request. Keep the existing 1-50 limit, revision, lock, structure and atomicity contracts. Do not create/replace a professional Stage solely to issue proposals; enforce the trusted delegated scope where present. The resulting proposals are not committed translations or completed professional review.',
     promptSnippet: 'Propose translations for review without changing segments',
-    promptGuidelines: [
-      'Never claim proposals are committed until cat_accept_proposals succeeds.',
-      'Use the exact segment id and revision returned by cat_get_segments; submit at most 50 proposals.',
-    ],
     parameters: Type.Object({
       segmentProposals: Type.Array(
         Type.Object({
@@ -208,7 +217,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
         throw new LinguistCatInvalidArgumentError('segmentProposals', 'expected 1-50 items')
       }
       const { project, db } = resolveBoundProject('cat_propose_translations', toolCallId)
-      runtime.prepareStage(params.segmentProposals.map(proposal => proposal.segmentId))
+      assertDelegatedProposalScope(params.segmentProposals.map(proposal => proposal.segmentId))
       for (const input of params.segmentProposals) {
         if (input.proposedTarget.trim() === '') {
           throw new LinguistCatInvalidArgumentError('proposedTarget', 'expected a non-empty translation')
@@ -313,9 +322,7 @@ export function createProposalTools(runtime: CatToolRuntime) {
   const acceptProposalsTool = defineTool({
     name: 'cat_accept_proposals',
     label: 'CAT accept proposals',
-    description:
-      'Atomically apply 1-50 pending proposals to their bound project segments. This is a project-local CAT write, ' +
-      'not file export or delivery. Current revisions, locks, terminology, and tag hard rules are revalidated.',
+    description: 'Accept explicitly authorized pending proposals using the existing revision, lock, structure and issuance checks. Do not auto-accept when the user requested suggestions or a report. Acceptance updates Target but does not by itself certify a professional stage; a professional execution task still needs valid decisions and required evidence. Use the current proposal snapshot where relevant; stale proposals require current data rather than overriding revision checks.',
     promptSnippet: 'Apply validated pending proposals to CAT segments',
     parameters: Type.Object({
       proposals: Type.Array(Type.Object({

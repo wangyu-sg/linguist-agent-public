@@ -27,21 +27,12 @@ export function createStageTools(runtime: CatToolRuntime) {
   const confirmSegmentsTool = defineTool({
     name: 'cat_confirm_segments',
     label: 'CAT confirm reviewed segments',
-    description:
-      'Record explicit unchanged, corrected, or blocked decisions for 1-200 segments in the bound project. ' +
-      'The current trusted Linguist role determines translation, editing, or proofreading; the model cannot choose a stage or project. ' +
-      'Delegated sessions report progress against their frozen Segment scope; fullReview is complete only after both decision and required Evidence coverage pass.',
+    description: 'Persist unchanged, corrected or blocked decisions for 1-200 segments of the current trusted professional role and frozen task. This is a write, not a progress query. Do not call for report-only, proposal-only or chat-only tasks; use cat_project_summary for a read-only status check. Read the full Source/current Target before unchanged. For corrected, first successfully apply the Target and use its new revision. Never confirm a failed write or a pending proposal as corrected. blocked records an unresolved segment and is not successful completion. Stage, revision, actor and evidence checks remain enforced by the existing store; decide task completion from the returned full state, not only the number of decisions.',
     promptSnippet: 'Record explicit per-segment completion decisions for the current Linguist role',
-    promptGuidelines: [
-      'Use unchanged only after reading Source and the complete current Target.',
-      'For corrected, first write the new Target with cat_apply_translations, then confirm its new revision.',
-      'Use blocked for a reviewed Segment that cannot be completed because it is locked, stale, or lacks required context.',
-      'Page through the whole frozen scope; reading a page without recording decisions is not completion.',
-    ],
     parameters: Type.Object({
       items: Type.Array(Type.Object({
         segmentId: Type.String({ minLength: 1 }),
-        expectedRevision: Type.Integer({ minimum: 0 }),
+        expectedRevision: Type.Integer({ minimum: 0, description: 'Current Target revision actually read or returned after a successful apply. Never guess or reuse the pre-edit revision when confirming a correction.' }),
         decision: Type.Union([
           Type.Literal('unchanged'),
           Type.Literal('corrected'),

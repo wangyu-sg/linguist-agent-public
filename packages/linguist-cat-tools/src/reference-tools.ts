@@ -47,7 +47,7 @@ const EMPTY_PATTERNS_NOTE =
 const IMAGE_DOC_NOTE =
   'This context doc is an image. The managed image requires a vision-capable model; a filename or text-only model does not satisfy visual evidence. Do not switch Provider without user authorization.'
 const NO_EXTRACT_NOTE =
-  'This context doc has no plain-text extract (only binary/source bytes are stored). Ask the user for the relevant content if you need it.'
+  'No plain-text extract is available. Inspect the authorized original with existing file/vision tools when its path or reference is known; do not invent a path or claim generic reading creates CAT evidence. Report only the task-relevant facts that remain unavailable.'
 const SENTENCE_PATTERN_STATUSES = [
   'confirmed',
   'pending',
@@ -99,35 +99,23 @@ export function createReferenceTools(runtime: CatToolRuntime) {
   const getTranslationContextTool = defineTool({
     name: 'cat_get_translation_context',
     label: 'CAT get translation context',
-    description:
-      'Read translation context for 1-50 segment ids from the bound project in input order. ' +
-      'Returns revision snapshots, neighbors, TM/TB matches, project rules, linked Context excerpts, ' +
-      'required Evidence pending fetches, and submitted Stage Evidence coverage. ' +
-      'This tool prepares evidence; only a confirmed Provider submission contributes to coverage. ' +
-      'Results may be truncated by maxBytes and continued with a cursor that ' +
-      'binds the remaining requested context — relevant content changes produce CONTEXT_DRIFT.',
+    description: 'Read complete Source/current Target, matching terminology/TM, applicable rules and linked reference content for 1-50 segment IDs in the bound project. segmentIds is the current read batch, not automatically the whole user task. For an execution task, declare stageScope on its first read; continue without restartStage, and set restartStage=true only for an explicitly requested new round. Use readOnly=true for inspection, reports or proposal preparation: it does not create/replace a Stage or prepare evidence receipts, and cannot be combined with stageScope or restartStage=true. Follow nextCursor with the same original segmentIds and matching options. Rules paginate independently via rulesOnly=true and rulesOffset=ruleCoverage.nextOffset, using the same segmentIds; omit the text cursor on rules-only calls. Only after all rules for this same request were actually read and remain in the current model context may later text pages use rulesOffset=ruleCoverage.total to avoid repeating them. A skipped offset is not proof of reading. Read requiredEvidencePending via cat_read_context_doc; an image directory is not visual evidence. On CONTEXT_DRIFT restart with fresh content; on minimumRequiredBytes raise the budget within the schema limit or reduce the read batch, without shrinking the user task. readOnly=false prepares evidence only; coverage requires the existing Provider submission confirmation.',
     promptSnippet: 'Read bounded batch translation context from the bound CAT project',
-    promptGuidelines: [
-      'Use one batch call for related segments instead of repeating TM/TB searches per segment.',
-      'On the first professional task read, use stageScope=segments/assets/project to match the user request. UI selection never overrides that scope. Use restartStage=true only for an explicitly requested new review round; omit it on continuation pages.',
-      'Treat every revision as a snapshot; proposals must still use the returned current revision.',
-      'Reviewer and Proofreader context always retains the complete current target; reduce the segment batch or raise maxBytes when the minimum core does not fit.',
-      'Read ruleCoverage remaining rules with rulesOnly=true and rulesOffset=nextOffset (same segmentIds); do not treat a digest as the full rule set.',
-      'Fetch every requiredEvidencePending item with cat_read_context_doc before confirming the Stage.',
-      'On CONTEXT_DRIFT discard the cursor and restart from the first page; on an empty page with minimumRequiredBytes retry with a larger maxBytes.',
-    ],
     parameters: Type.Object({
-      segmentIds: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 50 }),
-      includeNeighbors: Type.Optional(Type.Boolean()),
-      neighborCount: Type.Optional(Type.Integer({ minimum: 0, maximum: 5 })),
-      tmLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10 })),
-      termLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, description: 'Advisory match limit; required/forbidden authority and conflicts are always retained.' })),
-      maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144 })),
-      cursor: Type.Optional(Type.String()),
-      stageScope: Type.Optional(Type.Union([Type.Literal('segments'), Type.Literal('assets'), Type.Literal('project')])),
-      restartStage: Type.Optional(Type.Boolean()),
-      rulesOnly: Type.Optional(Type.Boolean()),
-      rulesOffset: Type.Optional(Type.Integer({ minimum: 0 })),
+      segmentIds: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 50, description: 'The current batch of 1-50 existing segment IDs, in input order. For a full asset/project execution task, declare its full stageScope on the first read; this read batch does not redefine the whole task. Keep the same full array when continuing its nextCursor or rules-only pages.' }),
+      includeNeighbors: Type.Optional(Type.Boolean({ description: 'Include adjacent context when useful. Omitted=true behavior remains unchanged. This affects returned context, not the task scope.' })),
+      neighborCount: Type.Optional(Type.Integer({ minimum: 0, maximum: 5, description: 'Number of adjacent segments on each side, 0-5. Keep unchanged when continuing a text cursor.' })),
+      tmLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, description: 'Maximum optional TM evidence per segment, 0-10; keep unchanged with a text cursor. A match is reference evidence, not automatic approval.' })),
+      termLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, description: 'Advisory match limit, 0-10. Required/forbidden authority and conflicts remain available even at 0. Keep unchanged with a text cursor.' })),
+      maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144, description: 'UTF-8 byte budget for the complete text result, 1024-262144. Default 65536. On minimumRequiredBytes increase within this limit or reduce the read batch without silently reducing the user task.' })),
+      cursor: Type.Optional(Type.String({ description: 'The exact nextCursor from a prior text page. Reuse the same original segmentIds and matching options; do not pass it to rulesOnly calls or combine it with restartStage=true.' })),
+      stageScope: Type.Optional(Type.Union([Type.Literal('segments'), Type.Literal('assets'), Type.Literal('project')], { description: 'Execution task scope on the first read: segments freezes exactly these IDs; assets freezes every segment in each asset represented by these IDs; project freezes the entire bound project. Omit on continuation. Not permitted with readOnly=true; never broaden a selected subset to all assets to bypass the 50-ID read limit.' })),
+      restartStage: Type.Optional(Type.Boolean({ description: 'True only when the user explicitly requests a new professional round, such as reviewing the same scope again. Omit/false for continuation, pagination, retries and ordinary resume. Requires a fresh request without cursor and cannot be used with readOnly=true.' })),
+      rulesOnly: Type.Optional(Type.Boolean({ description: 'Return an applicable-rules page without rebuilding segment context/TM. Use the same segmentIds and rulesOffset from ruleCoverage.nextOffset. Omit the text cursor, stageScope and restartStage on a continuation rule page; preserve readOnly=true for inspection.' })),
+      rulesOffset: Type.Optional(Type.Integer({ minimum: 0, description: 'Offset in the applicable rules for this exact segmentIds request. Start at 0 and follow ruleCoverage.nextOffset. After all these rules were actually read and remain in current context, later text pages of the same request may use ruleCoverage.total to avoid repeating them. Do not carry this offset to a different segment batch or treat skipped rules as read.' })),
+      readOnly: Type.Optional(Type.Boolean({
+        description: 'When true, inspect content without creating/replacing a professional Stage or preparing evidence receipts. Use for reports or proposal preparation. Does not disable binding validation or make later write tools read-only. Omitted/false preserves execution behavior.',
+      })),
     }),
     async execute(toolCallId, params) {
       if (params.segmentIds.length < 1 || params.segmentIds.length > 50) {
@@ -149,9 +137,16 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       if (!Number.isInteger(maxBytes) || maxBytes < 1_024 || maxBytes > 262_144) {
         throw new LinguistCatInvalidArgumentError('maxBytes', 'expected an integer from 1024 to 262144')
       }
+      const readOnly = params.readOnly === true
+      if (readOnly && params.stageScope !== undefined) {
+        throw new LinguistCatInvalidArgumentError('stageScope', 'cannot be used with readOnly=true')
+      }
+      if (readOnly && params.restartStage === true) {
+        throw new LinguistCatInvalidArgumentError('restartStage', 'cannot be used with readOnly=true')
+      }
       const { project, db } = resolveBoundProject('cat_get_translation_context', toolCallId)
       if (params.cursor !== undefined && params.restartStage) throw new LinguistCatInvalidArgumentError('restartStage', 'restart from a fresh context request without cursor')
-      runtime.prepareStage(params.segmentIds, { scope: params.stageScope, restart: params.restartStage, toolCallId })
+      if (!readOnly) runtime.prepareStage(params.segmentIds, { scope: params.stageScope, restart: params.restartStage, toolCallId })
       const cursorKey = translationContextCursorKey(
         params.segmentIds,
         neighborCount,
@@ -430,7 +425,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           pending: coverage.pending.length,
         }
       }
-      const evidenceSummary = stageSummary()
+      const evidenceSummary = readOnly ? undefined : stageSummary()
       const page = (
         items: SegmentTranslationContext[],
         minimumRequiredBytes?: number,
@@ -456,6 +451,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
             ...(rulesOffset + projectRules.length < allRules.length && (!params.rulesOnly || projectRules.length > 0) ? { nextOffset: rulesOffset + projectRules.length } : {}) },
           ...(requiredEvidencePending.length > 0 ? { requiredEvidencePending } : {}),
           ...(evidenceSummary === undefined ? {} : { stageEvidence: evidenceSummary }),
+          ...(readOnly ? { readOnly: true } : {}),
           ...(minimumRequiredBytes !== undefined ? { minimumRequiredBytes } : {}),
           maxBytes,
           usedBytes: 0,
@@ -543,13 +539,15 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       for (const rule of dto.projectRules ?? []) presented.push({ ref: { kind: rule.kind, id: rule.ruleId }, anchorIds: [] })
       for (const context of dto.contexts) for (const profile of context.voiceProfiles ?? []) presented.push({ ref: { kind: 'voice-profile', id: profile.id }, anchorIds: [] })
       const result = toolResult(dto, deps.resultProjectId, dto.contexts.map((context) => context.segmentId))
-      runtime.prepareEvidencePresentation(
-        db,
-        toolCallId,
-        dto.contexts.map((context) => context.segmentId),
-        presented,
-        result.content,
-      )
+      if (!readOnly) {
+        runtime.prepareEvidencePresentation(
+          db,
+          toolCallId,
+          dto.contexts.map((context) => context.segmentId),
+          presented,
+          result.content,
+        )
+      }
       return result
     },
   })
@@ -695,20 +693,24 @@ export function createReferenceTools(runtime: CatToolRuntime) {
   const readContextDocTool = defineTool({
     name: 'cat_read_context_doc',
     label: 'CAT read context doc',
-    description: 'Read bound project Context text by UTF-16 offset, or attach its image. Follow nextOffset for text and nextMetadataOffset at the same offset and returned limit for remaining anchors/warnings. maxBytes covers the final text envelope; image bytes remain separate. Reading only prepares evidence until a Provider response confirms submission.',
+    description: 'Read bound-project Context text by UTF-16 offset, or return its managed image. Follow nextOffset for text. For nextMetadataOffset keep the same text offset and returned limit, change metadataOffset, and read the remaining anchors/media/warnings before continuing the text page. maxBytes bounds the full text envelope, not image bytes. Use readOnly=true for inspection/reports/proposal preparation: no Stage changes and no evidence preparation. Omitted/false preserves execution evidence behavior; preparing content is not proof that a model received it. Images require actual visual content and a capable configured model; filenames, directories or OCR text do not automatically satisfy visual evidence. If no extract exists, use authorized general file/vision capabilities to inspect the original where available; do not invent a path or claim generic reading creates CAT receipts. Only unresolved, task-relevant missing facts require user input. Never switch Provider without user authorization.',
     promptSnippet: 'Read a bounded Context page or managed image',
     parameters: Type.Object({
-      docId: Type.String({ minLength: 1 }),
-      offset: Type.Optional(Type.Integer({ minimum: 0 })),
-      limit: Type.Optional(Type.Integer({ minimum: 1 })),
-      metadataOffset: Type.Optional(Type.Integer({ minimum: 0 })),
-      maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144 })),
+      docId: Type.String({ minLength: 1, description: 'Existing managed Context document ID from the bound project inventory, digest or context result; never a filesystem path.' }),
+      offset: Type.Optional(Type.Integer({ minimum: 0, description: 'UTF-16 text offset. Start at 0 and follow returned nextOffset; do not add the requested limit to guess the next page.' })),
+      limit: Type.Optional(Type.Integer({ minimum: 1, description: 'Requested text length. For metadata continuation reuse the previous page\'s returned limit; actual text length may be smaller because of the byte budget.' })),
+      metadataOffset: Type.Optional(Type.Integer({ minimum: 0, description: 'Start at 0. Follow nextMetadataOffset while keeping the same text offset and returned limit; this pages related anchors, images and warnings, not the document text.' })),
+      maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144, description: 'Complete text-envelope UTF-8 byte budget. Default 65536, maximum 262144. If minimumRequiredBytes is returned without a continuation, increase the budget; do not loop on an unchanged insufficient request.' })),
+      readOnly: Type.Optional(Type.Boolean({
+        description: 'When true, read content without changing a professional Stage or preparing evidence receipts. Omitted/false preserves execution evidence behavior.',
+      })),
     }),
     async execute(toolCallId, params) {
       const { db } = resolveBoundProject('cat_read_context_doc', toolCallId)
       const doc = db.contextDocs.get(params.docId)
       if (doc === undefined) throw new StoreNotFoundError('context doc', params.docId)
-      deps.prepareContextDoc?.(doc.parentContextDocId ?? doc.id)
+      const readOnly = params.readOnly === true
+      if (!readOnly) deps.prepareContextDoc?.(doc.parentContextDocId ?? doc.id)
       const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.readContextDoc)
       const maxBytes = params.maxBytes ?? 65_536
       const metadataOffset = params.metadataOffset ?? 0
@@ -751,6 +753,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           ...(doc.kind === 'image' ? { note: IMAGE_DOC_NOTE }
             : doc.textExtract === undefined ? { note: NO_EXTRACT_NOTE }
               : page.note === undefined ? {} : { note: page.note }),
+          ...(readOnly ? { readOnly: true } : {}),
           maxBytes, usedBytes: 0,
         }
         for (let index = 0; index < 4; index += 1) {
@@ -771,6 +774,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
           docId: doc.id, kind: doc.kind, filename: doc.originalFilename, createdAt: doc.createdAt,
           offset: page.offset, limit: page.limit, totalChars: extract.length, hasMore: page.offset < extract.length,
           metadataOffset, minimumRequiredBytes: dto.usedBytes, maxBytes,
+          ...(readOnly ? { readOnly: true } : {}),
           note: 'Budget cannot hold one text unit and one metadata item; increase maxBytes.',
         }
         return toolResult(insufficient, deps.resultProjectId)
@@ -786,12 +790,12 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       const requirement = deps.stageEvidenceRunId === undefined ? undefined
         : db.stageEvidence.get(deps.stageEvidenceRunId)?.plan.requirements.find(item => item.evidence.ref.kind === 'context-doc' && item.evidence.ref.id === evidenceDocId)
       const visual = result.content.filter(block => block.type === 'image')
-      if (textLength > 0 || visual.length > 0) runtime.prepareEvidencePresentation(
-        db, toolCallId, requirement?.scope.kind === 'segments' ? requirement.scope.segmentIds : [],
-        [{ ref: { kind: 'context-doc', id: evidenceDocId }, anchorIds: visual.length > 0 ? evidenceAnchors.map(anchor => anchor.id) : [],
-          ...(visual.length > 0 ? { visual: true } : { textRange: { start: page.offset, end: page.offset + textLength } }) }],
-        visual.length > 0 ? visual : result.content,
-      )
+      if (!readOnly && (textLength > 0 || visual.length > 0)) runtime.prepareEvidencePresentation(
+          db, toolCallId, requirement?.scope.kind === 'segments' ? requirement.scope.segmentIds : [],
+          [{ ref: { kind: 'context-doc', id: evidenceDocId }, anchorIds: visual.length > 0 ? evidenceAnchors.map(anchor => anchor.id) : [],
+            ...(visual.length > 0 ? { visual: true } : { textRange: { start: page.offset, end: page.offset + textLength } }) }],
+          visual.length > 0 ? visual : result.content,
+        )
       return result
     },
   })

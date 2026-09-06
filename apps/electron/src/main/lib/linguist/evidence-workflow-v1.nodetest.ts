@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
-import { Agent } from '@earendil-works/pi-agent-core'
+import { Agent, type AgentTool } from '@earendil-works/pi-agent-core'
 import { getModel, streamSimple } from '@earendil-works/pi-ai/compat'
 import type { AgentToolResult, ExtensionContext } from '@earendil-works/pi-coding-agent'
 import { convertToLlm, SessionManager } from '@earendil-works/pi-coding-agent'
@@ -88,6 +88,45 @@ function toolByName(tools: LinguistCatTool[], name: string): LinguistCatTool {
 function invoke(tool: LinguistCatTool, toolCallId: string, params: unknown): Promise<AgentToolResult<unknown>> {
   return tool.execute(toolCallId, params as never, undefined, undefined, EXTENSION_CONTEXT)
 }
+
+test('CAT 工具说明经真实 Pi Agent 与 fake Provider 序列化进入最终请求', async () => {
+  const requests: Record<string, unknown>[] = []
+  const provider = createServer(async (request, response) => {
+    let body = ''
+    for await (const chunk of request) body += String(chunk)
+    requests.push(JSON.parse(body) as Record<string, unknown>)
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' })
+    response.end(`data: ${JSON.stringify({ id: 'fake', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { content: 'ok' }, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ id: 'fake', object: 'chat.completion.chunk', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`)
+  })
+  provider.listen(0, '127.0.0.1')
+  await once(provider, 'listening')
+  const address = provider.address()
+  assert.ok(address && typeof address !== 'string')
+  const model = { ...getModel('openai', 'gpt-4o-mini'), api: 'openai-completions' as const, baseUrl: `http://127.0.0.1:${address.port}/v1` }
+  const catTools = createLinguistCatTools({ resolveProject: () => { throw new Error('unused') } })
+  try {
+    const agent = new Agent({
+      initialState: { model, systemPrompt: 'synthetic linguist prompt', messages: [], tools: catTools as unknown as AgentTool[] },
+      convertToLlm,
+      streamFn: streamSimple,
+      getApiKey: () => 'synthetic-test-key',
+    })
+    await agent.prompt('检查工具说明')
+    assert.equal(agent.state.errorMessage, undefined)
+    const body = requests.at(-1)
+    assert.ok(body)
+    const tools = body.tools as Array<{ type: string; function: { name: string; description: string; parameters: { properties: Record<string, { description?: string }> } } }>
+    const context = tools.find(tool => tool.function.name === 'cat_get_translation_context')!
+    assert.match(context.function.description, /Use readOnly=true for inspection/)
+    assert.match(context.function.parameters.properties.readOnly?.description ?? '', /without creating\/replacing a professional Stage/)
+    const summary = tools.find(tool => tool.function.name === 'cat_project_summary')!
+    assert.match(summary.function.description, /includeDelivery=true with assetId/)
+    assert.equal('promptGuidelines' in context.function, false)
+  } finally {
+    provider.closeAllConnections()
+    await new Promise<void>((resolve, reject) => provider.close(error => error ? reject(error) : resolve()))
+  }
+})
 
 test('Context 跨页区间有间隙不完成，连续覆盖支持旧无 anchor 文本且最终输出有界', async () => {
   const store = new CatStore({ rootDir: mkdtempSync(join(tmpdir(), 'evidence-pages-')), entropy: createSeededEntropy('pages') })

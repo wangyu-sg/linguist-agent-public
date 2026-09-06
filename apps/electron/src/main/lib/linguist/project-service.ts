@@ -1194,6 +1194,13 @@ export class LinguistProjectService {
     )
   }
 
+  getDeliveryPreflight(
+    projectId: string,
+    assetId: string,
+  ): LinguistDeliveryPreflight {
+    return this.delivery.getDeliveryPreflight(projectId, assetId)
+  }
+
   prepareDelivery(
     projectId: string,
     assetId: string,

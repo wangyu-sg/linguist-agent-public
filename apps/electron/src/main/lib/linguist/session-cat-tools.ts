@@ -83,8 +83,13 @@ export function resolveLinguistSessionCatTools(
     sessionId: session.id,
     onEvidencePrepared,
     ...(session.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
+    ...(session.linguistDelegatedScope === undefined ? {} : { delegatedScopeSegmentIds: session.linguistDelegatedScope.segmentIds }),
     get stageEvidenceRunId() { return stageEvidence?.stageRunId },
     get reviewScopeSegmentIds() { return session.linguistDelegatedScope?.segmentIds ?? stageEvidence?.plan.segmentIds },
+    readDeliveryPreflight(assetId) {
+      currentBoundSession(session.id, projectId, 'assetId')
+      return getService().getDeliveryPreflight(projectId, assetId)
+    },
     prepareContextDoc(contextDocId) {
       const db = getService().openProject(projectId)
       if (stageEvidence === undefined || db.readOnly) return

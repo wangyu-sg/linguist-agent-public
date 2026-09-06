@@ -184,6 +184,10 @@ export interface LinguistCatToolsDeps {
   onEvidencePrepared?: (receipt: RecordStageEvidenceReceiptInput, content: AgentToolResult<unknown>['content']) => void
   /** 委派时冻结的 Segment 范围；模型无对应入参。 */
   reviewScopeSegmentIds?: readonly string[]
+  /** 委派 Proposal 允许写入的 Segment 范围；模型无对应入参。 */
+  delegatedScopeSegmentIds?: readonly string[]
+  /** 读取已绑定资产的现有交付预检；不执行 QA、导出或写入。 */
+  readDeliveryPreflight?: (assetId: string) => CatDeliveryPreflightSnapshot
   /** Current-turn host provenance; resolved locally per tool call. */
   generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance
   /** 读取已绑定项目的受管 Context 图片；宿主负责路径授权与图片校验。 */
@@ -413,7 +417,54 @@ export interface CatProjectSummaryResult {
   segmentCounts: Record<SegmentStatus, number>
   /** Present for archived projects: reads are fine, writes are rejected upstream. */
   note?: string
+  delivery?: CatDeliveryStatus
 }
+
+export interface CatDeliveryStatus {
+  assetId: string
+  workflowStage: WorkflowStage
+  archived: boolean
+  segmentCount: number
+  lockedSegments: number
+  unconfirmedUnlockedSegments: number
+  pendingProposalCount: number
+  qa: { openErrors: number; openWarnings: number; waived: number }
+  qaFreshness: 'not-evaluated'
+  evidence: {
+    status: 'not-applicable' | 'stale' | 'blocked' | 'in-progress' | 'complete'
+    stageRuns: number
+    required: number
+    presented: number
+    pending: number
+  }
+  ready: boolean
+  blockers: Array<{ code: string; count: number; message: string }>
+  verifiedExport: false
+  currentTask: null | {
+    stageRunId: string
+    role: 'translator' | 'reviewer' | 'proofreader'
+    status: 'in_progress' | 'blocked' | 'stale' | 'complete'
+    scopeSegments: number
+    pendingSegments: number
+    blockedSegments: number
+    pendingEvidence: number
+    blockingGaps: number
+  }
+}
+
+export type CatDeliveryPreflightSnapshot = Pick<
+  CatDeliveryStatus,
+  | 'assetId'
+  | 'workflowStage'
+  | 'segmentCount'
+  | 'lockedSegments'
+  | 'unconfirmedUnlockedSegments'
+  | 'pendingProposalCount'
+  | 'qa'
+  | 'evidence'
+  | 'ready'
+  | 'blockers'
+>
 
 export interface CatApplyTranslationsResult {
   requested: number
@@ -563,6 +614,7 @@ export interface CatGetTranslationContextResult {
     presented: number
     pending: number
   }
+  readOnly?: boolean
   /**
    * LA-CONTEXT-002：预算连下一段最小核心都放不下时返回（contexts 为空、
    * cursor 不推进），取值是重试该页所需的最低 maxBytes。
@@ -674,6 +726,7 @@ export interface CatReadContextDocResult {
   extractionWarnings?: ContextExtractionWarning[]
   /** 图片说明 / 无抽取说明 / clamp 提示。 */
   note?: string
+  readOnly?: boolean
 }
 
 export interface CatProposeTranslationsResult {

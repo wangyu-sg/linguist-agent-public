@@ -1,35 +1,38 @@
 ---
 name: release-lqa
-description: 对当前 Linguist 项目的指定批次执行发布或交付前 LQA。用户要求 release LQA、发布前检查、交付验收或抽查完成批次时使用；汇总覆盖、QA、阻断、警告和未验证范围，但不代替 Reviewer 全量审校，也不自行导出。
+description: 在已绑定 Linguist 项目且 CAT 工具可用时，执行指定批次的交付前检查或解读已有 QA。用于“检查能否交付”“发布前 LQA”；不替代全量双语审校、不自动导出。按本次要求区分当前检查、旧报告解读和授权修复。
 group: linguist
-version: "1.0.1"
+version: "1.0.2"
 ---
 
-# Release LQA
+# 交付前 LQA
 
-给出可审计的发布建议，不把抽查或自动 QA 冒充交付资格证明。
+核实当前数据能支持什么交付结论，而不是读取一份旧报告就宣布验收完成。
 
-## 执行
+## 先按用户要求执行
 
-1. **冻结检查范围。** 用 `cat_project_summary` 读取语言对与项目状态，用 `cat_list_assets` 分页列完指定批次；用户未指定时检查全部批次。对每个批次用 `cat_get_segments` 分页核对空译文、状态和锁定项。
-   - 完成条件：每个纳入或排除的批次都有理由，Segment 分页覆盖与工具 `total` 一致；任何抽查都明确样本和未覆盖范围。
-2. **读取 QA 证据。** 用 `cat_get_qa_findings` 分页读取全部 open 和 waived findings，并把 finding revision 与当前 Segment revision 对照。只有用户明确要求运行最新 QA 时才调用 `cat_run_qa`；先说明它会持久化 findings 但不会修改 Segment，完成后重新读取 findings。对范围内 Segment 分批调用 `cat_validate_terms`。
-   - 完成条件：open、waived findings 和术语校验均读完；未运行新 QA、revision 已过期或调用中断时，必须写入未验证范围。
-3. **复核交付风险。** 依据实际数据检查未翻译内容、结构/Tag/placeholder、术语、明显格式异常和跨 Segment 一致性。只有项目资料提供界面或图片上下文时才检查截断与图文关系。CAT 工具未暴露的阶段确认记录不得从 Segment status 推断。
-   - 完成条件：每个发现都有 `assetId`、Segment、QA finding 或术语证据；阶段、视觉和人工语言审校的缺口均单列。
-4. **形成建议。** 有未解决阻断或关键覆盖缺口时给 `not-ready`；只有非阻断警告时给 `ready-with-warnings`；范围完整且没有已知问题时才给 `ready`。这只是 LQA 建议，不等于 verified export 已通过。
-   - 完成条件：结论能由阻断、警告和覆盖表直接推出，且每个阻断项都有最小修复动作。
+- “检查能否交付”：默认对每个纳入批次运行一次当前 `cat_run_qa`。它会保存 findings，不改译文或确认状态；无需再询问是否运行这项检查。
+- “只看已有 QA/不运行新检查”：只读取旧结果，注明当前有效性未验证。
+- “检查并修复”：可以在明确授权范围内修正 Target；未获授权的 waiver、解锁、术语政策变更和导出不包含在内。
+- “完全只读/任何项目状态都不能写”：不刷新 inventory、不运行持久化 QA；Context 读取全部使用 `readOnly=true`，也不创建 Proposal 或阶段决定。
+
+## 执行顺序
+
+1. 复用已确定的语言对和批次范围；不足时用概览和分页批次目录补齐。全量、局部检查和抽查分别说明；不把检查少数样本称为全量语言审校。
+2. 对每个纳入批次调用 `cat_project_summary`，传入 `assetId` 与 `includeDelivery=true`。读取 `delivery` 中的阶段、未确认数、待处理 Proposal、证据、blockers 和当前会话任务。此查询不创建任务、不确认、不生成导出文件。
+3. 当前交付检查运行 `cat_run_qa`；本任务内刚成功运行、且此后没有修改该批次或相关规则时可复用这次结果，不重复运行。摘要中的 `qaFreshness=not-evaluated` 不能当 QA 新鲜度证明。旧记录为空也不等于已经运行且零问题。
+4. 用 `cat_get_qa_findings` 分页读取需要的 open/waived 记录，按纳入范围的 Segment ID 对照；不要臆造不存在的 assetId 参数。对照 finding revision，旧 revision 不当成当前结论。需要时用 `cat_validate_terms` 补充术语检查。
+5. 对有风险或需要人工语言判断的内容，取得完整 Source/Target 和必要参考。纯报告路径的 `cat_get_translation_context`、`cat_read_context_doc` 都使用 `readOnly=true`；规则和参考跟随返回位置续读。没有界面或图片证据时不声称已验证截断、图文动作或设备表现。
+6. 获授权修复后重新运行受影响批次 QA，再读取只读摘要；使用现有修复/QA机制的真实结果，不自行关闭或 waive finding。仅为取得绿色状态而确认句段、缩小任务范围或跳过证据均不允许。
 
 ## 输出
 
-- **范围与覆盖**：语言对、批次、Segment 数、全量/抽查方法和未覆盖项。
-- **建议结论**：`ready`、`ready-with-warnings` 或 `not-ready`，附证据摘要。
-- **阻断 / 警告 / 已接受风险**：位置、证据、影响和最小动作。
-- **未验证**：Reviewer 覆盖、视觉、真实设备或人工确认等没有证据的部分。
+先给建议：`ready`、`ready-with-warnings` 或 `not-ready`。随后只说明检查范围、当前 QA、重要阻断/警告、未验证项目和实际修复。
 
-## 边界
+`ready` 只表示本次声明的交付前检查没有已知阻断，不等于独立 Reviewer 已全量完成，也不等于 verified export 已经执行。`delivery.ready` 是现有预检结果，必须结合 archived、currentTask 和未验证范围解释；`currentTask=null` 不代表本轮专业审校已完成，也不自动否定合法人工流程。
 
-- 检查阶段不得调用 `cat_export_asset`；只有用户另行明确要求导出时才进入交付流程。
-- 不调用 `cat_confirm_segments`，不关闭或 waive QA finding，不修改译文或术语。
-- 当前工具不能只读核对阶段覆盖、待处理 Proposal 或 delivery preflight；这些项目必须标记未验证。
-- 不把抽查、自动 QA 或无上下文判断称为发布资格证明。
+有真实 blocker、任务 pending/blocked/stale 或必要证据缺口时说明具体范围。只有非阻断警告时使用 `ready-with-warnings`。未执行的 round-trip、真实设备和人工语言资格明确写未验证。
+
+## 导出边界
+
+本 Skill 不把检查请求解释为导出、发送或发布授权。用户明确要求“检查并导出”，且目标可确定时才调用现有导出工具；verified 失败不自动改成 as-is。只做报告时不调用 `cat_confirm_segments`。

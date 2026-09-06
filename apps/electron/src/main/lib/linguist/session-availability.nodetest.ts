@@ -132,6 +132,11 @@ test('旧格式项目副本与原 Pi Session：备份、恢复、新轮写回、
     assert.throws(() => service.editSegment(project.id, segment.id, '旧 revision', 0), /revision/i)
     db.segments.recordCurrentStageDecision(segment.id, 'editing', edited.revision, 'corrected', { actor: session.id })
     assert.equal(db.stageEvidence.getCompletion(state.stageRunId).status, 'complete')
+    const beforePreflightEvents = db.runs.latestEventSequence
+    const preflight = service.getDeliveryPreflight(project.id, imported.assetId)
+    assert.equal(db.runs.latestEventSequence, beforePreflightEvents)
+    const prepared = await service.prepareDelivery(project.id, imported.assetId, 'verified')
+    assert.deepEqual(prepared.preflight, preflight)
     const destination = join(root, 'old-upgraded.xlf')
     await service.exportAssetToPath(project.id, imported.assetId, destination, 'verified', false)
     const reimport = await service.importAsset(project.id, { filename: 'old-upgraded.xlf', bytes: readFileSync(destination) })

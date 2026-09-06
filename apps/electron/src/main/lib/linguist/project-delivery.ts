@@ -167,18 +167,12 @@ export class ProjectDelivery {
     )
   }
 
-  /**
-   * 先汇总提案、QA 与当前阶段；只有无阻断时才生成并重新导入验证。
-   */
-  async prepareDelivery(
+  /** 读取交付预检；只执行现有 Store 查询，不生成导出产物。 */
+  getDeliveryPreflight(
     projectId: string,
     assetId: string,
-    validation: 'verified' | 'as-is' = 'verified',
-  ): Promise<LinguistPreparedDelivery> {
+  ): LinguistDeliveryPreflight {
     const project = this.context.getProject(projectId)
-    if (project.archivedAt !== undefined) {
-      throw new LinguistProjectArchivedError(projectId)
-    }
     const db = this.context.openProject(projectId)
     const asset = this.context.call(() => db.assets.get(assetId), projectId)
     if (asset === undefined) throw new StoreNotFoundError('asset', assetId)
@@ -356,6 +350,22 @@ export class ProjectDelivery {
       ready: blockers.length === 0,
       blockers,
     }
+    return preflight
+  }
+
+  /**
+   * 先汇总提案、QA 与当前阶段；只有无阻断时才生成并重新导入验证。
+   */
+  async prepareDelivery(
+    projectId: string,
+    assetId: string,
+    validation: 'verified' | 'as-is' = 'verified',
+  ): Promise<LinguistPreparedDelivery> {
+    const project = this.context.getProject(projectId)
+    if (project.archivedAt !== undefined) {
+      throw new LinguistProjectArchivedError(projectId)
+    }
+    const preflight = this.getDeliveryPreflight(projectId, assetId)
     if (!preflight.ready && validation === 'verified') {
       return {
         validation,

@@ -1,4 +1,5 @@
 import type { SegmentStatus } from '@linguist/cat-core'
+import type { ProjectDatabase } from '@linguist/cat-store'
 import { Type } from 'typebox'
 import {
   LinguistCatAssetNotFoundError,
@@ -8,6 +9,7 @@ import { pageHasMore, resolvePage } from './pagination'
 import {
   CAT_TOOL_PAGE_LIMITS,
   type CatAssetListItem,
+  type CatDeliveryStatus,
   type CatProjectSummaryResult,
   type CatSegmentListItem,
   type PagedResult,
@@ -32,26 +34,95 @@ const ARCHIVED_NOTE = 'Project is archived: all data is read-only.'
 export function createProjectTools(runtime: CatToolRuntime) {
   const { deps, resolveBoundProject } = runtime
 
+  const currentTaskFor = (
+    db: ProjectDatabase,
+    assetId: string,
+  ): CatDeliveryStatus['currentTask'] => {
+    if (deps.sessionId === undefined
+      || (deps.linguistRole !== 'translator' && deps.linguistRole !== 'reviewer' && deps.linguistRole !== 'proofreader')) return null
+    const assetSegmentIds = new Set(db.segments.queryIds({ assetId }))
+    const state = db.stageEvidence.list().find(candidate =>
+      candidate.sessionId === deps.sessionId
+      && candidate.role === deps.linguistRole
+      && candidate.plan.segmentIds.some(segmentId => assetSegmentIds.has(segmentId)))
+    if (state === undefined) return null
+    const completion = db.stageEvidence.getCompletion(state.stageRunId)
+    return {
+      stageRunId: state.stageRunId,
+      role: deps.linguistRole,
+      status: completion.status,
+      scopeSegments: completion.decisions.total,
+      pendingSegments: completion.decisions.pending,
+      blockedSegments: completion.decisions.blocked,
+      pendingEvidence: completion.presentation.pending.length,
+      blockingGaps: completion.blockingGaps.length,
+    }
+  }
+
   const projectSummaryTool = defineTool({
     name: 'cat_project_summary',
     label: 'CAT project summary',
     description:
-      'Read-only summary of the Linguist CAT project bound to this session: name, locales, ' +
-      'asset count, total segments, and per-status segment counts. The project always comes ' +
-      'from the session binding — never ask the user for a project id. Archived projects are ' +
-      'reported with archived: true (reads still work). Contains no filesystem paths.',
+      'Read a side-effect-free business summary of the bound CAT project; never ask for or accept a model-selected projectId. With no arguments, return the existing project and count fields unchanged. For one imported batch, use includeDelivery=true with assetId to additionally read the existing delivery preflight snapshot and this session\'s latest relevant professional task. This query does not create tasks, record decisions/evidence, run persisted QA, stage an export, or save files. ready means preflight readiness, not verified export or independent review. qaFreshness=not-evaluated means this summary does not establish QA freshness; no findings is not proof that QA ran. currentTask=null means no matching task, not completed review. Archived projects remain readable but not exportable through this query.',
     promptSnippet: 'Summarize the bound CAT project',
-    promptGuidelines: [
-      'Read tools never modify project data; write correct translations with cat_apply_translations.',
-    ],
-    parameters: Type.Object({}),
-    async execute(toolCallId) {
+    parameters: Type.Object({
+      assetId: Type.Optional(Type.String({
+        minLength: 1,
+        description: 'Imported asset ID from the bound project. Supply together with includeDelivery=true to inspect one batch; never a project ID.',
+      })),
+      includeDelivery: Type.Optional(Type.Boolean({
+        description: 'Read the existing delivery preflight and this session\'s latest relevant task for one asset. Requires assetId. Does not run persisted QA, create a Stage, stage an export or save a file.',
+      })),
+    }),
+    async execute(toolCallId, params) {
+      if (params.includeDelivery === true && params.assetId === undefined) {
+        throw new LinguistCatInvalidArgumentError('assetId', 'required when includeDelivery=true')
+      }
+      if (params.assetId !== undefined && params.includeDelivery !== true) {
+        throw new LinguistCatInvalidArgumentError('includeDelivery', 'must be true when assetId is provided')
+      }
       const { project, db } = resolveBoundProject('cat_project_summary', toolCallId)
       const assetCount = db.assets.countByProject()
       const segmentCounts = db.segments.countByStatus()
       const totalSegments =
         segmentCounts.untranslated + segmentCounts.draft + segmentCounts.translated + segmentCounts.reviewed
       const archived = project.archivedAt !== undefined
+      const delivery = params.includeDelivery === true
+        ? (() => {
+            const assetId = params.assetId!
+            if (db.assets.get(assetId) === undefined) throw new LinguistCatAssetNotFoundError(assetId)
+            if (deps.readDeliveryPreflight === undefined) {
+              throw new LinguistCatInvalidArgumentError('includeDelivery', 'delivery preflight is unavailable')
+            }
+            const preflight = deps.readDeliveryPreflight(assetId)
+            return {
+              assetId: preflight.assetId,
+              workflowStage: preflight.workflowStage,
+              archived,
+              segmentCount: preflight.segmentCount,
+              lockedSegments: preflight.lockedSegments,
+              unconfirmedUnlockedSegments: preflight.unconfirmedUnlockedSegments,
+              pendingProposalCount: preflight.pendingProposalCount,
+              qa: {
+                openErrors: preflight.qa.openErrors,
+                openWarnings: preflight.qa.openWarnings,
+                waived: preflight.qa.waived,
+              },
+              qaFreshness: 'not-evaluated' as const,
+              evidence: {
+                status: preflight.evidence.status,
+                stageRuns: preflight.evidence.stageRuns,
+                required: preflight.evidence.required,
+                presented: preflight.evidence.presented,
+                pending: preflight.evidence.pending,
+              },
+              ready: preflight.ready,
+              blockers: preflight.blockers.map(({ code, count, message }) => ({ code, count, message })),
+              verifiedExport: false as const,
+              currentTask: currentTaskFor(db, assetId),
+            }
+          })()
+        : undefined
       const dto: CatProjectSummaryResult = {
         project: {
           id: project.id as string,
@@ -67,6 +138,7 @@ export function createProjectTools(runtime: CatToolRuntime) {
         totalSegments,
         segmentCounts,
         ...(archived ? { note: ARCHIVED_NOTE } : {}),
+        ...(delivery === undefined ? {} : { delivery }),
       }
       return toolResult(dto, deps.resultProjectId)
     },

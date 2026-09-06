@@ -36,13 +36,8 @@ export function createQaTools(runtime: CatToolRuntime) {
   >({
     name: 'cat_run_qa',
     label: 'CAT run QA',
-    description:
-      'Run deterministic QA for every segment in one asset of the bound CAT project and persist reviewable findings. ' +
-      'This never changes segment text, revision, or review status. Only a human can resolve or waive findings.',
+    description: 'Run deterministic QA for every segment in one bound-project asset and persist findings using the existing QA lifecycle. It does not edit Target or confirm review stages. For a current delivery-check request, run current QA unless this same task just completed an applicable unchanged run; do not ask for the same authorization again. For a request to interpret old reports or prohibit project writes, do not run it. No findings does not itself prove a fresh completed check. Do not directly resolve/waive findings; fixes and reruns may change status through the existing deterministic lifecycle.',
     promptSnippet: 'Run deterministic QA on one batch of the bound CAT project',
-    promptGuidelines: [
-      'Report findings to the user; never claim they are resolved or waived.',
-    ],
     parameters: RUN_QA_PARAMETERS,
     async execute(toolCallId, params, signal, onUpdate) {
       // PB-096：term_entries、项目 profile 与 tagProfile 一起冻结进 worker snapshot。

@@ -238,7 +238,7 @@ test('factory: CAT tools expose project-local accept and export but no resolve o
       assert.equal(typeof tool.label, 'string')
       assert.ok(tool.label.length > 0)
       assert.equal(typeof tool.description, 'string')
-      assert.ok(tool.description.includes('bound'))
+      assert.ok(tool.description.length > 0)
       assert.equal(typeof tool.promptSnippet, 'string')
       assert.ok(tool.parameters && typeof tool.parameters === 'object')
       assert.equal(typeof tool.execute, 'function')
@@ -824,6 +824,64 @@ test('cat_project_summary: locales, counts, JSON round-trip; resolver receives c
     // resolver saw the tool identity, never a project id from model input
     assert.deepEqual(calls, [{ toolName: 'cat_project_summary', toolCallId: 'call-1' }])
     assertNoAbsolutePaths(result, fixture.rootDir)
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('cat_project_summary includeDelivery returns a narrow read-only preflight for one asset', async () => {
+  const fixture = setup()
+  try {
+    let preflightCalls = 0
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      sessionId: 'summary-session',
+      linguistRole: 'reviewer',
+      readDeliveryPreflight: (assetId) => {
+        preflightCalls += 1
+        assert.equal(assetId, fixture.assetA.id)
+        return {
+          assetId,
+          workflowStage: 'editing',
+          segmentCount: fixture.assetA.segmentCount,
+          lockedSegments: 0,
+          unconfirmedUnlockedSegments: fixture.assetA.segmentCount,
+          pendingProposalCount: 0,
+          qa: { openErrors: 0, openWarnings: 1, waived: 0 },
+          evidence: { status: 'not-applicable', stageRuns: 0, required: 0, presented: 0, pending: 0 },
+          ready: false,
+          blockers: [{ code: 'UNCONFIRMED_SEGMENTS', count: fixture.assetA.segmentCount, message: 'needs review' }],
+        }
+      },
+    })
+    const beforeStageEvents = fixture.db.runs.latestEventSequence
+    const overview = (await invoke(toolByName(tools, 'cat_project_summary'), {})).details as { delivery?: unknown }
+    assert.equal(overview.delivery, undefined)
+    const result = (await invoke(toolByName(tools, 'cat_project_summary'), {
+      assetId: fixture.assetA.id,
+      includeDelivery: true,
+    })).details as { delivery: Record<string, unknown> }
+    assert.deepEqual(result.delivery, {
+      assetId: fixture.assetA.id,
+      workflowStage: 'editing',
+      archived: false,
+      segmentCount: fixture.assetA.segmentCount,
+      lockedSegments: 0,
+      unconfirmedUnlockedSegments: fixture.assetA.segmentCount,
+      pendingProposalCount: 0,
+      qa: { openErrors: 0, openWarnings: 1, waived: 0 },
+      qaFreshness: 'not-evaluated',
+      evidence: { status: 'not-applicable', stageRuns: 0, required: 0, presented: 0, pending: 0 },
+      ready: false,
+      blockers: [{ code: 'UNCONFIRMED_SEGMENTS', count: fixture.assetA.segmentCount, message: 'needs review' }],
+      verifiedExport: false,
+      currentTask: null,
+    })
+    assert.equal(preflightCalls, 1)
+    assert.equal(fixture.db.runs.latestEventSequence, beforeStageEvents)
+    assertNoAbsolutePaths(result, fixture.rootDir)
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_project_summary'), { assetId: fixture.assetA.id }), 'INVALID_ARGUMENT')
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_project_summary'), { includeDelivery: true }), 'INVALID_ARGUMENT')
   } finally {
     fixture.db.close()
   }
@@ -1650,6 +1708,97 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
       before,
       'context reads must not mutate Segment rows',
     )
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('readOnly context and document reads do not prepare Stage or evidence, and reject scope options before side effects', async () => {
+  const fixture = setup()
+  try {
+    const contextDoc = fixture.db.contextDocs.insert({
+      kind: 'doc',
+      originalFilename: 'brief.md',
+      blobRelpath: 'blobs/brief.md',
+      textExtract: 'read-only context',
+    })
+    let prepareStageCalls = 0
+    let prepareContextDocCalls = 0
+    let evidenceCalls = 0
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      prepareStage: () => { prepareStageCalls += 1 },
+      prepareContextDoc: () => { prepareContextDocCalls += 1 },
+      stageEvidenceRunId: 'missing-stage-is-not-used',
+      onEvidencePrepared: () => { evidenceCalls += 1 },
+    })
+    const beforeSegments = fixture.db.segments.getByIds([fixture.segmentsA[0]!.id]).map(({ id, target, revision }) => ({ id, target, revision }))
+    const beforeStageStates = fixture.db.stageEvidence.list().map(({ stageRunId, sessionId, role, plan }) => ({ stageRunId, sessionId, role, segmentIds: plan.segmentIds }))
+    const beforeReceipts = fixture.db.stageEvidence.list().flatMap(state => fixture.db.stageEvidence.listReceipts(state.stageRunId))
+    const beforeEvents = JSON.stringify(fixture.db.runs.listEvents())
+    const context = (await invoke(toolByName(tools, 'cat_get_translation_context'), {
+      segmentIds: [fixture.segmentsA[0]!.id],
+      readOnly: true,
+    })).details as { readOnly?: boolean; stageEvidence?: unknown; contexts: unknown[] }
+    assert.equal(context.readOnly, true)
+    assert.equal(context.stageEvidence, undefined)
+    assert.equal(context.contexts.length, 1)
+    const document = (await invoke(toolByName(tools, 'cat_read_context_doc'), {
+      docId: contextDoc.id,
+      readOnly: true,
+    })).details as { readOnly?: boolean; text?: string }
+    assert.equal(document.readOnly, true)
+    assert.equal(document.text, 'read-only context')
+    assert.equal(prepareStageCalls, 0)
+    assert.equal(prepareContextDocCalls, 0)
+    assert.equal(evidenceCalls, 0)
+    assert.deepEqual(fixture.db.segments.getByIds([fixture.segmentsA[0]!.id]).map(({ id, target, revision }) => ({ id, target, revision })), beforeSegments)
+    assert.deepEqual(fixture.db.stageEvidence.list().map(({ stageRunId, sessionId, role, plan }) => ({ stageRunId, sessionId, role, segmentIds: plan.segmentIds })), beforeStageStates)
+    assert.deepEqual(fixture.db.stageEvidence.list().flatMap(state => fixture.db.stageEvidence.listReceipts(state.stageRunId)), beforeReceipts)
+    assert.equal(JSON.stringify(fixture.db.runs.listEvents()), beforeEvents)
+
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_get_translation_context'), {
+      segmentIds: [fixture.segmentsA[0]!.id],
+      readOnly: true,
+      stageScope: 'assets',
+    }), 'INVALID_ARGUMENT')
+    assert.equal(prepareStageCalls, 0)
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('proposal mode preserves the existing Stage and enforces the trusted delegated scope', async () => {
+  const fixture = setup()
+  try {
+    const segment = fixture.segmentsA[0]!
+    const outside = fixture.segmentsB[0]!
+    let prepareStageCalls = 0
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      delegatedScopeSegmentIds: [segment.id],
+      prepareStage: () => { prepareStageCalls += 1 },
+    })
+    const before = fixture.db.segments.getById(segment.id)!
+    const stageCount = fixture.db.stageEvidence.list().length
+    const created = (await invoke(toolByName(tools, 'cat_apply_translations'), {
+      edits: [{ segmentId: segment.id, baseRevision: before.revision, target: '提案译文' }],
+      mode: 'proposal',
+    })).details as { proposalIds: string[] }
+    assert.equal(created.proposalIds.length, 1)
+    const after = fixture.db.segments.getById(segment.id)!
+    assert.equal(after.target, before.target)
+    assert.equal(after.revision, before.revision)
+    assert.equal(fixture.db.stageEvidence.list().length, stageCount)
+    assert.equal(prepareStageCalls, 0)
+
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_propose_translations'), {
+      segmentProposals: [{ segmentId: outside.id, baseRevision: outside.revision, proposedTarget: '越界建议' }],
+    }), 'INVALID_ARGUMENT')
+    assert.equal(prepareStageCalls, 0)
+    const outsideAfter = fixture.db.segments.getById(outside.id)!
+    assert.equal(outsideAfter.target, outside.target)
+    assert.equal(outsideAfter.revision, outside.revision)
   } finally {
     fixture.db.close()
   }
@@ -2550,7 +2699,7 @@ test('cat_read_context_doc: paged extract read + image fallback metadata + not-f
     // 无抽取文本：note 说明。
     const binary = (await invoke(tool, { docId: noExtract.id })).details as { text?: string; note?: string }
     assert.equal(binary.text, undefined)
-    assert.ok(binary.note?.includes('no plain-text extract'))
+    assert.ok(binary.note?.includes('No plain-text extract'))
 
     // 未知 docId：store 类型化错误穿透（STORE_NOT_FOUND）。
     try {

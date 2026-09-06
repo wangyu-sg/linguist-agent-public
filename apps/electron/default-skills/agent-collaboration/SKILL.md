@@ -1,8 +1,8 @@
 ---
 name: agent-collaboration
-description: Proma 协作子 Agent Skill。当需要并行探索多个方向（多样性探索）、对抗性审查验证已有方案、或多个长耗时独立任务需要真实可见的子会话时触发。用于判断是否以及如何调用 Proma 内置 collaboration 工具创建协作子会话。简单搜索、短调研、单文件修改、一次性代码审查由父会话直接使用普通工具完成。
+description: Proma 协作子 Agent Skill。用于独立并行探索、对抗审查、需要独立上下文的任务，以及 Linguist General 按用户目标安排的专业岗位交接。专业本地化交接可以顺序执行，不以并行为前提；清楚的小任务由父会话直接完成。
 group: proma
-version: "1.2.0"
+version: "1.2.1"
 ---
 
 # Proma Agent Collaboration
@@ -22,6 +22,16 @@ Proma 已提供内置 `collaboration` MCP 工具。你必须通过这些工具�
 - `collaboration.set_delegation_thinking_level`：父 Agent 按委派 ID 修改自己创建的子会话思考强度。当前已经运行的 turn 不会中途切换，新强度从下一轮或续跑开始生效。
 - `collaboration.stop_delegation` / `collaboration.stop_delegations`：停止一个或一批子会话。
 
+## Linguist 专业交接
+
+以下是本地化岗位任务的专用解释，不改变普通代码审查的只读默认。
+
+- 为了独立专业判断，可以先完成 Translator，再让 Reviewer 读取共享 CAT 的最新 Source/Target，之后按需要安排 Proofreader；顺序依赖不构成禁止委派的理由。
+- General 自行判断是否需要独立岗位；少量清楚的句段直接处理，不强制完整三阶段。专业岗位子会话仍不得继续委派。
+- 用户已授权修订的 Reviewer/Proofreader 可以按岗位写回；用户只要求报告时保持报告模式并用只读 Context，不确认阶段。通用对抗式代码审查的“只提建议、不改文件”不覆盖该本地化授权。
+- 同一范围不得无依据并行写。交接任务说明包含完整范围、操作要求、必要参考和未解决问题，不只给上一岗位的结论；下一岗位自行核查原文与当前译文。
+- 父会话按原生工具等待结果，核实 `linguistOutcome` 及必要的只读任务状态。运行 completed 不等于专业 complete；不能通过 scope 缩小、waive 或自动 as-is 隐藏未完成工作。
+
 ## 先判断用哪种能力
 
 优先按下面顺序判断，不要把所有复杂任务都拆成子会话。
@@ -30,7 +40,7 @@ Proma 已提供内置 `collaboration` MCP 工具。你必须通过这些工具�
 
 适合主 Agent 自己按固定流程推进，不创建真实子会话：
 
-- 步骤确定、强顺序依赖，后一阶段必须依赖前一阶段结果。
+- 步骤确定、强顺序依赖，后一阶段必须依赖前一阶段结果；需要独立本地化岗位判断的交接按上面的 Linguist 专节处理。
 - 任务是可复用 SOP，例如发布检查、会议纪要整理、表格导入、固定诊断流程。
 - 用户希望按阶段确认、暂停、审批或沿着一个计划线性推进。
 - 核心价值是流程正确性和可重复性，而不是并行速度。
@@ -58,7 +68,7 @@ Proma 已提供内置 `collaboration` MCP 工具。你必须通过这些工具�
 
 - 简单搜索、单文件阅读、一次性定位函数。
 - 只需要一个短结论，父会话直接使用普通工具更简单。
-- 子任务之间强依赖，必须串行决策。
+- 子任务强依赖父会话，且拆分不带来独立判断或上下文收益；本地化专业顺序交接除外。
 - 任务本身还没定义清楚，应该先向用户澄清。
 
 ## 拆分原则
@@ -71,7 +81,7 @@ Proma 已提供内置 `collaboration` MCP 工具。你必须通过这些工具�
 - 如需指定模型，先调用 `list_available_agent_models`，再从同一条模型记录传入 `channelId` 与 `modelId`；不传则继承父会话当前渠道和模型。
 - 如需控制计算成本或任务深度，为 `delegate_agent` 或每个 `delegate_agents.items[]` 传 `thinkingLevel`。不传时保持 Proma 新会话默认值；模型不支持请求档位时，运行时会归一化为该模型可用的最近档位。
 - 修改已存在子会话的强度时调用 `set_delegation_thinking_level`。该操作只影响下一轮/续跑，不会重启或篡改正在执行的当前 turn。
-- Linguist 项目中的 CAT 子任务必须显式传入 `linguistRole` 与 `linguistScope`；普通协作子会话不获得 CAT 工具。
+- Linguist General 发起专业岗位委派时，显式提供 `linguistRole` 和用户要求的完整 `linguistScope`。Linguist General 发起普通项目协作时，子会话继承可信项目与 Workspace，可继续使用其已绑定的 CAT 能力，但不要求非空专业范围或创建专业 Stage。未绑定 Linguist 项目的普通 Proma 会话不会因此自动获得 CAT 工具。
 - 权限模式不要高于父会话；高风险修改优先让子会话只调研或审查。
 - 子会话不能继续创建子会话。
 

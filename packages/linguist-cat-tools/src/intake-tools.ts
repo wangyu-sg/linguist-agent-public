@@ -117,7 +117,7 @@ export function createIntakeTools(runtime: CatToolRuntime) {
   const refreshProjectInventoryTool = defineTool({
     name: 'cat_refresh_project_inventory',
     label: 'CAT refresh project inventory',
-    description: 'Refresh the bound project evidence inventory across host-authorized workspace and attachment locations. The model cannot provide scan paths. Returns host-persisted gaps for unreadable, ambiguous, unsupported, truncated, or version-conflicting evidence.',
+    description: 'Refresh the inventory of sources and references within the host-authorized project scope. This records inventory facts/gaps but does not import or translate files and is not proof of reading their contents. Use when inventory is missing, inputs changed or relevant references are unaccounted for; reuse a still-current result in the same task. Do not refresh for an explicit no-project-writes request. Distinguish source batches, reference assets, mapping and media; investigate solvable gaps with existing tools. A warning alone does not stop unrelated work or authorize excluding required evidence.',
     promptSnippet: 'Refresh the host-authorized project asset and evidence inventory before formal stage work',
     parameters: Type.Object({}),
     async execute(toolCallId) {

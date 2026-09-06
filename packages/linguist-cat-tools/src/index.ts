@@ -32,6 +32,8 @@ export {
   type CatBatchConsistencyGroupItem,
   type CatConsistencyPlanResult,
   type CatCreateConsistencyProposalsResult,
+  type CatDeliveryPreflightSnapshot,
+  type CatDeliveryStatus,
   type CatEvidenceRef,
   type CatGetTranslationContextResult,
   type CatProjectSummaryResult,
