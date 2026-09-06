@@ -1,7 +1,7 @@
-# Proma Core Touchpoints — v0.19.26
+# Proma Core Touchpoints — v0.19.31
 
-> 基线：`v0.19.26@20a5aa8f7c19b8e91949b5fd74b9eee40d767078`（v0.19.26 之后的最新主线提交）
-> 正式 merge：`ed8aedd60577ab88d1cca1f092ac5645c1da2d8f`
+> 基线：`v0.19.31@7a3721d7cfe6e107b58c79e27a43fa463dac21ee`
+> 正式 merge：`b2c71810d750e55d737942d7c3855da36bc8ad59`
 > 机读真源：[proma-touchpoints.json](./proma-touchpoints.json)
 
 | 集合 | 路径数 |

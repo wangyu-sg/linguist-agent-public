@@ -1,6 +1,6 @@
 # Linguist Agent 当前事实
 
-核验日期：2026-09-05。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
+核验日期：2026-09-06。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
 
 ## 机器真源与当前值
 
@@ -9,8 +9,8 @@
 | 项目 | 当前值 |
 |---|---|
 | App | `0.17.70` |
-| Proma | `v0.19.26` |
-| Proma commit | `20a5aa8f7c19b8e91949b5fd74b9eee40d767078` |
+| Proma | `v0.19.31` |
+| Proma commit | `7a3721d7cfe6e107b58c79e27a43fa463dac21ee` |
 | Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.85.0` |
 | React / Jotai / Vite | `18.3.1` / `2.20.2` / `6.4.3` |
 | Shared | `0.1.69` |
@@ -18,7 +18,7 @@
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
-当前 Proma 主线已推进到该提交，尚无新的稳定 Tag。
+当前 Proma 稳定基线已推进到 `v0.19.31`；LA 保持独立应用版本 `0.17.70`。
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
 
@@ -38,7 +38,7 @@
 
 ## 本轮验证与发布证据
 
-- 本轮已将 Proma 主线 `20a5aa8f` 合并为 `ed8aedd60577ab88d1cca1f092ac5645c1da2d8f`，App 版本保持 `0.17.70`；推送、Tag、Release、生产数据迁移和安装替换尚未完成。此前发布准备见历史 [0.17.70 验证记录](./docs/release/VALIDATION_0_17_70.md)，不得把该包哈希当作本轮结果。
+- 本轮已将 Proma `v0.19.31`（`7a3721d7`）合并为 `b2c71810`，App 版本保持 `0.17.70`；本地 `smoke:pack` 已确认 `esbuild 0.28.1` 及平台二进制进入 `app.asar.unpacked`，新的 LA Release 尚未创建。此前发布准备见历史 [0.17.70 验证记录](./docs/release/VALIDATION_0_17_70.md)，不得把该包哈希当作本轮结果。
 - 默认集合覆盖真实 SQLite、Worker、SDK 转换和本地 HTTP；旧格式合成项目与 Pi 会话通过原译文/参考读取、备份、会话恢复、新轮写回、verified 导出、重导和损坏备份拒绝。具体命令、数量与边界见 [本轮实施记录](./docs/release/IMPLEMENTATION_2026_09_05.md)。
 - 最初原生候选暴露 ESM 加载和 utility 回调克隆两项集成回归，已修正。本轮 `electron:build` 与 `smoke:pack` 通过；`smoke:vertical` 的真实 HTTP 探针因沙箱禁止监听 `127.0.0.1`，窗口探针因沙箱限制无法启动，证据保持 partial，不能把旧候选结果挪作本轮结果。
 - 模型请求均使用合成资料和本地 Fake Provider；没有测试真实收费 Provider、真实 Keychain、原生 Open/Save 或语言质量。用户安装版保持原状，本轮未检查其哈希。

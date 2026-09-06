@@ -1,8 +1,8 @@
 # Upstream Sync Policy — Proma 稳定版同步
 
-> 更新日期：2026-09-04
+> 更新日期：2026-09-06
 >
-> 当前基线：[Proma v0.19.26](./UPSTREAM_BASELINE.md)
+> 当前基线：[Proma v0.19.31](./UPSTREAM_BASELINE.md)
 >
 > 自动流程：[upstream-sync.yml](../../.github/workflows/upstream-sync.yml)
 

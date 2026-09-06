@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 采用 Proma v0.19.31 的 Pi chord/esbuild 打包修复，确保运行时依赖在 packaged Agent 中可解析。
+
 ## [0.17.70] - 2026-09-05
 
 > 基于 Proma 主线 `20a5aa8f` 构建；真实 Provider 四岗位迷你全链仍缺独立测试配置与运行证据。
