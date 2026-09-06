@@ -7,6 +7,7 @@
 - 起始 SHA：`ddc6661cf859ac15a81f598cd075130b70c506b0`。
 - 代码实施结束 SHA：`ab3d6ca108e3a99abb3d1690914abf47d361c6ef`。
 - 实施代码提交：`feat(linguist): add read-only context and delivery summaries`。
+- 发布准备提交：`c4952496`；发布流程修正依次为 `08d3019d`、`a94faaed` 和最终顺序修复 `9b16eb77`。
 - 本轮固定 Proma 基线仍为 `v0.19.31`，基线提交 `7a3721d7cfe6e107b58c79e27a43fa463dac21ee`，正式合并提交 `b2c71810d750e55d737942d7c3855da36bc8ad59`。
 - 实施阶段 App / Bun / Electron / Pi 为 `0.17.70` / `1.3.14` / `43.2.0` / `0.85.0`；发布准备将 App 提升为 `0.17.71`，CAT Schema 保持 `19`。
 - CAT Tools 从 `0.0.38` 升至 `0.0.39`；Linguist Prompt 为 `3.1.4`；五个 Linguist Skill 为 `1.0.2`；`agent-collaboration` 为 `1.2.1`。
@@ -18,6 +19,7 @@
 - 定向测试：`apps/electron/src/main/lib/linguist/{evidence-workflow-v1,session-availability}.nodetest.ts`。
 - Prompt 与岗位：`resources/linguist-roles/{general,translator,reviewer,proofreader}.md`、`apps/electron/default-skills/{localization-readiness,translator-brief,release-lqa,cultural-lqa,terminology-candidate-mining,agent-collaboration}/SKILL.md`。
 - 构建事实：`apps/electron/src/renderer/lib/linguist-build-metadata.ts`。
+- 发布流程与元数据：`.github/workflows/release.yml`、`CHANGELOG.md`、`apps/electron/package.json`、`bun.lock`。
 - 状态文档：`CURRENT_FACTS_SIMPLE.md`、`docs/DOCS_INDEX.md`、`docs/HANDOFF.md`、`docs/architecture/{UPSTREAM_BASELINE.md,proma-baseline.json}` 以及本记录。
 - 未修改 `README.md`、`AGENTS.md`、Proma 核心、CAT Core/Formats/Store/shared、数据库 Schema、Runtime/Provider/权限/Renderer 宿主和无关模块。
 
@@ -62,10 +64,13 @@
 - 未运行真实收费 Provider、真实 Keychain、人工双语/文化/语音质量、IME/VoiceOver、原生 Open/Save 人工操作、目标平台安装/自动更新，也未替换本机安装版。
 - `delivery.qaFreshness` 有意保持 `not-evaluated`，`verifiedExport` 有意保持 `false`；只读摘要不等同交付资格或独立审校完成。
 - 默认 Skill 升级仍按既有同名 bundled Skill 版本覆盖规则执行；用户自定义同名 Skill 的所有权改造不在本轮。
-- 实施阶段未创建 Tag、GitHub Release，未推送远端；随后按用户授权执行 `0.17.71` 在线更新发布流程，不替换本机安装版，最终状态见下方 Release follow-up；未使用 reset credit。
+- 实施阶段（代码收口时）未创建 Tag 或 GitHub Release；随后按用户授权执行在线更新发布流程，不替换本机安装版；最终状态见下方 Release follow-up，未使用 reset credit。
 
 ## Release follow-up
 
 - 发布目标：Linguist Agent `0.17.71`，Proma 固定基线仍为 `v0.19.31`；本次只提升 LA 应用版本，不伪造上游版本或改变 CAT Schema。
 - 发布方式：提交版本号与 CHANGELOG 后推送 `main`，由现有 GitHub Actions 自动创建 tag、构建在线更新资产并创建 Release；不在本机安装构建产物。
-- 发布准备提交和 GitHub Actions 最终状态将在发布完成后补记；在此之前不得把“已创建 Release”当作实现事实。
+- 最终提交为 `9b16eb77`，已推送到 `origin/main`；远端 `v0.17.71` Tag 指向 `bafb65f61ef80d482d9c7e7630eb82bba713b3e2`。
+- GitHub Actions Release run `34011582164` 已成功完成完整 CI、macOS arm64/x64、Windows x64 构建、`latest-mac.yml` 合并和公开步骤。
+- [Linguist Agent 0.17.71 Release](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.71) 已公开；已核对 `latest-mac.yml`、`latest.yml`、macOS arm64/x64 的 DMG/ZIP 和 Windows x64 EXE 资产，公开资产中无 blockmap。
+- 本机安装版未替换；真实收费 Provider、人工语言质量、目标平台安装和实际在线更新消费仍未验证；未使用 reset credit。
