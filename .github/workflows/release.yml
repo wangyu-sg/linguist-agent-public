@@ -106,6 +106,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
+          bun run rebuild:node-pty
           bun run scripts/run-electron-builder.ts --mac --arm64 --publish always
 
   build-mac-x64:
@@ -167,6 +168,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
+          bun run rebuild:node-pty
           bun run scripts/run-electron-builder.ts --mac --x64 --publish always
 
   build-windows-x64:
@@ -204,6 +206,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
+          bun run rebuild:node-pty
           bun run scripts/run-electron-builder.ts --win --x64 --publish always
 
   merge-mac-yml:
