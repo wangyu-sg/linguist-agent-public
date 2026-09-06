@@ -15,7 +15,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| Linguist Agent / upstream app | `0.17.70` / `0.19.31` |
+| Linguist Agent / upstream app | `0.17.71` / `0.19.31` |
 | Electron / Bun | `43.2.0` / `1.3.14` |
 | Pi Runtime | `0.85.0` |
 | Shared | `0.1.69` |

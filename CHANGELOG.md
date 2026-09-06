@@ -6,8 +6,19 @@
 
 ## [Unreleased]
 
+## [0.17.71] - 2026-09-06
+
+### Added
+
+- 为 Context、上下文文档和项目交付预检提供模型可见的只读查询与摘要。
+
+### Changed
+
+- CAT 工具的关键操作和参数说明进入最终模型请求；通用 Prompt、四岗位资源和 Linguist Skills 按本轮合同定稿。
+
 ### Fixed
 
+- 只读 Context 和候选/Proposal 路径不再创建或替换专业 Stage，并继续保留委派范围、revision、locked、结构和事务门禁。
 - 采用 Proma v0.19.31 的 Pi chord/esbuild 打包修复，确保运行时依赖在 packaged Agent 中可解析。
 
 ## [0.17.70] - 2026-09-05
@@ -300,7 +311,8 @@
 
 - 修复上游合并后的 CI 测试口径。
 
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.70...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.71...HEAD
+[0.17.71]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.70...v0.17.71
 [0.17.70]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.69...v0.17.70
 [0.17.69]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.68...v0.17.69
 [0.17.68]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.67...v0.17.68

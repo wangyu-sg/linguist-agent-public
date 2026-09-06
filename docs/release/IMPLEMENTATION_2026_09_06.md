@@ -8,7 +8,7 @@
 - 代码实施结束 SHA：`ab3d6ca108e3a99abb3d1690914abf47d361c6ef`。
 - 实施代码提交：`feat(linguist): add read-only context and delivery summaries`。
 - 本轮固定 Proma 基线仍为 `v0.19.31`，基线提交 `7a3721d7cfe6e107b58c79e27a43fa463dac21ee`，正式合并提交 `b2c71810d750e55d737942d7c3855da36bc8ad59`。
-- App / Bun / Electron / Pi 保持 `0.17.70` / `1.3.14` / `43.2.0` / `0.85.0`；CAT Schema 保持 `19`。
+- 实施阶段 App / Bun / Electron / Pi 为 `0.17.70` / `1.3.14` / `43.2.0` / `0.85.0`；发布准备将 App 提升为 `0.17.71`，CAT Schema 保持 `19`。
 - CAT Tools 从 `0.0.38` 升至 `0.0.39`；Linguist Prompt 为 `3.1.4`；五个 Linguist Skill 为 `1.0.2`；`agent-collaboration` 为 `1.2.1`。
 
 ## 修改文件
@@ -62,4 +62,10 @@
 - 未运行真实收费 Provider、真实 Keychain、人工双语/文化/语音质量、IME/VoiceOver、原生 Open/Save 人工操作、目标平台安装/自动更新，也未替换本机安装版。
 - `delivery.qaFreshness` 有意保持 `not-evaluated`，`verifiedExport` 有意保持 `false`；只读摘要不等同交付资格或独立审校完成。
 - 默认 Skill 升级仍按既有同名 bundled Skill 版本覆盖规则执行；用户自定义同名 Skill 的所有权改造不在本轮。
-- 未创建 Tag、GitHub Release，未推送远端，未执行上游合并；未使用 reset credit。
+- 实施阶段未创建 Tag、GitHub Release，未推送远端；随后按用户授权执行 `0.17.71` 在线更新发布流程，不替换本机安装版，最终状态见下方 Release follow-up；未使用 reset credit。
+
+## Release follow-up
+
+- 发布目标：Linguist Agent `0.17.71`，Proma 固定基线仍为 `v0.19.31`；本次只提升 LA 应用版本，不伪造上游版本或改变 CAT Schema。
+- 发布方式：提交版本号与 CHANGELOG 后推送 `main`，由现有 GitHub Actions 自动创建 tag、构建在线更新资产并创建 Release；不在本机安装构建产物。
+- 发布准备提交和 GitHub Actions 最终状态将在发布完成后补记；在此之前不得把“已创建 Release”当作实现事实。
