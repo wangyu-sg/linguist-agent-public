@@ -105,8 +105,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           bun run build
+          bun run rebuild:node-pty
           bun run sync:runtime-deps
-          ./node_modules/.bin/electron-rebuild -f -w node-pty && bun run ensure-node-pty-helper
+          bun run ensure:node-pty-helper
           bun run scripts/run-electron-builder.ts --mac --arm64 --publish always
 
   build-mac-x64:
@@ -167,8 +168,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           bun run build
+          bun run rebuild:node-pty
           bun run sync:runtime-deps
-          ./node_modules/.bin/electron-rebuild -f -w node-pty && bun run ensure-node-pty-helper
+          bun run ensure:node-pty-helper
           bun run scripts/run-electron-builder.ts --mac --x64 --publish always
 
   build-windows-x64:
@@ -205,8 +207,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bun run build
+          bun run rebuild:node-pty
           bun run sync:runtime-deps
-          ./node_modules/.bin/electron-rebuild -f -w node-pty && bun run ensure-node-pty-helper
+          bun run ensure:node-pty-helper
           bun run scripts/run-electron-builder.ts --win --x64 --publish always
 
   merge-mac-yml:
