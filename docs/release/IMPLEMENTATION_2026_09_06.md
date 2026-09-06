@@ -1,0 +1,65 @@
+# 2026-09-06 优化实施记录
+
+本记录对应《LA-下一轮实施方案-GPT-5.6-Luna-max-2026-09-06.md》，只记录实际落地与验证结果。
+
+## 范围与提交
+
+- 起始 SHA：`ddc6661cf859ac15a81f598cd075130b70c506b0`。
+- 代码实施结束 SHA：`ab3d6ca108e3a99abb3d1690914abf47d361c6ef`。
+- 实施代码提交：`feat(linguist): add read-only context and delivery summaries`。
+- 本轮固定 Proma 基线仍为 `v0.19.31`，基线提交 `7a3721d7cfe6e107b58c79e27a43fa463dac21ee`，正式合并提交 `b2c71810d750e55d737942d7c3855da36bc8ad59`。
+- App / Bun / Electron / Pi 保持 `0.17.70` / `1.3.14` / `43.2.0` / `0.85.0`；CAT Schema 保持 `19`。
+- CAT Tools 从 `0.0.38` 升至 `0.0.39`；Linguist Prompt 为 `3.1.4`；五个 Linguist Skill 为 `1.0.2`；`agent-collaboration` 为 `1.2.1`。
+
+## 修改文件
+
+- CAT Tools：`packages/linguist-cat-tools/src/{types,index,reference-tools,proposal-tools,project-tools,qa-tools,stage-tools,intake-tools,tools.nodetest}.ts` 及 `packages/linguist-cat-tools/package.json`、`bun.lock`。
+- 主进程：`apps/electron/src/main/lib/linguist/{session-cat-tools,project-delivery,project-service,linguist-prompt-builder}.ts`。
+- 定向测试：`apps/electron/src/main/lib/linguist/{evidence-workflow-v1,session-availability}.nodetest.ts`。
+- Prompt 与岗位：`resources/linguist-roles/{general,translator,reviewer,proofreader}.md`、`apps/electron/default-skills/{localization-readiness,translator-brief,release-lqa,cultural-lqa,terminology-candidate-mining,agent-collaboration}/SKILL.md`。
+- 构建事实：`apps/electron/src/renderer/lib/linguist-build-metadata.ts`。
+- 状态文档：`CURRENT_FACTS_SIMPLE.md`、`docs/DOCS_INDEX.md`、`docs/HANDOFF.md`、`docs/architecture/{UPSTREAM_BASELINE.md,proma-baseline.json}` 以及本记录。
+- 未修改 `README.md`、`AGENTS.md`、Proma 核心、CAT Core/Formats/Store/shared、数据库 Schema、Runtime/Provider/权限/Renderer 宿主和无关模块。
+
+## 行为变化
+
+- `cat_get_translation_context` 与 `cat_read_context_doc` 支持显式 `readOnly=true`。只读读取保留真实 Source/Target、规则、分页、参考和图片，跳过 Stage、Context 准备及 Evidence receipt；与 `stageScope` 或 `restartStage=true` 的冲突在任何业务副作用前失败。省略或传 `false` 保持原执行路径。
+- `cat_apply_translations` 仅在 `apply` 分支准备 Stage；`proposal` 分支与 `cat_propose_translations` 不创建或替换专业 Stage，并继续使用可信委派范围、revision、locked、结构、事务和幂等校验。
+- `cat_project_summary({})` 保持原概览。按绑定项目中的 `assetId` 与 `includeDelivery=true` 才投影现有 delivery preflight 和当前会话匹配的专业任务；该查询不运行持久化 QA、不生成 staging/export 文件、不保存文件，`qaFreshness` 固定为 `not-evaluated`，`verifiedExport` 固定为 `false`。
+- 交付预检由 `ProjectDelivery.getDeliveryPreflight` 从原 `prepareDelivery` 连续逻辑抽出并复用；归档项目可读预检，真正导出仍拒绝归档。
+- 九项 CAT 工具的关键操作说明和参数说明进入最终模型请求的 `description`/schema；对应重复 `promptGuidelines` 已移除。通用 Prompt、四岗位资源和五个 Linguist Skill 使用方案定稿；既有规则分页协议用于减少同一请求内重复规则，没有新增缓存。
+
+## Touchpoint 账本
+
+- 新增 Touchpoint：`0`。
+- 删除 Touchpoint：`0`。
+- 本轮只修改已登记的 Linguist CAT、Prompt、岗位/Skill 和事实文档路径；未扩大 `docs/architecture/proma-touchpoints.json`，未改变 Proma 固定基线或 CAT Schema。
+
+## 实际验证
+
+| 命令 | 结果 |
+|---|---|
+| `bun install --frozen-lockfile` | 通过；锁文件未产生无关变更，检查 1389 installs / 1521 packages。 |
+| `bun run --cwd packages/linguist-cat-tools test` | 47 pass / 0 fail。覆盖只读状态链、Proposal 委派范围和窄摘要投影。 |
+| `bun run typecheck` | 11 个 workspace 全部通过。 |
+| `bun run test` | 377 pass / 0 fail：主集合 255、MCP 1、项目切换 1、协作 4、Store 57、CAT Tools 47、Stage 1、Delivery 3、Evidence 5、Host lifecycle 3。 |
+| `node --test tests/linguist-fusion-architecture.test.mjs` | 14 pass / 0 fail。 |
+| `bun run check:boundaries` | 4 pass / 0 fail；触点登记无新增/陈旧项。 |
+| `node scripts/verify-host-seams.mjs` | `host seams verified: 12`。 |
+| `bun test apps/electron/src/main/lib/linguist/linguist-prompt-builder.test.ts tests/linguist-build-metadata.test.ts tests/documentation-contract.test.ts` | 7 pass / 0 fail。 |
+| 临时 HOME 下默认 Skill 同步检查 | 1 pass；active/inactive 旧目录均升级到 `1.0.2`，inactive 状态保留；临时测试文件已删除。 |
+| `bun run electron:build` | 通过；主进程、Pi/Terminal runtime、preload、renderer、CLI、native helpers、资源和产品身份均完成构建。 |
+| `bun run --cwd apps/electron smoke:pack` | 通过；未签名 macOS arm64 packaged artifact 完整性通过。 |
+| `PATH=.../apps/electron/node_modules/.bin:$PATH bun run --cwd apps/electron smoke:vertical` | 通过：package、依赖恢复、Agent 19/19、Chat 19/19、项目切换、Linguist 21/21；报告为 `LF-003 PASS` 且 `coverage=partial`。 |
+| `jq empty docs/architecture/proma-baseline.json && git diff --check` | 通过。 |
+
+垂直冒烟第一次启动因此前打包步骤已经清空开发依赖而出现 `esbuild: command not found`，第二次先按脚本顺序恢复 `bun install --frozen-lockfile` 后通过；没有修改冒烟脚本。最终证据在 `apps/electron/out/smoke/vertical/vertical-smoke-report.json`，其中原生 Open/Save 对话框保持 `MANUAL/BLOCKED`，未折算为自动通过。
+
+测试中的 Provider 捕获使用真实 Pi Agent → `streamSimple` → 本地 fake HTTP Provider 链和合成资料；它证明工具说明进入最终请求，不证明真实收费 Provider 的自主工具选择或语言质量。
+
+## 未验证与剩余风险
+
+- 未运行真实收费 Provider、真实 Keychain、人工双语/文化/语音质量、IME/VoiceOver、原生 Open/Save 人工操作、目标平台安装/自动更新，也未替换本机安装版。
+- `delivery.qaFreshness` 有意保持 `not-evaluated`，`verifiedExport` 有意保持 `false`；只读摘要不等同交付资格或独立审校完成。
+- 默认 Skill 升级仍按既有同名 bundled Skill 版本覆盖规则执行；用户自定义同名 Skill 的所有权改造不在本轮。
+- 未创建 Tag、GitHub Release，未推送远端，未执行上游合并；未使用 reset credit。

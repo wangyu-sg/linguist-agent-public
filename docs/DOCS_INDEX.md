@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-09-05
+更新时间：2026-09-06
 
 ## 当前真源
 
@@ -29,6 +29,7 @@
 ## 发布与历史
 
 - [2026-09-05 优化实施记录](./release/IMPLEMENTATION_2026_09_05.md) — 本轮修改、实际验证与尚缺资格。
+- [2026-09-06 优化实施记录](./release/IMPLEMENTATION_2026_09_06.md) — 工具说明、只读查询、岗位/Skill 定稿与定向验证。
 
 - [SBOM.md](./release/SBOM.md) / [sbom-full.json](./release/sbom-full.json)
 - [KNOWN_LIMITATIONS.md](./release/KNOWN_LIMITATIONS.md)

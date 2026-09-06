@@ -14,7 +14,7 @@
 | Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.85.0` |
 | React / Jotai / Vite | `18.3.1` / `2.20.2` / `6.4.3` |
 | Shared | `0.1.69` |
-| CAT Core / Formats / Store / Tools | `0.0.24` / `0.0.13` / `0.0.43` / `0.0.38` |
+| CAT Core / Formats / Store / Tools | `0.0.24` / `0.0.13` / `0.0.43` / `0.0.39` |
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
@@ -34,13 +34,14 @@
 - CAT 结果自含正文/图片；最终请求经过 Pi SDK 和 utility 边界，以 HTTP 2xx 响应确认提交，旧工具级回执不计新覆盖。跨页正文按 UTF-16 区间累计；图片目录和规则均可继续读取。
 - Stage 独立于 Session；范围/相关资料变化和显式重审创建新轮，恢复复用原轮。本轮完成同时要求当前 revision 的本人决定、必要证据覆盖和零阻断；不能借用其他会话或旧任务的资格。
 - CAT 缺失/损坏时绑定会话仍可运行通用 Agent；归档只读。普通 General 协作不强制冻结空 CAT 范围，专业委派仍冻结范围。CAS、locked、受管 Source、结构检查与事务继续生效。
-- Prompt 合同 `3.1.3`；Digest、Stage 和工具共用完整项目规则。必要术语/冲突不能被可选限额清空，资料不够时明确显示缺口。
+- Prompt 合同 `3.1.4`；报告/候选准备可用 `readOnly` Context，不创建或替换专业 Stage；规则按既有分页协议续读。必要术语/冲突不能被可选限额清空，资料不够时明确显示缺口。
+- `cat_project_summary({})` 保持原概览；按 `assetId + includeDelivery=true` 才读取只读交付预检和当前会话专业任务摘要。它不运行 QA、不生成导出、不证明 QA 新鲜或 verified export。
 
 ## 本轮验证与发布证据
 
 - 本轮已将 Proma `v0.19.31`（`7a3721d7`）合并为 `b2c71810`，App 版本保持 `0.17.70`；本地 `smoke:pack` 已确认 `esbuild 0.28.1` 及平台二进制进入 `app.asar.unpacked`，新的 LA Release 尚未创建。此前发布准备见历史 [0.17.70 验证记录](./docs/release/VALIDATION_0_17_70.md)，不得把该包哈希当作本轮结果。
-- 默认集合覆盖真实 SQLite、Worker、SDK 转换和本地 HTTP；旧格式合成项目与 Pi 会话通过原译文/参考读取、备份、会话恢复、新轮写回、verified 导出、重导和损坏备份拒绝。具体命令、数量与边界见 [本轮实施记录](./docs/release/IMPLEMENTATION_2026_09_05.md)。
-- 最初原生候选暴露 ESM 加载和 utility 回调克隆两项集成回归，已修正。本轮 `electron:build` 与 `smoke:pack` 通过；`smoke:vertical` 的真实 HTTP 探针因沙箱禁止监听 `127.0.0.1`，窗口探针因沙箱限制无法启动，证据保持 partial，不能把旧候选结果挪作本轮结果。
+- 默认集合覆盖真实 SQLite、Worker、SDK 转换和本地 HTTP；旧格式合成项目与 Pi 会话通过原译文/参考读取、备份、会话恢复、新轮写回、verified 导出、重导和损坏备份拒绝。上一轮具体命令、数量与边界见 [2026-09-05 实施记录](./docs/release/IMPLEMENTATION_2026_09_05.md)；本轮定向证据见 [2026-09-06 实施记录](./docs/release/IMPLEMENTATION_2026_09_06.md)。
+- 最初原生候选暴露 ESM 加载和 utility 回调克隆两项集成回归，已修正。本轮 `electron:build`、`smoke:pack` 与 `smoke:vertical` 均通过；垂直证据仍按合同标记 partial，并保留原生 Open/Save 对话框人工阻断，不能把人工项折算为自动通过。
 - 模型请求均使用合成资料和本地 Fake Provider；没有测试真实收费 Provider、真实 Keychain、原生 Open/Save 或语言质量。用户安装版保持原状，本轮未检查其哈希。
 
 真实 Provider 四岗位迷你任务、质量对照和人工资格仍见 [TODO](./TODO.md) 与 [已知限制](./docs/release/KNOWN_LIMITATIONS.md)。
