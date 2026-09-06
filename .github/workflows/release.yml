@@ -106,8 +106,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
-          export PATH="$PWD/node_modules/.bin:$PATH"
-          bun run rebuild:node-pty
+          ./node_modules/.bin/electron-rebuild -f -w node-pty && bun run ensure-node-pty-helper
           bun run scripts/run-electron-builder.ts --mac --arm64 --publish always
 
   build-mac-x64:
@@ -169,8 +168,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
-          export PATH="$PWD/node_modules/.bin:$PATH"
-          bun run rebuild:node-pty
+          ./node_modules/.bin/electron-rebuild -f -w node-pty && bun run ensure-node-pty-helper
           bun run scripts/run-electron-builder.ts --mac --x64 --publish always
 
   build-windows-x64:
@@ -208,8 +206,7 @@ jobs:
         run: |
           bun run build
           bun run sync:runtime-deps
-          export PATH="$PWD/node_modules/.bin:$PATH"
-          bun run rebuild:node-pty
+          ./node_modules/.bin/electron-rebuild -f -w node-pty && bun run ensure-node-pty-helper
           bun run scripts/run-electron-builder.ts --win --x64 --publish always
 
   merge-mac-yml:
