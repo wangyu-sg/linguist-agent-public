@@ -84,3 +84,11 @@
 - 新暴露失败：Linguist 探针点击原始行上下文时，语言资产浮层拦截指针导致超时。源码中 workspace 模式始终启用浮层，而 SegmentGrid 的让位 spacer 仅在 max-lg 显示，与现象吻合；产品布局修复和复验尚未完成。未使用强制点击或跳过断言。
 - 本轮仅修复 CI 入口、报告门禁及证据保存，并更正事实文档；Touchpoint 新增/删除均为 0。本地定向测试 20 项、架构/公开身份 15 项、边界 4 项通过；报告门禁已验证拒绝旧 HEAD、失败和缺失步骤。
 - 本次不修改应用版本、不重新发布或替换本机安装版。
+
+## 2026-09-07 Linguist 浮层遮挡修复
+
+- 独立修复提交 `209c2640523a7d5badc02aad11dab172fce22e23` 已推送。修改 `LinguistWorkbenchShell.tsx`，让网格主区域预留底部浮层实际高度；修改 `SegmentGrid.tsx`，删除旧 scroll-padding 和窄屏 spacer。workspace 全宽度生效，page 宽屏仍使用原有流式布局。Touchpoint 新增/删除均为 0，未修改 Proma 基线、CAT Schema 或版本。
+- 保留原探针和点击断言。真实 CI [34080231269](https://github.com/wangyu-sg/linguist-agent-public/actions/runs/34080231269) 的 validate 与 macOS arm64 package-verify 均通过；后者作业 `101614439559` 实际运行 4 分 55 秒。
+- 已下载 artifact `packaged-vertical-34080231269-1`：报告 `sourceHead` 匹配该修复提交，`workingTreeDirty=false`，六步均 passed/exitCode=0，六份日志非空；`runStatus=passed`，`coverageStatus=partial`。报告记录 app.asar SHA-256 为 `93487f22c8274e5bb7f727db093a86a9a083152b2a52d854f643bf757b7cbcbc`，未独立下载应用核对哈希。
+- Linguist 日志为 21 PASS / 0 FAIL / 2 MANUAL，已走完项目定位、重启恢复、阶段确认、模型读取与 Proposal、QA 门禁、接受 Proposal、QA waiver、备份恢复与 Worker、导出重导入及最终交付状态恢复。Native Open/Save 仍为人工项；fake Provider 不构成真实语言质量证据。
+- 本地 typecheck、9 项定向测试、15 项架构/公开身份检查、4 项边界检查与 diff 检查通过。未替换本机安装版、未发布新版本；该修复不在既有 0.17.71 发布包内。

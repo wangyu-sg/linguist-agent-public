@@ -6,6 +6,6 @@ B–F 已完成上一轮自含多模态、最终请求回执、分页预算、�
 
 全部提交、修改文件、触点增删、失败及修正、真实运行状态、迁移与回滚边界见 [本轮实施记录](./release/IMPLEMENTATION_2026_09_06.md)；上一轮记录见 [2026-09-05 实施记录](./release/IMPLEMENTATION_2026_09_05.md)。历史 [此前验证记录](./release/VALIDATION_0_17_70.md) 不能覆盖新证据。
 
-本轮未执行真实收费 Provider、人工语言质量、Native Open/Save、IME/VoiceOver、目标平台安装和本机安装替换；这些资格继续保持未验证。在线更新 Release 已公开，平台发布已完成；此前 CI 打包验证空跑，修复后的 CI 已执行并拦截 Linguist 底部面板遮挡段落点击的问题，详见本轮实施记录。不要搜集用户凭据或用客户文件替代 fixture。README / AGENTS 的必要修订仍未修改。
+本轮未执行真实收费 Provider、人工语言质量、Native Open/Save、IME/VoiceOver、目标平台安装和本机安装替换；这些资格继续保持未验证。在线更新 Release 已公开，平台发布已完成；此前 CI 打包验证空跑，修复后的 CI 已执行并拦截 Linguist 底部面板遮挡段落点击的问题；布局修复 `209c2640` 已由 CI `34080231269` 的真实六步链路及下载日志验证通过，人工覆盖仍为 partial，详见本轮实施记录。不要搜集用户凭据或用客户文件替代 fixture。README / AGENTS 的必要修订仍未修改。
 
 当前规范入口：[文档索引](./DOCS_INDEX.md)、[基线](./architecture/proma-baseline.json)、[触点](./architecture/proma-touchpoints.json)、[限制](./release/KNOWN_LIMITATIONS.md)、[TODO](../TODO.md)。
