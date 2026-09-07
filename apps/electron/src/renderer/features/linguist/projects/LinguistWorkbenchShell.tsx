@@ -388,7 +388,7 @@ export function LinguistWorkbenchShell({
             presentation === 'workspace' && 'min-w-0',
           )}
           style={{
-            // 语言资产面板在 max-lg 转为浮层时，把浮层高度传给网格滚动区让位。
+            // 工作区始终使用浮层，页面仅窄屏使用；由主区域留出浮层实际占用的高度。
             '--bottom-dock-overlay-height': bottomDock !== undefined && uiState.bottomDockOpen
               ? `${uiState.bottomDockHeight}px`
               : '0px',
@@ -399,7 +399,13 @@ export function LinguistWorkbenchShell({
             scanRevision={unknownTagScanRevision(project.updatedAt, summary?.assets ?? [])}
             archived={project.archivedAt !== undefined}
           />
-          <main data-workbench-slot="segment-grid" className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <main
+            data-workbench-slot="segment-grid"
+            className={cn(
+              'min-h-0 min-w-0 flex-1 overflow-hidden pb-[var(--bottom-dock-overlay-height)]',
+              presentation === 'page' && 'lg:pb-0',
+            )}
+          >
             {children}
           </main>
 
