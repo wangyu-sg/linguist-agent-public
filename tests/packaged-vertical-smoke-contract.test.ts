@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dir, '..')
@@ -9,6 +10,25 @@ function source(path: string): string {
 }
 
 describe('LF-003 Packaged Vertical Smoke 合同', () => {
+  test('CI 报告门禁拒绝旧提交、失败或缺失步骤', () => {
+    const workflow = source('.github/workflows/ci.yml')
+    const filter = workflow.match(/jq -e --arg head "\$\(git rev-parse HEAD\)" '([\s\S]*?)'/)![1]!
+    const report = {
+      sourceHead: 'current', runStatus: 'passed',
+      steps: ['package', 'workspace-deps', 'agent', 'chat', 'project-switch', 'linguist-current']
+        .map(id => ({ id, status: 'passed', exitCode: 0 })),
+    }
+    const check = (input: unknown) => spawnSync('jq', ['-e', '--arg', 'head', 'current', filter], {
+      input: JSON.stringify(input), encoding: 'utf8',
+    }).status
+    expect(check(report)).toBe(0)
+    expect(check({ ...report, sourceHead: 'old' })).not.toBe(0)
+    expect(check({ ...report, runStatus: 'failed' })).not.toBe(0)
+    expect(check({ ...report, steps: report.steps.slice(1) })).not.toBe(0)
+    expect(check({ ...report, steps: report.steps.map(step => ({ ...step, exitCode: 1 })) })).not.toBe(0)
+    expect(check({})).not.toBe(0)
+  })
+
   test('Given runtime sync replaces app node_modules, When packaging starts, Then native rebuild runs first', () => {
     const manifest = JSON.parse(source('apps/electron/package.json')) as { scripts: Record<string, string> }
 

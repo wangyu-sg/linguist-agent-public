@@ -75,12 +75,22 @@ jobs:
       - name: 安装依赖
         run: bun install --frozen-lockfile
 
-      - name: 构建并同步运行时依赖
-        run: |
-          bun --cwd apps/electron run build
-          bun --cwd apps/electron run sync:runtime-deps
-
       - name: 打包与垂直链路验证
+        working-directory: apps/electron
         run: |
-          bun --cwd apps/electron run smoke:pack
-          bun --cwd apps/electron run smoke:vertical
+          rm -rf out/smoke/vertical
+          bun run smoke:vertical
+          jq -e --arg head "$(git rev-parse HEAD)" '
+            .sourceHead == $head and
+            .runStatus == "passed" and
+            ([.steps[].id] == ["package", "workspace-deps", "agent", "chat", "project-switch", "linguist-current"]) and
+            all(.steps[]; .status == "passed" and .exitCode == 0)
+          ' out/smoke/vertical/vertical-smoke-report.json
+
+      - name: 保存打包与垂直链路证据
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: packaged-vertical-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/electron/out/smoke/vertical/
+          if-no-files-found: error

@@ -71,6 +71,12 @@
 - 发布目标：Linguist Agent `0.17.71`，Proma 固定基线仍为 `v0.19.31`；本次只提升 LA 应用版本，不伪造上游版本或改变 CAT Schema。
 - 发布方式：提交版本号与 CHANGELOG 后推送 `main`，由现有 GitHub Actions 自动创建 tag、构建在线更新资产并创建 Release；不在本机安装构建产物。
 - 最终提交为 `9b16eb77`，已推送到 `origin/main`；远端 `v0.17.71` Tag 指向 `bafb65f61ef80d482d9c7e7630eb82bba713b3e2`。
-- GitHub Actions Release run `34011582164` 已成功完成完整 CI、macOS arm64/x64、Windows x64 构建、`latest-mac.yml` 合并和公开步骤。
+- GitHub Actions Release run `34011582164` 已完成 macOS arm64/x64、Windows x64 构建、`latest-mac.yml` 合并和公开步骤。
 - [Linguist Agent 0.17.71 Release](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.71) 已公开；已核对 `latest-mac.yml`、`latest.yml`、macOS arm64/x64 的 DMG/ZIP 和 Windows x64 EXE 资产，公开资产中无 blockmap。
 - 本机安装版未替换；真实收费 Provider、人工语言质量、目标平台安装和实际在线更新消费仍未验证；未使用 reset credit。
+
+## 2026-09-07 CI 证据更正
+
+- Release run `34011582164` 的 package-verify 作业 `101428542096` 与后续 CI `34012237919` 的作业 `101430182998` 均仅输出 Bun 帮助，未执行四条预期脚本。撤回此前将其 success 视为 packaged/vertical 验证完成的结论；平台发布资产与本地验证属于独立证据。
+- CI 改为在应用目录执行现有 `smoke:vertical`，清除该入口旧报告后要求本次 HEAD、六步状态和退出码均匹配，再上传报告与步骤日志；人工覆盖仍保持 partial。
+- 修复后的真实 CI 结果待补记。本次不修改应用版本、不重新发布或替换本机安装版。

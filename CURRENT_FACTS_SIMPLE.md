@@ -39,7 +39,7 @@
 
 ## 本轮验证与发布证据
 
-- 本轮已将 Proma `v0.19.31`（`7a3721d7`）合并为 `b2c71810`，App 版本为 `0.17.71`；本地 `smoke:pack` 已确认 `esbuild 0.28.1` 及平台二进制进入 `app.asar.unpacked`。GitHub Actions Release run `34011582164` 成功，公开的 [Linguist Agent 0.17.71 Release](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.71) 已包含 `latest-mac.yml`、`latest.yml`、macOS arm64/x64 DMG/ZIP 和 Windows x64 EXE。此前发布准备见历史 [0.17.70 验证记录](./docs/release/VALIDATION_0_17_70.md)，不得把该包哈希当作本轮结果。
+- 本轮已将 Proma `v0.19.31`（`7a3721d7`）合并为 `b2c71810`，App 版本为 `0.17.71`；本地 `smoke:pack` 已确认 `esbuild 0.28.1` 及平台二进制进入 `app.asar.unpacked`。GitHub Actions Release run `34011582164` 发布成功，但 2026-09-07 核查确认其中 package-verify 仅输出 Bun 帮助，未执行打包或垂直验证；后续 CI `34012237919` 也存在同样空跑。修复后真实 CI 结果待验证。公开的 [Linguist Agent 0.17.71 Release](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.71) 已包含 `latest-mac.yml`、`latest.yml`、macOS arm64/x64 DMG/ZIP 和 Windows x64 EXE。此前发布准备见历史 [0.17.70 验证记录](./docs/release/VALIDATION_0_17_70.md)，不得把该包哈希当作本轮结果。
 - 默认集合覆盖真实 SQLite、Worker、SDK 转换和本地 HTTP；旧格式合成项目与 Pi 会话通过原译文/参考读取、备份、会话恢复、新轮写回、verified 导出、重导和损坏备份拒绝。上一轮具体命令、数量与边界见 [2026-09-05 实施记录](./docs/release/IMPLEMENTATION_2026_09_05.md)；本轮定向证据见 [2026-09-06 实施记录](./docs/release/IMPLEMENTATION_2026_09_06.md)。
 - 最初原生候选暴露 ESM 加载和 utility 回调克隆两项集成回归，已修正。本轮 `electron:build`、`smoke:pack` 与 `smoke:vertical` 均通过；垂直证据仍按合同标记 partial，并保留原生 Open/Save 对话框人工阻断，不能把人工项折算为自动通过。
 - 模型请求均使用合成资料和本地 Fake Provider；没有测试真实收费 Provider、真实 Keychain、原生 Open/Save 或语言质量。用户安装版保持原状，本轮未检查其哈希。
