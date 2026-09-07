@@ -79,4 +79,8 @@
 
 - Release run `34011582164` 的 package-verify 作业 `101428542096` 与后续 CI `34012237919` 的作业 `101430182998` 均仅输出 Bun 帮助，未执行四条预期脚本。撤回此前将其 success 视为 packaged/vertical 验证完成的结论；平台发布资产与本地验证属于独立证据。
 - CI 改为在应用目录执行现有 `smoke:vertical`，清除该入口旧报告后要求本次 HEAD、六步状态和退出码均匹配，再上传报告与步骤日志；人工覆盖仍保持 partial。
-- 修复后的真实 CI 结果待补记。本次不修改应用版本、不重新发布或替换本机安装版。
+- 修复提交 `7c20356d5852730dffaa7b70cd25104e907f4e23` 已推送。真实 CI [34078566618](https://github.com/wangyu-sg/linguist-agent-public/actions/runs/34078566618) 的 validate 通过；package-verify 作业 `101609855576` 实际执行后失败。
+- 已下载 artifact `packaged-vertical-34078566618-1` 核验：`sourceHead` 匹配修复提交，`workingTreeDirty=false`；六步日志均存在且非空。package、workspace-deps、agent、chat、project-switch 为 passed，linguist-current 为 failed（exitCode=1）；`runStatus=failed`、`coverageStatus=partial`，Native Open/Save 保持 blocked。
+- 新暴露失败：Linguist 探针点击原始行上下文时，语言资产浮层拦截指针导致超时。源码中 workspace 模式始终启用浮层，而 SegmentGrid 的让位 spacer 仅在 max-lg 显示，与现象吻合；产品布局修复和复验尚未完成。未使用强制点击或跳过断言。
+- 本轮仅修复 CI 入口、报告门禁及证据保存，并更正事实文档；Touchpoint 新增/删除均为 0。本地定向测试 20 项、架构/公开身份 15 项、边界 4 项通过；报告门禁已验证拒绝旧 HEAD、失败和缺失步骤。
+- 本次不修改应用版本、不重新发布或替换本机安装版。
