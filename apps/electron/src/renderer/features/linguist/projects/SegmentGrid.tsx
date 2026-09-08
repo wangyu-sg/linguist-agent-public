@@ -193,7 +193,7 @@ export function SegmentGrid({
   ])
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl bg-content-area shadow-sm ring-1 ring-border/35">
+    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-auto rounded-xl bg-content-area shadow-sm ring-1 ring-border/35">
       <div
         role="grid"
         aria-rowcount={total + 1}
@@ -202,7 +202,7 @@ export function SegmentGrid({
         aria-readonly={archived}
         aria-label="Segment Grid"
         aria-describedby={instructionsId}
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex min-h-0 min-w-[760px] flex-1 flex-col"
       >
         <SegmentGridHeader />
         <VirtualSegmentViewport

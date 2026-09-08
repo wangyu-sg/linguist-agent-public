@@ -1034,8 +1034,8 @@ export function SegmentEditor({
 
   return (
     <section aria-label="Segment 编辑器" className="flex h-full min-h-0 flex-col gap-3 overflow-hidden p-4">
-      <div className="grid shrink-0 gap-2 sm:grid-cols-[minmax(0,1fr)_180px_140px]">
-        <label className="relative">
+      <div className="flex shrink-0 flex-wrap gap-2">
+        <label className="relative min-w-[160px] flex-1">
           <Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-foreground/35" />
           <span className="sr-only">搜索源文或译文</span>
           <input
@@ -1046,7 +1046,7 @@ export function SegmentEditor({
             className="h-9 w-full rounded-lg bg-background/70 pl-9 pr-3 text-[13px] outline-none ring-1 ring-border/50 focus:ring-primary/50"
           />
         </label>
-        <label>
+        <label className="min-w-[160px] flex-1">
           <span className="sr-only">批次筛选</span>
           <select
             value={filters.assetId ?? ''}
@@ -1059,7 +1059,7 @@ export function SegmentEditor({
             ))}
           </select>
         </label>
-        <label>
+        <label className="min-w-[140px] flex-1">
           <span className="sr-only">状态筛选</span>
           <select
             value={filters.currentStageState ?? ''}
@@ -1085,7 +1085,7 @@ export function SegmentEditor({
           <span>{data === undefined ? '正在查询…' : `共 ${data.total} 段`}</span>
           <span>{selectedIds.size} 项已选择</span>
         </span>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() => void goToNextUntouched()}

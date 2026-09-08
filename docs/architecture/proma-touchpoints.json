@@ -133,7 +133,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "EventKit 在 env 有效时释放 TSFN，env teardown 仅断开原生订阅。固定上游 bbf577a8 尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "EventKit 在 env 有效时释放 TSFN，env teardown 仅断开原生订阅。初次对比基线 bbf577a8 时尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-macos-eventkit-addon"
     },
     {
@@ -239,7 +239,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "CLI 编译使用正在执行脚本的 Bun，避免 PATH 解析失败。固定上游 bbf577a8 尚无等价实现；本地来源 ae9599c7。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "CLI 编译使用正在执行脚本的 Bun，避免 PATH 解析失败。初次对比基线 bbf577a8 时尚无等价实现；本地来源 ae9599c7。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-build-cli"
     },
     {
@@ -248,7 +248,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "原生头文件与 Electron 从 workspace 安装位置解析。固定上游 bbf577a8 尚无等价实现；本地来源 fa224430。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "原生头文件与 Electron 从 workspace 安装位置解析。初次对比基线 bbf577a8 时尚无等价实现；本地来源 fa224430。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-build-eventkit-native"
     },
     {
@@ -257,7 +257,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Electron Builder 使用真实 Node，剔除 Bun lifecycle shim。固定上游 bbf577a8 尚无等价实现；本地来源 e91a1518。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Electron Builder 使用真实 Node，剔除 Bun lifecycle shim。初次对比基线 bbf577a8 时尚无等价实现；本地来源 e91a1518。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-run-electron-builder"
     },
     {
@@ -266,7 +266,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "状态窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 707d6478。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "状态窗口显式启用 sandbox 与 webSecurity。初次对比基线 bbf577a8 时尚无等价实现；本地来源 707d6478。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-agent-status-hover-window"
     },
     {
@@ -319,7 +319,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Agent Island 顶层导航仅接受内部受信源。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Agent Island 顶层导航仅接受内部受信源。初次对比基线 bbf577a8 时尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-agent-island-navigation-policy"
     },
     {
@@ -328,7 +328,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "协作模型列表覆盖全部已启用渠道。固定上游 bbf577a8 尚无等价实现；本地来源 291e7e6b。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "协作模型列表覆盖全部已启用渠道。初次对比基线 bbf577a8 时尚无等价实现；本地来源 291e7e6b。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-agent-model-selection"
     },
     {
@@ -442,7 +442,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "独立预览窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "独立预览窗口显式启用 sandbox 与 webSecurity。初次对比基线 bbf577a8 时尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-detached-preview-window"
     },
     {
@@ -491,7 +491,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "向 JS 暴露 EventKit disposeChanges 生命周期。固定上游 bbf577a8 尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "向 JS 暴露 EventKit disposeChanges 生命周期。初次对比基线 bbf577a8 时尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-mac-eventkit-native-addon"
     },
     {
@@ -500,7 +500,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "MCP 凭据复用共享输入类型且强制校验 stdio 命令绑定。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "MCP 凭据复用共享输入类型且强制校验 stdio 命令绑定。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-mcp-oauth-service"
     },
     {
@@ -517,7 +517,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "停止 Planning coordinator 时释放原生订阅。固定上游 bbf577a8 尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "停止 Planning coordinator 时释放原生订阅。初次对比基线 bbf577a8 时尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-planning-native-sync-coordinator"
     },
     {
@@ -526,7 +526,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Planning 服务把释放请求交给 EventKit addon。固定上游 bbf577a8 尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Planning 服务把释放请求交给 EventKit addon。初次对比基线 bbf577a8 时尚无等价实现；本地来源 851b5686。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-planning-native-sync-service"
     },
     {
@@ -543,7 +543,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "快捷任务窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "快捷任务窗口显式启用 sandbox 与 webSecurity。初次对比基线 bbf577a8 时尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-quick-task-window"
     },
     {
@@ -568,7 +568,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "主进程测试共享 Electron mock 导出及加密故障注入。固定上游 bbf577a8 尚无等价实现；本地来源 c9a802cf。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "主进程测试共享 Electron mock 导出及加密故障注入。初次对比基线 bbf577a8 时尚无等价实现；本地来源 c9a802cf。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-electron-mock"
     },
     {
@@ -585,7 +585,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Todo CAS 失败清理新会话，清理失败保留恢复信息。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Todo CAS 失败清理新会话，清理失败保留恢复信息。初次对比基线 bbf577a8 时尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-todo-agent-start"
     },
     {
@@ -610,7 +610,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Vault 建目录使用 mkdir 原子失败语义。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Vault 建目录使用 mkdir 原子失败语义。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-vault-service"
     },
     {
@@ -619,7 +619,7 @@
       "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：语音提交以 Renderer 消费确认决定结果。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：语音提交以 Renderer 消费确认决定结果。初次对比基线 bbf577a8 时尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
     },
     {
       "file": "apps/electron/src/main/lib/voice-dictation-window.ts",
@@ -627,7 +627,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "语音窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 34921b0c。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "语音窗口显式启用 sandbox 与 webSecurity。初次对比基线 bbf577a8 时尚无等价实现；本地来源 34921b0c。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-voice-dictation-window"
     },
     {
@@ -644,7 +644,7 @@
       "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：Memory 窗口显式启用 sandbox 与 webSecurity。固定上游 bbf577a8 尚无等价实现；本地来源 a8b1ef35。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：Memory 窗口显式启用 sandbox 与 webSecurity。初次对比基线 bbf577a8 时尚无等价实现；本地来源 a8b1ef35。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
     },
     {
       "file": "apps/electron/src/main/lib/workspace-watcher.ts",
@@ -773,7 +773,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "集成目录删除无效状态排序输入。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "集成目录删除无效状态排序输入。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-integrationcatalog"
     },
     {
@@ -790,7 +790,7 @@
       "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：目录排序只消费 priority 与 placement，凭据地址取实际配置。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：目录排序只消费 priority 与 placement，凭据地址取实际配置。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/useAgentSkillsData.ts",
@@ -798,7 +798,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "MCP 开关采用主进程验证结果而非本地乐观覆盖。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "MCP 开关采用主进程验证结果而非本地乐观覆盖。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-useagentskillsdata"
     },
     {
@@ -1000,7 +1000,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "滚动到底部按钮提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "滚动到底部按钮提供无障碍名称。初次对比基线 bbf577a8 时尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-conversation"
     },
     {
@@ -1107,7 +1107,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Chat 标题编辑按钮提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 fc8e8f3d。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Chat 标题编辑按钮提供无障碍名称。初次对比基线 bbf577a8 时尚无等价实现；本地来源 fc8e8f3d。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-chatheader"
     },
     {
@@ -1133,7 +1133,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "上下文设置按钮提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "上下文设置按钮提供无障碍名称。初次对比基线 bbf577a8 时尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-contextsettingspopover"
     },
     {
@@ -1142,7 +1142,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "模型搜索输入提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 cf2832f3。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "模型搜索输入提供无障碍名称。初次对比基线 bbf577a8 时尚无等价实现；本地来源 cf2832f3。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-modelselector"
     },
     {
@@ -1151,7 +1151,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "提示词编辑输入关联 label。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "提示词编辑输入关联 label。初次对比基线 bbf577a8 时尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-prompteditorsidebar"
     },
     {
@@ -1168,7 +1168,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "工具弹层提供无障碍名称。固定上游 bbf577a8 尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "工具弹层提供无障碍名称。初次对比基线 bbf577a8 时尚无等价实现；本地来源 e877a211。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-toolselectorpopover"
     },
     {
@@ -1217,7 +1217,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "FileBrowser 用 roots 与单一加载结果隔离异步目录状态。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "FileBrowser 用 roots 与单一加载结果隔离异步目录状态。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-filebrowser"
     },
     {
@@ -1226,7 +1226,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "文件树加载状态并入唯一调用方。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "文件树加载状态并入唯一调用方。初次对比基线 bbf577a8 时尚无等价实现；本地合并取舍来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-file-browser-load-state"
     },
     {
@@ -1459,7 +1459,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Tab 滚动区域给操作按钮留出不可滚动边距。固定上游 bbf577a8 尚无等价实现；本地来源 8a026fa5。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Tab 滚动区域给操作按钮留出不可滚动边距。初次对比基线 bbf577a8 时尚无等价实现；本地来源 8a026fa5。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-tab-bar-action-layout"
     },
     {
@@ -1492,7 +1492,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Sheet 关闭按钮退出标题栏拖拽区。固定上游 bbf577a8 尚无等价实现；本地来源 fc8e8f3d。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Sheet 关闭按钮退出标题栏拖拽区。初次对比基线 bbf577a8 时尚无等价实现；本地来源 fc8e8f3d。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-sheet"
     },
     {
@@ -1629,7 +1629,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "macOS 标题栏避让原生红绿灯。固定上游 bbf577a8 尚无等价实现；本地来源 aaf24752。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "macOS 标题栏避让原生红绿灯。初次对比基线 bbf577a8 时尚无等价实现；本地来源 aaf24752。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-window-titlebar-layout"
     },
     {
@@ -1782,7 +1782,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "代码块支持键盘聚焦和横向滚动。固定上游 bbf577a8 尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "代码块支持键盘聚焦和横向滚动。初次对比基线 bbf577a8 时尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-codeblock"
     },
     {
@@ -1791,7 +1791,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "路径识别 helper 并入路径 chip。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "路径识别 helper 并入路径 chip。初次对比基线 bbf577a8 时尚无等价实现；本地合并取舍来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-file-path-chip-utils"
     },
     {
@@ -1800,7 +1800,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "路径 chip 复用现有解析与导航状态。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "路径 chip 复用现有解析与导航状态。初次对比基线 bbf577a8 时尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-file-path-chip"
     },
     {
@@ -1809,7 +1809,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "独立预览复用共享内容错误边界。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "独立预览复用共享内容错误边界。初次对比基线 bbf577a8 时尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-detachedpreviewapp"
     },
     {
@@ -1818,7 +1818,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "文件删除清理复用已有批量查询。固定上游 bbf577a8 尚无等价实现；本地来源 6025d2e2。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "文件删除清理复用已有批量查询。初次对比基线 bbf577a8 时尚无等价实现；本地来源 6025d2e2。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-diffchangeslist"
     },
     {
@@ -1827,7 +1827,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Markdown 滚动恢复使用单一代际生命周期。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Markdown 滚动恢复使用单一代际生命周期。初次对比基线 bbf577a8 时尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-difftabcontent"
     },
     {
@@ -1836,7 +1836,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "预览专用错误边界由共享边界替代。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "预览专用错误边界由共享边界替代。初次对比基线 bbf577a8 时尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-previewcontenterrorboundary"
     },
     {
@@ -1845,7 +1845,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "滚动恢复 helper 并入组件。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "滚动恢复 helper 并入组件。初次对比基线 bbf577a8 时尚无等价实现；本地合并取舍来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-markdown-scroll-restore"
     },
     {
@@ -1854,7 +1854,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Preview 与 Vault 共用内容错误边界。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Preview 与 Vault 共用内容错误边界。初次对比基线 bbf577a8 时尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-content-error-boundary"
     },
     {
@@ -1863,7 +1863,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "Vault 专用错误边界由共享边界替代。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "Vault 专用错误边界由共享边界替代。初次对比基线 bbf577a8 时尚无等价实现；本地合并取舍来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-vaultcontenterrorboundary"
     },
     {
@@ -1872,7 +1872,7 @@
       "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：Vault 编辑与侧栏复用既有状态及共享错误边界。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：Vault 编辑与侧栏复用既有状态及共享错误边界。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
     },
     {
       "file": "apps/electron/src/renderer/components/vault/vault-editor-lifecycle.ts",
@@ -1880,7 +1880,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除未消费的 Vault 生命周期 helper。固定上游 bbf577a8 尚无等价实现；本地来源 7f977074。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "删除未消费的 Vault 生命周期 helper。初次对比基线 bbf577a8 时尚无等价实现；本地来源 7f977074。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-vault-editor-lifecycle"
     },
     {
@@ -1889,7 +1889,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "侧栏布局 helper 并入唯一调用方。固定上游 bbf577a8 尚无等价实现；本地来源 。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "侧栏布局 helper 并入唯一调用方。初次对比基线 bbf577a8 时尚无等价实现；本地合并取舍来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-vault-sidebar-layout"
     },
     {
@@ -1898,7 +1898,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "删除未消费的单文件清理 helper。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "删除未消费的单文件清理 helper。初次对比基线 bbf577a8 时尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-session-file-changes"
     },
     {
@@ -1907,7 +1907,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "会话引用拖拽使用原生 DataTransfer。固定上游 bbf577a8 尚无等价实现；本地来源 7bbb743f。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "会话引用拖拽使用原生 DataTransfer。初次对比基线 bbf577a8 时尚无等价实现；本地来源 7bbb743f。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-session-reference-drag"
     },
     {
@@ -1916,7 +1916,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "停止快捷键只接受当前活动子会话 ID。固定上游 bbf577a8 尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "停止快捷键只接受当前活动子会话 ID。初次对比基线 bbf577a8 时尚无等价实现；本地来源 8ff00976。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-stop-generation-target"
     },
     {

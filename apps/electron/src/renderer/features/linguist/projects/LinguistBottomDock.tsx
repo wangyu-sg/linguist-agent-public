@@ -103,7 +103,7 @@ export function LinguistBottomDock({
             tabIndex={activeTab.id === tab.id ? 0 : -1}
             onClick={() => setUiState({ bottomDockTab: tab.id })}
             onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
-            className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground aria-selected:bg-accent aria-selected:text-foreground"
+            className="shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground aria-selected:bg-accent aria-selected:text-foreground"
           >
             {tab.label}
           </button>
