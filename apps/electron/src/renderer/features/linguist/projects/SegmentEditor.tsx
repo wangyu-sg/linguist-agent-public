@@ -1105,7 +1105,7 @@ export function SegmentEditor({
         </div>
       </div>
 
-      <div className="flex min-h-[180px] flex-1">
+      <div className="flex min-h-[196px] flex-1">
         {state.status === 'loading' ? (
         <div className="flex flex-1 items-center justify-center gap-2 text-[13px] text-foreground/60">
           <Loader2 size={15} className="animate-spin" />

@@ -1408,6 +1408,8 @@ async function captureLinguistUiEvidence(page: Page): Promise<void> {
       themeMode === 'dark',
       { timeout: 30_000 },
     )
+    // 主题重载后仍固定传统滚动条占位，让后续 Dock 专项覆盖相同条件。
+    await page.addStyleTag({ content: '[aria-label="Segment 编辑器"]::-webkit-scrollbar, [aria-label="Segment 编辑器"] ::-webkit-scrollbar { width: 16px; height: 16px; }' })
   }
 
   const locateSurface = async (): Promise<{ workspace: Locator; sidebar: Locator }> => {
@@ -1446,8 +1448,6 @@ async function captureLinguistUiEvidence(page: Page): Promise<void> {
   await applyTheme('light')
   let surface = await locateSurface()
   await saveScreenshot('02-light-linguist-sidebar-workbench.png')
-  // 固定传统滚动条占位，覆盖 macOS 自动隐藏与始终显示设置的差异。
-  await page.addStyleTag({ content: '[aria-label="Segment Grid"] ::-webkit-scrollbar { width: 16px; height: 16px; }' })
 
   for (const viewport of [{ width: 900, height: 720 }, { width: 800, height: 600 }]) {
     await page.setViewportSize(viewport)
