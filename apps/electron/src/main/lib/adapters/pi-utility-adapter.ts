@@ -230,6 +230,10 @@ export class PiUtilityAdapter {
       await pending.input.onCodexOAuthCredentialsRefreshed?.(payload?.credentials as never)
       return { accepted: true }
     }
+    if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_GITHUB_COPILOT_OAUTH_REFRESHED) {
+      await pending.input.onGithubCopilotOAuthCredentialsRefreshed?.(payload?.credentials as never)
+      return { accepted: true }
+    }
     if (request.method === AGENT_RUNTIME_METHODS.CAPABILITY_XAI_OAUTH_REFRESHED) {
       await pending.input.onXaiOAuthCredentialsRefreshed?.(payload?.credentials as never)
       return { accepted: true }
@@ -328,6 +332,7 @@ function serializeQueryInput(input: PiAgentQueryOptions): Record<string, unknown
     onRetry: _onRetry,
     onSkillActivated: _onSkillActivated,
     onCodexOAuthCredentialsRefreshed: _onCodexOAuthCredentialsRefreshed,
+    onGithubCopilotOAuthCredentialsRefreshed: _onGithubCopilotOAuthCredentialsRefreshed,
     onXaiOAuthCredentialsRefreshed: _onXaiOAuthCredentialsRefreshed,
     prepareSessionFile,
     providerObserver,

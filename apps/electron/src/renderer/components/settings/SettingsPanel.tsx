@@ -18,7 +18,6 @@ import {
   Info,
   Globe,
   BookOpen,
-  Wrench,
   Bot,
   GraduationCap,
   ArrowLeft,
@@ -56,7 +55,6 @@ import { ProxySettings } from "./ProxySettings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { AboutSettings } from "./AboutSettings";
 import { PromptSettings } from "./PromptSettings";
-import { ToolSettings } from "./ToolSettings";
 import { BotHubSettings } from "./BotHubSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
@@ -84,11 +82,6 @@ const BASE_TABS: TabItem[] = [
   { id: "proxy", label: "代理设置", icon: <Globe size={16} /> },
 ];
 
-const TOOLS_TAB: TabItem = {
-  id: "tools",
-  label: "Chat 工具",
-  icon: <Wrench size={16} />,
-};
 const BOTS_TAB: TabItem = {
   id: "bots",
   label: "远程连接",
@@ -137,8 +130,6 @@ function renderBuiltInTabContent(tab: SettingsTab): React.ReactElement {
       return <PromptSettings />;
     case "proxy":
       return <ProxySettings />;
-    case "tools":
-      return <ToolSettings />;
     case "appearance":
       return <AppearanceSettings />;
     case "about":
@@ -256,10 +247,9 @@ export function SettingsPanel({
     }
   }, [closeRequested, activeTab, setCloseRequested])
 
-  // 工具 tab 两种模式都显示，Agent Skills / MCP 独立在侧边栏能力中心管理。
+  // 通用设置导航；Agent Skills / MCP 独立在侧边栏能力中心管理。
   const tabs = React.useMemo(() => {
     const middleTabs = [
-      TOOLS_TAB,
       VOICE_INPUT_TAB,
       BOTS_TAB,
       SHORTCUTS_TAB,

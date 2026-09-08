@@ -214,8 +214,12 @@ export async function sendMessage(
   // Subscription OAuth uses Pi provider-specific transports, which Chat mode does
   // not currently implement. Keep this guard for historical conversations that
   // still reference a formerly selectable subscription model.
-  if (channel.provider === 'openai-codex' || channel.provider === 'xai') {
-    const providerName = channel.provider === 'xai' ? 'xAI（Grok OAuth）' : 'ChatGPT 订阅（Codex OAuth）'
+  if (channel.provider === 'openai-codex' || channel.provider === 'github-copilot' || channel.provider === 'xai') {
+    const providerName = channel.provider === 'xai'
+      ? 'xAI（Grok OAuth）'
+      : channel.provider === 'github-copilot'
+        ? 'GitHub Copilot 订阅'
+        : 'ChatGPT 订阅（Codex OAuth）'
     webContents.send(CHAT_IPC_CHANNELS.STREAM_ERROR, {
       conversationId,
       error: `Chat 模式暂不支持 ${providerName}，请切换到 Agent 模式使用。`,
@@ -351,15 +355,9 @@ export async function sendMessage(
       }
 
       // 执行工具调用（通过统一执行器）
-      // 提取前一轮对话的附件（用于参考图支持）
-      const lastUserMsg = fullHistory.filter((m) => m.role === 'user').at(-1)
-      const lastAssistantMsg = fullHistory.filter((m) => m.role === 'assistant').at(-1)
       const toolResults = await executeToolCalls(toolCalls, {
         webContents,
         conversationId,
-        currentAttachments: attachments,
-        previousUserAttachments: lastUserMsg?.attachments,
-        previousAssistantAttachments: lastAssistantMsg?.attachments,
       })
 
       // 累积工具结果到持久化数据
@@ -604,9 +602,9 @@ export async function generateTitle(input: GenerateTitleInput): Promise<string |
     return null
   }
 
-  if (channel.provider === 'openai-codex') {
+  if (channel.provider === 'openai-codex' || channel.provider === 'github-copilot') {
     const fallbackTitle = createFallbackTitle(userMessage)
-    console.log('[标题生成] ChatGPT OAuth 渠道使用本地标题:', fallbackTitle)
+    console.log('[标题生成] OAuth 订阅渠道使用本地标题:', fallbackTitle)
     return fallbackTitle
   }
 

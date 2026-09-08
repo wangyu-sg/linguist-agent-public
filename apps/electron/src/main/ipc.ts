@@ -193,10 +193,11 @@ import {
   getChannelPlanQuota,
 } from './lib/channel-manager'
 import { loginCodexOAuth, cancelCodexOAuthLogin } from './lib/codex-oauth-service'
+import { loginGithubCopilotOAuth, cancelGithubCopilotOAuthLogin } from './lib/github-copilot-oauth-service'
 import { loginXaiOAuth, cancelXaiOAuthLogin } from './lib/xai-oauth-service'
 import { resolvePiReasoningCapability } from './lib/adapters/pi-model-registry'
-import { serializeCodexCredentials, serializeXaiCredentials } from '@proma/shared'
-import type { CodexOAuthDeviceCode, CodexOAuthLoginMethod, XaiOAuthDeviceCode } from '@proma/shared'
+import { serializeCodexCredentials, serializeGithubCopilotCredentials, serializeXaiCredentials } from '@proma/shared'
+import type { CodexOAuthDeviceCode, CodexOAuthLoginMethod, GithubCopilotOAuthDeviceCode, XaiOAuthDeviceCode } from '@proma/shared'
 import {
   listConversations,
   createConversation,
@@ -225,7 +226,6 @@ import { getUserProfile, updateUserProfile } from './lib/user-profile-service'
 import { getSettings, updateSettings } from './lib/settings-service'
 import { refreshAgentIslandConfiguration, markAgentIslandSessionViewed } from './lib/agent-island-service'
 import { getAgentStatusHoverWindow } from './agent-status-hover-window'
-import { setBuiltinMcpUserEnabled } from './lib/builtin-mcp/settings'
 import { setDockBadgeCount } from './lib/dock-badge-service'
 
 import { checkEnvironment } from './lib/environment-checker'
@@ -425,7 +425,7 @@ function stopWorkspaceMemoryWatch(webContentsId: number, workspaceSlug: string):
 }
 
 import { getAllToolInfos } from './lib/chat-tool-registry'
-import { updateToolState, updateToolCredentials, getToolCredentials, addCustomTool, deleteCustomTool } from './lib/chat-tool-config'
+import { updateToolState, addCustomTool, deleteCustomTool } from './lib/chat-tool-config'
 import {
   getSystemPromptConfig,
   createSystemPrompt,
@@ -586,8 +586,69 @@ function getManagedSkillBasePath(options?: FileAccessOptions): string | undefine
   return workspace ? getWorkspaceSkillsDir(workspace.slug) : undefined
 }
 
+/**
+ * 可作为相对路径根或 HTML 资源根的显式目录授权。
+ * 不包含 getAgentWorkspacesDir() 这种聚合根，避免单个会话/文件的权限借聚合根横向扩张。
+ */
+function getExplicitPreviewDirectoryRoots(options?: FileAccessOptions): string[] {
+  const roots: string[] = []
+  const add = (path?: string): void => {
+    if (path && !roots.includes(path)) roots.push(path)
+  }
+
+  add(getAgentCwdForFileAccess(options))
+  const managedSkillBasePath = getManagedSkillBasePath(options)
+  add(managedSkillBasePath)
+  add(getLegacySkillBasePath(options))
+
+  if (options?.sessionId) {
+    const meta = getAgentSessionMeta(options.sessionId)
+    if (meta?.attachedDirectories) meta.attachedDirectories.forEach(add)
+    add(meta?.activeWorktree?.path)
+    if (meta?.workspaceId) {
+      const workspace = getAgentWorkspace(meta.workspaceId)
+      if (workspace) add(getAgentSessionWorkspacePath(workspace.slug, options.sessionId))
+    }
+  }
+
+  for (const slug of getWorkspaceSlugsForAccess(options)) {
+    add(getProjectFilesPath(slug))
+    getWorkspaceAttachedDirectories(slug).forEach(add)
+  }
+  return roots
+}
+
+function getExplicitPreviewFilePaths(options?: FileAccessOptions): string[] {
+  const files: string[] = []
+  const add = (path?: string): void => {
+    if (path && !files.includes(path)) files.push(path)
+  }
+
+  if (options?.sessionId) {
+    getAgentSessionMeta(options.sessionId)?.attachedFiles?.forEach(add)
+  }
+  for (const slug of getWorkspaceSlugsForAccess(options)) {
+    getWorkspaceAttachedFiles(slug).forEach(add)
+  }
+  return files
+}
+
+function isExplicitPreviewDirectoryPath(path: string, options?: FileAccessOptions): boolean {
+  if (options?.unrestricted) return true
+  const resolved = realpathOrResolve(path)
+  return getExplicitPreviewDirectoryRoots(options).some((root) => isUnderRoot(resolved, root))
+}
+
+/** 预览文件必须属于显式目录根，或恰好是当前会话/工作区附加的单一文件。 */
+function isExplicitPreviewFilePath(path: string, options?: FileAccessOptions): boolean {
+  if (options?.unrestricted) return true
+  const resolved = realpathOrResolve(path)
+  if (getExplicitPreviewDirectoryRoots(options).some((root) => isUnderRoot(resolved, root))) return true
+  return getExplicitPreviewFilePaths(options).some((file) => realpathOrResolve(file) === resolved)
+}
+
 function getAllowedCandidateBasePaths(options?: FileAccessOptions): string[] | undefined {
-  const allowed = (getPreviewCandidateBasePaths(options) ?? []).filter((p) => isPathAllowed(p, options))
+  const allowed = (getPreviewCandidateBasePaths(options) ?? []).filter((p) => isExplicitPreviewDirectoryPath(p, options))
   return allowed.length > 0 ? allowed : undefined
 }
 
@@ -600,6 +661,11 @@ function getLegacySkillBasePath(options?: FileAccessOptions): string | undefined
 
 function getPreviewCandidateBasePaths(options?: FileAccessOptions): string[] | undefined {
   const bases = options?.candidateBasePaths?.filter((p) => typeof p === 'string' && p.length > 0) ?? []
+  // Agent 文本中的相对路径默认相对实际运行 cwd，而不是仅相对 session workbench。
+  // 这覆盖 project / session / active worktree 三种 Agent CWD 模式；显式的 managed
+  // Skill 定位器例外，它仅服务于 Skill 自身的相对资源，必须优先保持可迁移语义。
+  const agentCwd = getAgentCwdForFileAccess(options)
+  if (agentCwd && !bases.includes(agentCwd)) bases.unshift(agentCwd)
   const managedSkillBasePath = getManagedSkillBasePath(options)
   if (managedSkillBasePath && !bases.includes(managedSkillBasePath)) {
     bases.unshift(managedSkillBasePath)
@@ -618,6 +684,23 @@ async function resolveFileAccessPath(filePath: string, options?: FileAccessOptio
     import('./lib/file-preview-service'),
   ])
   return resolveFilePath(filePath, getPreviewCandidateBasePaths(options)) ?? resolve(filePath)
+}
+
+/** 所有内联预览在注册文件 URL 或读取内容前，都必须验证最终 realpath 的授权范围。 */
+async function resolveAuthorizedPreviewPath(filePath: string, options?: FileAccessOptions): Promise<string | null> {
+  const { isAbsolutePreviewPath, resolveFilePath } = await import('./lib/file-preview-service')
+  const candidateBasePaths = (getPreviewCandidateBasePaths(options) ?? [])
+    .filter((basePath) => isExplicitPreviewDirectoryPath(basePath, options))
+  const resolved = resolveFilePath(filePath, candidateBasePaths)
+  if (!resolved || !isExplicitPreviewFilePath(resolved, options)) return null
+
+  // 相对引用必须留在最初的显式候选目录中。聚合工作区授权不能让绝对或
+  // 相对预览横向扩张到其他会话；绝对路径同样只接受当前会话的显式目录/文件授权。
+  if (!isAbsolutePreviewPath(filePath) && !options?.unrestricted) {
+    const realResolved = realpathOrResolve(resolved)
+    if (!candidateBasePaths.some((basePath) => isUnderRoot(realResolved, basePath))) return null
+  }
+  return resolved
 }
 
 /** 当前 Agent 的 Write/Edit 相对路径必须按实际运行 cwd 解析。 */
@@ -1286,7 +1369,7 @@ function releaseAttachedFileWatchers(filePaths: readonly string[] | undefined): 
   }
 }
 
-async function withOAuthDeviceCodeQr<T extends CodexOAuthDeviceCode | XaiOAuthDeviceCode>(deviceCode: T): Promise<T> {
+async function withOAuthDeviceCodeQr<T extends CodexOAuthDeviceCode | GithubCopilotOAuthDeviceCode | XaiOAuthDeviceCode>(deviceCode: T): Promise<T> {
   try {
     const QRCode = (await import('qrcode')).default
     return { ...deviceCode, qrCodeData: await QRCode.toDataURL(deviceCode.verificationUri, { width: 240, margin: 1 }) }
@@ -1740,6 +1823,36 @@ export function registerIpcHandlers(): void {
     async (): Promise<void> => {
       cancelCodexOAuthLogin()
     }
+  )
+
+  // 发起 GitHub Copilot OAuth device-code 登录。Pi 在完成授权后会同步当前订阅和
+  // 组织策略可用的模型；成功后的凭据沿用 Channel.apiKey 加密存储。
+  ipcMain.handle(
+    CHANNEL_IPC_CHANNELS.GITHUB_COPILOT_OAUTH_LOGIN,
+    async (event, enterpriseUrl?: string): Promise<import('@proma/shared').GithubCopilotOAuthLoginResult> => {
+      try {
+        const credentials = await loginGithubCopilotOAuth({
+          enterpriseUrl,
+          onDeviceCode: (deviceCode) => {
+            void withOAuthDeviceCodeQr(deviceCode).then((payload) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send(CHANNEL_IPC_CHANNELS.GITHUB_COPILOT_OAUTH_DEVICE_CODE, payload)
+              }
+            }).catch((error) => console.warn('[OAuth] 发送 GitHub Copilot device code 失败:', error))
+          },
+        })
+        return { success: true, credentials: serializeGithubCopilotCredentials(credentials) }
+      } catch (error) {
+        return { success: false, message: error instanceof Error ? error.message : String(error) }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    CHANNEL_IPC_CHANNELS.GITHUB_COPILOT_OAUTH_CANCEL,
+    async (): Promise<void> => {
+      cancelGithubCopilotOAuthLogin()
+    },
   )
 
   // 发起 xAI（Grok/X 订阅）OAuth device-code 登录。Pi 会通过 device-code 事件给出
@@ -3145,15 +3258,6 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // 启用或关闭 Proma 内置 MCP
-  ipcMain.handle(
-    AGENT_IPC_CHANNELS.SET_BUILTIN_MCP_ENABLED,
-    async (_, workspaceSlug: string, id: string, enabled: boolean): Promise<WorkspaceCapabilities> => {
-      setBuiltinMcpUserEnabled(id, enabled)
-      return getWorkspaceCapabilities(workspaceSlug)
-    }
-  )
-
   // 获取工作区 Skill 列表（含活跃和不活跃，设置页 UI 用）
   ipcMain.handle(
     AGENT_IPC_CHANNELS.GET_SKILLS,
@@ -3597,27 +3701,11 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // 获取工具凭据
-  ipcMain.handle(
-    CHAT_TOOL_IPC_CHANNELS.GET_TOOL_CREDENTIALS,
-    async (_, toolId: string): Promise<Record<string, string>> => {
-      return getToolCredentials(toolId)
-    }
-  )
-
   // 更新工具开关状态
   ipcMain.handle(
     CHAT_TOOL_IPC_CHANNELS.UPDATE_TOOL_STATE,
     async (_, toolId: string, state: ChatToolState): Promise<void> => {
       updateToolState(toolId, state)
-    }
-  )
-
-  // 更新工具凭据
-  ipcMain.handle(
-    CHAT_TOOL_IPC_CHANNELS.UPDATE_TOOL_CREDENTIALS,
-    async (_, toolId: string, credentials: Record<string, string>): Promise<void> => {
-      updateToolCredentials(toolId, credentials)
     }
   )
 
@@ -3634,73 +3722,6 @@ export function registerIpcHandlers(): void {
     CHAT_TOOL_IPC_CHANNELS.DELETE_CUSTOM_TOOL,
     async (_, toolId: string): Promise<void> => {
       deleteCustomTool(toolId)
-    }
-  )
-
-  // 测试工具连接
-  ipcMain.handle(
-    CHAT_TOOL_IPC_CHANNELS.TEST_TOOL,
-    async (_, toolId: string): Promise<{ success: boolean; message: string }> => {
-      // 联网搜索工具测试
-      if (toolId === 'web-search') {
-        const { getToolCredentials: getCredentials } = await import('./lib/chat-tool-config')
-        const credentials = getCredentials('web-search')
-        if (!credentials.apiKey) {
-          return { success: false, message: '请先填写 Tavily API Key' }
-        }
-        try {
-          const response = await getFetchFn(await getEffectiveProxyUrl())('https://api.tavily.com/search', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${credentials.apiKey}`,
-            },
-            body: JSON.stringify({
-              query: 'test connection',
-              search_depth: 'basic',
-              max_results: 1,
-            }),
-          })
-          if (!response.ok) {
-            const errorText = await response.text()
-            return { success: false, message: `API 请求失败 (${response.status}): ${errorText}` }
-          }
-          return { success: true, message: '连接成功，Tavily 搜索 API 可用' }
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error)
-          return { success: false, message: `连接失败: ${msg}` }
-        }
-      }
-      // Nano Banana 生图工具测试
-      if (toolId === 'nano-banana') {
-        const { getToolCredentials: getCredentials } = await import('./lib/chat-tool-config')
-        const credentials = getCredentials('nano-banana')
-        if (!credentials.apiKey) {
-          return { success: false, message: '请先填写 Gemini API Key' }
-        }
-        try {
-          const baseUrl = credentials.baseUrl?.trim() || 'https://generativelanguage.googleapis.com'
-          const model = credentials.model?.trim() || 'gemini-3.1-flash-image-preview'
-          const url = `${baseUrl}/v1beta/models/${model}:generateContent?key=${credentials.apiKey}`
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
-              generationConfig: { maxOutputTokens: 10 },
-            }),
-          })
-          if (!response.ok) {
-            const errorText = await response.text()
-            return { success: false, message: `API 请求失败 (${response.status}): ${errorText.slice(0, 200)}` }
-          }
-          return { success: true, message: `连接成功，模型 ${model} 可用` }
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error)
-          return { success: false, message: `连接失败: ${msg}` }
-        }
-      }
-      return { success: false, message: `工具 ${toolId} 不支持测试` }
     }
   )
 
@@ -4149,14 +4170,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'file:resolve-and-read',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@proma/shared').FilePreviewReadResult | null> => {
-      const { resolveAndReadFile, resolveFilePath } = await import('./lib/file-preview-service')
+      const { resolveAndReadFile } = await import('./lib/file-preview-service')
       const options = normalizeFileAccessOptions(access)
-      const resolved = resolveFilePath(filePath, getPreviewCandidateBasePaths(options))
-      if (!resolved) {
-        return null
-      }
-      const result = resolveAndReadFile(resolved)
-      return result
+      const resolved = await resolveAuthorizedPreviewPath(filePath, options)
+      return resolved ? resolveAndReadFile(resolved) : null
     }
   )
 
@@ -4221,9 +4238,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'file:resolve-path',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<(ResolvedFileUrl & { resolvedPath: string }) | null> => {
-      const { resolveFilePath } = await import('./lib/file-preview-service')
       const options = normalizeFileAccessOptions(access)
-      const result = resolveFilePath(filePath, getPreviewCandidateBasePaths(options))
+      const result = await resolveAuthorizedPreviewPath(filePath, options)
       if (!result) return null
       // registerPromaFilePath 对目录路径会抛「不是文件」。渲染端（如悬浮预览解析 markdown
       // 链接）可能传入目录路径，此处优雅降级为 null，而不是让异常冒泡成未捕获的 handler 错误。
@@ -4236,17 +4252,22 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // 为 HTML 预览注册所在目录，使相对 CSS、脚本和图片资源保持可加载。
-  // 返回的仍是 token-gated proma-file URL，不向渲染进程泄露本机绝对路径。
+  // 当所在目录本身已授权时，为 HTML 预览注册它以加载相对 CSS、脚本和图片资源；
+  // 单文件授权仅注册 HTML 本体。返回的仍是 token-gated proma-file URL。
   ipcMain.handle(
     'file:resolve-html-preview-path',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<ResolvedFileUrl | null> => {
-      const { resolveFilePath } = await import('./lib/file-preview-service')
       const options = normalizeFileAccessOptions(access)
-      const result = resolveFilePath(filePath, getPreviewCandidateBasePaths(options))
+      const result = await resolveAuthorizedPreviewPath(filePath, options)
       if (!result) return null
       try {
-        const directoryUrl = registerPromaDirectoryPath(dirname(result))
+        const parentDir = dirname(result)
+        // 单文件附件只授权该文件本身，不能因 HTML 预览而将父目录整体注册为 URL 根；
+        // 此时仍可加载 HTML 本体，但同目录资源会按授权边界被拒绝。
+        if (!isExplicitPreviewDirectoryPath(parentDir, options)) {
+          return { url: registerPromaFilePath(result) }
+        }
+        const directoryUrl = registerPromaDirectoryPath(parentDir)
         return { url: `${directoryUrl}/${encodeURIComponent(basename(result))}` }
       } catch (err) {
         console.warn('[IPC] file:resolve-html-preview-path 无法注册预览目录，跳过:', result, err instanceof Error ? err.message : err)
@@ -4259,12 +4280,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'file:prepare-pdf-preview',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<{ tmpHtmlUrl: string } | null> => {
-      const { preparePdfPreview, resolveFilePath } = await import('./lib/file-preview-service')
+      const { preparePdfPreview } = await import('./lib/file-preview-service')
       const options = normalizeFileAccessOptions(access)
-      const resolved = resolveFilePath(filePath, getPreviewCandidateBasePaths(options))
-      if (!resolved) {
-        return null
-      }
+      const resolved = await resolveAuthorizedPreviewPath(filePath, options)
+      if (!resolved) return null
       const result = await preparePdfPreview(resolved)
       return result ? { tmpHtmlUrl: result.tmpHtmlUrl } : null
     }
@@ -4274,12 +4293,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'file:office-to-html',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@proma/shared').OfficePreviewResult | null> => {
-      const { convertOfficeToHtml, resolveFilePath } = await import('./lib/file-preview-service')
+      const { convertOfficeToHtml } = await import('./lib/file-preview-service')
       const options = normalizeFileAccessOptions(access)
-      const resolved = resolveFilePath(filePath, getPreviewCandidateBasePaths(options))
-      if (!resolved) {
-        return null
-      }
+      const resolved = await resolveAuthorizedPreviewPath(filePath, options)
+      if (!resolved) return null
       return convertOfficeToHtml(resolved)
     }
   )

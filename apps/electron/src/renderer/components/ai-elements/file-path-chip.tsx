@@ -23,14 +23,8 @@ import {
 } from '@/components/ui/context-menu'
 
 const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'])
-const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov'])
-const CODE_EXTS = new Set([
-  'md', 'markdown', 'json', 'jsonc', 'json5', 'xml', 'html', 'htm', 'txt', 'log', 'csv',
-  'yaml', 'yml', 'toml', 'ini', 'env', 'lock', 'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
-  'py', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cpp', 'hpp', 'cs', 'sh', 'bash',
-  'zsh', 'fish', 'css', 'scss', 'less', 'sql', 'rb', 'php', 'diff', 'patch',
-])
-const ALL_PREVIEWABLE_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...CODE_EXTS, 'pdf', 'docx'])
+const EXTENSIONLESS_FILE_NAMES = new Set(['makefile', 'dockerfile', 'license', 'readme', 'agents'])
+const MAX_FILE_REFERENCE_LENGTH = 4096
 const PATH_SEP_RE = /[\\/]/
 const WIN_DRIVE_RE = /^[A-Za-z]:[\\/]/
 const UNC_PATH_RE = /^\\\\/
@@ -66,15 +60,27 @@ export function isAbsoluteFilePath(text: string): boolean {
 
 export function isRelativeFilePath(text: string): boolean {
   const trimmed = text.trim()
-  if (trimmed.length < 3) return false
-  const { path } = stripLineCol(trimmed)
-  const ext = getExtension(path)
-  return Boolean(
-    ext
-    && ALL_PREVIEWABLE_EXTS.has(ext)
-    && /^[\w./@\\-]+$/.test(path)
-    && (!path.startsWith('.') || PATH_SEP_RE.test(path)),
-  )
+  if (trimmed.length < 2 || trimmed.length > MAX_FILE_REFERENCE_LENGTH) return false
+  if(/[\u0000-\u001F\u007F]/.test(trimmed)) return false
+
+  const { path: clean } = stripLineCol(trimmed)
+  if (!clean || (clean.startsWith('/') || UNC_PATH_RE.test(clean) || WIN_DRIVE_RE.test(clean))) return false
+  // 回复中的相对引用不得跨出候选根；需要父目录文件时模型应输出已授权的绝对路径。
+  if (clean.split(PATH_SEP_RE).includes('..')) return false
+  // 不将 URL、file URI 或普通锚点当作本地文件路径。
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(clean) || clean.startsWith('//')) return false
+  if (clean.endsWith('/') || clean.endsWith('\\')) return false
+
+  const filename = getFileName(clean)
+  const ext = getExtension(filename)
+  const hasExplicitRelativePrefix = clean.startsWith('./') || clean.startsWith('.\\')
+  // 仅因包含分隔符的无扩展名链接（如 v1/users）很可能是站内 URL，不能劫持为文件预览。
+  return hasExplicitRelativePrefix || Boolean(ext) || EXTENSIONLESS_FILE_NAMES.has(filename.toLowerCase())
+}
+
+/** 可安全交给主进程解析的本地文件引用（绝对或相对）。 */
+export function isLocalFileReference(text: string): boolean {
+  return isAbsoluteFilePath(text) || isRelativeFilePath(text)
 }
 
 /** 文件存在性缓存（模块级共享，避免重复 IPC）。key = filePath + basePaths */

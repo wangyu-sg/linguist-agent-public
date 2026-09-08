@@ -9,6 +9,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, cpSync, mkdirSync, statSync, lstatSync, openSync, readSync, closeSync, realpathSync } from 'node:fs'
 import { cp as cpAsync, readFile as readFileAsync, realpath as realpathAsync, writeFile as writeFileAsync } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
+import { writeExistingSkillFile } from './skill-file-write'
 import { rmSyncWithRetry, renameIfDestinationAbsentWithRetry, renameWithRetry } from './fs-retry'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { writeJsonFileAtomic, readJsonFileSafe, writeTextFileAtomic } from './safe-file'
@@ -787,7 +788,7 @@ function parseSkillFrontmatter(content: string, slug: string, enabled: boolean):
 export function getWorkspaceCapabilities(workspaceSlug: string): WorkspaceCapabilities {
   const mcpConfig = getWorkspaceMcpConfig(workspaceSlug)
   const skills = getWorkspaceSkills(workspaceSlug)
-  const builtinMcpServers = listBuiltinMcpServers({ workspaceSlug })
+  const builtinMcpServers = listBuiltinMcpServers()
   const memory = getWorkspaceMemorySummary(workspaceSlug)
 
   const mcpServers = Object.entries(mcpConfig.servers ?? {}).map(([name, entry]) => ({
@@ -1778,17 +1779,8 @@ export function writeSkillFile(workspaceSlug: string, skillSlug: string, relativ
     throw new Error(`内容过大（${(byteLen / 1024 / 1024).toFixed(2)} MB），超过 10 MB 限制`)
   }
 
-  if (existsSync(abs) && statSync(abs).isDirectory()) {
-    throw new Error(`目标是目录，无法写入文件内容: ${relativePath}`)
-  }
-
-  // 自动创建父目录
-  const parent = dirname(abs)
-  if (!existsSync(parent)) {
-    mkdirSync(parent, { recursive: true })
-  }
-
-  writeFileSync(abs, content, 'utf-8')
+  // 资源创建由 createSkillEntry 负责；编辑保存不能重建已删除/重命名的旧路径。
+  writeExistingSkillFile(abs, content)
   console.log(`[Agent 工作区] 已更新 Skill 子文件: ${workspaceSlug}/${skillSlug}/${relativePath}`)
 }
 

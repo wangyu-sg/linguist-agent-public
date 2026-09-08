@@ -1669,6 +1669,16 @@ export interface ExitPlanAllowedPrompt {
   prompt: string
 }
 
+/** 经主进程校验的计划 Markdown 工件，用于审批时的只读预览。 */
+export interface ExitPlanDocument {
+  /** 计划文件的规范化绝对路径；必须位于当前会话的 plan/ 目录。 */
+  filePath: string
+  /** 供右侧预览 Tab 展示的文件名。 */
+  displayName: string
+  /** 提交审批时的内容哈希；批准前若文件变化则要求重新提交。 */
+  contentHash: string
+}
+
 /** ExitPlanMode 请求（主进程 → 渲染进程） */
 export interface ExitPlanModeRequest {
   /** 请求唯一 ID */
@@ -1679,6 +1689,8 @@ export interface ExitPlanModeRequest {
   toolInput: Record<string, unknown>
   /** 解析后的 allowedPrompts 列表 */
   allowedPrompts: ExitPlanAllowedPrompt[]
+  /** 本次待审批的计划文档；未提供或校验失败时省略。 */
+  planDocument?: ExitPlanDocument
 }
 
 /** ExitPlanMode 用户选择行为 */
@@ -1906,8 +1918,6 @@ export const AGENT_IPC_CHANNELS = {
   SET_CLI_INTEGRATION_ENABLED: 'agent:set-cli-integration-enabled',
   /** 测试 MCP 服务器连接 */
   TEST_MCP_SERVER: 'agent:test-mcp-server',
-  /** 启用或关闭 Proma 内置 MCP */
-  SET_BUILTIN_MCP_ENABLED: 'agent:set-builtin-mcp-enabled',
   /** 获取工作区 Skill 列表 */
   GET_SKILLS: 'agent:get-skills',
   /** 获取工作区 Skills 目录绝对路径 */

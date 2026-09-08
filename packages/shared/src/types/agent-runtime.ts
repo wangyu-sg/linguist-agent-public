@@ -85,6 +85,7 @@ export const AGENT_RUNTIME_METHODS = {
   // LA-HOST-SEAM: evidence-runtime
   CAPABILITY_PREPARE_SESSION: 'agent.capability.prepareSession',
   CAPABILITY_CODEX_OAUTH_REFRESHED: 'agent.capability.codex_oauth_refreshed',
+  CAPABILITY_GITHUB_COPILOT_OAUTH_REFRESHED: 'agent.capability.github_copilot_oauth_refreshed',
   CAPABILITY_XAI_OAUTH_REFRESHED: 'agent.capability.xai_oauth_refreshed',
   EVENT_STATE: 'runtime.state',
   EVENT_CRASHED: 'runtime.crashed',
