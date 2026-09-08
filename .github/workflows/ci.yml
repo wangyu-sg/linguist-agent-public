@@ -90,6 +90,10 @@ jobs:
             all(.steps[]; .status == "passed" and .exitCode == 0)
           ' out/smoke/vertical/vertical-smoke-report.json
 
+      - name: 语言资产 Dock 专项回归
+        working-directory: apps/electron
+        run: node scripts/smoke/probe-pb074-e2e.ts --lf056-only > out/smoke/vertical/linguist-dock.log 2>&1
+
       - name: 保存打包与垂直链路证据
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

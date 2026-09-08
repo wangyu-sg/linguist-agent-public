@@ -193,12 +193,17 @@ function runCli(args: string[]): string {
   )
 }
 
+interface Lf056Fixture {
+  tmId: string
+  proposalId: string
+}
+
 function runLf056FixtureSeeder(
   linguistRoot: string,
   projectId: string,
   segmentId: string,
-): string {
-  return execFileSync(
+): Lf056Fixture {
+  const output = execFileSync(
     process.execPath,
     [
       '--experimental-transform-types',
@@ -214,6 +219,7 @@ function runLf056FixtureSeeder(
     ],
     { cwd: APP_DIR, encoding: 'utf8' },
   ).trim()
+  return JSON.parse(output) as Lf056Fixture
 }
 
 function fileSha256(path: string): string {
@@ -854,7 +860,7 @@ async function openQaFindings(workspace: Locator): Promise<Locator> {
   if (!qaSelected) throw new Error('语言资产 QA Tab 未成功打开')
   const panel = dock.getByRole('tabpanel')
   await panel.waitFor({ timeout: 30_000 })
-  const findings = panel.locator('section[aria-label="QA Findings"]')
+  const findings = panel.getByRole('region', { name: /^(当前片段 )?QA Findings$/u })
   await findings.waitFor({ timeout: 30_000 })
   return findings
 }
@@ -962,6 +968,7 @@ async function runLanguageResourceDockGate(
   projectId: string,
   distractorProjectId: string,
   segmentId: string,
+  tmId: string,
   alternateSegmentId: string,
   sourceBlobPath: string,
   sourceHashBefore: string,
@@ -989,7 +996,7 @@ async function runLanguageResourceDockGate(
   const tmTarget = '欢迎回来，{player}！'
   await tmMatches.getByRole(
     'button',
-    { name: /使用 100% Client Exact TM 替换当前译文草稿/u },
+    { name: '使用 100% Legacy TM 100 Exact TM 替换当前译文草稿', exact: true },
   ).click()
   const replaceApplied = await waitFor(async () => await editor.inputValue() === tmTarget, 10_000)
   const afterReplace = await readPackagedSegmentState(page, projectId, segmentId)
@@ -1006,7 +1013,7 @@ async function runLanguageResourceDockGate(
   }, tmInsertPrefix.length)
   await tmMatches.getByRole(
     'button',
-    { name: /使用 100% Client Exact TM 插入当前译文草稿/u },
+    { name: '使用 100% Legacy TM 100 Exact TM 插入当前译文草稿', exact: true },
   ).click()
   const insertApplied = await waitFor(
     async () => await editor.inputValue() === `${tmInsertPrefix}${tmTarget}${tmInsertSuffix}`,
@@ -1079,6 +1086,16 @@ async function runLanguageResourceDockGate(
     `article[aria-label="QA Finding EMPTY_TARGET for ${segmentId}"]`,
   )
   await runQa(qaFindings, emptyTargetArticle)
+  const projectQaLabels = await qaFindings
+    .locator('article[aria-label^="QA Finding "]')
+    .evaluateAll((articles) => articles.map((article) => article.getAttribute('aria-label') ?? ''))
+  const currentSegmentFilter = qaFindings.getByRole('checkbox', { name: '仅显示当前片段', exact: true })
+  check('lf056-qa-default-project-scope', !await currentSegmentFilter.isChecked()
+    && projectQaLabels.some((label) => label.endsWith(`for ${segmentId}`))
+    && projectQaLabels.some((label) => label.endsWith(`for ${alternateSegmentId}`)),
+    `默认项目范围=${JSON.stringify(projectQaLabels)}`)
+  await currentSegmentFilter.check()
+  await emptyTargetArticle.waitFor({ timeout: 30_000 })
   const qaLabels = await qaFindings
     .locator('article[aria-label^="QA Finding "]')
     .evaluateAll((articles) => articles.map((article) => article.getAttribute('aria-label') ?? ''))
@@ -1096,9 +1113,9 @@ async function runLanguageResourceDockGate(
   await contextSources.getByText('必须保留玩家占位符', { exact: true }).waitFor({
     timeout: 30_000,
   })
-  await evidence.getByText(/tm:tmu_v2_[0-9a-f]{64}/u).waitFor({ timeout: 30_000 })
+  await evidence.getByText(`tm:${tmId}`, { exact: true }).waitFor({ timeout: 30_000 })
   const contextVisible = await contextSources.getByText('System', { exact: true }).isVisible()
-    && await contextSources.getByText('client', { exact: true }).isVisible()
+    && await contextSources.getByText('Legacy TM', { exact: true }).isVisible()
   const evidenceVisible = await evidence.getByText(/style:sgr_v2_[0-9a-f]{64}/u).isVisible()
     && await evidence.getByText(/voice:vpr_v2_[0-9a-f]{64}/u).isVisible()
     && await evidence.getByText(/context:segment-origin/u).isVisible()
@@ -1127,6 +1144,7 @@ async function runLanguageResourceDockGate(
     timeout: 30_000,
   })
   const alternateQaPanel = await openDockTab(dock, 'QA')
+  await alternateQaPanel.getByRole('checkbox', { name: '仅显示当前片段', exact: true }).check()
   const alternateFinding = alternateQaPanel.locator(
     `article[aria-label="QA Finding EMPTY_TARGET for ${alternateSegmentId}"]`,
   )
@@ -1155,7 +1173,7 @@ async function runLanguageResourceDockGate(
   const restoredEvidence = restoredContextPanel.locator(
     'section[aria-label="建议的证据来源"]',
   )
-  await restoredEvidence.getByText(/tm:tmu_v2_[0-9a-f]{64}/u).waitFor({ timeout: 30_000 })
+  await restoredEvidence.getByText(`tm:${tmId}`, { exact: true }).waitFor({ timeout: 30_000 })
   check(
     'lf056-active-segment-resources-refresh',
     alternateResourcesVisible
@@ -1752,6 +1770,7 @@ async function main(): Promise<void> {
 
   let server: FakeModelServer | undefined
   let launched: LaunchedApp | undefined
+  let lf056Fixture: Lf056Fixture | undefined
   let projectId = ''
   let assetId = ''
   let segmentId = ''
@@ -1819,11 +1838,11 @@ async function main(): Promise<void> {
         '--target', '',
         '--expected-revision', String(alternate.revision),
       ])
-      const seeded = runLf056FixtureSeeder(linguistRoot, projectId, segmentId)
+      lf056Fixture = runLf056FixtureSeeder(linguistRoot, projectId, segmentId)
       check(
         'lf056-public-repository-fixture',
-        PROPOSAL_ID_PATTERN.test(seeded),
-        `公共 repository fixture=${seeded}`,
+        PROPOSAL_ID_PATTERN.test(lf056Fixture.proposalId),
+        `公共 repository fixture=${JSON.stringify(lf056Fixture)}`,
       )
     }
     const distractor = runCli([
@@ -1904,6 +1923,7 @@ async function main(): Promise<void> {
         projectId,
         distractorProjectId,
         segmentId,
+        lf056Fixture!.tmId,
         alternateSegmentId,
         sourceBlobPath,
         sourceHashBefore,

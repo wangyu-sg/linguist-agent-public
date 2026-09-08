@@ -61,7 +61,7 @@ GitHub Releases API 核实最新稳定版为 [Proma v0.19.37](https://github.com
 
 当前已通过：
 
-- `bun install --frozen-lockfile`：锁文件安装成功，无依赖升级。
+- `bun install --frozen-lockfile`：按合并后的锁文件安装成功；CAT Store 与 Shared 的 workspace 版本注记已和 manifest 对齐，未额外升级依赖。
 - `bun run test`：423 项通过。
 - `bun test apps/electron/src/renderer/features/linguist/projects/cat-editor.browser.test.ts`：32 条真实 Chromium 行为检查通过，涵盖草稿、保存、跨批次回执及 Linguist / Agent / Chat 导航竞态。
 - `bun run typecheck`：11 个 workspace package 通过。
@@ -72,9 +72,23 @@ GitHub Releases API 核实最新稳定版为 [Proma v0.19.37](https://github.com
 
 CAT 浏览器行为回归已纳入 macOS CI，在仓库锁定 Electron 的 Chromium 中运行，不依赖外部浏览器。
 
-首轮干净候选 `f1cfefa1` 的六步垂直链路通过，Agent 19、Chat 19、Linguist 22 项自动检查通过；Linguist 仍有 2 项人工项。截图复核发现原有“页面不溢出”断言未能发现窄窗内容已不可读，因此该结果不能作为窄窗 UI 通过的证据。收紧后的同一探针在旧包复现 4 项失败：原文/译文列宽均为 0、筛选控件重叠、Dock 标签多行、编辑可读前置不满足。布局检查现已默认执行，截图保存仍可选。首轮日志与截图保存在 `artifacts/audit-20260908/first-vertical/`；最终候选正在重跑。
+首轮干净候选 `f1cfefa1` 的六步垂直链路通过，Agent 19、Chat 19、Linguist 22 项自动检查通过；Linguist 仍有 2 项人工项。截图复核发现原有“页面不溢出”断言未能发现窄窗内容已不可读，因此该结果不能作为窄窗 UI 通过的证据。收紧后的同一探针在旧包复现 4 项失败：原文/译文列宽均为 0、筛选控件重叠、Dock 标签多行、编辑可读前置不满足。布局检查现已默认执行，截图保存仍可选。首轮日志与截图保存在 `artifacts/audit-20260908/first-vertical/`；最终结果见下。
 
 第二候选 `76639149` 的列宽、筛选与 Dock 检查通过，但编辑器命中检查失败：筛选栏增高后，textarea 被纵向裁切。垂直链路正确返回失败，Linguist 为 25 PASS / 1 FAIL / 2 MANUAL，证据保留在 `artifacts/audit-20260908/second-vertical/`。随后按代码允许的 800×600 最小窗口量测，Dock 仍占 240px，列表 viewport 为 0，确认需同时保证编辑区域的可用高度。
+
+最终干净源码候选为 `9ea58ca2981199ccb9bc3c0e9d21e3f67d400cf1`。2026-09-08 08:46–08:49（Asia/Shanghai）完成 `smoke:vertical`：package、workspace-deps、agent、chat、project-switch、linguist-current 六步均为 `passed / exitCode=0`。Agent 19 PASS、Chat 19 PASS、Linguist 31 PASS，均为 0 FAIL；Linguist 仍有 2 MANUAL，整体合同覆盖为 `partial`。
+
+900×720 和 800×600 中，原文与译文列均为 182px，编辑 viewport 为 148px；textarea 整体可见且中心命中，保存/取消可经滚动操作。Dock 的保存偏好与实际显示高度分离；受限窗口中的无效方向键不改偏好、增高窗口后恢复原高度已通过 LF-056 专项验证。独立截图复核通过宽屏深浅主题及两种小窗口编辑态。小窗口使用局部横向与纵向滚动，网格全部列、顶部阶段/设置与底部标签无需同时处于视窗内。
+
+同一产物补跑 `node scripts/smoke/probe-pb074-e2e.ts --lf056-only`，结果为 26 PASS / 0 FAIL / 0 MANUAL：验证 TM/术语替换、插入、撤销且数据库不变，项目 QA 与当前片段筛选，精确参考来源，预览源文件完整性，以及 Dock 高度偏好、边界按键、跨项目与重启恢复。专项的旧名称、旧 ID 前缀与 QA 默认范围假设已按当前公开数据和界面合同修正；保留严格行为断言。该命令已接入 macOS CI，失败会阻止后续发布并保留专项日志；本轮验证的是本地同一命令，未触发远程 CI。
+
+产物为 `apps/electron/out/mac-arm64/Linguist Agent.app`，未安装或发布。`app.asar` SHA-256：
+
+```text
+65e44ac058e3f757cadc3eb3d691da044a1efab04347af0b512ca1e31b5825c6
+```
+
+机器报告与六步日志保存在本地 `artifacts/audit-20260908/final-vertical/`，截图在同目录上一级的 `ui/`，默认测试与类型日志在 `artifacts/audit-20260908/`。后续收尾提交只更新验证文档与检查配置/探针；打包证据对应上面的源码候选，不把文档提交冒充重新打包的源码。
 
 后续优化只在证据足够时实施：现有 Renderer 主 chunk 约 6.4 MB（首次构建，gzip 约 1.9 MB），属于构建事实；尚未证明它导致启动或交互延迟，因此先采集启动与交互 profile，再决定是否调整加载边界。大型真实 TM/TB/图片 Context 也应先测端到端延迟，再考虑候选剪枝或 Worker。
 
