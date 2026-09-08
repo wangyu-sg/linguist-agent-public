@@ -6,6 +6,6 @@
 
 后续先查该记录的最终验证与未完成项，再按 [TODO](../TODO.md) 完成真实 Provider 四岗位、真实格式产物、语言质量、IME/VoiceOver/Native Open/Save 和日用验收。合成资料、本地 Fake Provider、headless UI 与打包自动链路不能证明这些人工资格。
 
-当前修改保留在候选分支；未推送、发布或替换用户安装版。原工作区 main 保持原状。历史发布和验证记录保留其原始版本与结论，不能覆盖当前候选。
+审查候选已合入 main 并推送；发布收尾修复了远程 CI 发现的传统滚动条布局问题，最终 CI 与自动发布已通过。提交、产物签名、更新索引和失败记录见 [发布收尾验证](./release/VALIDATION_0_17_72.md)。本机安装版由用户通过自动更新升级，尚未确认安装完成。历史记录保留各自产物和资格边界。
 
 规范入口：[文档索引](./DOCS_INDEX.md)、[触点](./architecture/proma-touchpoints.json)、[限制](./release/KNOWN_LIMITATIONS.md)。
