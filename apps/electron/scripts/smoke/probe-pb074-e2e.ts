@@ -946,6 +946,16 @@ async function verifyCleanTargetConfirmShortcut(
   )
 }
 
+async function bottomDockHeightMatchesAria(dock: Locator): Promise<boolean> {
+  return dock.evaluate((element) => {
+    const separator = element.querySelector('[role="separator"]')!
+    const height = element.getBoundingClientRect().height
+    return Math.abs(height - Number(separator.getAttribute('aria-valuenow'))) <= 1
+      && height >= Number(separator.getAttribute('aria-valuemin')) - 1
+      && height <= Number(separator.getAttribute('aria-valuemax')) + 1
+  })
+}
+
 async function runLanguageResourceDockGate(
   page: Page,
   workspace: Locator,
@@ -1222,12 +1232,21 @@ async function runLanguageResourceDockGate(
   const pointerEndHeight = Number(await separator.getAttribute('aria-valuenow'))
   await separator.press('End')
   const keyboardHeight = await separator.getAttribute('aria-valuenow')
+  const keyboardHeightMatchesAria = await bottomDockHeightMatchesAria(dock)
   await openDockTab(dock, '预览')
 
-  await page.setViewportSize({ width: 900, height: 720 })
+  await page.setViewportSize({ width: 800, height: 600 })
   const narrowOverlay = await dock.evaluate(
     (element) => getComputedStyle(element).position === 'absolute',
   )
+  const minimumEditorUsable = await waitFor(async () => await bottomDockHeightMatchesAria(dock)
+    && await workspace.locator('[data-testid="cat-virtual-scroll"]').evaluate((element) => element.clientHeight >= 140), 10_000)
+  await separator.press('ArrowUp')
+  await separator.press('ArrowDown')
+  await page.setViewportSize({ width: 1280, height: 1200 })
+  const expandedPreferenceRestored = await waitFor(async () =>
+    Math.abs((await dock.boundingBox())!.height - 480) <= 1
+      && await bottomDockHeightMatchesAria(dock), 10_000)
   await page.setViewportSize({ width: 1280, height: 800 })
 
   const persisted = await waitFor(async () => {
@@ -1266,9 +1285,7 @@ async function runLanguageResourceDockGate(
     .getByRole('tablist', { name: '语言资产', exact: true })
     .getByRole('tab', { name: '预览', exact: true })
     .getAttribute('aria-selected') === 'true'
-  const mainHeight = await mainDock
-    .getByRole('separator', { name: '调整语言资产面板高度', exact: true })
-    .getAttribute('aria-valuenow')
+  const mainHeightMatchesAria = await bottomDockHeightMatchesAria(mainDock)
 
   const mainState = await readPersistedLinguistState(page, projectId)
   const distractorState = await readPersistedLinguistState(page, distractorProjectId)
@@ -1282,16 +1299,18 @@ async function runLanguageResourceDockGate(
     'lf056-dock-project-isolation',
     pointerHeightChanged
       && keyboardSelectedTerms
-      && keyboardHeight === '480'
+      && keyboardHeightMatchesAria
       && narrowOverlay
+      && minimumEditorUsable
+      && expandedPreferenceRestored
       && persisted
       && distractorPersisted
       && isolated
       && mainPreviewSelected
-      && mainHeight === '480',
+      && mainHeightMatchesAria,
     `pointer=${pointerHeightChanged} (${pointerStartHeight}→${pointerEndHeight})` +
       `，键盘 Tab=${keyboardSelectedTerms}，height=${keyboardHeight}` +
-      `，narrow overlay=${narrowOverlay}，main persisted=${persisted}` +
+      `，narrow overlay=${narrowOverlay}，最小窗编辑区=${minimumEditorUsable}，放大恢复480=${expandedPreferenceRestored}，main persisted=${persisted}` +
       `，distractor persisted=${distractorPersisted}，isolated=${isolated}`,
   )
 }
@@ -1307,13 +1326,9 @@ async function verifyLanguageResourceDockRecovery(
   const previewTab = dock
     .getByRole('tablist', { name: '语言资产', exact: true })
     .getByRole('tab', { name: '预览', exact: true })
-  const separator = dock.getByRole(
-    'separator',
-    { name: '调整语言资产面板高度', exact: true },
-  )
   const mainState = await readPersistedLinguistState(page, projectId)
   const mainRestored = await previewTab.getAttribute('aria-selected') === 'true'
-    && await separator.getAttribute('aria-valuenow') === '480'
+    && await bottomDockHeightMatchesAria(dock)
     && mainState.location?.bottomDockOpen === true
     && mainState.location.bottomDockTab === 'preview'
     && mainState.location.bottomDockHeight === 480
@@ -1340,9 +1355,7 @@ async function verifyLanguageResourceDockRecovery(
     .getByRole('tablist', { name: '语言资产', exact: true })
     .getByRole('tab', { name: '预览', exact: true })
     .getAttribute('aria-selected') === 'true'
-    && await mainDock
-      .getByRole('separator', { name: '调整语言资产面板高度', exact: true })
-      .getAttribute('aria-valuenow') === '480'
+    && await bottomDockHeightMatchesAria(mainDock)
   check(
     'lf056-dock-restart-restores-layout',
     mainRestored && distractorRestored && mainStillRestored,
@@ -1416,138 +1429,160 @@ async function captureLinguistUiEvidence(page: Page): Promise<void> {
   let surface = await locateSurface()
   await saveScreenshot('02-light-linguist-sidebar-workbench.png')
 
-  await page.setViewportSize({ width: 900, height: 720 })
-  await page.waitForFunction(() => window.innerWidth === 900 && window.innerHeight === 720)
-  surface = await locateSurface()
-  await page.evaluate(async () => { await document.fonts.ready })
-  await saveScreenshot('03-narrow-light-linguist-sidebar-workbench.png')
+  for (const viewport of [{ width: 900, height: 720 }, { width: 800, height: 600 }]) {
+    await page.setViewportSize(viewport)
+    await page.waitForFunction((size) => window.innerWidth === size.width && window.innerHeight === size.height, viewport)
+    surface = await locateSurface()
+    await surface.workspace.locator('section[aria-label="Segment 编辑器"]').evaluate((element) => { element.scrollTop = 0 })
+    await surface.workspace.locator('[role="row"][data-segment-id]').first().waitFor({ state: 'attached' })
+    await page.evaluate(async () => { await document.fonts.ready })
+    await saveScreenshot(`${viewport.width === 900 ? '03-narrow' : '06-minimum'}-light-linguist-sidebar-workbench.png`)
 
-  const [workspaceBox, sidebarBox, toolbarBox, layout] = await Promise.all([
-    surface.workspace.boundingBox(),
-    surface.sidebar.boundingBox(),
-    surface.workspace
-      .locator('header[aria-label="本地化工作台工具栏"]')
-      .boundingBox(),
-    page.evaluate(() => ({
-      viewportWidth: window.innerWidth,
-      documentOverflow: Math.max(
-        document.documentElement.scrollWidth,
-        document.body.scrollWidth,
-      ) - window.innerWidth,
-    })),
-  ])
-  const boxes = [workspaceBox, sidebarBox, toolbarBox]
-  const keyRectsInsideViewport = boxes.every(
-    (box) => box !== null && box.x >= -1 && box.x + box.width <= layout.viewportWidth + 1,
-  )
-  check(
-    'lf056-ui-evidence-light-dark-narrow',
-    layout.documentOverflow <= 1 && keyRectsInsideViewport,
-    `screenshots=${UI_EVIDENCE_DIR ?? '未请求'}，overflow=${layout.documentOverflow}px` +
-      `，侧边栏/工作台/工具栏未越界=${keyRectsInsideViewport}`,
-  )
+    const [workspaceBox, sidebarBox, toolbarBox, layout] = await Promise.all([
+      surface.workspace.boundingBox(),
+      surface.sidebar.boundingBox(),
+      surface.workspace
+        .locator('header[aria-label="本地化工作台工具栏"]')
+        .boundingBox(),
+      page.evaluate(() => ({
+        viewportWidth: window.innerWidth,
+        documentOverflow: Math.max(
+          document.documentElement.scrollWidth,
+          document.body.scrollWidth,
+        ) - window.innerWidth,
+      })),
+    ])
+    const boxes = [workspaceBox, sidebarBox, toolbarBox]
+    const keyRectsInsideViewport = boxes.every(
+      (box) => box !== null && box.x >= -1 && box.x + box.width <= layout.viewportWidth + 1,
+    )
+    check(
+      `lf056-ui-evidence-${viewport.width}`,
+      layout.documentOverflow <= 1 && keyRectsInsideViewport,
+      `screenshots=${UI_EVIDENCE_DIR ?? '未请求'}，overflow=${layout.documentOverflow}px` +
+        `，侧边栏/工作台/工具栏未越界=${keyRectsInsideViewport}`,
+    )
 
-  const readability = await surface.workspace.evaluate(async (workspace) => {
-    const grid = workspace.querySelector<HTMLElement>('[role="grid"]')!
-    const scroller = grid.parentElement!
-    const row = grid.querySelector<HTMLElement>('[role="row"][data-segment-id]')!
-    const headers = [...grid.querySelectorAll<HTMLElement>('[role="columnheader"]')]
-    const cells = [...row.querySelectorAll<HTMLElement>(':scope > [role="gridcell"]')]
-    const columns = () => {
-      const rects = cells.map((cell) => cell.getBoundingClientRect())
-      return {
-        sourceWidth: rects[2]!.width,
-        targetWidth: rects[3]!.width,
-        separated: rects.every((rect, index) => index === 0 || rect.left >= rects[index - 1]!.right),
-        aligned: headers.every((header, index) => {
-          const rect = header.getBoundingClientRect()
-          return Math.abs(rect.left - rects[index]!.left) <= 1
-            && Math.abs(rect.width - rects[index]!.width) <= 1
-        }),
+    const readability = await surface.workspace.evaluate(async (workspace) => {
+      const grid = workspace.querySelector<HTMLElement>('[role="grid"]')!
+      const scroller = grid.parentElement!
+      const row = grid.querySelector<HTMLElement>('[role="row"][data-segment-id]')!
+      const headers = [...grid.querySelectorAll<HTMLElement>('[role="columnheader"]')]
+      const cells = [...row.querySelectorAll<HTMLElement>(':scope > [role="gridcell"]')]
+      const columns = () => {
+        const rects = cells.map((cell) => cell.getBoundingClientRect())
+        return {
+          sourceWidth: rects[2]!.width,
+          targetWidth: rects[3]!.width,
+          separated: rects.every((rect, index) => index === 0 || rect.left >= rects[index - 1]!.right),
+          aligned: headers.every((header, index) => {
+            const rect = header.getBoundingClientRect()
+            return Math.abs(rect.left - rects[index]!.left) <= 1
+              && Math.abs(rect.width - rects[index]!.width) <= 1
+          }),
+        }
       }
+      scroller.scrollLeft = 0
+      const before = columns()
+      scroller.scrollLeft = scroller.scrollWidth
+      await new Promise<void>((resolveFrame) => requestAnimationFrame(() => resolveFrame()))
+      const after = columns()
+      const lastCell = cells[5]!.getBoundingClientRect()
+      const scrollBounds = scroller.getBoundingClientRect()
+      const qaVisible = lastCell.left >= scrollBounds.left && lastCell.right <= scrollBounds.right
+      const scrollLeft = scroller.scrollLeft
+      scroller.scrollLeft = 0
+
+      const editor = workspace.querySelector('section[aria-label="Segment 编辑器"]')!
+      const controls = [...editor.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select')]
+        .filter((control) => control.closest('[role="grid"]') === null)
+      const controlRects = controls.map((control) => control.getBoundingClientRect())
+      const controlsSeparate = controlRects.every((rect, index) => controlRects.slice(index + 1).every(
+        (other) => rect.right <= other.left || other.right <= rect.left
+          || rect.bottom <= other.top || other.bottom <= rect.top,
+      ))
+      const controlsReachable = controls.every((control, index) => {
+        const rect = controlRects[index]!
+        return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === control
+      })
+      const tabs = [...workspace.querySelectorAll<HTMLElement>('[role="tablist"][aria-label="语言资产"] [role="tab"]')]
+      const tabLabelsSingleLine = tabs.every((tab) => {
+        const range = document.createRange()
+        range.selectNodeContents(tab)
+        return range.getBoundingClientRect().height <= Number.parseFloat(getComputedStyle(tab).lineHeight) + 1
+      })
+      return {
+        before, after, scrollLeft, qaVisible, controlsSeparate, controlsReachable,
+        controlWidths: controlRects.map((rect) => rect.width), tabLabelsSingleLine,
+      }
+    })
+    const gridReadable = readability.before.sourceWidth >= 180 && readability.before.targetWidth >= 180
+      && readability.before.separated && readability.after.separated
+      && readability.before.aligned && readability.after.aligned
+      && readability.scrollLeft > 0 && readability.qaVisible
+    check(`lf056-${viewport.width}-grid-readable`, gridReadable, JSON.stringify(readability.before)
+      + `，滚后对齐=${readability.after.aligned}，scrollLeft=${readability.scrollLeft}，QA可达=${readability.qaVisible}`)
+    check(`lf056-${viewport.width}-filters-readable`, readability.controlWidths.length === 3
+      && readability.controlWidths.every((width, index) => width >= (index === 0 ? 200 : 140))
+      && readability.controlsSeparate && readability.controlsReachable,
+      `宽度=${readability.controlWidths.join('/')}，无重叠=${readability.controlsSeparate}，中心可命中=${readability.controlsReachable}`)
+
+    const tabs = surface.workspace.getByRole('tablist', { name: '语言资产', exact: true })
+    const originalTabId = await tabs.locator('[aria-selected="true"]').getAttribute('id')
+    await tabs.locator('[aria-selected="true"]').press('End')
+    const lastTab = tabs.getByRole('tab').last()
+    const deliveryReachable = await lastTab.evaluate((tab) => {
+      const rect = tab.getBoundingClientRect()
+      const list = tab.parentElement!.getBoundingClientRect()
+      return tab.getAttribute('aria-selected') === 'true' && document.activeElement === tab
+        && rect.left >= list.left && rect.right <= list.right
+    })
+    check(`lf056-${viewport.width}-dock-readable`, readability.tabLabelsSingleLine && deliveryReachable,
+      `标签单行=${readability.tabLabelsSingleLine}，End键交付tab可见/选中/聚焦=${deliveryReachable}`)
+
+    let draftRetained = false
+    let editorReachable = false
+    let editorGeometry = '列宽前置未通过'
+    if (gridReadable) {
+      const activeRow = surface.workspace.locator('[role="row"][data-segment-id][aria-current="true"]')
+      await activeRow.locator('[data-target-edit]').click()
+      const target = activeRow.locator('textarea')
+      await target.fill('{player} 窄窗编辑回归')
+      await target.scrollIntoViewIfNeeded()
+      const geometry = await target.evaluate((element) => {
+        const rect = element.getBoundingClientRect()
+        const scroller = element.closest('[role="grid"]')!.parentElement!
+        const horizontalViewport = scroller.getBoundingClientRect()
+        const viewport = element.closest('[data-testid="cat-virtual-scroll"]')!.getBoundingClientRect()
+        const editor = element.closest('section[aria-label="Segment 编辑器"]')!.getBoundingClientRect()
+        const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+        return {
+          left: rect.left, width: rect.width, height: rect.height, top: rect.top, bottom: rect.bottom,
+          viewportTop: viewport.top, viewportBottom: viewport.bottom, viewportHeight: viewport.height,
+          scrollLeft: scroller.scrollLeft,
+          fullyVisible: rect.left >= horizontalViewport.left - 1 && rect.right <= horizontalViewport.right + 1
+            && rect.top >= Math.max(viewport.top, editor.top) - 1
+            && rect.bottom <= Math.min(viewport.bottom, editor.bottom) + 1,
+          centerHit: hit === element, hit: `${hit?.tagName}/${hit?.getAttribute('role')}/${hit?.getAttribute('data-testid')}`,
+        }
+      })
+      editorReachable = geometry.width >= 180 && geometry.scrollLeft > 0 && geometry.centerHit && geometry.fullyVisible
+      editorGeometry = JSON.stringify(geometry)
+      await activeRow.getByRole('button', { name: '保存译文', exact: true }).click({ trial: true })
+      await activeRow.getByRole('button', { name: '取消编辑', exact: true }).click({ trial: true })
+      await target.scrollIntoViewIfNeeded()
+      await saveScreenshot(`${viewport.width === 900 ? '04-narrow' : '07-minimum'}-light-linguist-editor.png`)
+      await page.setViewportSize({ width: 1280, height: 800 })
+      draftRetained = await target.inputValue() === '{player} 窄窗编辑回归'
+        && await lastTab.getAttribute('aria-selected') === 'true'
+      await saveScreenshot(`${viewport.width === 900 ? '05' : '08'}-wide-light-linguist-editor.png`)
+      await target.press('Escape')
+      draftRetained &&= await activeRow.locator('textarea').count() === 0
     }
-    scroller.scrollLeft = 0
-    const before = columns()
-    scroller.scrollLeft = scroller.scrollWidth
-    await new Promise<void>((resolveFrame) => requestAnimationFrame(() => resolveFrame()))
-    const after = columns()
-    const lastCell = cells[5]!.getBoundingClientRect()
-    const scrollBounds = scroller.getBoundingClientRect()
-    const qaVisible = lastCell.left >= scrollBounds.left && lastCell.right <= scrollBounds.right
-    const scrollLeft = scroller.scrollLeft
-    scroller.scrollLeft = 0
-
-    const editor = workspace.querySelector('section[aria-label="Segment 编辑器"]')!
-    const controls = [...editor.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select')]
-      .filter((control) => control.closest('[role="grid"]') === null)
-    const controlRects = controls.map((control) => control.getBoundingClientRect())
-    const controlsSeparate = controlRects.every((rect, index) => controlRects.slice(index + 1).every(
-      (other) => rect.right <= other.left || other.right <= rect.left
-        || rect.bottom <= other.top || other.bottom <= rect.top,
-    ))
-    const controlsReachable = controls.every((control, index) => {
-      const rect = controlRects[index]!
-      return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === control
-    })
-    const tabs = [...workspace.querySelectorAll<HTMLElement>('[role="tablist"][aria-label="语言资产"] [role="tab"]')]
-    const tabLabelsSingleLine = tabs.every((tab) => {
-      const range = document.createRange()
-      range.selectNodeContents(tab)
-      return range.getBoundingClientRect().height <= Number.parseFloat(getComputedStyle(tab).lineHeight) + 1
-    })
-    return {
-      before, after, scrollLeft, qaVisible, controlsSeparate, controlsReachable,
-      controlWidths: controlRects.map((rect) => rect.width), tabLabelsSingleLine,
-    }
-  })
-  const gridReadable = readability.before.sourceWidth >= 180 && readability.before.targetWidth >= 180
-    && readability.before.separated && readability.after.separated
-    && readability.before.aligned && readability.after.aligned
-    && readability.scrollLeft > 0 && readability.qaVisible
-  check('lf056-narrow-grid-readable', gridReadable, JSON.stringify(readability.before)
-    + `，滚后对齐=${readability.after.aligned}，scrollLeft=${readability.scrollLeft}，QA可达=${readability.qaVisible}`)
-  check('lf056-narrow-filters-readable', readability.controlWidths.length === 3
-    && readability.controlWidths.every((width, index) => width >= (index === 2 ? 140 : 160))
-    && readability.controlsSeparate && readability.controlsReachable,
-    `宽度=${readability.controlWidths.join('/')}，无重叠=${readability.controlsSeparate}，中心可命中=${readability.controlsReachable}`)
-
-  const tabs = surface.workspace.getByRole('tablist', { name: '语言资产', exact: true })
-  const originalTabId = await tabs.locator('[aria-selected="true"]').getAttribute('id')
-  await tabs.locator('[aria-selected="true"]').press('End')
-  const lastTab = tabs.getByRole('tab').last()
-  const deliveryReachable = await lastTab.evaluate((tab) => {
-    const rect = tab.getBoundingClientRect()
-    const list = tab.parentElement!.getBoundingClientRect()
-    return tab.getAttribute('aria-selected') === 'true' && document.activeElement === tab
-      && rect.left >= list.left && rect.right <= list.right
-  })
-  check('lf056-narrow-dock-readable', readability.tabLabelsSingleLine && deliveryReachable,
-    `标签单行=${readability.tabLabelsSingleLine}，End键交付tab可见/选中/聚焦=${deliveryReachable}`)
-
-  let draftRetained = false
-  let editorReachable = false
-  if (gridReadable) {
-    const activeRow = surface.workspace.locator('[role="row"][data-segment-id][aria-current="true"]')
-    await activeRow.locator('[data-target-edit]').click()
-    const target = activeRow.locator('textarea')
-    await target.fill('{player} 窄窗编辑回归')
-    editorReachable = await target.evaluate((element) => {
-      const rect = element.getBoundingClientRect()
-      const scroller = element.closest('[role="grid"]')!.parentElement!
-      return rect.width >= 180 && scroller.scrollLeft > 0
-        && document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === element
-    })
-    await saveScreenshot('04-narrow-light-linguist-editor.png')
-    await page.setViewportSize({ width: 1280, height: 800 })
-    draftRetained = await target.inputValue() === '{player} 窄窗编辑回归'
-      && await lastTab.getAttribute('aria-selected') === 'true'
-    await saveScreenshot('05-wide-light-linguist-editor.png')
-    await target.press('Escape')
-    draftRetained &&= await activeRow.locator('textarea').count() === 0
+    check(`lf056-${viewport.width}-editor-resize`, editorReachable && draftRetained,
+      `横滚后textarea宽度/中心可编辑=${editorReachable}，窄→宽草稿和Dock保留/Escape取消=${draftRetained}，${editorGeometry}`)
+    await tabs.locator(`[id="${originalTabId}"]`).click()
   }
-  check('lf056-narrow-editor-resize', editorReachable && draftRetained,
-    `横滚后textarea宽度/中心可编辑=${editorReachable}，窄→宽草稿和Dock保留/Escape取消=${draftRetained}`)
-  await tabs.locator(`[id="${originalTabId}"]`).click()
   await page.setViewportSize({ width: 1280, height: 800 })
   await applyTheme('dark')
   await locateSurface()

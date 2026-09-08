@@ -96,6 +96,22 @@ export function LinguistWorkbenchShell({
   const [settingsInitialTab, setSettingsInitialTab] = useAtom(
     linguistProjectSettingsTabAtomFamily(project.id),
   )
+  const catColumnRef = React.useRef<HTMLDivElement>(null)
+  const [catColumnHeight, setCatColumnHeight] = React.useState(0)
+  React.useLayoutEffect(() => {
+    const column = catColumnRef.current!
+    const measure = (): void => setCatColumnHeight(column.getBoundingClientRect().height)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(column)
+    return () => observer.disconnect()
+  }, [])
+  // 优先给编辑区保留 360px；最小窗口仍保留 Dock 的 160px，编辑工具区可纵向滚动。
+  const bottomDockMaxHeight = Math.min(
+    BOTTOM_DOCK_MAX_HEIGHT,
+    Math.max(BOTTOM_DOCK_MIN_HEIGHT, catColumnHeight - 360),
+  )
+  const bottomDockHeight = Math.min(uiState.bottomDockHeight, bottomDockMaxHeight)
   const assetNavigatorResizeStart = React.useRef<{
     pointerId: number
     clientX: number
@@ -210,21 +226,20 @@ export function LinguistWorkbenchShell({
       bottomDockResizeStart.current = {
         pointerId: event.pointerId,
         clientY: event.clientY,
-        height: uiState.bottomDockHeight,
+        height: bottomDockHeight,
       }
     },
-    [uiState.bottomDockHeight],
+    [bottomDockHeight],
   )
 
   const handleBottomDockPointerMove = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => {
       const start = bottomDockResizeStart.current
       if (start?.pointerId !== event.pointerId) return
-      setUiState({
-        bottomDockHeight: clampBottomDockHeight(start.height + start.clientY - event.clientY),
-      })
+      const height = Math.min(bottomDockMaxHeight, clampBottomDockHeight(start.height + start.clientY - event.clientY))
+      if (height !== bottomDockHeight) setUiState({ bottomDockHeight: height })
     },
-    [setUiState],
+    [setUiState, bottomDockHeight, bottomDockMaxHeight],
   )
 
   const handleBottomDockPointerEnd = React.useCallback(
@@ -240,12 +255,16 @@ export function LinguistWorkbenchShell({
 
   const handleBottomDockKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>): void => {
-      const height = getBottomDockHeightFromKey(uiState.bottomDockHeight, event.key)
+      let height = getBottomDockHeightFromKey(bottomDockHeight, event.key)
       if (height === null) return
       event.preventDefault()
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        height = Math.min(bottomDockMaxHeight, height)
+        if (height === bottomDockHeight) return
+      }
       setUiState({ bottomDockHeight: height })
     },
-    [setUiState, uiState.bottomDockHeight],
+    [setUiState, bottomDockHeight, bottomDockMaxHeight],
   )
 
   return (
@@ -267,7 +286,7 @@ export function LinguistWorkbenchShell({
             批次
           </Button>
         )}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-fit flex-1 items-center gap-2">
           <Languages aria-hidden="true" className="size-4 shrink-0 text-primary" />
           <h1 className="max-w-40 truncate text-sm font-semibold text-foreground">{project.name}</h1>
           {project.archivedAt !== undefined && (
@@ -276,7 +295,7 @@ export function LinguistWorkbenchShell({
               只读
             </span>
           )}
-          <span className="shrink-0 font-mono text-xs text-muted-foreground">
+          <span className="shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground">
             {project.sourceLocale} → {project.targetLocale}
           </span>
           <span className="truncate text-xs text-muted-foreground">
@@ -381,6 +400,7 @@ export function LinguistWorkbenchShell({
         )}
 
         <div
+          ref={catColumnRef}
           data-workbench-slot="cat-column"
           className={cn(
             'relative min-h-0 min-w-[32rem] flex-1 flex-col max-md:min-w-0',
@@ -390,7 +410,7 @@ export function LinguistWorkbenchShell({
           style={{
             // 工作区始终使用浮层，页面仅窄屏使用；由主区域留出浮层实际占用的高度。
             '--bottom-dock-overlay-height': bottomDock !== undefined && uiState.bottomDockOpen
-              ? `${uiState.bottomDockHeight}px`
+              ? `${bottomDockHeight}px`
               : '0px',
           } as React.CSSProperties}
         >
@@ -417,16 +437,16 @@ export function LinguistWorkbenchShell({
                 'relative min-h-0 shrink-0 overflow-hidden border-t border-border/50 bg-content-area max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20',
                 presentation === 'workspace' && 'absolute inset-x-0 bottom-0 z-20',
               )}
-              style={{ height: uiState.bottomDockHeight }}
+              style={{ height: bottomDockHeight }}
             >
               <div
                 role="separator"
                 aria-label="调整语言资产面板高度"
                 aria-orientation="horizontal"
                 aria-valuemin={BOTTOM_DOCK_MIN_HEIGHT}
-                aria-valuemax={BOTTOM_DOCK_MAX_HEIGHT}
-                aria-valuenow={uiState.bottomDockHeight}
-                aria-valuetext={`${uiState.bottomDockHeight} 像素`}
+                aria-valuemax={bottomDockMaxHeight}
+                aria-valuenow={bottomDockHeight}
+                aria-valuetext={`${bottomDockHeight} 像素`}
                 tabIndex={0}
                 title="拖动调整高度；方向键微调；Enter 或双击复位"
                 onPointerDown={handleBottomDockPointerDown}

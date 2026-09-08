@@ -1033,9 +1033,9 @@ export function SegmentEditor({
   ])
 
   return (
-    <section aria-label="Segment 编辑器" className="flex h-full min-h-0 flex-col gap-3 overflow-hidden p-4">
+    <section aria-label="Segment 编辑器" className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-4">
       <div className="flex shrink-0 flex-wrap gap-2">
-        <label className="relative min-w-[160px] flex-1">
+        <label className="relative min-w-[200px] flex-1">
           <Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-foreground/35" />
           <span className="sr-only">搜索源文或译文</span>
           <input
@@ -1046,7 +1046,7 @@ export function SegmentEditor({
             className="h-9 w-full rounded-lg bg-background/70 pl-9 pr-3 text-[13px] outline-none ring-1 ring-border/50 focus:ring-primary/50"
           />
         </label>
-        <label className="min-w-[160px] flex-1">
+        <label className="min-w-[140px] flex-1">
           <span className="sr-only">批次筛选</span>
           <select
             value={filters.assetId ?? ''}
@@ -1105,7 +1105,7 @@ export function SegmentEditor({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-[180px] flex-1">
         {state.status === 'loading' ? (
         <div className="flex flex-1 items-center justify-center gap-2 text-[13px] text-foreground/60">
           <Loader2 size={15} className="animate-spin" />

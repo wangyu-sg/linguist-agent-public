@@ -202,7 +202,7 @@ export function SegmentGrid({
         aria-readonly={archived}
         aria-label="Segment Grid"
         aria-describedby={instructionsId}
-        className="flex min-h-0 min-w-[760px] flex-1 flex-col"
+        className="flex min-h-0 min-w-[688px] flex-1 flex-col"
       >
         <SegmentGridHeader />
         <VirtualSegmentViewport

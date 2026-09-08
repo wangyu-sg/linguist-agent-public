@@ -231,7 +231,7 @@ test('语言资产 Dock 与状态栏使用同一不透明层级边界', () => {
     'utf8',
   )
   const dockStart = shell.indexOf('aria-label="语言资产面板"')
-  const dockEnd = shell.indexOf('style={{ height: uiState.bottomDockHeight }}', dockStart)
+  const dockEnd = shell.indexOf('>', dockStart)
   const footerStart = shell.indexOf('aria-label="本地化工作台状态栏"')
   const footerEnd = shell.indexOf('>', footerStart)
   assert.ok(dockStart >= 0 && dockEnd > dockStart)
