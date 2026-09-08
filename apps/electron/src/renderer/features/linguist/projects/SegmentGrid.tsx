@@ -202,7 +202,7 @@ export function SegmentGrid({
         aria-readonly={archived}
         aria-label="Segment Grid"
         aria-describedby={instructionsId}
-        className="flex min-h-0 min-w-[688px] flex-1 flex-col"
+        className="flex min-h-0 min-w-[704px] flex-1 flex-col"
       >
         <SegmentGridHeader />
         <VirtualSegmentViewport
@@ -286,7 +286,7 @@ function SegmentGridHeader(): React.ReactElement {
     <div
       role="row"
       aria-rowindex={1}
-      className="grid grid-cols-[32px_56px_minmax(0,1fr)_minmax(0,1fr)_100px_72px] gap-2 border-b border-border/40 px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-foreground/60"
+      className="grid overflow-hidden [scrollbar-gutter:stable] grid-cols-[32px_56px_minmax(0,1fr)_minmax(0,1fr)_100px_72px] gap-2 border-b border-border/40 px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-foreground/60"
     >
       <span role="columnheader" aria-label="选择片段">
         <span className="sr-only">选择</span>
@@ -314,7 +314,7 @@ function VirtualSegmentViewport({
       ref={scrollRef}
       data-testid="cat-virtual-scroll"
       role="rowgroup"
-      className="h-full min-h-0 flex-1 overflow-auto"
+      className="h-full min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]"
     >
       <div role="presentation" style={{ height: totalSize, position: 'relative' }}>
         {children}
