@@ -8,7 +8,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| App | `0.17.71` |
+| App | `0.17.72` |
 | Proma | `v0.19.37` |
 | Proma commit | `a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6` |
 | Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.85.0` |
@@ -18,7 +18,7 @@
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
-当前 worktree 的 Proma 稳定基线已推进到 `v0.19.37`，正式合并为 `4a7cbcec`；LA 保持独立应用版本 `0.17.71`。当前候选位于 `codex/la-audit-upstream-20260908`，尚未发布或替换本机安装版。
+当前 worktree 的 Proma 稳定基线已推进到 `v0.19.37`，正式合并为 `4a7cbcec`；LA 发布候选版本为 `0.17.72`。审查候选 `479120b7` 已快进合入 `main`，正在提交远程 CI 与自动发布；本机安装版由用户通过自动更新升级。
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
 
