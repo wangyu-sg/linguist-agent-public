@@ -119,28 +119,11 @@ test('getById / getByIds: bulk fetch follows input order, unknown ids omitted', 
   }
 })
 
-test('neighborsMany: two segment contexts execute one neighbor query and preserve local order', () => {
+test('neighborsMany: 保留局部顺序、边界和去重，零邻居不读取内容', () => {
   const { db, segments } = setup(6)
   try {
-    const sqlite = db.catDb.db
-    const prepare = sqlite.prepare.bind(sqlite)
-    let queryExecutions = 0
-    sqlite.prepare = ((sql: string) => {
-      const statement = prepare(sql)
-      if (!sql.includes('WITH requested')) return statement
-      return new Proxy(statement, {
-        get(target, property) {
-          const value = Reflect.get(target, property, target)
-          if (property !== 'all') return typeof value === 'function' ? value.bind(target) : value
-          return (...args: unknown[]) => {
-            queryExecutions += 1
-            return Reflect.apply(value as (...values: unknown[]) => unknown, target, args)
-          }
-        },
-      })
-    }) as typeof sqlite.prepare
-
-    const neighbors = db.segments.neighborsMany([segments[2]!, segments[4]!], 2)
+    const neighbors = db.segments.neighborsMany([segments[2]!, segments[4]!, segments[2]!], 2)
+    assert.equal(neighbors.size, 2)
     assert.deepEqual(
       neighbors.get(segments[2]!.id)?.previous.map((segment) => segment.ordinal),
       [0, 1],
@@ -157,7 +140,26 @@ test('neighborsMany: two segment contexts execute one neighbor query and preserv
       neighbors.get(segments[4]!.id)?.next.map((segment) => segment.ordinal),
       [5],
     )
-    assert.equal(queryExecutions, 1, 'batch neighbors must execute one SQL query')
+    assert.equal(db.segments.neighborsMany([], 2).size, 0)
+    assert.deepEqual(db.segments.neighborsMany([segments[0]!], 0).get(segments[0]!.id), { previous: [], next: [] })
+  } finally {
+    db.close()
+  }
+})
+
+test('neighborsMany: 一万段资产的 50 段上下文保持索引查询量级', () => {
+  const { db, segments } = setup(10_000)
+  try {
+    const selected = segments.slice(5_000, 5_050)
+    const started = performance.now()
+    const expected = new Map(selected.map((segment) => [segment.id, db.segments.neighbors(segment.id, 1)]))
+    const indexedMs = performance.now() - started
+    const batchStarted = performance.now()
+    const actual = db.segments.neighborsMany(selected, 1)
+    const batchMs = performance.now() - batchStarted
+    assert.deepEqual(actual, expected)
+    // 同机索引读取作参照并预留调度余量；阻止恢复逐请求扫描并排序整份资产。
+    assert.ok(batchMs < Math.max(250, indexedMs * 20), `批量邻接 ${batchMs.toFixed(1)}ms，索引参照 ${indexedMs.toFixed(1)}ms`)
   } finally {
     db.close()
   }

@@ -20,6 +20,7 @@ import {
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
+import { beginProjectNavigationAtom, projectSwitchGenerationAtom } from '@/host/project-switch'
 
 type JotaiStore = ReturnType<typeof createStore>
 type CreateProjectSession = (
@@ -145,6 +146,7 @@ export async function createActiveLinguistProjectSession(
   createSession: CreateProjectSession = (input) =>
     window.electronAPI.linguistSessionsCreateForProject(input),
 ): Promise<LinguistIpcResult<AgentSessionMeta>> {
+  const generation = store.set(beginProjectNavigationAtom)
   const projectId = resolveActiveLinguistProjectId(
     store.get(activeTabAtom),
     store.get(agentSessionsAtom),
@@ -156,7 +158,7 @@ export async function createActiveLinguistProjectSession(
     }
   }
   const result = await createProjectAgentSession(store, projectId, 'general', createSession)
-  if (result.ok) {
+  if (result.ok && store.get(projectSwitchGenerationAtom) === generation) {
     const opened = openTab(store.get(tabsAtom), {
       type: 'agent',
       sessionId: result.data.id,

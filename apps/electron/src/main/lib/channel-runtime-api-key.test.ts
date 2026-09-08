@@ -66,6 +66,7 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
+  process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS = '1'
   rmSync(join(tempHome, '.proma'), { recursive: true, force: true })
   rmSync(join(tempHome, '.proma-dev'), { recursive: true, force: true })
   rmSync(join(tempHome, '.linguist-agent'), { recursive: true, force: true })
@@ -113,6 +114,8 @@ describe('渠道运行时认证解析', () => {
 
     await expect(channelManager.resolveChannelRuntimeApiKey('codex-channel'))
       .resolves.toBe('oauth-access-token')
+    channelManager.updateChannel('codex-channel', { models: [] })
+    expect(channelManager.getChannelById('codex-channel')?.models).toEqual([])
   })
 
   test('Given 普通渠道 When 解析运行时 key Then 返回解密后的 API Key', async () => {
@@ -328,7 +331,7 @@ describe('渠道运行时认证解析', () => {
       },
     ])
 
-    expect(() => channelManager.importPromaProviderConfigs()).toThrow('当前 Provider 配置损坏，已取消导入')
+    expect(() => channelManager.importPromaProviderConfigs()).toThrow('当前 Provider 配置损坏')
     expect(readFileSync(currentPath, 'utf-8')).toBe(broken)
   })
 
@@ -351,5 +354,59 @@ describe('渠道运行时认证解析', () => {
 
     expect(() => channelManager.importPromaProviderConfigs()).toThrow('系统安全存储不可用')
     expect(existsSync(join(tempHome, '.linguist-agent', 'channels.json'))).toBe(false)
+  })
+
+  test('Given 正常安全存储 When 创建和更新 Provider Then 只落盘加密凭据并可解密', () => {
+    process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS = '0'
+    const channel = channelManager.createChannel({
+      name: 'Provider', provider: 'anthropic', baseUrl: 'https://example.test/v1',
+      apiKey: 'first-secret', models: [], enabled: true,
+    })
+    const path = join(tempHome, '.linguist-agent', 'channels.json')
+    expect(readFileSync(path, 'utf8')).not.toContain('first-secret')
+    expect(channelManager.decryptApiKey(channel.id)).toBe('first-secret')
+
+    channelManager.updateChannel(channel.id, { apiKey: 'replacement-secret' })
+    expect(readFileSync(path, 'utf8')).not.toContain('replacement-secret')
+    expect(channelManager.decryptApiKey(channel.id)).toBe('replacement-secret')
+    expect(getSafeStorageEncryptCalls()).toBe(2)
+  })
+
+  test('Given 系统安全存储不可用 When 创建、更新或读取密钥 Then 显式失败且不改配置或写迁移', async () => {
+    process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS = '0'
+    resetElectronMock(false)
+    const input = {
+      name: 'Provider', provider: 'anthropic' as const, baseUrl: 'https://example.test/v1',
+      apiKey: 'must-not-save', models: [], enabled: true,
+    }
+    const path = join(tempHome, '.linguist-agent', 'channels.json')
+    expect(() => channelManager.createChannel(input)).toThrow('系统安全存储不可用')
+    expect(existsSync(path)).toBe(false)
+
+    writeChannels([{ ...input, id: 'existing', apiKey: Buffer.from('encrypted-secret').toString('base64'), createdAt: 1, updatedAt: 1 }])
+    const original = readFileSync(path, 'utf8').replace('"version":2', '"version":1')
+    writeFileSync(path, original)
+    expect(() => channelManager.createChannel(input)).toThrow('系统安全存储不可用')
+    expect(() => channelManager.updateChannel('existing', { apiKey: 'must-not-save' })).toThrow('系统安全存储不可用')
+    expect(readFileSync(path, 'utf8')).toBe(original)
+    expect(existsSync(path + '.bak')).toBe(false)
+    await expect(channelManager.resolveChannelRuntimeApiKey('existing')).rejects.toThrow('系统安全存储不可用')
+    expect(readFileSync(path, 'utf8')).toBe(original)
+    expect(existsSync(path + '.bak')).toBe(false)
+  })
+
+  test.each(['{', '{"version":2,"channels":"broken"}'])('Given 损坏配置 %s When 列举、创建或更新 Provider Then 保留原文件', (broken) => {
+    process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS = '0'
+    const path = join(tempHome, '.linguist-agent', 'channels.json')
+    mkdirSync(join(tempHome, '.linguist-agent'), { recursive: true })
+    writeFileSync(path, broken)
+    expect(() => channelManager.listChannels()).toThrow('当前 Provider 配置损坏')
+    expect(() => channelManager.createChannel({
+      name: 'Provider', provider: 'anthropic', baseUrl: 'https://example.test/v1',
+      apiKey: 'new-secret', models: [], enabled: true,
+    })).toThrow('当前 Provider 配置损坏')
+    expect(() => channelManager.updateChannel('existing', { apiKey: 'new-secret' })).toThrow('当前 Provider 配置损坏')
+    expect(readFileSync(path, 'utf8')).toBe(broken)
+    expect(existsSync(path + '.bak')).toBe(false)
   })
 })

@@ -48,6 +48,7 @@ import {
 import { linguistProjectSummaryAtomFamily } from './project-summary-atoms'
 import { openLinguistAgentSession } from './open-linguist-session'
 import { ensureProjectAgentSession } from './project-agent-session'
+import { beginProjectNavigationAtom } from '@/host/project-switch'
 
 interface LoadingState {
   status: 'loading'
@@ -134,6 +135,7 @@ export function LocalizationProjectWorkbench({
     setSummaryRefreshToken((current) => current + 1)
   }, [])
   const openProjectAgent = React.useCallback((): void => {
+    const generation = store.set(beginProjectNavigationAtom)
     void ensureProjectAgentSession(store, projectId)
       .then((result) => {
         if (!result.ok) {
@@ -142,7 +144,7 @@ export function LocalizationProjectWorkbench({
           })
           return null
         }
-        return openLinguistAgentSession(store, result.data.id)
+        return openLinguistAgentSession(store, result.data.id, undefined, generation)
       })
       .then((result) => {
         if (result !== null && !result.ok) {

@@ -15,6 +15,7 @@ import {
 import {
   FormatExportError,
   FormatSegmentLostError,
+  JSON_ADAPTER_ID,
   PHRASE_MXLIFF_ADAPTER_ID,
   SDLXLIFF_ADAPTER_ID,
   XLIFF_ADAPTER_ID,
@@ -157,6 +158,9 @@ async function verifyReimport(
     targetLocale: project.targetLocale,
     ...(formatConfigJson === undefined ? {} : { formatConfigJson }),
   })
+  // 单语 JSON 的译文写入字符串叶子；重新导入时该叶子成为 source。
+  const monolingualJson = adapter.id === JSON_ADAPTER_ID
+    && new TextDecoder().decode(originalBytes).trimStart().startsWith('{')
   const byPosition = new Map<string, (typeof reimported.segments)[number]>()
   const originalByPosition = new Map<string, (typeof original.segments)[number]>()
   for (const segment of original.segments) {
@@ -182,13 +186,15 @@ async function verifyReimport(
   for (const segment of expected) {
     const imported = byPosition.get(positionOf(segment))!
     const before = originalByPosition.get(positionOf(segment))
-    if (before === undefined) {
+    if (before === undefined || before.source !== segment.source) {
       throw new FormatExportError(adapter.id, `original template differs at segment ${segment.id}`)
     }
-    if (imported.source !== segment.source) {
+    const expectedSource = monolingualJson ? segment.target || segment.source : segment.source
+    const expectedTarget = monolingualJson ? '' : segment.target
+    if (imported.source !== expectedSource) {
       throw new FormatExportError(adapter.id, `reimported source differs at segment ${segment.id}`)
     }
-    if (imported.target !== segment.target) {
+    if (imported.target !== expectedTarget) {
       throw new FormatExportError(adapter.id, `reimported target differs at segment ${segment.id}`)
     }
     if (before.target !== segment.target) changedTargetSegments += 1

@@ -6,7 +6,7 @@
  * - 读取：主文件 → .tmp 残留 → .bak 回退，多层容错
  */
 
-import { closeSync, copyFileSync, existsSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 
@@ -15,23 +15,11 @@ import { basename, dirname, join } from 'node:path'
  * 写入前自动保留 .bak 备份
  */
 export function writeJsonFileAtomic(filePath: string, data: object, skipBackup = false): void {
-  const tmpPath = filePath + '.tmp'
-  const bakPath = filePath + '.bak'
-
-  // 备份当前文件（如果存在且可读）
+  // 主文件与备份都复用独占临时文件，避免沿预置的 .tmp / .bak 符号链接写穿。
   if (!skipBackup && existsSync(filePath)) {
-    try {
-      copyFileSync(filePath, bakPath)
-    } catch {
-      // 备份失败不阻塞写入
-    }
+    writeTextFileAtomic(filePath + '.bak', readFileSync(filePath, 'utf-8'))
   }
-
-  // 写入临时文件
-  writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
-
-  // 原子重命名（POSIX rename 是原子操作）
-  renameSync(tmpPath, filePath)
+  writeTextFileAtomic(filePath, JSON.stringify(data, null, 2))
 }
 
 /**

@@ -376,8 +376,13 @@ function parseChannelsConfig(raw: string): { config: ChannelsConfig; changed: bo
   if (parsed === null || typeof parsed !== 'object') throw new Error('配置根必须是对象')
   const record = parsed as Record<string, unknown>
   if (!Array.isArray(record.channels)) throw new Error('channels 必须是数组')
+  if (record.appliedPresetModelUpdates !== undefined && (
+    !Array.isArray(record.appliedPresetModelUpdates)
+    || !record.appliedPresetModelUpdates.every((value) => typeof value === 'string')
+  )) throw new Error('appliedPresetModelUpdates 必须是字符串数组')
   return migrateConfig({
     version: typeof record.version === 'number' ? record.version : 1,
+    appliedPresetModelUpdates: record.appliedPresetModelUpdates as string[] | undefined,
     channels: record.channels.map((value, index) => {
       if (value === null || typeof value !== 'object') {
         throw new Error(`channels[${index}] 必须是对象`)
@@ -432,32 +437,25 @@ function parseChannelsConfig(raw: string): { config: ChannelsConfig; changed: bo
 }
 
 /**
- * 读取渠道配置文件。
- * 普通调用维持历史 fail-open；导入流程可要求 fail-closed，避免覆盖损坏的现有配置。
+ * 读取并校验渠道配置。写操作延后迁移落盘，直到本次变更全部通过校验。
  */
-function readConfig(failClosed = false): ChannelsConfig {
+function readConfig(persistMigration = true): ChannelsConfig {
   const configPath = getChannelsPath()
   if (!existsSync(configPath)) return { version: CONFIG_VERSION, channels: [] }
 
   try {
     const raw = readFileSync(configPath, 'utf-8')
-    const schemaMigration = failClosed
-      ? parseChannelsConfig(raw)
-      : migrateConfig(JSON.parse(raw) as ChannelsConfig)
+    const schemaMigration = parseChannelsConfig(raw)
     const presetModelUpdate = applyPresetModelCandidateUpdates(schemaMigration.config)
     const config = presetModelUpdate.config
-    if (!failClosed && (schemaMigration.changed || presetModelUpdate.changed)) {
+    if (persistMigration && (schemaMigration.changed || presetModelUpdate.changed)) {
       writeConfig(config)
       console.log('[渠道管理] 渠道配置已迁移并持久化')
     }
     return config
   } catch (error) {
-    if (failClosed) {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`当前 Provider 配置损坏，已取消导入：${message}`)
-    }
-    console.error('[渠道管理] 读取配置文件失败:', error)
-    return { version: CONFIG_VERSION, channels: [] }
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`当前 Provider 配置损坏，操作已取消：${message}`)
   }
 }
 
@@ -487,18 +485,6 @@ function writeConfig(config: ChannelsConfig): void {
   }
 }
 
-function canEncryptChannelApiKey(): boolean {
-  // 打包烟测使用临时 HOME；访问 macOS Keychain 会请求不存在的旧服务密钥并阻塞探针。
-  if (process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS === '1') return false
-
-  try {
-    return safeStorage.isEncryptionAvailable()
-  } catch (error) {
-    console.warn('[渠道管理] safeStorage 状态读取失败，将以明文存储', error)
-    return false
-  }
-}
-
 /**
  * 加密 API Key
  *
@@ -510,9 +496,10 @@ function canEncryptChannelApiKey(): boolean {
  * @returns base64 编码的加密字符串
  */
 function encryptApiKey(plainKey: string): string {
-  if (!canEncryptChannelApiKey()) {
-    console.warn('[渠道管理] safeStorage 加密不可用，将以明文存储')
-    return plainKey
+  // 显式烟测模式只使用临时 HOME 中的假凭据，避免访问真实 Keychain。
+  if (!plainKey || process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS === '1') return plainKey
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('系统安全存储不可用，无法保存 Provider 凭据')
   }
 
   const encrypted = safeStorage.encryptString(plainKey)
@@ -526,9 +513,9 @@ function encryptApiKey(plainKey: string): string {
  * @returns 明文 API Key
  */
 function decryptKey(encryptedKey: string): string {
-  if (!canEncryptChannelApiKey()) {
-    // 如果加密不可用，假设存储的是明文
-    return encryptedKey
+  if (!encryptedKey || process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS === '1') return encryptedKey
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('系统安全存储不可用，无法读取 Provider 凭据')
   }
 
   try {
@@ -581,7 +568,7 @@ export function listChannels(): Channel[] {
  * 返回的渠道中 apiKey 保持加密状态。
  */
 export function getChannelById(id: string): Channel | undefined {
-  const config = readConfig()
+  const config = readConfig(false)
   return config.channels.find((c) => c.id === id)
 }
 
@@ -592,7 +579,8 @@ export function getChannelById(id: string): Channel | undefined {
  * @returns 创建后的渠道（apiKey 为加密态）
  */
 export function createChannel(input: ChannelCreateInput): Channel {
-  const config = readConfig()
+  const apiKey = encryptApiKey(input.apiKey)
+  const config = readConfig(false)
   const now = Date.now()
 
   const channel: Channel = {
@@ -600,7 +588,7 @@ export function createChannel(input: ChannelCreateInput): Channel {
     name: input.name,
     provider: input.provider,
     baseUrl: input.baseUrl,
-    apiKey: encryptApiKey(input.apiKey),
+    apiKey,
     models: input.models,
     enabled: input.enabled,
     createdAt: now,
@@ -619,11 +607,11 @@ export function importPromaProviderConfigs(): PromaProviderImportResult {
   if (process.env.LINGUIST_SMOKE_PLAINTEXT_CREDENTIALS === '1') {
     throw new Error('打包烟测明文凭据模式不允许导入 Proma Provider 配置')
   }
-  if (!canEncryptChannelApiKey()) {
+  if (!safeStorage.isEncryptionAvailable()) {
     throw new Error('系统安全存储不可用，无法安全解密并重新加密 Proma Provider 配置')
   }
   const source = readPromaConfig()
-  const target = readConfig(true)
+  const target = readConfig(false)
   const targetIds = new Set(target.channels.map((channel) => channel.id))
   const imported: Channel[] = []
   let skippedCount = 0
@@ -659,7 +647,8 @@ export function importPromaProviderConfigs(): PromaProviderImportResult {
  * @returns 更新后的渠道
  */
 export function updateChannel(id: string, input: ChannelUpdateInput): Channel {
-  const config = readConfig()
+  const apiKey = input.apiKey ? encryptApiKey(input.apiKey) : undefined
+  const config = readConfig(false)
   const index = config.channels.findIndex((c) => c.id === id)
 
   if (index === -1) {
@@ -673,7 +662,7 @@ export function updateChannel(id: string, input: ChannelUpdateInput): Channel {
     name: input.name ?? existing.name,
     provider: input.provider ?? existing.provider,
     baseUrl: input.baseUrl ?? existing.baseUrl,
-    apiKey: input.apiKey ? encryptApiKey(input.apiKey) : existing.apiKey,
+    apiKey: apiKey ?? existing.apiKey,
     models: input.models ?? existing.models,
     enabled: input.enabled ?? existing.enabled,
     updatedAt: Date.now(),
@@ -690,7 +679,7 @@ export function updateChannel(id: string, input: ChannelUpdateInput): Channel {
  * 删除渠道
  */
 export function deleteChannel(id: string): void {
-  const config = readConfig()
+  const config = readConfig(false)
   const index = config.channels.findIndex((c) => c.id === id)
 
   if (index === -1) {
@@ -709,7 +698,7 @@ export function deleteChannel(id: string): void {
  * 仅在用户需要查看时调用。
  */
 export function decryptApiKey(channelId: string): string {
-  const config = readConfig()
+  const config = readConfig(false)
   const channel = config.channels.find((c) => c.id === channelId)
 
   if (!channel) {
@@ -749,7 +738,7 @@ export function persistCodexOAuthCredentials(channelId: string, credentials: Cod
  * Pi runtime 必须接收完整 credential，才能在长时间运行时按真实 expires 刷新 token。
  */
 export async function resolveCodexOAuthCredentials(channelId: string): Promise<CodexOAuthCredentials> {
-  const config = readConfig()
+  const config = readConfig(false)
   const channel = config.channels.find((c) => c.id === channelId)
   if (!channel) {
     throw new Error(`渠道不存在: ${channelId}`)
@@ -854,7 +843,7 @@ export function persistXaiOAuthCredentials(channelId: string, credentials: XaiOA
 
 /** 解析 xAI（Grok/X 订阅）凭据，按 expiry 刷新并回写加密渠道存储。 */
 export async function resolveXaiOAuthCredentials(channelId: string): Promise<XaiOAuthCredentials> {
-  const config = readConfig()
+  const config = readConfig(false)
   const channel = config.channels.find((c) => c.id === channelId)
   if (!channel || channel.provider !== 'xai') {
     throw new Error('xAI 订阅渠道不存在或类型不匹配')
@@ -902,7 +891,7 @@ export async function resolveChannelRuntimeApiKey(channelId: string): Promise<st
  * 向供应商的 API 发送简单请求，验证 API Key 和连接是否有效。
  */
 export async function testChannel(channelId: string): Promise<ChannelTestResult> {
-  const config = readConfig()
+  const config = readConfig(false)
   const channel = config.channels.find((c) => c.id === channelId)
 
   if (!channel) {

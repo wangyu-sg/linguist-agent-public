@@ -142,6 +142,12 @@ export function SegmentEditor({
   const lastFocusedSegmentId = React.useRef<string>()
   const deferredSearch = React.useDeferredValue(filters.search)
   const signature = `${projectId}\0${workflowStage}\0${filters.assetId ?? ''}\0${filters.currentStageState ?? ''}\0${deferredSearch}`
+  const currentSignature = React.useRef<string | undefined>(signature)
+  currentSignature.current = signature
+  React.useEffect(() => {
+    currentSignature.current = signature
+    return () => { currentSignature.current = undefined }
+  }, [signature])
   const data = state.status === 'ready' ? state.data : undefined
   const selectedPendingIds = [...selectedIds].filter((id) => pendingBySegment.has(id))
   const updateEditorCapability = React.useCallback((
@@ -318,7 +324,7 @@ export function SegmentEditor({
   }
 
   const focusRow = React.useCallback((index: number): void => {
-    if (data === undefined || index < 0 || index >= data.total) return
+    if (data === undefined || data.signature !== currentSignature.current || index < 0 || index >= data.total) return
     const segment = data.rows.get(index)
     setActiveSegmentId(data.segmentIds[index], segment?.assetId)
     setPendingFocusIndex(index)
@@ -602,6 +608,18 @@ export function SegmentEditor({
     refreshQaSummary,
   ])
 
+  const updateLoadedSegment = React.useCallback((
+    index: number,
+    segment: LinguistSegmentInfo,
+  ): void => {
+    setState((current) => {
+      if (current.status !== 'ready' || current.data.signature !== signature) return current
+      const rows = new Map(current.data.rows)
+      rows.set(index, segment)
+      return { status: 'ready', data: { ...current.data, rows } }
+    })
+  }, [signature])
+
   const saveTarget = React.useCallback(async (
     index: number,
     segment: LinguistSegmentInfo,
@@ -629,12 +647,7 @@ export function SegmentEditor({
         toast.success('译文已保存')
         return 'saved'
       }
-      setState((current) => {
-        if (current.status !== 'ready') return current
-        const rows = new Map(current.data.rows)
-        rows.set(index, result.data)
-        return { status: 'ready', data: { ...current.data, rows } }
-      })
+      updateLoadedSegment(index, result.data)
       setQaRefreshToken((current) => current + 1)
       onProjectSummaryInvalidated?.()
       toast.success('译文已保存')
@@ -643,19 +656,7 @@ export function SegmentEditor({
       toast.error('保存失败', { description: '与主进程通信异常（INTERNAL）' })
       return 'failed'
     }
-  }, [deferredSearch, filters.currentStageState, onProjectSummaryInvalidated, projectId])
-
-  const updateLoadedSegment = React.useCallback((
-    index: number,
-    segment: LinguistSegmentInfo,
-  ): void => {
-    setState((current) => {
-      if (current.status !== 'ready' || current.data.signature !== signature) return current
-      const rows = new Map(current.data.rows)
-      rows.set(index, segment)
-      return { status: 'ready', data: { ...current.data, rows } }
-    })
-  }, [signature])
+  }, [deferredSearch, filters.currentStageState, onProjectSummaryInvalidated, projectId, updateLoadedSegment])
 
   const mutateCurrentStage = React.useCallback(async (
     index: number,
@@ -725,7 +726,7 @@ export function SegmentEditor({
     index: number,
     assetId: string,
   ): Promise<void> => {
-    if (archived || data === undefined) return
+    if (archived || data === undefined || data.signature !== currentSignature.current) return
     let candidateRows = new Map(data.rows)
     let next = findNextEditableRow(candidateRows, index, assetId, data.total)
     try {

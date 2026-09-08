@@ -7,9 +7,9 @@ declare const __APP_VERSION__: string
 
 export const LINGUIST_BUILD_METADATA = {
   linguistAgentVersion: typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0-dev',
-  promaBaseVersion: '0.19.31',
-  promaBaseCommit: '7a3721d7cfe6e107b58c79e27a43fa463dac21ee',
-  formalMergeCommit: 'b2c71810d750e55d737942d7c3855da36bc8ad59',
+  promaBaseVersion: '0.19.37',
+  promaBaseCommit: 'a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6',
+  formalMergeCommit: '4a7cbcecf3b0be635a6dd49f71bff70f6ac9edb1',
   catSchema: 19,
   promptVersion: '3.1.4',
   hostContract: '未单独版本化',

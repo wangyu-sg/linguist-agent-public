@@ -6,6 +6,7 @@ import type {
 } from '@proma/shared'
 import { ensureProjectAgentSession } from './project-agent-session'
 import { activateLinguistAgentSession } from './open-linguist-session'
+import { beginProjectNavigationAtom, projectSwitchGenerationAtom } from '@/host/project-switch'
 
 export { restoreLastLocalizationProject } from '@/lib/linguist-navigation'
 
@@ -21,8 +22,10 @@ export async function openLocalizationProject(
   store: JotaiStore,
   projectId: string,
   openProject: OpenProject = (input) => window.electronAPI.linguistProjectsOpen(input),
+  generation = store.set(beginProjectNavigationAtom),
 ): Promise<LinguistIpcResult<LinguistProjectOpenResult>> {
   const result = await openProject({ projectId })
+  if (store.get(projectSwitchGenerationAtom) !== generation) return result
   if (!result.ok) return result
   if (
     result.data.project.id !== projectId
@@ -41,6 +44,7 @@ export async function openLocalizationProject(
     session.data,
     projectId,
     result.data.project.archivedAt !== undefined,
+    generation,
   )) {
     return {
       ok: false,

@@ -58,6 +58,7 @@ import {
 } from '../projects/project-utils'
 import { openLocalizationProject } from '../projects/open-localization-project'
 import { openLinguistAgentSession } from '../projects/open-linguist-session'
+import { beginProjectNavigationAtom, projectSwitchGenerationAtom } from '@/host/project-switch'
 import {
   createProjectAgentSession,
   resolveActiveLinguistProjectId,
@@ -620,11 +621,12 @@ export function LinguistSidebarContent({
     role: LinguistRole,
   ): Promise<void> => {
     if (creatingProjectId !== null) return
+    const generation = store.set(beginProjectNavigationAtom)
     setCreatingProjectId(projectId)
     setSessionError(null)
     try {
       if (activeProjectId !== projectId) {
-        const opened = await openLocalizationProject(store, projectId)
+        const opened = await openLocalizationProject(store, projectId, undefined, generation)
         if (!opened.ok) {
           setSessionError({ projectId, message: describeLinguistIpcError(opened.error) })
           return
@@ -635,7 +637,7 @@ export function LinguistSidebarContent({
         setSessionError({ projectId, message: describeLinguistIpcError(result.error) })
         return
       }
-      const opened = await openLinguistAgentSession(store, result.data.id)
+      const opened = await openLinguistAgentSession(store, result.data.id, undefined, generation)
       if (!opened.ok) {
         setSessionError({ projectId, message: describeLinguistIpcError(opened.error) })
       }
@@ -741,14 +743,16 @@ export function LinguistSidebarContent({
   const handleOpenProjectSettings = React.useCallback(async (
     projectId: string,
   ): Promise<void> => {
+    const generation = store.set(beginProjectNavigationAtom)
     try {
       if (activeProjectId !== projectId) {
-        const opened = await openLocalizationProject(store, projectId)
+        const opened = await openLocalizationProject(store, projectId, undefined, generation)
         if (!opened.ok) {
           setSessionError({ projectId, message: describeLinguistIpcError(opened.error) })
           return
         }
       }
+      if (store.get(projectSwitchGenerationAtom) !== generation) return
       store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
         projectSettingsOpen: true,
       })
@@ -760,6 +764,7 @@ export function LinguistSidebarContent({
   const handleConfirmDeleteSession = React.useCallback(async (): Promise<void> => {
     const target = pendingDeleteTarget
     if (!target) return
+    const generation = store.set(beginProjectNavigationAtom)
     try {
       await deleteSessionTarget(target, {
         deleteChatConversation: window.electronAPI.deleteConversation,
@@ -777,7 +782,7 @@ export function LinguistSidebarContent({
           target.id,
         )
         if (fallbackId) {
-          void openLinguistAgentSession(store, fallbackId)
+          void openLinguistAgentSession(store, fallbackId, undefined, generation)
         } else {
           closeProjectTab(target.projectId)
         }

@@ -164,73 +164,18 @@ export class SegmentsRepository {
     return { previous, next }
   }
 
-  /** 多段邻接快照；用一次 window query 代替每段 previous/next 两次读取。 */
+  /** 多段邻接复用按 asset/ordinal 索引和 LIMIT 查询，避免逐请求排序整份资产。 */
   neighborsMany(
     segments: readonly Segment[],
     count: number,
   ): ReadonlyMap<string, { previous: Segment[]; next: Segment[] }> {
-    const uniqueSegments = [...new Map(
-      segments.map((segment) => [segment.id as string, segment]),
-    ).values()]
-    const result = new Map(
-      uniqueSegments.map((segment) => [
-        segment.id as string,
-        { previous: [] as Segment[], next: [] as Segment[] },
-      ]),
-    )
-    if (uniqueSegments.length === 0 || count < 1) return result
-
-    const rows = this.db.db
-      .prepare(
-        `WITH requested(requested_id, asset_id, ordinal) AS (
-           VALUES ${uniqueSegments.map(() => '(?, ?, ?)').join(', ')}
-         ),
-         ranked AS (
-           SELECT requested.requested_id,
-                  segments.*,
-                  CASE
-                    WHEN segments.ordinal < requested.ordinal THEN 'previous'
-                    ELSE 'next'
-                  END AS neighbor_direction,
-                  ROW_NUMBER() OVER (
-                    PARTITION BY requested.requested_id,
-                      CASE
-                        WHEN segments.ordinal < requested.ordinal THEN 'previous'
-                        ELSE 'next'
-                      END
-                    ORDER BY
-                      CASE WHEN segments.ordinal < requested.ordinal THEN segments.ordinal END DESC,
-                      CASE WHEN segments.ordinal > requested.ordinal THEN segments.ordinal END,
-                      CASE WHEN segments.ordinal < requested.ordinal THEN segments.key END DESC,
-                      CASE WHEN segments.ordinal > requested.ordinal THEN segments.key END,
-                      CASE WHEN segments.ordinal < requested.ordinal THEN segments.id END DESC,
-                      CASE WHEN segments.ordinal > requested.ordinal THEN segments.id END
-                  ) AS neighbor_rank
-           FROM requested
-           INNER JOIN segments
-             ON segments.asset_id = requested.asset_id
-            AND segments.ordinal <> requested.ordinal
-         )
-         SELECT * FROM ranked
-         WHERE neighbor_rank <= ?
-         ORDER BY requested_id, neighbor_direction, neighbor_rank`,
-      )
-      .all(
-        ...uniqueSegments.flatMap((segment) => [
-          segment.id,
-          segment.assetId,
-          segment.ordinal,
-        ]),
-        count,
-      ) as Array<SegmentRow & {
-        requested_id: string
-        neighbor_direction: 'previous' | 'next'
-        neighbor_rank: number
-      }>
-    for (const row of rows) {
-      result.get(row.requested_id)![row.neighbor_direction].push(segmentFromRow(row))
+    const result = new Map<string, { previous: Segment[]; next: Segment[] }>()
+    for (const segment of segments) {
+      if (result.has(segment.id)) continue
+      result.set(segment.id, count < 1
+        ? { previous: [], next: [] }
+        : this.neighbors(segment.id, count))
     }
-    for (const neighbors of result.values()) neighbors.previous.reverse()
     return result
   }
 

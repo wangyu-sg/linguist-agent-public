@@ -551,6 +551,9 @@ export class ProjectDelivery {
       )
     }
     try {
+      // 适配器导出会 await；清单必须与此次读取的句段快照一致。
+      const projectRevision = computeLinguistProjectRevision(project, db)
+      const evidence = summarizeDeliveryEvidence(db, assetId, normalizeWorkflowStage(project.workflowStage))
       const staged = await stageAssetExport({
         project,
         projectDir: this.context.getProjectPaths(projectId).projectDir,
@@ -562,9 +565,9 @@ export class ProjectDelivery {
         exportsDir: this.context.getProjectPaths(projectId).exportsDir,
         stagingPath: staged.stagingPath,
         artifact: staged.artifact,
-        projectRevision: computeLinguistProjectRevision(project, db),
+        projectRevision,
         validation: options.validation ?? 'verified',
-        evidence: summarizeDeliveryEvidence(db, assetId, normalizeWorkflowStage(project.workflowStage)),
+        evidence,
       })
       return staged
     } catch (err) {

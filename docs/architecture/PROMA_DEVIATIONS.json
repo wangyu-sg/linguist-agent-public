@@ -1,25 +1,20 @@
 {
   "schemaVersion": 1,
   "baseline": {
-    "tag": "v0.18.2",
-    "commit": "92a635faa522d5d40544b06fdf74a28152012c71",
-    "formalMerge": "fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79"
+    "tag": "v0.19.37",
+    "commit": "a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6",
+    "formalMerge": "4a7cbcecf3b0be635a6dd49f71bff70f6ac9edb1"
   },
-  "recomputedOn": "2026-08-27",
-  "formalMergePatch": {
-    "changedPaths": 728,
-    "allowlistedPaths": 524,
-    "registeredCoreTouchpoints": 204
-  },
+  "recomputedOn": "2026-09-08",
   "currentLedger": {
-    "registeredCoreTouchpoints": 204
+    "registeredCoreTouchpoints": 278
   },
   "deviations": [
     {
       "id": "permanent-product-fork",
       "classification": "Permanent Product Fork",
       "ticket": "LA-SYNC-005",
-      "registeredTouchpoints": 195,
+      "registeredTouchpoints": 217,
       "scope": [
         "package identity and dependency lock",
         "Electron packaging, builder runtime launcher, and branded resources",
@@ -33,15 +28,30 @@
       }
     },
     {
+      "id": "generated-overlay",
+      "classification": "Generated / Overlay",
+      "ticket": "LA-SYNC-005",
+      "registeredTouchpoints": 2,
+      "scope": [
+        "manifest overlay",
+        "build metadata"
+      ],
+      "rationale": "生成 LA 产品 manifest 与当前构建标识。",
+      "sunset": {
+        "status": "regenerate-at-upstream-sync",
+        "condition": "每次同步重算并核对机器基线。"
+      }
+    },
+    {
       "id": "local-host-seams",
       "classification": "Local Host Seam",
       "ticket": "LA-SYNC-003 / LA-SYNC-004",
-      "registeredTouchpoints": 6,
+      "registeredTouchpoints": 11,
       "scope": [
         "runtime, session, preload, IPC, and shared contracts",
         "native Agent/Chat shell composition, sidebar, tabs, settings, and renderer state"
       ],
-      "rationale": "Proma v0.18.2 has no stable project-bound CAT authority and vertical-agent composition contract; these narrow seams retain the native Agent/Chat implementation.",
+      "rationale": "Proma 尚无等价的项目绑定 CAT authority 与 vertical-agent 合同；这些接缝复用原生 Agent/Chat。",
       "sunset": {
         "status": "review-at-upstream-sync",
         "condition": "Replace a seam only when upstream provides an equivalent stable Host Contract that preserves session authority and fail-closed CAT behavior."
@@ -65,18 +75,16 @@
       }
     },
     {
-      "id": "pi-compaction-continuation-context",
+      "id": "temporary-deviations",
       "classification": "Temporary Deviation",
       "ticket": "LA-SYNC-003",
-      "registeredTouchpoints": 1,
-      "paths": [
-        "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts"
-      ],
-      "rationale": "Preserves the project-bound continuation context across Pi compaction until the runtime exposes an equivalent host-owned continuation hook.",
+      "registeredTouchpoints": 48,
+      "rationale": "Pi continuation context、原生生命周期、预览和安全写入等尚未被上游等价吸收的修复；每个触点的具体理由和退役条件见 proma-touchpoints.json。",
       "sunset": {
         "status": "must-review-at-next-upstream-sync",
-        "condition": "Remove when Proma/Pi exposes an equivalent typed host-owned continuation context hook with project binding."
-      }
+        "condition": "每次上游同步逐项比较真实行为与回归证据，已有等价实现时删除本地差异。"
+      },
+      "ledger": "proma-touchpoints.json#temporary-deviation"
     }
   ]
 }

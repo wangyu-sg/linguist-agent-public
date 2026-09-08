@@ -9,11 +9,15 @@ import { findLatestMainAgentSession, mergeFetchedAgentSessions, upsertAgentSessi
 import { resolveSessionAppMode } from './app-mode-registry'
 
 // 所有项目入口共用代际；点击当前项目也必须取消较早的异步切换。
-const projectSwitchGenerationAtom = atom(0)
-
-export const selectProjectAtom = atom(null, async (get, set, { workspaceId, resetView }: { workspaceId: string; resetView?: boolean }) => {
+export const projectSwitchGenerationAtom = atom(0)
+export const beginProjectNavigationAtom = atom(null, (get, set) => {
   const generation = get(projectSwitchGenerationAtom) + 1
   set(projectSwitchGenerationAtom, generation)
+  return generation
+})
+
+export const selectProjectAtom = atom(null, async (get, set, { workspaceId, resetView }: { workspaceId: string; resetView?: boolean }) => {
+  const generation = set(beginProjectNavigationAtom)
   if (resetView === false) {
     // 内部工具页导航合同：只切 Workspace，不创建会话或改变工具页。
     if (!window.electronAPI.updateSettingsSync({ agentWorkspaceId: workspaceId })) throw new Error('项目设置保存失败')

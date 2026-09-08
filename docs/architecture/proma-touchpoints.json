@@ -1,9 +1,9 @@
 {
   "schemaVersion": 3,
-  "baseline": "7a3721d7cfe6e107b58c79e27a43fa463dac21ee",
-  "formalMerge": "b2c71810d750e55d737942d7c3855da36bc8ad59",
-  "recomputedOn": "2026-09-06",
-  "comment": "Proma-core touchpoints tracked against v0.19.31; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
+  "baseline": "a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6",
+  "formalMerge": "4a7cbcecf3b0be635a6dd49f71bff70f6ac9edb1",
+  "recomputedOn": "2026-09-08",
+  "comment": "Proma-core touchpoints tracked against v0.19.37; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
     "tests/",
@@ -402,7 +402,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
+      "reason": "LA 独立数据根；仅 schema v3 之前的非 Pi 会话执行 Runtime 迁移，避免每次冷启动清空当前 lastSessionId。"
     },
     {
       "file": "apps/electron/src/main/lib/bridge-attachment-utils.ts",
@@ -418,31 +418,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "用户显式 Provider-only 导入旧 Proma 配置，提交前验证且加密。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/chat-tools-watcher.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/chat-tools/nano-banana-tool.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
-    },
-    {
-      "file": "apps/electron/src/main/lib/chat-tools/web-search-tool.ts",
-      "ticket": "LA-SYNC-003",
-      "kind": "product-fork",
-      "owner": "main-product",
-      "mergePolicy": "keep-la",
-      "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
+      "reason": "显式 Provider-only 导入旧 Proma 配置；普通 CRUD 与导入均 fail closed，凭据加密失败或配置损坏时零写入，保留预设模型更新标记。"
     },
     {
       "file": "apps/electron/src/main/lib/config-paths.ts",
@@ -799,14 +775,6 @@
       "mergePolicy": "keep-la",
       "reason": "集成目录删除无效状态排序输入。固定上游 bbf577a8 尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-integrationcatalog"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/agent-skills/BuiltinMcpDetailSheet.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "BuiltinMcpDetailSheet.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/SkillCard.tsx",
@@ -1436,14 +1404,6 @@
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
       "reason": "StorageSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
-    },
-    {
-      "file": "apps/electron/src/renderer/components/settings/ToolSettings.tsx",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "ToolSettings.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/VoiceInputSettings.tsx",
@@ -2353,6 +2313,15 @@
       "mergePolicy": "host-seam",
       "hook": "evidence-runtime",
       "reason": "通过既有 utility capability RPC 等待会话恢复，并以有序回调传递最终请求/响应观察；只传可克隆数据，业务记账留在主进程。固定上游无等价 hook；上游覆盖同一恢复顺序和请求证据合同后可归还。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/safe-file.ts",
+      "ticket": "LA-SYNC-021",
+      "kind": "temporary-deviation",
+      "owner": "data-integrity",
+      "mergePolicy": "keep-la",
+      "hook": "writeJsonFileAtomic",
+      "reason": "JSON 与备份复用随机独占临时文件和原子 rename，避免固定 .tmp / .bak 符号链接写穿；上游提供等价安全写入后退役。"
     }
   ]
 }

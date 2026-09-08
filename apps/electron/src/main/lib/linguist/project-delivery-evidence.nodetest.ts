@@ -1,13 +1,59 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSeededEntropy, createStageEvidenceBaseline, type ProjectId, type StageEvidencePlan } from '@linguist/cat-core'
 import { CatStore } from '@linguist/cat-store'
-import { summarizeDeliveryEvidence } from './project-delivery'
+import { CatFormatRegistry, JsonAdapter } from '@linguist/cat-formats'
+import { ProjectDelivery, summarizeDeliveryEvidence } from './project-delivery'
 import { readLinguistExportManifests, recordLinguistExportManifest } from './export-manifest'
+import { projectPaths } from './paths'
+import { computeLinguistProjectRevision } from './project-revision'
 import { makeImportedAsset } from '../../../../../../packages/linguist-cat-store/src/testkit'
+
+test('异步导出期间修改项目，清单仍标注实际导出快照的 revision', async () => {
+  const rootDir = mkdtempSync(join(tmpdir(), 'delivery-revision-'))
+  const store = new CatStore({ rootDir, entropy: createSeededEntropy('delivery-revision') })
+  const project = store.createProject({ name: 'Revision', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'workspace' })
+  const db = store.openProject(project.id)
+  try {
+    const adapter = new JsonAdapter()
+    const bytes = new TextEncoder().encode('[{"id":"one","source":"Hello","target":"你好"}]')
+    const imported = await adapter.import({ bytes, filename: 'sample.json', sourceLocale: 'en', targetLocale: 'zh-CN' })
+    const { asset, segments } = db.assets.insertImported(imported)
+    db.saveAssetSourceForImport(asset, bytes)
+    const revisionBefore = computeLinguistProjectRevision(project, db)
+    const delivery = new ProjectDelivery({
+      rootDir,
+      now: () => new Date().toISOString(),
+      registry: new CatFormatRegistry().register(adapter),
+      getProject: id => store.getProject(id),
+      getProjectPaths: id => projectPaths(rootDir, id),
+      openProject: () => db,
+      assertProjectWritable: () => {},
+      call: fn => fn(),
+    })
+    const normal = await delivery.stageExport(project.id, asset.id)
+    assert.equal(readLinguistExportManifests(projectPaths(rootDir, project.id).exportsDir).get(normal.artifact.id)?.projectRevision, revisionBefore)
+
+    let finish!: () => void
+    const blocked = new Promise<void>(resolve => { finish = resolve })
+    const exportOriginal = adapter.export.bind(adapter)
+    adapter.export = async input => { await blocked; return exportOriginal(input) }
+    const pending = delivery.stageExport(project.id, asset.id)
+    db.segments.applyTargetEdit(segments[0]!.id, '您好', 0)
+    finish()
+    const staged = await pending
+    assert.equal(readFileSync(staged.stagingPath, 'utf8'), new TextDecoder().decode(bytes))
+    const manifest = readLinguistExportManifests(projectPaths(rootDir, project.id).exportsDir).get(staged.artifact.id)!
+    assert.equal(manifest.projectRevision, revisionBefore)
+    assert.notEqual(manifest.projectRevision, computeLinguistProjectRevision(project, db))
+  } finally {
+    db.close()
+    rmSync(rootDir, { recursive: true, force: true })
+  }
+})
 
 test('交付按句段选择当前任务；小范围不能掩盖旧缺口，完整替代后旧 stale 不再污染', () => {
   const store = new CatStore({ rootDir: mkdtempSync(join(tmpdir(), 'delivery-scopes-')), entropy: createSeededEntropy('delivery-scopes') })

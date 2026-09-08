@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { beginProjectNavigationAtom, projectSwitchGenerationAtom } from '@/host/project-switch'
 import { useAtomValue, useStore } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
 import {
@@ -36,20 +37,22 @@ export async function navigateToCatResult(
     getContext: (input) => window.electronAPI.linguistCatGetContext(input),
   },
 ): Promise<CatResultNavigationOutcome> {
+  const generation = store.set(beginProjectNavigationAtom)
   let opened: LinguistIpcResult<LinguistProjectOpenResult>
   try {
-    opened = await openLocalizationProject(store, location.projectId, deps.openProject)
+    opened = await openLocalizationProject(store, location.projectId, deps.openProject, generation)
   } catch {
     return 'none'
   }
-  if (!opened.ok) return 'none'
+  if (!opened.ok || store.get(projectSwitchGenerationAtom) !== generation) return 'none'
   const segmentId = location.segmentId
   if (segmentId === undefined) return 'project'
 
   try {
     const context = await deps.getContext({ projectId: location.projectId, segmentId })
     if (
-      !context.ok
+      store.get(projectSwitchGenerationAtom) !== generation
+      || !context.ok
       || context.data.segment.id !== segmentId
       || !LINGUIST_ASSET_ID_PATTERN.test(context.data.segment.assetId)
     ) return 'project'

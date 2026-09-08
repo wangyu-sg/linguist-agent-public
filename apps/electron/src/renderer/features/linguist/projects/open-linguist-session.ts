@@ -18,6 +18,7 @@ import {
 } from '@/atoms/tab-atoms'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
+import { beginProjectNavigationAtom, projectSwitchGenerationAtom } from '@/host/project-switch'
 import {
   ensureProjectAgentSession,
   selectProjectAgentSession,
@@ -39,7 +40,10 @@ export function activateLinguistAgentSession(
   session: AgentSessionMeta,
   projectId: string,
   readOnlyHistory: boolean,
+  generation: number,
 ): boolean {
+  // 过期导航已取消；原请求读取/创建仍可完成，但不得改变当前界面。
+  if (store.get(projectSwitchGenerationAtom) !== generation) return true
   const selected = readOnlyHistory
     ? selectProjectAgentSessionForHistory(store, projectId, session.id)
     : selectProjectAgentSession(store, projectId, session.id)
@@ -64,6 +68,7 @@ export async function openLinguistAgentSession(
   store: JotaiStore,
   sessionId: string,
   openProject: OpenProject = (input) => window.electronAPI.linguistProjectsOpen(input),
+  generation = store.set(beginProjectNavigationAtom),
 ): Promise<LinguistIpcResult<OpenLinguistSessionResult>> {
   const session = store.get(agentSessionsAtom).find((item) => item.id === sessionId)
   const sessions = store.get(agentSessionsAtom)
@@ -82,7 +87,7 @@ export async function openLinguistAgentSession(
       || opened.error.code === 'PROJECT_UNHEALTHY'
       || opened.error.code === 'STORE_NOT_FOUND'
     ) {
-      if (!activateLinguistAgentSession(store, session, projectId, true)) {
+      if (!activateLinguistAgentSession(store, session, projectId, true, generation)) {
         return {
           ok: false,
           error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
@@ -101,7 +106,7 @@ export async function openLinguistAgentSession(
 
   const readOnlyHistory = opened.data.project.archivedAt !== undefined
     || session.archived === true
-  if (!activateLinguistAgentSession(store, session, projectId, readOnlyHistory)) {
+  if (!activateLinguistAgentSession(store, session, projectId, readOnlyHistory, generation)) {
     return {
       ok: false,
       error: { code: 'INTERNAL', message: '项目会话绑定不一致' },
@@ -119,10 +124,12 @@ export async function openLinguistProjectFilesPanel(
   projectId: string,
   openProject: OpenProject = (input) => window.electronAPI.linguistProjectsOpen(input),
 ): Promise<LinguistIpcResult<OpenLinguistSessionResult>> {
+  const generation = store.set(beginProjectNavigationAtom)
   const ensured = await ensureProjectAgentSession(store, projectId)
   if (!ensured.ok) return ensured
-  const opened = await openLinguistAgentSession(store, ensured.data.id, openProject)
+  const opened = await openLinguistAgentSession(store, ensured.data.id, openProject, generation)
   if (!opened.ok) return opened
+  if (store.get(projectSwitchGenerationAtom) !== generation) return opened
   store.set(agentSidePanelOpenAtomFamily(ensured.data.id), true)
   store.set(agentDiffPanelTabAtom, (prev) => new Map(prev).set(ensured.data.id, 'files'))
   return opened

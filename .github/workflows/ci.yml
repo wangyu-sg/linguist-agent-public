@@ -75,6 +75,9 @@ jobs:
       - name: 安装依赖
         run: bun install --frozen-lockfile
 
+      - name: CAT 编辑器真实浏览器回归
+        run: bun test apps/electron/src/renderer/features/linguist/projects/cat-editor.browser.test.ts
+
       - name: 打包与垂直链路验证
         working-directory: apps/electron
         run: |

@@ -21,6 +21,7 @@ import {
 } from './cat-workspace-atoms'
 import { openLinguistAgentSession } from './open-linguist-session'
 import { ensureProjectAgentSession } from './project-agent-session'
+import { beginProjectNavigationAtom } from '@/host/project-switch'
 
 type JotaiStore = ReturnType<typeof createStore>
 type CreateProjectSession = (
@@ -38,13 +39,14 @@ export async function sendProjectAgentTask(
   message: string,
   createSession?: CreateProjectSession,
 ): Promise<ProjectAgentTaskSendResult> {
+  const generation = store.set(beginProjectNavigationAtom)
   const ensured = await ensureProjectAgentSession(store, projectId, createSession)
   if (!ensured.ok) return { status: 'error', error: ensured.error }
 
   const snapshot = captureLinguistTurnContextSnapshot(store, projectId)
   if (snapshot.selectionTruncated) return { status: 'selection-truncated' }
 
-  const opened = await openLinguistAgentSession(store, ensured.data.id)
+  const opened = await openLinguistAgentSession(store, ensured.data.id, undefined, generation)
   if (!opened.ok) return { status: 'error', error: opened.error }
 
   store.set(agentPendingPromptAtom, {

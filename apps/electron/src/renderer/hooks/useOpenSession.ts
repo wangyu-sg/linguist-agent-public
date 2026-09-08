@@ -33,6 +33,7 @@ import {
   settingsPendingSessionNavigationAtom,
 } from '@/atoms/settings-tab'
 import { openHostedAgentSession } from '@/host/agent-host-extension'
+import { beginProjectNavigationAtom } from '@/host/project-switch'
 
 interface OpenSessionOptions {
   bypassSettingsGuard?: boolean
@@ -63,6 +64,7 @@ export function useOpenSession(): OpenSessionFn {
 
   return React.useCallback(
     (type: OpenSessionTarget, sessionId: string, title: string, options?: OpenSessionOptions): void => {
+      store.set(beginProjectNavigationAtom)
       if (!options?.bypassSettingsGuard && settingsOpen && channelFormDirty) {
         setPendingSessionNavigation({ type, sessionId, title, onOpened: options?.onOpened })
         return

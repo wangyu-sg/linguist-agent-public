@@ -1643,7 +1643,6 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
       const statement = prepare(sql)
       if (![
         'SELECT * FROM segments WHERE id IN',
-        'WITH requested',
         'SELECT * FROM tm_units WHERE project_id = ? AND source_locale',
         'FROM tm_units AS u',
         'SELECT * FROM term_entries WHERE project_id = ?',
@@ -1702,7 +1701,7 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
     assert.ok(dto.contexts[0]!.evidence.some((item) => item.kind === 'tm'))
     assert.equal(dto.truncated, false)
     assert.equal(dto.nextCursor, undefined)
-    assert.equal(contextQueries, 4, '2 segments still use one bulk query per data family')
+    assert.equal(contextQueries, 3, '句段、TM 和术语各执行一次批量读取；邻接走有界索引查询')
     assert.deepEqual(
       fixture.db.segments.getByIds(before.map((segment) => segment.id)),
       before,

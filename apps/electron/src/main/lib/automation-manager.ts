@@ -70,9 +70,9 @@ function migrateLegacyFields(data: AutomationsIndex): boolean {
       dayOfMonth: a.dayOfMonth,
       scheduledAt: a.scheduledAt,
     })) changed = true
-    // 因此清空 lastSessionId，下一次运行必定创建新的 Pi 会话。
+    // v3 起只使用 Pi；仅旧索引中非 Pi 的会话需要失效，不能重复清空当前绑定。
     const raw = a as Automation & { agentRuntime?: unknown }
-    const wasLegacyRuntime = raw.agentRuntime !== 'pi'
+    const wasLegacyRuntime = data.version < 3 && raw.agentRuntime !== 'pi'
     if ('agentRuntime' in raw) {
       delete raw.agentRuntime
       changed = true

@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useAtom, type WritableAtom } from 'jotai'
 import type { LinguistSegmentInfo, LinguistTagProfileInfo } from '@proma/shared'
 import { compileTagFamilyRegex, scanTags } from '@linguist/cat-core'
 import { Check, Loader2, Redo2, Undo2, X } from 'lucide-react'
@@ -28,6 +29,15 @@ export interface TargetDraftState {
   future: readonly string[]
   composing: boolean
   compositionBase?: string
+}
+
+export interface TargetEditorDraft {
+  state: TargetDraftState
+  baseTarget: string
+  baseRevision: number
+  saving: boolean
+  conflict: boolean
+  resolvingConflict: boolean
 }
 
 export type TargetDraftAction =
@@ -89,6 +99,7 @@ export interface TargetEditorHandle {
 }
 
 export interface TargetEditorProps {
+  draftAtom: WritableAtom<TargetEditorDraft | undefined, [React.SetStateAction<TargetEditorDraft | undefined>], void>
   index: number
   segment: LinguistSegmentInfo
   archived: boolean
@@ -97,7 +108,6 @@ export interface TargetEditorProps {
   onSave: (target: string) => Promise<TargetSaveResult>
   onReload: () => Promise<LinguistSegmentInfo | undefined>
   onSaved?: (advance: boolean) => void
-  onDraftChange?: (draft: string, dirty: boolean) => void
   onHandleChange?: (handle: TargetEditorHandle | undefined) => void
   tagProfile?: LinguistTagProfileInfo
 }
@@ -321,6 +331,7 @@ function ProtectedTokenChips({
 
 export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorProps>(
   function TargetEditor({
+    draftAtom,
     index,
     segment,
     archived,
@@ -329,29 +340,28 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
     onSave,
     onReload,
     onSaved,
-    onDraftChange,
     onHandleChange,
     tagProfile,
   }, ref): React.ReactElement {
-    const [state, dispatch] = React.useReducer(
-      targetDraftReducer,
-      segment.target,
-      createTargetDraftState,
-    )
-    const [saving, setSaving] = React.useState(false)
+    const [draft, setDraft] = useAtom(draftAtom)
+    // TargetCell 只在有草稿时挂载编辑器；保存完成/取消后由同一 atom 卸载。
+    const { state, baseTarget, baseRevision, saving, conflict, resolvingConflict } = draft!
+    const updateDraft = React.useCallback((patch: Partial<TargetEditorDraft>): void => {
+      setDraft((current) => current === undefined ? current : { ...current, ...patch })
+    }, [setDraft])
+    const dispatch = React.useCallback((action: TargetDraftAction): void => {
+      setDraft((current) => current === undefined ? current : {
+        ...current,
+        state: targetDraftReducer(current.state, action),
+      })
+    }, [setDraft])
     const [blocked, setBlocked] = React.useState(false)
-    const [conflict, setConflict] = React.useState(false)
-    const [resolvingConflict, setResolvingConflict] = React.useState(false)
     const [tagHint, setTagHint] = React.useState<string>()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const composingRef = React.useRef(false)
     const pendingCaretRef = React.useRef<number>()
-    const previousSegmentRef = React.useRef(segment)
-    const draftValueRef = React.useRef(state.value)
-    const acceptedLatestRef = React.useRef<{ preserveDraft: boolean }>()
-    const readOnly = archived || segment.locked
+    const readOnly = archived || segment.locked || saving || resolvingConflict
     const dirty = state.value !== segment.target
-    draftValueRef.current = state.value
     const violations = React.useMemo(
       () => targetProtectionViolations(segment, state.value, tagProfile),
       [segment, state.value, tagProfile],
@@ -378,36 +388,31 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
     const canCommit = canCommitTarget(commitAvailability)
     const canConfirm = onSaved !== undefined && canConfirmTarget(commitAvailability)
 
-    React.useEffect(() => {
-      const previous = previousSegmentRef.current
-      previousSegmentRef.current = segment
-      if (previous.id !== segment.id) {
-        acceptedLatestRef.current = undefined
-        dispatch({ type: 'reset', value: segment.target })
-        setBlocked(false)
-        setConflict(false)
-        setTagHint(undefined)
-        return
-      }
-      if (
-        previous.revision === segment.revision
-        && previous.target === segment.target
-      ) return
-      const acceptedLatest = acceptedLatestRef.current
-      acceptedLatestRef.current = undefined
-      if (acceptedLatest?.preserveDraft) return
-      if (acceptedLatest !== undefined || draftValueRef.current === previous.target) {
-        dispatch({ type: 'reset', value: segment.target })
-        setBlocked(false)
-        setConflict(false)
-        return
-      }
-      setConflict(true)
-    }, [segment.id, segment.revision, segment.target])
+    React.useEffect(() => () => {
+      // IME 组合属于当前 DOM；卸载后保留文字并结束组合，重新打开即可继续编辑。
+      setDraft((current) => current?.state.composing ? {
+        ...current,
+        state: targetDraftReducer(current.state, {
+          type: 'composition-end', value: current.state.value,
+        }),
+      } : current)
+    }, [setDraft])
 
     React.useEffect(() => {
-      onDraftChange?.(state.value, dirty)
-    }, [dirty, onDraftChange, state.value])
+      if (baseRevision === segment.revision && baseTarget === segment.target) return
+      setDraft((current) => {
+        if (current === undefined) return current
+        const pristine = current.state.value === current.baseTarget
+        return {
+          ...current,
+          baseRevision: segment.revision,
+          baseTarget: segment.target,
+          state: pristine ? createTargetDraftState(segment.target) : current.state,
+          conflict: !pristine,
+        }
+      })
+      setBlocked(false)
+    }, [baseRevision, baseTarget, segment.revision, segment.target, setDraft])
 
     // U-12：值变化后自适应高度；IME 组合期间跳过（避免重排闪烁），组合结束时补量。
     React.useEffect(() => {
@@ -429,6 +434,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
       operation: 'manual' | 'protected',
       action: TargetDraftAction = { type: 'commit', value },
     ): boolean => {
+      if (readOnly) return false
       const nextViolations = targetProtectionViolations(segment, value, tagProfile)
       const currentIsValid = targetProtectionViolations(segment, state.value, tagProfile).length === 0
       if (
@@ -442,29 +448,29 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
       setTagHint(undefined)
       dispatch(action)
       return true
-    }, [segment, state.value, tagProfile])
+    }, [dispatch, readOnly, segment, state.value, tagProfile])
 
     const undo = React.useCallback((): boolean => {
-      if (state.composing || state.past.length === 0) return false
+      if (readOnly || state.composing || state.past.length === 0) return false
       setBlocked(false)
       dispatch({ type: 'undo' })
       return true
-    }, [state.composing, state.past.length])
+    }, [dispatch, readOnly, state.composing, state.past.length])
 
     const redo = React.useCallback((): boolean => {
-      if (state.composing || state.future.length === 0) return false
+      if (readOnly || state.composing || state.future.length === 0) return false
       setBlocked(false)
       dispatch({ type: 'redo' })
       return true
-    }, [state.composing, state.future.length])
+    }, [dispatch, readOnly, state.composing, state.future.length])
 
     const replace = React.useCallback((value: string): boolean => {
-      if (readOnly || composingRef.current) return false
+      if (composingRef.current) return false
       return acceptCandidate(value, 'protected')
-    }, [acceptCandidate, readOnly])
+    }, [acceptCandidate])
 
     const insert = React.useCallback((value: string): boolean => {
-      if (readOnly || composingRef.current) return false
+      if (composingRef.current) return false
       const textarea = textareaRef.current
       // Bottom Dock 按钮会暂时取得 DOM 焦点，但 textarea 仍保留用户最后的选区。
       const selection = textarea !== null
@@ -474,7 +480,7 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
       if (!acceptCandidate(result.value, 'protected')) return false
       pendingCaretRef.current = result.caret
       return true
-    }, [acceptCandidate, readOnly, state.value])
+    }, [acceptCandidate, state.value])
 
     const operationsRef = React.useRef({ replace, insert, undo, redo })
     operationsRef.current = { replace, insert, undo, redo }
@@ -499,46 +505,37 @@ export const TargetEditor = React.forwardRef<TargetEditorHandle, TargetEditorPro
         onSaved?.(true)
         return
       }
-      setSaving(true)
+      updateDraft({ saving: true })
       try {
         const completion = targetSaveCompletion(await onSave(state.value), advance)
         if (completion === 'conflict') {
-          setConflict(true)
+          updateDraft({ conflict: true })
         } else if (completion === 'close' || completion === 'advance') {
           onSaved?.(completion === 'advance')
         }
       } finally {
-        setSaving(false)
+        updateDraft({ saving: false })
       }
     }
 
     const resolveConflict = async (preserveDraft: boolean): Promise<void> => {
       if (resolvingConflict || saving) return
-      acceptedLatestRef.current = { preserveDraft }
-      setResolvingConflict(true)
+      updateDraft({ resolvingConflict: true })
       try {
         const latest = await onReload()
-        if (latest === undefined) {
-          acceptedLatestRef.current = undefined
-          return
-        }
-        if (
-          latest.revision === segment.revision
-          && latest.target === segment.target
-        ) {
-          acceptedLatestRef.current = undefined
-        }
-        dispatch({
-          type: 'reset',
-          value: latest.target,
+        if (latest === undefined) return
+        const latestState = createTargetDraftState(latest.target)
+        updateDraft({
+          state: preserveDraft
+            ? targetDraftReducer(latestState, { type: 'commit', value: state.value })
+            : latestState,
+          baseTarget: latest.target,
+          baseRevision: latest.revision,
+          conflict: false,
         })
-        if (preserveDraft) {
-          dispatch({ type: 'commit', value: state.value })
-        }
         setBlocked(false)
-        setConflict(false)
       } finally {
-        setResolvingConflict(false)
+        updateDraft({ resolvingConflict: false })
       }
     }
 

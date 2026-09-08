@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useSetAtom } from 'jotai'
+import { useAtom, useSetAtom } from 'jotai'
 import { toast } from 'sonner'
 import { AlertTriangle, Check, Loader2, Lock, Pencil, X } from 'lucide-react'
 import type {
@@ -20,6 +20,7 @@ import {
 import {
   createSegmentAgentReference,
   linguistSegmentAgentReferenceAtomFamily,
+  createLinguistTargetEditorDraftAtom,
 } from './cat-workspace-atoms'
 import { gridRowKeyAction, virtualRowKey } from './cat-virtual-utils'
 import {
@@ -29,6 +30,7 @@ import {
 } from './qa-findings-utils'
 import {
   TargetEditor,
+  createTargetDraftState,
   splitProtectedText,
   type ProtectedTextPart,
   type TargetEditorHandle,
@@ -213,6 +215,7 @@ export function SegmentGrid({
             return (
               <SegmentRow
                 key={virtualRow.key}
+                projectId={projectId}
                 measureElement={rowVirtualizer.measureElement}
                 index={virtualRow.index}
                 start={virtualRow.start}
@@ -321,6 +324,7 @@ function VirtualSegmentViewport({
 }
 
 interface SegmentRowProps {
+  projectId: string
   index: number
   start: number
   total: number
@@ -367,6 +371,7 @@ interface SegmentRowProps {
 }
 
 function SegmentRow({
+  projectId,
   index,
   start,
   total,
@@ -504,6 +509,7 @@ function SegmentRow({
             tagProfile={tagProfile}
           />
           <TargetCell
+            projectId={projectId}
             index={segment.ordinal}
             segment={segment}
             archived={archived}
@@ -750,6 +756,7 @@ function SourceCell({
 }
 
 function TargetCell({
+  projectId,
   index,
   segment,
   archived,
@@ -764,6 +771,7 @@ function TargetCell({
   onConfirmAndAdvance,
   onTargetEditorCapabilityChange,
 }: {
+  projectId: string
   index: number
   segment: LinguistSegmentInfo
   archived: boolean
@@ -781,7 +789,12 @@ function TargetCell({
     handle: TargetEditorHandle | undefined,
   ) => void
 }): React.ReactElement {
-  const [editing, setEditing] = React.useState(false)
+  const draftAtom = React.useMemo(
+    () => createLinguistTargetEditorDraftAtom(projectId, segment.id),
+    [projectId, segment.id],
+  )
+  const [draft, setDraft] = useAtom(draftAtom)
+  const editing = draft !== undefined
   const editButtonRef = React.useRef<HTMLButtonElement>(null)
   const editingCellRef = React.useRef<HTMLSpanElement>(null)
   const restoreFocusRef = React.useRef(false)
@@ -810,7 +823,7 @@ function TargetCell({
 
   const closeEditor = (restoreFocus: boolean): void => {
     restoreFocusRef.current = restoreFocus
-    setEditing(false)
+    setDraft(undefined)
   }
 
   if (!editing) {
@@ -835,7 +848,14 @@ function TargetCell({
           }
           onClick={() => {
             onActivate()
-            setEditing(true)
+            setDraft({
+              state: createTargetDraftState(segment.target),
+              baseTarget: segment.target,
+              baseRevision: segment.revision,
+              saving: false,
+              conflict: false,
+              resolvingConflict: false,
+            })
           }}
           className={cn(
             'group flex w-full items-start gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:hover:bg-transparent',
@@ -864,6 +884,7 @@ function TargetCell({
   return (
     <span role="gridcell" ref={editingCellRef}>
       <TargetEditor
+        draftAtom={draftAtom}
         index={index}
         segment={segment}
         archived={archived}

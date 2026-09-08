@@ -1,25 +1,18 @@
-# Proma Deviations — v0.18.2
+# Proma Deviations — v0.19.37
 
 > 机读真源：[PROMA_DEVIATIONS.json](./PROMA_DEVIATIONS.json)
-> 基线：v0.18.2 / 92a635faa522d5d40544b06fdf74a28152012c71
-> formal merge：fc8e8f3d976e2a187b5c8fa610dbdbbd2bb42d79
+> 当前基线与正式合并：[proma-baseline.json](./proma-baseline.json)
 
-本账本回答“为什么这不是上游代码、何时可以删掉”，而不是把每个差异都当作永久正当化。精确路径见 [proma-touchpoints.json](./proma-touchpoints.json)。当前账本共 `204` 个生产触点，测试文件不计入。
+本账本说明差异的原因与退役条件。精确文件、所有者、接缝和理由以 [proma-touchpoints.json](./proma-touchpoints.json) 为准；不把已登记误作永久合理。
 
-| 分类 | 当前范围 | 处理 / sunset |
-|---|---|---|
-| **Permanent Product Fork** | 产品身份、独立数据根、发布、安全策略、资源、CLI、lock/manifest（195 个已登记生产触点） | 产品仍为独立 Linguist Agent 时无计划移除；产品身份改变时重新评估。 |
-| **Generated / Overlay** | 上游同步生成或 overlay 的 manifest / metadata（2 个触点） | 每次同步重新生成并核对。 |
-| **Local Host Seam** | Runtime/Session/IPC/Preload 与原生 Agent/Chat Shell 的组合缝（6 个触点） | 上游提供等价、稳定且仍可 fail closed 的 Host Contract 后，在下一次上游同步逐项替换或删除。 |
-| **Linguist Extension** | main/lib/linguist、features/linguist、packages/linguist-*、项目 skills | 不进入 Proma Core；CAT vertical 仍是产品能力时保留。 |
-| **Temporary Deviation** | pi-agent-adapter.ts 的 compaction continuation context preservation（1 个触点） | Proma/Pi 提供等价的 typed host-owned continuation hook 后移除；下次上游同步必须复核。 |
+| 分类 | 当前生产触点 | 处理条件 |
+|---|---:|---|
+| Permanent Product Fork | 217 | 保留 LA 产品身份、独立数据根、发布与安全策略。 |
+| Generated / Overlay | 2 | 每次同步重算 manifest 和构建标识。 |
+| Local Host Seam | 11 | 上游提供等价、稳定且保留 Session authority 的合同后删除接缝。 |
+| Temporary Deviation | 48 | 每次同步逐项核对生命周期、预览、安全与 continuation 回归；有等价证据后退役。 |
+| Linguist Extension | 0 | 位于允许的 LA 路径，不计入 Proma Core 账本。 |
 
-## 禁止的解释
+本轮删除 5 个已被上游吸收或退役的触点，增加共享原子 JSON 写入的安全修复触点。合并记录与验证见 [全仓库审查与优化记录](../release/REPOSITORY_AUDIT_2026_09_08.md)。
 
-- “有 ticket”不等于可以绕开权限、Session authority 或 CAT fail-closed 约束。
-- “上游尚未提供 API”不等于可以扩散改动；优先收窄为一个 Local Host Seam。
-- “目前通过测试”不等于具有发布资格；packaged Gate、手工验收和受阻覆盖必须分别记录。
-
-## 更新流程
-
-每次上游同步后，先更新 [proma-baseline.json](./proma-baseline.json)，用实际 Git diff 重算触点，再复查此文件的分类和 sunset。删除已被上游吸收的条目，不能以旧票号保留 stale 记录。
+维护顺序为 baseline → 实际 diff → ledger → deviations → boundary + fusion。登记不能绕开权限、Session authority 或 CAT fail-closed；自动验证、打包验证、人工操作与产品资格分别记录。

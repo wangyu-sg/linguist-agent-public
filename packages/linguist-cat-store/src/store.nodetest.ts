@@ -1,12 +1,59 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { CsvAdapter, FormatExportError, JsonAdapter } from '@linguist/cat-formats'
 import { CatStore } from './store'
+import { stageAssetExport } from './export-staging'
 import { readBackupManifest } from './backup'
 import { LINGUIST_APPLICATION_ID } from './database'
 import { loadDatabaseSync } from './runtime'
 import { MIGRATIONS } from './schema'
 import { makeClock, makeEntropy, makeTempDir } from './testkit'
+
+test('交付往返：单语 JSON 写入译文，双语 JSON/CSV 保留源文，拒绝错误产物', async (t) => {
+  for (const sample of [
+    { filename: 'flat.json', adapter: new JsonAdapter(), original: '{"hello":"Hello","keep":"Keep","empty":""}', expected: '{"hello":"你好","keep":"Keep","empty":""}' },
+    { filename: 'nested.json', adapter: new JsonAdapter(), original: '\uFEFF {"menu":{"hello":"Hello","keep":"Keep"},"count":2,"items":["opaque"]}', expected: '\uFEFF {"menu":{"hello":"你好","keep":"Keep"},"count":2,"items":["opaque"]}' },
+    { filename: 'bilingual.json', adapter: new JsonAdapter(), original: '[{"id":"hello","source":"Hello","target":""},{"id":"keep","source":"Keep","target":""}]', expected: '[{"id":"hello","source":"Hello","target":"你好"},{"id":"keep","source":"Keep","target":""}]' },
+    { filename: 'bilingual.csv', adapter: new CsvAdapter(), original: 'id,source,target\nhello,Hello,\nkeep,Keep,\n', expected: 'id,source,target\nhello,Hello,你好\nkeep,Keep,\n' },
+  ]) {
+    await t.test(sample.filename, async () => {
+      const rootDir = makeTempDir()
+      const store = new CatStore({ rootDir, entropy: makeEntropy(sample.filename), now: makeClock() })
+      const project = store.createProject({ name: 'Export', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'ws' })
+      const db = store.openProject(project.id)
+      try {
+        const bytes = new TextEncoder().encode(sample.original)
+        const imported = await sample.adapter.import({ bytes, filename: sample.filename, sourceLocale: 'en', targetLocale: 'zh-CN' })
+        const { asset, segments } = db.assets.insertImported(imported)
+        db.saveAssetSourceForImport(asset, bytes)
+        const input = { project, projectDir: store.index.projectDir(project.id), db, assetId: asset.id, adapter: sample.adapter }
+        const unmodified = await stageAssetExport(input)
+        assert.deepEqual(readFileSync(unmodified.stagingPath), Buffer.from(bytes))
+
+        db.segments.applyTargetEdit(segments[0]!.id, '你好', 0)
+        const exported = await stageAssetExport(input)
+        assert.equal(readFileSync(exported.stagingPath, 'utf8'), sample.expected)
+        assert.equal(exported.verifiedSegments, segments.length)
+        assert.equal(exported.verification.changedTargetSegments, 1)
+        assert.deepEqual(db.readAssetSource(asset.id), Buffer.from(bytes))
+
+        // 模拟适配器丢失译文和改坏源文；交付校验必须继续 fail closed。
+        const exportValid = sample.adapter.export.bind(sample.adapter)
+        sample.adapter.export = async () => bytes
+        await assert.rejects(stageAssetExport(input), FormatExportError)
+        sample.adapter.export = async (exportInput) => new TextEncoder().encode(
+          new TextDecoder().decode(await exportValid(exportInput)).replace('Keep', 'Corrupted'),
+        )
+        await assert.rejects(stageAssetExport(input), FormatExportError)
+      } finally {
+        db.close()
+        rmSync(rootDir, { recursive: true, force: true })
+      }
+    })
+  }
+})
 
 test('openProject: creates a verifiable pre-migration backup before Schema 19 writes', () => {
   const store = new CatStore({

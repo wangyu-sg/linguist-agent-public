@@ -13,6 +13,7 @@ import {
 import { restoreLastLocalizationProject } from '@/lib/linguist-navigation'
 import { useCreateSession } from './useCreateSession'
 import { useOpenSession } from './useOpenSession'
+import { beginProjectNavigationAtom } from '@/host/project-switch'
 
 export type SwitchAppMode = (targetMode: AppMode) => void
 
@@ -31,6 +32,7 @@ export function useSwitchAppMode(): SwitchAppMode {
   const store = useStore()
 
   return React.useCallback((targetMode: AppMode): void => {
+    store.set(beginProjectNavigationAtom)
     if (targetMode === mode) return
     if (getAppModeDefinition(targetMode).restoresProjectTab) {
       restoreLastLocalizationProject(store)

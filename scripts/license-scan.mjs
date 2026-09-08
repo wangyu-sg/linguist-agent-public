@@ -185,6 +185,7 @@ for (const dir of workspaceDirs) {
 // 汇总第三方清单与许可
 const thirdParty = {}
 for (const [key, pkg] of closure) {
+  if (!licenseMeta[key]) Object.assign(licenseMeta, await scanDir(pkg.dir))
   const meta = licenseMeta[key]
   let licenses = meta?.licenses
   if (licenses == null) {

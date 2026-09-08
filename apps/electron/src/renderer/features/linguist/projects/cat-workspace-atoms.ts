@@ -1,4 +1,5 @@
 import { atom } from 'jotai'
+import type { SetStateAction } from 'react'
 import type { createStore } from 'jotai/vanilla'
 import {
   createLinguistTurnContextV1,
@@ -8,7 +9,7 @@ import {
   type LinguistTurnContextParseResult,
 } from '@proma/shared'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
-import type { TargetEditorHandle } from './TargetEditor'
+import type { TargetEditorDraft, TargetEditorHandle } from './TargetEditor'
 
 const BOTTOM_DOCK_TABS = [
   'tm',
@@ -348,6 +349,28 @@ const targetEditorCapabilityAtoms = new Map<
   string,
   ReturnType<typeof atom<LinguistTargetEditorCapability | undefined>>
 >()
+const targetEditorDraftsAtom = atom<ReadonlyMap<string, TargetEditorDraft>>(new Map())
+
+/** 未提交草稿留在当前渲染会话，跨虚拟行/工作区卸载保留；不进入 settings 或 Agent 上下文。 */
+export function createLinguistTargetEditorDraftAtom(
+  projectId: string,
+  segmentId: string,
+) {
+  const key = `${projectId}\0${segmentId}`
+  return atom(
+    (get) => get(targetEditorDraftsAtom).get(key),
+    (get, set, update: SetStateAction<TargetEditorDraft | undefined>) => {
+      const drafts = get(targetEditorDraftsAtom)
+      const current = drafts.get(key)
+      const draft = typeof update === 'function' ? update(current) : update
+      if (draft === current) return
+      const next = new Map(drafts)
+      if (draft === undefined) next.delete(key)
+      else next.set(key, draft)
+      set(targetEditorDraftsAtom, next)
+    },
+  )
+}
 const qaFindingsCapabilityAtoms = new Map<
   string,
   ReturnType<typeof atom<LinguistQaFindingsCapability | undefined>>
@@ -509,6 +532,9 @@ export function captureLinguistTurnContextSnapshot(
 export const clearLinguistWorkbenchUiStateAtom = atom(
   null,
   (_get, set, projectId: string) => {
+    set(targetEditorDraftsAtom, (drafts) => new Map(
+      [...drafts].filter(([key]) => !key.startsWith(`${projectId}\0`)),
+    ))
     set(workbenchUiStateByProjectAtom, (states) => {
       if (!states.has(projectId)) return states
       const updated = new Map(states)

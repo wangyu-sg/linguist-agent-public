@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-09-06
+更新时间：2026-09-08
 
 ## 当前真源
 
@@ -28,13 +28,15 @@
 
 ## 发布与历史
 
+- [2026-09-08 全仓库审查与优化](./release/REPOSITORY_AUDIT_2026_09_08.md) — 当前候选、问题证据、修复、验证和后续计划。
+
 - [2026-09-05 优化实施记录](./release/IMPLEMENTATION_2026_09_05.md) — 本轮修改、实际验证与尚缺资格。
 - [2026-09-06 优化实施记录](./release/IMPLEMENTATION_2026_09_06.md) — 工具说明、只读查询、岗位/Skill 定稿与定向验证。
 
 - [SBOM.md](./release/SBOM.md) / [sbom-full.json](./release/sbom-full.json)
 - [KNOWN_LIMITATIONS.md](./release/KNOWN_LIMITATIONS.md)
 - [NOTICE.md](../NOTICE.md)、[ATTRIBUTION.md](../ATTRIBUTION.md)、[SOURCE_PROVENANCE.md](./attribution/SOURCE_PROVENANCE.md)
-- [LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md](./implementation/LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md)、[FINAL_IMPLEMENTATION_REPORT_2026-08-10.md](./implementation/FINAL_IMPLEMENTATION_REPORT_2026-08-10.md) 与 G8/G9/G10 报告均为历史证据，不描述当前 v0.19.31 实现。
+- [LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md](./implementation/LA_PROMA_V0_17_1_IMPLEMENTATION_REPORT_2026-08-11.md)、[FINAL_IMPLEMENTATION_REPORT_2026-08-10.md](./implementation/FINAL_IMPLEMENTATION_REPORT_2026-08-10.md) 与 G8/G9/G10 报告均为历史证据，不描述当前实现。
 - [docs/archive/](./archive/) 保存旧基线与队列快照。
 
 维护规则见 [DOCUMENTATION_MAINTENANCE.md](./DOCUMENTATION_MAINTENANCE.md)。事实优先级始终是代码 / manifest / 测试 / 真实运行输出高于说明文档。

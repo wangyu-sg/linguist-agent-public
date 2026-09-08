@@ -1,11 +1,11 @@
 # Linguist Agent 当前交接
 
-本轮执行 2026-09-06 新优化方案，起点为 `ddc6661c`；实施阶段先本地收口，随后按用户授权完成在线更新 Release，不替换本机安装版。当前版本和实现只在 [当前事实](../CURRENT_FACTS_SIMPLE.md) 维护。
+本轮在独立 worktree `.worktrees/la-audit-upstream-20260908` 与分支 `codex/la-audit-upstream-20260908` 完成上游合并及前后端审查。起点为 `e940e1bd`，当前版本、合并身份与验证状态只在 [CURRENT_FACTS_SIMPLE.md](../CURRENT_FACTS_SIMPLE.md) 和 [机器基线](./architecture/proma-baseline.json) 维护。
 
-B–F 已完成上一轮自含多模态、最终请求回执、分页预算、独立 Stage、项目降级、规则覆盖、旧项目闭环和 utility 实际接入。本轮补齐 Context/read-doc 的只读旁路、Proposal 不替换 Stage、按资产的只读交付预检、模型可见的工具说明、岗位/Skill 定稿与既有规则续页协议。
+已确认问题、最小优化方案、实现路径、红绿回归、性能样本和最终验证命令见 [全仓库审查与优化记录](./release/REPOSITORY_AUDIT_2026_09_08.md)。本轮工作覆盖 CAT 草稿与保存竞态、JSON 交付、邻文查询、Automation 冷启动、凭据和配置数据完整性，以及上游冲突接缝。默认测试门禁同时纳入已隔离验证的遗漏回归。
 
-全部提交、修改文件、触点增删、失败及修正、真实运行状态、迁移与回滚边界见 [本轮实施记录](./release/IMPLEMENTATION_2026_09_06.md)；上一轮记录见 [2026-09-05 实施记录](./release/IMPLEMENTATION_2026_09_05.md)。历史 [此前验证记录](./release/VALIDATION_0_17_70.md) 不能覆盖新证据。
+后续先查该记录的最终验证与未完成项，再按 [TODO](../TODO.md) 完成真实 Provider 四岗位、真实格式产物、语言质量、IME/VoiceOver/Native Open/Save 和日用验收。合成资料、本地 Fake Provider、headless UI 与打包自动链路不能证明这些人工资格。
 
-本轮未执行真实收费 Provider、人工语言质量、Native Open/Save、IME/VoiceOver、目标平台安装和本机安装替换；这些资格继续保持未验证。在线更新 Release 已公开，平台发布已完成；此前 CI 打包验证空跑，修复后的 CI 已执行并拦截 Linguist 底部面板遮挡段落点击的问题；布局修复 `209c2640` 已由 CI `34080231269` 的真实六步链路及下载日志验证通过，人工覆盖仍为 partial，详见本轮实施记录。不要搜集用户凭据或用客户文件替代 fixture。README / AGENTS 的必要修订仍未修改。
+当前修改保留在候选分支；未推送、发布或替换用户安装版。原工作区 main 保持原状。历史发布和验证记录保留其原始版本与结论，不能覆盖当前候选。
 
-当前规范入口：[文档索引](./DOCS_INDEX.md)、[基线](./architecture/proma-baseline.json)、[触点](./architecture/proma-touchpoints.json)、[限制](./release/KNOWN_LIMITATIONS.md)、[TODO](../TODO.md)。
+规范入口：[文档索引](./DOCS_INDEX.md)、[触点](./architecture/proma-touchpoints.json)、[限制](./release/KNOWN_LIMITATIONS.md)。
