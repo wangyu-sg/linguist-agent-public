@@ -18,7 +18,7 @@
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
-Proma 稳定基线保持 `v0.19.37`，正式合并 `4a7cbcec`。当前候选为 `codex/la-proma-ui-convergence-20260909`，起点 `ccdd3956`；0.17.73 的本轮验证和发布进度见 [实施记录](./docs/release/VALIDATION_0_17_73.md)。上一正式版本的证据见 [0.17.72 发布验证](./docs/release/VALIDATION_0_17_72.md)。本轮不安装到用户日用环境。
+Proma 稳定基线保持 `v0.19.37`，正式合并 `4a7cbcec`。0.17.73 已从独立分支 `codex/la-proma-ui-convergence-20260909`（起点 `ccdd3956`）快进推送并公开发布，Tag 源码为 `75be5764`；本轮验证和发布证据见 [实施记录](./docs/release/VALIDATION_0_17_73.md)。上一正式版本的证据见 [0.17.72 发布验证](./docs/release/VALIDATION_0_17_72.md)。本轮不安装到用户日用环境。
 
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
@@ -44,7 +44,9 @@ Proma 稳定基线保持 `v0.19.37`，正式合并 `4a7cbcec`。当前候选为 
 - 修改建议默认当前批次 pending，列表及总数在 SQL 分页前过滤；历史 accepted 的正常 revision 增加不再显示版本冲突。
 - QA 列表、数量、下一项和交付默认当前批次；项目历史从项目设置显式进入。TM/TB 与风格资料仍项目共用。
 - 项目设置分为项目、批次、语言资产、Tag Profiles、维护与诊断；底部为辅助面板。切换或卸载 CAT 保留进程内草稿与撤销历史。
-- 类型检查、默认回归与真实 Electron 浏览器检查通过；QA 主进程范围测试及 Store 批次分页测试通过。干净候选六步打包验证通过（CAT 31 PASS / 0 FAIL / 2 MANUAL），远程发布证据尚在收集，以 [0.17.73 实施记录](./docs/release/VALIDATION_0_17_73.md) 为准。
+- 类型检查、默认回归与真实 Electron 浏览器检查通过；QA 主进程范围测试及 Store 批次分页测试通过。本地及远程六步打包验证通过（CAT 31 PASS / 0 FAIL / 2 MANUAL，辅助面板 26 PASS / 0 FAIL）；远程 CI 与 Release 均成功，macOS arm64/x64、Windows x64 安装包和更新清单齐全，以 [0.17.73 实施记录](./docs/release/VALIDATION_0_17_73.md) 为准。
+
+- macOS 红绿灯窗口按钮有用户报告问题，复现条件与根因尚未核实；按用户要求留到下一轮，见 [TODO](./TODO.md)。
 
 ## 已发布版本的历史证据
 

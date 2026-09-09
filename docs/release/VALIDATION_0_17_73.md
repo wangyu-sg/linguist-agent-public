@@ -70,6 +70,29 @@
 
 ## 发布与资格
 
-本地候选验证通过，下一步由远程 CI 与 Auto Release 发布 `v0.17.73`。远程链接在完成后补入；不安装到日用环境。
+- 发布源码：`75be5764a868afe53b683b97270727c8767c12cb`，相较本地打包源码只补验证文档。
+- [CI 34365239119](https://github.com/wangyu-sg/linguist-agent-public/actions/runs/34365239119) 全部通过。下载 `packaged-vertical-34365239119-1` 原始 artifact 后核验：源码 SHA 匹配、工作树干净、六步顺序正确、全部 passed / exitCode=0、各步日志非空。
+- CI CAT：31 PASS / 0 FAIL / 2 MANUAL；辅助面板专项：26 PASS / 0 FAIL / 0 MANUAL。
+- CI macOS arm64 探针 `app.asar` SHA-256：`7e8059eefdce77faa6162114355f2f4e988e60ca2c0153b9fcddb79907314a0d`。原始证据下载至任务临时目录 `la-ui-ci-evidence`；CI artifact 保留原报告与日志。
+- [Auto Release 34366359302](https://github.com/wangyu-sg/linguist-agent-public/actions/runs/34366359302) 已成功完成三个目标构建、macOS 更新清单合并和公开发布。不安装到日用环境。
+- 用户报告 macOS 红绿灯按钮问题，并明确要求留到下一轮修复、本次继续发布。已登记 TODO 与已知限制；尚未确认复现条件或根因。
 
 真实 Provider、IME/VoiceOver、Native Open/Save、G8 盲评、AC-009 产品资格与 AC-011 日用证据继续 pending / blocked。Fake Provider 自动链只能证明对应合成路径，不能提升这些资格。
+
+## 公开资产核验
+
+[v0.17.73 Release](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.73) 于 2026-09-09 15:04:10 UTC 公开。通过 GitHub latest Release API 确认 `tag_name=v0.17.73`、`draft=false`、`prerelease=false`。Tag 精确指向上述已通过 CI 的发布源码。
+
+7 项资产均非空；下载两份更新清单后确认版本、目标文件名与资产列表一致，macOS 两种架构 ZIP 大小与清单一致，两份清单的本地 SHA-256 与 GitHub digest 相同。下表安装包摘要来自 GitHub asset digest，未在本机重新下载安装全部平台包或验证安装升级。
+
+| 资产 | 字节 | GitHub SHA-256 |
+|---|---:|---|
+| `latest-mac.yml` | 524 | `0462aa153edcec226f8a895ae02001f3de54bfe5a8bda2e2be755e0d5052af9b` |
+| `latest.yml` | 339 | `b980e7730d7822fc7f7668638a14b8f1a3a292c3ac1fabf4a444dbb5f33e3de3` |
+| `Linguist-Agent-0.17.73-arm64.dmg` | 232174734 | `82d77527a6741911892e68747b2e953adf457d6a0c66484fcd02d4f0185d3f2d` |
+| `Linguist-Agent-0.17.73-arm64.zip` | 222148787 | `95176ca7c485bb6b080445f06a70d1dfe205103f2e15c15ac36758e260de1b97` |
+| `Linguist-Agent-0.17.73-x64.dmg` | 243570152 | `8d93441a674fdfe1833cd59290eeccd2e29a13671f677d09c1d401b95036ab5a` |
+| `Linguist-Agent-0.17.73-x64.exe` | 173143470 | `55e17bdf5125498fd18a1306c6d5e6582832ac3c5ad7921166bd1aa6042076c6` |
+| `Linguist-Agent-0.17.73-x64.zip` | 233520795 | `a1380e82bf038c5d6725e32ea79a04da288753eaf9020460fefd4940960921a9` |
+
+原工作副本未改动；实现和收尾文档均通过独立 worktree 完成并快进推送至远程 main。历史报告保留其原版本和证据，本轮没有安装或改写真实用户数据。
