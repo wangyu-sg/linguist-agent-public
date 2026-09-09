@@ -66,7 +66,7 @@ try {
     }
     if (expectedTitle) assert.equal(session.title, expectedTitle)
     await page.locator('[data-agent-presentation="full"]').getByRole('button', { name: `会话菜单：${session.title}`, exact: true }).waitFor()
-    assert.ok((await page.getByRole('button', { name: `打开标签页：${session.title}`, exact: true }).getAttribute('class'))!.includes('app-tab-active'))
+    assert.equal(await page.getByRole('button', { name: /^打开标签页：/ }).count(), 0, 'Agent 主区不应显示中心会话标签栏')
     await page.getByRole('button', { name: '切换到 Agent 模式（悬停查看项目）', exact: true }).hover()
     const name = workspaceId === fixture.a.id ? fixture.a.name : fixture.b.name
     assert.ok((await page.getByRole('button', { name, exact: true }).getAttribute('class'))!.includes('shadow-'))

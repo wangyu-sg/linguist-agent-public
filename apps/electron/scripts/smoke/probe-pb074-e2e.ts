@@ -764,7 +764,7 @@ async function openLinguistWorkbenchAndSelectLocation(
   const boundAgentTabVisible = await waitFor(async () => {
     const state = await readPersistedLinguistState(page, projectId)
     const tabVisible = await page.locator('[data-agent-presentation="full"]').isVisible()
-      && await page.locator('button.app-tab-active').count() === 0
+      && await page.getByRole('button', { name: /^打开标签页：/ }).count() === 0
     return tabVisible
       && state.tab?.type === 'agent'
       && state.activeTabId === state.tab.id
@@ -828,7 +828,7 @@ async function readRecoveredLinguistLocation(
   const status = workspace.locator('footer[aria-label="本地化工作台状态栏"]')
   const persisted = await readPersistedLinguistState(page, projectId)
   const tabVisible = await page.locator('[data-agent-presentation="full"]').isVisible()
-    && await page.locator('button.app-tab-active').count() === 0
+    && await page.getByRole('button', { name: /^打开标签页：/ }).count() === 0
   return {
     modeSelected: await mode.getAttribute('aria-selected') === 'true',
     boundAgentTabVisible: tabVisible
