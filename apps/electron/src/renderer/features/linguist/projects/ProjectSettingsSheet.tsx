@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { useAtomValue } from 'jotai'
+import { linguistQaFindingsCapabilityAtomFamily } from './cat-workspace-atoms'
 import { RefreshCw } from 'lucide-react'
 import type { LinguistProjectInfo, LinguistProjectSummary } from '@proma/shared'
 import { toast } from 'sonner'
@@ -12,6 +14,8 @@ import { ProjectDiagnosticsSettings } from './ProjectDiagnosticsSettings'
 import { ProjectMaintenanceSettings } from './ProjectMaintenanceSettings'
 import { ProjectWorkflowSettings } from './ProjectWorkflowSettings'
 import { ProjectAssetsSection } from './ProjectAssetsSection'
+import { ProposalInbox } from './ProposalInbox'
+import { QaFindingsPanel } from './QaFindingsPanel'
 import { ReferenceManager } from './ReferenceManager'
 import { StyleGuidePanel } from './StyleGuidePanel'
 import { TagProfilesPanel } from './TagProfilesPanel'
@@ -85,11 +89,15 @@ export function ProjectSettingsSheetBody({
   onProjectDeleted?: (projectId: string) => void
 }): React.ReactElement {
   const startTab = initialTab ?? 'project'
+  const [proposalHistoryOpen, setProposalHistoryOpen] = React.useState(false)
+  const [qaHistoryOpen, setQaHistoryOpen] = React.useState(false)
+  const qaCapability = useAtomValue(linguistQaFindingsCapabilityAtomFamily(project.id))
   return (
     // key 随直达分类变化重挂载 Tabs，让 defaultValue 生效；打开后用户手动切换不受影响。
     <Tabs key={startTab} defaultValue={startTab} className="mt-6">
-      <TabsList aria-label="项目设置分类">
+      <TabsList aria-label="项目设置分类" className="flex flex-wrap h-auto">
         <TabsTrigger value="project">项目</TabsTrigger>
+        <TabsTrigger value="batches">批次</TabsTrigger>
         <TabsTrigger value="resources">语言资产</TabsTrigger>
         <TabsTrigger value="tags">Tag Profiles</TabsTrigger>
         <TabsTrigger value="maintenance">维护</TabsTrigger>
@@ -115,13 +123,20 @@ export function ProjectSettingsSheetBody({
         />
         <ProjectWorkflowSettings project={project} onUpdated={onSummaryRefresh} />
         <ProjectAgentCapabilitiesSection project={project} onNavigate={onClose} />
+        <details className="mt-3" onToggle={(event) => setProposalHistoryOpen(event.currentTarget.open)}><summary className="cursor-pointer">全项目建议历史</summary>
+          {proposalHistoryOpen && <ProposalInbox projectId={project.id} archived={project.archivedAt !== undefined} onChanged={async () => onSummaryRefresh()} />}
+        </details>
+        <details className="mt-3" onToggle={(event) => setQaHistoryOpen(event.currentTarget.open)}><summary className="cursor-pointer">全项目 QA 历史</summary>
+          {qaHistoryOpen && <QaFindingsPanel projectScope projectId={project.id} archived={project.archivedAt !== undefined}
+            onJump={(finding) => { qaCapability?.jumpToFinding(finding); onClose() }} onChanged={async () => onSummaryRefresh()} refreshToken={0} />}
+        </details>
+      </TabsContent>
+      <TabsContent value="batches">
+        <ProjectAssetsSection projectId={project.id} archived={project.archivedAt !== undefined}
+          summary={summary} onSummaryRefresh={async () => onSummaryRefresh()} />
       </TabsContent>
       <TabsContent value="resources">
-        <ProjectResourceSettings
-          project={project}
-          summary={summary}
-          onSummaryRefresh={onSummaryRefresh}
-        />
+        <ProjectResourceSettings project={project} />
       </TabsContent>
       <TabsContent value="tags">
         <TagProfilesPanel project={project} onUpdated={onSummaryRefresh} />
@@ -232,28 +247,14 @@ export function ProjectLocaleSettings({
   )
 }
 
-/** 复用既有批次与语言资产管理组件；IPC、校验与只读规则继续由各组件持有。 */
-export function ProjectResourceSettings({
-  project,
-  summary,
-  onSummaryRefresh,
-}: {
-  project: LinguistProjectInfo
-  summary: LinguistProjectSummary | null
-  onSummaryRefresh: () => void
-}): React.ReactElement {
+/** 复用既有项目语言资产组件，保留各组件的校验与只读规则。 */
+export function ProjectResourceSettings({ project }: { project: LinguistProjectInfo }): React.ReactElement {
   const archived = project.archivedAt !== undefined
   const [resourceRefreshToken, setResourceRefreshToken] = React.useState(0)
 
   return (
     <section aria-label="项目语言资产" className="space-y-3 py-1">
-      <ProjectAssetsSection
-        projectId={project.id}
-        archived={archived}
-        summary={summary}
-        onSummaryRefresh={async () => onSummaryRefresh()}
-        onResourcesChanged={() => setResourceRefreshToken((current) => current + 1)}
-      />
+      <p className="text-xs text-muted-foreground">本页资料在项目内共用。批次截图、反馈和说明可关联到对应批次或片段；确需独立术语或风格约定时，另建项目。</p>
       <div className="flex items-center justify-between px-1">
         <span className="text-[13px] font-medium text-foreground/55">语言资产</span>
         <button

@@ -34,7 +34,7 @@ export function useSwitchAppMode(): SwitchAppMode {
   return React.useCallback((targetMode: AppMode): void => {
     store.set(beginProjectNavigationAtom)
     if (targetMode === mode) return
-    if (getAppModeDefinition(targetMode).restoresProjectTab) {
+    if (getAppModeDefinition(targetMode).restoresProjectSession) {
       restoreLastLocalizationProject(store)
       return
     }

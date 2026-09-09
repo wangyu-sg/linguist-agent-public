@@ -22,7 +22,6 @@ import {
   activeTabAtom,
   activeTabIdAtom,
   closeTab,
-  createLocalizationProjectTabId,
   projectCurrentAgentSessionIdMapAtom,
   tabsAtom,
   updateTabTitle,
@@ -583,7 +582,8 @@ export function LinguistSidebarContent({
     const closed = closeTab(
       store.get(tabsAtom),
       store.get(activeTabIdAtom),
-      createLocalizationProjectTabId(projectId),
+      store.get(tabsAtom).find((tab) => tab.type === 'agent' &&
+        store.get(agentSessionsAtom).some((session) => session.id === tab.sessionId && session.linguistProjectId === projectId))?.id ?? '',
     )
     store.set(tabsAtom, closed.tabs)
     store.set(activeTabIdAtom, closed.activeTabId)

@@ -1038,14 +1038,6 @@
       "reason": "通过 App Mode Registry 组合 Linguist 第三模式与 rail policy，不直接依赖 Linguist feature。"
     },
     {
-      "file": "apps/electron/src/renderer/components/app-shell/right-panel-layout.ts",
-      "ticket": "LA-SYNC-004",
-      "kind": "product-fork",
-      "owner": "renderer-product",
-      "mergePolicy": "keep-la",
-      "reason": "Workbench 扩展右侧区域使用剩余主窗口空间。"
-    },
-    {
       "file": "apps/electron/src/renderer/components/app-shell/RightSidePanel.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "product-fork",

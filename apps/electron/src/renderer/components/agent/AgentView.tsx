@@ -456,7 +456,7 @@ interface AgentViewProps {
 
 export function AgentView({ sessionId, embedded = false }: AgentViewProps): React.ReactElement {
   const compact = embedded
-  const hostExtension = useAgentHostExtension(sessionId, embedded ? 'rail' : 'full')
+  const hostExtension = useAgentHostExtension(sessionId)
   const hostCapabilities = hostExtension.hostCapabilities
   const store = useStore()
   const stopShortcutTarget = React.useMemo(() => ({ kind: 'agent' as const, sessionId }), [sessionId])

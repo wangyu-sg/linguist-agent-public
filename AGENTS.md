@@ -102,7 +102,7 @@ bun run smoke:vertical
 
 - Agent / Chat 必须保持原生 Proma 行为和界面。
 - Linguist 以项目绑定的原生 Agent Tab 为入口，右侧现有工作区承载 CAT，领域状态使用 project-scoped Jotai。
-- 展开 CAT 时复用同一个 `AgentView` 的 rail presentation；Full `AgentView` 保留 Proma Files / Changes 面板，rail 只承载对话。
+- CAT 是右侧原生工作区的唯一内容贡献；主区始终使用完整 `AgentView`，尺寸、分屏、折叠与快捷键跟随 Proma。
 - Agent 会话树排除带 `linguistProjectId` 的会话；Linguist 侧栏只展示项目绑定会话，并复用 Proma 的侧栏、搜索、项目头、会话行和树行为。
 - Linguist 会话必须直接继承固定 Proma 基线的 Workspace、Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration，不新增第二套宿主能力。
 - 点击项目确保绑定会话并打开原生 Agent Tab 与右侧 CAT；点击项目会话复用同一入口。项目归档、缺失或暂不可用时对话仍可继续，CAT mutation 由项目 Store 状态 fail closed。
@@ -163,7 +163,7 @@ webPreferences: {
 ## CAT 分层
 
 ```text
-Linguist Workbench / Agent Rail
+Linguist Workbench / Native Agent
         ↓ IPC / Session binding
 Electron Linguist Services
         ↓
@@ -188,7 +188,7 @@ CAT 写入规则：
 
 `LinguistProjectService` 是现有门面，内部按 lifecycle、resources、quality、delivery 和稳定类型合同分层。CAT Tool 工厂位于 `packages/linguist-cat-tools/src/factory.ts`；工具按项目、参考、QA、Proposal、阶段确认、导入、交付、Tag、术语、Workbook 和 Voice 拆分，四岗位共享同一完整 Toolset。主进程必须重新校验 Session binding、文件可读性、交付模式与摘要，模型不得提交 `projectId`。
 
-同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须确认 Sheet / 列 mapping；复用 mapping 时歧义必须 fail closed，`locked` 列贯穿预览、保存和导入。只有已确认当前阶段的 Segment 可设为 approved exemplar。原生 SDLTM / SDLTB 可导入；批次源文件与保留原件的语言资产复用 Proma Preview Tab。受管 Context 图片通过现有读取工具作为 Pi 视觉内容提供，不新增 OCR 平台或图片数据库。
+同一项目可持续接收多个批次；批次是任务源文件，语言资产是 TM/TB/Style Guide/Context 等项目级资料，不得混为“全部资产”。XLSX 批次与 TM/TB 导入必须确认 Sheet / 列 mapping；复用 mapping 时歧义必须 fail closed，`locked` 列贯穿预览、保存和导入。只有已确认当前阶段的 Segment 可设为 approved exemplar。原生 SDLTM / SDLTB 可导入；批次源文件与保留原件的语言资产使用当前宿主会话的 Proma 右侧 Preview。受管 Context 图片通过现有读取工具作为 Pi 视觉内容提供，不新增 OCR 平台或图片数据库。
 
 ## 数据目录
 

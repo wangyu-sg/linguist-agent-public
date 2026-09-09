@@ -1147,6 +1147,7 @@ export class LinguistProjectService {
   listQaFindings(
     projectId: string,
     filter: {
+      assetId?: string
       segmentId?: string
       code?: string
       status?: 'open' | 'resolved' | 'waived'

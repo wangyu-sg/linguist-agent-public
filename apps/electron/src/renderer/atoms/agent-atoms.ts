@@ -545,7 +545,6 @@ export interface AgentSidePanelLayout {
   width: number
   hasOpenedWideWorkspace: boolean
   widePanelWidthOverride: number | null
-  expanded: boolean
 }
 
 export const MAX_PERSISTED_AGENT_SIDE_PANEL_LAYOUTS = 50
@@ -601,7 +600,6 @@ export const agentSidePanelLayoutAtomFamily = atomFamily((sessionId: string) => 
       width: stored?.width ?? get(legacyAgentSidePanelWidthAtom),
       hasOpenedWideWorkspace: stored?.hasOpenedWideWorkspace ?? false,
       widePanelWidthOverride: stored?.widePanelWidthOverride ?? null,
-      expanded: stored?.expanded ?? false,
     }
   },
   (get, set, update: AgentSidePanelLayout | ((previous: AgentSidePanelLayout) => AgentSidePanelLayout)) => {
@@ -610,7 +608,6 @@ export const agentSidePanelLayoutAtomFamily = atomFamily((sessionId: string) => 
         width: get(legacyAgentSidePanelWidthAtom),
         hasOpenedWideWorkspace: false,
         widePanelWidthOverride: null,
-        expanded: false,
       }
       const next = typeof update === 'function' ? update(current) : update
       const nextLayouts = { ...previous, [sessionId]: next }

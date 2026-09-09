@@ -25,7 +25,7 @@ modification are:
 - channel/provider, OAuth, and session-management changes maintained as
   in-repo commits on top of the upstream baseline
   (`docs/architecture/UPSTREAM_BASELINE.md`, baseline SHA
-  `7a3721d7cfe6e107b58c79e27a43fa463dac21ee`).
+  `a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6`).
 
 Per-file provenance, including every copy/adaptation from the legacy
 linguist-agent repository, is registered in

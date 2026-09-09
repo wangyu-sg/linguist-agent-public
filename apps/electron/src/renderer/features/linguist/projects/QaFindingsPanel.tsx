@@ -66,6 +66,7 @@ export function qaStateMatchesScope(stateScopeKey: string, currentScopeKey: stri
 
 export function buildQaFindingsRequest({
   projectId,
+  assetId,
   segmentId,
   status,
   severity,
@@ -73,6 +74,7 @@ export function buildQaFindingsRequest({
   offset,
 }: {
   projectId: string
+  assetId?: string
   segmentId?: string
   status: LinguistQaFindingStatus
   severity: LinguistQaFindingSeverity | ''
@@ -81,6 +83,7 @@ export function buildQaFindingsRequest({
 }): LinguistCatListQaFindingsRequest {
   return {
     projectId,
+    ...(assetId !== undefined ? { assetId } : {}),
     ...(segmentId !== undefined ? { segmentId } : {}),
     status,
     ...(severity !== '' ? { severity } : {}),
@@ -127,7 +130,9 @@ export function QaPanelScopeNotice({
   scopeId,
   segmentId,
   archived,
+  projectScope = false,
 }: {
+  projectScope?: boolean
   scopeId: string
   segmentId?: string
   archived: boolean
@@ -136,7 +141,7 @@ export function QaPanelScopeNotice({
     <>
       <p id={`${scopeId}-run-note`} className="text-[11px] text-foreground/60">
         {segmentId === undefined
-          ? '显示整个项目的 Finding；运行 QA 只扫描当前批次'
+          ? projectScope ? '全项目 QA 历史' : '显示当前批次的 Finding；运行 QA 只扫描当前批次'
           : '仅显示当前片段；运行 QA 只扫描当前批次'}
       </p>
       {archived && (
@@ -156,7 +161,9 @@ export function QaFindingsPanel({
   onJump,
   onChanged,
   refreshToken,
+  projectScope = false,
 }: {
+  projectScope?: boolean
   projectId: string
   /** QA 执行范围固定为当前批次；Finding 列表仍可按项目查看。 */
   activeAssetId?: string
@@ -172,9 +179,9 @@ export function QaFindingsPanel({
   const [dispositionFilter, setDispositionFilter] = React.useState<LinguistQaFindingDisposition | ''>('')
   const [currentSegmentOnly, setCurrentSegmentOnly] = React.useState(false)
   const [offset, setOffset] = React.useState(0)
-  // U-02：默认项目级；segment 过滤只来自显式开关。
+  // 默认当前批次；片段过滤与全项目历史均由显式入口开启。
   const segmentId = resolveQaPanelSegmentScope(activeSegmentId, currentSegmentOnly)
-  const scopeKey = qaFindingsScopeKey(projectId, segmentId)
+  const scopeKey = `${qaFindingsScopeKey(projectId, segmentId)}\0${projectScope ? 'project' : activeAssetId}\0${statusFilter}\0${severityFilter}\0${dispositionFilter}`
   const [state, setState] = React.useState<QaState>({ status: 'loading', scopeKey })
   const [reloadToken, setReloadToken] = React.useState(0)
   const [running, setRunning] = React.useState(false)
@@ -188,9 +195,13 @@ export function QaFindingsPanel({
   const accessibilityScopeId = `qa-findings-${projectId}-${segmentId ?? 'project'}`
 
   const load = React.useCallback(async (): Promise<QaState> => {
+    if (!projectScope && activeAssetId === undefined) {
+      return { status: 'ready', scopeKey, data: { items: [], total: 0, offset: 0, hasMore: false } }
+    }
     try {
       const result = await window.electronAPI.linguistCatListQaFindings(buildQaFindingsRequest({
         projectId,
+        assetId: projectScope ? undefined : activeAssetId,
         segmentId,
         status: statusFilter,
         severity: severityFilter,
@@ -208,6 +219,8 @@ export function QaFindingsPanel({
       }
     }
   }, [
+    activeAssetId,
+    projectScope,
     dispositionFilter,
     offset,
     projectId,
@@ -357,6 +370,8 @@ export function QaFindingsPanel({
     ? state
     : { status: 'loading', scopeKey }
 
+  if (!projectScope && activeAssetId === undefined) return <p>选择批次后查看 QA</p>
+
   return (
     <section
       aria-label={segmentId === undefined ? 'QA Findings' : '当前片段 QA Findings'}
@@ -367,6 +382,7 @@ export function QaFindingsPanel({
         <div>
           <h3 className="text-[12px] font-medium">QA Findings</h3>
           <QaPanelScopeNotice
+            projectScope={projectScope}
             scopeId={accessibilityScopeId}
             segmentId={segmentId}
             archived={archived}
@@ -468,6 +484,7 @@ export function QaFindingsPanel({
               <QaFindingCard
                 key={finding.id}
                 finding={finding}
+                projectScope={projectScope}
                 idPrefix={accessibilityScopeId}
                 archived={archived}
                 mutatingId={mutatingId}
@@ -498,6 +515,7 @@ export function QaFindingsPanel({
 }
 
 export function QaFindingCard({
+  projectScope = false,
   idPrefix,
   finding,
   archived,
@@ -512,6 +530,7 @@ export function QaFindingCard({
   onCancelWaiver,
   onWaiverReasonChange,
 }: {
+  projectScope?: boolean
   idPrefix: string
   finding: LinguistQaFindingInfo
   archived: boolean
@@ -602,6 +621,7 @@ export function QaFindingCard({
             >
               豁免此条
             </button>
+            {projectScope && (
             <button
               type="button"
               disabled={waiveReason !== undefined}
@@ -612,6 +632,7 @@ export function QaFindingCard({
             >
               豁免项目内同规则
             </button>
+            )}
             {waiveReason !== undefined && (
               <span id={waiveReasonId} className="sr-only">{waiveReason}</span>
             )}

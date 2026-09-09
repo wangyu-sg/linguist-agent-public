@@ -17,7 +17,6 @@ import {
   sessionViewStateMapAtom,
   tabMruAtom,
   tabsAtom,
-  type LocalizationProjectTab,
 } from '@/atoms/tab-atoms'
 import { previewFileMapAtom } from '@/atoms/preview-atoms'
 import { getInitialTabSwitchIndex, promoteTabMru } from '@/lib/tab-switching'
@@ -40,7 +39,7 @@ import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 
 type SwitchSectionId = 'collaboration' | 'recent'
-type SwitchCandidateType = 'chat' | 'agent' | 'linguist-project'
+type SwitchCandidateType = 'chat' | 'agent'
 
 interface SwitchCandidate {
   id: string
@@ -126,17 +125,7 @@ export function TabSwitcher(): ReactElement | null {
       .filter((session) => !session.archived && !session.isDraft && !draftSessionIds.has(session.id))
       .map(buildAgentCandidate)
 
-    const projectCandidates = tabs
-      .filter((tab): tab is LocalizationProjectTab => tab.type === 'linguist-project')
-      .map((tab): SwitchCandidate => ({
-        id: tab.id,
-        type: 'linguist-project',
-        title: tab.title,
-        updatedAt: 0,
-        status: 'idle',
-      }))
-
-    const allCandidates = [...chatCandidates, ...agentCandidates, ...projectCandidates]
+    const allCandidates = [...chatCandidates, ...agentCandidates]
 
     const candidateById = new Map(allCandidates.map((candidate) => [candidate.id, candidate]))
     const activeAgentSession = activeSessionId
@@ -252,22 +241,6 @@ export function TabSwitcher(): ReactElement | null {
       // 否则 activeTab 已变更而 TabContent 仍不可见。
       setAutomationForm({ open: false, draft: null })
       setActiveView('conversations')
-
-      if (candidate.type === 'linguist-project') {
-        const projectTab = tabsRef.current.find(
-          (tab): tab is LocalizationProjectTab =>
-            tab.type === 'linguist-project' && tab.id === candidate.id,
-        )
-        if (!projectTab) return
-        enterLinguistNavigation(store, projectTab.id, 'conversations')
-        activeSessionIdRef.current = candidate.id
-        setTabMru((prev) => {
-          const next = promoteTabMru(prev, candidate.id)
-          tabMruRef.current = next
-          return next
-        })
-        return
-      }
 
       // 切回 agent 会话时，若该会话上次开着预览 Tab 则一并重建并回到上次视图
       const restore = candidate.type === 'agent'
@@ -530,11 +503,6 @@ function SwitcherCandidateRow({
           <>
             <Bot className="size-2.5" />
             Agent
-          </>
-        ) : candidate.type === 'linguist-project' ? (
-          <>
-            <Languages className="size-2.5" />
-            Linguist
           </>
         ) : (
           <>

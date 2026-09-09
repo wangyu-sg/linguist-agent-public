@@ -474,6 +474,10 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
       return wrap(() => {
         const record = assertRecord(input)
         const projectId = readProjectId(record)
+        const assetId = record.assetId
+        if (assetId !== undefined && (typeof assetId !== 'string' || !LINGUIST_ASSET_ID_PATTERN.test(assetId))) {
+          invalid('assetId must be a valid Stable ID')
+        }
         const segmentId = record.segmentId
         if (segmentId !== undefined && (typeof segmentId !== 'string' || !LINGUIST_SEGMENT_ID_PATTERN.test(segmentId))) {
           invalid('segmentId must be a valid Stable ID')
@@ -504,6 +508,7 @@ export function createLinguistCatWorkspaceIpc(deps: LinguistCatWorkspaceIpcDeps)
         }
         if (offset < 0) invalid('offset must be non-negative')
         const result = deps.getService().listQaFindings(projectId, {
+          ...(typeof assetId === 'string' ? { assetId } : {}),
           ...(typeof segmentId === 'string' ? { segmentId } : {}),
           ...(typeof code === 'string' ? { code: code.trim() } : {}),
           ...(typeof status === 'string' ? { status: status as 'open' | 'resolved' | 'waived' } : {}),

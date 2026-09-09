@@ -7,5 +7,5 @@
 - [ ] 使用真实 Phrase / memoQ 平台产物验证导入、修改、导出、重导、inline code、状态和审校批注。
 - [ ] VALID-003：从可用构建开始累计 14 个真实日用日，记录阻断与数据完整性。
 - [ ] 真机人工：IME composition、Native Open/Save、Companion round-trip、VoiceOver、keyboard-only、窄窗与拖拽 / resize。
-- [ ] Workbench 视口验收：1440px、1024px 和 200% 下上下文清楚、无重叠；展开/还原保留当前会话、批次与 CAT 状态。
+- [ ] Workbench 视口验收：1440px、1024px 和 200% 下上下文清楚、无重叠；右侧切换/分屏保留当前会话、批次与 CAT 状态。
 - [ ] 取得上述证据后再裁决个人 Alpha 资格。

@@ -108,7 +108,7 @@ const rendererAdapters = [
   {
     file: 'apps/electron/src/renderer/host/agent-host-extension.tsx',
     anchor: 'renderer-agent-extension',
-    required: ['export function useAgentHostExtension(', 'export function useAgentSurfaceHostPresentation('],
+    required: ['export function useAgentHostExtension(', 'export function useAgentRightWorkspaceHostExtension('],
     forbidden: /from ['"]@\/features\/linguist\/projects\/ProjectAgentRail['"]/,
   },
   {
@@ -142,7 +142,7 @@ for (const contract of rendererAdapters) {
 const agentView = readSource(root, 'apps/electron/src/renderer/components/agent/AgentView.tsx')
 if (
   occurrences(agentView, /from ['"]@\/host\/agent-host-extension['"]/g) !== 1
-  || !agentView.includes("useAgentHostExtension(sessionId, embedded ? 'rail' : 'full')")
+  || !agentView.includes("useAgentHostExtension(sessionId)")
   || /from ['"][^'"]*features\/linguist\//.test(agentView)
 ) {
   fail('HOST_SEAM_CONTRACT_CHANGED', 'AgentView 不再只通过 Renderer Agent Host Adapter 接入 Linguist')

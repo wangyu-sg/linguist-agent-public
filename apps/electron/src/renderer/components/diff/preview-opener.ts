@@ -2,7 +2,7 @@
  * useOpenPreview — 统一的预览入口 Hook
  *
  * 把分散在 SidePanel / PreviewOpenButton / AgentView 等处的「打开预览」逻辑收敛到一处。
- * 默认在右侧工作区打开；显式 mode: 'tab' 的入口则打开主预览 Tab。
+ * 在指定会话的原生右侧工作区打开。
  */
 
 import * as React from 'react'
@@ -17,9 +17,7 @@ import {
 import {
   activeTabIdAtom,
   closeTab,
-  getPreviewTabTitle,
   isPreviewTab,
-  openTab,
   sessionViewStateMapAtom,
   tabsAtom,
 } from '@/atoms/tab-atoms'
@@ -27,10 +25,6 @@ import { agentDiffPanelTabAtom, agentSidePanelOpenAtomFamily, getPreviewSidePane
 
 /** Jotai store 类型（从 useStore 推导，避免直接 import 内部 Store 类型） */
 type JotaiStore = ReturnType<typeof useStore>
-
-export interface OpenPreviewOptions {
-  mode?: 'tab' | 'split'
-}
 
 /**
  * 在指定会话的右侧工作区中打开并聚焦文件预览。
@@ -41,14 +35,14 @@ export function useOpenPreview() {
   const store = useStore()
 
   return React.useCallback(
-    (sessionId: string, file: PreviewFile, options?: OpenPreviewOptions) => {
-      openPreviewInStore(store, sessionId, file, options)
+    (sessionId: string, file: PreviewFile) => {
+      openPreviewInStore(store, sessionId, file)
     },
     [store],
   )
 }
 
-export function openPreviewInStore(store: JotaiStore, sessionId: string, file: PreviewFile, options?: OpenPreviewOptions): void {
+export function openPreviewInStore(store: JotaiStore, sessionId: string, file: PreviewFile): void {
   const previewId = getPreviewFileId(file)
   store.set(previewFilesMapAtom, (prev) => {
     const next = new Map(prev)
@@ -66,21 +60,6 @@ export function openPreviewInStore(store: JotaiStore, sessionId: string, file: P
     next.set(sessionId, file)
     return next
   })
-  if (options?.mode === 'tab') {
-    const opened = openTab(store.get(tabsAtom), {
-      type: 'preview',
-      sessionId,
-      title: getPreviewTabTitle(file.filePath),
-    })
-    store.set(tabsAtom, opened.tabs)
-    store.set(activeTabIdAtom, opened.activeTabId)
-    store.set(sessionViewStateMapAtom, (prev) => {
-      const next = new Map(prev)
-      next.set(sessionId, { previewTabOpen: true, lastView: 'preview' })
-      return next
-    })
-    return
-  }
   store.set(previewPanelOpenMapAtom, (prev) => {
     const next = new Map(prev)
     next.set(sessionId, true)

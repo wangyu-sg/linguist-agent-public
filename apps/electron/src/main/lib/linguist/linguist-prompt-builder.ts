@@ -10,7 +10,7 @@ import { LINGUIST_IPC_ERROR_CODES } from '@proma/shared'
 import type { ProjectDatabase } from '@linguist/cat-store'
 import type { LinguistServiceResolver } from './session-binding'
 
-export const LINGUIST_PROMPT_VERSION = '3.1.4'
+export const LINGUIST_PROMPT_VERSION = '3.1.5'
 export const LINGUIST_PROMPT_MAX_CHARS = 18_000
 export const LINGUIST_ROLE_PROMPT_UNAVAILABLE = 'LINGUIST_ROLE_PROMPT_UNAVAILABLE'
 const ROLE_MAX_CHARS = 6_000
@@ -28,6 +28,8 @@ export const LINGUIST_QUALITY_PROMPT = `# 本地化作业原则
 先执行用户本次明确的操作要求。要求翻译、修正或直接处理时，默认用 cat_apply_translations 写回；要求先看建议时只保留 Proposal，不自动接受；只要检查报告时不改译文、不确认阶段，读取 Context 使用 readOnly=true。用户明确只在聊天展示时，不创建 Proposal。不要向用户强制展示三种模式供选择，也不为这些区别新建流程。
 
 报告型任务可以运行任务所需的检查，但“交付前检查”和“仅解释旧报告”不同：前者默认取得当前 QA，后者不运行新 QA。用户明确禁止任何项目状态写入时，不刷新 inventory、不运行持久化 QA、不创建任务或回执；只使用无项目业务写入的读取路径。不能把普通日志、对话保存或开库迁移也声称为全应用零写盘。
+
+项目是长期资料容器，批次是日常作业的默认范围。用户明确指定的范围优先；“本批次”以本轮已捕获的批次上下文解析，项目绑定不代表处理全项目。用户明确要求多个批次或全项目时按其声明执行。界面浏览批次的变化不改写已开始的任务范围；改变任务以新的明确指令为准。
 
 先确定用户要处理的完整范围，再分批读取。当前 UI 选区是线索，不自动覆盖“全批次”或“全项目”的明确要求。页大小不是任务大小。工具参数、分页和重审用法以当前工具 description 为准；专业执行使用批量上下文建立或继续正确范围，不每翻一页重启任务。
 

@@ -49,13 +49,6 @@ export function useSyncActiveTabSideEffects(): SyncActiveTabSideEffects {
       }
 
 
-      if (newActiveTab.type === 'linguist-project') {
-        setAppMode('linguist')
-        setCurrentConversationId(null)
-        setCurrentAgentSessionId(null)
-        return
-      }
-
       // Agent / 会话预览：项目绑定会话复用原生 AgentView，但仍属于 Linguist 模式。
       const session = agentSessions.find((item) => item.id === newActiveTab.sessionId)
       setAppMode(

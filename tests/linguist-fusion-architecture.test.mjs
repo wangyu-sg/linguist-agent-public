@@ -225,12 +225,12 @@ test('LF-075：Bottom Dock 接管上下文能力后删除旧 CatContextRail', ()
   assert.match(bottomDock, /ContextEvidencePanel/)
 })
 
-test('语言资产 Dock 与状态栏使用同一不透明层级边界', () => {
+test('辅助面板 Dock 与状态栏使用同一不透明层级边界', () => {
   const shell = readFileSync(
     join(LINGUIST_FEATURE_ROOT, 'projects/LinguistWorkbenchShell.tsx'),
     'utf8',
   )
-  const dockStart = shell.indexOf('aria-label="语言资产面板"')
+  const dockStart = shell.indexOf('aria-label="辅助面板"')
   const dockEnd = shell.indexOf('>', dockStart)
   const footerStart = shell.indexOf('aria-label="本地化工作台状态栏"')
   const footerEnd = shell.indexOf('>', footerStart)
@@ -331,7 +331,7 @@ test('三模式导航：Linguist 会话复用原生 Agent Tab 与右侧 CAT 工�
   assert.match(sessionOpener, /openHostedAgentSession\(store, sessionId\)/)
   assert.match(hostExtension, /openLinguistAgentSession\(store, sessionId\)/)
   assert.match(hostExtension, /id: 'linguist'/)
-  assert.match(hostExtension, /<LocalizationProjectWorkbench projectId=\{projectId\} presentation="workspace" \/>/)
+  assert.match(hostExtension, /<LocalizationProjectWorkbench key=\{projectId\} projectId=\{projectId\} sessionId=\{sessionId\} \/>/)
 })
 
 test('Linguist Runtime 同时装配 Proma Workspace 能力与 CAT overlay', () => {

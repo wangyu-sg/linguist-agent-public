@@ -66,7 +66,7 @@ Key boundaries:
 - Phrase split/master MXLIFF pairing uses content evidence and blocks verified export when mapping is incomplete or stale.
 - memoQ MQXLIFF uses a dedicated adapter that preserves inline codes, confirmation status, and review comments; real customer samples still require per-sample validation.
 
-Full `AgentView` retains Proma's Files / Changes panel; the Workbench rail is conversation-only. A Linguist session directly inherits its Proma Workspace's Skills, MCP, trusted `AGENTS.md`, Memory, Files, Planning, Queue, and Collaboration. CAT project binding only adds domain context and tools; it does not duplicate host capabilities.
+Linguist uses the complete native `AgentView`; CAT and managed previews share Proma's right workspace, layout, split panes, and sizing. A Linguist session directly inherits its Proma Workspace's Skills, MCP, trusted `AGENTS.md`, Memory, Files, Planning, Queue, and Collaboration. CAT project binding only adds domain context and tools; it does not duplicate host capabilities.
 
 Batch navigation lists only real batches, refreshes in place, and selects the first valid batch when the current selection disappears. Footer progress, draft count, and source/target character counts are scoped to that batch; stage labels follow project workflow (`confirmed / reviewed / proofread`).
 

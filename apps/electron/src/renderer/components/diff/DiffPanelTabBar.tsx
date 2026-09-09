@@ -6,7 +6,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, Maximize2, MessageCircle, Minimize2, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X } from 'lucide-react'
+import { Blocks, Brain, CalendarDays, Clock, Columns2, FolderOpen, Globe, ListTodo, MessageCircle, PanelRight, Plus, Repeat2, ServerCog, SquareTerminal, X } from 'lucide-react'
 import { OBSIDIAN_NAME, ObsidianIcon } from '@/components/obsidian/obsidian-brand'
 import { cn } from '@/lib/utils'
 import { getScrollLeftToRevealTab } from '@/lib/tab-visibility'
@@ -27,7 +27,6 @@ import {
 import { agentDiffUnseenChangesAtom, currentAgentSessionIdAtom } from '@/atoms/agent-atoms'
 import type { AgentSidePanelTab, WorkspaceComponentTab } from '@/atoms/agent-atoms'
 import { groupRightWorkspaceTabs, type RightWorkspacePane } from '@/lib/right-workspace-split'
-import { detectIsMac } from '@/lib/platform'
 import type { ProductivityToolsSettings } from '@/types/settings'
 
 export interface RightWorkspaceTabDragState {
@@ -64,8 +63,6 @@ interface DiffPanelTabBarProps {
   onTabDrop?: (state: RightWorkspaceTabDragState) => void
   onSplitTab?: (tab: AgentSidePanelTab, pane: RightWorkspacePane) => void
   onCollapseSplit?: () => void
-  expanded?: boolean
-  onExpandedChange?: (expanded: boolean) => void
   onClose?: () => void
 }
 
@@ -88,15 +85,12 @@ export function DiffPanelTabBar({
   onTabDrop,
   onSplitTab,
   onCollapseSplit,
-  expanded = false,
-  onExpandedChange,
   onClose,
 }: DiffPanelTabBarProps): React.ReactElement {
   const unseenMap = useAtomValue(agentDiffUnseenChangesAtom)
   const setUnseenMap = useSetAtom(agentDiffUnseenChangesAtom)
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
   const unseenChanges = unseenMap.get(currentSessionId ?? '') ?? false
-  const isMac = React.useMemo(() => detectIsMac(), [])
   const [isSplitTabGroupHovered, setIsSplitTabGroupHovered] = React.useState(false)
   // 仅鼠标在菜单外取消时抑制 Radix 的回焦；Esc 与键盘选择必须保留可见焦点。
   const suppressPointerDismissFocusRestoreRef = React.useRef(false)
@@ -304,10 +298,7 @@ export function DiffPanelTabBar({
         <div className="relative flex min-w-0 flex-1 self-stretch">
           <div
             ref={tabListRef}
-            className={cn(
-              'flex h-9 min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 pt-1.5 pb-0.5 scrollbar-none',
-              expanded && isMac && 'pl-10',
-            )}
+            className="flex h-9 min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 pt-1.5 pb-0.5 scrollbar-none"
             role="tablist"
             aria-label="右侧工作区"
           >
@@ -527,21 +518,7 @@ export function DiffPanelTabBar({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-        {onExpandedChange && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => onExpandedChange(!expanded)}
-                className="mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] hover:bg-muted hover:text-foreground active:scale-[0.96]"
-                aria-label={expanded ? '还原面板' : '展开面板'}
-              >
-                {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{expanded ? '还原面板' : '展开面板'}</TooltipContent>
-          </Tooltip>
-        )}
+
         {onClose && (
           <Tooltip>
             <TooltipTrigger asChild>

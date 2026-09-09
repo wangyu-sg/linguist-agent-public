@@ -16,6 +16,7 @@ import {
   type LinguistProposalListPendingResult,
   type LinguistProposalRejectResult,
   type LinguistProposalRejectSelectedResult,
+  LINGUIST_ASSET_ID_PATTERN,
   LINGUIST_PROPOSAL_ID_PATTERN,
   LINGUIST_SEGMENT_ID_PATTERN,
 } from '@proma/shared'
@@ -128,10 +129,15 @@ function readApplyEdits(record: Record<string, unknown>) {
 }
 
 function readListFilter(record: Record<string, unknown>): {
+  assetId?: string
   status?: ProposalStatus
   limit: number
   offset: number
 } {
+  const assetId = record.assetId
+  if (assetId !== undefined && (typeof assetId !== 'string' || !LINGUIST_ASSET_ID_PATTERN.test(assetId))) {
+    invalid('assetId must be a valid Stable ID')
+  }
   const status = record.status
   if (status !== undefined && !PROPOSAL_STATUSES.includes(status as ProposalStatus)) {
     invalid(`status must be one of ${PROPOSAL_STATUSES.join('/')}`)
@@ -145,6 +151,7 @@ function readListFilter(record: Record<string, unknown>): {
     invalid('offset must be a non-negative safe integer')
   }
   return {
+    ...(typeof assetId === 'string' ? { assetId } : {}),
     ...(status !== undefined ? { status: status as ProposalStatus } : {}),
     limit: limit as number,
     offset: offset as number,
@@ -242,8 +249,11 @@ export function createLinguistProposalIpc(deps: LinguistProposalIpcDeps) {
         const record = assertRecord(input)
         const db = open(record)
         const filter = readListFilter(record)
+        if (filter.assetId !== undefined && db.assets.get(filter.assetId) === undefined) {
+          throw new StoreNotFoundError('asset', filter.assetId)
+        }
         const items = db.proposals.listWithDiffs(filter)
-        const total = db.proposals.count(filter.status)
+        const total = db.proposals.count(filter)
         return {
           items,
           total,

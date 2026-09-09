@@ -763,7 +763,8 @@ async function openLinguistWorkbenchAndSelectLocation(
   await workspace.waitFor({ timeout: 30_000 })
   const boundAgentTabVisible = await waitFor(async () => {
     const state = await readPersistedLinguistState(page, projectId)
-    const tabVisible = await page.locator('button.app-tab-active').getAttribute('aria-label') === `打开标签页：${state.tab?.title}`
+    const tabVisible = await page.locator('[data-agent-presentation="full"]').isVisible()
+      && await page.locator('button.app-tab-active').count() === 0
     return tabVisible
       && state.tab?.type === 'agent'
       && state.activeTabId === state.tab.id
@@ -826,7 +827,8 @@ async function readRecoveredLinguistLocation(
   await workspace.waitFor({ timeout: 30_000 })
   const status = workspace.locator('footer[aria-label="本地化工作台状态栏"]')
   const persisted = await readPersistedLinguistState(page, projectId)
-  const tabVisible = await page.locator('button.app-tab-active').getAttribute('aria-label') === `打开标签页：${persisted.tab?.title}`
+  const tabVisible = await page.locator('[data-agent-presentation="full"]').isVisible()
+    && await page.locator('button.app-tab-active').count() === 0
   return {
     modeSelected: await mode.getAttribute('aria-selected') === 'true',
     boundAgentTabVisible: tabVisible
@@ -843,14 +845,14 @@ async function readRecoveredLinguistLocation(
 
 
 async function openQaFindings(workspace: Locator): Promise<Locator> {
-  const resourcesButton = workspace.locator('footer[aria-label="本地化工作台状态栏"]').getByRole('button', { name: '语言资产', exact: true })
+  const resourcesButton = workspace.locator('footer[aria-label="本地化工作台状态栏"]').getByRole('button', { name: '辅助面板', exact: true })
   if (await resourcesButton.getAttribute('aria-pressed') !== 'true') {
     await resourcesButton.click()
   }
-  const dock = workspace.locator('section[aria-label="语言资产面板"]')
+  const dock = workspace.locator('section[aria-label="辅助面板"]')
   await dock.waitFor({ timeout: 30_000 })
   const qaTab = dock
-    .getByRole('tablist', { name: '语言资产', exact: true })
+    .getByRole('tablist', { name: '辅助面板', exact: true })
     .getByRole('tab', { name: 'QA', exact: true })
   await qaTab.click()
   const qaSelected = await waitFor(
@@ -873,10 +875,10 @@ async function runQa(findings: Locator, expectedFinding: Locator): Promise<void>
 
 async function openDockTab(
   dock: Locator,
-  label: 'TM 匹配' | '术语' | 'QA' | '上下文/证据' | '预览',
+  label: 'TM 匹配' | '术语' | 'QA' | '上下文/证据' | '修改建议' | '准备交付',
 ): Promise<Locator> {
   const tab = dock
-    .getByRole('tablist', { name: '语言资产', exact: true })
+    .getByRole('tablist', { name: '辅助面板', exact: true })
     .getByRole('tab', { name: label, exact: true })
   await tab.click()
   const selected = await waitFor(
@@ -973,14 +975,14 @@ async function runLanguageResourceDockGate(
   sourceBlobPath: string,
   sourceHashBefore: string,
 ): Promise<void> {
-  const resourcesButton = workspace.locator('footer[aria-label="本地化工作台状态栏"]').getByRole('button', { name: '语言资产', exact: true })
+  const resourcesButton = workspace.locator('footer[aria-label="本地化工作台状态栏"]').getByRole('button', { name: '辅助面板', exact: true })
   if (await resourcesButton.getAttribute('aria-pressed') !== 'true') {
     await resourcesButton.click()
   }
-  const dock = workspace.locator('section[aria-label="语言资产面板"]')
+  const dock = workspace.locator('section[aria-label="辅助面板"]')
   await dock.waitFor({ timeout: 30_000 })
-  const tabs = dock.getByRole('tablist', { name: '语言资产', exact: true })
-  for (const label of ['TM 匹配', '术语', 'QA', '上下文/证据', '预览']) {
+  const tabs = dock.getByRole('tablist', { name: '辅助面板', exact: true })
+  for (const label of ['TM 匹配', '术语', 'QA', '上下文/证据', '修改建议', '准备交付']) {
     await tabs.getByRole('tab', { name: label, exact: true }).waitFor({ timeout: 30_000 })
   }
 
@@ -1090,10 +1092,10 @@ async function runLanguageResourceDockGate(
     .locator('article[aria-label^="QA Finding "]')
     .evaluateAll((articles) => articles.map((article) => article.getAttribute('aria-label') ?? ''))
   const currentSegmentFilter = qaFindings.getByRole('checkbox', { name: '仅显示当前片段', exact: true })
-  check('lf056-qa-default-project-scope', !await currentSegmentFilter.isChecked()
+  check('lf056-qa-default-batch-scope', !await currentSegmentFilter.isChecked()
     && projectQaLabels.some((label) => label.endsWith(`for ${segmentId}`))
     && projectQaLabels.some((label) => label.endsWith(`for ${alternateSegmentId}`)),
-    `默认项目范围=${JSON.stringify(projectQaLabels)}`)
+    `默认批次范围=${JSON.stringify(projectQaLabels)}`)
   await currentSegmentFilter.check()
   await emptyTargetArticle.waitFor({ timeout: 30_000 })
   const qaLabels = await qaFindings
@@ -1182,18 +1184,11 @@ async function runLanguageResourceDockGate(
     `，back=${segmentId} TM/Terms/Evidence restored`,
   )
 
-  const previewPanel = await openDockTab(dock, '预览')
-  await previewPanel.getByText('mini_game_ui.xliff', { exact: true }).waitFor({ timeout: 30_000 })
-  await previewPanel.getByText(/^XLIFF 1\.2 · \d+ 段 · 只读$/u).waitFor({ timeout: 30_000 })
-  await previewPanel
-    .getByRole('button', { name: '在预览标签页中打开', exact: true })
-    .click()
-  const previewTab = page.getByRole(
-    'button',
-    { name: '打开标签页：预览：mini_game_ui.xliff', exact: true },
-  )
-  await previewTab.waitFor({ timeout: 30_000 })
-  await previewTab.click()
+  const navigatorToggle = workspace.getByRole('button', { name: '批次', exact: true })
+  if (!await workspace.getByRole('button', { name: '预览 mini_game_ui.xliff', exact: true }).isVisible()) {
+    await navigatorToggle.click()
+  }
+  await workspace.getByRole('button', { name: '预览 mini_game_ui.xliff', exact: true }).click()
   const semanticPreview = page.locator('[aria-label="批次语义预览"]')
   await semanticPreview.waitFor({ timeout: 30_000 })
   await semanticPreview.locator('li').filter({ hasText: PB074_SOURCE }).waitFor({ timeout: 30_000 })
@@ -1227,10 +1222,10 @@ async function runLanguageResourceDockGate(
 
   const separator = dock.getByRole(
     'separator',
-    { name: '调整语言资产面板高度', exact: true },
+    { name: '调整辅助面板高度', exact: true },
   )
   const separatorBox = await separator.boundingBox()
-  if (separatorBox === null) throw new Error('语言资产面板高度分隔条不可见')
+  if (separatorBox === null) throw new Error('辅助面板高度分隔条不可见')
   const pointerStartHeight = Number(await separator.getAttribute('aria-valuenow'))
   await page.mouse.move(
     separatorBox.x + separatorBox.width / 2,
@@ -1251,7 +1246,7 @@ async function runLanguageResourceDockGate(
   await separator.press('End')
   const keyboardHeight = await separator.getAttribute('aria-valuenow')
   const keyboardHeightMatchesAria = await bottomDockHeightMatchesAria(dock)
-  await openDockTab(dock, '预览')
+  await openDockTab(dock, '上下文/证据')
 
   await page.setViewportSize({ width: 800, height: 600 })
   const narrowOverlay = await dock.evaluate(
@@ -1270,23 +1265,23 @@ async function runLanguageResourceDockGate(
   const persisted = await waitFor(async () => {
     const state = await readPersistedLinguistState(page, projectId)
     return state.location?.bottomDockOpen === true
-      && state.location.bottomDockTab === 'preview'
+      && state.location.bottomDockTab === 'context'
       && state.location.bottomDockHeight === 480
   }, 10_000)
 
   const distractorWorkspace = await openSidebarProject(page, DISTRACTOR_PROJECT_NAME)
   const distractorResourcesButton = distractorWorkspace
     .locator('footer[aria-label="本地化工作台状态栏"]')
-    .getByRole('button', { name: '语言资产', exact: true })
+    .getByRole('button', { name: '辅助面板', exact: true })
   if (await distractorResourcesButton.getAttribute('aria-pressed') !== 'true') {
     await distractorResourcesButton.click()
   }
-  const distractorDock = distractorWorkspace.locator('section[aria-label="语言资产面板"]')
+  const distractorDock = distractorWorkspace.locator('section[aria-label="辅助面板"]')
   await distractorDock.waitFor({ timeout: 30_000 })
   await openDockTab(distractorDock, '术语')
   const distractorSeparator = distractorDock.getByRole(
     'separator',
-    { name: '调整语言资产面板高度', exact: true },
+    { name: '调整辅助面板高度', exact: true },
   )
   await distractorSeparator.press('Home')
   const distractorPersisted = await waitFor(async () => {
@@ -1297,11 +1292,11 @@ async function runLanguageResourceDockGate(
   }, 10_000)
 
   const mainWorkspace = await openSidebarProject(page, PROJECT_NAME)
-  const mainDock = mainWorkspace.locator('section[aria-label="语言资产面板"]')
+  const mainDock = mainWorkspace.locator('section[aria-label="辅助面板"]')
   await mainDock.waitFor({ timeout: 30_000 })
   const mainPreviewSelected = await mainDock
-    .getByRole('tablist', { name: '语言资产', exact: true })
-    .getByRole('tab', { name: '预览', exact: true })
+    .getByRole('tablist', { name: '辅助面板', exact: true })
+    .getByRole('tab', { name: '上下文/证据', exact: true })
     .getAttribute('aria-selected') === 'true'
   const mainHeightMatchesAria = await bottomDockHeightMatchesAria(mainDock)
 
@@ -1309,7 +1304,7 @@ async function runLanguageResourceDockGate(
   const distractorState = await readPersistedLinguistState(page, distractorProjectId)
   const isolated = mainState.location !== undefined
     && distractorState.location !== undefined
-    && mainState.location.bottomDockTab === 'preview'
+    && mainState.location.bottomDockTab === 'context'
     && mainState.location.bottomDockHeight === 480
     && distractorState.location.bottomDockTab === 'terms'
     && distractorState.location.bottomDockHeight === 160
@@ -1339,39 +1334,39 @@ async function verifyLanguageResourceDockRecovery(
   projectId: string,
   distractorProjectId: string,
 ): Promise<void> {
-  const dock = workspace.locator('section[aria-label="语言资产面板"]')
+  const dock = workspace.locator('section[aria-label="辅助面板"]')
   await dock.waitFor({ timeout: 30_000 })
   const previewTab = dock
-    .getByRole('tablist', { name: '语言资产', exact: true })
-    .getByRole('tab', { name: '预览', exact: true })
+    .getByRole('tablist', { name: '辅助面板', exact: true })
+    .getByRole('tab', { name: '上下文/证据', exact: true })
   const mainState = await readPersistedLinguistState(page, projectId)
   const mainRestored = await previewTab.getAttribute('aria-selected') === 'true'
     && await bottomDockHeightMatchesAria(dock)
     && mainState.location?.bottomDockOpen === true
-    && mainState.location.bottomDockTab === 'preview'
+    && mainState.location.bottomDockTab === 'context'
     && mainState.location.bottomDockHeight === 480
 
   const distractorWorkspace = await openSidebarProject(page, DISTRACTOR_PROJECT_NAME)
-  const distractorDock = distractorWorkspace.locator('section[aria-label="语言资产面板"]')
+  const distractorDock = distractorWorkspace.locator('section[aria-label="辅助面板"]')
   await distractorDock.waitFor({ timeout: 30_000 })
   const distractorState = await readPersistedLinguistState(page, distractorProjectId)
   const distractorRestored = await distractorDock
-    .getByRole('tablist', { name: '语言资产', exact: true })
+    .getByRole('tablist', { name: '辅助面板', exact: true })
     .getByRole('tab', { name: '术语', exact: true })
     .getAttribute('aria-selected') === 'true'
     && await distractorDock
-      .getByRole('separator', { name: '调整语言资产面板高度', exact: true })
+      .getByRole('separator', { name: '调整辅助面板高度', exact: true })
       .getAttribute('aria-valuenow') === '160'
     && distractorState.location?.bottomDockOpen === true
     && distractorState.location.bottomDockTab === 'terms'
     && distractorState.location.bottomDockHeight === 160
 
   const mainWorkspace = await openSidebarProject(page, PROJECT_NAME)
-  const mainDock = mainWorkspace.locator('section[aria-label="语言资产面板"]')
+  const mainDock = mainWorkspace.locator('section[aria-label="辅助面板"]')
   await mainDock.waitFor({ timeout: 30_000 })
   const mainStillRestored = await mainDock
-    .getByRole('tablist', { name: '语言资产', exact: true })
-    .getByRole('tab', { name: '预览', exact: true })
+    .getByRole('tablist', { name: '辅助面板', exact: true })
+    .getByRole('tab', { name: '上下文/证据', exact: true })
     .getAttribute('aria-selected') === 'true'
     && await bottomDockHeightMatchesAria(mainDock)
   check(
@@ -1525,14 +1520,14 @@ async function captureLinguistUiEvidence(page: Page): Promise<void> {
         const rect = controlRects[index]!
         return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === control
       })
-      const tabs = [...workspace.querySelectorAll<HTMLElement>('[role="tablist"][aria-label="语言资产"] [role="tab"]')]
+      const tabs = [...workspace.querySelectorAll<HTMLElement>('[role="tablist"][aria-label="辅助面板"] [role="tab"]')]
       const tabLabelsSingleLine = tabs.every((tab) => {
         const range = document.createRange()
         range.selectNodeContents(tab)
         return range.getBoundingClientRect().height <= Number.parseFloat(getComputedStyle(tab).lineHeight) + 1
       })
       return {
-        before, after, scrollLeft, qaVisible, controlsSeparate, controlsReachable,
+        before, after, scrollLeft, qaVisible, qaBounds: { left: lastCell.left, right: lastCell.right, scrollLeft: scrollBounds.left, scrollRight: scrollBounds.right }, controlsSeparate, controlsReachable,
         controlWidths: controlRects.map((rect) => rect.width), tabLabelsSingleLine,
       }
     })
@@ -1541,24 +1536,27 @@ async function captureLinguistUiEvidence(page: Page): Promise<void> {
       && readability.before.aligned && readability.after.aligned
       && readability.scrollLeft > 0 && readability.qaVisible
     check(`lf056-${viewport.width}-grid-readable`, gridReadable, JSON.stringify(readability.before)
-      + `，滚后对齐=${readability.after.aligned}，scrollLeft=${readability.scrollLeft}，QA可达=${readability.qaVisible}`)
+      + `，滚后对齐=${readability.after.aligned}，scrollLeft=${readability.scrollLeft}，QA可达=${readability.qaVisible}，bounds=${JSON.stringify(readability.qaBounds)}`)
     check(`lf056-${viewport.width}-filters-readable`, readability.controlWidths.length === 3
       && readability.controlWidths.every((width, index) => width >= (index === 0 ? 200 : 140))
       && readability.controlsSeparate && readability.controlsReachable,
       `宽度=${readability.controlWidths.join('/')}，无重叠=${readability.controlsSeparate}，中心可命中=${readability.controlsReachable}`)
 
-    const tabs = surface.workspace.getByRole('tablist', { name: '语言资产', exact: true })
+    const tabs = surface.workspace.getByRole('tablist', { name: '辅助面板', exact: true })
     const originalTabId = await tabs.locator('[aria-selected="true"]').getAttribute('id')
     await tabs.locator('[aria-selected="true"]').press('End')
     const lastTab = tabs.getByRole('tab').last()
     const deliveryReachable = await lastTab.evaluate((tab) => {
       const rect = tab.getBoundingClientRect()
       const list = tab.parentElement!.getBoundingClientRect()
-      return tab.getAttribute('aria-selected') === 'true' && document.activeElement === tab
-        && rect.left >= list.left && rect.right <= list.right
+      return { selected: tab.getAttribute('aria-selected') === 'true', focused: document.activeElement === tab,
+        left: rect.left, right: rect.right, listLeft: list.left, listRight: list.right }
     })
-    check(`lf056-${viewport.width}-dock-readable`, readability.tabLabelsSingleLine && deliveryReachable,
-      `标签单行=${readability.tabLabelsSingleLine}，End键交付tab可见/选中/聚焦=${deliveryReachable}`)
+    // 原生滚动取整而 DOMRect 保留小数；与列对齐检查共用 1px 几何容差。
+    const deliveryVisible = deliveryReachable.selected && deliveryReachable.focused
+      && deliveryReachable.left >= deliveryReachable.listLeft - 1 && deliveryReachable.right <= deliveryReachable.listRight + 1
+    check(`lf056-${viewport.width}-dock-readable`, readability.tabLabelsSingleLine && deliveryVisible,
+      `标签单行=${readability.tabLabelsSingleLine}，End键交付tab=${JSON.stringify(deliveryReachable)}`)
 
     let draftRetained = false
     let editorReachable = false
@@ -1619,7 +1617,7 @@ async function openProjectAssetsSettings(
   await sheet.getByRole('heading', { name: '项目设置', exact: true }).waitFor({ timeout: 30_000 })
   const resourcesTab = sheet
     .getByRole('tablist', { name: '项目设置分类', exact: true })
-    .getByRole('tab', { name: '语言资产', exact: true })
+    .getByRole('tab', { name: '批次', exact: true })
   await resourcesTab.click()
   const resourcesSelected = await waitFor(
     async () => await resourcesTab.getAttribute('aria-selected') === 'true',

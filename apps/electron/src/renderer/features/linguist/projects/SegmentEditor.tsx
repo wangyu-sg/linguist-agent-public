@@ -281,6 +281,10 @@ export function SegmentEditor({
   }, [loadPending])
 
   const refreshQaSummary = React.useCallback(async (): Promise<void> => {
+    const qaSignature = signature
+    if (filters.assetId === undefined) { setQaOpenCount(0); setQaBySegment(new Map()); return }
+    setQaOpenCount(undefined)
+    setQaBySegment(undefined)
     try {
       const findings: LinguistQaFindingInfo[] = []
       let offset = 0
@@ -288,10 +292,12 @@ export function SegmentEditor({
       while (hasMore) {
         const result = await window.electronAPI.linguistCatListQaFindings({
           projectId,
+          assetId: filters.assetId,
           status: 'open',
           limit: PAGE_SIZE,
           offset,
         })
+        if (currentSignature.current !== qaSignature) return
         if (!result.ok || (result.data.hasMore && result.data.items.length === 0)) {
           setQaOpenCount(undefined)
           setQaBySegment(undefined)
@@ -304,10 +310,11 @@ export function SegmentEditor({
       setQaOpenCount(findings.length)
       setQaBySegment(summarizeOpenQaFindingsBySegment(findings))
     } catch {
+      if (currentSignature.current !== qaSignature) return
       setQaOpenCount(undefined)
       setQaBySegment(undefined)
     }
-  }, [projectId])
+  }, [filters.assetId, projectId, signature])
 
   React.useEffect(() => {
     void refreshQaSummary()

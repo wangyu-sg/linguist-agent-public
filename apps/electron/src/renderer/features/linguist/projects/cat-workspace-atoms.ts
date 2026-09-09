@@ -16,7 +16,6 @@ const BOTTOM_DOCK_TABS = [
   'terms',
   'qa',
   'context',
-  'preview',
   'proposals',
   'delivery',
 ] as const
@@ -26,6 +25,7 @@ export type LinguistBottomDockTab = (typeof BOTTOM_DOCK_TABS)[number]
 /** 项目设置 Sheet 的分类 tab；「查看」类入口可直达具体分类。 */
 export type LinguistProjectSettingsTab =
   | 'project'
+  | 'batches'
   | 'resources'
   | 'tags'
   | 'maintenance'
@@ -189,10 +189,10 @@ function getLocation(value: unknown): LinguistWorkbenchLocation | null {
     ? clampAssetNavigatorWidth(raw.assetNavigatorWidth)
     : undefined
   const bottomDockOpen = typeof raw.bottomDockOpen === 'boolean' ? raw.bottomDockOpen : undefined
-  const bottomDockTab = typeof raw.bottomDockTab === 'string'
-    && BOTTOM_DOCK_TABS.includes(raw.bottomDockTab as LinguistBottomDockTab)
-    ? raw.bottomDockTab as LinguistBottomDockTab
-    : undefined
+  const bottomDockTab = raw.bottomDockTab === 'preview' ? 'context'
+    : typeof raw.bottomDockTab === 'string' && BOTTOM_DOCK_TABS.includes(raw.bottomDockTab as LinguistBottomDockTab)
+      ? raw.bottomDockTab as LinguistBottomDockTab
+      : undefined
   const bottomDockHeight = typeof raw.bottomDockHeight === 'number'
     && Number.isFinite(raw.bottomDockHeight)
     ? clampBottomDockHeight(raw.bottomDockHeight)

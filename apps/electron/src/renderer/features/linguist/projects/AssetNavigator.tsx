@@ -1,4 +1,7 @@
 import * as React from 'react'
+import { useSetAtom } from 'jotai'
+import { useOpenLinguistPreview } from './linguist-preview-open'
+import { linguistProjectSettingsTabAtomFamily } from './cat-workspace-atoms'
 import { useAtom } from 'jotai'
 import { FileText, RefreshCw, Search } from 'lucide-react'
 import type { LinguistAssetInfo, LinguistProjectSummary } from '@proma/shared'
@@ -45,6 +48,8 @@ export function AssetNavigator({
   onRefresh,
 }: AssetNavigatorProps): React.ReactElement {
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectId))
+  const setSettingsTab = useSetAtom(linguistProjectSettingsTabAtomFamily(projectId))
+  const openPreview = useOpenLinguistPreview()
   const query = uiState.assetNavigatorSearch.trim().toLocaleLowerCase()
   const assets = summary?.assets.filter((asset) => asset.filename.toLocaleLowerCase().includes(query)) ?? []
   const selectAsset = (assetId: string): void => {
@@ -70,6 +75,10 @@ export function AssetNavigator({
           </button>
         </div>
       </div>
+      <button type="button" className="text-left text-xs text-primary" onClick={() => {
+        setSettingsTab('batches')
+        setUiState({ projectSettingsOpen: true })
+      }}>管理批次</button>
       <label className="relative">
         <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
         <span className="sr-only">搜索批次</span>
@@ -98,8 +107,8 @@ export function AssetNavigator({
             {summary.assetCount === 0 ? '尚未导入批次' : '没有匹配的批次'}
           </p>
         ) : assets.map((asset) => (
+          <div key={asset.assetId}>
           <AssetButton
-            key={asset.assetId}
             active={uiState.activeAssetId === asset.assetId}
             asset={asset}
             label={asset.filename}
@@ -109,6 +118,9 @@ export function AssetNavigator({
             )} · QA ${asset.openQaCount}`}
             onClick={() => selectAsset(asset.assetId)}
           />
+          <button type="button" className="ml-7 text-xs text-primary" aria-label={`预览 ${asset.filename}`}
+            onClick={() => openPreview({ kind: 'batch', projectId, ...asset })}>预览</button>
+          </div>
         ))}
       </nav>
     </section>
@@ -141,7 +153,7 @@ function AssetButton({
     >
       <FileText aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium">{label}</span>
+        <span className="block break-words text-xs font-medium">{label}</span>
         <span className="block text-[11px] text-foreground/65">{detail}</span>
       </span>
     </button>

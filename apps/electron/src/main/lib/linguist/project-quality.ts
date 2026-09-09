@@ -235,6 +235,7 @@ export class ProjectQuality {
   listQaFindings(
     projectId: string,
     filter: {
+      assetId?: string
       segmentId?: string
       code?: string
       status?: 'open' | 'resolved' | 'waived'
@@ -246,6 +247,12 @@ export class ProjectQuality {
   ): { items: CatQaFinding[]; total: number } {
     this.context.getProject(projectId)
     const db = this.context.openProject(projectId)
+    if (filter.assetId !== undefined) {
+      if (db.assets.get(filter.assetId) === undefined) throw new StoreNotFoundError('asset', filter.assetId)
+      if (filter.segmentId !== undefined && db.segments.getById(filter.segmentId)?.assetId !== filter.assetId) {
+        throw new StoreNotFoundError('segment in asset', filter.segmentId)
+      }
+    }
     return this.context.call(() => ({
       items: this.toQaFindings(db, db.qaFindings.list(filter)),
       total: db.qaFindings.count(filter),

@@ -36,11 +36,8 @@ import { LocalizationProjectWorkbench } from '@/features/linguist/projects/Local
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 import {
   DEFAULT_AGENT_HOST_CAPABILITIES,
-  UNAVAILABLE_AGENT_HOST_CAPABILITIES,
   type AgentHostCapabilities,
 } from './contracts'
-import { extensionRegistry } from './extensions'
-import { getAgentSurfaceControls } from './extension-registry'
 
 export interface AgentHostAttachmentGate {
   resolve: (workspaceSlug?: string) => AgentAttachmentSaveGate
@@ -81,7 +78,6 @@ export function openHostedAgentSession(
 
 export function useAgentHostExtension(
   sessionId: string,
-  presentation: 'full' | 'rail' = 'full',
 ): AgentHostExtension {
   const sessions = useAtomValue(agentSessionsAtom)
   const sessionMeta = sessions.find((item) => item.id === sessionId)
@@ -123,16 +119,6 @@ export function useAgentHostExtension(
     return <ComposerContextChips chips={chips} />
   }, [linguistProjectId, segmentReference, setSegmentReference, setUiState, summaryState, uiState])
 
-  const hostCapabilities = React.useMemo((): AgentHostCapabilities => {
-    if (!linguistProjectId) return DEFAULT_AGENT_HOST_CAPABILITIES
-    const surface = extensionRegistry.getAgentSurfaceContext({
-      extensionId: 'linguist',
-      sessionId,
-      presentation: presentation === 'rail' ? 'linguist-rail' : 'linguist-full',
-    })
-    return surface?.hostCapabilities ?? UNAVAILABLE_AGENT_HOST_CAPABILITIES
-  }, [linguistProjectId, presentation, sessionId])
-
   const attachmentGate = React.useMemo((): AgentHostAttachmentGate => ({
     resolve: (workspaceSlug) => resolveAgentAttachmentSaveGate({
       linguistProjectId,
@@ -143,7 +129,7 @@ export function useAgentHostExtension(
   return {
     composerContextChips,
     captureTurnContext,
-    hostCapabilities,
+    hostCapabilities: DEFAULT_AGENT_HOST_CAPABILITIES,
     attachmentGate,
   }
 }
@@ -155,52 +141,14 @@ export function useAgentRightWorkspaceHostExtension(
   const sessions = useAtomValue(agentSessionsAtom)
   const session = sessions.find((item) => item.id === sessionId)
   const projectId = session ? getAgentSessionLinguistProjectId(session, sessions) : undefined
-  const summaryState = useAtomValue(linguistProjectSummaryAtomFamily(projectId ?? NO_PROJECT))
-  const projectName = summaryState.status === 'ready'
-    ? summaryState.summary.project.name
-    : session?.linguistProjectName
-
   return React.useMemo(() => projectId === undefined
     ? { tab: null, content: null }
     : {
         tab: {
           id: 'linguist',
-          label: projectName ?? 'CAT 工作台',
+          label: 'CAT',
           icon: <Languages className="size-3.5" />,
         },
-        content: <LocalizationProjectWorkbench projectId={projectId} presentation="workspace" />,
-      }, [projectId, projectName])
-}
-
-export interface AgentSurfaceHostPresentation {
-  presentation: 'rail' | 'full'
-  hostCapabilities: AgentHostCapabilities
-  canExpandToFull: boolean
-}
-
-/** Renderer Host Seam 的呈现裁决合同。 */
-export function useAgentSurfaceHostPresentation(
-  projectId: string,
-  sessionId: string | undefined,
-  requestedPresentation: 'closed' | 'rail' | 'full',
-): AgentSurfaceHostPresentation {
-  return React.useMemo(() => {
-    const requestedSurfacePresentation = requestedPresentation === 'full'
-      ? 'linguist-full'
-      : 'linguist-rail'
-    const agentSurface = extensionRegistry.getAgentSurfaceContext({
-      extensionId: 'linguist',
-      sessionId: sessionId ?? `project:${projectId}`,
-      presentation: requestedSurfacePresentation,
-    })
-    const hostCapabilities = agentSurface?.hostCapabilities ?? UNAVAILABLE_AGENT_HOST_CAPABILITIES
-    const surfaceControls = getAgentSurfaceControls(hostCapabilities)
-    return {
-      presentation: requestedSurfacePresentation === 'linguist-full' && surfaceControls.canExpandToFull
-        ? 'full'
-        : 'rail',
-      hostCapabilities,
-      canExpandToFull: surfaceControls.canExpandToFull,
-    }
-  }, [projectId, requestedPresentation, sessionId])
+        content: <LocalizationProjectWorkbench key={projectId} projectId={projectId} sessionId={sessionId} />,
+      }, [projectId, sessionId])
 }

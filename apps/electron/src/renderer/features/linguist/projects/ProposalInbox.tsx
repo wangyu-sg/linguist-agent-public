@@ -50,6 +50,7 @@ type BulkMutation = 'accept' | 'reject'
 
 interface ProposalInboxProps {
   projectId: string
+  assetId?: string
   archived: boolean
   onChanged: () => Promise<void>
   coverage?: ProposalReviewCoverage
@@ -73,11 +74,8 @@ export function ProposalCoverageBanner({
       className="rounded-xl bg-success/[0.06] px-3 py-2 text-[12px] leading-5 text-foreground/60"
     >
       <p className="font-medium text-foreground/75">
-        本轮覆盖：{stageCompletionLabel(coverage.workflowStage)} {coverage.confirmedSegments} / {coverage.totalSegments}
-        {' · '}未覆盖 {uncovered}
-      </p>
-      <p className="text-[11px] text-foreground/45">
-        覆盖数来自当前阶段的人工确认，包含“检查后无需修改”的句段；没有建议本身不计为已覆盖。
+        本批次阶段进度：{stageCompletionLabel(coverage.workflowStage)} {coverage.confirmedSegments} / {coverage.totalSegments}
+        {' · '}未确认 {uncovered}
       </p>
     </div>
   )
@@ -94,29 +92,48 @@ function formatTimestamp(value: string): string {
 
 export function ProposalInbox({
   projectId,
+  assetId,
   archived,
   onChanged,
   coverage,
 }: ProposalInboxProps): React.ReactElement {
   const [state, setState] = React.useState<InboxState>({ status: 'loading' })
-  const [filter, setFilter] = React.useState<ProposalFilter>('all')
+  const [filter, setFilter] = React.useState<ProposalFilter>('pending')
   const [page, setPage] = React.useState(0)
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set())
   const [mutating, setMutating] = React.useState<Record<string, Mutation | undefined>>({})
   const [bulkMutating, setBulkMutating] = React.useState<BulkMutation | undefined>()
 
+  const queryKey = `${projectId}:${assetId ?? 'project'}:${filter}:${page}`
+  const currentQuery = React.useRef(queryKey)
+  currentQuery.current = queryKey
+  const generation = React.useRef(0)
+  const mounted = React.useRef(true)
+  React.useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false; generation.current += 1 }
+  }, [])
+
   const load = React.useCallback(async (): Promise<void> => {
+    if (!mounted.current || currentQuery.current !== queryKey) return
+    const requestGeneration = ++generation.current
     setState({ status: 'loading' })
     setSelectedIds(new Set())
     try {
       const list = await window.electronAPI.linguistProposalsList({
         projectId,
+        assetId,
         ...(filter !== 'all' ? { status: filter } : {}),
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       })
+      if (!mounted.current || currentQuery.current !== queryKey || requestGeneration !== generation.current) return
       if (!list.ok) {
         setState({ status: 'error', message: describeLinguistIpcError(list.error) })
+        return
+      }
+      if (list.data.items.length === 0 && page > 0) {
+        setPage(Math.max(0, Math.ceil(list.data.total / PAGE_SIZE) - 1))
         return
       }
       setState({
@@ -127,9 +144,10 @@ export function ProposalInbox({
         hasMore: list.data.hasMore,
       })
     } catch {
+      if (!mounted.current || currentQuery.current !== queryKey || requestGeneration !== generation.current) return
       setState({ status: 'error', message: '与主进程通信异常（INTERNAL）' })
     }
-  }, [filter, page, projectId])
+  }, [assetId, filter, page, projectId, queryKey])
 
   React.useEffect(() => {
     void load()
@@ -281,7 +299,7 @@ export function ProposalInbox({
           <div className="flex size-12 items-center justify-center rounded-2xl bg-foreground/[0.06] text-foreground/55">
             <Inbox size={22} />
           </div>
-          <p className="text-[14px] font-medium text-foreground/70">当前筛选下没有建议</p>
+          <p className="text-[14px] font-medium text-foreground/70">{assetId !== undefined && filter === 'pending' ? '本批次暂无待处理建议' : '当前筛选下没有建议'}</p>
           <p className="max-w-lg text-[12px] leading-5 text-foreground/45">
             没有建议只表示没有可展示的建议历史，不代表项目已经审校、QA 或交付验证通过。
           </p>
@@ -296,14 +314,7 @@ export function ProposalInbox({
           <section key={group.runId} aria-label={`建议批次 ${group.runId}`}>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-foreground/[0.035] px-3 py-2">
               <div className="min-w-0">
-                <p className="truncate font-mono text-[11px] font-medium text-foreground/60">
-                  {group.runId}
-                </p>
-                <p className="mt-0.5 text-[11px] text-foreground/40">
-                  {formatTimestamp(group.createdAt)}
-                  {group.modelId ? ` · 模型 ${group.modelId}` : ''}
-                  {group.sessionId ? ` · 会话 ${group.sessionId}` : ''}
-                </p>
+                <p className="text-[11px] text-foreground/40">{formatTimestamp(group.createdAt)}</p>
               </div>
               <div className="flex flex-wrap gap-1">
                 {Object.entries(group.statusCounts).map(([status, count]) => (
@@ -396,10 +407,6 @@ export function ProposalInbox({
           项目已归档，建议历史仅可查看。
         </div>
       )}
-      <div className="rounded-xl bg-primary/[0.055] px-3 py-2 text-[12px] leading-5 text-foreground/60">
-        建议是当前最佳修改的可见载体。新建会话只会获得干净的对话上下文；
-        项目中的 TM、术语、Context、建议与 QA 历史仍然保留。
-      </div>
       {coverage !== undefined && <ProposalCoverageBanner coverage={coverage} />}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -501,7 +508,7 @@ function ProposalCard({
   const [editing, setEditing] = React.useState(false)
   const [editedTarget, setEditedTarget] = React.useState(diff.proposedTarget)
   const pending = diff.proposal.status === 'pending'
-  const conflicted = diff.currentRevision !== diff.baseRevision
+  const conflicted = pending && diff.currentRevision !== diff.baseRevision
   const blocked = archived || conflicted || diff.locked || mutation !== undefined
   const targetMatches = diff.currentTarget === diff.proposedTarget
 
@@ -519,23 +526,26 @@ function ProposalCard({
           <div className="min-w-0">
             <p className="text-[11px] font-medium text-foreground/60">
               原始行 {diff.originalOrdinal}
-              <span className="ml-2 font-mono font-normal text-foreground/35">
+              <span className="sr-only">
                 {diff.proposal.segmentId}
               </span>
             </p>
-            <p className="mt-0.5 font-mono text-[10px] text-foreground/35">
-              {diff.proposal.id} · 基于 r{diff.baseRevision} · 当前 r{diff.currentRevision}
-            </p>
+            <details className="mt-1 break-all text-[10px] text-foreground/45">
+              <summary className="cursor-pointer">技术详情</summary>
+              <p>Proposal {diff.proposal.id} · Segment {diff.proposal.segmentId}</p>
+              <p>Run {diff.proposal.runId} · Session {diff.proposal.sessionId} · 模型 {diff.proposal.modelId}</p>
+              <p>基于 r{diff.baseRevision} · 当前 r{diff.currentRevision}</p>
+            </details>
           </div>
         </div>
         <div className="flex flex-wrap gap-1">
           <span className="rounded-full bg-foreground/[0.06] px-2 py-1 text-[11px] text-foreground/55">
-            {PROPOSAL_STATUS_LABELS[diff.proposal.status]}
+            {diff.proposal.status === 'accepted' ? '已应用' : PROPOSAL_STATUS_LABELS[diff.proposal.status]}
           </span>
           {(conflicted || diff.locked) && (
             <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
               <AlertTriangle size={11} />
-              {diff.locked ? '片段已锁定' : '版本冲突'}
+              {diff.locked ? '当前片段已锁定' : '版本冲突'}
             </span>
           )}
         </div>
@@ -569,7 +579,7 @@ function ProposalCard({
           'rounded-full px-2 py-1',
           targetMatches ? 'bg-success/10 text-success' : 'bg-foreground/[0.055]',
         )}>
-          {targetMatches ? '当前译文与此建议一致' : '当前译文与此建议不一致'}
+          {targetMatches ? '当前译文与此建议一致' : pending ? '当前译文与此建议不一致' : '当前译文与此记录不同'}
         </span>
         {diff.proposal.warnings.map((warning) => (
           <span key={warning} className="rounded-full bg-warning/10 px-2 py-1 text-warning-foreground">

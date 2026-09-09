@@ -162,7 +162,7 @@ export function MainArea(): React.ReactElement {
             <VaultView />
           ) : (
             <>
-              <TabBar />
+              {activeTab?.type !== 'agent' && <TabBar />}
               {automationFormOpen && activeView !== 'conversations' ? (
                 <AutomationFormView />
               ) : tabs.length === 0 ? (

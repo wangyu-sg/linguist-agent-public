@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-09-08
+更新时间：2026-09-09
 
 ## 当前真源
 
@@ -27,6 +27,8 @@
 - [RUNTIME_POLICY.md](./architecture/RUNTIME_POLICY.md)
 
 ## 发布与历史
+
+- [0.17.73 实施与发布验证](./release/VALIDATION_0_17_73.md) — 原生 UI 收敛、批次范围、草稿和发布证据。
 
 - [2026-09-08 全仓库审查与优化](./release/REPOSITORY_AUDIT_2026_09_08.md) — 审查候选、问题证据、修复、验证和后续计划。
 - [发布收尾验证](./release/VALIDATION_0_17_72.md) — main / Tag、远程 CI、滚动条回归及自动更新产物。

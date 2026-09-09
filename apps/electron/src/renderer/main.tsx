@@ -930,7 +930,7 @@ function TabStatePersistenceInitializer(): null {
       // 已归档会话仅在上次打开的标签引用它时才读取，以兼容恢复该标签。
       const activeAgentSessionIds = new Set(activeAgentSessions.map((session) => session.id))
       const hasArchivedAgentTab = tabState.tabs.some(
-        (tab) => tab.type === 'agent' && !activeAgentSessionIds.has(tab.sessionId),
+        (tab) => tab.type !== 'chat' && (tab.type !== 'agent' || !activeAgentSessionIds.has(tab.sessionId)),
       )
       const archivedAgentSessions = hasArchivedAgentTab
         ? await window.electronAPI.listArchivedAgentSessions()
@@ -943,23 +943,32 @@ function TabStatePersistenceInitializer(): null {
         ...conversations.map((c) => c.id),
         ...agentSessions.map((s) => s.id),
       ])
-      const projectStatuses = new Map(
-        projectsResult?.ok
-          ? projectsResult.data.map((project) => [
-            project.id,
-            project.archivedAt ? 'archived' as const : 'active' as const,
-          ])
-          : [],
-      )
-      const restored = restorePersistedTabState(tabState, validSessionIds, projectStatuses)
+      const projectSessions = new Map<string, { id: string; title: string }>()
+      for (const session of agentSessions) {
+        const projectId = getAgentSessionLinguistProjectId(session, agentSessions)
+        if (projectId && (!projectSessions.has(projectId)
+          || store.get(projectCurrentAgentSessionIdMapAtom).get(projectId) === session.id)) {
+          projectSessions.set(projectId, session)
+        }
+      }
+      const legacyActive = (tabState.tabs as unknown[]).find((value) => value && typeof value === 'object'
+        && (value as Record<string, unknown>).id === tabState.activeTabId) as Record<string, unknown> | undefined
+      if (legacyActive?.type === 'linguist-project' && typeof legacyActive.projectId === 'string'
+        && !projectSessions.has(legacyActive.projectId) && projectsResult?.ok
+        && projectsResult.data.some((project) => project.id === legacyActive.projectId && !project.archivedAt)) {
+        const { ensureProjectAgentSession } = await import('./features/linguist/projects/project-agent-session')
+        const result = await ensureProjectAgentSession(store, legacyActive.projectId)
+        if (!result.ok) throw new Error(result.error.message)
+        agentSessions.push(result.data)
+        validSessionIds.add(result.data.id)
+        projectSessions.set(legacyActive.projectId, result.data)
+      }
+      const restored = restorePersistedTabState(tabState, validSessionIds, projectSessions)
       const restoredActiveTab = restored.tabs.find((tab) => tab.id === restored.activeTabId)
-      const activeSessionTab = restoredActiveTab?.type === 'linguist-project'
-        ? restored.tabs.findLast((tab) => tab.type === 'agent')
-        : restoredActiveTab
-      const validTabs = activeSessionTab ? [activeSessionTab] : []
+      const validTabs = restored.tabs
       if (validTabs.length === 0) return
 
-      const restoredActiveTabId = activeSessionTab!.id
+      const restoredActiveTabId = restoredActiveTab?.id ?? validTabs[0]!.id
       const activeTab = validTabs.find((t) => t.id === restoredActiveTabId) ?? validTabs[0] ?? null
       store.set(tabsAtom, validTabs)
       store.set(activeTabIdAtom, restoredActiveTabId)
@@ -983,10 +992,6 @@ function TabStatePersistenceInitializer(): null {
           if (session && getAgentSessionLinguistProjectId(session, agentSessions)) {
             restoreLastLocalizationProject(store)
           }
-        } else if (activeTab.type === 'linguist-project') {
-          store.set(appModeAtom, 'linguist')
-          store.set(currentConversationIdAtom, null)
-          store.set(currentAgentSessionIdAtom, null)
         }
       }
 

@@ -868,7 +868,7 @@ function AssetRow({
     <li className="rounded-xl border border-border/50 bg-content-area px-4 py-3 flex flex-col gap-1.5">
       <div className="flex items-center gap-2 min-w-0">
         <FileText size={14} className="flex-shrink-0 text-foreground/40" />
-        <span className="text-[13px] font-medium text-foreground truncate">{asset.filename}</span>
+        <span className="text-[13px] font-medium text-foreground break-words">{asset.filename}</span>
         <span
           className="flex-shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-foreground/55"
           title={`格式标识 ${asset.formatId}`}
@@ -914,10 +914,10 @@ function AssetRow({
         </button>
       </div>
       <div className="flex items-center gap-2 flex-wrap text-[12px] text-foreground/45">
-        <span className="font-mono" title={`SHA-256 ${asset.sourceSha256}`}>
-          SHA-256 {truncateSha256(asset.sourceSha256)}
-        </span>
-        <CopyDigestButton sha256={asset.sourceSha256} filename={asset.filename} />
+        <details><summary className="cursor-pointer">技术详情</summary>
+          <span className="font-mono break-all">SHA-256 {asset.sourceSha256}</span>
+          <CopyDigestButton sha256={asset.sourceSha256} filename={asset.filename} />
+        </details>
         {lastImport !== null && (
           <>
             <span aria-hidden="true">·</span>

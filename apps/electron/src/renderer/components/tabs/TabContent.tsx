@@ -11,8 +11,6 @@ import { tabsAtom } from '@/atoms/tab-atoms'
 import { ChatView } from '@/components/chat'
 import { AgentView } from '@/components/agent'
 import { PreviewTabContent } from '@/components/diff/PreviewTabContent'
-import { LocalizationProjectWorkbench } from '@/features/linguist/projects/LocalizationProjectWorkbench'
-import { agentSidePanelLayoutAtomFamily } from '@/atoms/agent-atoms'
 import { TabErrorBoundary } from './TabErrorBoundary'
 
 export interface TabContentProps {
@@ -54,30 +52,6 @@ export function TabContent({ tabId }: TabContentProps): React.ReactElement {
     )
   }
 
-  if (tab.type === 'linguist-project') {
-    if (tab.repairState !== 'missing') {
-      return <LocalizationProjectWorkbench projectId={tab.projectId} />
-    }
-    if (tab.historySessionId) {
-      return (
-        <div data-testid="linguist-missing-project-history" className="flex h-full min-h-0 flex-col">
-          <div className="shrink-0 border-b border-destructive/20 bg-destructive/[0.06] px-4 py-2 text-xs text-destructive">
-            项目目录不可用；当前仅显示会话历史，发送与 CAT 操作已阻断。
-          </div>
-          <div className="min-h-0 flex-1">
-            <TabErrorBoundary key={tab.historySessionId} sessionId={tab.historySessionId}>
-              <AgentView sessionId={tab.historySessionId} />
-            </TabErrorBoundary>
-          </div>
-        </div>
-      )
-    }
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        项目不可用，请修复或关闭此标签页。
-      </div>
-    )
-  }
 
   return (
     <AgentTabContent sessionId={tab.sessionId} />
@@ -85,10 +59,9 @@ export function TabContent({ tabId }: TabContentProps): React.ReactElement {
 }
 
 function AgentTabContent({ sessionId }: { sessionId: string }): React.ReactElement {
-  const layout = useAtomValue(agentSidePanelLayoutAtomFamily(sessionId))
   return (
     <TabErrorBoundary key={sessionId} sessionId={sessionId}>
-      <AgentView sessionId={sessionId} embedded={layout.expanded} />
+      <AgentView sessionId={sessionId} />
     </TabErrorBoundary>
   )
 }

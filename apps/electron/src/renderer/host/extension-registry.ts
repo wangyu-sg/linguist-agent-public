@@ -1,8 +1,6 @@
 import type { PrimaryAppMode } from '@/atoms/app-mode'
 import type {
   AgentHostCapabilities,
-  AgentSurfaceContext,
-  AgentSurfacePresentation,
   AgentProfileContribution,
   AppModeContribution,
   IpcModuleContribution,
@@ -16,19 +14,12 @@ export interface ModeContribution<T> {
   value: T
 }
 
-export interface AgentSurfaceContextRequest {
-  extensionId: string
-  sessionId: string
-  presentation: AgentSurfacePresentation
-}
-
 export interface ExtensionRegistry {
   readonly extensions: readonly PromaExtension[]
   readonly agentProfiles: readonly AgentProfileContribution[]
   readonly settingsSections: readonly SettingsContribution[]
   readonly ipcModules: readonly IpcModuleContribution[]
   appModesFor: (mode: PrimaryAppMode) => readonly AppModeContribution[]
-  getAgentSurfaceContext: (request: AgentSurfaceContextRequest) => AgentSurfaceContext | null
 }
 
 function assertUnique(ids: Iterable<string>, label: string): void {
@@ -61,15 +52,6 @@ export function createExtensionRegistry(extensions: readonly PromaExtension[]): 
     extensions.flatMap((extension) => (extension.ipcModules ?? []).map((contribution) => contribution.namespace)),
     'IpcModuleContribution',
   )
-  assertUnique(
-    extensions.flatMap((extension) => (extension.hostCapabilityManifests ?? []).map((manifest) => `${extension.id}:${manifest.id}`)),
-    'HostCapabilityManifest',
-  )
-  assertUnique(
-    extensions.flatMap((extension) => (extension.hostCapabilityManifests ?? []).map((manifest) => `${extension.id}:${manifest.presentation}`)),
-    'HostCapabilityManifest presentation',
-  )
-
   const registeredExtensions = Object.freeze([...extensions])
   const agentProfiles = Object.freeze(
     registeredExtensions.flatMap((extension) => extension.agentProfiles ?? []),
@@ -91,18 +73,7 @@ export function createExtensionRegistry(extensions: readonly PromaExtension[]): 
         (extension.appModes ?? []).filter((contribution) => contribution.mode === mode),
       )
     },
-    getAgentSurfaceContext(request: AgentSurfaceContextRequest): AgentSurfaceContext | null {
-      const extension = registeredExtensions.find((candidate) => candidate.id === request.extensionId)
-      const manifest = extension?.hostCapabilityManifests?.find(
-        (candidate) => candidate.presentation === request.presentation,
-      )
-      if (!manifest) return null
-      return {
-        sessionId: request.sessionId,
-        presentation: manifest.presentation,
-        hostCapabilities: manifest.capabilities,
-      }
-    },
+
   })
 }
 

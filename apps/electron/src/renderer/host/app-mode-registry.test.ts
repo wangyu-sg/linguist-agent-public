@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { findSessionToRestore } from './app-mode-registry'
-import { getExpandedRightWorkspaceLayout } from '@/components/app-shell/right-panel-layout'
+import { getRightPanelMaxWidth } from '@/components/app-shell/right-panel-layout'
 import { getMacTitlebarLeadingInsetPx } from '@/lib/window-titlebar-layout'
 
 test('Agent 模式不会恢复 Linguist 父会话的委派子会话', () => {
@@ -20,15 +20,9 @@ test('Agent 模式不会恢复 Linguist 父会话的委派子会话', () => {
   )
 })
 
-test('展开右侧工作区时隐藏 Agent 主区并占满剩余空间', () => {
-  expect(getExpandedRightWorkspaceLayout(1440, 61)).toEqual({
-    mainAreaWidth: 0,
-    rightPanelWidth: 1379,
-  })
-  expect(getExpandedRightWorkspaceLayout(720, 61)).toEqual({
-    mainAreaWidth: 0,
-    rightPanelWidth: 659,
-  })
+test('右侧拖宽仍给主会话保留原生最小宽度', () => {
+  expect(getRightPanelMaxWidth(1440, 61, true)).toBe(1059)
+  expect(getRightPanelMaxWidth(720, 61, true)).toBe(339)
 })
 
 test('macOS 根据侧栏实际占用为首个 Tab 预留红绿灯安全区', () => {

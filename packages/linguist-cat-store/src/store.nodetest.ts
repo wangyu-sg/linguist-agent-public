@@ -221,3 +221,44 @@ test('Schema 19 source identity is not shared across language pairs', () => {
     db.close()
   }
 })
+
+test('建议批次过滤在分页之前执行，历史与 count 同范围', async () => {
+  const rootDir = makeTempDir()
+  const store = new CatStore({ rootDir, entropy: makeEntropy('proposal-batch'), now: makeClock() })
+  const project = store.createProject({ name: '批次建议', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'ws' })
+  const db = store.openProject(project.id)
+  try {
+    const batches = []
+    for (const filename of ['a.csv', 'b.csv']) {
+      const imported = await new CsvAdapter().import({
+        bytes: new TextEncoder().encode('id,source,target\n1,One,\n2,Two,\n3,Three,\n'),
+        filename, sourceLocale: 'en', targetLocale: 'zh-CN',
+      })
+      const batch = db.assets.insertImported(imported)
+      batches.push(batch)
+      for (const segment of batch.segments) {
+        db.proposals.insertPending({ segmentId: segment.id, baseRevision: 0,
+          proposedTarget: '译文', runId: filename, now: '2026-09-09T00:00:00.000Z' })
+      }
+    }
+    const assetId = batches[0]!.asset.id
+    const filter = { assetId, status: 'pending' as const }
+    assert.equal(db.proposals.count(filter), 3)
+    assert.equal(db.proposals.count(), 6)
+    const all = db.proposals.list(filter)
+    assert.equal(all.length, 3)
+    assert.deepEqual(db.proposals.list({ ...filter, limit: 1, offset: 1 }), [all[1]])
+    assert.deepEqual(db.proposals.listWithDiffs({ ...filter, limit: 1, offset: 1 }).map(item => item.proposal.id), [all[1]!.id])
+    db.proposals.accept(all[0]!.id)
+    assert.equal(db.proposals.count(filter), 2)
+    assert.equal(db.proposals.count({ assetId, status: 'accepted' }), 1)
+    const applied = db.proposals.listWithDiffs({ assetId, status: 'accepted' })[0]!
+    assert.equal(applied.currentRevision, applied.baseRevision + 1)
+    assert.equal(applied.currentTarget, applied.proposedTarget)
+    assert.equal(db.proposals.count({ assetId: 'missing' }), 0)
+    assert.deepEqual(db.proposals.listWithDiffs({ assetId: 'missing' }), [])
+  } finally {
+    db.close()
+    rmSync(rootDir, { recursive: true, force: true })
+  }
+})

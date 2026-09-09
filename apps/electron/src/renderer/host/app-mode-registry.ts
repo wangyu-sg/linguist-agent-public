@@ -21,7 +21,7 @@ export interface AppModeDefinition {
   /** 切换到该模式时恢复上次同模式会话(Agent/Chat)。 */
   restoresSession: boolean
   /** 切换到该模式时恢复上次本地化项目标签(Linguist)。 */
-  restoresProjectTab: boolean
+  restoresProjectSession: boolean
   /** 该模式主区是否允许挂载 Agent Rail(右侧文件/改动面板)。 */
   allowsAgentRail: boolean
 }
@@ -33,7 +33,7 @@ export const APP_MODE_DEFINITIONS: readonly AppModeDefinition[] = [
     allowedViews: ['conversations', 'planning', 'agent-skills', 'vault'],
     fallbackView: 'conversations',
     restoresSession: true,
-    restoresProjectTab: false,
+    restoresProjectSession: false,
     allowsAgentRail: true,
   },
   {
@@ -42,16 +42,16 @@ export const APP_MODE_DEFINITIONS: readonly AppModeDefinition[] = [
     allowedViews: ['conversations', 'planning', 'agent-skills', 'vault'],
     fallbackView: 'conversations',
     restoresSession: true,
-    restoresProjectTab: false,
+    restoresProjectSession: false,
     allowsAgentRail: false,
   },
   {
     mode: 'linguist',
     fallbackLabel: 'Linguist',
-    allowedViews: ['conversations', 'agent-skills', 'projects'],
+    allowedViews: ['conversations', 'planning', 'agent-skills', 'vault', 'projects'],
     fallbackView: 'conversations',
     restoresSession: false,
-    restoresProjectTab: true,
+    restoresProjectSession: true,
     allowsAgentRail: true,
   },
 ]

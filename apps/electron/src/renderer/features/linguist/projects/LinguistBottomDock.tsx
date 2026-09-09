@@ -1,16 +1,12 @@
 import { useAtom, useAtomValue } from 'jotai'
 import type { LinguistAssetInfo } from '@proma/shared'
 import type { KeyboardEvent, ReactElement } from 'react'
-import { toast } from 'sonner'
-import { ExternalLink } from 'lucide-react'
 import {
   type LinguistBottomDockTab,
   linguistQaFindingsCapabilityAtomFamily,
   linguistWorkbenchUiStateAtomFamily,
 } from './cat-workspace-atoms'
 import { ContextEvidencePanel } from './ContextEvidencePanel'
-import { describeLinguistFormat } from './format-labels'
-import { useOpenLinguistPreview } from './linguist-preview-open'
 import { QaFindingsPanel } from './QaFindingsPanel'
 import { PrepareDeliveryPanel } from './PrepareDeliveryPanel'
 import { ProposalInbox, type ProposalReviewCoverage } from './ProposalInbox'
@@ -22,8 +18,7 @@ const TABS: ReadonlyArray<{ id: LinguistBottomDockTab; label: string }> = [
   { id: 'terms', label: '术语' },
   { id: 'qa', label: 'QA' },
   { id: 'context', label: '上下文/证据' },
-  { id: 'preview', label: '预览' },
-  { id: 'proposals', label: '待查看建议' },
+  { id: 'proposals', label: '修改建议' },
   { id: 'delivery', label: '准备交付' },
 ]
 
@@ -57,25 +52,8 @@ export function LinguistBottomDock({
 }): ReactElement {
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectId))
   const qaCapability = useAtomValue(linguistQaFindingsCapabilityAtomFamily(projectId))
-  /** 批次预览统一进 Proma Preview Tab；dock 只保留入口，不再内嵌第二套预览面。 */
-  const openLinguistPreview = useOpenLinguistPreview()
   const activeTab = TABS.find((tab) => tab.id === uiState.bottomDockTab) ?? TABS[0]!
-  const previewAsset = assets.find((asset) => asset.assetId === uiState.activeAssetId)
-  const openActiveAssetPreview = (): void => {
-    if (previewAsset === undefined) return
-    const opened = openLinguistPreview({
-      kind: 'batch',
-      projectId,
-      assetId: previewAsset.assetId,
-      filename: previewAsset.filename,
-      formatId: previewAsset.formatId,
-      segmentCount: previewAsset.segmentCount,
-      segmentCounts: previewAsset.segmentCounts,
-      currentStageCounts: previewAsset.currentStageCounts,
-      openQaCount: previewAsset.openQaCount,
-    })
-    if (!opened) toast('项目会话尚未就绪，请稍后重试')
-  }
+  const activeAsset = assets.find((asset) => asset.assetId === uiState.activeAssetId)
   const handleTabKeyDown = (
     event: KeyboardEvent<HTMLButtonElement>,
     tabId: LinguistBottomDockTab,
@@ -84,14 +62,14 @@ export function LinguistBottomDock({
     if (nextTab === undefined) return
     event.preventDefault()
     setUiState({ bottomDockTab: nextTab })
-    event.currentTarget.ownerDocument
-      .getElementById(`linguist-dock-tab-${projectId}-${nextTab}`)
-      ?.focus()
+    const button = event.currentTarget.ownerDocument.getElementById(`linguist-dock-tab-${projectId}-${nextTab}`)!
+    button.focus({ preventScroll: true })
+    button.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' })
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col pt-1">
-      <div role="tablist" aria-label="语言资产" className="flex shrink-0 gap-1 overflow-x-auto px-3">
+      <div role="tablist" aria-label="辅助面板" className="flex shrink-0 gap-1 overflow-x-auto px-3">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -131,6 +109,7 @@ export function LinguistBottomDock({
           />
         ) : activeTab.id === 'qa' ? (
           <QaFindingsPanel
+            key={`${projectId}:${uiState.activeAssetId}`}
             projectId={projectId}
             activeAssetId={uiState.activeAssetId}
             activeSegmentId={uiState.activeSegmentId}
@@ -146,31 +125,12 @@ export function LinguistBottomDock({
             archived={archived}
             onOpenTerms={() => setUiState({ bottomDockTab: 'terms' })}
           />
-        ) : activeTab.id === 'preview' ? (
-          previewAsset === undefined ? (
-            <p>选择批次后可在此打开预览</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <p className="text-[12px] text-foreground/60">
-                <span className="font-medium text-foreground">{previewAsset.filename}</span>
-                <span className="ml-2 text-foreground/45" title={`格式标识 ${previewAsset.formatId}`}>
-                  {describeLinguistFormat(previewAsset.formatId)} · {previewAsset.segmentCount} 段 · 只读
-                </span>
-              </p>
-              <div>
-                <button
-                  type="button"
-                  onClick={openActiveAssetPreview}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.06] px-2.5 py-1.5 text-[12px] font-medium text-foreground/70 hover:bg-foreground/[0.09] hover:text-foreground transition-colors duration-100"
-                >
-                  <ExternalLink size={12} />
-                  在预览标签页中打开
-                </button>
-              </div>
-            </div>
-          )
         ) : activeTab.id === 'proposals' ? (
+          activeAsset === undefined ? <p>选择批次后查看修改建议</p> : <>
+          <p className="mb-2 text-xs">当前批次：{activeAsset.filename}</p>
           <ProposalInbox
+            key={`${projectId}:${activeAsset.assetId}`}
+            assetId={activeAsset.assetId}
             projectId={projectId}
             archived={archived}
             coverage={proposalCoverage}
@@ -179,8 +139,10 @@ export function LinguistBottomDock({
               onProjectChanged?.()
             }}
           />
+          </>
         ) : activeTab.id === 'delivery' ? (
           <PrepareDeliveryPanel
+            key={`${projectId}:${uiState.activeAssetId}`}
             projectId={projectId}
             assets={assets}
             initialAssetId={uiState.activeAssetId}

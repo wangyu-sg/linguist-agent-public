@@ -66,7 +66,7 @@ Proma Pi Agent Runtime
 - Phrase split/master MXLIFF 以内容证据配对；mapping 不完整或 stale 时阻断 `verified` 导出。
 - memoQ MQXLIFF 使用专用 Adapter，保留 inline code、确认状态与审校批注；实机客户样本仍需逐样本验证。
 
-Full `AgentView` 保留 Proma 的 Files / Changes 面板；Workbench rail 只承载对话。Linguist 会话直接继承其 Proma Workspace 的 Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration；CAT 项目绑定只增加领域上下文和工具，不复制宿主能力。
+Linguist 使用完整原生 `AgentView`，CAT 与受管预览由右侧原生工作区承载，布局、分屏与尺寸跟随 Proma。Linguist 会话直接继承其 Proma Workspace 的 Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration；CAT 项目绑定只增加领域上下文和工具，不复制宿主能力。
 
 批次导航只显示真实批次，支持原位刷新，并在当前选择失效时收敛到首个有效批次。底部进度、草稿数和源文/译文字符数严格属于当前批次；阶段文案由项目工作流驱动，依次为“已确认 / 已审校 / 已校对”。
 

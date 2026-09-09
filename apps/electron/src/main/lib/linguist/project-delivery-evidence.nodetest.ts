@@ -221,3 +221,31 @@ test('Export Manifest 区分 verified/as-is 并持久化非阻断证据提醒', 
   assert.equal(manifest?.validation, 'as-is')
   assert.equal(manifest?.evidence?.gaps[0]?.severity, 'warning')
 })
+
+test('QA 查询保持批次范围并拒绝跨批次片段与无效批次', async () => {
+  const { ProjectQuality } = await import('./project-quality')
+  const rootDir = mkdtempSync(join(tmpdir(), 'qa-batch-scope-'))
+  const store = new CatStore({ rootDir, entropy: createSeededEntropy('qa-batch-scope') })
+  const project = store.createProject({ name: 'QA Scope', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'workspace' })
+  const db = store.openProject(project.id)
+  try {
+    const batches = []
+    for (const filename of ['a.json', 'b.json']) {
+      const imported = await new JsonAdapter().import({ bytes: new TextEncoder().encode('[{"source":"Number 123","target":"数字 456"}]'),
+        filename, sourceLocale: 'en', targetLocale: 'zh-CN' })
+      batches.push(db.assets.insertImported(imported))
+    }
+    const quality = new ProjectQuality({ rootDir, now: () => new Date().toISOString(), registry: new CatFormatRegistry(),
+      getProject: id => store.getProject(id), getProjectPaths: id => projectPaths(rootDir, id),
+      openProject: () => db, assertProjectWritable: () => {}, call: fn => fn() })
+    for (const batch of batches) quality.runQa(project.id, batch.asset.id)
+    const a = batches[0]!
+    const b = batches[1]!
+    const scoped = quality.listQaFindings(project.id, { assetId: a.asset.id })
+    assert.ok(scoped.total > 0)
+    assert.ok(scoped.items.every(item => item.segmentId === a.segments[0]!.id))
+    assert.equal(quality.listQaFindings(project.id).total, scoped.total * 2)
+    assert.throws(() => quality.listQaFindings(project.id, { assetId: a.asset.id, segmentId: b.segments[0]!.id }))
+    assert.throws(() => quality.listQaFindings(project.id, { assetId: 'missing' }))
+  } finally { db.close(); rmSync(rootDir, { recursive: true, force: true }) }
+})

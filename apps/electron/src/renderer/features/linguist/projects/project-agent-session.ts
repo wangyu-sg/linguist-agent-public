@@ -115,7 +115,6 @@ export function resolveActiveLinguistProjectId(
   activeTab: TabItem | null,
   sessions: readonly AgentSessionMeta[],
 ): string | null {
-  if (activeTab?.type === 'linguist-project') return activeTab.projectId
   if (activeTab?.type !== 'agent' && activeTab?.type !== 'preview') return null
   const session = sessions.find((item) => item.id === activeTab.sessionId)
   return session ? getAgentSessionLinguistProjectId(session, sessions) ?? null : null

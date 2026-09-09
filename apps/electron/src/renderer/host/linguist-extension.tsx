@@ -5,7 +5,7 @@ import {
   LinguistSidebarContent,
   type SharedProjectSessionRowProps,
 } from '@/features/linguist/sidebar/LinguistSidebarContent'
-import type { AgentHostCapabilities, PromaExtension } from './contracts'
+import type { PromaExtension } from './contracts'
 
 interface LinguistSidebarRenderContext {
   SessionRowComponent?: React.ComponentType<SharedProjectSessionRowProps>
@@ -24,27 +24,6 @@ function renderLinguistSidebar(context: unknown): React.ReactNode {
   const SessionRowComponent = getSessionRowComponent(context)
   if (!SessionRowComponent) return null
   return <LinguistSidebarContent SessionRowComponent={SessionRowComponent} />
-}
-
-/**
- * Rail 保持窄面板职责，不挂载文件面板；Full 复用原生 Files / Changes / Chat 侧面板。
- */
-export const LINGUIST_AGENT_RAIL_HOST_CAPABILITIES: AgentHostCapabilities = {
-  references: true,
-  companionChat: true,
-  filePanel: false,
-  preview: true,
-  attachments: true,
-  slashMenu: true,
-  modelControls: true,
-  queueAndSteer: true,
-  permissions: true,
-  fullPresentation: true,
-}
-
-export const LINGUIST_AGENT_FULL_HOST_CAPABILITIES: AgentHostCapabilities = {
-  ...LINGUIST_AGENT_RAIL_HOST_CAPABILITIES,
-  filePanel: true,
 }
 
 /**
@@ -74,16 +53,4 @@ export const linguistExtension: PromaExtension = {
     // 现有 IPC 尚未迁移为受验证的 namespaced bridge，不能伪登记为已实现 command。
     commands: {},
   }],
-  hostCapabilityManifests: [
-    {
-      id: 'linguist-rail',
-      presentation: 'linguist-rail',
-      capabilities: LINGUIST_AGENT_RAIL_HOST_CAPABILITIES,
-    },
-    {
-      id: 'linguist-full',
-      presentation: 'linguist-full',
-      capabilities: LINGUIST_AGENT_FULL_HOST_CAPABILITIES,
-    },
-  ],
 }

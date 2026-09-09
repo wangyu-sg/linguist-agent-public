@@ -6,12 +6,12 @@
 
 | 集合 | 路径数 |
 |---|---:|
-| Permanent Product Fork | 217 |
+| Permanent Product Fork | 216 |
 | Generated / Overlay | 2 |
 | Main Host Seam | 8 |
 | Renderer Host Seam | 3 |
 | Temporary Deviation | 48 |
-| 当前精确 ledger | 278 |
+| 当前精确 ledger | 277 |
 
 账本使用 schema v3；每个条目都记录 `kind`、`owner`、`mergePolicy`、具体理由，以及 Host Seam 的稳定 `hook`。Linguist Extension 位于允许根，不计入 Proma Core Touchpoint。精确文件只维护在 JSON，避免双写漂移。
 

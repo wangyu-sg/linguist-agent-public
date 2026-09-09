@@ -10,7 +10,6 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
-import type { LinguistRole } from '@proma/shared'
 import { HelpCircle, Keyboard, Globe, PanelRight } from 'lucide-react'
 import {
   tabsAtom,
@@ -36,18 +35,10 @@ import { getTabBarActionLayout } from './tab-bar-action-layout'
 import { useCloseTab } from '@/hooks/useCloseTab'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { cn } from '@/lib/utils'
-import { getAgentSessionLinguistProjectName } from '@/lib/agent-session-list'
 import { shortcutGuideOpenAtom } from '@/atoms/shortcut-guide'
 import { faqDialogOpenAtom } from '@/atoms/faq-dialog'
 import { browserPanelMinimizedMapAtom, browserPanelOpenMapAtom, browserStateMapAtom } from '@/atoms/browser-atoms'
 // 浏览器入口对所有 Agent 会话开放；来源限制由主进程浏览器策略处理。
-
-const LINGUIST_ROLE_SHORT_LABEL: Record<LinguistRole, string> = {
-  general: '通用',
-  translator: '翻译',
-  reviewer: '审校',
-  proofreader: '校对',
-}
 
 export function TabBar(): React.ReactElement {
   const tabs = useAtomValue(tabsAtom)
@@ -75,23 +66,14 @@ export function TabBar(): React.ReactElement {
     }
   }, [store, tabs])
 
-  const contextBySessionId = React.useMemo(() => {
-    const workspaceNameMap = new Map(agentWorkspaces.map((workspace) => [workspace.id, workspace.name]))
-    const contexts = new Map<string, { label: string; roleLabel?: string }>()
+  const workspaceNameBySessionId = React.useMemo(() => {
+    const workspaceNames = new Map(agentWorkspaces.map((workspace) => [workspace.id, workspace.name]))
+    const names = new Map<string, string>()
     for (const session of agentSessions) {
-      const linguistProjectName = getAgentSessionLinguistProjectName(session, agentSessions)
-      const label = linguistProjectName
-        ?? (session.workspaceId ? workspaceNameMap.get(session.workspaceId) : undefined)
-      if (label) {
-        contexts.set(session.id, {
-          label,
-          roleLabel: linguistProjectName
-            ? LINGUIST_ROLE_SHORT_LABEL[session.linguistRole ?? 'general']
-            : undefined,
-        })
-      }
+      const name = session.workspaceId ? workspaceNames.get(session.workspaceId) : undefined
+      if (name) names.set(session.id, name)
     }
-    return contexts
+    return names
   }, [agentSessions, agentWorkspaces])
 
   const automationSessionIds = React.useMemo(() => {
@@ -164,7 +146,7 @@ export function TabBar(): React.ReactElement {
         tabs={tabs}
         activeTabId={activeTabId}
         streamingMap={indicatorMap}
-        contextBySessionId={contextBySessionId}
+        workspaceNameBySessionId={workspaceNameBySessionId}
         automationSessionIds={automationSessionIds}
         delegationSessionIds={delegationSessionIds}
         onActivate={handleActivate}
@@ -181,7 +163,7 @@ function TabBarInner({
   tabs,
   activeTabId,
   streamingMap,
-  contextBySessionId,
+  workspaceNameBySessionId,
   automationSessionIds,
   delegationSessionIds,
   onActivate,
@@ -192,7 +174,7 @@ function TabBarInner({
   tabs: TabItem[]
   activeTabId: string | null
   streamingMap: Map<string, SessionIndicatorStatus>
-  contextBySessionId: Map<string, { label: string; roleLabel?: string }>
+  workspaceNameBySessionId: Map<string, string>
   automationSessionIds: Set<string>
   delegationSessionIds: Set<string>
   onActivate: (tabId: string) => void
@@ -408,17 +390,15 @@ function TabBarInner({
         )}
       >
         {tabs.map((tab) => {
-          const sessionContext = tab.type === 'agent' || tab.type === 'preview'
-            ? contextBySessionId.get(tab.sessionId)
+          const workspaceName = tab.type === 'agent' || tab.type === 'preview'
+            ? workspaceNameBySessionId.get(tab.sessionId)
             : undefined
           return <TabBarItem
             key={tab.id}
             id={tab.id}
             type={tab.type}
             title={tab.title}
-            displayTitle={tab.type === 'linguist-project' ? '工作台' : undefined}
-            contextLabel={tab.type === 'linguist-project' ? tab.title : sessionContext?.label}
-            roleLabel={sessionContext?.roleLabel}
+            workspaceName={workspaceName}
             isAutomation={tab.type === 'agent' && automationSessionIds.has(tab.sessionId)}
             isDelegation={tab.type === 'agent' && delegationSessionIds.has(tab.sessionId)}
             isActive={tab.id === activeTabId}

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useStore } from 'jotai'
-import { Archive, Bot, Languages, PanelBottom, PanelLeft, Settings } from 'lucide-react'
+import { Archive, Languages, PanelBottom, PanelLeft, Settings } from 'lucide-react'
 import type { LinguistProjectInfo, LinguistStageDecisionCoverage, LinguistWorkflowStage } from '@proma/shared'
 import { toast } from 'sonner'
 import type { WorkbenchSummaryState } from './project-summary-atoms'
@@ -74,9 +74,7 @@ interface LinguistWorkbenchShellProps {
   onProjectArchived?: (project: LinguistProjectInfo) => void
   onProjectDeleted?: (projectId: string) => void
   assetNavigator?: React.ReactNode
-  onOpenAgent?: () => void
   bottomDock?: React.ReactNode
-  presentation?: 'page' | 'workspace'
   children: React.ReactNode
 }
 
@@ -87,9 +85,7 @@ export function LinguistWorkbenchShell({
   onProjectArchived,
   onProjectDeleted,
   assetNavigator,
-  onOpenAgent,
   bottomDock,
-  presentation = 'page',
   children,
 }: LinguistWorkbenchShellProps): React.ReactElement {
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(project.id))
@@ -317,17 +313,6 @@ export function LinguistWorkbenchShell({
           </select>
         </label>
         <div aria-label="工作台操作" className="flex shrink-0 items-center gap-1">
-          {onOpenAgent !== undefined && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onOpenAgent}
-            >
-              <Bot aria-hidden="true" />
-              Agent
-            </Button>
-          )}
           <Button
             type="button"
             variant="ghost"
@@ -335,7 +320,7 @@ export function LinguistWorkbenchShell({
             onClick={() => setUiState({ projectSettingsOpen: true })}
           >
             <Settings aria-hidden="true" />
-            <span className={cn(presentation === 'workspace' && 'sr-only')}>项目设置</span>
+            <span className="sr-only">项目设置</span>
           </Button>
         </div>
       </header>
@@ -360,10 +345,7 @@ export function LinguistWorkbenchShell({
           <aside
             aria-label="批次导航"
             data-workbench-slot="asset-navigator"
-            className={cn(
-              'relative min-h-0 shrink-0 overflow-hidden bg-content-area/55 shadow-[1px_0_0_hsl(var(--border)/0.45)] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:max-w-72 max-md:bg-content-area max-md:shadow-xl',
-              presentation === 'workspace' && 'absolute inset-y-0 left-0 z-20 max-w-72 bg-content-area shadow-xl',
-            )}
+            className="absolute inset-y-0 left-0 z-20 min-h-0 max-w-72 shrink-0 overflow-hidden border-r border-border/45 bg-content-area"
             style={{ width: uiState.assetNavigatorWidth }}
           >
             <div
@@ -402,13 +384,9 @@ export function LinguistWorkbenchShell({
         <div
           ref={catColumnRef}
           data-workbench-slot="cat-column"
-          className={cn(
-            'relative min-h-0 min-w-[32rem] flex-1 flex-col max-md:min-w-0',
-            'flex',
-            presentation === 'workspace' && 'min-w-0',
-          )}
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col"
           style={{
-            // 工作区始终使用浮层，页面仅窄屏使用；由主区域留出浮层实际占用的高度。
+            // 主区域留出辅助面板浮层实际占用的高度。
             '--bottom-dock-overlay-height': bottomDock !== undefined && uiState.bottomDockOpen
               ? `${bottomDockHeight}px`
               : '0px',
@@ -421,27 +399,21 @@ export function LinguistWorkbenchShell({
           />
           <main
             data-workbench-slot="segment-grid"
-            className={cn(
-              'min-h-0 min-w-0 flex-1 overflow-hidden pb-[var(--bottom-dock-overlay-height)]',
-              presentation === 'page' && 'lg:pb-0',
-            )}
+            className="min-h-0 min-w-0 flex-1 overflow-hidden pb-[var(--bottom-dock-overlay-height)]"
           >
             {children}
           </main>
 
           {bottomDock !== undefined && uiState.bottomDockOpen && (
             <section
-              aria-label="语言资产面板"
+              aria-label="辅助面板"
               data-workbench-slot="bottom-dock"
-              className={cn(
-                'relative min-h-0 shrink-0 overflow-hidden border-t border-border/50 bg-content-area max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20',
-                presentation === 'workspace' && 'absolute inset-x-0 bottom-0 z-20',
-              )}
+              className="absolute inset-x-0 bottom-0 z-20 min-h-0 shrink-0 overflow-hidden border-t border-border/50 bg-content-area"
               style={{ height: bottomDockHeight }}
             >
               <div
                 role="separator"
-                aria-label="调整语言资产面板高度"
+                aria-label="调整辅助面板高度"
                 aria-orientation="horizontal"
                 aria-valuemin={BOTTOM_DOCK_MIN_HEIGHT}
                 aria-valuemax={bottomDockMaxHeight}
@@ -521,7 +493,7 @@ export function LinguistWorkbenchShell({
               className={cn('h-6 shrink-0 px-2 text-[11px]', uiState.bottomDockOpen && 'bg-accent/70')}
             >
               <PanelBottom aria-hidden="true" />
-              语言资产
+              辅助面板
             </Button>
           )}
         </div>

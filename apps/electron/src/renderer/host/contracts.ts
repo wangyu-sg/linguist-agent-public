@@ -1,8 +1,8 @@
 import type { ReactElement, ReactNode } from 'react'
 import type { PrimaryAppMode } from '@/atoms/app-mode'
 
-/** Agent 页面、Linguist rail 和全屏呈现共用的宿主表面标识。 */
-export type AgentSurfacePresentation = 'page' | 'linguist-rail' | 'linguist-full'
+/** 原生 Agent 与 Linguist 会话共用的宿主表面标识。 */
+export type AgentSurfacePresentation = 'page' | 'linguist-full'
 
 /**
  * Agent 原生界面可按宿主表面显式开放的能力。
@@ -22,7 +22,7 @@ export interface AgentHostCapabilities {
   fullPresentation: boolean
 }
 
-/** 普通 Agent 页面沿用现有完整能力，Linguist 由 extension manifest 单独声明。 */
+/** 普通 Agent 页面沿用现有完整能力，Linguist 会话继承同一能力。 */
 export const DEFAULT_AGENT_HOST_CAPABILITIES: AgentHostCapabilities = {
   references: true,
   companionChat: true,
@@ -36,20 +36,6 @@ export const DEFAULT_AGENT_HOST_CAPABILITIES: AgentHostCapabilities = {
   fullPresentation: true,
 }
 
-/** registry 缺失时的保守回退，避免错误地向嵌入式 Agent 暴露宿主入口。 */
-export const UNAVAILABLE_AGENT_HOST_CAPABILITIES: AgentHostCapabilities = {
-  references: false,
-  companionChat: false,
-  filePanel: false,
-  preview: false,
-  attachments: false,
-  slashMenu: false,
-  modelControls: false,
-  queueAndSteer: false,
-  permissions: false,
-  fullPresentation: false,
-}
-
 export interface AgentSurfaceContextValue {
   sessionId: string
   presentation: AgentSurfacePresentation
@@ -58,15 +44,6 @@ export interface AgentSurfaceContextValue {
 
 /** 与蓝图中的 AgentSurfaceContext 命名对齐的简写。 */
 export type AgentSurfaceContext = AgentSurfaceContextValue
-
-/**
- * 静态登记的宿主能力；不会在运行时加载第三方插件。
- */
-export interface HostCapabilityManifest {
-  id: string
-  presentation: AgentSurfacePresentation
-  capabilities: AgentHostCapabilities
-}
 
 export interface SettingsContribution {
   id: string
@@ -164,5 +141,4 @@ export interface PromaExtension {
   agentProfiles?: readonly AgentProfileContribution[]
   settingsSections?: readonly SettingsContribution[]
   ipcModules?: readonly IpcModuleContribution[]
-  hostCapabilityManifests?: readonly HostCapabilityManifest[]
 }

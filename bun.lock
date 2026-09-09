@@ -38,7 +38,7 @@
     },
     "apps/electron": {
       "name": "@proma/electron",
-      "version": "0.17.72",
+      "version": "0.17.73",
       "dependencies": {
         "@codemirror/language": "^6.12.4",
         "@codemirror/state": "^6.7.1",
@@ -214,7 +214,7 @@
     },
     "packages/linguist-cat-store": {
       "name": "@linguist/cat-store",
-      "version": "0.0.44",
+      "version": "0.0.45",
       "dependencies": {
         "@linguist/cat-core": "workspace:*",
         "@linguist/cat-formats": "workspace:*",

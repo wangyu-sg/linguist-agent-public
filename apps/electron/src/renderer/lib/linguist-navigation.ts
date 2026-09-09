@@ -56,7 +56,7 @@ export function restoreLastLocalizationProject(
     return null
   }
 
-  const opened = openTab(store.get(tabsAtom).filter((tab) => tab.type !== 'linguist-project'), {
+  const opened = openTab(store.get(tabsAtom), {
     type: 'agent',
     sessionId: session.id,
     title: session.title,
@@ -65,7 +65,9 @@ export function restoreLastLocalizationProject(
   enterLinguistNavigation(store, opened.activeTabId, 'conversations')
   store.set(currentAgentSessionIdAtom, session.id)
   if (session.workspaceId) store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
-  store.set(agentSidePanelOpenAtomFamily(session.id), true)
-  store.set(agentDiffPanelTabAtom, (previous) => new Map(previous).set(session.id, 'linguist'))
+  if (!store.get(agentDiffPanelTabAtom).has(session.id)) {
+    store.set(agentSidePanelOpenAtomFamily(session.id), true)
+    store.set(agentDiffPanelTabAtom, (previous) => new Map(previous).set(session.id, 'linguist'))
+  }
   return session.id
 }

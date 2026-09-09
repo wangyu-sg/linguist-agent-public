@@ -19,6 +19,12 @@ import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import { Provider, createStore } from 'jotai'
 import { SegmentEditor } from './SegmentEditor'
+import { ProposalInbox } from './ProposalInbox'
+import { QaFindingsPanel } from './QaFindingsPanel'
+import { restorePersistedTabState, tabsAtom } from '@/atoms/tab-atoms'
+import { openLinguistPreview } from './linguist-preview-open'
+import { openPreviewInStore } from '@/components/diff/preview-opener'
+import { previewFilesMapAtom } from '@/atoms/preview-atoms'
 import { openLinguistAgentSession, openLinguistProjectFilesPanel } from './open-linguist-session'
 import { openLocalizationProject } from './open-localization-project'
 import { selectProjectAtom } from '@/host/project-switch'
@@ -210,6 +216,39 @@ try {
   const afterFiles = openLinguistAgentSession(store, 'B', openProject)
   finishOpen.get('B')(); await afterFiles; finishCreate(); await lateFiles
   check('Files 入口延迟创建不会重启过期导航', store.get(currentAgentSessionIdAtom) === 'B')
+  const beforePreviewTab = store.get(activeTabIdAtom)
+  openLinguistPreview('B', (id, file) => openPreviewInStore(store, id, file),
+    { kind: 'batch', projectId: 'B', assetId: assetB, filename: 'same.xliff', formatId: 'xliff' })
+  check('预览保留中心会话且使用明确宿主', store.get(activeTabIdAtom) === beforePreviewTab && store.get(previewFilesMapAtom).get('B').length === 1)
+  const oldUi = { tabs: [{ id: 'linguist-project:A', type: 'linguist-project', projectId: 'A', title: '项目 A' },
+    { id: '__preview__:B', type: 'preview', sessionId: 'B', title: '只剩标题' }], activeTabId: 'linguist-project:A' }
+  const restored = restorePersistedTabState(oldUi, new Set(['A', 'B']), new Map([['A', { id: 'A', title: 'A' }]]))
+  check('旧项目及预览恢复为合法原生会话', restored.activeTabId === 'A' && restored.tabs.every(tab => tab.type === 'agent') && restored.tabs.map(tab => tab.sessionId).join(',') === 'A,B')
+  check('旧状态归一幂等', JSON.stringify(restorePersistedTabState(restored, new Set(['A', 'B']), new Map())) === JSON.stringify(restored))
+  let finishAList
+  const requests = []
+  const diff = (id, status) => ({ proposal: { id, segmentId: id, status, warnings: [], evidenceRefs: [], termRefs: [],
+    createdAt: '2026-09-09', runId: id }, originalOrdinal: 1, source: id, currentTarget: '译文', proposedTarget: '译文',
+    currentRevision: 1, baseRevision: 0, locked: false })
+  window.electronAPI.linguistProposalsList = request => {
+    requests.push(request)
+    if (request.assetId === assetA) return new Promise(resolve => { finishAList = () => resolve({ ok: true, data: { items: [diff('old-A', 'pending')], total: 1, offset: 0, hasMore: false } }) })
+    return Promise.resolve({ ok: true, data: { items: [diff('new-B', request.status === 'pending' ? 'pending' : 'accepted')], total: 1, offset: 0, hasMore: false } })
+  }
+  const inbox = assetId => root.render(<Provider store={store}><ProposalInbox key={assetId} projectId={projectId} assetId={assetId} archived={false} onChanged={async () => {}} /></Provider>)
+  inbox(assetA); await tick(); inbox(assetB); await tick(); finishAList(); await tick()
+  check('建议默认当前批次待处理且迟到 A 不覆盖 B', requests.at(-1).assetId === assetB && requests.at(-1).status === 'pending' && document.body.textContent.includes('new-B') && !document.body.textContent.includes('old-A'))
+  check('pending 即使文字一致仍提示版本冲突', document.body.textContent.includes('版本冲突'))
+  const statusSelect = document.querySelector('#proposal-status-filter')
+  statusSelect.value = 'all'; statusSelect.dispatchEvent(new Event('change', { bubbles: true })); await tick(); await tick()
+  check('全部历史仍只查询 B 且 accepted 不报冲突', requests.at(-1).assetId === assetB && !requests.at(-1).status && document.body.textContent.includes('已应用') && !document.body.textContent.includes('版本冲突'))
+  const qaRequests = []
+  window.electronAPI.linguistCatListQaFindings = async request => { qaRequests.push(request); return { ok: true, data: { items: [], total: 0, offset: 0, hasMore: false } } }
+  root.render(<Provider store={store}><QaFindingsPanel projectId={projectId} activeAssetId={assetB} archived={false} onJump={() => {}} onChanged={async () => {}} refreshToken={0} /></Provider>); await tick(); await tick()
+  check('QA 默认查询当前批次', qaRequests.at(-1).assetId === assetB)
+  root.render(<Provider store={store}><QaFindingsPanel projectId={projectId} archived={false} onJump={() => {}} onChanged={async () => {}} refreshToken={0} /></Provider>); await tick(); await tick()
+  check('未选批次不请求全项目 QA', qaRequests.length === 1 && document.body.textContent.includes('选择批次后查看 QA'))
+
 } catch (error) {
   results.push({ label: String(error.stack || error), ok: false })
 }

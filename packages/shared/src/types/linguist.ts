@@ -1339,6 +1339,7 @@ export interface LinguistCatRunQaResult {
 }
 
 export interface LinguistCatListQaFindingsRequest {
+  assetId?: string
   projectId: string
   segmentId?: string
   code?: string
@@ -2509,6 +2510,7 @@ export interface LinguistProposalListPendingRequest {
 export type LinguistProposalListPendingResult = LinguistProposalInfo[]
 
 export interface LinguistProposalListRequest extends LinguistProposalListPendingRequest {
+  assetId?: string
   status?: LinguistProposalStatus
   limit?: number
   offset?: number

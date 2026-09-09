@@ -70,7 +70,6 @@ import {
   agentTerminalTabsAtom,
   agentSidePanelSplitMapAtom,
   agentSidePanelSplitRatioMapAtom,
-  agentSidePanelLayoutAtomFamily,
 } from '@/atoms/agent-atoms'
 import {
   getBrowserSidePanelTab,
@@ -463,7 +462,6 @@ interface SidePanelProps {
 }
 
 export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, width = 460 }: SidePanelProps): React.ReactElement {
-  const [sidePanelLayout, setSidePanelLayout] = useAtom(agentSidePanelLayoutAtomFamily(sessionId))
   const hostWorkspace = useAgentRightWorkspaceHostExtension(sessionId)
   // 按会话保存最近访问顺序。该历史仅存在于当前 renderer 进程，避免恢复失效的临时 Tab。
   const rightPanelTabHistoryRef = React.useRef(new Map<string, AgentSidePanelTab[]>())
@@ -1813,11 +1811,6 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
             onTabDrop={handleTabDrop}
             onSplitTab={handleSplitTab}
             onCollapseSplit={split ? handleCollapseSplit : undefined}
-            expanded={sidePanelLayout.expanded}
-            onExpandedChange={(expanded) => setSidePanelLayout((previous) => ({
-              ...previous,
-              expanded,
-            }))}
             activeTabAction={activeExplorationBranch ? (
               <ExplorationBringBackAction parentSessionId={sessionId} branch={activeExplorationBranch} sessions={sessions} />
             ) : undefined}

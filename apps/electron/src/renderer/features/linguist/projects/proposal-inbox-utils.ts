@@ -197,7 +197,7 @@ export function groupProposalRuns(
 }
 
 export const PROPOSAL_STATUS_LABELS: Record<LinguistProposalStatus, string> = {
-  pending: '待查看',
+  pending: '待处理',
   accepted: '已接受',
   rejected: '已拒绝',
   superseded: '已取代',

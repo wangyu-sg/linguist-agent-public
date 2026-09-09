@@ -1,0 +1,63 @@
+# 0.17.73 原生 UI 收敛与批次作业修复
+
+日期：2026-09-09。用户明确要求实施、doc sync 与 Release；未要求安装到日用环境。
+
+## 来源与范围
+
+- 起点：`ccdd3956be1c4e35056a593fe1152dbaec15d581`。
+- 候选：`codex/la-proma-ui-convergence-20260909`，独立 worktree；原工作副本保持原状。
+- 固定上游：Proma `v0.19.37`，`a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6`；没有升级 Runtime / Provider。
+- App `0.17.73`；CAT Store `0.0.45`（批次过滤公开合同）；Prompt `3.1.5`；Schema 19、32 个 CAT 工具不变。
+
+## 已实现
+
+中心 CAT Tab 类型、挂载、打开/最近入口与独立全宽、中心归零和 rail 能力分支已删除。主区继承完整 Agent，CAT 只作为原生右工作区内容。项目入口激活 CAT；已有会话切换保留原生工作区选择和布局。中心 Preview 的 LA 强制打开选项与 Dock 跳板删除；上游固有 Preview 类型和生命周期仍保留。
+
+保留模式与项目绑定、CAT 内容贡献、受管预览、当前轮上下文捕获、附件权限接缝，以及现有导航代际、原子写入、CAS、冻结任务、导出、安全和无障碍修复。没有加入第二套布局或任务平台。
+
+- 修改建议默认当前批次 pending；SQL JOIN 后在排序/分页前过滤，列表与总数一致。末页清空回到有效页；切换批次和筛选的晚响应不能覆盖新列表。
+- pending 按 revision 显示真实版本冲突；accepted 显示已应用，其正常 revision 增长不误报。终态文字差异只作中性提示，锁定标识保留。技术 ID 与 provenance 收进详情。
+- QA 列表、总数、下一项与交付默认当前批次；主进程校验批次归属。全项目建议/QA 历史必须从设置显式打开，项目级规则豁免只在那里提供。
+- 阶段进度取当前 asset 的 segmentCount/currentStageCounts。切换视图不修改正在运行的 Stage 范围。
+- 批次导航去阴影；管理批次进入独立批次页。辅助面板与项目共用语言资产分开；TM/TB、Context 等仍是项目资源。
+- 键盘切换辅助面板后，用原生 scrollIntoView 保证选中标签可见。
+
+## 旧状态与数据
+
+旧项目 Tab 归一为合法已有绑定 Agent，会话重复项去重；只有标题的旧 Preview 回到所属会话，不猜测文件。恢复保留合法标签顺序和活动身份；有效活跃项目缺少会话时由既有项目入口确保会话。数据库及持久化项目格式不变，不清空用户设置。
+
+卸载 CAT 不再释放项目草稿和撤销 atom；显式项目删除才清理。草稿只在当前进程保留，不承诺崩溃或退出恢复。浏览器回归覆盖编辑与保存隔离、CAS、切换竞态、旧 Tab 恢复幂等性、显式 Preview owner、批次响应隔离及 pending/终态标签。测试使用合成资料和临时数据根。
+
+## 同一上游的 UI 差异
+
+数值为 `git diff --numstat` 相对同一个固定上游的增加/删除行数；统计包括仍必须保留的正确性补丁，不把差异减少当作等价证明。
+
+| Renderer 文件 | 起点 | 本轮实现 |
+|---|---:|---:|
+| `components/tabs/MainArea.tsx` | +9 / −5 | +9 / −5 |
+| `components/tabs/TabContent.tsx` | +36 / −2 | +9 / −2 |
+| `atoms/tab-atoms.ts` | +283 / −35 | +183 / −31 |
+| `components/tabs/TabBar.tsx` | +50 / −55 | +27 / −52 |
+| `components/tabs/TabBarItem.tsx` | +40 / −26 | +18 / −20 |
+| `components/app-shell/AppShell.tsx` | +83 / −20 | +57 / −17 |
+| `components/app-shell/right-panel-layout.ts` | +11 / −0 | 0 / 0 |
+| `components/agent/SidePanel.tsx` | +20 / −13 | +13 / −13 |
+| `components/diff/DiffPanelTabBar.tsx` | +34 / −23 | +10 / −22 |
+| `components/diff/preview-opener.ts` | +30 / −14 | +12 / −17 |
+
+`right-panel-layout.ts` 已与固定上游逐字一致，因此移除该触点登记；其余接缝继续登记并接受边界检查。
+
+## 验证
+
+- `bun run test`：默认完整链通过，包括真实 SQLite / Worker / 本地 HTTP；不是只运行 Bun 帮助。
+- `bun run typecheck`、真实 Electron `cat-editor.browser.test.ts`：通过。
+- `node scripts/verify-host-seams.mjs`：12 个接缝通过；`node scripts/test-proma-sync-replay.mjs`：通过，9 个冲突均按现有策略分类。
+- Store 新增批次分页/计数/accepted 测试，QA 主进程新增批次范围和跨批次拒绝测试；默认集合包含这些测试。
+- `bun run electron:build`：通过。首次受限沙箱无法写 Swift 模块缓存，正常构建权限下重跑通过。
+- 初轮打包探针定位旧中心 Tab 断言，并保留其会话/数据恢复验证改为原生主区定位；辅助面板专项发现窄窗 End 焦点可见性问题并修复。最终 clean SHA 六步打包、专项及产物 hash 待下方补入，不把这些中间失败计为通过。
+
+## 发布与资格
+
+最终源码提交、打包报告、产物 hash、远程 CI / Release 链接待验证完成后补入。当前尚未发布或安装。
+
+真实 Provider、IME/VoiceOver、Native Open/Save、G8 盲评、AC-009 产品资格与 AC-011 日用证据继续 pending / blocked。Fake Provider 自动链只能证明对应合成路径，不能提升这些资格。
