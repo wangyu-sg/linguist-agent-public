@@ -54,10 +54,22 @@
 - `node scripts/verify-host-seams.mjs`：12 个接缝通过；`node scripts/test-proma-sync-replay.mjs`：通过，9 个冲突均按现有策略分类。
 - Store 新增批次分页/计数/accepted 测试，QA 主进程新增批次范围和跨批次拒绝测试；默认集合包含这些测试。
 - `bun run electron:build`：通过。首次受限沙箱无法写 Swift 模块缓存，正常构建权限下重跑通过。
-- 初轮打包探针定位旧中心 Tab 断言，并保留其会话/数据恢复验证改为原生主区定位；辅助面板专项发现窄窗 End 焦点可见性问题并修复。最终 clean SHA 六步打包、专项及产物 hash 待下方补入，不把这些中间失败计为通过。
+- 初轮打包探针定位旧中心 Tab 断言，并保留其会话/数据恢复验证改为原生主区定位；辅助面板专项发现窄窗 End 焦点可见性问题并修复。最终修复保持会话/工作区/标签落盘断言，并按中心标签的可访问名称定位，避免误判右侧文件来源 Tab。原生滚动后的 0.10px 取整误差按既有 1px 几何容差检查，中间失败不计为通过。
+
+## 本地最终打包证据
+
+- 源码：`2ad71c23e1a4a7fcabaf5f6a99722abe15479b93`，`workingTreeDirty=false`。实现提交 `8836ba71`，随后 `2ad71c23` 只调整探针定位。
+- 命令：`cd apps/electron && CSC_IDENTITY_AUTO_DISCOVERY=false bun run smoke:vertical`。
+- 六步 `package / workspace-deps / agent / chat / project-switch / linguist-current` 均 `passed / exitCode=0`，逐一核对日志非空。
+- Agent：19 PASS / 0 FAIL；Chat：19 PASS / 0 FAIL；CAT：31 PASS / 0 FAIL / 2 MANUAL。
+- 报告：候选 worktree 下 `apps/electron/out/smoke/vertical/vertical-smoke-report.json`；各步日志位于同目录。
+- macOS arm64 `app.asar` SHA-256：`648a9a83d18cf398665bad67169e291b798fa472c05c8b2fd062a83a13d6a119`。这是本地未签名探针产物，不作为远程 Release 安装包哈希。
+- 辅助面板专项：`node scripts/smoke/probe-pb074-e2e.ts --lf056-only`，26 PASS / 0 FAIL / 0 MANUAL；包含草稿/撤销、跨项目隔离、只读预览、窄窗键盘和重启恢复。深浅主题及 900/800px 截图保存于任务临时目录。
+- `coverageStatus=partial`；Native Open/Save 保留 MANUAL / blocked。
+- `bun run license:check`、当前公开树与新增可达历史署名扫描通过；新增提交带 DCO Signed-off-by。
 
 ## 发布与资格
 
-最终源码提交、打包报告、产物 hash、远程 CI / Release 链接待验证完成后补入。当前尚未发布或安装。
+本地候选验证通过，下一步由远程 CI 与 Auto Release 发布 `v0.17.73`。远程链接在完成后补入；不安装到日用环境。
 
 真实 Provider、IME/VoiceOver、Native Open/Save、G8 盲评、AC-009 产品资格与 AC-011 日用证据继续 pending / blocked。Fake Provider 自动链只能证明对应合成路径，不能提升这些资格。
