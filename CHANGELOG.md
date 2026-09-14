@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [0.17.74] - 2026-09-14
+
+### Changed
+
+- Proma 基线升级至 v0.19.53，Pi Runtime 升级至 0.85.1，保留 Linguist 项目、批次和 CAT 工作区行为。
+- 合入原生 MCP 配置与 OAuth、Exa 连接入口、Skills 启停管理、Copilot 额度及侧栏滚动改进。
+- 新增默认关闭的 DeepSeek Flash 模型候选；已有模型、端点和历史保持原配置。
+
+### Fixed
+
+- 合入 Markdown 多行表格、会话图片与 home 路径解析修复，并保持项目访问边界。
+- 打包检查覆盖 Pi Server 入口和重试补丁，修正窄窗验证中的滚动时序。
+
 ## [0.17.73] - 2026-09-09
 
 ### Changed
@@ -339,7 +352,8 @@
 
 - 修复上游合并后的 CI 测试口径。
 
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.71...HEAD
+[0.17.74]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.73...v0.17.74
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.74...HEAD
 [0.17.71]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.70...v0.17.71
 [0.17.70]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.69...v0.17.70
 [0.17.69]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.68...v0.17.69
