@@ -38,3 +38,12 @@ test('搜索服务目录顺序固定为飞书、钉钉、企业微信、Tavily�
 
   expect(actual.slice(0, expected.length)).toEqual(expected)
 })
+
+
+test('Exa 使用现有安全凭据入口与远程 MCP URL，并在 Brave 后显示', () => {
+  const exa = credentialIntegration('exa-search-mcp')
+  expect(exa.entry).toEqual({ type: 'http', url: 'https://mcp.exa.ai/mcp', enabled: false })
+  expect(exa.credential.headerName).toBe('x-api-key')
+  const catalog = [...MCP_INTEGRATION_CATALOG].sort(compareCatalogConnectionCards)
+  expect(catalog[catalog.findIndex((item) => item.id === 'brave-search-mcp') + 1]?.id).toBe(exa.id)
+})

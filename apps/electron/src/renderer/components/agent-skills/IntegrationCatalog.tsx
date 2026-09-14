@@ -3,6 +3,7 @@ import { ChartCandlestick, Check, CircleDashed, Cloud, FileText, Mail, Orbit, Pl
 import { Switch } from '@/components/ui/switch'
 import tavilyIcon from '@/assets/integrations/tavily.png'
 import braveIcon from '@/assets/integrations/brave.svg'
+import exaIcon from '@/assets/integrations/exa.png'
 import tongdaxinIcon from '@/assets/integrations/tongdaxin.png'
 import qichachaIcon from '@/assets/integrations/qichacha.png'
 import tencentDocsIcon from '@/assets/integrations/tencent-docs.png'
@@ -163,6 +164,7 @@ function IntegrationCard({ card, installing }: { card: CatalogCard; installing: 
   const localIcon = {
     'asset:brave': braveIcon,
     'asset:tavily': tavilyIcon,
+    'asset:exa': exaIcon,
     'asset:tongdaxin': tongdaxinIcon,
     'asset:baidu-netdisk': baiduNetdiskIcon,
     'asset:tencent-docs': tencentDocsIcon,

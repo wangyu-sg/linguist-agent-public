@@ -54,6 +54,7 @@ export function isAbsoluteFilePath(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed.length < 2) return false
   const { path } = stripLineCol(trimmed)
+  if (/^~(?:[\\/]|$)/.test(path)) return true
   if (!path.startsWith('/')) return UNC_PATH_RE.test(path) || WIN_DRIVE_RE.test(path)
   return /^\/[^\n]+\/[^\n]+$/.test(path) && (!path.endsWith('/') || path.includes('.'))
 }
@@ -83,10 +84,10 @@ export function isLocalFileReference(text: string): boolean {
   return isAbsoluteFilePath(text) || isRelativeFilePath(text)
 }
 
-/** 文件存在性缓存（模块级共享，避免重复 IPC）。key = filePath + basePaths */
+/** 文件存在性缓存（模块级共享，避免重复 IPC）。key 包含会话授权上下文 */
 const fileExistsCache = new Map<string, string | null>()
-function existsCacheKey(filePath: string, bases: string[]): string {
-  return `${filePath}\0${bases.join('\0')}`
+function existsCacheKey(filePath: string, bases: string[], sessionId?: string): string {
+  return `${sessionId ?? ''}\0${filePath}\0${bases.join('\0')}`
 }
 
 interface FilePathChipProps {
@@ -96,11 +97,13 @@ interface FilePathChipProps {
   basePath?: string
   /** 多个候选基础目录（如主 cwd + 附加目录），点击时由主进程依次解析 */
   basePaths?: string[]
+  /** 消息所属会话；嵌入子会话时不得回退为父会话的授权边界。 */
+  sessionId?: string
   className?: string
 }
 
 /** 文件路径芯片 — 可点击，触发文件预览 */
-export function FilePathChip({ filePath, basePath, basePaths, className }: FilePathChipProps): React.ReactElement {
+export function FilePathChip({ filePath, basePath, basePaths, sessionId, className }: FilePathChipProps): React.ReactElement {
   const trimmedPath = filePath.trim()
   const { path: cleanPath, suffix: lineColSuffix } = stripLineCol(trimmedPath)
   const filename = getFileName(cleanPath)
@@ -119,13 +122,15 @@ export function FilePathChip({ filePath, basePath, basePaths, className }: FileP
 
   const displayPath = resolvedPath ? `${resolvedPath}${lineColSuffix}` : trimmedPath
 
+  const getSessionId = React.useCallback(() => sessionId ?? store.get(currentAgentSessionIdAtom) ?? undefined, [sessionId, store])
+
   const resolveCurrentPath = React.useCallback((): Promise<void> => {
-    const key = existsCacheKey(cleanPath, candidateBases)
+    const key = existsCacheKey(cleanPath, candidateBases, getSessionId())
     const generation = ++requestGenerationRef.current
     const bases = candidateBases.length > 0 ? candidateBases : undefined
-    const sessionId = store.get(currentAgentSessionIdAtom)
+    const resolvedSessionId = getSessionId()
     return window.electronAPI.resolveFilePath(cleanPath, {
-      sessionId: sessionId ?? undefined,
+      sessionId: resolvedSessionId,
       candidateBasePaths: bases,
     })
       .then((resolved) => {
@@ -135,7 +140,7 @@ export function FilePathChip({ filePath, basePath, basePaths, className }: FileP
         setResolvedPath(path)
       })
       .catch(() => { /* IPC 失败时保留当前状态 */ })
-  }, [cleanPath, candidateBases, store])
+  }, [cleanPath, candidateBases, getSessionId])
 
   // IntersectionObserver 首次懒检查可使用缓存；Tooltip 打开时会绕过缓存重新解析。
   React.useEffect(() => {
@@ -144,7 +149,7 @@ export function FilePathChip({ filePath, basePath, basePaths, className }: FileP
 
     requestGenerationRef.current += 1
     setResolvedPath(undefined)
-    const key = existsCacheKey(cleanPath, candidateBases)
+    const key = existsCacheKey(cleanPath, candidateBases, getSessionId())
     if (fileExistsCache.has(key)) {
       setResolvedPath(fileExistsCache.get(key)!)
       return () => {
@@ -165,18 +170,18 @@ export function FilePathChip({ filePath, basePath, basePaths, className }: FileP
       requestGenerationRef.current += 1
       observer.disconnect()
     }
-  }, [cleanPath, candidateBases, resolveCurrentPath])
+  }, [cleanPath, candidateBases, getSessionId, resolveCurrentPath])
 
   const handleClick = React.useCallback(() => {
-    const sessionId = store.get(currentAgentSessionIdAtom)
-    if (!sessionId) return
+    const resolvedSessionId = getSessionId()
+    if (!resolvedSessionId) return
 
-    openPreview(sessionId, {
+    openPreview(resolvedSessionId, {
       filePath: cleanPath,
       previewOnly: true,
       basePaths: candidateBases.length > 0 ? candidateBases : undefined,
     })
-  }, [store, openPreview, cleanPath, candidateBases])
+  }, [getSessionId, openPreview, cleanPath, candidateBases])
 
   const handleShowInFolder = React.useCallback(() => {
     const bases = candidateBases.length > 0 ? candidateBases : undefined

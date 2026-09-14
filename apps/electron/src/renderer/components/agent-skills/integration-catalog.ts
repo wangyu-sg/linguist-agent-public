@@ -202,7 +202,6 @@ const HIDDEN_UNTIL_TESTED_INTEGRATION_IDS = new Set([
   'google-calendar-mcp',
   'vercel-mcp',
   'github-cli',
-  'github-mcp',
   'stripe-mcp',
 ])
 
@@ -212,11 +211,20 @@ export function isCatalogIntegrationVisible(integration: CatalogIntegration): bo
 
 export const MCP_INTEGRATION_CATALOG: CatalogIntegration[] = [
   {
-    id: 'github-mcp', name: 'GitHub', iconSlug: 'github', kind: 'mcp', authentication: 'oauth', serverName: 'github',
+    id: 'github-mcp', name: 'GitHub', iconSlug: 'github', kind: 'mcp', authentication: 'oauth', oauthProvider: 'github', serverName: 'github',
     description: '让 Agent 在你的 GitHub 上读取代码上下文，并处理协作与代码质量工作流。',
     capabilities: ['仓库与文件', 'Issue / PR', 'Actions 与安全扫描'],
     setupUrl: 'https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/set-up-the-github-mcp-server',
-    entry: remoteMcp('https://api.githubcopilot.com/mcp/'),
+    entry: {
+      ...remoteMcp('https://api.githubcopilot.com/mcp/'),
+      oauth: {
+        provider: 'github',
+        authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+        tokenEndpoint: 'https://github.com/login/oauth/access_token',
+        clientSecretRequired: true,
+        scopes: ['repo', 'read:org', 'read:user', 'user:email', 'read:packages', 'write:packages', 'read:project', 'project', 'gist', 'notifications'],
+      },
+    },
   },
   {
     id: 'notion-mcp', name: 'Notion', iconSlug: 'notion', kind: 'mcp', authentication: 'oauth', oauthProvider: 'notion', serverName: 'notion',
@@ -280,6 +288,22 @@ export const MCP_INTEGRATION_CATALOG: CatalogIntegration[] = [
     capabilities: ['AI 开发助手', '代码生成与解释', '钉钉开发工具'],
     setupUrl: 'https://open.dingtalk.com/document/development/dingtalk-cli-performing-tasks-within',
     agentPrompt: cliSetupPrompt('钉钉 CLI', 'https://open.dingtalk.com/document/development/dingtalk-cli-performing-tasks-within', '设置 → 远程连接 → 配置钉钉 CLI'),
+  },
+  {
+    id: 'exa-search-mcp', name: 'Exa Search', iconSlug: 'asset:exa', kind: 'credential', priority: 6,
+    description: '接入 Exa 官方远程 MCP，提供语义网页搜索与页面内容提取能力。',
+    capabilities: ['语义网页搜索', '页面内容提取'],
+    setupUrl: 'https://dashboard.exa.ai/api-keys',
+    serverName: 'exa',
+    entry: remoteMcp('https://mcp.exa.ai/mcp'),
+    credential: {
+      label: 'Exa API Key',
+      placeholder: '粘贴 Exa API Key',
+      helpText: '仅需填写 API Key。Linguist Agent 会加密保存到系统 Keychain，并通过 x-api-key 请求头连接 Exa 官方远程 MCP。',
+      acquisitionUrl: 'https://dashboard.exa.ai/api-keys',
+      acquisitionLabel: '打开 Exa API Console',
+      headerName: 'x-api-key',
+    },
   },
   {
     id: 'brave-search-mcp', name: 'Brave Search', iconSlug: 'asset:brave', kind: 'credential', priority: 5,
@@ -380,8 +404,14 @@ export const MCP_INTEGRATION_CATALOG: CatalogIntegration[] = [
   },
 ]
 
+/**
+ * 只有实际渲染的目录卡才能占用“目录服务器名”。被暂时隐藏的目录项不能吞掉
+ * Agent 已写入的同名工作区 MCP，否则待 OAuth 的通用连接会既不在目录、也不在“我的 MCP”。
+ */
 export function getCatalogServerNames(): Set<string> {
-  return new Set(MCP_INTEGRATION_CATALOG.flatMap((integration) => 'serverName' in integration && integration.serverName ? [integration.serverName] : []))
+  return new Set(MCP_INTEGRATION_CATALOG
+    .filter(isCatalogIntegrationVisible)
+    .flatMap((integration) => 'serverName' in integration && integration.serverName ? [integration.serverName] : []))
 }
 export function matchesCatalogSearch(integration: CatalogIntegration, query: string): boolean {
   if (!query) return true

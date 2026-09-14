@@ -129,6 +129,7 @@ import {
 } from '@/components/agent/CollapsedWorkspacePopover'
 import { ObsidianIcon } from '@/components/obsidian/obsidian-brand'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
+import { SidebarScrollBoundary } from '@/components/ui/sidebar-scroll-boundary'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
 import { MoveSessionDialog } from '@/components/agent/MoveSessionDialog'
 import {
@@ -302,12 +303,12 @@ function WorkspaceComponentSidebarEntry({ label, icon, active, onClick, badge }:
       className={cn(
         'group flex w-full items-center justify-between rounded-md px-3 py-2 text-[13px] transition-colors duration-100 titlebar-no-drag',
         active
-          ? 'bg-accent-foreground/[0.10] text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
-          : 'text-foreground/75 hover:bg-accent-foreground/[0.08] hover:text-foreground',
+          ? 'bg-accent-foreground/[0.10] text-[hsl(var(--sidebar-primary-foreground))] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
+          : 'text-[hsl(var(--sidebar-primary-foreground))] hover:bg-accent-foreground/[0.08] hover:text-[hsl(var(--sidebar-primary-foreground))]',
       )}
     >
       <span className="flex min-w-0 items-center gap-3">
-        <span className={cn('flex size-[18px] shrink-0 items-center justify-center', active ? 'text-accent-foreground' : 'text-foreground/60')}>
+        <span className={cn('flex size-[18px] shrink-0 items-center justify-center', active ? 'text-accent-foreground' : 'text-[hsl(var(--sidebar-primary-foreground))]')}>
           {icon}
         </span>
         <span className="truncate">{label}</span>
@@ -2696,8 +2697,8 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
     if (pinnedConversations.length > 0) {
       rows.push({
         id: 'chat-pinned-heading',
-        estimateSize: 30,
-        content: <div className="pl-[18px] pr-3.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">置顶</div>,
+        estimateSize: 32,
+        content: <div className="pl-6 pr-3.5 pt-2 pb-1 text-[15px] font-medium leading-5 text-foreground/45 select-none">置顶</div>,
       })
       for (const conv of pinnedConversations) {
         rows.push({
@@ -2823,35 +2824,24 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
       const isCurrentProject = group.kind === 'workspace' && group.id === currentWorkspaceId
       rows.push({
         id: `agent-archived-project-${group.id}`,
-        estimateSize: 34,
+        estimateSize: 38,
         content: (
-          <div className="px-2">
+          <div className="pl-1 pr-3">
             <section className="relative py-0.5 rounded-md">
-              <div className="group/project relative flex translate-x-[2px] items-center">
+              <div className="group/project relative flex items-center">
                 <button
                   type="button"
                   aria-expanded={!collapsed}
                   onClick={() => handleToggleArchivedProject(group.id)}
                   className={cn(
-                    'relative flex-1 min-w-0 flex items-center gap-1 pl-[9px] pr-1 py-1 rounded-md text-left transition-[padding,color,background-color] titlebar-no-drag group-hover/project:pl-4 hover:bg-foreground/[0.025]',
-                    isCurrentProject
-                      ? 'agent-project-item-current text-foreground'
-                      : 'text-foreground/65 hover:text-foreground/88',
+                    'relative flex-1 min-w-0 flex h-[34px] items-center gap-2 pl-[10px] pr-1 py-1.5 rounded-md text-left transition-[color,background-color] titlebar-no-drag hover:bg-foreground/[0.025]',
+                    'text-[hsl(var(--sidebar-primary-foreground))] hover:text-[hsl(var(--sidebar-primary-foreground))]',
                   )}
                 >
                   {group.kind === 'automation' ? (
                     <Clock size={13} className="flex-shrink-0 text-foreground/40" />
                   ) : (
-                    <>
-                      <FolderOpen size={13} className="flex-shrink-0 text-foreground/40 group-hover/project:hidden" />
-                      <ChevronRight
-                        size={13}
-                        className={cn(
-                          'hidden flex-shrink-0 text-foreground/40 transition-transform duration-150 group-hover/project:block',
-                          collapsed ? '-rotate-90' : 'rotate-90',
-                        )}
-                      />
-                    </>
+                    <FolderOpen size={14} className="flex-shrink-0 text-[hsl(var(--sidebar-primary-foreground)/0.78)] dark:text-[hsl(var(--sidebar-primary-foreground)/0.65)]" />
                   )}
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="min-w-0 truncate text-[13px] font-medium leading-[18px]">{group.label}</span>
@@ -2978,7 +2968,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
         estimateSize: 34,
         content: (
           <div
-            className="ml-4"
+            className="ml-7"
             onDragOver={projectWorkspaceId ? (event) => handleProjectDragOver(event, projectWorkspaceId) : undefined}
             onDragLeave={projectWorkspaceId ? handleProjectDragLeave : undefined}
             onDrop={projectWorkspaceId ? (event) => handleProjectDrop(event, projectWorkspaceId) : undefined}
@@ -2989,6 +2979,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
               indicatorStatus={rowStatus}
               showPinIcon={showPinIcon && !!item.session.pinned}
               disableMiniMap={!sessionHoverPreviewEnabled}
+              suppressAutomationIcon={isAutomationGroup}
               delegationSummary={childCount > 0
                 ? {
                   total: childCount,
@@ -3033,6 +3024,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
                   activeDelegationSessionId={activeDelegationSessionId}
                   agentIndicatorMap={agentIndicatorMap}
                   relativeTimeNow={relativeTimeNow}
+                  suppressAutomationIcon={isAutomationGroup}
                   workspaceName={isAutomationGroup && childSession.workspaceId ? workspaceNameMapForRow?.get(childSession.workspaceId) : undefined}
                   onSelect={handleSelectAgentSession}
                   onRequestDelete={handleRequestDeleteAgent}
@@ -3052,8 +3044,8 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
     if (pinnedAgentSessionTrees.length > 0) {
       rows.push({
         id: 'agent-pinned-heading',
-        estimateSize: 30,
-        content: <div className="pl-[18px] pr-3.5 pt-2 pb-1 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">置顶</div>,
+        estimateSize: 32,
+        content: <div className="pl-4 pr-3.5 pt-2 pb-1 text-[15px] font-medium leading-5 text-foreground/45 select-none">置顶</div>,
       })
       for (const item of pinnedAgentSessionTrees) {
         pushSessionTreeRows(item, false, false, workspaceNameMap)
@@ -3064,10 +3056,10 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
 
     rows.push({
       id: 'agent-project-heading',
-      estimateSize: 34,
+      estimateSize: 40,
       content: (
         <div className="px-2 pt-2 pb-1 flex items-center justify-between">
-          <span className="px-1.5 text-[13px] font-medium leading-[18px] text-foreground/60 select-none">项目</span>
+          <span className="px-2 text-[15px] font-medium leading-5 text-foreground/45 select-none">项目</span>
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -3081,10 +3073,10 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
                       return next
                     })
                   }}
-                  className="size-6 flex items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.06] hover:text-foreground/60 transition-colors titlebar-no-drag disabled:opacity-30 disabled:pointer-events-none"
+                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag disabled:opacity-30 disabled:pointer-events-none"
                   aria-label="折叠所有项目"
                 >
-                  <ChevronsDownUp size={13} />
+                  <ChevronsDownUp size={15} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">折叠所有项目</TooltipContent>
@@ -3094,10 +3086,10 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
                 <button
                   type="button"
                   onClick={() => void handleCreateProjectFromFolder()}
-                  className="size-6 flex items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.06] hover:text-foreground/60 transition-colors titlebar-no-drag"
+                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag"
                   aria-label="从本地文件夹创建项目"
                 >
-                  <FolderInput size={13} />
+                  <FolderInput size={15} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">从本地文件夹创建项目</TooltipContent>
@@ -3107,10 +3099,10 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
                 <button
                   type="button"
                   onClick={handleStartCreateProject}
-                  className="size-6 flex items-center justify-center rounded-md text-foreground/35 hover:bg-foreground/[0.06] hover:text-foreground/60 transition-colors titlebar-no-drag"
+                  className="size-7 flex items-center justify-center rounded-md text-[hsl(var(--sidebar-primary-foreground)/0.65)] hover:bg-foreground/[0.06] hover:text-[hsl(var(--sidebar-primary-foreground))] transition-colors titlebar-no-drag"
                   aria-label="新建空白项目"
                 >
-                  <Plus size={13} />
+                  <Plus size={15} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">新建空白项目</TooltipContent>
@@ -3159,9 +3151,9 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
 
       rows.push({
         id: `agent-project-${group.workspace.id}`,
-        estimateSize: 34,
+        estimateSize: 38,
         content: (
-          <div className="px-2">
+          <div className="pl-2">
             <AgentProjectGroupItem
               group={group}
               isAutomationGroup={isAuto}
@@ -3214,7 +3206,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
           rows.push({
             id: `agent-project-empty-${group.workspace.id}`,
             estimateSize: 28,
-            content: <div className="ml-5 px-1.5 py-0.5 text-[12px] text-foreground/22 select-none">暂无会话</div>,
+            content: <div className="ml-[38px] py-0.5 text-[12px] text-muted-foreground/75 select-none">暂无会话</div>,
           })
         } else {
           for (const item of visible.sessions) pushSessionTreeRows(item, isAuto, true, workspaceNameMap, group.workspace.id)
@@ -3223,7 +3215,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
               id: `agent-project-controls-${group.workspace.id}`,
               estimateSize: 34,
               content: (
-                <div className="ml-4 flex items-center gap-0.5 pt-0.5">
+                <div className="ml-7 flex items-center gap-0.5 pt-0.5">
                   {visible.hiddenCount > 0 && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -3731,7 +3723,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
               type="button"
               onClick={() => setSearchDialogOpen(true)}
               aria-label="搜索"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-foreground/45 transition-[background-color,color,transform] hover:bg-foreground/[0.055] hover:text-foreground active:scale-[0.96] titlebar-no-drag"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-[hsl(var(--sidebar-primary-foreground))] transition-[background-color,color,transform] hover:bg-foreground/[0.055] hover:text-[hsl(var(--sidebar-primary-foreground))] active:scale-[0.96] titlebar-no-drag"
             >
               <Search size={16} />
             </button>
@@ -3804,20 +3796,24 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
         )}
       </div>}
 
-      {/* Linguist 使用项目适配层；Chat 使用上游虚拟列表。 */}
+      {/* 原生与虚拟列表共享顶部反馈，切换视图时不沿用上一列表的滚动状态。 */}
       {modeSidebarContributions.length > 0 ? modeSidebarContributions : mode === 'chat' && viewMode === 'active' ? (
-        <VirtualSidebarList
-          key="chat-active-list"
-          className="flex-1"
-          rows={chatActiveVirtualRows}
-          activeRowId={activeSessionId ? `chat-${activeSessionId}` : null}
-        />
+        <SidebarScrollBoundary key="chat-active-boundary">
+          <VirtualSidebarList
+            key="chat-active-list"
+            className="flex-1"
+            rows={chatActiveVirtualRows}
+            activeRowId={activeSessionId ? `chat-${activeSessionId}` : null}
+          />
+        </SidebarScrollBoundary>
       ) : mode === 'agent' && viewMode === 'active' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin titlebar-no-drag px-2 pb-3">
-          {agentActiveVirtualRows.map((row) => (
-            <React.Fragment key={row.id}>{row.content}</React.Fragment>
-          ))}
-        </div>
+        <SidebarScrollBoundary key="agent-active-boundary">
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin titlebar-no-drag px-2 pb-3">
+            {agentActiveVirtualRows.map((row) => (
+              <React.Fragment key={row.id}>{row.content}</React.Fragment>
+            ))}
+          </div>
+        </SidebarScrollBoundary>
       ) : (
         <>
           {/* 归档视图标题栏 */}
@@ -3831,19 +3827,23 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
 
           {/* 归档视图：单列表布局 */}
           {mode === 'chat' ? (
-            <VirtualSidebarList
-              key="chat-archived-list"
-              className="flex-1 px-3 pt-2 pb-3"
-              rows={chatArchivedVirtualRows}
-              activeRowId={activeSessionId ? `chat-archived-${activeSessionId}` : null}
-            />
+            <SidebarScrollBoundary key="chat-archived-boundary">
+              <VirtualSidebarList
+                key="chat-archived-list"
+                className="flex-1 px-3 pt-2 pb-3"
+                rows={chatArchivedVirtualRows}
+                activeRowId={activeSessionId ? `chat-archived-${activeSessionId}` : null}
+              />
+            </SidebarScrollBoundary>
           ) : (
-            <VirtualSidebarList
-              key="agent-archived-list"
-              className="flex-1 px-3 pt-2 pb-3"
-              rows={agentArchivedVirtualRows}
-              activeRowId={activeSessionId ? `agent-archived-${activeSessionId}` : null}
-            />
+            <SidebarScrollBoundary key="agent-archived-boundary">
+              <VirtualSidebarList
+                key="agent-archived-list"
+                className="flex-1 px-3 pt-2 pb-3"
+                rows={agentArchivedVirtualRows}
+                activeRowId={activeSessionId ? `agent-archived-${activeSessionId}` : null}
+              />
+            </SidebarScrollBoundary>
           )}
         </>
       )}
@@ -4318,7 +4318,7 @@ const ConversationItem = React.memo(function ConversationItem({
               }}
               className={cn(
                 'flex flex-1 min-w-0 items-center gap-1.5 rounded text-left text-[13px] leading-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-                active ? 'text-foreground' : 'text-foreground/80',
+                'text-[hsl(var(--sidebar-primary-foreground))]',
               )}
             >
               {showPinIcon && (
@@ -4403,6 +4403,8 @@ interface AgentSessionItemProps {
   leftAccent?: SessionLeftAccent
   /** 是否禁用悬浮 Mini 地图 */
   disableMiniMap?: boolean
+  /** 定时任务合成项目内已由项目标题表达来源，隐藏行内重复时钟。 */
+  suppressAutomationIcon?: boolean
   /** 项目名称 Badge（跨项目列表时显示） */
   workspaceName?: string
   /** 用同一个时间戳刷新相对时间，避免每行独立计时 */
@@ -4426,6 +4428,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
   delegationSummary,
   leftAccent,
   disableMiniMap,
+  suppressAutomationIcon,
   workspaceName,
   relativeTimeNow,
   onSelect,
@@ -4541,7 +4544,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
             onRename={(title) => onRename(session.id, title)}
             buttonClassName={cn(
               'flex min-w-0 flex-1 cursor-grab items-center gap-1.5 rounded text-left text-[13px] leading-[18px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-              active ? 'text-foreground' : 'text-foreground/80',
+              'text-[hsl(var(--sidebar-primary-foreground))]',
             )}
             inputClassName="px-0 py-0 text-[13px] leading-5 text-foreground"
             beforeTitle={(
@@ -4549,7 +4552,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                 {showPinIcon && (
                   <Pin size={11} className="flex-shrink-0 text-primary/60" />
                 )}
-                {session.sourceAutomationId && !session.sourceDelegationId && (
+                {!suppressAutomationIcon && session.sourceAutomationId && !session.sourceDelegationId && (
                   <Clock size={11} className="flex-shrink-0 text-foreground/40" />
                 )}
                 {session.sourceDelegationId && (
@@ -4678,6 +4681,8 @@ interface DelegatedChildSessionItemProps {
   activeDelegationSessionId: string | null
   agentIndicatorMap: Map<string, SessionIndicatorStatus>
   relativeTimeNow: number
+  /** 定时任务合成项目内隐藏行级时钟。 */
+  suppressAutomationIcon?: boolean
   workspaceName?: string
   onSelect: (id: string, title: string) => void
   onRequestDelete: (id: string) => void
@@ -4694,6 +4699,7 @@ const DelegatedChildSessionItem = React.memo(function DelegatedChildSessionItem(
   activeDelegationSessionId,
   agentIndicatorMap,
   relativeTimeNow,
+  suppressAutomationIcon,
   workspaceName,
   onSelect,
   onRequestDelete,
@@ -4715,6 +4721,7 @@ const DelegatedChildSessionItem = React.memo(function DelegatedChildSessionItem(
       indicatorStatus={status}
       disableMiniMap={!sessionHoverPreviewEnabled}
       relativeTimeNow={relativeTimeNow}
+      suppressAutomationIcon={suppressAutomationIcon}
       workspaceName={workspaceName}
       onSelect={onSelect}
       onRequestDelete={onRequestDelete}
@@ -5086,7 +5093,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
       />
 
       {!hideSessions && (
-        <div id={`project-sessions-${group.workspace.id}`} className="ml-4 mt-px">
+        <div id={`project-sessions-${group.workspace.id}`} className="ml-5 mt-px">
         {!collapsed ? (
           treeItems.length > 0 ? (
             <div className="flex flex-col gap-0.5">
@@ -5106,6 +5113,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                       indicatorStatus={rowStatus}
                       showPinIcon={!!item.session.pinned}
                       disableMiniMap={!sessionHoverPreviewEnabled}
+                      suppressAutomationIcon={isAutomationGroup}
                       delegationSummary={childCount > 0
                         ? {
                           total: childCount,
@@ -5136,6 +5144,7 @@ const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                             activeDelegationSessionId={activeDelegationSessionId}
                             agentIndicatorMap={agentIndicatorMap}
                             relativeTimeNow={relativeTimeNow}
+                            suppressAutomationIcon={isAutomationGroup}
                             workspaceName={isAutomationGroup && childSession.workspaceId ? workspaceNameMap?.get(childSession.workspaceId) : undefined}
                             onSelect={onSelectSession}
                             onRequestDelete={onRequestDelete}

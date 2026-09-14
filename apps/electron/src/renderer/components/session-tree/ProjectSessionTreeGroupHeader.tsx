@@ -97,12 +97,12 @@ export function ProjectSessionTreeGroupHeader({
       {editor ? (
         <div
           className={cn(
-            'relative flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pl-[9px] pr-1 text-left titlebar-no-drag',
+            'relative flex min-w-0 flex-1 items-center h-[34px] gap-2 rounded-md py-1.5 pl-[10px] pr-1 text-left titlebar-no-drag',
             onToggleCollapse && 'group-hover/project:pl-7',
-            current ? 'agent-project-item-current text-foreground' : 'text-foreground/65',
+            'text-[hsl(var(--sidebar-primary-foreground))]',
           )}
         >
-          {icon ?? <FolderOpen size={13} className="flex-shrink-0 text-foreground/40" />}
+          {icon ?? <FolderOpen size={14} className="flex-shrink-0 text-[hsl(var(--sidebar-primary-foreground)/0.78)] dark:text-[hsl(var(--sidebar-primary-foreground)/0.65)]" />}
           {editor}
         </div>
       ) : (
@@ -118,15 +118,13 @@ export function ProjectSessionTreeGroupHeader({
           }}
           title={title}
           className={cn(
-            'relative flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pl-[9px] pr-1 text-left transition-[padding,color,background-color] titlebar-no-drag hover:bg-foreground/[0.025]',
+            'relative flex min-w-0 flex-1 items-center h-[34px] gap-2 rounded-md py-1.5 pl-[10px] pr-1 text-left transition-[padding,color,background-color] titlebar-no-drag hover:bg-foreground/[0.025]',
             onToggleCollapse && 'group-hover/project:pl-7',
-            current
-              ? 'agent-project-item-current text-foreground'
-              : 'text-foreground/65 hover:text-foreground/88',
+            'text-[hsl(var(--sidebar-primary-foreground))]',
             nameButtonClassName,
           )}
         >
-          {icon ?? <FolderOpen size={13} className="flex-shrink-0 text-foreground/40" />}
+          {icon ?? <FolderOpen size={14} className="flex-shrink-0 text-[hsl(var(--sidebar-primary-foreground)/0.78)] dark:text-[hsl(var(--sidebar-primary-foreground)/0.65)]" />}
           <span className="flex min-w-0 items-center">
             <span className="min-w-0 truncate text-[13px] font-medium leading-[18px]">{name}</span>
             {current && <span className="workspace-selected-triangle flex-shrink-0" aria-hidden="true" />}
@@ -141,7 +139,7 @@ export function ProjectSessionTreeGroupHeader({
   )
 
   return (
-    <div className="group/project relative flex translate-x-[2px] items-center">
+    <div className="group/project relative flex items-center">
       {contextMenuItems ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
