@@ -2,7 +2,7 @@
 
 本轮在独立 worktree 和候选分支完成固定 Proma Tag 的正式合并。来源和双亲 SHA 见 [机器基线](./architecture/proma-baseline.json)，实现与验证见 [本轮记录](./release/UPSTREAM_0_19_53_2026_09_14.md)。
 
-用户已授权推送与 Release，发布版本已递增，等待远程 CI 与完整资产发布。原始 checkout 与日用安装保持原状；发布结果以当前事实和本轮记录为准。
+更新已推送到 main，远程 CI 与自动 Release 成功，三个平台安装包和更新清单已公开。已下载核验发布提交的六步打包日志与报告。原始 checkout 与日用安装保持原状；发布来源和证据以当前事实和本轮记录为准。
 
 当前版本、实现和资格见 [当前事实](../CURRENT_FACTS_SIMPLE.md)。CAT 仍只挂载原生右侧工作区，项目绑定、批次范围、草稿、Stage、CAS 与交付门禁保持不变。
 

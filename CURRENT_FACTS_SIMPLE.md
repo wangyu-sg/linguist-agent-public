@@ -18,7 +18,7 @@
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
-Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本地候选分支 `codex/la-upstream-v0.19.53-20260914`，起点 `9f0de928`。App 已按用户发布请求递增为 `0.17.74`，正在准备推送与 Release；尚未覆盖日用安装。已发布版本及其产物证据仍见 [0.17.73 实施记录](./docs/release/VALIDATION_0_17_73.md)。本次候选验证见 [上游更新记录](./docs/release/UPSTREAM_0_19_53_2026_09_14.md)。
+Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本地候选分支 `codex/la-upstream-v0.19.53-20260914`，起点 `9f0de928`。App `0.17.74` 已推送并[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.74)，Tag 指向 `d6d0a7ee`。CI `34844497883` 与 Auto Release `34845329153` 成功，macOS arm64/x64、Windows x64 安装包和更新清单共七项资产齐全；未覆盖日用安装。证据见 [上游更新与发布记录](./docs/release/UPSTREAM_0_19_53_2026_09_14.md)。
 
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
