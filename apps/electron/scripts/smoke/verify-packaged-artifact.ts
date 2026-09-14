@@ -18,6 +18,7 @@ const ASAR_RUNTIME_PACKAGES = [
   ['@earendil-works/pi-coding-agent', 'dist/index.js'],
   ['@earendil-works/pi-agent-core', 'dist/index.js'],
   ['@earendil-works/pi-ai', 'dist/index.js'],
+  ['@earendil-works/pi-server', 'dist/index.js'],
   ['pdfjs-dist', 'legacy/build/pdf.mjs'],
 ] as const
 
@@ -132,6 +133,10 @@ export function verifyPackagedArtifact(appPath: string, repoRoot: string): void 
   for (const [packageName, entry] of ASAR_RUNTIME_PACKAGES) {
     requireAsarPackageVersion(asar, packageName, join(sourceNodeModules, packageName, 'package.json'))
     requireAsarFile(asar, `node_modules/${packageName}/${entry}`)
+  }
+  const retryPath = '@earendil-works/pi-ai/dist/utils/retry.js'
+  if (!readAsarFile(asar, `node_modules/${retryPath}`).equals(readFileSync(join(sourceNodeModules, retryPath)))) {
+    throw new Error('打包 Pi retry 实现与已验证安装内容不一致')
   }
   for (const worker of ASAR_WORKERS) requireAsarFile(asar, worker)
 }

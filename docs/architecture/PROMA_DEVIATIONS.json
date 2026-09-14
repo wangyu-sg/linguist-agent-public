@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "baseline": {
-    "tag": "v0.19.37",
-    "commit": "a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6",
-    "formalMerge": "4a7cbcecf3b0be635a6dd49f71bff70f6ac9edb1"
+    "tag": "v0.19.53",
+    "commit": "f99edbdb594407ab190b97ae073889c5d96637ab",
+    "formalMerge": "56bc3f29b225c71f02f42483e10f1db8c3fcb2d5"
   },
-  "recomputedOn": "2026-09-09",
+  "recomputedOn": "2026-09-14",
   "currentLedger": {
     "registeredCoreTouchpoints": 277
   },

@@ -1,6 +1,6 @@
 # KNOWN_LIMITATIONS — 当前已知限制
 
-更新日期：2026-09-09
+更新日期：2026-09-14
 
 > 当前目标是作者本人使用的个人 Alpha。实现、单元验证、打包验证、真机人工和产品资格是不同证据等级。
 
@@ -11,6 +11,8 @@
 3. **对照评估**：尚未用同一模型、同一 reasoning 和同一真实任务比较 Web Chat、旧 LA 与当前 LA。
 4. **14 天日用**：必须从当前可用构建重新累计，不能由开发日或自动测试补记。
 5. **真机人工**：真实 macOS IME composition、Native Open/Save、Companion round-trip、VoiceOver、完整 keyboard-only、窄窗和拖拽/resize 仍待操作。
+
+6. **Exa 与 OAuth**：连接卡片和本地回归不证明真实账号认证、Keychain 或远程 MCP 握手已通过。
 
 ## B. 当前功能边界
 
@@ -41,7 +43,7 @@
 5. Full Integrity Scrub、Backup/Restore 有自动故障注入；真实磁盘耗尽、只读卷、断电和硬件损坏不是本轮 real-machine 证据。
 6. 公开 Release 的存在不能证明本机安装版已更新；产物和安装验证状态见 [当前事实](../../CURRENT_FACTS_SIMPLE.md)。
 
-7. 用户报告 macOS 红绿灯窗口按钮存在问题；尚未取得具体复现和根因证据。用户明确要求本次照常发布，下一轮排查修复。
+7. 用户报告 macOS 红绿灯窗口按钮存在问题；尚未取得具体复现和根因证据。按用户要求延期排查修复。
 
 ## D. 发布定位与平台资格
 

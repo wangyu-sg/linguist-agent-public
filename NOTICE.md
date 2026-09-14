@@ -18,7 +18,7 @@ AGPL-3.0.
 - Source: https://github.com/proma-ai/Proma
 - License: GNU Affero General Public License, version 3 (AGPL-3.0)
 - Upstream baseline pinned in `docs/architecture/UPSTREAM_BASELINE.md`
-  (baseline SHA `a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6`).
+  (baseline SHA `f99edbdb594407ab190b97ae073889c5d96637ab`).
 
 The original Proma `LICENSE` file and all upstream copyright notices are
 preserved unmodified. Proma copyright and license headers must not be

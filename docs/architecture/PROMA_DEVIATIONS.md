@@ -1,4 +1,4 @@
-# Proma Deviations — v0.19.37
+# Proma Deviations — v0.19.53
 
 > 机读真源：[PROMA_DEVIATIONS.json](./PROMA_DEVIATIONS.json)
 > 当前基线与正式合并：[proma-baseline.json](./proma-baseline.json)
@@ -13,6 +13,6 @@
 | Temporary Deviation | 48 | 每次同步逐项核对生命周期、预览、安全与 continuation 回归；有等价证据后退役。 |
 | Linguist Extension | 0 | 位于允许的 LA 路径，不计入 Proma Core 账本。 |
 
-本轮 UI 收敛将右侧尺寸算法恢复到固定上游，精确账本相应减少一项。实现与本轮验证见 [0.17.73 实施记录](../release/VALIDATION_0_17_73.md)。
+前轮 UI 收敛后的 277 项 ledger 在本次基线重算后全部仍有实际差异；没有 stale 条目。更新验证见 [本次记录](../release/UPSTREAM_0_19_53_2026_09_14.md)。
 
 维护顺序为 baseline → 实际 diff → ledger → deviations → boundary + fusion。登记不能绕开权限、Session authority 或 CAT fail-closed；自动验证、打包验证、人工操作与产品资格分别记录。

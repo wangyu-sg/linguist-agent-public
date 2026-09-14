@@ -1,6 +1,6 @@
 # Linguist Agent 当前事实
 
-核验日期：2026-09-09。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
+核验日期：2026-09-14。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
 
 ## 机器真源与当前值
 
@@ -9,16 +9,16 @@
 | 项目 | 当前值 |
 |---|---|
 | App | `0.17.73` |
-| Proma | `v0.19.37` |
-| Proma commit | `a987ec88fcfa05dd2448dc0ccdd9824a4b510dc6` |
-| Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.85.0` |
+| Proma | `v0.19.53` |
+| Proma commit | `f99edbdb594407ab190b97ae073889c5d96637ab` |
+| Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.85.1` |
 | React / Jotai / Vite | `18.3.1` / `2.20.3` / `6.4.3` |
 | Shared | `0.1.71` |
 | CAT Core / Formats / Store / Tools | `0.0.24` / `0.0.13` / `0.0.45` / `0.0.39` |
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
-Proma 稳定基线保持 `v0.19.37`，正式合并 `4a7cbcec`。0.17.73 已从独立分支 `codex/la-proma-ui-convergence-20260909`（起点 `ccdd3956`）快进推送并公开发布，Tag 源码为 `75be5764`；本轮验证和发布证据见 [实施记录](./docs/release/VALIDATION_0_17_73.md)。上一正式版本的证据见 [0.17.72 发布验证](./docs/release/VALIDATION_0_17_72.md)。本轮不安装到用户日用环境。
+Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本地候选分支 `codex/la-upstream-v0.19.53-20260914`，起点 `9f0de928`。App 保持 `0.17.73`；本次尚未推送、发布或覆盖日用安装。已发布版本及其产物证据仍见 [0.17.73 实施记录](./docs/release/VALIDATION_0_17_73.md)。本次候选验证见 [上游更新记录](./docs/release/UPSTREAM_0_19_53_2026_09_14.md)。
 
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
@@ -38,13 +38,20 @@ Proma 稳定基线保持 `v0.19.37`，正式合并 `4a7cbcec`。0.17.73 已从�
 - Prompt 合同 `3.1.5`；报告/候选准备可用 `readOnly` Context，不创建或替换专业 Stage；规则按既有分页协议续读。必要术语/冲突不能被可选限额清空，资料不够时明确显示缺口。
 - `cat_project_summary({})` 保持原概览；按 `assetId + includeDelivery=true` 才读取只读交付预检和当前会话专业任务摘要。它不运行 QA、不生成导出、不证明 QA 新鲜或 verified export。
 
-## 本轮实现与验证
+## 本次上游更新
+
+- Pi 五项 override 与四项 App 依赖均为 `0.85.1`，重试补丁仅重命名；冻结安装、类型检查、完整回归和构建通过。
+- Exa 复用原生凭据与握手入口；DeepSeek Flash 候选默认不启用，共享上下文推断为 1M。用户已有模型 ID 与历史不自动改写。
+- 原生 MCP 配置/OAuth、inactive Skill 管理、Copilot 额度、Markdown 多行表格、会话图片与 home 路径以及侧栏层级/滚动边界已合入。
+- 本地真实 HTTP 验证 SDK 长缓存请求和重试分类；不等于真实 Provider 或 Exa 连接验证。打包验证结果见本次记录。
+
+## 已保留的 UI 与批次行为
 
 - CAT 仅在右侧原生工作区挂载；主区使用完整 Agent，会话切换恢复用户原生工作区状态。项目入口明确激活 CAT，预览使用当前宿主 sessionId。
 - 修改建议默认当前批次 pending，列表及总数在 SQL 分页前过滤；历史 accepted 的正常 revision 增加不再显示版本冲突。
 - QA 列表、数量、下一项和交付默认当前批次；项目历史从项目设置显式进入。TM/TB 与风格资料仍项目共用。
 - 项目设置分为项目、批次、语言资产、Tag Profiles、维护与诊断；底部为辅助面板。切换或卸载 CAT 保留进程内草稿与撤销历史。
-- 类型检查、默认回归与真实 Electron 浏览器检查通过；QA 主进程范围测试及 Store 批次分页测试通过。本地及远程六步打包验证通过（CAT 31 PASS / 0 FAIL / 2 MANUAL，辅助面板 26 PASS / 0 FAIL）；远程 CI 与 Release 均成功，macOS arm64/x64、Windows x64 安装包和更新清单齐全，以 [0.17.73 实施记录](./docs/release/VALIDATION_0_17_73.md) 为准。
+- 以下为已发布 0.17.73 的历史验证，不能代替当前候选：类型检查、默认回归与真实 Electron 浏览器检查通过；QA 主进程范围测试及 Store 批次分页测试通过。本地及远程六步打包验证通过（CAT 31 PASS / 0 FAIL / 2 MANUAL，辅助面板 26 PASS / 0 FAIL）；远程 CI 与 Release 均成功，macOS arm64/x64、Windows x64 安装包和更新清单齐全，以 [0.17.73 实施记录](./docs/release/VALIDATION_0_17_73.md) 为准。
 
 - macOS 红绿灯窗口按钮有用户报告问题，复现条件与根因尚未核实；按用户要求留到下一轮，见 [TODO](./TODO.md)。
 

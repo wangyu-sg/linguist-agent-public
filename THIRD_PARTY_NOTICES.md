@@ -70,7 +70,7 @@
 
 ### dompurify（双许可选择记录）
 
-- 版本：3.4.5（生产依赖闭包内版本）
+- 版本：3.4.14（生产依赖闭包内版本）
 - 许可：双许可 (MPL-2.0 OR Apache-2.0)
 - 来源：npm `dompurify`，https://github.com/cure53/DOMPurify
 - 用途：HTML 消毒（XSS 防护）。
@@ -89,16 +89,16 @@
 - 当前 macOS arm64 包：`@img/sharp-libvips-darwin-arm64` 1.3.3。
 - 许可：LGPL-3.0-or-later；包内还列明其捆绑库各自的 MPL、MIT、BSD、
   LGPL、Zlib 等许可。
-- 来源：npm `@img/sharp-libvips-*`，随 `sharp` 0.35.3 按目标平台安装；
+- 来源：npm `@img/sharp-libvips-*`，随 `sharp` 0.35.4 按目标平台安装；
   发行物使用未修改的动态 `libvips` 库。
 - 用途：Vision Relay 的图片处理。
 - 义务：保留包内许可与归属信息，并允许用户按 LGPL 条款替换或修改该动态库。
-  当前个人 Alpha 不公开发行；公开发行前必须复核目标平台产物、签名机制和 LGPL
+  个人使用发行物仍需复核目标平台产物、签名机制和 LGPL
   合规材料，不能把 license gate 通过等同于法律审查完成。
 
 ### 其余开源依赖
 
-除上述已单列组件外，其余第三方依赖（当前生产闭包共 489 个，含传递依赖）
+除上述已单列组件外，其余第三方依赖（当前生产闭包共 519 个，含传递依赖）
 均为宽松许可
 （MIT / Apache-2.0 / BSD / ISC / BlueOak-1.0.0 / 0BSD / Unlicense /
 CC-BY-4.0 / EPL-2.0 / Zlib 等），逐包清单与许可见
