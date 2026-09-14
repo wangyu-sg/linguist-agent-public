@@ -43,7 +43,7 @@ Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本�
 - Pi 五项 override 与四项 App 依赖均为 `0.85.1`，重试补丁仅重命名；冻结安装、类型检查、完整回归和构建通过。
 - Exa 复用原生凭据与握手入口；DeepSeek Flash 候选默认不启用，共享上下文推断为 1M。用户已有模型 ID 与历史不自动改写。
 - 原生 MCP 配置/OAuth、inactive Skill 管理、Copilot 额度、Markdown 多行表格、会话图片与 home 路径以及侧栏层级/滚动边界已合入。
-- 本地真实 HTTP 验证 SDK 长缓存请求和重试分类；不等于真实 Provider 或 Exa 连接验证。打包验证结果见本次记录。
+- 本地真实 HTTP 验证 SDK 长缓存请求和重试分类；不等于真实 Provider 或 Exa 连接验证。干净提交 `e8ff739a` 的六步打包验证全部通过：Agent/Chat 各 19 项，CAT 31 项；辅助面板专项 26 项通过。原生 Open/Save 仍为 2 MANUAL，整体资格保持 partial，详见本次记录。
 
 ## 已保留的 UI 与批次行为
 
