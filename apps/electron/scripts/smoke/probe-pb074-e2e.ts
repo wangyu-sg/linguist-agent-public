@@ -1499,8 +1499,12 @@ async function captureLinguistUiEvidence(page: Page): Promise<void> {
       }
       scroller.scrollLeft = 0
       const before = columns()
-      scroller.scrollLeft = scroller.scrollWidth
-      await new Promise<void>((resolveFrame) => requestAnimationFrame(() => resolveFrame()))
+      // 窗口尺寸已更新不代表滚动容器已完成布局；到达当前末端后再测量 QA 列。
+      for (let frame = 0; frame < 60; frame++) {
+        scroller.scrollLeft = scroller.scrollWidth
+        await new Promise<void>((resolveFrame) => requestAnimationFrame(() => resolveFrame()))
+        if (Math.abs(scroller.scrollLeft - (scroller.scrollWidth - scroller.clientWidth)) <= 1) break
+      }
       const after = columns()
       const lastCell = cells[5]!.getBoundingClientRect()
       const scrollBounds = scroller.getBoundingClientRect()
@@ -1599,7 +1603,7 @@ async function captureLinguistUiEvidence(page: Page): Promise<void> {
     }
     check(`lf056-${viewport.width}-editor-resize`, editorReachable && draftRetained,
       `横滚后textarea宽度/中心可编辑=${editorReachable}，窄→宽草稿和Dock保留/Escape取消=${draftRetained}，${editorGeometry}`)
-    await tabs.locator(`[id="${originalTabId}"]`).click()
+    await tabs.locator(`[id="${originalTabId}"]`).press('Enter')
   }
   await page.setViewportSize({ width: 1280, height: 800 })
   await applyTheme('dark')
