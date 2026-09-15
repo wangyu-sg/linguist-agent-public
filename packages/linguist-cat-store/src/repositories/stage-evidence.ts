@@ -365,12 +365,37 @@ export class StageEvidenceRepository {
     const sourceSegments = new Map<string, Set<string>>()
     const visual = new Map<string, Set<string>>()
     const ranges = new Map<string, Array<{ start: number; end: number }>>()
-    for (const receipt of this.listReceipts(stageRunId)) {
+    const receipts = this.listReceipts(stageRunId)
+    const payloadRanges = new Map<string, Array<NonNullable<StageEvidenceReceipt['evidence'][number]['payloadPart']>>>()
+    const partKey = (receipt: StageEvidenceReceipt, item: StageEvidenceReceipt['evidence'][number]): string =>
+      JSON.stringify([receipt.segmentIds, item.ref, item.version, item.payloadPart?.hash, item.payloadPart?.total])
+    for (const receipt of receipts) {
+      if (receipt.baselineHash !== state.baseline.baselineHash) continue
+      for (const item of receipt.evidence) {
+        if (item.submission !== 'provider-response-v1' || !item.payloadPart) continue
+        const key = partKey(receipt, item)
+        const parts = payloadRanges.get(key) ?? []
+        parts.push(item.payloadPart)
+        payloadRanges.set(key, parts)
+      }
+    }
+    const completedPayloads = new Set<string>()
+    for (const [key, parts] of payloadRanges) {
+      let end = 0
+      for (const part of parts.sort((a, b) => a.start - b.start)) {
+        if (part.start > end) break
+        end = Math.max(end, part.end)
+      }
+      const total = parts[0]!.total
+      if (end === total) completedPayloads.add(key)
+    }
+    for (const receipt of receipts) {
       if (receipt.baselineHash !== state.baseline.baselineHash) continue
       for (const item of receipt.evidence) {
         const key = evidenceRefKey(item.ref)
         const planned = state.plan.requirements.find(requirement => evidenceRefKey(requirement.evidence.ref) === key)
         if (item.submission !== 'provider-response-v1' || item.version !== planned?.evidence.version) continue
+        if (item.payloadPart && !completedPayloads.has(partKey(receipt, item))) continue
         if (item.ref.kind === 'asset') {
           const ids = sourceSegments.get(key) ?? new Set<string>()
           receipt.segmentIds.forEach(id => ids.add(id))
@@ -411,9 +436,10 @@ export class StageEvidenceRepository {
         && completeRange({ start: 0, end: doc.text_extract.length })
       const anchors = this.db.db.prepare('SELECT id, locator_json, media_context_doc_id FROM context_anchors WHERE context_doc_id = ?')
         .all(item.evidence.ref.id) as Array<{ id: string; locator_json: string; media_context_doc_id: string | null }>
+      const anchorsById = new Map(anchors.map(anchor => [anchor.id, anchor]))
       const ids = item.anchorIds.length > 0 ? item.anchorIds : anchors.map(anchor => anchor.id)
       const missing = ids.filter(id => {
-        const anchor = anchors.find(candidate => candidate.id === id)
+        const anchor = anchorsById.get(id)
         if (anchor === undefined) return true
         const locator = JSON.parse(anchor.locator_json) as ContextAnchorLocator
         if (anchor.media_context_doc_id !== null || locator.kind === 'image') return !visual.get(key)?.has(id)

@@ -591,6 +591,9 @@ export interface SegmentTranslationContext {
 export type CatProjectRuleItem = ProjectRule
 
 export interface CatGetTranslationContextResult {
+  /** 将 text 按 offset 连接后解析为完整 JSON；分片不代表内容/证据已读完。 */
+  contextFragment?: { encoding: 'json'; offset: number; totalChars: number; text: string }
+
   contexts: SegmentTranslationContext[]
   totalRequested: number
   /** Echoes the opaque input cursor; null is the first page. */
@@ -615,11 +618,6 @@ export interface CatGetTranslationContextResult {
     pending: number
   }
   readOnly?: boolean
-  /**
-   * LA-CONTEXT-002：预算连下一段最小核心都放不下时返回（contexts 为空、
-   * cursor 不推进），取值是重试该页所需的最低 maxBytes。
-   */
-  minimumRequiredBytes?: number
   maxBytes: number
   usedBytes: number
 }

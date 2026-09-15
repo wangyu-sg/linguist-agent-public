@@ -121,6 +121,8 @@ export interface StageEvidenceReceipt {
     anchorIds: string[]
     /** 旧工具级记录没有此标记，不计入模型提交覆盖。 */
     submission?: 'provider-response-v1'
+    /** 完整 JSON 载荷分片；全部区间经 Provider 确认后才计入证据覆盖。 */
+    payloadPart?: { hash: string; start: number; end: number; total: number }
     version?: string
     visual?: boolean
     /** 实际提交的 UTF-16 半开区间，可跨页合并。 */

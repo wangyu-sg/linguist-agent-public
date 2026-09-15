@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { rmSync } from 'node:fs'
+import { deriveStableIdV2 } from '@linguist/cat-core'
 import { CatStore } from './store'
 import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
 
@@ -41,6 +42,8 @@ test('Context extraction persists child media, typed anchors, and Asset/Segment 
       mediaContextDocId: media.id,
     }])
     db.contextDocs.linkExtractionByExactText(parent.id, 'mapping-1')
+    assert.equal(db.contextDocs.evidenceVersion(parent.id, imported.segments.map(s => s.id), [imported.asset.id]),
+      deriveStableIdV2('ctxv', [parent.sha256!, parent.textExtract!, JSON.stringify(db.contextDocs.listAnchors(parent.id)), JSON.stringify(db.contextDocs.listEvidenceLinks(parent.id))]))
 
     assert.equal(db.contextDocs.list().some((doc) => doc.id === media.id), false)
     assert.equal(db.contextDocs.list({ includeExtractedMedia: true }).some((doc) => doc.id === media.id), true)

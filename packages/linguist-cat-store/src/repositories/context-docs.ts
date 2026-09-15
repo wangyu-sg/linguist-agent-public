@@ -6,6 +6,7 @@
  * the service layer composes blob removal (best-effort) on top.
  */
 
+import { createHash } from 'node:crypto'
 import {
   deriveStableIdV2,
   type ContextAnchor,
@@ -163,8 +164,14 @@ export class ContextDocsRepository {
     if (doc === undefined) return undefined
     const links = this.listEvidenceLinks(id).filter(link => link.relation.kind === 'segment'
       ? segmentIds.includes(link.relation.segmentId) : assetIds.includes(link.relation.assetId))
-    return deriveStableIdV2('ctxv', [doc.sha256 ?? doc.createdAt, doc.textExtract ?? null,
-      JSON.stringify(this.listAnchors(id)), JSON.stringify(links)])
+    // 与 deriveStableIdV2 的 UTF-8 元组完全一致；逐字段哈希避免复制整个大型证据闭包。
+    const hash = createHash('sha256')
+    for (const field of ['v2', 'ctxv', doc.sha256 ?? doc.createdAt, doc.textExtract ?? null,
+      JSON.stringify(this.listAnchors(id)), JSON.stringify(links)]) {
+      if (field === null) hash.update('z0:')
+      else hash.update(`s${Buffer.byteLength(field)}:`).update(field)
+    }
+    return `ctxv_v2_${hash.digest('hex')}`
   }
 
   updateNote(id: string, note?: string): ContextDoc {

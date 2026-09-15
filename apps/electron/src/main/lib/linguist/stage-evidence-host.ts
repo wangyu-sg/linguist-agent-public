@@ -30,7 +30,13 @@ const ROLE_STAGE = {
 const REQUIREDNESS_RANK = { optional: 0, conditional: 1, required: 2 } as const
 
 function hash(values: readonly string[]): string {
-  return createHash('sha256').update(JSON.stringify([...values].sort())).digest('hex')
+  const digest = createHash('sha256').update('[')
+  let separator = ''
+  for (const value of [...values].sort()) {
+    digest.update(separator).update(JSON.stringify(value))
+    separator = ','
+  }
+  return digest.update(']').digest('hex')
 }
 
 function refKey(item: VersionedStageEvidenceRef): string {
@@ -95,13 +101,13 @@ export function ensureStageEvidenceForSession(input: {
       .filter((link) => relevantLink(link, assetIdSet, segmentIdSet))
     const previouslyUsed = sameScope && existing?.plan.requirements.some(item => item.evidence.ref.kind === 'context-doc' && item.evidence.ref.id === doc.id)
     if (links.length === 0 && doc.id !== input.contextDocId && !previouslyUsed) continue
-    mappingRevisions.push(...links.map((link) => JSON.stringify({
+    for (const link of links) mappingRevisions.push(JSON.stringify({
       contextDocId: doc.id,
       anchorId: link.anchorId ?? null,
       relation: link.relation,
       requiredness: link.requiredness,
       mappingRevision: link.mappingRevision,
-    })))
+    }))
     const anchorIds = [...new Set(links.flatMap((link) => link.anchorId === undefined ? [] : [link.anchorId]))].sort()
     const linkedSegmentIds = [...new Set(links.flatMap((link) =>
       link.relation.kind === 'segment' ? [link.relation.segmentId] : []))]
@@ -112,14 +118,14 @@ export function ensureStageEvidenceForSession(input: {
       'optional',
     )
     const anchors = input.db.contextDocs.listAnchors(doc.id)
-    mappingRevisions.push(...anchors.map((anchor) => JSON.stringify({
+    for (const anchor of anchors) mappingRevisions.push(JSON.stringify({
       contextDocId: doc.id,
       anchorId: anchor.id,
       locator: anchor.locator,
       mediaContextDocId: anchor.mediaContextDocId ?? null,
-    })))
+    }))
+    const linkedAnchors = new Set(anchorIds)
     if (links.length > 0) {
-      const linkedAnchors = new Set(anchorIds)
       const dataRows = new Map<string, typeof anchors>()
       for (const anchor of anchors) {
         const row = anchor.locator.kind === 'sheet' && anchor.locator.rowKind === 'data'
@@ -149,7 +155,7 @@ export function ensureStageEvidenceForSession(input: {
     }
     requirements.push({
       evidence: { ...evidence, version: input.db.contextDocs.evidenceVersion(doc.id, segmentIds, assetIds)! },
-      purpose: anchors.some((anchor) => anchorIds.includes(anchor.id) && anchor.mediaContextDocId !== undefined)
+      purpose: anchors.some((anchor) => linkedAnchors.has(anchor.id) && anchor.mediaContextDocId !== undefined)
         ? 'visual-fact'
         : 'client-feedback',
       requiredness,

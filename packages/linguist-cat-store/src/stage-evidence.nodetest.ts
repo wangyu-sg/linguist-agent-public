@@ -145,3 +145,19 @@ test('Project Evidence inventory gaps persist, resolve when absent, and reopen w
     db.close()
   }
 })
+
+test('分片证据仅在同载荷全部区间经 Provider 确认后覆盖，缺页、重复和异载荷不能补齐', () => {
+  const { db, imported } = setup()
+  try {
+    const ref = { kind: 'asset' as const, id: imported.asset.id }
+    const plan: StageEvidencePlan = { stageRunId: 'fragment-stage', role: 'reviewer', stage: 'editing', assetIds: [imported.asset.id], segmentIds: imported.segments.map(s => s.id), requirements: [{ evidence: { ref, version: imported.asset.sourceSha256 }, purpose: 'source-authority', requiredness: 'required', scope: { kind: 'stage' }, anchorIds: [], rationale: 'source' }] }
+    const baseline = createStageEvidenceBaseline({ stageRunId: plan.stageRunId, discoveryScopeHash: 'scope', mappingRevision: 'map', ruleSetRevision: 'rules', segmentIds: plan.segmentIds, evidence: plan.requirements.map(r => r.evidence) })
+    db.stageEvidence.create({ stageRunId: plan.stageRunId, sessionId: 'session', plan, baseline })
+    const record = (start: number, end: number, hash = 'payload', submitted = true) => db.stageEvidence.recordReceipt({ stageRunId: plan.stageRunId, baselineHash: baseline.baselineHash, sessionId: 'session', generationRunId: 'generation', segmentIds: plan.segmentIds, evidence: [{ ref, anchorIds: [], version: imported.asset.sourceSha256, ...(submitted ? { submission: 'provider-response-v1' as const } : {}), payloadPart: { hash, start, end, total: 100 } }] })
+    record(0, 30); record(0, 30); record(60, 100)
+    record(30, 60, 'other'); record(30, 60, 'payload', false)
+    assert.equal(db.stageEvidence.getPresentationCoverage(plan.stageRunId).presented, 0)
+    record(30, 60)
+    assert.equal(db.stageEvidence.getPresentationCoverage(plan.stageRunId).presented, 1)
+  } finally { db.close() }
+})

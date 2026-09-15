@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -97,6 +98,11 @@ test('宿主冻结独立 Stage Plan，恢复本轮状态，并把未映射数据
       fallbackSegmentIds: [],
     })!
     assert.match(first.stageRunId, /^stage:[0-9a-f-]{36}$/)
+    const originalMapping = [
+      ...db.contextDocs.listEvidenceLinks(context.id).map(link => JSON.stringify({ contextDocId: context.id, anchorId: link.anchorId ?? null, relation: link.relation, requiredness: link.requiredness, mappingRevision: link.mappingRevision })),
+      ...db.contextDocs.listAnchors(context.id).map(anchor => JSON.stringify({ contextDocId: context.id, anchorId: anchor.id, locator: anchor.locator, mediaContextDocId: anchor.mediaContextDocId ?? null })),
+    ]
+    assert.equal(first.baseline.mappingRevision, createHash('sha256').update(JSON.stringify(originalMapping.sort())).digest('hex'), '流式哈希必须保持既有 Stage baseline')
     assert.equal(first.status, 'ready-with-gaps')
     assert.equal(first.plan.requirements.find((item) => item.evidence.ref.kind === 'context-doc')?.requiredness, 'required')
     assert.deepEqual(db.stageEvidence.getPresentationCoverage(first.stageRunId), {
@@ -195,4 +201,32 @@ test('宿主冻结独立 Stage Plan，恢复本轮状态，并把未映射数据
   } finally {
     db.close()
   }
+})
+
+test('大型 Context 锚点不会作为函数实参展开，865 句 Stage 恢复保持身份和范围', () => {
+  const store = new CatStore({ rootDir: mkdtempSync(join(tmpdir(), 'stage-large-')) })
+  const project = store.createProject({ name: 'Large stage', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'ws' })
+  const db = store.openProject(project.id)
+  try {
+    const imported = db.assets.insertImported({
+      asset: { formatId: 'fixture', originalFilename: 'batch.xlf', sourceSha256: 'a'.repeat(64), segmentCount: 865 },
+      segments: Array.from({ length: 865 }, (_, ordinal) => ({ ordinal, source: `source ${ordinal}`, target: '', sourceLocale: 'en', targetLocale: 'zh-CN', status: 'translated' as const, locked: false, revision: 0, sourceHash: `hash-${ordinal}` })),
+      warnings: [], originalBytes: new Uint8Array([1]),
+    })
+    const doc = db.contextDocs.insert({ kind: 'doc', originalFilename: 'large.txt', blobRelpath: 'blobs/large.txt', sha256: 'b'.repeat(64), textExtract: 'reference' })
+    db.contextDocs.replaceExtraction(doc.id, Array.from({ length: 130000 }, (_, index) => ({ id: `a-${index}`, locator: { kind: 'paragraph' as const, index }, text: 'reference' })))
+    db.contextDocs.setEvidenceLink({ contextDocId: doc.id, anchorId: 'a-0', relation: { kind: 'asset', assetId: imported.asset.id }, requiredness: 'required', mappingRevision: 'v1' })
+    const input = {
+      session: { id: 'large-stage', linguistRole: 'reviewer' as const }, db,
+      discoveryScope: { roots: [], files: [], unavailable: [], hash: 'scope', managedEvidence: [
+        { ref: { kind: 'asset' as const, id: imported.asset.id }, version: imported.asset.sourceSha256 },
+        { ref: { kind: 'context-doc' as const, id: doc.id }, version: doc.sha256! },
+      ] }, fallbackSegmentIds: imported.segments.map(segment => segment.id),
+    }
+    const state = ensureStageEvidenceForSession(input)!
+    assert.equal(state.plan.segmentIds.length, 865)
+    assert.equal(ensureStageEvidenceForSession(input)!.stageRunId, state.stageRunId)
+    assert.equal(db.stageEvidence.list().length, 1)
+    assert.equal(db.stageEvidence.listReceipts(state.stageRunId).length, 0)
+  } finally { db.close() }
 })

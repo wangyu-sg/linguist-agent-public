@@ -1907,7 +1907,7 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
       resolveProject: makeOkResolver(fixture),
       resultProjectId: fixture.project.id as string,
     }), 'cat_get_translation_context')
-    // LA-CONTEXT-002：预算放不下第一段最小核心 → 空页 + minimumRequiredBytes，cursor 不推进
+    // 单句核心超预算时必须提供可完成的分片续页。
     const { segments: longSegments } = seedAsset(fixture.db, fixture.project, {
       filename: 'long.tsv',
       sha: 'c'.repeat(64),
@@ -1933,12 +1933,8 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
     assert.deepEqual(minimumBudget.contexts, [])
     assert.equal(minimumBudget.cursor, null)
     assert.equal(minimumBudget.truncated, true)
-    assert.equal(minimumBudget.nextCursor, undefined, '预算不足的空页不得推进 cursor')
-    assert.ok(
-      minimumBudget.minimumRequiredBytes !== undefined
-        && minimumBudget.minimumRequiredBytes > minimumBudget.maxBytes,
-      'minimumRequiredBytes 必须超过当前预算',
-    )
+    assert.ok(minimumBudget.nextCursor?.startsWith('ctx4-'))
+    assert.equal(minimumBudget.minimumRequiredBytes, undefined)
     assert.ok(minimumBudget.usedBytes <= minimumBudget.maxBytes)
     assert.ok(Buffer.byteLength(JSON.stringify(minimumResult.details), 'utf8') <= 1_024)
   } finally {
@@ -2111,8 +2107,17 @@ test('cat_get_translation_context: 规则全集可续读，预算不足不推进
     const huge = fixture.db.styleGuideRules.upsert({ groupKey: '必须', ruleText: '必要规则'.repeat(2_000) })
     const hugeOffset = fixture.db.getProjectRules([fixture.segmentsA[0]!]).findIndex(rule => rule.ruleId === huge.id)
     const insufficient = (await invoke(tool, { ...params, rulesOnly: true, rulesOffset: hugeOffset, maxBytes: 1_024 })).details as import('./types').CatGetTranslationContextResult
-    assert.ok(insufficient.minimumRequiredBytes! > 1_024)
+    assert.ok(insufficient.contextFragment)
+    assert.ok(insufficient.nextCursor)
     assert.equal(insufficient.ruleCoverage.nextOffset, undefined)
+    let rulePage = insufficient
+    let ruleJson = rulePage.contextFragment!.text
+    while (rulePage.nextCursor) {
+      rulePage = (await invoke(tool, { ...params, rulesOnly: true, rulesOffset: hugeOffset, maxBytes: 1024, cursor: rulePage.nextCursor })).details as import('./types').CatGetTranslationContextResult
+      assert.equal(rulePage.contextFragment!.offset, ruleJson.length)
+      ruleJson += rulePage.contextFragment!.text
+    }
+    assert.equal(JSON.parse(ruleJson).projectRules[0].ruleText, huge.ruleText)
     fixture.db.styleGuideRules.delete(huge.id)
     for (const rule of fixture.db.styleGuideRules.list()) fixture.db.styleGuideRules.delete(rule.id)
     for (const rule of fixture.db.techConstraints.list()) fixture.db.techConstraints.delete(rule.id)
@@ -3033,4 +3038,69 @@ test('worker adapter cancellation is durable and never calls compute', async () 
   } finally {
     fixture.db.close()
   }
+})
+
+
+test('超大单句上下文以完整 JSON 分片续读，长文本无丢失且快照变化拒绝续页', async () => {
+  const fixture = setup()
+  try {
+    const segment = fixture.segmentsA[0]!
+    const text = '😀必需上下文'.repeat(3000)
+    const doc = fixture.db.contextDocs.insert({ kind: 'doc', originalFilename: 'large.txt', blobRelpath: 'blobs/large.txt', sha256: 'c'.repeat(64), textExtract: text })
+    fixture.db.contextDocs.replaceExtraction(doc.id, Array.from({ length: 1500 }, (_, index) => ({ id: `anchor-${index}`, locator: { kind: 'paragraph' as const, index }, text: 'required' })))
+    fixture.db.catDb.transaction('fixture links', () => {
+      for (let index = 0; index < 1500; index++) fixture.db.contextDocs.setEvidenceLink({ contextDocId: doc.id, anchorId: `anchor-${index}`, relation: { kind: 'segment', segmentId: segment.id }, requiredness: 'required', mappingRevision: 'v1' })
+    })
+    const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture), resultProjectId: fixture.project.id }), 'cat_get_translation_context')
+    const request = { segmentIds: [segment.id], includeNeighbors: false, tmLimitPerSegment: 0, termLimitPerSegment: 0, maxBytes: 4096, readOnly: true }
+    let cursor: string | undefined
+    let json = ''
+    let firstCursor: string | undefined
+    do {
+      const result = await invoke(tool, { ...request, cursor })
+      const page = result.details as { contextFragment?: { offset: number; text: string; totalChars: number }; nextCursor?: string; usedBytes: number }
+      assert.ok(page.contextFragment, 'oversized context must return a fragment')
+      assert.equal(page.contextFragment.offset, json.length)
+      assert.equal(Buffer.byteLength(resultText(result)), page.usedBytes)
+      assert.ok(page.usedBytes <= request.maxBytes)
+      json += page.contextFragment.text
+      cursor = page.nextCursor
+      firstCursor ??= cursor
+    } while (cursor)
+    const restored = JSON.parse(json)
+    assert.equal(restored.contexts[0].source, segment.source)
+    assert.equal(restored.requiredEvidencePending[0].anchorIds.length, 1500)
+    assert.equal(new Set(restored.requiredEvidencePending[0].anchorIds).size, 1500)
+    assert.equal(fixture.db.stageEvidence.list().length, 0)
+    fixture.db.contextDocs.setEvidenceLink({ contextDocId: doc.id, anchorId: 'anchor-0', relation: { kind: 'segment', segmentId: segment.id }, requiredness: 'conditional', mappingRevision: 'v2' })
+    await assertThrowsCode(invoke(tool, { ...request, cursor: firstCursor }), 'CONTEXT_DRIFT')
+  } finally { fixture.db.close() }
+})
+
+test('超长 Source、Target 与必需术语出处可无损重组，续页预算改变不改变载荷', async () => {
+  const fixture = setup()
+  try {
+    const segment = fixture.segmentsA[0]!
+    const source = `Alpha ${'😀源文'.repeat(1000)}`
+    const target = '🧩译文'.repeat(1000)
+    fixture.db.catDb.db.prepare('UPDATE segments SET source = ?, target = ? WHERE id = ?').run(source, target, segment.id)
+    const note = '术语出处'.repeat(1000)
+    fixture.db.termEntries.upsert({ term: 'Alpha', translation: '阿尔法', status: 'required', caseSensitive: false, note })
+    const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture) }), 'cat_get_translation_context')
+    let cursor: string | undefined, json = '', pages = 0
+    do {
+      const maxBytes = pages++ % 2 === 0 ? 1024 : 8192
+      const result = await invoke(tool, { segmentIds: [segment.id], includeNeighbors: false, tmLimitPerSegment: 0, termLimitPerSegment: 0, readOnly: true, maxBytes, cursor })
+      const page = result.details as import('./types').CatGetTranslationContextResult
+      assert.ok(page.contextFragment)
+      assert.equal(page.contextFragment.offset, json.length)
+      assert.ok(Buffer.byteLength(resultText(result)) <= maxBytes)
+      json += page.contextFragment.text
+      cursor = page.nextCursor
+    } while (cursor)
+    const restored = JSON.parse(json)
+    assert.equal(restored.contexts[0].source, source)
+    assert.equal(restored.contexts[0].currentTarget, target)
+    assert.equal(restored.contexts[0].requiredTerms[0].note, note)
+  } finally { fixture.db.close() }
 })
