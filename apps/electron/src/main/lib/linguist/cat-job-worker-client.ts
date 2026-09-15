@@ -10,15 +10,18 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Worker } from 'node:worker_threads'
+import type { ContextDoc } from '@linguist/cat-store'
+import type { ContextImportWorkerRequest } from './context-import'
 
 type WorkerMessage<TResult> =
   | { type: 'progress'; phase: 'started' | 'completed'; threadId: number }
   | { type: 'result'; result: TResult }
   | { type: 'error'; name: string; message: string }
 
-type WorkerRequest =
+export type WorkerRequest =
   | { kind: 'qa'; request: LinguistQaWorkerRequest }
   | { kind: 'consistency'; request: LinguistConsistencyWorkerRequest }
+  | { kind: 'context-import'; request: ContextImportWorkerRequest }
 
 function workerEntry(): string {
   const moduleDir = typeof __dirname === 'string'
@@ -104,3 +107,6 @@ export const runLinguistConsistencyWorker: LinguistConsistencyWorker = (
   signal,
   onProgress,
 )
+
+export const runLinguistContextImportWorker = (request: ContextImportWorkerRequest): Promise<ContextDoc> =>
+  runWorker({ kind: 'context-import', request }, 'Context import', undefined, undefined)

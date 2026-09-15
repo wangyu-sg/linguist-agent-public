@@ -88,6 +88,14 @@
       "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
+      "file": "apps/electron/default-skills/phrase-platform-review-ops/SKILL.md",
+      "ticket": "PB-040",
+      "kind": "product-fork",
+      "owner": "linguist-skills",
+      "mergePolicy": "keep-la",
+      "reason": "Linguist 的 Phrase 平台回填与 QA 操作规范，复用 Proma 内置浏览器。"
+    },
+    {
       "file": "apps/electron/default-skills/session-cleaner/SKILL.md",
       "ticket": "LA-SYNC-005",
       "kind": "product-fork",

@@ -23,7 +23,7 @@
     "test:stage-evidence-host": "node --experimental-transform-types --import ./packages/linguist-cat-store/test/register-ts-loader.mjs --test apps/electron/src/main/lib/linguist/stage-evidence-host.nodetest.ts",
     "test:delivery-evidence": "node --experimental-transform-types --import ./packages/linguist-cat-store/test/register-ts-loader.mjs --test apps/electron/src/main/lib/linguist/project-delivery-evidence.nodetest.ts",
     "test:evidence-workflow-v1": "node --experimental-transform-types --import ./packages/linguist-cat-store/test/register-ts-loader.mjs --test apps/electron/src/main/lib/linguist/evidence-workflow-v1.nodetest.ts",
-    "test:host-lifecycle": "node --experimental-test-module-mocks --experimental-transform-types --import ./packages/linguist-cat-store/test/register-ts-loader.mjs --test apps/electron/src/main/lib/linguist/session-availability.nodetest.ts apps/electron/src/main/lib/linguist/cat-job-worker-client.nodetest.ts",
+    "test:host-lifecycle": "node --experimental-test-module-mocks --experimental-transform-types --import ./packages/linguist-cat-store/test/register-ts-loader.mjs --test apps/electron/src/main/lib/linguist/session-availability.nodetest.ts apps/electron/src/main/lib/linguist/cat-job-worker-client.nodetest.ts apps/electron/src/main/lib/linguist/context-import.nodetest.ts",
     "test:store-critical": "bun run --cwd packages/linguist-cat-store test",
     "test:tools-critical": "bun run --cwd packages/linguist-cat-tools test",
     "check:boundaries": "bun test tests/upstream-boundary.test.ts",

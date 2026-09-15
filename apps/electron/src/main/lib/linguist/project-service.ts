@@ -74,6 +74,7 @@ import {
   type VoiceProfileUpsertInput,
 } from '@linguist/cat-store'
 import { getConfigDir } from '../config-paths'
+import { runLinguistContextImportWorker } from './cat-job-worker-client'
 import { createAgentWorkspace, getAgentWorkspace } from '../agent-workspace-manager'
 import {
   LINGUIST_ASSET_ID_PATTERN,
@@ -188,6 +189,7 @@ export class LinguistProjectService {
   private probe?: SqliteRuntimeProbe
   private readonly handles = new Map<string, { db: ProjectDatabase; ino: number; dev: number }>()
   private readonly resources: ProjectResources
+  private readonly contextImports = new Set<string>()
   private readonly quality: ProjectQuality
   private readonly delivery: ProjectDelivery
 
@@ -340,6 +342,7 @@ export class LinguistProjectService {
    * 一律只读（fail closed）。
    */
   archiveProject(projectId: string): LinguistProject {
+    if (this.contextImports.has(projectId)) throw new Error('项目正在导入参考资料，请完成后再归档。')
     const project = this.call(() => this.store.archiveProject(projectId), projectId)
     this.closeProject(projectId)
     console.log(`[Linguist] 已归档 CAT 项目: ${project.id}`)
@@ -799,6 +802,7 @@ export class LinguistProjectService {
 
   /** PB-080：所有 reference 写入共享的归档前置守卫。 */
   assertProjectWritable(projectId: string): void {
+    if (this.contextImports.has(projectId)) throw new Error('项目正在导入参考资料，请完成后再修改项目。')
     const project = this.getProject(projectId)
     if (project.archivedAt !== undefined) throw new LinguistProjectArchivedError(projectId)
   }
@@ -1096,11 +1100,19 @@ export class LinguistProjectService {
     return this.resources.resolveContextDocPreviewPath(projectId, docId)
   }
 
-  importContextDoc(
+  async importContextDoc(
     projectId: string,
     input: ImportContextDocInput,
   ): Promise<ContextDoc> {
-    return this.resources.importContextDoc(projectId, input)
+    this.assertProjectWritable(projectId)
+    this.openProject(projectId)
+    const { projectDir } = this.getProjectPaths(projectId)
+    this.contextImports.add(projectId)
+    try {
+      return await runLinguistContextImportWorker({ projectId: this.getProject(projectId).id, projectDir, input })
+    } finally {
+      this.contextImports.delete(projectId)
+    }
   }
 
   importSentencePatterns(

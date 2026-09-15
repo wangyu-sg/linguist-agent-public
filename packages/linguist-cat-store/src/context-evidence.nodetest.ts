@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { rmSync } from 'node:fs'
 import { CatStore } from './store'
 import { makeClock, makeEntropy, makeImportedAsset, makeTempDir } from './testkit'
 
@@ -55,5 +56,40 @@ test('Context extraction persists child media, typed anchors, and Asset/Segment 
     ])
   } finally {
     db.close()
+  }
+})
+
+test('大型 Context 精确关联不逐单元格扫描整个批次，保留 source/target/key 与同排传播', () => {
+  const rootDir = makeTempDir()
+  const store = new CatStore({ rootDir, entropy: makeEntropy(), now: makeClock() })
+  const project = store.createProject({
+    name: '大型参考表', sourceLocale: 'en', targetLocale: 'zh-CN', promaWorkspaceId: 'workspace-1',
+  })
+  const db = store.openProject(project.id)
+  try {
+    const imported = db.assets.insertImported(makeImportedAsset({ segmentCount: 865, fillEvery: 2 }))
+    const doc = db.contextDocs.insert({
+      kind: 'doc', originalFilename: 'large.xlsx', blobRelpath: 'blobs/large.xlsx',
+    })
+    const first = imported.segments[0]!
+    const matches = [first.source, first.target, first.key!]
+    db.contextDocs.replaceExtraction(doc.id, Array.from({ length: 30_000 }, (_, index) => ({
+      id: `cell-${index}`,
+      locator: { kind: 'sheet' as const, sheet: '参考', row: Math.floor(index / 2) + 1 },
+      text: index < 6 && index % 2 === 0 ? matches[index / 2]! : index === 6 ? '' : `无匹配-${index}`,
+    })))
+    const started = performance.now()
+    const links = db.contextDocs.linkExtractionByExactText(doc.id, 'large-1')
+    const elapsed = performance.now() - started
+    assert.equal(links.length, 12)
+    for (let index = 0; index < 6; index++) {
+      assert.ok(links.some((link) => link.anchorId === `cell-${index}`
+        && link.relation.kind === 'segment' && link.relation.segmentId === first.id))
+    }
+    assert.ok(elapsed < 2_000, `Context 关联阻塞主线程 ${Math.round(elapsed)}ms`)
+    assert.equal(db.contextDocs.linkExtractionByExactText(doc.id, 'large-2').length, links.length)
+  } finally {
+    db.close()
+    rmSync(rootDir, { recursive: true, force: true })
   }
 })

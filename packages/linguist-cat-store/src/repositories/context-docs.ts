@@ -348,49 +348,61 @@ export class ContextDocsRepository {
     return this.db.transaction(`link Context extraction ${contextDocId}`, () => {
       if (this.get(contextDocId) === undefined) throw new StoreNotFoundError('context doc', contextDocId)
       this.db.db.prepare(`
+        WITH segment_texts AS MATERIALIZED (
+          SELECT segment.id AS segment_id, asset.id AS asset_id, segment.source AS text
+          FROM segments AS segment INNER JOIN assets AS asset ON asset.id = segment.asset_id
+          WHERE asset.project_id = ?
+          UNION
+          SELECT segment.id, asset.id, segment.target
+          FROM segments AS segment INNER JOIN assets AS asset ON asset.id = segment.asset_id
+          WHERE asset.project_id = ?
+          UNION
+          SELECT segment.id, asset.id, segment.key
+          FROM segments AS segment INNER JOIN assets AS asset ON asset.id = segment.asset_id
+          WHERE asset.project_id = ?
+        ), matches AS MATERIALIZED (
+          SELECT anchor.context_doc_id, anchor.id AS anchor_id, text.segment_id, text.asset_id
+          FROM context_anchors AS anchor
+          INNER JOIN segment_texts AS text ON text.text = anchor.text_extract
+          WHERE anchor.context_doc_id = ? AND anchor.text_extract <> ''
+        )
         INSERT INTO context_evidence_links (
           context_doc_id, anchor_id, relation_type, asset_id, segment_id,
           requiredness, mapping_revision
         )
-        SELECT anchor.context_doc_id, anchor.id, 'segment', NULL, segment.id,
-               'required', ?
-        FROM context_anchors AS anchor
-        INNER JOIN segments AS segment
-          ON anchor.text_extract <> ''
-          AND (anchor.text_extract = segment.source
-            OR anchor.text_extract = segment.target
-            OR anchor.text_extract = segment.key)
-        INNER JOIN assets AS asset ON asset.id = segment.asset_id
-        WHERE anchor.context_doc_id = ? AND asset.project_id = ?
+        SELECT context_doc_id, anchor_id, 'segment', NULL, segment_id, 'required', ? FROM matches
+        UNION
+        SELECT context_doc_id, anchor_id, 'asset', asset_id, NULL, 'conditional', ? FROM matches WHERE true
         ON CONFLICT DO UPDATE SET mapping_revision = excluded.mapping_revision
-      `).run(mappingRevision, contextDocId, this.projectId)
-      this.db.db.prepare(`
-        INSERT INTO context_evidence_links (
-          context_doc_id, anchor_id, relation_type, asset_id, segment_id,
-          requiredness, mapping_revision
-        )
-        SELECT DISTINCT anchor.context_doc_id, anchor.id, 'asset', asset.id, NULL,
-               'conditional', ?
-        FROM context_anchors AS anchor
-        INNER JOIN segments AS segment
-          ON anchor.text_extract <> ''
-          AND (anchor.text_extract = segment.source
-            OR anchor.text_extract = segment.target
-            OR anchor.text_extract = segment.key)
-        INNER JOIN assets AS asset ON asset.id = segment.asset_id
-        WHERE anchor.context_doc_id = ? AND asset.project_id = ?
-        ON CONFLICT DO UPDATE SET mapping_revision = excluded.mapping_revision
-      `).run(mappingRevision, contextDocId, this.projectId)
+      `).run(this.projectId, this.projectId, this.projectId, contextDocId, mappingRevision, mappingRevision)
 
       const anchors = this.listAnchors(contextDocId)
       const links = this.listEvidenceLinks(contextDocId)
+      const linksByAnchor = new Map<string, ContextEvidenceLink[]>()
+      for (const link of links) {
+        if (link.anchorId === undefined) continue
+        const grouped = linksByAnchor.get(link.anchorId)
+        if (grouped) grouped.push(link)
+        else linksByAnchor.set(link.anchorId, [link])
+      }
       const rowLinks = new Map<string, ContextEvidenceLink[]>()
       for (const anchor of anchors) {
         if (anchor.locator.kind !== 'sheet' || anchor.locator.row === undefined) continue
         const key = `${anchor.locator.sheet}\u0000${anchor.locator.row}`
-        const linked = links.filter((link) => link.anchorId === anchor.id)
+        const linked = linksByAnchor.get(anchor.id) ?? []
         if (linked.length > 0) rowLinks.set(key, [...(rowLinks.get(key) ?? []), ...linked])
       }
+      // 来源关系与锚点均取自当前文档的已验证记录；批量传播复用语句，
+      // 避免每条关系通过公共写入口重新读取整份 Context 正文。
+      const insert = this.db.db.prepare(`
+        INSERT INTO context_evidence_links (
+          context_doc_id, anchor_id, relation_type, asset_id, segment_id,
+          requiredness, mapping_revision
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT DO UPDATE SET
+          requiredness = excluded.requiredness,
+          mapping_revision = excluded.mapping_revision
+      `)
       for (const anchor of anchors) {
         if (
           (anchor.locator.kind !== 'sheet' && anchor.locator.kind !== 'image')
@@ -399,11 +411,15 @@ export class ContextDocsRepository {
         ) continue
         const linked = rowLinks.get(`${anchor.locator.sheet}\u0000${anchor.locator.row}`) ?? []
         for (const source of linked) {
-          this.setEvidenceLink({
-            ...source,
-            anchorId: anchor.id,
+          insert.run(
+            contextDocId,
+            anchor.id,
+            source.relation.kind,
+            source.relation.kind === 'asset' ? source.relation.assetId : null,
+            source.relation.kind === 'segment' ? source.relation.segmentId : null,
+            source.requiredness,
             mappingRevision,
-          })
+          )
         }
       }
       return this.listEvidenceLinks(contextDocId)
