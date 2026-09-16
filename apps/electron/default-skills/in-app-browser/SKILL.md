@@ -2,7 +2,7 @@
 name: in-app-browser
 description: Proma 内嵌受管浏览器使用指南。当用户要求打开、展示、访问、浏览或操作网页，或提到小红书、X/Twitter、LinkedIn、BOSS 直聘、登录后站内搜索、动态页面、截图或本地 HTML/React 预览时使用。对邮件、消息、文档、项目管理等已有匹配专用 MCP/API/CLI 的服务，必须优先使用专用工具；仅在没有匹配工具、工具无法完成当前能力、网络搜索工具不可用或无法取得足够好的结果、或用户明确要求网页时改用 Browser。浏览器工具出现在当前工具列表时，必须先阅读本 Skill 再进行网页操作；不要因为工具直接可见就跳过。
 group: proma
-version: "1.1.2"
+version: "1.1.3"
 ---
 
 # Proma In-App Browser
@@ -40,7 +40,8 @@ Proma 的 `Browser*` 工具控制当前会话关联的受管浏览器。网页�
 - `BrowserFind`：按可访问性 role 和/或 name 定位少量新 ref，适合完整 Observe 过大或找不到目标时使用。它与 `BrowserObserve` 一样会作废该 tab 的全部旧 ref。
 - `BrowserClick`：点击指定 ref；页面会短暂高亮目标，方便用户确认。
 - `BrowserAct`：支持原有 click+wait，以及互斥的 steps 串行组合。steps 只执行一串有界动作，复用原生 Browser 控制器、tab 队列和停止机制，不是并行调用或网页后台循环。可将已知的定位、前置检查、焦点、输入、等待和结构化读回合为一次调用；任一步失败/中止返回成功前缀、失败位置及未执行范围。组合成功不自动等于业务保存成功。不要重放已经成功的前缀，不虚构当前 schema 未提供的步骤。
-- `BrowserFill`：替换指定 `ref` 的 input、textarea 或 contenteditable 编辑器内容；完整消息、搜索词和多行文本都优先用它。
+- **BrowserAct 只读检查**：优先用 `probe:{selector,attributes?}`，返回 `{url,nodes:[{text,value,attributes}]}`。它在隔离环境执行固定 DOM 读取，`text` 是精确 textContent，`value` 是 input/textarea 的当前值（其他节点 null），属性仅含请求名称；结果按文档顺序，无匹配为 nodes 空数组。限定当前小组，用 `guard.expected` 比较实际身份/内容，用 `check` 比较最终结果；正常检查不另加 Observe 或自造哈希。自定义函数 `probe:{expression,args?}` 仍须同步只读；Chromium 可能拒绝某些只读 DOM 方法，遇到 `Possible side-effect` 直接改固定 DOM 检查，不反复重试或关闭保护。
+- `BrowserFill`：使用原生编辑命令全选后输入，避开页面对全选快捷键的拦截；替换指定 `ref` 的 input、textarea 或 contenteditable 编辑器内容；完整消息、搜索词和多行文本都优先用它。
 - `BrowserPress`：区分结构化按键与文本。`action:{kind:"key",key:"a",modifiers:["Meta"]}` 表示真实组合键；`action:{kind:"text",text:"Meta+A"}` 表示输入字面文本。支持的键以工具 schema 为准，显式按键不支持时返回错误，不能当文字输入。输入可绑定已观察到的目标，并复用焦点检查；自绘编辑器需验证实际输入节点，不把外层 cell 当输入框。已建立选区后，不重复聚焦破坏选区。旧字符串参数仅为兼容既有导航键和普通文本，新任务优先结构化参数。网站支持快捷键，不等于旧工具接口支持同名字符串。
 - `BrowserHover` / `BrowserDrag`：对当前 ref 做原生指针悬浮或拖拽；拖拽不伪造任意 DragEvent/DataTransfer，完成后必须核验。
 - `BrowserScroll`：以固定、数据化操作滚动页面或 CSS selector 指定的内部滚动容器，返回前后 scroll 指标。

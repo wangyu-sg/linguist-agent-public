@@ -42,6 +42,38 @@ void app.whenReady().then(async () => {
   await page.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
   const target = { selector: '#target' }
   const current = { expression: `() => document.querySelector('#target').value` }
+  // 编辑器接管全选快捷键时，fill 仍须替换搜索框已有内容，不能追加。
+  await page.executeJavaScript(`document.body.insertAdjacentHTML('beforeend','<input id="filter" value="deployed">'); document.querySelector('#filter').addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='a')e.preventDefault()}); true`)
+  const filterProbe = { expression: `() => document.querySelector('#filter').value` }
+  const filterFill = await controller.act(sessionId, { tabId, steps: [
+    { kind: 'fill', target: { selector: '#filter' }, text: 'deployed heroes', guard: { probe: filterProbe, expected: 'deployed' } },
+    { kind: 'check', probe: filterProbe, expected: 'deployed heroes' },
+    { kind: 'fill', target: { selector: '#filter' }, text: '' },
+    { kind: 'check', probe: filterProbe, expected: '' },
+  ] })
+  assert.ok('status' in filterFill && filterFill.status === 'completed', JSON.stringify(filterFill))
+  // 页面可包装 DOM 方法；固定读取必须不执行该包装，也不能修改页面。
+  await page.executeJavaScript(`window.queryReads=0;window.originalQuerySelectorAll=Document.prototype.querySelectorAll;Document.prototype.querySelectorAll=function(s){window.queryReads++;return window.originalQuerySelectorAll.call(this,s)};true`)
+  const domRead = await controller.act(sessionId, { tabId, steps: [{ kind: 'read', probe: {
+    selector: '#target, #filter', attributes: ['id'],
+  } }] })
+  assert.ok('status' in domRead && domRead.status === 'completed', JSON.stringify(domRead))
+  assert.deepEqual(domRead.results[0]?.value, { url: fixtureUrl + '/', nodes: [
+    { text: 'original', value: 'original', attributes: { id: 'target' } },
+    { text: '', value: '', attributes: { id: 'filter' } },
+  ] })
+  assert.equal(await page.executeJavaScript('window.queryReads'), 0)
+  await page.executeJavaScript('Document.prototype.querySelectorAll=window.originalQuerySelectorAll;true')
+  const domGuard = { probe: { selector: '#target, #filter', attributes: ['id'] }, expected: domRead.results[0]!.value! }
+  await page.executeJavaScript(`document.querySelector('#filter').value='changed by user';true`)
+  const domConflict = await controller.act(sessionId, { tabId, steps: [
+    { kind: 'fill', target: { selector: '#filter' }, text: 'must not overwrite', guard: domGuard },
+    { kind: 'fill', target: { selector: '#other' }, text: 'must not continue' },
+  ] })
+  assert.ok('status' in domConflict && domConflict.results[0]?.status === 'mismatch')
+  assert.equal(await page.executeJavaScript(`document.querySelector('#filter').value`), 'changed by user')
+  assert.equal(await page.executeJavaScript(`document.querySelector('#other').value`), 'untouched')
+  await page.executeJavaScript(`document.querySelector('#target').focus(); true`)
   await assert.rejects(controller.press(sessionId, 'Meta+A', tabId), /action/)
   assert.equal(await page.executeJavaScript(`document.querySelector('#target').value`), 'original')
   await controller.press(sessionId, { action: { kind: 'key', key: 'a', modifiers: ['Meta'] }, target }, tabId)
@@ -182,6 +214,13 @@ void app.whenReady().then(async () => {
     { kind: 'check', probe: { expression: `() => ({tags:Array.from(document.querySelectorAll('[data-tag]'),(node,index)=>({same:node===window.originalTags[index],kind:node.dataset.tag})),variable:document.querySelector('#variable').textContent,format:document.querySelector('#rich-text').tagName})` }, expected: { tags: [{same:true,kind:'open'},{same:true,kind:'close'}], variable:'{player}', format:'B' } },
   ] })
   assert.ok('status' in rich && rich.status === 'completed', JSON.stringify(rich) + await page.executeJavaScript(`document.querySelector('#rich-text').outerHTML`))
+  const richSnapshot = await controller.act(sessionId, { tabId, steps: [{kind:'check',probe:{selector:'#rich > *',attributes:['data-tag']},expected:{url:fixtureUrl+'/next',nodes:[
+    {text:'{1}',value:null,attributes:{'data-tag':'open'}},
+    {text:richText,value:null,attributes:{'data-tag':null}},
+    {text:'{/1}',value:null,attributes:{'data-tag':'close'}},
+    {text:'{player}',value:null,attributes:{'data-tag':null}},
+  ]}}] })
+  assert.ok('status' in richSnapshot && richSnapshot.status === 'completed', JSON.stringify(richSnapshot))
   // 陈旧 Saved 与失败保存均不能通过本次内容屏障；不继续确认。
   await page.executeJavaScript(`document.querySelector('#target').dataset.savedText='previous'; true`)
   const failedSave = await controller.act(sessionId, { tabId, steps: [

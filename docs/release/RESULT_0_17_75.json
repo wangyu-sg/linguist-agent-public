@@ -1,0 +1,92 @@
+{
+  "templateOnly": false,
+  "release": {
+    "version": "0.17.75",
+    "tag": "v0.17.75",
+    "sourceCommit": "85aa7e5da0f1ed63a6ed63d5bcd8a89c24fdd8a1",
+    "releaseUrl": "https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.75",
+    "status": "released"
+  },
+  "baseline": {
+    "upstreamTag": "v0.19.53",
+    "upstreamCommit": "f99edbdb594407ab190b97ae073889c5d96637ab",
+    "bun": "1.3.14",
+    "electron": "43.2.0",
+    "pi": "0.85.1"
+  },
+  "implementation": {
+    "browserInput": "implemented",
+    "browserSequence": "implemented",
+    "phraseSkill": "implemented",
+    "nativeUIParity": "implemented",
+    "automationContext": "implemented"
+  },
+  "verification": {
+    "defaultTests": "passed",
+    "packagedSmoke": "passed",
+    "phraseTestJob": "not-run",
+    "realPerformanceComparison": "not-run",
+    "signedReleaseAssets": "mac-arm64-locally-verified; other-platforms-CI-built",
+    "signedPackageStartup": "passed",
+    "isolatedUpdate": "not-run"
+  },
+  "evidencePaths": [
+    "VALIDATION_0_17_75.md",
+    "https://github.com/wangyu-sg/linguist-agent-public/actions/runs/35094944942"
+  ],
+  "assets": [
+    {
+      "name": "latest-mac.yml",
+      "size": 524,
+      "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/download/v0.17.75/latest-mac.yml"
+    },
+    {
+      "name": "latest.yml",
+      "size": 339,
+      "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/download/v0.17.75/latest.yml"
+    },
+    {
+      "name": "Linguist-Agent-0.17.75-arm64.dmg",
+      "size": 233073001,
+      "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/download/v0.17.75/Linguist-Agent-0.17.75-arm64.dmg",
+      "downloadStatus": 200
+    },
+    {
+      "name": "Linguist-Agent-0.17.75-arm64.zip",
+      "size": 222982793,
+      "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/download/v0.17.75/Linguist-Agent-0.17.75-arm64.zip",
+      "metadataSize": 222982793,
+      "sha512": "G07s472HES0nLsxHCqOyseLYK8te2G/qYPSCCutVZRU4tHLabOqbkIrTs0BmStSTZtfCWafsD2EP6zIC+OQufA==",
+      "sha256": "f75fd908ec227127b547bd9dd6475484a217c9d75d955369f8c79fc4e866515a"
+    },
+    {
+      "name": "Linguist-Agent-0.17.75-x64.dmg",
+      "size": 244408409,
+      "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/download/v0.17.75/Linguist-Agent-0.17.75-x64.dmg",
+      "downloadStatus": 200
+    },
+    {
+      "name": "Linguist-Agent-0.17.75-x64.exe",
+      "size": 173008947,
+      "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/download/v0.17.75/Linguist-Agent-0.17.75-x64.exe",
+      "metadataSize": null,
+      "sha512": "yA7Wf0g9FO78Q7pbatpmFR8kMAiaagcgr/XUH8K8LpP3jKeSL8aaUWZ9+5sTH49uw7Y/rVVyuOxW3hMcJQPwWA==",
+      "sha256": "0feb634736031f85c628286fe0eeb72954defbfddca11b0e82cea15b1cc1b976"
+    },
+    {
+      "name": "Linguist-Agent-0.17.75-x64.zip",
+      "size": 234354907,
+      "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/download/v0.17.75/Linguist-Agent-0.17.75-x64.zip",
+      "metadataSize": 234354907,
+      "sha512": "6at/HhPBaqLSTH5pUa31qK12TDqDuVzwD89mYY0f03kuh8dMD8VIgY5XcHGNwEDQV9sW5WeH7GfDNKzy7ACeqg==",
+      "sha256": "299a11d5f9f0d4a809b26748d96c7421b9a13ac70f412a121c2d0d69ea77cdac"
+    }
+  ],
+  "limitations": [
+    "真实 Phrase DOM、标签/多行、保存、TM/QA 未现场校准。",
+    "自动更新链路未验证；本地是用户授权的手动替换。",
+    "IME、Native Open/Save、真实 Provider 和产品日用资格仍需独立证据。"
+  ],
+  "dailyInstallChanged": true,
+  "customerDataChanged": false
+}

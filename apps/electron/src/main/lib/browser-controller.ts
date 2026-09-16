@@ -1590,9 +1590,21 @@ export class BrowserController {
   }
 
   private async readProbe(tab: BrowserTabRecord, probe: BrowserProbe, signal?: AbortSignal): Promise<BrowserJsonValue> {
+    let contextId: number | undefined
+    let expression: string
+    if (probe.selector !== undefined) {
+      // 固定读取在隔离 world 执行，不调用页面包装过的 DOM 方法或 getter。
+      // Chromium 会误拒绝部分原生只读方法；仅任意脚本仍使用 side-effect 检查。
+      const tree = await this.cdp(tab, 'Page.getFrameTree', {}, undefined, signal) as { frameTree: { frame: { id: string } } }
+      const world = await this.cdp(tab, 'Page.createIsolatedWorld', { frameId: tree.frameTree.frame.id, worldName: 'proma-dom-probe' }, undefined, signal)
+      contextId = world.executionContextId as number
+      expression = `(() => { const {selector, attributes} = ${JSON.stringify({ selector: probe.selector, attributes: probe.attributes ?? [] })}; return {url:location.href,nodes:Array.from(document.querySelectorAll(selector),element=>({text:element.textContent,value:element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element.value : null,attributes:Object.fromEntries(attributes.map(name=>[name,element.getAttribute(name)]))}))}; })()`
+    } else {
+      expression = `(${probe.expression})(${JSON.stringify(probe.args ?? null)})`
+    }
     const response = await this.cdp(tab, 'Runtime.evaluate', {
-      expression: `(() => { const value = (${probe.expression})(${JSON.stringify(probe.args ?? null)}); if (value && typeof value.then === 'function') throw new Error('probe 必须同步返回 JSON，不能返回 Promise/thenable'); const json = JSON.stringify(value); if (typeof json !== 'string' || json.length > ${MAX_BROWSER_SCRIPT_RESULT_CHARS}) throw new Error('probe 返回值须为不超过 ${MAX_BROWSER_SCRIPT_RESULT_CHARS} 字符的 JSON；截断结果不能用于核验'); return JSON.parse(json); })()`,
-      returnByValue: true, awaitPromise: false, throwOnSideEffect: true, timeout: 2000,
+      expression: `(() => { const value = ${expression}; if (value && typeof value.then === 'function') throw new Error('probe 必须同步返回 JSON，不能返回 Promise/thenable'); const json = JSON.stringify(value); if (typeof json !== 'string' || json.length > ${MAX_BROWSER_SCRIPT_RESULT_CHARS}) throw new Error('probe 返回值须为不超过 ${MAX_BROWSER_SCRIPT_RESULT_CHARS} 字符的 JSON；截断结果不能用于核验'); return JSON.parse(json); })()`,
+      contextId, returnByValue: true, awaitPromise: false, throwOnSideEffect: probe.selector === undefined, timeout: 2000,
     }, undefined, signal)
     if (response.exceptionDetails) throw new Error(describeBrowserScriptException(response))
     const remote = response.result as { value?: BrowserJsonValue } | undefined
@@ -1633,8 +1645,9 @@ export class BrowserController {
   }
 
   private async fillInternal(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, target: BrowserTarget, text: string, guard?: BrowserGuard, signal?: AbortSignal, dispatched?: () => void): Promise<void> {
-    const input = { ...target, focus: 'activate' as const }
-    await this.pressInternal(browserSession, tab, { target: input, guard, action: { kind: 'key', key: 'a', modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] } }, signal, dispatched)
+    await this.inputTarget(tab, { ...target, focus: 'activate' }, signal)
+    // 原生编辑命令不经过网站的 keydown 拦截；全选失败会把替换变成追加。
+    tab.view.webContents.selectAll()
     await this.pressInternal(browserSession, tab, { target: { ...target, focus: 'verify' }, guard, action: { kind: 'text', text } }, signal, dispatched)
   }
 

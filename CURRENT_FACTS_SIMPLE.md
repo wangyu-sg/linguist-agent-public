@@ -21,7 +21,9 @@
 Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本地候选分支 `codex/la-upstream-v0.19.53-20260914`，起点 `9f0de928`。App `0.17.74` 已推送并[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.74)，Tag 指向 `d6d0a7ee`。CI `34844497883` 与 Auto Release `34845329153` 成功，macOS arm64/x64、Windows x64 安装包和更新清单共七项资产齐全；未覆盖日用安装。证据见 [上游更新与发布记录](./docs/release/UPSTREAM_0_19_53_2026_09_14.md)。
 
 
-当前源码目标为 `0.17.75`；Shared 浏览器/定时任务 DTO 为 `0.1.72`。CAT Core/Store/Tools 依据已有 manifest 校正为 `0.0.25`/`0.0.46`/`0.0.40`，本轮未再次递增。实现及验证进度见 [本轮记录](./docs/release/VALIDATION_0_17_75.md)；正式发布与打包以该记录的实际结果为准。
+App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.75)，源码/Tag 为 `85aa7e5d`，Release run `35094944942` 成功，七项资产核验通过。用户随后授权用正式签名 arm64 包替换本机旧安装，验签及启动通过；自动更新链路未验证。详见 [发布记录](./docs/release/VALIDATION_0_17_75.md)。Shared DTO 为 `0.1.72`，CAT 版本按现有 manifest 校正，本轮未再次递增。
+
+后续源码修复已加入原生全选填充、固定只读 DOM probe、Phrase Skill `1.0.6` 与 in-app-browser `1.1.3`，定向 Chromium 回归、类型、边界与受影响入口构建通过。**这部分尚未打包、安装或同步真实工作区**，按用户要求保留今晚运行环境。见 [效率修复](./docs/release/BROWSER_BATCH_FIX_2026_09_16.md)。
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
 
@@ -31,7 +33,7 @@ Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本�
 
 - Linguist 与 Agent 共享原生侧栏项目头、会话树及待办/日历/Obsidian/记忆/Skills/MCP/定时任务入口；关闭组件后回到当前会话的 CAT 或文件。领域侧栏仅提供数据和项目操作。
 - 定时任务持久化项目、岗位和明确范围快照；来源删除后保留，跨工作区清除，reuse/daily 按完整绑定校验。只读摘要不创建 Stage；执行结束与业务完成分开显示。
-- BrowserAct 在一个 tab 队列内执行至多 64 步、30 秒（含排队）；失败返回成功前缀和未执行范围。新技能随新二进制发布，未同步到旧安装版。真实 Phrase DOM/保存/TM 配方尚未校准。
+- BrowserAct 在一个 tab 队列内执行至多 64 步、30 秒（含排队）；失败返回成功前缀和未执行范围。正式包携带的 Skill 与后续源码修复版本分开记录；真实 Phrase 保存/TM 与完整富文本操作尚未校准。
 
 - 完整 Proma Agent / Chat + Linguist 第三模式，Pi-only；四岗位 Prompt 真源为 [resources/linguist-roles](./resources/linguist-roles)。岗位身份在已有持久化用户消息后固定，委派子会话固定岗位。
 - MCP 桥接保持固定 Proma 合同；browser-controller 在原生队列上增加显式 text/key、实际输入节点检查与有界 steps。源码与固定 Proma 浏览器文件存在已登记差异。
@@ -53,7 +55,7 @@ Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本�
 
 ## 已保留的 UI 与批次行为
 
-- CAT 仅在右侧原生工作区挂载；主区使用完整 Agent，会话切换恢复用户原生工作区状态。项目入口明确激活 CAT，预览使用当前宿主 sessionId。
+- CAT 仅在右侧原生工作区挂载；主区使用完整 Agent，会话切换恢复用户原生工作区状态。切换项目激活 CAT；当前项目头保持原生展开/收起行为，从预览返回可用 CAT 标签。预览使用当前宿主 sessionId。
 - 修改建议默认当前批次 pending，列表及总数在 SQL 分页前过滤；历史 accepted 的正常 revision 增加不再显示版本冲突。
 - QA 列表、数量、下一项和交付默认当前批次；项目历史从项目设置显式进入。TM/TB 与风格资料仍项目共用。
 - 项目设置分为项目、批次、语言资产、Tag Profiles、维护与诊断；底部为辅助面板。切换或卸载 CAT 保留进程内草稿与撤销历史。

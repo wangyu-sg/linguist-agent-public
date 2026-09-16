@@ -10,10 +10,13 @@ const target = (input = false) => Type.Union([
   Type.Object({ ref, ...(input ? { focus: Type.Optional(Type.Union([Type.Literal('activate'), Type.Literal('verify')], { description: 'Default verify preserves an existing selection; activate focuses the input first.' })) } : {}) }, { additionalProperties: false }),
   Type.Object({ selector, ...(input ? { focus: Type.Optional(Type.Union([Type.Literal('activate'), Type.Literal('verify')], { description: 'Default verify preserves an existing selection; activate focuses the input first.' })) } : {}) }, { additionalProperties: false }),
 ], { description: 'An observed ref or selector, exclusively. Input targets must be the actual editable node.' })
-const probe = Type.Object({
+const probe = Type.Union([Type.Object({
+  selector,
+  attributes: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 100 }), { maxItems: 16, uniqueItems: true })),
+}, { additionalProperties: false, description: 'Preferred DOM check: fixed read-only snapshot {url,nodes:[{text,value,attributes}]}, in document order. value is input/textarea value or null; attributes contains only requested names. Empty match returns nodes: []. No page scripts or hashes required.' }), Type.Object({
   expression: Type.String({ minLength: 1, maxLength: 20000, description: 'Synchronous read-only function expression (args) => JSON, based on observed DOM. No mutations, events, requests, timers or promises.' }),
   args: Type.Optional(Type.Unknown({ description: 'JSON data passed to the function; never interpolated as source code.' })),
-}, { additionalProperties: false })
+}, { additionalProperties: false })])
 const expected = Type.Unknown({ description: 'Complete expected JSON, compared strictly without trimming or text normalization.' })
 const guard = Type.Object({ probe, expected }, { additionalProperties: false, description: 'Re-read immediately before mutation; mismatch prevents dispatch.' })
 const text = Type.String({ maxLength: 10000, description: 'Exact literal text including spaces, Unicode and line breaks; never interpreted as keys.' })
@@ -49,6 +52,7 @@ export const browserActSchema = Type.Object({
 }, { additionalProperties: false })
 
 function assertProbe(probe: BrowserProbe): void {
+  if (probe.selector !== undefined) return
   // 只编译语法，不在宿主执行页面代码；读取仍由 Chromium 的 side-effect check 执行。
   new Script(`(${probe.expression})`)
   if (probe.args !== undefined && JSON.stringify(probe.args).length > 64000) throw new Error('probe args 超过数据预算。')

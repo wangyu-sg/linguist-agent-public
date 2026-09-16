@@ -1047,7 +1047,7 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
     sdk.defineTool({
       name: 'BrowserAct',
       label: '执行网页串行操作',
-      description: 'Execute either the original ref click+wait or bounded steps (mutually exclusive). Steps run serially under one tab queue, at most 64 steps and 30 seconds, with immediate guards, focus protection, read/check/wait probes and stop/partial results. Probes are synchronous read-only JSON functions; no background mutation loops. A completed sequence proves only its supplied conditions, not persistence without a save condition. Never replay the successful prefix after partial/unknown results.',
+      description: 'Execute either the original ref click+wait or bounded steps (mutually exclusive). Steps run serially under one tab queue, at most 64 steps and 30 seconds, with immediate guards, focus protection, read/check/wait probes and stop/partial results. Prefer fixed DOM probes {selector,attributes?}; they return {url,nodes:[{text,value,attributes}]} without page scripts or hashes. Custom expression probes remain synchronous and side-effect checked. Batch known edits and checks; no background mutation loops. A completed sequence proves only its supplied conditions, not persistence without a save condition. Never replay the successful prefix after partial/unknown results.',
       parameters: browserActSchema,
       async execute(_id, params, signal?: AbortSignal) {
         const result = await browserController.act(ctx.sessionId, params as BrowserActInput, signal)

@@ -121,11 +121,11 @@ export type BrowserInputAction =
   | { kind: 'key'; key: string; modifiers?: BrowserKeyModifier[] }
 export type BrowserTarget = { ref: string; selector?: never } | { selector: string; ref?: never }
 export type BrowserInputTarget = BrowserTarget & { focus?: 'activate' | 'verify' }
-export interface BrowserProbe {
+export type BrowserProbe =
+  /** 固定只读 DOM 快照；按文档顺序返回 {url,nodes:[{text,value,attributes}]}。 */
+  | { selector: string; attributes?: string[]; expression?: never; args?: never }
   /** 同步只读函数表达式，args 经 JSON 作为数据传入。 */
-  expression: string
-  args?: BrowserJsonValue
-}
+  | { expression: string; args?: BrowserJsonValue; selector?: never; attributes?: never }
 export interface BrowserGuard { probe: BrowserProbe; expected: BrowserJsonValue }
 export interface BrowserPressInput {
   action?: BrowserInputAction

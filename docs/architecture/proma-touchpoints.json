@@ -2361,7 +2361,7 @@
       "kind": "product-fork",
       "owner": "browser-runtime",
       "mergePolicy": "keep-la",
-      "reason": "真实组合键、紧前 guard、有界只读 probe 与单队列序列；停止返回实际前缀。"
+      "reason": "真实组合键、原生全选填充、隔离固定 DOM 快照、紧前 guard 与单队列序列；任意 probe 保留副作用保护，停止返回实际前缀。"
     },
     {
       "file": "apps/electron/src/main/lib/browser-key-policy.ts",

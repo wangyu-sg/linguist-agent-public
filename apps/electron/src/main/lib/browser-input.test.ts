@@ -24,6 +24,12 @@ test('显式正文不解释键名，显式按键严格校验并编码修饰键',
     { kind: 'press', action: { kind: 'text', text: 'valid' } },
     { kind: 'press', action: { kind: 'key', key: 'NotAKey' } },
   ] })).toThrow()
+  expect(() => assertBrowserActInput({ tabId: 'tab', steps: [
+    { kind: 'read', probe: { selector: '.row', attributes: ['id', 'data-tag-id'] } },
+  ] })).not.toThrow()
+  expect(() => assertBrowserActInput({ tabId: 'tab', steps: [
+    { kind: 'read', probe: { selector: '.row', expression: '() => true' } },
+  ] } as unknown as Parameters<typeof assertBrowserActInput>[0])).toThrow()
 })
 
 test('Pi afterToolCall 将未完成序列标为错误并保留原始结构化前缀', async () => {
