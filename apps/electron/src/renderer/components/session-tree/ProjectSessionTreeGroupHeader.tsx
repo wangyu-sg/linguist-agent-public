@@ -108,6 +108,7 @@ export function ProjectSessionTreeGroupHeader({
       ) : (
         <button
           type="button"
+          data-project-id={projectId}
           aria-label={ariaLabel ?? `打开项目 ${name}`}
           aria-current={current ? 'page' : undefined}
           aria-expanded={!collapsed}

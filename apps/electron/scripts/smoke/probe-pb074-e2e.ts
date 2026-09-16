@@ -1204,7 +1204,7 @@ async function runLanguageResourceDockGate(
     `editable=${editablePreviewCount}，source sha256=${sourceHashAfter.slice(0, 12)}…`,
   )
 
-  await openSidebarProject(page, PROJECT_NAME)
+  await page.getByRole('tablist', { name: '右侧工作区', exact: true }).getByRole('tab', { name: 'CAT', exact: true }).click()
   await workspace.waitFor({ timeout: 30_000 })
   await resourcesButton.click()
   await dock.waitFor({ state: 'hidden', timeout: 30_000 })
@@ -1787,6 +1787,9 @@ async function main(): Promise<void> {
     await enterMainUI(launched.page)
     projectId = await createProjectViaUi(launched.page)
     check('create-project-ui', projectId.length > 0, `项目 ${projectId}，en-US → zh-CN`)
+    check('create-project-focus', await waitFor(() => launched!.page.evaluate(
+      (id) => document.activeElement?.getAttribute('data-project-id') === id, projectId,
+    ), 5_000), '新建项目后焦点落到原生侧栏的项目入口')
 
     await quitApp(launched.app)
     launched = undefined

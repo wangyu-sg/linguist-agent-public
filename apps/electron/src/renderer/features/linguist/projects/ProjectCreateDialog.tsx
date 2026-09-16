@@ -53,9 +53,9 @@ interface FormErrors {
   form?: string
 }
 
-/** 侧栏「打开项目」按钮 selector：项目头（ProjectSessionTreeGroupHeader）以 aria-controls 标识项目 id。 */
+/** 侧栏「打开项目」按钮 selector：项目头（ProjectSessionTreeGroupHeader）以 data-project-id 标识项目 id。 */
 export function projectOpenButtonSelector(projectId: string): string {
-  return `button[aria-controls="project-sessions-${projectId}"]`
+  return `button[data-project-id="${projectId}"]`
 }
 
 /** 可注入的 DOM 探针，便于无 DOM 环境下做行为测试。 */
