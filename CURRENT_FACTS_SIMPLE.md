@@ -23,7 +23,7 @@ Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本�
 
 App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.75)，源码/Tag 为 `85aa7e5d`，Release run `35094944942` 成功，七项资产核验通过。用户随后授权用正式签名 arm64 包替换本机旧安装，验签及启动通过；自动更新链路未验证。详见 [发布记录](./docs/release/VALIDATION_0_17_75.md)。Shared DTO 为 `0.1.72`，CAT 版本按现有 manifest 校正，本轮未再次递增。
 
-后续源码修复已加入原生全选填充、固定只读 DOM probe、Phrase Skill `1.0.6` 与 in-app-browser `1.1.3`，定向 Chromium 回归、类型、边界与受影响入口构建通过。**这部分尚未打包、安装或同步真实工作区**，按用户要求保留今晚运行环境。见 [效率修复](./docs/release/BROWSER_BATCH_FIX_2026_09_16.md)。
+后续修复 `2468e3e2` 已加入原生全选填充、固定只读 DOM probe、Phrase Skill `1.0.6` 与 in-app-browser `1.1.3`，定向 Chromium 回归、类型、边界与构建通过。用户随后授权替换安装：本机现为该提交的 `0.17.75` arm64 修复版，沿用自更新证书，验签、启动与默认 Skill 同步通过；公开 Release 仍为 `85aa7e5d`。真实 Phrase 提速与自动更新链路未验证。见 [效率修复及安装记录](./docs/release/BROWSER_BATCH_FIX_2026_09_16.md)。
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
 

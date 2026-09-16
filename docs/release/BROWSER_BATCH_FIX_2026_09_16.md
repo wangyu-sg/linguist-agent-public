@@ -1,6 +1,6 @@
 # 浏览器批量回填效率修复
 
-日期：2026-09-16。基于已发布源码 `85aa7e5d`；本次不提高 App 版本，不发布或替换安装版。
+日期：2026-09-16。基于已发布源码 `85aa7e5d`；修复提交 `2468e3e2`，App 版本保持不变。用户随后授权替换本机安装，未发布新的 Release。
 
 ## 原因与改动
 
@@ -19,4 +19,14 @@
 - `bun run check:boundaries`、`node --test tests/linguist-fusion-architecture.test.mjs`：通过。
 - Electron `build:main`、`build:agent-runtime`：通过。保留已有 CAT runtime 的 CJS/import.meta 构建警告。
 
-代码样例只用合成页面与临时 profile；没有操作真实 Phrase 任务、热改工作区 Skill 或替换运行中的安装版。此轮证明故障样例修复，不证明真实 Phrase 保存/富文本全流程或实际提速倍数。安装与现场验证留待用户今晚任务结束后明确安排。
+代码回归只用合成页面与临时 profile，没有操作真实 Phrase 任务。此轮证明故障样例修复，不证明真实 Phrase 保存/富文本全流程或实际提速倍数。
+
+## 本机安装
+
+用户授权后，于当日 23:55（Asia/Shanghai）完成 macOS arm64 打包、正常退出旧版、备份、替换与启动。安装版本仍为 `0.17.75`，代码为 `2468e3e2`；GitHub 同名 Release 仍对应 `85aa7e5d`。
+
+- 使用现有 `Linguist Agent Self Update` 证书签名，与旧安装的 designated requirement 一致；`codesign --verify --deep --strict` 通过。未重新验证自动更新链路。
+- 安装路径：`/Applications/Linguist Agent.app`；启动后主进程 PID `80379`，默认模板及 OSgame 工作区的 Phrase / in-app-browser Skill 均已自动升级到上述版本。
+- `app.asar` SHA-256：`c2fec54c48b83f7fe5cf3522cdc9b03818a8e5cea3530bfe8f605cc1219d6c5b`。
+- 旧正式安装备份：`/tmp/la-2468e3e2-install-backup/Linguist Agent 0.17.75 official.app`。
+- 打包日志：`/tmp/la-2468e3e2-pack.log`。保留前述定向回归结果，安装阶段未重复全量烟测。
