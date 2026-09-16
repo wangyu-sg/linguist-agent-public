@@ -1,3 +1,5 @@
+import { captureAutomationLinguistContext } from '../linguist/automation-context'
+import type { AutomationLinguistCapture } from '@proma/shared'
 /**
  * Pi Runtime 内置 MCP 工具桥接层
  *
@@ -8,11 +10,14 @@
  */
 
 import { Type } from 'typebox'
+import { browserActSchema, browserPressSchema } from '../browser-operation-contract'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import type { AgentToolResult } from '@earendil-works/pi-agent-core'
 import { AGENT_IPC_CHANNELS, getTerminalProfilesForPlatform, normalizePathForCompare, parseTerminalProfile } from '@proma/shared'
 import type {
   AgentWorkspace,
+  BrowserActInput,
+  BrowserPressInput,
   CreateAutomationInput,
   LinguistTurnContextV1,
   PromaPermissionMode,
@@ -86,6 +91,7 @@ import {
 } from '../terminal-service'
 import {
   automationCreateToolParameters,
+  automationLinguistFields,
   discardInapplicableAutomationScheduleFields,
 } from './automation-tool-schema'
 import { updateSettings } from '../settings-service'
@@ -247,6 +253,7 @@ function summarizeAutomation(
     ? (workspacesById ? workspacesById.get(a.workspaceId) : getAgentWorkspace(a.workspaceId))
     : undefined
   return {
+    linguistContext: a.linguistContext,
     id: a.id,
     name: a.name,
     active: a.active,
@@ -440,6 +447,10 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
         if (input.scheduleType === 'once' && input.scheduledAt === undefined) {
           throw new Error('scheduleType=once 时 scheduledAt（绝对触发时间戳）必填')
         }
+        input.linguistContext = captureAutomationLinguistContext({
+          scope: (args.linguistScope as AutomationLinguistCapture['scope']) ?? 'context',
+          role: args.linguistRole as AutomationLinguistCapture['role'], turnContext: ctx.linguistContext,
+        }, getAgentSessionMeta(ctx.sessionId), input.workspaceId)
         const automation = createAutomation(input)
         broadcastAutomationsChanged()
         return jsonToolResult({ automation: summarizeAutomation(automation, true) })
@@ -450,6 +461,7 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
       label: '修改定时任务',
       description: '修改 Proma 定时任务，包括名称、执行提示词、频率和启用状态。定时任务自动执行中可以省略 id 来修改当前任务。',
       parameters: Type.Object({
+        ...automationLinguistFields,
         id: Type.Optional(Type.String({ description: '定时任务 ID；定时任务自动执行中可省略以更新当前任务' })),
         name: Type.Optional(Type.String({ description: '新的任务名' })),
         prompt: Type.Optional(Type.String({ description: '新的执行提示词' })),
@@ -528,6 +540,15 @@ function buildAutomationTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefin
         }
         if (effective.scheduleType === 'once' && effective.scheduledAt === undefined) {
           throw new Error('scheduleType 改为 once 时必须提供 scheduledAt')
+        }
+        if (args.linguistScope !== undefined || args.linguistRole !== undefined) {
+          input.linguistContext = captureAutomationLinguistContext({
+            scope: (args.linguistScope as AutomationLinguistCapture['scope']) ?? 'context',
+            role: args.linguistRole as AutomationLinguistCapture['role'], turnContext: ctx.linguistContext,
+          }, getAgentSessionMeta(ctx.sessionId), existing.workspaceId) ?? null
+          if (args.linguistScope === undefined && input.linguistContext && input.linguistContext.projectId === existing.linguistContext?.projectId) {
+            input.linguistContext.scope = existing.linguistContext.scope
+          }
         }
         const automation = updateAutomation(input)
         if (!automation) throw new Error(`定时任务不存在: ${id}`)
@@ -1025,25 +1046,12 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
     }),
     sdk.defineTool({
       name: 'BrowserAct',
-      label: '点击并等待网页状态',
-      description: 'Click a current BrowserObserve/BrowserFind reference and optionally wait for one URL, visible-text, or CSS-selector condition in the same serialized operation. Prefer this to a separate click and wait when the expected condition is known.',
-      parameters: Type.Object({
-        ref: Type.String({ description: 'Element reference from the latest BrowserObserve or BrowserFind result.' }),
-        waitFor: Type.Optional(Type.Object({
-          kind: Type.Union([Type.Literal('url'), Type.Literal('text'), Type.Literal('selector')]),
-          value: Type.String({ minLength: 1, maxLength: 2000, description: 'Expected URL fragment, visible text, or CSS selector.' }),
-        })),
-        timeoutMs: Type.Optional(Type.Number({ minimum: 250, maximum: 30000, description: 'Maximum wait time when waitFor is supplied. Defaults to 10000.' })),
-        tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab.' })),
-      }),
+      label: '执行网页串行操作',
+      description: 'Execute either the original ref click+wait or bounded steps (mutually exclusive). Steps run serially under one tab queue, at most 64 steps and 30 seconds, with immediate guards, focus protection, read/check/wait probes and stop/partial results. Probes are synchronous read-only JSON functions; no background mutation loops. A completed sequence proves only its supplied conditions, not persistence without a save condition. Never replay the successful prefix after partial/unknown results.',
+      parameters: browserActSchema,
       async execute(_id, params, signal?: AbortSignal) {
-        const args = params as Record<string, unknown>
-        const waitForRecord = args.waitFor as Record<string, unknown> | undefined
-        const kind = waitForRecord?.kind
-        const waitFor: { kind: 'url' | 'text' | 'selector'; value: string } | undefined = kind === 'url' || kind === 'text' || kind === 'selector'
-          ? { kind: kind as 'url' | 'text' | 'selector', value: typeof waitForRecord?.value === 'string' ? waitForRecord.value : '' }
-          : undefined
-        return jsonToolResult(await browserController.act(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', waitFor, typeof args.timeoutMs === 'number' ? args.timeoutMs : 10_000, typeof args.tabId === 'string' ? args.tabId : undefined, signal))
+        const result = await browserController.act(ctx.sessionId, params as BrowserActInput, signal)
+        return jsonToolResult(result)
       },
     }),
     sdk.defineTool({
@@ -1097,12 +1105,12 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
     }),
     sdk.defineTool({
       name: 'BrowserPress',
-      label: '按下受管浏览器按键',
-      description: 'Press a navigation key (Enter, Tab, Escape, arrows, Backspace, Delete, etc.) or insert complete text into the currently focused input, textarea, or contenteditable editor. Supports spaces, punctuation, Unicode, and line breaks. Prefer BrowserFill when you have the field ref and want to replace its content.',
-      parameters: Type.Object({ key: Type.String({ description: 'A navigation key, or complete text to insert into the currently focused editor. Examples: Enter, "Hello, world.", "第一行\\n第二行". Use BrowserFill to replace a referenced field.' }), tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab, independent of the tab visible to the user.' })) }),
+      label: '输入文本或浏览器按键',
+      description: 'Use action.kind=text for exact literal text or action.kind=key for navigation, Latin letter or F1-F12 keys with Alt/Control/Meta/Shift modifiers. Unknown keys fail without typing. action and legacy key are exclusive; legacy shortcut strings fail with guidance. Bind an observed actual editable target: focus=verify (default) preserves selection; activate focuses it. An optional immediate guard must match before dispatch. A dispatched input does not prove saving.',
+      parameters: browserPressSchema,
       async execute(_id, params, signal?: AbortSignal) {
-        const args = params as Record<string, unknown>
-        return jsonToolResult(await browserController.press(ctx.sessionId, typeof args.key === 'string' ? args.key : '', typeof args.tabId === 'string' ? args.tabId : undefined, signal))
+        const { tabId, ...input } = params as BrowserPressInput & { tabId?: string }
+        return jsonToolResult(await browserController.press(ctx.sessionId, input, tabId, signal))
       },
     }),
     sdk.defineTool({

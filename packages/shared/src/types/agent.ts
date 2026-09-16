@@ -1,3 +1,4 @@
+import type { AutomationLinguistContext } from './automation'
 import type { ProviderType } from './channel'
 export const LINGUIST_ROLES = ['general', 'translator', 'reviewer', 'proofreader'] as const
 export type LinguistRole = (typeof LINGUIST_ROLES)[number]
@@ -737,6 +738,8 @@ export interface SetAgentSessionActiveWorktreeInput {
  * 类似 ConversationMeta，独立存储。
  */
 export interface AgentSessionMeta {
+  /** 定时运行创建时冻结的项目/范围快照，不能经通用 metadata 修改。 */
+  automationLinguistContext?: AutomationLinguistContext
   /** 会话唯一标识 */
   id: string
   /** 会话标题 */

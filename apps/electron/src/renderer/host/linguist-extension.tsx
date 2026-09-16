@@ -1,30 +1,7 @@
 import * as React from 'react'
 import { HardDriveDownload, Languages } from 'lucide-react'
 import { MigrationSettings } from '@/components/settings/MigrationSettings'
-import {
-  LinguistSidebarContent,
-  type SharedProjectSessionRowProps,
-} from '@/features/linguist/sidebar/LinguistSidebarContent'
 import type { PromaExtension } from './contracts'
-
-interface LinguistSidebarRenderContext {
-  SessionRowComponent?: React.ComponentType<SharedProjectSessionRowProps>
-}
-
-function getSessionRowComponent(
-  context: unknown,
-): React.ComponentType<SharedProjectSessionRowProps> | null {
-  if (!context || typeof context !== 'object' || !('SessionRowComponent' in context)) return null
-  // React.memo 返回的是 exotic component object，而不一定是 function。
-  // Shell 是唯一调用方，已在类型层传入共享会话行组件。
-  return (context as LinguistSidebarRenderContext).SessionRowComponent ?? null
-}
-
-function renderLinguistSidebar(context: unknown): React.ReactNode {
-  const SessionRowComponent = getSessionRowComponent(context)
-  if (!SessionRowComponent) return null
-  return <LinguistSidebarContent SessionRowComponent={SessionRowComponent} />
-}
 
 /**
  * 已编译进桌面应用的 Linguist 组合贡献。
@@ -38,7 +15,6 @@ export const linguistExtension: PromaExtension = {
     mode: 'linguist',
     label: 'Linguist',
     icon: <Languages size={16} />,
-    renderSidebar: renderLinguistSidebar,
   }],
   settingsSections: [{
     id: 'migration',

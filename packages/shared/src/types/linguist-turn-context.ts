@@ -10,6 +10,8 @@ export const LINGUIST_TURN_CONTEXT_SELECTED_SEGMENT_LIMIT = 100
 
 export interface LinguistTurnContextV1 {
   schemaVersion: 1
+  /** 保留超量选区事实，不能将前 100 段当作完整选择。 */
+  selectionTruncated?: true
   projectId: string
   assetId?: string
   activeSegmentId?: string
@@ -40,6 +42,7 @@ export class LinguistTurnContextValidationError extends Error {
 
 const ALLOWED_FIELDS = new Set([
   'schemaVersion',
+  'selectionTruncated',
   'projectId',
   'assetId',
   'activeSegmentId',
@@ -137,7 +140,9 @@ export function parseLinguistTurnContextV1(value: unknown): LinguistTurnContextP
     LINGUIST_SEGMENT_ID_PATTERN,
     true,
   )
+  if (record.selectionTruncated !== undefined && record.selectionTruncated !== true) throw new LinguistTurnContextValidationError('selectionTruncated must be true when present')
   const selected = readSelectedSegmentIds(record.selectedSegmentIds)
+  const selectionTruncated = selected.truncated || record.selectionTruncated === true
   const activeQaFindingId = readId(
     record,
     'activeQaFindingId',
@@ -149,6 +154,7 @@ export function parseLinguistTurnContextV1(value: unknown): LinguistTurnContextP
 
   const context: LinguistTurnContextV1 = {
     schemaVersion: LINGUIST_TURN_CONTEXT_SCHEMA_VERSION,
+    ...(selectionTruncated ? { selectionTruncated: true as const } : {}),
     projectId,
     ...(assetId !== undefined ? { assetId } : {}),
     ...(activeSegmentId !== undefined ? { activeSegmentId } : {}),
@@ -159,7 +165,7 @@ export function parseLinguistTurnContextV1(value: unknown): LinguistTurnContextP
   }
   return {
     context: Object.freeze(context),
-    selectionTruncated: selected.truncated,
+    selectionTruncated,
   }
 }
 

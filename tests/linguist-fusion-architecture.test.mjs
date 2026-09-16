@@ -57,6 +57,8 @@ const REGISTERED_PROMA_TO_LINGUIST_IMPORTERS = new Set([
   'apps/electron/src/renderer/components/agent/tool-result-renderers/delegation-result.tsx',
   'apps/electron/src/renderer/components/agent/SidePanel.tsx',
   'apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx',
+  'apps/electron/src/renderer/components/session-tree/AgentProjectGroupItem.tsx',
+  'apps/electron/src/renderer/components/automation/AutomationFormView.tsx',
   'apps/electron/src/renderer/components/app-shell/SearchDialog.tsx',
   'apps/electron/src/renderer/components/diff/PreviewPanel.tsx',
   'apps/electron/src/renderer/components/diff/PreviewTabContent.tsx',

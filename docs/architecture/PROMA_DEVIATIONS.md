@@ -7,12 +7,12 @@
 
 | 分类 | 当前生产触点 | 处理条件 |
 |---|---:|---|
-| Permanent Product Fork | 216 | 保留 LA 产品身份、独立数据根、发布与安全策略。 |
+| Permanent Product Fork | 229 | 保留 LA 产品身份、独立数据根、发布与安全策略。 |
 | Generated / Overlay | 2 | 每次同步重算 manifest 和构建标识。 |
 | Local Host Seam | 11 | 上游提供等价、稳定且保留 Session authority 的合同后删除接缝。 |
 | Temporary Deviation | 48 | 每次同步逐项核对生命周期、预览、安全与 continuation 回归；有等价证据后退役。 |
 | Linguist Extension | 0 | 位于允许的 LA 路径，不计入 Proma Core 账本。 |
 
-前轮 UI 收敛后的 277 项 ledger 在本次基线重算后全部仍有实际差异；没有 stale 条目。更新验证见 [本次记录](../release/UPSTREAM_0_19_53_2026_09_14.md)。
+本轮 ledger 为 290 项；浏览器接口、原生 UI 与定时任务快照新增差异均逐文件登记。验证见 [本轮记录](../release/VALIDATION_0_17_75.md)。
 
 维护顺序为 baseline → 实际 diff → ledger → deviations → boundary + fusion。登记不能绕开权限、Session authority 或 CAT fail-closed；自动验证、打包验证、人工操作与产品资格分别记录。

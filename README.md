@@ -68,6 +68,8 @@ Proma Pi Agent Runtime
 
 Linguist 使用完整原生 `AgentView`，CAT 与受管预览由右侧原生工作区承载，布局、分屏与尺寸跟随 Proma。Linguist 会话直接继承其 Proma Workspace 的 Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration；CAT 项目绑定只增加领域上下文和工具，不复制宿主能力。
 
+Linguist 与 Agent 共用侧栏列表、项目头、会话行及待办、日历、Obsidian、项目记忆、Skills、MCP、定时任务入口。关闭原生组件后回到 CAT。定时任务可保存来源项目、岗位和明确批次/句段范围，来源会话删除后仍保留快照；执行结束不等于业务完成。浏览器工具支持显式文字/组合键与单页有界步骤，异常返回已执行前缀；Phrase 回填保持工作状态 Accepted。
+
 批次导航只显示真实批次，支持原位刷新，并在当前选择失效时收敛到首个有效批次。底部进度、草稿数和源文/译文字符数严格属于当前批次；阶段文案由项目工作流驱动，依次为“已确认 / 已审校 / 已校对”。
 
 项目缺失、归档或暂不可用时，Agent 对话仍可继续；CAT 工具如实返回项目状态，写入由 Store fail closed。

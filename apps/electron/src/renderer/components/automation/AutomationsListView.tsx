@@ -68,7 +68,7 @@ function formatWeekdays(days?: number[]): string {
 }
 
 function formatNextRun(a: Automation): string {
-  if (!a.active) return a.completedAt ? '已完成' : '已暂停'
+  if (!a.active) return a.completedAt ? '调度已结束' : '已暂停'
   return `下次 ${new Date(a.nextRunAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}`
 }
 
@@ -133,7 +133,7 @@ export function AutomationsListView(): React.ReactElement {
               <Section title="已暂停" automations={paused} onEdit={handleEdit} onRefresh={refreshList} onDelete={setPendingDeletion} />
             )}
             {completed.length > 0 && (
-              <Section title="已完成" automations={completed} onEdit={handleEdit} onRefresh={refreshList} onDelete={setPendingDeletion} />
+              <Section title="调度已结束" automations={completed} onEdit={handleEdit} onRefresh={refreshList} onDelete={setPendingDeletion} />
             )}
           </div>
         )}

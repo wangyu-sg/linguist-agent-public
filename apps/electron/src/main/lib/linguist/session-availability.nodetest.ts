@@ -19,6 +19,54 @@ const { resolveLinguistDelegationMetadata } = await import('./delegation-host-ex
 const { validateLinguistTurnContextForAgentTurn } = await import('./turn-context-validator')
 const service = initLinguistProjectService({ rootDir: join(root, 'linguist'), workspaceCreator: async () => 'fixture-workspace', workspaceResolver: () => true })
 
+test('定时任务保留真实项目与完整范围，重启/来源删除后只读执行不建 Stage', async () => {
+  const { captureAutomationLinguistContext, automationSessionBinding, automationSessionMatches } = await import('./automation-context')
+  const { createAutomation, updateAutomation, getAutomation, appendRun } = await import('../automation-manager')
+  const { createLinguistTurnContextV1, parseLinguistTurnContextV1 } = await import('@proma/shared')
+  const { updateAgentSessionMeta } = await import('../agent-session-manager')
+  const project = await service.createProject({ name: 'Scheduled scope', sourceLocale: 'en', targetLocale: 'zh-CN' })
+  const workspaceId = await service.ensureProjectWorkspace(project.id)
+  const source = createAgentSession('Origin', undefined, workspaceId, undefined, undefined, undefined, { linguistProjectId: project.id, linguistProjectName: project.name, linguistRole: 'reviewer' })
+  const imported = await service.importAsset(project.id, { filename: 'scheduled.xlf', bytes: Buffer.from(`<xliff version="1.2"><file source-language="en" target-language="zh-CN" datatype="plaintext" original="test"><body>${Array.from({ length: 101 }, (_, i) => `<trans-unit id="${i}"><source>Source ${i}</source><target>Target ${i}</target></trans-unit>`).join('')}</body></file></xliff>`) })
+  const db = service.openProject(project.id)
+  const ids = db.segments.queryIds({ assetId: imported.assetId })
+  const parsed = createLinguistTurnContextV1({ projectId: project.id, assetId: imported.assetId, selectedSegmentIds: ids, capturedAt: new Date().toISOString(), uiRevision: 1 })
+  assert.equal(parsed.selectionTruncated, true)
+  assert.equal(parseLinguistTurnContextV1(JSON.parse(JSON.stringify(parsed.context))).selectionTruncated, true)
+  assert.throws(() => captureAutomationLinguistContext({ scope: 'segments', turnContext: parsed.context }, source, workspaceId, () => service), /100|截断/)
+  const context = captureAutomationLinguistContext({ scope: 'asset', turnContext: parsed.context }, source, workspaceId, () => service)!
+  assert.equal(context.role, 'general', '普通自动任务不继承来源的 Reviewer 岗位')
+  assert.deepEqual(context.scope, { kind: 'asset', assetId: imported.assetId })
+  assert.equal(captureAutomationLinguistContext({ scope: 'context' }, source, 'other', () => service), undefined)
+  assert.throws(() => captureAutomationLinguistContext({ scope: 'asset', turnContext: parsed.context }, source, 'other', () => service), /工作区/)
+  const task = createAutomation({ name: 'Read batch', prompt: '只读批次摘要', scheduleType: 'interval', intervalMinutes: 30, channelId: 'fixture', workspaceId, sourceSessionId: source.id, linguistContext: context })
+  deleteAgentSession(source.id)
+  const reopened = getAutomation(task.id)!
+  assert.deepEqual(reopened.linguistContext, context)
+  const binding = automationSessionBinding(reopened, service)
+  const run = createAgentSession('Run', 'fixture', workspaceId, undefined, undefined, undefined, binding)
+  const session = updateAgentSessionMeta(run.id, { sourceAutomationId: task.id })
+  assert.equal(session.sourceDelegationId, undefined)
+  assert.equal(automationSessionMatches(reopened, session), true)
+  const before = db.segments.query({ assetId: imported.assetId, limit: 200 })
+  const stages = db.stageEvidence.list()
+  const host = resolveLinguistAgentHostExtension({ session, turnContext: undefined, automationContext: context })
+  assert.match(host.turnContextBlock, /linguist_automation_context/)
+  assert.doesNotMatch(host.turnContextBlock, /uiRevision/)
+  const tools = host.composeTools({ baseTools: [], mcpServerNames: [], modelProvider: 'fixture', getModelId: () => 'fixture' }).tools
+  const summary = tools.find(tool => tool.name === 'cat_project_summary')!
+  await summary.execute('scheduled-summary', { assetId: imported.assetId, includeDelivery: true }, undefined, undefined, {} as never)
+  assert.deepEqual(db.segments.query({ assetId: imported.assetId, limit: 200 }), before)
+  assert.deepEqual(db.stageEvidence.list(), stages)
+  appendRun(task.id, { sessionId: session.id, status: 'success', runAt: Date.now(), linguistContext: context })
+  const updated = updateAutomation({ id: task.id, linguistContext: { ...context, scope: { kind: 'segments', assetId: imported.assetId, segmentIds: [ids[0]!] } } })!
+  assert.equal(automationSessionMatches(updated, session), false)
+  const moved = updateAutomation({ id: task.id, workspaceId: 'other' })!
+  assert.equal(moved.linguistContext, undefined)
+  assert.deepEqual(moved.runHistory[0]?.linguistContext, context)
+  service.closeAll()
+})
+
 test('有效 Session 在 CAT 缺失、损坏、归档与恢复间保留宿主能力，CAT 每次重新校验', async () => {
   const project = await service.createProject({ name: 'Availability', sourceLocale: 'en', targetLocale: 'zh-CN' })
   const session = createAgentSession('Availability', undefined, undefined, undefined, undefined, undefined, { linguistProjectId: project.id, linguistProjectName: project.name, linguistRole: 'general' })

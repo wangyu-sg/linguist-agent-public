@@ -4,6 +4,24 @@
   "rules": [
     {
       "patterns": [
+        "apps/electron/default-skills/in-app-browser/SKILL.md",
+        "apps/electron/src/main/lib/adapters/automation-tool-schema.ts",
+        "apps/electron/src/main/lib/agent-prompt-builder.ts",
+        "apps/electron/src/main/lib/automation-scheduler.ts",
+        "apps/electron/src/main/lib/browser-controller.ts",
+        "apps/electron/src/main/lib/browser-key-policy.ts",
+        "apps/electron/src/main/lib/browser-operation-contract.ts",
+        "apps/electron/src/renderer/atoms/automation-atoms.ts",
+        "packages/shared/src/types/automation.ts",
+        "packages/shared/src/types/browser.ts",
+        "apps/electron/src/renderer/components/session-tree/AgentProjectGroupItem.tsx",
+        "packages/shared/package.json"
+      ],
+      "policy": "keep-la",
+      "owner": "native-host"
+    },
+    {
+      "patterns": [
         "apps/electron/src/renderer/components/agent/AgentView.tsx",
         "apps/electron/src/renderer/components/agent/SidePanel.tsx",
         "apps/electron/src/renderer/components/app-shell/AppShell.tsx"
@@ -12,7 +30,9 @@
       "owner": "renderer-host"
     },
     {
-      "patterns": ["apps/electron/package.json"],
+      "patterns": [
+        "apps/electron/package.json"
+      ],
       "policy": "overlay"
     },
     {
@@ -33,14 +53,12 @@
     {
       "patterns": [
         "packages/core/package.json",
-        "packages/shared/package.json",
         "packages/session-core/package.json",
         "packages/ui/package.json",
         "packages/shared/src/types/feishu.ts",
         "apps/electron/src/main/lib/chat-tool-config.ts",
         "apps/electron/src/main/lib/adapters/pi-mcp-tools.ts",
-        "apps/electron/src/renderer/components/agent/AgentPlaceholder.tsx",
-        "apps/electron/src/main/lib/browser-controller.ts"
+        "apps/electron/src/renderer/components/agent/AgentPlaceholder.tsx"
       ],
       "policy": "take-upstream"
     },
@@ -150,7 +168,9 @@
       "owner": "upstream-maintenance"
     },
     {
-      "patterns": ["**"],
+      "patterns": [
+        "**"
+      ],
       "policy": "manual"
     }
   ]

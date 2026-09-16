@@ -467,6 +467,7 @@ export function createAutomation(input: CreateAutomationInput): Automation {
     sessionMode: input.sessionMode,
     notificationTargets: input.notificationTargets,
     sourceSessionId: input.sourceSessionId,
+    linguistContext: input.linguistContext,
     createdAt: now,
     updatedAt: now,
     nextRunAt: computeNextRunAt(input, now),
@@ -499,8 +500,10 @@ export function updateAutomation(input: UpdateAutomationInput): Automation | und
       target.workspaceId = nextWorkspaceId
       // 会话 cwd 与项目绑定；项目改变后不能复用旧会话。
       target.lastSessionId = undefined
+      target.linguistContext = undefined
     }
   }
+  if (input.linguistContext !== undefined) target.linguistContext = input.linguistContext ?? undefined
   if (input.permissionMode !== undefined) target.permissionMode = input.permissionMode
   if (input.sessionMode !== undefined) target.sessionMode = input.sessionMode
   if (input.notificationTargets !== undefined) target.notificationTargets = input.notificationTargets

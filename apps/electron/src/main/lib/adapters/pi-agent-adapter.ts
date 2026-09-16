@@ -1346,6 +1346,9 @@ export function installRuntimeGuardHooks(session: AgentSession, guard: AgentRunt
       details: previousResult?.details ?? context.result.details,
       terminate: previousResult?.terminate ?? context.result.terminate,
     }
+    const details: unknown = resultAfterPreviousHooks.details
+    const incompleteBrowserSequence = context.toolCall.name === 'BrowserAct'
+      && !!details && typeof details === 'object' && 'status' in details && details.status !== 'completed'
     const sanitizedContent = sanitizeToolResultImageContent(resultAfterPreviousHooks.content)
     const guardedResult = guard.applyToolResult({
       ...resultAfterPreviousHooks,
@@ -1354,6 +1357,7 @@ export function installRuntimeGuardHooks(session: AgentSession, guard: AgentRunt
 
     if (
       !previousResult
+      && !incompleteBrowserSequence
       && guardedResult.terminate === context.result.terminate
       && sanitizedContent === context.result.content
     ) {
@@ -1362,6 +1366,7 @@ export function installRuntimeGuardHooks(session: AgentSession, guard: AgentRunt
 
     return {
       ...previousResult,
+      ...(incompleteBrowserSequence ? { isError: true } : {}),
       content: sanitizedContent,
       terminate: guardedResult.terminate,
     }

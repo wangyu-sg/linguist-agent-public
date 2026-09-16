@@ -1,3 +1,4 @@
+import type { AutomationLinguistContext } from '@proma/shared'
 /**
  * Agent 服务层（IPC 薄层）
  *
@@ -271,6 +272,7 @@ export function setVisibleAgentSession(webContents: WebContents, sessionId: stri
 type AgentRunInput = AgentSendInput & { runGeneration?: number }
 
 export interface AgentRunExtensions {
+  automationLinguistContext?: AutomationLinguistContext
   piCustomTools?: ToolDefinition[]
 }
 

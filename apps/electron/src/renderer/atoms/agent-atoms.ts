@@ -10,6 +10,7 @@ import type { Getter } from 'jotai'
 import { atomFamily, atomWithStorage, selectAtom } from 'jotai/utils'
 import type { AgentSessionMeta, AgentEvent, AgentWorkspace, AgentPendingFile, RetryAttempt, PromaPermissionMode, PermissionRequest, AskUserRequest, ExitPlanModeRequest, ThinkingConfig, AgentEffort, SDKMessage, UnstagedChangesResult, LinguistTurnContextParseResult, LinguistTurnContextV1 } from '@proma/shared'
 import { PROMA_DEFAULT_PERMISSION_MODE } from '@proma/shared'
+import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 import { calculateDockBadgeCount, countPendingRequests } from '@/lib/dock-badge-count'
 import type { AgentQueuedMessage } from '@/lib/agent-message-queue'
 import type { ExternalLinguistSessionOpener } from '@/lib/external-agent-session-opener'
@@ -909,7 +910,7 @@ export const revealChangedWorkspaceComponentAtom = atom(
   },
 )
 
-/** 关闭当前 session 的一个组件；若它正被当前会话查看，回退到文件。 */
+/** 关闭当前组件后返回会话的基础工作区：Linguist 返回 CAT，Agent 返回文件。 */
 export const closeWorkspaceComponentAtom = atom(
   null,
   (get, set, component: WorkspaceComponentTab) => {
@@ -919,7 +920,9 @@ export const closeWorkspaceComponentAtom = atom(
     set(agentDiffPanelTabAtom, (previous) => {
       if (previous.get(sessionId) !== component) return previous
       const next = new Map(previous)
-      next.set(sessionId, 'files')
+      const sessions = get(agentSessionsAtom)
+      const session = sessions.find(item => item.id === sessionId)
+      next.set(sessionId, session && getAgentSessionLinguistProjectId(session, sessions) ? 'linguist' : 'files')
       return next
     })
   },

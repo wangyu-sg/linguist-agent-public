@@ -1,6 +1,6 @@
 # KNOWN_LIMITATIONS — 当前已知限制
 
-更新日期：2026-09-14
+更新日期：2026-09-16
 
 > 当前目标是作者本人使用的个人 Alpha。实现、单元验证、打包验证、真机人工和产品资格是不同证据等级。
 
@@ -13,6 +13,8 @@
 5. **真机人工**：真实 macOS IME composition、Native Open/Save、Companion round-trip、VoiceOver、完整 keyboard-only、窄窗和拖拽/resize 仍待操作。
 
 6. **Exa 与 OAuth**：连接卡片和本地回归不证明真实账号认证、Keychain 或远程 MCP 握手已通过。
+
+7. **Phrase 网页回填现场校准**：本轮仅使用合成 Chromium 页面；实际站点 DOM、富文本换行、保存与 TM owner 信号尚未校准，不提供猜测的站点写入脚本或提速倍数。
 
 ## B. 当前功能边界
 

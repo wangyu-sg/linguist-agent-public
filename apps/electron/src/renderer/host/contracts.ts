@@ -62,7 +62,6 @@ export interface AppModeContribution {
   mode: PrimaryAppMode
   label: string
   icon: ReactNode
-  renderSidebar?: (context: unknown) => ReactNode
   renderMain?: () => ReactNode
   restoreNavigationState?: () => void
 }

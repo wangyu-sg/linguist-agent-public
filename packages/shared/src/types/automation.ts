@@ -5,8 +5,29 @@
  * 每次执行都新建独立子会话（不污染来源会话，规避 orchestrator 同会话并发守卫）。
  */
 
+import type { LinguistRole } from './agent'
+import type { LinguistTurnContextV1 } from './linguist-turn-context'
+
+/** 主进程捕获的任务范围；缺少 scope 只代表项目上下文。 */
+export interface AutomationLinguistContext {
+  projectId: string
+  role: LinguistRole
+  scope?: { kind: 'project' } | { kind: 'asset'; assetId: string } | { kind: 'segments'; assetId: string; segmentIds: string[] }
+  capturedAt: string
+}
+
+/** UI 的显式捕获请求。项目身份由 sessionId 对应的主进程绑定确定。 */
+export interface AutomationLinguistCapture {
+  sessionId?: string
+  scope: 'context' | 'project' | 'asset' | 'segments' | 'none'
+  role?: LinguistRole
+  turnContext?: Readonly<LinguistTurnContextV1>
+}
+
 /** 单次自动运行的记录 */
 export interface AutomationRun {
+  /** 本次运行使用的冻结快照；任务后续编辑不改变历史含义。 */
+  linguistContext?: AutomationLinguistContext
   /** 本次触发的时间戳 */
   runAt: number
   /** 本轮新建的子会话 ID（可点进去查看执行详情） */
@@ -76,6 +97,7 @@ export type AutomationNotificationTarget = AutomationFeishuNotificationTarget
 
 /** 定时任务定义 */
 export interface Automation extends AutomationActiveWindow {
+  linguistContext?: AutomationLinguistContext
   id: string
   /** 任务名（默认从来源消息生成，可编辑） */
   name: string
@@ -153,6 +175,9 @@ export const AUTOMATION_MAX_CONSECUTIVE_FAILURES = 5
 
 /** 创建定时任务的输入 */
 export interface CreateAutomationInput extends AutomationActiveWindow {
+  /** 仅由宿主填入；Renderer 使用 linguistCapture。 */
+  linguistContext?: AutomationLinguistContext
+  linguistCapture?: AutomationLinguistCapture
   name: string
   prompt: string
   scheduleType: AutomationScheduleType
@@ -177,6 +202,9 @@ export interface CreateAutomationInput extends AutomationActiveWindow {
 
 /** 更新定时任务的输入（部分字段） */
 export interface UpdateAutomationInput {
+  /** null 显式移除；宿主填入，Renderer 使用 linguistCapture。 */
+  linguistContext?: AutomationLinguistContext | null
+  linguistCapture?: AutomationLinguistCapture
   id: string
   name?: string
   prompt?: string

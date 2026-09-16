@@ -15,6 +15,8 @@
  */
 
 import { BrowserWindow } from 'electron'
+import { automationSessionBinding, automationSessionMatches } from './linguist/automation-context'
+import { getLinguistProjectService } from './linguist/project-service'
 import {
   AUTOMATION_MAX_CONSECUTIVE_FAILURES,
   AUTOMATION_IPC_CHANNELS,
@@ -127,6 +129,7 @@ export async function runAutomation(automation: Automation, manual = false): Pro
   }
 
   runningAutomations.add(automation.id)
+  automation = structuredClone(automation)
   const runAt = Date.now()
 
   try {
@@ -143,7 +146,7 @@ export async function runAutomation(automation: Automation, manual = false): Pro
       console.log(`[定时任务] ${automation.name} 上次会话已被用户接管，本次自动开新会话`)
     }
     if (automation.lastSessionId && lastSessionMeta && !lastSessionMeta.automationGraduated) {
-      if (lastSessionMeta.workspaceId !== automation.workspaceId) {
+      if (!automationSessionMatches(automation, lastSessionMeta)) {
         console.warn(`[定时任务] ${automation.name} 上次会话项目已变化，本次自动开新会话`)
       } else if (sessionMode === 'reuse') {
         reuseSessionId = automation.lastSessionId
@@ -167,7 +170,8 @@ export async function runAutomation(automation: Automation, manual = false): Pro
     if (reuseSessionId) {
       targetSessionId = reuseSessionId
     } else {
-      const created = createAgentSession(automation.name, automation.channelId, automation.workspaceId, automation.modelId)
+      const binding = automation.linguistContext ? automationSessionBinding(automation, getLinguistProjectService()) : undefined
+      const created = createAgentSession(automation.name, automation.channelId, automation.workspaceId, automation.modelId, undefined, undefined, binding)
       updateAgentSessionMeta(created.id, { sourceAutomationId: automation.id })
       targetSessionId = created.id
       setLastSessionId(automation.id, created.id)
@@ -182,6 +186,7 @@ export async function runAutomation(automation: Automation, manual = false): Pro
         if (timeoutTimer) clearTimeout(timeoutTimer)
         const run: AutomationRun = {
           runAt,
+          linguistContext: automation.linguistContext,
           sessionId: targetSessionId,
           status,
           durationMs: Date.now() - runAt,
@@ -216,7 +221,7 @@ export async function runAutomation(automation: Automation, manual = false): Pro
         {
           sessionId: targetSessionId,
           userMessage: automation.prompt + '\n<!--PROMA_SCHEDULED_RUN-->',
-          automationContext: `这是 Proma 定时任务「${automation.name}」的自动执行（ID: ${automation.id}，${formatScheduleLabel(automation)}）。这本身就是定时任务，不要建议用户再创建定时任务。直接执行任务即可。如发现本任务连续失败、输出价值低、频率不合适或提示词不完整，可以使用 automation 工具读取并更新当前任务。`,
+          automationContext: `这是 Proma 定时任务「${automation.name}」的自动执行（ID: ${automation.id}，${formatScheduleLabel(automation)}）。这本身就是定时任务，不要建议用户再创建定时任务。直接执行任务即可。运行记录的 success 仅表示 Agent 执行结束；最终输出必须区分已完成业务与登录、浏览器授权、冲突或未处理范围等未决事项。如发现本任务连续失败、输出价值低、频率不合适或提示词不完整，可以使用 automation 工具读取并更新当前任务。`,
           channelId: automation.channelId,
           modelId: automation.modelId,
           workspaceId: automation.workspaceId,
@@ -230,6 +235,7 @@ export async function runAutomation(automation: Automation, manual = false): Pro
           onComplete: () => finish('success'),
           onTitleUpdated: () => { /* 子会话标题不需要特殊处理 */ },
         },
+        { automationLinguistContext: automation.linguistContext },
       ).catch((err) => {
         finish('error', err instanceof Error ? err.message : '未知错误')
       })
@@ -238,6 +244,7 @@ export async function runAutomation(automation: Automation, manual = false): Pro
     console.error(`[定时任务] ${automation.name} 执行异常:`, err)
     const run: AutomationRun = {
       runAt,
+      linguistContext: automation.linguistContext,
       sessionId: '',
       status: 'error',
       durationMs: Date.now() - runAt,

@@ -5,16 +5,16 @@
     "commit": "f99edbdb594407ab190b97ae073889c5d96637ab",
     "formalMerge": "56bc3f29b225c71f02f42483e10f1db8c3fcb2d5"
   },
-  "recomputedOn": "2026-09-14",
+  "recomputedOn": "2026-09-16",
   "currentLedger": {
-    "registeredCoreTouchpoints": 277
+    "registeredCoreTouchpoints": 290
   },
   "deviations": [
     {
       "id": "permanent-product-fork",
       "classification": "Permanent Product Fork",
       "ticket": "LA-SYNC-005",
-      "registeredTouchpoints": 216,
+      "registeredTouchpoints": 229,
       "scope": [
         "package identity and dependency lock",
         "Electron packaging, builder runtime launcher, and branded resources",

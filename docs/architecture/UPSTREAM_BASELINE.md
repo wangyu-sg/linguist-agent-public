@@ -1,6 +1,6 @@
 # Upstream Baseline — Proma v0.19.53
 
-> 更新日期：2026-09-14
+> 更新日期：2026-09-16
 > 机读真源：[proma-baseline.json](./proma-baseline.json)
 
 | 项目 | 值 |
@@ -15,11 +15,11 @@
 
 | 项目 | 当前值 |
 |---|---|
-| Linguist Agent / upstream app | `0.17.74` / `0.19.53` |
+| Linguist Agent / upstream app | `0.17.75` / `0.19.53` |
 | Electron / Bun | `43.2.0` / `1.3.14` |
 | Pi Runtime | `0.85.1` |
-| Shared | `0.1.71` |
-| CAT Core / Formats / Store / Tools | `0.0.24 / 0.0.13 / 0.0.45 / 0.0.39` |
+| Shared | `0.1.72` |
+| CAT Core / Formats / Store / Tools | `0.0.25 / 0.0.13 / 0.0.46 / 0.0.40` |
 | CAT schema | `19` |
 
 ## 保留差异

@@ -106,6 +106,8 @@ bun run smoke:vertical
 - Agent 会话树排除带 `linguistProjectId` 的会话；Linguist 侧栏只展示项目绑定会话，并复用 Proma 的侧栏、搜索、项目头、会话行和树行为。
 - Linguist 会话必须直接继承固定 Proma 基线的 Workspace、Skills、MCP、受信 `AGENTS.md`、Memory、Files、Planning、Queue 和 Collaboration，不新增第二套宿主能力。
 - 点击项目确保绑定会话并打开原生 Agent Tab 与右侧 CAT；点击项目会话复用同一入口。项目归档、缺失或暂不可用时对话仍可继续，CAT mutation 由项目 Store 状态 fail closed。
+- 原生侧栏由共享列表、项目头与会话行渲染；领域层仅提供项目数据、筛选和项目操作，不恢复整块 `renderSidebar` 替换。
+- 定时任务通过主进程捕获并持久化 `AutomationLinguistContext`；切换工作区清除绑定，复用会话校验项目/岗位/范围；不得伪造 delegation 或 UI revision。浏览器写入用显式 text/key 与紧前检查，步骤失败保留真实前缀，不自动重放。
 - 禁止新增 `LinguistAgentView`、`LinguistComposer`、`LinguistThinkingBlock`、`LinguistToolCard`、`LinguistApprovalCard`、第二套 Agent Session Store 或第二套 Session tree 行为。
 - CAT 编辑、Proposal、QA、TM/TB、Context、Preview 和设置位于 `renderer/features/linguist/**`。
 

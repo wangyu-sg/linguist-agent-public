@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "baseline": "f99edbdb594407ab190b97ae073889c5d96637ab",
   "formalMerge": "56bc3f29b225c71f02f42483e10f1db8c3fcb2d5",
-  "recomputedOn": "2026-09-14",
+  "recomputedOn": "2026-09-16",
   "comment": "Proma-core touchpoints tracked against v0.19.53; automatic sync updates only the baseline metadata and preserves reviewed touchpoint reasons.",
   "allowedNewPaths": [
     "docs/",
@@ -2322,6 +2322,102 @@
       "mergePolicy": "keep-la",
       "hook": "writeJsonFileAtomic",
       "reason": "JSON 与备份复用随机独占临时文件和原子 rename，避免固定 .tmp / .bak 符号链接写穿；上游提供等价安全写入后退役。"
+    },
+    {
+      "file": "apps/electron/default-skills/in-app-browser/SKILL.md",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "browser-runtime",
+      "mergePolicy": "keep-la",
+      "reason": "浏览器技能说明显式 text/key、单队列 steps 与真实结果边界。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/adapters/automation-tool-schema.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "native-host",
+      "mergePolicy": "keep-la",
+      "reason": "定时任务创建和更新声明可选领域岗位与范围，项目身份由宿主解析。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/agent-prompt-builder.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "native-host",
+      "mergePolicy": "keep-la",
+      "reason": "浏览器 Prompt 与实际结构化按键和目标保护合同一致。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/automation-scheduler.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "native-host",
+      "mergePolicy": "keep-la",
+      "reason": "原生 scheduler 传递领域快照、验证复用绑定，保留每次运行历史。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/browser-controller.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "browser-runtime",
+      "mergePolicy": "keep-la",
+      "reason": "真实组合键、紧前 guard、有界只读 probe 与单队列序列；停止返回实际前缀。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/browser-key-policy.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "browser-runtime",
+      "mergePolicy": "keep-la",
+      "reason": "显式 text/key 解析、CDP 按键编码；拒绝旧快捷键字符串污染正文。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/browser-operation-contract.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "browser-runtime",
+      "mergePolicy": "keep-la",
+      "reason": "现有 BrowserPress/Act 的共享参数 schema 与派发前全量验证。"
+    },
+    {
+      "file": "apps/electron/src/renderer/atoms/automation-atoms.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "native-host",
+      "mergePolicy": "keep-la",
+      "reason": "原生任务草稿保留领域快照及显式重捕获请求。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/session-tree/AgentProjectGroupItem.tsx",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "native-host",
+      "mergePolicy": "keep-la",
+      "reason": "Agent/Linguist 共用原生项目头、改名和菜单容器，领域只提供操作。"
+    },
+    {
+      "file": "packages/shared/package.json",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "native-host",
+      "mergePolicy": "keep-la",
+      "reason": "Shared 公开浏览器和定时任务 DTO 发布版本递增。"
+    },
+    {
+      "file": "packages/shared/src/types/automation.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "native-host",
+      "mergePolicy": "keep-la",
+      "reason": "持久化 Automation 领域身份、范围和逐次运行快照 DTO。"
+    },
+    {
+      "file": "packages/shared/src/types/browser.ts",
+      "ticket": "LA-HOST-006",
+      "kind": "product-fork",
+      "owner": "browser-runtime",
+      "mergePolicy": "keep-la",
+      "reason": "现有 BrowserPress/Act 的结构化输入与部分结果 DTO。"
     }
   ]
 }

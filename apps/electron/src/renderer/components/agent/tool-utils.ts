@@ -185,9 +185,9 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   BrowserNavigate: '打开网页',
   BrowserWaitFor: '等待网页状态',
   BrowserClick: '点击网页元素',
-  BrowserAct: '点击并等待网页状态',
+  BrowserAct: '执行浏览器操作',
   BrowserFill: '填写网页字段',
-  BrowserPress: '按下浏览器按键',
+  BrowserPress: '浏览器输入',
   BrowserHover: '悬停网页元素',
   BrowserDrag: '拖拽网页元素',
   BrowserScroll: '滚动网页或容器',
@@ -275,8 +275,11 @@ export function getInputSummary(
       try { return new URL(url).host } catch { return url.slice(0, 60) }
     }
 
+    case 'BrowserAct': {
+      return Array.isArray(input.steps) ? `${input.steps.length} 步串行操作` : typeof input.ref === 'string' ? input.ref : null
+    }
+
     case 'BrowserClick':
-    case 'BrowserAct':
     case 'BrowserFill':
     case 'BrowserHover':
     case 'BrowserUpload': {
@@ -303,6 +306,14 @@ export function getInputSummary(
     }
 
     case 'BrowserPress': {
+      const action = input.action
+      if (action && typeof action === 'object' && 'kind' in action) {
+        if (action.kind === 'text' && 'text' in action && typeof action.text === 'string') return `输入 ${Array.from(action.text).length} 个字符`
+        if (action.kind === 'key' && 'key' in action && typeof action.key === 'string') {
+          const modifiers = 'modifiers' in action && Array.isArray(action.modifiers) ? action.modifiers : []
+          return [...modifiers, action.key].join('+')
+        }
+      }
       return typeof input.key === 'string' ? input.key : null
     }
 

@@ -30,7 +30,7 @@ import { openLocalizationProject } from './open-localization-project'
 import { selectProjectAtom } from '@/host/project-switch'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
-import { agentSessionsAtom, currentAgentSessionIdAtom } from '@/atoms/agent-atoms'
+import { agentSessionsAtom, currentAgentSessionIdAtom, openWorkspaceComponentAtom, closeWorkspaceComponentAtom, agentDiffPanelTabAtom } from '@/atoms/agent-atoms'
 import { activeTabIdAtom, projectCurrentAgentSessionIdMapAtom } from '@/atoms/tab-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
 import { clearLinguistWorkbenchUiStateAtom, createLinguistTargetEditorDraftAtom,
@@ -166,6 +166,17 @@ try {
   const sessions = ['A', 'B', 'native'].map(id => ({ id, title: id, workspaceId: id,
     ...(id === 'native' ? {} : { linguistProjectId: id }), createdAt: 1, updatedAt: 1 }))
   store.set(agentSessionsAtom, sessions)
+  for (const sessionId of ['A', 'native']) {
+    store.set(currentAgentSessionIdAtom, sessionId)
+    const catState = store.get(linguistWorkbenchUiStateAtomFamily(projectId))
+    for (const component of ['todos', 'calendar', 'automations', 'skills', 'mcp', 'memory', 'vault']) {
+      store.set(openWorkspaceComponentAtom, component)
+      check(sessionId + ' 打开 ' + component + ' 沿用会话', store.get(currentAgentSessionIdAtom) === sessionId && store.get(agentDiffPanelTabAtom).get(sessionId) === component)
+      store.set(closeWorkspaceComponentAtom, component)
+      check(sessionId + ' 关闭 ' + component + ' 回到基础工作区', store.get(agentDiffPanelTabAtom).get(sessionId) === (sessionId === 'A' ? 'linguist' : 'files'))
+    }
+    check(sessionId + ' 原生面板不改变 CAT 状态', store.get(linguistWorkbenchUiStateAtomFamily(projectId)) === catState)
+  }
   store.set(projectCurrentAgentSessionIdMapAtom, new Map([['A', 'A'], ['B', 'B']]))
   const finishOpen = new Map()
   const opened = projectId => ({ ok: true, data: { project: { id: projectId }, health: { projectId } } })

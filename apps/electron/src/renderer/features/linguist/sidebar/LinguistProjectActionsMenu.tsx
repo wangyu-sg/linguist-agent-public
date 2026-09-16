@@ -152,7 +152,7 @@ export function LinguistCreateSessionMenu({
           aria-label={`在项目 ${project.name} 中新建会话`}
           aria-busy={creating || undefined}
           disabled={creating}
-          className="absolute right-6 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-foreground/35 opacity-0 hover:bg-foreground/[0.055] hover:text-foreground/65 group-hover/project:opacity-100 disabled:cursor-wait disabled:opacity-50"
+          className="absolute right-0 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-foreground/35 opacity-0 hover:bg-foreground/[0.055] hover:text-foreground/65 group-hover/project:opacity-100 disabled:cursor-wait disabled:opacity-50"
         >
           {creating
             ? <Loader2 size={12} className="animate-spin" aria-hidden="true" />

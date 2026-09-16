@@ -8,6 +8,8 @@
 import { atom } from 'jotai'
 import type {
   Automation,
+  AutomationLinguistContext,
+  AutomationLinguistCapture,
   AutomationNotificationTarget,
   AutomationScheduleType,
   AutomationPermissionMode,
@@ -24,6 +26,8 @@ export const automationsAtom = atom<Automation[]>([])
  * - 有 id：编辑模式（预填已有任务字段）
  */
 export interface AutomationDraft {
+  linguistContext?: AutomationLinguistContext
+  linguistCapture?: AutomationLinguistCapture
   /** 编辑模式下的任务 id；创建模式为空 */
   id?: string
   name: string
@@ -105,6 +109,7 @@ export function automationToDraft(a: Automation): AutomationDraft {
     sessionMode: a.sessionMode ?? AUTOMATION_DEFAULT_SESSION_MODE,
     notificationTargets: a.notificationTargets,
     sourceSessionId: a.sourceSessionId,
+    linguistContext: a.linguistContext,
     active: a.active,
   }
 }

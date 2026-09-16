@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-09-14
+更新时间：2026-09-16
 
 ## 当前真源
 
@@ -27,6 +27,8 @@
 - [RUNTIME_POLICY.md](./architecture/RUNTIME_POLICY.md)
 
 ## 发布与历史
+
+- [0.17.75 实施与发布验证](./release/VALIDATION_0_17_75.md) — 浏览器操作、原生 UI 共用与定时任务领域快照。
 
 - [Proma 上游更新与发布](./release/UPSTREAM_0_19_53_2026_09_14.md) — 固定 Tag 合并、Pi 升级、打包验证和发布证据。
 

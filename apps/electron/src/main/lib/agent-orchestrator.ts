@@ -1,3 +1,4 @@
+import type { AutomationLinguistContext } from '@proma/shared'
 /**
  * AgentOrchestrator — Agent 编排层
  *
@@ -697,7 +698,7 @@ export class AgentOrchestrator {
   async sendMessage(
     input: AgentRunInput,
     callbacks: SessionCallbacks,
-    extensions: { piCustomTools?: ToolDefinition[] } = {},
+    extensions: { piCustomTools?: ToolDefinition[]; automationLinguistContext?: AutomationLinguistContext } = {},
   ): Promise<void> {
     const { sessionId, userMessage, rawUserMessage, userMessageUuid, channelId, modelId, workspaceId: requestedWorkspaceId, additionalDirectories, permissionModeOverride, mentionedSkills, mentionedMcpServers, mentionedSessionIds, mentionedTodoIds, mentionedCalendarEventIds, automationContext, retryOfErrorUuid, linguistContext } = input
     // Capture the focus once per turn. Later UI focus changes must not rewrite this reply's attribution.
@@ -720,6 +721,7 @@ export class AgentOrchestrator {
       linguistExtension = resolveLinguistAgentHostExtension({
         session: sessionMeta,
         turnContext: linguistContext,
+        automationContext: extensions.automationLinguistContext,
         onProjectMutation: callbacks.onLinguistProjectMutation,
       })
     } catch (error) {

@@ -1,3 +1,7 @@
+import { Button } from '@/components/ui/button'
+import { useStore } from 'jotai'
+import { captureLinguistTurnContextSnapshot } from '@/features/linguist/projects/cat-workspace-atoms'
+import type { AutomationLinguistCapture } from '@proma/shared'
 /**
  * 定时任务表单视图（Codex 风格，覆盖在中间内容区，非弹窗）
  *
@@ -86,7 +90,7 @@ function getWeekdaysFromPreset(value: string, current?: number[]): number[] {
 }
 
 function formatRunStatus(status: AutomationRun['status']): string {
-  if (status === 'success') return '完成'
+  if (status === 'success') return '执行结束'
   if (status === 'error') return '失败'
   return '跳过'
 }
@@ -132,6 +136,7 @@ function getDraftSignature(draft: AutomationDraft): string {
     permissionMode: draft.permissionMode,
     sessionMode: draft.sessionMode,
     notificationTargets: draft.notificationTargets ?? [],
+    linguistCapture: draft.linguistCapture,
     active: draft.active,
   })
 }
@@ -157,6 +162,7 @@ function draftToCreateInput(draft: AutomationDraft): CreateAutomationInput {
     sessionMode: draft.sessionMode,
     notificationTargets: draft.notificationTargets,
     sourceSessionId: draft.sourceSessionId,
+    linguistCapture: draft.linguistCapture,
     active: draft.active,
   }
 }
@@ -182,6 +188,7 @@ function draftToUpdateInput(draft: AutomationDraft): UpdateAutomationInput {
     permissionMode: draft.permissionMode,
     sessionMode: draft.sessionMode,
     notificationTargets: draft.notificationTargets ?? [],
+    linguistCapture: draft.linguistCapture,
     active: draft.active,
   }
 }
@@ -293,6 +300,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
   const setActiveView = useSetAtom(activeViewAtom)
   const setAgentSkillsTab = useSetAtom(agentSkillsTabAtom)
   const openSession = useOpenSession()
+  const store = useStore()
 
   const [form, setForm] = React.useState<AutomationDraft | null>(null)
   const [weekdayPresetOverride, setWeekdayPresetOverride] = React.useState<'custom' | null>(null)
@@ -317,7 +325,16 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
 
   React.useEffect(() => {
     if (formState.open && formState.draft) {
-      const draft = formState.draft
+      const origin = agentSessions.find(session => session.id === activeSessionId)
+      const draft = { ...formState.draft }
+      if (!draft.id && origin) {
+        draft.sourceSessionId ??= origin.id
+        draft.workspaceId ??= origin.workspaceId
+        if (origin.linguistProjectId && origin.workspaceId === draft.workspaceId) {
+          draft.linguistCapture = { sessionId: origin.id, scope: 'context',
+            turnContext: captureLinguistTurnContextSnapshot(store, origin.linguistProjectId).context }
+        }
+      }
       setForm(draft)
       setWeekdayPresetOverride(null)
       lastSavedSignatureRef.current = draft.id && canPersistDraft(draft)
@@ -393,9 +410,9 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
         if (draftToSave.id) {
           const updated = await window.electronAPI.updateAutomation(draftToUpdateInput(draftToSave))
           if (!updated) throw new Error('定时任务不存在')
-          lastSavedSignatureRef.current = signature
+          lastSavedSignatureRef.current = getDraftSignature({ ...draftToSave, linguistContext: updated.linguistContext, linguistCapture: undefined })
           setAutomations((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
-          setForm((prev) => (prev ? { ...prev, id: updated.id, name: updated.name } : prev))
+          setForm((prev) => (prev ? { ...prev, id: updated.id, name: updated.name, ...(prev.linguistCapture === draftToSave.linguistCapture ? { linguistContext: updated.linguistContext, linguistCapture: undefined } : {}) } : prev))
           if (isMountedRef.current) {
             setSaveStatus('saved')
             setLastSavedAt(Date.now())
@@ -406,7 +423,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
           const createdDraft = automationToDraft(created)
           lastSavedSignatureRef.current = getDraftSignature(createdDraft)
           setAutomations((prev) => [created, ...prev.filter((a) => a.id !== created.id)])
-          setForm((prev) => (prev ? { ...prev, id: created.id, name: created.name } : prev))
+          setForm((prev) => (prev ? { ...prev, id: created.id, name: created.name, ...(prev.linguistCapture === draftToSave.linguistCapture ? { linguistContext: created.linguistContext, linguistCapture: undefined } : {}) } : prev))
           if (isMountedRef.current) {
             setSaveStatus('saved')
             setLastSavedAt(Date.now())
@@ -497,8 +514,21 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
     setFormState({ open: false, draft: null })
   }
   const update = (patch: Partial<AutomationDraft>): void => {
-    setForm((prev) => (prev ? { ...prev, ...patch } : prev))
+    setForm((prev) => (prev ? { ...prev, ...patch, ...(patch.workspaceId !== undefined && patch.workspaceId !== prev.workspaceId ? { linguistContext: undefined, linguistCapture: { scope: 'none' as const } } : {}) } : prev))
   }
+
+  const captureScope = (scope: AutomationLinguistCapture['scope']): void => {
+    if (scope === 'none') { update({ linguistCapture: { scope: 'none' } }); return }
+    const origin = agentSessions.find(session => session.id === activeSessionId)
+    if (!origin?.linguistProjectId || origin.workspaceId !== form?.workspaceId) {
+      toast.error('请在同工作区的 Linguist 会话中明确捕获任务范围')
+      return
+    }
+    const snapshot = captureLinguistTurnContextSnapshot(store, origin.linguistProjectId)
+    if (scope === 'segments' && snapshot.selectionTruncated) { toast.error('当前选择超过 100 段，请绑定完整批次或缩小明确选择'); return }
+    update({ linguistCapture: { sessionId: origin.id, scope, role: form.linguistContext?.role ?? 'general', turnContext: snapshot.context } })
+  }
+
 
   const updateFeishuNotification = (target: AutomationFeishuNotificationTarget | null): void => {
     update({ notificationTargets: target ? [target] : [] })
@@ -655,6 +685,18 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
               任务编写
             </Label>
           </div>
+          {(form.linguistContext || form.linguistCapture || agentSessions.some(session => session.id === activeSessionId && session.linguistProjectId && session.workspaceId === form.workspaceId)) && (
+            <div className="rounded-lg border border-foreground/10 p-3 text-xs space-y-2">
+              <p className="text-muted-foreground">任务范围：{form.linguistCapture ? `待保存 · ${{context:'仅项目上下文',project:'整个项目',asset:'当前完整批次',segments:'当前完整选择',none:'移除绑定'}[form.linguistCapture.scope]}` : form.linguistContext ? `${form.linguistContext.projectId} · ${form.linguistContext.scope ? {project:'整个项目',asset:'完整批次',segments:'冻结选择'}[form.linguistContext.scope.kind] : '仅项目上下文'}${form.linguistContext.scope && 'assetId' in form.linguistContext.scope ? ` · ${form.linguistContext.scope.assetId}` : ''}` : '未绑定'}</p>
+              {form.linguistContext && <p className="text-muted-foreground">岗位 {form.linguistContext.role}{form.linguistContext.scope?.kind === 'segments' ? ` · ${form.linguistContext.scope.segmentIds.length} 段` : ''} · 捕获于 {new Date(form.linguistContext.capturedAt).toLocaleString()}</p>}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => captureScope('context')}>仅绑定项目</Button>
+                <Button variant="outline" size="sm" onClick={() => captureScope('asset')}>绑定当前批次</Button>
+                <Button variant="outline" size="sm" onClick={() => captureScope('segments')}>绑定当前选择</Button>
+                <Button variant="outline" size="sm" onClick={() => captureScope('none')}>移除绑定</Button>
+              </div>
+            </div>
+          )}
           <div className="min-h-0 flex-1">
             <div className="flex h-full min-h-0 flex-col gap-3">
               <AutomationPromptEmptyGuide />
@@ -712,7 +754,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
                 <span className="text-muted-foreground">下次运行</span>
                 <span className="text-foreground/80 tabular-nums">
                   {live?.completedAt
-                    ? '已完成'
+                    ? '调度已结束'
                     : live?.active
                       ? formatTime(live?.nextRunAt)
                       : '已暂停'}
@@ -735,7 +777,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
               {live?.completedAt && (
                 <div className="flex items-center gap-1.5 pt-0.5 text-emerald-600 dark:text-emerald-400">
                   <Check className="size-3" />
-                  <span>任务已完成（重新启用可再跑一轮）</span>
+                  <span>调度已结束（重新启用可再跑一轮）</span>
                 </div>
               )}
             </div>
@@ -1012,7 +1054,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
               <span className="pl-2.5 text-xs text-muted-foreground leading-relaxed">
-                任务将在该时刻运行一次后自动完成。适合"X 小时/天后跑一次"或某个具体时间点的一次性任务。
+                任务将在该时刻运行一次后自动停用。适合"X 小时/天后跑一次"或某个具体时间点的一次性任务。
               </span>
             </div>
           )}
@@ -1037,7 +1079,7 @@ export function AutomationFormView({ embedded = false }: { embedded?: boolean } 
                 <span className="text-xs text-muted-foreground shrink-0">次后停止</span>
               </div>
               <span className="pl-2.5 text-xs text-muted-foreground leading-relaxed">
-                留空表示不限次。按实际执行次数计（成功 / 失败都算），达到上限后任务自动完成停用。
+                留空表示不限次。按实际执行次数计（成功 / 失败都算），达到上限后任务自动停用。
               </span>
             </div>
           )}

@@ -1,3 +1,4 @@
+import { captureAutomationLinguistContext } from './lib/linguist/automation-context'
 /**
  * IPC 处理器模块
  *
@@ -6022,7 +6023,11 @@ export function registerIpcHandlers(): void {
       // channelId / workspaceId 允许为空（草稿态），但此时任务不能被启用
       validateAutomationFields(input)
       validateAutomationScheduleComplete(input)
-      const a = createAutomation(input)
+      if (input.linguistContext !== undefined) throw new Error('项目绑定由宿主捕获，请使用 linguistCapture')
+      const capture = input.linguistCapture ?? { scope: 'context' as const, sessionId: input.sourceSessionId }
+      const a = createAutomation({ ...input, linguistContext: captureAutomationLinguistContext(
+        capture, capture.sessionId ? getAgentSessionMeta(capture.sessionId) : undefined, input.workspaceId,
+      ) })
       broadcastAutomationsChanged()
       return a
     }
@@ -6039,7 +6044,12 @@ export function registerIpcHandlers(): void {
       if (!existing) return undefined
       validateAutomationFields(input)
       validateAutomationScheduleComplete(input, existing)
-      const a = updateAutomation(input)
+      if (input.linguistContext !== undefined) throw new Error('项目绑定由宿主捕获，请使用 linguistCapture')
+      const capture = input.linguistCapture
+      const a = updateAutomation({ ...input, ...(capture ? { linguistContext: captureAutomationLinguistContext(
+        capture, capture.sessionId ? getAgentSessionMeta(capture.sessionId) : undefined,
+        input.workspaceId ?? existing.workspaceId,
+      ) ?? null } : {}) })
       broadcastAutomationsChanged()
       return a
     }

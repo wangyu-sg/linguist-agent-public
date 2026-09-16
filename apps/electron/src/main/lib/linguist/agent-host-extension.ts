@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util'
+import type { AutomationLinguistContext } from '@proma/shared'
 import { createHash, randomUUID } from 'node:crypto'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import {
@@ -47,10 +49,17 @@ export interface LinguistAgentHostExtension {
 export function resolveLinguistAgentHostExtension(input: {
   session: AgentSessionMeta
   turnContext: unknown
+  automationContext?: AutomationLinguistContext
   onProjectMutation?: (event: LinguistProjectMutationEvent) => void
 }): LinguistAgentHostExtension {
   const profile = resolveAgentProfile(input.session)
-  const turnContext = validateLinguistTurnContextForAgentTurn(
+  if (input.automationContext && (
+    input.turnContext !== undefined
+    || input.automationContext.projectId !== input.session.linguistProjectId
+    || input.automationContext.role !== input.session.linguistRole
+    || !isDeepStrictEqual(input.automationContext, input.session.automationLinguistContext)
+  )) throw new Error('定时任务范围与创建时冻结的会话绑定不一致')
+  const turnContext = input.automationContext ? undefined : validateLinguistTurnContextForAgentTurn(
     input.turnContext,
     input.session,
     getLinguistProjectService,
@@ -87,7 +96,9 @@ export function resolveLinguistAgentHostExtension(input: {
     executionScope: resolveAgentExecutionScope(input.session),
     promptOverlay: promptBuild?.prompt ?? '',
     ...(turnContext === undefined ? {} : { turnContext }),
-    turnContextBlock: turnContext === undefined ? '' : buildLinguistTurnContextBlock(turnContext),
+    turnContextBlock: input.automationContext
+      ? `<linguist_automation_context trust="project-data">\n${JSON.stringify(input.automationContext)}\n</linguist_automation_context>\n这是任务创建时捕获的范围，不是当前 UI 选择。scope 缺失只表示项目上下文，不能据此处理全项目。`
+      : turnContext === undefined ? '' : buildLinguistTurnContextBlock(turnContext),
     composeTools: ({ baseTools, mcpServerNames, modelProvider, getModelId }) => {
       let toolsetHash: string | undefined
       const catTools = profile.kind === 'linguist'
@@ -114,6 +125,7 @@ export function resolveLinguistAgentHostExtension(input: {
             ...(toolsetHash === undefined ? {} : { toolsetHash }),
           }),
           providerObserver?.prepare,
+          input.automationContext,
         ) as unknown as ToolDefinition[]
         : []
       const composition = composeAgentTools(profile, baseTools, () => catTools)

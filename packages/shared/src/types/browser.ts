@@ -112,3 +112,47 @@ export interface BrowserCreateTabInput {
   sessionId: string
   url?: string
 }
+
+/** 浏览器工具跨进程传递的数据；不携带函数或页面节点。 */
+export type BrowserJsonValue = null | boolean | number | string | BrowserJsonValue[] | { [key: string]: BrowserJsonValue }
+export type BrowserKeyModifier = 'Alt' | 'Control' | 'Meta' | 'Shift'
+export type BrowserInputAction =
+  | { kind: 'text'; text: string }
+  | { kind: 'key'; key: string; modifiers?: BrowserKeyModifier[] }
+export type BrowserTarget = { ref: string; selector?: never } | { selector: string; ref?: never }
+export type BrowserInputTarget = BrowserTarget & { focus?: 'activate' | 'verify' }
+export interface BrowserProbe {
+  /** 同步只读函数表达式，args 经 JSON 作为数据传入。 */
+  expression: string
+  args?: BrowserJsonValue
+}
+export interface BrowserGuard { probe: BrowserProbe; expected: BrowserJsonValue }
+export interface BrowserPressInput {
+  action?: BrowserInputAction
+  /** 仅供原有导航/普通正文调用；与 action 互斥。 */
+  key?: string
+  target?: BrowserInputTarget
+  guard?: BrowserGuard
+}
+export type BrowserSequenceStep = { stepId?: string; itemId?: string } & (
+  | { kind: 'click'; target: BrowserTarget; guard?: BrowserGuard }
+  | { kind: 'focus'; target: BrowserTarget }
+  | ({ kind: 'press'; action: BrowserInputAction } & Omit<BrowserPressInput, 'key' | 'action'>)
+  | { kind: 'fill'; target: BrowserTarget; text: string; guard?: BrowserGuard }
+  | { kind: 'scroll'; selector?: string; deltaY?: number; position?: 'top' | 'bottom' }
+  | { kind: 'read'; probe: BrowserProbe }
+  | ({ kind: 'check' } & BrowserGuard)
+  | ({ kind: 'wait'; timeoutMs?: number } & BrowserGuard)
+)
+export type BrowserActInput =
+  | { ref: string; waitFor?: { kind: 'url' | 'text' | 'selector'; value: string }; timeoutMs?: number; tabId?: string; steps?: never }
+  | { steps: BrowserSequenceStep[]; tabId: string; timeoutMs?: number; ref?: never; waitFor?: never }
+export interface BrowserSequenceResult {
+  status: 'completed' | 'partial' | 'failed' | 'aborted' | 'unknown'
+  tabId: string
+  completedStepCount: number
+  stoppedAt?: number
+  results: Array<{ stepId: string; itemId?: string; status: 'ok' | 'mismatch' | 'failed' | 'unknown'; value?: BrowserJsonValue }>
+  unexecutedFrom?: number
+  timing: { queuedMs: number; elapsedMs: number; waitMs: number }
+}

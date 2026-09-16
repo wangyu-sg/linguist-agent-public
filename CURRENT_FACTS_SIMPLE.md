@@ -1,6 +1,6 @@
 # Linguist Agent 当前事实
 
-核验日期：2026-09-14。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
+核验日期：2026-09-16。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
 
 ## 机器真源与当前值
 
@@ -8,18 +8,20 @@
 
 | 项目 | 当前值 |
 |---|---|
-| App | `0.17.74` |
+| App | `0.17.75` |
 | Proma | `v0.19.53` |
 | Proma commit | `f99edbdb594407ab190b97ae073889c5d96637ab` |
 | Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.85.1` |
 | React / Jotai / Vite | `18.3.1` / `2.20.3` / `6.4.3` |
-| Shared | `0.1.71` |
-| CAT Core / Formats / Store / Tools | `0.0.24` / `0.0.13` / `0.0.45` / `0.0.39` |
+| Shared | `0.1.72` |
+| CAT Core / Formats / Store / Tools | `0.0.25` / `0.0.13` / `0.0.46` / `0.0.40` |
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
 Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本地候选分支 `codex/la-upstream-v0.19.53-20260914`，起点 `9f0de928`。App `0.17.74` 已推送并[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.74)，Tag 指向 `d6d0a7ee`。CI `34844497883` 与 Auto Release `34845329153` 成功，macOS arm64/x64、Windows x64 安装包和更新清单共七项资产齐全；未覆盖日用安装。证据见 [上游更新与发布记录](./docs/release/UPSTREAM_0_19_53_2026_09_14.md)。
 
+
+当前源码目标为 `0.17.75`；Shared 浏览器/定时任务 DTO 为 `0.1.72`。CAT Core/Store/Tools 依据已有 manifest 校正为 `0.0.25`/`0.0.46`/`0.0.40`，本轮未再次递增。实现及验证进度见 [本轮记录](./docs/release/VALIDATION_0_17_75.md)；正式发布与打包以该记录的实际结果为准。
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
 
@@ -27,8 +29,12 @@ Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本�
 
 ## 当前实现
 
+- Linguist 与 Agent 共享原生侧栏项目头、会话树及待办/日历/Obsidian/记忆/Skills/MCP/定时任务入口；关闭组件后回到当前会话的 CAT 或文件。领域侧栏仅提供数据和项目操作。
+- 定时任务持久化项目、岗位和明确范围快照；来源删除后保留，跨工作区清除，reuse/daily 按完整绑定校验。只读摘要不创建 Stage；执行结束与业务完成分开显示。
+- BrowserAct 在一个 tab 队列内执行至多 64 步、30 秒（含排队）；失败返回成功前缀和未执行范围。新技能随新二进制发布，未同步到旧安装版。真实 Phrase DOM/保存/TM 配方尚未校准。
+
 - 完整 Proma Agent / Chat + Linguist 第三模式，Pi-only；四岗位 Prompt 真源为 [resources/linguist-roles](./resources/linguist-roles)。岗位身份在已有持久化用户消息后固定，委派子会话固定岗位。
-- MCP 桥接和 browser-controller 与固定 Proma 文件逐字一致；其余未获得等价证据的原生生命周期与安全修复保留。
+- MCP 桥接保持固定 Proma 合同；browser-controller 在原生队列上增加显式 text/key、实际输入节点检查与有界 steps。源码与固定 Proma 浏览器文件存在已登记差异。
 - 项目快捷切换刷新主进程权威列表，无主会话时创建，旧请求不能提交可见状态；同步设置落盘成功后一起切换 Workspace / Session / Agent Tab / 模式。`resetView:false` 保留内部工具页合同。
 - Agent Host Extension 与 App Mode Registry 是主要宿主组合入口；其他产品级 Renderer 触点必须逐项登记。
 - 产品启动、加载、欢迎页读取同一身份配置，第一章介绍 Agent / Chat / Linguist；FAQ 对照持久化岗位与导出规则。

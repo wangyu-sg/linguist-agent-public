@@ -428,6 +428,7 @@ export function resolveAgentWorkbenchDir(
  * 岗位经专用 API 更新，不进入通用 metadata 更新白名单。
  */
 export interface AgentSessionLinguistBinding {
+  automationLinguistContext?: AgentSessionMeta['automationLinguistContext']
   linguistProjectId: string
   linguistProjectName: string
   linguistRole: NonNullable<AgentSessionMeta['linguistRole']>
@@ -452,6 +453,7 @@ function frozenLinguistBinding(
 ): AgentSessionLinguistBinding | undefined {
   if (!session.linguistProjectId) return undefined
   return {
+    automationLinguistContext: session.automationLinguistContext,
     linguistProjectId: session.linguistProjectId,
     linguistProjectName: session.linguistProjectName ?? session.linguistProjectId,
     linguistRole: session.linguistRole ?? 'general',
@@ -764,6 +766,7 @@ export function updateAgentSessionMeta(
     // Linguist 项目绑定在创建时冻结（PB-034 硬规则）：类型白名单刻意不含
     // 这两个字段，这里再防御 any 断言绕过——永远保持创建时的值。
     // 岗位只能经专用 API 修改；这里防止 any 绕过。
+    automationLinguistContext: existing.automationLinguistContext,
     linguistProjectId: existing.linguistProjectId,
     linguistProjectName: existing.linguistProjectName,
     linguistRole: existing.linguistRole,
@@ -792,6 +795,7 @@ export function detachAgentSessionLinguistBinding(id: string): AgentSessionMeta 
   if (!existing.linguistProjectId) return existing
 
   const updated: AgentSessionMeta = { ...existing, updatedAt: Date.now() }
+  delete updated.automationLinguistContext
   delete updated.linguistProjectId
   delete updated.linguistProjectName
   delete updated.linguistRole

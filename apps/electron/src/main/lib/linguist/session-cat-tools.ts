@@ -1,3 +1,5 @@
+import type { AutomationLinguistContext } from '@proma/shared'
+import { resolveAutomationSegmentScope } from './automation-context'
 /**
  * 会话绑定的 CAT Tool 装配层。
  *
@@ -66,14 +68,18 @@ export function resolveLinguistSessionCatTools(
   onProjectMutation?: LinguistProjectMutationSink,
   generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance,
   onEvidencePrepared?: LinguistCatToolsDeps['onEvidencePrepared'],
+  automationContext?: AutomationLinguistContext,
 ) {
   const projectId = session?.linguistProjectId
   if (!projectId) return []
   let stageEvidence: StageEvidenceState | undefined
+  let automationSegmentIds: readonly string[] | undefined
   const resolveProject: ResolveLinguistCatProject = () => {
     const current = currentBoundSession(session.id, projectId, 'sessionId')
     const service = getService()
+    if (automationContext && service.getProject(projectId).promaWorkspaceId !== current.workspaceId) throw new LinguistCatInvalidArgumentError('sessionId', 'automation project no longer belongs to this workspace')
     const db = service.openProject(projectId)
+    if (automationContext && automationSegmentIds === undefined) automationSegmentIds = resolveAutomationSegmentScope(automationContext, service)
     stageEvidence = db.stageEvidence.list().find(state => state.sessionId === current.id && state.role === current.linguistRole)
     return { project: service.getProject(projectId), db }
   }
@@ -83,9 +89,9 @@ export function resolveLinguistSessionCatTools(
     sessionId: session.id,
     onEvidencePrepared,
     ...(session.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
-    ...(session.linguistDelegatedScope === undefined ? {} : { delegatedScopeSegmentIds: session.linguistDelegatedScope.segmentIds }),
+    get delegatedScopeSegmentIds() { return automationSegmentIds ?? session.linguistDelegatedScope?.segmentIds },
     get stageEvidenceRunId() { return stageEvidence?.stageRunId },
-    get reviewScopeSegmentIds() { return session.linguistDelegatedScope?.segmentIds ?? stageEvidence?.plan.segmentIds },
+    get reviewScopeSegmentIds() { return automationSegmentIds ?? session.linguistDelegatedScope?.segmentIds ?? stageEvidence?.plan.segmentIds },
     readDeliveryPreflight(assetId) {
       currentBoundSession(session.id, projectId, 'assetId')
       return getService().getDeliveryPreflight(projectId, assetId)
@@ -107,7 +113,8 @@ export function resolveLinguistSessionCatTools(
         throw new LinguistCatInvalidArgumentError('segmentIds', 'write is outside the frozen task; start a new task with cat_get_translation_context')
       }
       const existingScope = stageEvidence?.plan.segmentIds
-      const scope = current.linguistDelegatedScope?.segmentIds
+      if (automationSegmentIds && segmentIds.some(id => !automationSegmentIds!.includes(id))) throw new LinguistCatInvalidArgumentError('segmentIds', 'outside the automation scope')
+      const scope = automationSegmentIds ?? current.linguistDelegatedScope?.segmentIds
         ?? (task?.scope === 'project' ? db.segments.queryIds()
           : task?.scope === 'assets' ? [...new Set(segments.flatMap(segment => db.segments.queryIds({ assetId: segment.assetId })))]
             : task?.scope === 'segments' ? segmentIds

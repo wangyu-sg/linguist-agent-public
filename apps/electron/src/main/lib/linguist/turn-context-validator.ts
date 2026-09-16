@@ -34,23 +34,8 @@ export function validateLinguistTurnContextForSession(
     throw new LinguistTurnContextOwnershipError('context project does not match session binding')
   }
 
-  service.getProject(context.projectId)
-  const db = service.openProject(context.projectId)
-  if (context.assetId !== undefined && db.assets.get(context.assetId) === undefined) {
-    throw new LinguistTurnContextOwnershipError('context asset does not belong to bound project')
-  }
-
-  const segmentIds = new Set(context.selectedSegmentIds)
-  if (context.activeSegmentId !== undefined) segmentIds.add(context.activeSegmentId)
-  for (const segmentId of segmentIds) {
-    const segment = db.segments.getById(segmentId)
-    if (segment === undefined) {
-      throw new LinguistTurnContextOwnershipError('context segment does not belong to bound project')
-    }
-    if (context.assetId !== undefined && segment.assetId !== context.assetId) {
-      throw new LinguistTurnContextOwnershipError('context segment does not belong to context asset')
-    }
-  }
+  const segmentIds = [...context.selectedSegmentIds, ...(context.activeSegmentId ? [context.activeSegmentId] : [])]
+  const db = validateLinguistScopeOwnership(service, context.projectId, context.assetId, segmentIds)
 
   if (
     context.activeQaFindingId !== undefined
@@ -62,6 +47,21 @@ export function validateLinguistTurnContextForSession(
   }
 
   return parsed
+}
+
+/** UI 与持久化任务共用的实体归属校验；不创建 Stage、不写句段。 */
+export function validateLinguistScopeOwnership(
+  service: LinguistProjectService, projectId: string, assetId?: string, segmentIds: readonly string[] = [],
+) {
+  service.getProject(projectId)
+  const db = service.openProject(projectId)
+  if (assetId !== undefined && db.assets.get(assetId) === undefined) throw new LinguistTurnContextOwnershipError('context asset does not belong to bound project')
+  for (const segmentId of segmentIds) {
+    const segment = db.segments.getById(segmentId)
+    if (segment === undefined) throw new LinguistTurnContextOwnershipError('context segment does not belong to bound project')
+    if (assetId !== undefined && segment.assetId !== assetId) throw new LinguistTurnContextOwnershipError('context segment does not belong to context asset')
+  }
+  return db
 }
 
 /**
