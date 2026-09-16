@@ -214,16 +214,8 @@ async function quitApp(app: ElectronApplication): Promise<void> {
 
 // ===== UI 驱动 =====
 
-/**
- * 确保应用处于 Chat 模式并已完成首启动画。
- *
- * Proma 默认启动在 Agent 模式（appModeAtom 默认值 'agent'，localStorage key
- * 'proma-app-mode'）。这里写入应用自身的持久化偏好后 reload，
- * ModeSwitcher 挂载时读取该值进入 Chat 模式——与用户在 ModeSwitcher 上
- * 点击「Chat」等价（同一存储键），但比多层弹层点击更稳定。
- */
+/** 完成首启后通过实际模式入口进入 Chat，避免恢复活动 Tab 时覆盖测试写入的偏好。 */
 async function ensureChatMode(page: Page): Promise<void> {
-  await page.evaluate(() => window.localStorage.setItem('proma-app-mode', JSON.stringify('chat')))
   await page.reload()
   await page.waitForFunction(
     () => typeof (window as unknown as { electronAPI?: unknown }).electronAPI === 'object',
@@ -232,6 +224,9 @@ async function ensureChatMode(page: Page): Promise<void> {
   )
   // AppShell 挂载标志：展开或收起的侧栏二选一。
   await page.locator('.mode-switcher-track, button[aria-label="展开侧边栏"]').first().waitFor({ timeout: 60_000 })
+  const expandSidebar = page.getByRole('button', { name: '展开侧边栏', exact: true })
+  if (await expandSidebar.isVisible()) await expandSidebar.click()
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click()
   // 教程 Banner 非模态但会遮挡，尽力关闭
   try {
     const dismiss = page.getByText('稍后再学', { exact: true }).first()
@@ -241,19 +236,9 @@ async function ensureChatMode(page: Page): Promise<void> {
   }
 }
 
-/** 在侧边栏中打开指定标题的 Chat 对话（rail 按钮优先，标题文本兜底） */
+/** 在已经展开的原生侧栏中打开指定 Chat 对话。 */
 async function openConversationByTitle(page: Page, title: string): Promise<void> {
-  const expandSidebar = page.getByRole('button', { name: '展开侧边栏' })
-  if (await expandSidebar.isVisible()) {
-    await expandSidebar.click()
-    await page.locator('.mode-switcher-track').first().waitFor({ timeout: 15_000 })
-  }
-  const railButton = page.locator(`button[aria-label="打开Chat 对话：${title}"]`)
-  try {
-    await railButton.first().click({ timeout: 10_000 })
-  } catch {
-    await page.getByText(title, { exact: true }).first().click({ timeout: 15_000 })
-  }
+  await page.getByRole('button', { name: `打开对话：${title}`, exact: true }).click({ timeout: 15_000 })
   // 等待 Chat 输入框出现（ChatView 已挂载）
   await page.locator('[data-input-mode="chat"] .ProseMirror').first().waitFor({ timeout: 30_000 })
 }
