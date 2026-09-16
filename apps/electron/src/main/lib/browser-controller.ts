@@ -1473,6 +1473,7 @@ export class BrowserController {
   private async clickInternal(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, locator: BrowserTarget, guard?: BrowserGuard, signal?: AbortSignal, dispatched?: () => void): Promise<RefEntry> {
     const target = await this.resolveTarget(tab, locator, signal)
     const { x, y } = await this.centerForTarget(tab, target, signal)
+    await this.highlightAgentTarget(tab, target.backendNodeId)
     await this.checkGuard(tab, guard, signal)
     this.assertCurrentDocument(tab, target.generation, signal)
     dispatched?.()

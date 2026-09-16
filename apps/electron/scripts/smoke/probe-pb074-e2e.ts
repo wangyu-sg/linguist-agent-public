@@ -564,7 +564,7 @@ async function resolveVisibleLinguistProjectList(page: Page): Promise<{
   totalCount: number
   visibleCount: number
 }> {
-  const lists = page.getByRole('list', { name: '本地化项目', exact: true })
+  const lists = page.locator('div:has(> [data-sidebar-scroll-boundary]) > div:first-child')
   let totalCount = 0
   let list = lists.first()
   let visibleCount = 0
@@ -745,10 +745,8 @@ async function openLinguistWorkbenchAndSelectLocation(
     'button',
     { name: '管理项目', exact: true },
   ).count() === 0
-  await projectList.getByRole(
-    'button',
-    { name: `管理项目 ${PROJECT_NAME}`, exact: true },
-  ).click()
+  await projectList.locator('section').filter({ has: page.getByRole('button', { name: `打开项目 ${PROJECT_NAME}`, exact: true }) })
+    .getByRole('button', { name: '项目菜单', exact: true }).click()
   const projectActionsMenu = page.locator('[role="menu"]').filter({ hasText: '重命名' })
   await projectActionsMenu.waitFor({ state: 'visible', timeout: 10_000 })
   const projectActionsPaintedPixels = countNonDominantPixels(

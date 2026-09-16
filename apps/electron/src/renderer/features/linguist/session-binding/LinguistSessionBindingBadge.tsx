@@ -10,13 +10,10 @@
 import * as React from 'react'
 import { AlertTriangle, Archive, FolderOpen } from 'lucide-react'
 import type { AgentSessionMeta } from '@proma/shared'
-import { useSetAtom, useStore } from 'jotai'
-import { toast } from 'sonner'
+import { useSetAtom } from 'jotai'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { cn } from '@/lib/utils'
-import { openLocalizationProject } from '../projects/open-localization-project'
-import { describeLinguistIpcError } from '../projects/project-utils'
 import { bindingNoticeCopy, bindingStatusLabel } from './binding-utils'
 import {
   linguistSessionBindingsAtom,
@@ -32,32 +29,16 @@ export function LinguistSessionBindingBadge({
   session: BindingSession
 }): React.ReactElement | null {
   const binding = useLinguistSessionBinding(session)
-  const store = useStore()
   const projectId = session.linguistProjectId
   if (!projectId) return null
 
   const projectName = binding?.projectName ?? session.linguistProjectName ?? '项目'
   const status = binding?.status ?? 'active'
   const label = bindingStatusLabel(status)
-  const returnToProject = (): void => {
-    void openLocalizationProject(store, projectId)
-      .then((result) => {
-        if (!result.ok) {
-          toast.error('返回项目失败', {
-            description: describeLinguistIpcError(result.error),
-          })
-        }
-      })
-      .catch(() => {
-        toast.error('返回项目失败', { description: '与主进程通信异常（INTERNAL）' })
-      })
-  }
 
   return (
-    <button
-      type="button"
-      onClick={returnToProject}
-      aria-label={`返回 Linguist 项目 ${projectName}`}
+    <span
+      aria-label={`所属项目 ${projectName}`}
       data-testid="linguist-project-badge"
       data-binding-status={status}
       title={
@@ -67,15 +48,15 @@ export function LinguistSessionBindingBadge({
             ? `绑定项目「${projectName}」目录缺失，Agent 对话仍可用`
             : status === 'unavailable'
               ? `绑定项目「${projectName}」暂不可用，Agent 对话仍可用`
-              : `返回 Linguist 项目「${projectName}」`
+              : `所属项目「${projectName}」`
       }
       className={cn(
-        'titlebar-no-drag inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] flex-shrink-0',
+        'titlebar-no-drag cursor-default inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] flex-shrink-0',
         status === 'archived' &&
           'border-warning/40 bg-warning/10 text-warning',
         (status === 'missing' || status === 'unavailable') &&
           'border-destructive/40 bg-destructive/10 text-destructive',
-        status === 'active' && 'border-border/60 text-foreground/55 hover:bg-accent/70 hover:text-foreground',
+        status === 'active' && 'border-border/60 text-foreground/55',
       )}
     >
       {status === 'archived' ? (
@@ -87,7 +68,7 @@ export function LinguistSessionBindingBadge({
       )}
       <span className="max-w-[160px] truncate">{projectName}</span>
       {label && <span>· {label}</span>}
-    </button>
+    </span>
   )
 }
 
