@@ -7,6 +7,8 @@ import {
   type DeterministicHardRuleInput,
 } from './hard-rules'
 import { compileTagFamilyRegex } from './tag-families'
+import { normalizeTagProfile } from './tag-profile'
+import { runQa } from './qa-core'
 import type { Segment } from './segment'
 
 const assetId = asAssetId('ast-0000000000000001')
@@ -325,11 +327,11 @@ describe('PB-097 tag 族引擎', () => {
     )
   })
 
-  test('ICU span 内 {N} 由族管线单独验，不被 withoutSpans 抹掉后漏检', () => {
+  test('标准 ICU 分支内编号参数不因避开全局多重集而漏检', () => {
     expect(codesOf(
       '{count, plural, one {{0} 个} other {{0} 个}}',
       '{count, plural, one {个} other {{0} 个}}',
-    )).toContain(DETERMINISTIC_HARD_RULE_CODES.TAG_PLACEHOLDER_FAMILY_MISMATCH)
+    )).toContain(DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH)
     // ICU 分支体内的 {Rare} 是分支文本不是占位符，不误报
     expect(pb097Run(
       '{kind, select, rare {Rare} other {Normal}}',
@@ -394,5 +396,95 @@ describe('PB-097 tag 族引擎', () => {
     expect(compileTagFamilyRegex('x'.repeat(300))).toBeNull() // 长度上限
     expect(compileTagFamilyRegex('\\[ok\\]', 'gZ')).toBeNull() // 非法 flag
     expect(compileTagFamilyRegex('\\[ok\\]')).not.toBeNull()
+  })
+})
+
+describe('LA018 ICU 语言类别兼容', () => {
+  const check = (source: string, target: string, targetLocale = 'en-US') => runDeterministicHardRules({
+    segment: { ...segment, source, targetLocale }, proposedTarget: target,
+  })
+  test('S01–S07：合法 plural/调序通过，变量、select、数值分支和语法损坏拒绝', () => {
+    const cases: Array<[string, string, boolean]> = [
+      ['{count, plural, other {获得#枚徽章}}', '{count, plural, one {Gain # badge} other {Gain # badges}}', true],
+      ['{count, plural, other {获得#枚徽章}}', '{coins, plural, one {Gain # badge} other {Gain # badges}}', false],
+      ['{kind, select, member {会员通道} guest {访客通道} other {普通通道}}', '{kind, select, premium {Member entrance} guest {Guest entrance} other {Main entrance}}', false],
+      ['{count, plural, =0 {没有徽章} other {#枚徽章}}', '{count, plural, one {# badge} other {# badges}}', false],
+      ['{count, plural, other {#枚徽章}}', '{count, plural, one {# badge} other {# badges}', false],
+      ['<b>{name}</b>获得{count}枚徽章。', '{count} badges awarded to <b>{name}</b>.', true],
+      ['轮到{player}。', "It is {enemy}'s turn.", false],
+    ]
+    for (const [source, target, allowed] of cases) expect(check(source, target).ok).toBe(allowed)
+  })
+  test('S08：实际换行变字面转义仍进入明确 QA', () => {
+    const result = runDeterministicHardRules({
+      segment: { ...segment, source: '准备。\n出发。' }, proposedTarget: 'Ready.\\nGo.',
+    }, { includeAdvisory: true })
+    expect(result.violations.some(item => item.code === 'NEWLINE_SIGNATURE_MISMATCH')).toBe(true)
+  })
+  test('新增分支可复制编号占位符与嵌套 select；丢失或改身份仍拒绝', () => {
+    const source = '{count, plural, other {{kind, select, rare {<b>{0}</b>稀有} other {{0}普通}}}}'
+    const target = '{count, plural, one {{kind, select, rare {<b>{0}</b> rare} other {{0} normal}}} other {{kind, select, rare {<b>{0}</b> rare} other {{0} normal}}}}'
+    expect(check(source, target).ok).toBe(true)
+    expect(check(source, target.replace('<b>{0}</b>', '<b>{1}</b>')).ok).toBe(false)
+    expect(check(source, target.replace('<b>{0}</b>', '')).ok).toBe(false)
+    expect(check(source, target.replace('rare {', 'premium {')).ok).toBe(false)
+  })
+  test('合法去掉重复类别，非法目标类别/offset/ordinal 变化仍拒绝', () => {
+    expect(check('{count, plural, one {#个} other {#个}}', '{count, plural, other {#个}}', 'zh-CN').ok).toBe(true)
+    expect(check('{count, plural, other {#}}', '{count, plural, few {#} other {#}}').ok).toBe(false)
+    expect(check('{count, plural, offset:1 other {#}}', '{count, plural, offset:2 other {#}}').ok).toBe(false)
+    expect(check('{count, plural, other {#}}', '{count, selectordinal, other {#}}').ok).toBe(false)
+    expect(check('{count, plural, one {{bonus}} other {{name}}}', '{count, plural, other {{name}}}', 'zh-CN').ok).toBe(false)
+  })
+})
+
+describe('LA018 显式项目 plural 属性语法', () => {
+  const family = {
+    id: 'synthetic-inflection', pattern: '\\[Inflect[^\\]]*\\]', class: 'singleton' as const,
+    targetLocales: ['en'],
+    grammar: { kind: 'plural-attributes' as const, tagName: 'Inflect', argumentAttribute: 'arg', formAttributes: ['one', 'other'] },
+  }
+  const check = (source: string, target: string) => runDeterministicHardRules({
+    segment: { ...segment, source, targetLocale: 'en-US' }, proposedTarget: target,
+    tagProfile: normalizeTagProfile({ families: [family] }),
+  })
+  test('源无grammar时合法目标词形可加入；属性调序与本地化词形合法', () => {
+    expect(check('获得{0}枚徽章', 'Gain {0} [Inflect arg="0" one="badge" other="badges"]').ok).toBe(true)
+    expect(check('{count} [Inflect arg="count" one="徽章" other="徽章"]', '{count} [Inflect other="badges" one="badge" arg="count"]').ok).toBe(true)
+  })
+  test('源已有 grammar 不能借普通占位符换绑另一个运行参数；关联重排合法', () => {
+    const source = '{0} item[Inflect arg="0" one="" other="s"]; {1} bonus'
+    expect(check(source, '{0} item[Inflect arg="1" one="" other="s"]; {1} bonus').ok).toBe(false)
+    const both = '{0}[Inflect arg="0" one="item" other="items"] {1}[Inflect arg="1" one="bonus" other="bonuses"]'
+    expect(check(both, '{1}[Inflect arg="1" one="bonus" other="bonuses"] {0}[Inflect arg="0" one="item" other="items"]').ok).toBe(true)
+    expect(check('{0} item; {1} bonus', '{0} item; {1}[Inflect arg="1" one="bonus" other="bonuses"]').ok).toBe(true)
+  })
+  test('坏索引/属性/括号/隐藏运行结构拒绝；已有语法的独有变量不得丢失', () => {
+    for (const target of [
+      '{0} [Inflect arg="1" one="badge" other="badges"]',
+      '{0} [Inflect arg="0.5" one="badge" other="badges"]',
+      '{0} [Inflect arg="0" one="badge"]',
+      '{0} [Inflect arg="0" one="badge" one="badges" other="badges"]',
+      '{0} [Inflect arg="0" one="badge" other="badges" unknown="x"]',
+      '{0} [Inflect arg="0" one="badge" other="badges"',
+      '{0} [Inflect arg="0" one="<b>badge</b>" other="badges"]',
+    ]) expect(check('获得{0}枚徽章', target).ok).toBe(false)
+    expect(check('[Inflect arg="count" one="徽章" other="徽章"]', 'Badges').ok).toBe(false)
+    expect(runQa([{ ...segment, source: '{0}', target: '{0} [Inflect arg="1" one="badge" other="badges"]', targetLocale: 'en-US' }], {
+      tagProfile: normalizeTagProfile({ families: [family] }),
+    }).some(finding => finding.code === 'TAG_FAMILY_MISMATCH' && finding.severity === 'L0')).toBe(true)
+  })
+  test('无grammar声明仍守恒，未指定适用locale或未知策略不得开启豁免', () => {
+    for (const profile of [
+      { families: [{ id: family.id, pattern: family.pattern, class: family.class }] },
+      { families: [{ ...family, targetLocales: [] }] },
+      { families: [{ ...family, grammar: { ...family.grammar, kind: 'unknown' } }] },
+    ]) {
+      expect(runDeterministicHardRules({
+        segment: { ...segment, source: '{0}', targetLocale: 'en-US' },
+        proposedTarget: '{0} [Inflect arg="0" one="badge" other="badges"]',
+        tagProfile: normalizeTagProfile(profile),
+      }).ok).toBe(false)
+    }
   })
 })

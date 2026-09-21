@@ -16,6 +16,7 @@ import {
   createStageEvidenceBaseline,
   deriveSegmentId,
   tmSourceHash,
+  RevisionConflictError,
   SegmentLockedError,
   StaleProposalError,
   UnknownSegmentError,
@@ -51,6 +52,7 @@ import {
   type LinguistCatToolCallInfo,
   type LinguistCatToolMutation,
   type LinguistCatToolName,
+  type CatApplyTranslationsResult,
   type PagedResult,
   type ResolveLinguistCatProject,
 } from './types'
@@ -164,6 +166,24 @@ async function invoke(
   toolCallId = 'call-1',
 ): Promise<AgentToolResult<unknown>> {
   return tool.execute(toolCallId, params as never, undefined, undefined, FAKE_EXTENSION_CTX)
+}
+
+/** 测试中按真实分片合同组回一页，不把空 contexts 当作丢失正文。 */
+async function completeContextPage(tool: LinguistCatTool, params: Record<string, unknown>): Promise<Pick<
+  import('./types').CatGetTranslationContextResult, 'contexts' | 'shared' | 'unprovidedReferences' | 'projectRules'
+>> {
+  let page = (await invoke(tool, params)).details as import('./types').CatGetTranslationContextResult
+  if (page.contextFragment === undefined) return page
+  let json = ''
+  while (page.contextFragment !== undefined) {
+    assert.equal(page.contextFragment.offset, json.length)
+    assert.ok(page.usedBytes <= page.maxBytes)
+    json += page.contextFragment.text
+    if (json.length === page.contextFragment.totalChars) return JSON.parse(json)
+    assert.ok(page.nextCursor)
+    page = (await invoke(tool, { ...params, cursor: page.nextCursor })).details as import('./types').CatGetTranslationContextResult
+  }
+  throw new Error('context fragment did not complete')
 }
 
 /** Text payload of a tool result (first text block). */
@@ -1065,6 +1085,60 @@ test('cat_apply_translations defaults to direct apply and can leave Pending prop
   }
 })
 
+test('apply 回执只含成功 savepoint，replay 保留原 revision，旧回执不能确认新写入', async () => {
+  const fixture = setup()
+  try {
+    const [first, second, stale, locked, malformed, sqlFailure] = fixture.segmentsA
+    assert.ok(first && second && stale && locked && malformed && sqlFailure)
+    fixture.db.segments.applyTargetEdit(stale.id, '外部修改', 0)
+    fixture.db.segments.setLocked(locked.id, true)
+    fixture.db.catDb.db.exec(`CREATE TRIGGER reject_test_target BEFORE UPDATE OF target ON segments
+      WHEN NEW.target = 'reject-target' BEGIN SELECT RAISE(ABORT, 'TEST_ACCEPT_FAILURE'); END`)
+    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture), sessionId: 'receipt-test' })
+    const tool = toolByName(tools, 'cat_apply_translations')
+    const params = { edits: [
+      { segmentId: first.id, baseRevision: 0, target: '成功一' },
+      { segmentId: second.id, baseRevision: 0, target: '成功二' },
+      { segmentId: stale.id, baseRevision: 0, target: '过期' },
+      { segmentId: locked.id, baseRevision: 0, target: '锁定' },
+      { segmentId: malformed.id, baseRevision: 0, target: '新增 {undeclared}' },
+      { segmentId: sqlFailure.id, baseRevision: 0, target: 'reject-target' },
+    ] }
+    const result = (await invoke(tool, params)).details as CatApplyTranslationsResult
+    assert.equal(result.applied, 2)
+    assert.deepEqual(result.stale, [stale.id])
+    assert.deepEqual(result.locked, [locked.id])
+    assert.deepEqual(result.failed.map(item => item.segmentId), [malformed.id, sqlFailure.id])
+    assert.equal(result.proposalIds.length, 2, '接受失败回滚的 proposal 不得出现在成功结果')
+    assert.deepEqual(result.appliedItems, [first, second].map((segment, index) => ({
+      segmentId: segment.id, proposalId: result.proposalIds[index], baseRevision: 0, revision: 1,
+    })))
+    assert.equal(fixture.db.proposals.list({}).length, 2)
+    fixture.db.segments.applyTargetEdit(first.id, '再次外部修改', 1)
+    const replay = (await invoke(tool, params)).details as CatApplyTranslationsResult
+    assert.deepEqual(replay, result)
+    assert.equal(fixture.db.segments.getById(first.id)?.revision, 2)
+    assert.throws(() => fixture.db.segments.recordCurrentStageDecision(first.id, 'translation', 1, 'corrected'), RevisionConflictError)
+    const { appliedItems: _items, ...historical } = result
+    fixture.db.catDb.db.prepare('UPDATE proposal_mutations SET result_json = ? WHERE run_id = ? AND tool_call_id = ?')
+      .run(JSON.stringify(historical), 'run:receipt-test:call-1', 'call-1')
+    assert.deepEqual((await invoke(tool, params)).details, historical, '旧回执缺字段时原样返回，不查当前版本补造')
+    assert.throws(() => fixture.db.catDb.transaction('外层失败', () => {
+      fixture.db.proposals.applyTranslations([{ segmentId: second.id, baseRevision: 1, target: '应回滚' }])
+      throw new Error('OUTER_FAILURE')
+    }), /OUTER_FAILURE/)
+    assert.equal(fixture.db.segments.getById(second.id)?.revision, 1)
+    assert.equal(fixture.db.proposals.list({}).length, 2)
+    const pending = (await invoke(tool, {
+      mode: 'proposal', edits: [{ segmentId: second.id, baseRevision: 1, target: '仅候选' }],
+    }, 'pending')).details as CatApplyTranslationsResult
+    assert.equal(pending.pending, 1)
+    assert.deepEqual(pending.appliedItems, [])
+  } finally {
+    fixture.db.close()
+  }
+})
+
 test('cat_propose_translations enforces batch, target, signature, lock and CAS rules', async () => {
   const fixture = setup()
   try {
@@ -1890,18 +1964,15 @@ test('cat_get_translation_context: enforces 50-item and UTF-8 byte budgets with 
         JSON.stringify({ note: '审校备注'.repeat(2_000) }),
         fixture.segmentsA[0]!.id,
       )
-    const degraded = (await invoke(tool, {
+    const degraded = await completeContextPage(tool, {
       segmentIds: [fixture.segmentsA[0]!.id],
       includeNeighbors: false,
       tmLimitPerSegment: 0,
       termLimitPerSegment: 0,
       maxBytes: 1_800,
-    })).details as {
-      contexts: Array<{ currentTarget: string; notes?: string; warnings: string[] }>
-    }
+    })
     assert.equal(degraded.contexts[0]!.currentTarget, '译文 0')
-    assert.equal(degraded.contexts[0]!.notes, undefined)
-    assert.ok(degraded.contexts[0]!.warnings.some((warning) => warning.includes('truncated')))
+    assert.equal(degraded.contexts[0]!.notes, '审校备注'.repeat(2_000))
 
     const boundedTool = toolByName(createLinguistCatTools({
       resolveProject: makeOkResolver(fixture),
@@ -2124,10 +2195,10 @@ test('cat_get_translation_context: 规则全集可续读，预算不足不推进
     fixture.db.termEntries.upsert({ term: 'Alpha', translation: '阿尔法', status: 'required', caseSensitive: false })
     fixture.db.termEntries.upsert({ term: 'source', translation: '阿法', status: 'forbidden', caseSensitive: false })
     fixture.db.catDb.db.prepare('UPDATE segments SET context_json = ? WHERE id = ?').run(JSON.stringify({ note: '冗长备注'.repeat(2_000) }), params.segmentIds[0])
-    const terms = (await invoke(tool, { ...params, maxBytes: 4_000 })).details as import('./types').CatGetTranslationContextResult
+    const terms = await completeContextPage(tool, { ...params, maxBytes: 4_000 })
     assert.equal(terms.contexts[0]!.requiredTerms.length, 1)
     assert.equal(terms.contexts[0]!.forbiddenTerms.length, 1)
-    assert.equal(terms.contexts[0]!.notes, undefined)
+    assert.equal(terms.contexts[0]!.notes, '冗长备注'.repeat(2_000))
   } finally { fixture.db.close() }
 })
 
@@ -2815,18 +2886,16 @@ test('Stage Evidence 工具只准备正文与图片描述，不提前记录提�
       { segmentIds: [segment.id], includeNeighbors: false },
       'context-call',
     )).details as {
-      contexts: Array<{ linkedContext: Array<{ anchorId?: string }> }>
-      requiredEvidencePending?: Array<{ docId: string; anchorIds: string[] }>
+      contexts: Array<{ contextRefs: Array<{ ref: string }> }>
+      shared: { context: Record<string, { anchorId?: string }> }
+      unprovidedReferences: Array<{ docId: string; anchorIds: string[]; history: { status: string } }>
       stageEvidence: { required: number; presented: number; pending: number }
     }
-    assert.deepEqual(contextResult.contexts[0]?.linkedContext.map((item) => item.anchorId), ['anchor-text'])
-    assert.deepEqual(contextResult.requiredEvidencePending, [{
-      docId: image.id,
-      filename: 'frame.png',
-      anchorIds: ['anchor-image'],
-      kind: 'image',
-      reason: '必需视觉证据尚未进入模型请求，需调用 cat_read_context_doc',
-    }])
+    assert.deepEqual(contextResult.contexts[0]?.contextRefs.map(item => contextResult.shared.context[item.ref]!.anchorId), ['anchor-text'])
+    assert.equal(contextResult.unprovidedReferences.length, 1)
+    assert.equal(contextResult.unprovidedReferences[0]!.docId, image.id)
+    assert.deepEqual(contextResult.unprovidedReferences[0]!.anchorIds, ['anchor-image'])
+    assert.equal(contextResult.unprovidedReferences[0]!.history.status, 'pending')
     assert.deepEqual(contextResult.stageEvidence, {
       stageRunId,
       status: 'in_progress',
@@ -2844,6 +2913,22 @@ test('Stage Evidence 工具只准备正文与图片描述，不提前记录提�
     assert.equal(fixture.db.stageEvidence.listReceipts(stageRunId).length, 0)
     assert.equal(prepared.length, 2)
     assert.ok(prepared[1]?.evidence.every(item => item.visual && item.submission === undefined))
+    const body = (await invoke(toolByName(tools, 'cat_read_context_doc'), { docId: parent.id }, 'body-call')).details as import('./types').CatReadContextDocResult
+    assert.equal(prepared.length, 3)
+    await invoke(toolByName(tools, 'cat_read_context_doc'), {
+      docId: parent.id, metadataOnly: true, docVersion: body.docVersion,
+      offset: body.offset, limit: body.limit, metadataOffset: 1,
+    }, 'metadata-call')
+    assert.equal(prepared.length, 3, '元数据续页不准备正文或图片 receipt')
+    for (const receipt of prepared) fixture.db.stageEvidence.recordReceipt({
+      ...receipt, evidence: receipt.evidence.map(item => ({ ...item, submission: 'provider-response-v1' })),
+    })
+    const covered = (await invoke(toolByName(tools, 'cat_get_translation_context'), {
+      segmentIds: [segment.id], includeNeighbors: false,
+    }, 'covered-context')).details as import('./types').CatGetTranslationContextResult
+    assert.equal(covered.stageEvidence?.pending, 0)
+    assert.equal(covered.unprovidedReferences?.[0]?.history.status, 'covered')
+    assert.equal(covered.unprovidedReferences?.[0]?.docId, image.id, '本次未附图像仍可路由，但不声称历史欠项')
   } finally {
     fixture.db.close()
   }
@@ -3069,8 +3154,8 @@ test('超大单句上下文以完整 JSON 分片续读，长文本无丢失且�
     } while (cursor)
     const restored = JSON.parse(json)
     assert.equal(restored.contexts[0].source, segment.source)
-    assert.equal(restored.requiredEvidencePending[0].anchorIds.length, 1500)
-    assert.equal(new Set(restored.requiredEvidencePending[0].anchorIds).size, 1500)
+    assert.equal(restored.unprovidedReferences[0].anchorIds.length, 1500)
+    assert.equal(new Set(restored.unprovidedReferences[0].anchorIds).size, 1500)
     assert.equal(fixture.db.stageEvidence.list().length, 0)
     fixture.db.contextDocs.setEvidenceLink({ contextDocId: doc.id, anchorId: 'anchor-0', relation: { kind: 'segment', segmentId: segment.id }, requiredness: 'conditional', mappingRevision: 'v2' })
     await assertThrowsCode(invoke(tool, { ...request, cursor: firstCursor }), 'CONTEXT_DRIFT')
@@ -3102,5 +3187,150 @@ test('超长 Source、Target 与必需术语出处可无损重组，续页预算
     assert.equal(restored.contexts[0].source, source)
     assert.equal(restored.contexts[0].currentTarget, target)
     assert.equal(restored.contexts[0].requiredTerms[0].note, note)
+  } finally { fixture.db.close() }
+})
+
+test('schema2 在装页前共享正文与 Voice，保留异源权威、每段 requiredness 和边界邻文', async () => {
+  const fixture = setup()
+  try {
+    const { asset, segments } = seedAsset(fixture.db, fixture.project, {
+      filename: 'shared-context.tsv', sha: '7'.repeat(64), count: 22, sourcePrefix: 'Shared', fillEvery: 1,
+    })
+    const selected = segments.slice(1, 21)
+    const text = 'A shared reference paragraph. '.repeat(60)
+    const docIds: string[] = []
+    for (const index of [1, 2]) {
+      const doc = fixture.db.contextDocs.insert({ kind: 'doc', originalFilename: `guide-${index}.txt`, blobRelpath: `blobs/guide-${index}.txt`, textExtract: text })
+      docIds.push(doc.id)
+      fixture.db.contextDocs.setEvidenceLink({ contextDocId: doc.id, relation: { kind: 'asset', assetId: asset.id }, requiredness: index === 1 ? 'required' : 'optional', mappingRevision: 'v1' })
+    }
+    fixture.db.contextDocs.setEvidenceLink({ contextDocId: docIds[1]!, relation: { kind: 'segment', segmentId: selected[0]!.id }, requiredness: 'required', mappingRevision: 'v1' })
+    for (const segment of selected) fixture.db.catDb.db.prepare('UPDATE segments SET context_json = ? WHERE id = ?').run(JSON.stringify({ note: 'A meaningful note', origin: 'Tutorial', meta: { speaker: 'Narrator', textType: 'dialogue', module: 'intro', unrelatedInternal: 'do not repeat this' } }), segment.id)
+    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
+    await invoke(toolByName(tools, 'cat_upsert_voice_profile'), { speaker: 'Narrator', register: 'formal', toneMarkers: ['restrained'] })
+    const result = await invoke(toolByName(tools, 'cat_get_translation_context'), {
+      segmentIds: selected.map(item => item.id), tmLimitPerSegment: 0, termLimitPerSegment: 0, neighborCount: 1, maxBytes: 45_000, readOnly: true,
+    })
+    const dto = result.details as import('./types').CatGetTranslationContextResult
+    assert.equal(dto.contextFormatVersion, 2)
+    assert.equal(dto.contexts.length, 20, '共享后整组放入相同预算，不先按未去重的体量切页')
+    assert.equal(dto.truncated, false)
+    assert.equal(Object.keys(dto.shared.context).length, 2, '同文异源不能合并为一条权威')
+    assert.equal(Object.keys(dto.shared.voices).length, 1)
+    assert.deepEqual(Object.values(dto.shared.neighbors).map(item => item.segmentId), [segments[0]!.id, segments[21]!.id])
+    assert.equal(resultText(result).split(text).length - 1, 2)
+    assert.equal(dto.contexts[0]!.contextRefs.find(ref => dto.shared.context[ref.ref]!.docId === docIds[1])?.requiredness, 'required')
+    assert.equal(dto.contexts[1]!.contextRefs.find(ref => dto.shared.context[ref.ref]!.docId === docIds[1])?.requiredness, 'optional')
+    for (const [index, context] of dto.contexts.entries()) {
+      assert.equal(context.source, selected[index]!.source)
+      assert.equal(context.currentTarget, selected[index]!.target)
+      assert.equal(context.notes, 'A meaningful note')
+      assert.equal(context.origin, 'Tutorial')
+      assert.equal(context.textType, 'dialogue')
+      assert.equal(context.module, 'intro')
+      assert.ok(context.voiceRefs.every(ref => dto.shared.voices[ref] !== undefined))
+      for (const ref of [...context.previous, ...context.next]) assert.ok(dto.contexts.some(item => item.segmentId === ref.segmentId && item.revision === ref.revision)
+        || dto.shared.neighbors[`${ref.segmentId}@${ref.revision}`] !== undefined)
+    }
+    assert.ok(!resultText(result).includes('unrelatedInternal'))
+    assert.equal(dto.usedBytes, Buffer.byteLength(resultText(result)))
+    const expanded = dto.contexts.map(context => ({ ...context,
+      linkedContext: context.contextRefs.map(ref => ({ ...dto.shared.context[ref.ref], requiredness: ref.requiredness })),
+      voiceProfiles: context.voiceRefs.map(ref => dto.shared.voices[ref]),
+    }))
+    assert.ok(Buffer.byteLength(JSON.stringify(expanded)) > dto.maxBytes, '以完整相同内容验证去重确实改变本组装页结果')
+  } finally { fixture.db.close() }
+})
+
+test('schema2 极小预算分片仍保留完整双语、原生标签位置、key 和语义备注', async () => {
+  const fixture = setup()
+  try {
+    const segment = fixture.segmentsA[0]!
+    const source = '<b>Alpha</b>\n{count} ready'
+    const target = '  已有 <b>阿尔法</b>\n{count}  '
+    const note = '控制角色说话范围。'.repeat(400)
+    fixture.db.catDb.db.prepare('UPDATE segments SET source = ?, target = ?, context_json = ? WHERE id = ?').run(source, target, JSON.stringify({ note }), segment.id)
+    const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture) }), 'cat_get_translation_context')
+    const page = await completeContextPage(tool, { segmentIds: [segment.id], includeNeighbors: false, tmLimitPerSegment: 0, termLimitPerSegment: 0, maxBytes: 1024, readOnly: true })
+    const actual = page.contexts[0]!
+    assert.equal(actual.source, source)
+    assert.equal(actual.currentTarget, target)
+    assert.equal(actual.notes, note)
+    assert.equal(actual.key, segment.key)
+    assert.equal(actual.originalOrdinal, segment.ordinal + 1)
+    assert.ok(actual.tags.length > 0)
+    assert.ok(actual.targetTags.length > 0)
+    assert.equal(source.slice(actual.tags[0]!.start, actual.tags[0]!.end), '<b>')
+    assert.equal(target.slice(actual.targetTags[0]!.start, actual.targetTags[0]!.end), '<b>')
+  } finally { fixture.db.close() }
+})
+
+test('metadataOnly 续取同版本同正文范围，省去正文且不能静默拼接版本', async () => {
+  const fixture = setup()
+  try {
+    const text = 'Long reference content. '.repeat(300)
+    const doc = fixture.db.contextDocs.insert({ kind: 'doc', originalFilename: 'metadata.txt', blobRelpath: 'blobs/metadata.txt', textExtract: text })
+    const anchors = Array.from({ length: 45 }, (_, index) => ({ id: `meta-${index}`, locator: { kind: 'paragraph' as const, index, textRange: { start: 0, end: text.length } }, text }))
+    fixture.db.contextDocs.replaceExtraction(doc.id, anchors)
+    let preparation = 0
+    const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture), prepareContextDoc: () => { preparation++ } }), 'cat_read_context_doc')
+    const first = (await invoke(tool, { docId: doc.id, offset: 0, limit: 8000 })).details as import('./types').CatReadContextDocResult
+    assert.equal(first.text, text)
+    assert.equal(first.nextMetadataOffset, 20)
+    const args = { docId: doc.id, offset: first.offset, limit: first.limit, docVersion: first.docVersion, metadataOffset: first.nextMetadataOffset, metadataOnly: true }
+    const metadataResult = await invoke(tool, args)
+    const metadata = metadataResult.details as import('./types').CatReadContextDocResult
+    assert.equal(metadata.metadataOnly, true)
+    assert.equal(metadata.text, undefined)
+    assert.equal(metadata.docVersion, first.docVersion)
+    assert.equal(metadata.offset, first.offset)
+    assert.equal(metadata.limit, first.limit)
+    assert.deepEqual(metadata.anchors?.map(anchor => anchor.id), fixture.db.contextDocs.listAnchors(doc.id).slice(20, 40).map(anchor => anchor.id))
+    assert.ok(metadata.anchors?.every(anchor => anchor.text === undefined))
+    assert.equal(preparation, 1)
+    assert.ok(Buffer.byteLength(resultText(metadataResult)) < first.usedBytes!)
+    const standalone = (await invoke(tool, { docId: doc.id, offset: first.offset, limit: first.limit, metadataOffset: 20 })).details as import('./types').CatReadContextDocResult
+    assert.equal(standalone.text, text, 'metadataOffset 本身不是此前已读凭证，独立读取仍附正文')
+    await assertThrowsCode(invoke(tool, { docId: doc.id, metadataOnly: true, offset: 0, limit: 1 }), 'INVALID_ARGUMENT')
+    fixture.db.contextDocs.insert({ kind: 'doc', originalFilename: 'metadata.txt', blobRelpath: 'blobs/metadata.txt', textExtract: text,
+      extractionWarnings: [{ code: 'PARTIAL_EXTRACTION', message: 'A newly detected extraction limitation.' }],
+    })
+    await assertThrowsCode(invoke(tool, args), 'CONTEXT_DRIFT')
+    args.docVersion = ((await invoke(tool, { docId: doc.id, offset: first.offset, limit: first.limit })).details as import('./types').CatReadContextDocResult).docVersion
+    fixture.db.contextDocs.replaceExtraction(doc.id, [...anchors, { id: 'new-anchor', locator: { kind: 'paragraph', index: 45 }, text: 'new metadata' }])
+    await assertThrowsCode(invoke(tool, args), 'CONTEXT_DRIFT')
+  } finally { fixture.db.close() }
+})
+
+test('schema2 分片期间原件披露状态变化须拒绝拼接，但保留已有历史 receipt', async () => {
+  const fixture = setup()
+  try {
+    const segment = fixture.segmentsA[0]!
+    fixture.db.catDb.db.prepare('UPDATE segments SET source = ? WHERE id = ?').run('Source '.repeat(1200), segment.id)
+    const doc = fixture.db.contextDocs.insert({ kind: 'doc', originalFilename: 'required.txt', blobRelpath: 'blobs/required.txt', textExtract: 'Required reference. '.repeat(180) })
+    fixture.db.contextDocs.setEvidenceLink({ contextDocId: doc.id, relation: { kind: 'segment', segmentId: segment.id }, requiredness: 'required', mappingRevision: 'v1' })
+    const stageRunId = 'stage:fragment-history'
+    const requirement = {
+      evidence: { ref: { kind: 'context-doc' as const, id: doc.id }, version: fixture.db.contextDocs.evidenceVersion(doc.id, [segment.id], [fixture.assetA.id])! },
+      purpose: 'style' as const, requiredness: 'required' as const,
+      scope: { kind: 'segments' as const, segmentIds: [segment.id] }, anchorIds: [], rationale: 'required reference',
+    }
+    fixture.db.stageEvidence.create({
+      stageRunId, sessionId: 'fragment-session',
+      plan: { stageRunId, role: 'reviewer', stage: 'editing', assetIds: [fixture.assetA.id], segmentIds: [segment.id], requirements: [requirement] },
+      baseline: createStageEvidenceBaseline({ stageRunId, discoveryScopeHash: 'scope', mappingRevision: 'v1', ruleSetRevision: 'v1', segmentIds: [segment.id], evidence: [requirement.evidence] }),
+    })
+    const prepared: RecordStageEvidenceReceiptInput[] = []
+    const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture), stageEvidenceRunId: stageRunId, sessionId: 'fragment-session', onEvidencePrepared: receipt => { prepared.push(receipt) } })
+    const contextTool = toolByName(tools, 'cat_get_translation_context')
+    const params = { segmentIds: [segment.id], includeNeighbors: false, tmLimitPerSegment: 0, termLimitPerSegment: 0, maxBytes: 1024 }
+    const first = (await invoke(contextTool, params, 'first-fragment')).details as import('./types').CatGetTranslationContextResult
+    assert.ok(first.contextFragment)
+    await invoke(toolByName(tools, 'cat_read_context_doc'), { docId: doc.id, limit: 8000 }, 'body-read')
+    const bodyReceipt = prepared.find(item => item.toolCallId === 'body-read')!
+    fixture.db.stageEvidence.recordReceipt({ ...bodyReceipt, evidence: bodyReceipt.evidence.map(item => ({ ...item, submission: 'provider-response-v1' })) })
+    assert.equal(fixture.db.stageEvidence.getPresentationCoverage(stageRunId).pending.length, 0)
+    await assertThrowsCode(invoke(contextTool, { ...params, cursor: first.nextCursor }, 'old-fragment'), 'CONTEXT_DRIFT')
+    assert.equal(fixture.db.stageEvidence.listReceipts(stageRunId).length, 1)
   } finally { fixture.db.close() }
 })

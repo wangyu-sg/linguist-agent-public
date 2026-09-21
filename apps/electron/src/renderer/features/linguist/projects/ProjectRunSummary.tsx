@@ -182,17 +182,18 @@ export function ProjectRunSummary({
     if (summary === null && state.error === undefined && state.undoResult === undefined) return null
     return (
       <section
-        aria-label="本次运行"
+        aria-label="最近 CAT 运行"
         className="flex min-h-7 shrink-0 items-center justify-between gap-2 border-b border-border/50 bg-content-area/55 px-3 py-1 text-[11px] text-muted-foreground"
       >
         <span className="min-w-0 truncate">
           {state.error !== undefined
-            ? `本次运行：${state.error}`
+            ? `最近 CAT 运行：${state.error}`
             : state.undoResult !== undefined
               ? undoStatusLabel(state.undoResult)
               : summary === null
                 ? '暂无 CAT 运行记录'
                 : [
+                    '最近 CAT 运行',
                     summary.job ? jobStatusLabel(summary.job.status) : null,
                     `建议 ${summary.changes.proposalsCreated}`,
                     `QA ${qaCount}`,
@@ -218,7 +219,7 @@ export function ProjectRunSummary({
   if (summary === null && state.error === undefined && state.undoResult === undefined) {
     return (
       <section
-        aria-label="本次运行"
+        aria-label="最近 CAT 运行"
         className="shrink-0 border-b border-border/60 bg-content-area/65 px-4 py-1"
       >
         <p className="text-[11px] leading-4 text-muted-foreground">
@@ -232,7 +233,7 @@ export function ProjectRunSummary({
 
   return (
     <section
-      aria-label="本次运行"
+      aria-label="最近 CAT 运行"
       className="shrink-0 border-b border-border/60 bg-content-area/65 px-4 py-2"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">

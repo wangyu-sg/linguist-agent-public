@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
+import { getAgentWorkspace, getAllWorkspaceSkills, readWorkspaceSkillContent } from '../agent-workspace-manager'
 import type {
   AgentSessionMeta,
   LinguistDiagnosticBundle,
@@ -127,6 +128,14 @@ function collectDiagnostics(
     invalid('sessionId 不属于当前 Linguist 项目')
   }
 
+  const workspace = session?.workspaceId ? getAgentWorkspace(session.workspaceId) : undefined
+  const workspaceSkills = workspace ? getAllWorkspaceSkills(workspace.slug).map(skill => ({
+    slug: skill.slug,
+    version: skill.version,
+    enabled: skill.enabled,
+    source: `${skill.enabled ? 'skills' : 'skills-inactive'}/${skill.slug}/SKILL.md`,
+    sha256: createHash('sha256').update(readWorkspaceSkillContent(workspace.slug, skill.slug)).digest('hex'),
+  })) : undefined
   const promptSession = {
     linguistProjectId: request.projectId,
     ...(session?.linguistRole === undefined ? {} : { linguistRole: session.linguistRole }),
@@ -181,7 +190,7 @@ function collectDiagnostics(
     ...(session === undefined ? {} : { sessionId: session.id }),
     status: {
       projectRevision,
-      prompt: { ...prompt.status },
+      prompt: { ...prompt.status, ...(workspaceSkills ? { workspaceSkills } : {}) },
       dev: {
         ...(profile?.kind === 'linguist'
           ? {
@@ -254,6 +263,7 @@ function fingerprint(
 
 function buildBundle(collected: CollectedDiagnostics): LinguistDiagnosticBundle {
   const { status } = collected
+  const { workspaceSkills: _workspaceSkills, ...bundlePrompt } = status.prompt
   const trace = status.dev.trace
   const availableTraceFields: LinguistDiagnosticBundle[
     'correlation'
@@ -307,7 +317,7 @@ function buildBundle(collected: CollectedDiagnostics): LinguistDiagnosticBundle 
       unavailableTraceFields,
     },
     projectRevision: status.projectRevision,
-    prompt: status.prompt,
+    prompt: bundlePrompt,
     metrics: status.dev.metrics,
     runtime: {
       agentRuntime: status.dev.agentRuntime,

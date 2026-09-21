@@ -1,0 +1,821 @@
+{
+  "schemaVersion": 1,
+  "provenance": "Original synthetic fixtures authored for this plan; not customer text.",
+  "usage": "Strip evaluation before model input; judge semantically, not exact string.",
+  "cases": [
+    {
+      "id": "T01",
+      "stage": "T",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "门快关了，赶紧上车！",
+      "currentTarget": "",
+      "brief": "疏散场景，角色催同伴登上列车。短促自然。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "门将关闭",
+          "催促登车"
+        ],
+        "mustNot": [
+          "解释文化背景",
+          "增加伤亡或倒计时"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "T02",
+      "stage": "T",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "连续格挡4次后，下一次反击返还一半体力消耗。",
+      "currentTarget": "",
+      "brief": "技能说明；stamina为已批准资源名。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "连续格挡4次",
+          "仅下一次反击",
+          "返还该次反击一半体力消耗"
+        ],
+        "mustNot": [
+          "4个目标",
+          "所有未来反击",
+          "法力"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "T03",
+      "stage": "T",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "生命值不超过25%时，护盾强度提升至原来的2倍。",
+      "currentTarget": "",
+      "brief": "机制说明，百分比指当前生命比例。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "包含25%",
+          "护盾强度结果为2倍"
+        ],
+        "mustNot": [
+          "严格低于",
+          "增加200%导致3倍",
+          "增加最大生命"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "T04",
+      "stage": "T",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "这事八字还没一撇呢，别急着庆功。",
+      "currentTarget": "",
+      "brief": "现代伙伴对话，没有书法双关。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "事情尚无着落/为时尚早",
+          "不要过早庆祝"
+        ],
+        "mustNot": [
+          "汉字笔画解释",
+          "新增角色冲突"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "T05",
+      "stage": "T",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "他嘴上说不在乎，却把那枚旧徽章擦了一遍又一遍。",
+      "currentTarget": "",
+      "brief": "克制叙事，保留行为透露情绪，不把潜台词讲透。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "口头声称不在乎",
+          "反复擦旧徽章",
+          "反差"
+        ],
+        "mustNot": [
+          "明确新增恋人或愧疚剧情",
+          "变成UI说明"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "T06",
+      "stage": "T",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "无王冠，无预言。只有你。",
+      "currentTarget": "",
+      "brief": "奇幻动作游戏宣传标语，可创译节奏，不能增加卖点。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "没有王冠/预言的英雄定位",
+          "强调玩家自身"
+        ],
+        "mustNot": [
+          "限时免费",
+          "保证成为国王"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "T07",
+      "stage": "T",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "Rewards earned while the beacon is active are doubled.",
+      "currentTarget": "",
+      "brief": "奖励规则，beacon批准译名“信标”。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "信标生效期间",
+          "期间获得的奖励翻倍"
+        ],
+        "mustNot": [
+          "激活信标这一动作的奖励",
+          "增加为3倍"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "example-regression"
+      }
+    },
+    {
+      "id": "T08",
+      "stage": "T",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "You cannot equip this item until you reach Rank 5.",
+      "currentTarget": "",
+      "brief": "装备提示，Rank为品阶，短而清楚。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "达到5阶后才可装备"
+        ],
+        "mustNot": [
+          "照搬until成不自然中文",
+          "5级人物等级"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "example-regression"
+      }
+    },
+    {
+      "id": "T09",
+      "stage": "T",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "Not bad. For a rookie.",
+      "currentTarget": "",
+      "brief": "老队员对新人轻微挖苦，没有恶意辱骂。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "表面认可与轻微揶揄",
+          "简短停顿语气"
+        ],
+        "mustNot": [
+          "客观评估报告体",
+          "新增脏话"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "example-regression"
+      }
+    },
+    {
+      "id": "T10",
+      "stage": "T",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "Your shield protects nearby allies, but not you.",
+      "currentTarget": "",
+      "brief": "技能说明。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "附近友军",
+          "自身不受保护"
+        ],
+        "mustNot": [
+          "省略例外",
+          "改成自己也受保护"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "example-regression"
+      }
+    },
+    {
+      "id": "T11",
+      "stage": "T",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "No crown. No prophecy. Just you.",
+      "currentTarget": "",
+      "brief": "营销短句；允许自然重组，保留核心意象，不逐词机械。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "王冠与预言均缺席",
+          "强调玩家"
+        ],
+        "mustNot": [
+          "增加承诺奖励",
+          "固定唯一中文"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "T12",
+      "stage": "T",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "Release to fire.",
+      "currentTarget": "",
+      "brief": "玩家按住弓弦蓄力后松开触控按钮射箭的提示。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "松开按钮触发射击"
+        ],
+        "mustNot": [
+          "释放技能",
+          "开火键位置猜测"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E01",
+      "stage": "E",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "修复完成后可再次出航。",
+      "currentTarget": "You can set sail again once repairs are complete.",
+      "brief": "航海任务提示；面向普通玩家。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留准确自然译文"
+        ],
+        "mustNot": [
+          "happy-to-glad式换词"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "example-regression"
+      }
+    },
+    {
+      "id": "E02",
+      "stage": "E",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "生命值不超过25%时，护盾强度提升至原来的2倍。",
+      "currentTarget": "When Health is below 25%, Shield Strength increases by 200%.",
+      "brief": "边界和结果倍率均需准确。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "包含25%",
+          "结果2倍"
+        ],
+        "mustNot": [
+          "仅改大小写",
+          "留一个机制错误"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E03",
+      "stage": "E",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "连续格挡4次后，下一次反击返还一半体力消耗。",
+      "currentTarget": "After blocking four enemies, all counterattacks restore half your Stamina.",
+      "brief": "完整双语审校。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "次数非敌人数",
+          "下一次反击",
+          "消耗的一半"
+        ],
+        "mustNot": [
+          "只因术语对就保留"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E04",
+      "stage": "E",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "该功能将在完成试炼后开放。",
+      "currentTarget": "This feature becomes available after you complete the trial.",
+      "brief": "普通功能提示；术语表普通“功能”可为function，不是强制项。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "认可feature在此语境"
+        ],
+        "mustNot": [
+          "机械改function",
+          "增加系统名称"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E05",
+      "stage": "E",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "雾林会记住每一个归来的人。",
+      "currentTarget": "The mistwood remembers everyone who returns.",
+      "brief": "诗性旁白；mistwood为项目普通地点描述，当前小写已批准。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留意象和自然表达"
+        ],
+        "mustNot": [
+          "无依据大写成专名",
+          "把拟人删除成客观说明"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E06",
+      "stage": "E",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "每次回合结束时，恢复少量体力。",
+      "currentTarget": "Restore a small amount of Stamina at the end of each turn.",
+      "brief": "旧TM同类句含10%，当前Source没有。",
+      "references": [
+        {
+          "source": "approved-archive",
+          "sourceText": "每次回合结束时，恢复10%体力。",
+          "targetText": "Restore 10% Stamina at the end of each turn.",
+          "scope": "older-version"
+        }
+      ],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保持不确定量不补数值"
+        ],
+        "mustNot": [
+          "从旧TM加10%"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E07",
+      "stage": "E",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "You cannot equip this item until you reach Rank 5.",
+      "currentTarget": "你不能装备此物品直到你达到5阶。",
+      "brief": "用户要求达到简洁自然的产品提示质量。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "改成中文自然条件关系",
+          "保留5阶限制"
+        ],
+        "mustNot": [
+          "只改标点保留翻译腔"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "example-regression"
+      }
+    },
+    {
+      "id": "E08",
+      "stage": "E",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "Matchmaking has been cancelled.",
+      "currentTarget": "匹配已取消。",
+      "brief": "简中常规提示。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "认可无主句"
+        ],
+        "mustNot": [
+          "强行加被或你的",
+          "无收益扩写"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "example-regression"
+      }
+    },
+    {
+      "id": "E09",
+      "stage": "E",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "The reward doubles only if both gates remain open.",
+      "currentTarget": "只要有一扇门开着，奖励就翻倍。",
+      "brief": "机制条件。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "两扇门都保持打开",
+          "only if必要条件"
+        ],
+        "mustNot": [
+          "OR与AND混淆"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E10",
+      "stage": "E",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "I said I was fine. I did not say it stopped hurting.",
+      "currentTarget": "我说过我没事，可没说过已经不疼了。",
+      "brief": "角色一边掩饰受伤，一边与熟悉的同伴交谈。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留反差和人物口吻"
+        ],
+        "mustNot": [
+          "逐词回译",
+          "无依据变庄严书面语"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E11",
+      "stage": "E",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "Join",
+      "currentTarget": "加入",
+      "brief": "只提供一个字符串，无key、界面或产品动作，用户只要指出关键歧义，禁止臆改。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "context-needed",
+        "mustPreserve": [
+          "承认可能是加入队伍/连接/拼接，现译可暂保留",
+          "只索取能消歧的最少上下文"
+        ],
+        "mustNot": [
+          "断言加入必错",
+          "扩展到全项目检查"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "E12",
+      "stage": "E",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "The watch is over.",
+      "currentTarget": "手表结束了。",
+      "brief": "守城士兵交班对白，watch指值守。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "修正为值守/守夜结束",
+          "保留对白简洁"
+        ],
+        "mustNot": [
+          "机械套时间设备术语",
+          "因无TM拒绝修"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P01",
+      "stage": "P",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "反击会恢复体力。",
+      "currentTarget": "A counterattack restore Stamina.",
+      "brief": "英文校对，可回看Source。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "单数主谓一致"
+        ],
+        "mustNot": [
+          "扩大整批重译",
+          "新增触发条件"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P02",
+      "stage": "P",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "先躲开，再找机会反击。",
+      "currentTarget": "Dodge first, then look for an opening to counterattack.",
+      "brief": "动作教程；面向新玩家，操作先后须清楚。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留自然简短表达"
+        ],
+        "mustNot": [
+          "无实际收益换写同义词",
+          "省略反击动作",
+          "增加源文没有的触发或必胜承诺"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P03",
+      "stage": "P",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "别告诉我你又迷路了。",
+      "currentTarget": "Don’t tell me you got lost again.",
+      "brief": "对白，项目允许弯引号和contractions。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留人物口吻"
+        ],
+        "mustNot": [
+          "无依据改正式语气或ASCII标点"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P04",
+      "stage": "P",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "准备好了吗？\n我们出发。",
+      "currentTarget": "Ready?\\nLet’s go.",
+      "brief": "Source含真实换行；Target中是字面量反斜杠+n（\\n）。格式要求实际两行。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "改为真实换行",
+          "正文含义保持"
+        ],
+        "mustNot": [
+          "把二者当相同",
+          "删第二句"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P05",
+      "stage": "P",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "护盾值增加到150。",
+      "currentTarget": "Shield Strength increases by 150.",
+      "brief": "P中发现可能误义时允许回Source定位修正。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "to 150不是by150"
+        ],
+        "mustNot": [
+          "认为P无权发现误译",
+          "重跑全批TEP"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P06",
+      "stage": "P",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "已发送给{recipient}。",
+      "currentTarget": "Sent to {recipient}.",
+      "brief": "占位符已注册身份，移动可合法但此处无需改。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "变量身份完整"
+        ],
+        "mustNot": [
+          "翻译recipient标识",
+          "无收益重排"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P07",
+      "stage": "P",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "The gate is locked.",
+      "currentTarget": "大门已锁锁上。",
+      "brief": "中文校对。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "修复重复字"
+        ],
+        "mustNot": [
+          "改成永久封闭增加含义"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P08",
+      "stage": "P",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "You have {count} attempts remaining.",
+      "currentTarget": "剩余{count}次尝试机会。",
+      "brief": "简中提示；count实际变量。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留自然省略"
+        ],
+        "mustNot": [
+          "加“你有”与重复剩余",
+          "删变量"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P09",
+      "stage": "P",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "Wait. Listen. Do you hear it?",
+      "currentTarget": "等等。听——你听见了吗？",
+      "brief": "悬疑对白，允许破折号和口语。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留节奏与悬念"
+        ],
+        "mustNot": [
+          "统一成客服用语",
+          "擅添声音来源"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P10",
+      "stage": "P",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "Reward: {item} × {quantity}",
+      "currentTarget": "奖励：{quantity} × {item}",
+      "brief": "该格式明确允许变量重排；物品与数量身份不可变，当前中文呈现已批准。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "认可合法重排"
+        ],
+        "mustNot": [
+          "为源译顺序一致强改",
+          "变量标识变化"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P11",
+      "stage": "P",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "The expedition begins in three days.",
+      "currentTarget": "远征将在3天后开始。",
+      "brief": "完整句子；项目仅组合倒计时要求d，普通叙述用天。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留3天完整句"
+        ],
+        "mustNot": [
+          "将倒计时规则扩到所有数字时间"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    },
+    {
+      "id": "P12",
+      "stage": "P",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "We need supplies, not excuses.",
+      "currentTarget": "我们需要的是补给，而不是借口。",
+      "brief": "军官对白；语气克制有力。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "保留对比语气"
+        ],
+        "mustNot": [
+          "增加侮辱或训斥剧情",
+          "无收益换词"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "synthetic-regression"
+      }
+    }
+  ]
+}

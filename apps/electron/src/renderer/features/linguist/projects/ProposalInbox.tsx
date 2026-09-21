@@ -598,6 +598,21 @@ function ProposalCard({
         <span>创建：{formatTimestamp(diff.proposal.createdAt)}</span>
       </div>
 
+      {diff.latestIssuance && (
+        <details className="mt-2 text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer">本次建议的生成依据</summary>
+          <dl className="mt-2 grid gap-1 break-all">
+            <div>模型：{diff.latestIssuance.modelId ?? '未记录'}</div>
+            <div>Prompt 版本：{diff.latestIssuance.linguistPromptVersion ?? '未记录'}</div>
+            <div>Prompt hash：{diff.latestIssuance.promptHash ?? '未记录'}</div>
+            <div>项目摘要版本：{diff.latestIssuance.projectDigestRevision ?? '未记录'}</div>
+            <div>项目摘要 hash：{diff.latestIssuance.projectDigestHash ?? '未记录'}</div>
+            <div>工具集 hash：{diff.latestIssuance.toolsetHash ?? '未记录'}</div>
+            <div>输入版本：{diff.baseRevision}；当前版本：{diff.currentRevision}</div>
+          </dl>
+        </details>
+      )}
+
       {editing && pending ? (
         <div className="mt-4 flex flex-col gap-2">
           <label className="text-[12px] font-medium text-foreground/60" htmlFor={`edit-${diff.proposal.id}`}>

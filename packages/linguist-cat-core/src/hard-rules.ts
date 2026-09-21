@@ -22,6 +22,7 @@ import {
   type TagTokenGroup,
 } from './tag-families'
 import type { LinguistTagProfile } from './tag-profile'
+import { projectGrammarTokens } from './project-grammar'
 
 export const DETERMINISTIC_HARD_RULE_CODES = {
   LOCKED_SEGMENT: 'LOCKED_SEGMENT',
@@ -33,6 +34,7 @@ export const DETERMINISTIC_HARD_RULE_CODES = {
   TAG_PLACEHOLDER_FAMILY_MISMATCH: 'TAG_PLACEHOLDER_FAMILY_MISMATCH',
   TAG_FAMILY_MISMATCH: 'TAG_FAMILY_MISMATCH',
   TAG_PAIRING_MISMATCH: 'TAG_PAIRING_MISMATCH',
+  TAG_GRAMMAR_INVALID: 'TAG_GRAMMAR_INVALID',
   ICU_SYNTAX_INVALID: 'ICU_SYNTAX_INVALID',
   ICU_SIGNATURE_MISMATCH: 'ICU_SIGNATURE_MISMATCH',
   NEWLINE_SIGNATURE_MISMATCH: 'NEWLINE_SIGNATURE_MISMATCH',
@@ -173,6 +175,7 @@ interface IcuSignature {
   spans: Span[]
   syntaxError?: string
   standard: boolean
+  ast?: readonly MessageFormatElement[]
 }
 
 function hasStandardIcu(value: string): boolean {
@@ -261,7 +264,7 @@ function standardIcuSignature(value: string): IcuSignature {
         ? []
         : [{ start: location.start.offset, end: location.end.offset }]
     })
-    return { signature: astSignature(ast).sort(), spans, standard: true }
+    return { signature: astSignature(ast).sort(), spans, standard: true, ast }
   } catch (error) {
     const fallback = legacyIcuSignature(value)
     return {
@@ -275,6 +278,56 @@ function standardIcuSignature(value: string): IcuSignature {
 function icuSignature(value: string, forceStandard = false): IcuSignature {
   if (forceStandard || hasStandardIcu(value)) return standardIcuSignature(value)
   return { ...legacyIcuSignature(value), standard: false }
+}
+
+/** 复用 ICU AST 比较运行结构；新增语法类别与源 other 分支对齐。 */
+function compatibleIcuElements(
+  source: readonly MessageFormatElement[],
+  target: readonly MessageFormatElement[],
+  targetLocale: string,
+  tagProfile?: LinguistTagProfile,
+): boolean {
+  interface Node { key: string; element?: MessageFormatElement }
+  const nodes = (elements: readonly MessageFormatElement[]): Node[] => elements.flatMap((element): Node[] => {
+    if (element.type === TYPE.literal) {
+      return scanTagTokens(element.value, { targetLocale, ...(tagProfile === undefined ? {} : { profile: tagProfile }) })
+        .map(token => ({ key: `literal:${token.signature}` }))
+    }
+    if (element.type === TYPE.plural) return [{ key: `plural:${element.value}:${element.pluralType}:${element.offset}`, element }]
+    if (element.type === TYPE.select) return [{ key: `select:${element.value}:${Object.keys(element.options).sort().join('|')}`, element }]
+    return [{ key: astSignature([element], 'icu', true).join('\n'), element }]
+  })
+  const remaining = nodes(target)
+  const expected = nodes(source)
+  if (expected.length !== remaining.length) return false
+  for (const node of expected) {
+    const index = remaining.findIndex(candidate => {
+      if (node.key !== candidate.key) return false
+      const left = node.element
+      const right = candidate.element
+      if (left?.type === TYPE.select && right?.type === TYPE.select) {
+        return Object.keys(left.options).every(key => compatibleIcuElements(
+          left.options[key]!.value, right.options[key]!.value, targetLocale, tagProfile,
+        ))
+      }
+      if (left?.type !== TYPE.plural || right?.type !== TYPE.plural) return true
+      const leftKeys = Object.keys(left.options)
+      const rightKeys = Object.keys(right.options)
+      const categories = new Intl.PluralRules(targetLocale, { type: right.pluralType }).resolvedOptions().pluralCategories
+      if (rightKeys.some(key => !key.startsWith('=') && !categories.includes(key as Intl.LDMLPluralRule))) return false
+      if (!same(leftKeys.filter(key => key.startsWith('=')).sort(), rightKeys.filter(key => key.startsWith('=')).sort())) return false
+      // 保留既有分支；新类别按源 other 对齐。删除类别也不能丢失分支中的运行参数。
+      return [...new Set([...leftKeys, ...rightKeys])].every(key => compatibleIcuElements(
+        (left.options[key] ?? left.options.other)!.value,
+        (right.options[key] ?? right.options.other)!.value,
+        targetLocale,
+        tagProfile,
+      ))
+    })
+    if (index < 0) return false
+    remaining.splice(index, 1)
+  }
+  return true
 }
 
 function withoutSpans(value: string, spans: readonly Span[]): string {
@@ -526,6 +579,16 @@ export function runDeterministicHardRules(
     targetLocale: segment.targetLocale,
     ...(input.tagProfile !== undefined ? { profile: input.tagProfile } : {}),
   })
+  const grammar = projectGrammarTokens(segment.source, proposedTarget, sourceTags, targetTags, segment.targetLocale, input.tagProfile)
+  // 标准 ICU 内的标签/编号参数按 AST 分支核对；全局多重集会误拦新增 plural 分支。
+  const outsideIcu = (tokens: ReturnType<typeof scanTagTokens>, icu: IcuSignature) => icu.ast === undefined
+    ? tokens
+    : tokens.filter(token => !icu.spans.some(span => token.start >= span.start && token.end <= span.end))
+  const sourceOutsideTags = outsideIcu(sourceTags, sourceIcu).filter(token => !grammar.source.has(token))
+  const targetOutsideTags = outsideIcu(targetTags, targetIcu).filter(token => !grammar.target.has(token))
+  const icuCompatible = sourceIcu.ast !== undefined && targetIcu.ast !== undefined
+    ? compatibleIcuElements(sourceIcu.ast, targetIcu.ast, segment.targetLocale, input.tagProfile)
+    : same(sourceIcu.signature, targetIcu.signature)
   const sourcePlaceholders = placeholderSignature(segment.source, sourceIcu.spans)
   const targetPlaceholders = placeholderSignature(proposedTarget, targetIcu.spans)
   // 成对配平/嵌套校验：源为事实基准——源本身不配平时跳过目标配对校验
@@ -537,8 +600,14 @@ export function runDeterministicHardRules(
     code: DeterministicHardRuleCode,
     message: string,
   ): DeterministicHardRuleViolation | undefined =>
-    mismatch(code, message, tagGroupSignature(sourceTags, group), tagGroupSignature(targetTags, group))
+    mismatch(code, message, tagGroupSignature(sourceOutsideTags, group), tagGroupSignature(targetOutsideTags, group))
   const candidates: Array<DeterministicHardRuleViolation | undefined> = [
+    grammar.errors.length === 0 ? undefined : {
+      code: DETERMINISTIC_HARD_RULE_CODES.TAG_GRAMMAR_INVALID,
+      message: 'Registered project plural grammar has invalid attributes or undeclared runtime arguments.',
+      expected: [],
+      actual: grammar.errors,
+    },
     segment.locked
       ? {
           code: DETERMINISTIC_HARD_RULE_CODES.LOCKED_SEGMENT,
@@ -604,12 +673,12 @@ export function runDeterministicHardRules(
           actual: false,
         }
       : undefined,
-    mismatch(
-      DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH,
-      'ICU branch signature differs between source and target.',
-      sourceIcu.signature,
-      targetIcu.signature,
-    ),
+    icuCompatible ? undefined : {
+      code: DETERMINISTIC_HARD_RULE_CODES.ICU_SIGNATURE_MISMATCH,
+      message: 'ICU runtime arguments or branch structure are incompatible.',
+      expected: sourceIcu.signature,
+      actual: targetIcu.signature,
+    },
   ]
 
   if (options.includeAdvisory === true) {

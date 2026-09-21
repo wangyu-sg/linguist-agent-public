@@ -1,6 +1,6 @@
 # Linguist Agent 文档索引
 
-更新时间：2026-09-16
+更新时间：2026-09-22
 
 ## 当前真源
 
@@ -27,6 +27,8 @@
 - [RUNTIME_POLICY.md](./architecture/RUNTIME_POLICY.md)
 
 ## 发布与历史
+
+- [0.18 候选实施与验证](./release/VALIDATION_0_18_0.md) — 当前候选，尚未公开发布或替换日用安装；[实施起点](./release/LA018_BASELINE.md)记录本轮基线与证据边界。
 
 - [0.17.75 实施与发布验证](./release/VALIDATION_0_17_75.md) — 浏览器操作、原生 UI 共用与定时任务领域快照。
 

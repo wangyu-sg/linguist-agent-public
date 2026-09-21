@@ -245,8 +245,8 @@ export function ContextEvidenceView({
           empty="无 Style Guide"
           items={sources.styleRules.items.map((rule) => ({
             id: rule.id,
-            title: rule.groupKey ?? '通用规则',
-            detail: rule.ruleText,
+            title: `${rule.groupKey ?? '未指定分组'} · ${rule.updatedAt}`,
+            detail: `${rule.ruleText}\n来源 ID：${rule.id}；适用性需结合当前源文判断。`,
           }))}
         />
         <SourceSummary

@@ -515,9 +515,10 @@ function StageCoverageSpan({
     <span
       data-stage-coverage={stage}
       data-complete={view.complete}
+      title="当前译文版本的本地阶段记录；不代表客户 TM、QA 或外部平台工作已完成。"
       className={coverage.blocked > 0 ? 'text-warning' : undefined}
     >
-      {view.text}
+      本批次已记录 · {view.text}
     </span>
   )
 }

@@ -1,6 +1,10 @@
 # Linguist Agent 当前事实
 
-核验日期：2026-09-16。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
+核验日期：2026-09-22。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
+
+## 本次候选
+
+`0.18.0` 的工程回归和独立候选打包验证通过；真实语言验证尚未发出请求，等待本机 Keychain 授权界面恢复。尚未公开发布或替换日用安装。实现与验证状态见 [0.18 记录](./docs/release/VALIDATION_0_18_0.md)。上一公开版本仍为下述 `0.17.75`，不得把其验证结果算到当前候选。
 
 ## 机器真源与当前值
 
@@ -8,13 +12,13 @@
 
 | 项目 | 当前值 |
 |---|---|
-| App | `0.17.75` |
+| App | `0.18.0` |
 | Proma | `v0.19.53` |
 | Proma commit | `f99edbdb594407ab190b97ae073889c5d96637ab` |
 | Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.85.1` |
 | React / Jotai / Vite | `18.3.1` / `2.20.3` / `6.4.3` |
 | Shared | `0.1.72` |
-| CAT Core / Formats / Store / Tools | `0.0.25` / `0.0.13` / `0.0.46` / `0.0.40` |
+| CAT Core / Formats / Store / Tools | `0.0.26` / `0.0.13` / `0.0.47` / `0.0.41` |
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
@@ -25,7 +29,7 @@ App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-publ
 
 后续修复 `2468e3e2` 已加入原生全选填充、固定只读 DOM probe、Phrase Skill `1.0.6` 与 in-app-browser `1.1.3`，定向 Chromium 回归、类型、边界与构建通过。用户随后授权替换安装：本机现为该提交的 `0.17.75` arm64 修复版，沿用自更新证书，验签、启动与默认 Skill 同步通过；公开 Release 仍为 `85aa7e5d`。真实 Phrase 提速与自动更新链路未验证。见 [效率修复及安装记录](./docs/release/BROWSER_BATCH_FIX_2026_09_16.md)。
 
-工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。本轮没有新增或删除 CAT 工具。
+工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。CAT 工厂仍为 32 个工具；Linguist Session overlay 另外提供 1 个 `linguist_working_copy` 文件工作副本工具，总计 33 个领域工具。
 
 触点分类、具体理由、上游来源与退役条件只在 [proma-touchpoints.json](./docs/architecture/proma-touchpoints.json) 维护，不在本页复制计数。
 
@@ -43,7 +47,7 @@ App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-publ
 - CAT 结果自含正文/图片；最终请求经过 Pi SDK 和 utility 边界，以 HTTP 2xx 响应确认提交，旧工具级回执不计新覆盖。跨页正文按 UTF-16 区间累计；图片目录和规则均可继续读取。
 - Stage 独立于 Session；范围/相关资料变化和显式重审创建新轮，恢复复用原轮。本轮完成同时要求当前 revision 的本人决定、必要证据覆盖和零阻断；不能借用其他会话或旧任务的资格。
 - CAT 缺失/损坏时绑定会话仍可运行通用 Agent；归档只读。普通 General 协作不强制冻结空 CAT 范围，专业委派仍冻结范围。CAS、locked、受管 Source、结构检查与事务继续生效。
-- Prompt 合同 `3.1.5`；报告/候选准备可用 `readOnly` Context，不创建或替换专业 Stage；规则按既有分页协议续读。必要术语/冲突不能被可选限额清空，资料不够时明确显示缺口。
+- Prompt 合同 `3.1.6`；报告/候选准备可用 `readOnly` Context，不创建或替换专业 Stage；规则按既有分页协议续读。必要术语/冲突不能被可选限额清空，资料不够时明确显示缺口。
 - `cat_project_summary({})` 保持原概览；按 `assetId + includeDelivery=true` 才读取只读交付预检和当前会话专业任务摘要。它不运行 QA、不生成导出、不证明 QA 新鲜或 verified export。
 
 ## 本次上游更新

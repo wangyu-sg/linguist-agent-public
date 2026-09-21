@@ -4,6 +4,8 @@ import * as os from 'node:os'
 import { join } from 'node:path'
 import {
   buildLinguistPrompt,
+  enforceTotalCharLimit,
+  LINGUIST_PROMPT_MAX_CHARS,
   loadRolePrompt,
 } from './linguist-prompt-builder'
 
@@ -45,4 +47,16 @@ test('专业岗位 Prompt 超过岗位上限时同样拒绝', () => {
   writeFileSync(join(rolesRoot, 'translator.md'), 'x'.repeat(6_001), 'utf8')
 
   expect(() => loadRolePrompt('translator', rolesRoot)).toThrow('LINGUIST_ROLE_PROMPT_UNAVAILABLE')
+})
+
+test('超长 Digest 只按完整条目裁剪，保留岗位并明确尚未展开的范围', () => {
+  const prompt = enforceTotalCharLimit({
+    role: 'reviewer', rolePrompt: '独立审读本次全部双语。',
+    digest: `### 关键要求\n- 完整保留这一条。\n- ${'不得只发送半句要求'.repeat(3_000)}\n- 后续资料`,
+  }, 'markdown')
+  expect(prompt.length).toBeLessThanOrEqual(LINGUIST_PROMPT_MAX_CHARS)
+  expect(prompt).toContain('独立审读本次全部双语')
+  expect(prompt).toContain('完整保留这一条')
+  expect(prompt).not.toContain('不得只发送半句要求')
+  expect(prompt).toContain('其余必要要求与资料尚未展开')
 })

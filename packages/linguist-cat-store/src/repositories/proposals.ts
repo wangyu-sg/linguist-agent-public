@@ -90,6 +90,7 @@ export interface ApplyTranslationsResult {
   locked: string[]
   failed: Array<{ segmentId: string; code: string }>
   proposalIds: string[]
+  appliedItems?: Array<{ segmentId: string; proposalId: string; baseRevision: number; revision: number }>
 }
 
 export interface EditAndAcceptInput extends ProposalMutationItem, ProposalHardRuleOptions {
@@ -162,6 +163,7 @@ export class ProposalsRepository {
       locked: [],
       failed: [],
       proposalIds: [],
+      appliedItems: [],
     }
     return this.db.transaction(`apply ${edits.length} translations`, () => {
       const hardRules: ProposalHardRuleOptions = options
@@ -180,13 +182,21 @@ export class ProposalsRepository {
             ...(options.runId === undefined ? {} : { runId: options.runId }),
             ...(options.now === undefined ? {} : { now: options.now }),
           }, hardRules, options.issuance)
-          result.proposalIds.push(proposal.id as string)
-          if ((options.mode ?? 'apply') === 'proposal') result.pending += 1
-          else {
-            this.acceptWithinTransaction(proposal.id, { ...hardRules, ...(options.now === undefined ? {} : { now: options.now }) })
-            result.applied += 1
-          }
+          const accepted = (options.mode ?? 'apply') === 'proposal'
+            ? undefined
+            : this.acceptWithinTransaction(proposal.id, { ...hardRules, ...(options.now === undefined ? {} : { now: options.now }) })
           this.db.db.exec('RELEASE apply_translation_item')
+          result.proposalIds.push(proposal.id as string)
+          if (accepted === undefined) result.pending += 1
+          else {
+            result.applied += 1
+            result.appliedItems!.push({
+              segmentId: accepted.segment.id as string,
+              proposalId: accepted.proposal.id as string,
+              baseRevision: accepted.proposal.baseRevision,
+              revision: accepted.segment.revision,
+            })
+          }
         } catch (error) {
           this.db.db.exec('ROLLBACK TO apply_translation_item')
           this.db.db.exec('RELEASE apply_translation_item')

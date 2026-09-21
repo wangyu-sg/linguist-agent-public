@@ -174,6 +174,17 @@ export class ContextDocsRepository {
     return `ctxv_v2_${hash.digest('hex')}`
   }
 
+  /** 正文、定位与展示元数据的版本，供文档续页和派生简报共同引用。 */
+  documentVersion(id: string): string | undefined {
+    const doc = this.get(id)
+    if (doc === undefined) return undefined
+    return deriveStableIdV2('ctxdoc', [
+      this.evidenceVersion(id, [], [])!,
+      JSON.stringify(doc.extractionWarnings),
+      doc.note ?? null,
+    ])
+  }
+
   updateNote(id: string, note?: string): ContextDoc {
     return this.db.transaction(`update context doc note ${id}`, () => {
       const result = this.db.db

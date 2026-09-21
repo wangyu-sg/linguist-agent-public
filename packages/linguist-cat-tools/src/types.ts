@@ -474,6 +474,8 @@ export interface CatApplyTranslationsResult {
   locked: string[]
   failed: Array<{ segmentId: string; code: string }>
   proposalIds: string[]
+  /** 本次实际提交的版本；旧幂等回放可能没有该字段，不补造历史回执。 */
+  appliedItems?: Array<{ segmentId: string; proposalId: string; baseRevision: number; revision: number }>
 }
 
 export interface CatConfirmSegmentsResult {
@@ -543,21 +545,52 @@ export interface CatEvidenceRef {
   kind: 'segment-revision' | 'neighbor' | 'term' | 'tm'
 }
 
-export interface CatLinkedContextEvidence {
+export interface CatSharedContextEvidence {
   docId: string
+  version: string
   filename: string
   anchorId?: string
   locator?: ContextAnchor['locator']
   text: string
+}
+
+export interface CatLinkedContextEvidence extends CatSharedContextEvidence {
   requiredness: 'required' | 'conditional' | 'optional'
 }
 
-export interface CatRequiredEvidencePending {
+/** 本响应未附的必要原件；历史覆盖不代表当前模型记得正文。 */
+export interface CatUnprovidedReference {
+  sourceRef: { kind: 'context-doc'; id: string }
+  version: string
   docId: string
   filename: string
   anchorIds: string[]
   kind: 'document' | 'image'
   reason: string
+  segmentIds: string[]
+  retrieve: { tool: 'cat_read_context_doc'; docId: string; offset?: number; limit?: number }
+  history: {
+    status: 'covered' | 'pending' | 'not-tracked' | 'unknown'
+    stageRunId?: string
+    version?: string
+  }
+}
+
+export interface CatContextReference {
+  ref: string
+  requiredness: CatLinkedContextEvidence['requiredness']
+}
+
+export interface CatNeighborReference {
+  segmentId: string
+  revision: number
+}
+
+export interface CatSharedTranslationContext {
+  context: Record<string, CatSharedContextEvidence>
+  voices: Record<string, VoiceProfile>
+  /** 只包含本页 contexts 未承载的边界邻文，键为 segmentId@revision。 */
+  neighbors: Record<string, CatSegmentBrief>
 }
 
 export interface SegmentTranslationContext {
@@ -568,12 +601,19 @@ export interface SegmentTranslationContext {
   source: string
   currentTarget: string
   locked: boolean
+  originalOrdinal: number
+  key?: string
+  origin?: string
+  textType?: string
+  module?: string
+  category?: string
   speaker?: string
-  voiceProfiles?: VoiceProfile[]
+  voiceRefs: string[]
   notes?: string
-  previous: CatSegmentBrief[]
-  next: CatSegmentBrief[]
+  previous: CatNeighborReference[]
+  next: CatNeighborReference[]
   tags: TagToken[]
+  targetTags: TagToken[]
   placeholderSignature: string[]
   /** 仅承载项目明确声明的 Required authority；不得把 preferred 升格。 */
   requiredTerms: TermEntryMatch[]
@@ -581,8 +621,8 @@ export interface SegmentTranslationContext {
   preferredTerms: TermEntryMatch[]
   conflicts: TermEntryMatch[]
   tm: TmAgentEvidence[]
-  /** 已自动进入本次工具结果的小型强关联 Context 正文。 */
-  linkedContext: CatLinkedContextEvidence[]
+  /** 引用本响应 shared.context；requiredness 属于当前句段的关联。 */
+  contextRefs: CatContextReference[]
   warnings: string[]
   evidence: CatEvidenceRef[]
 }
@@ -591,10 +631,12 @@ export interface SegmentTranslationContext {
 export type CatProjectRuleItem = ProjectRule
 
 export interface CatGetTranslationContextResult {
+  contextFormatVersion: 2
   /** 将 text 按 offset 连接后解析为完整 JSON；分片不代表内容/证据已读完。 */
   contextFragment?: { encoding: 'json'; offset: number; totalChars: number; text: string }
 
   contexts: SegmentTranslationContext[]
+  shared: CatSharedTranslationContext
   totalRequested: number
   /** Echoes the opaque input cursor; null is the first page. */
   cursor: string | null
@@ -604,8 +646,7 @@ export interface CatGetTranslationContextResult {
   /** 当前规则页；通过相同工具的 rulesOnly/rulesOffset 续读。 */
   projectRules?: CatProjectRuleItem[]
   ruleCoverage: { total: number; offset: number; provided: number; remaining: number; nextOffset?: number }
-  /** 必需但尚未进入模型请求的大型文档或视觉证据。 */
-  requiredEvidencePending?: CatRequiredEvidencePending[]
+  unprovidedReferences?: CatUnprovidedReference[]
   /** 宿主签发的 Stage Evidence 覆盖；Agent 文本不能改写。 */
   stageEvidence?: {
     stageRunId: string
@@ -689,6 +730,9 @@ export type CatSearchSentencePatternsResult = PagedResult<SentencePattern>
  */
 export interface CatReadContextDocResult {
   docId: string
+  /** 正文和定位元数据版本；metadataOnly 必须回传，拒绝跨版本拼接。 */
+  docVersion: string
+  metadataOnly?: true
   kind: ContextDocKind
   /** 导入时的文件 basename（元数据，不是路径）。 */
   filename: string

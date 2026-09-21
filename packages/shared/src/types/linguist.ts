@@ -603,6 +603,13 @@ export interface LinguistTagFamilyInfo {
   pairWith?: string
   note?: string
   enabled?: boolean
+  targetLocales?: readonly string[]
+  grammar?: {
+    kind: 'plural-attributes'
+    tagName: string
+    argumentAttribute: string
+    formAttributes: readonly string[]
+  }
 }
 
 export interface LinguistTagProfileCandidateInfo {
@@ -2166,6 +2173,8 @@ export interface LinguistDiagnosticsRequest {
 }
 
 export interface LinguistPromptStatusInfo {
+  /** 本次诊断读取的工作区文件；不证明历史请求已经加载。 */
+  workspaceSkills?: Array<{ slug: string; version?: string; enabled: boolean; source: string; sha256: string }>
   promptVersion: string
   promptHash: string
   role: import('./agent').LinguistRole
@@ -2551,6 +2560,8 @@ export interface LinguistApplyTranslationsResult {
   locked: string[]
   failed: Array<{ segmentId: string; code: string }>
   proposalIds: string[]
+  /** 本次实际提交的版本；旧结果缺失时不推测。 */
+  appliedItems?: Array<{ segmentId: string; proposalId: string; baseRevision: number; revision: number }>
 }
 
 export interface LinguistProposalMutationRequest

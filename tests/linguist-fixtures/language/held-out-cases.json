@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "provenance": "Original synthetic holdout cases, separate from shipped skills and their examples; not customer content.",
+  "usage": "Use the input allowlist generator. Keep evaluation and this case set outside model project memory and skills. After exposure these become regressions.",
+  "cases": [
+    {
+      "id": "HT01",
+      "stage": "T",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "每有一座风塔停转，其余风塔的充能时间就缩短2秒，最短为6秒。",
+      "currentTarget": "",
+      "brief": "塔防游戏技能说明。风塔批准名称为 Wind Spire；充能时间指两次可用之间所需时间。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "每座停转塔分别触发",
+          "只影响其余风塔",
+          "每次缩短2秒",
+          "充能时间下限6秒"
+        ],
+        "mustNot": [
+          "总量减少6秒",
+          "包含停转塔自身",
+          "至多6秒误作上限"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "held-out-synthetic"
+      }
+    },
+    {
+      "id": "HT02",
+      "stage": "T",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "You kept the receipt? For a dragon?",
+      "currentTarget": "",
+      "brief": "轻松奇幻冒险对白。同伴发现主角竟然保存着购买一条龙的收据，语气惊讶又好笑。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "translate",
+        "mustPreserve": [
+          "为买龙留收据的荒诞感",
+          "追问和惊讶"
+        ],
+        "mustNot": [
+          "赠送给龙的收据",
+          "自行增加退货剧情"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "held-out-synthetic"
+      }
+    },
+    {
+      "id": "HE01",
+      "stage": "E",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "周围没有敌人时，维修无人机会优先修复损伤最重的炮台。",
+      "currentTarget": "When no enemies are nearby, repair drones prioritize the most heavily damaged turret.",
+      "brief": "即时战略游戏。无人机是维修单位，炮台是固定防御设施。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "没有附近敌人的条件",
+          "优先而非只修",
+          "损伤最重的炮台"
+        ],
+        "mustNot": [
+          "无收益改写",
+          "增加修复数值"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "held-out-synthetic"
+      }
+    },
+    {
+      "id": "HE02",
+      "stage": "E",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "The bridge stays raised unless both switches are held down.",
+      "currentTarget": "只要按住任意一个开关，桥就会一直升起。",
+      "brief": "合作解谜游戏的机关说明。桥升起时无法通行。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "两开关都持续按住才打破升起状态",
+          "unless条件关系"
+        ],
+        "mustNot": [
+          "任意一开关足够",
+          "增加计时或按钮顺序"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "held-out-synthetic"
+      }
+    },
+    {
+      "id": "HP01",
+      "stage": "P",
+      "sourceLocale": "zh-CN",
+      "targetLocale": "en-US",
+      "source": "别碰那盏灯。它还记得上一个主人的手。",
+      "currentTarget": "Don’t touch that lamp. It still remembers its last owner’s hands.",
+      "brief": "偏哥特风格的低声警告。项目允许 contractions 与弯引号；保留拟人化叙述。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "keep",
+        "mustPreserve": [
+          "警告和拟人化悬念",
+          "简短对白"
+        ],
+        "mustNot": [
+          "展开解释魔法机制",
+          "改成客服提示或无收益换词"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "held-out-synthetic"
+      }
+    },
+    {
+      "id": "HP02",
+      "stage": "P",
+      "sourceLocale": "en-US",
+      "targetLocale": "zh-CN",
+      "source": "The northern path leads back to camp. Take it if you are running low on supplies.",
+      "currentTarget": "北边的小路通回营地。如果补给不足不足，就走这条路。",
+      "brief": "探索游戏地图指引，口吻直接清楚。",
+      "references": [],
+      "evaluation": {
+        "expectedDecision": "revise",
+        "mustPreserve": [
+          "修复重复字",
+          "北边小路回营地",
+          "补给不足时走此路"
+        ],
+        "mustNot": [
+          "新增危险或支线目标",
+          "整段无收益重写"
+        ],
+        "exactReferenceRequired": false,
+        "cohort": "held-out-synthetic"
+      }
+    }
+  ]
+}

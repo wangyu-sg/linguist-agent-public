@@ -117,8 +117,8 @@ test('CAT 工具说明经真实 Pi Agent 与 fake Provider 序列化进入最终
     assert.ok(body)
     const tools = body.tools as Array<{ type: string; function: { name: string; description: string; parameters: { properties: Record<string, { description?: string }> } } }>
     const context = tools.find(tool => tool.function.name === 'cat_get_translation_context')!
-    assert.match(context.function.description, /Use readOnly=true for inspection/)
-    assert.match(context.function.parameters.properties.readOnly?.description ?? '', /without creating\/replacing a professional Stage/)
+    assert.match(context.function.description, /readOnly=true creates neither Stage nor evidence receipts/)
+    assert.match(context.function.parameters.properties.readOnly?.description ?? '', /without creating\/replacing a (professional )?Stage/)
     const summary = tools.find(tool => tool.function.name === 'cat_project_summary')!
     assert.match(summary.function.description, /includeDelivery=true with assetId/)
     assert.equal('promptGuidelines' in context.function, false)

@@ -78,11 +78,12 @@ test('有效 Session 在 CAT 缺失、损坏、归档与恢复间保留宿主能
   try {
     // 修复前这里因 eager openProject 直接失败。
     const tools = resolveLinguistSessionCatTools(session, () => service)
-    assert.equal(tools.length, 32)
+    assert.equal(tools.length, 33)
+    assert.ok(tools.some(tool => tool.name === 'linguist_working_copy'))
     const list = tools.find(tool => tool.name === 'cat_project_summary')!
     const invoke = () => list.execute('availability', {} as never, undefined, undefined, {} as never)
     const host = resolveLinguistAgentHostExtension({ session, turnContext })
-    assert.equal(host.composeTools({ baseTools: [], mcpServerNames: [], modelProvider: 'fixture', getModelId: () => 'fixture' }).overlayToolCount, 32)
+    assert.equal(host.composeTools({ baseTools: [], mcpServerNames: [], modelProvider: 'fixture', getModelId: () => 'fixture' }).overlayToolCount, tools.length)
     assert.match(host.promptOverlay, /当前无法读取/)
     await assert.rejects(invoke, /missing|unhealthy/)
     assert.equal(existsSync(paths.catDbPath), false, '缺失 DB 不得被重建')

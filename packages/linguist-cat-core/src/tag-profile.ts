@@ -16,6 +16,14 @@ export type LinguistTagFamilyClass = 'paired' | 'singleton'
 export type LinguistTagCandidateKind = 'standalone' | 'opening' | 'closing'
 export type LinguistTagCandidateStatus = 'candidate' | 'ignored'
 
+/** 项目显式声明的属性式复数语法；只支持引用已有花括号运行参数。 */
+export interface LinguistPluralAttributeGrammar {
+  kind: 'plural-attributes'
+  tagName: string
+  argumentAttribute: string
+  formAttributes: readonly string[]
+}
+
 export interface LinguistTagFamily {
   /** 稳定 id，签名与配对键的一部分（如 `grm-qty`）。 */
   id: string
@@ -35,6 +43,8 @@ export interface LinguistTagFamily {
   pairWith?: string
   /** 激活条件：仅当段 targetLocale 命中（全串或 base 相等，忽略大小写）时生效；缺省全 locale 生效。 */
   targetLocales?: readonly string[]
+  /** 缺省仍多重集守恒；语法适配仅用于指定目标语言的 singleton 族。 */
+  grammar?: LinguistPluralAttributeGrammar
   /** 人类可读备注（为何登记此族），不参与匹配。 */
   note?: string
   /** false 表示用户禁用，不进入硬保护扫描。 */
@@ -73,6 +83,7 @@ function normalizeFamily(value: unknown): LinguistTagFamily | undefined {
   const targetLocales = Array.isArray(raw.targetLocales)
     ? raw.targetLocales.filter((locale): locale is string => nonEmptyString(locale) !== undefined)
     : undefined
+  const grammar = normalizeGrammar(raw.grammar)
   return {
     id,
     pattern,
@@ -83,9 +94,21 @@ function normalizeFamily(value: unknown): LinguistTagFamily | undefined {
     ...(nonEmptyString(raw.flags) !== undefined ? { flags: raw.flags as string } : {}),
     ...(nonEmptyString(raw.pairWith) !== undefined ? { pairWith: raw.pairWith as string } : {}),
     ...(targetLocales !== undefined && targetLocales.length > 0 ? { targetLocales } : {}),
+    ...(grammar !== undefined && familyClass === 'singleton' && targetLocales !== undefined && targetLocales.length > 0 ? { grammar } : {}),
     ...(nonEmptyString(raw.note) !== undefined ? { note: raw.note as string } : {}),
     ...(typeof raw.enabled === 'boolean' ? { enabled: raw.enabled } : {}),
   }
+}
+
+function normalizeGrammar(value: unknown): LinguistPluralAttributeGrammar | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  const attribute = (item: unknown): item is string => typeof item === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(item)
+  if (raw.kind !== 'plural-attributes' || !attribute(raw.argumentAttribute) || !Array.isArray(raw.formAttributes)) return undefined
+  if (typeof raw.tagName !== 'string' || !/^[A-Za-z_][A-Za-z0-9_:-]*$/.test(raw.tagName)) return undefined
+  if (raw.formAttributes.length < 2 || !raw.formAttributes.every(attribute)) return undefined
+  if (new Set([...raw.formAttributes, raw.argumentAttribute]).size !== raw.formAttributes.length + 1) return undefined
+  return { kind: 'plural-attributes', tagName: raw.tagName, argumentAttribute: raw.argumentAttribute, formAttributes: raw.formAttributes }
 }
 
 function normalizeCandidate(value: unknown): LinguistTagProfileCandidate | undefined {

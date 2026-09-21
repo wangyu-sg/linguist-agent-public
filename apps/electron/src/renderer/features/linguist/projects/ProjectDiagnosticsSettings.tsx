@@ -61,7 +61,7 @@ export function PromptStatusCard({
           ) : (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="size-3.5" aria-hidden="true" />
-              当前岗位 Prompt 已加载
+              本次岗位 Prompt 构建成功
             </p>
           )}
           {prompt !== undefined && prompt.projectDigestStatus !== 'complete' && (
@@ -116,6 +116,19 @@ export function PromptStatusCard({
             <dd className="font-mono text-foreground">{prompt.charCount} chars</dd>
           </div>
         </dl>
+      )}
+      {prompt?.workspaceSkills && (
+        <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer">当前工作区 Skill 文件</summary>
+          <p className="my-2">本次探测读取的文件，不代表历史运行已经加载。模型窗口、压缩原因与精确耗时未采集；用量见原生会话统计。</p>
+          <ul className="space-y-2">
+            {prompt.workspaceSkills.map(skill => <li key={skill.slug} className="break-all">
+              <span>{skill.slug} · {skill.version ?? '无版本'} · {skill.enabled ? '启用' : '禁用'}</span>
+              <div>{skill.source}</div>
+              <div title={skill.sha256}>SHA256：{shortHash(skill.sha256)}</div>
+            </li>)}
+          </ul>
+        </details>
       )}
     </section>
   )

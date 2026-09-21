@@ -25,3 +25,7 @@
 6. 维护顺序固定为 baseline → 实际 diff → ledger → deviations → boundary + fusion。
 
 不要扩大白名单来掩盖核心改动，也不要把“已登记”误解为永久合理。
+
+## LA 领域方法资源
+
+本轮新增允许根 `apps/electron/default-skills/game-localization/`，以及既有 Phrase Skill 的 `references/`。两者仅承载 LA 专业方法与定制覆盖合并指引；通用 Skills、Pi、Browser 和原生侧栏不因此获得新的修改范围。

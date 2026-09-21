@@ -89,12 +89,12 @@ export function createProposalTools(runtime: CatToolRuntime) {
   const applyTranslationsTool = defineTool({
     name: 'cat_apply_translations',
     label: 'CAT apply translations',
-    description: 'Write 1-200 edits in the bound project using current baseRevision and the existing lock/structure checks. Default mode=apply commits successful translations and reports individual stale/locked/failed edits. mode=proposal only creates pending proposals: do not accept or confirm them unless separately authorized. Proposal creation does not start/replace a professional Stage; the trusted delegated scope still applies. Use neither mode for a report-only or chat-only request. On execution tasks, establish the full professional scope through cat_get_translation_context before batch writes. Confirm corrected only after a successful write and a fresh revision; do not infer all edits succeeded from a successful tool call.',
+    description: 'Submit 1-200 edits using each reviewed baseRevision and existing lock/structure checks. mode=apply commits successful items; appliedItems returns each real committed segmentId, proposalId, baseRevision and revision. Reuse that receipt for a matching stage decision; no reread is required solely to obtain the same version. Concurrent changes still cause CAS failure. mode=proposal stores pending suggestions without accepting or confirming them or replacing the trusted Stage; delegated scope still applies. Inspect stale, locked and failed results: successful tool completion does not imply every edit applied. Historical replay may lack appliedItems; never invent a revision or relabel current database state as the old receipt. Report-only tasks must not write. Establish the full professional scope before execution writes, then commit finalized results in useful groups; a read page does not require immediate submission.',
     promptSnippet: 'Write the translations currently judged correct; use proposal mode only when review was requested',
     parameters: Type.Object({
       edits: Type.Array(Type.Object({
         segmentId: Type.String({ minLength: 1 }),
-        baseRevision: Type.Integer({ minimum: 0 }),
+        baseRevision: Type.Integer({ minimum: 0, description: 'Revision of the Source/Target snapshot actually used to form this edit. On conflict, reassess the affected content; do not attach a fresh revision to an unchanged stale candidate.' }),
         target: Type.String({ minLength: 1 }),
         note: Type.Optional(Type.String({ maxLength: 2_000 })),
       }), { minItems: 1, maxItems: 200 }),

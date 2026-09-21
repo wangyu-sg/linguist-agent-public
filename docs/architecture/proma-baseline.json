@@ -19,17 +19,17 @@
     "pi": "0.85.1"
   },
   "product": {
-    "linguistAgentVersion": "0.17.75",
+    "linguistAgentVersion": "0.18.0",
     "sharedVersion": "0.1.72",
-    "catCoreVersion": "0.0.25",
+    "catCoreVersion": "0.0.26",
     "catFormatsVersion": "0.0.13",
-    "catStoreVersion": "0.0.46",
-    "catToolsVersion": "0.0.40",
+    "catStoreVersion": "0.0.47",
+    "catToolsVersion": "0.0.41",
     "catSchema": 19
   },
   "contracts": {
     "prompt": {
-      "linguistPromptVersion": "3.1.5",
+      "linguistPromptVersion": "3.1.6",
       "source": "linguist-prompt-builder.ts + resources/linguist-roles"
     },
     "host": {

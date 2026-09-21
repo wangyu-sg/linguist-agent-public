@@ -222,7 +222,7 @@ function compileProjectFamilies(profile?: LinguistTagProfile): CompiledFamily[] 
 }
 
 /** locale 命中：全串或 base 相等（忽略大小写），`ru` 命中 `ru-RU`。 */
-function localeMatches(entry: string, targetLocale: string): boolean {
+export function localeMatches(entry: string, targetLocale: string): boolean {
   const normalize = (value: string) => value.trim().toLowerCase()
   const full = normalize(targetLocale)
   const wanted = normalize(entry)

@@ -129,6 +129,10 @@ const HARD_RULE_MAPPING: Partial<Record<string, FindingSpec>> = {
     code: QA_RULE_CODES.TAG_FAMILY_MISMATCH,
     message: '富文本/项目标签族与源文不一致。',
   },
+  [DETERMINISTIC_HARD_RULE_CODES.TAG_GRAMMAR_INVALID]: {
+    code: QA_RULE_CODES.TAG_FAMILY_MISMATCH,
+    message: '项目复数语法属性或运行参数引用不合法。',
+  },
   [DETERMINISTIC_HARD_RULE_CODES.TAG_PAIRING_MISMATCH]: {
     code: QA_RULE_CODES.TAG_PAIRING_MISMATCH,
     message: '标签配对或嵌套不合法。',

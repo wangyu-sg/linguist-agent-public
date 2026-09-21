@@ -4,3 +4,4 @@
 
 - [当前事实](../../CURRENT_FACTS_SIMPLE.md)
 - [未完成工作](../../TODO.md)
+- [0.18 候选实施与验证](../release/VALIDATION_0_18_0.md)

@@ -1,3 +1,5 @@
+import { createWorkingCopyTool } from './working-copy-tool'
+import { getAgentWorkspace, getProjectFilesPath } from '../agent-workspace-manager'
 import type { AutomationLinguistContext } from '@proma/shared'
 import { resolveAutomationSegmentScope } from './automation-context'
 /**
@@ -83,7 +85,7 @@ export function resolveLinguistSessionCatTools(
     stageEvidence = db.stageEvidence.list().find(state => state.sessionId === current.id && state.role === current.linguistRole)
     return { project: service.getProject(projectId), db }
   }
-  return createLinguistCatTools({
+  const catTools = createLinguistCatTools({
     resolveProject,
     resultProjectId: projectId,
     sessionId: session.id,
@@ -219,6 +221,16 @@ export function resolveLinguistSessionCatTools(
     ...(session.modelId === undefined ? {} : { modelId: session.modelId }),
     ...(generationProvenance === undefined ? {} : { generationProvenance }),
   })
+  return [...catTools, createWorkingCopyTool(() => {
+    const current = currentBoundSession(session.id, projectId, 'sessionId')
+    const workspace = current.workspaceId ? getAgentWorkspace(current.workspaceId) : undefined
+    if (!workspace) throw new Error('当前项目未绑定可用工作区')
+    return {
+      workspaceRoot: getProjectFilesPath(workspace.slug),
+      sessionId: current.id,
+      tagProfile: getService().getProject(projectId).tagProfile,
+    }
+  })]
 }
 
 /** cat_* 与本轮其他工具撞名时 fail closed。 */
