@@ -2,9 +2,9 @@
 
 核验日期：2026-09-22。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
 
-## 本次候选
+## 本次发布
 
-`0.18.0` 的工程回归、独立候选打包与真实模型小样本已完成，正在进入正式发布。日用安装未替换。实现与验证状态见 [0.18 记录](./docs/release/VALIDATION_0_18_0.md)。上一公开版本仍为下述 `0.17.75`，不得把其验证结果算到当前候选。
+`0.18.0` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.0)，源码/Tag 为 `a7c80c20`。main CI `35699307235` 与 Auto Release `35700030085` 成功，七项资产、更新文件哈希、两架构 macOS 签名及旧证书兼容性核验通过。正式 arm64 包隔离三模式验证通过；42 个独立语言小样及 6 次接续完成模型辅助评价。日用安装未替换，在线更新端到端未验证。详见 [0.18 记录](./docs/release/VALIDATION_0_18_0.md)，以下旧版本内容保留历史范围。
 
 ## 机器真源与当前值
 
@@ -27,7 +27,7 @@ Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本�
 
 App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.75)，源码/Tag 为 `85aa7e5d`，Release run `35094944942` 成功，七项资产核验通过。用户随后授权用正式签名 arm64 包替换本机旧安装，验签及启动通过；自动更新链路未验证。详见 [发布记录](./docs/release/VALIDATION_0_17_75.md)。Shared DTO 为 `0.1.72`，CAT 版本按现有 manifest 校正，本轮未再次递增。
 
-后续修复 `2468e3e2` 已加入原生全选填充、固定只读 DOM probe、Phrase Skill `1.0.6` 与 in-app-browser `1.1.3`，定向 Chromium 回归、类型、边界与构建通过。用户随后授权替换安装：本机现为该提交的 `0.17.75` arm64 修复版，沿用自更新证书，验签、启动与默认 Skill 同步通过；公开 Release 仍为 `85aa7e5d`。真实 Phrase 提速与自动更新链路未验证。见 [效率修复及安装记录](./docs/release/BROWSER_BATCH_FIX_2026_09_16.md)。
+后续修复 `2468e3e2` 已加入原生全选填充、固定只读 DOM probe、Phrase Skill `1.0.6` 与 in-app-browser `1.1.3`，定向 Chromium 回归、类型、边界与构建通过。用户随后授权替换安装：本机现为该提交的 `0.17.75` arm64 修复版，沿用自更新证书，验签、启动与默认 Skill 同步通过；当时公开 Release 仍为 `85aa7e5d`。真实 Phrase 提速与自动更新链路未验证。见 [效率修复及安装记录](./docs/release/BROWSER_BATCH_FIX_2026_09_16.md)。
 
 工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。CAT 工厂仍为 32 个工具；Linguist Session overlay 另外提供 1 个 `linguist_working_copy` 文件工作副本工具，总计 33 个领域工具。
 

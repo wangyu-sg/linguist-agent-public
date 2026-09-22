@@ -28,7 +28,7 @@
 
 ## 发布与历史
 
-- [0.18 候选实施与验证](./release/VALIDATION_0_18_0.md) — 当前候选，尚未公开发布或替换日用安装；[实施起点](./release/LA018_BASELINE.md)记录本轮基线与证据边界。
+- [0.18 实施与发布验证](./release/VALIDATION_0_18_0.md) — 已公开发布，日用安装由用户在线更新；[实施起点](./release/LA018_BASELINE.md)记录本轮基线与证据边界。
 
 - [0.17.75 实施与发布验证](./release/VALIDATION_0_17_75.md) — 浏览器操作、原生 UI 共用与定时任务领域快照。
 

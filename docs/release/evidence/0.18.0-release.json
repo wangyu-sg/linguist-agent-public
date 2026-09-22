@@ -1,0 +1,106 @@
+{
+  "tag": "v0.18.0",
+  "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.0",
+  "publishedAt": "2026-09-22T07:45:29Z",
+  "public": true,
+  "assetNames": [
+    "Linguist-Agent-0.18.0-arm64.dmg",
+    "Linguist-Agent-0.18.0-arm64.zip",
+    "Linguist-Agent-0.18.0-x64.dmg",
+    "Linguist-Agent-0.18.0-x64.exe",
+    "Linguist-Agent-0.18.0-x64.zip",
+    "latest-mac.yml",
+    "latest.yml"
+  ],
+  "updates": [
+    {
+      "name": "Linguist-Agent-0.18.0-arm64.zip",
+      "size": 223083778,
+      "sha512": "i2Z1jD4YZtCQT0wzlFpkPMvBhd5o46p+54+DmvaA7KEl5ZcQZsYfHmWikLwqcPEvxJBTXXnG4hqcM1JgDaNtVg==",
+      "manifestHasSize": true
+    },
+    {
+      "name": "Linguist-Agent-0.18.0-x64.zip",
+      "size": 234455785,
+      "sha512": "qzcdamJAz3ptnVobX8zKDD7XqN3/u34aIRqQv4bKcFM16sB8Kb4siiFImDAel4HQvyu7JPzEcAWWaKM0IuDyVw==",
+      "manifestHasSize": true
+    },
+    {
+      "name": "Linguist-Agent-0.18.0-x64.exe",
+      "size": 173117529,
+      "sha512": "DT3HK7NENoew55H+WfTeBrHVDKR9VT7fHCQB8lCF1WFtph0RQ8c4NfoYqfvm6Ldx+m886C0iKYXU9gon+pFkhw==",
+      "manifestHasSize": false
+    }
+  ],
+  "sourceCommit": "a7c80c200d5f4043469626bd9b2fab07629ff524",
+  "ci": {
+    "runId": 35699307235,
+    "attempt": 2,
+    "sourceCommit": "a7c80c200d5f4043469626bd9b2fab07629ff524",
+    "workingTreeDirty": false,
+    "runStatus": "passed",
+    "steps": [
+      {
+        "id": "package",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "workspace-deps",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "agent",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "chat",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "project-switch",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "linguist-current",
+        "status": "passed",
+        "exitCode": 0
+      }
+    ],
+    "appAsarSha256": "5bf9b3137f22b9e0523393000f89ebe4ddc166951f3f56428826b25571f97ee0",
+    "dockChecks": {
+      "pass": 27,
+      "fail": 0
+    }
+  },
+  "releaseRunId": 35700030085,
+  "macSignatures": {
+    "deepStrict": "both passed",
+    "matchesPriorInstallRequirement": "both passed",
+    "requirement": "identifier \"com.linguistagent.app\" and certificate root = H\"065e1da4385a42fc59b0c2da5daa7b6e2b39b969\"",
+    "arm64AppAsarSha256": "1397c7bb10dcfbed11a0094482dd190aaae68bec85c1cd2fe29f0a4b70110a05",
+    "x64AppAsarSha256": "2ec249505e1508c549fad67c4272336d6a084406569d7c7613c6465ee78d3a70",
+    "arm64AfterLaunch": "passed"
+  },
+  "signedArm64Runtime": {
+    "agentPass": 19,
+    "chatPass": 19,
+    "linguistPass": 32,
+    "manualOpenSave": 2
+  },
+  "defaultSkillAndRoleFiles": {
+    "count": 248,
+    "allHashesMatch": true
+  },
+  "limits": {
+    "dailyInstallReplaced": false,
+    "onlineUpdateEndToEndVerified": false,
+    "nativeOpenSaveHumanVerified": false,
+    "x64OrWindowsRuntimeVerified": false,
+    "humanLanguageCertification": false
+  }
+}

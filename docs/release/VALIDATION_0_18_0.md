@@ -1,6 +1,6 @@
 # LA 0.18.0 实施与验证
 
-状态：工程、隔离候选打包与真实模型小样本完成，进入正式发布。日用安装未替换；云端正式产物与在线更新结果分别核验。
+状态：`0.18.0` 已于 2026-09-22 15:45:29（Asia/Shanghai）[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.0)并成为 latest。源码/Tag 为 `a7c80c20`；日用安装未替换，用户自行在线更新。
 
 ## 已实现
 
@@ -20,7 +20,7 @@
 - 依赖许可扫描与 SBOM 一致性通过，没有升级第三方依赖。
 - `electron:build` 通过；随后 `smoke:vertical` 重新构建并完成六步：package、workspace-deps、Agent、Chat、project-switch、Linguist。Agent 19 PASS，Chat 19 PASS，Linguist 32 PASS / 0 FAIL / 2 MANUAL。原生 Open/Save 没有执行人工交互，整体覆盖为 partial。
 - 打包后 248 个默认 Skill/岗位资源文件逐文件 hash 与源码一致，包括新增 game-localization 及其 references。
-- 远程 CI `35629138226` 的 validate 与六步打包通过；额外 Dock 专项因新来源说明与旧整段精确文本断言失配而失败。断言改为在同一来源区匹配规则正文后，本地专项 27 PASS / 0 FAIL；最终提交由 main CI 重验。
+- 远程 CI `35629138226` 的 validate 与六步打包通过；额外 Dock 专项因新来源说明与旧整段精确文本断言失配而失败。断言改为在同一来源区匹配规则正文后，本地专项 27 PASS / 0 FAIL；最终 main CI `35699307235` attempt 2 已重验通过，包括 Dock 27 项。
 
 ### 本地候选来源
 
@@ -50,6 +50,16 @@ E11 的孤立 `Join` 正确保留“加入”，并只询问区分加入、连�
 ## 发布顺序
 
 首次候选安装/资源核验及真实语言运行在 Tag 或 release dispatch 前完成。既有 Release workflow 构建成功会自动公开 latest，不假定存在人工等待门。发布后的核对仅确认实际下载资产与更新清单。用户自行在线更新，开发过程不替换日用安装。
+
+## 正式发布核验
+
+- main CI `35699307235` attempt 2 成功，机器报告 `sourceHead=a7c80c200d5f4043469626bd9b2fab07629ff524`、`workingTreeDirty=false`、六步均 passed/exitCode=0，Dock 专项 27 PASS。首次并发取消与早先候选的旧断言失败不计为通过。
+- Auto Release `35700030085` 成功；Tag 实际解析为同一源码 SHA；GitHub latest 为 `v0.18.0`，非草稿/预发布。
+- 两套 macOS DMG/ZIP、Windows x64 EXE、两份更新清单共 7 项资产齐全，blockmap 已删除。
+- 最终 `latest-mac.yml` 同时列出 arm64/x64 ZIP；两个 ZIP 和 Windows EXE 的下载 SHA-512 与各自清单一致，大小与 GitHub 资产元数据一致（macOS 清单也提供并匹配 size，Windows 清单未提供 size）。
+- 两个 macOS ZIP 解包后的版本均为 0.18.0，`codesign --verify --deep --strict` 通过，均满足旧安装的 designated requirement，证书 root SHA-1 为 `065e1da4385a42fc59b0c2da5daa7b6e2b39b969`。
+- 正式 arm64 包在隔离临时数据根中启动：Agent 19 PASS、Chat 19 PASS、Linguist 32 PASS / 0 FAIL / 2 MANUAL；启动后签名仍有效，248 个默认 Skill/岗位资源文件与源码逐文件一致。没有在 arm64 主机执行 x64/Windows 包。
+- [发布机器证据](./evidence/0.18.0-release.json)记录资产哈希、CI 与正式包 ASAR 哈希、签名及覆盖边界。用户日用安装和数据未替换，下载包启动通过不等于在线更新端到端通过。
 
 ## 限制
 

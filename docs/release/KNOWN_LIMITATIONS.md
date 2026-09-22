@@ -4,19 +4,19 @@
 
 > 当前目标是作者本人使用的个人 Alpha。实现、单元验证、打包验证、真机人工和产品资格是不同证据等级。
 
-当前候选与发布/安装状态见 [0.18 验证记录](./VALIDATION_0_18_0.md)；历史已发布包的证据不自动覆盖候选。
+当前发布/安装状态见 [0.18 验证记录](./VALIDATION_0_18_0.md)；历史已发布包的证据不自动覆盖候选。
 
 ## A. 尚缺的真实与人工证据
 
-1. **真实 Provider 与模型质量**：历史单次真实请求不能证明本轮候选的 Provider 协议、网络重试或翻译质量；Fake Model、Prompt 合同和格式 round-trip 也不能替代这些证据。
+1. **真实 Provider 与模型质量**：历史单次真实请求不能证明所有 Provider 协议、网络重试或生产翻译质量；0.18 已完成 Astra/xhigh 的 42 个独立合成案例和 6 次接续模型辅助评价，其覆盖不等于客户任务或人类认证；Fake Model、Prompt 合同和格式 round-trip 也不能替代这些证据。
 2. **四岗位全链**：尚未用真实 Provider 完成 Translator → Reviewer → Proofreader → `verified` 交付并复核输出。
 3. **对照评估**：尚未用同一模型、同一 reasoning 和同一真实任务比较 Web Chat、旧 LA 与当前 LA。
 4. **14 天日用**：必须从当前可用构建重新累计，不能由开发日或自动测试补记。
 5. **真机人工**：真实 macOS IME composition、Native Open/Save、Companion round-trip、VoiceOver、完整 keyboard-only、窄窗和拖拽/resize 仍待操作。
 
-6. **Exa 与 OAuth**：连接卡片和本地回归不证明真实账号认证、Keychain 或远程 MCP 握手已通过。
+6. **Exa 与 OAuth**：0.18 语言验证已走通所选模型的正常 Keychain 只读鉴权；这不证明 Exa 账号认证或远程 MCP 握手已通过。
 
-7. **Phrase 网页回填现场校准**：0.18 候选尚未执行真实客户回填；合成 Chromium 页面与既有私有项目方法不能证明新候选在实际站点的 DOM、富文本换行、保存与 TM owner 信号全部有效，不据此给出提速倍数。
+7. **Phrase 网页回填现场校准**：0.18 尚未执行真实客户回填；合成 Chromium 页面与既有私有项目方法不能证明新候选在实际站点的 DOM、富文本换行、保存与 TM owner 信号全部有效，不据此给出提速倍数。
 
 ## B. 当前功能边界
 
