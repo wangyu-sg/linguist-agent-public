@@ -4,8 +4,8 @@
  * 直接展示文件浏览器，默认打开状态。
  * 切换按钮在面板关闭时显示活动指示点。
  */
-// LA-HOST-SEAM: renderer-right-workspace-extension
 
+// LA-HOST-SEAM: renderer-right-workspace-extension
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { X, ExternalLink, ChevronRight, MoreHorizontal, FolderSearch, Pencil, FolderInput, GitBranch, GitMerge, MessageSquarePlus, FileDiff, FileText, FolderOpen, Globe, MessageCircle, Brain, Split, Blocks, CalendarDays, ListTodo, Clock, ServerCog, SquareTerminal, Terminal } from 'lucide-react'
@@ -348,10 +348,12 @@ function SideAgentSessionContent({
   contentKey,
   children,
   onView,
+  visible,
 }: {
   contentKey: string
   children: React.ReactNode
   onView?: () => void
+  visible: boolean
 }): React.ReactElement {
   const previousContentKeyRef = React.useRef<string | null>(null)
   const onViewRef = React.useRef(onView)
@@ -362,12 +364,10 @@ function SideAgentSessionContent({
     previousContentKeyRef.current = contentKey
   }, [contentKey])
 
-  // A delegated child may finish while hidden, then become visible simply because its parent
-  // session is reopened. Rendering the visible content itself is a view acknowledgement; do not
-  // require a second pointer or focus event inside the child pane to clear its completion state.
+  // 收起面板仍保留子会话挂载；只有真正可见时才清除完成提醒，重新展开也算查看。
   React.useEffect(() => {
-    onViewRef.current?.()
-  }, [contentKey])
+    if (visible) onViewRef.current?.()
+  }, [contentKey, visible])
 
   return (
     <div
@@ -376,8 +376,8 @@ function SideAgentSessionContent({
         'min-h-0 flex-1 overflow-hidden',
         shouldAnimate && 'animate-in fade-in-0 slide-in-from-right-1 duration-150 motion-reduce:animate-none',
       )}
-      onFocusCapture={onView}
-      onPointerDownCapture={onView}
+      onFocusCapture={visible ? onView : undefined}
+      onPointerDownCapture={visible ? onView : undefined}
     >
       {children}
     </div>
@@ -1276,11 +1276,14 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
   }, [activeBrowserTabId, browserState?.tabs, returnToPreviousTabAfterClose])
 
   const showBrowserActivity = Boolean(browserState?.activity && browserState.executionSource !== 'user')
+  // WebContentsView 是原生子视图，会盖住 renderer 的 portal。加号菜单打开时，
+  // BrowserPanel 为它保留一个固定避让区，而非 setVisible(false)。
   React.useEffect(() => {
     if (activeTab !== 'todos' && activeTab !== 'calendar' && activeTab !== 'vault') return
     if (!isWorkspaceComponentEnabled(activeTab)) onTabChange('files')
   }, [activeTab, isWorkspaceComponentEnabled, onTabChange])
 
+  const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
   const workspaceTabs = React.useMemo<WorkspacePanelTab[]>(() => [
     ...(hostWorkspace.tab ? [hostWorkspace.tab] : []),
     { id: 'files', label: '文件', icon: <FolderOpen className="size-3.5" /> },
@@ -1320,6 +1323,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
       id: 'delegation' as const,
       label: getDelegationTabLabel(selectedDelegationSession.title),
       icon: <GitBranch className={cn('size-3.5', getDelegationStatusIconClass(selectedDelegationStatus))} />,
+      status: selectedDelegationStatus,
       closable: true,
     }] : []),
     ...(browserState?.tabs.map((tab) => ({
@@ -1593,6 +1597,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
               sessionId={sessionId}
               tabId={paneBrowserTabId}
               state={browserState}
+              isAddTabMenuOpen={isAddTabMenuOpen}
             />
           </div>
         )
@@ -1608,12 +1613,13 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
         <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">暂无问答会话</div>
       )
     ) : paneExplorationBranch ? (
-      <SideAgentSessionContent contentKey={`exploration:${paneExplorationBranch.sessionId}`}>
+      <SideAgentSessionContent contentKey={`exploration:${paneExplorationBranch.sessionId}`} visible={isOpen}>
         <AgentView sessionId={paneExplorationBranch.sessionId} embedded />
       </SideAgentSessionContent>
     ) : paneDelegationSession ? (
       <SideAgentSessionContent
         contentKey={`delegation:${paneDelegationSession.id}`}
+        visible={isOpen}
         onView={() => markDelegationSessionViewed(paneDelegationSession.id)}
       >
         <AgentView sessionId={paneDelegationSession.id} embedded />
@@ -1792,6 +1798,7 @@ export function SidePanel({ sessionId, sessionPath, activeTab, onTabChange, widt
             onTabChange={handleWorkspaceTabChange}
             onCloseTab={handleCloseWorkspaceTab}
             onOpenBrowser={() => void handleOpenBrowserTab()}
+            onAddTabMenuOpenChange={setIsAddTabMenuOpen}
             onOpenFile={() => handleWorkspaceTabChange('files')}
             onOpenTerminal={handleOpenTerminal}
             onOpenWorkspaceComponent={(component) => {

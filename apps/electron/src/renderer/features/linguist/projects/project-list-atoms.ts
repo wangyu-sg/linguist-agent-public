@@ -6,7 +6,7 @@
  */
 
 import { atom } from 'jotai'
-import { atomWithRefresh, unwrap } from 'jotai/utils'
+import { atomFamily, atomWithRefresh, unwrap } from 'jotai/utils'
 import type { LinguistProjectInfo } from '@proma/shared'
 import { describeLinguistIpcError } from './project-utils'
 
@@ -38,6 +38,13 @@ const unwrappedLinguistProjectListAtom = unwrap(
 export const linguistProjectListStateAtom = atom<LinguistProjectListState>((get) => (
   get(unwrappedLinguistProjectListAtom)
 ))
+
+/** 项目元信息复用同一列表快照；普通 Agent 的空项目 ID 不触发 CAT IPC。 */
+export const linguistProjectInfoAtomFamily = atomFamily((projectId: string) => atom((get) => {
+  if (!projectId) return undefined
+  const state = get(linguistProjectListStateAtom)
+  return state.status === 'ready' ? state.projects.find((project) => project.id === projectId) : undefined
+}))
 
 /** 创建、归档、迁移后失效共享缓存；下一次读取自动复用新结果。 */
 export const refreshLinguistProjectListAtom = atom(null, (_get, set) => {

@@ -972,7 +972,7 @@ function TabStatePersistenceInitializer(): null {
       const activeTab = validTabs.find((t) => t.id === restoredActiveTabId) ?? validTabs[0] ?? null
       store.set(tabsAtom, validTabs)
       store.set(activeTabIdAtom, restoredActiveTabId)
-      const restoredMru = getPersistedTabMru(tabState, validTabs)
+      const restoredMru = getPersistedTabMru(tabState)
       if (restoredMru.length > 0) store.set(tabMruAtom, restoredMru)
 
       // 同步 appMode 和 currentSessionId

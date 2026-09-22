@@ -62,6 +62,7 @@ import {
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
 import { resolveModeNavigation } from '@/host/app-mode-registry'
+import { createHostedAgentSession } from '@/host/agent-host-extension'
 import { isDelegationObservationVisible } from '@/lib/agent-session-list'
 import { getLastInteractedStopTarget, resolveStopGenerationTarget } from '@/lib/stop-generation-target'
 import { CLOSE_ACTIVE_RIGHT_WORKSPACE_TAB_EVENT } from '@/lib/right-workspace-events'
@@ -79,6 +80,7 @@ import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
  * 挂载后从 settings 加载自定义配置，并注册所有应用级快捷键。
  */
 export function GlobalShortcuts(): null {
+  const store = useStore()
   const appMode = useAtomValue(appModeAtom)
   const [settingsOpen, setSettingsOpen] = useAtom(settingsOpenAtom)
   const channelFormDirty = useAtomValue(channelFormDirtyAtom)
@@ -193,7 +195,14 @@ export function GlobalShortcuts(): null {
     useCallback(() => {
       if (appMode === 'agent') void createAgent({ draft: true })
       if (appMode === 'chat') void createChat({ draft: true })
-    }, [appMode, createAgent, createChat]),
+      if (appMode === 'linguist') {
+        void createHostedAgentSession(store).catch((error: unknown) => {
+          toast.error('新建项目会话失败', {
+            description: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
+    }, [appMode, createAgent, createChat, store]),
   )
 
   // Cmd+B → 切换侧边栏
@@ -261,7 +270,6 @@ export function GlobalShortcuts(): null {
 
   // ===== 快速任务窗口 → 创建会话并自动发送 =====
 
-  const store = useStore()
 
   useEffect(() => {
     const cleanup = window.electronAPI.onQuickTaskOpenSession(async (data) => {

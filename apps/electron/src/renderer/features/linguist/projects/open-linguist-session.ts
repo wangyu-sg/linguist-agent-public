@@ -11,11 +11,16 @@ import {
   agentSidePanelOpenAtomFamily,
   currentAgentSessionIdAtom,
   currentAgentWorkspaceIdAtom,
+  unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
 import {
+  buildOpenTabRestore,
   openTab,
+  sessionViewStateMapAtom,
   tabsAtom,
 } from '@/atoms/tab-atoms'
+import { previewFileMapAtom } from '@/atoms/preview-atoms'
+import { markSessionCompletionViewed } from '@/lib/agent-completion-presence'
 import { enterLinguistNavigation } from '@/lib/linguist-navigation'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 import { beginProjectNavigationAtom, projectSwitchGenerationAtom } from '@/host/project-switch'
@@ -49,17 +54,22 @@ export function activateLinguistAgentSession(
     : selectProjectAgentSession(store, projectId, session.id)
   if (!selected) return false
 
+  const restore = buildOpenTabRestore(
+    session.id,
+    store.get(sessionViewStateMapAtom),
+    store.get(previewFileMapAtom),
+  )
   const opened = openTab(store.get(tabsAtom), {
     type: 'agent',
     sessionId: session.id,
     title: session.title,
-  })
+  }, restore)
   store.set(tabsAtom, opened.tabs)
   enterLinguistNavigation(store, opened.activeTabId, 'conversations')
   store.set(currentAgentSessionIdAtom, session.id)
+  store.set(unviewedCompletedSessionIdsAtom, (previous) => markSessionCompletionViewed(previous, session.id))
   if (session.workspaceId) store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
   if (!store.get(agentDiffPanelTabAtom).has(session.id)) {
-    store.set(agentSidePanelOpenAtomFamily(session.id), true)
     store.set(agentDiffPanelTabAtom, (previous) => new Map(previous).set(session.id, 'linguist'))
   }
   return true

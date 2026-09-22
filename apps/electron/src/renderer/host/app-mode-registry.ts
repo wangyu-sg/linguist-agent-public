@@ -155,26 +155,7 @@ export interface AgentRailContext {
 export function resolveRightRailPolicy(context: AgentRailContext): boolean {
   if (!getAppModeDefinition(context.appMode).allowsAgentRail) return false
   if (!context.hasAgentSession) return false
-  if (context.automationFormOpen) return false
-  // 非会话视图均为全屏管理界面,不挂 Agent Rail。
-  return context.activeView === 'conversations'
-}
-
-/** 视口放不下左右栏与最小主区时,让右栏暂时让位。 */
-export function shouldSuppressAgentRail(
-  viewportWidth: number,
-  leftSidebarWidth: number,
-  rightPanelWidth: number,
-  minMainAreaWidth: number,
-): boolean {
-  return viewportWidth < leftSidebarWidth + rightPanelWidth + minMainAreaWidth
-}
-
-/** 极窄视口(如 200% zoom)下左栏折叠为图标栏,先保主区最小可用宽度。 */
-export function shouldForceCollapseLeftSidebar(
-  viewportWidth: number,
-  leftSidebarWidth: number,
-  minMainAreaWidth: number,
-): boolean {
-  return viewportWidth < leftSidebarWidth + minMainAreaWidth
+  if (context.automationFormOpen && context.activeView !== 'conversations') return false
+  // 通用视图沿用 Proma；Linguist 项目管理页使用完整主区。
+  return context.activeView !== 'planning' && context.activeView !== 'agent-skills' && context.activeView !== 'projects'
 }

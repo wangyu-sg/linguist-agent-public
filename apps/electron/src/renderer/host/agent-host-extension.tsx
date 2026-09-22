@@ -14,7 +14,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import type { createStore } from 'jotai/vanilla'
 import { toast } from 'sonner'
 import { Languages } from 'lucide-react'
-import type { LinguistTurnContextV1 } from '@proma/shared'
+import type { AgentSessionMeta, LinguistTurnContextV1 } from '@proma/shared'
 import type { WorkspacePanelTab } from '@/components/diff/DiffPanelTabBar'
 import {
   agentLinguistTurnContextCaptureAtom,
@@ -30,8 +30,10 @@ import {
   linguistWorkbenchUiStateAtomFamily,
 } from '@/features/linguist/projects/cat-workspace-atoms'
 import { linguistProjectSummaryAtomFamily } from '@/features/linguist/projects/project-summary-atoms'
+import { linguistProjectInfoAtomFamily } from '@/features/linguist/projects/project-list-atoms'
 import { buildProjectComposerContextChips } from '@/features/linguist/projects/project-composer-context'
 import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
+import { createActiveLinguistProjectSession } from '@/features/linguist/projects/project-agent-session'
 import { LocalizationProjectWorkbench } from '@/features/linguist/projects/LocalizationProjectWorkbench'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 import {
@@ -52,6 +54,8 @@ export interface AgentHostExtension {
   hostCapabilities: AgentHostCapabilities
   /** 附件落盘闸门(封装 linguistProjectId,AgentView 不直接接触项目身份)。 */
   attachmentGate: AgentHostAttachmentGate
+  /** 继续项目会话时沿用项目与岗位；普通会话使用原生创建入口。 */
+  createContinuationSession?: () => Promise<AgentSessionMeta>
 }
 
 export interface AgentRightWorkspaceHostExtension {
@@ -76,6 +80,12 @@ export function openHostedAgentSession(
   })
 }
 
+/** 项目会话新建复用侧栏入口，快捷键不另造 Session 或跳离当前项目。 */
+export async function createHostedAgentSession(store: JotaiStore): Promise<void> {
+  const result = await createActiveLinguistProjectSession(store)
+  if (!result.ok) throw new Error(result.error.message)
+}
+
 export function useAgentHostExtension(
   sessionId: string,
 ): AgentHostExtension {
@@ -87,6 +97,7 @@ export function useAgentHostExtension(
   const projectKey = linguistProjectId ?? NO_PROJECT
 
   const summaryState = useAtomValue(linguistProjectSummaryAtomFamily(projectKey))
+  const project = useAtomValue(linguistProjectInfoAtomFamily(projectKey))
   const [uiState, setUiState] = useAtom(linguistWorkbenchUiStateAtomFamily(projectKey))
   const segmentReference = useAtomValue(linguistSegmentAgentReferenceAtomFamily(projectKey))
   const setSegmentReference = useSetAtom(linguistSegmentAgentReferenceAtomFamily(projectKey))
@@ -109,7 +120,7 @@ export function useAgentHostExtension(
     const chips = buildProjectComposerContextChips({
       projectId: linguistProjectId,
       // 摘要未就绪时回退到通用标签;就绪后自动替换为真实项目名。
-      projectName: summary?.project.name ?? '当前项目',
+      projectName: project?.name ?? summary?.project.name ?? '当前项目',
       assets: summary?.assets ?? [],
       uiState,
       segmentReference,
@@ -117,7 +128,7 @@ export function useAgentHostExtension(
       onClearSelectedSegments: () => setUiState({ selectedSegmentIds: [] }),
     })
     return <ComposerContextChips chips={chips} />
-  }, [linguistProjectId, segmentReference, setSegmentReference, setUiState, summaryState, uiState])
+  }, [linguistProjectId, project?.name, segmentReference, setSegmentReference, setUiState, summaryState, uiState])
 
   const attachmentGate = React.useMemo((): AgentHostAttachmentGate => ({
     resolve: (workspaceSlug) => resolveAgentAttachmentSaveGate({
@@ -131,6 +142,14 @@ export function useAgentHostExtension(
     captureTurnContext,
     hostCapabilities: DEFAULT_AGENT_HOST_CAPABILITIES,
     attachmentGate,
+    createContinuationSession: linguistProjectId ? async () => {
+      const result = await window.electronAPI.linguistSessionsCreateForProject({
+        projectId: linguistProjectId,
+        role: sessionMeta?.linguistRole ?? 'general',
+      })
+      if (!result.ok) throw new Error(result.error.message)
+      return result.data
+    } : undefined,
   }
 }
 

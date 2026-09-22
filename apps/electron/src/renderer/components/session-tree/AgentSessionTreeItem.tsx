@@ -16,6 +16,7 @@ interface AgentSessionTreeItemProps {
   buttonClassName?: string
   inputClassName?: string
   onDragStart: React.DragEventHandler<HTMLButtonElement>
+  onDragEnd: React.DragEventHandler<HTMLButtonElement>
   onSelect: () => void
   onRename: (title: string) => void | Promise<void>
 }
@@ -33,6 +34,7 @@ export const AgentSessionTreeItem = React.forwardRef<
   buttonClassName,
   inputClassName,
   onDragStart,
+  onDragEnd,
   onSelect,
   onRename,
 }, ref): React.ReactElement {
@@ -95,6 +97,7 @@ export const AgentSessionTreeItem = React.forwardRef<
         type="button"
         draggable
         onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
         aria-label={ariaLabel}
         aria-current={ariaCurrent || undefined}
         onClick={onSelect}

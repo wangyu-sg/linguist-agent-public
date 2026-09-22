@@ -11,7 +11,6 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { LocalProjectBadge } from '@/components/agent/LocalProjectBadge'
 import { getActiveAccelerator, getAcceleratorDisplay } from '@/lib/shortcut-registry'
-import { ShortcutKeycaps } from '@/components/shortcuts/ShortcutKeycaps'
 
 interface AgentProjectGroupItemProps {
   group: { workspace: AgentWorkspace; sessions: AgentSessionMeta[] }
@@ -76,7 +75,6 @@ export const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
   )
 
   const [renamingWorkspace, setRenamingWorkspace] = React.useState(false)
-  const [projectMenuOpen, setProjectMenuOpen] = React.useState(false)
   const [workspaceEditName, setWorkspaceEditName] = React.useState('')
   const workspaceEditRef = React.useRef<HTMLInputElement>(null)
   const justStartedRenamingRef = React.useRef(false)
@@ -164,7 +162,7 @@ export const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
                 projectRootStatus={group.workspace.projectRootStatus}
               />
             )}
-            {linguistProject && <LinguistWorkspaceBadge />}
+            {linguistProject && !domainMode && <LinguistWorkspaceBadge />}
             {isAutomationGroup && (
               <ChevronRight
                 size={12}
@@ -179,7 +177,7 @@ export const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
         contextMenuItems={domainProps ? <LinguistProjectActionItems {...domainProps} variant="context" /> : undefined}
         draggable={!domainProps?.project.archivedAt}
         onDragStart={(event) => onDragStart(event, group.workspace.id)}
-        nameButtonClassName={cn('pr-12', isCurrent && 'pr-32')}
+        nameButtonClassName={isAutomationGroup ? 'pr-1' : 'pr-12'}
         editor={renamingWorkspace ? (
           <input
             ref={workspaceEditRef}
@@ -191,14 +189,7 @@ export const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
             maxLength={50}
           />
         ) : undefined}
-        hint={isCurrent && !isAutomationGroup && !projectMenuOpen ? (
-          <ShortcutKeycaps
-            shortcutId="new-session"
-            className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 !flex-nowrap opacity-65 transition-opacity group-hover/project:opacity-0"
-            keycapClassName="h-4 min-w-4 rounded-[3px] border-border/60 px-0.5 text-[9px] shadow-none"
-            separatorClassName="text-[8px]"
-          />
-        ) : undefined}
+
         actions={!isAutomationGroup ? (
           <>
             {domainProps ? (domainProps.project.archivedAt === undefined && <LinguistCreateSessionMenu project={domainProps.project} creating={domainActions?.creatingProjectId === domainProps.project.id} onCreateSession={domainProps.onCreateSession} />) : (
@@ -221,7 +212,7 @@ export const AgentProjectGroupItem = React.memo(function AgentProjectGroupItem({
               </TooltipContent>
             </Tooltip>
             )}
-            <DropdownMenu onOpenChange={setProjectMenuOpen}>
+            <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"

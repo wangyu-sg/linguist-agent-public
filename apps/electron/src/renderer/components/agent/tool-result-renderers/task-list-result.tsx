@@ -87,19 +87,19 @@ function statusMeta(status: string): {
     case 'in_progress':
       return {
         label: '进行中',
-        className: 'text-info',
+        className: 'text-blue-600 dark:text-blue-400',
         icon: Clock3,
       }
     case 'completed':
       return {
         label: '已完成',
-        className: 'text-success',
+        className: 'text-green-600 dark:text-green-400',
         icon: CheckCircle2,
       }
     case 'blocked':
       return {
         label: '已阻塞',
-        className: 'text-warning',
+        className: 'text-amber-700 dark:text-amber-400',
         icon: Circle,
       }
     case 'cancelled':

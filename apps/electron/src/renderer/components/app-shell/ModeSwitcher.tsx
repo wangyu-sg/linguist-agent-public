@@ -5,7 +5,7 @@
  * 1. 优先恢复上次选中的对话 ID
  * 2. 其次查找已打开的同类型 Tab
  * 3. 兜底打开最近的对话/会话（列表首项）
- * 4. 都没有则创建该模式的草稿会话
+ * 4. 都没有则仅切换模式
  */
 
 import * as React from 'react'
@@ -87,7 +87,7 @@ export function ModeSwitcher({ ariaLabel = '主工作模式' }: { ariaLabel?: st
               'mode-btn titlebar-no-drag relative z-[1] h-8 flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-0 text-sm font-medium transition-colors duration-200 select-none',
               mode === value
                 ? 'mode-btn-selected text-foreground'
-                : 'text-foreground/60 hover:text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <span className="mode-switcher-icon flex-shrink-0">{icon}</span>

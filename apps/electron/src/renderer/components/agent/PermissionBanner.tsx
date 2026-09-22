@@ -18,16 +18,16 @@ import type { DangerLevel } from '@proma/shared'
 
 /** 危险等级对应的图标颜色 */
 const DANGER_ICON_STYLES: Record<DangerLevel, string> = {
-  safe: 'text-success',
+  safe: 'text-green-500',
   normal: 'text-primary',
-  dangerous: 'text-warning',
+  dangerous: 'text-amber-500',
 }
 
 /** 危险等级文字徽章（不只靠图标颜色传达风险） */
 const DANGER_BADGES: Record<DangerLevel, { label: string; className: string }> = {
-  safe: { label: '安全', className: 'bg-success/10 text-success' },
+  safe: { label: '安全', className: 'bg-green-500/10 text-green-500' },
   normal: { label: '需确认', className: 'bg-muted text-muted-foreground' },
-  dangerous: { label: '危险', className: 'bg-warning/15 text-warning' },
+  dangerous: { label: '危险', className: 'bg-amber-500/15 text-amber-500' },
 }
 
 /** 解析工具显示名称（MCP 工具显示 server / tool） */
@@ -137,7 +137,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
 
   return (
     <div
-      className="rounded-xl border border-border/60 bg-card overflow-hidden animate-in slide-in-from-bottom-2 duration-200"
+      className="mx-4 mb-3 rounded-xl bg-card shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200"
     >
       {/* 头部 */}
       <div className="flex items-center justify-between px-3 py-2">

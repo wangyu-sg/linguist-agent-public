@@ -46,6 +46,10 @@ import { DefaultAppOpenButton } from './DefaultAppOpenButton'
 import { UnsupportedFilePreview } from './UnsupportedFilePreview'
 import { PreviewFindBar } from './PreviewFindBar'
 import { MarkdownToc, MarkdownTocScrollTail } from './MarkdownToc'
+import {
+  isCurrentMarkdownScrollRestore,
+  shouldMaskMarkdownForScrollRestore as getShouldMaskMarkdownForScrollRestore,
+} from './markdown-scroll-restore'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PIERRE_FILE_CSS } from '@/components/agent/tool-result-renderers/pierre-styles'
 import { SelectionActionPopover } from '@/components/selection/SelectionActionPopover'
@@ -1025,48 +1029,79 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   // cached mount → restore; scroll → save.
   const prevRefreshVersionRef = React.useRef(refreshVersion)
   const restoreScrollRef = React.useRef(false)
-  const restoreGenerationRef = React.useRef(0)
+  const restoreRafRef = React.useRef(0)
+  const restoreTimeoutRef = React.useRef<number | null>(null)
+  const scrollNavigationEpochRef = React.useRef(0)
+  const currentScrollKeyRef = React.useRef(scrollKey)
+  const previousScrollKeyRef = React.useRef(scrollKey)
+  // 在 layout effect 清理旧事务前，先让旧回调能够同步识别当前已切换文件。
+  currentScrollKeyRef.current = scrollKey
 
   // 等待异步 Markdown 渲染稳定期间保留布局但隐藏正文，避免切回标签时
   // 先暴露文档顶部、再跳回保存位置。
   const [liveMarkdownReadyKey, setLiveMarkdownReadyKey] = React.useState<string | null>(null)
   const [restoredScrollKey, setRestoredScrollKey] = React.useState<string | null>(null)
+  const restoreGenerationRef = React.useRef(0)
   const cachedScrollPosition = scrollPositionCache.get(scrollKey)
-  const shouldMaskMarkdownForScrollRestore = Boolean(
-    isMarkdown
-      && !loading
-      && liveMarkdownReadyKey !== scrollKey
-      && cachedScrollPosition
-      && (cachedScrollPosition.top > 0 || cachedScrollPosition.left > 0)
-      && restoredScrollKey !== scrollKey,
-  )
+  const shouldMaskMarkdownForScrollRestore = getShouldMaskMarkdownForScrollRestore({
+    isMarkdown: Boolean(isMarkdown),
+    loading,
+    cachedScrollPosition,
+    restoredScrollKey,
+    scrollKey,
+    editorReady: liveMarkdownReadyKey === scrollKey,
+  })
+
+  const invalidatePendingPreviewScrollRestore = React.useCallback(() => {
+    scrollNavigationEpochRef.current += 1
+    restoreScrollRef.current = false
+    if (restoreRafRef.current) {
+      cancelAnimationFrame(restoreRafRef.current)
+      restoreRafRef.current = 0
+    }
+    if (restoreTimeoutRef.current !== null) {
+      clearTimeout(restoreTimeoutRef.current)
+      restoreTimeoutRef.current = null
+    }
+  }, [])
 
   const cancelPendingPreviewScrollRestore = React.useCallback(() => {
     // A user-initiated TOC jump supersedes a restore captured before this click.
     // Otherwise the restore rAF may write the old (often zero) position after
     // CodeMirror has already moved the document to the requested heading.
-    restoreGenerationRef.current += 1
-    restoreScrollRef.current = false
+    invalidatePendingPreviewScrollRestore()
     // 目录跳转成为当前阅读意图：结束旧恢复并同时释放它临时添加的遮罩。
     // 否则 LiveMarkdown 就绪后取消其 rAF，会使正文一直处于隐藏状态。
     setRestoredScrollKey(scrollKey)
-  }, [scrollKey])
+  }, [invalidatePendingPreviewScrollRestore, scrollKey])
 
   React.useLayoutEffect(() => {
-    restoreGenerationRef.current += 1
-    setLiveMarkdownReadyKey((current) => current === scrollKey ? current : null)
-    setRestoredScrollKey((current) => current === scrollKey ? current : null)
-    return () => { restoreGenerationRef.current += 1 }
-  }, [scrollKey])
+    // 同一预览组件复用打开另一文件时，旧文件的异步恢复不得写入新容器。
+    if (previousScrollKeyRef.current !== scrollKey) {
+      previousScrollKeyRef.current = scrollKey
+      invalidatePendingPreviewScrollRestore()
+    }
+    if (liveMarkdownReadyKey && liveMarkdownReadyKey !== scrollKey) setLiveMarkdownReadyKey(null)
+    if (restoredScrollKey && restoredScrollKey !== scrollKey) setRestoredScrollKey(null)
+  }, [invalidatePendingPreviewScrollRestore, liveMarkdownReadyKey, restoredScrollKey, scrollKey])
 
   React.useEffect(() => {
     // 异常 widget 或极端资源压力不能让阅读区永久空白；超时后 best-effort 恢复。
     if (!shouldMaskMarkdownForScrollRestore || liveMarkdownReadyKey === scrollKey) return
-    const generation = restoreGenerationRef.current
+    const restoreEpoch = scrollNavigationEpochRef.current
     const restoreKey = scrollKey
     const timer = window.setTimeout(() => {
-      if (generation !== restoreGenerationRef.current) return
+      restoreTimeoutRef.current = null
+      if (
+        restoreKey !== currentScrollKeyRef.current
+        || !isCurrentMarkdownScrollRestore(restoreEpoch, scrollNavigationEpochRef.current)
+      ) return
       restoreScrollRef.current = false
+      restoreGenerationRef.current++
+      if (restoreRafRef.current) {
+        cancelAnimationFrame(restoreRafRef.current)
+        restoreRafRef.current = 0
+      }
       const position = scrollPositionCache.get(restoreKey)
       const container = scrollContainerRef.current
       if (position && container) {
@@ -1075,10 +1110,16 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
       }
       setRestoredScrollKey(restoreKey)
     }, 500)
-    return () => clearTimeout(timer)
+    restoreTimeoutRef.current = timer
+    return () => {
+      clearTimeout(timer)
+      if (restoreTimeoutRef.current === timer) restoreTimeoutRef.current = null
+    }
   }, [liveMarkdownReadyKey, scrollKey, shouldMaskMarkdownForScrollRestore])
 
   const handleLiveMarkdownReady = React.useCallback(() => {
+    // 旧编辑器在切换文件后才完成挂载时，不能为当前文件启动恢复事务。
+    if (currentScrollKeyRef.current !== scrollKey) return
     // ink-mde 异步完成后才允许本 Markdown 的恢复事务结束；不能以空容器的高度稳定
     // 来提前解除遮罩，否则会重新出现“顶部可见后再跳回”的闪动。
     setLiveMarkdownReadyKey(scrollKey)
@@ -1125,8 +1166,9 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
       return
     }
 
-    const generation = restoreGenerationRef.current
+    const generation = ++restoreGenerationRef.current
     const el = scrollContainerRef.current
+    const restoreEpoch = scrollNavigationEpochRef.current
     const restoreKey = scrollKey
     const maxFrames = 30
     let frameCount = 0
@@ -1135,27 +1177,29 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
 
     const canRestore = (): boolean => (
       restoreGenerationRef.current === generation
+      && restoreKey === currentScrollKeyRef.current
+      && restoreEpoch === scrollNavigationEpochRef.current
       && restoreScrollRef.current
     )
-
-    let frame = 0
 
     const completeRestore = (): void => {
       if (!canRestore()) return
       // 首帧与下一帧各写入一次，覆盖 CodeMirror / widget 延迟测量导致的钳制。
       el.scrollTop = pos.top
       el.scrollLeft = pos.left
-      frame = requestAnimationFrame(() => {
+      restoreRafRef.current = requestAnimationFrame(() => {
         if (!canRestore()) return
         el.scrollTop = pos.top
         el.scrollLeft = pos.left
         restoreScrollRef.current = false
         setRestoredScrollKey(restoreKey)
+        restoreRafRef.current = 0
       })
     }
 
     const check = () => {
       if (!canRestore()) {
+        restoreRafRef.current = 0
         return
       }
       frameCount++
@@ -1170,14 +1214,17 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
         completeRestore()
         return
       }
-      frame = requestAnimationFrame(check)
+      restoreRafRef.current = requestAnimationFrame(check)
     }
 
-    frame = requestAnimationFrame(check)
+    restoreRafRef.current = requestAnimationFrame(check)
 
     return () => {
-      if (frame) cancelAnimationFrame(frame)
-      if (restoreGenerationRef.current === generation) restoreGenerationRef.current += 1
+      if (restoreGenerationRef.current === generation) restoreGenerationRef.current++
+      if (restoreRafRef.current) {
+        cancelAnimationFrame(restoreRafRef.current)
+        restoreRafRef.current = 0
+      }
     }
   }, [isMarkdown, liveMarkdownReadyKey, loading, previewScrollRestoreVersion, scrollKey])
 
@@ -1208,6 +1255,8 @@ export function DiffTabContent({ filePath, dirPath, sessionId, gitRoot, previewO
   React.useEffect(() => {
     return () => {
       if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
+      if (restoreRafRef.current) cancelAnimationFrame(restoreRafRef.current)
+      if (restoreTimeoutRef.current !== null) clearTimeout(restoreTimeoutRef.current)
     }
   }, [])
 

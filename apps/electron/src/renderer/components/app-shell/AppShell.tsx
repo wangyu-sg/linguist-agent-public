@@ -15,11 +15,7 @@ import { appModeAtom } from '@/atoms/app-mode'
 import { agentDiffPanelTabAtom, agentSessionComponentOpenMapAtom, agentSessionsAtom, agentSidePanelLayoutAtomFamily, agentSidePanelLayoutMapAtom, agentSidePanelSplitMapAtom, currentAgentSessionIdAtom, currentSessionSidePanelOpenAtom, isWorkspaceComponentTab, pruneAgentSidePanelLayouts, fileBrowserExpandedPathsAtom, fileBrowserScrollTopMapAtom, pruneFileBrowserStateMap } from '@/atoms/agent-atoms'
 import { leftSidebarWidthAtom } from '@/atoms/sidebar-atoms'
 import { sidebarCollapsedAtom } from '@/atoms/tab-atoms'
-import {
-  clampRightPanelWidth,
-  getRightPanelMaxWidth,
-  MIN_MAIN_AREA_WIDTH,
-} from './right-panel-layout'
+import { clampRightPanelWidth, getRightPanelMaxWidth } from './right-panel-layout'
 import { automationFormAtom } from '@/atoms/automation-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { productivityToolsAtom } from '@/atoms/ui-preferences'
@@ -31,8 +27,6 @@ import { SettingsPanel } from '@/components/settings/SettingsPanel'
 import {
   resolveActiveViewForMode,
   resolveRightRailPolicy,
-  shouldForceCollapseLeftSidebar,
-  shouldSuppressAgentRail,
 } from '@/host/app-mode-registry'
 import { detectIsMac, detectIsWindows } from '@/lib/platform'
 import { getMacTitlebarLeadingInsetPx, getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
@@ -47,8 +41,6 @@ const MIN_TODO_PANEL_WIDTH = 600
 // 两个 Pane 需要各自保留约 320px 内容区及中间分隔条。
 const MIN_SPLIT_PANEL_WIDTH = 720
 const EXPANDED_WORKSPACE_DEFAULT_VIEWPORT_RATIO = 2 / 5
-// 窄窗口时优先保留主会话的最小可读宽度；扩展工作区的 480px 仅在空间足够时强制。
-const MIN_MAIN_AREA_WITH_EXPANDED_LEFT_SIDEBAR = 512
 const COLLAPSED_LEFT_SIDEBAR_WIDTH = 60
 
 function isExpandedWorkspaceTab(tab: string | undefined): boolean {
@@ -136,7 +128,7 @@ export function AppShell(): React.ReactElement {
     })
   }, [productivityTools.calendarEnabled, productivityTools.obsidianEnabled, productivityTools.todosEnabled, rawActiveView, setActiveView, setAgentDiffPanelTabs, setAgentSessionComponentOpenMap])
 
-  const rightPanelAllowed = resolveRightRailPolicy({
+  const showRightPanel = resolveRightRailPolicy({
     appMode,
     hasAgentSession: !!currentSessionId,
     automationFormOpen: automationForm.open,
@@ -208,11 +200,6 @@ export function AppShell(): React.ReactElement {
   const setRightPanelSplitMap = useSetAtom(agentSidePanelSplitMapAtom)
   const [rightPanelLayout, setRightPanelLayout] = useAtom(agentSidePanelLayoutAtomFamily(currentSessionId ?? ''))
   const [viewportWidth, setViewportWidth] = React.useState(() => window.innerWidth)
-  const leftSidebarForceCollapsed = shouldForceCollapseLeftSidebar(
-    viewportWidth,
-    clampedLeftSidebarWidth,
-    MIN_MAIN_AREA_WITH_EXPANDED_LEFT_SIDEBAR,
-  )
   const dragging = React.useRef(false)
   const currentSessionIdRef = React.useRef(currentSessionId)
   const rightPanelDragCleanup = React.useRef<(() => void) | null>(null)
@@ -224,7 +211,7 @@ export function AppShell(): React.ReactElement {
     activeRightPanelSplit === null && activeRightPanelTab === 'todos',
     rightPanelLayout.hasOpenedWideWorkspace || (activeRightPanelSplit === null && isExpandedRightWorkspace),
   )
-  const leftSidebarContentWidth = sidebarCollapsed || leftSidebarForceCollapsed
+  const leftSidebarContentWidth = sidebarCollapsed
     ? COLLAPSED_LEFT_SIDEBAR_WIDTH
     : clampedLeftSidebarWidth
   const leftSidebarOccupiedWidth = leftSidebarContentWidth + 1
@@ -234,8 +221,8 @@ export function AppShell(): React.ReactElement {
     : ordinaryRightPanelMinimumWidth
   // 右侧面板是完整的工作区：不论当前为文件、改动或扩展 Tab，继续向左拖拽时
   // 都应能收起左侧 Sidebar，并使用释放出的全部宽度；主区域仍由 MIN_MAIN_AREA_WIDTH 兜底。
-  const canUseCollapsedSidebarSpace = sidebarCollapsed || leftSidebarForceCollapsed
-  const canAutoCollapseSidebarForRightPanel = !sidebarCollapsed && !leftSidebarForceCollapsed
+  const canUseCollapsedSidebarSpace = sidebarCollapsed
+  const canAutoCollapseSidebarForRightPanel = !sidebarCollapsed
   const clampedRightPanelWidth = clampRightPanelWidth(
     rightPanelLayout.width,
     viewportWidth,
@@ -263,14 +250,6 @@ export function AppShell(): React.ReactElement {
   const usesWidePanelLayout = rightPanelLayout.hasOpenedWideWorkspace || activeRightPanelSplit !== null
   const persistedRightPanelWidth = usesWidePanelLayout ? effectiveWidePanelWidth : clampedRightPanelWidth
   const displayedRightPanelWidth = draggedRightPanelWidth ?? persistedRightPanelWidth
-  const showRightPanel = rightPanelAllowed && (
-    !shouldSuppressAgentRail(
-      viewportWidth,
-      leftSidebarOccupiedWidth,
-      displayedRightPanelWidth,
-      MIN_MAIN_AREA_WIDTH,
-    )
-  )
 
   React.useEffect(() => {
     return () => rightPanelDragCleanup.current?.()
@@ -402,16 +381,12 @@ export function AppShell(): React.ReactElement {
         >
             {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
             <div className="relative z-[60] crt-sidebar">
-              <LeftSidebar
-                width={clampedLeftSidebarWidth}
-                noTransition={isDraggingLeftSidebar}
-                forceCollapsed={leftSidebarForceCollapsed}
-              />
+              <LeftSidebar width={clampedLeftSidebarWidth} noTransition={isDraggingLeftSidebar} />
               {/* 侧边栏展开时显示拖拽手柄，折叠态隐藏 */}
-              {!sidebarCollapsed && !leftSidebarForceCollapsed && (
+              {!sidebarCollapsed && (
                 <div
                   className={cn(
-                    'absolute right-0 top-0 bottom-0 w-4 translate-x-1/2 cursor-col-resize hover:bg-primary/5 active:bg-primary/50 transition-colors z-20'
+                    'titlebar-no-drag absolute right-0 top-0 bottom-0 w-4 translate-x-1/2 cursor-col-resize hover:bg-primary/5 active:bg-primary/50 transition-colors z-20'
                   )}
                   onMouseDown={handleLeftSidebarMouseDown}
                 />

@@ -25,8 +25,9 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { agentDiffUnseenChangesAtom, currentAgentSessionIdAtom } from '@/atoms/agent-atoms'
-import type { AgentSidePanelTab, WorkspaceComponentTab } from '@/atoms/agent-atoms'
+import type { AgentSidePanelTab, SessionIndicatorStatus, WorkspaceComponentTab } from '@/atoms/agent-atoms'
 import { groupRightWorkspaceTabs, type RightWorkspacePane } from '@/lib/right-workspace-split'
+import { getDelegationStatusIconClass } from '@/lib/agent-session-list'
 import type { ProductivityToolsSettings } from '@/types/settings'
 
 export interface RightWorkspaceTabDragState {
@@ -41,6 +42,7 @@ export interface WorkspacePanelTab {
   icon: React.ReactNode
   closable?: boolean
   activity?: boolean
+  status?: SessionIndicatorStatus
 }
 
 interface DiffPanelTabBarProps {
@@ -49,6 +51,8 @@ interface DiffPanelTabBarProps {
   onTabChange: (tab: AgentSidePanelTab) => void
   onCloseTab: (tab: AgentSidePanelTab) => void
   onOpenBrowser: () => void
+  /** 加号菜单是否展开；供原生浏览器视图临时避让。 */
+  onAddTabMenuOpenChange?: (open: boolean) => void
   onOpenFile: () => void
   onOpenTerminal?: () => void
   onOpenWorkspaceComponent?: (component: WorkspaceComponentTab) => void
@@ -72,6 +76,7 @@ export function DiffPanelTabBar({
   onTabChange,
   onCloseTab,
   onOpenBrowser,
+  onAddTabMenuOpenChange,
   onOpenFile,
   onOpenTerminal,
   onOpenWorkspaceComponent,
@@ -91,6 +96,7 @@ export function DiffPanelTabBar({
   const setUnseenMap = useSetAtom(agentDiffUnseenChangesAtom)
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
   const unseenChanges = unseenMap.get(currentSessionId ?? '') ?? false
+  const [isAddTabMenuOpen, setIsAddTabMenuOpen] = React.useState(false)
   const [isSplitTabGroupHovered, setIsSplitTabGroupHovered] = React.useState(false)
   // 仅鼠标在菜单外取消时抑制 Radix 的回焦；Esc 与键盘选择必须保留可见焦点。
   const suppressPointerDismissFocusRestoreRef = React.useRef(false)
@@ -103,10 +109,17 @@ export function DiffPanelTabBar({
   const suppressClickTabRef = React.useRef<AgentSidePanelTab | null>(null)
   const activeTabDragCancelRef = React.useRef<(() => void) | null>(null)
 
+  React.useEffect(() => () => onAddTabMenuOpenChange?.(false), [onAddTabMenuOpenChange])
   React.useEffect(() => () => activeTabDragCancelRef.current?.(), [])
   React.useEffect(() => {
     if (!visibleTabs?.left || !visibleTabs.right) setIsSplitTabGroupHovered(false)
   }, [visibleTabs?.left, visibleTabs?.right])
+
+  const handleAddTabMenuOpenChange = React.useCallback((open: boolean) => {
+    if (open) suppressPointerDismissFocusRestoreRef.current = false
+    setIsAddTabMenuOpen(open)
+    onAddTabMenuOpenChange?.(open)
+  }, [onAddTabMenuOpenChange])
 
   const syncScrollbarThumb = React.useCallback(() => {
     const tabList = tabListRef.current
@@ -296,12 +309,7 @@ export function DiffPanelTabBar({
       <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
       <div className="relative flex h-full min-w-0 flex-1 items-center titlebar-no-drag">
         <div className="relative flex min-w-0 flex-1 self-stretch">
-          <div
-            ref={tabListRef}
-            className="flex h-9 min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 pt-1.5 pb-0.5 scrollbar-none"
-            role="tablist"
-            aria-label="右侧工作区"
-          >
+          <div ref={tabListRef} className="flex h-9 min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overscroll-x-contain px-2 pt-1.5 pb-0.5 scrollbar-none" role="tablist" aria-label="右侧工作区">
           {orderedTabs.map((tab) => {
             const selected = activeTab === tab.id
             const isSplitView = visibleTabs?.left !== undefined && visibleTabs.right !== undefined
@@ -350,7 +358,12 @@ export function DiffPanelTabBar({
                   {tab.activity || (isChangesTab && unseenChanges && !selected) ? (
                     <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="有未查看更新" />
                   ) : (
-                    <span className={cn('shrink-0', selected ? 'text-foreground' : 'text-muted-foreground/80')}>{tab.icon}</span>
+                    <span className={cn(
+                      'shrink-0',
+                      tab.status
+                        ? getDelegationStatusIconClass(tab.status)
+                        : selected ? 'text-foreground' : 'text-muted-foreground/80',
+                    )}>{tab.icon}</span>
                   )}
                   <span className="truncate">{tab.label}</span>
                 </button>
@@ -427,7 +440,7 @@ export function DiffPanelTabBar({
             <TooltipContent side="bottom">退出并排，保留当前标签</TooltipContent>
           </Tooltip>
         )}
-        <DropdownMenu>
+        <DropdownMenu open={isAddTabMenuOpen} onOpenChange={handleAddTabMenuOpenChange}>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
@@ -518,7 +531,6 @@ export function DiffPanelTabBar({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-
         {onClose && (
           <Tooltip>
             <TooltipTrigger asChild>

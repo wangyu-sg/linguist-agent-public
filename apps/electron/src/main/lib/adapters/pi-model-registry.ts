@@ -56,10 +56,14 @@ const ZERO_MODEL_COST: PiModelCost = { input: 0, output: 0, cacheRead: 0, cacheW
 export const DEFAULT_CONTEXT_WINDOW = 200_000
 const DEFAULT_MAX_TOKENS = 64_000
 const VOLCENGINE_GLM_MAX_TOKENS = 128_000
-/** GLM-5.3 与 GLM-5.3-Flash 均支持 128K 最大输出。 */
+/** GLM-5.3 系列均支持 128K 最大输出。 */
 const GLM_53_FAMILY_MAX_TOKENS = 131_072
 const CODEX_BASE_URL = 'https://chatgpt.com/backend-api'
 const CODEX_MAX_TOKENS = 128_000
+/** 已从 ChatGPT Codex 订阅下线、不得再展示或运行的模型。 */
+const UNSUPPORTED_CODEX_MODEL_IDS = new Set([
+  'gpt-5.3-codex-spark',
+])
 // GPT-6 Astra 与 GPT-5.6 系列统一按 372K 上下文注册。
 const CODEX_GPT_6_ASTRA_CONTEXT_WINDOW = CODEX_GPT_56_CONTEXT_WINDOW
 /**
@@ -698,7 +702,7 @@ async function resolvePiModelDefaults(input: PiAgentQueryOptions): Promise<PiMod
   const isVolcengineGlm5x = (input.provider === 'doubao' || input.provider === 'doubao-api' || input.provider === 'ark-coding-plan')
     && (glmModelId === 'glm-5.2' || glmModelId === 'glm-5.3')
   const isCatalogMissingGlm53Family = !catalogModel
-    && (glmModelId === 'glm-5.3' || glmModelId === 'glm-5.3-flash')
+    && (glmModelId === 'glm-5.3' || glmModelId === 'glm-5.3-flash' || glmModelId === 'glm-5.3-flashx')
   const catalogContextWindow = catalogModel?.contextWindow ?? DEFAULT_CONTEXT_WINDOW
   const inferredContextWindow = inferContextWindow(input.model) ?? DEFAULT_CONTEXT_WINDOW
   const shouldForceAdaptiveThinking = shouldForcePiAdaptiveThinking(api, catalogModel, input.model)
@@ -823,9 +827,13 @@ function isCompleteCatalogModel(model: PiCatalogModelPatch): model is PiCatalogM
   )
 }
 
+function isSupportedCodexModel(model: Pick<PiCatalogModel, 'id'>): boolean {
+  return !UNSUPPORTED_CODEX_MODEL_IDS.has(model.id.trim().toLowerCase())
+}
+
 export async function getCodexCatalogModels(): Promise<PiCatalogModel[]> {
   const { getModels } = await loadPiAiCompat()
-  return mergeCodexModels(getModels('openai-codex'))
+  return mergeCodexModels(getModels('openai-codex')).filter(isSupportedCodexModel)
 }
 
 /**
@@ -851,7 +859,7 @@ export async function buildCodexModel(sdk: PiSdk, input: CodexModelInput) {
   })
 
   const resolvedModelId = stripLegacyAgentSdkContextSuffix(input.model)
-  const runtimeModels = modelRuntime.getModels('openai-codex')
+  const runtimeModels = modelRuntime.getModels('openai-codex').filter(isSupportedCodexModel)
   const codexModels = await getCodexCatalogModels()
   const model = resolvedModelId
     ? runtimeModels.find((candidate) => candidate.id === resolvedModelId)

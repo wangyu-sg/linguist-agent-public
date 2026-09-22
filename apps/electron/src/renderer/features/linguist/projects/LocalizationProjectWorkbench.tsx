@@ -21,7 +21,7 @@ import {
   type WorkbenchSummaryState,
 } from './LinguistWorkbenchShell'
 import { describeLinguistIpcError } from './project-utils'
-import { refreshLinguistProjectListAtom } from './project-list-atoms'
+import { linguistProjectInfoAtomFamily, refreshLinguistProjectListAtom } from './project-list-atoms'
 import {
   clearLinguistWorkbenchUiStateAtom,
   disposeLinguistWorkbenchAtomFamiliesAtom,
@@ -105,6 +105,7 @@ export function LocalizationProjectWorkbench({
 }): React.ReactElement {
   const store = useStore()
   const refreshProjectList = useSetAtom(refreshLinguistProjectListAtom)
+  const projectInfo = useAtomValue(linguistProjectInfoAtomFamily(projectId))
   const clearWorkbenchUiState = useSetAtom(clearLinguistWorkbenchUiStateAtom)
   const disposeWorkbenchAtoms = useSetAtom(disposeLinguistWorkbenchAtomFamiliesAtom)
   const mutationAtom = linguistProjectMutationStateAtomFamily(projectId)
@@ -244,9 +245,10 @@ export function LocalizationProjectWorkbench({
     )
   }
 
-  const currentProject = summaryState.status === 'ready'
+  const summaryProject = summaryState.status === 'ready'
     ? summaryState.summary.project
     : state.project
+  const currentProject = projectInfo ? { ...summaryProject, name: projectInfo.name } : summaryProject
 
   const activeAsset = summaryState.status === 'ready'
     ? summaryState.summary.assets.find((asset) => asset.assetId === uiState.activeAssetId)

@@ -595,7 +595,6 @@ function ThinkingBlock({ block, dimmed = false, isStreaming = false }: ThinkingB
   const [isExpanded, setIsExpanded] = React.useState(false)
   const [shouldCollapse, setShouldCollapse] = React.useState(false)
   const contentRef = React.useRef<HTMLDivElement>(null)
-  const isLive = isStreaming && !dimmed
   const { displayedContent } = useSmoothStream({
     content: block.thinking,
     isStreaming,
@@ -619,10 +618,8 @@ function ThinkingBlock({ block, dimmed = false, isStreaming = false }: ThinkingB
     <div className="relative mb-3">
       <div className="flex items-center gap-1.5 mb-1.5">
         <Brain className={cn('size-3.5', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')} />
-        {/* live 态用静态圆点作「进行中」指示（不用 animate-spin，reduced-motion 下不会冻结成静止首帧） */}
-        {isLive && <span className="size-1.5 rounded-full bg-primary/60 shrink-0" aria-hidden="true" />}
         <span className={cn('text-[14px] uppercase tracking-wider', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')}>
-          {isLive ? 'Thinking…' : 'Thought process'}
+          Thinking
         </span>
       </div>
       <div
@@ -728,7 +725,7 @@ export function ContentBlock({ block, allMessages, basePath, basePaths, animate 
     )
   }
 
-  // thinking 块（live 态 = 流式中且未被弱化，即当前正在生成的思考段）
+  // thinking 块
   if (block.type === 'thinking') {
     const thinkingBlock = block as SDKThinkingBlock
     if (!thinkingBlock.thinking) return null

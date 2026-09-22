@@ -304,16 +304,15 @@ function TabBarInner({
   // 鼠标滚轮横向滚动（使用原生事件监听器以支持 preventDefault）
   React.useEffect(() => {
     const el = scrollRef.current
-    const bar = barRef.current
-    if (!el || !bar) return
+    if (!el) return
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
-      el.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+      el.scrollLeft += e.deltaY || e.deltaX
     }
 
-    bar.addEventListener('wheel', handleWheel, { passive: false })
-    return () => bar.removeEventListener('wheel', handleWheel)
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
   }, [])
 
   // 新增 tab 时自动滚动到最右
@@ -386,11 +385,11 @@ function TabBarInner({
         ref={scrollRef}
         className={cn(
           "relative flex items-end flex-1 min-w-0 overflow-x-auto scrollbar-none",
-          actionLayout.scrollMarginClassName,
+          actionLayout.scrollPaddingClassName,
         )}
       >
         {tabs.map((tab) => {
-          const workspaceName = tab.type === 'agent' || tab.type === 'preview'
+          const workspaceName = tab.type === 'agent'
             ? workspaceNameBySessionId.get(tab.sessionId)
             : undefined
           return <TabBarItem

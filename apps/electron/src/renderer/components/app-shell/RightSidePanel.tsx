@@ -12,8 +12,6 @@ import {
   agentSidePanelOpenAtomFamily,
   agentSessionPathMapAtom,
   agentDiffPanelTabAtom,
-  agentTerminalTabsAtom,
-  getTerminalSidePanelTab,
   getBrowserSidePanelTab,
   getPreviewSidePanelTab,
 } from '@/atoms/agent-atoms'
@@ -27,7 +25,6 @@ export function RightSidePanel({ sessionId, width }: { sessionId: string; width?
   const sessionPathMap = useAtomValue(agentSessionPathMapAtom)
   const diffPanelTabMap = useAtomValue(agentDiffPanelTabAtom)
   const setDiffPanelTabMap = useSetAtom(agentDiffPanelTabAtom)
-  const setTerminalTabsMap = useSetAtom(agentTerminalTabsAtom)
   const setSidePanelOpen = useSetAtom(agentSidePanelOpenAtomFamily(sessionId))
   const browserOpenMap = useAtomValue(browserPanelOpenMapAtom)
   const browserStateMap = useAtomValue(browserStateMapAtom)
@@ -50,49 +47,8 @@ export function RightSidePanel({ sessionId, width }: { sessionId: string; width?
     })
   }, [currentSessionId, setDiffPanelTabMap])
 
-  // 首次打开浏览器时承接到右侧工作区；Agent 回复链接还会显式携带目标标签，
-  // 即使当前浏览器已打开，也应切换到那个新网页而不是留在文件、Diff 或终端。
-  React.useEffect(() => {
-    const unsubscribeOpen = window.electronAPI.onAgentTerminalOpen((event) => {
-      setTerminalTabsMap((previous) => {
-        const current = previous.get(event.sessionId) ?? []
-        if (current.some((terminal) => terminal.terminalId === event.terminalId)) return previous
-        const next = new Map(previous)
-        next.set(event.sessionId, [...current, { terminalId: event.terminalId, title: event.title, cwd: event.cwd }])
-        return next
-      })
-      if (event.sessionId !== currentSessionId) return
-      setSidePanelOpen(true)
-      setDiffPanelTabMap((previous) => {
-        const next = new Map(previous)
-        next.set(event.sessionId, getTerminalSidePanelTab(event.terminalId))
-        return next
-      })
-    })
-    const unsubscribeClose = window.electronAPI.onAgentTerminalClose((event) => {
-      setTerminalTabsMap((previous) => {
-        const current = previous.get(event.sessionId) ?? []
-        const remaining = current.filter((terminal) => terminal.terminalId !== event.terminalId)
-        if (remaining.length === current.length) return previous
-        const next = new Map(previous)
-        if (remaining.length > 0) next.set(event.sessionId, remaining)
-        else next.delete(event.sessionId)
-        return next
-      })
-      if (event.sessionId !== currentSessionId) return
-      setDiffPanelTabMap((previous) => {
-        if (previous.get(event.sessionId) !== getTerminalSidePanelTab(event.terminalId)) return previous
-        const next = new Map(previous)
-        next.set(event.sessionId, 'files')
-        return next
-      })
-    })
-    return () => {
-      unsubscribeOpen()
-      unsubscribeClose()
-    }
-  }, [currentSessionId, setDiffPanelTabMap, setSidePanelOpen, setTerminalTabsMap])
-
+  // 首次打开浏览器时承接到右侧工作区；终端 IPC 在全局监听器中收集，
+  // 离开会话/进入其他模式时仍保留后台终端。
   React.useEffect(() => {
     const previous = previousBrowserStateRef.current
     const openedInCurrentSession = previous.sessionId === currentSessionId && !previous.open && browserOpen

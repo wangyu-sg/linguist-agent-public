@@ -58,13 +58,10 @@ import {
   canBeSticky,
 } from './tree-row-layout'
 import { setFilePanelDragData, dispatchInsertFileMention } from '@/lib/file-panel-drag'
+import { isCurrentFileBrowserLoadRequest, shouldShowFileBrowserEmptyState } from './file-browser-load-state'
+import type { FileBrowserRoot, FileScope } from './file-browser-roots'
 
-export type FileScope = 'project' | 'session'
-
-export interface FileBrowserRoot {
-  path: string
-  scope: FileScope
-}
+export type { FileBrowserRoot, FileScope } from './file-browser-roots'
 
 /** 计算目标路径相对 rootPath 的祖先目录集合（不含 rootPath 自身、含目标的所有上级） */
 export function computeRevealAncestors(rootPath: string, targetPath: string): Set<string> {
@@ -144,12 +141,15 @@ export function FileBrowser({ roots, hideToolbar, embedded, hideEmpty, access, p
     () => (JSON.parse(rootsKey) as Array<[FileScope, string]>).map(([scope, path]) => ({ scope, path })),
     [rootsKey],
   )
+  const currentRootsKeyRef = React.useRef(rootsKey)
+  currentRootsKeyRef.current = rootsKey
+  const [entries, setEntries] = React.useState<ScopedFileEntry[]>([])
   const [loading, setLoading] = React.useState(false)
-  const [loadResult, setLoadResult] = React.useState<{
-    rootsKey: string | null
-    entries: ScopedFileEntry[]
-    error: string | null
-  }>({ rootsKey: null, entries: [], error: null })
+  const [error, setError] = React.useState<string | null>(null)
+  const [errorRootsKey, setErrorRootsKey] = React.useState<string | null>(null)
+  // 记录 entries 对应的最后一次成功根目录。相同根目录的后台刷新不清除此值，
+  // 这样已确认的空态不会因 watcher 触发 loading 而上下跳动。
+  const [loadedRootsKey, setLoadedRootsKey] = React.useState<string | null>(null)
   const loadRequestIdRef = React.useRef(0)
   const filesVersion = useAtomValue(workspaceFilesVersionAtom)
   const currentSessionId = useAtomValue(currentAgentSessionIdAtom)
@@ -215,27 +215,41 @@ export function FileBrowser({ roots, hideToolbar, embedded, hideEmpty, access, p
   const loadRoot = React.useCallback(async () => {
     const requestId = ++loadRequestIdRef.current
     const requestRootsKey = rootsKey
-    const isCurrentRequest = (): boolean => requestId === loadRequestIdRef.current
+    const isCurrentRequest = (): boolean => (
+      isCurrentFileBrowserLoadRequest(requestId, loadRequestIdRef.current)
+      && currentRootsKeyRef.current === requestRootsKey
+    )
 
     if (browserRoots.length === 0) {
+      // 没有可用根目录通常表示路径仍在异步解析，不能把它当成“已确认的空目录”。
       if (!isCurrentRequest()) return
-      setLoadResult({ rootsKey: null, entries: [], error: null })
+      setEntries([])
+      setError(null)
+      setErrorRootsKey(null)
+      setLoadedRootsKey(null)
       setLoading(false)
       return
     }
 
+    // 不清除 loadedRootsKey：同一根目录的 watcher 刷新应保留既有树和空态。
     setLoading(true)
+    setError(null)
+    setErrorRootsKey(null)
     try {
       const groups = await Promise.all(browserRoots.map(async (root) => {
         const items = await window.electronAPI.listDirectory(root.path, access)
         return items.map((entry): ScopedFileEntry => ({ ...entry, scope: root.scope, rootPath: root.path }))
       }))
       if (!isCurrentRequest()) return
-      setLoadResult({ rootsKey: requestRootsKey, entries: sortEntries(groups.flat()), error: null })
+      setEntries(sortEntries(groups.flat()))
+      setLoadedRootsKey(requestRootsKey)
     } catch (err) {
       if (!isCurrentRequest()) return
       const msg = err instanceof Error ? err.message : '加载失败'
-      setLoadResult({ rootsKey: requestRootsKey, entries: [], error: msg })
+      setError(msg)
+      setErrorRootsKey(requestRootsKey)
+      setEntries([])
+      setLoadedRootsKey(null)
     } finally {
       if (isCurrentRequest()) {
         setLoading(false)
@@ -400,15 +414,21 @@ export function FileBrowser({ roots, hideToolbar, embedded, hideEmpty, access, p
     return parts.length > 2 ? `.../${parts.slice(-2).join('/')}` : primaryRoot
   }, [browserRoots])
 
-  const visibleEntries = loadResult.rootsKey === rootsKey ? loadResult.entries : []
-  const visibleError = loadResult.rootsKey === rootsKey ? loadResult.error : null
+  const visibleEntries = loadedRootsKey === rootsKey ? entries : []
+  const visibleError = errorRootsKey === rootsKey ? error : null
 
   const fileTree = (
     <div className={cn('file-tree-guide-scope', embedded ? 'py-0' : 'py-1')} onClick={handleBackgroundClick}>
       {visibleError && (
         <div className="px-3 py-2 text-xs text-destructive">{visibleError}</div>
       )}
-      {!visibleError && !hideEmpty && visibleEntries.length === 0 && loadResult.rootsKey === rootsKey && (
+      {!shouldShowFileBrowserEmptyState({
+        currentRootsKey: rootsKey,
+        loadedRootsKey,
+        entryCount: visibleEntries.length,
+        hasError: Boolean(visibleError),
+        hideEmpty,
+      }) ? null : (
         <div className="px-3 py-4 text-xs text-muted-foreground text-center">
           目录为空
         </div>

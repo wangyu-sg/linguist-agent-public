@@ -17,6 +17,22 @@
   text-rendering: optimizeLegibility;
 }
 
+/* Electron 首帧和认证切换期间，确保文档不会回落到 Chromium 黑色背景。 */
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+html,
+body {
+  height: 100%;
+}
+
 /* CRT Terminal 主题：全局等宽字体覆盖 */
 .theme-terminal-dark {
   font-family:
@@ -613,6 +629,9 @@
   * {
     @apply border-border;
   }
+  html, body, #root {
+    height: 100%;
+  }
   body {
     @apply bg-background text-foreground;
   }
@@ -624,8 +643,24 @@
   bottom: auto;
 }
 
+/* 项目徽标跟随主区实际宽度收缩，给原生标题、探索和右区按钮留出空间。 */
+.agent-session-header {
+  container-type: inline-size;
+}
+
+@container (max-width: 520px) {
+  .linguist-header-context .linguist-role-name {
+    display: none;
+  }
+
+  .linguist-header-context .linguist-role-short-name {
+    display: inline;
+  }
+}
+
 /* Draggable title bar region for Electron window */
-.titlebar-drag-region {
+.titlebar-drag-region,
+.app-drag-region {
   -webkit-app-region: drag;
   app-region: drag;
 }
@@ -1010,7 +1045,7 @@
 /* ===== 工作区 Badge 文字颜色（追踪 workspace-item-selected 的字色） ===== */
 /* 默认主题（light / dark / system）兜底色 */
 .workspace-badge {
-  color: hsl(var(--foreground) / 0.7);
+  color: hsl(var(--foreground) / 0.4);
 }
 /* 晴空碧海 */
 .theme-ocean-light .workspace-badge {
@@ -1094,6 +1129,7 @@
   height: 3px;
   border-radius: 0;
   background-color: hsl(var(--tab-indicator));
+  box-shadow: 0 0 10px hsl(var(--tab-indicator) / 0.28);
   z-index: 2;
 }
 
@@ -2773,6 +2809,18 @@
   overflow-x: auto;
   border-radius: 0.5rem;
 }
+.live-markdown-table-editor-hint {
+  display: flex;
+  min-height: 1.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.2rem 0.55rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
 .live-markdown-table-cell-trigger {
   display: block;
   width: calc(100% + 1.4rem);
@@ -2787,10 +2835,16 @@
   line-height: inherit;
   text-align: inherit;
   cursor: text;
-  transition: background-color 120ms ease;
+  transform-origin: center;
+  transition-property: background-color, transform;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 .live-markdown-table-cell-trigger:hover {
   background: hsl(var(--muted) / 0.58);
+}
+.live-markdown-table-cell-trigger:active {
+  transform: scale(0.96);
 }
 .live-markdown-table-cell-trigger:focus-visible {
   outline: 2px solid hsl(var(--ring));

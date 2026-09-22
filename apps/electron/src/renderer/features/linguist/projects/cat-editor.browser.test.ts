@@ -25,6 +25,11 @@ import { restorePersistedTabState, tabsAtom } from '@/atoms/tab-atoms'
 import { openLinguistPreview } from './linguist-preview-open'
 import { openPreviewInStore } from '@/components/diff/preview-opener'
 import { previewFilesMapAtom } from '@/atoms/preview-atoms'
+import { useGlobalAgentListeners } from '@/hooks/useGlobalAgentListeners'
+import { useAgentHostExtension } from '@/host/agent-host-extension'
+import { useLinguistSidebarActions } from '../sidebar/useLinguistSidebarActions'
+import { LinguistSessionBindingBadge } from '../session-binding/LinguistSessionBindingBadge'
+import { agentSidePanelOpenAtomFamily, agentTerminalTabsAtom } from '@/atoms/agent-atoms'
 import { openLinguistAgentSession, openLinguistProjectFilesPanel } from './open-linguist-session'
 import { openLocalizationProject } from './open-localization-project'
 import { selectProjectAtom } from '@/host/project-switch'
@@ -89,12 +94,19 @@ const input = value => {
 const openEditor = () => document.querySelector('[data-target-edit]').click()
 const shortcut = (key, shiftKey = false) => document.querySelector('textarea')
   .dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, shiftKey, bubbles: true }))
-function NavigationProbe() {
+function NavigationProbe({ sessionId = 'native' }) {
   const openSession = useOpenSession()
   const switchMode = useSwitchAppMode()
-  React.useEffect(() => { window.openSession = openSession; window.switchMode = switchMode })
+  const host = useAgentHostExtension(sessionId)
+  React.useEffect(() => { window.openSession = openSession; window.switchMode = switchMode; window.hostExtension = host })
   return null
 }
+function SidebarActionsProbe({ session }) {
+  const actions = useLinguistSidebarActions()
+  React.useEffect(() => { window.sidebarActions = actions })
+  return <LinguistSessionBindingBadge session={session} />
+}
+function GlobalListenersProbe() { useGlobalAgentListeners(); return null }
 try {
   mount(); await tick(); await tick()
   openEditor(); await tick(); input('draft before scroll'); await tick()
@@ -231,6 +243,12 @@ try {
   openLinguistPreview('B', (id, file) => openPreviewInStore(store, id, file),
     { kind: 'batch', projectId: 'B', assetId: assetB, filename: 'same.xliff', formatId: 'xliff' })
   check('预览保留中心会话且使用明确宿主', store.get(activeTabIdAtom) === beforePreviewTab && store.get(previewFilesMapAtom).get('B').length === 1)
+  openLinguistPreview('B', (id, file) => openPreviewInStore(store, id, file),
+    { kind: 'batch', projectId: 'B', assetId: assetA, filename: 'same.xliff', formatId: 'xliff' })
+  check('同名受管批次保留独立预览身份', store.get(previewFilesMapAtom).get('B').length === 2)
+  openLinguistPreview('B', (id, file) => openPreviewInStore(store, id, file),
+    { kind: 'batch', projectId: 'B', assetId: assetB, filename: 'same.xliff', formatId: 'xliff' })
+  check('重开同一受管批次复用原Tab', store.get(previewFilesMapAtom).get('B').length === 2)
   const oldUi = { tabs: [{ id: 'linguist-project:A', type: 'linguist-project', projectId: 'A', title: '项目 A' },
     { id: '__preview__:B', type: 'preview', sessionId: 'B', title: '只剩标题' }], activeTabId: 'linguist-project:A' }
   const restored = restorePersistedTabState(oldUi, new Set(['A', 'B']), new Map([['A', { id: 'A', title: 'A' }]]))
@@ -260,6 +278,56 @@ try {
   root.render(<Provider store={store}><QaFindingsPanel projectId={projectId} archived={false} onJump={() => {}} onChanged={async () => {}} refreshToken={0} /></Provider>); await tick(); await tick()
   check('未选批次不请求全项目 QA', qaRequests.length === 1 && document.body.textContent.includes('选择批次后查看 QA'))
 
+  let projectName = '旧项目名'
+  window.electronAPI.linguistProjectsList = async () => ({ ok: true, data: [{ id: 'B', name: projectName }] })
+  window.electronAPI.linguistProjectsRename = async ({ name }) => { projectName = name; return { ok: true, data: { id: 'B', name } } }
+  window.electronAPI.linguistSessionsGetBinding = async () => ({ ok: true, data: { binding: { projectId: 'B', projectName: '旧项目名', status: 'active' } } })
+  store.set(agentSidePanelOpenAtomFamily('B'), false)
+  store.set(agentDiffPanelTabAtom, new Map([['B', 'files']]))
+  root.render(<Provider store={store}><SidebarActionsProbe session={sessions[1]} /></Provider>); await tick(); await tick()
+  await window.sidebarActions.settings('B'); await tick()
+  check('同项目设置入口展开右区并进入CAT', store.get(agentSidePanelOpenAtomFamily('B')) && store.get(agentDiffPanelTabAtom).get('B') === 'linguist' && store.get(linguistWorkbenchUiStateAtomFamily('B')).projectSettingsOpen)
+  await window.sidebarActions.rename('B', '新项目名'); await tick(); await tick()
+  check('项目改名刷新徽标且不改会话标题', document.body.textContent.includes('新项目名') && store.get(agentSessionsAtom).find(session => session.id === 'B').title === 'B')
+
+  root.render(<Provider store={store}><NavigationProbe /></Provider>); await tick(); await tick()
+  check('普通会话继续新任务沿用原生创建入口', window.hostExtension.createContinuationSession === undefined)
+  store.set(agentSessionsAtom, previous => previous.map(session => session.id === 'B' ? { ...session, linguistRole: 'reviewer' } : session))
+  const continuationRequests = []
+  window.electronAPI.linguistSessionsCreateForProject = async input => {
+    continuationRequests.push(input)
+    return continuationRequests.length === 1 ? { ok: true, data: { id: 'B-continuation', linguistProjectId: 'B', linguistRole: input.role } }
+      : { ok: false, error: { code: 'INTERNAL', message: '创建失败证据' } }
+  }
+  let ordinaryCreationCount = 0
+  window.electronAPI.createAgentSession = async () => { ordinaryCreationCount++; throw new Error('不应使用普通创建') }
+  root.render(<Provider store={store}><NavigationProbe sessionId="B" /></Provider>); await tick(); await tick()
+  const continuation = await window.hostExtension.createContinuationSession()
+  check('LA继续新任务保留来源项目和岗位', continuation.linguistProjectId === 'B' && continuation.linguistRole === 'reviewer' && JSON.stringify(continuationRequests[0]) === JSON.stringify({ projectId: 'B', role: 'reviewer' }))
+  let continuationError = ''
+  try { await window.hostExtension.createContinuationSession() } catch (error) { continuationError = error.message }
+  check('LA继续创建失败明确报错且不降级普通会话', continuationError === '创建失败证据' && ordinaryCreationCount === 0)
+
+  // 只挂载应用级监听器，不挂载右栏：Chat/规划页也必须保留后台终端事件。
+  const terminalListeners = new Map()
+  window.electronAPI = new Proxy(window.electronAPI, { get(target, name) {
+    if (String(name).startsWith('on')) return callback => { terminalListeners.set(name, callback); return () => terminalListeners.delete(name) }
+    if (name === 'getPendingRequests') return async () => ({ exitPlans: [] })
+    if (['listActiveAgentSessionSnapshots', 'listActiveAgentSessions', 'getQueuedAgentMessages'].includes(name)) return async () => []
+    if (name === 'setVisibleAgentStreamSession') return async () => {}
+    return target[name]
+  } })
+  store.set(currentAgentSessionIdAtom, null)
+  root.render(<Provider store={store}><GlobalListenersProbe /></Provider>); await tick(); await tick()
+  const backgroundTerminal = { sessionId: 'B', terminalId: 'background-terminal', title: '后台终端' }
+  terminalListeners.get('onAgentTerminalOpen')?.(backgroundTerminal)
+  check('右栏未挂载仍收集后台终端', store.get(agentTerminalTabsAtom).get('B')?.length === 1)
+  check('后台终端不抢当前会话焦点', store.get(currentAgentSessionIdAtom) === null)
+  terminalListeners.get('onAgentTerminalClose')?.(backgroundTerminal)
+  check('右栏未挂载仍清理已关闭终端', !store.get(agentTerminalTabsAtom).has('B'))
+  flushSync(() => root.render(null))
+  check('全局终端监听随应用根清理', !terminalListeners.has('onAgentTerminalOpen') && !terminalListeners.has('onAgentTerminalClose'))
+
 } catch (error) {
   results.push({ label: String(error.stack || error), ok: false })
 }
@@ -269,6 +337,7 @@ return results
       },
       bundle: true,
       format: 'iife',
+      loader: { '.mp3': 'file', '.webp': 'file' },
       outfile: join(directory, 'check.js'),
       define: { 'process.env.NODE_ENV': '"production"' },
     })

@@ -86,6 +86,50 @@ try {
   await select('Switch B')
   await select('Switch A')
   await verify(fixture.a.id, 'A refreshed')
+  // Linguist 复用同一个原生窗口：覆盖项目接入造成的布局与导航回归。
+  const project = await page.evaluate(async () => {
+    const created = await window.electronAPI.linguistProjectsCreate({
+      name: '长项目名称用于侧栏与顶栏布局验证 Long Project', sourceLocale: 'zh-CN', targetLocale: 'en-US',
+    })
+    if (!created.ok) throw new Error(created.error.message)
+    const session = await window.electronAPI.linguistSessionsCreateForProject({
+      projectId: created.data.id, title: 'Linguist layout', role: 'general',
+    })
+    if (!session.ok) throw new Error(session.error.message)
+    return created.data
+  })
+  await page.reload()
+  await page.getByRole('button', { name: '展开侧边栏', exact: true }).click()
+  await page.getByRole('tab', { name: 'Linguist', exact: true }).click()
+  const projectButton = page.getByRole('button', { name: `打开项目 ${project.name}`, exact: true })
+  await projectButton.click()
+  await page.getByRole('button', { name: '会话菜单：Linguist layout', exact: true }).waitFor()
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows().find(window => window.webContents.getURL().endsWith('/dist/renderer/index.html'))!.setSize(900, 720)
+  })
+  // 等待原生窗口 resize 与 CSS 过渡落定，再检查真实元素边界。
+  await page.waitForTimeout(400)
+  const titleBounds = await page.getByRole('button', { name: '会话菜单：Linguist layout', exact: true }).boundingBox()
+  const nameBounds = await projectButton.locator('span').filter({ hasText: project.name }).first().boundingBox()
+  const roleBounds = await page.getByRole('button', { name: '当前岗位：通用项目 Agent', exact: true }).boundingBox()
+  const mainBounds = await page.locator('[data-agent-presentation="full"]').boundingBox()
+  assert.ok(titleBounds && titleBounds.width >= 60, '窄主区会话标题不能被徽标挤空')
+  assert.ok(nameBounds && nameBounds.width >= 60, '侧栏项目名称不能被额外装饰挤空')
+  assert.ok(roleBounds && mainBounds && roleBounds.x + roleBounds.width <= mainBounds.x + mainBounds.width, '岗位菜单不能超出主区')
+  await page.getByRole('tab', { name: '文件', exact: true }).click()
+  await projectButton.hover()
+  await page.getByRole('button', { name: '项目菜单', exact: true }).click()
+  await page.getByRole('menuitem', { name: '项目设置', exact: true }).click()
+  await page.getByRole('dialog').waitFor()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: '折叠右侧工作区', exact: true }).click()
+  await page.getByRole('button', { name: '展开右侧工作区', exact: true }).waitFor()
+  await page.reload()
+  await page.getByRole('button', { name: '会话菜单：Linguist layout', exact: true }).waitFor()
+  await page.getByRole('button', { name: '展开右侧工作区', exact: true }).waitFor()
+  await page.getByRole('button', { name: '展开右侧工作区', exact: true }).click()
+  await page.getByRole('tab', { name: 'CAT', exact: true }).waitFor()
+  console.log('PASS：Linguist 窄窗标题与项目名、Files 中打开项目设置、Renderer 冷恢复保持右栏收起、顶栏重新展开。')
   console.log('PASS：实际侧栏 → 权威 Session → 持久化 Workspace / Tab → 中央 AgentView；空项目创建、列表刷新与 A→B→A 一致。')
   console.log('范围：真实窗口与 IPC；无模型调用。延迟响应与失败注入由独立 Jotai 状态回归覆盖。')
 } finally {

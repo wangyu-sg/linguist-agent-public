@@ -48,6 +48,7 @@ import { downloadInstaller, launchInstaller } from '../installer-downloader'
 import { fetchInstallerManifest, findInstallerSource } from '../installer-manifest'
 import { shouldOfferWindowsShellInstaller } from './windows-shell-installer'
 import { buildPiCollaborationTools } from '../agent-collaboration-tools'
+import { serializePiToolResultPayload } from './pi-tool-result-json'
 import { configureWorkspaceMcp, listWorkspaceMcpServers } from '../mcp-configuration-service'
 import { getVisionRelayRouteLabel, inspectImageWithVisionRelay, isVisionRelayConfigured, isVisionRelayEligibleForModel } from '../vision-relay-service'
 import {
@@ -124,9 +125,10 @@ export interface PiBuiltinToolsContext {
 }
 
 function jsonToolResult(payload: unknown): AgentToolResult<unknown> {
+  const serialized = serializePiToolResultPayload(payload)
   return {
-    content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
-    details: payload,
+    content: [{ type: 'text', text: serialized.text }],
+    details: serialized.details,
   } as AgentToolResult<unknown>
 }
 

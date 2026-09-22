@@ -6,6 +6,32 @@
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-09-22
+
+> 发布候选；最终验证与发布状态见 [0.18.1 记录](https://github.com/wangyu-sg/linguist-agent-public/blob/main/docs/release/VALIDATION_0_18_1.md)。
+
+### Changed
+
+- Agent、Chat 与 Linguist 共用的侧栏、顶栏、输入框和右侧工作区重新对齐 Proma；保留项目绑定、CAT 与独立产品身份。
+- 恢复原生折叠会话树、工具弹层、固定审批区、会话拖入、队列与消息样式；新会话右区从 460px 开始，已有会话偏好保留。
+- 恢复文件树加载、Markdown 阅读位置与浏览器菜单避让，移除窄窗下额外强折侧栏和隐藏右区的分叉逻辑。
+- 升级 Pi Runtime 至 0.86.1，合入任务进度跨压缩/运行隔离、会话删除与运行时生命周期修复。
+- Proma 基线由 [v0.19.53](https://github.com/proma-ai/Proma/releases/tag/v0.19.53) 升级至 [v0.19.57](https://github.com/proma-ai/Proma/releases/tag/v0.19.57)。
+
+### Fixed
+
+- 窄窗下限制项目和岗位徽标宽度，保留会话标题、探索菜单和右区展开按钮。
+- 修复最近访问记录丢失、旧项目请求覆盖新导航、项目会话预览恢复以及冷启动强制展开已收起右栏的问题。
+- 项目设置从文件页或收起的右栏也能直接打开；项目改名同步更新徽标与引用，不修改会话标题；同名受管文件保留独立预览标签。
+- 切换模式或打开规划页时继续接收后台终端事件；子任务只有实际可见时才清除完成提醒。
+- 解除项目绑定后正确回到普通 Agent；在新会话继续保留项目与岗位，同会话重试保留原轮次的 CAT 范围。
+- 修复工具发现项目指令后同一任务持续被阻断的问题，通过 Pi 原生消息队列在下一模型轮交付指令。
+
+### Validation and limits
+
+- 定向状态回归和隔离打包界面检查已有通过证据；完整回归、最终打包和发布资产核验尚待完成，不据此宣称所有界面或真实语言任务均已验证。
+- 源码以公开 Proma v0.19.57 为基线；Proma 0.19.62 安装包仅用于部分主界面对照，不代表已合入该包全部功能。
+
 ## [0.18.0] - 2026-09-22
 
 ### Changed
@@ -392,7 +418,10 @@
 - 修复上游合并后的 CI 测试口径。
 
 [0.17.74]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.73...v0.17.74
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.74...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.1...HEAD
+[0.18.1]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.0...v0.18.1
+[0.18.0]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.75...v0.18.0
+[0.17.75]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.74...v0.17.75
 [0.17.71]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.70...v0.17.71
 [0.17.70]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.69...v0.17.70
 [0.17.69]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.68...v0.17.69

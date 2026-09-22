@@ -11,7 +11,6 @@ import {
   getAppModeDefinition,
 } from '@/host/app-mode-registry'
 import { restoreLastLocalizationProject } from '@/lib/linguist-navigation'
-import { useCreateSession } from './useCreateSession'
 import { useOpenSession } from './useOpenSession'
 import { beginProjectNavigationAtom } from '@/host/project-switch'
 
@@ -28,7 +27,6 @@ export function useSwitchAppMode(): SwitchAppMode {
   const tabs = useAtomValue(tabsAtom)
   const draftSessionIds = useAtomValue(draftSessionIdsAtom)
   const openSession = useOpenSession()
-  const { createChat, createAgent } = useCreateSession()
   const store = useStore()
 
   return React.useCallback((targetMode: AppMode): void => {
@@ -56,12 +54,10 @@ export function useSwitchAppMode(): SwitchAppMode {
       return
     }
 
-    void (isChat ? createChat({ draft: true }) : createAgent({ draft: true }))
+    setMode(targetMode)
   }, [
     agentSessions,
     conversations,
-    createAgent,
-    createChat,
     currentAgentSessionId,
     currentConversationId,
     draftSessionIds,

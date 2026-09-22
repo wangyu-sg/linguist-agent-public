@@ -16,9 +16,8 @@
  */
 
 import * as React from 'react'
-import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Search, X, MessageSquare, Bot, Archive, Loader2, Languages } from 'lucide-react'
-import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogPortal, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { searchDialogOpenAtom } from '@/atoms/search-atoms'
@@ -43,8 +42,6 @@ import type {
   MessageSearchResult,
   AgentMessageSearchResult,
 } from '@proma/shared'
-import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
-import { describeLinguistIpcError } from '@/features/linguist/projects/project-utils'
 import { linguistProjectListStateAtom } from '@/features/linguist/projects/project-list-atoms'
 import { findBestSearchMatch } from '@proma/shared'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
@@ -234,7 +231,6 @@ function SearchResultRow({
 }
 
 export function SearchDialog(): React.ReactElement {
-  const store = useStore()
   const [open, setOpen] = useAtom(searchDialogOpenAtom)
   const conversations = useAtomValue(conversationsAtom)
   const agentSessions = useAtomValue(agentSessionsAtom)
@@ -444,21 +440,13 @@ export function SearchDialog(): React.ReactElement {
       const conv = conversations.find((c) => c.id === result.id)
       const title = conv?.title ?? result.title
       openSession('chat', result.id, title)
-    } else if (result.type === 'agent') {
+    } else {
       setActiveView('conversations')
       const session = agentSessions.find((s) => s.id === result.id)
       const title = session?.title ?? result.title
       openSession('agent', result.id, title)
-    } else {
-      void openLinguistAgentSession(store, result.id).then((opened) => {
-        if (!opened.ok) {
-          toast.error('打开 Linguist 会话失败', {
-            description: describeLinguistIpcError(opened.error),
-          })
-        }
-      })
     }
-  }, [setOpen, setActiveView, openSession, conversations, agentSessions, store])
+  }, [setOpen, setActiveView, openSession, conversations, agentSessions])
 
   /**
    * Enter 键语义：

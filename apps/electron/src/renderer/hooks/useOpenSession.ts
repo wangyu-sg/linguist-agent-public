@@ -33,7 +33,7 @@ import {
   settingsPendingSessionNavigationAtom,
 } from '@/atoms/settings-tab'
 import { openHostedAgentSession } from '@/host/agent-host-extension'
-import { beginProjectNavigationAtom } from '@/host/project-switch'
+import { beginProjectNavigationAtom, projectSwitchGenerationAtom } from '@/host/project-switch'
 
 interface OpenSessionOptions {
   bypassSettingsGuard?: boolean
@@ -72,8 +72,11 @@ export function useOpenSession(): OpenSessionFn {
       setSettingsOpen(false)
       const hostedNavigation = type === 'agent' ? openHostedAgentSession(store, sessionId) : null
       if (hostedNavigation) {
+        const generation = store.get(projectSwitchGenerationAtom)
         void hostedNavigation.then(
-          undefined,
+          () => {
+            if (store.get(projectSwitchGenerationAtom) === generation) options?.onOpened?.()
+          },
           (error: unknown) => {
             toast.error('打开项目会话失败', {
               description: error instanceof Error ? error.message : '与主进程通信异常',
@@ -123,6 +126,6 @@ export function useOpenSession(): OpenSessionFn {
 
       options?.onOpened?.()
     },
-    [tabs, setTabs, setActiveTabId, setAutomationForm, setActiveView, setAppMode, setCurrentConversationId, setCurrentAgentSessionId, agentSessions, setCurrentAgentWorkspaceId, setUnviewedCompleted, settingsOpen, channelFormDirty, setSettingsOpen, setPendingSessionNavigation, currentAgentSessionId],
+    [store, tabs, setTabs, setActiveTabId, setAutomationForm, setActiveView, setAppMode, setCurrentConversationId, setCurrentAgentSessionId, agentSessions, setCurrentAgentWorkspaceId, setUnviewedCompleted, settingsOpen, channelFormDirty, setSettingsOpen, setPendingSessionNavigation, currentAgentSessionId],
   )
 }

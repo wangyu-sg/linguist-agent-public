@@ -10,10 +10,14 @@
 import * as React from 'react'
 import { AlertTriangle, Archive, FolderOpen } from 'lucide-react'
 import type { AgentSessionMeta } from '@proma/shared'
-import { useSetAtom } from 'jotai'
+import { useAtomValue, useSetAtom, useStore } from 'jotai'
 import { agentSessionsAtom } from '@/atoms/agent-atoms'
+import { activeTabAtom } from '@/atoms/tab-atoms'
+import { beginProjectNavigationAtom, projectSwitchGenerationAtom } from '@/host/project-switch'
+import { syncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { cn } from '@/lib/utils'
+import { linguistProjectInfoAtomFamily } from '../projects/project-list-atoms'
 import { bindingNoticeCopy, bindingStatusLabel } from './binding-utils'
 import {
   linguistSessionBindingsAtom,
@@ -30,9 +34,10 @@ export function LinguistSessionBindingBadge({
 }): React.ReactElement | null {
   const binding = useLinguistSessionBinding(session)
   const projectId = session.linguistProjectId
+  const project = useAtomValue(linguistProjectInfoAtomFamily(projectId ?? ''))
   if (!projectId) return null
 
-  const projectName = binding?.projectName ?? session.linguistProjectName ?? '项目'
+  const projectName = project?.name ?? binding?.projectName ?? session.linguistProjectName ?? '项目'
   const status = binding?.status ?? 'active'
   const label = bindingStatusLabel(status)
 
@@ -51,7 +56,7 @@ export function LinguistSessionBindingBadge({
               : `所属项目「${projectName}」`
       }
       className={cn(
-        'titlebar-no-drag cursor-default inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] flex-shrink-0',
+        'titlebar-no-drag cursor-default inline-flex min-w-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]',
         status === 'archived' &&
           'border-warning/40 bg-warning/10 text-warning',
         (status === 'missing' || status === 'unavailable') &&
@@ -60,14 +65,13 @@ export function LinguistSessionBindingBadge({
       )}
     >
       {status === 'archived' ? (
-        <Archive size={11} />
+        <Archive size={11} className="shrink-0" />
       ) : status === 'active' ? (
-        <FolderOpen size={11} />
+        <FolderOpen size={11} className="shrink-0" />
       ) : (
-        <AlertTriangle size={11} />
+        <AlertTriangle size={11} className="shrink-0" />
       )}
-      <span className="max-w-[160px] truncate">{projectName}</span>
-      {label && <span>· {label}</span>}
+      <span className="min-w-0 max-w-[160px] truncate">{projectName}{label && ` · ${label}`}</span>
     </span>
   )
 }
@@ -79,6 +83,7 @@ export function LinguistSessionBindingNotice({
   session: BindingSession
 }): React.ReactElement | null {
   const binding = useLinguistSessionBinding(session)
+  const store = useStore()
   const setBindings = useSetAtom(linguistSessionBindingsAtom)
   const setAgentSessions = useSetAtom(agentSessionsAtom)
   const [detaching, setDetaching] = React.useState(false)
@@ -91,6 +96,7 @@ export function LinguistSessionBindingNotice({
     if (!window.confirm('永久解除项目绑定？解绑后该会话会作为普通 Agent 继续，且不能重新绑定。')) {
       return
     }
+    const navigationGeneration = store.set(beginProjectNavigationAtom)
     setDetaching(true)
     setDetachError(null)
     try {
@@ -106,6 +112,11 @@ export function LinguistSessionBindingNotice({
         setAgentSessions((previous) =>
           replaceAgentSessionInFreshnessOrder(previous, updatedSession),
         )
+      }
+      const activeTab = store.get(activeTabAtom)
+      if (updatedSession && activeTab?.sessionId === session.id
+        && store.get(projectSwitchGenerationAtom) === navigationGeneration) {
+        syncActiveTabSideEffects(store, activeTab)
       }
       setBindings((previous) => {
         if (!(session.id in previous)) return previous

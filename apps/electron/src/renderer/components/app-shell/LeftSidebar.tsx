@@ -18,11 +18,10 @@ import { getLinguistRoleOption } from '@/features/linguist/session-binding/Lingu
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, CirclePlus, Trash2, Pencil, PanelLeft, PanelLeftOpen, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, Languages, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, GripVertical, Clock, CalendarDays, ChevronRight, ChevronDown, ChevronUp, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, CirclePlus, Trash2, Pencil, PanelLeft, PanelRight, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, Languages, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, GripVertical, Clock, CalendarDays, ChevronRight, ChevronDown, ChevronUp, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ModeSwitcher } from './ModeSwitcher'
-import { MAC_TITLEBAR_SAFE_AREA_HEIGHT } from './titlebar-safe-area'
 import { ProjectCreateDialog } from '@/features/linguist/projects/ProjectCreateDialog'
 import { projectCreateDialogOpenAtom } from '@/features/linguist/projects/projects-atoms'
 import {
@@ -34,7 +33,6 @@ import {
   LinguistWorkspaceBadge,
 } from '@/features/linguist/projects/LinguistWorkspaceBadge'
 import { openLocalizationProject } from '@/features/linguist/projects/open-localization-project'
-import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
 import {
   createActiveLinguistProjectSession,
   resolveActiveLinguistProjectId,
@@ -124,6 +122,7 @@ import { sidebarViewModeAtom } from '@/atoms/sidebar-atoms'
 import { searchDialogOpenAtom } from '@/atoms/search-atoms'
 import { hasUpdateAtom, updateStatusAtom, type UpdateStatus } from '@/atoms/updater'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
+import { clearBrowserSessionStateAtom } from '@/atoms/browser-atoms'
 import { hasEnvironmentIssuesAtom } from '@/atoms/environment'
 import { conversationPromptIdAtom } from '@/atoms/system-prompt-atoms'
 import { useCreateSession } from '@/hooks/useCreateSession'
@@ -135,6 +134,9 @@ import {
   CollapsedProjectPopover,
   CollapsedWorkspacePopover,
 } from '@/components/agent/CollapsedWorkspacePopover'
+import { CollapsedToolsPopover, type CollapsedToolItem } from '@/components/agent/CollapsedToolsPopover'
+import { CollapsedSessionRail, type RailRecentItem } from '@/components/agent/CollapsedSessionRail'
+import { getCollapsedAgentRailTrees, getCollapsedAgentRailTreeStatus } from '@/lib/collapsed-agent-rail'
 import { ObsidianIcon } from '@/components/obsidian/obsidian-brand'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
 import { SidebarScrollBoundary } from '@/components/ui/sidebar-scroll-boundary'
@@ -183,7 +185,7 @@ import {
   selectDelegatedSession,
   sortAgentSessionsByUpdatedAtDesc,
 } from '@/lib/agent-session-list'
-import { insertSessionReferenceMention, setSessionReferenceDragData } from '@/lib/session-reference-drag'
+import { clearSessionReferenceDragState, insertSessionReferenceMention, setSessionReferenceDragData } from '@/lib/session-reference-drag'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -362,9 +364,6 @@ export interface LeftSidebarProps {
   width?: number
   /** 拖拽过程中禁用 CSS transition，保证即时响应 */
   noTransition?: boolean
-  /** 极窄视口（如 200% zoom）下由 AppShell 请求强制折叠为图标栏；不写回用户折叠偏好 */
-  forceCollapsed?: boolean
-  forceCollapsedReason?: string
 }
 
 /** 日期分组标签 */
@@ -433,21 +432,12 @@ function groupByDate<T extends { updatedAt: number }>(items: T[]): Array<{ label
   return groups
 }
 
-/**
- * 非 macOS 平台的顶部拖拽条高度（无红绿灯，只需一条可拖拽细条）。
- * macOS 统一使用 MAC_TITLEBAR_SAFE_AREA_HEIGHT，收起/展开一致。
- */
-const SIDEBAR_DRAG_STRIP_HEIGHT_NON_MAC = {
+const SIDEBAR_DRAG_STRIP_HEIGHT = {
+  collapsedMac: 50,
+  expandedMac: 30,
   collapsed: 8,
   expanded: 4,
 } as const
-
-const RAIL_STATUS_CLASS: Record<SessionIndicatorStatus, string> = {
-  idle: 'hidden',
-  running: 'border-blue-500 animate-pulse',
-  blocked: 'border-orange-500',
-  completed: 'border-emerald-500',
-}
 
 function getRailInitial(title: string): string {
   return title.trim().slice(0, 1).toUpperCase() || '·'
@@ -589,74 +579,6 @@ function getArchivedDelegatedChildren(
   ))
 }
 
-interface RailRecentItem {
-  id: string
-  title: string
-  type: SessionMiniMapType
-  initial: string
-  active: boolean
-  status: SessionIndicatorStatus
-  workspaceName?: string
-  isAutomation?: boolean
-  isDelegation?: boolean
-}
-
-function RailRecentButton({
-  item,
-  onSelect,
-  miniMapDisabled,
-}: {
-  item: RailRecentItem
-  onSelect: (item: RailRecentItem) => void
-  miniMapDisabled?: boolean
-}): React.ReactElement {
-  const preview = useSessionMiniMapHover(600, miniMapDisabled)
-
-  return (
-    <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            ref={preview.setAnchorRef}
-            type="button"
-            aria-label={`打开${item.type === 'agent' ? 'Agent 会话' : 'Chat 对话'}：${item.title}`}
-            onClick={() => onSelect(item)}
-            onMouseEnter={preview.handleMouseEnter}
-            onMouseLeave={preview.handleMouseLeave}
-            className={cn(
-              'relative flex size-10 items-center justify-center overflow-hidden rounded-[12px] transition-colors titlebar-no-drag',
-              item.active
-                ? 'bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
-                : 'text-foreground/55 hover:bg-foreground/[0.06] hover:text-foreground/80',
-            )}
-          >
-            <span className={cn('pointer-events-none absolute inset-y-0 left-0 w-0 rounded-l-[12px] border-l-[3px]', RAIL_STATUS_CLASS[item.status])} />
-            {item.isAutomation
-              ? <Clock size={14} className="text-foreground/40" />
-              : item.isDelegation
-                ? <GitBranch size={14} className="text-foreground/40" />
-                : <span className="text-[13px] font-semibold leading-none">{item.initial}</span>}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right">{item.type === 'agent' ? 'Agent' : 'Chat'} · {item.title}</TooltipContent>
-      </Tooltip>
-      <SessionMiniMapPopover
-        target={{
-          type: item.type,
-          sessionId: item.id,
-          title: item.title,
-          workspaceName: item.workspaceName,
-        }}
-        anchorRef={preview.anchorRef}
-        open={preview.isOpen}
-        isLeaving={preview.isLeaving}
-        onMouseEnter={preview.handlePanelMouseEnter}
-        onMouseLeave={preview.handlePanelMouseLeave}
-      />
-    </>
-  )
-}
-
 function LinguistProjectCreateDialogHost(): React.ReactElement {
   const store = useStore()
   const refreshProjects = useSetAtom(refreshLinguistProjectListAtom)
@@ -705,7 +627,7 @@ function deleteSetEntry<T>(prev: Set<T>, value: T): Set<T> {
   return next
 }
 
-export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapsedReason }: LeftSidebarProps): React.ReactElement {
+export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.ReactElement {
   const [activeView, setActiveView] = useAtom(activeViewAtom)
   const setAutomationForm = useSetAtom(automationFormAtom)
   const setPlanningTab = useSetAtom(planningTabAtom)
@@ -815,10 +737,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
   const [activeTabId, setActiveTabId] = useAtom(activeTabIdAtom)
   // 会话高亮按"激活 Tab 所属会话"判定：预览 Tab 激活时其 owner 会话仍保持高亮
   const activeSessionId = useAtomValue(activeSessionIdAtom)
-  const [sidebarCollapsedPreference, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
-  // U-04：极窄视口（如 200% zoom）下 AppShell 可请求强制折叠为图标栏；
-  // 只影响本次渲染，不写回用户的折叠偏好，视口变宽后自动恢复。
-  const sidebarCollapsed = sidebarCollapsedPreference || forceCollapsed === true
+  const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
   const { createChat, createAgent } = useCreateSession()
   const openSession = useOpenSession()
   const syncActiveTabSideEffects = useSyncActiveTabSideEffects()
@@ -951,6 +870,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
   const setLiveMessagesMap = useSetAtom(liveMessagesMapAtom)
   const setSessionPendingFiles = useSetAtom(agentSessionPendingFilesAtom)
   const setSessionViewStateMap = useSetAtom(sessionViewStateMapAtom)
+  const clearBrowserSessionState = useSetAtom(clearBrowserSessionStateAtom)
 
   /** 清理 per-conversation/session Map atoms 条目 */
   const cleanupMapAtoms = React.useCallback((id: string) => {
@@ -1012,6 +932,9 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
     setSessionPathMap(deleteKey)
     // 视图状态（预览开关 + 上次视图）：删除/归档是终态，统一清理避免孤立条目
     setSessionViewStateMap(deleteKey)
+    // 即使主进程的 browser-closed 事件因删除过程中的重渲染晚到，也不能让右侧工作区
+    // 保留已删除会话的浏览器面板。
+    clearBrowserSessionState(id)
 
     // 重型流式数据：streamingStates（累积 content + toolActivities）与 liveMessages（SDK 消息数组）
     setStreamingStates(deleteKey)
@@ -1042,7 +965,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
     sessionExistsAtom.remove(id)
 
     clearPreviewCacheForSession(id)
-  }, [setConvModels, setConvContextLength, setConvThinking, setConvParallel, setConvPromptId, setPreviewPanelOpen, setPreviewFile, setPreviewFiles, setPreviewContentRefreshVersion, setPreviewResolvedPaths, setConversationQuotedSelections, setAgentSideChatMap, setDiffPanelTab, setDiffRefreshVersion, setDiffUnseen, setDiffUnseenFiles, setNonGitFileChanges, setFileChangesCurrentRun, setDiffData, setAgentSidePanelOpenMap, setSessionChannelMap, setSessionModelMap, setSessionPathMap, setSessionViewStateMap, setStreamingStates, setLiveMessagesMap, setSessionPendingFiles, store])
+  }, [clearBrowserSessionState, setConvModels, setConvContextLength, setConvThinking, setConvParallel, setConvPromptId, setPreviewPanelOpen, setPreviewFile, setPreviewFiles, setPreviewContentRefreshVersion, setPreviewResolvedPaths, setConversationQuotedSelections, setAgentSideChatMap, setDiffPanelTab, setDiffRefreshVersion, setDiffUnseen, setDiffUnseenFiles, setNonGitFileChanges, setFileChangesCurrentRun, setDiffData, setAgentSidePanelOpenMap, setSessionChannelMap, setSessionModelMap, setSessionPathMap, setSessionViewStateMap, setStreamingStates, setLiveMessagesMap, setSessionPendingFiles, store])
 
   const currentWorkspaceSlug = React.useMemo(() => {
     if (!currentWorkspaceId) return null
@@ -1971,20 +1894,6 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
     })
   }, [agentSessions, openSession, setActiveView, setUnviewedCompleted, setUnviewedDelegatedCompleted, store])
 
-  const handleSelectLinguistSession = React.useCallback((id: string): void => {
-    void openLinguistAgentSession(store, id).then((result) => {
-      if (!result.ok) {
-        toast.error('打开项目会话失败', {
-          description: describeLinguistIpcError(result.error),
-        })
-      }
-    }).catch(() => {
-      toast.error('打开项目会话失败', {
-        description: '与主进程通信异常（INTERNAL）',
-      })
-    })
-  }, [store])
-
   const handleOpenLinguistProject = React.useCallback((projectId: string): void => {
     void openLocalizationProject(store, projectId).then((result) => {
       if (!result.ok) {
@@ -2141,8 +2050,7 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
         event.preventDefault()
         event.stopPropagation()
         if (target.type === 'agent') {
-          if (mode === 'linguist') handleSelectLinguistSession(target.id)
-          else handleSelectAgentSession(target.id, target.title)
+          handleSelectAgentSession(target.id, target.title)
         } else {
           handleSelectConversation(target.id, target.title)
         }
@@ -2198,7 +2106,6 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
     settingsOpen,
     searchDialogOpen,
     handleSelectAgentSession,
-    handleSelectLinguistSession,
     handleSelectConversation,
     mode,
     refreshQuickSwitchTargets,
@@ -2521,63 +2428,83 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
   const railRecentItems = React.useMemo<RailRecentItem[]>(() => {
     if (mode === 'chat') {
       return conversations
-        .filter((conversation) => !conversation.archived && !draftSessionIds.has(conversation.id))
+        .filter((c) => !c.archived && !draftSessionIds.has(c.id))
         .sort((a, b) => {
           const activeDelta = Number(b.id === activeSessionId) - Number(a.id === activeSessionId)
           if (activeDelta !== 0) return activeDelta
           const streamingDelta = Number(streamingIds.has(b.id)) - Number(streamingIds.has(a.id))
           if (streamingDelta !== 0) return streamingDelta
           const pinnedDelta = Number(!!b.pinned) - Number(!!a.pinned)
-          return pinnedDelta !== 0 ? pinnedDelta : b.updatedAt - a.updatedAt
+          if (pinnedDelta !== 0) return pinnedDelta
+          return b.updatedAt - a.updatedAt
         })
         .slice(0, 5)
         .map((conversation) => ({
           id: conversation.id,
           title: conversation.title,
-          type: 'chat',
+          type: 'chat' as const,
           initial: getRailInitial(conversation.title),
           active: conversation.id === activeSessionId,
-          status: streamingIds.has(conversation.id) ? 'running' : 'idle',
+          status: streamingIds.has(conversation.id) ? 'running' as const : 'idle' as const,
+          pinned: !!conversation.pinned,
+          workspaceName: undefined,
         }))
     }
 
-    return agentSessions
-      .filter((session) => (
-        isSessionInMode(session)
-        && isActiveProjectSession(session)
-        && !session.archived
-        && !session.isDraft
-        && !draftSessionIds.has(session.id)
-        && (!currentWorkspaceId || session.workspaceId === currentWorkspaceId)
-        && !isHiddenAutomationSession(session)
-      ))
-      .sort((a, b) => {
-        const statusA = agentIndicatorMap.get(a.id) ?? (unviewedCompletedSessionIds.has(a.id) ? 'completed' : 'idle')
-        const statusB = agentIndicatorMap.get(b.id) ?? (unviewedCompletedSessionIds.has(b.id) ? 'completed' : 'idle')
-        const priority = (session: AgentSessionMeta, status: SessionIndicatorStatus): number => {
-          if (session.id === activeSessionId) return 0
-          if (status === 'blocked') return 1
-          if (status === 'running') return 2
-          if (session.pinned) return 3
-          if (status === 'completed') return 4
-          return 5
-        }
-        const priorityDelta = priority(a, statusA) - priority(b, statusB)
-        return priorityDelta !== 0 ? priorityDelta : b.updatedAt - a.updatedAt
-      })
-      .slice(0, 5)
-      .map((session) => ({
-        id: session.id,
-        title: session.title,
-        type: 'agent',
-        initial: getRailInitial(session.title),
-        active: session.id === activeSessionId,
-        status: agentIndicatorMap.get(session.id) ?? (unviewedCompletedSessionIds.has(session.id) ? 'completed' : 'idle'),
-        workspaceName: session.workspaceId ? workspaceNameMap.get(session.workspaceId) : undefined,
-        isAutomation: !!session.sourceAutomationId,
-        isDelegation: !!session.sourceDelegationId,
-      }))
-  }, [activeSessionId, agentIndicatorMap, agentSessions, conversations, currentWorkspaceId, draftSessionIds, mode, streamingIds, unviewedCompletedSessionIds, workspaceNameMap, isSessionInMode, isActiveProjectSession])
+    const eligibleSessions = agentSessions.filter((session) => (
+      isSessionInMode(session)
+      && isActiveProjectSession(session)
+      && !session.archived
+      && !session.isDraft
+      && !draftSessionIds.has(session.id)
+      // 自动任务会话不出现在收起态 Rail，与展开态列表保持一致
+      && !isHiddenAutomationSession(session)
+    ))
+    const railTrees = getCollapsedAgentRailTrees({
+      sessions: eligibleSessions,
+      workspaceId: currentWorkspaceId,
+      activeSessionId,
+      agentIndicatorMap,
+      unviewedCompletedSessionIds,
+      // CollapsedSessionRail 自己截取 5 个可见根；Popover 打开后它需要完整候选集，
+      // 才能用快照 id 取回可能已被动态排序挤出前五的 Anchor。
+      limit: Number.POSITIVE_INFINITY,
+    })
+
+    return railTrees.map((tree) => ({
+      id: tree.session.id,
+      title: tree.session.title,
+      type: 'agent' as const,
+      initial: getRailInitial(tree.session.title),
+      active: tree.session.id === activeSessionId,
+      // 色条与展开态行共用会话树聚合状态：父会话空闲时也跟随子会话的运行/阻塞/完成态。
+      status: getCollapsedAgentRailTreeStatus(tree, agentIndicatorMap, unviewedCompletedSessionIds),
+      pinned: !!tree.session.pinned,
+      workspaceName: tree.session.workspaceId ? workspaceNameMap.get(tree.session.workspaceId) : undefined,
+      isAutomation: !!tree.session.sourceAutomationId,
+      // 正常 child 收纳进父 Popover；仅父不在当前 workspace 的 moved/orphan child
+      // 复用展开态策略成为可达根条目，并以 delegation 图标区分。
+      isDelegation: isDelegatedChildSession(tree.session),
+      childSessions: tree.childSessions,
+    }))
+  }, [
+    mode,
+    conversations,
+    agentSessions,
+    draftSessionIds,
+    currentWorkspaceId,
+    activeSessionId,
+    streamingIds,
+    agentIndicatorMap,
+    unviewedCompletedSessionIds,
+    workspaceNameMap,
+    isSessionInMode,
+    isActiveProjectSession,
+  ])
+
+  const handleSelectRailChild = React.useCallback((session: AgentSessionMeta): void => {
+    handleSelectAgentSession(session.id, session.title)
+  }, [handleSelectAgentSession])
 
   // 删除确认弹窗（collapsed/expanded 共享）
   const deleteDialog = (
@@ -3341,6 +3268,47 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
       isWorkspaceComponentActive(component as WorkspaceComponentTab),
     );
 
+    const collapsedToolItems: CollapsedToolItem[] = [
+      ...(productivityTools.todosEnabled ? [{
+        label: "Todo",
+        icon: <ListTodo size={16} />,
+        active: isWorkspaceComponentActive("todos"),
+        onClick: () => handleOpenPlanningComponent("todos"),
+      }] : []),
+      ...(productivityTools.calendarEnabled ? [{
+        label: "日程",
+        icon: <CalendarDays size={16} />,
+        active: isWorkspaceComponentActive("calendar"),
+        onClick: () => handleOpenPlanningComponent("calendar"),
+      }] : []),
+      ...(productivityTools.obsidianEnabled ? [{
+        label: "Obsidian",
+        icon: <ObsidianIcon size={16} />,
+        active: isWorkspaceComponentActive("vault"),
+        onClick: handleOpenVault,
+      }] : []),
+      ...(mode !== "chat" ? [{
+        label: "项目记忆",
+        icon: <Brain size={16} />,
+        active: isWorkspaceComponentActive("memory"),
+        onClick: () => handleOpenCapabilityComponent("memory"),
+      }] : []),
+      {
+        label: "定时任务",
+        icon: <Clock size={16} />,
+        active: isWorkspaceComponentActive("automations"),
+        badge: automationCount > 0 ? formatAutomationCount(automationCount) : undefined,
+        onClick: () => handleOpenPlanningComponent("automations"),
+      },
+      ...(mode !== "chat" ? [{
+        label: "MCP/Skills",
+        icon: <Blocks size={16} />,
+        active: isWorkspaceComponentActive("skills") || isWorkspaceComponentActive("mcp"),
+        showUpdate: (capabilities?.skills.filter((skill) => skill.hasUpdate).length ?? 0) > 0,
+        onClick: handleOpenMcpSkillsComponents,
+      }] : []),
+    ];
+
     return (
       <div
         ref={sidebarRootRef}
@@ -3353,14 +3321,12 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
         style={{ width: 60, flexShrink: 0 }}
       >
         <SidebarWindowDragStrip
-          height={isMac ? MAC_TITLEBAR_SAFE_AREA_HEIGHT : SIDEBAR_DRAG_STRIP_HEIGHT_NON_MAC.collapsed}
+          height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.collapsedMac : SIDEBAR_DRAG_STRIP_HEIGHT.collapsed}
         />
 
-        {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。
-            留白高度使用统一的 titlebar 安全区（收起/展开一致），由 trafficLightPosition 推导。 */}
+        {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。 */}
         <div
-          className={cn('w-full flex-shrink-0 titlebar-drag-region', !isMac && 'h-2')}
-          style={isMac ? { height: MAC_TITLEBAR_SAFE_AREA_HEIGHT } : undefined}
+          className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-[50px]' : 'h-2')}
         />
 
         {/* 折叠态将会话放在主路径：控件维持 40px 热区，但把视觉体积收至 32px。 */}
@@ -3369,21 +3335,24 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={forceCollapsed ? forceCollapsedReason ?? '视口过窄，无法展开侧边栏' : '展开侧边栏'}
-                title={forceCollapsed ? forceCollapsedReason ?? '放大窗口或降低缩放比例后可展开' : undefined}
-                disabled={forceCollapsed}
+                aria-label="展开侧边栏"
                 onClick={() => setSidebarCollapsed(false)}
-                className="group flex size-10 items-center justify-center p-1 titlebar-no-drag disabled:cursor-not-allowed disabled:opacity-40"
+                className="group flex size-10 items-center justify-center p-1 titlebar-no-drag"
               >
                 <span className="flex size-8 items-center justify-center rounded-[10px] bg-muted text-foreground/60 transition-[background-color,color] duration-150 group-hover:bg-foreground/[0.08] group-hover:text-foreground">
-                  <PanelLeftOpen size={16} />
+                  <PanelRight size={16} />
                 </span>
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {forceCollapsed
-                ? forceCollapsedReason ?? '放大窗口或降低缩放比例后可展开'
-                : `展开侧边栏 (${navigator.platform.includes('Mac') ? '⌘B' : 'Ctrl+Shift+E'})`}
+              <span className="flex items-center gap-2">
+                <span>展开侧边栏</span>
+                <ShortcutKeycaps
+                  shortcutId="toggle-sidebar"
+                  keycapClassName="h-5 min-w-5 px-1 text-[11px]"
+                  separatorClassName="text-[10px]"
+                />
+              </span>
             </TooltipContent>
           </Tooltip>
 
@@ -3483,9 +3452,10 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {primaryItemDisabled && mode === 'linguist'
-                ? '请先打开本地化项目'
-                : primaryItemLabel}
+              <span className="flex items-center gap-2">
+                <span>{primaryItemDisabled && mode === 'linguist' ? '请先打开本地化项目' : primaryItemLabel}</span>
+                <ShortcutKeycaps shortcutId="new-session" keycapClassName="h-5 min-w-5 px-1 text-[11px]" separatorClassName="text-[10px]" />
+              </span>
             </TooltipContent>
           </Tooltip>
 
@@ -3504,127 +3474,49 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
             </TooltipTrigger>
             <TooltipContent side="right">搜索</TooltipContent>
           </Tooltip>
-        </div>
-
-        <div className="mt-2 min-h-0 w-full flex-1 overflow-y-auto scrollbar-thin">
-          <div className="flex flex-col items-center gap-0.5 pb-2">
-            {railRecentItems.map((item) => (
-              <RailRecentButton
-                key={`${item.type}-${item.id}`}
-                item={item}
-                miniMapDisabled={!sessionHoverPreviewEnabled}
-                onSelect={(selected) => {
-                  if (selected.type === 'agent') {
-                    handleSelectAgentSession(selected.id, selected.title)
-                  } else {
-                    handleSelectConversation(selected.id, selected.title)
-                  }
-                }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* 次级工作区工具收纳至底部菜单，始终可达且不挤压会话入口。 */}
-        <div className="flex flex-col items-center gap-0.5 border-t border-border/50 py-2">
-          <DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="更多工作区工具"
-                    className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag"
-                  >
-                    <span
-                      className={cn(
-                        "flex size-8 items-center justify-center rounded-[10px] text-foreground/45 transition-[background-color,color] duration-150 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75",
-                        hasActiveCollapsedTool &&
-                          "bg-primary/10 text-foreground",
-                      )}
-                    >
-                      <MoreHorizontal size={17} />
-                    </span>
-                    {hasActiveCollapsedTool && (
-                      <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" />
-                    )}
-                  </button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="right">更多工作区工具</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent side="right" align="end" className="z-[100] min-w-40 titlebar-no-drag">
-              {productivityTools.todosEnabled && (
-                <DropdownMenuItem
-                  aria-current={isWorkspaceComponentActive("todos") ? "page" : undefined}
-                  className={cn(isWorkspaceComponentActive("todos") && "bg-accent/70 text-accent-foreground")}
-                  onSelect={() => handleOpenPlanningComponent("todos")}
-                >
-                  <ListTodo />
-                  Todo
-                </DropdownMenuItem>
-              )}
-              {productivityTools.calendarEnabled && (
-                <DropdownMenuItem
-                  aria-current={isWorkspaceComponentActive("calendar") ? "page" : undefined}
-                  className={cn(isWorkspaceComponentActive("calendar") && "bg-accent/70 text-accent-foreground")}
-                  onSelect={() => handleOpenPlanningComponent("calendar")}
-                >
-                  <CalendarDays />
-                  日程
-                </DropdownMenuItem>
-              )}
-              {productivityTools.obsidianEnabled && (
-                <DropdownMenuItem
-                  aria-current={isWorkspaceComponentActive("vault") ? "page" : undefined}
-                  className={cn(isWorkspaceComponentActive("vault") && "bg-accent/70 text-accent-foreground")}
-                  onSelect={handleOpenVault}
-                >
-                  <ObsidianIcon size={16} />
-                  Obsidian
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                aria-current={isWorkspaceComponentActive("automations") ? "page" : undefined}
-                className={cn(isWorkspaceComponentActive("automations") && "bg-accent/70 text-accent-foreground")}
-                onSelect={() => handleOpenPlanningComponent("automations")}
-              >
-                <Clock />
-                定时任务
-                {automationCount > 0 && (
-                  <span className="ml-auto rounded-full bg-primary px-1.5 text-[10px] font-medium leading-4 text-primary-foreground tabular-nums">
-                    {formatAutomationCount(automationCount)}
-                  </span>
+          <CollapsedToolsPopover items={collapsedToolItems}>
+            <button
+              type="button"
+              aria-label="工作区工具"
+              className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-[10px] text-foreground/45 transition-[background-color,color,box-shadow] duration-150 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75",
+                  hasActiveCollapsedTool && "bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]",
                 )}
-              </DropdownMenuItem>
-              {mode !== "chat" && (
-                <>
-                  <DropdownMenuItem
-                    aria-current={isWorkspaceComponentActive("skills") || isWorkspaceComponentActive("mcp") ? "page" : undefined}
-                    className={cn((isWorkspaceComponentActive("skills") || isWorkspaceComponentActive("mcp")) && "bg-accent/70 text-accent-foreground")}
-                    onSelect={handleOpenMcpSkillsComponents}
-                  >
-                    <Blocks />
-                    MCP/Skills
-                    {(capabilities?.skills.filter((skill) => skill.hasUpdate)
-                      .length ?? 0) > 0 && (
-                      <span className="ml-auto size-2 rounded-full bg-blue-500" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    aria-current={isWorkspaceComponentActive("memory") ? "page" : undefined}
-                    className={cn(isWorkspaceComponentActive("memory") && "bg-accent/70 text-accent-foreground")}
-                    onSelect={() => handleOpenCapabilityComponent("memory")}
-                  >
-                    <Brain />
-                    项目记忆
-                  </DropdownMenuItem>
-                </>
+              >
+                <Blocks size={16} />
+              </span>
+              {hasActiveCollapsedTool && (
+                <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" />
               )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </button>
+          </CollapsedToolsPopover>
 
+          <div className="my-1 h-px w-6 bg-border/70" />
+        </div>
+
+        {/* 会话列表不再和 Todo、日程、Skills 等次级入口抢占垂直空间。 */}
+        {/* Rail 的面板开合与顺序冻结都在组件内部，hover 不会重渲染整个侧栏。 */}
+        <CollapsedSessionRail
+          items={railRecentItems}
+          activeSessionId={activeSessionId}
+          activeDelegationSessionId={activeDelegationSessionId}
+          agentIndicatorMap={agentIndicatorMap}
+          miniMapDisabled={!sessionHoverPreviewEnabled}
+          onSelectChild={handleSelectRailChild}
+          onSelect={(selected) => {
+            if (selected.type === "agent") {
+              handleSelectAgentSession(selected.id, selected.title);
+            } else {
+              handleSelectConversation(selected.id, selected.title);
+            }
+          }}
+        />
+
+        {/* 底部只保留全局状态与账户入口，工作区工具统一从搜索下方进入。 */}
+        <div className="flex flex-col items-center gap-0.5 py-2">
           {hasUpdate && (
             <SidebarUpdateButton
               status={updateStatus}
@@ -3678,14 +3570,12 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
       style={{ width: width ?? 'var(--sidebar-w)', minWidth: 200, flexShrink: 0 }}
     >
       <SidebarWindowDragStrip
-        height={isMac ? MAC_TITLEBAR_SAFE_AREA_HEIGHT : SIDEBAR_DRAG_STRIP_HEIGHT_NON_MAC.expanded}
+        height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.expandedMac : SIDEBAR_DRAG_STRIP_HEIGHT.expanded}
       />
 
-      {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。
-          留白高度使用统一的 titlebar 安全区（收起/展开一致），由 trafficLightPosition 推导。 */}
+      {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。 */}
       <div
-        className={cn('w-full flex-shrink-0 titlebar-drag-region', !isMac && 'h-1')}
-        style={isMac ? { height: MAC_TITLEBAR_SAFE_AREA_HEIGHT } : undefined}
+        className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-[30px]' : 'h-1')}
       />
 
       {/* 模式切换器 + 折叠按钮 */}
@@ -3706,7 +3596,16 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
               <PanelLeft size={14} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right">收起侧边栏 ({navigator.platform.includes('Mac') ? '⌘B' : 'Ctrl+Shift+E'})</TooltipContent>
+          <TooltipContent side="right">
+            <span className="flex items-center gap-2">
+              <span>收起侧边栏</span>
+              <ShortcutKeycaps
+                shortcutId="toggle-sidebar"
+                keycapClassName="h-5 min-w-5 px-1 text-[11px]"
+                separatorClassName="text-[10px]"
+              />
+            </span>
+          </TooltipContent>
         </Tooltip>
       </div>
 
@@ -3753,7 +3652,16 @@ export function LeftSidebar({ width, noTransition, forceCollapsed, forceCollapse
               <Search size={16} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">搜索 ({getAcceleratorDisplay(getActiveAccelerator('global-search'))})</TooltipContent>
+          <TooltipContent side="bottom">
+            <span className="flex items-center gap-2">
+              <span>搜索</span>
+              <ShortcutKeycaps
+                shortcutId="global-search"
+                keycapClassName="h-5 min-w-5 px-1 text-[11px]"
+                separatorClassName="text-[10px]"
+              />
+            </span>
+          </TooltipContent>
         </Tooltip>
       </div>
 
@@ -4570,6 +4478,7 @@ const AgentSessionItem = React.memo(function AgentSessionItem({
                 title: session.title,
               })
             }}
+            onDragEnd={clearSessionReferenceDragState}
             onSelect={() => onSelect(session.id, session.title)}
             onRename={(title) => onRename(session.id, title)}
             buttonClassName={cn(
