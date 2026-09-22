@@ -1,0 +1,115 @@
+{
+  "tag": "v0.18.1",
+  "url": "https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.1",
+  "sourceCommit": "c85c7d8e206737adf92340001290f0bdf0a70620",
+  "ci": {
+    "runId": 35739485354,
+    "attempt": 1,
+    "sourceCommit": "c85c7d8e206737adf92340001290f0bdf0a70620",
+    "workingTreeDirty": false,
+    "runStatus": "passed",
+    "coverageStatus": "partial",
+    "steps": [
+      {
+        "id": "package",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "workspace-deps",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "agent",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "chat",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "project-switch",
+        "status": "passed",
+        "exitCode": 0
+      },
+      {
+        "id": "linguist-current",
+        "status": "passed",
+        "exitCode": 0
+      }
+    ],
+    "appAsarSha256": "2c4d2c9c6b2fe87b03003a642a15a3f80e785b58ed6066c07822d0b84bbc1297",
+    "dockChecks": {
+      "pass": 27,
+      "fail": 0
+    }
+  },
+  "releaseRunId": 35740252627,
+  "limits": {
+    "dailyInstallReplaced": true,
+    "onlineUpdateEndToEndVerified": false,
+    "nativeOpenSaveHumanVerified": false,
+    "x64OrWindowsRuntimeVerified": false,
+    "updateCheckVerified": true
+  },
+  "publishedAt": "2026-09-22T14:35:44Z",
+  "public": true,
+  "latestVerified": true,
+  "assetNames": [
+    "latest-mac.yml",
+    "latest.yml",
+    "Linguist-Agent-0.18.1-arm64.dmg",
+    "Linguist-Agent-0.18.1-arm64.zip",
+    "Linguist-Agent-0.18.1-x64.dmg",
+    "Linguist-Agent-0.18.1-x64.exe",
+    "Linguist-Agent-0.18.1-x64.zip"
+  ],
+  "updates": [
+    {
+      "name": "Linguist-Agent-0.18.1-arm64.zip",
+      "size": 221331904,
+      "sha512": "xEjSmK9R+1zcQBebOW74TTiyqBFwF3zgSgc0AGAZkBDpiO9bpf2PiluynydO4UMn7xwUZaBDj5YdIfOxijt+kQ==",
+      "manifestHasSize": true
+    },
+    {
+      "name": "Linguist-Agent-0.18.1-x64.zip",
+      "size": 232644966,
+      "sha512": "CvJiYysaaF/rXohxGZTifLNuXwJwfO55Sy73lP/LsjnSw+88R2STaVHyEhPYURaslN7KOxtVJx4Yb4rRzHz7Pw==",
+      "manifestHasSize": true
+    },
+    {
+      "name": "Linguist-Agent-0.18.1-x64.exe",
+      "size": 172751205,
+      "sha512": "x8iJAh45Uh3Hl2csgJWQZsn+473eVMivW0n44cOJgSCDej+v8arsJH3VxoP6fnHaZdEgNsve5P9kDB/oRRzR2w==",
+      "manifestHasSize": false
+    }
+  ],
+  "macSignatures": {
+    "deepStrict": "both passed",
+    "matchesPriorInstallRequirement": "both passed",
+    "requirement": "identifier \"com.linguistagent.app\" and certificate root = H\"065e1da4385a42fc59b0c2da5daa7b6e2b39b969\"",
+    "arm64AppAsarSha256": "3b64b7b5f84e6295e1608c8198185cbc4f9649ab485364f5983a6f7de98b2da5",
+    "x64AppAsarSha256": "d82c0fdb574ee9d7838cd846e05ebf9d46d9a14df1ccdf8e585b775cf3c444f2"
+  },
+  "updateConfigurations": {
+    "bothMacPackagesPresent": true,
+    "arm64RealUpdaterRead": "passed",
+    "provider": "github",
+    "owner": "wangyu-sg",
+    "repo": "linguist-agent-public"
+  },
+  "installedArm64": {
+    "version": "0.18.1",
+    "previousVersion": "0.17.75",
+    "userAuthorizedReplacement": true,
+    "previousAppBackupRetained": true,
+    "signatureAfterLaunch": "passed",
+    "appAsarMatchesRelease": true,
+    "uiVersionVerified": true,
+    "manualCheckForUpdates": "checking → already latest",
+    "previousFailure": "ENOENT: missing app-update.yml"
+  }
+}
