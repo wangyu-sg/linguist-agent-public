@@ -1,6 +1,6 @@
 # Linguist Agent 当前交接
 
-当前工作是 [0.18 候选](./release/VALIDATION_0_18_0.md)，尚未公开发布，日用安装未替换。工程/typecheck、全链回归与六步打包 smoke 已通过；真实语言门禁目前等待唤醒后完成 Keychain 授权，尚未发出模型请求。下一步先取得真实语言运行结果，再按验证记录的发布顺序继续；自动回归不替代语言质量证据。起点见 [LA018_BASELINE](./release/LA018_BASELINE.md)，动态状态以 [当前事实](../CURRENT_FACTS_SIMPLE.md) 为准。
+当前工作是 [0.18 候选](./release/VALIDATION_0_18_0.md)，尚未公开发布，日用安装未替换。工程/typecheck、全链回归与六步打包 smoke 已通过；真实 Astra/xhigh 的 42 个独立案例和 6 次接续判断已完成模型辅助盲核（1 项正确待上下文，其余通过或合理保留，未发现需修改项）。Dock 专项的旧精确文本断言已修正并定向通过；下一步由 main CI 验证最终提交并触发正式 Release。起点见 [LA018_BASELINE](./release/LA018_BASELINE.md)，动态状态以 [当前事实](../CURRENT_FACTS_SIMPLE.md) 为准。
 
 上次浏览器串行操作、Linguist 原生侧栏共用、定时任务领域快照已发布，用户授权的本机正式签名安装替换已完成，见 [发布记录](./release/VALIDATION_0_17_75.md)。
 

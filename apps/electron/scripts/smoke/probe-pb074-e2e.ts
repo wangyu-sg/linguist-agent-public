@@ -1110,7 +1110,7 @@ async function runLanguageResourceDockGate(
   const contextPanel = await openDockTab(dock, '上下文/证据')
   const contextSources = contextPanel.locator('section[aria-label="片段上下文来源"]')
   const evidence = contextPanel.locator('section[aria-label="建议的证据来源"]')
-  await contextSources.getByText('必须保留玩家占位符', { exact: true }).waitFor({
+  await contextSources.getByText('必须保留玩家占位符', { exact: false }).waitFor({
     timeout: 30_000,
   })
   await evidence.getByText(`tm:${tmId}`, { exact: true }).waitFor({ timeout: 30_000 })

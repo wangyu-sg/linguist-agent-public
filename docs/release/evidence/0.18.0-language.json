@@ -1,0 +1,327 @@
+{
+  "candidateCommit": "bb604c61aecfe9c59a9a7394b1b772f5e3394a6c",
+  "scope": "真实 Provider、候选 buildModel、Pi Session、岗位 Prompt 与 Skill 的隔离合成语言验证；不是整 App/CAT/平台资格，也不是人类认证。",
+  "model": {
+    "id": "gpt-6-astra",
+    "provider": "openai-codex",
+    "api": "openai-codex-responses",
+    "contextWindow": 272000,
+    "maxTokens": 128000
+  },
+  "effort": "xhigh",
+  "promptVersion": "3.1.6",
+  "skillSha256": "b8225e503bcf54c67b017a1348e1c8a698ee17365f8ec893cb80eccb5666cabb",
+  "groups": [
+    {
+      "name": "base-T",
+      "caseCount": 12,
+      "startedAt": "2026-09-22T07:13:21.033Z",
+      "endedAt": "2026-09-22T07:14:28.302Z",
+      "elapsedMs": 67269,
+      "requests": 3,
+      "toolCalls": 3,
+      "systemPromptHash": "44b2abb1d2bfa6f5e388a7f32cd7df110ba850397a96592860bafc9ebe9ee458",
+      "results": [
+        {
+          "id": "T01",
+          "target": "The doors are about to close! Hurry, get on!"
+        },
+        {
+          "id": "T02",
+          "target": "After you block 4 times in a row, your next counterattack refunds half its stamina cost."
+        },
+        {
+          "id": "T03",
+          "target": "Shield strength is doubled while your health is at or below 25%."
+        },
+        {
+          "id": "T04",
+          "target": "This hasn't even gotten off the ground. Don't celebrate yet."
+        },
+        {
+          "id": "T05",
+          "target": "He said he didn't care, but he polished that old badge again and again."
+        },
+        {
+          "id": "T06",
+          "target": "No crown. No prophecy. Just you."
+        },
+        {
+          "id": "T07",
+          "target": "信标激活期间获得的奖励翻倍。"
+        },
+        {
+          "id": "T08",
+          "target": "品阶达到5阶后才能装备此物品。"
+        },
+        {
+          "id": "T09",
+          "target": "不错嘛。对新手来说。"
+        },
+        {
+          "id": "T10",
+          "target": "你的护盾能保护附近的友军，但不能保护你自己。"
+        },
+        {
+          "id": "T11",
+          "target": "没有王冠，没有预言。只有你。"
+        },
+        {
+          "id": "T12",
+          "target": "松开即可射箭。"
+        }
+      ]
+    },
+    {
+      "name": "base-E",
+      "caseCount": 12,
+      "startedAt": "2026-09-22T07:14:28.303Z",
+      "endedAt": "2026-09-22T07:15:16.353Z",
+      "elapsedMs": 48050,
+      "requests": 3,
+      "toolCalls": 3,
+      "systemPromptHash": "d85f79d57c3ec6554d12c4576d2cb47f8f1f3e204d51cafc729ab4bc774032d7",
+      "results": [
+        {
+          "id": "E01",
+          "target": "You can set sail again once repairs are complete."
+        },
+        {
+          "id": "E02",
+          "target": "When Health is at or below 25%, Shield Strength doubles."
+        },
+        {
+          "id": "E03",
+          "target": "After you block four times in a row, your next counterattack refunds half its Stamina cost."
+        },
+        {
+          "id": "E04",
+          "target": "This feature becomes available after you complete the trial."
+        },
+        {
+          "id": "E05",
+          "target": "The mistwood remembers everyone who returns."
+        },
+        {
+          "id": "E06",
+          "target": "Restore a small amount of Stamina at the end of each turn."
+        },
+        {
+          "id": "E07",
+          "target": "达到5阶后才能装备此物品。"
+        },
+        {
+          "id": "E08",
+          "target": "匹配已取消。"
+        },
+        {
+          "id": "E09",
+          "target": "只有两扇门都保持开启，奖励才会翻倍。"
+        },
+        {
+          "id": "E10",
+          "target": "我说过我没事，可没说过已经不疼了。"
+        },
+        {
+          "id": "E11",
+          "target": "加入"
+        },
+        {
+          "id": "E12",
+          "target": "这班岗站完了。"
+        }
+      ]
+    },
+    {
+      "name": "base-P",
+      "caseCount": 12,
+      "startedAt": "2026-09-22T07:15:16.354Z",
+      "endedAt": "2026-09-22T07:15:42.297Z",
+      "elapsedMs": 25943,
+      "requests": 2,
+      "toolCalls": 1,
+      "systemPromptHash": "8ef2c75ca4de8fc7e50248e34c01bd6dc4da9f8dc15b30ec6116c66d88babc60",
+      "results": [
+        {
+          "id": "P01",
+          "target": "A counterattack restores Stamina."
+        },
+        {
+          "id": "P02",
+          "target": "Dodge first, then look for an opening to counterattack."
+        },
+        {
+          "id": "P03",
+          "target": "Don’t tell me you got lost again."
+        },
+        {
+          "id": "P04",
+          "target": "Ready?\nLet’s go."
+        },
+        {
+          "id": "P05",
+          "target": "Shield Strength increases to 150."
+        },
+        {
+          "id": "P06",
+          "target": "Sent to {recipient}."
+        },
+        {
+          "id": "P07",
+          "target": "大门已锁上。"
+        },
+        {
+          "id": "P08",
+          "target": "剩余{count}次尝试机会。"
+        },
+        {
+          "id": "P09",
+          "target": "等等。听——你听见了吗？"
+        },
+        {
+          "id": "P10",
+          "target": "奖励：{quantity} × {item}"
+        },
+        {
+          "id": "P11",
+          "target": "远征将在3天后开始。"
+        },
+        {
+          "id": "P12",
+          "target": "我们需要的是补给，而不是借口。"
+        }
+      ]
+    },
+    {
+      "name": "holdout-T",
+      "caseCount": 2,
+      "startedAt": "2026-09-22T07:15:42.298Z",
+      "endedAt": "2026-09-22T07:16:12.750Z",
+      "elapsedMs": 30452,
+      "requests": 4,
+      "toolCalls": 3,
+      "systemPromptHash": "44b2abb1d2bfa6f5e388a7f32cd7df110ba850397a96592860bafc9ebe9ee458",
+      "results": [
+        {
+          "id": "HT01",
+          "target": "Each time a Wind Spire shuts down, the cooldown of the remaining Wind Spires is reduced by 2 seconds, to a minimum of 6 seconds."
+        },
+        {
+          "id": "HT02",
+          "target": "你居然还留着收据？买龙的收据？"
+        }
+      ]
+    },
+    {
+      "name": "holdout-E",
+      "caseCount": 2,
+      "startedAt": "2026-09-22T07:16:12.751Z",
+      "endedAt": "2026-09-22T07:16:27.933Z",
+      "elapsedMs": 15182,
+      "requests": 2,
+      "toolCalls": 1,
+      "systemPromptHash": "d85f79d57c3ec6554d12c4576d2cb47f8f1f3e204d51cafc729ab4bc774032d7",
+      "results": [
+        {
+          "id": "HE01",
+          "target": "When no enemies are nearby, repair drones prioritize the most heavily damaged turret."
+        },
+        {
+          "id": "HE02",
+          "target": "除非同时按住两个开关，否则桥会一直保持升起状态。"
+        }
+      ]
+    },
+    {
+      "name": "holdout-P",
+      "caseCount": 2,
+      "startedAt": "2026-09-22T07:16:27.934Z",
+      "endedAt": "2026-09-22T07:16:45.498Z",
+      "elapsedMs": 17564,
+      "requests": 2,
+      "toolCalls": 1,
+      "systemPromptHash": "8ef2c75ca4de8fc7e50248e34c01bd6dc4da9f8dc15b30ec6116c66d88babc60",
+      "results": [
+        {
+          "id": "HP01",
+          "target": "Don’t touch that lamp. It still remembers its last owner’s hands."
+        },
+        {
+          "id": "HP02",
+          "target": "北边的小路通回营地。如果补给不足，就走这条路。"
+        }
+      ]
+    },
+    {
+      "name": "chain-E",
+      "caseCount": 3,
+      "startedAt": "2026-09-22T07:16:45.500Z",
+      "endedAt": "2026-09-22T07:16:58.001Z",
+      "elapsedMs": 12501,
+      "requests": 2,
+      "toolCalls": 1,
+      "systemPromptHash": "d85f79d57c3ec6554d12c4576d2cb47f8f1f3e204d51cafc729ab4bc774032d7",
+      "results": [
+        {
+          "id": "T08",
+          "target": "品阶达到5阶后才能装备此物品。"
+        },
+        {
+          "id": "T10",
+          "target": "你的护盾能保护附近的友军，但不能保护你自己。"
+        },
+        {
+          "id": "T12",
+          "target": "松开即可射箭。"
+        }
+      ]
+    },
+    {
+      "name": "chain-P",
+      "caseCount": 3,
+      "startedAt": "2026-09-22T07:16:58.001Z",
+      "endedAt": "2026-09-22T07:17:13.250Z",
+      "elapsedMs": 15249,
+      "requests": 2,
+      "toolCalls": 1,
+      "systemPromptHash": "8ef2c75ca4de8fc7e50248e34c01bd6dc4da9f8dc15b30ec6116c66d88babc60",
+      "results": [
+        {
+          "id": "T08",
+          "target": "品阶达到5阶后才能装备此物品。"
+        },
+        {
+          "id": "T10",
+          "target": "你的护盾能保护附近的友军，但不能保护你自己。"
+        },
+        {
+          "id": "T12",
+          "target": "松开即可射箭。"
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "uniqueCases": 42,
+    "stageDecisions": 48,
+    "groupCount": 8,
+    "groupElapsedSumMs": 232210,
+    "providerRequests": 20,
+    "toolCalls": 14,
+    "rawPiUsageSums": {
+      "input": 51813,
+      "output": 5513,
+      "cacheRead": 35840,
+      "cacheWrite": 0,
+      "totalTokens": 93166
+    }
+  },
+  "measurementNotes": [
+    "耗时为八组执行总和；不包含程序准备、鉴权等待和盲核。",
+    "工具耗时包含在组耗时中，不重复相加。",
+    "usage保留原生Pi字段口径，累计输入不是唯一正文大小。",
+    "reasoning子集未单独返回，不与output重复相加；没有费用估算。",
+    "全部请求xhigh；0重跑，0工具错误，0压缩事件。",
+    "同源示例回归7项，其余既有合成回归29项，新样6项；接续6次不算独立新样。"
+  ]
+}
