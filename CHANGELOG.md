@@ -8,7 +8,7 @@
 
 ## [0.18.1] - 2026-09-22
 
-> 发布候选；最终验证与发布状态见 [0.18.1 记录](https://github.com/wangyu-sg/linguist-agent-public/blob/main/docs/release/VALIDATION_0_18_1.md)。
+> 验证范围与发布状态见 [0.18.1 记录](https://github.com/wangyu-sg/linguist-agent-public/blob/main/docs/release/VALIDATION_0_18_1.md)。
 
 ### Changed
 
@@ -29,7 +29,7 @@
 
 ### Validation and limits
 
-- 定向状态回归和隔离打包界面检查已有通过证据；完整回归、最终打包和发布资产核验尚待完成，不据此宣称所有界面或真实语言任务均已验证。
+- 完整本地测试 484 项、类型/架构边界检查与隔离打包纵向检查通过；原生 Open/Save 等人工项仍未覆盖，不据此宣称所有界面或真实语言任务均已验证。
 - 源码以公开 Proma v0.19.57 为基线；Proma 0.19.62 安装包仅用于部分主界面对照，不代表已合入该包全部功能。
 
 ## [0.18.0] - 2026-09-22

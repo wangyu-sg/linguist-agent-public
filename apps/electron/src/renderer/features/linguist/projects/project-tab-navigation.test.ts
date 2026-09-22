@@ -7,7 +7,7 @@ import { appModeAtom } from '@/atoms/app-mode'
 import { projectCurrentAgentSessionIdMapAtom } from '@/atoms/project-agent-session-atoms'
 import { activeTabAtom, activeTabIdAtom, tabsAtom, type TabItem } from '@/atoms/tab-atoms'
 import { openLinguistAgentSession } from '@/features/linguist/projects/open-linguist-session'
-import { syncActiveTabSideEffects } from './useSyncActiveTabSideEffects'
+import { syncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 
 const originalWindow = globalThis.window
 afterEach(() => { Object.assign(globalThis, { window: originalWindow }) })
