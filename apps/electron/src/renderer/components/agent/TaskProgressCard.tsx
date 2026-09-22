@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ToolActivity } from '@/atoms/agent-atoms'
-import { aggregateTaskItems, type TaskItem } from './task-progress'
+import { aggregateTaskItems, getTaskProgressCounts, type TaskItem } from './task-progress'
 
 // ===== 任务行 =====
 
@@ -51,10 +51,10 @@ function TaskRow({ item }: TaskRowProps): React.ReactElement {
           <Loader2 className="size-2 animate-spin text-blue-500" />
         )}
         {isCompleted && (
-          <CheckCircle2 className="size-2.5 text-success" />
+          <CheckCircle2 className="size-2.5 text-green-500" />
         )}
         {item.status === 'blocked' && (
-          <CircleAlert className="size-2.5 text-warning" />
+          <CircleAlert className="size-2.5 text-amber-500" />
         )}
         {isCancelled && (
           <CircleX className="size-2.5 text-muted-foreground/50" />
@@ -119,8 +119,7 @@ export function TaskProgressCard({ activities, animate = false, streamEnded = fa
 
   if (items.length === 0) return null
 
-  const completedCount = items.filter((t) => t.status === 'completed').length
-  const totalCount = items.length
+  const { completed: completedCount, total: totalCount } = getTaskProgressCounts(items)
   const needsCollapse = items.length > MAX_VISIBLE
   const visibleItems = needsCollapse && !expanded && !alwaysExpanded ? items.slice(0, MAX_VISIBLE) : items
 

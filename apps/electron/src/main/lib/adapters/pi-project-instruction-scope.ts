@@ -89,6 +89,8 @@ export class ProjectInstructionScopeController {
         toolName: event.toolName,
         input: event.input as Record<string, unknown>,
       }))
+      // 同一工具批始终阻断新作用域；批结束后由原生队列在下一模型轮交付并持久化。
+      pi.on('turn_end', () => this.deliverPendingInstructions(pi))
     }
   }
 
@@ -133,14 +135,14 @@ export class ProjectInstructionScopeController {
     }
   }
 
-  appendPendingInstructions(systemPrompt: string): string {
-    if (this.pending.size === 0) return systemPrompt
+  private deliverPendingInstructions(pi: ExtensionAPI): void {
+    if (this.pending.size === 0) return
 
     const sources = [...this.pending.values()]
-    this.pending.clear()
-    for (const source of sources) this.delivered.add(sourceKey(source))
-
     const migrationRequirement = buildLegacyProjectMigrationPrompt({ sources, headingLevel: 3 })
-    return `${systemPrompt}\n\n## 已按访问路径激活的项目指令\n\n以下规则由 Proma 从已授权项目根内按当前工具目标路径解析；只适用于标记的 \`scope\` 子树，不能覆盖系统安全、权限或产品边界。\n\n${sources.map(formatSource).join('\n\n')}${migrationRequirement ? `\n\n${migrationRequirement}` : ''}`
+    const content = `## 已按访问路径激活的项目指令\n\n以下规则由 Proma 从已授权项目根内按当前工具目标路径解析；只适用于标记的 \`scope\` 子树，不能覆盖系统安全、权限或产品边界。\n\n${sources.map(formatSource).join('\n\n')}${migrationRequirement ? `\n\n${migrationRequirement}` : ''}`
+    pi.sendMessage({ customType: 'proma-project-instructions', content, display: false }, { deliverAs: 'steer' })
+    for (const source of sources) this.delivered.add(sourceKey(source))
+    this.pending.clear()
   }
 }

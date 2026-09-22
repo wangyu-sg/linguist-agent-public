@@ -43,6 +43,6 @@ test('Pi afterToolCall 将未完成序列标为错误并保留原始结构化前
     const context = { toolCall: { name: 'BrowserAct' }, result: { content: [{ type: 'text', text: JSON.stringify(details) }], details }, isError: false } as HookContext
     const override = await session.agent.afterToolCall!(context, new AbortController().signal)
     expect(override?.isError).toBe(status === 'completed' ? undefined : true)
-    expect(override?.details ?? context.result.details).toBe(details)
+    expect(override?.details ?? context.result.details).toEqual(details)
   }
 })

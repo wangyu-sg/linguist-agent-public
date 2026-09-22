@@ -18,7 +18,6 @@ const ASAR_RUNTIME_PACKAGES = [
   ['@earendil-works/pi-coding-agent', 'dist/index.js'],
   ['@earendil-works/pi-agent-core', 'dist/index.js'],
   ['@earendil-works/pi-ai', 'dist/index.js'],
-  ['@earendil-works/pi-server', 'dist/index.js'],
   ['pdfjs-dist', 'legacy/build/pdf.mjs'],
 ] as const
 

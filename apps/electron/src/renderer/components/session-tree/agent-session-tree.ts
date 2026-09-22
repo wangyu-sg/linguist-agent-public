@@ -5,10 +5,13 @@ import {
   getDelegatedChildSessionStatus,
 } from '@/lib/agent-session-list'
 
-export interface AgentSessionTreeNode {
-  session: AgentSessionMeta
-  childSessions: AgentSessionMeta[]
-}
+export {
+  buildAgentSessionTrees,
+  isDelegatedChildSession,
+  sortDelegatedChildSessions,
+} from '@/lib/collapsed-agent-rail'
+import { isDelegatedChildSession, type AgentSessionTreeItem } from '@/lib/collapsed-agent-rail'
+export type AgentSessionTreeNode = AgentSessionTreeItem
 
 export const PROJECT_SESSION_PREVIEW_LIMIT = 5
 export const PROJECT_SESSION_RECENT_WINDOW_MS = 3 * 86_400_000
@@ -24,49 +27,6 @@ const ACTIVE_SESSION_STATUS_PRIORITY: Record<SessionIndicatorStatus, number> = {
   running: 1,
   completed: 2,
   idle: 3,
-}
-
-export function isDelegatedChildSession(session: AgentSessionMeta): boolean {
-  return !!session.parentSessionId && !!session.sourceDelegationId
-}
-
-export function buildAgentSessionTrees(
-  sessions: readonly AgentSessionMeta[],
-  indicatorMap?: ReadonlyMap<string, SessionIndicatorStatus>,
-): AgentSessionTreeNode[] {
-  const sessionIds = new Set(sessions.map((session) => session.id))
-  const childrenByParentId = new Map<string, AgentSessionMeta[]>()
-  const roots: AgentSessionMeta[] = []
-
-  for (const session of sessions) {
-    if (
-      isDelegatedChildSession(session)
-      && session.parentSessionId
-      && sessionIds.has(session.parentSessionId)
-    ) {
-      const children = childrenByParentId.get(session.parentSessionId) ?? []
-      children.push(session)
-      childrenByParentId.set(session.parentSessionId, children)
-    } else {
-      roots.push(session)
-    }
-  }
-
-  return roots.map((session) => ({
-    session,
-    childSessions: sortDelegatedChildSessions(childrenByParentId.get(session.id) ?? [], indicatorMap),
-  }))
-}
-
-export function sortDelegatedChildSessions(
-  sessions: readonly AgentSessionMeta[],
-  indicatorMap?: ReadonlyMap<string, SessionIndicatorStatus>,
-): AgentSessionMeta[] {
-  return [...sessions].sort((left, right) => {
-    const leftActive = indicatorMap && ACTIVE_SESSION_STATUSES.has(getDelegatedChildSessionStatus(left, indicatorMap)) ? 1 : 0
-    const rightActive = indicatorMap && ACTIVE_SESSION_STATUSES.has(getDelegatedChildSessionStatus(right, indicatorMap)) ? 1 : 0
-    return rightActive - leftActive || right.updatedAt - left.updatedAt
-  })
 }
 
 export function getSessionTreeStatus(

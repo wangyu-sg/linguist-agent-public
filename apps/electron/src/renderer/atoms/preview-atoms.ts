@@ -109,11 +109,14 @@ export interface PreviewFile {
 
 /** 预览 Tab 的稳定 key：同一文件在不同预览/比较上下文可独立打开。 */
 export function getPreviewFileId(file: PreviewFile): string {
+  if (file.linguist) {
+    return ['linguist', file.linguist.projectId, file.linguist.kind, getLinguistPreviewTargetId(file.linguist)].join('\u0000')
+  }
   return [file.filePath, file.previewOnly ? 'preview' : 'diff', file.gitRoot ?? '', file.baseRef ?? ''].join('\u0000')
 }
 
 /** 同一会话中单个预览文件的内容刷新版本。 */
-export function getPreviewContentRefreshKey(sessionId: string, file: Pick<PreviewFile, 'filePath' | 'previewOnly' | 'gitRoot' | 'baseRef'>): string {
+export function getPreviewContentRefreshKey(sessionId: string, file: Pick<PreviewFile, 'filePath' | 'previewOnly' | 'gitRoot' | 'baseRef' | 'linguist'>): string {
   return `${sessionId}\u0000${getPreviewFileId(file)}`
 }
 

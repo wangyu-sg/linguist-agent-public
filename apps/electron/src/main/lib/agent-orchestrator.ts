@@ -50,7 +50,7 @@ import { getAdapter, fetchTitle } from '@proma/core'
 import pkg from '../../../package.json' with { type: 'json' }
 import { getFetchFn } from './proxy-fetch'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
-import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, removeSDKErrorMessage, updateSDKUserMessageSkillActivations, rewindPiAgentSession, resolveAgentCwd, getActiveWorktreePath, getAgentCwdMode, getSessionWorkbenchLayout, resolveSessionWorkbenchContextDir } from './agent-session-manager'
+import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, removeSDKErrorMessage, updateSDKUserMessageSkillActivations, rewindPiAgentSession, resolveAgentCwd, getActiveWorktreePath, getAgentCwdMode, getSessionWorkbenchLayout, resolveSessionWorkbenchContextDir, isAgentSessionDeleting } from './agent-session-manager'
 import { getAgentWorkspace, getProjectFilesPath, getWorkspaceMcpConfig, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles, getWorkspaceAgentsMdPath, readWorkspaceAgentsMd, getWorkspaceMemoryGuidance, isWorkspaceProjectKnowledgeMaintenanceApproved } from './agent-workspace-manager'
 import { getLocalProjectRootStatus } from './project-root-health'
 import { getMcpApiKeyEnvironment, getMcpOAuthHeaders } from './mcp-oauth-service'
@@ -102,7 +102,7 @@ export interface SessionCallbacks {
   /** 发送标题更新 */
   onTitleUpdated: (title: string) => void
   /** 用户消息已持久化，外部入口可据此通知前端切到实时会话 */
-  onRunStarted?: (opts: { startedAt: number; runGeneration: number }) => void
+  onRunStarted?: (opts: { startedAt: number; runGeneration: number; userMessage?: string; userMessageUuid?: string }) => void
   /** Agent CAT Tool 成功提交项目写入后的窄事件。 */
   onLinguistProjectMutation?: (event: LinguistProjectMutationEvent) => void
 }
@@ -763,6 +763,17 @@ export class AgentOrchestrator {
       userMessagePersisted = true
     }
 
+    // 删除墓碑必须先于并发/预检检查：headless run 可能已进入异步预检，
+    // 但还没有占用 active/start 槽位。此时绝不能再持久化或启动 runtime。
+    if (isAgentSessionDeleting(sessionId)) {
+      callbacks.onComplete([], {
+        stoppedByUser: true,
+        startedAt: streamStartedAt,
+        ...(input.runGeneration != null ? { runGeneration: input.runGeneration } : {}),
+      })
+      return
+    }
+
     // 0. 并发保护
     const hasActiveRun = this.activeSessions.has(sessionId)
     const shouldPersistUserMessage = shouldPersistInitialUserMessage({ hasActiveRun, retryOfErrorUuid })
@@ -803,6 +814,11 @@ export class AgentOrchestrator {
 
     // 环境 / 配置类错误的统一上报：持久化为 TypedError 消息，由 SDKMessageRenderer 渲染
     const reportPreflightError = (typedError: TypedError) => {
+      // 凭据预检可能跨越 await；失败出口也必须遵守主动停止与删除墓碑语义。
+      if (isAgentSessionDeleting(sessionId) || this.stoppedBeforeRunSessions.has(sessionId)) {
+        completeBeforeRun({ stoppedByUser: true })
+        return
+      }
       const errorContent = typedError.title
         ? `${typedError.title}: ${typedError.message}`
         : typedError.message
@@ -944,14 +960,21 @@ export class AgentOrchestrator {
     // 2.1 立即抢占会话槽位（在所有同步检查通过后、第一个 await 之前）
     // 防止 buildSdkEnv 等 await 期间并发调用绕过上方的检查，导致多条重复消息写入 JSONL
     // finally 块会通过 generation 匹配来安全清理，不影响正常流程
-    if (this.stoppedBeforeRunSessions.has(sessionId)) {
+    if (isAgentSessionDeleting(sessionId) || this.stoppedBeforeRunSessions.has(sessionId)) {
       completeBeforeRun({ stoppedByUser: true })
       return
     }
     const runGeneration = input.runGeneration ?? this.reserveRunGeneration(sessionId)
     this.activeSessions.set(sessionId, runGeneration)
     this.activeSessionStartedAt.set(sessionId, streamStartedAt)
-    callbacks.onRunStarted?.({ startedAt: streamStartedAt, runGeneration })
+    callbacks.onRunStarted?.({
+      startedAt: streamStartedAt,
+      runGeneration,
+      ...(initialUserMessageUuid ? {
+        userMessage: rawUserMessage ?? userMessage,
+        userMessageUuid: initialUserMessageUuid,
+      } : {}),
+    })
 
     const releaseActiveRun = (): void => {
       // 在发送 STREAM_COMPLETE 前释放 active slot，避免渲染进程已进入空闲态、
@@ -1583,7 +1606,8 @@ export class AgentOrchestrator {
 
         // 标题请求与前台 Agent run 使用独立的 Codex Responses 请求，可并发执行。
         // 自动标题只会写入仍为默认名称的会话，因此不会覆盖用户的手动重命名。
-        this.autoGenerateTitle(sessionId, userMessage, channelId, resolvedModel, callbacks)
+        // 标题优先基于用户原文；Bridge 追加的来源标记等 Agent 运行上下文不应出现在标题中。
+        this.autoGenerateTitle(sessionId, rawUserMessage ?? userMessage, channelId, resolvedModel, callbacks)
           .catch((err) => console.error('[Agent 编排] 标题生成未捕获异常:', err))
       }
       const handleSessionId = (sdkSessionId: string, piSessionFile?: string): void => {
@@ -1612,7 +1636,6 @@ export class AgentOrchestrator {
           }
         }
 
-        startAutoTitleGeneration()
       }
       const handleModelResolved = (model: string): void => {
         // `[1m]` 是 SDK 内部上下文变体，不应泄漏到标题生成或用户可见的模型名。
@@ -1735,17 +1758,33 @@ export class AgentOrchestrator {
         },
       }
 
+      // 首条用户消息已持久化且运行参数已就绪，立刻启动自动命名。
+      // 不依赖 Pi onSessionId：部分第三方渠道在该回调延迟或缺失时仍必须完成重命名。
+      startAutoTitleGeneration()
+
       console.log(`[Agent 编排] 开始通过 Adapter 遍历事件流...`)
 
       // 14. 遍历 Adapter 事件流。Pi adapter 自行处理传输层重试；此处仅允许一次 resume artifact 回退。
       const MAX_QUERY_ATTEMPTS = 2
       const queryStartedAt = Date.now()
+      // 运行期标记只随 EventBus 的浅拷贝发送到 renderer，绝不污染待持久化的 SDKMessage。
+      // renderer 据此拒绝旧 run 的迟到消息，避免其覆盖当前任务进度。
+      const emitLiveSdkMessage = (message: SDKMessage): void => {
+        this.eventBus.emit(sessionId, {
+          kind: 'sdk_message',
+          message: {
+            ...(message as Record<string, unknown>),
+            _promaLiveRunStartedAt: streamStartedAt,
+            _promaLiveRunGeneration: runGeneration,
+          } as unknown as SDKMessage,
+        })
+      }
 
       for (let attempt = 1; attempt <= MAX_QUERY_ATTEMPTS; attempt++) {
         // stop() releases the active slot before aborting the adapter. It can win
         // the race against async preflight or a recoverable-error retry, when no
         // adapter query exists yet to cancel. Never start that later query.
-        if (this.activeSessions.get(sessionId) !== runGeneration) {
+        if (isAgentSessionDeleting(sessionId) || this.activeSessions.get(sessionId) !== runGeneration) {
           const wasStoppedByUser = this.consumeStoppedByUser(sessionId, runGeneration)
           this.persistSDKMessages(sessionId, accumulatedMessages, Date.now() - queryStartedAt)
           try { updateAgentSessionMeta(sessionId, { stoppedByUser: wasStoppedByUser }) } catch { /* 会话可能已删除 */ }
@@ -1941,7 +1980,7 @@ export class AgentOrchestrator {
                   }
                   accumulatedMessages.push(partialOutput)
                   // Reuse the Pi UUID to replace the latest partial frame with normal markdown output.
-                  this.eventBus.emit(sessionId, { kind: 'sdk_message', message: partialOutput })
+                  emitLiveSdkMessage(partialOutput)
                 }
                 this.persistSDKMessages(sessionId, accumulatedMessages, Date.now() - queryStartedAt)
                 accumulatedMessages.length = 0
@@ -1973,7 +2012,7 @@ export class AgentOrchestrator {
                 console.log(`[Agent 编排] 已保存 TypedError 消息: ${typedError.code} - ${typedError.title}`)
 
                 // 透传归一化后的错误消息到前端，避免 SDK 原始 API Error 直接暴露给用户。
-                this.eventBus.emit(sessionId, { kind: 'sdk_message', message: errorSDKMsg })
+                emitLiveSdkMessage(errorSDKMsg)
                 try { updateAgentSessionMeta(sessionId, {}) } catch { /* 忽略 */ }
                 completeRun(getAgentSessionMessages(sessionId), { startedAt: streamStartedAt })
                 return
@@ -2091,7 +2130,7 @@ export class AgentOrchestrator {
             if (!shouldEmit) {
               // 跳过 SDK 内部 user 消息的前端推送
             } else {
-              this.eventBus.emit(sessionId, { kind: 'sdk_message', message: msg })
+              emitLiveSdkMessage(msg)
             }
           }
 
@@ -2138,7 +2177,7 @@ export class AgentOrchestrator {
         } catch (error) {
           // 同一 session 的新 run 可能已在旧 run 的迟到错误之前开始；只要
           // 本代际不再拥有 active slot，就只能收束自己，不能向新 run 泄漏终态。
-          if (this.activeSessions.get(sessionId) !== runGeneration) {
+          if (isAgentSessionDeleting(sessionId) || this.activeSessions.get(sessionId) !== runGeneration) {
             const wasStoppedByUser = this.consumeStoppedByUser(sessionId, runGeneration)
             this.persistSDKMessages(sessionId, accumulatedMessages, Date.now() - queryStartedAt)
             try { updateAgentSessionMeta(sessionId, { stoppedByUser: wasStoppedByUser }) } catch { /* 会话可能已删除 */ }
@@ -2304,7 +2343,7 @@ export class AgentOrchestrator {
    * 先从 activeSessions 移除（供 sendMessage catch 块检测用户中止），
    * 再调用 adapter.abort() 中止底层 SDK 进程。
    */
-  stop(sessionId: string, stopBeforeRun = false): void {
+  stop(sessionId: string, stopBeforeRun = false): void | Promise<void> {
     const runGeneration = this.activeSessions.get(sessionId)
     this.activeSessions.delete(sessionId)
     this.activeSessionStartedAt.delete(sessionId)
@@ -2318,8 +2357,14 @@ export class AgentOrchestrator {
       this.stoppedBeforeRunSessions.add(sessionId)
     }
     this.queuedMessageUuids.delete(sessionId)
-    this.adapter.abort(sessionId)
+    const abort = this.adapter.abort(sessionId)
     console.log(`[Agent 编排] 已中止会话: ${sessionId}`)
+    return abort
+  }
+
+  /** 删除会话专用：等待已发出的底层中止请求完成，再移除持久化文件。 */
+  async stopAndDrain(sessionId: string): Promise<void> {
+    await this.stop(sessionId, true)
   }
 
   /** 为一个会话预留下一次运行身份。所有 run lifecycle 事件都必须复用该值。 */

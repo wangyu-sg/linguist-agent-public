@@ -18,6 +18,7 @@ import { toolResult } from '../../../../../../packages/linguist-cat-tools/src/to
 import { normalizeLegacyCatSessionFile } from './legacy-cat-session'
 import { sanitizePiMessageImageContent } from '../image-content-validation'
 import { createEvidenceSubmissionObserver } from './evidence-submission'
+import { normalizePiToolResultDetails } from '../adapters/pi-tool-result-json'
 import { formatContextExtractionText } from './context-extractor'
 
 test('CAT 自含正文与合法图片经过真实 Pi 转换后仍进入模型内容', () => {
@@ -310,7 +311,7 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
       observer.onResponse({ status: 200 })
       assert.equal(db.stageEvidence.listReceipts(state.stageRunId).length, 0, '压缩删除的内容不得签收')
       const agent = new Agent({
-        initialState: { model, messages: [{ role: 'toolResult', toolCallId: `${role}-context`, toolName: contextTool.name, ...prepared, isError: false, timestamp: 0 }] },
+        initialState: { model, messages: [{ role: 'toolResult', toolCallId: `${role}-context`, toolName: contextTool.name, ...prepared, details: normalizePiToolResultDetails(prepared.details), isError: false, timestamp: 0 }] },
         convertToLlm,
         transformContext: async messages => sanitizePiMessageImageContent(messages),
         streamFn: streamSimple,
@@ -347,7 +348,7 @@ test('Translator → Reviewer → Proofreader 共用宿主 Evidence 闭环并分
       const pendingRules = await invoke(confirmTool, `${role}-before-rules`, { items: [{ segmentId, expectedRevision: 0, decision: 'unchanged' }] }) as AgentToolResult<{ fullReview: { status: string } }>
       assert.equal(pendingRules.details.fullReview.status, 'blocked', '逐段决定齐全也不能跳过剩余项目规则')
       const rules = await invoke(contextTool, `${role}-remaining-rules`, { segmentIds: [segmentId], rulesOnly: true, rulesOffset: 20 })
-      agent.state.messages = [...agent.state.messages, { role: 'toolResult', toolName: contextTool.name, toolCallId: `${role}-remaining-rules`, ...rules, isError: false, timestamp: 1 }]
+      agent.state.messages = [...agent.state.messages, { role: 'toolResult', toolName: contextTool.name, toolCallId: `${role}-remaining-rules`, ...rules, details: normalizePiToolResultDetails(rules.details), isError: false, timestamp: 1 }]
       await agent.prompt('已补充余下项目规则，继续确认')
       assert.equal(agent.state.errorMessage, undefined)
       assert.equal(db.stageEvidence.getPresentationCoverage(state.stageRunId).pending.length, 0)

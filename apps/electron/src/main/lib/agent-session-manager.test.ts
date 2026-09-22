@@ -140,6 +140,7 @@ describe('Agent 会话 JSONL 读取', () => {
         uiRevision: 1,
       },
     }
+    writeAgentSessionsIndex([{ id: 'session-with-context', title: '项目上下文', workspaceId: 'workspace-a', createdAt: 1, updatedAt: 1, agentRuntime: 'pi' }])
     manager.appendSDKMessages('session-with-context', [message])
 
     const stored = manager.getAgentSessionSDKMessages('session-with-context')[0]
@@ -909,5 +910,20 @@ describe('Agent 会话持久化边界', () => {
 
     expect(() => manager.moveSessionToWorkspace(session.id, 'ordinary-workspace'))
       .toThrow('Linguist 项目会话不能迁移')
+  })
+})
+
+describe('Agent 会话删除墓碑', () => {
+  test('Given 已删除会话的晚到 SDK 输出 When 追加 Then 不重新创建 transcript', () => {
+    const id = 'deleted-session-late-output'
+    writeAgentSessionsIndex([{ id, title: '待删除会话', workspaceId: 'workspace-a', createdAt: 1, updatedAt: 1 }])
+    writeAgentSessionJsonl(id, [JSON.stringify({ type: 'user', message: { content: [{ type: 'text', text: '原始消息' }] } })])
+
+    manager.markAgentSessionDeleting(id)
+    manager.deleteAgentSession(id)
+    manager.appendSDKMessages(id, [{ type: 'result', subtype: 'success' } as never])
+
+    expect(manager.getAgentSessionMeta(id)).toBeUndefined()
+    expect(existsSync(join(tempHome, '.proma', 'agent-sessions', `${id}.jsonl`))).toBe(false)
   })
 })

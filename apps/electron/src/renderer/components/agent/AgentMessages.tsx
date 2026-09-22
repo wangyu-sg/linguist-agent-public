@@ -7,7 +7,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { Bot, RotateCw, AlertTriangle, CheckCircle2, Ban, ChevronDown, ChevronRight } from 'lucide-react'
+import { RotateCw, AlertTriangle, CheckCircle2, Ban, ChevronDown, ChevronRight } from 'lucide-react'
 import { WelcomeEmptyState } from '@/components/welcome/WelcomeEmptyState'
 import {
   BasePathsProvider,
@@ -214,8 +214,6 @@ export interface AgentHistoryQuoteNavigationRequest {
 /** AgentMessages 属性接口 */
 interface AgentMessagesProps {
   sessionId: string
-  /** Rail 表示层只收紧间距，不改变消息行为。 */
-  compact?: boolean
   /** 用户在前端选择的模型 ID（用于显示渠道配置的 Model Name） */
   sessionModelId?: string
   /** 消息是否已完成首次加载 */
@@ -238,8 +236,6 @@ interface AgentMessagesProps {
   onCompact?: () => void
   /** 宿主表面可公开的 Agent 入口。 */
   hostCapabilities?: AgentHostCapabilities
-  /** 渲染在消息流末尾的交互横幅（权限 / AskUser / ExitPlanMode），随消息流滚动 */
-  inlineBanner?: React.ReactNode
   /** 将单条 Agent 历史选区写为当前 RichTextInput 的内联 mention。 */
   onAddHistoryQuote?: (quote: QuotedSelection) => boolean
   /** 嵌入在右侧探索分支时关闭嵌套探索入口，避免没有容器的二级分叉。 */
@@ -325,30 +321,11 @@ function applyAgentHistoryQuoteHighlight(range: Range): boolean {
   return true
 }
 
-/** Full 保留全局欢迎页；Rail 使用项目内空态，避免模式切换泄漏。 */
-function EmptyState({ compact }: { compact: boolean }): React.ReactElement {
-  if (compact) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 px-5 text-center">
-        <Bot className="size-5 text-muted-foreground/60" aria-hidden="true" />
-        <p className="text-sm font-medium text-foreground/80">选择片段或输入任务</p>
-        <p className="text-xs leading-5 text-muted-foreground">
-          Agent 将基于当前项目上下文协助处理。
-        </p>
-      </div>
-    )
-  }
+/** 空状态引导 — 使用 WelcomeEmptyState */
+function EmptyState(): React.ReactElement {
   return <WelcomeEmptyState />
 }
 
-/** 交互横幅出现在消息流末尾时，滚动到底保证可见（复用 StickToBottom 上下文） */
-function InlineBannerScrollIntoView(): null {
-  const { scrollToBottom } = useStickToBottomContext()
-  React.useEffect(() => {
-    scrollToBottom()
-  }, [scrollToBottom])
-  return null
-}
 /** 重试提示组件 - 折叠式 */
 function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['retrying']> }): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
@@ -392,42 +369,42 @@ function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['
   const isTerminal = retrying.phase === 'exhausted' || retrying.phase === 'cancelled'
 
   return (
-    <div className="rounded-lg border border-warning/30 bg-warning-soft/50 p-3 mb-3">
+    <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 p-3 mb-3">
       <button
         type="button"
         className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
         onClick={() => setExpanded(!expanded)}
       >
         {retrying.phase === 'succeeded' ? (
-          <CheckCircle2 className="size-4 text-success shrink-0" />
+          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
         ) : isTerminal ? (
           retrying.phase === 'cancelled'
-            ? <Ban className="size-4 text-warning shrink-0" />
-            : <AlertTriangle className="size-4 text-warning shrink-0" />
+            ? <Ban className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            : <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
         ) : (
-          <RotateCw className="size-4 animate-spin text-warning shrink-0" />
+          <RotateCw className="size-4 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
         )}
-        <span className="text-sm text-warning-foreground flex-1 tabular-nums">
+        <span className="text-sm text-amber-900 dark:text-amber-100 flex-1 tabular-nums">
           {statusText}
           {retrying.reason && ` · ${retrying.reason}`}
         </span>
         {expanded ? (
-          <ChevronDown className="size-4 text-warning shrink-0" />
+          <ChevronDown className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
         ) : (
-          <ChevronRight className="size-4 text-warning shrink-0" />
+          <ChevronRight className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
         )}
       </button>
 
       {expanded && (
-        <div className="mt-3 space-y-3 border-t border-warning/30 pt-3">
+        <div className="mt-3 space-y-3 border-t border-amber-200 dark:border-amber-800 pt-3">
           {retrying.maxTotalAttempts != null && (
-            <div className="text-xs text-warning tabular-nums">
+            <div className="text-xs text-amber-700 dark:text-amber-300 tabular-nums">
               本轮已安排 {retrying.totalAttempt ?? 0}/{retrying.maxTotalAttempts} 次自动恢复
             </div>
           )}
           {retrying.history.length > 0 && (
             <>
-              <div className="text-xs font-medium text-warning-foreground">
+              <div className="text-xs font-medium text-amber-900 dark:text-amber-100">
                 已执行的恢复记录：
               </div>
               {retrying.history.map((attempt, index) => (
@@ -440,13 +417,13 @@ function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['
             </>
           )}
           {retrying.phase === 'scheduled' && (
-            <div className="flex items-center gap-2 text-xs text-warning pl-6 tabular-nums">
+            <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 pl-6 tabular-nums">
               <RotateCw className="size-3 animate-spin" />
               <span>{countdown > 0 ? `等待 ${countdown} 秒后开始第 ${retrying.currentAttempt} 次继续当前回答` : `即将开始第 ${retrying.currentAttempt} 次继续当前回答`}</span>
             </div>
           )}
           {retrying.phase === 'running' && (
-            <div className="flex items-center gap-2 text-xs text-warning pl-6 tabular-nums">
+            <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 pl-6 tabular-nums">
               <RotateCw className="size-3 animate-spin" />
               <span>正在执行第 {retrying.currentAttempt} 次继续当前回答…</span>
             </div>
@@ -480,16 +457,16 @@ function RetryAttemptItem({
       <div className="flex items-start gap-2">
         <span className="text-destructive shrink-0">❌</span>
         <div className="flex-1 min-w-0 space-y-1">
-          <div className="text-xs text-warning-foreground tabular-nums">
+          <div className="text-xs text-amber-900 dark:text-amber-100 tabular-nums">
             第 {attempt.attempt} 次恢复前的错误（{time}）- {attempt.reason}
           </div>
-          <div className="text-xs text-warning-foreground/80 font-mono break-words">
+          <div className="text-xs text-amber-700 dark:text-amber-300 font-mono break-words">
             {attempt.errorMessage}
           </div>
 
           {/* 环境信息 */}
           {attempt.environment && (
-            <div className="text-[11px] text-warning space-y-0.5">
+            <div className="text-[11px] text-amber-600 dark:text-amber-400 space-y-0.5">
               <div>运行时: {attempt.environment.runtime}</div>
               <div>平台: {attempt.environment.platform}</div>
               <div>模型: {attempt.environment.model}</div>
@@ -502,7 +479,7 @@ function RetryAttemptItem({
             <div className="mt-2">
               <button
                 type="button"
-                className="text-[11px] text-warning-foreground/80 hover:underline flex items-center gap-1"
+                className="text-[11px] text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
                 onClick={() => setShowStderr(!showStderr)}
               >
                 {showStderr ? (
@@ -513,7 +490,7 @@ function RetryAttemptItem({
                 显示 stderr 输出
               </button>
               {showStderr && (
-                <pre className="mt-1 text-[10px] text-warning-foreground/90 bg-warning/10 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
+                <pre className="mt-1 text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
                   {attempt.stderr}
                 </pre>
               )}
@@ -525,7 +502,7 @@ function RetryAttemptItem({
             <div className="mt-2">
               <button
                 type="button"
-                className="text-[11px] text-warning-foreground/80 hover:underline flex items-center gap-1"
+                className="text-[11px] text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
                 onClick={() => setShowStack(!showStack)}
               >
                 {showStack ? (
@@ -536,7 +513,7 @@ function RetryAttemptItem({
                 显示堆栈跟踪
               </button>
               {showStack && (
-                <pre className="mt-1 text-[10px] text-warning-foreground/90 bg-warning/10 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
+                <pre className="mt-1 text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
                   {attempt.stack}
                 </pre>
               )}
@@ -897,7 +874,6 @@ const AgentTranscriptHistory = React.forwardRef<AgentTranscriptHistoryHandle, Ag
 
 export const AgentMessages = React.memo(function AgentMessages({
   sessionId,
-  compact = false,
   sessionModelId,
   messagesLoaded,
   persistedSDKMessages,
@@ -913,7 +889,6 @@ export const AgentMessages = React.memo(function AgentMessages({
   onCreateTodo,
   onCompact,
   hostCapabilities,
-  inlineBanner,
   onAddHistoryQuote,
   explorationEnabled = true,
   onAgentHistoryQuoteClick,
@@ -1063,12 +1038,23 @@ export const AgentMessages = React.memo(function AgentMessages({
       .join('\u0000')
   ), [allSDKMessages])
 
-  // 仅扫描当前 live turn；不从持久化历史恢复任务，避免跨 turn 显示旧进度。
+  // 在当前 run 的全部 live turn 中汇总任务。压缩边界或后台唤醒会拆开 turn，
+  // 不能只取最后一段，否则此前已创建但未再次更新的任务会从进度卡消失。
   const liveTaskActivities = React.useMemo(() => {
-    const liveGroups = groupIntoTurns(liveMessages ?? [], sessionModelId)
-    const currentTurn = [...liveGroups].reverse().find((group) => group.type === 'assistant-turn')
-    return currentTurn ? buildTaskProgressDataForTurn(currentTurn).taskActivities : []
-  }, [liveMessages, sessionModelId])
+    const currentRunMessages = (liveMessages ?? []).filter((message) => {
+      const record = message as Record<string, unknown>
+      const messageRunGeneration = record._promaLiveRunGeneration
+      const messageRunStartedAt = record._promaLiveRunStartedAt
+      if (streamState?.runGeneration != null && typeof messageRunGeneration === 'number') {
+        return messageRunGeneration === streamState.runGeneration
+      }
+      return startedAt == null || messageRunStartedAt == null || messageRunStartedAt === startedAt
+    })
+    return groupIntoTurns(currentRunMessages, sessionModelId)
+      .flatMap((group) => group.type === 'assistant-turn'
+        ? buildTaskProgressDataForTurn(group).taskActivities
+        : [])
+  }, [liveMessages, sessionModelId, startedAt, streamState?.runGeneration])
 
   const contextCompaction = React.useMemo(
     () => getContextCompactionProgress(liveMessages ?? [], streamState?.isCompacting, streamState?.contextCompaction),
@@ -1214,11 +1200,9 @@ export const AgentMessages = React.memo(function AgentMessages({
       `}</style>
           <Conversation resize="instant" className={ready ? 'opacity-100' : 'opacity-0'}>
         <ScrollPositionManager id={sessionId} ready={ready} />
-        <ConversationContent
-          className={compact ? 'px-3 py-3' : undefined}
-        >
+        <ConversationContent>
           {!hasContent && !streaming ? (
-            <EmptyState compact={compact} />
+            <EmptyState />
           ) : (
             <>
               {/* 统一消息渲染（持久化 + 实时合并为一个列表，确保 system 消息位置正确） */}
@@ -1270,14 +1254,6 @@ export const AgentMessages = React.memo(function AgentMessages({
               )}
 
             </>
-          )}
-
-          {/* 交互横幅（权限 / AskUser / ExitPlanMode）：内联在消息流末尾 */}
-          {inlineBanner && (
-            <div className="pt-2">
-              <InlineBannerScrollIntoView />
-              {inlineBanner}
-            </div>
           )}
         </ConversationContent>
         <ScrollMinimap items={minimapItems} searchMessages={searchMessages} />

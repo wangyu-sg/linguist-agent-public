@@ -19,15 +19,21 @@ import { cn } from '@/lib/utils'
 import { browserPendingNavigationMapAtom } from '@/atoms/browser-atoms'
 import { BrowserSlot } from './BrowserSlot'
 import { shouldReuseInitialBrowserTab } from './agent-browser-link-utils'
+import { resolveExternalBrowserUrl } from './browser-external-url'
+
+/** 加号菜单最多 7 项；为原生 WebContentsView 预留完整菜单及安全间距。 */
+const ADD_TAB_MENU_CLEARANCE_PX = 256
 
 interface BrowserPanelProps {
   sessionId: string
   /** 由右侧统一顶栏选中的网页。 */
   tabId: string
   state: BrowserViewState | null
+  /** 右侧加号菜单展开时，原生浏览器必须避让其 renderer 区域。 */
+  isAddTabMenuOpen?: boolean
 }
 
-export function BrowserPanel({ sessionId, tabId, state }: BrowserPanelProps): React.ReactElement {
+export function BrowserPanel({ sessionId, tabId, state, isAddTabMenuOpen = false }: BrowserPanelProps): React.ReactElement {
   const [url, setUrl] = React.useState(state?.url ?? '')
   const [riskAcknowledged, setRiskAcknowledged] = React.useState<boolean | null>(null)
   const [savingRiskAcknowledgement, setSavingRiskAcknowledgement] = React.useState(false)
@@ -56,10 +62,14 @@ export function BrowserPanel({ sessionId, tabId, state }: BrowserPanelProps): Re
     try { await navigateBrowser({ sessionId, tabId, url: value }) } catch (error) { console.error('[受管浏览器] 导航失败:', error) }
   }, [sessionId, tabId, url])
 
-  const parsedExternalUrl = URL.parse(url.trim())
-  const externalBrowserUrl = parsedExternalUrl && (parsedExternalUrl.protocol === 'http:' || parsedExternalUrl.protocol === 'https:')
-    ? parsedExternalUrl.toString()
-    : null
+  const openInDefaultBrowser = React.useCallback(() => {
+    const externalUrl = resolveExternalBrowserUrl(url)
+    if (!externalUrl) return
+    void window.electronAPI.openExternal(externalUrl).catch((error) => {
+      console.error('[受管浏览器] 在默认浏览器中打开失败:', error)
+    })
+  }, [url])
+
   const closeBrowser = React.useCallback(async () => {
     try {
       await window.electronAPI.closeAgentBrowser(sessionId)
@@ -115,6 +125,7 @@ export function BrowserPanel({ sessionId, tabId, state }: BrowserPanelProps): Re
   // 外层右侧 Tab 会先更新 UI，再异步激活 controller 中的原生标签；激活完成前禁用
   // 依赖 controller.activeTabId 的历史操作，导航则始终显式携带当前 tabId。
   const isControllerTabActive = state?.activeTabId === tabId
+  const externalBrowserUrl = resolveExternalBrowserUrl(url)
   const isBackgroundRun = state?.executionSource === 'automation' || state?.executionSource === 'delegation'
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden border-l border-border/80 bg-content-area titlebar-no-drag">
@@ -133,9 +144,7 @@ export function BrowserPanel({ sessionId, tabId, state }: BrowserPanelProps): Re
               size="icon"
               className="size-8 shrink-0 rounded-lg text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
               disabled={riskBlocked || !isControllerTabActive || !externalBrowserUrl}
-              onClick={() => {
-                if (externalBrowserUrl) void window.electronAPI.openExternal(externalBrowserUrl).catch((error) => console.error('[受管浏览器] 在默认浏览器中打开失败:', error))
-              }}
+              onClick={openInDefaultBrowser}
               aria-label="通过默认浏览器打开"
             >
               <Globe className="size-[18px]" />
@@ -149,7 +158,10 @@ export function BrowserPanel({ sessionId, tabId, state }: BrowserPanelProps): Re
         )}
       </div>
       {riskAcknowledged === true ? (
-        <div className="flex flex-1 min-h-0 flex-col">
+        <div
+          className="flex flex-1 min-h-0 flex-col"
+          style={isAddTabMenuOpen ? { paddingTop: ADD_TAB_MENU_CLEARANCE_PX } : undefined}
+        >
           <BrowserSlot key={tabId} sessionId={sessionId} tabId={tabId} />
         </div>
       ) : (
@@ -170,9 +182,9 @@ export function BrowserPanel({ sessionId, tabId, state }: BrowserPanelProps): Re
             <AlertDialogTitle className="text-balance">首次使用受管浏览器</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-left leading-6">
-                <p>Linguist Agent 可让 Agent 在浏览器中读取、搜索、点击和输入。部分平台可能将这些行为或高频操作识别为自动化活动。</p>
+                <p>Proma 可让 Agent 在浏览器中读取、搜索、点击和输入。部分平台可能将这些行为或高频操作识别为自动化活动。</p>
                 <p>这可能导致验证码、限流、功能限制、账号风控，严重时可能造成账号处罚或封禁。请自行了解并遵守目标平台规则，并自行承担相应风险。</p>
-                <p className="text-xs">Linguist Agent 不会保证第三方平台接受这些操作；请避免不必要的高频互动，并在重要操作前核对页面状态。</p>
+                <p className="text-xs">Proma 不会保证第三方平台接受这些操作；请避免不必要的高频互动，并在重要操作前核对页面状态。</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

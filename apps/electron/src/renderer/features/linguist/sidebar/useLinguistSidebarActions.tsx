@@ -2,8 +2,8 @@ import * as React from 'react'
 import { useAtomValue, useSetAtom, useStore } from 'jotai'
 import { toast } from 'sonner'
 import type { AgentSessionMeta, LinguistProjectInfo, LinguistRole } from '@proma/shared'
-import { agentSessionsAtom } from '@/atoms/agent-atoms'
-import { activeTabAtom, activeTabIdAtom, closeTab, tabsAtom, updateTabTitle } from '@/atoms/tab-atoms'
+import { agentDiffPanelTabAtom, agentSessionsAtom, agentSidePanelOpenAtomFamily, currentAgentSessionIdAtom } from '@/atoms/agent-atoms'
+import { activeTabAtom, activeTabIdAtom, closeTab, tabsAtom } from '@/atoms/tab-atoms'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
 import { linguistProjectListStateAtom, refreshLinguistProjectListAtom } from '../projects/project-list-atoms'
@@ -115,7 +115,6 @@ export function useLinguistSidebarActions() {
         name: name.trim(),
       })
       if (!result.ok) return describeLinguistIpcError(result.error)
-      store.set(tabsAtom, (current) => updateTabTitle(current, projectId, result.data.name))
       refresh()
       toast.success(`项目已重命名为「${result.data.name}」`)
       return null
@@ -144,6 +143,9 @@ export function useLinguistSidebarActions() {
         }
       }
       if (store.get(projectSwitchGenerationAtom) !== generation) return
+      const sessionId = store.get(currentAgentSessionIdAtom)!
+      store.set(agentSidePanelOpenAtomFamily(sessionId), true)
+      store.set(agentDiffPanelTabAtom, (previous) => new Map(previous).set(sessionId, 'linguist'))
       store.set(linguistWorkbenchUiStateAtomFamily(projectId), {
         projectSettingsOpen: true,
       })

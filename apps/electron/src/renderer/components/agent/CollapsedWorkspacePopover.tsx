@@ -217,7 +217,7 @@ export function CollapsedWorkspacePopover({ children }: { children: React.ReactN
       currentProjectId={currentWorkspaceId}
       emptyLabel="暂无 Agent 项目"
       onSelect={selectProject}
-      onCreate={async (name) => (await createProject(name)) !== undefined}
+      onCreate={async (name) => (await createProject(name)) !== null}
       onCreateFromFolder={() => { void createProjectFromFolder() }}
     >
       {children}

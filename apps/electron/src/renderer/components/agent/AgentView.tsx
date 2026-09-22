@@ -131,8 +131,12 @@ import { inferContextWindow, inferReasoningTransport, isCodexFastModeSupportedMo
 import { fileToBase64, formatFileNames, getFileParentPath } from '@/lib/file-utils'
 import { getFilePanelDragData, INSERT_FILE_MENTION_EVENT, type FilePanelDragItem } from '@/lib/file-panel-drag'
 import {
+  canReferenceDraggedSession,
+  clearSessionReferenceDragState,
+  getActiveSessionReferenceDragId,
   getSessionReferenceDragData,
   INSERT_SESSION_REFERENCE_MENTION_EVENT,
+  isSessionReferenceDrag,
   type InsertSessionReferenceMentionDetail,
 } from '@/lib/session-reference-drag'
 import { buildQuotedSelectionBlock, expandAgentHistoryQuoteMentions } from '@/lib/quoted-selection'
@@ -455,7 +459,6 @@ interface AgentViewProps {
 }
 
 export function AgentView({ sessionId, embedded = false }: AgentViewProps): React.ReactElement {
-  const compact = embedded
   const hostExtension = useAgentHostExtension(sessionId)
   const hostCapabilities = hostExtension.hostCapabilities
   const store = useStore()
@@ -748,7 +751,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     const handleInsertSessionReference = (event: Event): void => {
       const detail = (event as CustomEvent<InsertSessionReferenceMentionDetail>).detail
       if (!detail || detail.targetSessionId !== sessionId) return
-      if (detail.item.sessionId === sessionId) return
+      if (!canReferenceDraggedSession(detail.item, sessionId)) return
       detail.inserted = richTextInputRef.current?.insertSessionMention(detail.item) ?? false
     }
     window.addEventListener(INSERT_SESSION_REFERENCE_MENTION_EVENT, handleInsertSessionReference)
@@ -1745,9 +1748,19 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
   const handleDragOver = React.useCallback((e: React.DragEvent): void => {
     e.preventDefault()
     e.stopPropagation()
+    const sessionReferenceDrag = isSessionReferenceDrag(e.dataTransfer)
+    const draggedSessionId = getActiveSessionReferenceDragId(e.dataTransfer)
+    if (
+      sessionReferenceDrag
+      && (draggedSessionId === sessionId || isComposerDisabled)
+    ) {
+      e.dataTransfer.dropEffect = 'none'
+      setIsDragOver(false)
+      return
+    }
     e.dataTransfer.dropEffect = 'copy'
     setIsDragOver(true)
-  }, [])
+  }, [isComposerDisabled, sessionId])
 
   const handleDragLeave = React.useCallback((e: React.DragEvent): void => {
     e.preventDefault()
@@ -1759,11 +1772,13 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     e.preventDefault()
     e.stopPropagation()
     setIsDragOver(false)
+    clearSessionReferenceDragState()
+
     // 左侧 Agent 会话行拖入：复用键盘 & 菜单生成的 session mention chip。
     const draggedSession = getSessionReferenceDragData(e.dataTransfer)
     if (draggedSession) {
       if (isComposerDisabled) return
-      if (draggedSession.sessionId === sessionId) {
+      if (!canReferenceDraggedSession(draggedSession, sessionId)) {
         toast.warning('不能引用当前会话')
         return
       }
@@ -2438,10 +2453,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     if (!agentChannelId || streaming) return
 
     // 找到最后一条用户消息
-    const lastUserRawMessage = [...persistedSDKMessages]
-      .reverse()
-      .map(getUserTextFromSDKMessage)
-      .find((text): text is string => text !== null)
+    const lastUserEntry = persistedSDKMessages.findLast((message): message is SDKUserMessage => getUserTextFromSDKMessage(message) !== null)
+    const lastUserRawMessage = lastUserEntry ? getUserTextFromSDKMessage(lastUserEntry) : null
     if (!lastUserRawMessage) return
     // 重试重发给 Agent 的消息：@file 路径还原为真实路径（持久化存的是编码原文）
     const lastUserMessage = parseQueuedMessageMentions(lastUserRawMessage).cleanedText
@@ -2490,6 +2503,8 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
       startedAt: streamStartedAt,
       permissionModeOverride: permissionMode,
       ...(retryOfErrorUuid && { retryOfErrorUuid }),
+      ...(lastUserEntry?.type === 'user' && lastUserEntry.linguistContext
+        ? { linguistContext: lastUserEntry.linguistContext } : {}),
     }).catch(console.error)
   }, [persistedSDKMessages, sessionId, agentChannelId, agentModelId, agentChannelProvider, currentWorkspaceId, streaming, setAgentStreamErrors, setStreamingStates, setMessagesCache, permissionMode])
 
@@ -2498,9 +2513,11 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     if (!agentChannelId) return
 
     try {
-      const meta = await window.electronAPI.createAgentSession(
-        undefined, agentChannelId, currentWorkspaceId || undefined, agentModelId || undefined,
-      )
+      const meta = hostExtension.createContinuationSession
+        ? await hostExtension.createContinuationSession()
+        : await window.electronAPI.createAgentSession(
+            undefined, agentChannelId, currentWorkspaceId || undefined, agentModelId || undefined,
+          )
       setAgentSessions((prev) => [meta, ...prev])
 
       // 切换到新会话 tab
@@ -2534,7 +2551,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
     } catch (error) {
       console.error('[AgentView] 在新会话中重试失败:', error)
     }
-  }, [sessionId, agentChannelId, agentModelId, currentWorkspaceId, openSession, setAgentSessions, setStreamingStates, permissionMode])
+  }, [sessionId, agentChannelId, agentModelId, currentWorkspaceId, openSession, setAgentSessions, setStreamingStates, permissionMode, hostExtension.createContinuationSession])
 
   /** 从回复节点创建 Pi `/tree` 探索分支，并在当前主线的右侧工作区继续。 */
   const handleFork = React.useCallback(async (upToMessageUuid: string): Promise<void> => {
@@ -2999,7 +3016,6 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
         {/* 消息区域 */}
         <AgentMessages
           sessionId={sessionId}
-          compact={compact}
           sessionModelId={agentModelId || undefined}
           messagesLoaded={messagesLoaded}
           persistedSDKMessages={persistedSDKMessages}
@@ -3015,25 +3031,20 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
           onCreateTodo={handleOpenReplyTodoDialog}
           onCompact={handleCompact}
           hostCapabilities={hostCapabilities}
-          inlineBanner={hasBlockingRequests ? (
-            <div className="flex flex-col gap-2">
-              <PermissionBanner sessionId={sessionId} />
-              <AskUserBanner sessionId={sessionId} />
-              <ExitPlanModeBanner sessionId={sessionId} />
-            </div>
-          ) : undefined}
           onAddHistoryQuote={handleAddHistoryQuote}
           explorationEnabled={!embedded}
           onAgentHistoryQuoteClick={handleAgentHistoryQuoteClick}
           historyQuoteNavigation={historyQuoteNavigation}
         />
 
+        {/* 交互请求固定在输入区域上方，与消息滚动位置无关。 */}
+        <PermissionBanner sessionId={sessionId} />
+        <AskUserBanner sessionId={sessionId} />
+        <ExitPlanModeBanner sessionId={sessionId} />
+
         {/* 输入区域 — 交互横幅显示时隐藏，由横幅替代 */}
         {!hasBannerOverlay && (
-        <div
-          className={compact ? 'px-2 pb-2' : 'px-2.5 pb-2.5 md:px-[18px] md:pb-[18px]'}
-          data-input-mode="agent"
-        >
+        <div className="px-2.5 pb-2.5 md:px-[18px] md:pb-[18px]" data-input-mode="agent">
           <div
             className={cn(
               'rounded-[17px] border-[0.5px] border-border bg-background/70 backdrop-blur-sm transition-all duration-200',
@@ -3166,11 +3177,7 @@ export function AgentView({ sessionId, embedded = false }: AgentViewProps): Reac
             />
 
             {/* Footer 工具栏 — 容器变窄时尾部按钮自动折叠进「更多」Popover */}
-            <InputToolbarOverflow
-              items={inputToolbarItems}
-              trailing={inputTrailingNode}
-              className={compact ? 'h-11 px-1.5 gap-2' : undefined}
-            />
+            <InputToolbarOverflow items={inputToolbarItems} trailing={inputTrailingNode} />
           </div>
         </div>
         )}

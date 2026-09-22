@@ -20,7 +20,6 @@ export interface ProjectSessionTreeGroupHeaderProps {
   trailing?: React.ReactNode
   editor?: React.ReactNode
   actions?: React.ReactNode
-  hint?: React.ReactNode
   draggable?: boolean
   onDragStart?: React.DragEventHandler<HTMLSpanElement>
   contextMenuItems?: React.ReactNode
@@ -48,7 +47,6 @@ export function ProjectSessionTreeGroupHeader({
   trailing,
   editor,
   actions,
-  hint,
   draggable = false,
   onDragStart,
   contextMenuItems,
@@ -135,7 +133,6 @@ export function ProjectSessionTreeGroupHeader({
         </button>
       )}
 
-      {hint}
     </>
   )
 

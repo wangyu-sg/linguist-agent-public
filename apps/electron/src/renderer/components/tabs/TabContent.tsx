@@ -52,16 +52,9 @@ export function TabContent({ tabId }: TabContentProps): React.ReactElement {
     )
   }
 
-
   return (
-    <AgentTabContent sessionId={tab.sessionId} />
-  )
-}
-
-function AgentTabContent({ sessionId }: { sessionId: string }): React.ReactElement {
-  return (
-    <TabErrorBoundary key={sessionId} sessionId={sessionId}>
-      <AgentView sessionId={sessionId} />
+    <TabErrorBoundary key={tab.sessionId} sessionId={tab.sessionId}>
+      <AgentView sessionId={tab.sessionId} />
     </TabErrorBoundary>
   )
 }

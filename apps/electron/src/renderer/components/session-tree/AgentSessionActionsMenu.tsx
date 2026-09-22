@@ -1,5 +1,6 @@
-import { Archive, ArchiveRestore, ArrowRightLeft, MessageSquare, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
+import { Info, Archive, ArchiveRestore, ArrowRightLeft, MessageSquare, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
 import type { AgentSessionMeta } from '@proma/shared'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -85,7 +86,23 @@ export function AgentSessionActionsMenu({
     <>
       <Item className="py-1 text-xs [&>svg]:size-3.5" onSelect={onReference}>
         <MessageSquare size={14} />
-        引用此会话
+        <span className="min-w-0 flex-1">引用此会话</span>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <span
+              role="img"
+              aria-label="引用此会话说明"
+              className="inline-flex size-5 items-center justify-center rounded text-foreground/40 hover:bg-foreground/[0.08] hover:text-foreground/70"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.preventDefault(); event.stopPropagation() }}
+            >
+              <Info size={13} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-64">
+            将此会话插入当前 Agent 输入框作为引用；也可以直接把会话拖到输入框中。
+          </TooltipContent>
+        </Tooltip>
       </Item>
       <Separator className="my-0.5" />
       {!historyOnly && (childCount > 0 ? (

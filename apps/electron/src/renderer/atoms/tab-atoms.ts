@@ -84,25 +84,9 @@ export interface OpenTabRestore {
 /** 标签页 MRU（最近使用）顺序，最近使用的 ID 排在前面 */
 export const tabMruAtom = atom<string[]>([])
 
-const tabsStateAtom = atom<TabItem[]>([])
+/** 当前会话及其预览入口；最近访问历史独立于可见 Tab。 */
+export const tabsAtom = atom<TabItem[]>([])
 const activeTabIdStateAtom = atom<string | null>(null)
-
-/** 顶部入口列表：Linguist 项目 + 当前会话 */
-export const tabsAtom = atom(
-  (get) => get(tabsStateAtom),
-  (get, set, update: AtomUpdate<TabItem[]>) => {
-    const nextTabs = typeof update === 'function'
-      ? update(get(tabsStateAtom))
-      : update
-    set(tabsStateAtom, nextTabs)
-    const validMruIds = new Set(
-      nextTabs.map(getTabMruId).filter((id): id is string => id !== null),
-    )
-    const previousMru = get(tabMruAtom)
-    const nextMru = previousMru.filter((id) => validMruIds.has(id))
-    if (nextMru.length !== previousMru.length) set(tabMruAtom, nextMru)
-  },
-)
 
 /** 当前激活的标签 ID；激活时统一更新 MRU。 */
 export const activeTabIdAtom = atom(
@@ -325,7 +309,7 @@ export function getPersistableTabState(
       ?? null
     : activeTabId
 
-  const persistentMru = getPersistedTabMru({ mru }, persistentTabs)
+  const persistentMru = getPersistedTabMru({ mru })
   return {
     tabs: persistentTabs,
     activeTabId: persistentActiveTabId,
@@ -334,21 +318,17 @@ export function getPersistableTabState(
 }
 
 /** 从磁盘状态恢复可用 MRU；旧状态没有 mru 时保持空列表。 */
-export function getPersistedTabMru(value: unknown, tabs: readonly TabItem[]): string[] {
+export function getPersistedTabMru(value: unknown): string[] {
   if (!value || typeof value !== 'object') return []
   const rawMru = (value as Record<string, unknown>).mru
   if (!Array.isArray(rawMru)) return []
-  const validIds = new Set(
-    getPersistentTabs([...tabs])
-      .map(getTabMruId)
-      .filter((id): id is string => id !== null),
-  )
   const seen = new Set<string>()
   const mru: string[] = []
   for (const id of rawMru) {
-    if (typeof id !== 'string' || !validIds.has(id) || seen.has(id)) continue
+    if (typeof id !== 'string' || id.length === 0 || seen.has(id)) continue
     seen.add(id)
     mru.push(id)
+    if (mru.length === 50) break
   }
   return mru
 }

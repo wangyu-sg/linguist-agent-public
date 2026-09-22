@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
   "baseline": {
-    "tag": "v0.19.53",
-    "commit": "f99edbdb594407ab190b97ae073889c5d96637ab",
-    "formalMerge": "56bc3f29b225c71f02f42483e10f1db8c3fcb2d5"
+    "tag": "v0.19.57",
+    "commit": "4e96c5e859302c4a34618d45db352b29a7ebeb28",
+    "formalMerge": "b9417191d80d96e15a2702c9f8f927327312a970"
   },
-  "recomputedOn": "2026-09-16",
+  "recomputedOn": "2026-09-22",
   "currentLedger": {
-    "registeredCoreTouchpoints": 290
+    "registeredCoreTouchpoints": 274
   },
   "deviations": [
     {
       "id": "permanent-product-fork",
       "classification": "Permanent Product Fork",
       "ticket": "LA-SYNC-005",
-      "registeredTouchpoints": 229,
+      "registeredTouchpoints": 216,
       "scope": [
         "package identity and dependency lock",
         "Electron packaging, builder runtime launcher, and branded resources",
@@ -51,7 +51,7 @@
         "runtime, session, preload, IPC, and shared contracts",
         "native Agent/Chat shell composition, sidebar, tabs, settings, and renderer state"
       ],
-      "rationale": "Proma 尚无等价的项目绑定 CAT authority 与 vertical-agent 合同；这些接缝复用原生 Agent/Chat。",
+      "rationale": "Proma 尚无等价的项目绑定 CAT authority 与 vertical-agent 合同；接缝复用原生 Agent/Chat 输入、消息、队列和右栏，项目身份通过宿主组合，不替换成另一套界面。",
       "sunset": {
         "status": "review-at-upstream-sync",
         "condition": "Replace a seam only when upstream provides an equivalent stable Host Contract that preserves session authority and fail-closed CAT behavior."
@@ -78,13 +78,19 @@
       "id": "temporary-deviations",
       "classification": "Temporary Deviation",
       "ticket": "LA-SYNC-003",
-      "registeredTouchpoints": 48,
-      "rationale": "Pi continuation context、原生生命周期、预览和安全写入等尚未被上游等价吸收的修复；每个触点的具体理由和退役条件见 proma-touchpoints.json。",
+      "registeredTouchpoints": 45,
+      "rationale": "尚未被上游等价吸收的具体修复；本轮新增 Pi 0.86.1 工具作用域规则在同一任务下轮交付，保留真实计划正文、压缩显式重试等通用改动。右栏后台终端监听/协作已查看可见性位于已有混合触点，分别记录范围与退出条件，不算新增领域权限。逐文件依据与退役条件见 proma-touchpoints.json。",
       "sunset": {
         "status": "must-review-at-next-upstream-sync",
         "condition": "每次上游同步逐项比较真实行为与回归证据，已有等价实现时删除本地差异。"
       },
-      "ledger": "proma-touchpoints.json#temporary-deviation"
+      "ledger": "proma-touchpoints.json#temporary-deviation",
+      "scope": [
+        "Pi project-instruction handoff within the same prompt (0.86.1 turn_end)",
+        "compaction continuation and explicit retry",
+        "project-independent native lifecycle, preview, accessibility, and safe writes",
+        "single FileBrowser roots contract and deletion of unused native compatibility helpers"
+      ]
     }
   ]
 }

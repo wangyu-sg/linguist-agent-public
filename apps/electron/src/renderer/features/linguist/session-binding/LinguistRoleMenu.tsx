@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { replaceAgentSessionInFreshnessOrder } from '@/lib/agent-session-list'
-import { cn } from '@/lib/utils'
 import { describeLinguistIpcError } from '../projects/project-utils'
 
 export const LINGUIST_ROLE_OPTIONS: readonly {
@@ -33,10 +32,8 @@ export function getLinguistRoleOption(role: LinguistRole | undefined) {
 
 export function LinguistRoleMenu({
   session,
-  compact = false,
 }: {
   session: AgentSessionMeta
-  compact?: boolean
 }): React.ReactElement | null {
   const setSessions = useSetAtom(agentSessionsAtom)
   const [saving, setSaving] = React.useState(false)
@@ -69,13 +66,12 @@ export function LinguistRoleMenu({
           type="button"
           disabled={saving}
           aria-label={`当前岗位：${current.label}`}
-          className={cn(
-            'titlebar-no-drag inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 text-foreground/60 hover:bg-accent/70 hover:text-foreground',
-            compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-[11px]',
-          )}
+          title={`当前岗位：${current.label}`}
+          className="titlebar-no-drag inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-foreground/60 hover:bg-accent/70 hover:text-foreground"
         >
-          <Icon size={compact ? 10 : 11} aria-hidden="true" />
-          <span>{compact ? current.shortLabel : current.label}</span>
+          <Icon size={11} aria-hidden="true" />
+          <span className="linguist-role-name">{current.label}</span>
+          <span className="linguist-role-short-name hidden">{current.shortLabel}</span>
           <ChevronDown size={10} aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>

@@ -102,7 +102,7 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
 
   return (
     <>
-    <div className="relative z-[51] flex h-[48px] items-center gap-2 px-3">
+    <div className="agent-session-header relative z-[51] flex h-[48px] items-center gap-2 px-3">
       {/* 页面标题栏仍可拖动；系统控制按钮由窗口顶部的统一标题栏承载。 */}
       <div className="absolute inset-0 titlebar-drag-region pointer-events-none" />
       {editing ? (
@@ -156,8 +156,12 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <LinguistSessionBindingBadge session={session} />
-        <LinguistRoleMenu session={session} />
+        {session.linguistProjectId && (
+          <div className="linguist-header-context flex min-w-0 max-w-[40%] items-center gap-2">
+            <LinguistSessionBindingBadge session={session} />
+            <LinguistRoleMenu session={session} />
+          </div>
+        )}
         </>
       )}
       {explorationBranches.length > 0 && (

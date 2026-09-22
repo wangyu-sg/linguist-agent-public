@@ -5,16 +5,21 @@ import { appModeAtom } from '@/atoms/app-mode'
 import {
   agentDiffPanelTabAtom,
   agentSessionsAtom,
-  agentSidePanelOpenAtomFamily,
   currentAgentSessionIdAtom,
   currentAgentWorkspaceIdAtom,
+  unviewedCompletedSessionIdsAtom,
 } from '@/atoms/agent-atoms'
 import { currentConversationIdAtom } from '@/atoms/chat-atoms'
 import {
   activeTabIdAtom,
+  buildOpenTabRestore,
   openTab,
+  sessionViewStateMapAtom,
   tabsAtom,
 } from '@/atoms/tab-atoms'
+import { channelFormDirtyAtom, settingsOpenAtom, settingsPendingSessionNavigationAtom } from '@/atoms/settings-tab'
+import { previewFileMapAtom } from '@/atoms/preview-atoms'
+import { markSessionCompletionViewed } from '@/lib/agent-completion-presence'
 import { getAgentSessionLinguistProjectId } from '@/lib/agent-session-list'
 
 type JotaiStore = ReturnType<typeof useStore>
@@ -56,17 +61,28 @@ export function restoreLastLocalizationProject(
     return null
   }
 
+  if (store.get(settingsOpenAtom) && store.get(channelFormDirtyAtom)) {
+    store.set(settingsPendingSessionNavigationAtom, { type: 'agent', sessionId: session.id, title: session.title })
+    return null
+  }
+  store.set(settingsOpenAtom, false)
+
+  const restore = buildOpenTabRestore(
+    session.id,
+    store.get(sessionViewStateMapAtom),
+    store.get(previewFileMapAtom),
+  )
   const opened = openTab(store.get(tabsAtom), {
     type: 'agent',
     sessionId: session.id,
     title: session.title,
-  })
+  }, restore)
   store.set(tabsAtom, opened.tabs)
   enterLinguistNavigation(store, opened.activeTabId, 'conversations')
   store.set(currentAgentSessionIdAtom, session.id)
+  store.set(unviewedCompletedSessionIdsAtom, (previous) => markSessionCompletionViewed(previous, session.id))
   if (session.workspaceId) store.set(currentAgentWorkspaceIdAtom, session.workspaceId)
   if (!store.get(agentDiffPanelTabAtom).has(session.id)) {
-    store.set(agentSidePanelOpenAtomFamily(session.id), true)
     store.set(agentDiffPanelTabAtom, (previous) => new Map(previous).set(session.id, 'linguist'))
   }
   return session.id

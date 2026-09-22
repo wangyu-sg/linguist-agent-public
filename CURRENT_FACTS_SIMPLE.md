@@ -2,9 +2,11 @@
 
 核验日期：2026-09-22。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
 
-## 本次发布
+## 本次候选与最近已发布版本
 
-`0.18.0` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.0)，源码/Tag 为 `a7c80c20`。main CI `35699307235` 与 Auto Release `35700030085` 成功，七项资产、更新文件哈希、两架构 macOS 签名及旧证书兼容性核验通过。正式 arm64 包隔离三模式验证通过；42 个独立语言小样及 6 次接续完成模型辅助评价。日用安装未替换，在线更新端到端未验证。详见 [0.18 记录](./docs/release/VALIDATION_0_18_0.md)，以下旧版本内容保留历史范围。
+`0.18.1` 为当前发布候选，尚未公开发布。候选已合入 Proma `v0.19.57` 与 Pi `0.86.1`，并继续完成三模式界面和会话/右侧工作区状态修复。本地 484 项测试、11 包类型检查、边界/宿主接缝与六步隔离打包检查通过；公开 CI、签名资产及更新元数据仍待收口。日用安装未替换。详见 [0.18.1 候选验证](./docs/release/VALIDATION_0_18_1.md)。
+
+最近已发布版本：`0.18.0` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.0)，源码/Tag 为 `a7c80c20`。main CI `35699307235` 与 Auto Release `35700030085` 成功，七项资产、更新文件哈希、两架构 macOS 签名及旧证书兼容性核验通过。正式 arm64 包隔离三模式验证通过；42 个独立语言小样及 6 次接续完成模型辅助评价。日用安装未替换，在线更新端到端未验证。详见 [0.18 记录](./docs/release/VALIDATION_0_18_0.md)，以下旧版本内容保留历史范围。
 
 ## 机器真源与当前值
 
@@ -12,17 +14,17 @@
 
 | 项目 | 当前值 |
 |---|---|
-| App | `0.18.0` |
-| Proma | `v0.19.53` |
-| Proma commit | `f99edbdb594407ab190b97ae073889c5d96637ab` |
-| Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.85.1` |
+| App | `0.18.1` |
+| Proma | `v0.19.57` |
+| Proma commit | `4e96c5e859302c4a34618d45db352b29a7ebeb28` |
+| Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.86.1` |
 | React / Jotai / Vite | `18.3.1` / `2.20.3` / `6.4.3` |
-| Shared | `0.1.72` |
+| Shared | `0.1.73` |
 | CAT Core / Formats / Store / Tools | `0.0.26` / `0.0.13` / `0.0.47` / `0.0.41` |
 | CAT Schema | `19` |
 | CAT Tool Count | `32` |
 
-Proma 基线已正式合并为 `v0.19.53`，双亲合并提交 `56bc3f29`，本地候选分支 `codex/la-upstream-v0.19.53-20260914`，起点 `9f0de928`。App `0.17.74` 已推送并[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.74)，Tag 指向 `d6d0a7ee`。CI `34844497883` 与 Auto Release `34845329153` 成功，macOS arm64/x64、Windows x64 安装包和更新清单共七项资产齐全；未覆盖日用安装。证据见 [上游更新与发布记录](./docs/release/UPSTREAM_0_19_53_2026_09_14.md)。
+上一正式基线为 `v0.19.53`，双亲合并提交 `56bc3f29`，本地候选分支 `codex/la-upstream-v0.19.53-20260914`，起点 `9f0de928`。App `0.17.74` 已推送并[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.74)，Tag 指向 `d6d0a7ee`。CI `34844497883` 与 Auto Release `34845329153` 成功，macOS arm64/x64、Windows x64 安装包和更新清单共七项资产齐全；未覆盖日用安装。证据见 [上游更新与发布记录](./docs/release/UPSTREAM_0_19_53_2026_09_14.md)。
 
 
 App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.75)，源码/Tag 为 `85aa7e5d`，Release run `35094944942` 成功，七项资产核验通过。用户随后授权用正式签名 arm64 包替换本机旧安装，验签及启动通过；自动更新链路未验证。详见 [发布记录](./docs/release/VALIDATION_0_17_75.md)。Shared DTO 为 `0.1.72`，CAT 版本按现有 manifest 校正，本轮未再次递增。
@@ -35,7 +37,7 @@ App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-publ
 
 ## 当前实现
 
-- Linguist 与 Agent 共享原生侧栏项目头、会话树及待办/日历/Obsidian/记忆/Skills/MCP/定时任务入口；关闭组件后回到当前会话的 CAT 或文件。领域侧栏仅提供数据和项目操作。
+- Linguist 与 Agent 共享原生侧栏项目头、会话树及待办/日历/Obsidian/记忆/Skills/MCP/定时任务入口；右区沿用原生打开、关闭、最近访问和分屏逻辑，CAT 作为一项内容。领域侧栏仅提供数据和项目操作。
 - 定时任务持久化项目、岗位和明确范围快照；来源删除后保留，跨工作区清除，reuse/daily 按完整绑定校验。只读摘要不创建 Stage；执行结束与业务完成分开显示。
 - BrowserAct 在一个 tab 队列内执行至多 64 步、30 秒（含排队）；失败返回成功前缀和未执行范围。正式包携带的 Skill 与后续源码修复版本分开记录；真实 Phrase 保存/TM 与完整富文本操作尚未校准。
 
@@ -50,12 +52,15 @@ App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-publ
 - Prompt 合同 `3.1.6`；报告/候选准备可用 `readOnly` Context，不创建或替换专业 Stage；规则按既有分页协议续读。必要术语/冲突不能被可选限额清空，资料不够时明确显示缺口。
 - `cat_project_summary({})` 保持原概览；按 `assetId + includeDelivery=true` 才读取只读交付预检和当前会话专业任务摘要。它不运行 QA、不生成导出、不证明 QA 新鲜或 verified export。
 
-## 本次上游更新
+## 本次上游更新与界面收敛
 
-- Pi 五项 override 与四项 App 依赖均为 `0.85.1`，重试补丁仅重命名；冻结安装、类型检查、完整回归和构建通过。
-- Exa 复用原生凭据与握手入口；DeepSeek Flash 候选默认不启用，共享上下文推断为 1M。用户已有模型 ID 与历史不自动改写。
-- 原生 MCP 配置/OAuth、inactive Skill 管理、Copilot 额度、Markdown 多行表格、会话图片与 home 路径以及侧栏层级/滚动边界已合入。
-- 本地真实 HTTP 验证 SDK 长缓存请求和重试分类；不等于真实 Provider 或 Exa 连接验证。干净提交 `e8ff739a` 的六步打包验证全部通过：Agent/Chat 各 19 项，CAT 31 项；辅助面板专项 26 项通过。原生 Open/Save 仍为 2 MANUAL，整体资格保持 partial，详见本次记录。
+- 源码基线为公开 Proma `v0.19.57`，Pi Runtime 升至 `0.86.1`。正式合并提交身份及机读基线在发布收口时更新；历史 `v0.19.53` 合并证据保留原范围。
+- Agent、Chat 与 Linguist 共用的顶栏、侧栏、输入框和右区恢复原生布局与交互；保留 CAT 内容、项目身份与授权接缝。窄窗中的项目/岗位徽标限制在可用空间内，不挤掉标题及右区展开按钮。
+- 修复最近访问顺序、旧异步项目导航抢焦点、Linguist 右区收起状态恢复、项目设置入口、同名受管预览覆盖和项目改名显示。新任务继续保留项目/岗位，同会话重试复用原轮次 CAT 范围。
+- 终端事件由现有全局监听器收集，切到 Chat 或规划页仍保留后台终端；收起的子任务内容不再被误记为已查看。上述两项上游也存在，不归因为 LA 独立实现。
+- Pi 使用原生轮末消息队列激活本轮工具发现的项目指令，规则交付前阻断同批访问，下一模型轮收到指令后再继续；保留路径范围及原生 transcript。
+- Proma `0.19.62` 安装包只作为部分主界面对照。其公开 Tag 与 `v0.19.57` 指向同一 commit，但安装包包含公开源码未覆盖的同步接口；不把该包视为已完整合入的新源码基线，也不宣称全部功能等价。
+- 本轮定向检查范围、实际打包界面证据和待完成发布门禁见 [0.18.1 候选验证](./docs/release/VALIDATION_0_18_1.md)。没有据此声称真实翻译任务提速或减少多少 token。
 
 ## 已保留的 UI 与批次行为
 
