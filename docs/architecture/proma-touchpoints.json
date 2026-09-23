@@ -2336,15 +2336,6 @@
       "hook": "upstream-codeblock"
     },
     {
-      "file": "patches/@earendil-works%2Fpi-ai@0.86.1.patch",
-      "ticket": "LA-SYNC-005",
-      "kind": "temporary-deviation",
-      "owner": "upstream-maintenance",
-      "mergePolicy": "keep-la",
-      "reason": "升级 Pi 0.87.1 时删除 0.86.1 旧补丁；登记删除 diff 以满足上游触点审计。",
-      "hook": "upstream-gpt6-catalog"
-    },
-    {
       "file": "patches/@earendil-works%2Fpi-ai@0.87.1.patch",
       "ticket": "LA-SYNC-005",
       "kind": "temporary-deviation",
