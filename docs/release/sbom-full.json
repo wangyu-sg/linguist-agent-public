@@ -227,27 +227,27 @@
     "licenses": "MIT",
     "repository": "git+https://code.haverbeke.berlin/codemirror/view"
   },
-  "@earendil-works/chord@0.86.1": {
+  "@earendil-works/chord@0.87.1": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-agent-core@0.86.1": {
+  "@earendil-works/pi-agent-core@0.87.1": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-ai@0.86.1": {
+  "@earendil-works/pi-ai@0.87.1": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-coding-agent@0.86.1": {
+  "@earendil-works/pi-coding-agent@0.87.1": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-telemetry@0.86.1": {
+  "@earendil-works/pi-telemetry@0.87.1": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },
-  "@earendil-works/pi-tui@0.86.1": {
+  "@earendil-works/pi-tui@0.87.1": {
     "licenses": "MIT",
     "repository": "https://github.com/earendil-works/pi"
   },

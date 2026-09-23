@@ -136,8 +136,7 @@ mac:
     NSMicrophoneUsageDescription: "Linguist Agent 需要访问麦克风，用于将你的语音实时转写为文本。"
     NSCalendarsFullAccessUsageDescription: "Linguist Agent 需要访问你的日历，以显示、创建和同步你选择的日程。"
     NSRemindersFullAccessUsageDescription: "Linguist Agent 需要访问你的提醒事项，以同步 Todo 和你选择的列表。"
-  # 架构由 CLI 参数控制（CI 矩阵分别传 --arm64 / --x64），
-  # 每个 runner 只构建其宿主架构对应的产物。
+  # 默认发布仅构建 macOS arm64；其他平台和架构按需传 CLI 参数单独构建。
   target:
     - dmg
     - zip
@@ -180,8 +179,8 @@ nsis:
 
 # ============================================
 # 发布配置
-# 每个平台的 build job 通过 --publish always 直接上传到 GitHub Release。
-# electron-builder 会自动创建/复用 Release，并在多架构并行上传时合并 latest-mac.yml。
+# macOS arm64 build job 通过 --publish always 上传到 GitHub Release。
+# electron-builder 生成 arm64 的 latest-mac.yml 供自动更新使用。
 # ============================================
 publish:
   provider: github

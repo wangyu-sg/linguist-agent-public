@@ -23,18 +23,21 @@ const electronPackage = JSON.parse(
 ) as { scripts: Record<string, string> }
 
 describe('AC-002 发布链 fail-closed', () => {
-  test('Release 复用完整 CI，并让三个发布构建显式依赖验证成功', () => {
+  test('Release 复用完整 CI，macOS arm64 构建依赖验证成功', () => {
     expect(ciWorkflow).toContain('workflow_call:')
     expect(releaseWorkflow).toContain('uses: ./.github/workflows/ci.yml')
-    expect(releaseWorkflow.match(/needs: validate/g)).toHaveLength(3)
+    expect(releaseWorkflow.match(/needs: validate/g)).toHaveLength(1)
   })
 
-  test('所有平台成功且更新元数据齐全后才公开 Release', () => {
-    expect(releaseWorkflow).toContain('needs: [build-mac-arm64, build-mac-x64, build-windows-x64, merge-mac-yml]')
+  test('arm64 包和更新元数据齐全后才公开 Release', () => {
+    expect(releaseWorkflow).toContain('needs: build-mac-arm64')
+    expect(releaseWorkflow).toContain("needs.build-mac-arm64.result == 'success'")
     expect(releaseWorkflow).toContain("grep -Fx 'latest-mac.yml'")
-    expect(releaseWorkflow).toContain("grep -Fx 'latest.yml'")
+    expect(releaseWorkflow).toContain("grep -E -- '-arm64\\.zip$'")
+    expect(releaseWorkflow).toContain("grep -E -- '-arm64\\.dmg$'")
     expect(releaseWorkflow).toContain('--draft=false --latest')
-    expect(releaseWorkflow).toContain("needs.merge-mac-yml.result == 'success'")
+    expect(releaseWorkflow).not.toContain('build-mac-x64:')
+    expect(releaseWorkflow).not.toContain('build-windows-x64:')
   })
 
   test('普通 main 提交只有显式声明 release 且 CHANGELOG 包含对应版本才创建 Tag', () => {
@@ -57,8 +60,12 @@ describe('AC-002 发布链 fail-closed', () => {
     expect(releaseWorkflow).not.toContain('--from "$PREVIOUS_TAG"')
   })
 
-  test('三个发布构建都使用仓库锁定的 Electron Builder 入口', () => {
-    expect(releaseWorkflow.match(/bun run scripts\/run-electron-builder\.ts/g)).toHaveLength(3)
+  test('默认仅构建 macOS arm64，其他平台保留按需构建命令', () => {
+    expect(releaseWorkflow.match(/bun run scripts\/run-electron-builder\.ts/g)).toHaveLength(1)
+    expect(releaseWorkflow).toContain('run-electron-builder.ts --mac --arm64 --publish always')
+    expect(electronPackage.scripts['dist:mac']).toContain('--mac --arm64')
+    expect(electronPackage.scripts['dist:win']).toContain('--win')
+    expect(electronPackage.scripts['dist:linux']).toContain('--linux')
     expect(releaseWorkflow).not.toContain('bunx electron-builder')
   })
 
@@ -94,9 +101,9 @@ describe('AC-002 发布链 fail-closed', () => {
 
   test('macOS 自动更新发布必须使用固定签名身份', () => {
     expect(releaseWorkflow).not.toContain('继续生成个人 Alpha 未签名产物')
-    expect(releaseWorkflow.match(/test -n "\$MAC_CERTS"/g)).toHaveLength(2)
-    expect(releaseWorkflow.match(/sudo security add-trusted-cert -d -r trustRoot/g)).toHaveLength(2)
-    expect(releaseWorkflow.match(/security find-identity -v -p codesigning/g)).toHaveLength(2)
+    expect(releaseWorkflow.match(/test -n "\$MAC_CERTS"/g)).toHaveLength(1)
+    expect(releaseWorkflow.match(/sudo security add-trusted-cert -d -r trustRoot/g)).toHaveLength(1)
+    expect(releaseWorkflow.match(/security find-identity -v -p codesigning/g)).toHaveLength(1)
   })
 
   test('DMG 包含首次打开的解除隔离说明', () => {

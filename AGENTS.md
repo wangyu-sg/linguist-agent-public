@@ -36,6 +36,8 @@ Linguist Agent 的 Vertical Agent Profile + CAT Core / Store / Tools / Workbench
 
 发布产物主要用于作者本人安装与自动更新；不承诺公众支持、兼容周期、签名公证或跨平台资格。安全和数据完整性必须 fail closed。
 
+默认 Release 只构建 macOS arm64 的 DMG、ZIP 和更新清单；其他平台或架构在需要时用单独构建命令生成。
+
 ## 版本与事实来源
 
 固定 Proma 基线与 Runtime / 产品版本见 `docs/architecture/proma-baseline.json`；依赖以各 `package.json` 和 `bun.lock` 为准，动态事实唯一人工入口为 `CURRENT_FACTS_SIMPLE.md`。不得从旧报告复制版本或测试总数；上游升级必须作为独立工作流。
@@ -160,7 +162,7 @@ webPreferences: {
 - `@earendil-works/pi-agent-core`
 - `@earendil-works/pi-ai`
 
-打包前运行 `apps/electron/scripts/sync-runtime-deps.ts`，把 external runtime 依赖闭包同步到 appDir。`electron-builder.yml` 必须包含运行时 `node_modules`，并保留 Pi native 内容所需的 `asarUnpack`。每个平台 runner 只构建与宿主架构匹配的产物。
+打包前运行 `apps/electron/scripts/sync-runtime-deps.ts`，把 external runtime 依赖闭包同步到 appDir。`electron-builder.yml` 必须包含运行时 `node_modules`，并保留 Pi native 内容所需的 `asarUnpack`。默认发布 runner 只构建 macOS arm64；按需构建其他平台时须与宿主架构匹配。
 
 ## CAT 分层
 
@@ -201,6 +203,8 @@ CAT 写入规则：
 ## Provider
 
 Chat 与 Pi 支持多 Provider；Claude 模型通过 Anthropic 协议 Provider 使用，ChatGPT subscription 通过 Codex OAuth 路径使用。Provider 配置入口在“设置 → 模型配置”。
+
+Codex 内置模型目录包含 GPT-6 Astra、Sol、Luna；模型拉取使用合并 Pi 目录以展示 Sol/Luna，真实账号调用需要独立验证。
 
 API Key 写入 `channels.json` 前必须经 Electron `safeStorage` 加密。Provider 导入失败必须零写入，并通过同目录原子替换提交最终配置。
 

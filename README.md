@@ -12,6 +12,8 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 
 当前是 **个人 Alpha**。发布产物主要用于作者本人安装与自动更新；不承诺公众支持、兼容周期、签名公证或跨平台资格。当前版本和验证证据见 [CURRENT_FACTS_SIMPLE.md](./CURRENT_FACTS_SIMPLE.md)，核心改动见 [Touchpoint 账本](./docs/architecture/proma-touchpoints.json)。
 
+默认 Release 仅构建 macOS arm64 的 DMG、ZIP 和自动更新清单；macOS x64、Windows、Linux 需要时使用对应构建命令单独生成。
+
 应用有三个并列模式：
 
 - **Agent**：Proma 的完整通用 Agent，包括工具、文件、MCP、Skills、受信项目指令、Workspace Memory、权限、Thinking、Queue / Steer、Planning、Collaboration 和 Automations。
@@ -19,6 +21,8 @@ Linguist Agent 是面向个人日常本地化工作的桌面 Agent：
 - **Linguist**：项目、批次、TM/TB/Context、Segment 编辑、Proposal、QA、导入导出、Tag Profile、备份与恢复。
 
 Agent 统一使用 **Pi Runtime**。Claude 模型仍可通过 Anthropic 协议 Provider 使用，但产品不再包含 Claude Agent SDK 或 Nowledge Mem Runtime。Linguist 复用同一个 `AgentView`、Session Store、Workspace、Provider、模型、权限和 Proma Toolset，不另建受限 Agent 或第二套 Composer。
+
+ChatGPT Codex OAuth 的内置模型目录包含 GPT-6 Astra、Sol 和 Luna；当前源码已验证模型拉取、构建与推理档位，真实账号调用仍需单独验证。
 
 ## 四种岗位
 

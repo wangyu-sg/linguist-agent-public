@@ -1,5 +1,6 @@
 import type { AutomationLinguistContext } from './automation'
 import type { ProviderType } from './channel'
+import { isGpt6AstraFamily, isGpt6LunaFamily, isGpt6SolFamily } from '../utils/model-family'
 export const LINGUIST_ROLES = ['general', 'translator', 'reviewer', 'proofreader'] as const
 export type LinguistRole = (typeof LINGUIST_ROLES)[number]
 import type { LinguistTurnContextV1 } from './linguist-turn-context'
@@ -99,7 +100,10 @@ export const CODEX_FAST_MODE_MODEL_IDS = [
 
 /** 模型 ID 是否可通过 ChatGPT Codex OAuth 使用 Fast Mode。 */
 export function isCodexFastModeSupportedModel(modelId: string | undefined): boolean {
-  return modelId !== undefined && (CODEX_FAST_MODE_MODEL_IDS as readonly string[]).includes(modelId.toLowerCase())
+  return isGpt6AstraFamily(modelId)
+    || isGpt6SolFamily(modelId)
+    || isGpt6LunaFamily(modelId)
+    || (modelId !== undefined && (CODEX_FAST_MODE_MODEL_IDS as readonly string[]).includes(modelId.toLowerCase()))
 }
 
 /**

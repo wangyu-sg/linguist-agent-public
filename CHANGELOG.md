@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-09-23
+
+### Changed
+
+- 提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型支持，并将 Pi Runtime 升级至 `0.87.1`；Proma 稳定源码基线仍为 `v0.19.57`。
+- 默认 Release 仅构建 macOS arm64 的 DMG、ZIP 和更新清单；其他平台或架构按需单独构建。
+
+### Validation and limits
+
+- 本地完整测试、类型与架构边界检查、Electron 构建及 macOS arm64 未签名打包冒烟通过；真实 Codex 账号调用和正式签名包仍需独立验证。
+
 ## [0.18.1] - 2026-09-22
 
 > 验证范围与发布状态见 [0.18.1 记录](https://github.com/wangyu-sg/linguist-agent-public/blob/main/docs/release/VALIDATION_0_18_1.md)。
@@ -418,7 +429,8 @@
 - 修复上游合并后的 CI 测试口径。
 
 [0.17.74]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.73...v0.17.74
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.1...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.2...HEAD
+[0.18.2]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.75...v0.18.0
 [0.17.75]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.74...v0.17.75

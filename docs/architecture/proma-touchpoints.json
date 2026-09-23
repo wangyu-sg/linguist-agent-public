@@ -355,6 +355,15 @@
       "reason": "把当前已验证的 Linguist turn context 交给 Proma Collaboration，供绑定项目的子会话复用同一宿主快照。"
     },
     {
+      "file": "apps/electron/src/main/lib/adapters/pi-model-registry.ts",
+      "ticket": "LA-SYNC-005",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "提前移植 Proma #2085 的 GPT-6 模型注册；Pi 0.87.1 的 getAvailable 未列出 Sol/Luna，LA 继续用合并目录供模型拉取。上游稳定基线修复并通过模型列表回归后退役。",
+      "hook": "upstream-gpt6-catalog"
+    },
+    {
       "file": "apps/electron/src/main/lib/adapters/pi-project-instruction-scope.ts",
       "ticket": "LA-SYNC-005",
       "kind": "temporary-deviation",
@@ -2266,6 +2275,15 @@
       "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
+      "file": "packages/shared/src/types/reasoning-profile.ts",
+      "ticket": "LA-SYNC-005",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力；上游稳定基线包含同等实现并通过回归后退役。",
+      "hook": "upstream-gpt6-catalog"
+    },
+    {
       "file": "packages/shared/src/types/system-prompt.ts",
       "ticket": "LA-SYNC-003",
       "kind": "product-fork",
@@ -2282,6 +2300,33 @@
       "reason": "该文件的数据路径注释或默认 Skill 明确指向 LA 独立数据根；采用 Proma 路径会误导本机配置操作。"
     },
     {
+      "file": "packages/shared/src/utils/context-window.ts",
+      "ticket": "LA-SYNC-005",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力；上游稳定基线包含同等实现并通过回归后退役。",
+      "hook": "upstream-gpt6-catalog"
+    },
+    {
+      "file": "packages/shared/src/utils/index.ts",
+      "ticket": "LA-SYNC-005",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力；上游稳定基线包含同等实现并通过回归后退役。",
+      "hook": "upstream-gpt6-catalog"
+    },
+    {
+      "file": "packages/shared/src/utils/model-family.ts",
+      "ticket": "LA-SYNC-005",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力；上游稳定基线包含同等实现并通过回归后退役。",
+      "hook": "upstream-gpt6-catalog"
+    },
+    {
       "file": "packages/ui/src/code-block/CodeBlock.tsx",
       "ticket": "LA-SYNC-004",
       "kind": "temporary-deviation",
@@ -2289,6 +2334,24 @@
       "mergePolicy": "keep-la",
       "reason": "代码块支持键盘聚焦和横向滚动。初次对比基线 bbf577a8 时尚无等价实现；本地来源 6601ee20。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
       "hook": "upstream-codeblock"
+    },
+    {
+      "file": "patches/@earendil-works%2Fpi-ai@0.86.1.patch",
+      "ticket": "LA-SYNC-005",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "升级 Pi 0.87.1 时删除 0.86.1 旧补丁；登记删除 diff 以满足上游触点审计。",
+      "hook": "upstream-gpt6-catalog"
+    },
+    {
+      "file": "patches/@earendil-works%2Fpi-ai@0.87.1.patch",
+      "ticket": "LA-SYNC-005",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力；上游稳定基线包含同等实现并通过回归后退役。",
+      "hook": "upstream-gpt6-catalog"
     }
   ]
 }

@@ -194,6 +194,15 @@ const PRESET_MODEL_CANDIDATE_UPDATES: readonly {
       ],
     },
   },
+  {
+    id: 'openai-codex-gpt-6-sol-luna-v1',
+    candidates: {
+      'openai-codex': [
+        { id: 'gpt-6-sol', name: 'GPT-6 Sol', enabled: true },
+        { id: 'gpt-6-luna', name: 'GPT-6 Luna', enabled: true },
+      ],
+    },
+  },
 ]
 
 /**
@@ -2029,7 +2038,7 @@ export async function fetchModels(input: FetchModelsInput): Promise<FetchModelsR
       case 'github-copilot':
       case 'xai':
         if (provider === 'openai-codex') {
-          // ChatGPT (Codex) 走 Pi SDK 内置模型目录，不依赖 baseUrl/apiKey。
+          // Codex 使用 Pi 目录与当前模型补丁的合并结果，不依赖 baseUrl/apiKey。
           const codexModels = await listCodexModels()
           return {
             success: true,
