@@ -4,13 +4,13 @@
 
 ## 当前发布与上一版本
 
-`0.18.1` 已于 `2026-09-22T14:35:44Z`（北京时间 22:35:44）[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.1)，为 latest，非草稿、非预发布；源码/Tag 为 `c85c7d8e206737adf92340001290f0bdf0a70620`。已合入 Proma `v0.19.57` 与 Pi `0.86.1`，完成本轮三模式界面和会话/右侧工作区状态修复。本地 484 项测试、11 包类型检查、边界/宿主接缝通过；main CI `35739485354` attempt 1 以同一源码、干净工作树完成六步检查，Dock 27 项通过。Auto Release `35740252627` 成功，七项安装包和更新资产已上传；两架构 macOS 签名、三个更新资产下载哈希及清单核验通过。用户随后授权替换日用安装，正式 arm64 包已安装并启动，点击检查更新成功显示“已是最新版本”；自动下载并安装下一版本的全链尚未验证。详见 [0.18.1 实施与发布验证](./docs/release/VALIDATION_0_18_1.md)。
+`0.18.2` 已于 `2026-09-23T07:22:48Z`（北京时间 15:22:48）[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.2)，为 latest，非草稿、非预发布；源码/Tag 为 `a7679a5df7de8ecdad934f880c802ab92f118207`。提前移植 [Proma #2085](https://github.com/proma-ai/Proma/pull/2085) 的 GPT-6 Sol/Luna 支持与 Pi `0.87.1`，默认 Release 仅构建 macOS arm64；Proma 稳定源码基线仍为 `v0.19.57`。main CI `35830019276` 的类型、测试、边界、许可、构建与 arm64 打包纵向验证通过，Auto Release `35830663733` 成功。公开资产为 arm64 DMG、ZIP 和 `latest-mac.yml`；下载的 ZIP 大小与 SHA-512 匹配清单，解压后应用在宿主权限下通过深度严格签名验证，签名身份与已安装的 `0.18.1` 一致。真实 Codex 账号调用与用户执行的在线更新安装尚未验证。
 
-2026-09-23 `0.18.2` 发布候选已提前移植 [Proma #2085](https://github.com/proma-ai/Proma/pull/2085) 的 GPT-6 Sol/Luna 支持与 Pi `0.87.1`，并将默认 Release 收敛为 macOS arm64。Proma 稳定源码基线仍为 `v0.19.57`。本地类型检查、完整测试、边界/宿主接缝、Electron 构建和 arm64 打包冒烟通过；未签名 arm64 DMG、ZIP 与 `latest-mac.yml` 已生成，ZIP 哈希与清单一致。真实 Codex 账号调用与正式签名发布尚未验证。
+上一已发布版本 `0.18.1` 于 `2026-09-22T14:35:44Z` [公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.1)，源码/Tag 为 `c85c7d8e206737adf92340001290f0bdf0a70620`。该版合入 Proma `v0.19.57` 与 Pi `0.86.1`，完成三模式界面和会话/右侧工作区状态修复。main CI `35739485354`、Auto Release `35740252627` 成功；用户随后授权替换日用安装，正式 arm64 包已安装并启动，点击检查更新显示“已是最新版本”。详见 [0.18.1 实施与发布验证](./docs/release/VALIDATION_0_18_1.md)。
 
 替换前的日用 `0.17.75` 本地修复包缺少 `Contents/Resources/app-update.yml`；真实 updater 读取该安装配置复现 `ENOENT`，发生在网络请求与签名检查之前。正式 `0.18.0` 包配置正常。本轮经用户明确授权，以正式 `0.18.1` 包替换并备份旧应用，恢复更新检查；项目和会话保留。
 
-上一已发布版本：`0.18.0` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.0)，源码/Tag 为 `a7c80c20`。main CI `35699307235` 与 Auto Release `35700030085` 成功，七项资产、更新文件哈希、两架构 macOS 签名及旧证书兼容性核验通过。正式 arm64 包隔离三模式验证通过；42 个独立语言小样及 6 次接续完成模型辅助评价。日用安装未替换，在线更新端到端未验证。详见 [0.18 记录](./docs/release/VALIDATION_0_18_0.md)，以下旧版本内容保留历史范围。
+再上一已发布版本：`0.18.0` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.0)，源码/Tag 为 `a7c80c20`。main CI `35699307235` 与 Auto Release `35700030085` 成功，七项资产、更新文件哈希、两架构 macOS 签名及旧证书兼容性核验通过。正式 arm64 包隔离三模式验证通过；42 个独立语言小样及 6 次接续完成模型辅助评价。日用安装未替换，在线更新端到端未验证。详见 [0.18 记录](./docs/release/VALIDATION_0_18_0.md)，以下旧版本内容保留历史范围。
 
 ## 机器真源与当前值
 
@@ -21,7 +21,7 @@
 | App | `0.18.2` |
 | Proma | `v0.19.57` |
 | Proma commit | `4e96c5e859302c4a34618d45db352b29a7ebeb28` |
-| Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.87.1`（当前工作树） |
+| Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.87.1` |
 | React / Jotai / Vite | `18.3.1` / `2.20.3` / `6.4.3` |
 | Shared | `0.1.73` |
 | CAT Core / Formats / Store / Tools | `0.0.26` / `0.0.13` / `0.0.47` / `0.0.41` |
