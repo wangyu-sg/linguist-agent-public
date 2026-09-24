@@ -1064,7 +1064,7 @@ export type LinguistProjectImportResult =
       truncated: boolean
       items: Array<{
         filename: string
-        status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'ready'
+        status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'ready' | 'supporting'
         resourceKind?: 'batch' | 'tm' | 'terms' | 'context'
         resourceId?: string
         message?: string

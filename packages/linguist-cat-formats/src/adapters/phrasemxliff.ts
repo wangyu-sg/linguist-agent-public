@@ -116,6 +116,7 @@ import type {
 } from '../adapter'
 import { FormatExportError, FormatParseError } from '../errors'
 import { sha256Hex, type HashFn } from '../hash'
+import { parseXml } from '../xml-parser'
 import { statusFromXliff } from './xliff'
 import {
   decodeXmlEntities,
@@ -172,7 +173,9 @@ export interface PhraseMxliffFormatConfig {
 
 export interface PhraseMasterPairProbe {
   config: PhraseMxliffFormatConfig
-  score: number
+  status: 'not-required' | 'matched' | 'needs-master' | 'partial' | 'ambiguous' | 'parse-error' | 'unsupported-representation'
+  literalSegments: number
+  sampleKeys: string[]
 }
 
 function looksBinary(bytes: Uint8Array): boolean {
@@ -272,7 +275,63 @@ const PHRASE_NATIVE_TAG_PROFILE = {
 }
 
 function phrasePlaceholders(value: string): string[] {
-  return [...value.matchAll(PHRASE_PLACEHOLDER_PATTERN)].map((match) => match[0])
+  const placeholders: string[] = []
+  replacePhrasePlaceholders(value, (placeholder) => {
+    placeholders.push(placeholder)
+    return placeholder
+  })
+  return placeholders
+}
+
+function replacePhrasePlaceholders(value: string, replace: (placeholder: string) => string): string {
+  const nativeTags = scanTags(value, { profile: PHRASE_NATIVE_TAG_PROFILE })
+    .filter((tag) => tag.familyId === 'phrase-inline-container')
+  let output = ''
+  let cursor = 0
+  for (const match of value.matchAll(PHRASE_PLACEHOLDER_PATTERN)) {
+    const start = match.index
+    if (nativeTags.some((tag) => start >= tag.start && start < tag.end)) continue
+    output += value.slice(cursor, start) + replace(match[0])
+    cursor = start + match[0].length
+  }
+  return output + value.slice(cursor)
+}
+
+function phraseChangeWrappers(value: string): { count: number; valid: boolean } {
+  let depth = 0
+  let count = 0
+  for (const match of value.matchAll(/\{u>|<u\}/g)) {
+    if (match[0] === '{u>') {
+      depth += 1
+      count += 1
+    } else if (--depth < 0) {
+      return { count, valid: false }
+    }
+  }
+  return { count, valid: depth === 0 }
+}
+
+export function inspectPhraseRecovery(
+  segments: readonly Pick<ImportedCatSegment, 'key' | 'ordinal' | 'source' | 'target'>[],
+): { status: 'not-required' | 'needs-master' | 'unsupported-representation'; keys: string[] } {
+  const needsMaster: string[] = []
+  const unsupported: string[] = []
+  for (const segment of segments) {
+    const sourceMarkers = phrasePlaceholders(segment.source)
+    const targetMarkers = phrasePlaceholders(segment.target)
+    const sourceWrappers = phraseChangeWrappers(segment.source)
+    const targetWrappers = phraseChangeWrappers(segment.target)
+    if (!sourceWrappers.valid || !targetWrappers.valid || targetWrappers.count > sourceWrappers.count
+      || targetMarkers.some((marker) => !sourceMarkers.includes(marker))) {
+      unsupported.push(segment.key ?? `#tu-${segment.ordinal}`)
+    } else if (sourceMarkers.length > 0) {
+      needsMaster.push(segment.key ?? `#tu-${segment.ordinal}`)
+    }
+  }
+  if (unsupported.length > 0) return { status: 'unsupported-representation', keys: unsupported.slice(0, 5) }
+  return needsMaster.length > 0
+    ? { status: 'needs-master', keys: needsMaster.slice(0, 5) }
+    : { status: 'not-required', keys: [] }
 }
 
 function structuralTags(value: string): string[] {
@@ -294,16 +353,16 @@ function stripStructuralTags(value: string): string {
 }
 
 function splitPlainSource(value: string): string {
-  return value.replace(/\{u>|<u\}/g, '').replace(PHRASE_PLACEHOLDER_PATTERN, '').replace(/\s+/g, ' ').trim()
+  return stripStructuralTags(replacePhrasePlaceholders(value, () => ''))
 }
 
 function splitPlainForTagCount(value: string, tagCount: number): string {
   let seen = 0
-  return value.replace(/\{u>|<u\}/g, '').replace(PHRASE_PLACEHOLDER_PATTERN, (placeholder) => {
+  return stripStructuralTags(replacePhrasePlaceholders(value, (placeholder) => {
     if (seen >= tagCount) return placeholder
     seen += 1
     return ''
-  }).replace(/\s+/g, ' ').trim()
+  }))
 }
 
 function parsePhraseConfig(value: string | undefined, filename: string): PhraseMxliffFormatConfig | undefined {
@@ -332,7 +391,7 @@ function rehydratePhraseValue(value: string, mapping?: PhraseMxliffTagMapping): 
     tags.push(mapping.tags[index]!)
     byPlaceholder.set(placeholder, tags)
   })
-  return value.replace(PHRASE_PLACEHOLDER_PATTERN, (placeholder) => byPlaceholder.get(placeholder)?.shift() ?? placeholder)
+  return replacePhrasePlaceholders(value, (placeholder) => byPlaceholder.get(placeholder)?.shift() ?? placeholder)
 }
 
 function dehydratePhraseValue(value: string, mapping?: PhraseMxliffTagMapping): string {
@@ -386,19 +445,48 @@ export async function probePhraseMasterPair(
   masterBytes: Uint8Array,
   masterFilename: string,
 ): Promise<PhraseMasterPairProbe> {
-  const splitText = new TextDecoder('utf-8', { fatal: true }).decode(splitBytes)
-  const masterText = new TextDecoder('utf-8', { fatal: true }).decode(masterBytes)
-  if (!MEMSOURCE_NAMESPACE_PATTERN.test(splitText) || !XLIFF_ROOT_PATTERN.test(masterText)) {
+  const masterSha256 = await sha256Hex(masterBytes)
+  let splitText: string
+  let masterText: string
+  try {
+    parseXml(splitBytes, PHRASE_MXLIFF_ADAPTER_ID, splitFilename)
+    parseXml(masterBytes, PHRASE_MXLIFF_ADAPTER_ID, masterFilename)
+    splitText = new TextDecoder('utf-8', { fatal: true }).decode(splitBytes)
+    masterText = new TextDecoder('utf-8', { fatal: true }).decode(masterBytes)
+  } catch {
     return {
       config: {
-        version: 1, masterFilename, masterSha256: await sha256Hex(masterBytes),
+        version: 1, masterFilename, masterSha256,
         placeholderSegments: 0, matchedSegments: 0, unmatchedSegments: 0, ambiguousSegments: 0, mappings: {},
       },
-      score: 0,
+      status: 'parse-error', literalSegments: 0, sampleKeys: [],
+    }
+  }
+  if (!MEMSOURCE_NAMESPACE_PATTERN.test(splitText) || !XLIFF_ROOT_PATTERN.test(masterText)
+    || MEMSOURCE_NAMESPACE_PATTERN.test(masterText)) {
+    return {
+      config: {
+        version: 1, masterFilename, masterSha256,
+        placeholderSegments: 0, matchedSegments: 0, unmatchedSegments: 0, ambiguousSegments: 0, mappings: {},
+      },
+      status: !MEMSOURCE_NAMESPACE_PATTERN.test(splitText) ? 'unsupported-representation' : 'parse-error',
+      literalSegments: 0,
+      sampleKeys: [],
     }
   }
   const contexts = parseGroupContexts(splitText)
   const masters = parseMasterUnits(masterText)
+  if (masters.length === 0) {
+    return {
+      config: {
+        version: 1, masterFilename, masterSha256,
+        placeholderSegments: 0, matchedSegments: 0, unmatchedSegments: 0, ambiguousSegments: 0, mappings: {},
+      },
+      status: 'parse-error',
+      literalSegments: 0,
+      sampleKeys: [],
+    }
+  }
   const byId = new Map<string, MasterUnitForPairing[]>()
   const byResname = new Map<string, MasterUnitForPairing[]>()
   const byPlain = new Map<string, MasterUnitForPairing[]>()
@@ -416,6 +504,9 @@ export async function probePhraseMasterPair(
   let matchedSegments = 0
   let unmatchedSegments = 0
   let ambiguousSegments = 0
+  let literalSegments = 0
+  let unsupportedSegments = 0
+  const sampleKeys: string[] = []
   let splitOrdinal = 0
   TRANS_UNIT_PATTERN.lastIndex = 0
   for (const match of splitText.matchAll(TRANS_UNIT_PATTERN)) {
@@ -426,38 +517,76 @@ export async function probePhraseMasterPair(
     if (!key || !source) continue
     const sourceText = decodeXmlInline(source.inner)
     const placeholders = phrasePlaceholders(sourceText)
+    const targetText = decodeXmlInline(findDirectChild(match[3] ?? '', 'target')?.inner ?? '')
+    const sourceWrappers = phraseChangeWrappers(sourceText)
+    const targetWrappers = phraseChangeWrappers(targetText)
+    if (!sourceWrappers.valid || !targetWrappers.valid || targetWrappers.count > sourceWrappers.count
+      || phrasePlaceholders(targetText).some((marker) => !placeholders.includes(marker))) {
+      unsupportedSegments += 1
+      if (sampleKeys.length < 5) sampleKeys.push(key)
+      continue
+    }
     if (placeholders.length === 0) continue
     const context = attrs['m:para-id'] ? contexts.get(attrs['m:para-id']) : undefined
-    const candidateSets = [
-      context?.masterId ? byId.get(context.masterId) : undefined,
-      attrs.resname ? byResname.get(attrs.resname) : undefined,
-      byPlain.get(splitPlainSource(sourceText)),
-    ].filter((items): items is MasterUnitForPairing[] => items !== undefined)
-    const candidates = candidateSets.find((items) => items.length > 0) ?? []
+    const literal = masters.some((unit) => unit.tags.length === 0
+      && unit.sourceRich === sourceText
+      && (context?.masterId === undefined || unit.id === context.masterId)
+      && (attrs.resname === undefined || unit.resname === attrs.resname))
+    const candidates = context?.masterId !== undefined
+      ? byId.get(context.masterId) ?? []
+      : attrs.resname !== undefined
+        ? byResname.get(attrs.resname) ?? []
+        : byPlain.get(splitPlainSource(sourceText)) ?? []
     const valid = candidates.filter((unit) =>
       unit.tags.length <= placeholders.length
-      && (
-        unit.sourcePlain === splitPlainForTagCount(sourceText, unit.tags.length)
-        || (context?.masterId !== undefined && unit.id === context.masterId)
-      ))
+      && unit.sourcePlain === splitPlainForTagCount(sourceText, unit.tags.length))
+    if (literal && valid.length > 0) {
+      placeholderSegments += 1
+      ambiguousSegments += 1
+      if (sampleKeys.length < 5) sampleKeys.push(key)
+      continue
+    }
+    if (literal) {
+      literalSegments += 1
+      continue
+    }
     const equivalent = [...new Map(valid.map((unit) => [JSON.stringify(unit.tags), unit])).values()]
     if (equivalent.length > 1) {
       placeholderSegments += 1
       ambiguousSegments += 1
+      if (sampleKeys.length < 5) sampleKeys.push(key)
       continue
     }
     const master = equivalent[0]
     if (!master) {
       placeholderSegments += 1
       unmatchedSegments += 1
+      if (sampleKeys.length < 5) sampleKeys.push(key)
       continue
     }
     if (master.tags.length === 0) continue
+    const mapped = placeholders.slice(0, master.tags.length)
+    const literals = placeholders.slice(master.tags.length)
+    if (mapped.some((marker) => literals.includes(marker))) {
+      placeholderSegments += 1
+      ambiguousSegments += 1
+      if (sampleKeys.length < 5) sampleKeys.push(key)
+      continue
+    }
+    const targetMarkers = phrasePlaceholders(targetText)
+    if ([...new Set(mapped)].some((marker) =>
+      targetMarkers.filter((value) => value === marker).length
+      > mapped.filter((value) => value === marker).length)) {
+      placeholderSegments += 1
+      unsupportedSegments += 1
+      if (sampleKeys.length < 5) sampleKeys.push(key)
+      continue
+    }
     placeholderSegments += 1
     mappings[key] = {
       masterId: master.id,
       splitSourceHash: fnv1a64(sourceText),
-      placeholders: placeholders.slice(0, master.tags.length),
+      placeholders: mapped,
       tags: master.tags,
     }
     matchedSegments += 1
@@ -465,14 +594,24 @@ export async function probePhraseMasterPair(
   const config: PhraseMxliffFormatConfig = {
     version: 1,
     masterFilename,
-    masterSha256: await sha256Hex(masterBytes),
+    masterSha256,
     placeholderSegments,
     matchedSegments,
     unmatchedSegments,
     ambiguousSegments,
     mappings,
   }
-  return { config, score: placeholderSegments === 0 ? 0 : matchedSegments / placeholderSegments }
+  const status: PhraseMasterPairProbe['status'] = unsupportedSegments > 0
+    ? 'unsupported-representation'
+    : ambiguousSegments > 0 ? 'ambiguous'
+      : unmatchedSegments > 0 ? matchedSegments > 0 ? 'partial' : 'needs-master'
+        : matchedSegments > 0 ? 'matched' : 'not-required'
+  return {
+    config,
+    status,
+    literalSegments,
+    sampleKeys,
+  }
 }
 
 export function serializePhraseMxliffFormatConfig(config: PhraseMxliffFormatConfig): string {
@@ -502,6 +641,7 @@ export class PhraseMxliffAdapter implements CatFormatAdapter {
 
   async import(input: CatFormatImportInput): Promise<ImportedCatAsset> {
     const { bytes, filename, sourceLocale, targetLocale, formatConfigJson } = input
+    parseXml(bytes, this.id, filename)
     const text = this.decode(bytes, filename)
     const { units, warnings } = this.parseTemplate(text, filename)
     const config = parsePhraseConfig(formatConfigJson, filename)

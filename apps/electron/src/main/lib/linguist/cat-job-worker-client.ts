@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { Worker } from 'node:worker_threads'
 import type { ContextDoc } from '@linguist/cat-store'
 import type { ContextImportWorkerRequest } from './context-import'
+import type { ImportContextDocInput } from './project-service-types'
 
 type WorkerMessage<TResult> =
   | { type: 'progress'; phase: 'started' | 'completed'; threadId: number }
@@ -22,6 +23,7 @@ export type WorkerRequest =
   | { kind: 'qa'; request: LinguistQaWorkerRequest }
   | { kind: 'consistency'; request: LinguistConsistencyWorkerRequest }
   | { kind: 'context-import'; request: ContextImportWorkerRequest }
+  | { kind: 'context-prepare'; request: ImportContextDocInput }
 
 function workerEntry(): string {
   const moduleDir = typeof __dirname === 'string'
@@ -110,3 +112,6 @@ export const runLinguistConsistencyWorker: LinguistConsistencyWorker = (
 
 export const runLinguistContextImportWorker = (request: ContextImportWorkerRequest): Promise<ContextDoc> =>
   runWorker({ kind: 'context-import', request }, 'Context import', undefined, undefined)
+
+export const runLinguistContextPrepareWorker = (request: ImportContextDocInput): Promise<{ ready: true }> =>
+  runWorker({ kind: 'context-prepare', request }, 'Context prepare', undefined, undefined)

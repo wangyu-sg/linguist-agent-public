@@ -16,6 +16,8 @@ import {
   FormatParseError,
   FormatUnsupportedError,
   PHRASE_MXLIFF_ADAPTER_ID,
+  inspectPhraseRecovery,
+  JSON_ADAPTER_ID,
   parsePhraseMxliffFormatConfig,
   probePhraseMasterPair,
   serializePhraseMxliffFormatConfig,
@@ -575,16 +577,8 @@ export class ProjectDelivery {
     }
   }
 
-  /**
-   * bytes + filename → 格式探测 → 解析 → source blob → 单事务插入 +
-   * 同事务回读验证（LA-INTAKE-007：段数/格式/语言对/source hash 任一项
-   * 失败即抛 IMPORT_VERIFICATION_FAILED，整批回滚）。
-   * asset id 内容寻址，先落盘只可能留下可幂等覆盖的孤儿 blob。
-   */
-  async importAsset(
-    projectId: string,
-    input: ImportAssetInput,
-  ): Promise<ImportAssetResult> {
+  /** dry-run 与正式导入共用解析；重复源文件仍沿用既有的幂等路径。 */
+  private async prepareImport(projectId: string, input: ImportAssetInput) {
     const project = this.context.getProject(projectId)
     if (project.archivedAt !== undefined) {
       throw new LinguistProjectArchivedError(projectId)
@@ -618,20 +612,8 @@ export class ProjectDelivery {
           columns: input.xlsxMapping.columns,
         })
     if (formatConfigJson !== undefined) parseXlsxFormatConfig(formatConfigJson, input.filename)
-    if (input.phraseMaster !== undefined) {
-      if (adapter.id !== PHRASE_MXLIFF_ADAPTER_ID) {
-        throw new FormatParseError(adapter.id, input.filename, 'a Phrase master companion was supplied for a non-Phrase file')
-      }
-      const probe = await probePhraseMasterPair(
-        input.bytes,
-        input.filename,
-        input.phraseMaster.bytes,
-        input.phraseMaster.filename,
-      )
-      if (probe.config.placeholderSegments > 0 && probe.config.matchedSegments === 0) {
-        throw new FormatParseError(adapter.id, input.filename, 'Phrase master companion matched none of the split placeholder segments')
-      }
-      formatConfigJson = serializePhraseMxliffFormatConfig(probe.config)
+    if (input.phraseMaster !== undefined && adapter.id !== PHRASE_MXLIFF_ADAPTER_ID) {
+      throw new FormatParseError(adapter.id, input.filename, 'a Phrase master companion was supplied for a non-Phrase file')
     }
     const sourceSha256 = sha256Hex(input.bytes)
     const db = this.context.openProject(projectId)
@@ -641,13 +623,105 @@ export class ProjectDelivery {
       projectId,
     )
     if (duplicate !== undefined) {
-      if (duplicate.formatConfigJson !== formatConfigJson) {
+      const storedMaster = adapter.id === PHRASE_MXLIFF_ADAPTER_ID
+        ? parsePhraseMxliffFormatConfig(duplicate.formatConfigJson, duplicate.originalFilename)
+        : undefined
+      const mappingChanged = adapter.id === PHRASE_MXLIFF_ADAPTER_ID
+        ? input.phraseMaster !== undefined
+          && storedMaster?.masterSha256 !== sha256Hex(input.phraseMaster.bytes)
+        : duplicate.formatConfigJson !== formatConfigJson
+      if (mappingChanged) {
         throw new FormatParseError(
           adapter.id,
           input.filename,
           'source bytes are already imported with a different mapping; undo the existing batch before importing with a new mapping',
         )
       }
+      return { project, adapter, db, sourceSha256, duplicate } as const
+    }
+    if (input.phraseMaster !== undefined) {
+      const probe = await probePhraseMasterPair(
+        input.bytes,
+        input.filename,
+        input.phraseMaster.bytes,
+        input.phraseMaster.filename,
+      )
+      if (probe.status !== 'matched' && probe.status !== 'not-required') {
+        throw new FormatParseError(adapter.id, input.filename, `Phrase master companion: ${probe.status}`)
+      }
+      if (probe.status === 'matched' || probe.literalSegments > 0) {
+        formatConfigJson = serializePhraseMxliffFormatConfig(probe.config)
+      }
+    }
+    const rawImported = await adapter.import({
+      bytes: input.bytes,
+      filename: input.filename,
+      sourceLocale: project.sourceLocale,
+      targetLocale: project.targetLocale,
+      ...(adapter.id === PHRASE_MXLIFF_ADAPTER_ID || formatConfigJson === undefined
+        ? {}
+        : { formatConfigJson }),
+    })
+    if (adapter.id === JSON_ADAPTER_ID) {
+      const value: unknown = JSON.parse(new TextDecoder().decode(input.bytes).replace(/^\uFEFF/u, ''))
+      if (typeof value === 'object' && value !== null && 'artifactKind' in value
+        && value.artifactKind === 'linguist-working-copy') {
+        throw new FormatParseError(adapter.id, input.filename, 'working-copy metadata is not a source batch')
+      }
+    }
+    if (adapter.id === PHRASE_MXLIFF_ADAPTER_ID) {
+      const recovery = inspectPhraseRecovery(rawImported.segments)
+      if (recovery.status === 'unsupported-representation') {
+        throw new FormatParseError(adapter.id, input.filename, 'Phrase target-only or unbalanced markers require manual source/master inspection')
+      }
+      if (recovery.status === 'needs-master' && input.phraseMaster === undefined) {
+        throw new FormatParseError(adapter.id, input.filename, 'Phrase markers require a verified master XLIFF companion')
+      }
+      if (recovery.status === 'needs-master' && formatConfigJson === undefined) {
+        throw new FormatParseError(adapter.id, input.filename, 'Phrase master did not verify the unresolved markers')
+      }
+    }
+    const imported = adapter.id === PHRASE_MXLIFF_ADAPTER_ID && formatConfigJson !== undefined
+      ? await adapter.import({
+          bytes: input.bytes,
+          filename: input.filename,
+          sourceLocale: project.sourceLocale,
+          targetLocale: project.targetLocale,
+          formatConfigJson,
+        })
+      : rawImported
+    return { project, adapter, db, sourceSha256, imported } as const
+  }
+
+  /** 只读预检执行与正式导入相同的格式探测、配置检查及新文件解析。 */
+  async previewAssetImport(
+    projectId: string,
+    input: ImportAssetInput,
+  ): Promise<{ status: 'ready' | 'skipped-duplicate'; formatId: string; segmentCount: number; sourceSha256: string; assetId?: string }> {
+    const prepared = await this.prepareImport(projectId, input)
+    return {
+      status: prepared.duplicate === undefined ? 'ready' : 'skipped-duplicate',
+      formatId: prepared.adapter.id,
+      segmentCount: prepared.duplicate === undefined ? prepared.imported.asset.segmentCount : prepared.duplicate.segmentCount,
+      sourceSha256: prepared.sourceSha256,
+      ...(prepared.duplicate === undefined ? {} : { assetId: prepared.duplicate.id }),
+    }
+  }
+
+  /**
+   * bytes + filename → 格式探测 → 解析 → source blob → 单事务插入 +
+   * 同事务回读验证（LA-INTAKE-007：段数/格式/语言对/source hash 任一项
+   * 失败即抛 IMPORT_VERIFICATION_FAILED，整批回滚）。
+   * asset id 内容寻址，先落盘只可能留下可幂等覆盖的孤儿 blob。
+   */
+  async importAsset(
+    projectId: string,
+    input: ImportAssetInput,
+  ): Promise<ImportAssetResult> {
+    const prepared = await this.prepareImport(projectId, input)
+    const { project, adapter, db, sourceSha256 } = prepared
+    if (prepared.duplicate !== undefined) {
+      const { duplicate } = prepared
       console.log(
         `[Linguist] 跳过项目内重复资产: 项目 ${projectId} 资产 ${duplicate.id}`,
       )
@@ -668,13 +742,7 @@ export class ProjectDelivery {
         unknownTagSummary: [],
       }
     }
-    const imported = await adapter.import({
-      bytes: input.bytes,
-      filename: input.filename,
-      sourceLocale: project.sourceLocale,
-      targetLocale: project.targetLocale,
-      ...(formatConfigJson === undefined ? {} : { formatConfigJson }),
-    })
+    const { imported } = prepared
     const assetPreview = createAsset({
       projectId: project.id,
       formatId: imported.asset.formatId,

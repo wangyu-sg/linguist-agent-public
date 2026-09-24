@@ -13,15 +13,19 @@ export interface ContextImportWorkerRequest {
   input: ImportContextDocInput
 }
 
-/** 抽取、关联和事务写入都在 CAT worker 内完成，主线程不搬运大表锚点。 */
-export async function importContextInWorker({ projectId, projectDir, input }: ContextImportWorkerRequest): Promise<ContextDoc> {
+/** 同一只读提取过程供预检和正式写入使用。 */
+export async function prepareContextImport(input: ImportContextDocInput) {
   const sha256 = sha256Hex(input.bytes)
   const extension = extname(input.filename).toLowerCase()
-  const kind: ContextDoc['kind'] = isContextDocImageExtension(extension)
-    ? 'image'
-    : 'doc'
+  const kind: ContextDoc['kind'] = isContextDocImageExtension(extension) ? 'image' : 'doc'
   const extraction = await extractContext(input.bytes, input.filename)
   const textExtract = formatContextExtractionText(extraction)
+  return { sha256, extension, kind, extraction, textExtract }
+}
+
+/** 抽取、关联和事务写入都在 CAT worker 内完成，主线程不搬运大表锚点。 */
+export async function importContextInWorker({ projectId, projectDir, input }: ContextImportWorkerRequest): Promise<ContextDoc> {
+  const { sha256, extension, kind, extraction, textExtract } = await prepareContextImport(input)
   const manifest = readProjectManifestFile(join(projectDir, 'project.json'))
   if (manifest.archivedAt !== undefined) throw new LinguistProjectArchivedError(projectId)
   const db = ProjectDatabase.open(join(projectDir, 'cat.db'), { projectId, trustedManifest: manifest })

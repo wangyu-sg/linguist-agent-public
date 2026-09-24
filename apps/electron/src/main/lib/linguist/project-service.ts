@@ -1309,6 +1309,13 @@ export class LinguistProjectService {
     return this.delivery.importAsset(projectId, input)
   }
 
+  previewAssetImport(
+    projectId: string,
+    input: ImportAssetInput,
+  ): Promise<{ status: 'ready' | 'skipped-duplicate'; formatId: string; segmentCount: number; sourceSha256: string; assetId?: string }> {
+    return this.delivery.previewAssetImport(projectId, input)
+  }
+
   previewWorkbookMapping(
     projectId: string,
     cwd: string,

@@ -1,8 +1,12 @@
 import { open, readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, resolve } from 'node:path'
 import {
+  FormatParseError,
   normalizeDelimitedHeader,
   parseDelimitedTable,
+  PHRASE_MXLIFF_ADAPTER_ID,
+  inspectPhraseRecovery,
+  parsePhraseMxliffFormatConfig,
   probePhraseMasterPair,
 } from '@linguist/cat-formats'
 import { sha256Hex } from '@linguist/cat-core'
@@ -20,7 +24,9 @@ import type {
 } from '@linguist/cat-tools'
 import { LinguistCatInvalidArgumentError } from '@linguist/cat-tools'
 import { errorCodeOf, LinguistImportTooLargeError } from './errors'
+import { runLinguistContextPrepareWorker } from './cat-job-worker-client'
 import { createDefaultCatFormatRegistry } from './format-registry'
+import { parseTermReference, parseTmReference } from './project-resource-parsers'
 import type { LinguistProjectService } from './project-service'
 
 const CONTEXT_EXTENSIONS = new Set([
@@ -29,6 +35,7 @@ const CONTEXT_EXTENSIONS = new Set([
 ])
 const TM_EXTENSIONS = new Set(['.tmx', '.sdltm'])
 const TB_EXTENSIONS = new Set(['.tbx', '.sdltb'])
+const BATCH_EXTENSIONS = new Set(['.mxliff', '.xlf', '.xliff', '.mqxliff', '.sdlxliff', '.csv', '.tsv', '.json', '.xlsx'])
 const FILE_LIMIT = 500
 const SAFE_FAILURE_CODE = /^[A-Z][A-Z0-9_]{0,63}$/
 const AUTO_CSV_TERM_HEADERS = new Set(['term', '术语', '源术语'].map(normalizeDelimitedHeader))
@@ -49,6 +56,9 @@ interface IntakeEntry {
 function safeImportFailureMessage(error: unknown): string {
   const code = errorCodeOf(error)
   const publicCode = code !== 'UNKNOWN' && SAFE_FAILURE_CODE.test(code) ? code : 'INTERNAL'
+  if (error instanceof FormatParseError) {
+    return `导入失败（${publicCode} / ${error.adapterId}）：${error.detail.slice(0, 240)}`
+  }
   return `导入失败（${publicCode}）`
 }
 
@@ -252,12 +262,6 @@ export async function importProjectFile(
   } catch {
     throw new LinguistCatInvalidArgumentError('filePath', 'must resolve to a readable file')
   }
-  if (extname(entry.filename).toLowerCase() === '.mxliff') {
-    throw new LinguistCatInvalidArgumentError(
-      'filePath',
-      'Phrase split MXLIFF requires cat_import_resources with its master XLIFF',
-    )
-  }
   if (
     resourceKind !== 'context'
     && extname(entry.filename).toLowerCase() === '.xlsx'
@@ -287,17 +291,63 @@ export async function importProjectResources(
   // 项目级失败不能伪装成某一个文件的 partial failure；也不要先读用户文件再
   // 发现项目已归档或 cat.db 不健康。
   service.assertProjectWritable(projectId)
-  service.openProject(projectId)
+  const db = service.openProject(projectId)
   const { entries, failures, truncated } = await scanEntries(cwd, input.paths, input.recursive)
   const registry = createDefaultCatFormatRegistry()
   const items: LinguistImportResourceItem[] = [...failures]
-  const phraseSplits = entries.filter((entry) => extname(entry.filename).toLowerCase() === '.mxliff')
-  const phraseMasters = entries.filter((entry) => ['.xlf', '.xliff'].includes(extname(entry.filename).toLowerCase()))
+  const phraseSplits: IntakeEntry[] = []
+  const phraseFiles = new Set<string>()
+  const phraseIssues = new Map<string, string>()
+  const project = service.getProject(projectId)
+  const importedAssetsByHash = new Map(db.assets.listByProject().map((asset) => [asset.sourceSha256, asset]))
+  const duplicateMasterHashes = new Set<string>()
+  for (const entry of entries) {
+    if (!['.mxliff', '.xlf', '.xliff'].includes(extname(entry.filename).toLowerCase())) continue
+    try {
+      const bytes = (await readPickedFileWithinLimit(entry.path, LINGUIST_IMPORT_MAX_BYTES)).bytes
+      const adapter = await registry.detectBest(bytes, entry.filename)
+      if (adapter.id !== PHRASE_MXLIFF_ADAPTER_ID) continue
+      phraseFiles.add(entry.path)
+      const duplicate = importedAssetsByHash.get(sha256Hex(bytes))
+      if (duplicate !== undefined) {
+        const config = parsePhraseMxliffFormatConfig(duplicate.formatConfigJson, duplicate.originalFilename)
+        if (config !== undefined) duplicateMasterHashes.add(config.masterSha256)
+        continue
+      }
+      const parsed = await adapter.import({
+        bytes, filename: entry.filename,
+        sourceLocale: project.sourceLocale, targetLocale: project.targetLocale,
+      })
+      const recovery = inspectPhraseRecovery(parsed.segments)
+      if (recovery.status === 'unsupported-representation') {
+        phraseIssues.set(entry.path, `Phrase 包含仅在 Target 出现或未配对的标记：${recovery.keys.join('、')}`)
+      } else if (recovery.status === 'needs-master') {
+        phraseSplits.push(entry)
+      }
+    } catch {
+      // 格式错误由下方真实导入/预检返回；不把坏文件误作 master 候选。
+      if (extname(entry.filename).toLowerCase() === '.mxliff') phraseFiles.add(entry.path)
+    }
+  }
+  const phraseMasters = entries.filter((entry) =>
+    ['.xlf', '.xliff'].includes(extname(entry.filename).toLowerCase()) && !phraseFiles.has(entry.path))
   const phrasePairs = new Map<string, IntakeEntry>()
   const phrasePairMessages = new Map<string, string>()
-  const phraseIssues = new Map<string, string>()
   const phraseCandidateMasters = new Set<string>()
   const usedMasters = new Set<string>()
+  // 与待恢复 Phrase 同批选中的 XLIFF 可能是 master；未唯一配对前不能自动当独立批次导入。
+  if (phraseSplits.length > 0 || phraseIssues.size > 0 || duplicateMasterHashes.size > 0) {
+    for (const master of phraseMasters) phraseCandidateMasters.add(master.path)
+  }
+  for (const master of phraseMasters) {
+    if (!phraseCandidateMasters.has(master.path)) continue
+    try {
+      const bytes = (await readPickedFileWithinLimit(master.path, LINGUIST_IMPORT_MAX_BYTES)).bytes
+      if (duplicateMasterHashes.has(sha256Hex(bytes))) usedMasters.add(master.path)
+    } catch {
+      // 下方统一返回 needs-input；不可读的配套文件不自动当独立源批次导入。
+    }
+  }
   for (const split of phraseSplits) {
     let splitBytes: Uint8Array
     try {
@@ -307,6 +357,7 @@ export async function importProjectResources(
       continue
     }
     const ranked = []
+    const rejected: string[] = []
     for (const master of phraseMasters) {
       try {
         const probe = await probePhraseMasterPair(
@@ -315,40 +366,37 @@ export async function importProjectResources(
           (await readPickedFileWithinLimit(master.path, LINGUIST_IMPORT_MAX_BYTES)).bytes,
           master.filename,
         )
-        if (probe.score > 0) ranked.push({ master, probe })
+        if (probe.status === 'matched' || (probe.status === 'not-required' && probe.literalSegments > 0)) {
+          ranked.push({ master, probe })
+        } else {
+          if (rejected.length < 3) rejected.push(`${master.filename}: ${probe.status}${probe.sampleKeys.length > 0 ? ` [${probe.sampleKeys.join(', ')}]` : ''}`)
+        }
       } catch {
-        // 单个候选不可读/不可解析不阻断其他候选。
+        if (rejected.length < 3) rejected.push(`${master.filename}: parse-error`)
       }
     }
-    ranked.sort((left, right) => right.probe.score - left.probe.score)
     const best = ranked[0]
     if (best === undefined) {
-      phraseIssues.set(split.path, 'Phrase split 缺少可匹配的 master XLIFF')
-    } else if (best.probe.score === ranked[1]?.probe.score) {
-      const tied = ranked.filter((item) => item.probe.score === best.probe.score)
-      for (const item of tied) phraseCandidateMasters.add(item.master.path)
+      phraseIssues.set(split.path, `Phrase split 缺少可匹配的 master XLIFF${rejected.length > 0 ? `（${rejected.join('；')}）` : ''}`)
+    } else if (ranked.length > 1) {
+      const sampleKeys = [...new Set(ranked.flatMap((item) => [
+        ...item.probe.sampleKeys,
+        ...Object.keys(item.probe.config.mappings),
+      ]))].slice(0, 5)
       phraseIssues.set(
         split.path,
-        `Phrase split 存在多个同分 master 候选：${tied.map((item) => item.master.filename).join('、')}`,
-      )
-    } else if (best.probe.config.unmatchedSegments > 0 || best.probe.config.ambiguousSegments > 0) {
-      phraseCandidateMasters.add(best.master.path)
-      phraseIssues.set(
-        split.path,
-        `Phrase master ${best.master.filename} 的 Tag Mapping 不完整或有歧义：匹配 ${best.probe.config.matchedSegments}/${best.probe.config.placeholderSegments}，未匹配 ${best.probe.config.unmatchedSegments}，歧义 ${best.probe.config.ambiguousSegments}`,
+        `Phrase split 存在多个可接受但解释不唯一的 master 候选：${ranked.map((item) => item.master.filename).join('、')}${sampleKeys.length > 0 ? ` [${sampleKeys.join(', ')}]` : ''}`,
       )
     } else {
-      phraseCandidateMasters.add(best.master.path)
       phrasePairs.set(split.path, best.master)
       phrasePairMessages.set(
         split.path,
-        `已与 master ${best.master.filename} 唯一配对；Tag Mapping ${best.probe.config.matchedSegments}/${best.probe.config.placeholderSegments}`,
+        `已与 master ${best.master.filename} 唯一配对；Tag Mapping ${best.probe.config.matchedSegments}/${best.probe.config.placeholderSegments}，字面变量 ${best.probe.literalSegments}`,
       )
       usedMasters.add(best.master.path)
     }
   }
 
-  const masterResourceIds = new Map<string, string>()
   for (const entry of entries) {
     if (phraseCandidateMasters.has(entry.path)) continue
     const filename = entry.filename
@@ -391,7 +439,8 @@ export async function importProjectResources(
           await registry.detectBest(bytes, filename)
           resourceKind = 'batch'
         } catch {
-          if (CONTEXT_EXTENSIONS.has(extension)) resourceKind = 'context'
+          if (BATCH_EXTENSIONS.has(extension)) resourceKind = 'batch'
+          else if (CONTEXT_EXTENSIONS.has(extension)) resourceKind = 'context'
         }
       }
       if (resourceKind === undefined) {
@@ -414,17 +463,44 @@ export async function importProjectResources(
         }
       }
       assertEntryWithinLimit(entry, resourceKind)
+      const master = phrasePairs.get(entry.path)
       if (input.dryRun) {
         const maxBytes = resourceKind === 'batch'
           ? LINGUIST_IMPORT_MAX_BYTES
           : LINGUIST_RESOURCE_IMPORT_MAX_BYTES
         bytes ??= (await readPickedFileWithinLimit(entry.path, maxBytes)).bytes
-        items.push({ filename, status: 'ready', resourceKind, sourceSha256: sha256Hex(bytes) })
+        let status: LinguistImportResourceItem['status'] = 'ready'
+        let resourceId: string | undefined
+        if (resourceKind === 'batch') {
+          const preview = await service.previewAssetImport(projectId, {
+            bytes,
+            filename,
+            xlsxMapping,
+            ...(master === undefined ? {} : {
+              phraseMaster: {
+                bytes: (await readPickedFileWithinLimit(master.path, LINGUIST_IMPORT_MAX_BYTES)).bytes,
+                filename: master.filename,
+              },
+            }),
+          })
+          status = preview.status
+          resourceId = preview.assetId
+        } else if (resourceKind === 'context') {
+          await runLinguistContextPrepareWorker({ bytes, filename })
+        } else {
+          const project = service.getProject(projectId)
+          const reference = { bytes, filename, xlsxMapping }
+          if (resourceKind === 'tm') {
+            await parseTmReference(reference, project.sourceLocale, project.targetLocale)
+          } else {
+            await parseTermReference(reference, project.sourceLocale, project.targetLocale)
+          }
+        }
+        items.push({ filename, status, resourceKind, sourceSha256: sha256Hex(bytes),
+          ...(resourceId === undefined ? {} : { resourceId }) })
         continue
       }
-      const master = phrasePairs.get(entry.path)
       const imported = await importEntry(service, projectId, entry, resourceKind, xlsxMapping, master)
-      if (master !== undefined) masterResourceIds.set(master.path, imported.resourceId)
       items.push({
         filename,
         status: imported.status,
@@ -443,16 +519,14 @@ export async function importProjectResources(
       })
     }
   }
-  if (phraseSplits.length > 0) {
+  if (phraseCandidateMasters.size > 0) {
     for (const master of phraseMasters.filter((entry) => phraseCandidateMasters.has(entry.path))) {
-      const resourceId = masterResourceIds.get(master.path)
       const paired = usedMasters.has(master.path)
       items.push({
         filename: master.filename,
-        status: input.dryRun && paired ? 'ready' : resourceId === undefined ? 'needs-input' : 'imported',
+        status: paired ? 'supporting' : 'needs-input',
         resourceKind: 'batch',
-        ...(resourceId === undefined ? {} : { resourceId }),
-        message: paired ? 'Phrase master companion (content-verified)' : 'Phrase master 未能唯一配对 split MXLIFF',
+        message: paired ? 'Phrase master companion (content-verified)' : '此 XLIFF 与待恢复 Phrase 文件同批选中，但无法确认配对；若是独立批次，请单独导入',
       })
     }
   }

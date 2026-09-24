@@ -647,6 +647,7 @@ export function BulkImportSummary({
 }): React.ReactElement {
   const details = result.items.filter((item) =>
     (item.status === 'imported' && item.message !== undefined)
+    || item.status === 'supporting'
     || item.status === 'needs-input'
     || item.status === 'unsupported'
     || item.status === 'failed')
@@ -670,7 +671,7 @@ export function BulkImportSummary({
           {details.slice(0, 20).map((item, index) => (
             <li key={`${item.filename}-${index}`} className="break-words">
               <span className="font-medium text-foreground/75">{item.filename}</span>
-              {' · '}{item.status === 'imported' ? '已导入' : item.status === 'needs-input' ? '需要确认' : item.status === 'unsupported' ? '不支持' : '失败'}
+              {' · '}{item.status === 'imported' ? '已导入' : item.status === 'supporting' ? '配套 master' : item.status === 'needs-input' ? '需要确认' : item.status === 'unsupported' ? '不支持' : '失败'}
               {item.message === undefined ? '' : ` · ${item.message}`}
               {item.status === 'needs-input' && item.filename.toLowerCase().endsWith('.xlsx')
                 ? '；请在“导入资源 → 选择文件…”中单独选择以确认 Sheet/列映射'

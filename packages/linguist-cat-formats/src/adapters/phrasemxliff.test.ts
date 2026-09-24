@@ -9,6 +9,7 @@ import { assertRoundTrip } from '../testing/index'
 import {
   PHRASE_MXLIFF_ADAPTER_ID,
   PhraseMxliffAdapter,
+  inspectPhraseRecovery,
   probePhraseMasterPair,
   serializePhraseMxliffFormatConfig,
 } from './phrasemxliff'
@@ -112,6 +113,65 @@ describe('PhraseMxliffAdapter direct-child targets and round-trip', () => {
 })
 
 describe('PhraseMxliffAdapter master Tag Mapping', () => {
+  test('区分原生标签、变化包装、待恢复占位符和 Target 独有标记', () => {
+    const segment = (source: string, target: string) => ({ key: 'one', ordinal: 0, source, target })
+    expect(inspectPhraseRecovery([segment('A <ph id="1">{0}</ph>', 'B <ph id="1">{0}</ph>')]).status).toBe('not-required')
+    expect(inspectPhraseRecovery([segment('{u>A<u}', '{u>B<u}')]).status).toBe('not-required')
+    expect(inspectPhraseRecovery([segment('{u>A', 'B')]).status).toBe('unsupported-representation')
+    expect(inspectPhraseRecovery([segment('<u}A{u>', 'B')]).status).toBe('unsupported-representation')
+    expect(inspectPhraseRecovery([segment('A', '{u>B<u}')]).status).toBe('unsupported-representation')
+    expect(inspectPhraseRecovery([segment('A', 'B {0}')]).status).toBe('unsupported-representation')
+    expect(inspectPhraseRecovery([segment('A {0}', 'B {1}')]).status).toBe('unsupported-representation')
+    expect(inspectPhraseRecovery([segment('A {0}', 'B {0}')]).status).toBe('needs-master')
+  })
+
+  test('同文本文字变量由 master 验证；强身份冲突不退化成正文匹配', async () => {
+    const literal = bytes('<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><trans-unit id="one"><source>Gain {0} points</source><target>获得 {0} 分</target></trans-unit></body></file></xliff>')
+    const literalMaster = bytes('<xliff version="1.2"><file><body><trans-unit id="one"><source>Gain {0} points</source></trans-unit></body></file></xliff>')
+    const literalProbe = await probePhraseMasterPair(literal, 'split.xlf', literalMaster, 'master.xlf')
+    expect(literalProbe.status).toBe('not-required')
+    expect(literalProbe.literalSegments).toBe(1)
+
+    const split = bytes('<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><group m:para-id="p1"><context context-type="x-key">expected</context><trans-unit id="one" m:para-id="p1"><source>Open {0} world</source></trans-unit></group></body></file></xliff>')
+    const wrongMaster = bytes('<xliff version="1.2"><file><body><trans-unit id="other"><source>Open <ph id="1">{0}</ph> world</source></trans-unit></body></file></xliff>')
+    const conflict = await probePhraseMasterPair(split, 'split.mxliff', wrongMaster, 'wrong.xlf')
+    expect(conflict.status).toBe('needs-master')
+    expect(conflict.config.matchedSegments).toBe(0)
+    expect(conflict.sampleKeys).toContain('one')
+
+    const ambiguousMaster = bytes('<xliff version="1.2"><file><body><trans-unit id="literal"><source>Gain {0} points</source></trans-unit><trans-unit id="tag"><source>Gain <ph id="1">{0}</ph> points</source></trans-unit></body></file></xliff>')
+    expect((await probePhraseMasterPair(literal, 'split.xlf', ambiguousMaster, 'master.xlf')).status).toBe('ambiguous')
+    expect((await probePhraseMasterPair(literal, 'split.xlf', bytes('<xliff><file><body></body></file>'), 'broken.xlf')).status).toBe('parse-error')
+    expect((await probePhraseMasterPair(literal, 'split.xlf', new Uint8Array([0xff]), 'broken.xlf')).status).toBe('parse-error')
+
+    const partialSplit = bytes('<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><trans-unit id="a"><source>Open {0} world</source></trans-unit><trans-unit id="b"><source>Close {0} world</source></trans-unit></body></file></xliff>')
+    const partialMaster = bytes('<xliff version="1.2"><file><body><trans-unit id="a"><source>Open <ph id="1">{0}</ph> world</source></trans-unit></body></file></xliff>')
+    const partial = await probePhraseMasterPair(partialSplit, 'split.xlf', partialMaster, 'master.xlf')
+    expect(partial.status).toBe('partial')
+    expect(partial.sampleKeys).toContain('b')
+
+    const repeatedTarget = bytes('<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><trans-unit id="one"><source>A {0}</source><target>B {0} and {0}</target></trans-unit></body></file></xliff>')
+    const tagMaster = bytes('<xliff version="1.2"><file><body><trans-unit id="one"><source>A <ph id="1">{0}</ph></source></trans-unit></body></file></xliff>')
+    const repeatedProbe = await probePhraseMasterPair(repeatedTarget, 'split.xlf', tagMaster, 'master.xlf')
+    expect(repeatedProbe.status).toBe('unsupported-representation')
+    expect(repeatedProbe.sampleKeys).toContain('one')
+    const repeatedLiteral = bytes('<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><trans-unit id="one"><source>Gain {0} points</source><target>Gain {0} or {0} points</target></trans-unit></body></file></xliff>')
+    expect((await probePhraseMasterPair(repeatedLiteral, 'split.xlf', literalMaster, 'master.xlf')).status).toBe('not-required')
+
+    const mixedSplit = bytes('<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><trans-unit id="one" resname="strong"><source>x {0} {0}</source><target>x {0} {0}</target></trans-unit></body></file></xliff>')
+    const mixedMaster = bytes('<xliff version="1.2"><file><body><trans-unit id="one" resname="strong"><source>x <ph id="1">{0}</ph> {0}</source></trans-unit></body></file></xliff>')
+    expect((await probePhraseMasterPair(mixedSplit, 'split.xlf', mixedMaster, 'master.xlf')).status).toBe('ambiguous')
+  })
+
+  test('损坏的 Phrase XML 与反序包装不能通过预检', async () => {
+    const adapter = new PhraseMxliffAdapter()
+    const malformed = bytes('<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><trans-unit id="one"><source>A</source><target>B</target></trans-unit></file></xliff>')
+    await expect(adapter.import({ bytes: malformed, filename: 'broken.mxliff', sourceLocale: 'en-US', targetLocale: 'zh-CN' }))
+      .rejects.toBeInstanceOf(FormatParseError)
+    const split = bytes('<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><trans-unit id="one"><source>A {0}</source></trans-unit></body></file></xliff>')
+    expect((await probePhraseMasterPair(split, 'split.mxliff', malformed, 'broken.xlf')).status).toBe('parse-error')
+  })
+
   test('master mapping 可 rehydrate/dehydrate，且 stale mapping 拒绝导入', async () => {
     const split = bytes(`<xliff version="1.2" xmlns:m="http://www.memsource.com/mxlf/2.0"><file><body><trans-unit id="s1"><source>Open {0} world</source><target>打开 {0} 世界</target></trans-unit></body></file></xliff>`)
     const master = bytes(`<xliff version="1.2"><file><body><trans-unit id="m1"><source>Open <ph id="1">{0}</ph> world</source></trans-unit></body></file></xliff>`)

@@ -51,6 +51,7 @@ export { SDLXLIFF_ADAPTER_ID, SdlXliffAdapter } from './adapters/sdlxliff'
 export {
   PHRASE_MXLIFF_ADAPTER_ID,
   PhraseMxliffAdapter,
+  inspectPhraseRecovery,
   probePhraseMasterPair,
   parsePhraseMxliffFormatConfig,
   serializePhraseMxliffFormatConfig,
