@@ -4,11 +4,11 @@
 
 ## 当前发布与上一版本
 
-本地源码版本为 `0.18.3`，正在准备发布；以下 `0.18.2` 仍是已核验的最新公开 Release。发布状态以远端 CI 和资产核验为准。
+`0.18.3` 已于 `2026-09-24T13:30:02Z` [公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.3)，为 latest，非草稿、非预发布；Tag 指向 `c48cc29df58957f13860d9bdecf239acca1e5495`。main CI `36004258620` 的完整测试与 macOS arm64 打包纵向验证通过，Auto Release `36005182997` 成功。公开资产为 arm64 DMG、ZIP 和 `latest-mac.yml`；下载的 ZIP 大小与 SHA-512 匹配清单，包内含正确仓库的 `app-update.yml`。解压后应用在宿主权限下通过深度严格签名验证，指定签名要求与本机已安装的 `0.18.2` 一致。本机安装版未替换，实际在线更新安装尚未验证。
 
-`0.18.2` 已于 `2026-09-23T07:22:48Z`（北京时间 15:22:48）[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.2)，为 latest，非草稿、非预发布；源码/Tag 为 `a7679a5df7de8ecdad934f880c802ab92f118207`。提前移植 [Proma #2085](https://github.com/proma-ai/Proma/pull/2085) 的 GPT-6 Sol/Luna 支持与 Pi `0.87.1`，默认 Release 仅构建 macOS arm64；Proma 稳定源码基线仍为 `v0.19.57`。main CI `35830019276` 的类型、测试、边界、许可、构建与 arm64 打包纵向验证通过，Auto Release `35830663733` 成功。公开资产为 arm64 DMG、ZIP 和 `latest-mac.yml`；下载的 ZIP 大小与 SHA-512 匹配清单，解压后应用在宿主权限下通过深度严格签名验证，签名身份与已安装的 `0.18.1` 一致。真实 Codex 账号调用与用户执行的在线更新安装尚未验证。
+上一已发布版本 `0.18.2` 于 `2026-09-23T07:22:48Z`（北京时间 15:22:48）[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.2)，源码/Tag 为 `a7679a5df7de8ecdad934f880c802ab92f118207`。提前移植 [Proma #2085](https://github.com/proma-ai/Proma/pull/2085) 的 GPT-6 Sol/Luna 支持与 Pi `0.87.1`，默认 Release 仅构建 macOS arm64；Proma 稳定源码基线仍为 `v0.19.57`。main CI `35830019276` 的类型、测试、边界、许可、构建与 arm64 打包纵向验证通过，Auto Release `35830663733` 成功。公开资产为 arm64 DMG、ZIP 和 `latest-mac.yml`；下载的 ZIP 大小与 SHA-512 匹配清单，解压后应用在宿主权限下通过深度严格签名验证，签名身份与已安装的 `0.18.1` 一致。真实 Codex 账号调用与用户执行的在线更新安装尚未验证。
 
-上一已发布版本 `0.18.1` 于 `2026-09-22T14:35:44Z` [公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.1)，源码/Tag 为 `c85c7d8e206737adf92340001290f0bdf0a70620`。该版合入 Proma `v0.19.57` 与 Pi `0.86.1`，完成三模式界面和会话/右侧工作区状态修复。main CI `35739485354`、Auto Release `35740252627` 成功；用户随后授权替换日用安装，正式 arm64 包已安装并启动，点击检查更新显示“已是最新版本”。详见 [0.18.1 实施与发布验证](./docs/release/VALIDATION_0_18_1.md)。
+此前版本 `0.18.1` 于 `2026-09-22T14:35:44Z` [公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.1)，源码/Tag 为 `c85c7d8e206737adf92340001290f0bdf0a70620`。该版合入 Proma `v0.19.57` 与 Pi `0.86.1`，完成三模式界面和会话/右侧工作区状态修复。main CI `35739485354`、Auto Release `35740252627` 成功；用户随后授权替换日用安装，正式 arm64 包已安装并启动，点击检查更新显示“已是最新版本”。详见 [0.18.1 实施与发布验证](./docs/release/VALIDATION_0_18_1.md)。
 
 替换前的日用 `0.17.75` 本地修复包缺少 `Contents/Resources/app-update.yml`；真实 updater 读取该安装配置复现 `ENOENT`，发生在网络请求与签名检查之前。正式 `0.18.0` 包配置正常。本轮经用户明确授权，以正式 `0.18.1` 包替换并备份旧应用，恢复更新检查；项目和会话保留。
 
