@@ -2,7 +2,7 @@
 name: in-app-browser
 description: Proma 内嵌受管浏览器使用指南。当用户要求打开、展示、访问、浏览或操作网页，或提到小红书、X/Twitter、LinkedIn、BOSS 直聘、登录后站内搜索、动态页面、截图或本地 HTML/React 预览时使用。对邮件、消息、文档、项目管理等已有匹配专用 MCP/API/CLI 的服务，必须优先使用专用工具；仅在没有匹配工具、工具无法完成当前能力、网络搜索工具不可用或无法取得足够好的结果、或用户明确要求网页时改用 Browser。浏览器工具出现在当前工具列表时，必须先阅读本 Skill 再进行网页操作；不要因为工具直接可见就跳过。
 group: proma
-version: "1.1.3"
+version: "1.1.5"
 ---
 
 # Proma In-App Browser
@@ -24,10 +24,10 @@ Proma 的 `Browser*` 工具控制当前会话关联的受管浏览器。网页�
 ## 操作流程
 
 0. **首次使用先等待用户确认风险告知**：首次 Browser 调用会打开应用内声明，提示平台可能将 Agent 操作或高频行为识别为自动化，造成验证码、限流、风控或封禁。此时停止网页操作，等待用户在面板中确认；确认后再重试当前步骤，绝不尝试绕过。
-1. **复用当前会话的浏览器与标签**：先 `BrowserListTabs`；需要新页面时再 `BrowserNewTab`，完成后主动用 `BrowserCloseTab` 关闭不再需要的 Agent 标签。需要结束整个浏览器会话时调用 `BrowserClose`，它会销毁当前受管浏览器会话及其全部标签。用户手动切换页面不会改变 Agent 的默认操作目标；但 Agent 通过 `BrowserNewTab`、`BrowserSelectTab` 或 `BrowserPreviewOpen` 选择的标签会同步激活到用户可见的浏览器面板。标签总数超过 20 时，浏览器还会按最近使用时间自动回收旧 Agent 标签，绝不自动关闭用户标签、前台标签或当前工作标签。需要操作其他 tab 时明确传该 `tabId`。
+1. **复用当前会话的浏览器与标签**：已有可靠的 `tabId` 就直接复用；目标标签不明确时才调用 `BrowserListTabs`。需要新页面时再 `BrowserNewTab`，完成后主动用 `BrowserCloseTab` 关闭不再需要的 Agent 标签。需要结束整个浏览器会话时调用 `BrowserClose`，它会销毁当前受管浏览器会话及其全部标签。用户手动切换页面不会改变 Agent 的默认操作目标；但 Agent 通过 `BrowserNewTab`、`BrowserSelectTab` 或 `BrowserPreviewOpen` 选择的标签会同步激活到用户可见的浏览器面板。标签总数超过 20 时，浏览器还会按最近使用时间自动回收旧 Agent 标签，绝不自动关闭用户标签、前台标签或当前工作标签。需要操作其他 tab 时明确传该 `tabId`。
 2. **先观察再操作**：调用 `BrowserObserve` 获取 URL、标题和可交互元素 ref；默认返回 240 个元素（约 160 个可交互元素优先 + 80 个语义上下文），只使用最新观察结果中的 ref。快照过大或目标不在其中时，用 `BrowserFind` 按 role/name 返回少量新 ref。一次 `BrowserObserve` 或 `BrowserFind` 会整体作废同一 tab 的旧 ref；时间流逝本身不会失效，但应在下一次观察/定位前完成依赖该 ref 的操作。 观察用于建立操作依据，不是每步固定开销。AX 在同一页面状态下只返回 Root 或不足以定位时，先核对实际工作 tab/frame；有真实 DOM 依据后改用限定结构化读取。导航和 ref 代际变化仍需重新绑定；可复用定位规则，不可复用失效节点。不要把 ref 的新代际误称为一定发生了真实页面导航。
-3. **页面变化后重新观察**：导航、点击导致的重渲染或切换标签也会让旧 ref 失效，必须再次 `BrowserObserve` 或 `BrowserFind`。
-4. **等待页面状态**：已知点击后的预期状态时，优先 `BrowserAct` 把点击和等待合并为一次串行操作；其他情况使用 `BrowserWaitFor`（URL 片段、可见文本或 CSS selector），设置合理超时后再观察验证。
+3. **页面变化后按需重新定位**：导航、重渲染或切换标签后不能复用失效的 ref；后续动作需要新 ref 时才调用 `BrowserObserve` 或 `BrowserFind`。已有可靠 selector 或 `BrowserAct` 的条件结果足够时，不为了每次页面变化追加观察。
+4. **等待页面状态**：已知点击后的预期状态时，优先 `BrowserAct` 把点击、等待和结果检查合并为一次串行操作；其他情况使用 `BrowserWaitFor`（URL 片段、可见文本或 CSS selector）并设置合理超时。返回结果已证明预期状态时继续操作；需要新 ref 或结果有歧义时再定向观察。
 5. **优先原子工具而非 JS**：滚动内部信息流用 `BrowserScroll`；读取正文或区域用 `BrowserExtract`；选择原生 `<select>` 用 `BrowserSelectOption`；处理悬浮菜单/拖拽用 `BrowserHover`/`BrowserDrag`；文件选择用 `BrowserUpload`。只有这些固定操作仍不够时才使用 `BrowserExecuteJavaScript`。
 6. **完成动作并核验**：完成一个业务动作后，检查其实际结果。BrowserAct 串行组合中，内部检查、等待和读回可以在同次调用完成，不要求每个物理 click/press 后再向模型返回一份 Observe。工具返回的 dispatched 只表示已派发；只有页面可归属的业务结果才证明保存或确认。已经包含有效结果的返回不再重复观察。身份、ref、焦点、保存或结果出现具体异常时，再追加针对性的读取。
 7. **按需截图**：语义结构足够时优先 Observe；需要视觉验证、布局或渲染证据时用 `BrowserScreenshot`。
@@ -39,7 +39,7 @@ Proma 的 `Browser*` 工具控制当前会话关联的受管浏览器。网页�
 - `BrowserObserve`：读取当前页面可访问性结构与最新 ref，并标出 `editable` 字段。默认 `maxElements=240`；仅在长信息流或复杂页面找不到目标时提高到 `400`（此时会读取更深的 AX tree），不要每轮都请求最大值。页面无响应时会在短暂等待后返回错误，可稍后重试或重新加载，不要连续并发 Observe。
 - `BrowserFind`：按可访问性 role 和/或 name 定位少量新 ref，适合完整 Observe 过大或找不到目标时使用。它与 `BrowserObserve` 一样会作废该 tab 的全部旧 ref。
 - `BrowserClick`：点击指定 ref；页面会短暂高亮目标，方便用户确认。
-- `BrowserAct`：支持原有 click+wait，以及互斥的 steps 串行组合。steps 只执行一串有界动作，复用原生 Browser 控制器、tab 队列和停止机制，不是并行调用或网页后台循环。可将已知的定位、前置检查、焦点、输入、等待和结构化读回合为一次调用；任一步失败/中止返回成功前缀、失败位置及未执行范围。组合成功不自动等于业务保存成功。不要重放已经成功的前缀，不虚构当前 schema 未提供的步骤。
+- `BrowserAct`：支持原有 click+wait，以及互斥的 steps 串行组合。steps 只执行一串有界动作，复用原生 Browser 控制器、tab 队列和停止机制，不是并行调用或网页后台循环。可将已知的定位、前置检查、焦点、输入、等待和结构化读回合为一次调用；任一步失败/中止返回成功前缀、失败位置及未执行范围。组合成功不自动等于业务保存成功。不要重放已经成功的前缀，不虚构当前 schema 未提供的步骤。预期下载时设 `expectDownload:true` 并保留返回的 `download.operationId`；若收据仍为 `pending`，用 `BrowserGetDownload` 按同一 ID 查询，不重复点击；同 tab 与时间窗口的关联只是候选，仍须核实文件对应的业务任务身份。
 - **BrowserAct 只读检查**：优先用 `probe:{selector,attributes?}`，返回 `{url,nodes:[{text,value,attributes}]}`。它在隔离环境执行固定 DOM 读取，`text` 是精确 textContent，`value` 是 input/textarea 的当前值（其他节点 null），属性仅含请求名称；结果按文档顺序，无匹配为 nodes 空数组。限定当前小组，用 `guard.expected` 比较实际身份/内容，用 `check` 比较最终结果；正常检查不另加 Observe 或自造哈希。自定义函数 `probe:{expression,args?}` 仍须同步只读；Chromium 可能拒绝某些只读 DOM 方法，遇到 `Possible side-effect` 直接改固定 DOM 检查，不反复重试或关闭保护。
 - `BrowserFill`：使用原生编辑命令全选后输入，避开页面对全选快捷键的拦截；替换指定 `ref` 的 input、textarea 或 contenteditable 编辑器内容；完整消息、搜索词和多行文本都优先用它。
 - `BrowserPress`：区分结构化按键与文本。`action:{kind:"key",key:"a",modifiers:["Meta"]}` 表示真实组合键；`action:{kind:"text",text:"Meta+A"}` 表示输入字面文本。支持的键以工具 schema 为准，显式按键不支持时返回错误，不能当文字输入。输入可绑定已观察到的目标，并复用焦点检查；自绘编辑器需验证实际输入节点，不把外层 cell 当输入框。已建立选区后，不重复聚焦破坏选区。旧字符串参数仅为兼容既有导航键和普通文本，新任务优先结构化参数。网站支持快捷键，不等于旧工具接口支持同名字符串。

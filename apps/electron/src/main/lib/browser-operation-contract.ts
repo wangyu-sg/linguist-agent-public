@@ -1,7 +1,7 @@
 import { Type } from 'typebox'
 import { Script } from 'node:vm'
 import { Check } from 'typebox/value'
-import type { BrowserActInput, BrowserPressInput, BrowserProbe, BrowserGuard } from '@proma/shared'
+import type { BrowserActInput, BrowserPressInput, BrowserProbe, BrowserGuard, BrowserOperationStatus, BrowserViewState, BrowserFailureReason, BrowserFailureTarget } from '@proma/shared'
 import { parseBrowserPressAction } from './browser-key-policy'
 
 const selector = Type.String({ minLength: 1, maxLength: 1000, description: 'CSS selector observed in the current page; no guessed targets.' })
@@ -20,6 +20,23 @@ const probe = Type.Union([Type.Object({
 const expected = Type.Unknown({ description: 'Complete expected JSON, compared strictly without trimming or text normalization.' })
 const guard = Type.Object({ probe, expected }, { additionalProperties: false, description: 'Re-read immediately before mutation; mismatch prevents dispatch.' })
 const text = Type.String({ maxLength: 10000, description: 'Exact literal text including spaces, Unicode and line breaks; never interpreted as keys.' })
+
+export class BrowserKnownFailure extends Error {
+  constructor(readonly reasonCode: BrowserFailureReason, message: string, readonly target?: BrowserFailureTarget) {
+    super(message)
+    this.name = 'BrowserKnownFailure'
+  }
+}
+
+export function browserFailureReceipt(error: BrowserKnownFailure, tabId?: string) {
+  return {
+    ...(tabId === undefined ? {} : { tabId }),
+    operationStatus: 'failed' as const,
+    reasonCode: error.reasonCode,
+    ...(error.target === undefined ? {} : { target: error.target }),
+    error: error.message,
+  }
+}
 const action = Type.Union([
   Type.Object({ kind: Type.Literal('text'), text }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal('key'), key: Type.String({ minLength: 1, description: 'Navigation key, a-z/A-Z or F1-F12. Unknown keys fail without typing.' }), modifiers: Type.Optional(Type.Array(Type.Union(['Alt', 'Control', 'Meta', 'Shift'].map(value => Type.Literal(value))), { uniqueItems: true, maxItems: 4, description: 'Modifier keys held for this event only.' })) }, { additionalProperties: false }),
@@ -49,18 +66,19 @@ export const browserActSchema = Type.Object({
     ]), { minItems: 1, maxItems: 64, description: 'Flat bounded sequence on one tab; no branching, retries, loops or nested flows. Failed/unknown prefix is not replayed.' })),
   tabId: Type.Optional(Type.String({ minLength: 1, description: 'Required explicit tab for steps; legacy click defaults to the working tab.' })),
   timeoutMs: Type.Optional(Type.Number({ minimum: 250, maximum: 30000, description: 'Steps: total budget including queue wait, default/max 30000ms. Legacy click: wait budget, default 10000ms.' })),
+  expectDownload: Type.Optional(Type.Boolean({ description: 'Capture downloads from this tab during the bounded action. Correlation is a candidate, not proof of job/language/version identity.' })),
 }, { additionalProperties: false })
 
 function assertProbe(probe: BrowserProbe): void {
   if (probe.selector !== undefined) return
   // 只编译语法，不在宿主执行页面代码；读取仍由 Chromium 的 side-effect check 执行。
   new Script(`(${probe.expression})`)
-  if (probe.args !== undefined && JSON.stringify(probe.args).length > 64000) throw new Error('probe args 超过数据预算。')
+  if (probe.args !== undefined && JSON.stringify(probe.args).length > 64000) throw new BrowserKnownFailure('probe-too-large', 'probe args 超过数据预算。', { probe: 'expression' })
 }
 function assertGuard(guard: BrowserGuard): void {
   assertProbe(guard.probe)
   const json = JSON.stringify(guard.expected)
-  if (json === undefined || json.length > 64000) throw new Error('expected 须为不超过 64000 字符的 JSON。')
+  if (json === undefined || json.length > 64000) throw new BrowserKnownFailure('probe-too-large', 'expected 须为不超过 64000 字符的 JSON。', guard.probe.selector === undefined ? { probe: 'expression' } : { selector: guard.probe.selector })
 }
 
 export function assertBrowserPressInput(input: BrowserPressInput): void {
@@ -78,4 +96,12 @@ export function assertBrowserActInput(input: BrowserActInput): void {
     if (step.kind === 'fill') parseBrowserPressAction({ action: { kind: 'text', text: step.text } })
     if (step.kind === 'scroll' && (step.deltaY === undefined) === (step.position === undefined)) throw new Error('scroll 必须且只能提供 deltaY 或 position。')
   }
+}
+
+/** 仅供模型使用；完整 BrowserViewState 仍由 BrowserController 发布给 UI。 */
+export function browserStateReceipt(state: BrowserViewState, tabId: string, operationStatus: BrowserOperationStatus) {
+  const tab = state.tabs.find((item) => item.tabId === tabId)
+  return tab
+    ? { tabId, url: tab.url, title: tab.title, documentRevision: tab.documentRevision, loading: tab.loading, operationStatus }
+    : { tabId, operationStatus: 'unknown' as const, closed: true }
 }

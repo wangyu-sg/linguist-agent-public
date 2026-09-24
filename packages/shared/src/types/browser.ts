@@ -22,6 +22,7 @@ export type BrowserExecutionSource = 'user' | 'automation' | 'delegation'
 
 export type BrowserTraceAction = 'navigate' | 'observe' | 'find' | 'wait' | 'click' | 'act' | 'fill' | 'press' | 'hover' | 'drag' | 'scroll' | 'extract' | 'select' | 'upload' | 'dom' | 'script' | 'screenshot' | 'tab' | 'download' | 'popup'
 export type BrowserOperationStatus = 'dispatched' | 'verified' | 'failed' | 'unknown'
+export type BrowserFailureReason = 'stale-ref' | 'no-layout' | 'probe-too-large'
 
 /** 脱敏的浏览器操作账本项；绝不含输入正文、Cookie、截图或脚本全文。 */
 export interface BrowserTraceItem {
@@ -52,6 +53,7 @@ export interface BrowserTabSummary {
   tabId: string
   url: string
   title: string
+  documentRevision: number
   /** 页面声明的 HTTP(S) favicon；未提供或加载失败时 renderer 使用默认图标。 */
   favicon?: string
   loading: boolean
@@ -81,6 +83,30 @@ export interface BrowserViewState {
   trace: BrowserTraceItem[]
   /** 最近一条 Agent 操作，用于用户未查看工作 tab 时的非阻断活动提示。 */
   activity: BrowserTraceItem | null
+}
+
+/** 下载收据只证明受管标签产生了文件；业务作业、语言及版本仍须另行核对。 */
+export interface BrowserDownloadReceipt {
+  downloadId: string
+  sessionId: string
+  tabId: string
+  filename: string
+  state: 'in_progress' | 'completed' | 'cancelled' | 'interrupted'
+  startedAt: number
+  completedAt?: number
+  receivedBytes: number
+  totalBytes: number
+  filePath?: string
+  reason?: string
+}
+
+export interface BrowserExpectedDownloadReceipt {
+  operationId: string
+  tabId: string
+  correlation: 'pending' | 'candidate' | 'ambiguous' | 'unknown'
+  /** 仅按来源标签与动作时段关联，不能作为 Phrase 作业身份凭据。 */
+  businessIdentityVerified: false
+  downloads: BrowserDownloadReceipt[]
 }
 
 /** 通知 renderer 当前会话的受管浏览器已销毁。 */
@@ -120,6 +146,7 @@ export type BrowserInputAction =
   | { kind: 'text'; text: string }
   | { kind: 'key'; key: string; modifiers?: BrowserKeyModifier[] }
 export type BrowserTarget = { ref: string; selector?: never } | { selector: string; ref?: never }
+export type BrowserFailureTarget = BrowserTarget | { probe: 'expression' }
 export type BrowserInputTarget = BrowserTarget & { focus?: 'activate' | 'verify' }
 export type BrowserProbe =
   /** 固定只读 DOM 快照；按文档顺序返回 {url,nodes:[{text,value,attributes}]}。 */
@@ -145,14 +172,15 @@ export type BrowserSequenceStep = { stepId?: string; itemId?: string } & (
   | ({ kind: 'wait'; timeoutMs?: number } & BrowserGuard)
 )
 export type BrowserActInput =
-  | { ref: string; waitFor?: { kind: 'url' | 'text' | 'selector'; value: string }; timeoutMs?: number; tabId?: string; steps?: never }
-  | { steps: BrowserSequenceStep[]; tabId: string; timeoutMs?: number; ref?: never; waitFor?: never }
+  | { ref: string; waitFor?: { kind: 'url' | 'text' | 'selector'; value: string }; timeoutMs?: number; tabId?: string; expectDownload?: boolean; steps?: never }
+  | { steps: BrowserSequenceStep[]; tabId: string; timeoutMs?: number; expectDownload?: boolean; ref?: never; waitFor?: never }
 export interface BrowserSequenceResult {
   status: 'completed' | 'partial' | 'failed' | 'aborted' | 'unknown'
   tabId: string
   completedStepCount: number
   stoppedAt?: number
-  results: Array<{ stepId: string; itemId?: string; status: 'ok' | 'mismatch' | 'failed' | 'unknown'; value?: BrowserJsonValue }>
+  results: Array<{ stepId: string; itemId?: string; status: 'ok' | 'mismatch' | 'failed' | 'unknown'; value?: BrowserJsonValue; reasonCode?: BrowserFailureReason; target?: BrowserFailureTarget }>
   unexecutedFrom?: number
   timing: { queuedMs: number; elapsedMs: number; waitMs: number }
+  download?: BrowserExpectedDownloadReceipt
 }

@@ -10,10 +10,10 @@
 | Generated / Overlay | 2 |
 | Main Host Seam | 8 |
 | Renderer Host Seam | 3 |
-| Temporary Deviation | 61 |
-| 当前精确 ledger | 290 |
+| Temporary Deviation | 64 |
+| 当前精确 ledger | 293 |
 
-账本使用 schema v3；每个条目都记录 `kind`、`owner`、`mergePolicy`、具体理由，以及 Host Seam 的稳定 `hook`。Linguist Extension 位于允许根，不计入 Proma Core Touchpoint。精确文件只维护在 JSON，避免双写漂移。
+账本使用 schema v3；每个条目都记录 `kind`、`owner`、`mergePolicy`、具体理由，以及 Host Seam 的稳定 `hook`。Linguist Extension 位于允许根，不计入 Proma Core Touchpoint。精确文件只维护在 JSON，避免双写漂移。`CONTEXT.md` 是 LA 领域用语文件，仅按精确路径允许。
 
 ## 规则
 
@@ -44,6 +44,8 @@
 本轮另外登记三处最小内部合同清理：FileBrowser 只接受唯一生产调用已提供的必填 `roots`，删除未使用的 `rootPath` 入口及两个专用 helper；Utility 启动删除零生产调用的取消分类器。目录加载保护与启动握手不变，均以精确条目记录，在上游完成等价删除后退役。
 
 2026-09-23 提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力与 Pi `0.87.1`；新增 6 个临时触点。Pi 的 `getAvailable()` 尚未列出 Sol/Luna，模型拉取继续使用合并目录，并由 `pi-gpt6-models.test.ts` 验证。稳定上游基线具备等价行为后逐项退役。
+
+本轮通用协作新增三个临时触点：等待参数归一化与 utility→main RPC 的业务预算一致；指定文件在创建子会话前预检并交付。它们分别以等待/取消和文件输入回归为退役条件，不扩大 CAT 领域路径权限。
 
 ### 对应证据入口
 

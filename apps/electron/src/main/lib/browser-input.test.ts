@@ -1,6 +1,40 @@
 import { expect, test } from 'bun:test'
 import { parseBrowserPressAction } from './browser-key-policy'
-import { assertBrowserActInput, assertBrowserPressInput, browserActSchema } from './browser-operation-contract'
+import { BrowserKnownFailure, assertBrowserActInput, assertBrowserPressInput, browserActSchema, browserFailureReceipt, browserStateReceipt } from './browser-operation-contract'
+import type { BrowserViewState } from '@proma/shared'
+
+test('浏览器动作回执指向实际操作标签，不携带用户标签和历史记录', () => {
+  const state = {
+    activeTabId: 'user-tab', agentTabId: 'agent-tab', url: 'https://user.example/', title: '用户页面',
+    tabs: [
+      { tabId: 'user-tab', url: 'https://user.example/', title: '用户页面', documentRevision: 2, loading: false },
+      { tabId: 'agent-tab', url: 'https://agent.example/', title: '工作页面', documentRevision: 7, loading: false },
+    ],
+    trace: Array.from({ length: 30 }, (_, index) => ({ id: `${index}`, summary: '历史记录' })),
+  } as BrowserViewState
+  expect(browserStateReceipt(state, 'agent-tab', 'dispatched')).toEqual({
+    tabId: 'agent-tab', url: 'https://agent.example/', title: '工作页面', documentRevision: 7, loading: false, operationStatus: 'dispatched',
+  })
+})
+
+test('已识别浏览器失败返回稳定原因、目标和原始错误', () => {
+  const stale = new BrowserKnownFailure('stale-ref', '元素引用已失效', { ref: 'r7' })
+  expect(browserFailureReceipt(stale, 'agent-tab')).toEqual({
+    tabId: 'agent-tab', operationStatus: 'failed', reasonCode: 'stale-ref', target: { ref: 'r7' }, error: '元素引用已失效',
+  })
+  expect(browserFailureReceipt(new BrowserKnownFailure('no-layout', '截图为空'), 'agent-tab')).toEqual({
+    tabId: 'agent-tab', operationStatus: 'failed', reasonCode: 'no-layout', error: '截图为空',
+  })
+  try {
+    assertBrowserActInput({ tabId: 'agent-tab', steps: [{ kind: 'read', probe: { expression: '() => 1', args: 'x'.repeat(64_001) } }] })
+    throw new Error('过大的 probe 应被拒绝')
+  } catch (error) {
+    expect(error).toBeInstanceOf(BrowserKnownFailure)
+    expect(browserFailureReceipt(error as BrowserKnownFailure, 'agent-tab')).toMatchObject({
+      tabId: 'agent-tab', reasonCode: 'probe-too-large', target: { probe: 'expression' }, error: 'probe args 超过数据预算。',
+    })
+  }
+})
 
 test('旧快捷键写法在派发前拒绝，普通正文和导航仍可输入', () => {
   for (const key of ['Meta+A', 'Control+A', 'Shift+Enter', 'F8']) {

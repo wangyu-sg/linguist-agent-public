@@ -1,11 +1,14 @@
 import { beforeAll, beforeEach, expect, mock, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { AgentSessionMeta, LinguistTurnContextV1 } from '@proma/shared'
 
 type CollaborationToolsModule = typeof import('./agent-collaboration-tools')
 
 interface ToolDefinition {
   name: string
-  execute: (toolCallId: string, params: unknown) => Promise<unknown>
+  execute: (toolCallId: string, params: unknown, signal?: AbortSignal) => Promise<unknown>
 }
 
 const parentContext: LinguistTurnContextV1 = {
@@ -33,6 +36,7 @@ const capturedRunInputs: Record<string, unknown>[] = []
 let collaborationTools: CollaborationToolsModule
 
 mock.module('./agent-session-manager', () => ({
+  deleteAgentSession: (sessionId: string) => { sessions.delete(sessionId) },
   createAgentSession: (
     title: string,
     channelId: string,
@@ -72,7 +76,7 @@ mock.module('./agent-headless-runner-registry', () => ({
   ) => {
     capturedRunInput = input
     capturedRunInputs.push(input)
-    if (typeof input.userMessage === 'string' && input.userMessage.startsWith('继续')) {
+    if (typeof input.userMessage === 'string' && input.userMessage.startsWith('继续') && !input.userMessage.startsWith('继续等待')) {
       callbacks.onComplete([])
     }
     return Promise.resolve()
@@ -83,6 +87,12 @@ mock.module('./agent-headless-runner-registry', () => ({
 mock.module('./agent-model-selection', () => ({
   assertEnabledModelForChannel: ({ modelId }: { modelId: string }) => modelId,
   listEnabledAgentModels: () => [],
+}))
+
+mock.module('./agent-workspace-manager', () => ({
+  getProjectFilesPath: () => '/nonexistent-child-project',
+  getWorkspaceAttachedDirectories: () => [],
+  getWorkspaceAttachedFiles: () => [],
 }))
 
 mock.module('./linguist/project-service', () => ({
@@ -148,6 +158,12 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
     effectiveModelId: 'deepseek-v4-pro',
     delegation: { thinkingLevel: 'max' },
   })
+
+  const list = tools.find((tool) => tool.name === 'mcp__collaboration__list_delegations')!
+  const listed = await list.execute('list-call', {}) as { details: { delegations: Array<Record<string, unknown>> } }
+  expect(listed.details.delegations[0]).toMatchObject({ status: 'running', resultAvailable: false })
+  expect(listed.details.delegations[0]).not.toHaveProperty('goal')
+  expect(listed.details.delegations[0]).not.toHaveProperty('resultSummary')
 
   await delegate.execute('tool-call-2', { task: '普通协作任务' })
   expect(capturedRunInput?.linguistContext).toMatchObject({
@@ -276,4 +292,77 @@ test('Linguist 委派续跑从持久化子会话绑定重建 Context', async () 
     },
     delegationStatus: 'completed',
   })
+})
+
+test('等待超时与取消只释放等待，子会话仍需显式停止', async () => {
+  const sdk = {
+    defineTool: (definition: ToolDefinition) => definition,
+  } as unknown as typeof import('@earendil-works/pi-coding-agent')
+  const tools = collaborationTools.buildPiCollaborationTools(sdk, {
+    sessionId: parent.id,
+    channelId: parent.channelId!,
+    workspaceId: parent.workspaceId,
+    permissionMode: parent.permissionMode,
+  } as Parameters<CollaborationToolsModule['buildPiCollaborationTools']>[1]) as ToolDefinition[]
+  const delegate = tools.find((tool) => tool.name === 'mcp__collaboration__delegate_agent')!
+  const wait = tools.find((tool) => tool.name === 'mcp__collaboration__wait_for_delegations')!
+  const stop = tools.find((tool) => tool.name === 'mcp__collaboration__stop_delegation')!
+  const continued = tools.find((tool) => tool.name === 'mcp__collaboration__continue_delegation')!
+
+  const started = await delegate.execute('wait-cancel-start', { task: '保持运行供等待测试' }) as {
+    details: { delegation: { delegationId: string } }
+  }
+  const delegationId = started.details.delegation.delegationId
+  const timedOut = await wait.execute('wait-short-timeout', {
+    delegationIds: [delegationId], timeoutSeconds: 0.001,
+  }) as { details: { status: string; runningCount: number } }
+  expect(timedOut.details).toMatchObject({ status: 'timeout', runningCount: 1 })
+
+  const abortWait = new AbortController()
+  const waiting = wait.execute('wait-abort', { delegationIds: [delegationId] }, abortWait.signal)
+  abortWait.abort()
+  await expect(waiting).rejects.toBeDefined()
+
+  await stop.execute('wait-stop', { delegationId })
+  const abortContinuation = new AbortController()
+  const continuing = continued.execute('continue-abort', {
+    delegationId, message: '继续等待后续结果',
+  }, abortContinuation.signal)
+  abortContinuation.abort()
+  await expect(continuing).rejects.toBeDefined()
+
+  const stillRunning = await wait.execute('wait-after-abort', {
+    delegationIds: [delegationId], timeoutSeconds: 0.001,
+  }) as { details: { status: string; runningCount: number } }
+  expect(stillRunning.details).toMatchObject({ status: 'timeout', runningCount: 1 })
+  await stop.execute('continue-stop', { delegationId })
+})
+
+test('必需文件缺失时返回 blocked-input，不创建子会话或启动 runner', async () => {
+  const parentCwd = mkdtempSync(join(tmpdir(), 'collab-missing-'))
+  try {
+    const sdk = {
+      defineTool: (definition: ToolDefinition) => definition,
+    } as unknown as typeof import('@earendil-works/pi-coding-agent')
+    const tools = collaborationTools.buildPiCollaborationTools(sdk, {
+      sessionId: parent.id,
+      channelId: parent.channelId!,
+      workspaceId: parent.workspaceId,
+      workspaceSlug: 'test-project',
+      agentCwd: parentCwd,
+      allowedRoots: [parentCwd],
+    } as Parameters<CollaborationToolsModule['buildPiCollaborationTools']>[1]) as ToolDefinition[]
+    const delegate = tools.find(tool => tool.name === 'mcp__collaboration__delegate_agent')!
+    const sessionsBefore = sessions.size
+    const result = await delegate.execute('missing-input-1', {
+      task: '核验指定文件',
+      inputs: [{ path: 'absent.xlf' }],
+    }) as { details: { status: string; inputs: Array<{ state: string; reason: string }> } }
+    expect(result.details.status).toBe('blocked-input')
+    expect(result.details.inputs[0]).toMatchObject({ state: 'blocked-input', reason: '文件不存在' })
+    expect(sessions.size).toBe(sessionsBefore)
+    expect(capturedRunInputs).toHaveLength(0)
+  } finally {
+    rmSync(parentCwd, { recursive: true, force: true })
+  }
 })

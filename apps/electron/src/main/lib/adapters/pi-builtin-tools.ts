@@ -10,14 +10,16 @@ import type { AutomationLinguistCapture } from '@proma/shared'
  */
 
 import { Type } from 'typebox'
-import { browserActSchema, browserPressSchema } from '../browser-operation-contract'
+import { BrowserKnownFailure, browserActSchema, browserFailureReceipt, browserPressSchema, browserStateReceipt } from '../browser-operation-contract'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import type { AgentToolResult } from '@earendil-works/pi-agent-core'
 import { AGENT_IPC_CHANNELS, getTerminalProfilesForPlatform, normalizePathForCompare, parseTerminalProfile } from '@proma/shared'
 import type {
   AgentWorkspace,
   BrowserActInput,
+  BrowserOperationStatus,
   BrowserPressInput,
+  BrowserViewState,
   CreateAutomationInput,
   LinguistTurnContextV1,
   PromaPermissionMode,
@@ -130,6 +132,27 @@ function jsonToolResult(payload: unknown): AgentToolResult<unknown> {
     content: [{ type: 'text', text: serialized.text }],
     details: serialized.details,
   } as AgentToolResult<unknown>
+}
+
+function throwBrowserKnownFailure(error: unknown, tabId?: string): never {
+  if (!(error instanceof BrowserKnownFailure)) throw error
+  // Pi 只把抛出的异常标为 tool error；错误正文仍保留原始信息与稳定分类。
+  throw new Error(JSON.stringify(browserFailureReceipt(error, tabId)), { cause: error })
+}
+
+async function browserActionResult(
+  sessionId: string,
+  requestedTabId: string | undefined,
+  operationStatus: BrowserOperationStatus,
+  action: (tabId: string) => Promise<BrowserViewState>,
+): Promise<AgentToolResult<unknown>> {
+  const tabId = browserController.resolveAgentTabId(sessionId, requestedTabId)
+  try {
+    const state = await action(tabId)
+    return jsonToolResult(browserStateReceipt(state, tabId, operationStatus))
+  } catch (error) {
+    return throwBrowserKnownFailure(error, tabId)
+  }
 }
 
 function numberOrUndefined(value: unknown): number | undefined {
@@ -992,7 +1015,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       parameters: Type.Object({ url: Type.String({ description: 'A URL, bare domain, or search query. Explicit URLs and recognizable hostnames open directly; other text is searched with Google. about:blank is supported for an empty page.' }), tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab, independent of the tab visible to the user.' })) }),
       async execute(_id, params, signal?: AbortSignal) {
         const args = params as Record<string, unknown>
-        return jsonToolResult(await browserController.navigate(ctx.sessionId, typeof args.url === 'string' ? args.url : '', typeof args.tabId === 'string' ? args.tabId : undefined, signal))
+        return browserActionResult(ctx.sessionId, typeof args.tabId === 'string' ? args.tabId : undefined, 'verified',
+          (tabId) => browserController.navigate(ctx.sessionId, typeof args.url === 'string' ? args.url : '', tabId, signal))
       },
     }),
     sdk.defineTool({
@@ -1043,17 +1067,43 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       parameters: Type.Object({ ref: Type.String({ description: 'Element reference from BrowserObserve.' }), tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab, independent of the tab visible to the user.' })) }),
       async execute(_id, params, signal?: AbortSignal) {
         const args = params as Record<string, unknown>
-        return jsonToolResult(await browserController.click(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', typeof args.tabId === 'string' ? args.tabId : undefined, signal))
+        return browserActionResult(ctx.sessionId, typeof args.tabId === 'string' ? args.tabId : undefined, 'dispatched',
+          (tabId) => browserController.click(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', tabId, signal))
       },
     }),
     sdk.defineTool({
       name: 'BrowserAct',
       label: '执行网页串行操作',
-      description: 'Execute either the original ref click+wait or bounded steps (mutually exclusive). Steps run serially under one tab queue, at most 64 steps and 30 seconds, with immediate guards, focus protection, read/check/wait probes and stop/partial results. Prefer fixed DOM probes {selector,attributes?}; they return {url,nodes:[{text,value,attributes}]} without page scripts or hashes. Custom expression probes remain synchronous and side-effect checked. Batch known edits and checks; no background mutation loops. A completed sequence proves only its supplied conditions, not persistence without a save condition. Never replay the successful prefix after partial/unknown results.',
+      description: 'Execute either the original ref click+wait or bounded steps (mutually exclusive). Steps run serially under one tab queue, at most 64 steps and 30 seconds, with immediate guards, focus protection, read/check/wait probes and stop/partial results. Prefer fixed DOM probes {selector,attributes?}; they return {url,nodes:[{text,value,attributes}]} without page scripts or hashes. Custom expression probes remain synchronous and side-effect checked. Batch known edits and checks; no background mutation loops. Set expectDownload for a download-producing action; its receipt identifies a candidate file, not the Phrase job/language/version. A completed sequence proves only its supplied conditions, not persistence without a save condition. Never replay the successful prefix after partial/unknown results.',
       parameters: browserActSchema,
       async execute(_id, params, signal?: AbortSignal) {
-        const result = await browserController.act(ctx.sessionId, params as BrowserActInput, signal)
-        return jsonToolResult(result)
+        const input = params as BrowserActInput
+        let tabId = input.tabId
+        try {
+          if (input.expectDownload && _id && browserController.hasDownloadAttempt(ctx.sessionId, _id)) {
+            return jsonToolResult({ replayed: true, dispatchedAgain: false, download: browserController.getDownload(ctx.sessionId, { operationId: _id }) })
+          }
+          if (input.steps) return jsonToolResult(await browserController.act(ctx.sessionId, input, signal, _id))
+          tabId = browserController.resolveAgentTabId(ctx.sessionId, input.tabId)
+          const result = await browserController.act(ctx.sessionId, { ...input, tabId }, signal, _id)
+          if (!('state' in result)) return jsonToolResult(result)
+          const operationStatus = result.wait?.matched === false ? 'unknown' : result.wait ? 'verified' : 'dispatched'
+          return jsonToolResult({ ...browserStateReceipt(result.state, tabId, operationStatus), wait: result.wait, ...(result.download ? { download: result.download } : {}) })
+        } catch (error) {
+          return throwBrowserKnownFailure(error, tabId)
+        }
+      },
+    }),
+    sdk.defineTool({
+      name: 'BrowserGetDownload',
+      label: '查询浏览器下载',
+      description: 'Read a bounded download receipt by BrowserAct operationId or downloadId; omit both for the 10 most recent downloads from this Agent session. A single source-tab/time candidate does not prove the business job, language or version. Pending means check this receipt later rather than clicking Download again.',
+      parameters: Type.Object({
+        operationId: Type.Optional(Type.String({ description: 'BrowserAct tool call ID returned in its expected download receipt.' })),
+        downloadId: Type.Optional(Type.String({ description: 'Stable ID for one DownloadItem.' })),
+      }, { additionalProperties: false }),
+      async execute(_id, params) {
+        return jsonToolResult(browserController.getDownload(ctx.sessionId, params as { operationId?: string; downloadId?: string }))
       },
     }),
     sdk.defineTool({
@@ -1063,7 +1113,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       parameters: Type.Object({ ref: Type.String({ description: 'Input reference from BrowserObserve.' }), text: Type.String({ description: 'Text to enter.' }), tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab, independent of the tab visible to the user.' })) }),
       async execute(_id, params, signal?: AbortSignal) {
         const args = params as Record<string, unknown>
-        return jsonToolResult(await browserController.fill(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', typeof args.text === 'string' ? args.text : '', typeof args.tabId === 'string' ? args.tabId : undefined, signal))
+        return browserActionResult(ctx.sessionId, typeof args.tabId === 'string' ? args.tabId : undefined, 'dispatched',
+          (tabId) => browserController.fill(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', typeof args.text === 'string' ? args.text : '', tabId, signal))
       },
     }),
     sdk.defineTool({
@@ -1112,7 +1163,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       parameters: browserPressSchema,
       async execute(_id, params, signal?: AbortSignal) {
         const { tabId, ...input } = params as BrowserPressInput & { tabId?: string }
-        return jsonToolResult(await browserController.press(ctx.sessionId, input, tabId, signal))
+        return browserActionResult(ctx.sessionId, tabId, 'dispatched',
+          (resolvedTabId) => browserController.press(ctx.sessionId, input, resolvedTabId, signal))
       },
     }),
     sdk.defineTool({
@@ -1122,7 +1174,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       parameters: Type.Object({ ref: Type.String({ description: 'Element reference from the latest BrowserObserve or BrowserFind result.' }), tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab.' })) }),
       async execute(_id, params, signal?: AbortSignal) {
         const args = params as Record<string, unknown>
-        return jsonToolResult(await browserController.hover(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', typeof args.tabId === 'string' ? args.tabId : undefined, signal))
+        return browserActionResult(ctx.sessionId, typeof args.tabId === 'string' ? args.tabId : undefined, 'dispatched',
+          (tabId) => browserController.hover(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', tabId, signal))
       },
     }),
     sdk.defineTool({
@@ -1136,7 +1189,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       }),
       async execute(_id, params, signal?: AbortSignal) {
         const args = params as Record<string, unknown>
-        return jsonToolResult(await browserController.drag(ctx.sessionId, typeof args.sourceRef === 'string' ? args.sourceRef : '', typeof args.targetRef === 'string' ? args.targetRef : '', typeof args.tabId === 'string' ? args.tabId : undefined, signal))
+        return browserActionResult(ctx.sessionId, typeof args.tabId === 'string' ? args.tabId : undefined, 'dispatched',
+          (tabId) => browserController.drag(ctx.sessionId, typeof args.sourceRef === 'string' ? args.sourceRef : '', typeof args.targetRef === 'string' ? args.targetRef : '', tabId, signal))
       },
     }),
     sdk.defineTool({
@@ -1214,7 +1268,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       async execute(_id, params, signal?: AbortSignal) {
         const args = params as Record<string, unknown>
         const filePaths = Array.isArray(args.filePaths) ? args.filePaths.filter((value): value is string => typeof value === 'string') : []
-        return jsonToolResult(await browserController.upload(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', filePaths, typeof args.tabId === 'string' ? args.tabId : undefined, signal))
+        return browserActionResult(ctx.sessionId, typeof args.tabId === 'string' ? args.tabId : undefined, 'dispatched',
+          (tabId) => browserController.upload(ctx.sessionId, typeof args.ref === 'string' ? args.ref : '', filePaths, tabId, signal))
       },
     }),
     sdk.defineTool({
@@ -1224,14 +1279,19 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       parameters: Type.Object({ tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to the Agent working tab, independent of the tab visible to the user.' })) }),
       async execute(_id, params, signal?: AbortSignal) {
         const tabId = typeof (params as Record<string, unknown>).tabId === 'string' ? (params as Record<string, string>).tabId : undefined
-        const screenshot = await browserController.screenshot(ctx.sessionId, tabId, signal)
-        return {
-          content: [
-            { type: 'text', text: `已截取当前页面：${screenshot.url}` },
-            { type: 'image', data: screenshot.base64, mimeType: screenshot.mimeType },
-          ],
-          details: { url: screenshot.url, mimeType: screenshot.mimeType, bytes: Math.floor(screenshot.base64.length * 0.75) },
-        } as AgentToolResult<unknown>
+        const operationTabId = browserController.resolveAgentTabId(ctx.sessionId, tabId)
+        try {
+          const screenshot = await browserController.screenshot(ctx.sessionId, operationTabId, signal)
+          return {
+            content: [
+              { type: 'text', text: `已截取当前页面：${screenshot.url}` },
+              { type: 'image', data: screenshot.base64, mimeType: screenshot.mimeType },
+            ],
+            details: { url: screenshot.url, mimeType: screenshot.mimeType, bytes: Math.floor(screenshot.base64.length * 0.75) },
+          } as AgentToolResult<unknown>
+        } catch (error) {
+          return throwBrowserKnownFailure(error, operationTabId)
+        }
       },
     }),
     sdk.defineTool({
@@ -1241,14 +1301,15 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       parameters: Type.Object({ path: Type.String({ description: 'Absolute or current-workspace-relative path to an HTML file or directory with index.html.' }), tabId: Type.Optional(Type.String({ description: 'Optional tab id. Defaults to a new preview tab.' })) }),
       async execute(_id, params, signal?: AbortSignal) {
         const args = params as Record<string, unknown>
-        return jsonToolResult(await browserController.previewOpen(
+        const state = await browserController.previewOpen(
           ctx.sessionId,
           typeof args.path === 'string' ? args.path : '',
           typeof args.tabId === 'string' ? args.tabId : undefined,
           ctx.allowedRoots ?? [],
           ctx.agentCwd,
           signal,
-        ))
+        )
+        return jsonToolResult(browserStateReceipt(state, state.operationTabId, 'verified'))
       },
     }),
     sdk.defineTool({
@@ -1256,7 +1317,10 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       label: '列出浏览器标签',
       description: 'List all tabs in the current in-app browser session, including the user-visible tab and Agent working tab. Use tabId when intentionally operating another tab.',
       parameters: Type.Object({}),
-      async execute() { return jsonToolResult(await browserController.listTabs(ctx.sessionId)) },
+      async execute() {
+        const state = browserController.listTabs(ctx.sessionId)
+        return jsonToolResult({ activeTabId: state.activeTabId, agentTabId: state.agentTabId, tabs: state.tabs })
+      },
     }),
     sdk.defineTool({
       name: 'BrowserNewTab',
@@ -1265,7 +1329,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       parameters: Type.Object({ url: Type.Optional(Type.String({ description: 'Optional URL to navigate to.' })) }),
       async execute(_id, params) {
         const url = typeof (params as Record<string, unknown>).url === 'string' ? (params as Record<string, string>).url : undefined
-        return jsonToolResult(await browserController.createNewTab(ctx.sessionId, url))
+        const state = await browserController.createNewTab(ctx.sessionId, url)
+        return jsonToolResult(browserStateReceipt(state, state.operationTabId, 'verified'))
       },
     }),
     sdk.defineTool({
@@ -1276,7 +1341,7 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       async execute(_id, params) {
         const value = (params as Record<string, unknown>).tabId
         const tabId = typeof value === 'string' ? value : ''
-        return jsonToolResult(browserController.selectAgentTab(ctx.sessionId, tabId))
+        return jsonToolResult(browserStateReceipt(browserController.selectAgentTab(ctx.sessionId, tabId), tabId, 'verified'))
       },
     }),
     sdk.defineTool({
@@ -1287,7 +1352,8 @@ function buildBrowserTools(sdk: PiSdk, ctx: PiBuiltinToolsContext): ToolDefiniti
       async execute(_id, params) {
         const value = (params as Record<string, unknown>).tabId
         const tabId = typeof value === 'string' ? value : ''
-        return jsonToolResult(await browserController.closeTab(ctx.sessionId, tabId))
+        const state = await browserController.closeTab(ctx.sessionId, tabId)
+        return jsonToolResult({ tabId, closed: true, operationStatus: 'verified', activeTabId: state?.activeTabId ?? null, agentTabId: state?.agentTabId ?? null })
       },
     }),
     sdk.defineTool({
@@ -1606,22 +1672,27 @@ export async function buildPiBuiltinTools(
 
   // collaboration 桥接
   // 协作是 Proma 基础运行时能力；仅由工作区和委派上下文决定是否可用。
-  const collaborationAvailable = !!ctx.workspaceId &&
+  const collaborationEligible = !!ctx.workspaceId &&
     ctx.triggeredBy !== 'delegation'
+  let collaborationAvailable = false
 
-  if (collaborationAvailable) {
+  if (collaborationEligible) {
     try {
       const collaborationTools = buildPiCollaborationTools(sdk, {
         sessionId: ctx.sessionId,
         channelId: ctx.channelId,
         modelId: ctx.modelId,
         workspaceId: ctx.workspaceId,
+        workspaceSlug: ctx.workspaceSlug,
+        agentCwd: ctx.agentCwd,
+        allowedRoots: ctx.allowedRoots,
         permissionMode: ctx.permissionMode,
         triggeredBy: ctx.triggeredBy === 'external' ? 'user' : ctx.triggeredBy,
         // LA-HOST-SEAM: linguist-delegation
         linguistContext: ctx.linguistContext,
       })
       tools.push(...collaborationTools as ToolDefinition[])
+      collaborationAvailable = collaborationTools.length > 0
     } catch (error) {
       console.error('[Pi 桥接] 注入 collaboration 工具失败:', error)
     }

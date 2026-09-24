@@ -1,9 +1,10 @@
 import { app, BrowserWindow, WebContentsView, session as electronSession, type DownloadItem, type Session, type WebContents } from 'electron'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
-import type { BrowserActInput, BrowserInputTarget, BrowserTarget, BrowserProbe, BrowserGuard, BrowserPressInput, BrowserJsonValue, BrowserSequenceResult } from '@proma/shared'
-import { assertBrowserActInput, assertBrowserPressInput } from './browser-operation-contract'
+import type { BrowserActInput, BrowserInputTarget, BrowserTarget, BrowserProbe, BrowserGuard, BrowserPressInput, BrowserJsonValue, BrowserSequenceResult, BrowserDownloadReceipt, BrowserExpectedDownloadReceipt } from '@proma/shared'
+import { assertBrowserActInput, assertBrowserPressInput, BrowserKnownFailure } from './browser-operation-contract'
 import { realpath, stat } from 'node:fs/promises'
 import type { BrowserExecutionSource, BrowserOperationStatus, BrowserSessionClosed, BrowserTabFocusChange, BrowserTraceAction, BrowserTraceItem, BrowserViewLayout, BrowserViewState, BrowserTabState } from '@proma/shared'
 import { AGENT_IPC_CHANNELS } from '@proma/shared'
@@ -44,6 +45,20 @@ const ACTION_HIGHLIGHT_DURATION_MS = 900
 const MAX_BROWSER_SCRIPT_RESULT_CHARS = 64_000
 /** 国内网络下默认 Google 新标签页/搜索等待此时长后转向 Bing。 */
 const GOOGLE_DEFAULT_LOAD_TIMEOUT_MS = 3_000
+const MAX_DOWNLOAD_RECEIPTS = 200
+
+interface DownloadAttemptRecord {
+  sessionId: string
+  operationId: string
+  tabId: string
+  startedAt?: number
+  deadlineAt?: number
+  captureUntilAt?: number
+  downloadIds: Set<string>
+  ambiguous: boolean
+  uncertain: boolean
+  listeners: Set<() => void>
+}
 
 /** 下载文件名脱敏：去掉控制字符与路径穿越，替换 Windows 非法字符，兜底默认名，避免写入 Downloads 之外的路径。 */
 function sanitizeDownloadFilename(raw: string): string {
@@ -233,6 +248,8 @@ export class BrowserController {
   private readonly guardedSessions = new WeakSet<Session>()
   /** 下载事件属于 Electron Session，不能随 Proma 会话重复注册或闭包捕获已关闭的会话。 */
   private readonly downloadGuardedSessions = new WeakSet<Session>()
+  private readonly downloadReceipts = new Map<string, BrowserDownloadReceipt>()
+  private readonly downloadAttempts = new Map<string, DownloadAttemptRecord>()
   /** 自定义 partition 不继承 default session 的协议处理器，必须单独注册本地预览协议。 */
   private readonly previewProtocolSessions = new WeakSet<Session>()
   /** 同一前台 Agent Session 可同时拥有多个原生 WebContentsView（双 Pane）。 */
@@ -305,6 +322,7 @@ export class BrowserController {
         tabId: tab.tabId,
         url: tab.state.url,
         title: tab.state.title,
+        documentRevision: tab.documentRevision,
         ...(tab.favicon ? { favicon: tab.favicon } : {}),
         loading: tab.state.loading,
         openedByAgent: tab.openedByAgent,
@@ -471,7 +489,7 @@ export class BrowserController {
   private assertCurrentDocument(tab: BrowserTabRecord, generation: number, signal?: AbortSignal): void {
     throwIfBrowserOperationAborted(signal)
     if (tab.generation !== generation || tab.view.webContents.isDestroyed()) {
-      throw new Error('页面已变化或标签已关闭，请先重新调用 BrowserObserve。')
+      throw new BrowserKnownFailure('stale-ref', '页面已变化或标签已关闭，请先重新调用 BrowserObserve。')
     }
   }
 
@@ -533,6 +551,100 @@ export class BrowserController {
     })
   }
 
+  private downloadAttemptKey(sessionId: string, operationId: string): string {
+    return `${sessionId}\u0000${operationId}`
+  }
+
+  hasDownloadAttempt(sessionId: string, operationId: string): boolean {
+    return this.downloadAttempts.has(this.downloadAttemptKey(sessionId, operationId))
+  }
+
+  private createDownloadAttempt(sessionId: string, tabId: string, operationId: string): DownloadAttemptRecord {
+    const key = this.downloadAttemptKey(sessionId, operationId)
+    if (this.downloadAttempts.has(key)) throw new Error(`浏览器下载动作已派发；使用 BrowserGetDownload 查询 ${operationId}，不要重放点击。`)
+    const attempt: DownloadAttemptRecord = {
+      sessionId, operationId, tabId, downloadIds: new Set(), ambiguous: false, uncertain: false, listeners: new Set(),
+    }
+    this.downloadAttempts.set(key, attempt)
+    while (this.downloadAttempts.size > MAX_DOWNLOAD_RECEIPTS) {
+      const oldest = this.downloadAttempts.entries().next().value as [string, DownloadAttemptRecord] | undefined
+      if (!oldest || oldest[1].listeners.size > 0) break
+      this.downloadAttempts.delete(oldest[0])
+    }
+    return attempt
+  }
+
+  private expectedDownloadReceipt(attempt: DownloadAttemptRecord): BrowserExpectedDownloadReceipt {
+    const downloads = [...attempt.downloadIds]
+      .map((id) => this.downloadReceipts.get(id))
+      .filter((item): item is BrowserDownloadReceipt => item !== undefined)
+    const correlation = attempt.ambiguous || attempt.downloadIds.size > 1 ? 'ambiguous'
+      : attempt.downloadIds.size === 1 && downloads.length === 1 ? 'candidate'
+      : attempt.uncertain ? 'unknown'
+      : attempt.captureUntilAt !== undefined && Date.now() > attempt.captureUntilAt ? 'unknown' : 'pending'
+    return {
+      operationId: attempt.operationId,
+      tabId: attempt.tabId,
+      correlation,
+      businessIdentityVerified: false,
+      downloads: downloads.map((item) => ({ ...item })),
+    }
+  }
+
+  getDownload(sessionId: string, query: { operationId?: string; downloadId?: string } = {}): BrowserExpectedDownloadReceipt | BrowserDownloadReceipt | { downloads: BrowserDownloadReceipt[] } {
+    if (query.operationId && query.downloadId) throw new Error('只能指定 operationId 或 downloadId。')
+    if (query.operationId) {
+      const attempt = this.downloadAttempts.get(this.downloadAttemptKey(sessionId, query.operationId))
+      if (!attempt) throw new Error(`下载动作不存在或收据已过期: ${query.operationId}`)
+      return this.expectedDownloadReceipt(attempt)
+    }
+    if (query.downloadId) {
+      const receipt = this.downloadReceipts.get(query.downloadId)
+      if (!receipt || receipt.sessionId !== sessionId) throw new Error(`下载收据不存在或不属于当前会话: ${query.downloadId}`)
+      return { ...receipt }
+    }
+    return {
+      downloads: [...this.downloadReceipts.values()]
+        .filter((item) => item.sessionId === sessionId)
+        .slice(-10)
+        .map((item) => ({ ...item })),
+    }
+  }
+
+  private notifyDownloadChanged(downloadId: string): void {
+    for (const attempt of this.downloadAttempts.values()) {
+      if (attempt.downloadIds.has(downloadId)) {
+        for (const listener of attempt.listeners) listener()
+      }
+    }
+  }
+
+  private async waitForExpectedDownload(attempt: DownloadAttemptRecord, signal?: AbortSignal): Promise<BrowserExpectedDownloadReceipt> {
+    const remainingMs = Math.max(0, (attempt.deadlineAt ?? 0) - Date.now())
+    if (remainingMs > 0) {
+      await new Promise<void>((resolve) => {
+        let timer: ReturnType<typeof setTimeout>
+        const cleanup = (): void => {
+          clearTimeout(timer)
+          attempt.listeners.delete(check)
+          signal?.removeEventListener('abort', finish)
+        }
+        const finish = (): void => { cleanup(); resolve() }
+        const check = (): void => {
+          const receipt = this.expectedDownloadReceipt(attempt)
+          if (receipt.correlation === 'ambiguous'
+            || (receipt.correlation === 'candidate' && receipt.downloads[0]?.state !== 'in_progress')) finish()
+        }
+        attempt.listeners.add(check)
+        signal?.addEventListener('abort', finish, { once: true })
+        timer = setTimeout(finish, remainingMs)
+        if (signal?.aborted) finish()
+        else check()
+      })
+    }
+    return this.expectedDownloadReceipt(attempt)
+  }
+
   /**
    * 将受管浏览器里的下载固定保存到系统「下载」目录。
    * Electron 会在 will-download 回调返回后立即决定是否显示 Save As，因此必须同步
@@ -541,12 +653,50 @@ export class BrowserController {
   private handleDownload(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, item: DownloadItem): void {
     const url = item.getURL()
     const filename = sanitizeDownloadFilename(item.getFilename())
-    item.setSavePath(path.join(app.getPath('downloads'), filename))
+    const downloadId = randomUUID()
+    const parsed = path.parse(filename)
+    const savePath = path.join(app.getPath('downloads'), `${parsed.name || 'download'}-${downloadId}${parsed.ext}`)
+    const receipt: BrowserDownloadReceipt = {
+      downloadId,
+      sessionId: browserSession.sessionId,
+      tabId: tab.tabId,
+      filename,
+      state: 'in_progress',
+      startedAt: Date.now(),
+      receivedBytes: item.getReceivedBytes(),
+      totalBytes: item.getTotalBytes(),
+    }
+    this.downloadReceipts.set(downloadId, receipt)
+    while (this.downloadReceipts.size > MAX_DOWNLOAD_RECEIPTS) {
+      const oldest = this.downloadReceipts.keys().next().value
+      if (!oldest) break
+      this.downloadReceipts.delete(oldest)
+    }
+    const matches = [...this.downloadAttempts.values()].filter((attempt) => (
+      attempt.sessionId === browserSession.sessionId
+      && attempt.tabId === tab.tabId
+      && attempt.startedAt !== undefined
+      && attempt.captureUntilAt !== undefined
+      && receipt.startedAt >= attempt.startedAt
+      && receipt.startedAt <= attempt.captureUntilAt
+    ))
+    for (const attempt of matches) {
+      attempt.downloadIds.add(downloadId)
+      if (matches.length > 1) attempt.ambiguous = true
+    }
+    this.notifyDownloadChanged(downloadId)
+    item.setSavePath(savePath)
     item.pause()
     item.once('done', (_event, state) => {
+      receipt.state = state === 'completed' ? 'completed' : state === 'cancelled' ? 'cancelled' : 'interrupted'
+      receipt.completedAt = Date.now()
+      receipt.receivedBytes = item.getReceivedBytes()
+      receipt.totalBytes = item.getTotalBytes()
+      if (state === 'completed') receipt.filePath = savePath
+      this.notifyDownloadChanged(downloadId)
       if (!this.isManagedTabCurrent(browserSession, tab)) return
-      if (state === 'completed') this.trace(browserSession, tab, 'download', `已下载 ${filename}`, 'verified')
-      else this.trace(browserSession, tab, 'download', `下载 ${filename} 未完成（${state}）`, 'failed')
+      if (state === 'completed') this.trace(browserSession, tab, 'download', `已下载 ${filename}（收据 ${downloadId}）`, 'verified')
+      else this.trace(browserSession, tab, 'download', `下载 ${filename} 未完成（${state}；收据 ${downloadId}）`, 'failed')
     })
     void assertSafeBrowserDownloadUrl(url)
       .then(() => {
@@ -555,6 +705,7 @@ export class BrowserController {
         item.resume()
       })
       .catch(() => {
+        receipt.reason = 'unsafe-download-url'
         item.cancel()
         if (this.isManagedTabCurrent(browserSession, tab)) this.trace(browserSession, tab, 'download', '已阻止不安全或不受支持的下载', 'failed')
       })
@@ -842,6 +993,11 @@ export class BrowserController {
     return browserSession ? structuredClone(this.buildState(browserSession)) : null
   }
 
+  /** 在动作派发前固定 Agent 工作标签，避免用户切换显示标签后回执指向另一页。 */
+  resolveAgentTabId(sessionId: string, tabId?: string): string {
+    return this.getAgentTab(this.getOrCreateSession(sessionId), tabId).tabId
+  }
+
   listTabs(sessionId: string): BrowserViewState {
     const browserSession = this.getOrCreateSession(sessionId)
     this.assertRiskDisclaimerAcknowledged()
@@ -1101,7 +1257,7 @@ export class BrowserController {
   }
 
   /** Agent 新建工作 tab，并立即切到该标签让用户能看到接下来的操作。 */
-  async createNewTab(sessionId: string, url?: string): Promise<BrowserViewState> {
+  async createNewTab(sessionId: string, url?: string): Promise<BrowserViewState & { operationTabId: string }> {
     // 新会话由本方法直接创建 Agent 标签，不能经 getOrCreateSession 预建空白标签，
     // 否则携带 URL 时会留下一个无用的初始标签。
     this.assertRiskDisclaimerAcknowledged()
@@ -1113,8 +1269,8 @@ export class BrowserController {
     this.trace(browserSession, tab, 'tab', reclaimed > 0
       ? `Agent 新建并打开工作标签；已回收 ${reclaimed} 个最久未使用的 Agent 标签`
       : `Agent 新建并打开工作标签 ${tab.tabId}`)
-    if (url?.trim()) return this.navigate(sessionId, url, tab.tabId)
-    return structuredClone(this.buildState(browserSession))
+    if (url?.trim()) return { ...(await this.navigate(sessionId, url, tab.tabId)), operationTabId: tab.tabId }
+    return { ...structuredClone(this.buildState(browserSession)), operationTabId: tab.tabId }
   }
 
   /** 用户在浏览器面板中新建 tab；不会抢占 Agent 的工作 tab。 */
@@ -1169,7 +1325,7 @@ export class BrowserController {
     return structuredClone(this.buildState(browserSession))
   }
 
-  async previewOpen(sessionId: string, inputPath: string, tabId: string | undefined, allowedRoots: string[], baseDir?: string, signal?: AbortSignal): Promise<BrowserViewState> {
+  async previewOpen(sessionId: string, inputPath: string, tabId: string | undefined, allowedRoots: string[], baseDir?: string, signal?: AbortSignal): Promise<BrowserViewState & { operationTabId: string }> {
     const browserSession = this.getOrCreateSession(sessionId, allowedRoots)
     const releaseAgentOperation = this.acquireAgentOperation(browserSession)
     try {
@@ -1187,7 +1343,7 @@ export class BrowserController {
           await this.loadUrl(tab, preview.url, operationSignal)
           this.trace(browserSession, tab, 'navigate', `预览本地文件 ${preview.filePath.split(/[\\/]/).pop() ?? preview.filePath}`, 'verified')
           this.updateNavigationState(browserSession, tab)
-          return structuredClone(this.buildState(browserSession))
+          return { ...structuredClone(this.buildState(browserSession)), operationTabId: tab.tabId }
         } catch (error) {
           this.trace(browserSession, tab, 'navigate', error instanceof BrowserOperationAbortedError ? '本地预览已停止，结果未知' : '本地预览加载失败', error instanceof BrowserOperationAbortedError ? 'unknown' : 'failed')
           throw error
@@ -1448,7 +1604,7 @@ export class BrowserController {
 
   private resolveRef(tab: BrowserTabRecord, ref: string): RefEntry {
     const entry = tab.refs.get(ref)
-    if (!entry || entry.generation !== tab.generation) throw new Error('元素引用已失效，请先重新调用 browser_observe。')
+    if (!entry || entry.generation !== tab.generation) throw new BrowserKnownFailure('stale-ref', '元素引用已失效，请先重新调用 browser_observe。', { ref })
     return entry
   }
 
@@ -1488,8 +1644,8 @@ export class BrowserController {
     return target
   }
 
-  private clickRef(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, ref: string, signal?: AbortSignal): Promise<RefEntry> {
-    return this.clickInternal(browserSession, tab, { ref }, undefined, signal)
+  private clickRef(browserSession: BrowserSessionRecord, tab: BrowserTabRecord, ref: string, signal?: AbortSignal, dispatched?: () => void): Promise<RefEntry> {
+    return this.clickInternal(browserSession, tab, { ref }, undefined, signal, dispatched)
   }
 
   async click(sessionId: string, ref: string, tabId?: string, signal?: AbortSignal): Promise<BrowserViewState> {
@@ -1606,7 +1762,13 @@ export class BrowserController {
       expression: `(() => { const value = ${expression}; if (value && typeof value.then === 'function') throw new Error('probe 必须同步返回 JSON，不能返回 Promise/thenable'); const json = JSON.stringify(value); if (typeof json !== 'string' || json.length > ${MAX_BROWSER_SCRIPT_RESULT_CHARS}) throw new Error('probe 返回值须为不超过 ${MAX_BROWSER_SCRIPT_RESULT_CHARS} 字符的 JSON；截断结果不能用于核验'); return JSON.parse(json); })()`,
       contextId, returnByValue: true, awaitPromise: false, throwOnSideEffect: probe.selector === undefined, timeout: 2000,
     }, undefined, signal)
-    if (response.exceptionDetails) throw new Error(describeBrowserScriptException(response))
+    if (response.exceptionDetails) {
+      const message = describeBrowserScriptException(response)
+      if (message.includes('probe 返回值须为不超过')) {
+        throw new BrowserKnownFailure('probe-too-large', message, probe.selector === undefined ? { probe: 'expression' } : { selector: probe.selector })
+      }
+      throw new Error(message)
+    }
     const remote = response.result as { value?: BrowserJsonValue } | undefined
     if (!remote || !Object.hasOwn(remote, 'value')) throw new Error('probe 未返回 JSON。')
     return remote.value!
@@ -1729,18 +1891,41 @@ export class BrowserController {
     return this.runTabOperation(browserSession, tab, signal ?? browserSession.agentAbortController.signal, (operationSignal) => this.waitForInternal(browserSession, tab, condition, timeoutMs, operationSignal))
   }
 
-  async act(sessionId: string, input: BrowserActInput, signal?: AbortSignal): Promise<BrowserSequenceResult | { state: BrowserViewState; wait: { tabId: string; url: string; title: string; matched: boolean } | null }> {
+  async act(sessionId: string, input: BrowserActInput, signal?: AbortSignal, operationId?: string): Promise<BrowserSequenceResult | { state: BrowserViewState; wait: { tabId: string; url: string; title: string; matched: boolean } | null; download?: BrowserExpectedDownloadReceipt }> {
     assertBrowserActInput(input)
     const browserSession = this.getOrCreateSession(sessionId)
     this.assertRiskDisclaimerAcknowledged()
     const tab = this.getAgentTab(browserSession, input.tabId)
+    const attempt = input.expectDownload
+      ? this.createDownloadAttempt(sessionId, tab.tabId, operationId?.trim() || randomUUID())
+      : undefined
     if (!input.steps) {
-      return this.runTabOperation(browserSession, tab, signal ?? browserSession.agentAbortController.signal, async (operationSignal) => {
-        await this.clickRef(browserSession, tab, input.ref, operationSignal)
-        const wait = input.waitFor ? await this.waitForInternal(browserSession, tab, input.waitFor, input.timeoutMs ?? 10_000, operationSignal) : null
-        this.trace(browserSession, tab, 'act', '点击与等待', wait?.matched === false ? 'failed' : 'verified')
-        return { state: structuredClone(this.buildState(browserSession)), wait }
-      })
+      let dispatched = false
+      let result: { state: BrowserViewState; wait: { tabId: string; url: string; title: string; matched: boolean } | null }
+      try {
+        result = await this.runTabOperation(browserSession, tab, signal ?? browserSession.agentAbortController.signal, async (operationSignal) => {
+          if (attempt) {
+            attempt.startedAt = Date.now()
+            attempt.deadlineAt = attempt.startedAt + (input.timeoutMs ?? 10_000)
+            attempt.captureUntilAt = attempt.startedAt + 30_000
+          }
+          await this.clickRef(browserSession, tab, input.ref, operationSignal, () => { dispatched = true })
+          const wait = input.waitFor ? await this.waitForInternal(browserSession, tab, input.waitFor, input.timeoutMs ?? 10_000, operationSignal) : null
+          this.trace(browserSession, tab, 'act', '点击与等待', wait?.matched === false ? 'failed' : 'verified')
+          return { state: structuredClone(this.buildState(browserSession)), wait }
+        })
+      } catch (error) {
+        if (attempt) {
+          attempt.uncertain = true
+          attempt.deadlineAt = Date.now() - 1
+          if (!dispatched) attempt.captureUntilAt = Date.now() - 1
+        }
+        throw error
+      }
+      if (!attempt) return result
+      const download = await this.waitForExpectedDownload(attempt, signal ?? browserSession.agentAbortController.signal)
+      if (attempt.downloadIds.size > 0) attempt.captureUntilAt = Date.now()
+      return { ...result, download }
     }
     const requestedAt = Date.now()
     const timeout = new AbortController()
@@ -1752,6 +1937,11 @@ export class BrowserController {
       await this.runTabOperation(browserSession, tab, combined, async operationSignal => {
         startedAt = Date.now()
         result.timing.queuedMs = startedAt - requestedAt
+        if (attempt) {
+          attempt.startedAt = startedAt
+          attempt.deadlineAt = requestedAt + (input.timeoutMs ?? 30_000)
+          attempt.captureUntilAt = startedAt + 30_000
+        }
         const revision = tab.documentRevision
         let returnedChars = 0
         for (const [index, step] of input.steps!.entries()) {
@@ -1759,7 +1949,7 @@ export class BrowserController {
           const markDispatched = () => { dispatched = true }
           try {
             throwIfBrowserOperationAborted(operationSignal)
-            if (tab.view.webContents.isDestroyed() || tab.documentRevision !== revision) throw new Error('序列期间主文档已导航或标签已关闭。')
+            if (tab.view.webContents.isDestroyed() || tab.documentRevision !== revision) throw new BrowserKnownFailure('stale-ref', '序列期间主文档已导航或标签已关闭。')
             let value: BrowserJsonValue | undefined
             switch (step.kind) {
               case 'click': await this.clickInternal(browserSession, tab, step.target, step.guard, operationSignal, markDispatched); break
@@ -1780,7 +1970,7 @@ export class BrowserController {
                 const waitSignal = AbortSignal.any([operationSignal!, waitTimeout])
                 try {
                   while (true) {
-                    if (tab.view.webContents.isDestroyed() || tab.documentRevision !== revision) throw new Error('序列期间主文档已导航或标签已关闭。')
+                    if (tab.view.webContents.isDestroyed() || tab.documentRevision !== revision) throw new BrowserKnownFailure('stale-ref', '序列期间主文档已导航或标签已关闭。')
                     const actual = await this.readProbe(tab, step.probe, waitSignal)
                     if (isDeepStrictEqual(actual, step.expected)) break
                     await delay(100, undefined, { signal: waitSignal })
@@ -1789,19 +1979,28 @@ export class BrowserController {
                 break
               }
             }
-            if (tab.view.webContents.isDestroyed() || tab.documentRevision !== revision) throw new Error('序列期间主文档已导航或标签已关闭。')
+            if (tab.view.webContents.isDestroyed() || tab.documentRevision !== revision) throw new BrowserKnownFailure('stale-ref', '序列期间主文档已导航或标签已关闭。')
             const size = value === undefined ? 0 : JSON.stringify(value).length
-            if (returnedChars + size > MAX_BROWSER_SCRIPT_RESULT_CHARS) throw new Error('序列读取总量超过结果预算；请缩小组或 probe。')
+            if (returnedChars + size > MAX_BROWSER_SCRIPT_RESULT_CHARS) throw new BrowserKnownFailure('probe-too-large', '序列读取总量超过结果预算；请缩小组或 probe。')
             returnedChars += size
             result.results.push({ stepId: step.stepId ?? String(index), ...(step.itemId ? { itemId: step.itemId } : {}), status: 'ok', ...(value === undefined ? {} : { value }) })
             result.completedStepCount++
           } catch (error) {
             const mismatch = error instanceof BrowserGuardMismatch
             const unknown = dispatched && !mismatch
+            const target = error instanceof BrowserKnownFailure && error.target !== undefined
+              ? error.target
+              : 'target' in step && step.target !== undefined
+                ? step.target
+                : 'selector' in step && step.selector !== undefined
+                  ? { selector: step.selector }
+                  : 'probe' in step
+                    ? step.probe.selector === undefined ? { probe: 'expression' as const } : { selector: step.probe.selector }
+                    : undefined
             result.status = unknown ? 'unknown' : combined.aborted || operationSignal?.aborted ? 'aborted' : index > 0 ? 'partial' : 'failed'
             result.stoppedAt = index
             result.unexecutedFrom = index + 1
-            result.results.push({ stepId: step.stepId ?? String(index), ...(step.itemId ? { itemId: step.itemId } : {}), status: mismatch ? 'mismatch' : unknown ? 'unknown' : 'failed', value: mismatch ? error.actual : { error: error instanceof Error ? error.message : String(error) } })
+            result.results.push({ stepId: step.stepId ?? String(index), ...(step.itemId ? { itemId: step.itemId } : {}), status: mismatch ? 'mismatch' : unknown ? 'unknown' : 'failed', value: mismatch ? error.actual : { error: error instanceof Error ? error.message : String(error) }, ...(error instanceof BrowserKnownFailure ? { reasonCode: error.reasonCode } : {}), ...(target === undefined ? {} : { target }) })
             break
           }
         }
@@ -1816,6 +2015,17 @@ export class BrowserController {
     } finally {
       clearTimeout(timer)
       result.timing.elapsedMs = Date.now() - startedAt
+    }
+    if (attempt) {
+      if ((result.status === 'failed' || result.status === 'aborted') && result.completedStepCount === 0) {
+        attempt.deadlineAt = Date.now() - 1
+        attempt.captureUntilAt = Date.now() - 1
+      } else {
+        result.download = await this.waitForExpectedDownload(attempt, combined)
+        if (attempt.downloadIds.size > 0) attempt.captureUntilAt = Date.now()
+        result.timing.elapsedMs = Date.now() - startedAt
+      }
+      result.download ??= this.expectedDownloadReceipt(attempt)
     }
     this.trace(browserSession, tab, 'act', `串行操作 ${result.completedStepCount}/${input.steps.length}：${result.status}`, result.status === 'completed' ? 'verified' : result.status === 'unknown' ? 'unknown' : 'failed')
     return result
@@ -1947,12 +2157,12 @@ export class BrowserController {
       throwIfBrowserOperationAborted(operationSignal)
       if (image.isEmpty()) {
         this.trace(browserSession, tab, 'screenshot', '截图为空，已拒绝返回无效图片', 'failed')
-        throw new Error('截图为空：浏览器页面尚未完成可捕获布局，请稍后重试或改用 BrowserObserve。')
+        throw new BrowserKnownFailure('no-layout', '截图为空：浏览器页面尚未完成可捕获布局，请稍后重试或改用 BrowserObserve。')
       }
       const { width, height } = image.getSize()
       if (width <= 0 || height <= 0) {
         this.trace(browserSession, tab, 'screenshot', '截图尺寸无效，已拒绝返回无效图片', 'failed')
-        throw new Error('截图尺寸无效：浏览器页面尚未完成可捕获布局，请稍后重试或改用 BrowserObserve。')
+        throw new BrowserKnownFailure('no-layout', '截图尺寸无效：浏览器页面尚未完成可捕获布局，请稍后重试或改用 BrowserObserve。')
       }
       const buffer = image.toPNG()
       if (!isValidImageBytes('image/png', buffer)) {

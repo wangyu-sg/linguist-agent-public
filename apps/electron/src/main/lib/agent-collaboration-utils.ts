@@ -23,6 +23,14 @@ export const DEFAULT_DELEGATION_WAIT_SECONDS = 60 * 60
 /** 显式指定 timeoutSeconds 时允许的最大等待时长。 */
 export const MAX_DELEGATION_WAIT_SECONDS = 2 * 60 * 60
 
+export function normalizeDelegationWaitSeconds(value: unknown): number {
+  if (value === undefined) return DEFAULT_DELEGATION_WAIT_SECONDS
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > MAX_DELEGATION_WAIT_SECONDS) {
+    throw new Error(`timeoutSeconds 必须是大于 0 且不超过 ${MAX_DELEGATION_WAIT_SECONDS} 的有限数字`)
+  }
+  return value
+}
+
 /**
  * 为具有副作用的工具调用提供进程内幂等保护。
  *

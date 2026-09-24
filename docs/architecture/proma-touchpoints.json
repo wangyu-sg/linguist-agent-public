@@ -21,6 +21,7 @@
     "resources/linguist-roles/",
     ".gitignore",
     "AGENTS.md",
+    "CONTEXT.md",
     "CURRENT_FACTS.md",
     "CURRENT_FACTS_SIMPLE.md",
     "TODO.md",
@@ -382,6 +383,15 @@
       "reason": "通过既有 utility capability RPC 等待会话恢复，并以有序回调传递最终请求/响应观察；只传可克隆数据，业务记账留在主进程。固定上游无等价 hook；上游覆盖同一恢复顺序和请求证据合同后可归还。"
     },
     {
+      "file": "apps/electron/src/main/lib/agent-collaboration-inputs.ts",
+      "ticket": "LA-HOST-002",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-collaboration-file-input",
+      "reason": "通用委派在创建子会话前预检指定文件的真实路径、读取权限与可选哈希，并向子会话交付冻结副本或明确的可读引用；防止缺料后才启动核验。上游提供等价输入交付合同并通过预检与取消回归后退役。"
+    },
+    {
       "file": "apps/electron/src/main/lib/agent-collaboration-tools.ts",
       "ticket": "LA-HOST-002",
       "kind": "host-seam",
@@ -389,6 +399,15 @@
       "mergePolicy": "host-seam",
       "hook": "linguist-delegation",
       "reason": "在 Proma Collaboration 中注入受信 Linguist role、project binding、专业岗位冻结范围与 outcome；通用协作只继承项目身份。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/agent-collaboration-utils.ts",
+      "ticket": "LA-HOST-002",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-collaboration-wait-budget",
+      "reason": "通用委派等待参数统一验证有限数值、默认一小时和最长两小时，使主进程业务等待与 utility RPC 使用同一时长合同；上游具备等价合同与取消回归后退役。"
     },
     {
       "file": "apps/electron/src/main/lib/agent-error-utils.ts",
@@ -2135,6 +2154,15 @@
       "owner": "product-build",
       "mergePolicy": "keep-la",
       "reason": "设置只持久化 Linguist 编辑位置和项目会话 ID。"
+    },
+    {
+      "file": "apps/electron/src/utility/agent-runtime-request-timeout.ts",
+      "ticket": "LA-HOST-002",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-collaboration-wait-budget",
+      "reason": "仅 Collaboration wait/continue 的 utility→main RPC 使用业务等待预算加五秒传输余量，其他工具保留原有两分钟检测；上游具备等价预算与取消回归后退役。"
     },
     {
       "file": "apps/electron/src/utility/agent-runtime.ts",

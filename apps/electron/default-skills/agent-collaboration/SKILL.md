@@ -2,7 +2,7 @@
 name: agent-collaboration
 description: Proma 协作子 Agent Skill。用于独立并行探索、对抗审查、需要独立上下文的任务，以及 Linguist General 按用户目标安排的专业岗位交接。专业本地化交接可以顺序执行，不以并行为前提；清楚的小任务由父会话直接完成。
 group: proma
-version: "1.2.1"
+version: "1.2.2"
 ---
 
 # Proma Agent Collaboration
@@ -14,7 +14,7 @@ Proma 已提供内置 `collaboration` MCP 工具。你必须通过这些工具�
 可用工具：
 
 - `collaboration.list_available_agent_models`：查看全部已启用渠道中可用于协作子 Agent 的模型与 `channelId`。
-- `collaboration.delegate_agent`：创建单个真实子会话；可选传入 `thinkingLevel`（`off/minimal/low/medium/high/xhigh/max`）为子会话设置思考强度。**返回只代表启动成功，不代表子任务完成**。记下返回的 `delegationId`，后续凡是需要该子任务结果才能回复、决策或交付，都必须调用 `collaboration.wait_for_delegations` 收敛；只有完全独立的主线可以先继续。
+- `collaboration.delegate_agent`：创建单个真实子会话；可选传入 `thinkingLevel`（`off/minimal/low/medium/high/xhigh/max`）为子会话设置思考强度。明确文件输入放在 `inputs`，不能只把路径写进 `task`；必需文件无法交付时返回 `blocked-input`，不启动子任务。**启动返回不代表子任务完成**。记下返回的 `delegationId`，后续凡是需要该子任务结果才能回复、决策或交付，都必须调用 `collaboration.wait_for_delegations` 收敛；只有完全独立的主线可以先继续。
 - `collaboration.delegate_agents`：批量创建真实子会话，适合已经明确分片的大型并行任务；每个 `items[]` 可独立指定 `thinkingLevel`。**批量创建成功也不等于批次完成**。保存返回的全部 `delegationIds`，需要完整批次结果时必须用 `wait_for_delegations(mode=all)`。
 - `collaboration.wait_for_delegations`：父会话的结果收敛屏障。只要当前回复、下一步判断或交付依赖已委派任务，父会话必须在回复前调用；不能仅凭 delegate 工具返回就结束本轮或声称任务完成。`mode=any` 只用于明确接受部分结果的场景，完整交付使用 `mode=all`。
 - `collaboration.list_delegations`：查看当前父会话创建的子会话状态。
@@ -78,6 +78,7 @@ Proma 已提供内置 `collaboration` MCP 工具。你必须通过这些工具�
 - 小型并行任务优先拆 2-8 个子会话；大型扫描、批量审查、跨模块调研可以使用 `delegate_agents` 批量创建。
 - 每个子任务必须独立、自包含、可完成。
 - 委派说明里写清楚目标、范围、禁止事项、预期输出。
+- 文件任务将明确的相对或已授权绝对路径放进 `inputs`；需要固定版本时设 `snapshot` 或 `expectedSha256`。收据只说明文件可读或已复制，不说明子会话已经审阅。
 - 如需指定模型，先调用 `list_available_agent_models`，再从同一条模型记录传入 `channelId` 与 `modelId`；不传则继承父会话当前渠道和模型。
 - 如需控制计算成本或任务深度，为 `delegate_agent` 或每个 `delegate_agents.items[]` 传 `thinkingLevel`。不传时保持 Proma 新会话默认值；模型不支持请求档位时，运行时会归一化为该模型可用的最近档位。
 - 修改已存在子会话的强度时调用 `set_delegation_thinking_level`。该操作只影响下一轮/续跑，不会重启或篡改正在执行的当前 turn。
