@@ -24,12 +24,12 @@ import type { LinguistCatToolsDeps } from './types'
  */
 export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const runtime = createCatToolRuntime(deps)
-  const [projectSummaryTool, listAssetsTool, getSegmentsTool] =
+  const [projectSummaryTool, listBatchesTool, getSegmentsTool] =
     createProjectTools(runtime)
-  const [importResourcesTool, refreshProjectInventoryTool, importAssetTool] = createIntakeTools(runtime)
+  const [importResourcesTool, refreshProjectInventoryTool] = createIntakeTools(runtime)
   const [previewWorkbookMappingTool, saveWorkbookMappingTool] = createWorkbookTools(runtime)
   const [upsertVoiceProfileTool, addApprovedExemplarTool, getVoiceContextTool] = createVoiceTools(runtime)
-  const [exportAssetTool] = createDeliveryTools(runtime)
+  const [exportBatchTool] = createDeliveryTools(runtime)
   const [scanUnknownTagPatternsTool, saveTagProfileCandidateTool] = createTagTools(runtime)
   const [upsertTermsTool, deleteTermsTool, listTermConflictsTool, validateTermsTool] =
     createTerminologyTools(runtime)
@@ -52,11 +52,10 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
   const [confirmSegmentsTool] = createStageTools(runtime)
   return [
     projectSummaryTool,
-    listAssetsTool,
+    listBatchesTool,
     getSegmentsTool,
     importResourcesTool,
     refreshProjectInventoryTool,
-    importAssetTool,
     previewWorkbookMappingTool,
     saveWorkbookMappingTool,
     upsertVoiceProfileTool,
@@ -64,7 +63,7 @@ export function createLinguistCatTools(deps: LinguistCatToolsDeps) {
     getVoiceContextTool,
     scanUnknownTagPatternsTool,
     saveTagProfileCandidateTool,
-    exportAssetTool,
+    exportBatchTool,
     getTranslationContextTool,
     getProposalSnapshotTool,
     applyTranslationsTool,

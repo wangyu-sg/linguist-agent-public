@@ -2,13 +2,13 @@ import type { SegmentStatus } from '@linguist/cat-core'
 import type { ProjectDatabase } from '@linguist/cat-store'
 import { Type } from 'typebox'
 import {
-  LinguistCatAssetNotFoundError,
+  LinguistCatBatchNotFoundError,
   LinguistCatInvalidArgumentError,
 } from './errors'
 import { pageHasMore, resolvePage } from './pagination'
 import {
   CAT_TOOL_PAGE_LIMITS,
-  type CatAssetListItem,
+  type CatBatchListItem,
   type CatDeliveryStatus,
   type CatProjectSummaryResult,
   type CatSegmentIndexItem,
@@ -37,15 +37,15 @@ export function createProjectTools(runtime: CatToolRuntime) {
 
   const currentTaskFor = (
     db: ProjectDatabase,
-    assetId: string,
+    batchId: string,
   ): CatDeliveryStatus['currentTask'] => {
     if (deps.sessionId === undefined
       || (deps.linguistRole !== 'translator' && deps.linguistRole !== 'reviewer' && deps.linguistRole !== 'proofreader')) return null
-    const assetSegmentIds = new Set(db.segments.queryIds({ assetId }))
+    const batchSegmentIds = new Set(db.segments.queryIds({ assetId: batchId }))
     const state = db.stageEvidence.list().find(candidate =>
       candidate.sessionId === deps.sessionId
       && candidate.role === deps.linguistRole
-      && candidate.plan.segmentIds.some(segmentId => assetSegmentIds.has(segmentId)))
+      && candidate.plan.segmentIds.some(segmentId => batchSegmentIds.has(segmentId)))
     if (state === undefined) return null
     const completion = db.stageEvidence.getCompletion(state.stageRunId)
     return {
@@ -64,40 +64,40 @@ export function createProjectTools(runtime: CatToolRuntime) {
     name: 'cat_project_summary',
     label: 'CAT project summary',
     description:
-      'Read a side-effect-free business summary of the bound CAT project; never ask for or accept a model-selected projectId. With no arguments, return the existing project and count fields unchanged. For one imported batch, use includeDelivery=true with assetId to additionally read the existing delivery preflight snapshot and this session\'s latest relevant professional task. This query does not create tasks, record decisions/evidence, run persisted QA, stage an export, or save files. ready means preflight readiness, not verified export or independent review. qaFreshness=not-evaluated means this summary does not establish QA freshness; no findings is not proof that QA ran. currentTask=null means no matching task, not completed review. Archived projects remain readable but not exportable through this query.',
+      'Read a side-effect-free business summary of the bound CAT project; never ask for or accept a model-selected projectId. With no arguments, return project, batchCount and segment counts. For one imported batch, use includeDelivery=true with batchId to additionally read the existing delivery preflight snapshot and this session\'s latest relevant professional task. This query does not create tasks, record decisions/evidence, run persisted QA, stage an export, or save files. ready means preflight readiness, not verified export or independent review. qaFreshness=not-evaluated means this summary does not establish QA freshness; no findings is not proof that QA ran. currentTask=null means no matching task, not completed review. Archived projects remain readable but not exportable through this query.',
     promptSnippet: 'Summarize the bound CAT project',
     parameters: Type.Object({
-      assetId: Type.Optional(Type.String({
+      batchId: Type.Optional(Type.String({
         minLength: 1,
-        description: 'Imported batch ID (internal field: assetId) from the bound project. Supply together with includeDelivery=true to inspect one batch; never a project ID.',
+        description: 'Imported batch ID from cat_list_batches. Supply together with includeDelivery=true to inspect one batch; never a project ID.',
       })),
       includeDelivery: Type.Optional(Type.Boolean({
-        description: 'Read the existing delivery preflight and this session\'s latest relevant task for one batch. Requires assetId. Does not run persisted QA, create a Stage, stage an export or save a file.',
+        description: 'Read the existing delivery preflight and this session\'s latest relevant task for one batch. Requires batchId. Does not run persisted QA, create a Stage, stage an export or save a file.',
       })),
     }),
     async execute(toolCallId, params) {
-      if (params.includeDelivery === true && params.assetId === undefined) {
-        throw new LinguistCatInvalidArgumentError('assetId', 'required when includeDelivery=true')
+      if (params.includeDelivery === true && params.batchId === undefined) {
+        throw new LinguistCatInvalidArgumentError('batchId', 'required when includeDelivery=true')
       }
-      if (params.assetId !== undefined && params.includeDelivery !== true) {
-        throw new LinguistCatInvalidArgumentError('includeDelivery', 'must be true when assetId is provided')
+      if (params.batchId !== undefined && params.includeDelivery !== true) {
+        throw new LinguistCatInvalidArgumentError('includeDelivery', 'must be true when batchId is provided')
       }
       const { project, db } = resolveBoundProject('cat_project_summary', toolCallId)
-      const assetCount = db.assets.countByProject()
+      const batchCount = db.assets.countByProject()
       const segmentCounts = db.segments.countByStatus()
       const totalSegments =
         segmentCounts.untranslated + segmentCounts.draft + segmentCounts.translated + segmentCounts.reviewed
       const archived = project.archivedAt !== undefined
       const delivery = params.includeDelivery === true
         ? (() => {
-            const assetId = params.assetId!
-            if (db.assets.get(assetId) === undefined) throw new LinguistCatAssetNotFoundError(assetId)
+            const batchId = params.batchId!
+            if (db.assets.get(batchId) === undefined) throw new LinguistCatBatchNotFoundError(batchId)
             if (deps.readDeliveryPreflight === undefined) {
               throw new LinguistCatInvalidArgumentError('includeDelivery', 'delivery preflight is unavailable')
             }
-            const preflight = deps.readDeliveryPreflight(assetId)
+            const preflight = deps.readDeliveryPreflight(batchId)
             return {
-              assetId: preflight.assetId,
+              batchId: preflight.assetId,
               workflowStage: preflight.workflowStage,
               archived,
               segmentCount: preflight.segmentCount,
@@ -120,7 +120,7 @@ export function createProjectTools(runtime: CatToolRuntime) {
               ready: preflight.ready,
               blockers: preflight.blockers.map(({ code, count, message }) => ({ code, count, message })),
               verifiedExport: false as const,
-              currentTask: currentTaskFor(db, assetId),
+              currentTask: currentTaskFor(db, batchId),
             }
           })()
         : undefined
@@ -135,7 +135,7 @@ export function createProjectTools(runtime: CatToolRuntime) {
           updatedAt: project.updatedAt,
           ...(project.archivedAt !== undefined ? { archivedAt: project.archivedAt } : {}),
         },
-        assetCount,
+        batchCount,
         totalSegments,
         segmentCounts,
         ...(archived ? { note: ARCHIVED_NOTE } : {}),
@@ -145,13 +145,13 @@ export function createProjectTools(runtime: CatToolRuntime) {
     },
   })
 
-  const listAssetsTool = defineTool({
-    name: 'cat_list_assets',
+  const listBatchesTool = defineTool({
+    name: 'cat_list_batches',
     label: 'CAT list batches',
     description:
-      'List imported work batches (source files), not language reference assets, of the bound CAT project: assetId, filename, formatId, ' +
+      'List imported work batches (source files), not language reference assets, of the bound CAT project: batchId, filename, formatId, ' +
       'segmentCount, and the content-derived sourceSha256 (not a path). Paginated: default limit ' +
-      `${CAT_TOOL_PAGE_LIMITS.listAssets.defaultLimit}, hard max ${CAT_TOOL_PAGE_LIMITS.listAssets.maxLimit} ` +
+      `${CAT_TOOL_PAGE_LIMITS.listBatches.defaultLimit}, hard max ${CAT_TOOL_PAGE_LIMITS.listBatches.maxLimit} ` +
       '(larger limits are clamped with a note). Use offset to page.',
     promptSnippet: 'List work batches of the bound CAT project',
     parameters: Type.Object({
@@ -159,24 +159,24 @@ export function createProjectTools(runtime: CatToolRuntime) {
       offset: Type.Optional(Type.Integer({ minimum: 0 })),
     }),
     async execute(toolCallId, params) {
-      const { db } = resolveBoundProject('cat_list_assets', toolCallId)
-      const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.listAssets)
+      const { db } = resolveBoundProject('cat_list_batches', toolCallId)
+      const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.listBatches)
       // Asset rows are file-level metadata (tens, not millions); listByProject
       // never loads segment rows, so an in-memory page slice stays cheap.
-      const assets = db.assets.listByProject()
-      const items: CatAssetListItem[] = assets.slice(page.offset, page.offset + page.limit).map((asset) => ({
-        assetId: asset.id as string,
-        filename: asset.originalFilename,
-        formatId: asset.formatId,
-        segmentCount: asset.segmentCount,
-        sourceSha256: asset.sourceSha256,
+      const batches = db.assets.listByProject()
+      const items: CatBatchListItem[] = batches.slice(page.offset, page.offset + page.limit).map((batch) => ({
+        batchId: batch.id as string,
+        filename: batch.originalFilename,
+        formatId: batch.formatId,
+        segmentCount: batch.segmentCount,
+        sourceSha256: batch.sourceSha256,
       }))
-      const dto: PagedResult<CatAssetListItem> = {
+      const dto: PagedResult<CatBatchListItem> = {
         items,
-        total: assets.length,
+        total: batches.length,
         limit: page.limit,
         offset: page.offset,
-        hasMore: pageHasMore(assets.length, page.offset, items.length),
+        hasMore: pageHasMore(batches.length, page.offset, items.length),
         ...(page.note !== undefined ? { note: page.note } : {}),
       }
       return toolResult(dto, deps.resultProjectId)
@@ -187,8 +187,8 @@ export function createProjectTools(runtime: CatToolRuntime) {
     name: 'cat_get_segments',
     label: 'CAT get segments',
     description:
-      'Read segments of the bound CAT project, optionally filtered by assetId (must come from ' +
-      'cat_list_assets), status, or a case-insensitive literal substring over source/target. ' +
+      'Read segments of the bound CAT project, optionally filtered by batchId (must come from ' +
+      'cat_list_batches), status, or a case-insensitive literal substring over source/target. ' +
       'Paginated: default limit ' +
       `${CAT_TOOL_PAGE_LIMITS.getSegments.defaultLimit}, hard max ${CAT_TOOL_PAGE_LIMITS.getSegments.maxLimit} ` +
       '(larger limits are clamped with a note). Use offset to page through large batches — never ' +
@@ -200,7 +200,7 @@ export function createProjectTools(runtime: CatToolRuntime) {
       'Page cat_get_segments with offset for large batches; each call returns at most 100 segments.',
     ],
     parameters: Type.Object({
-      assetId: Type.Optional(Type.String({ description: 'Batch ID from cat_list_assets.' })),
+      batchId: Type.Optional(Type.String({ description: 'Batch ID from cat_list_batches.' })),
       status: Type.Optional(
         Type.Union([
           Type.Literal('untranslated'),
@@ -217,7 +217,7 @@ export function createProjectTools(runtime: CatToolRuntime) {
       offset: Type.Optional(Type.Integer({ minimum: 0 })),
     }),
     async execute(toolCallId, params) {
-      const { assetId, status, search, view } = params
+      const { batchId, status, search, view } = params
       if (status !== undefined && !SEGMENT_STATUSES.includes(status)) {
         throw new LinguistCatInvalidArgumentError('status', `expected one of ${SEGMENT_STATUSES.join('/')}, got ${String(status)}`)
       }
@@ -225,12 +225,12 @@ export function createProjectTools(runtime: CatToolRuntime) {
         throw new LinguistCatInvalidArgumentError('view', `expected content/index, got ${String(view)}`)
       }
       const { db } = resolveBoundProject('cat_get_segments', toolCallId)
-      if (assetId !== undefined && db.assets.get(assetId) === undefined) {
-        throw new LinguistCatAssetNotFoundError(assetId)
+      if (batchId !== undefined && db.assets.get(batchId) === undefined) {
+        throw new LinguistCatBatchNotFoundError(batchId)
       }
       const page = resolvePage(params, CAT_TOOL_PAGE_LIMITS.getSegments)
       const filter = {
-        ...(assetId !== undefined ? { assetId } : {}),
+        ...(batchId !== undefined ? { assetId: batchId } : {}),
         ...(status !== undefined ? { status } : {}),
         ...(search !== undefined && search !== '' ? { search } : {}),
       }
@@ -240,7 +240,7 @@ export function createProjectTools(runtime: CatToolRuntime) {
         ? db.segments.queryIndex(pageFilter).map(segment => ({
             segmentId: segment.id as string,
             id: segment.id as string,
-            assetId: segment.assetId as string,
+            batchId: segment.assetId as string,
             ordinal: segment.ordinal,
             originalOrdinal: segment.ordinal + 1,
             ...(segment.key !== undefined ? { key: segment.key } : {}),
@@ -264,7 +264,7 @@ export function createProjectTools(runtime: CatToolRuntime) {
 
 return [
     projectSummaryTool,
-    listAssetsTool,
+    listBatchesTool,
     getSegmentsTool,
   ] as const
 }

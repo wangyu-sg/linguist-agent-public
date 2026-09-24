@@ -102,14 +102,14 @@ export function createReferenceTools(runtime: CatToolRuntime) {
     description: 'Read complete Source/current Target and relevant evidence for 1–50 segment IDs. The read page is not the task, review group or commit boundary. Each response is self-contained: segment refs resolve to shared Context/Voice/neighbor content in that response; source, revision, scope and requiredness remain attached. Execution reads establish/continue the trusted Stage; readOnly=true creates neither Stage nor evidence receipts. Follow the returned cursor and ruleCoverage positions with the same request. unprovidedReferences describes content omitted from this response, not proof that the Stage has never received it or that the model currently remembers it. Resolve genuinely missing or currently needed evidence before claiming its dependent work complete. Content preparation is not Provider submission. If contextFragment is returned, collect its returned continuation until the JSON is complete; on CONTEXT_DRIFT retrieve the affected current content.',
     promptSnippet: 'Read bounded batch translation context from the bound CAT project',
     parameters: Type.Object({
-      segmentIds: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 50, description: 'The current batch of 1-50 existing segment IDs, in input order. For a full asset/project execution task, declare its full stageScope on the first read; this read batch does not redefine the whole task. Keep the same full array when continuing its nextCursor or rules-only pages.' }),
+      segmentIds: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 50, description: 'The current page of 1-50 existing segment IDs, in input order. For a full batch/project execution task, declare its full stageScope on the first read; this page does not redefine the whole task. Keep the same full array when continuing its nextCursor or rules-only pages.' }),
       includeNeighbors: Type.Optional(Type.Boolean({ description: 'Include adjacent context when useful. Omitted=true behavior remains unchanged. This affects returned context, not the task scope.' })),
       neighborCount: Type.Optional(Type.Integer({ minimum: 0, maximum: 5, description: 'Number of adjacent segments on each side, 0-5. Keep unchanged when continuing a text cursor.' })),
       tmLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, description: 'Maximum optional TM evidence per segment, 0-10; keep unchanged with a text cursor. A match is reference evidence, not automatic approval.' })),
       termLimitPerSegment: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, description: 'Advisory match limit, 0-10. Required/forbidden authority and conflicts remain available even at 0. Keep unchanged with a text cursor.' })),
       maxBytes: Type.Optional(Type.Integer({ minimum: 1_024, maximum: 262_144, description: 'UTF-8 byte budget for the complete text result, 1024-262144. Default 65536. Oversized single-context content uses contextFragment and nextCursor; continue with the same request.' })),
       cursor: Type.Optional(Type.String({ description: 'The exact nextCursor from a prior text page. Reuse the same original segmentIds and matching options; For rulesOnly, use it only to continue a contextFragment. Never combine with restartStage=true.' })),
-      stageScope: Type.Optional(Type.Union([Type.Literal('segments'), Type.Literal('assets'), Type.Literal('project')], { description: 'Execution task scope on the first read: segments freezes exactly these IDs; assets freezes every segment in each asset represented by these IDs; project freezes the entire bound project. Omit on continuation. Not permitted with readOnly=true; never broaden a selected subset to all assets to bypass the 50-ID read limit.' })),
+      stageScope: Type.Optional(Type.Union([Type.Literal('segments'), Type.Literal('batches'), Type.Literal('project')], { description: 'Execution task scope on the first read: segments freezes exactly these IDs; batches freezes every segment in each batch represented by these IDs; project freezes the entire bound project. Omit on continuation. Not permitted with readOnly=true; never broaden a selected subset to all batches to bypass the 50-ID read limit.' })),
       restartStage: Type.Optional(Type.Boolean({ description: 'True only when the user explicitly requests a new professional round, such as reviewing the same scope again. Omit/false for continuation, pagination, retries and ordinary resume. Requires a fresh request without cursor and cannot be used with readOnly=true.' })),
       rulesOnly: Type.Optional(Type.Boolean({ description: 'Return an applicable-rules page without rebuilding segment context/TM. Use the same segmentIds and rulesOffset from ruleCoverage.nextOffset. Omit stageScope and restartStage on continuation; keep cursor only for a contextFragment; preserve readOnly=true for inspection.' })),
       rulesOffset: Type.Optional(Type.Integer({ minimum: 0, description: 'Offset in the applicable rules for this exact segmentIds request. Start at 0 and follow ruleCoverage.nextOffset. After all these rules were actually read and remain in current context, later text pages of the same request may use ruleCoverage.total to avoid repeating them. Do not carry this offset to a different segment batch or treat skipped rules as read.' })),
@@ -146,7 +146,11 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       }
       const { project, db } = resolveBoundProject('cat_get_translation_context', toolCallId)
       if (params.cursor !== undefined && params.restartStage) throw new LinguistCatInvalidArgumentError('restartStage', 'restart from a fresh context request without cursor')
-      if (!readOnly) runtime.prepareStage(params.segmentIds, { scope: params.stageScope, restart: params.restartStage, toolCallId })
+      if (!readOnly) runtime.prepareStage(params.segmentIds, {
+        scope: params.stageScope === 'batches' ? 'assets' : params.stageScope,
+        restart: params.restartStage,
+        toolCallId,
+      })
       const cursorKey = translationContextCursorKey(
         params.segmentIds,
         neighborCount,
@@ -319,7 +323,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
         ]
         contexts.push({
           segmentId: segment.id as string,
-          assetId: segment.assetId as string,
+          batchId: segment.assetId as string,
           revision: segment.revision,
           source: segment.source,
           currentTarget: segment.target,
@@ -373,9 +377,9 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       }
       const snapshotFor = (items: readonly ResolvedTranslationContext[]): string => {
         const ids = new Set(items.map(item => item.segmentId))
-        const assets = new Set(items.map(item => item.assetId))
+        const batches = new Set(items.map(item => item.batchId))
         const documents = contextEvidence.flatMap(({ doc, version, links }) => {
-          const relevant = links.filter(link => link.relation.kind === 'segment' ? ids.has(link.relation.segmentId) : assets.has(link.relation.assetId))
+          const relevant = links.filter(link => link.relation.kind === 'segment' ? ids.has(link.relation.segmentId) : batches.has(link.relation.assetId))
           return relevant.length === 0 ? [] : [{ docId: doc.id, version, links: relevant }]
         })
         return fnv1a64(JSON.stringify({ contexts: items, rules: allRules, documents }))
@@ -573,7 +577,7 @@ export function createReferenceTools(runtime: CatToolRuntime) {
       }
       const presented: StageEvidenceReceipt['evidence'] = []
       for (const context of receiptContexts) {
-        presented.push({ ref: { kind: 'asset', id: context.assetId }, anchorIds: [] })
+        presented.push({ ref: { kind: 'asset', id: context.batchId }, anchorIds: [] })
         for (const evidence of context.linkedContext) {
           const source = contextEvidence.find(item => item.doc.id === evidence.docId)
           const anchor = evidence.anchorId === undefined ? undefined : source?.anchors.get(evidence.anchorId)

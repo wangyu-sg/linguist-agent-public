@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { LinguistProjectService } from './project-service'
-import { importProjectFile } from './project-file-intake'
+import { importProjectResources } from './project-file-intake'
 
 const temporaryDirectories: string[] = []
 
@@ -19,6 +19,13 @@ describe('项目文件导入', () => {
     await writeFile(filePath, new Uint8Array([1, 2, 3]))
     let mappingRequested = false
     const service = {
+      assertProjectWritable() {},
+      openProject() {
+        return { assets: { listByProject: () => [] } }
+      },
+      getProject() {
+        return { sourceLocale: 'en', targetLocale: 'zh-CN' }
+      },
       async resolveWorkbookMapping() {
         mappingRequested = true
         return undefined
@@ -36,10 +43,12 @@ describe('项目文件导入', () => {
       },
     } as unknown as LinguistProjectService
 
-    const result = await importProjectFile(service, 'project-1', directory, filePath, 'context')
+    const result = await importProjectResources(service, 'project-1', directory, {
+      paths: [filePath], recursive: false, kind: 'context', dryRun: false,
+    })
 
     expect(mappingRequested).toBe(false)
-    expect(result.status).toBe('imported')
-    expect(result.resourceId).toBe('ctx-brief')
+    expect(result.imported).toBe(1)
+    expect(result.items[0]?.resourceId).toBe('ctx-brief')
   })
 })

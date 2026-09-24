@@ -20,8 +20,8 @@ export const LINGUIST_CAT_TOOL_ERROR_CODES = {
   BINDING_MISSING: 'BINDING_MISSING',
   /** The bound project no longer exists (index/disk gone or unreadable). */
   PROJECT_MISSING: 'PROJECT_MISSING',
-  /** A supplied assetId does not exist in the bound project. */
-  ASSET_NOT_FOUND: 'ASSET_NOT_FOUND',
+  /** A supplied batchId does not exist in the bound project. */
+  BATCH_NOT_FOUND: 'BATCH_NOT_FOUND',
   /** An argument failed defensive validation inside the tool. */
   INVALID_ARGUMENT: 'INVALID_ARGUMENT',
   /** 分页期间项目产生了新事件，cursor 绑定的事件快照已漂移，须从首页重拉。 */
@@ -59,15 +59,15 @@ export class LinguistCatProjectMissingError extends LinguistCatToolError {
   }
 }
 
-/** A supplied assetId does not exist in the bound project. */
-export class LinguistCatAssetNotFoundError extends LinguistCatToolError {
-  readonly code = LINGUIST_CAT_TOOL_ERROR_CODES.ASSET_NOT_FOUND
-  constructor(readonly assetId: string) {
+/** A supplied batchId does not exist in the bound project. */
+export class LinguistCatBatchNotFoundError extends LinguistCatToolError {
+  readonly code = LINGUIST_CAT_TOOL_ERROR_CODES.BATCH_NOT_FOUND
+  constructor(readonly batchId: string) {
     super(
-      `[${LINGUIST_CAT_TOOL_ERROR_CODES.ASSET_NOT_FOUND}] Asset not found in the bound project: ${assetId}. ` +
-        'Use cat_list_assets to enumerate valid asset ids.',
+      `[${LINGUIST_CAT_TOOL_ERROR_CODES.BATCH_NOT_FOUND}] Batch not found in the bound project: ${batchId}. ` +
+        'Use cat_list_batches to enumerate valid batch IDs.',
     )
-    this.name = 'LinguistCatAssetNotFoundError'
+    this.name = 'LinguistCatBatchNotFoundError'
   }
 }
 

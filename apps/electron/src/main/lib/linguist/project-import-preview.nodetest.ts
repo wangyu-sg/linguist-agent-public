@@ -7,7 +7,6 @@ import { electronMock } from '../test/electron-mock'
 
 mock.module('electron', { namedExports: electronMock })
 const { LinguistProjectService } = await import('./project-service')
-const { importProjectFile } = await import('./project-file-intake')
 
 test('导入预检真实解析，Phrase 恢复要求不随扩展名改变', async () => {
   const rootDir = mkdtempSync(join(tmpdir(), 'la-import-preview-'))
@@ -69,8 +68,8 @@ test('导入预检真实解析，Phrase 恢复要求不随扩展名改变', asyn
       const result = await service.importResourcesFromPaths(project.id, rootDir, input([path], true))
       assert.equal(result.ready, 0, `${extension} cannot claim ready without master`)
       assert.equal(result.needsInput, 1)
+      assert.equal((await service.importResourcesFromPaths(project.id, rootDir, input([path], false))).imported, 0)
       await assert.rejects(service.importAsset(project.id, { filename: `split.${extension}`, bytes: Buffer.from(phrase) }), /master XLIFF/)
-      await assert.rejects(importProjectFile(service, project.id, rootDir, path, 'batch'), /master XLIFF/)
     }
 
     const master = join(rootDir, 'master.xlf')

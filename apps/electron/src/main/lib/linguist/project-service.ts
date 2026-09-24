@@ -83,8 +83,6 @@ import {
 import type {
   LinguistImportResourcesInput,
   LinguistImportResourcesResult,
-  LinguistIntakeImportResult,
-  LinguistIntakeResourceKind,
   LinguistIntakeXlsxMapping,
   LinguistProjectEvidenceInventoryResult,
   LinguistSaveWorkbookMappingInput,
@@ -102,7 +100,6 @@ import {
 import { readLinguistExportManifests } from './export-manifest'
 import { createDefaultCatFormatRegistry } from './format-registry'
 import {
-  importProjectFile,
   importProjectResources,
 } from './project-file-intake'
 import { refreshProjectEvidenceInventory } from './project-evidence-inventory'
@@ -1384,16 +1381,6 @@ export class LinguistProjectService {
     filename: string,
   ): Promise<LinguistIntakeXlsxMapping | undefined> {
     return resolveProjectWorkbookMapping(this.getProject(projectId), bytes, filename)
-  }
-
-  importFileResource(
-    projectId: string,
-    cwd: string,
-    filePath: string,
-    resourceKind: LinguistIntakeResourceKind,
-    xlsxMapping?: LinguistIntakeXlsxMapping,
-  ): Promise<LinguistIntakeImportResult> {
-    return importProjectFile(this, projectId, cwd, filePath, resourceKind, xlsxMapping)
   }
 
   importResourcesFromPaths(

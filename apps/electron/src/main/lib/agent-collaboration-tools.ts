@@ -827,7 +827,7 @@ async function startDelegation(
     role,
     task: (linguist?.scope === undefined
       ? task
-      : `${task}\n\n冻结 CAT 范围：${JSON.stringify(linguist.scope)}。以共享 CAT Store 的当前 Source/Target 为准。`)
+      : `${task}\n\n冻结 CAT 范围：${JSON.stringify({ batchIds: linguist.scope.assetIds, segmentIds: linguist.scope.segmentIds })}。以共享 CAT Store 的当前 Source/Target 为准。`)
       + (inputReceipts.length === 0 ? '' : `\n\n文件输入回执（referenced/snapshotted 仅证明当前可读，missing 未交付，不证明已审校）：${JSON.stringify(inputReceipts)}`),
     expectedOutput: args.expectedOutput,
   })
@@ -900,8 +900,7 @@ export function buildPiCollaborationTools(
     Type.Literal('proofreader'),
   ], { description: '可选 Linguist 岗位；仅 General 项目会话可用' }))
   const linguistScopeType = Type.Optional(Type.Object({
-    batchId: Type.Optional(Type.String({ description: '当前批次 Asset ID' })),
-    assetIds: Type.Optional(Type.Array(Type.String(), { description: '指定 Asset ID 列表' })),
+    batchIds: Type.Optional(Type.Array(Type.String(), { description: '指定工作批次 ID 列表' })),
     segmentIds: Type.Optional(Type.Array(Type.String(), { description: '指定 Segment ID 列表' })),
   }))
   const thinkingLevelType = Type.Union([

@@ -439,7 +439,13 @@ export function createProposalTools(runtime: CatToolRuntime) {
       segmentIds: group.segmentIds.map((id) => id as string),
       findingIds: group.findingIds.map((id) => id as string),
       candidateTargets: group.candidateTargets,
-      dimensions: group.dimensions,
+      dimensions: {
+        batchIds: group.dimensions.assetIds,
+        contextKeys: group.dimensions.contextKeys,
+        domains: group.dimensions.domains,
+        stringTypes: group.dimensions.stringTypes,
+        speakers: group.dimensions.speakers,
+      },
       findings: group.findings.map((finding) => ({
         findingId: finding.findingId as string,
         segmentId: finding.segmentId as string,

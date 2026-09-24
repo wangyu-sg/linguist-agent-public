@@ -3,14 +3,12 @@ import { LinguistCatInvalidArgumentError } from './errors'
 import { defineTool, toolResult, type CatToolRuntime } from './tool-runtime'
 import type {
   LinguistImportResourceKind,
+  LinguistImportResourceItem,
   LinguistImportResourcesResult,
-  LinguistIntakeImportResult,
-  LinguistIntakeResourceKind,
   LinguistProjectEvidenceInventoryResult,
 } from './types'
 import type { UnknownTagPatternResult } from '@linguist/cat-core'
 
-const RESOURCE_KINDS = new Set<LinguistIntakeResourceKind>(['batch', 'tm', 'terms', 'context'])
 const IMPORT_KINDS = new Set<LinguistImportResourceKind>(['auto', 'batch', 'tm', 'tb', 'context'])
 
 function tagPatternOverview(patterns: UnknownTagPatternResult[] | undefined) {
@@ -24,6 +22,15 @@ function tagPatternOverview(patterns: UnknownTagPatternResult[] | undefined) {
       example: pattern.examples[0],
     })),
     detailTool: 'cat_scan_unknown_tag_patterns',
+  }
+}
+
+function batchResourceItem({ resourceId, ...item }: LinguistImportResourceItem) {
+  return {
+    ...item,
+    ...(resourceId === undefined ? {} : item.resourceKind === 'batch'
+      ? { batchId: resourceId }
+      : { resourceId }),
   }
 }
 
@@ -83,66 +90,16 @@ export function createIntakeTools(runtime: CatToolRuntime) {
         xlsxMapping: params.xlsxMapping,
       })
       if (result.imported > 0) notifyMutation({ kind: 'project-updated' })
-      return importToolResult(result, {
+      const details = {
         ...result,
-        items: result.items.map(({ unknownTagSummary, ...item }) => ({
+        items: result.items.map(batchResourceItem),
+      }
+      return importToolResult(details, {
+        ...details,
+        items: details.items.map(({ unknownTagSummary, ...item }) => ({
           ...item,
           ...(unknownTagSummary === undefined ? {} : { unknownTagSummary: tagPatternOverview(unknownTagSummary) }),
         })),
-      }, deps.resultProjectId)
-    },
-  })
-
-  const importAssetTool = defineTool({
-    name: 'cat_import_asset',
-    label: 'CAT import file',
-    description:
-      'Compatibility alias for importing one batch, translation memory, termbase, or Context document into the bound project. ' +
-      'Paths follow the current Proma session permissions; the model never supplies a project id.',
-    promptSnippet: 'Register a readable file as a batch, TM, termbase, or Context resource',
-    parameters: Type.Object({
-      filePath: Type.String({ minLength: 1, description: 'Absolute path, or a path relative to the current session cwd.' }),
-      resourceKind: Type.Union([
-        Type.Literal('batch'),
-        Type.Literal('tm'),
-        Type.Literal('terms'),
-        Type.Literal('context'),
-      ]),
-      xlsxMapping: Type.Optional(Type.Object({
-        sheetName: Type.String({ minLength: 1 }),
-        columns: Type.Object({
-          key: Type.Optional(Type.String({ minLength: 1 })),
-          source: Type.String({ minLength: 1 }),
-          target: Type.String({ minLength: 1 }),
-          locked: Type.Optional(Type.String({ minLength: 1 })),
-          context: Type.Optional(Type.String({ minLength: 1 })),
-        }),
-      })),
-    }),
-    async execute(toolCallId, params) {
-      resolveBoundProject('cat_import_asset', toolCallId)
-      if (deps.importIntakeAsset === undefined) {
-        throw new LinguistCatInvalidArgumentError(
-          'filePath',
-          'session intake is unavailable',
-        )
-      }
-      if (typeof params.filePath !== 'string' || params.filePath.trim() === '') {
-        throw new LinguistCatInvalidArgumentError('filePath', 'must be a non-blank path')
-      }
-      if (!RESOURCE_KINDS.has(params.resourceKind as LinguistIntakeResourceKind)) {
-        throw new LinguistCatInvalidArgumentError('resourceKind', 'must be batch, tm, terms, or context')
-      }
-      const result: LinguistIntakeImportResult = await deps.importIntakeAsset(
-        params.filePath,
-        params.resourceKind as LinguistIntakeResourceKind,
-        params.xlsxMapping,
-      )
-      notifyMutation({ kind: 'project-updated' })
-      const { unknownTagSummary, ...modelResult } = result
-      return importToolResult(result, {
-        ...modelResult,
-        ...(unknownTagSummary === undefined ? {} : { unknownTagSummary: tagPatternOverview(unknownTagSummary) }),
       }, deps.resultProjectId)
     },
   })
@@ -161,9 +118,9 @@ export function createIntakeTools(runtime: CatToolRuntime) {
       const result: LinguistProjectEvidenceInventoryResult =
         await deps.refreshProjectEvidenceInventory()
       notifyMutation({ kind: 'project-updated' })
-      return toolResult(result, deps.resultProjectId)
+      return toolResult({ ...result, items: result.items.map(batchResourceItem) }, deps.resultProjectId)
     },
   })
 
-  return [importResourcesTool, refreshProjectInventoryTool, importAssetTool] as const
+  return [importResourcesTool, refreshProjectInventoryTool] as const
 }

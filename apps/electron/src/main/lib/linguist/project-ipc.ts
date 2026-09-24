@@ -633,7 +633,7 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
             dryRun: false,
           })
           console.log(
-            `[Linguist IPC] 单项语言资产导入完成: 项目 ${projectId}（导入 ${result.imported}，重复 ${result.skippedDuplicate}，待确认 ${result.needsInput}，失败 ${result.failed}）`,
+            `[Linguist IPC] 单文件导入完成: 项目 ${projectId}（导入 ${result.imported}，重复 ${result.skippedDuplicate}，待确认 ${result.needsInput}，失败 ${result.failed}）`,
           )
           return { cancelled: false, bulk: true, ...result }
         }
@@ -684,8 +684,8 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         const result = await service.importAsset(projectId, { bytes, filename })
         console.log(
           result.status === 'skipped-duplicate'
-            ? `[Linguist IPC] 已跳过重复资产: 项目 ${projectId} 资产 ${result.assetId}`
-            : `[Linguist IPC] 导入完成: 项目 ${projectId} 资产 ${result.assetId}（${result.formatId}，${result.segmentCount} 段）`,
+            ? `[Linguist IPC] 已跳过重复批次: 项目 ${projectId} 批次 ${result.assetId}`
+            : `[Linguist IPC] 导入完成: 项目 ${projectId} 批次 ${result.assetId}（${result.formatId}，${result.segmentCount} 段）`,
         )
         return { cancelled: false, bulk: false, requiresXlsxMapping: false, filename, ...result }
       })
@@ -741,8 +741,8 @@ export function createLinguistProjectIpc(deps: LinguistProjectIpcDeps) {
         pendingFiles.remove(pending.id, 'xlsx-mapping')
         console.log(
           result.status === 'skipped-duplicate'
-            ? `[Linguist IPC] 已跳过已确认 XLSX 映射的重复资产: 项目 ${confirmation.projectId} 资产 ${result.assetId}`
-            : `[Linguist IPC] 已导入已确认 XLSX 映射: 项目 ${confirmation.projectId} 资产 ${result.assetId}（${result.segmentCount} 段）`,
+            ? `[Linguist IPC] 已跳过已确认 XLSX 映射的重复批次: 项目 ${confirmation.projectId} 批次 ${result.assetId}`
+            : `[Linguist IPC] 已导入已确认 XLSX 映射: 项目 ${confirmation.projectId} 批次 ${result.assetId}（${result.segmentCount} 段）`,
         )
         return {
           cancelled: false,

@@ -54,7 +54,7 @@ export function buildProposalReviewSnapshot(
     proposalId: proposal.id as string,
     status: snapshotStatus(proposal, segment.revision),
     segmentId: segment.id as string,
-    assetId: segment.assetId as string,
+    batchId: segment.assetId as string,
     source: segment.source,
     currentTarget: segment.target,
     proposedTarget: proposal.proposedTarget,

@@ -248,11 +248,11 @@ function DeliveryResult({
         <Metric label="QA 警告 / 已豁免" value={`${preflight.qa.openWarnings} / ${preflight.qa.waived}`} />
       </dl>
       <section
-        aria-label="系统签发的资产与证据覆盖"
+        aria-label="系统签发的批次与证据覆盖"
         className="space-y-2 rounded-xl border border-border/55 bg-foreground/[0.025] p-3 text-[11px]"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="font-medium text-foreground">系统签发 · 资产与证据覆盖</p>
+          <p className="font-medium text-foreground">系统签发 · 批次与证据覆盖</p>
           <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-foreground/60">
             {preflight.evidence.status}
           </span>

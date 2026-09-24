@@ -40,7 +40,7 @@ export function shouldShowToolKindLabel(
 ): boolean {
   // MCP 工具的语义化短语已经包含完整的 "SERVER / TOOL" 名称，
   // 再叠加 toolKindLabel 前缀会形成 "名称 · 名称 + 参数" 的重复，直接隐藏前缀。
-  if (toolName.startsWith('mcp__')) return false
+  if (toolName.startsWith('mcp__') || toolName.startsWith('cat_')) return false
   if (!hasMeaningfulToolInput(input)) return false
   if (!kindLabel.trim() || !phraseLabel.trim()) return false
   if (normalizeToolLabel(kindLabel) === normalizeToolLabel(phraseLabel)) return false
@@ -449,7 +449,8 @@ export function getToolPhrase(toolName: string, input: Record<string, unknown>):
       return phrase('检查项目摘要')
 
     case 'cat_list_assets':
-      return phrase('查看项目文件')
+    case 'cat_list_batches':
+      return phrase('查看批次')
 
     case 'cat_get_segments': {
       const limit = input.limit
@@ -504,17 +505,25 @@ export function getToolPhrase(toolName: string, input: Record<string, unknown>):
 
     case 'cat_import_resources': {
       const paths = input.paths
+      const target = input.kind === 'batch' ? '批次'
+        : input.kind === 'tm' ? 'TM'
+        : input.kind === 'tb' ? '术语库'
+        : input.kind === 'context' ? '上下文资料' : '批次与资料'
       return phrase(
         Array.isArray(paths)
-          ? `导入 ${paths.length} 项资源`
-          : '导入资源',
+          ? `导入 ${paths.length} 项（${target}）`
+          : `导入${target}`,
       )
     }
 
     case 'cat_import_asset':
-      return phrase('导入批次')
+      return phrase(input.resourceKind === 'batch' ? '导入批次'
+        : input.resourceKind === 'tm' ? '导入 TM'
+        : input.resourceKind === 'terms' ? '导入术语库'
+        : input.resourceKind === 'context' ? '导入上下文资料' : '导入文件')
 
     case 'cat_export_asset':
+    case 'cat_export_batch':
       return phrase('导出批次')
 
     case 'cat_scan_unknown_tag_patterns':

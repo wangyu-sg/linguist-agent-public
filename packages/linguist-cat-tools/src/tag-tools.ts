@@ -12,16 +12,16 @@ export function createTagTools(runtime: CatToolRuntime) {
     description: 'Deterministically scan the bound project for unregistered bracket, brace, angle, dollar and custom escape shapes. Returns examples and preservation evidence; never activates a profile.',
     promptSnippet: 'Scan unknown tag-like patterns before proposing a project Tag Profile',
     parameters: Type.Object({
-      assetIds: Type.Optional(Type.Array(Type.String(), { maxItems: 100 })),
+      batchIds: Type.Optional(Type.Array(Type.String(), { maxItems: 100 })),
       sampleLimit: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
     }),
     async execute(toolCallId, params) {
       resolveBoundProject('cat_scan_unknown_tag_patterns', toolCallId)
       if (!deps.scanUnknownTagPatterns) {
-        throw new LinguistCatInvalidArgumentError('assetIds', 'unknown Tag scanning is unavailable in this host')
+        throw new LinguistCatInvalidArgumentError('batchIds', 'unknown Tag scanning is unavailable in this host')
       }
       return toolResult(
-        { patterns: deps.scanUnknownTagPatterns(params.assetIds, params.sampleLimit), activated: false },
+        { patterns: deps.scanUnknownTagPatterns(params.batchIds, params.sampleLimit), activated: false },
         deps.resultProjectId,
       )
     },

@@ -12,7 +12,7 @@
 
 export {
   LINGUIST_CAT_TOOL_ERROR_CODES,
-  LinguistCatAssetNotFoundError,
+  LinguistCatBatchNotFoundError,
   LinguistCatBindingMissingError,
   LinguistCatInvalidArgumentError,
   LinguistCatProjectMissingError,
@@ -25,7 +25,7 @@ export { pageHasMore, resolvePage, type PageLimits, type PageRequest, type Resol
 export {
   CAT_TOOL_PAGE_LIMITS,
   LINGUIST_CAT_TOOL_NAMES,
-  type CatAssetListItem,
+  type CatBatchListItem,
   type CatApplyTranslationsResult,
   type CatConfirmSegmentsResult,
   type CatBatchConsistencyFindingItem,

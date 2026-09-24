@@ -131,14 +131,16 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
     linguistContext: parentContext,
   } as Parameters<CollaborationToolsModule['buildPiCollaborationTools']>[1]) as ToolDefinition[]
   const delegate = tools.find((tool) => tool.name === 'mcp__collaboration__delegate_agent')!
+  const schema = (delegate as ToolDefinition & { parameters: { properties: { linguistScope: { properties: Record<string, unknown> } } } }).parameters
+  expect(Object.keys(schema.properties.linguistScope.properties)).toEqual(['batchIds', 'segmentIds'])
 
   const result = await delegate.execute('tool-call-1', {
-    task: '审校当前资产',
+    task: '审校当前批次',
     channelId: 'channel-deepseek',
     modelId: 'deepseek-v4-pro',
     thinkingLevel: 'max',
     linguistRole: 'reviewer',
-    linguistScope: { assetIds: [parentContext.assetId] },
+    linguistScope: { batchIds: [parentContext.assetId] },
   }) as { details: Record<string, unknown> }
 
   expect(capturedRunInput?.linguistContext).toMatchObject({
@@ -147,6 +149,8 @@ test('Linguist 委派继承可信 Context，并应用目标渠道与推理档', 
     selectedSegmentIds: ['seg_v2_1111111111111111111111111111111111111111111111111111111111111111'],
     uiRevision: parentContext.uiRevision,
   })
+  expect(capturedRunInput?.userMessage).toContain('"batchIds"')
+  expect(capturedRunInput?.userMessage).not.toContain('"assetIds"')
   expect(capturedRunInput?.channelId).toBe('channel-deepseek')
   expect(sessions.get('child-session')).toMatchObject({
     channelId: 'channel-deepseek',
@@ -190,9 +194,9 @@ test('Linguist 委派在父轮次没有 UI 快照时仍冻结自身 CAT 范围',
   const delegate = tools.find((tool) => tool.name === 'mcp__collaboration__delegate_agent')!
 
   await delegate.execute('tool-call-without-parent-context', {
-    task: '审校当前资产',
+    task: '审校当前批次',
     linguistRole: 'reviewer',
-    linguistScope: { assetIds: [parentContext.assetId] },
+    linguistScope: { batchIds: [parentContext.assetId] },
   })
 
   expect(capturedRunInput?.linguistContext).toMatchObject({
@@ -218,9 +222,9 @@ test('Linguist 委派追加后续指令时保留冻结 CAT 范围', async () => 
   const continueDelegation = tools.find((tool) => tool.name === 'mcp__collaboration__continue_delegation')!
 
   const started = await delegate.execute('tool-call-for-continuation', {
-    task: '审校当前资产',
+    task: '审校当前批次',
     linguistRole: 'reviewer',
-    linguistScope: { assetIds: [parentContext.assetId] },
+    linguistScope: { batchIds: [parentContext.assetId] },
   }) as { details: { delegation: { delegationId: string } } }
   await stop.execute('stop-for-continuation', {
     delegationId: started.details.delegation.delegationId,
@@ -253,9 +257,9 @@ test('Linguist 委派续跑从持久化子会话绑定重建 Context', async () 
   const continueDelegation = tools.find((tool) => tool.name === 'mcp__collaboration__continue_delegation')!
 
   const first = await delegate.execute('continuation-delegate', {
-    task: '审校当前资产',
+    task: '审校当前批次',
     linguistRole: 'reviewer',
-    linguistScope: { assetIds: [parentContext.assetId] },
+    linguistScope: { batchIds: [parentContext.assetId] },
   }) as { details: { delegation: { delegationId: string } } }
   expect(sessions.get('child-session')).toMatchObject({
     linguistProjectId: parentContext.projectId,

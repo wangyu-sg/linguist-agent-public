@@ -55,7 +55,7 @@ export function toSegmentItem(segment: Segment): CatSegmentListItem {
   return {
     segmentId: segment.id as string,
     id: segment.id as string,
-    assetId: segment.assetId as string,
+    batchId: segment.assetId as string,
     ordinal: segment.ordinal,
     originalOrdinal: segment.ordinal + 1,
     ...(segment.key !== undefined ? { key: segment.key } : {}),

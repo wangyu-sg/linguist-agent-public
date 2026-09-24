@@ -149,16 +149,6 @@ export function resolveLinguistSessionCatTools(
     },
     consistencyWorker: runLinguistConsistencyWorker,
     qaWorker: runLinguistQaWorker,
-    importIntakeAsset: (filePath, resourceKind, xlsxMapping) => {
-      const current = currentBoundSession(session.id, projectId, 'filePath')
-      return getService().importFileResource(
-        projectId,
-        resolveAgentExecutionScope(current).cwd,
-        filePath,
-        resourceKind,
-        xlsxMapping,
-      )
-    },
     importResources: (input) => {
       const current = currentBoundSession(session.id, projectId, 'paths')
       return getService().importResourcesFromPaths(

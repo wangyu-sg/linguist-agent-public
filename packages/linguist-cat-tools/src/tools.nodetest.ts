@@ -42,7 +42,7 @@ import {
   type WorkerJobProgress,
 } from './job-runner'
 import {
-  LinguistCatAssetNotFoundError,
+  LinguistCatBatchNotFoundError,
   LinguistCatBindingMissingError,
   LinguistCatProjectMissingError,
   type LinguistCatToolError,
@@ -250,7 +250,7 @@ test('factory: CAT tools expose project-local accept and export but no resolve o
       tools.map((tool) => tool.name),
       [...LINGUIST_CAT_TOOL_NAMES],
     )
-    assert.ok(toolByName(tools, 'cat_export_asset'))
+    assert.ok(toolByName(tools, 'cat_export_batch'))
     assert.equal(tools.some((tool) => /resolve|waive|deliver/i.test(tool.name)), false)
     assert.ok(toolByName(tools, 'cat_accept_proposals'))
     assert.equal(tools.length, LINGUIST_CAT_TOOL_NAMES.length)
@@ -281,16 +281,21 @@ test('import result keeps all file statuses while model receives compact tag dia
       suggestedVariableParts: [],
     }
     const importResources = async () => ({
-      found: 2, ready: 0, imported: 1, skippedDuplicate: 0, needsInput: 1, unsupported: 0, failed: 0, truncated: false,
+      found: 3, ready: 0, imported: 2, skippedDuplicate: 0, needsInput: 1, unsupported: 0, failed: 0, truncated: false,
       items: [
         { filename: 'first.xliff', status: 'imported' as const, resourceKind: 'batch' as const, resourceId: 'asset-1', unknownTagSummary: [pattern] },
         { filename: 'second.xliff', status: 'needs-input' as const, message: '缺少映射' },
+        { filename: 'memory.tmx', status: 'imported' as const, resourceKind: 'tm' as const, resourceId: 'reference-1' },
       ],
     })
     const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture), importResources }), 'cat_import_resources')
-    const result = await invoke(tool, { paths: ['first.xliff', 'second.xliff'] })
+    const result = await invoke(tool, { paths: ['first.xliff', 'second.xliff', 'memory.tmx'] })
     const model = JSON.parse(resultText(result))
-    assert.deepEqual(model.items.map((item: { status: string }) => item.status), ['imported', 'needs-input'])
+    assert.deepEqual(model.items.map((item: { status: string }) => item.status), ['imported', 'needs-input', 'imported'])
+    assert.equal(model.items[0].batchId, 'asset-1')
+    assert.equal('resourceId' in model.items[0], false)
+    assert.equal(model.items[2].resourceId, 'reference-1')
+    assert.equal((result.details as { items: Array<{ batchId?: string }> }).items[0]?.batchId, 'asset-1')
     assert.equal(model.items[0].unknownTagSummary.patterns[0].exampleCount, 500)
     assert.equal(model.items[0].unknownTagSummary.patterns[0].example.id, 'example-0')
     assert.equal((result.details as { items: Array<{ unknownTagSummary?: Array<{ examples: unknown[] }> }> }).items[0]?.unknownTagSummary?.[0]?.examples.length, 500)
@@ -454,7 +459,7 @@ test('cat_confirm_segments: corrected 先写回，blocked 可记录 locked/stale
   }
 })
 
-test('cat_export_asset delegates the bound asset and absolute destination without leaking its path', async () => {
+test('cat_export_batch delegates the bound batch and absolute destination without leaking its path', async () => {
   const fixture = setup()
   try {
     let exportedInput: { assetId: string; destinationPath: string; validation: string; overwrite: boolean } | undefined
@@ -472,13 +477,13 @@ test('cat_export_asset delegates the bound asset and absolute destination withou
         }
       },
     })
-    const properties = (toolByName(tools, 'cat_export_asset').parameters as {
+    const properties = (toolByName(tools, 'cat_export_batch').parameters as {
       properties: Record<string, unknown>
     }).properties
-    assert.deepEqual(Object.keys(properties), ['assetId', 'destinationPath', 'validation', 'overwrite'])
+    assert.deepEqual(Object.keys(properties), ['batchId', 'destinationPath', 'validation', 'overwrite'])
     assert.equal('mode' in properties, false)
-    const result = await invoke(toolByName(tools, 'cat_export_asset'), {
-      assetId: fixture.assetA.id,
+    const result = await invoke(toolByName(tools, 'cat_export_batch'), {
+      batchId: fixture.assetA.id,
       destinationPath: '/Users/test/Desktop/alpha.translated.zh-CN.tsv',
       validation: 'as-is',
       overwrite: true,
@@ -498,6 +503,10 @@ test('cat_export_asset delegates the bound asset and absolute destination withou
       validation: 'as-is',
     })
     assert.equal(collectStrings(result.details).some((value) => value.includes('/Users/test')), false)
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_export_batch'), {
+      batchId: 'ast-0000000000000000',
+      destinationPath: '/Users/test/Desktop/missing.tsv',
+    }), 'BATCH_NOT_FOUND')
   } finally {
     fixture.db.close()
   }
@@ -547,38 +556,6 @@ test('cat_accept_proposals atomically applies pending proposals without exportin
   }
 })
 
-test('intake tool delegates authorized file import kind to the host', async () => {
-  const fixture = setup()
-  try {
-    let importedInput: { filePath: string; resourceKind: string } | undefined
-    const tools = createLinguistCatTools({
-      resolveProject: makeOkResolver(fixture),
-      importIntakeAsset: async (filePath, resourceKind) => {
-        importedInput = { filePath, resourceKind }
-        return {
-          resourceKind,
-          filename: 'source.xliff',
-          status: 'imported',
-          resourceId: fixture.assetA.id as string,
-          importedCount: 1,
-          unchangedCount: 0,
-          sourceSha256: 'a'.repeat(64),
-          warnings: [],
-        }
-      },
-    })
-    const imported = (await invoke(toolByName(tools, 'cat_import_asset'), {
-      filePath: '/authorized/source.xliff',
-      resourceKind: 'batch',
-    })).details as { filename: string; status: string }
-    assert.deepEqual(importedInput, { filePath: '/authorized/source.xliff', resourceKind: 'batch' })
-    assert.equal(imported.status, 'imported')
-    assert.equal(imported.filename, 'source.xliff')
-  } finally {
-    fixture.db.close()
-  }
-})
-
 test('project inventory refresh has no path input and returns the host-signed evidence summary', async () => {
   const fixture = setup()
   try {
@@ -599,7 +576,7 @@ test('project inventory refresh has no path input and returns the host-signed ev
           unsupported: 0,
           failed: 0,
           truncated: false,
-          items: [{ filename: 'source.xliff', status: 'ready', resourceKind: 'batch' }],
+          items: [{ filename: 'source.xliff', status: 'ready', resourceKind: 'batch', resourceId: fixture.assetA.id }],
           gaps: [],
         }
       },
@@ -608,10 +585,13 @@ test('project inventory refresh has no path input and returns the host-signed ev
     const result = (await invoke(toolByName(tools, 'cat_refresh_project_inventory'), {})).details as {
       status: string
       discoveryScopeHash: string
+      items: Array<{ batchId?: string; resourceId?: string }>
     }
     assert.equal(calls, 1)
     assert.equal(result.status, 'ready')
     assert.equal(result.discoveryScopeHash, 'scope-hash')
+    assert.equal(result.items[0]?.batchId, fixture.assetA.id)
+    assert.equal('resourceId' in result.items[0]!, false)
   } finally {
     fixture.db.close()
   }
@@ -722,9 +702,9 @@ test('voice tools reuse profiles and translated segments as bounded approved con
         textType: 'dialogue',
         module: 'menu',
         note: `approved ${index}`,
-      })).details as { id: string; assetId: string; segmentId: string; approvedAt: string }
+      })).details as { id: string; batchId: string; segmentId: string; approvedAt: string }
       approvedIds.push(exemplar.id)
-      assert.equal(exemplar.assetId, fixture.assetA.id)
+      assert.equal(exemplar.batchId, fixture.assetA.id)
       assert.equal(exemplar.segmentId, fixture.segmentsA[index]!.id)
       assert.match(exemplar.approvedAt, /^2026-/)
     }
@@ -743,11 +723,12 @@ test('voice tools reuse profiles and translated segments as bounded approved con
       limit: 3,
     })).details as {
       profile: { id: string }
-      exemplars: Array<{ source: string; target: string; segmentId: string }>
+      exemplars: Array<{ source: string; target: string; segmentId: string; batchId: string }>
     }
     assert.equal(context.profile.id, profile.id)
     assert.equal(context.exemplars.length, 3)
     assert.ok(context.exemplars.every((item) => item.source !== '' && item.target !== ''))
+    assert.ok(context.exemplars.every((item) => item.batchId === fixture.assetA.id && !('assetId' in item)))
     assertNoAbsolutePaths(context, fixture.rootDir)
 
     await assertThrowsCode(invoke(toolByName(tools, 'cat_add_approved_exemplar'), {
@@ -770,7 +751,7 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
       onMutation: (mutation) => mutations.push(mutation),
     })
     const run = (await invoke(toolByName(tools, 'cat_run_qa'), {
-      assetId: fixture.assetA.id,
+      batchId: fixture.assetA.id,
     })).details as {
       total: number
       severityCounts: Record<string, number>
@@ -805,7 +786,7 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
       fixture.db.qaFindings.list({}).map((finding) => finding.id as string).sort(),
     )
     const repeated = (await invoke(toolByName(tools, 'cat_run_qa'), {
-      assetId: fixture.assetA.id,
+      batchId: fixture.assetA.id,
     })).details
     assert.deepEqual(repeated, run)
     assert.equal(mutations.length, 1)
@@ -813,7 +794,7 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
     const resolvedId = fixture.db.qaFindings.list({ segmentId: fixedSegment.id, status: 'open' })[0]!.id as string
     fixture.db.segments.applyTargetEdit(fixedSegment.id, '阿尔法源文 1', 0)
     await invoke(toolByName(tools, 'cat_run_qa'), {
-      assetId: fixture.assetA.id,
+      batchId: fixture.assetA.id,
     }, 'call-2')
     assert.equal(mutations.length, 2)
     assert.deepEqual(mutations[1]!.resolvedQaFindingIds, [resolvedId])
@@ -831,7 +812,7 @@ test('cat_run_qa + cat_get_qa_findings: persist deterministic findings and page 
     assert.equal(summary.canUndo, false)
 
     await invoke(toolByName(tools, 'cat_run_qa'), {
-      assetId: fixture.assetB.id,
+      batchId: fixture.assetB.id,
     }, 'call-b')
     const otherBatchFinding = fixture.db.qaFindings.list({
       assetId: fixture.assetB.id,
@@ -852,7 +833,7 @@ test('cat_project_summary: locales, counts, JSON round-trip; resolver receives c
     const result = await invoke(toolByName(tools, 'cat_project_summary'), {})
     const dto = result.details as {
       project: Record<string, unknown>
-      assetCount: number
+      batchCount: number
       totalSegments: number
       segmentCounts: Record<string, number>
       note?: string
@@ -866,7 +847,7 @@ test('cat_project_summary: locales, counts, JSON round-trip; resolver receives c
       createdAt: fixture.project.createdAt,
       updatedAt: fixture.project.updatedAt,
     })
-    assert.equal(dto.assetCount, 2)
+    assert.equal(dto.batchCount, 2)
     assert.equal(dto.totalSegments, 12)
     assert.deepEqual(dto.segmentCounts, { untranslated: 8, draft: 0, translated: 4, reviewed: 0 })
     assert.equal(dto.note, undefined)
@@ -908,11 +889,11 @@ test('cat_project_summary includeDelivery returns a narrow read-only preflight f
     const overview = (await invoke(toolByName(tools, 'cat_project_summary'), {})).details as { delivery?: unknown }
     assert.equal(overview.delivery, undefined)
     const result = (await invoke(toolByName(tools, 'cat_project_summary'), {
-      assetId: fixture.assetA.id,
+      batchId: fixture.assetA.id,
       includeDelivery: true,
     })).details as { delivery: Record<string, unknown> }
     assert.deepEqual(result.delivery, {
-      assetId: fixture.assetA.id,
+      batchId: fixture.assetA.id,
       workflowStage: 'editing',
       archived: false,
       segmentCount: fixture.assetA.segmentCount,
@@ -930,7 +911,7 @@ test('cat_project_summary includeDelivery returns a narrow read-only preflight f
     assert.equal(preflightCalls, 1)
     assert.equal(fixture.db.runs.latestEventSequence, beforeStageEvents)
     assertNoAbsolutePaths(result, fixture.rootDir)
-    await assertThrowsCode(invoke(toolByName(tools, 'cat_project_summary'), { assetId: fixture.assetA.id }), 'INVALID_ARGUMENT')
+    await assertThrowsCode(invoke(toolByName(tools, 'cat_project_summary'), { batchId: fixture.assetA.id }), 'INVALID_ARGUMENT')
     await assertThrowsCode(invoke(toolByName(tools, 'cat_project_summary'), { includeDelivery: true }), 'INVALID_ARGUMENT')
   } finally {
     fixture.db.close()
@@ -1377,11 +1358,11 @@ test('cat_project_summary: archived project reads fine (read-only open) and carr
   }
 })
 
-test('cat_list_assets: metadata page with stable ids and digests', async () => {
+test('cat_list_batches: metadata page with stable ids and digests', async () => {
   const fixture = setup()
   try {
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
-    const result = await invoke(toolByName(tools, 'cat_list_assets'), {})
+    const result = await invoke(toolByName(tools, 'cat_list_batches'), {})
     const dto = result.details as PagedResult<Record<string, unknown>>
     assert.equal(dto.total, 2)
     assert.equal(dto.limit, 50)
@@ -1391,7 +1372,7 @@ test('cat_list_assets: metadata page with stable ids and digests', async () => {
     const byFilename = new Map(dto.items.map((item) => [item.filename, item]))
     const alpha = byFilename.get('alpha.tsv')
     assert.ok(alpha)
-    assert.equal(alpha.assetId, fixture.assetA.id)
+    assert.equal(alpha.batchId, fixture.assetA.id)
     assert.equal(alpha.formatId, 'fake_tsv')
     assert.equal(alpha.segmentCount, 8)
     assert.equal(alpha.sourceSha256, 'a'.repeat(64))
@@ -1401,20 +1382,20 @@ test('cat_list_assets: metadata page with stable ids and digests', async () => {
   }
 })
 
-test('cat_list_assets: pagination edges (offset beyond total, clamp note)', async () => {
+test('cat_list_batches: pagination edges (offset beyond total, clamp note)', async () => {
   const fixture = setup()
   try {
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
-    const tool = toolByName(tools, 'cat_list_assets')
+    const tool = toolByName(tools, 'cat_list_batches')
 
-    const page1 = (await invoke(tool, { limit: 1 })).details as PagedResult<{ assetId: string }>
+    const page1 = (await invoke(tool, { limit: 1 })).details as PagedResult<{ batchId: string }>
     assert.deepEqual(
       { total: page1.total, limit: page1.limit, offset: page1.offset, hasMore: page1.hasMore, count: page1.items.length },
       { total: 2, limit: 1, offset: 0, hasMore: true, count: 1 },
     )
-    const page2 = (await invoke(tool, { limit: 1, offset: 1 })).details as PagedResult<{ assetId: string }>
+    const page2 = (await invoke(tool, { limit: 1, offset: 1 })).details as PagedResult<{ batchId: string }>
     assert.equal(page2.hasMore, false)
-    assert.notEqual(page1.items[0]!.assetId, page2.items[0]!.assetId)
+    assert.notEqual(page1.items[0]!.batchId, page2.items[0]!.batchId)
 
     const beyond = (await invoke(tool, { offset: 99 })).details as PagedResult<unknown>
     assert.equal(beyond.items.length, 0)
@@ -1446,7 +1427,7 @@ test('cat_get_segments: default page returns stable content-derived ids and shap
       assert.deepEqual(
         Object.keys(item).sort(),
         [
-          'assetId',
+          'batchId',
           'id',
           'key',
           'locked',
@@ -1512,7 +1493,7 @@ test('cat_get_segments: index view keeps content paging and filters without send
   const fixture = setup()
   try {
     const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture) }), 'cat_get_segments')
-    const filter = { assetId: fixture.assetA.id as string, status: 'translated', search: 'alpha', limit: 2 }
+    const filter = { batchId: fixture.assetA.id as string, status: 'translated', search: 'alpha', limit: 2 }
     const content = (await invoke(tool, filter)).details as PagedResult<{ id: string; source: string; target: string }>
     const explicitContent = (await invoke(tool, { ...filter, view: 'content' })).details
     assert.deepEqual(explicitContent, content)
@@ -1540,27 +1521,27 @@ test('cat_get_segments: index view keeps content paging and filters without send
   }
 })
 
-test('cat_get_segments: assetId filter; unknown asset throws ASSET_NOT_FOUND', async () => {
+test('cat_get_segments: batchId filter; unknown batch throws BATCH_NOT_FOUND', async () => {
   const fixture = setup()
   try {
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
     const tool = toolByName(tools, 'cat_get_segments')
 
-    const filtered = (await invoke(tool, { assetId: fixture.assetB.id as string })).details as PagedResult<{ assetId: string; id: string }>
+    const filtered = (await invoke(tool, { batchId: fixture.assetB.id as string })).details as PagedResult<{ batchId: string; id: string }>
     assert.equal(filtered.total, 4)
     assert.equal(filtered.items.length, 4)
-    for (const item of filtered.items) assert.equal(item.assetId, fixture.assetB.id as string)
+    for (const item of filtered.items) assert.equal(item.batchId, fixture.assetB.id as string)
     assert.deepEqual(
       filtered.items.map((item) => item.id),
       fixture.segmentsB.map((segment) => segment.id as string),
     )
 
-    await assertThrowsCode(invoke(tool, { assetId: 'ast-0000000000000000' }), 'ASSET_NOT_FOUND')
+    await assertThrowsCode(invoke(tool, { batchId: 'ast-0000000000000000' }), 'BATCH_NOT_FOUND')
     try {
-      await invoke(tool, { assetId: 'ast-0000000000000000' })
+      await invoke(tool, { batchId: 'ast-0000000000000000' })
       assert.fail('must throw')
     } catch (err) {
-      assert.ok(err instanceof LinguistCatAssetNotFoundError)
+      assert.ok(err instanceof LinguistCatBatchNotFoundError)
     }
   } finally {
     fixture.db.close()
@@ -1581,7 +1562,7 @@ test('cat_get_segments: status and search filters (LIKE wildcards stay literal)'
     assert.equal(await total({ search: 'Beta source 2' }), 1)
     assert.equal(await total({ search: '译文' }), 4)
     assert.equal(await total({ search: '100%' }), 0)
-    assert.equal(await total({ status: 'translated', assetId: fixture.assetB.id as string }), 0)
+    assert.equal(await total({ status: 'translated', batchId: fixture.assetB.id as string }), 0)
     await assertThrowsCode(invoke(tool, { status: 'bogus' }), 'INVALID_ARGUMENT')
     await assertThrowsCode(invoke(tool, { limit: 0 }), 'INVALID_ARGUMENT')
     await assertThrowsCode(invoke(tool, { offset: -1 }), 'INVALID_ARGUMENT')
@@ -1806,6 +1787,7 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
     const dto = result.details as {
       contexts: Array<{
         segmentId: string
+        batchId: string
         revision: number
         previous: Array<{ segmentId: string }>
         next: Array<{ segmentId: string }>
@@ -1822,6 +1804,7 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
       dto.contexts.map((context) => context.segmentId),
       [fixture.segmentsA[2]!.id, fixture.segmentsA[0]!.id],
     )
+    assert.deepEqual(dto.contexts.map((context) => context.batchId), [fixture.assetA.id, fixture.assetA.id])
     assert.deepEqual(dto.contexts.map((context) => context.revision), [1, 0])
     assert.deepEqual(dto.contexts[0]!.previous.map((item) => item.segmentId), [
       fixture.segmentsA[1]!.id,
@@ -1843,6 +1826,27 @@ test('cat_get_translation_context: input order, revision, neighbors, TM/TB evide
       before,
       'context reads must not mutate Segment rows',
     )
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('cat_get_translation_context maps batch scope to the stored Stage scope', async () => {
+  const fixture = setup()
+  try {
+    let storedScope: string | undefined
+    const tools = createLinguistCatTools({
+      resolveProject: makeOkResolver(fixture),
+      prepareStage: (_segmentIds, task) => { storedScope = task?.scope },
+    })
+    const result = await invoke(toolByName(tools, 'cat_get_translation_context'), {
+      segmentIds: [fixture.segmentsA[0]!.id],
+      stageScope: 'batches',
+    })
+    const contexts = (result.details as { contexts: Array<Record<string, unknown>> }).contexts
+    assert.equal(storedScope, 'assets')
+    assert.equal(contexts[0]?.batchId, fixture.assetA.id)
+    assert.equal('assetId' in contexts[0]!, false)
   } finally {
     fixture.db.close()
   }
@@ -1895,7 +1899,7 @@ test('readOnly context and document reads do not prepare Stage or evidence, and 
     await assertThrowsCode(invoke(toolByName(tools, 'cat_get_translation_context'), {
       segmentIds: [fixture.segmentsA[0]!.id],
       readOnly: true,
-      stageScope: 'assets',
+      stageScope: 'batches',
     }), 'INVALID_ARGUMENT')
     assert.equal(prepareStageCalls, 0)
   } finally {
@@ -2269,11 +2273,10 @@ test('binding errors: unbound session, missing project, resolver that throws typ
   try {
     const minimalParams: Record<LinguistCatToolName, unknown> = {
       cat_project_summary: {},
-      cat_list_assets: {},
+      cat_list_batches: {},
       cat_get_segments: {},
       cat_import_resources: { paths: ['/missing'] },
       cat_refresh_project_inventory: {},
-      cat_import_asset: { filePath: '/missing', resourceKind: 'batch' },
       cat_preview_workbook_mapping: { filePath: '/missing.xlsx' },
       cat_save_workbook_mapping: {
         filePath: '/missing.xlsx',
@@ -2296,7 +2299,7 @@ test('binding errors: unbound session, missing project, resolver that throws typ
         confidence: 1,
         explanation: 'test',
       },
-      cat_export_asset: { assetId: fixture.assetA.id, destinationPath: '/missing' },
+      cat_export_batch: { batchId: fixture.assetA.id, destinationPath: '/missing' },
       cat_get_translation_context: { segmentIds: [fixture.segmentsA[0]!.id] },
       cat_get_proposal_snapshot: { proposalId: 'prp-0000000000000000' },
       cat_apply_translations: {
@@ -2323,7 +2326,7 @@ test('binding errors: unbound session, missing project, resolver that throws typ
       cat_accept_proposals: {
         proposals: [{ proposalId: 'prp-0000000000000000', expectedRevision: 0 }],
       },
-      cat_run_qa: { assetId: fixture.assetA.id },
+      cat_run_qa: { batchId: fixture.assetA.id },
       cat_get_qa_findings: {},
       cat_plan_consistency_repairs: {},
       cat_create_consistency_proposals: {
@@ -2375,11 +2378,11 @@ test('output discipline: recursive no-absolute-path scan, JSON round-trip, zero 
     const tools = createLinguistCatTools({ resolveProject: makeOkResolver(fixture) })
     const calls: Array<[LinguistCatToolName, unknown]> = [
       ['cat_project_summary', {}],
-      ['cat_list_assets', { limit: 1 }],
+      ['cat_list_batches', { limit: 1 }],
       ['cat_get_segments', { limit: 3, search: 'source' }],
       ['cat_search_tm', { query: 'x' }],
       ['cat_search_terms', { query: 'x' }],
-      ['cat_run_qa', { assetId: fixture.assetA.id }],
+      ['cat_run_qa', { batchId: fixture.assetA.id }],
       ['cat_get_qa_findings', { limit: 3 }],
       ['cat_search_sentence_patterns', { limit: 3 }],
     ]
@@ -2466,6 +2469,7 @@ interface ConsistencyPlanDto {
     segmentIds: string[]
     findingIds: string[]
     candidateTargets: Array<{ target: string; count: number; lockedCount: number }>
+    dimensions: { batchIds: string[]; assetIds?: string[] }
     findings: Array<{ findingId: string; segmentId: string; code: string; locked: boolean }>
   }>
   note?: string
@@ -2531,6 +2535,8 @@ test('cat_plan_consistency_repairs: 返回候选与快照 planId，绝不写库'
     assert.match(group.groupId, /^csg-[0-9a-f]{16}$/)
     assert.equal(group.source, 'Save your work')
     assert.deepEqual(group.segmentIds, segs.map((seg) => seg.id as string))
+    assert.deepEqual(group.dimensions.batchIds, [segs[0]!.assetId])
+    assert.equal('assetIds' in group.dimensions, false)
     assert.deepEqual(group.candidateTargets, [
       { target: '保存你的工作', count: 2, lockedCount: 0 },
       { target: '储存你的工作', count: 1, lockedCount: 0 },

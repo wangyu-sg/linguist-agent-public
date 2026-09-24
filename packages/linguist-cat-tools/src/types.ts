@@ -60,11 +60,10 @@ import type { LinguistCatToolError } from './errors'
 /** CAT tool names currently exposed to project sessions. */
 export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_project_summary',
-  'cat_list_assets',
+  'cat_list_batches',
   'cat_get_segments',
   'cat_import_resources',
   'cat_refresh_project_inventory',
-  'cat_import_asset',
   'cat_preview_workbook_mapping',
   'cat_save_workbook_mapping',
   'cat_upsert_voice_profile',
@@ -72,7 +71,7 @@ export const LINGUIST_CAT_TOOL_NAMES = [
   'cat_get_voice_context',
   'cat_scan_unknown_tag_patterns',
   'cat_save_tag_profile_candidate',
-  'cat_export_asset',
+  'cat_export_batch',
   'cat_get_translation_context',
   'cat_get_proposal_snapshot',
   'cat_apply_translations',
@@ -186,7 +185,7 @@ export interface LinguistCatToolsDeps {
   reviewScopeSegmentIds?: readonly string[]
   /** 委派 Proposal 允许写入的 Segment 范围；模型无对应入参。 */
   delegatedScopeSegmentIds?: readonly string[]
-  /** 读取已绑定资产的现有交付预检；不执行 QA、导出或写入。 */
+  /** 读取已绑定批次的现有交付预检；不执行 QA、导出或写入。 */
   readDeliveryPreflight?: (assetId: string) => CatDeliveryPreflightSnapshot
   /** Current-turn host provenance; resolved locally per tool call. */
   generationProvenance?: (toolCallId: string) => LinguistGenerationProvenance
@@ -196,12 +195,6 @@ export interface LinguistCatToolsDeps {
   qaWorker?: LinguistQaWorker
   /** Electron injects the same packaged worker for full-project consistency analysis. */
   consistencyWorker?: LinguistConsistencyWorker
-  /** 导入会话工作目录或已授权目录/文件中的项目资源。 */
-  importIntakeAsset?: (
-    filePath: string,
-    resourceKind: LinguistIntakeResourceKind,
-    xlsxMapping?: LinguistIntakeXlsxMapping,
-  ) => Promise<LinguistIntakeImportResult>
   /** 导入文件或目录中的多个资源；路径权限沿用 Proma Session。 */
   importResources?: (input: LinguistImportResourcesInput) => Promise<LinguistImportResourcesResult>
   /** 由宿主扫描当前项目授权范围；模型不能提供或扩张路径。 */
@@ -360,7 +353,7 @@ export interface CatVoiceContextResult {
   textType?: string
   module?: string
   profile?: VoiceProfile
-  exemplars: ApprovedExemplar[]
+  exemplars: Array<Omit<ApprovedExemplar, 'assetId'> & { batchId: string }>
   note?: string
 }
 
@@ -377,7 +370,7 @@ export interface LinguistCatToolMutation {
 
 /** Page limits (plan §7.4): defaults are small; maximums are HARD caps. */
 export const CAT_TOOL_PAGE_LIMITS = {
-  listAssets: { defaultLimit: 50, maxLimit: 200 },
+  listBatches: { defaultLimit: 50, maxLimit: 200 },
   getSegments: { defaultLimit: 20, maxLimit: 100 },
   getTranslationContext: { defaultLimit: 50, maxLimit: 50 },
   searchTm: { defaultLimit: 20, maxLimit: 50 },
@@ -412,7 +405,7 @@ export interface CatProjectSummaryResult {
     updatedAt: string
     archivedAt?: string
   }
-  assetCount: number
+  batchCount: number
   totalSegments: number
   segmentCounts: Record<SegmentStatus, number>
   /** Present for archived projects: reads are fine, writes are rejected upstream. */
@@ -421,7 +414,7 @@ export interface CatProjectSummaryResult {
 }
 
 export interface CatDeliveryStatus {
-  assetId: string
+  batchId: string
   workflowStage: WorkflowStage
   archived: boolean
   segmentCount: number
@@ -454,7 +447,6 @@ export interface CatDeliveryStatus {
 
 export type CatDeliveryPreflightSnapshot = Pick<
   CatDeliveryStatus,
-  | 'assetId'
   | 'workflowStage'
   | 'segmentCount'
   | 'lockedSegments'
@@ -464,7 +456,7 @@ export type CatDeliveryPreflightSnapshot = Pick<
   | 'evidence'
   | 'ready'
   | 'blockers'
->
+> & { assetId: string }
 
 export interface CatApplyTranslationsResult {
   requested: number
@@ -506,8 +498,8 @@ export interface CatConfirmSegmentsResult {
   replayed: boolean
 }
 
-export interface CatAssetListItem {
-  assetId: string
+export interface CatBatchListItem {
+  batchId: string
   /** Import-time file basename (metadata, never a path). */
   filename: string
   formatId: string
@@ -520,7 +512,7 @@ export interface CatSegmentListItem {
   /** Stable opaque identifier; explicit alias retained beside legacy `id`. */
   segmentId: string
   id: string
-  assetId: string
+  batchId: string
   /** Zero-based storage ordinal retained for API compatibility. */
   ordinal: number
   /** One-based original row number shown to users and used in audit references. */
@@ -600,7 +592,7 @@ export interface CatSharedTranslationContext {
 
 export interface SegmentTranslationContext {
   segmentId: string
-  assetId: string
+  batchId: string
   revision: number
   /** LA-CONTEXT-002：返回页永不空、永不截半截；预算只裁次级字段。 */
   source: string
@@ -680,7 +672,7 @@ export interface CatProposalReviewSnapshot {
   proposalId: string
   status: CatProposalReviewSnapshotStatus
   segmentId: string
-  assetId: string
+  batchId: string
   source: string
   currentTarget: string
   proposedTarget: string
@@ -833,7 +825,7 @@ export interface CatBatchConsistencyGroupItem {
   segmentIds: string[]
   findingIds: string[]
   candidateTargets: Array<{ target: string; count: number; lockedCount: number }>
-  dimensions: BatchConsistencyDimensions
+  dimensions: Omit<BatchConsistencyDimensions, 'assetIds'> & { batchIds: string[] }
   findings: CatBatchConsistencyFindingItem[]
 }
 

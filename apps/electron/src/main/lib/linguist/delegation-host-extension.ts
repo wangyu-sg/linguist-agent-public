@@ -9,8 +9,7 @@ import { getLinguistProjectService } from './project-service'
 export interface LinguistDelegationRequest {
   linguistRole?: Exclude<LinguistRole, 'general'>
   linguistScope?: {
-    batchId?: string
-    assetIds?: string[]
+    batchIds?: string[]
     segmentIds?: string[]
   }
 }
@@ -36,10 +35,7 @@ function freezeScope(
   input: LinguistDelegationRequest['linguistScope'],
 ): LinguistDelegatedScope {
   const db = getLinguistProjectService().openProject(parent.linguistProjectId)
-  const assetIds = [...new Set([
-    ...(input?.batchId ? [input.batchId] : []),
-    ...(input?.assetIds ?? []),
-  ])]
+  const assetIds = [...new Set(input?.batchIds ?? [])]
   const segmentIds = [...new Set(input?.segmentIds ?? [])]
   for (const assetId of assetIds) {
     if (!db.assets.get(assetId)) throw new Error(`Linguist 委派批次不存在: ${assetId}`)

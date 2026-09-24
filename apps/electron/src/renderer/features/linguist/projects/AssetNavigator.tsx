@@ -62,7 +62,7 @@ export function AssetNavigator({
         <h2 className="text-sm font-semibold text-foreground">批次</h2>
         <div className="flex items-center gap-1">
           {summary !== undefined && (
-            <span className="text-xs text-muted-foreground">{summary.assetCount} 个文件</span>
+            <span className="text-xs text-muted-foreground">{summary.assetCount} 个批次</span>
           )}
           <button
             type="button"

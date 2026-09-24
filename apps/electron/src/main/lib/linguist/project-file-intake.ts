@@ -1,4 +1,4 @@
-import { open, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, resolve } from 'node:path'
 import {
   FormatParseError,
@@ -246,40 +246,6 @@ function assertEntryWithinLimit(
     'paths',
     `file exceeds the ${Math.floor(maxBytes / 1024 / 1024)}MB ${resourceKind} intake limit`,
   )
-}
-
-export async function importProjectFile(
-  service: LinguistProjectService,
-  projectId: string,
-  cwd: string,
-  filePath: string,
-  resourceKind: LinguistIntakeResourceKind,
-  xlsxMapping?: LinguistIntakeXlsxMapping,
-): Promise<LinguistIntakeImportResult> {
-  let entry: IntakeEntry
-  try {
-    entry = await resolveEntry(cwd, filePath)
-  } catch {
-    throw new LinguistCatInvalidArgumentError('filePath', 'must resolve to a readable file')
-  }
-  if (
-    resourceKind !== 'context'
-    && extname(entry.filename).toLowerCase() === '.xlsx'
-    && xlsxMapping === undefined
-  ) {
-    xlsxMapping = await service.resolveWorkbookMapping(
-      projectId,
-      await readFile(entry.path),
-      entry.filename,
-    )
-    if (xlsxMapping === undefined) {
-      throw new LinguistCatInvalidArgumentError(
-        'xlsxMapping',
-        'no saved mapping matches this workbook; preview and save a mapping first',
-      )
-    }
-  }
-  return importEntry(service, projectId, entry, resourceKind, xlsxMapping)
 }
 
 export async function importProjectResources(

@@ -42,7 +42,7 @@ export function createVoiceTools(runtime: CatToolRuntime) {
   const addExemplarTool = defineTool({
     name: 'cat_add_approved_exemplar',
     label: 'CAT add approved exemplar',
-    description: 'Save the current text of one confirmed segment as an approved voice exemplar in the bound project. Source, target, asset, segment, locales, and approval time are host-owned.',
+    description: 'Save the current text of one confirmed segment as an approved voice exemplar in the bound project. Source, target, batch, segment, locales, and approval time are host-owned.',
     promptSnippet: 'Mark a confirmed segment as an approved speaker exemplar',
     parameters: Type.Object({
       segmentId: Type.String({ minLength: 1 }),
@@ -74,7 +74,8 @@ export function createVoiceTools(runtime: CatToolRuntime) {
         note: params.note,
       })
       notifyMutation({ kind: 'project-updated' })
-      return toolResult(exemplar, deps.resultProjectId)
+      const { assetId, ...rest } = exemplar
+      return toolResult({ ...rest, batchId: assetId }, deps.resultProjectId)
     },
   })
 
@@ -110,7 +111,7 @@ export function createVoiceTools(runtime: CatToolRuntime) {
         ...(params.textType === undefined ? {} : { textType: params.textType }),
         ...(params.module === undefined ? {} : { module: params.module }),
         ...(profile === undefined ? {} : { profile }),
-        exemplars,
+        exemplars: exemplars.map(({ assetId, ...exemplar }) => ({ ...exemplar, batchId: assetId })),
         ...(profile === undefined && exemplars.length === 0
           ? { note: 'No voice profile or approved exemplar matched.' }
           : {}),

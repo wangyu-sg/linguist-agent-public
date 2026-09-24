@@ -837,7 +837,7 @@ export interface LinguistImportWarning {
   segmentKey?: string
 }
 
-/** 项目资产的静态展示元数据；CAT 分页查询不额外重复聚合进度。 */
+/** 工作批次的静态展示元数据；现有 IPC 字段沿用 assetId。 */
 export interface LinguistAssetMetadata {
   assetId: string
   /** 导入时的文件 basename（展示元数据，绝非路径）。 */
@@ -849,7 +849,7 @@ export interface LinguistAssetMetadata {
 }
 
 /**
- * getSummary 的资产信息：静态元数据加 Store GROUP BY 的真实进度、字符数和开放 QA 数。
+ * getSummary 的批次信息：静态元数据加 Store GROUP BY 的真实进度、字符数和开放 QA 数。
  * 刻意不含时间戳：领域 Asset 本身不携带导入时间（assets.created_at 不进领域类型）。
  */
 export interface LinguistAssetInfo extends LinguistAssetMetadata {
@@ -866,8 +866,8 @@ export interface LinguistAssetInfo extends LinguistAssetMetadata {
  * 领域边界（2026-08）：一次导入的双语文件是「批次」（Batch，一次交付任务，
  * 拥有独立 Segments / QA / Export），不是「语言资产」。语言资产是
  * LinguistProjectAssetKind 承载的项目级长期资源（Style Guide / Context 等）。
- * 底层 schema 13 的 assets 表 / asset_id 是兼容存储细节，对外新代码统一使用
- * Batch 命名；Asset 命名保留为同一类型的兼容别名，不做全仓重命名或 DB 迁移。
+ * 现有数据库与 IPC 仍使用 assets / assetId 等字段；模型工具与用户界面
+ * 在边界将它们明确呈现为批次，不把这些旧字段解释为语言资产。
  */
 export type LinguistBatchMetadata = LinguistAssetMetadata
 export type LinguistBatchInfo = LinguistAssetInfo

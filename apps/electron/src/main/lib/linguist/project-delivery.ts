@@ -130,7 +130,7 @@ export function summarizeDeliveryEvidence(
   }
 }
 
-/** 交付预检、确定性导出验证与源资产导入。 */
+/** 交付预检、确定性导出验证与工作批次导入。 */
 export class ProjectDelivery {
   constructor(private readonly context: ProjectModuleContext) {}
 
@@ -723,7 +723,7 @@ export class ProjectDelivery {
     if (prepared.duplicate !== undefined) {
       const { duplicate } = prepared
       console.log(
-        `[Linguist] 跳过项目内重复资产: 项目 ${projectId} 资产 ${duplicate.id}`,
+        `[Linguist] 跳过项目内重复批次: 项目 ${projectId} 批次 ${duplicate.id}`,
       )
       // 重复跳过零写入：回读验证仍跑一遍并随结果带回（只读；不抛——
       // 本调用没有可回滚的写入，既有批次的问题由健康检查/完整性扫描负责）。
@@ -780,7 +780,7 @@ export class ProjectDelivery {
       projectId,
     )
     console.log(
-      `[Linguist] 已导入资产: 项目 ${projectId} 资产 ${asset.id}（${adapter.id}，${imported.segments.length} 段，${imported.warnings.length} 警告）`,
+      `[Linguist] 已导入批次: 项目 ${projectId} 批次 ${asset.id}（${adapter.id}，${imported.segments.length} 段，${imported.warnings.length} 警告）`,
     )
     const unknownTagSummary = await this.scanImportedAsset(db, project, asset)
     return {

@@ -5,7 +5,7 @@ import {
   type QaFindingListFilter,
 } from '@linguist/cat-store'
 import { Type } from 'typebox'
-import { LinguistCatAssetNotFoundError } from './errors'
+import { LinguistCatBatchNotFoundError } from './errors'
 import { runQaWorkerJob, type WorkerJobProgress } from './job-runner'
 import { pageHasMore, resolvePage } from './pagination'
 import {
@@ -23,7 +23,7 @@ import {
 } from './tool-runtime'
 
 const RUN_QA_PARAMETERS = Type.Object({
-  assetId: Type.String({ minLength: 1, description: 'Batch ID from cat_list_assets.' }),
+  batchId: Type.String({ minLength: 1, description: 'Batch ID from cat_list_batches.' }),
 })
 
 /** 确定性 QA 执行与 Finding 读取；不提供 resolve/waive。 */
@@ -44,11 +44,11 @@ export function createQaTools(runtime: CatToolRuntime) {
       // required / forbidden 都是硬规则；preferred advisory 由 cat_validate_terms 返回。
       // PB-097：项目 tagProfile 进同一道确定性 QA（缺省 = 仅内置族）。
       const { project, db } = resolveBoundProject('cat_run_qa', toolCallId)
-      const { assetId } = params
-      if (db.assets.get(assetId) === undefined) throw new LinguistCatAssetNotFoundError(assetId)
+      const { batchId } = params
+      if (db.assets.get(batchId) === undefined) throw new LinguistCatBatchNotFoundError(batchId)
       const runId = `qa:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`
-      const total = db.segments.count({ assetId })
-      const segments = total === 0 ? [] : db.segments.query({ assetId, limit: total })
+      const total = db.segments.count({ assetId: batchId })
+      const segments = total === 0 ? [] : db.segments.query({ assetId: batchId, limit: total })
       const qaOptions = {
         ...buildQaTermOptions(db, segments),
         glossaryPolicy: project.glossaryPolicy,
@@ -65,7 +65,7 @@ export function createQaTools(runtime: CatToolRuntime) {
           idempotencyKey: `cat_run_qa:${deps.sessionId ?? 'session-unavailable'}:${toolCallId}`,
         },
         operation: 'cat_run_qa',
-        payload: { assetId },
+        payload: { assetId: batchId },
         mutate: () => {
           const before = new Map(
             db.qaFindings.list().map((finding) => [finding.id as string, finding]),

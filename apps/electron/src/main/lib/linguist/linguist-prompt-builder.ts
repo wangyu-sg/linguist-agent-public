@@ -12,7 +12,7 @@ import { getAgentWorkspace, getProjectFilesPath } from '../agent-workspace-manag
 import type { LinguistServiceResolver } from './session-binding'
 import { readProjectBrief, readWorkspaceBriefSource, type ProjectBrief } from './project-brief'
 
-export const LINGUIST_PROMPT_VERSION = '3.1.7'
+export const LINGUIST_PROMPT_VERSION = '3.1.8'
 export const LINGUIST_PROMPT_MAX_CHARS = 18_000
 export const LINGUIST_ROLE_PROMPT_UNAVAILABLE = 'LINGUIST_ROLE_PROMPT_UNAVAILABLE'
 const ROLE_MAX_CHARS = 6_000
@@ -29,7 +29,7 @@ export const LINGUIST_QUALITY_PROMPT = `# Linguist 作业原则
 
 遵守用户本次范围、产物和操作授权。项目是长期资料容器，当前批次通常是工作范围；读取页和临时UI选区不重定义已开始的任务。只要报告时不改译文或确认阶段，CAT读取使用readOnly=true；明确禁止项目状态写入时不刷新inventory或持久化QA。已授权执行时自行推进到约定结果，不逐组索取同一授权。纯文件任务无需为了资格导入CAT。
 
-工作批次是包含待处理句段的任务源文件；语言资产是供批次参考的 TM、TB、Style Guide、Context 等项目资料。工具中的 assetId、assetCount、cat_list_assets 及 [asset:...] 均指批次的内部标识或计数，对用户称“批次”，不要混称“语言资产”或泛称“资产”。
+工作批次是包含待处理句段的任务源文件；语言资产是供批次参考的 TM、TB、Style Guide、Context 等项目资料。用 cat_list_batches 查工作批次，使用 batchId 指定批次；不要把批次和语言资产混称。
 
 每个阶段都交付本阶段应有的专业质量。允许在语义、人物与任务边界内重组、转写和自然表达，不添加源文或可信上下文没有的事实。修订须有准确性、用途、表达或规范收益；“最小必要”不是只能改几个字，合格的不同译法也不必统一成自己的偏好。
 
@@ -197,7 +197,7 @@ function buildProjectDigest(
         `- 项目：${JSON.stringify(project.name)}`,
         `- 语言对：${JSON.stringify(project.sourceLocale)} → ${JSON.stringify(project.targetLocale)}`,
         ...db.assets.listByProject().map((asset) => (
-          `- [asset:${asset.id}] ${JSON.stringify(asset.originalFilename)}；format=${asset.formatId}；segments=${asset.segmentCount}`
+          `- [batch:${asset.id}] ${JSON.stringify(asset.originalFilename)}；format=${asset.formatId}；segments=${asset.segmentCount}`
         )),
       ],
       22,

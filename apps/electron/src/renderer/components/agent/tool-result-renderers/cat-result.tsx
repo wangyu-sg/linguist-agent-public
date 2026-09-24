@@ -44,6 +44,16 @@ function parseObject(result: string): Record<string, unknown> | null {
   }
 }
 
+/** 旧 CAT 结果只在展示时换成批次字段；会话记录本身保持原样。 */
+export function formatCatResultForDisplay(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(formatCatResultForDisplay)
+  if (!isObject(value)) return value
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key === 'assetId' ? 'batchId' : key === 'assetIds' ? 'batchIds' : key === 'assetCount' ? 'batchCount' : key,
+    formatCatResultForDisplay(item),
+  ]))
+}
+
 function count(value: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
 }
@@ -203,21 +213,22 @@ function searchSummary(
     : { title, detail: `找到 ${total} 条${noun}` }
 }
 
-function summarizeCatResult(
+export function summarizeCatResult(
   toolName: string,
   payload: Record<string, unknown>,
 ): CatResultSummary | null {
   switch (toolName) {
     case 'cat_project_summary': {
-      const assets = count(payload.assetCount)
+      const batches = count(payload.batchCount ?? payload.assetCount)
       const segments = count(payload.totalSegments)
-      if (assets === null || segments === null || !isObject(payload.project) || !isObject(payload.segmentCounts)) {
+      if (batches === null || segments === null || !isObject(payload.project) || !isObject(payload.segmentCounts)) {
         return null
       }
-      return { title: '项目摘要', detail: `${assets} 个文件，${segments} 个片段` }
+      return { title: '项目摘要', detail: `${batches} 个批次，${segments} 个片段` }
     }
     case 'cat_list_assets':
-      return pagedSummary(payload, '项目文件', '文件')
+    case 'cat_list_batches':
+      return pagedSummary(payload, '工作批次', '批次')
     case 'cat_get_segments':
       return pagedSummary(payload, '项目片段', '片段')
     case 'cat_search_tm':
@@ -295,7 +306,7 @@ function summarizeCatResult(
         const item = count(value)
         return item !== null && item > 0 ? [`${label} ${item}`] : []
       })
-      return parts.length === 0 ? null : { title: '导入资源', detail: parts.join(' · ') }
+      return parts.length === 0 ? null : { title: '导入批次与资料', detail: parts.join(' · ') }
     }
     case 'cat_import_asset': {
       const importedCount = count(payload.importedCount)
@@ -317,7 +328,8 @@ function summarizeCatResult(
         detail: `${filename} · 新增 ${importedCount} · 未变化 ${unchangedCount}${warnings !== null && warnings > 0 ? ` · ${warnings} 条警告` : ''}`,
       }
     }
-    case 'cat_export_asset': {
+    case 'cat_export_asset':
+    case 'cat_export_batch': {
       const verified = count(payload.verifiedSegments)
       const filename = typeof payload.filename === 'string' ? payload.filename : null
       if (
@@ -433,7 +445,8 @@ export function CatResultRenderer({
   }, [mutationRevision, proposalIdentity?.projectId, proposalKey])
 
   const summary = payload === null ? null : summarizeCatResult(toolName, payload)
-  if (summary === null) return <DefaultResultRenderer result={result} isError={isError} />
+  const displayResult = payload === null ? result : JSON.stringify(formatCatResultForDisplay(payload))
+  if (summary === null) return <DefaultResultRenderer result={displayResult} isError={isError} />
   const location = payload === null ? null : readCatResultLocation(payload)
   const applyNavigation = toolName === 'cat_apply_translations' && payload !== null
     ? readApplyResultNavigation(payload)
@@ -447,7 +460,7 @@ export function CatResultRenderer({
       <p className="text-[12px] font-medium text-foreground/80">{summary.title}</p>
       <p className="mt-0.5 text-[12px] text-muted-foreground">{summary.detail}</p>
       <div className="mt-2">
-        <DefaultResultRenderer result={result} isError={false} />
+        <DefaultResultRenderer result={displayResult} isError={false} />
       </div>
       {applyNavigation.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5" aria-label="写回结果定位">

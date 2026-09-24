@@ -2,7 +2,7 @@
  * ProjectAssetsSection — 项目详情内的「批次（文件）」区（ticket PB-033）
  *
  * 职责：
- * - 「导入资源」入口：菜单分流多文件 / 文件夹原生选择器 → linguistProjectsImport（
+ * - 「导入批次与资料」入口：菜单分流多文件 / 文件夹原生选择器 → linguistProjectsImport（
  *   主进程读盘解析，renderer 永不接触路径/字节，计划 §7.4）。归档（只读）
  *   项目禁用并给出原因提示。
  * - 进度：导入是单次 invoke（扫描+读取+解析+落库均在主进程内完成），没有分阶段
@@ -202,13 +202,13 @@ export function ProjectImportMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="导入资源"
+          aria-label="导入批次与资料"
           disabled={disabled}
           title={title}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-100 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
         >
           {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-          <span>{busy ? '导入中…' : '导入资源'}</span>
+          <span>{busy ? '导入中…' : '导入批次与资料'}</span>
           {!busy && <ChevronDown size={12} aria-hidden="true" />}
         </button>
       </DropdownMenuTrigger>
@@ -518,7 +518,7 @@ export function ProjectAssetsSection({
           <ProjectImportMenu
             busy={importBusy}
             disabled={archived || importBusy || exportBusy || undoBusy || xlsxMapping !== null}
-            title={archived ? '已归档项目为只读，无法导入' : xlsxMapping !== null ? '请先确认或取消当前 XLSX 映射' : '选择多个文件或文件夹；单个 XLSX 会先确认映射'}
+            title={archived ? '已归档项目为只读，无法导入' : xlsxMapping !== null ? '请先确认或取消当前 XLSX 映射' : '选择文件或文件夹；自动区分工作批次与 TM/TB/Context 资料，单个 XLSX 会先确认映射'}
             onSelect={(selection) => void handleImport(selection)}
           />
         </div>
@@ -606,7 +606,7 @@ export function ProjectAssetsSection({
           <FileText size={18} className="text-foreground/30" />
           <p className="text-[13px] text-foreground/50">还没有批次</p>
           <p className="text-[12px] text-foreground/40">
-            打开「导入资源」后可选择多个文件，或递归导入文件夹并自动分类项目资源。
+            打开「导入批次与资料」后可选择多个文件或文件夹；双语源文件进入批次，TM/TB/Context 进入语言资产。
           </p>
         </div>
       ) : (
@@ -674,7 +674,7 @@ export function BulkImportSummary({
               {' · '}{item.status === 'imported' ? '已导入' : item.status === 'supporting' ? '配套 master' : item.status === 'needs-input' ? '需要确认' : item.status === 'unsupported' ? '不支持' : '失败'}
               {item.message === undefined ? '' : ` · ${item.message}`}
               {item.status === 'needs-input' && item.filename.toLowerCase().endsWith('.xlsx')
-                ? '；请在“导入资源 → 选择文件…”中单独选择以确认 Sheet/列映射'
+                ? '；请在“导入批次与资料 → 选择文件…”中单独选择以确认 Sheet/列映射'
                 : ''}
             </li>
           ))}

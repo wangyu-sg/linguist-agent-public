@@ -77,7 +77,7 @@ export function buildProjectEvidenceInventory(
   }
   for (const item of input.scan.items) {
     if (item.status === 'failed') {
-      gaps.push(gap('RESOURCE_IMPORT_FAILED', 'blocking', `${item.filename} 无法读取或解析`, '修复文件后刷新项目资产盘点'))
+      gaps.push(gap('RESOURCE_IMPORT_FAILED', 'blocking', `${item.filename} 无法读取或解析`, '修复文件后刷新批次与参考资料盘点'))
     } else if (item.status === 'needs-input') {
       gaps.push(gap('RESOURCE_MAPPING_AMBIGUOUS', 'blocking', `${item.filename} 需要明确用途或映射`, item.message ?? '确认资源类型与映射'))
     } else if (item.status === 'unsupported') {
@@ -92,7 +92,7 @@ export function buildProjectEvidenceInventory(
     gaps.push(gap('VERSION_CONFLICT', 'blocking', `${filename} 存在多个同名版本候选`, '由用户确认当前有效版本'))
   }
   if (input.scan.found === 0 && input.managedEvidenceCount === 0 && input.unavailable.length === 0) {
-    gaps.push(gap('REQUIRED_RESOURCE_MISSING', 'blocking', '项目尚无受管资产或可扫描的授权文件', '导入主批次或附加项目资料'))
+    gaps.push(gap('REQUIRED_RESOURCE_MISSING', 'blocking', '项目尚无受管批次、参考资料或可扫描的授权文件', '导入主批次或附加项目资料'))
   }
 
   return {
