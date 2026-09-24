@@ -38,7 +38,7 @@ try {
     const b = await api.createAgentWorkspace({ name: 'Switch B' })
     await api.createAgentSession('A older', undefined, a.id)
     const latest = await api.createAgentSession('A latest', undefined, a.id)
-    await api.updateSettings({ agentWorkspaceId: a.id })
+    await api.updateSettings({ agentWorkspaceId: b.id })
     return { a, b, latest }
   })
   await page.reload()
