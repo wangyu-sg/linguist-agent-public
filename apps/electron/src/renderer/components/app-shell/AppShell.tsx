@@ -9,6 +9,8 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { LeftSidebar } from './LeftSidebar'
+import { SidebarTitlebarControls } from './SidebarTitlebarControls'
+import { useWindowTitlebarLayout } from '@/hooks/useWindowTitlebarLayout'
 import { RightSidePanel } from './RightSidePanel'
 import { MainArea } from '@/components/tabs/MainArea'
 import { appModeAtom } from '@/atoms/app-mode'
@@ -28,8 +30,8 @@ import {
   resolveActiveViewForMode,
   resolveRightRailPolicy,
 } from '@/host/app-mode-registry'
-import { detectIsMac, detectIsWindows } from '@/lib/platform'
-import { getMacTitlebarLeadingInsetPx, getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
+import { detectIsWindows } from '@/lib/platform'
+import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -41,7 +43,6 @@ const MIN_TODO_PANEL_WIDTH = 600
 // 两个 Pane 需要各自保留约 320px 内容区及中间分隔条。
 const MIN_SPLIT_PANEL_WIDTH = 720
 const EXPANDED_WORKSPACE_DEFAULT_VIEWPORT_RATIO = 2 / 5
-const COLLAPSED_LEFT_SIDEBAR_WIDTH = 60
 
 function isExpandedWorkspaceTab(tab: string | undefined): boolean {
   return Boolean(
@@ -89,6 +90,8 @@ export function AppShell(): React.ReactElement {
   const settingsOpen = useAtomValue(settingsOpenAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
   const appContentRef = React.useRef<HTMLDivElement>(null)
+  const shellRef = React.useRef<HTMLDivElement>(null)
+  const sidebarRef = React.useRef<HTMLDivElement>(null)
 
   // 设置覆盖层打开时移除后台焦点目标，避免 aria-hidden 隐藏仍持有焦点的节点。
   React.useLayoutEffect(() => {
@@ -134,7 +137,6 @@ export function AppShell(): React.ReactElement {
     automationFormOpen: automationForm.open,
     activeView,
   })
-  const isMac = React.useMemo(() => detectIsMac(), [])
   const isWindows = React.useMemo(() => detectIsWindows(), [])
 
   // 左侧边栏可拖拽宽度
@@ -211,11 +213,8 @@ export function AppShell(): React.ReactElement {
     activeRightPanelSplit === null && activeRightPanelTab === 'todos',
     rightPanelLayout.hasOpenedWideWorkspace || (activeRightPanelSplit === null && isExpandedRightWorkspace),
   )
-  const leftSidebarContentWidth = sidebarCollapsed
-    ? COLLAPSED_LEFT_SIDEBAR_WIDTH
-    : clampedLeftSidebarWidth
-  const leftSidebarOccupiedWidth = leftSidebarContentWidth + 1
-  const macTitlebarLeadingInsetPx = getMacTitlebarLeadingInsetPx(isMac, leftSidebarOccupiedWidth)
+  const leftSidebarOccupiedWidth = sidebarCollapsed ? 0 : clampedLeftSidebarWidth + 1
+  useWindowTitlebarLayout(shellRef, sidebarRef)
   const rightPanelMinimumWidth = activeRightPanelSplit
     ? MIN_SPLIT_PANEL_WIDTH
     : ordinaryRightPanelMinimumWidth
@@ -308,8 +307,7 @@ export function AppShell(): React.ReactElement {
       const normalMaximumWidth = getRightPanelMaxWidth(viewportWidth, leftSidebarOccupiedWidth)
       const shouldCollapseSidebar = canAutoCollapseSidebarForRightPanel && requestedWidth > normalMaximumWidth
       const nextSidebarCollapsed = sidebarCollapsedDuringDrag || shouldCollapseSidebar
-      const nextLeftSidebarContentWidth = nextSidebarCollapsed ? COLLAPSED_LEFT_SIDEBAR_WIDTH : clampedLeftSidebarWidth
-      const nextLeftSidebarOccupiedWidth = nextLeftSidebarContentWidth + 1
+      const nextLeftSidebarOccupiedWidth = nextSidebarCollapsed ? 0 : clampedLeftSidebarWidth + 1
       const allowFullAvailableWidth = nextSidebarCollapsed && (
         activeRightPanelSplit !== null || isExpandedRightWorkspace || rightPanelLayout.hasOpenedWideWorkspace
       )
@@ -373,26 +371,26 @@ export function AppShell(): React.ReactElement {
     <>
       <WindowControls />
 
-      <div className="shell-bg relative h-screen w-screen overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900">
+      <div ref={shellRef} className="shell-bg relative h-screen w-screen overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:to-zinc-900" style={{ '--sidebar-layout-duration': isDraggingLeftSidebar ? '0ms' : '200ms' } as React.CSSProperties}>
         <div
           ref={appContentRef}
           className={cn('flex h-full w-full', getWindowTitlebarContentInsetClass(isWindows), settingsOpen && 'hidden')}
-          style={{ '--mac-titlebar-leading-inset': `${macTitlebarLeadingInsetPx}px` } as React.CSSProperties}
         >
             {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
-            <div className="relative z-[60] crt-sidebar">
-              <LeftSidebar width={clampedLeftSidebarWidth} noTransition={isDraggingLeftSidebar} />
+            <div ref={sidebarRef} id="app-left-sidebar" className="sidebar-layout-transition relative z-[60] shrink-0 overflow-hidden crt-sidebar" style={{ width: leftSidebarOccupiedWidth }}>
+              <LeftSidebar width={clampedLeftSidebarWidth} />
               {/* 侧边栏展开时显示拖拽手柄，折叠态隐藏 */}
               {!sidebarCollapsed && (
                 <div
                   className={cn(
-                    'titlebar-no-drag absolute right-0 top-0 bottom-0 w-4 translate-x-1/2 cursor-col-resize hover:bg-primary/5 active:bg-primary/50 transition-colors z-20'
+                    'titlebar-no-drag absolute right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/5 active:bg-primary/50 transition-colors z-20'
                   )}
+                  style={{ top: 'var(--sidebar-top-inset)' }}
                   onMouseDown={handleLeftSidebarMouseDown}
                 />
               )}
+              <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-px bg-border/50" />
             </div>
-            <div aria-hidden="true" className="relative z-[61] w-px flex-shrink-0 bg-border/80 dark:bg-border/70" />
 
             {/* 中间容器：relative z-[60] 使其在 z-50 拖动区域之上 */}
             <div className="flex-1 min-w-0 relative z-[60]">
@@ -420,6 +418,7 @@ export function AppShell(): React.ReactElement {
                 <RightSidePanel sessionId={currentSessionId!} width={displayedRightPanelWidth} />
               </div>
             )}
+          <SidebarTitlebarControls sidebarRef={sidebarRef} />
         </div>
         {currentWorkspace && <WorkspaceMemoryChangeObserver workspaceSlug={currentWorkspace.slug} />}
         {settingsOpen && (

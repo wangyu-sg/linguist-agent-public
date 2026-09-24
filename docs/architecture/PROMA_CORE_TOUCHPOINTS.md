@@ -10,8 +10,8 @@
 | Generated / Overlay | 2 |
 | Main Host Seam | 8 |
 | Renderer Host Seam | 3 |
-| Temporary Deviation | 51 |
-| 当前精确 ledger | 280 |
+| Temporary Deviation | 61 |
+| 当前精确 ledger | 290 |
 
 账本使用 schema v3；每个条目都记录 `kind`、`owner`、`mergePolicy`、具体理由，以及 Host Seam 的稳定 `hook`。Linguist Extension 位于允许根，不计入 Proma Core Touchpoint。精确文件只维护在 JSON，避免双写漂移。
 
@@ -53,3 +53,7 @@
 - `tests/proma-01957-composer-regression.test.ts`：任务终态、文件引用和原生会话拖入。
 
 上述文件是可复跑的证据入口；通过情况、真实机器与发布资格分别记录，不能由触点登记推定。
+
+## 标题栏与侧栏
+
+参考 Proma #2055 的页面缩放坐标换算，顶栏常驻侧栏开关与搜索；原生红绿灯保留系统尺寸，并按宿主页面缩放重新定位，与页面控件保持中心线对齐。主进程与 Renderer 共用坐标计算。收起侧栏释放全部宽度，删除图标栏专用组件；Agent、Chat 和独立工具页统一避让原生红绿灯与控件。具体文件与退役条件见 JSON 账本。

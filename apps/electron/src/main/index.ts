@@ -104,6 +104,7 @@ import { startWorkspaceWatcher, stopWorkspaceWatcher } from './lib/workspace-wat
 import { startChatToolsWatcher, stopChatToolsWatcher } from './lib/chat-tools-watcher'
 import { getIsQuitting, setQuitting } from './lib/app-lifecycle'
 import { getMainWindow as getStoredMainWindow, setMainWindow as setStoredMainWindow } from './lib/main-window-store'
+import { installMacWindowTitlebar } from './lib/window-titlebar'
 import {
   registerBridge,
   startAllBridges,
@@ -516,6 +517,7 @@ function createWindow(): void {
     ...titleBarOptions,
   })
   setStoredMainWindow(mainWindow)
+  installMacWindowTitlebar(mainWindow)
   installWindowsZoomInFallback(mainWindow)
   browserController.setOwnerWindow(mainWindow)
 

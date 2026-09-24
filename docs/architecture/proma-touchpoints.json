@@ -317,7 +317,7 @@
       "kind": "product-fork",
       "owner": "main-product",
       "mergePolicy": "keep-la",
-      "reason": "LA 独立 Electron 数据根、项目服务启动与退出清理及窗口产品身份。"
+      "reason": "LA 独立 Electron 数据根、项目服务启动与退出清理及窗口产品身份。 主窗口绑定原生标题栏缩放同步。"
     },
     {
       "file": "apps/electron/src/main/ipc.ts",
@@ -844,7 +844,7 @@
       "owner": "codex-main-host",
       "mergePolicy": "host-seam",
       "hook": "linguist-preload",
-      "reason": "在 Proma preload API 中组合一次 typed Linguist API。"
+      "reason": "在 Proma preload API 中组合一次 typed Linguist API；暴露页面缩放读取和主窗口原生红绿灯位置同步。"
     },
     {
       "file": "apps/electron/src/renderer/App.tsx",
@@ -1100,7 +1100,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "AgentSkillsView.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。"
+      "reason": "AgentSkillsView.tsx 使用 LA 的可读字号、主题状态色或减弱动效合同；不恢复上游硬编码视觉值。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent-skills/CredentialDialog.tsx",
@@ -1165,7 +1165,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "复用原生标题编辑和右栏控制；绑定会话显示项目名/状态与岗位，子会话按主进程绑定派生项目身份，解除绑定后刷新同一原生会话。"
+      "reason": "复用原生标题编辑和右栏控制；绑定会话显示项目名/状态与岗位，子会话按主进程绑定派生项目身份，解除绑定后刷新同一原生会话。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/AgentHistorySelectionLayer.tsx",
@@ -1206,7 +1206,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "Agent 与 Linguist 共享折叠项目预览弹层及焦点操作。"
+      "reason": "侧栏完全隐藏后删除只供图标栏使用的组件；展开态继续使用原生项目与会话树。"
     },
     {
       "file": "apps/electron/src/renderer/components/agent/ContentBlock.tsx",
@@ -1355,7 +1355,7 @@
       "owner": "renderer-host",
       "mergePolicy": "host-seam",
       "hook": "app-mode-registry",
-      "reason": "通过 App Mode Registry 组合第三模式与原生右栏；右栏收起时保留已有工作区挂载，仍使用上游尺寸与分屏。Settings 覆盖层使背景 inert，防止不可见输入取得焦点；领域仅贡献 CAT 内容。"
+      "reason": "通过 App Mode Registry 组合第三模式与原生右栏；右栏收起时保留已有工作区挂载，仍使用上游尺寸与分屏。Settings 覆盖层使背景 inert，防止不可见输入取得焦点；领域仅贡献 CAT 内容。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx",
@@ -1363,7 +1363,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "Linguist 项目侧栏复用原生树、搜索及项目快捷操作。"
+      "reason": "Linguist 项目侧栏复用原生树、搜索及项目快捷操作。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。"
     },
     {
       "file": "apps/electron/src/renderer/components/app-shell/ModeSwitcher.tsx",
@@ -1395,7 +1395,7 @@
       "kind": "product-fork",
       "owner": "product-identity",
       "mergePolicy": "keep-la",
-      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。"
+      "reason": "用户可见的 LA 产品身份与三模式引导；截图使用隔离当前应用，撤下旧两模式素材。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。"
     },
     {
       "file": "apps/electron/src/renderer/components/automation/AutomationsListView.tsx",
@@ -1694,7 +1694,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "普通与项目会话共享树构建规则。"
+      "reason": "普通与项目会话共享树构建规则。 侧栏完全隐藏后删除图标栏专用状态，通用会话树构建归入现有 session-tree 模块。"
     },
     {
       "file": "apps/electron/src/renderer/components/session-tree/session-actions.ts",
@@ -1814,7 +1814,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "设置根据 Linguist 模式组合领域设置入口。"
+      "reason": "设置根据 Linguist 模式组合领域设置入口。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。"
     },
     {
       "file": "apps/electron/src/renderer/components/settings/StorageSettings.tsx",
@@ -1870,7 +1870,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "原生 Tab 标题/切换和浏览器入口对项目绑定的 Agent 会话同样开放，项目模式由共享活动 Tab 副作用恢复。"
+      "reason": "参考 Proma #2055 统一 macOS 顶栏坐标换算、拖拽边界和页面标题避让；侧栏完全隐藏，顶栏开关与搜索常驻。上游稳定基线包含同等缩放及侧栏行为并通过回归后退役。"
     },
     {
       "file": "apps/electron/src/renderer/components/tabs/TabBarItem.tsx",
@@ -1937,7 +1937,7 @@
       "kind": "product-fork",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：Vault 编辑与侧栏复用既有状态及共享错误边界。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。"
+      "reason": "LA 用户界面显示 Linguist Agent 产品名；原有通用差异保留，退役条件：Vault 编辑与侧栏复用既有状态及共享错误边界。初次对比基线 bbf577a8 时尚无等价实现；本地来源 98f0ed12。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。"
     },
     {
       "file": "apps/electron/src/renderer/components/vault/vault-editor-lifecycle.ts",
@@ -2109,7 +2109,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "macOS 标题栏避让原生红绿灯。初次对比基线 bbf577a8 时尚无等价实现；本地来源 aaf24752。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。",
+      "reason": "macOS 标题栏避让原生红绿灯。初次对比基线 bbf577a8 时尚无等价实现；本地来源 aaf24752。待向上游提交；固定稳定基线包含等价合同且调用链验证通过后退役。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。",
       "hook": "upstream-window-titlebar-layout"
     },
     {
@@ -2126,7 +2126,7 @@
       "kind": "product-fork",
       "owner": "renderer-product",
       "mergePolicy": "keep-la",
-      "reason": "LA 全局字号、可访问状态色与动效 token。"
+      "reason": "LA 全局字号、可访问状态色与动效 token。 顶栏与侧栏按页面缩放统一避让原生红绿灯，侧栏收起后完全隐藏。"
     },
     {
       "file": "apps/electron/src/types/settings.ts",
@@ -2314,7 +2314,7 @@
       "kind": "temporary-deviation",
       "owner": "upstream-maintenance",
       "mergePolicy": "keep-la",
-      "reason": "提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力；上游稳定基线包含同等实现并通过回归后退役。",
+      "reason": "提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力；上游稳定基线包含同等实现并通过回归后退役。 导出主进程与 Renderer 共用的 macOS 标题栏布局计算。",
       "hook": "upstream-gpt6-catalog"
     },
     {
@@ -2343,6 +2343,96 @@
       "mergePolicy": "keep-la",
       "reason": "提前移植 Proma #2085 的 GPT-6 Sol/Luna 模型能力；上游稳定基线包含同等实现并通过回归后退役。",
       "hook": "upstream-gpt6-catalog"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent/CollapsedSessionRail.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "侧栏完全隐藏后删除只供图标栏使用的组件；上游稳定基线采用同等行为后退役。",
+      "hook": "upstream-window-titlebar-layout"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/agent/CollapsedToolsPopover.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "侧栏完全隐藏后删除只供图标栏使用的组件；上游稳定基线采用同等行为后退役。",
+      "hook": "upstream-window-titlebar-layout"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/app-shell/SidebarTitlebarControls.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "参考 Proma #2055 统一 macOS 顶栏坐标换算、拖拽边界和页面标题避让；侧栏完全隐藏，顶栏开关与搜索常驻。上游稳定基线包含同等缩放及侧栏行为并通过回归后退役。",
+      "hook": "upstream-window-titlebar-layout"
+    },
+    {
+      "file": "apps/electron/src/renderer/hooks/useWindowTitlebarLayout.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "reason": "参考 Proma #2055 统一 macOS 顶栏坐标换算、拖拽边界和页面标题避让；侧栏完全隐藏，顶栏开关与搜索常驻。上游稳定基线包含同等缩放及侧栏行为并通过回归后退役。",
+      "hook": "upstream-window-titlebar-layout"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/planning/PlanningView.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-window-titlebar-layout",
+      "reason": "独立规划页标题和拖拽区域按缩放避让常驻顶栏控件；上游稳定基线包含等价行为后退役。"
+    },
+    {
+      "file": "apps/electron/src/renderer/components/WindowControls.tsx",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-window-titlebar-layout",
+      "reason": "Windows 系统标题栏位于常驻侧栏按钮下方、主内容上方，避免吞掉按钮点击；上游稳定基线提供等价布局后退役。"
+    },
+    {
+      "file": "apps/electron/src/renderer/lib/collapsed-agent-rail.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-window-titlebar-layout",
+      "reason": "侧栏完全隐藏后删除图标栏专用状态，通用会话树构建归入现有 session-tree 模块；上游稳定基线采用等价结构后退役。"
+    },
+    {
+      "file": "apps/electron/src/main/lib/window-titlebar.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-window-titlebar-layout",
+      "reason": "原生红绿灯根据主进程页面缩放重新定位，与 Renderer 共用布局计算；上游稳定基线包含等价行为并通过回归后退役。"
+    },
+    {
+      "file": "packages/shared/src/utils/window-titlebar.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-window-titlebar-layout",
+      "reason": "原生红绿灯根据主进程页面缩放重新定位，与 Renderer 共用布局计算；上游稳定基线包含等价行为并通过回归后退役。"
+    },
+    {
+      "file": "packages/shared/src/types/runtime.ts",
+      "ticket": "LA-SYNC-004",
+      "kind": "temporary-deviation",
+      "owner": "upstream-maintenance",
+      "mergePolicy": "keep-la",
+      "hook": "upstream-window-titlebar-layout",
+      "reason": "原生红绿灯根据主进程页面缩放重新定位，与 Renderer 共用布局计算；上游稳定基线包含等价行为并通过回归后退役。"
     }
   ]
 }

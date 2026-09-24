@@ -665,15 +665,62 @@ body {
   app-region: drag;
 }
 
-/* Left sidebar sits above the global titlebar layer, so it owns a stable top drag strip. */
-.sidebar-window-drag-strip {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1;
-  -webkit-app-region: drag;
-  app-region: drag;
+/* 顶栏控件随页面缩放，原生红绿灯按同一中心线定位。 */
+.sidebar-titlebar-controls {
+  left: var(--titlebar-controls-left);
+  top: var(--titlebar-controls-top);
+  gap: 4px;
+}
+
+.sidebar-titlebar-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: hsl(var(--foreground) / 0.6);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.sidebar-titlebar-controls button:hover {
+  background: hsl(var(--foreground) / 0.06);
+  color: hsl(var(--foreground));
+}
+
+.sidebar-titlebar-controls button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.sidebar-titlebar-controls svg {
+  width: 16px;
+  height: 16px;
+}
+
+.main-window-titlebar {
+  height: var(--app-titlebar-height, 48px);
+}
+
+.main-titlebar-drag-region {
+  left: var(--main-titlebar-leading-inset);
+}
+
+.main-titlebar-page {
+  margin-left: var(--main-titlebar-leading-inset);
+  width: calc(100% - var(--main-titlebar-leading-inset));
+  min-height: var(--app-titlebar-height);
+}
+
+.sidebar-layout-transition {
+  transition: width var(--sidebar-layout-duration) ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-layout-transition {
+    transition: none;
+  }
 }
 
 .sidebar-control-surface {
@@ -770,12 +817,12 @@ body {
 .theme-slate-dark .shell-bg  { background: linear-gradient(135deg, hsl(270 10% 7%) 0%, hsl(260 8% 9%) 100%); }
 .theme-terminal-dark .shell-bg { background: linear-gradient(135deg, hsl(100 6% 6%) 0%, hsl(100 8% 7%) 100%); }
 
-/* 默认 300px 侧栏里要与搜索、收起按钮共处；窄轨道保留文字并隐藏装饰图标。 */
+/* 窄侧栏优先完整显示三种模式名称。 */
 .mode-switcher-track {
   container-type: inline-size;
 }
 
-@container (max-width: 230px) {
+@container (max-width: 320px) {
   .mode-switcher-track .mode-switcher-icon {
     display: none;
   }

@@ -265,7 +265,7 @@ export function SettingsPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-content-area text-foreground">
-      <div className="relative h-[35px] flex-shrink-0 bg-[hsl(var(--sidebar-surface))]">
+      <div className="relative flex-shrink-0 bg-[hsl(var(--sidebar-surface))]" style={{ height: 'var(--app-titlebar-height, 50px)' }}>
         <div
           aria-hidden="true"
           className="titlebar-drag-region pointer-events-none absolute inset-y-0 left-0"

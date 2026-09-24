@@ -26,7 +26,7 @@ export function WindowControls(): React.ReactElement | null {
 
   return (
     <div
-      className="window-titlebar fixed inset-x-0 top-0 z-[100] flex select-none"
+      className="window-titlebar fixed inset-x-0 top-0 z-[65] flex select-none"
       style={{
         height: WINDOW_TITLEBAR_HEIGHT_PX,
         '--window-titlebar-controls-width': `${WINDOW_TITLEBAR_CONTROLS_WIDTH_PX}px`,

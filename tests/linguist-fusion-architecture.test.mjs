@@ -394,13 +394,13 @@ test('关闭浏览器标签不会级联关闭其弹出标签', () => {
   assert.doesNotMatch(controller, /disposePopupChildren/)
 })
 
-test('折叠侧栏复用上游工作区工具弹层和会话树 Rail', () => {
-  const sidebar = readFileSync(
-    join(REPO_ROOT, 'apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx'),
-    'utf8',
-  )
-  assert.match(sidebar, /<CollapsedToolsPopover items=\{collapsedToolItems\}/)
-  assert.match(sidebar, /<CollapsedSessionRail/)
-  assert.match(sidebar, /onSelectChild=\{handleSelectRailChild\}/)
-  assert.doesNotMatch(sidebar, /function RailRecentButton|aria-label="更多工作区工具"/)
+test('侧栏隐藏释放宽度，顶栏入口常驻并复用原生会话树', () => {
+  const shell = readFileSync(join(REPO_ROOT, 'apps/electron/src/renderer/components/app-shell/AppShell.tsx'), 'utf8')
+  const sidebar = readFileSync(join(REPO_ROOT, 'apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx'), 'utf8')
+  const controls = readFileSync(join(REPO_ROOT, 'apps/electron/src/renderer/components/app-shell/SidebarTitlebarControls.tsx'), 'utf8')
+  assert.match(shell, /leftSidebarOccupiedWidth = sidebarCollapsed \? 0 : clampedLeftSidebarWidth \+ 1/)
+  assert.match(shell, /<SidebarTitlebarControls sidebarRef=\{sidebarRef\}/)
+  assert.match(controls, /sidebar.inert = collapsed/)
+  assert.match(controls, /<SearchDialog/)
+  assert.match(sidebar, /<VirtualSidebarList/)
 })

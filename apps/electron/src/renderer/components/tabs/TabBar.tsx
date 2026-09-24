@@ -138,7 +138,7 @@ export function TabBar(): React.ReactElement {
     document.addEventListener('pointerup', handleUp)
   }, [tabs])
 
-  if (tabs.length === 0) return <div className="h-[34px] titlebar-drag-region" />
+  if (tabs.length === 0) return <div className="main-window-titlebar relative shrink-0"><div className="main-titlebar-drag-region absolute inset-y-0 right-0 titlebar-drag-region" /></div>
 
   return (
     <>
@@ -368,13 +368,13 @@ function TabBarInner({
   return (
     <div
       ref={barRef}
-      className="main-tabbar flex items-end h-[34px] tabbar-bg relative"
-      style={{ paddingLeft: 'var(--mac-titlebar-leading-inset, 0px)' }}
+      className="main-tabbar main-window-titlebar flex shrink-0 items-center tabbar-bg relative"
+      style={{ paddingLeft: 'var(--main-titlebar-leading-inset)' }}
     >
       {/* 顶部 TabBar 的空白区域保持可拖拽；系统控制按钮由窗口顶部的统一标题栏承载。
           不要把 titlebar-no-drag 加到下面的整条 flex 容器上，否则标签右侧空白会失去拖拽能力。
           需要交互的单个 Tab 会在 TabBarItem 内部自己声明 titlebar-no-drag。 */}
-      <div className="pointer-events-none absolute inset-0 titlebar-drag-region" />
+      <div className="main-titlebar-drag-region pointer-events-none absolute inset-y-0 right-0 titlebar-drag-region" />
 
       {/* Tear-off 提示遮罩：拖出 TabBar 区域时，让 TabBar 下方出现一条高亮分割线 */}
       {tearingOff && (

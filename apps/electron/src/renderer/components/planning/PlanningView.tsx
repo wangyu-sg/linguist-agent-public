@@ -127,7 +127,7 @@ export function PlanningView({
   }, [createAutomation, triggerCalendarCreate, triggerTodoCreate, visibleTab]), true, { exclusive: true })
   return (
     <div className="flex h-full flex-col overflow-hidden bg-content-area">
-      <header className={cn('relative flex w-full items-center justify-between titlebar-no-drag', embedded ? 'px-4 py-3' : 'px-6 pb-5 pt-8 sm:px-8 xl:px-10')}>
+      <header className={cn('relative flex w-full items-center justify-between titlebar-no-drag', embedded ? 'px-4 py-3' : 'main-titlebar-page px-6 pb-5 pt-8 sm:px-8 xl:px-10')}>
         <div className="absolute inset-y-0 left-0 z-0 titlebar-drag-region right-0" />
         <div className="relative z-[1]">
           <h1 className={cn('font-semibold tracking-tight text-wrap-balance', embedded ? 'text-lg' : 'text-2xl')}>{visibleTab === 'todos' ? 'Todo' : visibleTab === 'calendar' ? '日程' : '定时任务'}</h1>

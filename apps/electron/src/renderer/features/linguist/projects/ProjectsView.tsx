@@ -32,7 +32,7 @@ export function ProjectsView(): React.ReactElement {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="titlebar-drag-region mx-auto flex w-full max-w-3xl items-center px-8 pb-6 pt-8">
+      <div className="main-titlebar-page titlebar-drag-region flex items-center px-8 pb-6 pt-8">
         <h1 className="text-2xl font-semibold text-foreground">Linguist 项目</h1>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center px-8 pb-16">

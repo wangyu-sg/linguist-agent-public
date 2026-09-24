@@ -18,7 +18,7 @@ import { getLinguistRoleOption } from '@/features/linguist/session-binding/Lingu
 import * as React from 'react'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import { toast } from 'sonner'
-import { Pin, PinOff, Star, Settings, Plus, CirclePlus, Trash2, Pencil, PanelLeft, PanelRight, ArrowRightLeft, Search, Archive, ArchiveRestore, ArrowLeft, Bot, Languages, MessageSquare, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, GripVertical, Clock, CalendarDays, ChevronRight, ChevronDown, ChevronUp, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw } from 'lucide-react'
+import { Pin, PinOff, Star, Settings, Plus, CirclePlus, Trash2, Pencil, ArrowRightLeft, Archive, ArchiveRestore, ArrowLeft, MoreHorizontal, FolderOpen, FolderInput, FolderPlus, GripVertical, Clock, CalendarDays, ChevronRight, ChevronDown, ChevronUp, ChevronsDownUp, Blocks, Brain, ListTodo, GitBranch, Download, Loader2, RotateCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ModeSwitcher } from './ModeSwitcher'
@@ -39,12 +39,11 @@ import {
   selectFallbackLinguistSession,
 } from '@/features/linguist/projects/project-agent-session'
 import { describeLinguistIpcError } from '@/features/linguist/projects/project-utils'
-import { SearchDialog } from './SearchDialog'
 import { UserAvatar } from '@/components/chat/UserAvatar'
 import { activeViewAtom, agentSkillsTabAtom } from '@/atoms/active-view'
 import { automationFormAtom, automationsAtom } from '@/atoms/automation-atoms'
 import { planningTabAtom } from '@/atoms/planning-atoms'
-import { appModeAtom, type AppMode } from '@/atoms/app-mode'
+import { appModeAtom } from '@/atoms/app-mode'
 import { settingsOpenAtom, settingsTabAtom } from '@/atoms/settings-tab'
 import {
   conversationsAtom,
@@ -127,16 +126,8 @@ import { hasEnvironmentIssuesAtom } from '@/atoms/environment'
 import { conversationPromptIdAtom } from '@/atoms/system-prompt-atoms'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { useOpenSession } from '@/hooks/useOpenSession'
-import { useSwitchAppMode } from '@/hooks/useSwitchAppMode'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
 import { productivityToolsAtom, sessionHoverPreviewEnabledAtom } from '@/atoms/ui-preferences'
-import {
-  CollapsedProjectPopover,
-  CollapsedWorkspacePopover,
-} from '@/components/agent/CollapsedWorkspacePopover'
-import { CollapsedToolsPopover, type CollapsedToolItem } from '@/components/agent/CollapsedToolsPopover'
-import { CollapsedSessionRail, type RailRecentItem } from '@/components/agent/CollapsedSessionRail'
-import { getCollapsedAgentRailTrees, getCollapsedAgentRailTreeStatus } from '@/lib/collapsed-agent-rail'
 import { ObsidianIcon } from '@/components/obsidian/obsidian-brand'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
 import { SidebarScrollBoundary } from '@/components/ui/sidebar-scroll-boundary'
@@ -362,8 +353,6 @@ function WorkspaceComponentRailButton({ label, icon, active, onClick, badge }: W
 export interface LeftSidebarProps {
   /** 可选固定宽度，默认使用 CSS 响应式宽度 */
   width?: number
-  /** 拖拽过程中禁用 CSS transition，保证即时响应 */
-  noTransition?: boolean
 }
 
 /** 日期分组标签 */
@@ -430,17 +419,6 @@ function groupByDate<T extends { updatedAt: number }>(items: T[]): Array<{ label
   if (yesterday.length > 0) groups.push({ label: '昨天', items: yesterday })
   if (earlier.length > 0) groups.push({ label: '更早', items: earlier })
   return groups
-}
-
-const SIDEBAR_DRAG_STRIP_HEIGHT = {
-  collapsedMac: 50,
-  expandedMac: 30,
-  collapsed: 8,
-  expanded: 4,
-} as const
-
-function getRailInitial(title: string): string {
-  return title.trim().slice(0, 1).toUpperCase() || '·'
 }
 
 interface QuickSwitchTarget {
@@ -598,16 +576,6 @@ function LinguistProjectCreateDialogHost(): React.ReactElement {
   )
 }
 
-function SidebarWindowDragStrip({ height }: { height: number }): React.ReactElement {
-  return (
-    <div
-      aria-hidden="true"
-      className="sidebar-window-drag-strip"
-      style={{ height }}
-    />
-  )
-}
-
 /** 不可变地切换 Set 中某个成员的存在状态（存在则删除，不存在则添加），返回新 Set */
 function toggleSetEntry<T>(prev: Set<T>, value: T): Set<T> {
   const next = new Set(prev)
@@ -627,7 +595,7 @@ function deleteSetEntry<T>(prev: Set<T>, value: T): Set<T> {
   return next
 }
 
-export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.ReactElement {
+export function LeftSidebar({ width }: LeftSidebarProps): React.ReactElement {
   const [activeView, setActiveView] = useAtom(activeViewAtom)
   const setAutomationForm = useSetAtom(automationFormAtom)
   const setPlanningTab = useSetAtom(planningTabAtom)
@@ -725,7 +693,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const setSessionPathMap = useSetAtom(agentSessionPathMapAtom)
   const [currentWorkspaceId, setCurrentWorkspaceId] = useAtom(currentAgentWorkspaceIdAtom)
   const [workspaces, setWorkspaces] = useAtom(agentWorkspacesAtom)
-  const switchMode = useSwitchAppMode()
 
   // 当前项目能力（MCP + Skill 计数）
   const [capabilities, setCapabilities] = React.useState<WorkspaceCapabilities | null>(null)
@@ -737,7 +704,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   const [activeTabId, setActiveTabId] = useAtom(activeTabIdAtom)
   // 会话高亮按"激活 Tab 所属会话"判定：预览 Tab 激活时其 owner 会话仍保持高亮
   const activeSessionId = useAtomValue(activeSessionIdAtom)
-  const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom)
+  const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom)
   const { createChat, createAgent } = useCreateSession()
   const openSession = useOpenSession()
   const syncActiveTabSideEffects = useSyncActiveTabSideEffects()
@@ -754,7 +721,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
   // 归档 & 搜索状态
   const [viewMode, setViewMode] = useAtom(sidebarViewModeAtom)
   const searchDialogOpen = useAtomValue(searchDialogOpenAtom)
-  const setSearchDialogOpen = useSetAtom(searchDialogOpenAtom)
   const newChatShortcutLabel = getAcceleratorDisplay(getActiveAccelerator('new-session'))
   const activeLinguistProjectId = resolveActiveLinguistProjectId(activeTab, agentSessions)
   // K1：同一 LA 项目在 Agent 侧栏只显示为一个带 Linguist 标记的 Workspace
@@ -2420,93 +2386,7 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     }))
   }, [agentSessions, draftSessionIds, viewMode, workspaces, mode, linguistArchivedGroups, isSessionInMode])
 
-  const handleRailModeSwitch = React.useCallback((targetMode: AppMode) => {
-    setViewMode('active')
-    switchMode(targetMode)
-  }, [setViewMode, switchMode])
-
-  const railRecentItems = React.useMemo<RailRecentItem[]>(() => {
-    if (mode === 'chat') {
-      return conversations
-        .filter((c) => !c.archived && !draftSessionIds.has(c.id))
-        .sort((a, b) => {
-          const activeDelta = Number(b.id === activeSessionId) - Number(a.id === activeSessionId)
-          if (activeDelta !== 0) return activeDelta
-          const streamingDelta = Number(streamingIds.has(b.id)) - Number(streamingIds.has(a.id))
-          if (streamingDelta !== 0) return streamingDelta
-          const pinnedDelta = Number(!!b.pinned) - Number(!!a.pinned)
-          if (pinnedDelta !== 0) return pinnedDelta
-          return b.updatedAt - a.updatedAt
-        })
-        .slice(0, 5)
-        .map((conversation) => ({
-          id: conversation.id,
-          title: conversation.title,
-          type: 'chat' as const,
-          initial: getRailInitial(conversation.title),
-          active: conversation.id === activeSessionId,
-          status: streamingIds.has(conversation.id) ? 'running' as const : 'idle' as const,
-          pinned: !!conversation.pinned,
-          workspaceName: undefined,
-        }))
-    }
-
-    const eligibleSessions = agentSessions.filter((session) => (
-      isSessionInMode(session)
-      && isActiveProjectSession(session)
-      && !session.archived
-      && !session.isDraft
-      && !draftSessionIds.has(session.id)
-      // 自动任务会话不出现在收起态 Rail，与展开态列表保持一致
-      && !isHiddenAutomationSession(session)
-    ))
-    const railTrees = getCollapsedAgentRailTrees({
-      sessions: eligibleSessions,
-      workspaceId: currentWorkspaceId,
-      activeSessionId,
-      agentIndicatorMap,
-      unviewedCompletedSessionIds,
-      // CollapsedSessionRail 自己截取 5 个可见根；Popover 打开后它需要完整候选集，
-      // 才能用快照 id 取回可能已被动态排序挤出前五的 Anchor。
-      limit: Number.POSITIVE_INFINITY,
-    })
-
-    return railTrees.map((tree) => ({
-      id: tree.session.id,
-      title: tree.session.title,
-      type: 'agent' as const,
-      initial: getRailInitial(tree.session.title),
-      active: tree.session.id === activeSessionId,
-      // 色条与展开态行共用会话树聚合状态：父会话空闲时也跟随子会话的运行/阻塞/完成态。
-      status: getCollapsedAgentRailTreeStatus(tree, agentIndicatorMap, unviewedCompletedSessionIds),
-      pinned: !!tree.session.pinned,
-      workspaceName: tree.session.workspaceId ? workspaceNameMap.get(tree.session.workspaceId) : undefined,
-      isAutomation: !!tree.session.sourceAutomationId,
-      // 正常 child 收纳进父 Popover；仅父不在当前 workspace 的 moved/orphan child
-      // 复用展开态策略成为可达根条目，并以 delegation 图标区分。
-      isDelegation: isDelegatedChildSession(tree.session),
-      childSessions: tree.childSessions,
-    }))
-  }, [
-    mode,
-    conversations,
-    agentSessions,
-    draftSessionIds,
-    currentWorkspaceId,
-    activeSessionId,
-    streamingIds,
-    agentIndicatorMap,
-    unviewedCompletedSessionIds,
-    workspaceNameMap,
-    isSessionInMode,
-    isActiveProjectSession,
-  ])
-
-  const handleSelectRailChild = React.useCallback((session: AgentSessionMeta): void => {
-    handleSelectAgentSession(session.id, session.title)
-  }, [handleSelectAgentSession])
-
-  // 删除确认弹窗（collapsed/expanded 共享）
+  // 删除确认弹窗
   const deleteDialog = (
     <AlertDialog
       open={pendingDeleteTarget !== null}
@@ -3254,309 +3134,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
     viewMode,
   ])
 
-  // ===== 折叠状态：精简图标视图 =====
-  if (sidebarCollapsed) {
-    const hasActiveCollapsedTool = [
-      ...(productivityTools.todosEnabled ? ["todos"] : []),
-      ...(productivityTools.calendarEnabled ? ["calendar"] : []),
-      "automations",
-      "skills",
-      "mcp",
-      "memory",
-      ...(productivityTools.obsidianEnabled ? ["vault"] : []),
-    ].some((component) =>
-      isWorkspaceComponentActive(component as WorkspaceComponentTab),
-    );
-
-    const collapsedToolItems: CollapsedToolItem[] = [
-      ...(productivityTools.todosEnabled ? [{
-        label: "Todo",
-        icon: <ListTodo size={16} />,
-        active: isWorkspaceComponentActive("todos"),
-        onClick: () => handleOpenPlanningComponent("todos"),
-      }] : []),
-      ...(productivityTools.calendarEnabled ? [{
-        label: "日程",
-        icon: <CalendarDays size={16} />,
-        active: isWorkspaceComponentActive("calendar"),
-        onClick: () => handleOpenPlanningComponent("calendar"),
-      }] : []),
-      ...(productivityTools.obsidianEnabled ? [{
-        label: "Obsidian",
-        icon: <ObsidianIcon size={16} />,
-        active: isWorkspaceComponentActive("vault"),
-        onClick: handleOpenVault,
-      }] : []),
-      ...(mode !== "chat" ? [{
-        label: "项目记忆",
-        icon: <Brain size={16} />,
-        active: isWorkspaceComponentActive("memory"),
-        onClick: () => handleOpenCapabilityComponent("memory"),
-      }] : []),
-      {
-        label: "定时任务",
-        icon: <Clock size={16} />,
-        active: isWorkspaceComponentActive("automations"),
-        badge: automationCount > 0 ? formatAutomationCount(automationCount) : undefined,
-        onClick: () => handleOpenPlanningComponent("automations"),
-      },
-      ...(mode !== "chat" ? [{
-        label: "MCP/Skills",
-        icon: <Blocks size={16} />,
-        active: isWorkspaceComponentActive("skills") || isWorkspaceComponentActive("mcp"),
-        showUpdate: (capabilities?.skills.filter((skill) => skill.hasUpdate).length ?? 0) > 0,
-        onClick: handleOpenMcpSkillsComponents,
-      }] : []),
-    ];
-
-    return (
-      <div
-        ref={sidebarRootRef}
-        data-session-switch-hints={quickSwitchHintsVisible ? "true" : undefined}
-        className={cn(
-          "relative h-full flex flex-col items-center px-2",
-          !noTransition && "transition-[width] duration-300",
-          "bg-[hsl(var(--sidebar-surface))]",
-        )}
-        style={{ width: 60, flexShrink: 0 }}
-      >
-        <SidebarWindowDragStrip
-          height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.collapsedMac : SIDEBAR_DRAG_STRIP_HEIGHT.collapsed}
-        />
-
-        {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。 */}
-        <div
-          className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-[50px]' : 'h-2')}
-        />
-
-        {/* 折叠态将会话放在主路径：控件维持 40px 热区，但把视觉体积收至 32px。 */}
-        <div className="flex flex-col items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="展开侧边栏"
-                onClick={() => setSidebarCollapsed(false)}
-                className="group flex size-10 items-center justify-center p-1 titlebar-no-drag"
-              >
-                <span className="flex size-8 items-center justify-center rounded-[10px] bg-muted text-foreground/60 transition-[background-color,color] duration-150 group-hover:bg-foreground/[0.08] group-hover:text-foreground">
-                  <PanelRight size={16} />
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <span className="flex items-center gap-2">
-                <span>展开侧边栏</span>
-                <ShortcutKeycaps
-                  shortcutId="toggle-sidebar"
-                  keycapClassName="h-5 min-w-5 px-1 text-[11px]"
-                  separatorClassName="text-[10px]"
-                />
-              </span>
-            </TooltipContent>
-          </Tooltip>
-
-          <div className="my-1 h-px w-6 bg-border/70" />
-
-          {/* 模式切换保持直接可达，项目选择仍由 Agent 图标的 hover popover 提供。 */}
-          <CollapsedWorkspacePopover>
-            <button
-              type="button"
-              aria-label="切换到 Agent 模式（悬停查看项目）"
-              onClick={() => handleRailModeSwitch("agent")}
-              className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag"
-            >
-              <span
-                className={cn(
-                  "flex size-8 items-center justify-center rounded-[10px] transition-[background-color,color,box-shadow] duration-150",
-                  mode === "agent"
-                    ? "bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]"
-                    : "text-foreground/45 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75",
-                )}
-              >
-                <Bot size={16} />
-              </span>
-            </button>
-          </CollapsedWorkspacePopover>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="切换到 Chat 模式"
-                onClick={() => handleRailModeSwitch("chat")}
-                className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag"
-              >
-                <span
-                  className={cn(
-                    "flex size-8 items-center justify-center rounded-[10px] transition-[background-color,color,box-shadow] duration-150",
-                    mode === "chat"
-                      ? "bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]"
-                      : "text-foreground/45 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75",
-                  )}
-                >
-                  <MessageSquare size={15} />
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Chat 模式</TooltipContent>
-          </Tooltip>
-          <CollapsedProjectPopover
-            title="本地化模式 · 项目"
-            items={collapsedLinguistProjects}
-            currentProjectId={activeLinguistProjectId}
-            emptyLabel={linguistProjectListState.status === 'loading'
-              ? '正在加载项目…'
-              : linguistProjectListState.status === 'error'
-                ? '项目列表加载失败'
-                : '暂无本地化项目'}
-            onSelect={handleOpenLinguistProject}
-            onCreateRequested={() => setProjectCreateDialogOpen(true)}
-          >
-            <button
-              type="button"
-              aria-label="切换到 Linguist 模式（悬停查看项目）"
-              onClick={() => handleRailModeSwitch('linguist')}
-              className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag"
-            >
-              <span
-                className={cn(
-                  'flex size-8 items-center justify-center rounded-[10px] transition-[background-color,color,box-shadow] duration-150',
-                  mode === 'linguist'
-                    ? 'bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]'
-                    : 'text-foreground/45 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75',
-                )}
-              >
-                <Languages size={17} />
-              </span>
-            </button>
-          </CollapsedProjectPopover>
-
-          <div className="my-1 h-px w-6 bg-border/70" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={primaryItemAriaLabel}
-                aria-busy={creatingPrimaryItem || undefined}
-                disabled={primaryItemDisabled}
-                onClick={() => { void handleCreatePrimaryItem() }}
-                className="group flex size-10 items-center justify-center p-1 titlebar-no-drag disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <span className="flex size-8 items-center justify-center rounded-[10px] text-foreground/65 transition-[background-color,color] duration-150 group-hover:bg-foreground/[0.07] group-hover:text-foreground">
-                  {creatingPrimaryItem
-                    ? <Loader2 size={16} className="animate-spin" />
-                    : <Plus size={16} />}
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <span className="flex items-center gap-2">
-                <span>{primaryItemDisabled && mode === 'linguist' ? '请先打开本地化项目' : primaryItemLabel}</span>
-                <ShortcutKeycaps shortcutId="new-session" keycapClassName="h-5 min-w-5 px-1 text-[11px]" separatorClassName="text-[10px]" />
-              </span>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="搜索"
-                onClick={() => setSearchDialogOpen(true)}
-                className="group flex size-10 items-center justify-center p-1 titlebar-no-drag"
-              >
-                <span className="flex size-8 items-center justify-center rounded-[10px] text-foreground/45 transition-[background-color,color] duration-150 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75">
-                  <Search size={15} />
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">搜索</TooltipContent>
-          </Tooltip>
-          <CollapsedToolsPopover items={collapsedToolItems}>
-            <button
-              type="button"
-              aria-label="工作区工具"
-              className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span
-                className={cn(
-                  "flex size-8 items-center justify-center rounded-[10px] text-foreground/45 transition-[background-color,color,box-shadow] duration-150 group-hover:bg-foreground/[0.06] group-hover:text-foreground/75",
-                  hasActiveCollapsedTool && "bg-primary/10 text-foreground shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]",
-                )}
-              >
-                <Blocks size={16} />
-              </span>
-              {hasActiveCollapsedTool && (
-                <span className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" />
-              )}
-            </button>
-          </CollapsedToolsPopover>
-
-          <div className="my-1 h-px w-6 bg-border/70" />
-        </div>
-
-        {/* 会话列表不再和 Todo、日程、Skills 等次级入口抢占垂直空间。 */}
-        {/* Rail 的面板开合与顺序冻结都在组件内部，hover 不会重渲染整个侧栏。 */}
-        <CollapsedSessionRail
-          items={railRecentItems}
-          activeSessionId={activeSessionId}
-          activeDelegationSessionId={activeDelegationSessionId}
-          agentIndicatorMap={agentIndicatorMap}
-          miniMapDisabled={!sessionHoverPreviewEnabled}
-          onSelectChild={handleSelectRailChild}
-          onSelect={(selected) => {
-            if (selected.type === "agent") {
-              handleSelectAgentSession(selected.id, selected.title);
-            } else {
-              handleSelectConversation(selected.id, selected.title);
-            }
-          }}
-        />
-
-        {/* 底部只保留全局状态与账户入口，工作区工具统一从搜索下方进入。 */}
-        <div className="flex flex-col items-center gap-0.5 py-2">
-          {hasUpdate && (
-            <SidebarUpdateButton
-              status={updateStatus}
-              onClick={handleUpdateButtonClick}
-              tooltipSide="right"
-              className="group flex size-10 items-center justify-center p-1"
-              readyDotClassName="absolute right-1 top-1 size-2 rounded-full bg-primary"
-            />
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="打开设置"
-                onClick={handleOpenSettings}
-                className="group relative flex size-10 items-center justify-center p-1 titlebar-no-drag"
-              >
-                <span className="flex size-8 items-center justify-center rounded-[10px] transition-colors duration-150 group-hover:bg-foreground/[0.06]">
-                  <UserAvatar avatar={userProfile.avatar} size={24} />
-                </span>
-                {hasEnvironmentIssues && (
-                  <span className="absolute right-1 top-1 size-2 rounded-full bg-destructive" />
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">设置</TooltipContent>
-          </Tooltip>
-        </div>
-
-        {linguistActions.dialogs}
-      {deleteDialog}
-        {projectDeleteDialog}
-        {restoreProjectRootDialog}
-        {moveDialog}
-        <SearchDialog />
-        {mode === 'linguist' && <LinguistProjectCreateDialogHost />}
-      </div>
-    );
-  }
-
   // ===== 展开状态：完整侧边栏 =====
   return (
     <div
@@ -3564,52 +3141,14 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       data-session-switch-hints={quickSwitchHintsVisible ? 'true' : undefined}
       className={cn(
         'relative h-full flex flex-col',
-        !noTransition && 'transition-[width] duration-300',
         'bg-[hsl(var(--sidebar-surface))]'
       )}
-      style={{ width: width ?? 'var(--sidebar-w)', minWidth: 200, flexShrink: 0 }}
+      style={{ width: width ?? 'var(--sidebar-w)', flexShrink: 0 }}
     >
-      <SidebarWindowDragStrip
-        height={isMac ? SIDEBAR_DRAG_STRIP_HEIGHT.expandedMac : SIDEBAR_DRAG_STRIP_HEIGHT.expanded}
-      />
+      <div aria-hidden="true" className="shrink-0" style={{ height: 'var(--sidebar-top-inset)' }} />
+      <div className="px-3"><ModeSwitcher /></div>
 
-      {/* macOS 需要避开左上角红绿灯；边栏覆盖全局标题栏拖拽层，因此留白自身也要可拖拽。 */}
-      <div
-        className={cn('w-full flex-shrink-0 titlebar-drag-region', isMac ? 'h-[30px]' : 'h-1')}
-      />
-
-      {/* 模式切换器 + 折叠按钮 */}
-      <div className={cn('titlebar-drag-region flex items-start gap-1.5 px-3', isMac && 'pt-[5px]')}>
-        <div className="flex-1 min-w-0">
-          <ModeSwitcher />
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="收起侧边栏"
-              onClick={() => setSidebarCollapsed(true)}
-              className={cn(
-                'sidebar-collapse-button mt-2 size-10 flex-shrink-0 flex items-center justify-center rounded-[10px] text-foreground/40 sidebar-control-surface hover:text-foreground/60 titlebar-no-drag transition-[background-color,color] duration-150'
-              )}
-            >
-              <PanelLeft size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            <span className="flex items-center gap-2">
-              <span>收起侧边栏</span>
-              <ShortcutKeycaps
-                shortcutId="toggle-sidebar"
-                keycapClassName="h-5 min-w-5 px-1 text-[11px]"
-                separatorClassName="text-[10px]"
-              />
-            </span>
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
-      {/* 新建任务/对话与搜索：默认无底色，降低左侧栏高频操作的视觉权重。 */}
+      {/* 新建任务/对话：默认无底色，降低左侧栏高频操作的视觉权重。 */}
       <div className="flex items-center gap-1 px-3 pt-2">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -3638,28 +3177,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
             <span className="flex items-center gap-2">
               <span>{primaryItemLabel}</span>
               <ShortcutKeycaps shortcutId="new-session" keycapClassName="h-5 min-w-5 px-1 text-[11px]" separatorClassName="text-[10px]" />
-            </span>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => setSearchDialogOpen(true)}
-              aria-label="搜索"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-[hsl(var(--sidebar-primary-foreground))] transition-[background-color,color,transform] hover:bg-foreground/[0.055] hover:text-[hsl(var(--sidebar-primary-foreground))] active:scale-[0.96] titlebar-no-drag"
-            >
-              <Search size={16} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <span className="flex items-center gap-2">
-              <span>搜索</span>
-              <ShortcutKeycaps
-                shortcutId="global-search"
-                keycapClassName="h-5 min-w-5 px-1 text-[11px]"
-                separatorClassName="text-[10px]"
-              />
             </span>
           </TooltipContent>
         </Tooltip>
@@ -3861,7 +3378,6 @@ export function LeftSidebar({ width, noTransition }: LeftSidebarProps): React.Re
       {projectDeleteDialog}
       {restoreProjectRootDialog}
       {moveDialog}
-      <SearchDialog />
       {mode === 'linguist' && <LinguistProjectCreateDialogHost />}
     </div>
   )

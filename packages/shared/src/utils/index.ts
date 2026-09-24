@@ -16,6 +16,7 @@ export {
 } from './agent-runtime'
 
 export { diffCapabilities } from './capabilities-diff'
+export { getMacTitlebarLayout } from './window-titlebar'
 export type { CapabilityChange } from './capabilities-diff'
 export {
   DEFAULT_CONTEXT_WINDOW,

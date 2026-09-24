@@ -102,9 +102,9 @@ export function AgentHeader({ sessionId }: AgentHeaderProps): React.ReactElement
 
   return (
     <>
-    <div className="agent-session-header relative z-[51] flex h-[48px] items-center gap-2 px-3">
+    <div className="agent-session-header main-window-titlebar relative z-[51] flex shrink-0 items-center gap-2 pr-3" style={{ paddingLeft: 'calc(12px + var(--main-titlebar-leading-inset))' }}>
       {/* 页面标题栏仍可拖动；系统控制按钮由窗口顶部的统一标题栏承载。 */}
-      <div className="absolute inset-0 titlebar-drag-region pointer-events-none" />
+      <div className="main-titlebar-drag-region absolute inset-y-0 right-0 titlebar-drag-region pointer-events-none" />
       {editing ? (
         <div className="flex items-center gap-1.5 flex-1 min-w-0 titlebar-no-drag">
           <input

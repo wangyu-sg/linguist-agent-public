@@ -1065,7 +1065,7 @@ export function VaultView({ embedded = false, sessionId }: { embedded?: boolean;
   return (
     <>
       <main className={cn('flex h-full min-h-0 flex-col bg-muted/25', embedded && 'min-w-[360px] bg-content-area')}>
-        {!embedded && <div className="relative z-10 h-[100px] shrink-0 border-b border-border/60 bg-muted/25" />}
+        {!embedded && <div className="main-window-titlebar relative z-10 shrink-0 border-b border-border/60 bg-muted/25"><div className="main-titlebar-drag-region absolute inset-y-0 right-0 titlebar-drag-region" /></div>}
         <div className="relative flex min-h-0 flex-1">
           <aside
             className={cn(

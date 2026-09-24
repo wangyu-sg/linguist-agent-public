@@ -5,13 +5,56 @@ import {
   getDelegatedChildSessionStatus,
 } from '@/lib/agent-session-list'
 
-export {
-  buildAgentSessionTrees,
-  isDelegatedChildSession,
-  sortDelegatedChildSessions,
-} from '@/lib/collapsed-agent-rail'
-import { isDelegatedChildSession, type AgentSessionTreeItem } from '@/lib/collapsed-agent-rail'
-export type AgentSessionTreeNode = AgentSessionTreeItem
+export interface AgentSessionTreeNode {
+  session: AgentSessionMeta
+  childSessions: AgentSessionMeta[]
+}
+
+export function isDelegatedChildSession(session: AgentSessionMeta): boolean {
+  return !!session.parentSessionId && !!session.sourceDelegationId
+}
+
+export function sortDelegatedChildSessions(
+  sessions: readonly AgentSessionMeta[],
+  agentIndicatorMap?: ReadonlyMap<string, SessionIndicatorStatus>,
+): AgentSessionMeta[] {
+  const priority = (session: AgentSessionMeta): number => Number(
+    agentIndicatorMap && ['blocked', 'running', 'completed'].includes(getDelegatedChildSessionStatus(session, agentIndicatorMap)),
+  )
+  return [...sessions].sort((a, b) => priority(b) - priority(a) || b.updatedAt - a.updatedAt)
+}
+
+export function buildAgentSessionTrees(
+  sessions: readonly AgentSessionMeta[],
+  agentIndicatorMap?: ReadonlyMap<string, SessionIndicatorStatus>,
+): AgentSessionTreeNode[] {
+  const sessionIds = new Set(sessions.map((session) => session.id))
+  const childrenByParentId = new Map<string, AgentSessionMeta[]>()
+  const roots: AgentSessionMeta[] = []
+
+  for (const session of sessions) {
+    if (
+      isDelegatedChildSession(session)
+      && session.parentSessionId
+      && sessionIds.has(session.parentSessionId)
+    ) {
+      const children = childrenByParentId.get(session.parentSessionId) ?? []
+      children.push(session)
+      childrenByParentId.set(session.parentSessionId, children)
+      continue
+    }
+
+    // 与展开态项目分组保持一致：父会话不在当前集合中的 moved/orphan child
+    // 作为该项目的根条目保留，避免因历史或迁移中间态变得不可达。
+    roots.push(session)
+  }
+
+  return roots.map((session) => ({
+    session,
+    childSessions: sortDelegatedChildSessions(childrenByParentId.get(session.id) ?? [], agentIndicatorMap),
+  }))
+}
+
 
 export const PROJECT_SESSION_PREVIEW_LIMIT = 5
 export const PROJECT_SESSION_RECENT_WINDOW_MS = 3 * 86_400_000
