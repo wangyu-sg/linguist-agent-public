@@ -55,7 +55,7 @@ test('定时任务保留真实项目与完整范围，重启/来源删除后只�
   assert.doesNotMatch(host.turnContextBlock, /uiRevision/)
   const tools = host.composeTools({ baseTools: [], mcpServerNames: [], modelProvider: 'fixture', getModelId: () => 'fixture' }).tools
   const summary = tools.find(tool => tool.name === 'cat_project_summary')!
-  await summary.execute('scheduled-summary', { assetId: imported.assetId, includeDelivery: true }, undefined, undefined, {} as never)
+  await summary.execute('scheduled-summary', { batchId: imported.assetId, includeDelivery: true }, undefined, undefined, {} as never)
   assert.deepEqual(db.segments.query({ assetId: imported.assetId, limit: 200 }), before)
   assert.deepEqual(db.stageEvidence.list(), stages)
   appendRun(task.id, { sessionId: session.id, status: 'success', runAt: Date.now(), linguistContext: context })
@@ -78,7 +78,7 @@ test('有效 Session 在 CAT 缺失、损坏、归档与恢复间保留宿主能
   try {
     // 修复前这里因 eager openProject 直接失败。
     const tools = resolveLinguistSessionCatTools(session, () => service)
-    assert.equal(tools.length, 33)
+    assert.equal(tools.length, 32)
     assert.ok(tools.some(tool => tool.name === 'linguist_working_copy'))
     const list = tools.find(tool => tool.name === 'cat_project_summary')!
     const invoke = () => list.execute('availability', {} as never, undefined, undefined, {} as never)

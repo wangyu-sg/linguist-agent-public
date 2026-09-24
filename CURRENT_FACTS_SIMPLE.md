@@ -1,8 +1,10 @@
 # Linguist Agent 当前事实
 
-核验日期：2026-09-23。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
+核验日期：2026-09-24。本文是当前动态事实唯一人工入口；代码、manifest、锁文件和真实运行输出优先于文字说明。
 
 ## 当前发布与上一版本
+
+本地源码版本为 `0.18.3`，正在准备发布；以下 `0.18.2` 仍是已核验的最新公开 Release。发布状态以远端 CI 和资产核验为准。
 
 `0.18.2` 已于 `2026-09-23T07:22:48Z`（北京时间 15:22:48）[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.2)，为 latest，非草稿、非预发布；源码/Tag 为 `a7679a5df7de8ecdad934f880c802ab92f118207`。提前移植 [Proma #2085](https://github.com/proma-ai/Proma/pull/2085) 的 GPT-6 Sol/Luna 支持与 Pi `0.87.1`，默认 Release 仅构建 macOS arm64；Proma 稳定源码基线仍为 `v0.19.57`。main CI `35830019276` 的类型、测试、边界、许可、构建与 arm64 打包纵向验证通过，Auto Release `35830663733` 成功。公开资产为 arm64 DMG、ZIP 和 `latest-mac.yml`；下载的 ZIP 大小与 SHA-512 匹配清单，解压后应用在宿主权限下通过深度严格签名验证，签名身份与已安装的 `0.18.1` 一致。真实 Codex 账号调用与用户执行的在线更新安装尚未验证。
 
@@ -18,15 +20,15 @@
 
 | 项目 | 当前值 |
 |---|---|
-| App | `0.18.2` |
+| App | `0.18.3` |
 | Proma | `v0.19.57` |
 | Proma commit | `4e96c5e859302c4a34618d45db352b29a7ebeb28` |
 | Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.87.1` |
 | React / Jotai / Vite | `18.3.1` / `2.20.3` / `6.4.3` |
 | Shared | `0.1.73` |
-| CAT Core / Formats / Store / Tools | `0.0.26` / `0.0.13` / `0.0.47` / `0.0.41` |
+| CAT Core / Formats / Store / Tools | `0.0.26` / `0.0.14` / `0.0.48` / `0.0.42` |
 | CAT Schema | `19` |
-| CAT Tool Count | `32` |
+| CAT Tool Count | `31` |
 
 上一正式基线为 `v0.19.53`，双亲合并提交 `56bc3f29`，本地候选分支 `codex/la-upstream-v0.19.53-20260914`，起点 `9f0de928`。App `0.17.74` 已推送并[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.17.74)，Tag 指向 `d6d0a7ee`。CI `34844497883` 与 Auto Release `34845329153` 成功，macOS arm64/x64、Windows x64 安装包和更新清单共七项资产齐全；未覆盖日用安装。证据见 [上游更新与发布记录](./docs/release/UPSTREAM_0_19_53_2026_09_14.md)。
 
@@ -35,7 +37,7 @@ App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-publ
 
 后续修复 `2468e3e2` 已加入原生全选填充、固定只读 DOM probe、Phrase Skill `1.0.6` 与 in-app-browser `1.1.3`，定向 Chromium 回归、类型、边界与构建通过。用户随后授权替换安装：本机现为该提交的 `0.17.75` arm64 修复版，沿用自更新证书，验签、启动与默认 Skill 同步通过；当时公开 Release 仍为 `85aa7e5d`。真实 Phrase 提速与自动更新链路未验证。见 [效率修复及安装记录](./docs/release/BROWSER_BATCH_FIX_2026_09_16.md)。
 
-工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；本轮开始前已是 32，旧文档与优化方案写成 31 属于漏记。CAT 工厂仍为 32 个工具；Linguist Session overlay 另外提供 1 个 `linguist_working_copy` 文件工作副本工具，总计 33 个领域工具。
+工具数由 `LINGUIST_CAT_TOOL_NAMES` 与工厂实际返回集合确认；移除重复的单文件导入别名后，CAT 工厂为 31 个工具。Linguist Session overlay 另外提供 1 个 `linguist_working_copy` 文件工作副本工具，总计 32 个领域工具。
 
 触点分类、具体理由、上游来源与退役条件只在 [proma-touchpoints.json](./docs/architecture/proma-touchpoints.json) 维护，不在本页复制计数。
 
@@ -53,8 +55,8 @@ App `0.17.75` 已[公开发布](https://github.com/wangyu-sg/linguist-agent-publ
 - CAT 结果自含正文/图片；最终请求经过 Pi SDK 和 utility 边界，以 HTTP 2xx 响应确认提交，旧工具级回执不计新覆盖。跨页正文按 UTF-16 区间累计；图片目录和规则均可继续读取。
 - Stage 独立于 Session；范围/相关资料变化和显式重审创建新轮，恢复复用原轮。本轮完成同时要求当前 revision 的本人决定、必要证据覆盖和零阻断；不能借用其他会话或旧任务的资格。
 - CAT 缺失/损坏时绑定会话仍可运行通用 Agent；归档只读。普通 General 协作不强制冻结空 CAT 范围，专业委派仍冻结范围。CAS、locked、受管 Source、结构检查与事务继续生效。
-- Prompt 合同 `3.1.6`；报告/候选准备可用 `readOnly` Context，不创建或替换专业 Stage；规则按既有分页协议续读。必要术语/冲突不能被可选限额清空，资料不够时明确显示缺口。
-- `cat_project_summary({})` 保持原概览；按 `assetId + includeDelivery=true` 才读取只读交付预检和当前会话专业任务摘要。它不运行 QA、不生成导出、不证明 QA 新鲜或 verified export。
+- Prompt 合同 `3.1.8`；报告/候选准备可用 `readOnly` Context，不创建或替换专业 Stage；规则按既有分页协议续读。必要术语/冲突不能被可选限额清空，资料不够时明确显示缺口。
+- `cat_project_summary({})` 保持原概览；按 `batchId + includeDelivery=true` 才读取只读交付预检和当前会话专业任务摘要。它不运行 QA、不生成导出、不证明 QA 新鲜或 verified export。
 
 ## 本次上游更新与界面收敛
 

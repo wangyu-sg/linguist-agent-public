@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [0.18.3] - 2026-09-24
+
+### Changed
+
+- 调整浏览器与子任务工具的输入、下载和结果回执，减少重复的模型往返；保留授权范围与失败时实际执行前缀。
+- 恢复 macOS 顶栏缩放与原生侧栏收起行为，移除额外的收起态侧栏分支。
+- CAT 增加轻量句段索引和紧凑导入回执；模型工具与界面统一称工作文件为“批次”，并与 TM/TB/Context 语言资产区分。
+
+### Fixed
+
+- Phrase MXLIFF 导入在落库前核验原生结构与配套 master，不再把改扩展名当作格式修复。
+- 导出、QA 与读取批次时使用一致的批次 ID 和错误名称；旧项目磁盘字段保持可读。
+
 ## [0.18.2] - 2026-09-23
 
 ### Changed
@@ -429,7 +442,8 @@
 - 修复上游合并后的 CI 测试口径。
 
 [0.17.74]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.73...v0.17.74
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.2...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.3...HEAD
+[0.18.3]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.2...v0.18.3
 [0.18.2]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.75...v0.18.0

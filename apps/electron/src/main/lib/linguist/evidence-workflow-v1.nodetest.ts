@@ -121,7 +121,7 @@ test('CAT 工具说明经真实 Pi Agent 与 fake Provider 序列化进入最终
     assert.match(context.function.description, /readOnly=true creates neither Stage nor evidence receipts/)
     assert.match(context.function.parameters.properties.readOnly?.description ?? '', /without creating\/replacing a (professional )?Stage/)
     const summary = tools.find(tool => tool.function.name === 'cat_project_summary')!
-    assert.match(summary.function.description, /includeDelivery=true with assetId/)
+    assert.match(summary.function.description, /includeDelivery=true with batchId/)
     assert.equal('promptGuidelines' in context.function, false)
   } finally {
     provider.closeAllConnections()
