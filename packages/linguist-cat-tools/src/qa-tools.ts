@@ -23,7 +23,7 @@ import {
 } from './tool-runtime'
 
 const RUN_QA_PARAMETERS = Type.Object({
-  assetId: Type.String({ minLength: 1, description: 'Asset id from cat_list_assets.' }),
+  assetId: Type.String({ minLength: 1, description: 'Batch ID from cat_list_assets.' }),
 })
 
 /** 确定性 QA 执行与 Finding 读取；不提供 resolve/waive。 */
@@ -36,7 +36,7 @@ export function createQaTools(runtime: CatToolRuntime) {
   >({
     name: 'cat_run_qa',
     label: 'CAT run QA',
-    description: 'Run deterministic QA for every segment in one bound-project asset and persist findings using the existing QA lifecycle. It does not edit Target or confirm review stages. For a current delivery-check request, run current QA unless this same task just completed an applicable unchanged run; do not ask for the same authorization again. For a request to interpret old reports or prohibit project writes, do not run it. No findings does not itself prove a fresh completed check. Do not directly resolve/waive findings; fixes and reruns may change status through the existing deterministic lifecycle.',
+    description: 'Run deterministic QA for every segment in one bound-project batch and persist findings using the existing QA lifecycle. It does not edit Target or confirm review stages. For a current delivery-check request, run current QA unless this same task just completed an applicable unchanged run; do not ask for the same authorization again. For a request to interpret old reports or prohibit project writes, do not run it. No findings does not itself prove a fresh completed check. Do not directly resolve/waive findings; fixes and reruns may change status through the existing deterministic lifecycle.',
     promptSnippet: 'Run deterministic QA on one batch of the bound CAT project',
     parameters: RUN_QA_PARAMETERS,
     async execute(toolCallId, params, signal, onUpdate) {

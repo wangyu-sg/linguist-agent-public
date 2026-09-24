@@ -7,7 +7,7 @@ export function createDeliveryTools(runtime: CatToolRuntime) {
   const { deps, notifyMutation, resolveBoundProject } = runtime
   return [defineTool({
     name: 'cat_export_asset',
-    label: 'CAT export asset',
+    label: 'CAT export batch',
     description:
       'Export a batch from the bound Linguist project directly to an absolute local file. validation=verified runs delivery preflight; ' +
       'validation=as-is permits incomplete content but still performs format round-trip verification. ' +

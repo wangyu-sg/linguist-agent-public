@@ -30,7 +30,7 @@ const SEGMENT_STATUSES: readonly SegmentStatus[] = [
 
 const ARCHIVED_NOTE = 'Project is archived: all data is read-only.'
 
-/** 项目概览、资产目录与分页句段读取。 */
+/** 项目概览、批次目录与分页句段读取。 */
 export function createProjectTools(runtime: CatToolRuntime) {
   const { deps, resolveBoundProject } = runtime
 
@@ -68,10 +68,10 @@ export function createProjectTools(runtime: CatToolRuntime) {
     parameters: Type.Object({
       assetId: Type.Optional(Type.String({
         minLength: 1,
-        description: 'Imported asset ID from the bound project. Supply together with includeDelivery=true to inspect one batch; never a project ID.',
+        description: 'Imported batch ID (internal field: assetId) from the bound project. Supply together with includeDelivery=true to inspect one batch; never a project ID.',
       })),
       includeDelivery: Type.Optional(Type.Boolean({
-        description: 'Read the existing delivery preflight and this session\'s latest relevant task for one asset. Requires assetId. Does not run persisted QA, create a Stage, stage an export or save a file.',
+        description: 'Read the existing delivery preflight and this session\'s latest relevant task for one batch. Requires assetId. Does not run persisted QA, create a Stage, stage an export or save a file.',
       })),
     }),
     async execute(toolCallId, params) {
@@ -146,13 +146,13 @@ export function createProjectTools(runtime: CatToolRuntime) {
 
   const listAssetsTool = defineTool({
     name: 'cat_list_assets',
-    label: 'CAT list assets',
+    label: 'CAT list batches',
     description:
-      'List the imported assets (files) of the bound CAT project: assetId, filename, formatId, ' +
+      'List imported work batches (source files), not language reference assets, of the bound CAT project: assetId, filename, formatId, ' +
       'segmentCount, and the content-derived sourceSha256 (not a path). Paginated: default limit ' +
       `${CAT_TOOL_PAGE_LIMITS.listAssets.defaultLimit}, hard max ${CAT_TOOL_PAGE_LIMITS.listAssets.maxLimit} ` +
       '(larger limits are clamped with a note). Use offset to page.',
-    promptSnippet: 'List assets of the bound CAT project',
+    promptSnippet: 'List work batches of the bound CAT project',
     parameters: Type.Object({
       limit: Type.Optional(Type.Integer({ minimum: 1 })),
       offset: Type.Optional(Type.Integer({ minimum: 0 })),
@@ -190,15 +190,15 @@ export function createProjectTools(runtime: CatToolRuntime) {
       'cat_list_assets), status, or a case-insensitive literal substring over source/target. ' +
       'Paginated: default limit ' +
       `${CAT_TOOL_PAGE_LIMITS.getSegments.defaultLimit}, hard max ${CAT_TOOL_PAGE_LIMITS.getSegments.maxLimit} ` +
-      '(larger limits are clamped with a note). Use offset to page through large assets — never ' +
+      '(larger limits are clamped with a note). Use offset to page through large batches — never ' +
       'expect more than the max in one call. Every item includes segmentId, one-based originalOrdinal, ' +
       'source, and current target; segment ids are stable across filtering and paging.',
     promptSnippet: 'Read segments of the bound CAT project (paged)',
     promptGuidelines: [
-      'Page cat_get_segments with offset for large assets; each call returns at most 100 segments.',
+      'Page cat_get_segments with offset for large batches; each call returns at most 100 segments.',
     ],
     parameters: Type.Object({
-      assetId: Type.Optional(Type.String({ description: 'Asset id from cat_list_assets.' })),
+      assetId: Type.Optional(Type.String({ description: 'Batch ID from cat_list_assets.' })),
       status: Type.Optional(
         Type.Union([
           Type.Literal('untranslated'),

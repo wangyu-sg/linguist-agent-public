@@ -66,7 +66,7 @@ export function createIntakeTools(runtime: CatToolRuntime) {
 
   const importAssetTool = defineTool({
     name: 'cat_import_asset',
-    label: 'CAT import asset',
+    label: 'CAT import file',
     description:
       'Compatibility alias for importing one batch, translation memory, termbase, or Context document into the bound project. ' +
       'Paths follow the current Proma session permissions; the model never supplies a project id.',
@@ -118,7 +118,7 @@ export function createIntakeTools(runtime: CatToolRuntime) {
     name: 'cat_refresh_project_inventory',
     label: 'CAT refresh project inventory',
     description: 'Refresh the inventory of sources and references within the host-authorized project scope. This records inventory facts/gaps but does not import or translate files and is not proof of reading their contents. Use when inventory is missing, inputs changed or relevant references are unaccounted for; reuse a still-current result in the same task. Do not refresh for an explicit no-project-writes request. Distinguish source batches, reference assets, mapping and media; investigate solvable gaps with existing tools. A warning alone does not stop unrelated work or authorize excluding required evidence.',
-    promptSnippet: 'Refresh the host-authorized project asset and evidence inventory before formal stage work',
+    promptSnippet: 'Refresh the host-authorized batch and reference inventory before formal stage work',
     parameters: Type.Object({}),
     async execute(toolCallId) {
       resolveBoundProject('cat_refresh_project_inventory', toolCallId)
