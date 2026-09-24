@@ -268,6 +268,36 @@ test('factory: CAT tools expose project-local accept and export but no resolve o
   }
 })
 
+test('import result keeps all file statuses while model receives compact tag diagnostics', async () => {
+  const fixture = setup()
+  try {
+    const examples = Array.from({ length: 500 }, (_, index) => ({
+      id: `example-${index}`, segmentId: `segment-${index}`, side: 'source' as const, value: '[value]',
+    }))
+    const pattern = {
+      patternShape: '[value]', examples, frequency: 500,
+      sourceTargetPreservation: { exactValueRate: 1, shapeRate: 1, countRate: 1 },
+      pairingEvidence: { opening: 0, closing: 0, balanced: true, pairKeys: [] },
+      suggestedVariableParts: [],
+    }
+    const importResources = async () => ({
+      found: 2, ready: 0, imported: 1, skippedDuplicate: 0, needsInput: 1, unsupported: 0, failed: 0, truncated: false,
+      items: [
+        { filename: 'first.xliff', status: 'imported' as const, resourceKind: 'batch' as const, resourceId: 'asset-1', unknownTagSummary: [pattern] },
+        { filename: 'second.xliff', status: 'needs-input' as const, message: '缺少映射' },
+      ],
+    })
+    const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture), importResources }), 'cat_import_resources')
+    const result = await invoke(tool, { paths: ['first.xliff', 'second.xliff'] })
+    const model = JSON.parse(resultText(result))
+    assert.deepEqual(model.items.map((item: { status: string }) => item.status), ['imported', 'needs-input'])
+    assert.equal(model.items[0].unknownTagSummary.patterns[0].exampleCount, 500)
+    assert.equal(model.items[0].unknownTagSummary.patterns[0].example.id, 'example-0')
+    assert.equal((result.details as { items: Array<{ unknownTagSummary?: Array<{ examples: unknown[] }> }> }).items[0]?.unknownTagSummary?.[0]?.examples.length, 500)
+    assert.ok(resultText(result).length < 2_000)
+  } finally { fixture.db.close() }
+})
+
 test('cat_confirm_segments: Reviewer 的 101 段冻结范围跨两批后才 complete', async () => {
   const fixture = setup()
   const { asset, segments } = seedAsset(fixture.db, fixture.project, {
@@ -1473,6 +1503,38 @@ test('cat_get_segments: pagination — deterministic order across pages, clamp, 
     assert.equal(clamped.items.length, 12) // clamped to the hard max, capped by total
     assert.ok(clamped.note?.includes('5000'))
     assert.ok(clamped.note?.includes('100'))
+  } finally {
+    fixture.db.close()
+  }
+})
+
+test('cat_get_segments: index view keeps content paging and filters without sending text', async () => {
+  const fixture = setup()
+  try {
+    const tool = toolByName(createLinguistCatTools({ resolveProject: makeOkResolver(fixture) }), 'cat_get_segments')
+    const filter = { assetId: fixture.assetA.id as string, status: 'translated', search: 'alpha', limit: 2 }
+    const content = (await invoke(tool, filter)).details as PagedResult<{ id: string; source: string; target: string }>
+    const explicitContent = (await invoke(tool, { ...filter, view: 'content' })).details
+    assert.deepEqual(explicitContent, content)
+
+    const first = await invoke(tool, { ...filter, view: 'index' })
+    const second = await invoke(tool, { ...filter, view: 'index', offset: 2 })
+    const index = first.details as PagedResult<Record<string, unknown>>
+    const next = second.details as PagedResult<Record<string, unknown>>
+    assert.equal(index.total, content.total)
+    assert.equal(index.limit, content.limit)
+    assert.equal(index.hasMore, true)
+    assert.deepEqual(
+      [...index.items, ...next.items].map(item => item.id),
+      ((await invoke(tool, { ...filter, limit: 20 })).details as PagedResult<{ id: string }>).items.map(item => item.id),
+    )
+    for (const item of [...index.items, ...next.items]) {
+      assert.ok(!('source' in item) && !('target' in item))
+      assert.equal(item.segmentId, item.id)
+      assert.equal(typeof item.currentStageState, 'string')
+    }
+    assert.ok(!resultText(first).includes('Alpha source'))
+    await assertThrowsCode(invoke(tool, { view: 'brief' }), 'INVALID_ARGUMENT')
   } finally {
     fixture.db.close()
   }

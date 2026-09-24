@@ -258,7 +258,7 @@ export interface LinguistImportResourcesInput {
 
 export interface LinguistImportResourceItem {
   filename: string
-  status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'ready'
+  status: 'imported' | 'skipped-duplicate' | 'needs-input' | 'unsupported' | 'failed' | 'ready' | 'supporting'
   resourceKind?: LinguistIntakeResourceKind
   resourceId?: string
   sourceSha256?: string
@@ -531,6 +531,11 @@ export interface CatSegmentListItem {
   revision: number
   source: string
   target: string
+}
+
+/** 仅供定位句段；不含审校所需正文或已读证据。 */
+export interface CatSegmentIndexItem extends Omit<CatSegmentListItem, 'source' | 'target'> {
+  currentStageState?: Segment['currentStageState']
 }
 
 export interface CatSegmentBrief {

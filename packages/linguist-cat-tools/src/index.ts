@@ -52,6 +52,7 @@ export {
   type CatSearchTermsResult,
   type CatSearchTmResult,
   type CatSegmentListItem,
+  type CatSegmentIndexItem,
   type CatSegmentBrief,
   type CatWorkerJobProgress,
   type CatVoiceContextResult,

@@ -8,9 +8,32 @@ import type {
   LinguistIntakeResourceKind,
   LinguistProjectEvidenceInventoryResult,
 } from './types'
+import type { UnknownTagPatternResult } from '@linguist/cat-core'
 
 const RESOURCE_KINDS = new Set<LinguistIntakeResourceKind>(['batch', 'tm', 'terms', 'context'])
 const IMPORT_KINDS = new Set<LinguistImportResourceKind>(['auto', 'batch', 'tm', 'tb', 'context'])
+
+function tagPatternOverview(patterns: UnknownTagPatternResult[] | undefined) {
+  if (patterns === undefined) return undefined
+  return {
+    count: patterns.length,
+    patterns: patterns.map((pattern) => ({
+      shape: pattern.patternShape,
+      frequency: pattern.frequency,
+      exampleCount: pattern.examples.length,
+      example: pattern.examples[0],
+    })),
+    detailTool: 'cat_scan_unknown_tag_patterns',
+  }
+}
+
+function importToolResult<T extends object>(details: T, modelDetails: object, projectId?: string) {
+  const result = toolResult(modelDetails, projectId)
+  return {
+    ...result,
+    details: projectId === undefined ? details : { ...details, projectId },
+  }
+}
 
 /** 路径只在宿主按会话授权根校验后使用，永不进入结果 DTO。 */
 export function createIntakeTools(runtime: CatToolRuntime) {
@@ -60,7 +83,13 @@ export function createIntakeTools(runtime: CatToolRuntime) {
         xlsxMapping: params.xlsxMapping,
       })
       if (result.imported > 0) notifyMutation({ kind: 'project-updated' })
-      return toolResult(result, deps.resultProjectId)
+      return importToolResult(result, {
+        ...result,
+        items: result.items.map(({ unknownTagSummary, ...item }) => ({
+          ...item,
+          ...(unknownTagSummary === undefined ? {} : { unknownTagSummary: tagPatternOverview(unknownTagSummary) }),
+        })),
+      }, deps.resultProjectId)
     },
   })
 
@@ -110,7 +139,11 @@ export function createIntakeTools(runtime: CatToolRuntime) {
         params.xlsxMapping,
       )
       notifyMutation({ kind: 'project-updated' })
-      return toolResult(result, deps.resultProjectId)
+      const { unknownTagSummary, ...modelResult } = result
+      return importToolResult(result, {
+        ...modelResult,
+        ...(unknownTagSummary === undefined ? {} : { unknownTagSummary: tagPatternOverview(unknownTagSummary) }),
+      }, deps.resultProjectId)
     },
   })
 

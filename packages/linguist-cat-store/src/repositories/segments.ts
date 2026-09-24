@@ -15,6 +15,7 @@ import {
   unconfirmCurrentStage as unconfirmCurrentStageDomain,
   UnknownSegmentError,
   type ApplyTargetEditOptions,
+  type AssetId,
   type CurrentStageState,
   type Segment,
   type SegmentId,
@@ -40,6 +41,10 @@ export interface SegmentQuery {
   limit?: number
   offset?: number
 }
+
+type SegmentIndexEntry = Pick<Segment,
+  'id' | 'assetId' | 'ordinal' | 'key' | 'status' | 'currentStageState' | 'locked' | 'revision'
+>
 
 export interface StageDecisionCoverage {
   total: number
@@ -106,6 +111,29 @@ export class SegmentsRepository {
       )
       .all(...params, limit, offset) as SegmentRow[]
     return rows.map(segmentFromRow)
+  }
+
+  /** 正文之外的分页导航；过滤和排序与 query() 一致。 */
+  queryIndex(filter: SegmentQuery = {}): SegmentIndexEntry[] {
+    const { where, params } = buildSegmentWhere(filter)
+    const limit = filter.limit ?? 500
+    const offset = filter.offset ?? 0
+    const rows = this.db.db.prepare(
+      `SELECT id, asset_id, ordinal, key, status, current_stage_state, locked, revision
+       FROM segments ${where} ORDER BY asset_id, ordinal, key, id LIMIT ? OFFSET ?`,
+    ).all(...params, limit, offset) as Array<Pick<SegmentRow,
+      'id' | 'asset_id' | 'ordinal' | 'key' | 'status' | 'current_stage_state' | 'locked' | 'revision'
+    >>
+    return rows.map(row => ({
+      id: row.id as SegmentId,
+      assetId: row.asset_id as AssetId,
+      ordinal: row.ordinal,
+      ...(row.key !== null ? { key: row.key } : {}),
+      status: row.status as SegmentStatus,
+      currentStageState: row.current_stage_state as CurrentStageState,
+      locked: row.locked !== 0,
+      revision: row.revision,
+    }))
   }
 
   /**

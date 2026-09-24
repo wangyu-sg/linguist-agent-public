@@ -11,6 +11,7 @@ import {
   type CatAssetListItem,
   type CatDeliveryStatus,
   type CatProjectSummaryResult,
+  type CatSegmentIndexItem,
   type CatSegmentListItem,
   type PagedResult,
 } from './types'
@@ -192,7 +193,8 @@ export function createProjectTools(runtime: CatToolRuntime) {
       `${CAT_TOOL_PAGE_LIMITS.getSegments.defaultLimit}, hard max ${CAT_TOOL_PAGE_LIMITS.getSegments.maxLimit} ` +
       '(larger limits are clamped with a note). Use offset to page through large batches — never ' +
       'expect more than the max in one call. Every item includes segmentId, one-based originalOrdinal, ' +
-      'source, and current target; segment ids are stable across filtering and paging.',
+      'source, and current target by default; view=index returns only IDs and navigation metadata, ' +
+      'not review content or evidence. Segment ids are stable across filtering and paging.',
     promptSnippet: 'Read segments of the bound CAT project (paged)',
     promptGuidelines: [
       'Page cat_get_segments with offset for large batches; each call returns at most 100 segments.',
@@ -208,13 +210,19 @@ export function createProjectTools(runtime: CatToolRuntime) {
         ]),
       ),
       search: Type.Optional(Type.String({ description: 'Literal substring matched against source or target.' })),
+      view: Type.Optional(Type.Union([Type.Literal('content'), Type.Literal('index')], {
+        description: 'Default content returns source/target; index returns only navigation metadata.',
+      })),
       limit: Type.Optional(Type.Integer({ minimum: 1 })),
       offset: Type.Optional(Type.Integer({ minimum: 0 })),
     }),
     async execute(toolCallId, params) {
-      const { assetId, status, search } = params
+      const { assetId, status, search, view } = params
       if (status !== undefined && !SEGMENT_STATUSES.includes(status)) {
         throw new LinguistCatInvalidArgumentError('status', `expected one of ${SEGMENT_STATUSES.join('/')}, got ${String(status)}`)
+      }
+      if (view !== undefined && view !== 'content' && view !== 'index') {
+        throw new LinguistCatInvalidArgumentError('view', `expected content/index, got ${String(view)}`)
       }
       const { db } = resolveBoundProject('cat_get_segments', toolCallId)
       if (assetId !== undefined && db.assets.get(assetId) === undefined) {
@@ -226,10 +234,23 @@ export function createProjectTools(runtime: CatToolRuntime) {
         ...(status !== undefined ? { status } : {}),
         ...(search !== undefined && search !== '' ? { search } : {}),
       }
-      const segments = db.segments.query({ ...filter, limit: page.limit, offset: page.offset })
+      const pageFilter = { ...filter, limit: page.limit, offset: page.offset }
       const total = db.segments.count(filter)
-      const items = segments.map(toSegmentItem)
-      const dto: PagedResult<CatSegmentListItem> = {
+      const items: Array<CatSegmentListItem | CatSegmentIndexItem> = view === 'index'
+        ? db.segments.queryIndex(pageFilter).map(segment => ({
+            segmentId: segment.id as string,
+            id: segment.id as string,
+            assetId: segment.assetId as string,
+            ordinal: segment.ordinal,
+            originalOrdinal: segment.ordinal + 1,
+            ...(segment.key !== undefined ? { key: segment.key } : {}),
+            status: segment.status,
+            currentStageState: segment.currentStageState,
+            locked: segment.locked,
+            revision: segment.revision,
+          }))
+        : db.segments.query(pageFilter).map(toSegmentItem)
+      const dto: PagedResult<CatSegmentListItem | CatSegmentIndexItem> = {
         items,
         total,
         limit: page.limit,
