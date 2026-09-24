@@ -46,8 +46,9 @@ try {
   await page.getByRole('button', { name: '收起侧边栏', exact: true }).click()
 
   async function select(name: string): Promise<void> {
-    await page.getByRole('button', { name: '切换到 Agent 模式（悬停查看项目）', exact: true }).hover()
-    await page.getByRole('button', { name, exact: true }).click()
+    const expand = page.getByRole('button', { name: '展开侧边栏', exact: true })
+    if (await expand.isVisible()) await expand.click()
+    await page.getByRole('button', { name: `打开项目 ${name}`, exact: true }).click()
   }
   async function verify(workspaceId: string, expectedTitle?: string): Promise<string> {
     const deadline = Date.now() + 15_000
@@ -67,10 +68,10 @@ try {
     if (expectedTitle) assert.equal(session.title, expectedTitle)
     await page.locator('[data-agent-presentation="full"]').getByRole('button', { name: `会话菜单：${session.title}`, exact: true }).waitFor()
     assert.equal(await page.getByRole('button', { name: /^打开标签页：/ }).count(), 0, 'Agent 主区不应显示中心会话标签栏')
-    await page.getByRole('button', { name: '切换到 Agent 模式（悬停查看项目）', exact: true }).hover()
     const name = workspaceId === fixture.a.id ? fixture.a.name : fixture.b.name
-    assert.ok((await page.getByRole('button', { name, exact: true }).getAttribute('class'))!.includes('shadow-'))
+    assert.equal(await page.getByRole('button', { name: `打开项目 ${name}`, exact: true }).getAttribute('aria-current'), 'page')
     await page.mouse.move(500, 300)
+    await page.getByRole('button', { name: '收起侧边栏', exact: true }).click()
     return session.id
   }
 

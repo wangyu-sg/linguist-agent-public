@@ -127,6 +127,7 @@ import { conversationPromptIdAtom } from '@/atoms/system-prompt-atoms'
 import { useCreateSession } from '@/hooks/useCreateSession'
 import { useOpenSession } from '@/hooks/useOpenSession'
 import { useSyncActiveTabSideEffects } from '@/hooks/useSyncActiveTabSideEffects'
+import { beginProjectNavigationAtom, selectProjectAtom } from '@/host/project-switch'
 import { productivityToolsAtom, sessionHoverPreviewEnabledAtom } from '@/atoms/ui-preferences'
 import { ObsidianIcon } from '@/components/obsidian/obsidian-brand'
 import { VirtualSidebarList, type VirtualSidebarRow } from '@/components/ui/virtual-sidebar-list'
@@ -692,6 +693,8 @@ export function LeftSidebar({ width }: LeftSidebarProps): React.ReactElement {
   const setSessionModelMap = useSetAtom(agentSessionModelMapAtom)
   const setSessionPathMap = useSetAtom(agentSessionPathMapAtom)
   const [currentWorkspaceId, setCurrentWorkspaceId] = useAtom(currentAgentWorkspaceIdAtom)
+  const beginProjectNavigation = useSetAtom(beginProjectNavigationAtom)
+  const switchProject = useSetAtom(selectProjectAtom)
   const [workspaces, setWorkspaces] = useAtom(agentWorkspacesAtom)
 
   // 当前项目能力（MCP + Skill 计数）
@@ -1414,15 +1417,14 @@ export function LeftSidebar({ width }: LeftSidebarProps): React.ReactElement {
   const handleSelectProject = React.useCallback((workspaceId: string): void => {
     if (workspaceId === currentWorkspaceId) {
       // 点击当前工作区 → 折叠/展开会话列表
+      beginProjectNavigation()
       setCollapsedWorkspaceIds((prev) => toggleSetEntry(prev, workspaceId))
       return
     }
-    setCurrentWorkspaceId(workspaceId)
-    setActiveView('conversations')
-    // 切换到新工作区时，自动展开该工作区
+    // 切换到新工作区时，自动展开该工作区，并同步当前会话与 Tab。
     setCollapsedWorkspaceIds((prev) => deleteSetEntry(prev, workspaceId))
-    window.electronAPI.updateSettings({ agentWorkspaceId: workspaceId }).catch(console.error)
-  }, [currentWorkspaceId, setCurrentWorkspaceId, setActiveView])
+    void switchProject({ workspaceId }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : '切换项目失败'))
+  }, [beginProjectNavigation, currentWorkspaceId, switchProject])
 
   /** 合成「自动任务」组头部点击：仅折叠/展开，绝不切换当前项目（它不是真实工作区） */
   const handleToggleGroupCollapse = React.useCallback((groupId: string): void => {
@@ -1589,10 +1591,11 @@ export function LeftSidebar({ width }: LeftSidebarProps): React.ReactElement {
 
   const handleConfigureProject = React.useCallback((workspaceId: string): void => {
     // 项目菜单显式指定目标项目；不能借用当前会话的右侧组件宿主，否则会打开另一项目的 MCP。
-    handleSelectProject(workspaceId)
-    setAgentSkillsTab('mcp')
-    setActiveView('agent-skills')
-  }, [handleSelectProject, setActiveView, setAgentSkillsTab])
+    void switchProject({ workspaceId, resetView: false }).then(() => {
+      setAgentSkillsTab('mcp')
+      setActiveView('agent-skills')
+    }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : '切换项目失败'))
+  }, [switchProject, setActiveView, setAgentSkillsTab])
 
   /** 展开某个项目时每次额外显示的会话数量 */
   const handleShowMoreSessions = React.useCallback((workspaceId: string): void => {
