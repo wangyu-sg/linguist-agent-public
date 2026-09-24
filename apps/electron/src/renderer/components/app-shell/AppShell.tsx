@@ -35,6 +35,10 @@ import { getWindowTitlebarContentInsetClass } from '@/lib/window-titlebar-layout
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/sonner'
 
+const StableLeftSidebar = React.memo(LeftSidebar)
+const StableMainArea = React.memo(MainArea)
+const StableRightSidePanel = React.memo(RightSidePanel)
+
 const MIN_RIGHT_PANEL_WIDTH = 300
 // 浏览器、预览、终端等工作区在窄视图中优先允许连续阅读和基础操作；需要更多空间时可继续向左拖拽并折叠左栏。
 const MIN_EXPANDED_WORKSPACE_PANEL_WIDTH = 360
@@ -378,7 +382,7 @@ export function AppShell(): React.ReactElement {
         >
             {/* 左侧边栏：可折叠，可拖拽调整宽度 */}
             <div ref={sidebarRef} id="app-left-sidebar" className="sidebar-layout-transition relative z-[60] shrink-0 overflow-hidden crt-sidebar" style={{ width: leftSidebarOccupiedWidth }}>
-              <LeftSidebar width={clampedLeftSidebarWidth} />
+              <StableLeftSidebar width={clampedLeftSidebarWidth} />
               {/* 侧边栏展开时显示拖拽手柄，折叠态隐藏 */}
               {!sidebarCollapsed && (
                 <div
@@ -395,7 +399,7 @@ export function AppShell(): React.ReactElement {
             {/* 中间容器：relative z-[60] 使其在 z-50 拖动区域之上 */}
             <div className="flex-1 min-w-0 relative z-[60]">
               {/* 主内容区域（TabBar + TabContent） */}
-              <MainArea />
+              <StableMainArea />
               {/* 全局 Toast 固定在 Agent 历史主区右上角，不进入右侧原生浏览器面板。 */}
               <Toaster position="top-right" offset={{ top: 58, right: 12 }} className="agent-history-toaster" />
             </div>
@@ -415,7 +419,7 @@ export function AppShell(): React.ReactElement {
                     onMouseDown={handleMouseDown}
                   />
                 )}
-                <RightSidePanel sessionId={currentSessionId!} width={displayedRightPanelWidth} />
+                <StableRightSidePanel sessionId={currentSessionId!} width={displayedRightPanelWidth} />
               </div>
             )}
           <SidebarTitlebarControls sidebarRef={sidebarRef} />

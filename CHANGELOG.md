@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.18.4] - 2026-09-24
+
+### Fixed
+
+- 移除覆盖主区与右侧工作区顶栏的整窗拖拽层，恢复按钮的鼠标命中。
+- 收起或展开侧栏时避免重复渲染未变化的主会话和工作区，减轻长会话的渲染负担。
+
 ## [0.18.3] - 2026-09-24
 
 ### Changed
@@ -443,7 +450,8 @@
 - 修复上游合并后的 CI 测试口径。
 
 [0.17.74]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.17.73...v0.17.74
-[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.3...HEAD
+[Unreleased]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.4...HEAD
+[0.18.4]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.3...v0.18.4
 [0.18.3]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.2...v0.18.3
 [0.18.2]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/wangyu-sg/linguist-agent-public/compare/v0.18.0...v0.18.1

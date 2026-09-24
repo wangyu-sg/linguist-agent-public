@@ -22,7 +22,6 @@ export function SidebarTitlebarControls({ sidebarRef }: { sidebarRef: React.RefO
 
   return (
     <>
-      <div aria-hidden="true" className="titlebar-drag-region fixed right-0 top-0 z-50" style={{ left: 'var(--titlebar-controls-end)', height: 'var(--sidebar-top-inset)' }} />
       <div className="sidebar-titlebar-controls titlebar-no-drag fixed z-[70] flex items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>

@@ -111,7 +111,6 @@ import {
   activeTabAtom,
   activeTabIdAtom,
   activeSessionIdAtom,
-  sidebarCollapsedAtom,
   closeTab,
   updateTabTitle,
   sessionViewStateMapAtom,
@@ -707,7 +706,6 @@ export function LeftSidebar({ width }: LeftSidebarProps): React.ReactElement {
   const [activeTabId, setActiveTabId] = useAtom(activeTabIdAtom)
   // 会话高亮按"激活 Tab 所属会话"判定：预览 Tab 激活时其 owner 会话仍保持高亮
   const activeSessionId = useAtomValue(activeSessionIdAtom)
-  const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom)
   const { createChat, createAgent } = useCreateSession()
   const openSession = useOpenSession()
   const syncActiveTabSideEffects = useSyncActiveTabSideEffects()
@@ -1975,7 +1973,6 @@ export function LeftSidebar({ width }: LeftSidebarProps): React.ReactElement {
     quickSwitchHintsVisible,
     clearQuickSwitchHints,
     refreshQuickSwitchTargets,
-    sidebarCollapsed,
     mode,
     viewMode,
     conversations,

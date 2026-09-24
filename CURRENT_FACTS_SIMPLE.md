@@ -4,7 +4,9 @@
 
 ## 当前发布与上一版本
 
-`0.18.3` 已于 `2026-09-24T13:30:02Z` [公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.3)，为 latest，非草稿、非预发布；Tag 指向 `c48cc29df58957f13860d9bdecf239acca1e5495`。main CI `36004258620` 的完整测试与 macOS arm64 打包纵向验证通过，Auto Release `36005182997` 成功。公开资产为 arm64 DMG、ZIP 和 `latest-mac.yml`；下载的 ZIP 大小与 SHA-512 匹配清单，包内含正确仓库的 `app-update.yml`。解压后应用在宿主权限下通过深度严格签名验证，指定签名要求与本机已安装的 `0.18.2` 一致。本机安装版未替换，实际在线更新安装尚未验证。
+本地源码版本为 `0.18.4`，发布验证尚未完成。当前已发布版本仍为 `0.18.3`。
+
+`0.18.3` 已于 `2026-09-24T13:30:02Z` [公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.3)，为 latest，非草稿、非预发布；Tag 指向 `c48cc29df58957f13860d9bdecf239acca1e5495`。main CI `36004258620` 的完整测试与 macOS arm64 打包纵向验证通过，Auto Release `36005182997` 成功。公开资产为 arm64 DMG、ZIP 和 `latest-mac.yml`；下载的 ZIP 大小与 SHA-512 匹配清单，包内含正确仓库的 `app-update.yml`。解压后应用在宿主权限下通过深度严格签名验证，指定签名要求与本机已安装的 `0.18.2` 一致。本机安装版现为 `0.18.3`；此次在线更新安装已发生，顶栏等交互回归待 `0.18.4` 验证。
 
 上一已发布版本 `0.18.2` 于 `2026-09-23T07:22:48Z`（北京时间 15:22:48）[公开发布](https://github.com/wangyu-sg/linguist-agent-public/releases/tag/v0.18.2)，源码/Tag 为 `a7679a5df7de8ecdad934f880c802ab92f118207`。提前移植 [Proma #2085](https://github.com/proma-ai/Proma/pull/2085) 的 GPT-6 Sol/Luna 支持与 Pi `0.87.1`，默认 Release 仅构建 macOS arm64；Proma 稳定源码基线仍为 `v0.19.57`。main CI `35830019276` 的类型、测试、边界、许可、构建与 arm64 打包纵向验证通过，Auto Release `35830663733` 成功。公开资产为 arm64 DMG、ZIP 和 `latest-mac.yml`；下载的 ZIP 大小与 SHA-512 匹配清单，解压后应用在宿主权限下通过深度严格签名验证，签名身份与已安装的 `0.18.1` 一致。真实 Codex 账号调用与用户执行的在线更新安装尚未验证。
 
@@ -20,7 +22,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| App | `0.18.3` |
+| App | `0.18.4` |
 | Proma | `v0.19.57` |
 | Proma commit | `4e96c5e859302c4a34618d45db352b29a7ebeb28` |
 | Bun / Electron / Pi | `1.3.14` / `43.2.0` / `0.87.1` |
